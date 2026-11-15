@@ -64,6 +64,25 @@ export const PREVIEW_STALE_REASONS = [
 
 export type PreviewStaleReason = (typeof PREVIEW_STALE_REASONS)[number];
 
+/** Why a frame announces no token for the rendering it shows (`avb:render-problem`). */
+export const FRAME_RENDER_PROBLEMS = [
+  /** One file stamped with two checksums: the rendering mixes versions of it. */
+  'conflicting-stamps',
+  /** More stamps, or stamped files, than one manifest may name. */
+  'too-many-stamps',
+  /** More elements than the stamp walk visits. */
+  'page-too-large',
+  /** The frame could not compute the manifest's digest. */
+  'no-digest',
+] as const;
+
+export type FrameRenderProblem = (typeof FRAME_RENDER_PROBLEMS)[number];
+
+/** Boundary parser for a frame's render problem; undefined for anything else. */
+export function parseFrameRenderProblem(input: unknown): FrameRenderProblem | undefined {
+  return FRAME_RENDER_PROBLEMS.find((known) => known === input);
+}
+
 /** What main found on disk for one stamped file. */
 export type StampedFileState =
   | { readonly tag: 'present'; readonly checksum: Digest }

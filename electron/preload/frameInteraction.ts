@@ -62,7 +62,12 @@ export function setCanvasInteraction(next: CanvasInteraction): void {
 // cursor the page sets on an element wins over them; the arrow on <html> is
 // inherited by everything the page leaves alone, which is where the I-beam came
 // from (`cursor: auto` over text).
-const DESIGN_CURSOR_CSS = '*, *::before, *::after { cursor: default !important; }';
+// Select mode also lets the pointer through embedded documents (a map, a video
+// player, a form widget): a pointer over a nested frame belongs to that frame's
+// document, so the canvas never heard the hover or the click and nothing could
+// be selected there. The frame's element is found again under the pointer by
+// the hit test (frameTargets.ts embedAt), so the click selects it.
+const DESIGN_CURSOR_CSS = ['*, *::before, *::after { cursor: default !important; }', 'iframe, embed, object { pointer-events: none !important; }'].join('\n');
 const INTERACT_CURSOR_CSS = [
   ':where(html) { cursor: default; }',
   ':where(a[href], area[href], button, summary, label, select, [role="button"], [role="link"], [onclick]) { cursor: pointer; }',

@@ -39,7 +39,7 @@ import {
 } from './frameRegions';
 import { ownClasses, resetThinCache } from './frameMeasure';
 import { forgetReportedKeys, paintOpened, scrollPathIntoView, sendClasses, sendRects, sendRendered } from './frameReports';
-import { enterDesignMode, nodeAtPoint, startOutlines } from './frameTargets';
+import { answerClickQuery, enterDesignMode, nodeAtPoint, startOutlines } from './frameTargets';
 
 // Nodes that put nothing on the page: a component that returns null for the
 // props it was given (an <Img> with no src, a grid with no children) still
@@ -149,6 +149,10 @@ export function listenForQueries(): void {
       return;
     }
     if (receiveAppCursor(data)) {
+      return;
+    }
+    if (data['type'] === 'avb:click-query') {
+      receiveClickQuery(data);
       return;
     }
     if (receivePointQuery(data, nodeAtPoint, (message) => window.parent.postMessage(message, '*'))) {
@@ -461,6 +465,28 @@ const track = (data: Record<string, unknown>, paths: unknown[]) => {
     sendClasses();
   }
 };
+
+// The editor's second look at a click it could not apply (frameTargets.ts
+// answerClickQuery). Ids count up from 1 and points are viewport pixels; a
+// malformed question is ours but answered by nobody, and the editor's own
+// bound on waiting covers it.
+const CLICK_QUERY_ID_MAX = 2 ** 31;
+const CLICK_QUERY_COORDINATE_PX_MAX = 1_000_000;
+function receiveClickQuery(data: Record<string, unknown>): void {
+  const id = data['id'];
+  const x = data['x'];
+  const y = data['y'];
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 1 || CLICK_QUERY_ID_MAX < id) {
+    return;
+  }
+  if (typeof x !== 'number' || !Number.isFinite(x) || CLICK_QUERY_COORDINATE_PX_MAX < Math.abs(x)) {
+    return;
+  }
+  if (typeof y !== 'number' || !Number.isFinite(y) || CLICK_QUERY_COORDINATE_PX_MAX < Math.abs(y)) {
+    return;
+  }
+  answerClickQuery(id, x, y);
+}
 
 function reportNavigation(): void {
   try {

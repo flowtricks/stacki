@@ -216,7 +216,11 @@ test('select mode: a link click selects and never navigates; a button keeps its 
     assert.equal(opened, 0, 'select mode keeps page scripts quiet');
     assert.deepEqual(page.selections(), ['1', '0']);
     assert.equal(page.window.document.getElementById('avb-design-style')?.disabled, false, 'the editor cursor shows');
-    assert.equal(page.window.document.getElementById('avb-design-style')?.textContent, '*, *::before, *::after { cursor: default !important; }');
+    assert.equal(
+      page.window.document.getElementById('avb-design-style')?.textContent,
+      // Embedded documents take no pointer in select mode, so the canvas hears hovers and clicks over them.
+      '*, *::before, *::after { cursor: default !important; }\niframe, embed, object { pointer-events: none !important; }',
+    );
   } finally {
     page.window.close();
   }

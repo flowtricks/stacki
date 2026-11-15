@@ -5,7 +5,19 @@
 import { canvasDragged, canvasInert, canvasSelects, holdLinkClick, replayingLinkClick, trackCanvas } from './frameInteraction';
 import { inlineTextPathAt } from './inlineText';
 import { isElement } from './frameBasics';
-import { PATH_ATTR, announceMapped, collectRegions, inFocus, inScope, pathsOf, regions, renderToken, runsOf, taggedAncestor } from './frameRegions';
+import {
+  PATH_ATTR,
+  announceMapped,
+  collectRegions,
+  inFocus,
+  inScope,
+  pathsOf,
+  regions,
+  renderToken,
+  runsOf,
+  setRenderListener,
+  taggedAncestor,
+} from './frameRegions';
 import { rectsForPath, thinAt } from './frameMeasure';
 import { forgetPseudoBoxes, pseudoTargetAt } from './framePseudoTarget';
 import { forgetUnionBoxes, unionTargetAt } from './frameUnionTarget';
@@ -21,6 +33,35 @@ export function enterDesignMode(): void {
 
 // The hover the app was last told about; undefined until it has been told.
 let lastHover: { readonly path: string | undefined; readonly occurrence: number; readonly pseudo: PseudoLayer | undefined } | undefined;
+// Where the pointer last was over the page, so a document that changes under a
+// still pointer is hit-tested again rather than leaving the old outline behind.
+let lastPointer: { readonly x: number; readonly y: number } | undefined;
+
+// Tells the app what the pointer is over, when that changed.
+function reportHover(scoped: ReturnType<typeof nodeAt>, element: Element | undefined): void {
+  // In deep outline mode a hover inside a closed component names the element there (frameOutlineMode.ts); a click never does.
+  const deep = deepHoverAt(element, scoped.path);
+  const { path: nodePath, occurrence, pseudo } = deep === undefined ? scoped : { ...deep, pseudo: undefined };
+  if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence || pseudo !== lastHover.pseudo) {
+    lastHover = { path: nodePath, occurrence, pseudo };
+    // A deep hover says how to label its node, which the editor's tree of the open file cannot.
+    postLocated('avb:hover-node', { path: nodePath, occurrence, ...pseudoField(pseudo), ...(deep === undefined ? {} : { deep: deep.node }) });
+  }
+}
+
+// The page changed under a pointer that has not moved: what it is over now.
+// Said with the new rendering's token, so the app draws the outline again
+// instead of keeping one from before the change.
+function rehover(): void {
+  const pointer = lastPointer;
+  if (pointer === undefined) {
+    return;
+  }
+  lastHover = undefined;
+  const hit = document.elementFromPoint(pointer.x, pointer.y);
+  const target = hit ? pointTarget(hit, pointer.x, pointer.y) : undefined;
+  reportHover(nodeAt(target, pointer.x, pointer.y), target);
+}
 
 // Deepest marked node whose rendered DOM contains the target, plus which
 // instance of it was hit — the app outlines only that one.
@@ -164,9 +205,81 @@ const deepestRegionAt = (target: Node | undefined, x: number | undefined, y: num
 // the capturing element as its target. Trusting e.target there selects the
 // whole carousel however deep you click. Hit-test the cursor instead; a
 // synthesised event with no coordinates keeps e.target.
-const targetAt = (event: MouseEvent): Node | undefined =>
-  (event.clientX || event.clientY ? document.elementFromPoint(event.clientX, event.clientY) : undefined) ||
-  (event.target instanceof window.Node ? event.target : undefined);
+const targetAt = (event: MouseEvent): Node | undefined => {
+  if (event.clientX || event.clientY) {
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    if (hit) {
+      return pointTarget(hit, event.clientX, event.clientY);
+    }
+  }
+  return event.target instanceof window.Node ? event.target : undefined;
+};
+
+// What the pointer is over at a point, past what no source owns: an embed
+// under it (embedAt), or, when the topmost element is markup no file wrote — a
+// script's overlay, a lightbox's click catcher, a widget's layer — the first
+// element beneath it that a file did write. Without this, an invisible overlay
+// a script laid over the page made every click select the layout.
+const pointTarget = (hit: Element, x: number, y: number): Element => {
+  const embed = embedAt(hit, x, y);
+  if (embed !== hit) {
+    return embed;
+  }
+  if (hit.hasAttribute(PATH_ATTR)) {
+    return hit;
+  }
+  return markedBeneath(hit, x, y) ?? hit;
+};
+
+// The first element under the point, below `hit`, that carries a path of its
+// own and is not one of hit's ancestors (those already answer for it). Bounded:
+// the stack under a point is short on any real page.
+const STACK_CHECKED_MAX = 32;
+const markedBeneath = (hit: Element, x: number, y: number): Element | undefined => {
+  if (typeof document.elementsFromPoint !== 'function') {
+    return undefined; // An engine without it (jsdom) keeps the plain hit.
+  }
+  const stack = document.elementsFromPoint(x, y);
+  const count = Math.min(stack.length, STACK_CHECKED_MAX);
+  for (let index = 0; index < count; index++) {
+    const element = stack[index];
+    if (element === undefined) {
+      break;
+    }
+    if (element === hit) {
+      continue;
+    }
+    if (!element.hasAttribute(PATH_ATTR)) {
+      continue;
+    }
+    // An ancestor already answers for the hit through the ordinary walk.
+    return element.contains(hit) ? undefined : element;
+  }
+  return undefined;
+};
+
+// Embedded documents take no pointer in select mode (frameInteraction.ts), so
+// the hit test lands on the element around them. The embed itself is what the
+// pointer is over: found among that element's own embeds, by its box. Bounded,
+// since a page can hold any number of them.
+const EMBEDS_CHECKED_MAX = 64;
+const embedAt = (hit: Element, x: number, y: number): Element => {
+  const embeds = hit.querySelectorAll('iframe, embed, object');
+  const count = Math.min(embeds.length, EMBEDS_CHECKED_MAX);
+  for (let index = 0; index < count; index++) {
+    const embed = embeds[index];
+    if (embed === undefined) {
+      break;
+    }
+    const box = embed.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0) {
+      if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
+        return embed;
+      }
+    }
+  }
+  return hit;
+};
 
 // The element under the pointer, for the deep hover's layers.
 const targetElementOf = (event: MouseEvent): Element | undefined => {
@@ -184,7 +297,8 @@ const nodeAtEvent = (event: MouseEvent) => (event.clientX || event.clientY ? nod
  * click reports it. Undefined over markup no node owns.
  */
 export function nodeAtPoint(x: number, y: number): FramePointHit | undefined {
-  const { path: nodePath, occurrence } = nodeAt(document.elementFromPoint(x, y) ?? undefined, x, y);
+  const hit = document.elementFromPoint(x, y);
+  const { path: nodePath, occurrence } = nodeAt(hit ? pointTarget(hit, x, y) : undefined, x, y);
   if (!nodePath) {
     return undefined;
   }
@@ -194,22 +308,50 @@ export function nodeAtPoint(x: number, y: number): FramePointHit | undefined {
 export const startOutlines = () => {
   // A page edit now patches the document instead of reloading it, so the
   // markers this map is built from move without the page ever going away.
-  // Registered before the early return: the first collection can come up
-  // empty (a page whose markup arrives with the first patch), and this is
-  // what gets it a second chance.
-  document.addEventListener('avb:morphed', () => {
+  // Registered first: the first collection can come up empty (a page whose
+  // markup arrives with the first patch), and this is what gets it a second
+  // chance. Astro's <ClientRouter /> swaps the page in place the same way, so a
+  // soft navigation re-reads the markers and the stamps too: without that the
+  // frame kept vouching for the page it navigated away from, and every click on
+  // the new one was refused.
+  const remap = (): void => {
     collectRegions();
     announceMapped();
+    if (regions.size) {
+      startWatching();
+    }
     queueRects(true);
-  });
+  };
+  // Once the new rendering's token is known, a pointer resting on the page is
+  // over something new: say so with that token.
+  setRenderListener(rehover);
+  document.addEventListener('avb:morphed', remap);
+  document.addEventListener('astro:after-swap', remap);
   collectRegions();
   // Said even when the page has no markers at all: "nothing here" is a real
   // answer, and withholding it would leave every question waiting out its
   // timeout.
   announceMapped();
-  if (!regions.size) {
+  // The pointer is always heard, markers or not: a page whose markup arrives
+  // later, an error page, a page the marker could not mark — the editor still
+  // answers every click there (it selects what it can), and a frame that went
+  // deaf left the canvas looking broken.
+  listenForPointer();
+  listenForContextMenu();
+  if (regions.size) {
+    startWatching();
+  }
+};
+
+// The observers that keep outlines on their elements. Started once, as soon as
+// the page has something to outline: a page with no markers has nothing to
+// measure, so it does not pay for watching.
+let watching = false;
+const startWatching = (): void => {
+  if (watching) {
     return;
   }
+  watching = true;
   // Wrapped, not passed straight in: a listener is handed the Event, and
   // queueRects reads its first argument as "the page may have changed too".
   // An Event is not false, so every scroll asked for the whole-page walk —
@@ -253,9 +395,30 @@ export const startOutlines = () => {
   // transition, anything that only changes where things are. Nothing above
   // fires for that; see followMotion.
   lookForMotion();
-  listenForPointer();
-  listenForContextMenu();
 };
+
+/**
+ * The editor asks again where a click landed (`avb:click-query` `{ id, x, y }`)
+ * when the rendering it first named was not current: the page is hit-tested
+ * afresh, by the click's own resolution, and answered as an ordinary
+ * `avb:click-node` carrying `replay: id` and the token of the rendering shown
+ * NOW. Nothing reaches the page: this is a question, not a click.
+ */
+export function answerClickQuery(id: number, x: number, y: number): void {
+  forgetKeptBoxes();
+  const hit = document.elementFromPoint(x, y);
+  const { path: nodePath, occurrence, outside, pseudo } = nodeAt(hit ? pointTarget(hit, x, y) : undefined, x, y);
+  postLocated('avb:click-node', {
+    path: nodePath || undefined,
+    occurrence,
+    outside: !!outside,
+    x,
+    y,
+    box: nodePath ? rectsForPath(nodePath)?.[occurrence] : undefined,
+    replay: id,
+    ...pseudoField(pseudo),
+  });
+}
 
 // Polls for motion nothing announces (see followMotion).
 const lookForMotion = () => {
@@ -270,18 +433,19 @@ const lookForMotion = () => {
 };
 
 // Hover, double-click and click, each resolved to the node under the pointer.
+// Each listener is on the window in the capture phase, the earliest point an
+// event reaches in the page: the preload runs before any page script, so a
+// page handler that stops propagation or rebuilds the node under the pointer
+// can no longer hide a hover from the canvas.
 const listenForPointer = () => {
-  document.addEventListener('mousemove', (event) => {
-    // In deep outline mode a hover inside a closed component names the element there (frameOutlineMode.ts); a click never does.
-    const scoped = nodeAtEvent(event);
-    const deep = deepHoverAt(targetElementOf(event), scoped.path);
-    const { path: nodePath, occurrence, pseudo } = deep === undefined ? scoped : { ...deep, pseudo: undefined };
-    if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence || pseudo !== lastHover.pseudo) {
-      lastHover = { path: nodePath, occurrence, pseudo };
-      // A deep hover says how to label its node, which the editor's tree of the open file cannot.
-      postLocated('avb:hover-node', { path: nodePath, occurrence, ...pseudoField(pseudo), ...(deep === undefined ? {} : { deep: deep.node }) });
-    }
-  });
+  window.addEventListener(
+    'mousemove',
+    (event) => {
+      lastPointer = event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined;
+      reportHover(nodeAtEvent(event), targetElementOf(event));
+    },
+    true,
+  );
   document.documentElement.addEventListener('mouseleave', startOutlinesClearHover);
   // Double-clicking a component opens it for editing, the way Webflow
   // drills into one.
@@ -381,6 +545,7 @@ function listenForContextMenu(): void {
 function startOutlinesClearHover(): void {
   // Coming back in, the page may have changed under the kept boxes.
   forgetKeptBoxes();
+  lastPointer = undefined;
   // Told nothing yet, or told of a node: either way, the pointer has left.
   if (lastHover === undefined || lastHover.path !== undefined) {
     lastHover = { path: undefined, occurrence: 0, pseudo: undefined };

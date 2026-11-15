@@ -6,6 +6,7 @@
 import { assert } from '../../shared/core/assert';
 import type { Box, Rect, TaggedPlace } from './frameBasics';
 import { PRELOAD_LIMITS, isChildNode, isComment, isElement, isText } from './frameBasics';
+import { PREVIEW_STAMP_PREFIX, parseStampData, type FrameRenderProblem } from '../../shared/page/previewToken';
 
 // --- Node outlines --------------------------------------------------------
 // Pages served through the app's marker plugin wrap every model node in
@@ -161,49 +162,59 @@ export const announceMapped = () => {
 // naming the bytes it was marked from. The stamps on the page are the
 // manifest of this rendering, and its token — the SHA-256 of the manifest's
 // canonical text — rides on every located event, so the app can refuse a
-// click from a rendering the files have since moved past. Mirrors
-// shared/page/previewToken.ts, which this sandboxed preload cannot require; the
-// contract test (test/electron/previewServer/previewBridge.test.ts) pins the two to each
-// other. The patcher gathers the stamps at the document's end after each
-// patch; the page arrives with them wherever each file rendered.
-const STAMP_PREFIX = 'avb-d:';
+// click from a rendering the files have since moved past. Each stamp is read
+// with shared/page/previewToken.ts's own parser, so the frame and the app's
+// boundary (parsePreviewRender) accept exactly the same stamps: a forged or
+// malformed one is skipped here instead of making the app drop the whole
+// announcement, which left every click refused as "still loading". The
+// contract test (test/electron/previewServer/previewBridge.test.ts) pins the
+// canonical text to the shared one. The patcher gathers the stamps at the
+// document's end after each patch; the page arrives with them wherever each
+// file rendered.
+const STAMP_PREFIX = PREVIEW_STAMP_PREFIX;
 export const STAMP_ATTRIBUTE = 'data-avb-d';
 const STAMPS_MAX = 20000; // LIMITS.previewMarkersMax
 const MANIFEST_FILES_MAX = 512; // LIMITS.previewManifestFilesMax
+// Elements the stamp walk visits: far past any page a person builds, and a
+// stated end for one that is not (a script appending forever).
+const MANIFEST_WALK_ELEMENTS_MAX = 2_000_000;
 export let renderToken: string | undefined = undefined;
 let renderStamps: { readonly file: string; readonly checksum: string }[] | undefined;
 let renderSeq = 0;
 export function canvasTextSourceMatches(file: string, checksum: string): boolean {
   return renderStamps?.some((stamp) => stamp.file === file && stamp.checksum === checksum) ?? false;
 }
-// Undefined when the page's stamps cannot form one manifest: too many, or
-// one file stamped with two checksums (a rendering mixing versions of it).
-const readManifest = (): { file: string; checksum: string }[] | undefined => {
+
+type ManifestReading =
+  | { readonly kind: 'manifest'; readonly stamps: readonly { readonly file: string; readonly checksum: string }[] }
+  | { readonly kind: 'problem'; readonly problem: FrameRenderProblem };
+
+// The page's stamps as one manifest, or why they cannot form one: too many,
+// or one file stamped with two checksums (a rendering mixing versions of it).
+const readManifest = (): ManifestReading => {
   const byFile = new Map<string, string>();
   let stamps = 0;
-  const record = (data: string): boolean => {
+  const record = (data: string): FrameRenderProblem | undefined => {
     stamps += 1;
     if (stamps > STAMPS_MAX) {
-      return false;
+      return 'too-many-stamps';
     }
-    if (!data.startsWith(STAMP_PREFIX)) {
-      return true;
+    const stamp = parseStampData(data);
+    if (stamp === undefined) {
+      return undefined; // Not a stamp, or a forged one: never trusted, never fatal.
     }
-    const rest = data.slice(STAMP_PREFIX.length);
-    const checksum = rest.slice(0, 64);
-    const file = rest.slice(65);
-    if (!/^[0-9a-f]{64}$/.test(checksum) || rest[64] !== ':' || !file) {
-      return true;
+    const seen = byFile.get(stamp.file);
+    if (seen !== undefined && seen !== stamp.checksum) {
+      return 'conflicting-stamps';
     }
-    const seen = byFile.get(file);
-    if (seen !== undefined && seen !== checksum) {
-      return false;
-    }
-    byFile.set(file, checksum);
-    return true;
+    byFile.set(stamp.file, stamp.checksum);
+    return undefined;
   };
   const stack: Node[] = [document];
-  while (stack.length) {
+  for (let visited = 0; stack.length > 0; visited++) {
+    if (MANIFEST_WALK_ELEMENTS_MAX < visited) {
+      return { kind: 'problem', problem: 'page-too-large' };
+    }
     const parent = stack.pop();
     if (!parent) {
       break;
@@ -213,18 +224,19 @@ const readManifest = (): { file: string; checksum: string }[] | undefined => {
         const carried = node.getAttribute(STAMP_ATTRIBUTE);
         if (carried !== null) {
           if (STAMPS_MAX * (65 + 1_024) < carried.length) {
-            return undefined;
+            return { kind: 'problem', problem: 'too-many-stamps' };
           }
           // Newlines cannot occur in a stamped path, unlike spaces, so a file
           // such as `Hero Card.astro` remains one token while inherited stamps
           // can still travel together through component props.
           const tokens = carried.split('\n').filter(Boolean);
           if (STAMPS_MAX < tokens.length) {
-            return undefined;
+            return { kind: 'problem', problem: 'too-many-stamps' };
           }
           for (const token of tokens) {
-            if (!record(token)) {
-              return undefined;
+            const problem = record(token);
+            if (problem !== undefined) {
+              return { kind: 'problem', problem };
             }
           }
         }
@@ -234,26 +246,52 @@ const readManifest = (): { file: string; checksum: string }[] | undefined => {
       if (!isComment(node) || !node.data.startsWith(STAMP_PREFIX)) {
         continue;
       }
-      if (!record(node.data)) {
-        return undefined;
+      const problem = record(node.data);
+      if (problem !== undefined) {
+        return { kind: 'problem', problem };
       }
     }
   }
   if (byFile.size > MANIFEST_FILES_MAX) {
-    return undefined;
+    return { kind: 'problem', problem: 'too-many-stamps' };
   }
-  return [...byFile.keys()].sort((left, right) => (left < right ? -1 : left === right ? 0 : 1)).map((file) => ({ file, checksum: byFile.get(file) ?? '' }));
+  const files = [...byFile.keys()].sort((left, right) => (left < right ? -1 : left === right ? 0 : 1));
+  return { kind: 'manifest', stamps: files.map((file) => ({ file, checksum: byFile.get(file) ?? '' })) };
 };
+
+// Called each time a rendering's token becomes known (frameTargets.ts re-hit-tests
+// a resting pointer then). One listener: the frame has one pointer.
+let renderListener: (() => void) | undefined;
+export function setRenderListener(listener: () => void): void {
+  renderListener = listener;
+}
+
+// Said once per rendering that cannot be vouched for, so the app can heal the
+// canvas instead of refusing every click on it.
+const reportRenderProblem = (problem: FrameRenderProblem): void => {
+  try {
+    window.parent.postMessage({ type: 'avb:render-problem', problem }, '*');
+  } catch {
+    /* no parent to tell */
+  }
+};
+
 const announceRender = () => {
   renderSeq += 1;
   const seq = renderSeq;
   renderToken = undefined; // Until this rendering's digest is known, events carry none.
   renderStamps = undefined;
-  const stamps = readManifest();
-  const subtle = globalThis.crypto?.subtle;
-  if (!stamps || !subtle) {
+  const reading = readManifest();
+  if (reading.kind === 'problem') {
+    reportRenderProblem(reading.problem);
     return;
   }
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    reportRenderProblem('no-digest');
+    return;
+  }
+  const stamps = [...reading.stamps];
   const canonical = stamps.map((stamp) => `${stamp.checksum} ${stamp.file}\n`).join('');
   subtle.digest('SHA-256', new TextEncoder().encode(canonical)).then(
     (digest) => {
@@ -264,9 +302,12 @@ const announceRender = () => {
       renderToken = bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
       renderStamps = stamps;
       reportRender();
+      renderListener?.();
     },
     () => {
-      /* no digest, no token: the app refuses this rendering's events */
+      if (seq === renderSeq) {
+        reportRenderProblem('no-digest'); // No digest, no token: the app refuses this rendering's events.
+      }
     },
   );
 };
