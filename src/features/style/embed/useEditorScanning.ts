@@ -8,8 +8,9 @@ import { forgetComputedStyles } from '../model/computedStyle';
 import { forgetComputedColors } from '../model/computedColor';
 import { computeRuleModel } from '../model/cascade';
 import { type MatchTarget } from '../model/selectors';
-import { getHost, onHostChange } from '../model/host';
+import { getHost, onHostChange, type HostState } from '../model/host';
 import { buildSnapshot, onDocsReloaded, rebuildRules, primeDomMatches, scanHasElement, serializeElementId, scanPage, webflowApi } from '../model/webflow';
+import { assert } from '../../../../shared/core/assert';
 import type { ElementSnapshot } from '../model/styleTypes';
 import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
 import { readScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
@@ -30,6 +31,32 @@ import {
 } from './editorModel';
 import { useEditorRefs, useScanState, useSelectionState, useNativeState, useContentRebuild, useApplyResolve } from './useEditorFoundation';
 
+// How many times one background refresh reads again because what it read from moved while it
+// ran. An undo moves the history tick twice (once as it starts, once when it has landed) and the
+// page model once; a live write moves the model once. Past this the pass stops, stays marked
+// stale, and the next poll takes it up as an urgent refresh.
+const BACKGROUND_REFRESH_PASSES_MAX = 4;
+
+// What the panel's content is read from, by identity: the history tick the app moves on undo
+// and redo, and the page model, whose `<style>` blocks are read from its nodes (webflow.ts
+// readSource). A content read while either moved holds the CSS from before the move.
+interface SourceRevision {
+  readonly historyTick: number;
+  readonly nodes: HostState['nodes'];
+}
+
+function sourceRevision(): SourceRevision {
+  const host = getHost();
+  return { historyTick: host.historyTick, nodes: host.nodes };
+}
+
+function sameSourceRevision(left: SourceRevision, right: SourceRevision): boolean {
+  if (left.historyTick !== right.historyTick) {
+    return false;
+  }
+  return left.nodes === right.nodes;
+}
+
 // Rebuild content in the background, then re-resolve the selection.
 export function useBackgroundRefresh(
   editorRefs: ReturnType<typeof useEditorRefs>,
@@ -41,29 +68,56 @@ export function useBackgroundRefresh(
   const { setRefreshing } = scanState;
   const { rebuildAndStore } = contentRebuild;
   const { applyResolve } = applyResolveHook;
+  // An urgent refresh asked for while another ran or an edit was saving. It used to be
+  // dropped: an undo asks once as it starts (the page still holds the old CSS) and again once
+  // it has landed, and the second ask arrived while the first read was still out, so the panel
+  // kept the read from before the undo — one step behind the canvas and the file (SP-06).
+  const staleRef = useRef(false);
 
   // Rebuild content in the background (coalesced + throttled) to pick up embed
   // edits, then re-resolve the current selection — without blocking the UI.
   const backgroundRefresh = useCallback(
     async ({ now = false }: { now?: boolean } = {}) => {
       if (refreshingRef.current || busyRef.current) {
+        if (now) {
+          staleRef.current = true;
+        }
         return;
       }
       // `now` skips the throttle: something rewrote the files or the model out
       // from under the panel (an undo), and waiting out a polling interval to
-      // notice is what made the panel trail the canvas.
-      if (!now && Date.now() - lastScanAtRef.current < BG_REFRESH_THROTTLE_MS) {
+      // notice is what made the panel trail the canvas. A refused urgent ask is
+      // urgent still when the poll comes round.
+      const urgent = now || staleRef.current;
+      if (!urgent && Date.now() - lastScanAtRef.current < BG_REFRESH_THROTTLE_MS) {
         return;
       }
       refreshingRef.current = true;
-      // Failed network refreshes need the same backoff as successful scans.
-      lastScanAtRef.current = Date.now();
       setRefreshing(true);
       try {
-        const content = await rebuildAndStore();
-        const element = selectedRef.current;
-        if (element && scanHasElement(content.scan, element)) {
-          await applyResolve(element, content, seqRef.current, { silent: true });
+        let passes = 0;
+        for (; passes < BACKGROUND_REFRESH_PASSES_MAX; passes++) {
+          staleRef.current = false;
+          const revision = sourceRevision();
+          // Failed network refreshes need the same backoff as successful scans.
+          lastScanAtRef.current = Date.now();
+          const content = await rebuildAndStore();
+          const element = selectedRef.current;
+          if (element && scanHasElement(content.scan, element)) {
+            await applyResolve(element, content, seqRef.current, { silent: true });
+          }
+          // Settled only when nothing it read from moved meanwhile: the model the panel
+          // shows is then the one for the document as it stands.
+          if (staleRef.current) {
+            continue;
+          }
+          if (sameSourceRevision(revision, sourceRevision())) {
+            break;
+          }
+        }
+        assert(passes <= BACKGROUND_REFRESH_PASSES_MAX, 'backgroundRefresh: the passes are bounded');
+        if (passes === BACKGROUND_REFRESH_PASSES_MAX) {
+          staleRef.current = true;
         }
       } catch {
         // Background failures are non-fatal — the cached view stays usable.
