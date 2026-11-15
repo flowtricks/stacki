@@ -1,6 +1,6 @@
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
-import { chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
+import { check as centralCheck, chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import type { InlineChip, InlineCodeView } from './useInlineTarget';
 import { InlineBranchEditor, InlineBranchPicker } from './InlineBranchEditor';
 import { CodeBlock } from '../../../ui/CodeBlock';
@@ -15,7 +15,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { CodeEditor } from '../components/CssCodeEditor';
 import { ruleChainText, ruleTextFromChain } from '../model/cssRuleText';
-import SegmentedControl from '../components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../components/SegmentedControl';
+import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
+import { getHost } from '../model/host';
+import { breakpointLabel } from '../../../lib/breakpointLabel';
+import { iconFor } from '../../../../shared/properties/breakpointIcon';
+import { deviceIcon } from './breakpointIcons';
+import { defaultDirection, parseCustom, suggestionMatches, suggestionsFor, type CustomQuery, type QueryDirection } from './addQueryModel';
 import { type MatchedRule, type RuleModel } from '../model/cascade';
 import { cssTokens } from '../model/cssCode';
 import { buildCssRuleView, type CssRuleRange, type CssRuleView } from '../model/cssRuleView';
@@ -214,29 +220,76 @@ export function queryKeyDown(
   }
 }
 
-// Inline form to add a custom query (@media/@container/@supports) to the current
-// selector, choosing whether it WRAPS the selector (a new at-rule block) or NESTS
-// inside the selector's existing rule (CSS nesting). Nesting needs a picked selector.
-// The controls sit ABOVE the input so the suggestion list (opened below it) can't
-// cover them; the input pre-fills `@` and offers project + common queries.
+// Inline form to add a query to the current selector, choosing whether it WRAPS the selector (a
+// new at-rule block) or NESTS inside the selector's existing rule (CSS nesting; needs a picked
+// selector). It is suggestion-first: the project's breakpoints, each with the exact condition it
+// would write for the chosen direction (Mobile first `width >= X`, Desktop first `width < X`), in
+// the preview bar's order, then a Custom row for any width the Settings editor accepts (or a whole
+// at-rule typed by hand, as the old field allowed). Only Enter or a click writes; browsing and
+// typing never do. A condition that exists already is checked and only switches the edit target.
 export function AddQueryForm({
   canNest,
-  suggestions,
+  contexts,
   onAdd,
+  onExisting,
   onCancel,
 }: {
   canNest: boolean;
-  suggestions: QuerySuggestion[];
+  contexts: readonly StyleContext[];
   onAdd: (query: string, mode: 'wrap' | 'nest') => void;
+  onExisting: (key: ContextKey) => void;
   onCancel: () => void;
 }) {
   const translate = useTranslate();
-  const [draft, setDraft] = useState('@');
+  const { resolved } = useProjectBreakpoints(getHost().projectPath);
+  const lengthUnit = getHost().lengthUnit;
   const [mode, setMode] = useState<'wrap' | 'nest'>('nest');
-  const submit = (text: string) => onAdd(text, canNest ? mode : 'wrap');
-
+  const [direction, setDirection] = useState<QueryDirection>(() => defaultDirection(contexts.map((context) => context.embedAtContext ?? '')));
+  const [draft, setDraft] = useState('');
+  const [highlight, setHighlight] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => listRef.current?.focus(), []);
+  const suggestions = useMemo(() => suggestionsFor(resolved, direction, contexts), [resolved, direction, contexts]);
+  const shown = suggestions.filter((suggestion) => suggestionMatches(suggestion, draft, breakpointLabel(suggestion.breakpoint, translate)));
+  const custom = parseCustom(draft, { direction, lengthUnit, contexts });
+  const active = shown[Math.min(highlight, shown.length - 1)];
+  const write = (query: string, existingKey: ContextKey | undefined) => {
+    if (existingKey === undefined) {
+      onAdd(query, canNest ? mode : 'wrap');
+    } else {
+      onExisting(existingKey);
+    }
+  };
+  const addCustom = () => {
+    if (custom.kind === 'width') {
+      write(custom.query, custom.existingKey);
+    } else if (custom.kind === 'raw') {
+      onAdd(custom.query, canNest ? mode : 'wrap');
+    }
+  };
+  const onListKey = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setHighlight((previous) => Math.min(previous + 1, shown.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHighlight((previous) => Math.max(previous - 1, 0));
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (active !== undefined) {
+        write(active.query, active.existingKey);
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      onCancel();
+    }
+  };
+  const directionOptions: SegmentedOption<QueryDirection>[] = [
+    { value: 'up', label: translate('styleModel.embed.query.mobileFirst') },
+    { value: 'down', label: translate('styleModel.embed.query.desktopFirst') },
+  ];
   return (
-    <div className="embed-editor_add-query">
+    <div className="embed-editor_add-query is-suggested">
       <div className="embed-editor_add-query-controls">
         <SegmentedControl
           className="embed-editor_add-query-mode"
@@ -251,23 +304,120 @@ export function AddQueryForm({
           <button type="button" className="u-button is-ghost is-small" onClick={onCancel}>
             {translate('ui.cancel')}
           </button>
-          <button type="button" className="u-button is-primary is-small" onClick={() => submit(draft)} disabled={draft.trim() === '' || draft.trim() === '@'}>
-            {translate('styleModel.embed.query.add')}
-          </button>
         </div>
       </div>
       {!canNest ? <p className="embed-editor_add-query-note">{translate('styleModel.embed.query.pickToNest')}</p> : undefined}
-      <QueryCombo
-        draft={draft}
-        setDraft={setDraft}
-        onSubmit={submit}
-        onCancel={onCancel}
-        suggestions={suggestions}
-        ariaLabel={translate('styleModel.embed.query.queryToAdd')}
+      <SegmentedControl
+        className="embed-editor_add-query-direction"
+        options={directionOptions}
+        value={direction}
+        onChange={(next) => {
+          setDirection(next);
+          setHighlight(0);
+        }}
+        ariaLabel={translate('styleModel.embed.query.direction')}
+        widthMode="hug"
       />
+      <div
+        ref={listRef}
+        className="embed-editor_aq-list"
+        role="listbox"
+        tabIndex={0}
+        aria-label={translate('styleModel.embed.query.breakpoints')}
+        aria-activedescendant={active === undefined ? undefined : `aq-${active.breakpoint.id}`}
+        onKeyDown={onListKey}
+      >
+        {shown.map((suggestion, index) => {
+          const name = breakpointLabel(suggestion.breakpoint, translate);
+          const added = suggestion.existingKey !== undefined;
+          return (
+            <div
+              key={suggestion.breakpoint.id}
+              id={`aq-${suggestion.breakpoint.id}`}
+              role="option"
+              aria-selected={added}
+              aria-label={added ? `${name}, ${suggestion.condition}, ${translate('styleModel.embed.query.alreadyAdded')}` : `${name}, ${suggestion.condition}`}
+              className={['embed-editor_aq-row', index === Math.min(highlight, shown.length - 1) ? 'is-active' : '', added ? 'is-added' : '']
+                .filter(Boolean)
+                .join(' ')}
+              onMouseEnter={() => setHighlight(index)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => write(suggestion.query, suggestion.existingKey)}
+            >
+              <span className="embed-editor_aq-icon">{deviceIcon(iconFor(suggestion.breakpoint, resolved))}</span>
+              <span className="embed-editor_aq-name">{name}</span>
+              <span className="embed-editor_aq-detail">{added ? translate('styleModel.embed.query.alreadyAdded') : suggestion.condition}</span>
+              <span className="embed-editor_aq-check">{added ? <CheckGlyph /> : undefined}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="embed-editor_aq-custom">
+        <input
+          className="u-input embed-editor_aq-input"
+          value={draft}
+          placeholder={translate('styleModel.embed.query.customPlaceholder')}
+          spellCheck={false}
+          aria-label={translate('styleModel.embed.query.custom')}
+          aria-invalid={custom.kind === 'invalid'}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setHighlight(0);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addCustom();
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              onCancel();
+            }
+          }}
+        />
+        <button type="button" className="u-button is-primary is-small" onClick={addCustom} disabled={custom.kind !== 'width' && custom.kind !== 'raw'}>
+          {translate('styleModel.embed.query.add')}
+        </button>
+      </div>
+      <p className={custom.kind === 'invalid' ? 'embed-editor_aq-preview is-invalid' : 'embed-editor_aq-preview'} role="status" aria-live="polite">
+        {customPreview(custom, translate)}
+      </p>
     </div>
   );
 }
+
+// The Custom row's live line: what will be added, or why nothing will be.
+function customPreview(custom: CustomQuery, translate: ReturnType<typeof useTranslate>): string {
+  switch (custom.kind) {
+    case 'empty':
+      return '';
+    case 'raw':
+      return translate('styleModel.embed.query.willAdd', { query: custom.query });
+    case 'width':
+      if (custom.existingKey !== undefined) {
+        return translate('styleModel.embed.query.alreadyAdded');
+      }
+      return translate(custom.converted ? 'styleModel.embed.query.willAddRem' : 'styleModel.embed.query.willAdd', { query: custom.query });
+    case 'invalid':
+      switch (custom.code) {
+        case 'pxWhole':
+          return translate('styleModel.embed.query.invalidPxWhole');
+        case 'range':
+          return translate('styleModel.embed.query.invalidRange');
+        case 'syntax':
+          return translate('styleModel.embed.query.invalidSyntax');
+        default: {
+          const exhaustive: never = custom.code;
+          return exhaustive;
+        }
+      }
+    default: {
+      const exhaustive: never = custom;
+      return exhaustive;
+    }
+  }
+}
+
+const CheckGlyph = centralIcon(centralCheck, 12);
 
 // Rename a query wherever this stylesheet spells it. A breakpoint is one idea
 // written in several places — this component's four `@media (width >= 64rem)`

@@ -1246,6 +1246,8 @@
     "src/features/style/embed/ResolvedRows.tsx",
     "src/features/style/embed/SelectorPicker.tsx",
     "src/features/style/embed/StyleCard.tsx",
+    "src/features/style/embed/addQueryModel.ts",
+    "src/features/style/embed/breakpointIcons.tsx",
     "src/features/style/embed/contextFollow.ts",
     "src/features/style/embed/contextRows.ts",
     "src/features/style/embed/contextGroups.ts",

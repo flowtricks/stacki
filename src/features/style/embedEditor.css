@@ -3806,6 +3806,93 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
+/* The suggestion-first add form: the project's breakpoints as flat 32px rows (no cards, no lines;
+   fills only for hover and the active row), then a Custom row and its live preview. Rows end in the
+   same 16px check slot, so insets are symmetric and nothing scrolls sideways. */
+.embed-editor_add-query.is-suggested {
+  gap: var(--space-2);
+  min-width: 0;
+}
+.embed-editor_aq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.embed-editor_aq-list:focus {
+  outline: none;
+}
+.embed-editor_aq-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: calc(var(--radius-xl) - var(--space-3));
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+.embed-editor_aq-row.is-active {
+  background: var(--color-bg-hover);
+}
+.embed-editor_aq-row.is-added {
+  color: var(--color-text-secondary);
+}
+.embed-editor_aq-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--color-text-tertiary);
+}
+.embed-editor_aq-name {
+  flex: 0 0 auto;
+}
+.embed-editor_aq-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-regular, 400);
+}
+.embed-editor_aq-check {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.embed-editor_aq-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.embed-editor_aq-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-xs);
+}
+.embed-editor_aq-preview {
+  margin: 0;
+  min-height: 1rem;
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  overflow-wrap: anywhere;
+}
+.embed-editor_aq-preview.is-invalid {
+  color: var(--color-danger, #ff9b9b);
+  font-family: var(--font-family-sans);
+}
 /* The add form wraps (its wrap/nest switch needs the room); the rename form is a
    label and two buttons and stays on one line, the label giving way first. */
 .embed-editor_add-query.is-rename .embed-editor_add-query-controls {

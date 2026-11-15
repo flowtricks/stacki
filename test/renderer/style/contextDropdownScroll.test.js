@@ -12,7 +12,7 @@
 // the context dropdown builds them, under the real tokens and stylesheets, then measures rects and
 // scrollTop. Presses are dispatched events; every wait polls observable state
 // (test/helpers/waitFor.js). Nothing is wall-clock dependent and no real project is touched. Set
-// STACKI_DROPDOWN_SHOTS=<directory> to also save screenshots of the typical, long and pinned lists.
+// STACKI_DROPDOWN_SHOTS=<directory> to also save screenshots (real icon components, not stand-ins) of the typical, long and pinned lists.
 
 const fs = require('fs');
 const path = require('path');
@@ -35,25 +35,27 @@ const check = (what, condition, detail) => {
     import React, { useState } from 'react'
     import { createRoot } from 'react-dom/client'
     import Select from './src/features/style/components/Select'
+    import { deviceIcon, WidthIcon } from './src/features/style/embed/breakpointIcons'
+    import { PinIcon, ChevronDownIcon } from './src/ui/Icons'
     import './src/features/style/tokens.css'
     import './src/features/style/utilities.css'
     import './src/features/style/embedEditor.css'
 
-    const pencil = { icon: <span>p</span>, label: 'Edit', onSelect: () => {} }
+    const pencil = { icon: <ChevronDownIcon />, label: 'Edit', onSelect: () => {} }
     const build = (rev, shape, pinned) => {
-      const options = [{ value: '__follow', label: 'Follow canvas size', icon: <span>pin</span>, header: true, switch: true, checked: !pinned }]
-      options.push({ value: '', label: 'Base', icon: <span>h</span> })
+      const options = [{ value: '__follow', label: 'Follow canvas size', icon: <PinIcon />, header: true, switch: true, checked: !pinned }]
+      options.push({ value: '', label: 'Base', icon: <WidthIcon /> })
       const heading = (value, label) => ({ value, label, heading: true })
       options.push(heading('g0', '.grid'))
       const rows = [['≥ 64rem', 'w0'], ['≥ 48rem', 'w1'], ['≥ 30rem', 'w2']]
       for (const [label, value] of rows) {
-        options.push({ value, label, title: '@media (width ' + label + ')', icon: <span>r</span>, marked: true, action: pencil, ...(value === 'w0' ? { triggerPrefix: 'Grid .grid' } : {}) })
+        options.push({ value, label, title: '@media (width ' + label + ')', icon: <WidthIcon />, marked: true, action: pencil, ...(value === 'w0' ? { triggerPrefix: 'Grid .grid' } : {}) })
       }
       if (shape === 'long') {
         for (let g = 1; g <= 9; g += 1) {
           options.push(heading('g' + g, 'src/styles/s' + g + '.css'))
-          options.push({ value: 'l' + g, label: 'Laptop', detail: '< 64rem', icon: <span>l</span>, marked: rev >= 0 })
-          options.push({ value: 'k' + g, label: 'Tablet', detail: '< 48rem', icon: <span>t</span>, marked: true })
+          options.push({ value: 'l' + g, label: 'Laptop', detail: '< 64rem', icon: deviceIcon('laptop'), marked: rev >= 0 })
+          options.push({ value: 'k' + g, label: 'Tablet', detail: '< 48rem', icon: deviceIcon('tablet'), marked: true })
         }
       }
       options.push(heading('other', 'Other'))

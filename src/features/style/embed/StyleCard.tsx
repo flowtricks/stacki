@@ -9,11 +9,11 @@ import Select from '../components/Select';
 import type { SelectOption, SelectTag } from '../components/selectTypes';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { homeRoundDoor as centralHomeRoundDoor } from '../../../ui/central/centralGeometry';
-import { DesktopIcon, LaptopIcon, PhoneIcon, PinIcon, SmartwatchIcon, StudioDisplayXdrIcon, TabletIcon, TelevisionIcon } from '../../../ui/Icons';
-import { ruler as centralRuler } from '../../../ui/central/centralGeometry';
+import { PinIcon } from '../../../ui/Icons';
 import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { breakpointLabel } from '../../../lib/breakpointLabel';
-import { iconFor, type DeviceIconKind } from '../../../../shared/properties/breakpointIcon';
+import { iconFor } from '../../../../shared/properties/breakpointIcon';
+import { WidthIcon, deviceIcon } from './breakpointIcons';
 import { describeCondition } from './contextRows';
 import { groupContexts } from './contextGroups';
 import { getHost } from '../model/host';
@@ -362,21 +362,6 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
 // The Other section label's value: never a context key nor ADD_QUERY.
 const OTHER_HEADING = '\u0000other';
 
-const WidthIcon = centralIcon(centralRuler);
-
-const DEVICE_ICONS: Readonly<Record<DeviceIconKind, () => ReactNode>> = {
-  desktop: () => <DesktopIcon />,
-  laptop: () => <LaptopIcon />,
-  tablet: () => <TabletIcon />,
-  phone: () => <PhoneIcon />,
-  studioDisplayXdr: () => <StudioDisplayXdrIcon />,
-  television: () => <TelevisionIcon />,
-  smartwatch: () => <SmartwatchIcon />,
-  canvas: () => <DesktopIcon />,
-};
-// The preview bar's and Settings' icon for a breakpoint.
-const deviceIcon = (kind: DeviceIconKind): ReactNode => DEVICE_ICONS[kind]();
-
 // The Follow canvas size row's value: neither a context key nor ADD_QUERY.
 const FOLLOW_CANVAS = '\u0000follow-canvas';
 
@@ -428,8 +413,12 @@ export function QueryForms({
       {addingQuery ? (
         <AddQueryForm
           canNest={card.activeSelector.length > 0}
-          suggestions={card.querySuggestions}
+          contexts={card.contexts}
           onCancel={() => setAddingQuery(false)}
+          onExisting={(key) => {
+            setAddingQuery(false);
+            card.onContext(key);
+          }}
           onAdd={(query, mode) => {
             setAddingQuery(false);
             card.onAddQuery(query, mode);

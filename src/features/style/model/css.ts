@@ -157,7 +157,8 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
           // A nested query's OWN bare declarations style the ENCLOSING selector within
           // the query. Surface them as a rule bound to the at-rule node itself (its
           // direct decls), so the authored bare form round-trips without an `& { }`.
-          if (parentSelectors && parentSelectors.length && at.some((child) => child.type === 'decl')) {
+          // A just-scaffolded query (`selector { @media (…) }`) has no block body yet: `nodes` is undefined, not [].
+          if (parentSelectors && parentSelectors.length && at.nodes !== undefined && at.some((child) => child.type === 'decl')) {
             const selectorsOnly = nextDisplay.filter((part) => part !== '@');
             const nestedDisplay = selectorsOnly.length > 1 ? renderNestedPath(selectorsOnly) : undefined;
             const queryDisplay = renderNestedPath(nextDisplay);
