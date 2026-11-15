@@ -29,12 +29,64 @@ jobs:
       - run: npm run check:policy
       - run: npm run typecheck
 
-  # The full gate on every platform the app ships on, split into four shards per
-  # platform so the slowest platform finishes in about a quarter of the time.
-  # Each shard runs the full gate's clean builds and its share of the suites
-  # (a stable hash of each suite's path, scripts/gate/testShard.ts); shard 1 also
-  # runs the static checks, so the four shards together run exactly `npm test`.
+  # The full gate on every platform the app ships on, split so no job carries
+  # more than about a quarter of it. Per platform: one job runs the builds and
+  # the desktop static checks (`--checks=desktop`: tsc, ESLint, Prettier, the
+  # policy scan, the adapter ratchet), one runs Studio's verify alone
+  # (`--checks=studio`, the long one), and four shards run the builds and their
+  # share of the suites (a stable hash of each suite's path,
+  # scripts/gate/testShard.ts). Together they run exactly `npm test`.
   # Linux has no display, so the Electron probes run under a virtual one.
+  static:
+    name: test static (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm test -- --checks=desktop
+      - if: runner.os != 'Linux'
+        run: npm test -- --checks=desktop
+
+  studio:
+    name: test studio (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # Studio's verify measured 600 s on the macOS runner; the gate's own limit for it is 25 minutes.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm test -- --checks=studio
+      - if: runner.os != 'Linux'
+        run: npm test -- --checks=studio
+
   shard:
     name: test shard (${{ matrix.os }}, ${{ matrix.shard }}/4)
     strategy:
@@ -63,12 +115,13 @@ jobs:
         run: npm test -- --shard=${{ matrix.shard }}/4
 
   # One job per platform under the name branch protection and the release
-  # scripts have always read (`test (<os>)`). It passes only when all four of
-  # its platform's shards passed in this run attempt; it runs even when a shard
-  # failed, so the platform reports red instead of skipped.
+  # scripts have always read (`test (<os>)`). It passes only when its
+  # platform's two checks jobs and all four shards passed in this run
+  # attempt; it runs even when one failed, so the platform reports red
+  # instead of skipped.
   test:
     name: test (${{ matrix.os }})
-    needs: shard
+    needs: [static, studio, shard]
     if: ${{ !cancelled() }}
     strategy:
       fail-fast: false

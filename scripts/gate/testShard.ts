@@ -5,7 +5,8 @@
 // shards share one (test/scripts/gate/testShard.test.ts proves both as properties).
 //
 // The whole-tree static checks (tsc, ESLint, Prettier, the policy scan, the adapter ratchet,
-// Studio's checks) belong to shard 1, so the n shards together run exactly what `npm test` runs.
+// Studio's checks) run in none of the shards but in their own run (`npm test -- --checks=all`, which CI splits into `--checks=desktop` and `--checks=studio`),
+// so no shard carries them and the checks plus the n shards are exactly `npm test`.
 
 import type { Suite } from './testDiscovery';
 

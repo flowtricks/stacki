@@ -18,6 +18,11 @@ export interface TestCommand {
    * `PoolOptions.electronJobs` of these at once, however many jobs it has for other commands.
    */
   readonly kind?: 'electron';
+  /**
+   * This command's own time limit, for the few that run many suites in one process (Studio's
+   * verify ran 600 s on GitHub's macOS runner and hit the default). At most `commandMsLimit`.
+   */
+  readonly timeoutMs?: number;
 }
 
 export interface TestOutcome {
@@ -53,6 +58,14 @@ export const POOL_LIMITS = {
    * 1.1.0 and 1.1.3; at the bound it is killed and reported failed, with its output.
    */
   commandMsMax: 10 * 60 * 1000,
+  /** The ceiling for a command's own `timeoutMs`: still a bound, never "no limit". */
+  commandMsLimit: 30 * 60 * 1000,
+  /**
+   * Studio's verify is one command running its compiler, lint, formatting, every Studio suite in
+   * batches and its build. It measured 600 s on GitHub's macOS runner (type checking 98 s, test
+   * batches 101 s, 126 s and 40 s), so it gets 25 minutes: comfortably above that, still bounded.
+   */
+  studioVerifyMsMax: 25 * 60 * 1000,
 } as const satisfies Record<string, number>;
 
 const running = new Set<ReturnType<typeof spawn>>();
@@ -147,6 +160,11 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
   // A monotonic clock: the wall clock can step backwards (WSL2 resyncs it), and
   // a duration measured across the step came out negative.
   const startedMs = performance.now();
+  // Checked before anything is spawned, so a bad limit never leaves a process running.
+  const limitMs = command.timeoutMs ?? POOL_LIMITS.commandMsMax;
+  if (limitMs <= 0 || limitMs > POOL_LIMITS.commandMsLimit) {
+    throw new Error(`runTestCommand: ${command.name}'s limit of ${limitMs} ms is outside 1 to ${POOL_LIMITS.commandMsLimit}`);
+  }
   const output = createOutputTail(POOL_LIMITS.outputBytesMax);
   return new Promise((resolve) => {
     const spawnOptions: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe> = {
@@ -163,9 +181,9 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
         : spawn(command.command, [...command.argumentsList], spawnOptions);
     running.add(child);
     const timer = setTimeout(() => {
-      output.push(Buffer.from(`\nKilled after ${POOL_LIMITS.commandMsMax / 1000} s without exiting.\n`));
+      output.push(Buffer.from(`\nKilled after ${limitMs / 1000} s without exiting.\n`));
       killProcessGroup(child);
-    }, POOL_LIMITS.commandMsMax);
+    }, limitMs);
     child.stdout.on('data', (chunk: Buffer) => output.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => output.push(chunk));
     const finish = (ending: { readonly passed: boolean; readonly note: string }): void => {

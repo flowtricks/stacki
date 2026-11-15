@@ -3,9 +3,9 @@
 //
 //   node --experimental-strip-types scripts/release/checkShards.mts --os=<ubuntu-latest|macos-latest|windows-latest> --run-id=<id> --attempt=<n>
 //
-// check.yml runs each platform's suites as CHECK_SHARD_COUNT shard jobs. This job keeps the name
-// branch protection and releaseStatus.mts have always read (`test (<os>)`), and passes only when
-// every one of that platform's shards in this run attempt passed. Reading the shard results from
+// check.yml runs each platform's suites as CHECK_SHARD_COUNT shard jobs and its static checks as
+// two more jobs (the desktop checks and Studio's verify). This job keeps the name branch protection and releaseStatus.mts have always read
+// (`test (<os>)`), and passes only when all of that platform's jobs in this run attempt passed. Reading the shard results from
 // the API, rather than from `needs`, is what makes the verdict per platform: `needs` only reports
 // the whole matrix at once.
 
@@ -14,16 +14,16 @@ import { assert } from '../policy/assert.mts';
 import { systemReporter } from './actionsReport.mts';
 import { systemCommandRunner, type CommandRunner } from './releaseCommands.mts';
 import { fail, ok, type Result } from './releaseResult.mts';
-import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, parseCheckJobs, shardJobName, SOURCE_REPOSITORY, type CheckJob } from './releaseStatus.mts';
+import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, parseCheckJobs, shardJobName, SOURCE_REPOSITORY, staticJobName, studioJobName, type CheckJob } from './releaseStatus.mts';
 
 export type ShardVerdict = { readonly kind: 'green' } | { readonly kind: 'red'; readonly problems: readonly string[] };
 
-/** Every shard of this platform present once and successful; anything else is red, with why. */
+/** The platform's static-checks job and every shard present once and successful; anything else is red. */
 export function assessShards(os: string, jobs: readonly CheckJob[]): ShardVerdict {
   assert(CHECK_SHARD_COUNT >= 1, 'assessShards: at least one shard');
   const problems: string[] = [];
-  for (let shard = 1; shard <= CHECK_SHARD_COUNT; shard += 1) {
-    const name = shardJobName(os, shard);
+  const names = [staticJobName(os), studioJobName(os), ...Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => shardJobName(os, index + 1))];
+  for (const name of names) {
     const matches = jobs.filter((job) => job.name === name);
     if (matches.length === 0) {
       problems.push(`${name}: missing from the run`);
@@ -71,7 +71,7 @@ function main(argumentsList: readonly string[]): number {
   const verdict = assessShards(parsed.value.os, jobs.value);
   switch (verdict.kind) {
     case 'green':
-      reporter.summary(`## test (${parsed.value.os}): all ${CHECK_SHARD_COUNT} shards passed`);
+      reporter.summary(`## test (${parsed.value.os}): the static checks and all ${CHECK_SHARD_COUNT} shards passed`);
       return 0;
     case 'red':
       reporter.summary([`## test (${parsed.value.os}): failed`, '', ...verdict.problems.map((problem) => `- ${problem}`)].join('\n'));

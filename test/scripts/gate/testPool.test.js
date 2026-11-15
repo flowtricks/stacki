@@ -187,3 +187,17 @@ test('the Dock preload is added to NODE_OPTIONS with its path quoted, and does n
   assert.equal(run.stdout, 'ran\n');
   assert.equal(run.stderr, '');
 });
+
+test('a command may carry its own time limit, bounded by the ceiling, and is killed at it', async () => {
+  const quick = { name: 'sleeper', command: process.execPath, argumentsList: ['-e', 'setTimeout(() => {}, 60000)'], timeoutMs: 300 };
+  const [outcome] = await runTestPool([quick], { cwd: process.cwd(), environment: process.env, jobs: 1 }, () => {});
+  assert.equal(outcome.passed, false);
+  assert.match(outcome.output, /Killed after 0\.3 s without exiting\./);
+  assert.ok(POOL_LIMITS.studioVerifyMsMax > 600_000, 'Studio verify has more than the 600 s it measured on macOS');
+  assert.ok(POOL_LIMITS.studioVerifyMsMax <= POOL_LIMITS.commandMsLimit);
+  const unbounded = { ...quick, timeoutMs: POOL_LIMITS.commandMsLimit + 1 };
+  await assert.rejects(
+    runTestPool([unbounded], { cwd: process.cwd(), environment: process.env, jobs: 1 }, () => {}),
+    /outside 1 to 1800000/,
+  );
+});

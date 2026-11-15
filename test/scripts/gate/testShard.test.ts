@@ -1,6 +1,6 @@
 // Goal: `npm test -- --shard=k/n` splits the suites so that the n shards together are exactly the
 // full gate: every suite in exactly one shard, the same shard on every run and platform, and the
-// static checks in shard 1 only. A shard that dropped or duplicated a suite would let CI go green
+// static checks in their own checks-only run, never in a shard. A shard that dropped or duplicated a suite would let CI go green
 // without running it.
 // Methodology: properties over the real suite list (discovered from test/) and over generated
 // paths for every n from 1 to the limit: the union of the shards is the input, the shards are
@@ -75,16 +75,19 @@ test('the parser accepts k/n within the limit and refuses the rest', () => {
   assert.throws(() => shardOf('x', 0), /^Error: shardOf: 0 shards is outside 1 to 16$/);
 });
 
-test('shard 1 runs the static checks, the others skip them, and a shard cannot name suites', () => {
+test('the checks-only run holds the static checks, no shard does, and neither names suites', () => {
   const [suite] = realSuites;
   assert.ok(suite !== undefined);
   assert.equal(gatePlanFor({ queries: [], selected: [suite] }).staticChecks, 'run');
-  assert.equal(gatePlanFor({ queries: [], selected: [suite], shard: { index: 1, count: 4 } }).staticChecks, 'run');
-  for (let index = 2; index <= 4; index += 1) {
+  assert.equal(gatePlanFor({ queries: [], selected: [suite], part: 'checks-all' }).staticChecks, 'run');
+  assert.equal(gatePlanFor({ queries: [], selected: [suite], part: 'checks-studio' }).kind, 'full');
+  for (let index = 1; index <= 4; index += 1) {
     const plan = gatePlanFor({ queries: [], selected: [suite], shard: { index, count: 4 } });
     assert.equal(plan.kind, 'full', 'every shard cleans and builds like the full gate');
     assert.equal(plan.staticChecks, 'skip');
   }
   assert.equal(gatePlanFor({ queries: ['x'], selected: [suite] }).staticChecks, 'skip');
   assert.throws(() => gatePlanFor({ queries: ['x'], selected: [suite], shard: { index: 1, count: 4 } }), /cannot be combined with named suites/);
+  assert.throws(() => gatePlanFor({ queries: [], selected: [suite], shard: { index: 1, count: 4 }, part: 'checks-desktop' }), /not both/);
+  assert.throws(() => gatePlanFor({ queries: ['x'], selected: [suite], part: 'checks-all' }), /names no suites/);
 });

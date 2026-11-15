@@ -52,6 +52,16 @@ export function shardJobName(os: string, shard: number): string {
   return `test shard (${os}, ${shard}/${CHECK_SHARD_COUNT})`;
 }
 
+// The desktop static checks run beside the shards, one job per platform (`npm test -- --checks=desktop`).
+export function staticJobName(os: string): string {
+  return `test static (${os})`;
+}
+
+// Studio's verify runs as its own job per platform (`npm test -- --checks=studio`).
+export function studioJobName(os: string): string {
+  return `test studio (${os})`;
+}
+
 // The files a release bump rewrites, from the one manifest prepare.mts writes them from.
 export const VERSION_ONLY_FILES: readonly string[] = RELEASE_BUMP_PATHS;
 
@@ -225,6 +235,14 @@ function shardProblems(jobs: readonly CheckJob[]): readonly string[] {
         problems.push(`${shardJobName(os, shard)}: missing from the run`);
       } else if (job.conclusion !== 'success') {
         problems.push(`${job.name}: ${job.conclusion ?? job.status}`);
+      }
+    }
+    for (const name of [staticJobName(os), studioJobName(os)]) {
+      const checks = jobs.find((job) => job.name === name);
+      if (checks === undefined) {
+        problems.push(`${name}: missing from the run`);
+      } else if (checks.conclusion !== 'success') {
+        problems.push(`${checks.name}: ${checks.conclusion ?? checks.status}`);
       }
     }
     const unexpected = shards.filter((job) => !Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => shardJobName(os, index + 1)).includes(job.name));

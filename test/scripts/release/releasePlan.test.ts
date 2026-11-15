@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import type { CommandRunner } from '../../../scripts/release/releaseCommands.mts';
 import { decidePlan, parsePlanArguments, planTests } from '../../../scripts/release/releasePlan.mts';
 import { fail, ok } from '../../../scripts/release/releaseResult.mts';
-import { REQUIRED_CHECK_JOBS, shardJobName, type CheckJob, type RunEvidence } from '../../../scripts/release/releaseStatus.mts';
+import { REQUIRED_CHECK_JOBS, shardJobName, staticJobName, studioJobName, type CheckJob, type RunEvidence } from '../../../scripts/release/releaseStatus.mts';
 
 const SHA = 'a'.repeat(40);
 const green: readonly CheckJob[] = REQUIRED_CHECK_JOBS.map((name) => ({ name, status: 'completed', conclusion: 'success' }));
@@ -21,7 +21,11 @@ function evidence(status: string, conclusion: string | undefined, jobs: readonly
 
 test('only a completed green run with every job skips the suite', () => {
   assert.deepEqual(decidePlan(ok(evidence('completed', 'success'))), { kind: 'skip-tests', url: 'https://example.test/run/1' });
-  const shards = ['ubuntu-latest', 'macos-latest', 'windows-latest'].flatMap((os) => [1, 2, 3, 4].map((shard) => ({ name: shardJobName(os, shard), status: 'completed', conclusion: 'success' })));
+  const shards = ['ubuntu-latest', 'macos-latest', 'windows-latest'].flatMap((os) => [
+    { name: staticJobName(os), status: 'completed', conclusion: 'success' },
+    { name: studioJobName(os), status: 'completed', conclusion: 'success' },
+    ...[1, 2, 3, 4].map((shard) => ({ name: shardJobName(os, shard), status: 'completed', conclusion: 'success' })),
+  ]);
   assert.equal(decidePlan(ok(evidence('completed', 'success', [...green, ...shards]))).kind, 'skip-tests');
   const runTests = [
     ok(undefined),

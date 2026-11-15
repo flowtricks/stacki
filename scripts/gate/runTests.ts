@@ -6,8 +6,11 @@
 //   npm test -- --list               the suites, without running them
 //   npm test -- --jobs=4             at most four suites at once
 //   npm test -- --electron-jobs=2    at most two suites that open Electron windows at once
-//   npm test -- --shard=2/4          the full gate's builds and only shard 2 of 4's suites; shard 1
-//                                    also runs the static checks (testShard.ts), for CI's matrix
+//   npm test -- --shard=2/4          the full gate's builds and only shard 2 of 4's suites, no static
+//                                    checks (testShard.ts), for CI's matrix
+//   npm test -- --checks=all         the full gate's builds and static checks, no suites; CI runs
+//                --checks=desktop    every check but Studio's verify, and --checks=studio that alone:
+//                --checks=studio     with the shards, exactly the full gate
 //
 // A full, unsharded run that passes writes a marker for the tree it built (gateMarker.ts), which
 // lets the pre-push hook skip running the identical gate on the identical tree again.
@@ -23,7 +26,7 @@
 
 import os = require('node:os');
 import path = require('node:path');
-import { gatePlanFor, targetedNotice, type BuildStage } from './gatePlan';
+import { gatePlanFor, targetedNotice, type BuildStage, type ChecksPart } from './gatePlan';
 import {
   parseElectronJobs,
   parseJobs,
@@ -43,10 +46,13 @@ import { parseShard, suitesInShard, type Shard } from './testShard';
 const root = repositoryRoot();
 const flags = process.argv.slice(2).filter((argument) => argument.startsWith('--'));
 const unknownFlags = flags.filter(
-  (flag) => !flag.startsWith('--jobs=') && !flag.startsWith('--electron-jobs=') && !flag.startsWith('--shard=') && flag !== '--list',
+  (flag) =>
+    !flag.startsWith('--jobs=') && !flag.startsWith('--electron-jobs=') && !flag.startsWith('--shard=') && !flag.startsWith('--checks=') && flag !== '--list',
 );
 if (unknownFlags.length > 0) {
-  console.error(`Unknown flag: ${unknownFlags.join(', ')} (supported: --jobs=<n>, --electron-jobs=<n>, --shard=<k>/<n>, --list)`);
+  console.error(
+    `Unknown flag: ${unknownFlags.join(', ')} (supported: --jobs=<n>, --electron-jobs=<n>, --shard=<k>/<n>, --checks=<all|desktop|studio>, --list)`,
+  );
   process.exit(1);
 }
 const shardFlag = flags.find((flag) => flag.startsWith('--shard='));
@@ -56,6 +62,18 @@ if (typeof shardParsed === 'string') {
   process.exit(1);
 }
 const shard: Shard | undefined = shardParsed;
+const checksFlag = flags.find((flag) => flag.startsWith('--checks='))?.slice('--checks='.length);
+const CHECKS_PARTS: Readonly<Record<string, ChecksPart>> = { all: 'checks-all', desktop: 'checks-desktop', studio: 'checks-studio' };
+const checksPart: ChecksPart | undefined = checksFlag === undefined ? undefined : CHECKS_PARTS[checksFlag];
+if (checksFlag !== undefined && checksPart === undefined) {
+  console.error('--checks takes all, desktop or studio.');
+  process.exit(1);
+}
+const checksOnly = checksPart !== undefined;
+if (checksOnly && (shard !== undefined || process.argv.slice(2).some((argument) => !argument.startsWith('--')))) {
+  console.error('--checks runs the builds and static checks of the full gate; it takes no shard and no suites.');
+  process.exit(1);
+}
 const jobs = parseJobs(flags.find((flag) => flag.startsWith('--jobs='))?.slice('--jobs='.length), os.availableParallelism());
 const electronJobs = parseElectronJobs(flags.find((flag) => flag.startsWith('--electron-jobs='))?.slice('--electron-jobs='.length), jobs);
 const queries = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
@@ -90,9 +108,11 @@ const testEnvironment = {
   NODE_OPTIONS: withDockPreload(process.env['NODE_OPTIONS'], path.join(root, 'test', 'helpers', 'hideDockPreload.js')),
 };
 const typeScript = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
-const plan = gatePlanFor(shard === undefined ? { queries, selected } : { queries, selected, shard });
+const plan = gatePlanFor(
+  shard !== undefined ? { queries, selected, shard } : checksPart !== undefined ? { queries, selected, part: checksPart } : { queries, selected },
+);
 // Taken before anything runs, compared after: a marker names only a tree that held still (gateMarker.ts).
-const treeHashAtStart = plan.kind === 'full' && shard === undefined ? workingTreeHash(root) : undefined;
+const treeHashAtStart = plan.kind === 'full' && shard === undefined && !checksOnly ? workingTreeHash(root) : undefined;
 // Node >= 22.18 strips types itself (package.json engines).
 const cleanCommand: TestCommand = {
   name: 'build:clean',
@@ -155,6 +175,7 @@ const staticChecks: readonly TestCommand[] = [
     name: 'studio verify',
     command: node,
     argumentsList: [path.join(root, 'scripts/policy/studioChecks.mts'), '--full'],
+    timeoutMs: POOL_LIMITS.studioVerifyMsMax,
   },
   {
     name: 'tsc --noEmit',
@@ -212,6 +233,24 @@ const staticChecks: readonly TestCommand[] = [
   },
 ];
 
+// The checks a run holds: all of them, or CI's two halves. Studio's verify is the long one, so CI
+// gives it a job of its own; the halves together are exactly the full list.
+function checksFor(part: ChecksPart | undefined): readonly TestCommand[] {
+  switch (part) {
+    case undefined:
+    case 'checks-all':
+      return staticChecks;
+    case 'checks-desktop':
+      return staticChecks.filter((check) => check.name !== 'studio verify');
+    case 'checks-studio':
+      return staticChecks.filter((check) => check.name === 'studio verify');
+    default: {
+      const exhaustive: never = part;
+      return exhaustive;
+    }
+  }
+}
+
 // Two phases: the shared pool, then the suites that run alone (they measure
 // timing or drive a real window) one at a time with nothing else running.
 // The Electron binary's path is what the electron package exports.
@@ -250,8 +289,9 @@ const report = (outcome: TestOutcome): void => {
 // Every check's output is shown (lint warnings included); any failure stops the
 // gate before the tests, as a failed build does.
 async function runStaticChecks(): Promise<void> {
-  const options = { cwd: root, environment, jobs: Math.min(jobs, staticChecks.length) };
-  const outcomes = await runTestPool(staticChecks, options, (outcome) => {
+  const chosen = checksFor(checksPart);
+  const options = { cwd: root, environment, jobs: Math.min(jobs, chosen.length) };
+  const outcomes = await runTestPool(chosen, options, (outcome) => {
     const seconds = (outcome.durationMs / 1000).toFixed(1);
     console.log(`\n[gate] ${outcome.name} ${outcome.passed ? 'done' : 'FAILED'} in ${seconds}s`);
     console.log(outcome.output);
@@ -319,7 +359,11 @@ async function runPhases(): Promise<readonly TestOutcome[]> {
   if (plan.staticChecks === 'run') {
     await runStaticChecks();
   } else if (shard !== undefined) {
-    console.log(`\n[gate] Shard ${shard.index}/${shard.count}: the static checks run in shard 1.`);
+    console.log(`\n[gate] Shard ${shard.index}/${shard.count}: the static checks run in their own jobs (--checks=desktop and --checks=studio).`);
+  }
+  if (checksOnly) {
+    console.log('\n[gate] Checks only: builds and static checks passed; the suites run in the shards.');
+    return [];
   }
   testsStartedMs = Date.now();
   console.log(`\n[gate] ${names.length} test suites, ${jobs} at a time, ${electronJobs} of them with Electron windows`);
@@ -333,6 +377,11 @@ async function runPhases(): Promise<readonly TestOutcome[]> {
 }
 
 function summarize(outcomes: readonly TestOutcome[]): void {
+  if (checksOnly) {
+    // A failed check already exited non-zero (runStaticChecks); there are no suites to count.
+    process.exitCode = 0;
+    return;
+  }
   const slowest = [...outcomes].sort((left, right) => right.durationMs - left.durationMs);
   const named = slowest.slice(0, 5).map((outcome) => `${outcome.name} ${(outcome.durationMs / 1000).toFixed(1)}s`);
   const testSeconds = ((Date.now() - testsStartedMs) / 1000).toFixed(1);

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { parse } from 'yaml';
-import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, REQUIRED_CHECK_JOBS, shardJobName } from '../../../scripts/release/releaseStatus.mts';
+import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, REQUIRED_CHECK_JOBS, shardJobName, staticJobName, studioJobName } from '../../../scripts/release/releaseStatus.mts';
 
 type Node = Readonly<Record<string, unknown>>;
 
@@ -165,7 +165,16 @@ test('check.yml: the shard matrix is the count the release scripts expect, under
   assert.deepEqual(matrix['shard'], Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => index + 1));
   assert.deepEqual(matrix['os'], [...CHECK_OPERATING_SYSTEMS]);
   assert.equal(String(shard['name']).replace('${{ matrix.os }}', 'ubuntu-latest').replace('${{ matrix.shard }}', '2'), shardJobName('ubuntu-latest', 2));
+  const checks = asNode(check['static'], 'static');
+  assert.equal(String(checks['name']).replace('${{ matrix.os }}', 'macos-latest'), staticJobName('macos-latest'));
+  assert.deepEqual(asNode(asNode(checks['strategy'], 'strategy')['matrix'], 'matrix')['os'], [...CHECK_OPERATING_SYSTEMS]);
+  assert.ok(steps(checks).some((step) => String(step['run'] ?? '').endsWith('npm test -- --checks=desktop')));
+  const studio = asNode(check['studio'], 'studio');
+  assert.equal(String(studio['name']).replace('${{ matrix.os }}', 'windows-latest'), studioJobName('windows-latest'));
+  assert.ok(steps(studio).some((step) => String(step['run'] ?? '').endsWith('npm test -- --checks=studio')));
+  assert.ok(Number(studio['timeout-minutes']) >= 25, 'Studio verify has room above its 25-minute gate limit');
   const aggregate = asNode(check['test'], 'test');
+  assert.deepEqual(aggregate['needs'], ['static', 'studio', 'shard'], 'the aggregate waits for the checks and every shard');
   assert.equal(aggregate['name'], 'test (${{ matrix.os }})');
   assert.equal(aggregate['if'], '${{ !cancelled() }}');
   assert.deepEqual(asNode(asNode(aggregate['strategy'], 'strategy')['matrix'], 'matrix')['os'], [...CHECK_OPERATING_SYSTEMS]);

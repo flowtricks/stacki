@@ -41,7 +41,8 @@ Run a dry run first whenever something changed in the tooling: it prints the exa
 
 Reading the result: the last job of **Release post** (`summary`) lists every stage with links to the
 release, npm and the site. Green everywhere means live. `Check` itself is faster now too: four shards
-per platform (`npm test -- --shard=k/4`), aggregated into the same `test (<os>)` job names.
+per platform (`npm test -- --shard=k/4`) plus a desktop static-checks job (`--checks=desktop`) and a Studio verify job (`--checks=studio`) per platform,
+aggregated into the same `test (<os>)` job names.
 
 ## 3. If it fails
 
