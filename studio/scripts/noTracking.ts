@@ -64,6 +64,7 @@ const CLIENT_HOSTS_ALLOWED: Readonly<Record<string, string>> = {
   'claude.com': "Claude Code's install page, opened in the browser from the AI panel's setup step; Studio never fetches it.",
   'cms.example.com': 'Placeholder text in the CMS connection form.',
   'creativecommons.org': 'A licence notice on bundled icons.',
+  'customer-site.example': 'Placeholder site address in the EmDash setup commands shown to copy (EmDashDetails.tsx); never contacted.',
   'dash.bunny.net': "Opens Bunny's dashboard for the user to copy an API key; Studio never fetches it.",
   'dash.cloudflare.com': 'Validates Cloudflare sign-in links; Studio never fetches it.',
   'developer.mozilla.org': "A link in the TypeScript compiler's diagnostic text.",
