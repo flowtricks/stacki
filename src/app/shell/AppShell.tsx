@@ -34,6 +34,7 @@ import type { HistoryCommit, HistoryCommitFile } from '../../features/history/hi
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { type LeftTab } from '../appTypes';
+import type { CodeReveal, SourceRange } from '../../features/code/codePanelModel';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, InstructionsPanel, ProjectSettingsPanel, preloadPanels } from '../appPanels';
@@ -666,6 +667,7 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
       relativePath={app.openRel ?? page.name}
       model={app.model}
       selectedId={app.selectedId}
+      revealRange={revealedCode(app.codeReveal, app.selectedId, state.source)}
       onChange={app.onCodeChange}
       onSelect={app.setSelectedId}
       onOpenComponent={(name, id) => {
@@ -673,6 +675,15 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
       }}
     />
   );
+}
+
+// The code a refusal pointed at, while it still applies: its element is the one
+// selected and the source still holds that code there. Anything else shows the element.
+function revealedCode(reveal: CodeReveal | undefined, selectedId: string | undefined, source: string): SourceRange | undefined {
+  if (reveal === undefined || reveal.nodeId !== selectedId) {
+    return undefined;
+  }
+  return source.slice(reveal.from, reveal.to) === reveal.code ? { from: reveal.from, to: reveal.to } : undefined;
 }
 
 export function HistoryTab({ app }: { readonly app: ShellView }) {

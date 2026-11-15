@@ -31,7 +31,9 @@ import { hasClass, withClass, type ClassPlacement } from '../../editor/classAttr
 import type { EditGesture } from '../../editor/pageEdits';
 import { attributeRemoval, classRemoval, type PropRemoval } from '../../editor/selectorRemoval';
 import { withAttributes } from '../../editor/attributesBinding';
-import { previewAddedClass, previewClassProps } from '../../editor/previewClassPatch';
+import { previewAddedClass, previewClassProps, previewRemovedClass } from '../../editor/previewClassPatch';
+import { reportActionToast } from '../../ui/errorNotices';
+import { attributeCodeRange } from '../../features/code/codePanelModel';
 import { cleanError } from '../../lib/cleanError';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
@@ -290,17 +292,42 @@ function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle:
 
 // A chip selected in the Style panel's selector field, then Delete: the class or
 // attribute comes off the element's tag as written, as one attribute edit (one
-// undo step). What decides whether that is safe is selectorRemoval.ts; a refusal
-// is shown as a toast and nothing is written.
+// undo step), `class` and `class:list` together when both name it. What decides
+// whether that is safe is selectorRemoval.ts; a refusal is shown as a toast and
+// nothing is written. A refusal about code (a computed class:list entry) offers
+// 'Show in code', which opens the Code panel on that exact piece of code.
 function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
   const translate = useTranslate();
-  const { pageStateRef } = coreState;
+  const { pageStateRef, setCodeReveal, setLeftTab, setSelectedId } = coreState;
   const { flushSave, showToast } = lifecycle;
   const { commitEdit } = history;
+  const showRefusal = useCallback(
+    (nodeId: string, removal: Extract<PropRemoval, { readonly tag: 'refused' }>) => {
+      const site = removal.site;
+      if (site === undefined) {
+        showToast(removal.reason, 'error');
+        return;
+      }
+      reportActionToast(removal.reason, 'error', [
+        {
+          label: translate('editor.selectorRemoval.showInCode'),
+          run: () => {
+            const state = pageStateRef.current.pageState;
+            const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+            const range = state === undefined || node === undefined ? undefined : attributeCodeRange(state.source, node, site.attribute, site.snippet);
+            setSelectedId(nodeId);
+            setCodeReveal(range === undefined ? undefined : { nodeId, ...range, code: site.snippet.code });
+            setLeftTab('code');
+          },
+        },
+      ]);
+    },
+    [pageStateRef, setCodeReveal, setLeftTab, setSelectedId, showToast, translate],
+  );
   const removeFromNode = useCallback(
     async (
       nodeId: string,
-      previewPath: string | undefined,
+      preview: { readonly path: string | undefined; readonly removedClass: string | undefined },
       plan: (props: Readonly<Record<string, Attr>> | undefined) => PropRemoval,
     ): Promise<ClassOutcome> => {
       const state = pageStateRef.current.pageState;
@@ -314,31 +341,42 @@ function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle
       assert(node.id === nodeId, 'removeFromNode: the node found is the one named');
       const removal = plan(node.props);
       if (removal.tag === 'refused') {
-        showToast(removal.reason, 'error');
+        showRefusal(nodeId, removal);
         return { tag: 'refused', message: removal.reason };
       }
-      assert(removal.key.length > 0, 'removeFromNode: an edit names the prop it writes');
-      const patch = { [removal.key]: removal.value };
+      const patch = removal.patch;
+      assert(Object.keys(patch).length > 0, 'removeFromNode: an edit names the props it writes');
       if (!commitEdit(propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true }))) {
         return { tag: 'refused', message: translate('shell.refusal.notQueued') };
       }
       // The canvas drops the class at once rather than after the save's re-render.
-      previewClassProps(previewPath, node, patch);
+      // The static names cover `class="…"` and whole entries; the named class covers
+      // the rest (`cond && 'a'`, an object key), which the static read can't see.
+      previewClassProps(preview.path, node, patch);
+      if (preview.removedClass !== undefined) {
+        previewRemovedClass(preview.path, preview.removedClass);
+      }
       try {
         await flushSave();
         return { tag: 'applied' };
       } catch (error: unknown) {
+        // The write failed, so the canvas gets the class back rather than showing an edit that never landed.
+        if (preview.removedClass !== undefined) {
+          previewAddedClass(preview.path, preview.removedClass);
+        }
         return { tag: 'refused', message: cleanError(error) };
       }
     },
-    [commitEdit, flushSave, showToast, pageStateRef, translate],
+    [commitEdit, flushSave, showRefusal, pageStateRef, translate],
   );
   const removeClassFromNode = useCallback(
-    (nodeId: string, className: string, previewPath?: string) => removeFromNode(nodeId, previewPath, (props) => classRemoval(props, className, translate)),
+    (nodeId: string, className: string, previewPath?: string) =>
+      removeFromNode(nodeId, { path: previewPath, removedClass: className }, (props) => classRemoval(props, className, translate)),
     [removeFromNode, translate],
   );
   const removeAttributeFromNode = useCallback(
-    (nodeId: string, attributeName: string) => removeFromNode(nodeId, undefined, (props) => attributeRemoval(props, attributeName, translate)),
+    (nodeId: string, attributeName: string) =>
+      removeFromNode(nodeId, { path: undefined, removedClass: undefined }, (props) => attributeRemoval(props, attributeName, translate)),
     [removeFromNode, translate],
   );
   return { removeClassFromNode, removeAttributeFromNode };

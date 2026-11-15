@@ -231,10 +231,11 @@ export const messages = {
   'editor.rename.unreadableCode': 'Ce code ne peut pas être lu pour renommer en toute sécurité : {excerpt} Renommez-le dans le code.',
   'editor.rename.usedAsTag': '« {name} » est utilisé comme balise, <{name}> : impossible de le renommer ici. Renommez-le dans le code.',
   'editor.selectorRemoval.bound': '{name} est lié à {code} : Stacki vous laisse le modifier dans le code.',
-  'editor.selectorRemoval.classExpression': '« {name} » vient de l’expression {code} : Stacki vous laisse la modifier dans le code.',
-  'editor.selectorRemoval.insideClassList': '« {name} » est écrit dans class:list : Stacki vous laisse le retirer dans le code.',
+  'editor.selectorRemoval.computed': '« {name} » peut venir de {code} dans {attribute}, que Stacki ne peut pas réécrire sans risque. Modifiez-le dans le code.',
   'editor.selectorRemoval.notOneThing': 'L’attribut {name} contient plusieurs éléments : il ne peut pas être retiré comme une seule pastille.',
   'editor.selectorRemoval.notWritten': '« {name} » n’est pas écrit sur cet élément : il n’y a rien à retirer ici.',
   'editor.selectorRemoval.notWrittenSpread':
     '« {name} » n’est pas écrit sur cet élément ; il peut venir d’un spread ou d’une prop du composant : il n’y a rien à retirer ici.',
+  'editor.selectorRemoval.showInCode': 'Afficher dans le code',
+  'editor.selectorRemoval.unreadable': 'Stacki n’a pas pu lire {code} sans risque : « {name} » reste tel quel. Modifiez-le dans le code.',
 } as const satisfies CatalogOf<MessageKey>;

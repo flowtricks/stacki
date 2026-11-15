@@ -7,7 +7,7 @@ import { parsePageTree } from '../../../vendor/stacki/shared/page/pageNode';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { nodeTextEdit } from './settingsEdits';
 import { attributeEdit } from '../source/source';
-import { addStyleClass } from './styleClassEdit';
+import { addStyleClass, removeStyleClass } from './styleClassEdit';
 import { addStyleBlockSource } from './styleBlockEdit';
 import type { ParserNode } from '../source/source';
 import type { OutlineState } from '../preview/outlineState';
@@ -78,6 +78,22 @@ export function StyleSettings({
             return { tag: 'applied' };
           } catch (error) {
             return { tag: 'refused', message: String(error) };
+          }
+        }}
+        onRemoveClass={async (name, nodeId) => {
+          // A chip selected, then Delete: the same removal Desktop makes, refusals included,
+          // on the element the panel shows (StylePanel passes its id).
+          try {
+            const removal = removeStyleClass(document.text.toString(), nodeId, name);
+            if (removal.tag === 'refused') {
+              report(new Error(removal.message));
+              return { tag: 'refused', message: removal.message };
+            }
+            document.replaceSource(removal.source);
+            await document.whenSaved();
+            return { tag: 'applied' };
+          } catch (error) {
+            return { tag: 'refused', message: error instanceof Error ? error.message : String(error) };
           }
         }}
         onAddStyleBlock={async (request) => {

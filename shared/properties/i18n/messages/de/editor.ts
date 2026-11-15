@@ -234,10 +234,11 @@ export const messages = {
   'editor.rename.unreadableCode': 'Dieser Code kann nicht gelesen werden, um sicher umzubenennen: {excerpt} Benenne es im Code um.',
   'editor.rename.usedAsTag': '„{name}“ wird als Tag <{name}> verwendet und kann hier nicht umbenannt werden. Benenne es im Code um.',
   'editor.selectorRemoval.bound': '{name} ist an {code} gebunden, daher überlässt Stacki dir die Änderung im Code.',
-  'editor.selectorRemoval.classExpression': '„{name}“ stammt aus dem Ausdruck {code}, daher überlässt Stacki dir die Änderung im Code.',
-  'editor.selectorRemoval.insideClassList': '„{name}“ steht in class:list, daher überlässt Stacki dir das Entfernen im Code.',
+  'editor.selectorRemoval.computed': '„{name}“ kommt möglicherweise aus {code} in {attribute}, das Stacki nicht sicher umschreiben kann. Ändere es im Code.',
   'editor.selectorRemoval.notOneThing': 'Das Attribut {name} enthält mehr als eine Sache und lässt sich nicht als ein Chip entfernen.',
   'editor.selectorRemoval.notWritten': '„{name}“ steht nicht an diesem Element, hier gibt es nichts zu entfernen.',
   'editor.selectorRemoval.notWrittenSpread':
     '„{name}“ steht nicht an diesem Element; es kann aus einem Spread oder einer Komponenten-Prop stammen, hier gibt es nichts zu entfernen.',
+  'editor.selectorRemoval.showInCode': 'Im Code zeigen',
+  'editor.selectorRemoval.unreadable': 'Stacki konnte {code} nicht sicher lesen und hat „{name}“ daher unverändert gelassen. Ändere es im Code.',
 } as const satisfies CatalogOf<MessageKey>;

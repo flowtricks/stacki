@@ -45,3 +45,10 @@ export function previewAddedClass(path: string | undefined, className: string): 
     tellCanvas({ type: 'avb:class-patch', path, add: [className], remove: [] });
   }
 }
+
+/** Takes one class off the canvas element at once, however the source wrote it (a guarded class:list entry included). */
+export function previewRemovedClass(path: string | undefined, className: string): void {
+  if (path) {
+    tellCanvas({ type: 'avb:class-patch', path, add: [], remove: [className] });
+  }
+}

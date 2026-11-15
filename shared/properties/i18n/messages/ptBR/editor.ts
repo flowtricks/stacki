@@ -227,10 +227,11 @@ export const messages = {
   'editor.rename.unreadableCode': 'Este código não pode ser lido para renomear com segurança: {excerpt} Renomeie no código.',
   'editor.rename.usedAsTag': '“{name}” é usado como tag, <{name}>, então não pode ser renomeado aqui. Renomeie-o no código.',
   'editor.selectorRemoval.bound': '{name} está vinculado a {code}, então o Stacki deixa que você o altere no código.',
-  'editor.selectorRemoval.classExpression': '“{name}” vem da expressão {code}, então o Stacki deixa que você a altere no código.',
-  'editor.selectorRemoval.insideClassList': '“{name}” está escrito dentro de class:list, então o Stacki deixa que você o remova no código.',
+  'editor.selectorRemoval.computed': '“{name}” pode vir de {code} em {attribute}, que o Stacki não consegue reescrever com segurança. Altere-o no código.',
   'editor.selectorRemoval.notOneThing': 'O atributo {name} contém mais de uma coisa, então não pode ser removido como um único chip.',
   'editor.selectorRemoval.notWritten': '“{name}” não está escrito neste elemento, então não há nada para remover aqui.',
   'editor.selectorRemoval.notWrittenSpread':
     '“{name}” não está escrito neste elemento; pode vir de um spread ou de uma prop do componente, então não há nada para remover aqui.',
+  'editor.selectorRemoval.showInCode': 'Mostrar no código',
+  'editor.selectorRemoval.unreadable': 'O Stacki não conseguiu ler {code} com segurança, então deixou “{name}” como está. Altere-o no código.',
 } as const satisfies CatalogOf<MessageKey>;

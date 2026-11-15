@@ -1,7 +1,7 @@
 // Goal: keep code, navigator, and canvas selection on one source-range model.
 // Methodology: parse a real Astro file with offsets, then exercise selection,
-// component links, nested hit-testing, text inside tags, frontmatter, and
-// invalid-range edges.
+// component links, nested hit-testing, text inside tags, frontmatter,
+// invalid-range edges, and the exact code a refusal's 'Show in code' points at.
 
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -76,7 +76,28 @@ const output = repoPath('node_modules/.stacki-test/code-panel-model.cjs');
   ]);
   assert.equal(modelTools.sourceLineLabel(source, { from: card.start, to: card.end }), 'L6–8');
   assert.equal(modelTools.sourceRangeForSelection(model, card.id, card.end - 1), undefined, 'stale ranges never escape the current document');
-  console.log('code-panel-model: passed [selection, links, nesting, bounds]');
+  // 'Show in code': a piece of an attribute's expression, by offsets into it.
+  const listed = '<div class="a" data-class={x} class:list={[\'card\', className]}>\n  <p class:list={[className]}>x</p>\n</div>\n';
+  const listedModel = parsePage(listed, { locs: true }).model;
+  const div = listedModel.nodes.find((node) => node.name === 'div');
+  const code = listedModel.nodes.find((node) => node.name === 'div').props['class:list'].value;
+  const at = code.indexOf('className');
+  const range = modelTools.attributeCodeRange(listed, div, 'class:list', { code: 'className', from: at, to: at + 'className'.length });
+  assert.ok(range, 'the code is found on the element’s own tag');
+  assert.equal(listed.slice(range.from, range.to), 'className');
+  assert.ok(range.from < listed.indexOf('<p'), 'on the element itself, not its child');
+  assert.equal(
+    modelTools.attributeCodeRange(listed, div, 'class', { code: 'className', from: 0, to: 9 }),
+    undefined,
+    'class matches neither class:list nor data-class',
+  );
+  assert.equal(
+    modelTools.attributeCodeRange(listed, div, 'class:list', { code: 'other', from: at, to: at + 5 }),
+    undefined,
+    'code the source no longer holds there is not shown',
+  );
+  assert.equal(modelTools.attributeCodeRange(listed, { start: undefined, end: undefined }, 'class:list', { code: 'x', from: 0, to: 1 }), undefined);
+  console.log('code-panel-model: passed [selection, links, nesting, bounds, reveal]');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

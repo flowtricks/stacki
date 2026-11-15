@@ -224,12 +224,13 @@ export const messages = {
   'editor.rename.unreadableCode': 'This code can’t be read to rename it safely: {excerpt} Rename it in the code.',
   'editor.rename.usedAsTag': '“{name}” is used as a tag, <{name}>, so it can’t be renamed here. Rename it in the code.',
   'editor.selectorRemoval.bound': '{name} is bound to {code}, so Stacki leaves it for you to change in code.',
-  'editor.selectorRemoval.classExpression': '“{name}” comes from the expression {code}, so Stacki leaves it for you to change in code.',
-  'editor.selectorRemoval.insideClassList': '“{name}” is written inside class:list, so Stacki leaves it for you to remove in code.',
+  'editor.selectorRemoval.computed': '“{name}” may come from {code} in {attribute}, which Stacki can’t rewrite safely. Change it in code.',
   'editor.selectorRemoval.notOneThing': 'The {name} attribute holds more than one thing, so it can’t be removed as one chip.',
   'editor.selectorRemoval.notWritten': '“{name}” isn’t written on this element, so there is nothing here to remove.',
   'editor.selectorRemoval.notWrittenSpread':
     '“{name}” isn’t written on this element; it may come from a spread or a component prop, so there is nothing here to remove.',
+  'editor.selectorRemoval.showInCode': 'Show in code',
+  'editor.selectorRemoval.unreadable': 'Stacki couldn’t read {code} safely, so it left “{name}” as written. Change it in code.',
 } as const satisfies CatalogOf<`editor.${string}`>;
 
 export type MessageKey = keyof typeof messages;

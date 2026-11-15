@@ -15,6 +15,7 @@ import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
 import type { CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
 import type { VariableSelection } from '../../ipc/variablesBridge';
 import { type CodeWindowState } from '../../features/code/codeWindowTarget';
+import { type CodeReveal } from '../../features/code/codePanelModel';
 import {
   type AssetPick,
   type CollectionSamples,
@@ -278,7 +279,13 @@ export function usePanelState(canvasReportState: ReturnType<typeof useCanvasRepo
   const [cmsSettings, setCmsSettings] = useState(false); // editing that collection's fields
   const [inPreview, setInPreview] = useState(false); // interactive full-site preview
   const [previewSource, setPreviewSource] = useState<string | undefined>(undefined);
+  // A piece of code a refusal pointed at ('Show in code'): the Code panel shows it
+  // instead of the whole selected element, while that element stays selected and
+  // the source still holds that code there (CodeTab checks both).
+  const [codeReveal, setCodeReveal] = useState<CodeReveal | undefined>(undefined);
   return {
+    codeReveal,
+    setCodeReveal,
     cmsRemote,
     setCmsRemote,
     cmsRel,
