@@ -57,6 +57,9 @@ import { createServer, type ViteDevServer } from 'vite';
 // Message references: the typed `messageRef` (shared/properties/i18n/messageRef) imports the English catalog so a key typo is a compile
 // error, and that catalog is one module per namespace (about forty files) plus the reference, locale and format modules the payload
 // parsers now read: roughly sixty more. English is bundled in the app anyway, so the graph is larger but the shipped size is not.
+// Breakpoint sync's request parsers (breakpointSyncPlan, breakpointSyncRecord, projectBreakpoints) and EmDash's (emdash, emdashInstall
+// and its message namespace) are in the graph; the sync parser takes its text bound from the record leaf, not the whole CSS scanner
+// (mediaBreakpointSync), which keeps the graph at the limit instead of over it.
 const MODULES_MAX = 150;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [

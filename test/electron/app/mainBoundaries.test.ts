@@ -107,7 +107,9 @@ test('the complete channel inventory matches real main and terminal registration
   // the guided setup.
   // Settings adds secrets:* and mcp:* (project .env values and MCP servers) and the microphone adds three
   // (microphone:status, :request and :openSettings), and the interface language is mirrored to main (locale:set); the AI panel adds a prewarm (ai:prewarm) and a remembered setting (ai:remember), and a CMS connection can be checked before it is saved (cmsConnections:check), 268 in all.
-  assert.equal(harness.handlers.size, 268);
+  // Breakpoint sync adds four (breakpointSync:scan, :usage, :apply and :restore) and EmDash projects five (emdash:project,
+  // :installPlan, :install, :installCancel and :adminUrl), 277 in all.
+  assert.equal(harness.handlers.size, 277);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

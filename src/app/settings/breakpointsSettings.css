@@ -191,15 +191,17 @@
   font-size: 12px;
   cursor: pointer;
 }
-/* Add is the primary button: blue at rest, hovered and pressed (it is only ever dimmed, while there is nothing to add), never grey. */
+/* Add is the primary button: blue at rest, the brighter blue hovered and the darker one pressed (it is only ever dimmed, while there is
+   nothing to add), never grey. The shades are the shared accent tokens, as for every primary button (controls.css). */
 .breakpoints-add-confirm.primary {
   background: var(--accent);
   color: #fff;
 }
-.breakpoints-add-confirm.primary:hover:not(:disabled),
+.breakpoints-add-confirm.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
 .breakpoints-add-confirm.primary:active:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.1);
+  background: var(--accent-pressed);
 }
 .breakpoints-add-confirm:disabled,
 .breakpoints-add:disabled {

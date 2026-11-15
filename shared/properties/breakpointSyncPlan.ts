@@ -3,7 +3,6 @@
 // still what the scan read before it writes one byte (electron/project/breakpointSync.ts).
 import { boolean, count, list, object, optional, pathText, text, type Parsed } from '../core/boundary';
 import { BREAKPOINT_LIMITS } from './projectBreakpoints';
-import { MEDIA_SYNC_LIMITS } from './mediaBreakpointSync';
 import { SYNC_RECORD_LIMITS, isProjectPath } from './breakpointSyncRecord';
 
 export const SYNC_PLAN_LIMITS = {
@@ -97,7 +96,7 @@ const token = (input: unknown): string => {
 
 const place = (input: unknown): number => {
   const value = count(input);
-  if (value > MEDIA_SYNC_LIMITS.textCharsMax) {
+  if (value > SYNC_RECORD_LIMITS.textCharsMax) {
     throw new Error('A position is outside the text bound');
   }
   return value;

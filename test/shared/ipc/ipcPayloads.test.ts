@@ -430,6 +430,21 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
   // The interface language mirrored to main: a shipped locale or "system".
   'locale:set': { preference: 'de' },
+  // Breakpoint sync: the scan and usage name a breakpoint's old and new value; apply and restore carry the scan's own digests and journal.
+  'breakpointSync:scan': {
+    projectPath: '/site',
+    id: 'tablet',
+    old: { direction: 'down', value: 991, unit: 'px' },
+    next: { direction: 'down', value: 1000, unit: 'px' },
+  },
+  'breakpointSync:usage': { projectPath: '/site', breakpoints: [{ id: 'tablet', direction: 'down', value: 991, unit: 'px' }] },
+  'breakpointSync:apply': {
+    projectPath: '/site',
+    key: 'tablet',
+    files: [{ rel: 'src/styles/a.css', digest: 'd'.repeat(64), edits: [{ locator: 'media:0', start: 0, end: 5, before: '991px', after: '1000px' }] }],
+    unchecked: [{ file: 'src/styles/b.css', locator: 'media:1' }],
+  },
+  'breakpointSync:restore': { projectPath: '/site', journalId: 'journal-1', direction: 'undo' },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
   'content:sampleValue': {
     projectPath: '/site',

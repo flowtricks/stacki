@@ -21,6 +21,12 @@ import { BREAKPOINT_LIMITS } from './projectBreakpoints';
 export const BREAKPOINT_SYNC_FILE = '.stacki/breakpoint-sync.json';
 
 export const SYNC_RECORD_LIMITS = {
+  /**
+   * CSS text read per section, and so the largest position a place can name. It lives here, in the leaf both the scanner
+   * (mediaBreakpointSync.ts) and the apply request's parser read, so the parser does not import the whole scanner and drag it
+   * into the renderer's startup contract graph (test/renderer/app/viteModules.test.ts).
+   */
+  textCharsMax: 4 * 1024 * 1024,
   fileBytesMax: 512 * 1024,
   /** Excluded or linked places kept for one breakpoint. */
   refsMax: 2_000,

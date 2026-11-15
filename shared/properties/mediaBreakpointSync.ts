@@ -21,11 +21,12 @@
 // A bound's locator names it without its number or its line, so a record of it survives the number changing and lines moving:
 // the prelude with the bound masked, hashed, plus which of the identical preludes in the file's CSS section it is.
 import { assert } from '../core/assert';
+import { SYNC_RECORD_LIMITS } from './breakpointSyncRecord';
 import { BREAKPOINT_LIMITS, boundaryPx, type Breakpoint, type BreakpointSetting } from './projectBreakpoints';
 
 export const MEDIA_SYNC_LIMITS = {
   /** CSS text read per section: a stylesheet this large is not hand-written. */
-  textCharsMax: 4 * 1024 * 1024,
+  textCharsMax: SYNC_RECORD_LIMITS.textCharsMax,
   /** `@media` rules read per section. */
   mediaRulesMax: 20_000,
   /** Tokens read in one prelude. */

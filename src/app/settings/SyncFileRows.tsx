@@ -9,6 +9,7 @@ import type { ComponentType } from 'react';
 import type { IconProps } from '../../ui/Icons';
 import { ChevronDownIcon, ChevronRightIcon, CodeIcon, ComponentIcon, DropletIcon, ExternalIcon, FileIcon } from '../../ui/Icons';
 import { fileCheck, middleEllipsis, placeKey, placeLabel, type CheckedPlaces } from '../../../shared/properties/breakpointSyncSelection';
+import { CodeInline } from '../../ui/CodeBlock';
 import './breakpointSyncDialog.css';
 
 /** Characters of a path shown before it is shortened in the middle (the full path is the tooltip). */
@@ -112,8 +113,8 @@ export function SyncFileRow(props: {
                 )}
                 <span className="breakpoint-sync-line">{translate('settings.breakpoints.sync.line', { line: place.line })}</span>
                 <span className="breakpoint-sync-change">
-                  <code className="breakpoint-sync-before">{place.beforeText}</code>
-                  <code className="breakpoint-sync-after">{place.afterText}</code>
+                  <CodeInline className="breakpoint-sync-before" text={place.beforeText} language="css" />
+                  <CodeInline className="breakpoint-sync-after" text={place.afterText} language="css" />
                 </span>
                 {label !== undefined && <span className="breakpoint-sync-flag">{translate(FLAG_LABELS[label])}</span>}
               </li>

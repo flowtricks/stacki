@@ -132,6 +132,8 @@
 }
 .breakpoint-sync-before {
   color: var(--text-faint);
+  /* Highlighted tokens carry their own colours, so the old query is dimmed as a whole rather than recoloured. */
+  opacity: 0.6;
 }
 .breakpoint-sync-after {
   color: var(--green);
