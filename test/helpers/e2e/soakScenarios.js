@@ -805,6 +805,10 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     return controlValue(key === undefined ? undefined : snapshot.controls[key]);
   }
 
+  // Whether the chip `finder` names is drawn and not pressed.
+  const chipUnpressed = (finder) =>
+    driver.evaluate(`(() => { const chip = ${finder}; return chip !== undefined && chip.getAttribute('aria-pressed') !== 'true'; })()`);
+
   // (iv) set -> clear -> undo -> redo, with field, label, canvas and saved file compared, for
   // one style source: the rule `selector` in `file` (a page or component <style> block, or an
   // external stylesheet), or with `pick` pressed first (the inline chip) whatever `declaredIn`
@@ -814,7 +818,8 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     await closeEverything();
     await select(element, 'canvas');
     await driver.settle();
-    if (pick !== undefined) {
+    // A chip already pressed (left so by an earlier cycle on this element) is the source already.
+    if (pick !== undefined && (await chipUnpressed(pick))) {
       const picked = await pressPanel(pick, `pick the source for ${family.id}`);
       if (!picked) {
         return;
@@ -926,12 +931,8 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     await closeEverything();
     await select(element, 'canvas');
     await driver.settle();
-    // `pick` names the source's chip; a chip already pressed (left so by an earlier cycle on
-    // this element) is the source already.
-    if (
-      pick !== undefined &&
-      (await driver.evaluate(`(() => { const chip = ${pick}; return chip !== undefined && chip.getAttribute('aria-pressed') !== 'true'; })()`))
-    ) {
+    // `pick` names the source's chip; a chip already pressed is the source already.
+    if (pick !== undefined && (await chipUnpressed(pick))) {
       if (!(await pressPanel(pick, `pick the source for ${first.family.id}`))) {
         return;
       }

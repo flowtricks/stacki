@@ -236,7 +236,7 @@ async function editEverySource(runner, family) {
     value: '12px',
     file: 'src/pages/index.astro',
     selector: '#soak-inline[style]',
-    pick: `document.querySelector('button.embed-editor_selector-chip.is-inline:not([aria-pressed="true"])') || undefined`,
+    pick: `document.querySelector('button.embed-editor_selector-chip.is-inline') || undefined`,
     declaredIn: (source) => inlineStyleDeclares(source, 'text-indent'),
   });
 }
