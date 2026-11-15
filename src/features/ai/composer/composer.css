@@ -165,6 +165,12 @@
   background: var(--accent);
   color: #fff;
 }
+.ai-send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.ai-send:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
 .ai-send-arrow {
   transform: rotate(180deg);
 }

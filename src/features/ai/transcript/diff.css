@@ -145,6 +145,12 @@
   background: var(--accent);
   color: #fff;
 }
+.ai-changes-bulk .ai-changes-keep:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.ai-changes-bulk .ai-changes-keep:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
 .ai-file {
   display: flex;
   flex-direction: column;

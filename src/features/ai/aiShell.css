@@ -67,6 +67,12 @@
   background: var(--accent);
   color: #fff;
 }
+.ai-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.ai-primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
 .ai-gate p {
   margin: 0;
   color: var(--text-dim);

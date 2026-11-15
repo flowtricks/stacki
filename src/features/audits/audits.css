@@ -708,6 +708,12 @@
   color: white;
   font-size: 11.5px;
 }
+.audits-card-button:not(.secondary):hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.audits-card-button:not(.secondary):active:not(:disabled) {
+  background: var(--accent-pressed);
+}
 .audits-card-button.secondary {
   align-self: center;
   background: var(--bg-hover);

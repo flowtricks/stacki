@@ -681,8 +681,10 @@
   color: #fff;
 }
 .loop-bind-button.primary:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.1);
+  background: var(--accent-hover);
+}
+.loop-bind-button.primary:active:not(:disabled) {
+  background: var(--accent-pressed);
 }
 .loop-bind-button:disabled {
   opacity: 0.45;

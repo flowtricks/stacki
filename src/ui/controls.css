@@ -52,6 +52,9 @@ button.primary {
 button.primary:hover:not(:disabled) {
   background: var(--accent-hover);
 }
+button.primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
 button.ghost {
   background: transparent;
   color: var(--text-dim);

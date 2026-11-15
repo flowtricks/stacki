@@ -179,10 +179,12 @@
 }
 /* The global button:hover fill would turn these grey, so each keeps its resting
    background on hover (written as button.* so it outweighs that rule) and gets a
-   non-grey cue instead: a brighter label, or slightly more brightness on the accent fill. */
+   non-grey cue instead: a brighter label, or the brighter accent (never a grey) on the accent fill. */
 .ai-ask-actions button.ai-allow:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.12);
+  background: var(--accent-hover);
+}
+.ai-ask-actions button.ai-allow:active:not(:disabled) {
+  background: var(--accent-pressed);
 }
 .ai-ask-actions button.ai-allow-secondary:hover:not(:disabled),
 .ai-ask-actions button.ai-reject:hover:not(:disabled) {

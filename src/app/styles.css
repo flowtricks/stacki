@@ -34,6 +34,9 @@
   --titlebar-control-height: 1.5rem;
   /* A hovered accent button: the accent a step brighter, never a grey. */
   --accent-hover: color-mix(in srgb, var(--accent), #fff 14%);
+  /* A pressed accent button: the accent a step darker. Hover and pressed stay in the blue family (test/renderer/app/accentButtonStates.test.js).
+     A disabled accent button is the same blue dimmed by the global button:disabled opacity, never a grey fill. */
+  --accent-pressed: color-mix(in srgb, var(--accent), #000 16%);
   --accent-soft: rgba(0, 153, 255, 0.16);
   /* Selected text, everywhere. A saturated blue rather than the accent, which
      is too light to carry white text — this one clears 5:1 against white, so a
@@ -723,6 +726,12 @@ html[data-platform='win32'] .titlebar {
 .conflict-choice button.on {
   background: var(--accent);
   color: white;
+}
+.conflict-choice button.on:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.conflict-choice button.on:active:not(:disabled) {
+  background: var(--accent-pressed);
 }
 @media (max-width: 800px) {
   .conflict-split {
