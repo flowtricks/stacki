@@ -109,12 +109,14 @@ function recorderMain(limits, popoverSelector) {
     // `moving`: the control sits in a popup whose own open or close motion is running (a
     // 5 px rise and fade, ui/popup.css). Its position then changes by design, not by layout,
     // so the layout-shift check leaves it out (SP-13 was the spacing editor's field rising).
+    // `inPopup`: the control is in a popup at all, whose coming and going is the person's own
+    // opening and closing (checked by the popover invariants, not as a control's flicker).
     const add = (name, element, value) => {
       let key = name;
       for (let suffix = 2; found[key] !== undefined && suffix < limits.duplicateNamesMax; suffix += 1) {
         key = `${name}#${suffix}`;
       }
-      found[key] = { ...value, moving: popupInMotion(element) };
+      found[key] = { ...value, moving: popupInMotion(element), inPopup: element.closest('.popup-surface') !== null };
     };
     for (const box of root.querySelectorAll('.embed-editor_varconnect')) {
       const field = box.querySelector('input[aria-label], textarea[aria-label], input[data-prop], textarea[data-prop]');

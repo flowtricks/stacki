@@ -194,6 +194,7 @@ const check = (what, condition, detail) => {
             closes += 1;
           },
           onSameLabelPress: () => {},
+          registerCommit: () => {},
         }),
       );
     });

@@ -129,6 +129,7 @@ const check = (what, condition, detail) => {
         onSelectSelector: () => {},
         onClose: () => {},
         onSameLabelPress: () => {},
+        registerCommit: () => {},
       }),
     );
   });

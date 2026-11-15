@@ -118,6 +118,11 @@ function stateViolations(segment) {
     if (key === segment.action.editedKey) {
       continue;
     }
+    // A control in a popup comes and goes with the popup, which the person opens and closes:
+    // that lifetime is the popover invariants' (closed-itself, toggle-parity), not a flicker.
+    if (full.some((frame) => frame.controls?.[key]?.inPopup === true)) {
+      continue;
+    }
     const before = controlValue(segment.before.controls?.[key]);
     const settled = controlValue(finalFrame.controls?.[key]);
     let reachedSettled = false;

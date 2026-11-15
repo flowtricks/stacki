@@ -117,6 +117,9 @@ export type SpacingEditorProps = {
   /** Fired when the popover closes because its OWN side's label was pressed —
    *  lets the parent suppress that label's click from re-opening it (toggle). */
   onSameLabelPress: () => void;
+  /** Hands the parent this editor's commit (undefined once it is gone): a new opening writes
+   *  the draft of one still playing its close motion before replacing it. */
+  registerCommit: (commit: (() => void) | undefined) => void;
 };
 
 // Reused Reset item — mousedown-preventDefault keeps input focus so the
@@ -142,7 +145,7 @@ export function SpacingResetButton({ onReset }: { onReset: () => void }) {
 
 // The editor's state and handlers: the draft (seeded once, when the popover
 // opens), live writes while typing, and the single commit when it closes.
-export function useSpacingEditor({ prop, side, read, setProp, clearProp, liveSetProp, onClose }: SpacingEditorProps) {
+export function useSpacingEditor({ prop, side, read, setProp, clearProp, liveSetProp, onClose, registerCommit }: SpacingEditorProps) {
   const external = spacingExternal(read(prop));
   const { draft, draftRef, setDraftValue } = useEditorDraft(external);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +166,7 @@ export function useSpacingEditor({ prop, side, read, setProp, clearProp, liveSet
     commit.abandon();
     onClose();
   };
+  useRegisteredCommit({ commit, cancelLive }, registerCommit);
   // A scrub only moves the draft: this popover's authoritative write happens when it
   // closes (see `close`), which is also what typing in it does.
   const scrub = useScrub({
@@ -185,6 +189,26 @@ export function useSpacingEditor({ prop, side, read, setProp, clearProp, liveSet
     onClose,
   });
   return { draft, rootRef, inputRef, scrub, close, abandon, ...handlers };
+}
+
+// Hands the parent a commit that writes the draft without closing anything: the popover it
+// belongs to is being replaced. `commit.close` runs once, so the close motion finishing (or a
+// blur) after it writes nothing twice. Taken back when the editor unmounts.
+function useRegisteredCommit(
+  editor: { readonly commit: ReturnType<typeof useSpacingCommit>; readonly cancelLive: () => void },
+  registerCommit: SpacingEditorProps['registerCommit'],
+): void {
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  useEffect(() => {
+    const commitDraft = (): void => {
+      if (editorRef.current.commit.close()) {
+        editorRef.current.cancelLive();
+      }
+    };
+    registerCommit(commitDraft);
+    return () => registerCommit(undefined);
+  }, [registerCommit]);
 }
 
 // The editor's event handlers, over the state `useSpacingEditor` owns.
