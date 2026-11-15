@@ -171,30 +171,63 @@ const check = (what, condition, detail) => {
        const menu = document.getElementById('menu');
        let chosen = 'none';
        menu.addEventListener('select', (event) => { chosen = event.detail.value; });
-       menu.querySelector('.stacki-kit-menu-button').click();
-       await until(() => document.querySelectorAll('.stacki-kit-menu [role^="menuitem"]').length === 3);
-       const rows = [...document.querySelectorAll('.stacki-kit-menu [role^="menuitem"]')];
-       const checkedRow = rows.find((row) => row.getAttribute('aria-checked') === 'true');
+       // Rows are always read fresh from the open menu, never kept across an await: on GitHub's
+       // Linux runner (run 43678899895) the menu was gone by the time the highlight was read, so
+       // the kept rows were detached (every computed style empty) and the press on one fired
+       // nothing. The menu is reopened, at most menuOpenCountMax times, when it closed on its own,
+       // and how often that happened is reported with the result.
+       const menuOpenCountMax = 3;
+       const menuRows = () => [...document.querySelectorAll('.stacki-kit-menu [role^="menuitem"]')];
+       let menuOpens = 0;
+       let spontaneousCloses = 0;
+       const openMenu = async () => {
+         while (menuRows().length !== 3 && menuOpens < menuOpenCountMax) {
+           if (document.querySelector('.stacki-kit-menu') === null) {
+             menuOpens += 1;
+             menu.querySelector('.stacki-kit-menu-button').click();
+           }
+           await until(() => menuRows().length === 3);
+         }
+       };
+       await openMenu();
+       const firstRows = menuRows();
+       const checkedRow = firstRows.find((row) => row.getAttribute('aria-checked') === 'true');
        const opened = {
-         rows: rows.map((row) => row.textContent),
-         roles: rows.map((row) => row.getAttribute('role')),
+         rows: firstRows.map((row) => row.textContent),
+         roles: firstRows.map((row) => row.getAttribute('role')),
          checkLast: Boolean(checkedRow && checkedRow.lastElementChild.classList.contains('dd-check') && checkedRow.lastElementChild.querySelector('svg')),
-         iconFirst: Boolean(rows[0] && rows[0].firstElementChild.classList.contains('dd-icon')),
+         iconFirst: Boolean(firstRows[0] && firstRows[0].firstElementChild.classList.contains('dd-icon')),
        };
-       rows[2].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-       // The highlight fades in: read its colours once the motion is over.
-       await tick();
-       await motionOver();
-       const dangerRow = getComputedStyle(rows[2]);
-       const danger = {
-         fill: dangerRow.backgroundColor,
-         text: dangerRow.color,
-         icon: getComputedStyle(rows[2].querySelector('.dd-icon')).color,
-         restText: getComputedStyle(rows[0]).color,
-       };
-       rows[2].click();
+       let danger = { fill: '', text: '', icon: '', restText: '' };
+       for (let attempt = 0; attempt < menuOpenCountMax; attempt += 1) {
+         await openMenu();
+         // The menu focuses its first row a frame after it opens; a hover before that focus lands
+         // loses its highlight to it on a slow runner, so the hover waits for it (bounded).
+         await until(() => menuRows()[0] !== undefined && document.activeElement === menuRows()[0]);
+         const hovered = menuRows()[2];
+         if (hovered === undefined) {
+           break;
+         }
+         hovered.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+         // The highlight fades in: read its colours once the motion is over.
+         await tick();
+         await motionOver();
+         if (!hovered.isConnected) {
+           spontaneousCloses += 1;
+           continue;
+         }
+         const dangerRow = getComputedStyle(hovered);
+         danger = {
+           fill: dangerRow.backgroundColor,
+           text: dangerRow.color,
+           icon: getComputedStyle(hovered.querySelector('.dd-icon')).color,
+           restText: getComputedStyle(menuRows()[0]).color,
+         };
+         hovered.click();
+         break;
+       }
        await until(() => document.querySelector('.stacki-kit-menu') === null);
-       const menuState = { opened, chosen, closed: document.querySelector('.stacki-kit-menu') === null, danger };
+       const menuState = { opened, chosen, closed: document.querySelector('.stacki-kit-menu') === null, danger, menuOpens, spontaneousCloses };
 
        const toggle = document.getElementById('toggle');
        let toggleChanges = 0;
@@ -297,6 +330,9 @@ const check = (what, condition, detail) => {
            read: () => js(atRest),
            until: (seen) => typeof seen.button === 'string' && typeof seen.reset === 'string' && seen.trigger !== undefined && seen.iconName !== undefined && seen.menuButton !== undefined,
          })).value;
+         // Clicks and focus inside the page behave as in a person's focused window, which a hidden
+         // window on the Linux runner is not by itself.
+         win.webContents.focus();
          const changes = await js(refill);
          await js(\`(() => {
            window.searchEvents = [];
