@@ -348,10 +348,12 @@ export function useSnapshotPreparer(editorRefs: ReturnType<typeof useEditorRefs>
     }
     const elementKey = serializeElementId(element);
     assert(elementKey === nodeId, 'useSnapshotPreparer: a node is keyed by its id');
+    // Resolved afresh even when an answer is remembered: the entry is keyed by the CSS, not by
+    // the classes the page gives the element at runtime, so one remembered before a script
+    // added a class drew rows the fresh answer then took away (a `--_mw` row on the heading for
+    // a frame). The hold waits for the computed values anyway, and this round trip runs beside
+    // them.
     const key = scanSnapshotKey(elementKey, docsRef.current);
-    if (readScanSnapshot(key) !== undefined) {
-      return 'remembered';
-    }
     const asked = await askCanvasAbout(elementKey, content.rules);
     const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
     await primeDomMatches(target, content.rules, asked);
