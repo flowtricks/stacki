@@ -257,8 +257,15 @@ function createdRanges(own: readonly SourceEdit[]): readonly ByteSpan[] {
 }
 
 // The nodes the edit created, paired with the gesture's own new nodes: in
-// document order, of one kind, and only nodes wholly inside what the edit
-// wrote. A node the gesture moved is new there too; its handle travels.
+// document order, of one kind, and only nodes that touch what the edit wrote.
+// Touching, not "wholly inside": the hunks are a diff's minimal edit, which
+// writes the same insertion one byte early or late (after a `>`) or merges it
+// with a neighbouring edit, so the new root can reach a byte outside the hunk.
+// Requiring containment left the root unpaired and shifted every handle down
+// one: the root's handle landed on its first child, and a selected Grid became
+// a Card. Pairing is by order and kind among handles nothing carried, so a node
+// that was carried never takes part. A node the gesture moved is new there too;
+// its handle travels.
 function pairCreated(
   afters: readonly Entry[],
   handles: ReadonlyMap<string, string>,
@@ -267,8 +274,8 @@ function pairCreated(
   predicted: PageModel,
   assign: (entry: Entry, handle: string) => void,
 ): void {
-  const inside = (span: ByteSpan | undefined): boolean => span !== undefined && created.some((range) => range.start <= span.start && span.end <= range.end);
-  const unpaired = afters.filter((entry) => !handles.has(entry.key) && inside(entry.span));
+  const touches = (span: ByteSpan | undefined): boolean => span !== undefined && created.some((range) => span.start < range.end && range.start < span.end);
+  const unpaired = afters.filter((entry) => !handles.has(entry.key) && touches(entry.span));
   // The predicted tree's ranges are stale (edits moved them): only its order
   // and its handles are read.
   const own = inOrder(predicted).filter((entry) => !used.has(entry.node.id));
