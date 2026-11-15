@@ -65,7 +65,16 @@ const check = (what, condition, detail) => {
     `const { app, BrowserWindow } = require('electron');
      const path = require('path');
      app.on('window-all-closed', () => {});
-     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+     const { pollUntil: pollUntilShared } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+     // Every wait that ran out is kept for the failure report: which step the page never reached.
+     const timedOut = [];
+     const pollUntil = async (options) => {
+       const outcome = await pollUntilShared(options);
+       if (outcome.kind === 'timedOut') {
+         timedOut.push(options.what + ': ' + JSON.stringify(outcome.value));
+       }
+       return outcome;
+     };
      app.whenReady().then(async () => {
        try {
          const win = new BrowserWindow({ show: false, width: 400, height: 500 });
@@ -97,6 +106,8 @@ const check = (what, condition, detail) => {
            return point;
          };
          const result = {};
+         // The page events that dismiss a kit tooltip, logged for the failure report.
+         await js("window.__dismissals = []; for (const kind of ['pointerdown', 'click', 'scroll', 'wheel', 'keydown', 'visibilitychange']) { document.addEventListener(kind, (event) => { if (window.__dismissals.length < 40) { window.__dismissals.push(kind + ':' + (event.target.id || event.target.nodeName)); } }, true); } window.addEventListener('blur', () => window.__dismissals.push('blur')); true");
 
          await hover('t0');
          result.hovered = await shownBecomes(1);
@@ -113,21 +124,14 @@ const check = (what, condition, detail) => {
 
          const wheelAt = await hover('t2');
          result.beforeWheel = await shownBecomes(1);
+         // The wheel scrolls the list smoothly, over frames after the event, and each of those
+         // scroll events would dismiss a later step's tooltip. Two equal reads of scrollTop are
+         // not proof it ended (a starved runner may run no frame between them), so the step waits
+         // for the list's own scrollend event, which fires once the smooth scroll has finished.
+         await js("window.__scrollEnds = 0; document.getElementById('list').addEventListener('scrollend', () => { window.__scrollEnds += 1; }); true");
          win.webContents.sendInputEvent({ type: 'mouseWheel', x: wheelAt.x, y: wheelAt.y, deltaX: 0, deltaY: -60 });
          result.wheeled = await shownBecomes(0);
-         // The wheel scrolls the list smoothly, over several frames after the event; each of
-         // those scroll events would dismiss the next step's tooltip, so the step ends only
-         // once the list's scroll position has held still between two polls.
-         let scrollTopLast = -1;
-         await pollUntil({
-           what: 'the wheel scroll settled',
-           read: () => js("document.getElementById('list').scrollTop"),
-           until: (scrollTop) => {
-             const settled = scrollTop === scrollTopLast;
-             scrollTopLast = scrollTop;
-             return settled;
-           },
-         });
+         await pollUntil({ what: 'the wheel scroll ended', read: () => js('window.__scrollEnds'), until: (count) => count > 0 });
          await away();
 
          await hover('t3');
@@ -152,16 +156,22 @@ const check = (what, condition, detail) => {
          await away();
 
          // A second tooltip hovered while the first still shows (a row slid under the pointer).
-         await hover('t6');
+         // Both hovers are page script with the real pointer parked off the list: with the pointer
+         // left on t6, t7 closed with no dismissing event in 2 of 15 stressed runs, as when the page
+         // hears the real pointer reach t6 again after the popups change the page; the kit is right
+         // to close t7 then, so the real pointer is kept out of this check.
+         const scriptHover = (id) => js(\`document.querySelector('#\${id} .stacki-kit-mount > span').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))\`);
+         await scriptHover('t6');
          await shownBecomes(1);
          result.first = await js("document.querySelector('.popup-tooltip') && document.querySelector('.popup-tooltip').textContent");
-         await js("document.querySelector('#t7 .stacki-kit-mount > span').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))");
+         await scriptHover('t7');
          const openTexts = "[...document.querySelectorAll('.popup-tooltip')].filter((popup) => popup.dataset.popupPhase !== 'closing').map((popup) => popup.textContent)";
          result.second = (await pollUntil({ what: 'the second tooltip open', read: () => js(openTexts), until: (texts) => texts.includes('Row 7 has a long name') })).value;
          // The first one's exit motion ends, leaving the second alone.
          result.secondCount = await shownBecomes(1);
-         // The pointer never entered t7 (its hover was page script), so leaving cannot close it.
-         await pointerOff();
+         result.popupsAfterSecond = await js("[...document.querySelectorAll('.popup-tooltip')].map((popup) => popup.textContent + '/' + popup.dataset.popupPhase)");
+         // The pointer never entered t7 (its hover was page script), so leaving cannot close it;
+         // the scroll below does.
 
          // A dismissed tooltip opens again on the next hover. The wheel and the scroll above
          // moved t1 out of the list's view, so it is scrolled back first (that scroll also
@@ -171,6 +181,8 @@ const check = (what, condition, detail) => {
          await hover('t1');
          const popupsOfFirstRow = "[...document.querySelectorAll('.popup-tooltip')].filter((popup) => popup.textContent === 'Row 1 has a long name').length";
          result.again = (await pollUntil({ what: "t1's popup open again", read: () => js(popupsOfFirstRow), until: (count) => count === 1 })).value;
+         result.timedOut = timedOut;
+         result.dismissals = await js('window.__dismissals');
          win.destroy();
          console.log(JSON.stringify(result));
        } catch (error) {
