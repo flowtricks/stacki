@@ -14,6 +14,7 @@
 // kit page is what an app serves: the injected tokens, `__stacki/ui.css` and
 // `__stacki/ui.js` from the shared module, and `<stacki-*>` elements. Each page
 // opens its dropdown with a real click, and the computed styles are compared.
+// Each read waits, bounded, on the state it reads (test/helpers/waitFor.js).
 const fs = require('fs');
 const path = require('path');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
@@ -104,7 +105,7 @@ const check = (what, condition, detail) => {
     `const { app, BrowserWindow } = require('electron');
      const path = require('path');
      app.on('window-all-closed', () => {});
-     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+     const { pollUntil, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      const read = \`(() => {
        const look = (element) => {
          if (!element) { return undefined; }
@@ -113,7 +114,7 @@ const check = (what, condition, detail) => {
          return { background: style.backgroundColor, color: style.color, radius: style.borderTopLeftRadius, height: Math.round(box.height * 10) / 10, font: style.fontSize + ' ' + style.fontWeight };
        };
        const trigger = document.querySelector('#dropdown .dd-trigger');
-       const box = trigger.getBoundingClientRect();
+       const box = trigger ? trigger.getBoundingClientRect() : undefined;
        return {
          primary: look(document.getElementById('primary')),
          secondary: look(document.getElementById('secondary')),
@@ -122,7 +123,7 @@ const check = (what, condition, detail) => {
          tabs: look(document.querySelector('#tabs .ui-tabs')),
          tab: look(document.querySelector('#tabs .ui-tab.on')),
          trigger: look(trigger),
-         at: { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) },
+         at: box ? { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) } : undefined,
        };
      })()\`;
      const readMenu = \`(() => {
@@ -134,22 +135,36 @@ const check = (what, condition, detail) => {
          return { background: style.backgroundColor, radius: style.borderTopLeftRadius, height: Math.round(element.getBoundingClientRect().height * 10) / 10, shadow: style.boxShadow };
        };
        return {
-         popup: popup && look(popup),
+         popup: popup ? look(popup) : undefined,
          rows: rows.length,
-         row: rows[0] && look(rows[0]),
+         row: rows[0] ? look(rows[0]) : undefined,
          checkLast: Boolean(chosen && chosen.lastElementChild && chosen.lastElementChild.classList.contains('dd-check')),
          checkRight: Boolean(chosen && chosen.querySelector('.dd-check').getBoundingClientRect().left > chosen.querySelector('.dd-option-label').getBoundingClientRect().right),
        };
      })()\`;
+     // Every wait is on observable state, bounded (test/helpers/waitFor.js), never a fixed
+     // pause: a hidden window on a slow runner mounts, lays out and opens the popup late, and
+     // GitHub's Linux runner (xvfb) can drop a press or close the popup on a window event, so
+     // the press is repeated, at most pressCountMax times, until the rows are there.
+     const pressCountMax = 5;
      async function session(file) {
        const win = new BrowserWindow({ show: false, width: 400, height: 500 });
        await win.loadFile(path.join(__dirname, file));
-       await wait(400);
        const js = (code) => win.webContents.executeJavaScript(code);
-       const rest = await js(read);
-       win.webContents.sendInputEvent({ type: 'mouseDown', x: rest.at.x, y: rest.at.y, button: 'left', clickCount: 1 });
-       win.webContents.sendInputEvent({ type: 'mouseUp', x: rest.at.x, y: rest.at.y, button: 'left', clickCount: 1 });
-       await wait(400);
+       const rest = await waitFor({
+         what: file + ': every part drawn, with the trigger laid out',
+         read: () => js(read),
+         until: (seen) => seen.primary !== undefined && seen.tab !== undefined && seen.trigger !== undefined && seen.trigger.height > 0,
+       });
+       let opened = { kind: 'timedOut', value: await js(readMenu), pollCount: 0 };
+       for (let press = 0; press < pressCountMax && opened.kind === 'timedOut'; press += 1) {
+         win.webContents.sendInputEvent({ type: 'mouseDown', x: rest.at.x, y: rest.at.y, button: 'left', clickCount: 1 });
+         win.webContents.sendInputEvent({ type: 'mouseUp', x: rest.at.x, y: rest.at.y, button: 'left', clickCount: 1 });
+         opened = await pollUntil({ what: file + ': the menu open', read: () => js(readMenu), until: (seen) => seen.rows === 2 && Boolean(seen.popup), pollCountMax: 40 });
+       }
+       // The popup scales open; its size is read once its motion is over, or at the bound
+       // (the check keeps its one-pixel tolerance for a runner that never finishes it).
+       await pollUntil({ what: file + ': the opening motion over', read: () => js('document.getAnimations().length'), until: (count) => count === 0, pollCountMax: 40 });
        const menu = await js(readMenu);
        win.destroy();
        return { rest, menu };
@@ -190,11 +205,15 @@ const check = (what, condition, detail) => {
     for (const part of ['popup', 'row']) {
       // Height within a pixel: on GitHub's older Linux runner one popup can still be
       // finishing its opening scale when it is read (61.1 against 62). The rest is exact.
-      const { height: editorHeight, ...editorRest } = editor.menu[part];
-      const { height: appHeight, ...appRest } = app.menu[part];
+      // A part missing on either side fails this check with what each side drew, not a TypeError.
+      const { height: editorHeight, ...editorRest } = editor.menu[part] ?? { height: Number.NaN };
+      const { height: appHeight, ...appRest } = app.menu[part] ?? { height: Number.NaN };
       check(
         `the open ${part} matches the editor`,
-        JSON.stringify(editorRest) === JSON.stringify(appRest) && Math.abs(editorHeight - appHeight) <= 1,
+        editor.menu[part] !== undefined &&
+          app.menu[part] !== undefined &&
+          JSON.stringify(editorRest) === JSON.stringify(appRest) &&
+          Math.abs(editorHeight - appHeight) <= 1,
         JSON.stringify({ editor: editor.menu[part], app: app.menu[part] }),
       );
     }
