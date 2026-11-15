@@ -14,7 +14,8 @@
 // in each: the pop-up's declaration goes through declaredProp, the editor's
 // change through main's property writer (editPropertyDefinition), and the
 // member and default each writes are compared. CodeMirror is real, so code is
-// typed through its own transactions (EditorView.findFromDOM).
+// typed through its own transactions (EditorView.findFromDOM). Highlighting can
+// finish after an edit, so its marks are awaited, bounded (test/helpers/waitFor.js).
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -24,6 +25,7 @@ const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { installPopupDOM } = require('../../helpers/popupDom.js');
+const { pollUntil } = require('../../helpers/waitFor.js');
 const { editPropertyDefinition, readComponentProperties } = require('#dist/electron/properties/propertyDefinitions.js');
 
 const directory = repoPath('node_modules/.stacki-test/property-sections');
@@ -185,11 +187,19 @@ test('the Code type is highlighted TypeScript in both hosts, and editing it writ
   // With commas, as the pop-up refuses a semicolon in a code type.
   const typed = 'readonly { title: string, note?: string }[]';
   const member = `  features?: ${typed};`;
-  const assertHighlighted = (field, host) => {
+  const assertHighlighted = async (field, host) => {
     assert.ok(field.matches('.expr-input'), `${host}: it is the code field a default uses`);
     assert.ok(!document.querySelector('input[aria-label="Code type"]'), `${host}: not a plain input`);
     assert.ok(field.querySelector('.cm-content[aria-label="Code type"]'), `${host}: it keeps its accessible name`);
-    assert.ok(field.querySelector('.cm-line span[class]'), `${host}: its tokens are marked`);
+    // CodeMirror parses within a small time budget per update and finishes the rest from an
+    // idle callback (a 500 ms timer in jsdom), so on a contended runner the marks can land
+    // after the edit: wait for them, bounded, rather than read the DOM straight after.
+    const marked = await pollUntil({
+      what: `${host}: marked tokens`,
+      read: () => field.querySelector('.cm-line span[class]') !== null,
+      until: (found) => found,
+    });
+    assert.ok(marked.value, `${host}: its tokens are marked`);
   };
   const typeType = async (field) => {
     const view = modules.EditorView.findFromDOM(field.querySelector('.cm-editor'));
@@ -203,7 +213,7 @@ test('the Code type is highlighted TypeScript in both hosts, and editing it writ
   });
   // A List keeps its disclosure shut, so the toggle opens it.
   const panelField = await openCodeType();
-  assertHighlighted(panelField, 'the Properties panel');
+  await assertHighlighted(panelField, 'the Properties panel');
   assert.equal(panelField.querySelector('.cm-content').textContent, LIST_TYPE);
   await typeType(panelField);
   await click(document.querySelector('[aria-label="Close property settings"]'));
@@ -221,7 +231,7 @@ test('the Code type is highlighted TypeScript in both hosts, and editing it writ
   });
   const popupField = await openCodeType();
   await typeType(popupField);
-  assertHighlighted(popupField, 'the pop-up');
+  await assertHighlighted(popupField, 'the pop-up');
   await click(byText('Create'));
   assert.equal(declaration.typing.codeType, typed);
   const declared = modules.declaredProp(SOURCE.split('---')[1], declaration, new Set(['heading']));
