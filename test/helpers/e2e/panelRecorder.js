@@ -97,14 +97,24 @@ function recorderMain(limits, popoverSelector) {
       const style = getComputedStyle(chip);
       return { binding: chip.getAttribute('data-binding') || '', background: style.backgroundColor, color: style.color };
     });
+  const popupInMotion = (element) => {
+    const surface = element.closest('.popup-surface');
+    if (surface === null) {
+      return false;
+    }
+    return surface.getAnimations().some((animation) => animation.playState === 'running');
+  };
   const controls = (root) => {
     const found = {};
-    const add = (name, value) => {
+    // `moving`: the control sits in a popup whose own open or close motion is running (a
+    // 5 px rise and fade, ui/popup.css). Its position then changes by design, not by layout,
+    // so the layout-shift check leaves it out (SP-13 was the spacing editor's field rising).
+    const add = (name, element, value) => {
       let key = name;
       for (let suffix = 2; found[key] !== undefined && suffix < limits.duplicateNamesMax; suffix += 1) {
         key = `${name}#${suffix}`;
       }
-      found[key] = value;
+      found[key] = { ...value, moving: popupInMotion(element) };
     };
     for (const box of root.querySelectorAll('.embed-editor_varconnect')) {
       const field = box.querySelector('input[aria-label], textarea[aria-label], input[data-prop], textarea[data-prop]');
@@ -121,7 +131,7 @@ function recorderMain(limits, popoverSelector) {
       } else if (hint !== null) {
         kind = 'hint';
       }
-      add(controlName(field), {
+      add(controlName(field), box, {
         kind,
         value: field.value ?? field.textContent ?? '',
         text: editor === null ? '' : (editor.textContent || '').trim().slice(0, 60),
@@ -132,7 +142,7 @@ function recorderMain(limits, popoverSelector) {
     }
     for (const button of root.querySelectorAll('button.u-select-button[aria-label]')) {
       const label = button.querySelector('.u-select-label');
-      add(controlName(button), {
+      add(controlName(button), button, {
         kind: 'select',
         value: label === null ? (button.textContent || '').trim().slice(0, 60) : label.textContent,
         text: '',
@@ -142,7 +152,7 @@ function recorderMain(limits, popoverSelector) {
       });
     }
     for (const button of root.querySelectorAll('button.embed-editor_spacing-label[data-prop]')) {
-      add(`${button.getAttribute('data-prop')} (spacing)`, {
+      add(`${button.getAttribute('data-prop')} (spacing)`, button, {
         kind: 'spacing',
         value: (button.textContent || '').trim().slice(0, 40),
         text: '',
@@ -153,7 +163,7 @@ function recorderMain(limits, popoverSelector) {
     }
     for (const group of root.querySelectorAll('[role="group"][aria-label]')) {
       const checked = group.querySelector('[role="radio"][aria-checked="true"]');
-      add(`${group.getAttribute('aria-label')} (segments)`, {
+      add(`${group.getAttribute('aria-label')} (segments)`, group, {
         kind: group.classList.contains('is-custom') ? 'segmented-custom' : 'segmented',
         value: checked === null ? '' : checked.getAttribute('aria-label') || '',
         text: '',

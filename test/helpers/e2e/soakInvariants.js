@@ -15,7 +15,8 @@
 //   blank-panel             a frame with the panel's controls gone between two elements
 //   count-changed           a filter count changed after its first paint for an element
 //   layout-shift            a row whose state did not change moved while nothing above it
-//                           changed and the panel did not scroll
+//                           changed and the panel did not scroll (a popup's own open or close
+//                           motion is design, not a shift)
 //   scroll-jump             the panel's scroll offset changed with no wheel from the person
 //   focus-after-click-out   a field held the caret after the person pressed outside it
 //   source-written          opening, hovering or closing something changed the project files
@@ -215,6 +216,10 @@ function layoutViolations(segment) {
     for (const [key, control] of Object.entries(current.controls)) {
       const earlier = previous.controls[key];
       if (earlier === undefined || controlValue(earlier) !== controlValue(control)) {
+        continue;
+      }
+      // A popup's own open or close motion moves what is in it on purpose.
+      if (earlier.moving === true || control.moving === true) {
         continue;
       }
       if (Math.abs(earlier.top - control.top) <= LAYOUT_SHIFT_PX_MAX) {
