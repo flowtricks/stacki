@@ -1,5 +1,5 @@
 import type { MessageRef } from '../core/i18n/messageReference';
-import type { BreakpointSyncApplied, BreakpointSyncScan } from '../properties/breakpointSyncPlan';
+import type { BreakpointSyncApplied, BreakpointSyncScan, BreakpointUsage } from '../properties/breakpointSyncPlan';
 import type { MicrophoneReport } from '../properties/microphone';
 import type { AiResults } from './aiChat';
 import type { AppFileAnswer } from '../properties/appFiles';
@@ -375,6 +375,11 @@ export interface IpcResults extends AiResults {
   readonly 'breakpointSync:scan': {
     readonly ok: boolean;
     readonly scan?: BreakpointSyncScan;
+    readonly error?: string;
+  };
+  readonly 'breakpointSync:usage': {
+    readonly ok: boolean;
+    readonly usage?: BreakpointUsage;
     readonly error?: string;
   };
   readonly 'breakpointSync:apply': BreakpointSyncApplied;

@@ -13,7 +13,7 @@ export const messages = {
   'settings.breakpoints.defaultName.down2': 'Winzig',
   'settings.breakpoints.defaultName.up0': 'Groß',
   'settings.breakpoints.defaultName.up1': 'Extragroß',
-  'settings.breakpoints.defaultName.up2': 'Ultra',
+  'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
   'settings.breakpoints.desktopWidth': 'Volle Breite',
   'settings.breakpoints.direction.down': 'Schmaler als (<)',
@@ -76,6 +76,14 @@ export const messages = {
   'settings.breakpoints.sync.undoLabel': 'Breakpoint-Abfragen synchronisieren',
   'settings.breakpoints.tablet': 'Tablet', // same
   'settings.breakpoints.undoLabel': 'Breakpoints bearbeiten',
+  'settings.breakpoints.usage.expand': 'Anzeigen, wo {name} verwendet wird',
+  'settings.breakpoints.usage.files': { one: '{count} Datei', other: '{count} Dateien' },
+  'settings.breakpoints.usage.inFiles': { one: 'in {count} Datei', other: 'in {count} Dateien' },
+  'settings.breakpoints.usage.none': 'In keiner Media Query verwendet',
+  'settings.breakpoints.usage.open': '{file} öffnen',
+  'settings.breakpoints.usage.places': { one: 'An {count} Stelle verwendet', other: 'An {count} Stellen verwendet' },
+  'settings.breakpoints.usage.problem': 'Die Verwendung konnte nicht gesucht werden. {message}',
+  'settings.breakpoints.usage.willPlaces': { one: 'Aktualisiert {count} Stelle', other: 'Aktualisiert {count} Stellen' },
   'settings.breakpoints.widthLabel': 'Breite {device} in Pixeln',
   'settings.close': 'Einstellungen schließen',
   'settings.cms.empty': 'Noch kein CMS verbunden.',

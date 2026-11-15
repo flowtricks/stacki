@@ -3,43 +3,24 @@
 // each with its line and `before → after`. Exact matches start checked; inclusive 1px forms and places remembered as "Not synced"
 // start unchecked and say so. Nothing is written until the primary button is pressed; "Just save the number" leaves the project's
 // files as they are. While the scan is slow the same dialog shows skeleton rows, so it never appears empty.
-import { useEffect, useRef, useState } from 'react';
-import type { BreakpointSyncScan, SyncFile, SyncFileKind } from '../../../shared/properties/breakpointSyncPlan';
+import { useEffect, useState } from 'react';
+import type { BreakpointSyncScan } from '../../../shared/properties/breakpointSyncPlan';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import type { MessageKey } from '../../lib/i18n/localeContext';
-import { ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import { Skeleton } from '../../ui/Skeleton';
 import {
   allPlaces,
   checkedCount,
-  fileCheck,
-  middleEllipsis,
   placeCount,
   placeKey,
-  placeLabel,
   toggledFile,
   toggledPlace,
   type CheckedPlaces,
 } from '../../../shared/properties/breakpointSyncSelection';
+import { SyncFileRow } from './SyncFileRows';
 import './breakpointSyncDialog.css';
 
-/** Characters of a path shown before it is shortened in the middle (the full path is the tooltip). */
-const PATH_CHARS_MAX = 44;
 const SKELETON_ROWS = 3;
-
-const KIND_LABELS: Readonly<Record<SyncFileKind, MessageKey>> = {
-  css: 'settings.breakpoints.sync.kind.css',
-  style: 'settings.breakpoints.sync.kind.style',
-  page: 'settings.breakpoints.sync.kind.page',
-  component: 'settings.breakpoints.sync.kind.component',
-};
-
-const FLAG_LABELS = {
-  notSynced: 'settings.breakpoints.sync.notSynced',
-  inclusive: 'settings.breakpoints.sync.inclusive',
-  exclusive: 'settings.breakpoints.sync.exclusive',
-} as const satisfies Record<'notSynced' | 'inclusive' | 'exclusive', MessageKey>;
 
 export type SyncDialogState = { readonly kind: 'scanning' } | { readonly kind: 'ready'; readonly scan: BreakpointSyncScan };
 
@@ -86,7 +67,7 @@ export function BreakpointSyncDialog(props: Props) {
               {scan === undefined
                 ? Array.from({ length: SKELETON_ROWS }, (_, index) => <Skeleton key={index} height="36px" radius="8px" />)
                 : scan.files.map((file) => (
-                    <FileRow
+                    <SyncFileRow
                       key={file.rel}
                       file={file}
                       checked={checked}
@@ -123,73 +104,4 @@ function toggled(set: ReadonlySet<string>, value: string): ReadonlySet<string> {
     next.add(value);
   }
   return next;
-}
-
-function FileRow(props: {
-  readonly file: SyncFile;
-  readonly checked: CheckedPlaces;
-  readonly expanded: boolean;
-  readonly onToggleOpen: () => void;
-  readonly onCheckFile: () => void;
-  readonly onCheckPlace: (place: SyncFile['occurrences'][number]) => void;
-}) {
-  const translate = useTranslate();
-  const box = useRef<HTMLInputElement>(null);
-  const state = fileCheck(props.file, props.checked);
-  useEffect(() => {
-    if (box.current !== null) {
-      box.current.indeterminate = state === 'some';
-    }
-  }, [state]);
-  const Chevron = props.expanded ? ChevronDownIcon : ChevronRightIcon;
-  return (
-    <div className="breakpoint-sync-file" data-kind={props.file.kind}>
-      <div className="breakpoint-sync-row">
-        <button
-          type="button"
-          className="breakpoint-sync-open"
-          aria-expanded={props.expanded}
-          aria-label={translate('settings.breakpoints.sync.open', { file: props.file.rel })}
-          onClick={props.onToggleOpen}
-        >
-          <Chevron size={12} />
-        </button>
-        <input
-          ref={box}
-          type="checkbox"
-          checked={state === 'all'}
-          aria-label={translate('settings.breakpoints.sync.checkFile', { file: props.file.rel })}
-          onChange={props.onCheckFile}
-        />
-        <span className="breakpoint-sync-pill">{translate(KIND_LABELS[props.file.kind])}</span>
-        <span className="breakpoint-sync-path" title={props.file.rel}>
-          {middleEllipsis(props.file.rel, PATH_CHARS_MAX)}
-        </span>
-        <span className="breakpoint-sync-count">{props.file.occurrences.length}</span>
-      </div>
-      {props.expanded && (
-        <ul className="breakpoint-sync-places">
-          {props.file.occurrences.map((place) => {
-            const label = placeLabel(place);
-            return (
-              <li key={place.locator} className="breakpoint-sync-place">
-                <input
-                  type="checkbox"
-                  checked={props.checked.has(placeKey(props.file.rel, place.locator))}
-                  aria-label={translate('settings.breakpoints.sync.checkPlace', { line: place.line })}
-                  onChange={() => props.onCheckPlace(place)}
-                />
-                <span className="breakpoint-sync-line">{translate('settings.breakpoints.sync.line', { line: place.line })}</span>
-                <span className="breakpoint-sync-change">
-                  <code className="breakpoint-sync-before">{place.beforeText}</code>
-                  <code className="breakpoint-sync-after">{place.afterText}</code>
-                </span>
-                {label !== undefined && <span className="breakpoint-sync-flag">{translate(FLAG_LABELS[label])}</span>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
 }

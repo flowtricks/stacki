@@ -250,7 +250,12 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
       );
     case 'breakpoints':
       return props.projectPath ? (
-        <BreakpointsSettings key={`breakpoints:${props.projectPath}`} projectPath={props.projectPath} onRecordUndo={props.onRecordUndo} />
+        <BreakpointsSettings
+          key={`breakpoints:${props.projectPath}`}
+          projectPath={props.projectPath}
+          onRecordUndo={props.onRecordUndo}
+          {...(props.onOpenFile === undefined ? {} : { onOpenFile: openAfterClosing(props.onClose, props.onOpenFile) })}
+        />
       ) : (
         <SettingsEmpty icon={icon}>{translate('settings.empty.breakpoints')}</SettingsEmpty>
       );

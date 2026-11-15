@@ -86,7 +86,9 @@ export async function scanBreakpointSync(
   assert(path.isAbsolute(projectPath), 'scanBreakpointSync: the project path is absolute');
   const lumos = readLengthUnit(projectPath).kind === 'rem';
   const record = readRecord(projectPath);
-  const excluded = new Set(entryOf(record.record, request.key).excluded.map((ref) => `${ref.file}\0${ref.locator}`));
+  const entry = entryOf(record.record, request.key);
+  const excluded = new Set(entry.excluded.map((ref) => `${ref.file}\0${ref.locator}`));
+  const linked = new Set(entry.linked.map((ref) => `${ref.file}\0${ref.locator}`));
   const listing = listCandidates(projectPath);
   const files: SyncFile[] = [];
   let skipped = 0;
@@ -112,7 +114,7 @@ export async function scanBreakpointSync(
         break;
       }
       const rel = toRelative(projectPath, abs);
-      const found = occurrencesIn(rel, read.text, { ...request, lumos, excluded });
+      const found = occurrencesIn(rel, read.text, { ...request, lumos, excluded, linked, includeUnchanged: false });
       if (found.length === 0) {
         continue;
       }
@@ -136,6 +138,10 @@ export function occurrencesIn(
     readonly next: BreakpointSetting;
     readonly lumos: boolean;
     readonly excluded: ReadonlySet<string>;
+    /** Places the person checked that are not exact matches (inclusive and exclusive forms start unchecked). */
+    readonly linked: ReadonlySet<string>;
+    /** List places whose text would not change (the usage view shows what is there now, not what a change would do). */
+    readonly includeUnchanged: boolean;
   },
 ): readonly SyncOccurrence[] {
   const view = cssView(rel, text);
@@ -155,7 +161,7 @@ export function occurrencesIn(
     const reason = match ?? 'exact';
     const after = replacementText(reason, bound, request.next, { lumos: request.lumos });
     const before = text.slice(bound.start, bound.end);
-    if (before === after) {
+    if (before === after && !request.includeUnchanged) {
       continue;
     }
     for (let index = counted; index < bound.start; index += 1) {
@@ -175,7 +181,7 @@ export function occurrencesIn(
       afterText: previewAround(view, bound, after),
       reason,
       excluded: wasExcluded,
-      checked: reason === 'exact' && !wasExcluded,
+      checked: !wasExcluded && (reason === 'exact' || request.linked.has(`${rel}\0${bound.locator}`)),
     });
   }
   return found;
@@ -550,4 +556,117 @@ export function validSetting(input: { readonly value: number; readonly unit: str
     assert(boundaryPx(checked.value) >= BREAKPOINT_LIMITS.boundaryPxMin, 'validSetting: within the canvas bounds');
   }
   return checked;
+}
+
+/** One breakpoint's places in the project, as they stand now. */
+export interface BreakpointUsageEntry {
+  readonly id: string;
+  readonly files: readonly SyncFile[];
+}
+
+export interface BreakpointUsageResult {
+  readonly entries: readonly BreakpointUsageEntry[];
+  readonly lumos: boolean;
+  readonly truncated: boolean;
+  readonly skipped: number;
+  readonly recordProblem: string | undefined;
+}
+
+// What the usage scan remembers of a file between scans, so a rescan reads only what changed: its text when it has `@media` in it
+// (the only files that can hold a place), keyed by when it was last written and how big it is. Bounded, oldest dropped first.
+const usageCache = new Map<string, { readonly stamp: string; readonly text: string | undefined; readonly digest: string }>();
+const USAGE_CACHE_MAX = 4_000;
+
+/**
+ * Where each breakpoint is used: the places in the project that equal its CURRENT value, per file, with the person's remembered
+ * choices applied. One pass over the project for all breakpoints, cached by file time and size. Writes nothing.
+ */
+export async function scanBreakpointUsage(
+  projectPath: string,
+  breakpoints: ReadonlyArray<Pick<Breakpoint, 'id' | 'direction' | 'setting'>>,
+): Promise<BreakpointUsageResult> {
+  assert(path.isAbsolute(projectPath), 'scanBreakpointUsage: the project path is absolute');
+  const lumos = readLengthUnit(projectPath).kind === 'rem';
+  const record = readRecord(projectPath);
+  const listing = listCandidates(projectPath);
+  const found = new Map<string, SyncFile[]>(breakpoints.map((breakpoint) => [breakpoint.id, []]));
+  let skipped = 0;
+  let truncated = listing.truncated;
+  let totalBytes = 0;
+  let places = 0;
+  for (let from = 0; from < listing.files.length && !truncated; from += SYNC_SCAN_LIMITS.concurrency) {
+    const batch = listing.files.slice(from, from + SYNC_SCAN_LIMITS.concurrency);
+    const reads = await Promise.all(batch.map((abs) => readForUsage(abs)));
+    for (const [index, read] of reads.entries()) {
+      const abs = batch[index];
+      assert(abs !== undefined, 'scanBreakpointUsage: a batch entry exists');
+      if (read.kind === 'large') {
+        skipped += 1;
+        continue;
+      }
+      if (read.kind === 'unreadable' || read.text === undefined) {
+        continue;
+      }
+      totalBytes += read.text.length;
+      if (totalBytes > SYNC_SCAN_LIMITS.totalBytesMax) {
+        truncated = true;
+        break;
+      }
+      const rel = toRelative(projectPath, abs);
+      for (const breakpoint of breakpoints) {
+        const entry = entryOf(record.record, breakpoint.id);
+        const occurrences = occurrencesIn(rel, read.text, {
+          old: breakpoint,
+          next: breakpoint.setting,
+          lumos,
+          excluded: new Set(entry.excluded.map((ref) => `${ref.file}\0${ref.locator}`)),
+          linked: new Set(entry.linked.map((ref) => `${ref.file}\0${ref.locator}`)),
+          includeUnchanged: true,
+        });
+        if (occurrences.length > 0) {
+          places += occurrences.length;
+          found.get(breakpoint.id)?.push({ rel, kind: kindOf(rel), digest: read.digest, occurrences });
+        }
+      }
+      if (places > SYNC_SCAN_LIMITS.placesMax * Math.max(1, breakpoints.length)) {
+        truncated = true;
+        break;
+      }
+    }
+  }
+  while (usageCache.size > USAGE_CACHE_MAX) {
+    const oldest = usageCache.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    usageCache.delete(oldest);
+  }
+  const entries = breakpoints.map((breakpoint) => ({ id: breakpoint.id, files: found.get(breakpoint.id) ?? [] }));
+  return { entries, lumos, truncated, skipped, recordProblem: record.problem };
+}
+
+type UsageRead =
+  { readonly kind: 'text'; readonly text: string | undefined; readonly digest: string } | { readonly kind: 'large' } | { readonly kind: 'unreadable' };
+
+async function readForUsage(abs: string): Promise<UsageRead> {
+  try {
+    const stat = await fs.promises.stat(abs);
+    if (stat.size > SYNC_SCAN_LIMITS.fileBytesMax) {
+      return { kind: 'large' };
+    }
+    const stamp = `${stat.mtimeMs}:${stat.size}`;
+    const cached = usageCache.get(abs);
+    if (cached !== undefined && cached.stamp === stamp) {
+      return { kind: 'text', text: cached.text, digest: cached.digest };
+    }
+    const text = await fs.promises.readFile(abs, 'utf8');
+    const digest = digestOf(text);
+    // Only a file with `@media` can hold a place; the rest is not kept.
+    const kept = /@media/i.test(text) ? text : undefined;
+    usageCache.delete(abs);
+    usageCache.set(abs, { stamp, text: kept, digest });
+    return { kind: 'text', text: kept, digest };
+  } catch {
+    return { kind: 'unreadable' };
+  }
 }

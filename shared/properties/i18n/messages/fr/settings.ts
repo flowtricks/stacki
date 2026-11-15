@@ -13,11 +13,11 @@ export const messages = {
   'settings.breakpoints.defaultName.down2': 'Minuscule',
   'settings.breakpoints.defaultName.up0': 'Grand',
   'settings.breakpoints.defaultName.up1': 'Très grand',
-  'settings.breakpoints.defaultName.up2': 'Ultra',
+  'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Bureau',
   'settings.breakpoints.desktopWidth': 'Pleine largeur',
   'settings.breakpoints.direction.down': 'Plus étroit que (<)',
-  'settings.breakpoints.direction.group': 'Direction',
+  'settings.breakpoints.direction.group': 'Direction', // same
   'settings.breakpoints.direction.up': 'Plus large que (>=)',
   'settings.breakpoints.error.direction': 'Un point d’arrêt plus large doit être supérieur à tous les plus étroits.',
   'settings.breakpoints.error.file':
@@ -76,6 +76,14 @@ export const messages = {
   'settings.breakpoints.sync.undoLabel': 'Synchroniser les requêtes des points d’arrêt',
   'settings.breakpoints.tablet': 'Tablette',
   'settings.breakpoints.undoLabel': 'Modifier les points d’arrêt',
+  'settings.breakpoints.usage.expand': 'Afficher où {name} est utilisé',
+  'settings.breakpoints.usage.files': { one: '{count} fichier', other: '{count} fichiers' },
+  'settings.breakpoints.usage.inFiles': { one: 'dans {count} fichier', other: 'dans {count} fichiers' },
+  'settings.breakpoints.usage.none': 'Utilisé dans aucune media query',
+  'settings.breakpoints.usage.open': 'Ouvrir {file}',
+  'settings.breakpoints.usage.places': { one: 'Utilisé à {count} endroit', other: 'Utilisé à {count} endroits' },
+  'settings.breakpoints.usage.problem': 'Impossible de chercher où c’est utilisé. {message}',
+  'settings.breakpoints.usage.willPlaces': { one: 'Mettra à jour {count} endroit', other: 'Mettra à jour {count} endroits' },
   'settings.breakpoints.widthLabel': 'Largeur : {device}, en pixels',
   'settings.close': 'Fermer les réglages',
   'settings.cms.empty': 'Aucun CMS connecté pour l’instant.',

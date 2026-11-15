@@ -2,7 +2,7 @@
 // the person kept, and put a sync back or forward again (electron/project/breakpointSync.ts).
 import * as path from 'node:path';
 import { errorMessage } from '../lib/mainHelpers';
-import { applyBreakpointSync, restoreBreakpointSync, scanBreakpointSync, validSetting } from '../project/breakpointSync';
+import { applyBreakpointSync, restoreBreakpointSync, scanBreakpointSync, scanBreakpointUsage, validSetting } from '../project/breakpointSync';
 import { announceVariableWrite } from './cssVariableHandlers';
 import type { MainHost } from './mainHost';
 
@@ -25,6 +25,22 @@ export function registerBreakpointSyncHandlers({ ipcMain, send }: Pick<MainHost,
           next: next.value,
         }),
       };
+    } catch (error: unknown) {
+      return { ok: false, error: errorMessage(error) };
+    }
+  });
+
+  ipcMain.handle('breakpointSync:usage', async (_event, request) => {
+    const breakpoints = [];
+    for (const entry of request.breakpoints) {
+      const setting = validSetting(entry);
+      if (!setting.ok) {
+        return { ok: false, error: setting.error.message };
+      }
+      breakpoints.push({ id: entry.id, direction: entry.direction, setting: setting.value });
+    }
+    try {
+      return { ok: true, usage: await scanBreakpointUsage(request.projectPath, breakpoints) };
     } catch (error: unknown) {
       return { ok: false, error: errorMessage(error) };
     }

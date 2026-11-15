@@ -146,3 +146,22 @@
 .breakpoint-sync .modal-footer {
   padding: 12px 20px 16px;
 }
+.breakpoint-sync-link {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.breakpoint-sync-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.breakpoint-sync-link:focus-visible {
+  outline: 2px solid var(--accent);
+}

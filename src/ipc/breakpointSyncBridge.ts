@@ -4,6 +4,8 @@
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import {
   parseSyncApplied,
+  parseUsageAnswer,
+  type BreakpointUsageAnswer,
   parseSyncRestored,
   parseSyncScanAnswer,
   type BreakpointSyncApplied,
@@ -34,6 +36,22 @@ export async function scanBreakpointSyncRequest(
     next: { direction: request.next.direction, ...request.next.setting },
   });
   return parseSyncScanAnswer(await window.avb.scanBreakpointSync(payload));
+}
+
+/** Whether this window can look for where the breakpoints are used. */
+export function breakpointUsageAvailable(): boolean {
+  return typeof window !== 'undefined' && typeof window.avb?.scanBreakpointUsage === 'function';
+}
+
+export async function scanBreakpointUsageRequest(projectPath: string, list: readonly Breakpoint[]): Promise<BreakpointUsageAnswer> {
+  if (!breakpointUsageAvailable()) {
+    return { ok: false, error: UNAVAILABLE };
+  }
+  const payload = parseIpcPayload('breakpointSync:usage', {
+    projectPath,
+    breakpoints: list.map((breakpoint) => ({ id: breakpoint.id, direction: breakpoint.direction, ...breakpoint.setting })),
+  });
+  return parseUsageAnswer(await window.avb.scanBreakpointUsage(payload));
 }
 
 export async function applyBreakpointSyncRequest(request: BreakpointSyncApply): Promise<BreakpointSyncApplied> {

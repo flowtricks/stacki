@@ -17,6 +17,7 @@ import {
   serializeBreakpointSyncRecord,
   withEntry,
 } from '#dist/shared/properties/breakpointSyncRecord.js';
+import { checkedTotals, foundTotals, recordWithChoices } from '#dist/shared/properties/breakpointSyncSelection.js';
 import { validateMetadata } from '#dist/shared/properties/projectMetadata.js';
 
 const good = {
@@ -121,4 +122,50 @@ test('the metadata transport validates the file before any write', () => {
     /project-relative/,
   );
   assert.throws(() => validateMetadata('breakpointSync', 'nope'), /not valid JSON/);
+});
+
+test('the Breakpoints screen remembers exact places when unchecked and ambiguous ones when checked', () => {
+  const exact = { file: 'src/a.css', locator: '00000001:0', reason: 'exact' as const };
+  const inclusive = { file: 'src/a.css', locator: '00000001:1', reason: 'inclusive' as const };
+  const unchecked = recordWithChoices(EMPTY_SYNC_RECORD, 'laptop', [
+    { ...exact, checked: false },
+    { ...inclusive, checked: false },
+  ]);
+  assert.deepEqual(entryOf(unchecked, 'laptop').excluded, [{ file: 'src/a.css', locator: '00000001:0' }], 'an unchecked ambiguous place is just its default');
+  assert.deepEqual(entryOf(unchecked, 'laptop').linked, []);
+  const both = recordWithChoices(unchecked, 'laptop', [
+    { ...exact, checked: true },
+    { ...inclusive, checked: true },
+  ]);
+  assert.deepEqual(entryOf(both, 'laptop').excluded, [], 'checking a place forgets it was left alone');
+  assert.deepEqual(entryOf(both, 'laptop').linked, [{ file: 'src/a.css', locator: '00000001:1' }], 'a checked ambiguous place is remembered as wanted');
+  assert.ok(recordsEqual(recordWithChoices(both, 'laptop', []), both), 'no choices, no change');
+  assert.ok(recordsEqual(recordWithChoices(unchecked, 'laptop', [{ ...exact, checked: false }]), unchecked), 'the same choice twice is the same bytes');
+  const other = recordWithChoices(both, 'bp-1', [{ ...exact, checked: false }]);
+  assert.deepEqual(entryOf(other, 'laptop'), entryOf(both, 'laptop'), 'breakpoints are independent');
+  const back = recordWithChoices(both, 'laptop', [{ ...inclusive, checked: false }]);
+  assert.deepEqual(entryOf(back, 'laptop').linked, [], 'unchecking an ambiguous place returns it to its default');
+});
+
+test('totals: what is found, and what a change would touch', () => {
+  const place = (locator: string, options: { readonly checked: boolean }) => ({
+    locator,
+    start: 0,
+    end: 1,
+    line: 1,
+    before: '64rem',
+    after: '70rem',
+    beforeText: '',
+    afterText: '',
+    reason: 'exact' as const,
+    excluded: false,
+    checked: options.checked,
+  });
+  const files = [
+    { rel: 'a.css', kind: 'css' as const, digest: 'x', occurrences: [place('00000001:0', { checked: true }), place('00000001:1', { checked: false })] },
+    { rel: 'b.astro', kind: 'page' as const, digest: 'y', occurrences: [place('00000002:0', { checked: false })] },
+  ];
+  assert.deepEqual(foundTotals(files), { places: 3, files: 2 });
+  assert.deepEqual(checkedTotals(files), { places: 1, files: 1 });
+  assert.deepEqual(checkedTotals([]), { places: 0, files: 0 });
 });

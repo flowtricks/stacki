@@ -989,6 +989,7 @@
     "src/features/preview/canvasTextSelection.ts",
     "src/features/preview/canvasTextSource.ts",
     "src/features/preview/contextPosition.ts",
+    "src/features/preview/deviceIcons.ts",
     "src/features/preview/guide.css",
     "src/features/preview/guideModel.ts",
     "src/features/preview/guidePersistence.ts",

@@ -906,6 +906,15 @@ CSS. Desktop and Studio read it through the `breakpoints` metadata kind (witness
 `settings:breakpoints`) into one per-project store (`src/ipc/projectBreakpoints.ts`). Stacki writes no media query from these
 numbers; authored queries keep their own unit and Base (`baseWidth.ts`) is read from those.
 
+**Where breakpoints are used.** Settings > Breakpoints shows each breakpoint's places before anything is changed: `breakpointSync:usage`
+(`scanBreakpointUsage`) answers, for the breakpoints' CURRENT saved values, the places per file (one pass for all, files cached
+by time and size, re-run when the tab opens, a value is saved, the window returns or a sync is applied). A card says
+`Used in N places · M files`, and its chevron opens the same file rows as the sync dialog, with a box per file and per place; while
+a different valid value is typed it says what that change will touch. Each tick is one write to `.stacki/breakpoint-sync.json`
+through the metadata transport (`recordWithChoices`): an exact place is remembered only when unchecked (`excluded`, "Not synced"),
+an inclusive or exclusive one only when checked (`linked`), and a scan itself writes nothing. The dialog after a change starts from
+the same set.
+
 **Breakpoint sync.** Committing a changed breakpoint in Settings scans the project (Desktop only; Studio has no Settings
 dialog) for `@media` width bounds equal to its OLD value (`shared/properties/mediaBreakpointSync.ts`, executed in main by
 `electron/project/breakpointSync.ts`; channels `breakpointSync:scan`, `:apply`, `:restore`). Matching reads only `@media`

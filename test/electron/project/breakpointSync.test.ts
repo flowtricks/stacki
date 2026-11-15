@@ -10,9 +10,15 @@ import test from 'node:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { SYNC_SCAN_LIMITS, applyBreakpointSync, restoreBreakpointSync, scanBreakpointSync } from '#dist/electron/project/breakpointSync.js';
+import {
+  SYNC_SCAN_LIMITS,
+  applyBreakpointSync,
+  restoreBreakpointSync,
+  scanBreakpointSync,
+  scanBreakpointUsage,
+} from '#dist/electron/project/breakpointSync.js';
 import { parseBreakpointSyncSource, serializeBreakpointSyncRecord, EMPTY_SYNC_RECORD, entryOf } from '#dist/shared/properties/breakpointSyncRecord.js';
-import { applyRequest, initialChecked } from '#dist/shared/properties/breakpointSyncSelection.js';
+import { applyRequest, initialChecked, recordWithChoices } from '#dist/shared/properties/breakpointSyncSelection.js';
 import type { BreakpointSyncScan } from '#dist/shared/properties/breakpointSyncPlan.js';
 import type { BreakpointSetting } from '#dist/shared/properties/projectBreakpoints.js';
 
@@ -287,4 +293,107 @@ test('a scan that finds nothing lists nothing', async () => {
   const root = fixture();
   const scan = await scanOf(root, NEXT, { value: 99, unit: 'rem' });
   assert.deepEqual(scan.files, []);
+});
+
+const LIST = [
+  { id: 'laptop', direction: 'down', setting: { value: 64, unit: 'rem' } },
+  { id: 'tablet', direction: 'down', setting: { value: 48, unit: 'rem' } },
+  { id: 'phone', direction: 'down', setting: { value: 30, unit: 'rem' } },
+] as const;
+
+function usageFixture(): string {
+  const root = fixture();
+  fs.writeFileSync(
+    path.join(root, 'src/styles/small.css'),
+    '@media (min-width: 48rem) { .a { color: red } }\n@media (max-width: 30rem) { .b { color: red } }\n@media (min-width: 30rem) { .c { color: red } }\n',
+  );
+  return root;
+}
+
+test('the usage scan counts where every breakpoint is used, per file, and writes nothing', async () => {
+  const root = usageFixture();
+  const before = fs.readFileSync(path.join(root, 'src/styles/site.css'), 'utf8');
+  const usage = await scanBreakpointUsage(root, LIST);
+  assert.equal(usage.lumos, false);
+  assert.equal(usage.truncated, false);
+  const byId = new Map(usage.entries.map((entry) => [entry.id, entry.files.map((file) => [file.rel, file.kind, file.occurrences.length])]));
+  assert.deepEqual(byId.get('laptop'), [
+    ['public/legacy.html', 'style', 1],
+    ['src/components/Card.astro', 'component', 2],
+    ['src/pages/index.astro', 'page', 1],
+    ['src/styles/site.css', 'css', 3],
+  ]);
+  assert.deepEqual(byId.get('tablet'), [['src/styles/small.css', 'css', 1]]);
+  assert.deepEqual(byId.get('phone'), [['src/styles/small.css', 'css', 2]]);
+  const site = usage.entries.find((entry) => entry.id === 'laptop')?.files.find((file) => file.rel === 'src/styles/site.css');
+  assert.deepEqual(
+    site?.occurrences.map((place) => [place.reason, place.checked]),
+    [
+      ['exact', true],
+      ['exact', true],
+      ['inclusive', false],
+    ],
+    'the 1px inclusive form is listed but starts unchecked',
+  );
+  assert.ok(
+    site?.occurrences.every((place) => place.before === place.after),
+    'the usage view shows what is there, not a change',
+  );
+  assert.equal(fs.readFileSync(path.join(root, 'src/styles/site.css'), 'utf8'), before);
+  assert.equal(fs.existsSync(path.join(root, '.stacki')), false, 'scanning writes not even the record');
+  // node_modules, dist and the .gitignore'd folder never appear.
+  assert.ok(usage.entries.every((entry) => entry.files.every((file) => !/node_modules|dist|generated/.test(file.rel))));
+});
+
+test('a rescan sees a changed file, and the choices the person saved are honoured and survive rescans', async () => {
+  const root = usageFixture();
+  const first = await scanBreakpointUsage(root, LIST);
+  const site = first.entries.find((entry) => entry.id === 'laptop')?.files.find((file) => file.rel === 'src/styles/site.css');
+  assert.ok(site);
+  // The person unticks the first exact place and ticks the inclusive one.
+  const record = recordWithChoices(EMPTY_SYNC_RECORD, 'laptop', [
+    { file: site.rel, locator: site.occurrences[0]?.locator ?? '', reason: 'exact', checked: false },
+    { file: site.rel, locator: site.occurrences[2]?.locator ?? '', reason: 'inclusive', checked: true },
+  ]);
+  fs.mkdirSync(path.join(root, '.stacki'));
+  fs.writeFileSync(path.join(root, '.stacki/breakpoint-sync.json'), serializeBreakpointSyncRecord(record));
+  for (let round = 0; round < 2; round += 1) {
+    const again = await scanBreakpointUsage(root, LIST);
+    const places = again.entries.find((entry) => entry.id === 'laptop')?.files.find((file) => file.rel === 'src/styles/site.css')?.occurrences;
+    assert.deepEqual(
+      places?.map((place) => [place.excluded, place.checked]),
+      [
+        [true, false],
+        [false, true],
+        [false, true],
+      ],
+      'unticked stays unticked and ticked stays ticked, scan after scan',
+    );
+  }
+  // Other breakpoints' choices are their own.
+  const tablet = (await scanBreakpointUsage(root, LIST)).entries.find((entry) => entry.id === 'tablet');
+  assert.ok(tablet?.files.every((file) => file.occurrences.every((place) => place.checked && !place.excluded)));
+  // The choices reach an apply: the unticked place is not rewritten by a sync, the ticked inclusive one is.
+  const sync = await scanOf(root);
+  const checked = initialChecked(sync);
+  const result = applyBreakpointSync(root, applyRequest(root, 'laptop', sync, checked));
+  assert.equal(result.ok, true);
+  const text = read(root, 'src/styles/site.css');
+  assert.ok(text.includes('(min-width: 64rem)'), 'the unticked place keeps its value');
+  assert.ok(text.includes('(max-width: 70rem)'), 'the other exact place moved');
+  assert.ok(text.includes('(max-width: 1119px)'), 'the ticked inclusive form moved, one pixel under the new boundary');
+  // A file changed on disk shows up on the next scan.
+  fs.appendFileSync(path.join(root, 'src/styles/small.css'), '@media (min-width: 48rem) { .d { color: red } }\n');
+  const changed = await scanBreakpointUsage(root, LIST);
+  assert.equal(changed.entries.find((entry) => entry.id === 'tablet')?.files[0]?.occurrences.length, 2);
+});
+
+test('a Lumos project is reported, and an unreadable record is reported once with nothing remembered', async () => {
+  const root = fixture({ lumos: true });
+  fs.mkdirSync(path.join(root, '.stacki'));
+  fs.writeFileSync(path.join(root, '.stacki/breakpoint-sync.json'), '{ nope');
+  const usage = await scanBreakpointUsage(root, LIST);
+  assert.equal(usage.lumos, true);
+  assert.match(usage.recordProblem ?? '', /not valid JSON/);
+  assert.equal(read(root, '.stacki/breakpoint-sync.json'), '{ nope');
 });

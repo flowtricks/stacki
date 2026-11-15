@@ -1,21 +1,10 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { cursorClick as centralCursorClick } from '../../ui/central/centralGeometry';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { IconProps } from '../../ui/Icons';
-import {
-  AllBreakpointsIcon,
-  ChevronRightIcon,
-  DesktopIcon,
-  LaptopIcon,
-  PanelRightIcon,
-  PhoneIcon,
-  SmartwatchIcon,
-  StudioDisplayXdrIcon,
-  TabletIcon,
-  TelevisionIcon,
-} from '../../ui/Icons';
+import { ChevronRightIcon, PanelRightIcon } from '../../ui/Icons';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
-import { barDevices, shortcutOf, type BarDevice, type DeviceIconKind, type PreviewDevice } from './breakpointDevices';
+import { barDevices, shortcutOf, type BarDevice, type PreviewDevice } from './breakpointDevices';
+import { deviceIconComponent } from './deviceIcons';
 import { breakpointLabel } from './breakpointLabel';
 import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
@@ -29,21 +18,7 @@ const InteractIcon = centralIcon(centralCursorClick);
 export type { PreviewDevice } from './breakpointDevices';
 export { deviceForWidth, deviceWidth } from './breakpointDevices';
 
-const DEVICE_ICONS: Readonly<Record<DeviceIconKind, React.ComponentType<IconProps>>> = {
-  desktop: DesktopIcon,
-  laptop: LaptopIcon,
-  tablet: TabletIcon,
-  phone: PhoneIcon,
-  studioDisplayXdr: StudioDisplayXdrIcon,
-  television: TelevisionIcon,
-  smartwatch: SmartwatchIcon,
-  canvas: AllBreakpointsIcon,
-};
-
-/** The icon component of a device kind: the same ones Settings draws on its cards. */
-export function deviceIconComponent(kind: DeviceIconKind): React.ComponentType<IconProps> {
-  return DEVICE_ICONS[kind];
-}
+export { deviceIconComponent } from './deviceIcons';
 
 export interface PreviewCrumb {
   /** The node the crumb selects; undefined for the page itself. */

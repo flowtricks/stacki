@@ -4,7 +4,8 @@
 // A place is named by its file and locator (`rel` + `\0` + locator). Exact matches the person has not unchecked before start
 // checked; inclusive 1px forms and places remembered as "Not synced" start unchecked. A file's box is checked when all its places
 // are, and half-checked when some are.
-import type { BreakpointSyncApply, BreakpointSyncScan, SyncFile, SyncOccurrence } from './breakpointSyncPlan';
+import type { BreakpointSyncApply, BreakpointSyncScan, SyncFile, SyncOccurrence, SyncReason } from './breakpointSyncPlan';
+import { canonicalRefs, entryOf, withEntry, type BreakpointSyncRecord } from './breakpointSyncRecord';
 
 export type CheckedPlaces = ReadonlySet<string>;
 
@@ -102,4 +103,66 @@ export function middleEllipsis(rel: string, max: number): string {
   const tail = Math.ceil((max - 1) * 0.6);
   const head = max - 1 - tail;
   return `${rel.slice(0, head)}…${rel.slice(rel.length - tail)}`;
+}
+
+/** One place the person checked or unchecked on the Breakpoints screen. */
+export interface PlaceChoice {
+  readonly file: string;
+  readonly locator: string;
+  readonly reason: SyncReason;
+  readonly checked: boolean;
+}
+
+/**
+ * The record after the person's choices for one breakpoint. An exact place is remembered only when unchecked (`excluded`, shown as
+ * "Not synced"); an inclusive or exclusive one starts unchecked, so it is remembered only when checked (`linked`). Checking a place
+ * forgets that it was excluded; unchecking an ambiguous one goes back to its default and is not remembered at all.
+ */
+export function recordWithChoices(record: BreakpointSyncRecord, id: string, choices: readonly PlaceChoice[]): BreakpointSyncRecord {
+  const entry = entryOf(record, id);
+  const named = (choice: PlaceChoice): string => placeKey(choice.file, choice.locator);
+  const touched = new Set(choices.map(named));
+  const excluded = entry.excluded.filter((ref) => !touched.has(placeKey(ref.file, ref.locator)));
+  const linked = entry.linked.filter((ref) => !touched.has(placeKey(ref.file, ref.locator)));
+  for (const choice of choices) {
+    const ref = { file: choice.file, locator: choice.locator };
+    if (choice.reason === 'exact') {
+      if (!choice.checked) {
+        excluded.push(ref);
+      }
+    } else if (choice.checked) {
+      linked.push(ref);
+    }
+  }
+  return withEntry(record, id, { excluded: canonicalRefs(excluded), linked: canonicalRefs(linked), appliedAt: entry.appliedAt });
+}
+
+/** The places that will change if this breakpoint's number does: how many, and in how many files. */
+export function checkedTotals(files: readonly SyncFile[]): { readonly places: number; readonly files: number } {
+  let places = 0;
+  let touched = 0;
+  for (const file of files) {
+    const on = file.occurrences.filter((place) => place.checked).length;
+    places += on;
+    touched += on > 0 ? 1 : 0;
+  }
+  return { places, files: touched };
+}
+
+/** Every place found, and in how many files. */
+export function foundTotals(files: readonly SyncFile[]): { readonly places: number; readonly files: number } {
+  return { places: files.reduce((sum, file) => sum + file.occurrences.length, 0), files: files.length };
+}
+
+/** The scan's files with each place's `checked` set from the person's boxes (the dialog's and the card's boxes agree). */
+export function withChecked(files: readonly SyncFile[], checked: CheckedPlaces): readonly SyncFile[] {
+  return files.map((file) => ({
+    ...file,
+    occurrences: file.occurrences.map((place) => ({ ...place, checked: checked.has(placeKey(file.rel, place.locator)) })),
+  }));
+}
+
+/** The checked places of a set of files, in the form the file rows read. */
+export function checkedOf(files: readonly SyncFile[]): CheckedPlaces {
+  return new Set(files.flatMap((file) => file.occurrences.filter((place) => place.checked).map((place) => placeKey(file.rel, place.locator))));
 }

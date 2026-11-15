@@ -46,10 +46,12 @@ import { Skeleton } from '../../ui/Skeleton';
 import { messageRef } from '../../../shared/properties/i18n/messageRef';
 import type { BreakpointSyncScan } from '../../../shared/properties/breakpointSyncPlan';
 import { applyBreakpointSyncRequest, breakpointSyncAvailable, restoreBreakpointSyncRequest, scanBreakpointSyncRequest } from '../../ipc/breakpointSyncBridge';
-import { deviceIconComponent } from '../../features/preview/PreviewToolbar';
+import { deviceIconComponent } from '../../features/preview/deviceIcons';
 import { iconFor } from '../../features/preview/breakpointDevices';
 import { breakpointLabel } from '../../features/preview/breakpointLabel';
 import { BreakpointSyncDialog } from './BreakpointSyncDialog';
+import { BreakpointUsageLine, BreakpointUsageList, hasUsage } from './BreakpointUsage';
+import { useBreakpointUsage } from './useBreakpointUsage';
 import { applyRequest, type CheckedPlaces } from '../../../shared/properties/breakpointSyncSelection';
 import { SettingsNotice, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import './breakpointsSettings.css';
@@ -90,15 +92,20 @@ const DEFAULT_NAMES: Readonly<Record<BreakpointDirection, readonly MessageKey[]>
 export function BreakpointsSettings({
   projectPath,
   onRecordUndo,
+  onOpenFile,
 }: {
   readonly projectPath: string;
   readonly onRecordUndo?: ((command: BreakpointSyncUndo) => void) | undefined;
+  /** Opens a project file in the Code panel (the used-in list links to it). */
+  readonly onOpenFile?: ((rel: string) => void) | undefined;
 }) {
   const translate = useTranslate();
   const role = useCurrentRole();
   const editable = can(role, 'settings:breakpoints');
   const { list, resolved, state, save } = useProjectBreakpoints(projectPath);
   const indicator = useSaveIndicator();
+  const usage = useBreakpointUsage(projectPath, list);
+  const [usageOpen, setUsageOpen] = useState<ReadonlySet<string>>(new Set());
   const [drafts, setDrafts] = useState<Drafts>(() => draftsOf(list));
   const [names, setNames] = useState<Drafts>(() => namesOf(list, translate));
   const [adding, setAdding] = useState<AddDraft>();
@@ -263,6 +270,7 @@ export function BreakpointsSettings({
       notes.push(translate('settings.breakpoints.sync.skippedFiles', { count: result.skipped.length }));
     }
     setSyncMessage(notes.length > 0 ? notes.join(' ') : undefined);
+    usage.refresh();
     const journalId = result.journalId;
     if (journalId !== undefined && onRecordUndo !== undefined) {
       onRecordUndo({
@@ -336,6 +344,14 @@ export function BreakpointsSettings({
           <span className="breakpoints-query" id={`breakpoints-query-${breakpoint.id}`}>
             {translate('settings.breakpoints.query', { condition: breakpointCondition(shown) })}
           </span>
+          <BreakpointUsageLine
+            id={breakpoint.id}
+            name={name}
+            state={usage.state}
+            pending={typed.ok && problem === undefined && !breakpointsEqual([shown], [breakpoint])}
+            expanded={usageOpen.has(breakpoint.id)}
+            onExpand={() => setUsageOpen(toggledId(usageOpen, breakpoint.id))}
+          />
         </div>
         <div className="breakpoints-field">
           <input
@@ -376,6 +392,9 @@ export function BreakpointsSettings({
         >
           <TrashIcon size={14} />
         </button>
+        {usageOpen.has(breakpoint.id) && hasUsage(usage.state, breakpoint.id) && (
+          <BreakpointUsageList id={breakpoint.id} state={usage.state} editable={editable && !blocked} onToggle={usage.toggle} onOpenFile={onOpenFile} />
+        )}
         {(problem !== undefined || nameIssue !== undefined) && (
           <p className="breakpoints-problem" role="alert">
             {problem ?? nameIssue}
@@ -505,6 +524,14 @@ export function BreakpointsSettings({
       )}
     </section>
   );
+}
+
+function toggledId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  const next = new Set(set);
+  if (!next.delete(id)) {
+    next.add(id);
+  }
+  return next;
 }
 
 function draftsOf(list: BreakpointList): Drafts {

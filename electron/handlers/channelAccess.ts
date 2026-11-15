@@ -72,6 +72,7 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   'css:renameVariables': ['panel:variables'],
   // Syncing a breakpoint into the project's queries is part of editing breakpoints in Settings.
   'breakpointSync:scan': ['settings:breakpoints'],
+  'breakpointSync:usage': ['settings:breakpoints'],
   'breakpointSync:apply': ['settings:breakpoints'],
   'breakpointSync:restore': ['settings:breakpoints'],
   'css:setSectionTitle': ['panel:variables'],

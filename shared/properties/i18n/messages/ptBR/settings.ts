@@ -13,7 +13,7 @@ export const messages = {
   'settings.breakpoints.defaultName.down2': 'Minúsculo',
   'settings.breakpoints.defaultName.up0': 'Grande',
   'settings.breakpoints.defaultName.up1': 'Extragrande',
-  'settings.breakpoints.defaultName.up2': 'Ultra',
+  'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
   'settings.breakpoints.desktopWidth': 'Largura total',
   'settings.breakpoints.direction.down': 'Mais estreito que (<)',
@@ -74,6 +74,14 @@ export const messages = {
   'settings.breakpoints.sync.undoLabel': 'Sincronizar consultas de breakpoints',
   'settings.breakpoints.tablet': 'Tablet', // same
   'settings.breakpoints.undoLabel': 'Editar breakpoints',
+  'settings.breakpoints.usage.expand': 'Mostrar onde {name} é usado',
+  'settings.breakpoints.usage.files': { one: '{count} arquivo', other: '{count} arquivos' },
+  'settings.breakpoints.usage.inFiles': { one: 'em {count} arquivo', other: 'em {count} arquivos' },
+  'settings.breakpoints.usage.none': 'Não usado em nenhuma media query',
+  'settings.breakpoints.usage.open': 'Abrir {file}',
+  'settings.breakpoints.usage.places': { one: 'Usado em {count} local', other: 'Usado em {count} locais' },
+  'settings.breakpoints.usage.problem': 'Não foi possível procurar onde isto é usado. {message}',
+  'settings.breakpoints.usage.willPlaces': { one: 'Vai atualizar {count} local', other: 'Vai atualizar {count} locais' },
   'settings.breakpoints.widthLabel': 'Largura de {device} em pixels',
   'settings.close': 'Fechar as configurações',
   'settings.cms.empty': 'Nenhum CMS conectado ainda.',

@@ -215,6 +215,7 @@ function dataBridge() {
     addCssVariables: invoke('css:addVariables'),
     renameCssVariables: invoke('css:renameVariables'),
     scanBreakpointSync: invoke('breakpointSync:scan'),
+    scanBreakpointUsage: invoke('breakpointSync:usage'),
     applyBreakpointSync: invoke('breakpointSync:apply'),
     restoreBreakpointSync: invoke('breakpointSync:restore'),
     setCssSectionTitle: invoke('css:setSectionTitle'),

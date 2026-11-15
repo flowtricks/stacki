@@ -123,7 +123,7 @@ function memoryStorage(initial) {
 }
 
 function fakeBridge(scan, options = {}) {
-  const calls = { scan: [], apply: [], restore: [] };
+  const calls = { scan: [], apply: [], restore: [], usage: [], record: { source: undefined, writes: [] } };
   window.avb = {
     scanBreakpointSync: async (request) => {
       calls.scan.push(request);
@@ -141,6 +141,19 @@ function fakeBridge(scan, options = {}) {
         skipped: [],
         journalId: 'journal-1',
       };
+    },
+    scanBreakpointUsage: async (request) => {
+      calls.usage.push(request);
+      return { ok: true, usage: options.usage ?? usageFixture() };
+    },
+    projectMetadata: async ({ kind }) => ({
+      ok: true,
+      value: kind === 'breakpointSync' && calls.record.source !== undefined ? { source: calls.record.source } : {},
+    }),
+    writeProjectMetadata: async ({ write }) => {
+      calls.record.writes.push(write.source);
+      calls.record.source = write.source;
+      return { ok: true, value: { source: write.source } };
     },
     restoreBreakpointSync: async (request) => {
       calls.restore.push(request);
@@ -358,4 +371,179 @@ test('the dialog keeps to its width: paths and queries wrap, nothing scrolls sid
   assert.match(css, /overflow-wrap: anywhere/);
   const borders = [...css.matchAll(/(?:^|[\s;{])border\s*:\s*([^;\s]+)/g)].map((match) => match[1]);
   assert.ok(borders.every((value) => value === '0' || value === 'none'));
+});
+
+function usageFixture() {
+  const place = (locator, line, overrides = {}) => occurrence(locator, line, { before: '64rem', after: '64rem', ...overrides });
+  return {
+    entries: [
+      {
+        id: 'laptop',
+        files: [
+          {
+            rel: 'src/styles/site.css',
+            kind: 'css',
+            digest: 'a',
+            occurrences: [place('00000001:0', 2), place('00000001:1', 5, { before: '1023px', reason: 'inclusive', checked: false })],
+          },
+          { rel: 'src/pages/index.astro', kind: 'page', digest: 'b', occurrences: [place('00000002:0', 9)] },
+        ],
+      },
+      { id: 'tablet', files: [{ rel: 'src/components/Card.astro', kind: 'component', digest: 'c', occurrences: [place('00000003:0', 3)] }] },
+      { id: 'phone', files: [] },
+    ],
+    lumos: false,
+    truncated: false,
+    skipped: 0,
+    recordProblem: undefined,
+  };
+}
+
+const usageLine = (label) => card(label).querySelector('.breakpoints-usage');
+const card = (label) => field(label).closest('.breakpoints-card');
+const open = (label) => click(card(label).querySelector('.breakpoints-usage-toggle'));
+
+test('each card says where it is used, before anything is changed, and writes nothing', async () => {
+  const calls = fakeBridge(scanFixture());
+  const { root, storage } = await mount('usage-line');
+  assert.equal(calls.usage.length, 1, 'one scan when the tab opens');
+  assert.deepEqual(
+    calls.usage[0].breakpoints.map((entry) => [entry.id, entry.direction, entry.value, entry.unit]),
+    [
+      ['laptop', 'down', 64, 'rem'],
+      ['tablet', 'down', 48, 'rem'],
+      ['phone', 'down', 30, 'rem'],
+    ],
+  );
+  assert.equal(usageLine('Laptop').textContent, 'Used in 3 places · 2 files');
+  assert.equal(usageLine('Tablet').textContent, 'Used in 1 place · 1 file');
+  assert.equal(usageLine('Phone').textContent, 'Not used in any media query');
+  assert.ok(card('Phone').querySelector('.breakpoints-usage-toggle') === null, 'nothing to open when there is nothing');
+  assert.equal(calls.record.writes.length, 0, 'looking writes nothing');
+  assert.equal(storage.state.writes.length, 0);
+  assert.equal(calls.apply.length, 0);
+  assert.ok(dialog() === null);
+  root.unmount();
+});
+
+test('the chevron opens the files of one card: kind pills, paths, counts, boxes; ambiguous places start unchecked and say so', async () => {
+  fakeBridge(scanFixture());
+  const { root } = await mount('usage-open');
+  assert.ok(card('Laptop').querySelector('.breakpoints-usage-list') === null);
+  await open('Laptop');
+  const list = card('Laptop').querySelector('.breakpoints-usage-list');
+  assert.ok(list, 'the list opens inside the card');
+  assert.ok(card('Tablet').querySelector('.breakpoints-usage-list') === null, 'only that card');
+  const rows = [...list.querySelectorAll('.breakpoint-sync-file')];
+  assert.deepEqual(
+    rows.map((row) => [
+      row.querySelector('.breakpoint-sync-pill').textContent,
+      row.querySelector('.breakpoint-sync-path').getAttribute('title'),
+      row.querySelector('.breakpoint-sync-count').textContent,
+    ]),
+    [
+      ['CSS file', 'src/styles/site.css', '2'],
+      ['Page', 'src/pages/index.astro', '1'],
+    ],
+  );
+  assert.deepEqual(
+    rows.map((row) => {
+      const box = row.querySelector('.breakpoint-sync-row input');
+      return [box.checked, box.indeterminate];
+    }),
+    [
+      [false, true],
+      [true, false],
+    ],
+  );
+  await click(rows[0].querySelector('.breakpoint-sync-open'));
+  const places = [...list.querySelectorAll('.breakpoint-sync-place')];
+  assert.equal(places[1].querySelector('.breakpoint-sync-flag').textContent, 'Inclusive 1px form');
+  assert.equal(places[1].querySelector('input').checked, false);
+  assert.match(list.querySelector('.breakpoints-usage-files').className, /breakpoints-usage-files/);
+  await open('Laptop');
+  assert.ok(card('Laptop').querySelector('.breakpoints-usage-list') === null, 'the chevron closes it again');
+  root.unmount();
+});
+
+test('a tick is saved at once, one write each, and a file box covers its places', async () => {
+  const calls = fakeBridge(scanFixture());
+  const { root } = await mount('usage-toggle');
+  await open('Laptop');
+  const files = () => [...card('Laptop').querySelectorAll('.breakpoint-sync-file')];
+  await click(files()[1].querySelector('.breakpoint-sync-row input'));
+  await settle(60);
+  assert.equal(calls.record.writes.length, 1, 'one write for one toggle');
+  const first = JSON.parse(calls.record.source);
+  assert.deepEqual(first.laptop.excluded, [{ file: 'src/pages/index.astro', locator: '00000002:0' }], 'an unticked exact place is remembered as left alone');
+  assert.ok(first.laptop.linked === undefined, 'nothing is recorded as synced yet');
+  await click(files()[0].querySelector('.breakpoint-sync-row input'));
+  await settle(60);
+  assert.equal(calls.record.writes.length, 2);
+  const second = JSON.parse(calls.record.source);
+  assert.deepEqual(
+    second.laptop.linked,
+    [{ file: 'src/styles/site.css', locator: '00000001:1' }],
+    'ticking a half-ticked file ticks the ambiguous place, which is remembered as wanted',
+  );
+  assert.equal(second.laptop.excluded.length, 1);
+  assert.ok(second.tablet === undefined, 'other breakpoints are untouched');
+  root.unmount();
+});
+
+test('All and None on a card save every place once; a second None changes nothing and writes nothing', async () => {
+  const calls = fakeBridge(scanFixture());
+  const { root } = await mount('usage-all-none');
+  await open('Laptop');
+  const bar = () => [...card('Laptop').querySelectorAll('.breakpoint-sync-bar button')];
+  await click(bar()[1]);
+  await settle(60);
+  assert.equal(calls.record.writes.length, 1);
+  assert.equal(JSON.parse(calls.record.source).laptop.excluded.length, 2, 'both exact places are left alone; the ambiguous one was never checked');
+  await click(bar()[1]);
+  await settle(60);
+  assert.equal(calls.record.writes.length, 1, 'nothing to change, nothing written');
+  root.unmount();
+});
+
+test('typing a different valid number says what the change will touch; the counts stay those of the saved value', async () => {
+  const calls = fakeBridge(scanFixture());
+  const { root } = await mount('usage-pending');
+  const input = field('Laptop');
+  await act(async () => {
+    input.focus();
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, '70rem');
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  assert.equal(usageLine('Laptop').textContent, 'Will update 2 places in 2 files', 'only the checked places count');
+  assert.equal(usageLine('Tablet').textContent, 'Used in 1 place · 1 file', 'the others still describe what is saved');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'abc');
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  assert.equal(usageLine('Laptop').textContent, 'Used in 3 places · 2 files', 'an invalid value is not a pending change');
+  assert.equal(calls.record.writes.length, 0);
+  root.unmount();
+});
+
+test('the files link opens the file when the app can, and a scan that fails says so once, quietly', async () => {
+  const opened = [];
+  fakeBridge(scanFixture());
+  document.body.innerHTML = '<div id="root"></div>';
+  const linkRoot = createRoot(document.getElementById('root'));
+  api.forgetBreakpointStores();
+  api.breakpointsStore('usage-link', memoryStorage(undefined));
+  await act(() => linkRoot.render(React.createElement(api.BreakpointsSettings, { projectPath: 'usage-link', onOpenFile: (rel) => opened.push(rel) })));
+  await settle();
+  await open('Laptop');
+  await click(card('Laptop').querySelector('.breakpoint-sync-link'));
+  assert.deepEqual(opened, ['src/styles/site.css']);
+  linkRoot.unmount();
+  window.avb = {
+    scanBreakpointSync: async () => ({ ok: false }),
+    scanBreakpointUsage: async () => ({ ok: false, error: 'disk is busy' }),
+  };
+  const failing = await mount('usage-fails');
+  assert.match(usageLine('Laptop').textContent, /Could not look for where this is used\. disk is busy/);
+  failing.root.unmount();
 });

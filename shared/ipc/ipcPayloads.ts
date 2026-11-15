@@ -1,7 +1,7 @@
 import { parseLocaleSet } from './localeChannel';
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
-import { parseSyncApply, parseSyncRestore, parseSyncScan } from '../properties/breakpointSyncPlan';
+import { parseSyncApply, parseSyncRestore, parseSyncScan, parseUsageRequest } from '../properties/breakpointSyncPlan';
 import { parseCmsCheckRequest, parseCmsConnectionDraft, parseConnectionId, parseSanityLoginRequest } from '../properties/cmsConnections';
 import {
   parseRemoteCollectionName,
@@ -389,6 +389,7 @@ export const IPC_PAYLOADS = {
   'css:moveVariables': object({ ...project, moves: optional(list(cssMove)) }),
   'css:removeSection': object({ ...project, ...cssRange }),
   'breakpointSync:scan': parseSyncScan,
+  'breakpointSync:usage': parseUsageRequest,
   'breakpointSync:apply': parseSyncApply,
   'breakpointSync:restore': parseSyncRestore,
   'css:renameVariables': object({ ...project, renames: list(object({ from: text, to: text })) }),

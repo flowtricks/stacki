@@ -238,3 +238,62 @@
   color: var(--text-faint);
   font-size: 11px;
 }
+
+/* Where a breakpoint is used: one quiet line under the subtitle, and a list of files across the card that opens from its chevron. */
+.breakpoints-usage {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 16px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.breakpoints-usage-toggle {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.breakpoints-usage-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.breakpoints-usage-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoints-usage-problem {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.breakpoints-usage-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+  min-width: 0;
+}
+.breakpoints-usage-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 14rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.breakpoints-usage-list .breakpoint-sync-row {
+  min-height: 28px;
+}
+.breakpoints-usage-list .breakpoint-sync-places {
+  padding-left: 30px;
+}

@@ -230,3 +230,42 @@ export function parseSyncRestored(input: unknown): { readonly ok: boolean; reado
   const value = parseRestoredShape(input);
   return { ok: value.ok, skipped: value.skipped ?? 0, error: value.error };
 }
+
+/** The request for where every breakpoint is used now: the list, each with its direction and value. */
+export const parseUsageRequest = object({
+  projectPath: pathText,
+  breakpoints: list(object({ id: key, direction, value: count, unit: text })),
+});
+export type BreakpointUsageRequest = Parsed<typeof parseUsageRequest>;
+
+export interface BreakpointUsage {
+  readonly entries: ReadonlyArray<{ readonly id: string; readonly files: readonly SyncFile[] }>;
+  readonly lumos: boolean;
+  readonly truncated: boolean;
+  readonly skipped: number;
+  readonly recordProblem: string | undefined;
+}
+
+const parseUsageShape = object({
+  ok: boolean,
+  usage: optional(
+    object({
+      entries: list(object({ id: key, files: list(object({ rel: text, kind: kindOf, digest: text, occurrences: list(parseOccurrence) })) })),
+      lumos: boolean,
+      truncated: boolean,
+      skipped: count,
+      recordProblem: optional(text),
+    }),
+  ),
+  error: optional(text),
+});
+
+export type BreakpointUsageAnswer = { readonly ok: true; readonly usage: BreakpointUsage } | { readonly ok: false; readonly error: string };
+
+export function parseUsageAnswer(input: unknown): BreakpointUsageAnswer {
+  const answer = parseUsageShape(input);
+  if (answer.ok && answer.usage !== undefined) {
+    return { ok: true, usage: { ...answer.usage, recordProblem: answer.usage.recordProblem } };
+  }
+  return { ok: false, error: answer.error ?? 'The scan failed.' };
+}
