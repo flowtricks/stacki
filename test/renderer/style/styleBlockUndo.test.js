@@ -245,14 +245,16 @@ test('undo and redo of a page style block edit show the step the page is on, eve
   }
 });
 
-test('a page model replaced from outside the panel (a reload, another editor) shows once the poll reads it', async (context) => {
+test('a page model replaced with no history step (a reload, a code edit) shows at once', async (context) => {
   const panel = await mountPanel();
   context.after(panel.unmount);
   const { setHost, getHost } = await panelEnvironment();
-  // An outside change arrives as a new model and nothing else; the panel's poll reads it.
+  // A new model and nothing else: no tick, no stylesheet changed. The block is read from the
+  // nodes in memory, so the panel follows without waiting for its poll's full rescan.
   panel.page.css = '\n  .plain {\n    color: red;\n    letter-spacing: 0.2em;\n  }\n';
-  setHost({ nodes: [paragraph, styleNode(panel.page.css)], historyTick: getHost().historyTick });
-  const POLL_WAIT_MS = 6000; // Past the panel's background-refresh throttle (editorSignatures.ts).
-  await wait(POLL_WAIT_MS);
+  const tick = getHost().historyTick;
+  setHost({ nodes: [paragraph, styleNode(panel.page.css)] });
+  await wait(SETTLE_MS);
+  assert.equal(getHost().historyTick, tick, 'no history step was taken');
   assert.deepEqual(panel.shown('Letter spacing'), { active: true, input: '0.2em' }, 'the panel shows what the block now declares');
 });

@@ -1,10 +1,13 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { requestSelectorFocus } from './embed/SelectorPicker';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useStyleFiles } from './useStyleFiles';
 import type { HostState } from './model/host';
 import { setHost } from './model/host';
 import { prefetchComponentSources } from './model/componentSourceCache';
+import { prefetchComputedStyles } from './model/computedStyle';
+import { prepareScanSnapshot } from './embed/scanSnapshotCache';
+import { assert } from '../../../shared/core/assert';
 import { PX_LENGTHS, sameLengthUnit, type LengthUnit } from '../../../shared/properties/lengthUnit';
 import EmbedEditor from './EmbedEditor';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -66,7 +69,11 @@ export default function StylePanel(props: StylePanelProps) {
   const lengthUnit = useStableLengthUnit(props.lengthUnit ?? PX_LENGTHS);
   const renderedClasses = useStableList(props.renderedClasses ?? NO_PATHS);
   const projectClasses = useStableList(props.projectClasses ?? NO_PATHS);
-  const host = hostState(props, { files: files.files, astroFiles: astroFiles.files, lengthUnit, renderedClasses, projectClasses });
+  const selection = useSwitchHold(props, renderedClasses);
+  const host = hostState(
+    { ...props, ...selection.props },
+    { files: files.files, astroFiles: astroFiles.files, lengthUnit, renderedClasses: selection.renderedClasses, projectClasses },
+  );
   // Children read the bridge during their own effects, which run before the
   // parent's effects. Publishing here ensures their first read is current.
   setHost(host);
@@ -87,10 +94,113 @@ export default function StylePanel(props: StylePanelProps) {
         {files.error || astroFiles.error ? (
           <ErrorToast message={translate('style.stylePanel.loadError', { error: files.error || astroFiles.error || '' })} />
         ) : undefined}
-        {props.node ? <EmbedEditor /> : <div className="props-empty">{translate('style.stylePanel.selectElement')}</div>}
+        {selection.props.node ? <EmbedEditor /> : <div className="props-empty">{translate('style.stylePanel.selectElement')}</div>}
       </div>
     </SoundHere>
   );
+}
+
+// What the panel is told about the selected element. Everything here describes ONE
+// element, so it is published to the host together (useSwitchHold).
+type SelectionProps = Pick<StylePanelProps, 'node' | 'renderedClassesKnown' | 'selectedComponentPath' | 'pseudoRequest'>;
+interface ShownSelection {
+  readonly props: SelectionProps;
+  readonly renderedClasses: string[];
+}
+
+// The longest the panel keeps showing the previous element after another is selected.
+// The hold ends as soon as the next element's answer is in hand (about one canvas round
+// trip); this bounds a canvas that is slow or never answers, after which the next element
+// is shown with the placeholders its sections draw while they wait.
+const SWITCH_HOLD_MS_MAX = 1500;
+
+function selectionOf(props: StylePanelProps, renderedClasses: string[]): ShownSelection {
+  return {
+    props: {
+      node: props.node,
+      renderedClassesKnown: props.renderedClassesKnown,
+      selectedComponentPath: props.selectedComponentPath,
+      pseudoRequest: props.pseudoRequest,
+    },
+    renderedClasses,
+  };
+}
+
+// From one element to another: the only change worth holding the previous one for.
+function isSwitch(shownId: string | undefined, targetId: string | undefined): boolean {
+  if (shownId === undefined) {
+    return false;
+  }
+  if (targetId === undefined) {
+    return false;
+  }
+  return shownId !== targetId;
+}
+
+/**
+ * The selection the panel shows: the app's, except across a switch from one element to
+ * another, where the previous element stays on screen until the next one's answer is in
+ * hand (stale-while-revalidate, for the whole panel at once). The next element's match,
+ * its chips and the page's computed values for its fields are read ahead
+ * (prepareScanSnapshot, prefetchComputedStyles) and its rendered classes are waited for;
+ * then the host gets the new element in one write and the panel draws it in one render.
+ * Published as the app sends it, the header changed first, the fields showed "Default"
+ * and empty values while the page was asked, and the previous element's chips and rows
+ * outlived the header by a frame or more.
+ *
+ * Selecting nothing, or selecting from nothing, is shown at once: there is no element to
+ * hold, and nothing to prepare. The hold is bounded by SWITCH_HOLD_MS_MAX from its start,
+ * however often the selection moves during it.
+ */
+function useSwitchHold(props: StylePanelProps, renderedClasses: string[]): ShownSelection {
+  const live = selectionOf(props, renderedClasses);
+  const targetId = props.node?.id;
+  const [shownId, setShownId] = useState(targetId);
+  // The selection as it last stood for the element on screen: the app's props already
+  // describe the next element (its classes, its component), so the held element's own
+  // are kept from before the switch.
+  const heldRef = useRef(live);
+  const holdStartMsRef = useRef<number | undefined>(undefined);
+  const holding = isSwitch(shownId, targetId);
+  if (!holding && shownId !== targetId) {
+    setShownId(targetId);
+  }
+  const classesKnown = props.renderedClassesKnown !== false;
+  useEffect(() => {
+    if (!holding || targetId === undefined) {
+      holdStartMsRef.current = undefined;
+      return undefined;
+    }
+    const startMs = holdStartMsRef.current ?? performance.now();
+    holdStartMsRef.current = startMs;
+    let cancelled = false;
+    const release = () => {
+      if (!cancelled) {
+        setShownId(targetId);
+      }
+    };
+    const remainingMs = Math.max(0, SWITCH_HOLD_MS_MAX - (performance.now() - startMs));
+    const deadline = window.setTimeout(release, remainingMs);
+    void Promise.all([prepareScanSnapshot(targetId), prefetchComputedStyles(targetId)])
+      .catch(() => undefined)
+      .then(() => {
+        // The rendered classes are part of the element's answer (chip colours, the class
+        // list): the app bounds their wait itself (AppPanes RENDERED_CLASSES_WAIT_MS).
+        if (classesKnown) {
+          release();
+        }
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(deadline);
+    };
+  }, [holding, targetId, classesKnown]);
+  if (holding) {
+    assert(heldRef.current.props.node?.id === shownId, 'useSwitchHold: the held selection is the element on screen');
+    return heldRef.current;
+  }
+  heldRef.current = live;
+  return live;
 }
 
 // A rescan builds a new setting object each time; the host compares by identity,

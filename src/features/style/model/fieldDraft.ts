@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { followWhileRendering } from './fieldHooks';
 
 // What a value field is showing, which is not always what the file says.
 //
@@ -21,23 +22,24 @@ export function useFieldDraft(external: string, options: { readonly busy: boolea
   const focused = useRef(false);
 
   // The ordinary sync: a value that changed elsewhere, while nobody is typing
-  // in this field.
-  useEffect(() => {
+  // in this field. Followed while rendering (fieldHooks.ts followWhileRendering).
+  followWhileRendering(useState(external), external, () => {
     if (!focused.current) {
       setDraft(external);
     }
-  }, [external]);
+  });
 
   // And the end of a save, which is the moment the model is worth believing
   // again — the value may be the same string it was before the edit, so there
   // is nothing above for the change to fire on.
-  useEffect(() => {
-    if (!busy && !focused.current) {
+  followWhileRendering(useState(busy), busy, () => {
+    if (busy) {
+      return;
+    }
+    if (!focused.current) {
       setDraft(external);
     }
-    // `external` is listed for truthfulness: a change to it alone is already handled
-    // by the effect above, and setting the same draft twice is a no-op.
-  }, [busy, external]);
+  });
 
   return { draft, setDraft, focused, cleared: () => setDraft('') };
 }

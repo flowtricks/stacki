@@ -26,7 +26,10 @@ import {
   useSelectionSubscriptions,
   useChangeSubscriptions,
   useRefreshDerived,
+  useSnapshotPreparer,
 } from './embed/useEditorScanning';
+import { getHost } from './model/host';
+import { nodeById } from './model/webflowElement';
 import { useSplitForEdit, useApplyEdit, usePropEdits, useLiveEdits, useRuleActions, useOpenEmbed, useElementTokens } from './embed/useEditorRuleEdits';
 import {
   useTokenDefault,
@@ -154,6 +157,18 @@ function useEditorSelection(editorFoundation: ReturnType<typeof useEditorFoundat
   const { applyResolveHook, backgroundRefreshHook, contentRebuild, designerSync } = editorScanning;
 
   const elementReset = useElementReset(editorRefs, scanState, selectionState, nativeState);
+  // The selection is reset while rendering, not after the host's change reaches the
+  // subscription below: StylePanel publishes the next element only once its answer is in
+  // hand, and this render already draws from the host it published. Reset in an effect, the
+  // first frame drew the new element's header and hints over the previous element's chips
+  // and rows. Setting this component's state while rendering makes React render again
+  // before anything is painted; the key check makes it run once per element, and the
+  // subscription's own reset then finds nothing to do.
+  const hostElement = nodeById(getHost().selectedId);
+  if ((hostElement === undefined ? '' : hostElement.id) !== editorRefs.selectedElementKeyRef.current) {
+    elementReset.resetForElement(hostElement);
+  }
+  useSnapshotPreparer(editorRefs);
   const scanWithoutSelectionHook = useScanWithoutSelection(editorRefs, scanState, contentRebuild);
   const scanSelectionHook = useScanSelection(editorRefs, scanState, contentRebuild, applyResolveHook, backgroundRefreshHook);
   const refreshHook = useRefresh(editorRefs, elementReset, scanWithoutSelectionHook, scanSelectionHook);

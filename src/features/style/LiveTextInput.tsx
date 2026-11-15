@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
+import { followWhileRendering } from './model/fieldHooks';
 import VariableConnect from './VariableConnect';
 import { commitInPlace } from './model/commitInPlace';
 import { pickerPreviewKind } from './connectFieldHelpers';
@@ -92,11 +93,13 @@ export function useLiveInputEditing({
 }) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
-  useEffect(() => {
+  // A new value reaches the draft while rendering, not in an effect (fieldHooks.ts
+  // followWhileRendering). A field being typed in keeps its draft, as before.
+  followWhileRendering(useState(value), value, () => {
     if (!focused.current) {
       setDraft(value);
     }
-  }, [value]);
+  });
   // Whether a live write went out that no commit or clear has settled, and whether the person has edited the
   // text since the last commit. A blur commits only after an edit or a live write: a field that shows its
   // default (or the picker's preview, put back) was never edited, and writing what it shows would turn an

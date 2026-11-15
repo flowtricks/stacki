@@ -2,7 +2,7 @@
 // label, the live text field and its draft, and arrow-key steps
 // (SizeSection.tsx).
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
@@ -13,7 +13,7 @@ import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
 import type { Contributor, ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
-import { useDebouncedLive } from './model/fieldHooks';
+import { followWhileRendering, useDebouncedLive } from './model/fieldHooks';
 import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -233,11 +233,11 @@ export { withImportant };
 export function useFollowingDraft(value: string) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
-  useEffect(() => {
+  followWhileRendering(useState(value), value, () => {
     if (!focused.current) {
       setDraft(value);
     }
-  }, [value]);
+  });
   return { draft, setDraft, focused };
 }
 

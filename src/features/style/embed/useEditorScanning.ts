@@ -9,7 +9,17 @@ import { forgetComputedColors } from '../model/computedColor';
 import { computeRuleModel } from '../model/cascade';
 import { type MatchTarget } from '../model/selectors';
 import { getHost, onHostChange, type HostState } from '../model/host';
-import { buildSnapshot, onDocsReloaded, rebuildRules, primeDomMatches, scanHasElement, serializeElementId, scanPage, webflowApi } from '../model/webflow';
+import {
+  buildSnapshot,
+  onDocsReloaded,
+  rebuildRules,
+  primeDomMatches,
+  scanHasElement,
+  serializeElementId,
+  scanPage,
+  syncNodeDocuments,
+  webflowApi,
+} from '../model/webflow';
 import { assert } from '../../../../shared/core/assert';
 import type { ElementSnapshot } from '../model/styleTypes';
 import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
@@ -102,6 +112,14 @@ export function useBackgroundRefresh(
           // Failed network refreshes need the same backoff as successful scans.
           lastScanAtRef.current = Date.now();
           const content = await rebuildAndStore();
+          // A read overtaken while it ran is not shown: resolving it costs a canvas round
+          // trip and would paint the step before for as long as the next read takes.
+          if (staleRef.current) {
+            continue;
+          }
+          if (!sameSourceRevision(revision, sourceRevision())) {
+            continue;
+          }
           const element = selectedRef.current;
           if (element && scanHasElement(content.scan, element)) {
             await applyResolve(element, content, seqRef.current, { silent: true });
@@ -611,7 +629,7 @@ export function useChangeSubscriptions(
 
 // Rebuild the panel's model after an edit.
 export function useRefreshDerived(editorRefs: ReturnType<typeof useEditorRefs>, scanState: ReturnType<typeof useScanState>) {
-  const { classListRef, contentRef, docsRef, primedRef, targetRef } = editorRefs;
+  const { busyRef, classListRef, contentRef, docsRef, primedRef, targetRef } = editorRefs;
   const { setScan } = scanState;
 
   const refreshDerived = useCallback(async () => {
@@ -658,6 +676,29 @@ export function useRefreshDerived(editorRefs: ReturnType<typeof useEditorRefs>, 
         void refreshDerived();
       }),
     [refreshDerived],
+  );
+
+  // The page model moved (an undo or redo, a save's reply, a code edit): its `<style>` blocks
+  // are read again from the nodes in memory, at once, rather than waiting on a rescan of
+  // every stylesheet. While an edit saves, the edit refreshes from its own documents, and
+  // the background refresh's revision check catches anything that moved meanwhile.
+  const nodesRef = useRef(getHost().nodes);
+  useEffect(
+    () =>
+      onHostChange(() => {
+        const nodes = getHost().nodes;
+        if (nodes === nodesRef.current) {
+          return;
+        }
+        nodesRef.current = nodes;
+        if (busyRef.current) {
+          return;
+        }
+        if (syncNodeDocuments(docsRef.current) > 0) {
+          void refreshDerived();
+        }
+      }),
+    [busyRef, docsRef, refreshDerived],
   );
   return { refreshDerived };
 }

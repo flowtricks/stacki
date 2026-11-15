@@ -631,6 +631,46 @@ async function writeStyleFileAndReload(embedDocument: EmbedDocument, path: strin
   }
 }
 
+/**
+ * Bring the open page's `<style>` documents up to the page model, in place, and say how many
+ * were read again. Those blocks are read from the model's nodes (readSource), and the model
+ * changes under the panel: an undo or redo, a save's reply, a code edit, a reload. Rereading
+ * every stylesheet over IPC to notice took long enough that the panel showed the step before
+ * (SP-06); a node's text is already in memory. A document with live writes outstanding is
+ * ahead of the model on purpose (the model catches up when they commit), so it is left alone.
+ */
+export function syncNodeDocuments(docs: readonly EmbedDocument[]): number {
+  const host = getHost();
+  let synced = 0;
+  for (const embedDocument of docs) {
+    const origin = embedDocument.source.origin;
+    if (origin.kind !== 'node') {
+      continue;
+    }
+    // Another file's block (the page's, remembered while a component is open) is not in this model.
+    if (origin.filePath !== host.openFilePath) {
+      continue;
+    }
+    if (embedDocument.historyBase !== embedDocument.code) {
+      continue;
+    }
+    const node = nodeById(origin.nodeId);
+    // A block that left the page: the rescan its list change starts takes the document away.
+    if (node === undefined) {
+      continue;
+    }
+    const text = String(node.inner ?? '');
+    if (text === embedDocument.code) {
+      continue;
+    }
+    embedDocument.replaceWith(documentForSource(embedDocument.source, text));
+    assert(embedDocument.code === text, 'syncNodeDocuments: the document holds the node text');
+    synced += 1;
+  }
+  assert(synced <= docs.length, 'syncNodeDocuments: at most one read per document');
+  return synced;
+}
+
 export function rebuildRules(docs: EmbedDocument[]): ParsedRule[] {
   const rules: ParsedRule[] = [];
   // One running counter across every source, so document order — and with it

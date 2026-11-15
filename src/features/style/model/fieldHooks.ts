@@ -15,12 +15,29 @@ const LIVE_DELAY_MS = 100;
 export function useExternalDraft(external: string) {
   const [draft, setDraft] = useState(external);
   const focused = useRef(false);
-  useEffect(() => {
+  followWhileRendering(useState(external), external, () => {
     if (!focused.current) {
       setDraft(external);
     }
-  }, [external]);
+  });
   return { draft, setDraft, focused };
+}
+
+/**
+ * Run `onChange` in the render that first sees `value` differ from the last one seen.
+ * A draft that followed its value in an effect committed once more after every other
+ * field had painted the new value: on an element switch, a frame of the previous
+ * element's chip under the new element's header. Setting state while rendering the same
+ * component makes React render again before anything is painted. `seen` is the caller's
+ * own `useState(value)`, so the hook order is the caller's.
+ */
+export function followWhileRendering<T>(seen: readonly [T, (next: T) => void], value: T, onChange: () => void): void {
+  const [seenValue, setSeenValue] = seen;
+  if (Object.is(seenValue, value)) {
+    return;
+  }
+  setSeenValue(value);
+  onChange();
 }
 
 // Live writes of typed text, split into value and `!important`. `scheduleLive`

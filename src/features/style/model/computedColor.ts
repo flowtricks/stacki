@@ -44,7 +44,7 @@ export function needsPage(value: string): boolean {
 }
 
 const cache = createQueryCache(async (path, values) => {
-  const answer = await queryCanvas(path, [], values, [], textStyleContext(path));
+  const answer = await queryCanvas(path, [], values, [], textStyleContext(path, getHost().selectedId));
   return answer?.computed;
 });
 

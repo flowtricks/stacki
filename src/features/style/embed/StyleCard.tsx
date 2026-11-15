@@ -404,8 +404,6 @@ export function sourceSelectOption(option: SourceOption) {
 
 // What every section's controls are handed.
 export type SectionCard = Pick<StyleCardProps, 'busy' | 'resolving' | 'setProp' | 'liveSetProp' | 'onSelectSelector' | 'activeSelector'> & {
-  /** The selected element: sections whose fields hold per-element state are keyed by it. */
-  elementKey: string;
   read: (prop: string) => ResolvedProp | undefined;
   clearProp: (prop: string | string[]) => void;
   onProvenance: (prop: string, anchor: DOMRect) => void;
@@ -425,7 +423,6 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
   // Read during render: a switch re-renders the card (the scan resets), and the host holds it.
   const elementKey = getHost().selectedId ?? '';
   const section: SectionCard = {
-    elementKey,
     read,
     busy: card.busy,
     resolving: card.resolving,
@@ -506,7 +503,6 @@ export const SECTION_ORDER = ['flex-child', 'layout', 'position', 'spacing', 'si
 export const SECTION_CONTROLS: Readonly<Record<string, (section: SectionCard) => ReactNode>> = {
   'flex-child': (section) => (
     <FlexChildSection
-      key={section.elementKey}
       read={section.read}
       busy={section.busy}
       setProp={section.setProp}
@@ -571,14 +567,15 @@ export const SECTION_CONTROLS: Readonly<Record<string, (section: SectionCard) =>
       onSelectSelector={section.onSelectSelector}
     />
   ),
-  // Keyed by the element, not the selector: its fields hold what they showed a moment ago
-  // while the page is asked (useHighlight), which must not carry to another element, but the
-  // selector can change with no one pressing anything (the default pick settling), and a key
-  // on it remounted the section and closed every popup open in it. Custom-mode state is
-  // scoped to the selector instead (model/selectorScope.ts).
+  // Not keyed, by the selector or by the element: a key remounted the section and closed
+  // every popup open in it. The selector changes with no one pressing anything (the default
+  // pick settling), and a press can land on the element on screen a moment before the next
+  // one is shown (StylePanel's switch hold), so a picker opened then must outlive the switch
+  // while its field is still there. What belongs to one selector on one element is scoped to
+  // both instead (model/selectorScope.ts), and what a field showed a moment ago is held for
+  // its own element only (computedStyle.ts useHighlight).
   typography: (section) => (
     <TypographySection
-      key={section.elementKey}
       read={section.read}
       busy={section.busy}
       setProp={section.setProp}

@@ -15,6 +15,7 @@ import { useStableStyleValue } from './useStableStyleValue';
 
 import { useEffect, useRef, useState } from 'react';
 import { hasCanvas, onCanvasReady, queryCanvas } from '../../../editor/canvasQuery';
+import { assert } from '../../../../shared/core/assert';
 import { findNode, getHost, onHostChange } from './host';
 import { createQueryCache } from './queryCache';
 import { textStyleContext } from './styleQuery';
@@ -23,14 +24,21 @@ const AUTHORED_PREFIX = 'authored:';
 const SOURCE_LABEL_PREFIX = 'source-label:';
 const SOURCE_PATH_PREFIX = 'source-path:';
 const PREFIXES = [AUTHORED_PREFIX, SOURCE_LABEL_PREFIX, SOURCE_PATH_PREFIX];
-const cache = createQueryCache(async (path, keys) => {
-  const expected = selectedTag();
+// Answers are kept per element, under a key naming the node as well as its rendered path
+// (`nodeId NUL path`): the tag check and the text-node context belong to the node asked
+// about, which is not always the one selected. The panel asks about the NEXT element while
+// it still shows the current one (prefetchComputedStyles), so the switch paints the new
+// element's values in the same frame as its header instead of blanks first.
+const ELEMENT_KEY_SEPARATOR = '\u0000';
+const cache = createQueryCache(async (elementKey, keys) => {
+  const { nodeId, path } = parseElementKey(elementKey);
+  const expected = tagOf(nodeId);
   const propertyOf = (key: string) => {
     const prefix = PREFIXES.find((prefix) => key.startsWith(prefix));
     return prefix ? key.slice(prefix.length) : key;
   };
   const props = [...new Set(keys.map(propertyOf))];
-  const answer = await queryCanvas(path, [], [], props, textStyleContext(path));
+  const answer = await queryCanvas(path, [], [], props, textStyleContext(path, nodeId));
   const tag = answer?.identity?.tag;
   if (tag && expected && tag !== expected) {
     return undefined;
@@ -52,10 +60,56 @@ const cache = createQueryCache(async (path, keys) => {
   );
 });
 
+// The selection is not part of the scope: answers are keyed by element, so the
+// current element's answers survive a switch away and back, and the next element's
+// prefetched answers survive the switch to it. Anything that changes what the page
+// renders (another project, file, tree, device, or an undo) still drops them all.
 function currentCache() {
   const host = getHost();
-  cache.setScope([host.projectPath, host.openFilePath, host.nodes, host.selectedId, host.device, host.historyTick]);
+  cache.setScope([host.projectPath, host.openFilePath, host.nodes, host.device, host.historyTick]);
   return cache;
+}
+
+function elementKeyOf(nodeId: string, path: string): string {
+  assert(nodeId.length > 0, 'elementKeyOf: a node id is never empty');
+  assert(!nodeId.includes(ELEMENT_KEY_SEPARATOR), 'elementKeyOf: a node id holds no separator');
+  return `${nodeId}${ELEMENT_KEY_SEPARATOR}${path}`;
+}
+
+function parseElementKey(elementKey: string): { readonly nodeId: string; readonly path: string } {
+  const separator = elementKey.indexOf(ELEMENT_KEY_SEPARATOR);
+  assert(separator > 0, 'parseElementKey: the key names a node');
+  return { nodeId: elementKey.slice(0, separator), path: elementKey.slice(separator + 1) };
+}
+
+// Every key a control has asked for this session, so a prefetch asks the next element
+// the same questions the panel's fields will. Bounded: the panel has a fixed set of
+// controls, and a key past the cap is still answered, only not prefetched.
+const LEARNED_KEYS_MAX = 512;
+const learnedKeys = new Set<string>();
+
+function learnKey(key: string): void {
+  if (learnedKeys.size < LEARNED_KEYS_MAX) {
+    learnedKeys.add(key);
+  }
+  assert(learnedKeys.size <= LEARNED_KEYS_MAX, 'learnKey: the learned keys are bounded');
+}
+
+/**
+ * Ask the page about `nodeId` before it is selected: every key a control has asked for,
+ * in one batch. Resolves once each has an answer (or the page could not answer), so the
+ * caller can show the element with its values settled. Without a canvas, or with no path
+ * for the node, there is nothing to ask and it resolves at once.
+ */
+export async function prefetchComputedStyles(nodeId: string): Promise<void> {
+  const host = getHost();
+  const path = hasCanvas() ? host.pathOf?.(nodeId) : undefined;
+  if (path === undefined || path.length === 0) {
+    return;
+  }
+  const elementKey = elementKeyOf(nodeId, path);
+  const asking = currentCache();
+  await Promise.all([...learnedKeys].map((key) => asking.request(elementKey, key)));
 }
 
 /** Forget everything: the page changed under us, so the answers may have too. */
@@ -65,17 +119,21 @@ export function forgetComputedStyles(): void {
 // A new page's answers are not the old one's.
 onCanvasReady(forgetComputedStyles);
 
-function pathOfSelection(): string | undefined {
+function selectionKey(): string | undefined {
   const host = getHost();
-  return host.selectedId ? host.pathOf?.(host.selectedId) : undefined;
+  const nodeId = host.selectedId;
+  if (nodeId === undefined || nodeId.length === 0) {
+    return undefined;
+  }
+  const path = host.pathOf?.(nodeId);
+  return path ? elementKeyOf(nodeId, path) : undefined;
 }
 
-// The selected node's HTML tag, when it has one. A component instance's name is its
+// A node's HTML tag, when it has one. A component instance's name is its
 // component ('Card'), which says nothing about the tag it renders, so only a plain
 // lowercase name counts — those are the ones a rendered tag can be checked against.
-function selectedTag(): string | undefined {
-  const host = getHost();
-  const node = host.selectedId ? findNode(host.nodes, host.selectedId) : undefined;
+function tagOf(nodeId: string): string | undefined {
+  const node = findNode(getHost().nodes, nodeId);
   if (node?.kind !== 'element') {
     return undefined;
   }
@@ -85,6 +143,7 @@ function selectedTag(): string | undefined {
 
 /** An answer from the page: what it said, and whether it is still being asked. */
 type Answer = { value: string; pending: boolean; path: string | undefined };
+// `path` is the element key (node and rendered path) the answer was read under.
 
 /**
  * What the page has already said about `prop`, read straight from the store.
@@ -102,12 +161,13 @@ function answeredNow(prop: string): Answer {
   }
   // `hasCanvas` is checked HERE, not once on mount: the panel can render before
   // the preview frame registers, and that first pass must not opt out for good.
-  const path = hasCanvas() ? pathOfSelection() : undefined;
+  const path = hasCanvas() ? selectionKey() : undefined;
   // Nothing to ask — so nothing is pending either. No answer is ever coming, and
   // a control waiting forever would never show anything.
   if (!path) {
     return { value: '', pending: false, path: undefined };
   }
+  learnKey(prop);
   const known = currentCache().read(path, prop);
   if (known.kind === 'pending') {
     return { value: '', pending: true, path };
@@ -208,16 +268,21 @@ export function useHighlight(authored: string, prop: string, values: readonly st
   const computed = answer.value.toLowerCase();
   const known = computed && values.includes(computed) ? computed : '';
   const settled = authored || known || (answer.pending ? '' : fallback);
+  // What was highlighted, and for which element. The sections are not remounted on a switch
+  // (StyleCard.tsx), so the memory carries the element it was for: another element's
+  // highlight is a guess about this one, and the fallback is the honest wait.
+  const elementKey = getHost().selectedId ?? '';
   // Seeded with the fallback: on the very first render there is nothing else to
   // have been showing.
-  const last = useRef(settled || fallback);
+  const last = useRef({ elementKey, shown: settled || fallback });
   // Only a value the control can show as one of its options is worth holding. A variable or
   // a custom value (`var(--tt)`) is what was just cleared, and holding it kept its chip in
   // the field until the page answered, or for good when it never did.
-  const held = values.includes(last.current) ? last.current : fallback;
+  const sameElement = last.current.elementKey === elementKey;
+  const held = sameElement && values.includes(last.current.shown) ? last.current.shown : fallback;
   const shown = settled || held;
   useEffect(() => {
-    last.current = shown;
-  }, [shown]);
+    last.current = { elementKey, shown };
+  }, [elementKey, shown]);
   return shown;
 }
