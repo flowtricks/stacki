@@ -19,6 +19,13 @@ const WAIT_LIMITS = Object.freeze({
   pollCountMax: 200,
 });
 
+// A page expression for Electron probes (`executeJavaScript(MOTION_SETTLED_EXPRESSION)`): true
+// once no popup is in its opening phase and no finite CSS animation or transition is still
+// running. Popups scale open (popup.css), so a size read mid-motion is a few percent short on
+// a slow runner. Infinite animations (spinners, skeletons) are ignored, or it would never hold.
+const MOTION_SETTLED_EXPRESSION = `(document.querySelector('[data-popup-phase="opening"]') === null &&
+  document.getAnimations().every((animation) => animation.playState !== 'running' || animation.effect === null || animation.effect.getTiming().iterations === Infinity))`;
+
 const pause = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
 const describeObserved = (value) => {
@@ -99,4 +106,4 @@ async function waitFor(options) {
   }
 }
 
-module.exports = { WAIT_LIMITS, describeObserved, pollUntil, waitFor };
+module.exports = { MOTION_SETTLED_EXPRESSION, WAIT_LIMITS, describeObserved, pollUntil, waitFor };
