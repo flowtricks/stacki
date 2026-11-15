@@ -2,6 +2,7 @@
 // tagged elements and the widened thin targets, and the hover, click and
 // double-click the canvas turns into selection.
 
+import { assert } from '../../shared/core/assert';
 import { canvasDragged, canvasInert, canvasSelects, holdLinkClick, replayingLinkClick, trackCanvas } from './frameInteraction';
 import { inlineTextPathAt } from './inlineText';
 import { isElement } from './frameBasics';
@@ -464,7 +465,7 @@ const listenForPointer = () => {
       // item, and opening it means the one under the cursor.
       forgetKeptBoxes();
       const { path: nodePath, occurrence } = nodeAtEvent(event);
-      postLocated('avb:open-node', { path: nodePath || undefined, occurrence });
+      postLocated('avb:open-node', { path: nodePath || undefined, occurrence, pressedAtMs: pressedAtMsOf(event) });
     },
     true,
   );
@@ -505,6 +506,7 @@ const listenForPointer = () => {
         x: event.clientX,
         y: event.clientY,
         box: nodePath ? rectsForPath(nodePath)?.[occurrence] : undefined,
+        pressedAtMs: pressedAtMsOf(event),
         ...pseudoField(pseudo),
       });
       if (canvasInert()) {
@@ -535,6 +537,7 @@ function listenForContextMenu(): void {
         outside: !!outside,
         left: event.clientX,
         top: event.clientY,
+        pressedAtMs: pressedAtMsOf(event),
         ...pseudoField(pseudo),
       });
     },
@@ -568,6 +571,16 @@ function pseudoField(pseudo: PseudoLayer | undefined): { readonly pseudo?: Pseud
 
 // Every located event names the rendering it landed on (step 7): the app
 // acts on it only while that rendering is still what the files hold.
+// When the person pressed, on the clock the app shares (epoch milliseconds): the input event's own
+// time, not the time this frame got round to it. A freshly reloaded page can post a click a few
+// hundred milliseconds late, after the person has gone on to open something in the panel, and the
+// app must not take that old press for one made on what they opened (soak SP-04).
+function pressedAtMsOf(event: Event): number {
+  const pressedAtMs = performance.timeOrigin + event.timeStamp;
+  assert(Number.isFinite(pressedAtMs), 'pressedAtMsOf: a press time is a finite number');
+  return pressedAtMs;
+}
+
 function postLocated(type: string, located: Record<string, unknown>): void {
   window.parent.postMessage({ type, ...located, token: renderToken }, '*');
 }

@@ -572,6 +572,13 @@ the value cache's selection and history invalidation and never becomes editable 
   coordinates finite within 10⁶ px) asks where a point lands now. The frame
   answers with `avb:click-node` carrying `replay: id` and the current token,
   never dispatching anything to the page (docs/canvas-click.md).
+- `avb:click-node`, `avb:open-node` and `avb:context-node` carry `pressedAtMs`, the input
+  event's own time on the clock both windows share (`performance.timeOrigin + event.timeStamp`).
+  A popover (`popupDismiss.ts` `isCanvasPressMessage`, `useDismiss`, the variable picker's
+  `pickerExit`) closes on a canvas press only when it was made after the popover opened and is
+  not a `replay`: a freshly reloaded page posts its click late, and the click ladder's replay is
+  the same press answered again, so either used to close what the person had opened since (soak
+  SP-04). A press without `pressedAtMs` (Studio's preview client) is taken at its word.
 - `preview:check` `{ projectPath, render }` → `PreviewVerdict`: main re-derives
   the token from the manifest, then reads every stamped file from disk
   (`electron/preview/previewCheck.ts`; a path outside the project is `missing`, a file

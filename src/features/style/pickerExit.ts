@@ -12,12 +12,9 @@
 
 import { useEffect, useRef } from 'react';
 import { getHost, onHostChange } from './model/host';
-import { toRecord } from '../../../shared/core/record';
+import { epochNowMs, isCanvasPressMessage } from '../../ui/popupDismiss';
 
 const PICKER_SELECTOR = '.embed-editor_varpicker';
-
-// Messages the canvas posts when a press landed in it.
-const CANVAS_PRESS: ReadonlySet<string> = new Set(['avb:click-node', 'avb:open-node', 'avb:context-node', 'studio:select', 'studio:open']);
 
 /** While `active`, runs `restore` the moment any way out begins. `restore` must be idempotent. */
 export function useExitRestore({ active, restore }: { readonly active: boolean; readonly restore: () => void }): void {
@@ -45,9 +42,11 @@ export function useExitRestore({ active, restore }: { readonly active: boolean; 
         run();
       }
     };
+    // A press in the canvas made since the picker opened: never a retried click's answer, nor a press the
+    // canvas posted late from before (both are the press already handled; popupDismiss.ts).
+    const openedAtMs = epochNowMs();
     const message = (event: MessageEvent<unknown>): void => {
-      const kind = toRecord(event.data)?.['type'];
-      if (typeof kind === 'string' && CANVAS_PRESS.has(kind)) {
+      if (isCanvasPressMessage(event.data, { openedAtMs })) {
         run();
       }
     };

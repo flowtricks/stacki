@@ -1,5 +1,5 @@
 import { inOwnedPopup, isTopPopupLayer } from './popupOwnership';
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import type { PopupProps, PopupActions } from './Popup';
 import { toRecord } from '../../shared/core/record';
 import { popupLayer } from './popupLayer';
@@ -28,6 +28,12 @@ function takesTypedText(target: Event['target']): boolean {
 export function usePopupDismiss(surface: RefObject<HTMLDivElement>, options: DismissOptions, { close, finish }: PopupActions): void {
   const { active, anchor, within, dismissible = true, mode, onEscape } = options;
   usePopupEnvironment(surface, options, dismissedBy(surface, close));
+  // When this popup opened: a canvas press stamped before that is not a press on it. Taken when it
+  // becomes active, not when the listeners below are added again for a new callback.
+  const openedAtRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    openedAtRef.current = active ? epochNowMs() : undefined;
+  }, [active]);
   useEffect(() => {
     if (!active || !dismissible) {
       return undefined;
@@ -71,8 +77,7 @@ export function usePopupDismiss(surface: RefObject<HTMLDivElement>, options: Dis
       }
     };
     const message = (event: MessageEvent<unknown>): void => {
-      const kind = toRecord(event.data)?.['type'];
-      if (mode === 'popover' && isCanvasPress(kind)) {
+      if (mode === 'popover' && isCanvasPressMessage(event.data, { openedAtMs: openedAtRef.current })) {
         dismissedBy(surface, close)();
       }
     };
@@ -200,6 +205,45 @@ function consumePopupClick(target: Event['target']): void {
   document.addEventListener('click', consume, { capture: true });
 }
 
-function isCanvasPress(kind: unknown): boolean {
-  return kind === 'avb:click-node' || kind === 'avb:open-node' || kind === 'avb:context-node' || kind === 'studio:select' || kind === 'studio:open';
+const CANVAS_PRESSES: ReadonlySet<string> = new Set(['avb:click-node', 'avb:open-node', 'avb:context-node', 'studio:select', 'studio:open']);
+
+/** Now, on the clock the canvas stamps its presses with (epoch milliseconds, frameTargets.ts pressedAtMsOf). */
+export function epochNowMs(): number {
+  return performance.timeOrigin + performance.now();
+}
+
+/**
+ * Whether a message from the canvas is a person's press in it that came after `openedAtMs` (when the
+ * popup asking opened; absent: any press). Two kinds of message are not: a click the app retries on a
+ * freshly reloaded canvas (canvasClickRetry.ts) comes back as an `avb:click-node` carrying `replay`,
+ * the press already handled; and a freshly reloaded page can post a press a few hundred milliseconds
+ * late, after the person went on to open something in the panel, so a press the canvas stamps as
+ * made before the popup opened is not a press on it. Taking either for a new press closed whatever
+ * the person had opened since the click (soak SP-04: a chip's picker, 230 to 270 ms after it opened,
+ * with nothing in the panel to say why).
+ */
+export function isCanvasPressMessage(data: unknown, { openedAtMs }: { readonly openedAtMs?: number | undefined } = {}): boolean {
+  const message = toRecord(data);
+  const kind = message?.['type'];
+  if (typeof kind !== 'string') {
+    return false;
+  }
+  if (!CANVAS_PRESSES.has(kind)) {
+    return false;
+  }
+  if (message?.['replay'] !== undefined) {
+    return false;
+  }
+  if (openedAtMs === undefined) {
+    return true;
+  }
+  // A canvas that does not stamp its presses (Studio's preview client, an older frame) is taken at its word.
+  const pressedAtMs = message?.['pressedAtMs'];
+  if (typeof pressedAtMs !== 'number') {
+    return true;
+  }
+  if (!Number.isFinite(pressedAtMs)) {
+    return true;
+  }
+  return pressedAtMs >= openedAtMs;
 }
