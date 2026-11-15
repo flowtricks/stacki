@@ -5,6 +5,25 @@ import type { MessageKey } from '../en/settings';
 export const messages = {
   'settings.audits.rules.px': 'px fuera de variables',
   'settings.audits.phrases.info': 'Una sola palabra debe ser todo el texto para contar; varias palabras pueden ser solo una parte.',
+  'settings.breakpoints.canvas': '{width}px de lienzo',
+  'settings.breakpoints.desktop': 'Escritorio',
+  'settings.breakpoints.desktopWidth': 'Ancho completo',
+  'settings.breakpoints.error.file':
+    'No se pudo usar el archivo de puntos de corte, así que se muestran los valores predeterminados y el archivo queda intacto. {message}',
+  'settings.breakpoints.error.order': '{row} debe ser menor que {above} ({limit}).',
+  'settings.breakpoints.error.pxWhole': 'Los anchos en px son números enteros. Usa rem para decimales, como 62.5rem.',
+  'settings.breakpoints.error.range': 'Usa un ancho de {minimum} a {maximum}, en px o rem.',
+  'settings.breakpoints.error.save': 'No se pudieron guardar los puntos de corte: {message}',
+  'settings.breakpoints.error.syntax': 'Escribe un ancho como 64rem, 62.5rem o 1024px. Un número solo es px.',
+  'settings.breakpoints.explain':
+    'Cada punto de corte es el ancho donde empieza su dispositivo, como width < valor: 64rem significa width < 64rem. La vista previa salta 1px por debajo (64rem son 1023px, 30rem son 479px; 1rem son 16px). Escribe rem o px, un número solo es px, y cada uno debe ser menor que el de arriba.',
+  'settings.breakpoints.intro':
+    'Se guarda en .stacki/breakpoints.json, así que Stacki Desktop y Studio lo comparten. Escritorio es el ancho completo y no lleva número.',
+  'settings.breakpoints.laptop': 'Portátil',
+  'settings.breakpoints.phone': 'Móvil',
+  'settings.breakpoints.query': 'Equivale a {condition}',
+  'settings.breakpoints.tablet': 'Tableta',
+  'settings.breakpoints.widthLabel': 'Ancho de {device} en píxeles',
   'settings.close': 'Cerrar los ajustes',
   'settings.cms.empty': 'Aún no hay ningún CMS conectado.',
   'settings.cms.payload.liveIn': 'Los cambios se aplican en vivo en: {names}',
@@ -86,6 +105,7 @@ export const messages = {
   'settings.editor.section.privacy': 'Privacidad',
   'settings.editor.sound.label': 'Sonidos de la interfaz',
   'settings.empty.audits': 'Abre un proyecto para configurar sus auditorías.',
+  'settings.empty.breakpoints': 'Abre un proyecto para configurar sus puntos de corte.',
   'settings.empty.cms': 'Abre un proyecto para conectar un CMS.',
   'settings.empty.folders': 'Abre un proyecto para elegir sus carpetas.',
   'settings.empty.instructions': 'Abre un proyecto para elegir qué oculta el panel de Instrucciones.',
@@ -225,6 +245,7 @@ export const messages = {
   'settings.studio.info':
     'Edición y colaboración en el navegador para este proyecto. La configuración instala Studio en local y guía el despliegue en la nube.',
   'settings.tab.audits': 'Auditorías',
+  'settings.tab.breakpoints': 'Puntos de corte',
   'settings.tab.cms': 'Conexiones de CMS',
   'settings.tab.editor': 'Ajustes del editor',
   'settings.tab.folders': 'Carpetas',

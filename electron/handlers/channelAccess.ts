@@ -172,6 +172,8 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
 export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeature[] | undefined>> = {
   // Ignoring an audit finding is part of working in the Audits panel.
   audits: ['panel:audits', 'settings:audits'],
+  // The preview widths are a project setting, edited in Settings.
+  breakpoints: ['settings:breakpoints'],
   componentSources: ['settings:folders'],
   components: ['component:edit'],
   folders: ['settings:folders'],

@@ -18,6 +18,7 @@ import { useScrollEdges } from '../../ui/useScrollEdges';
 import { FolderSettings } from './FolderSettings';
 import { InstructionsSettings } from './InstructionsSettings';
 import { AuditsSettings } from './AuditsSettings';
+import { BreakpointsSettings } from './BreakpointsSettings';
 import { SETTINGS_TABS, loadSettingsTab, saveSettingsTab, settingsTabAfterKey, type SettingsTab } from './settingsTab';
 import { RolesSettings } from './RolesSettings';
 import { useCurrentRole } from '../../lib/useCurrentRole';
@@ -87,6 +88,7 @@ const TAB_LABELS: Readonly<Record<SettingsTab, MessageKey>> = {
   studio: 'settings.tab.studio',
   instructions: 'settings.tab.instructions',
   audits: 'settings.tab.audits',
+  breakpoints: 'settings.tab.breakpoints',
   roles: 'settings.tab.roles',
 };
 
@@ -243,6 +245,12 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
         <AuditsSettings key={`audits:${props.projectPath}`} projectPath={props.projectPath} />
       ) : (
         <SettingsEmpty icon={icon}>{translate('settings.empty.audits')}</SettingsEmpty>
+      );
+    case 'breakpoints':
+      return props.projectPath ? (
+        <BreakpointsSettings key={`breakpoints:${props.projectPath}`} projectPath={props.projectPath} />
+      ) : (
+        <SettingsEmpty icon={icon}>{translate('settings.empty.breakpoints')}</SettingsEmpty>
       );
     case 'roles':
       return props.projectPath ? (

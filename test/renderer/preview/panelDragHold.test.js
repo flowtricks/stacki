@@ -25,6 +25,7 @@ buildSync({
     contents: [
       "export { usePreviewSizing, usePreviewDimensions } from './src/features/preview/usePreviewSizing';",
       "export { previewViewport } from './src/features/preview/previewViewport';",
+      "export { BREAKPOINT_DEFAULTS } from './shared/properties/projectBreakpoints';",
       "export { setPanelDragPhase, panelDragPhase } from './src/ui/panelDragPhase';",
     ].join('\n'),
     resolveDir: ROOT,
@@ -80,7 +81,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
   let device = 'desktop';
   function Canvas() {
     const dimensions = hold.usePreviewDimensions();
-    const sizing = hold.usePreviewSizing(device, dimensions, () => {});
+    const sizing = hold.usePreviewSizing(device, dimensions, hold.BREAKPOINT_DEFAULTS, () => {});
     renders.push({ width: sizing.viewport.width, scale: sizing.viewport.scale, settling: sizing.panelSettling });
     return React.createElement('div', { ref: sizing.wrapRef });
   }

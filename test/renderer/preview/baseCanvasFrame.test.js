@@ -26,6 +26,7 @@ buildSync({
     contents: [
       "export { useWindowState } from './src/app/state/appState';",
       "export { usePreviewSizing, usePreviewDimensions, useCanvasWidthRequest } from './src/features/preview/usePreviewSizing';",
+      "export { BREAKPOINT_DEFAULTS } from './shared/properties/projectBreakpoints';",
       "export { baseCanvasTarget } from './src/features/style/model/baseWidth';",
     ].join('\n'),
     resolveDir: ROOT,
@@ -79,7 +80,7 @@ async function mountCanvas() {
   function Canvas() {
     const windowState = frame.useWindowState();
     const dimensions = frame.usePreviewDimensions();
-    const sizing = frame.usePreviewSizing(windowState.device, dimensions, windowState.setDevice);
+    const sizing = frame.usePreviewSizing(windowState.device, dimensions, frame.BREAKPOINT_DEFAULTS, windowState.setDevice);
     frame.useCanvasWidthRequest(windowState.canvasWidthRequest, dimensions.setCustomWidth);
     handle.windowState = windowState;
     const state = { device: windowState.device, active: sizing.activeDevice, width: sizing.viewport.width ?? 'fluid' };

@@ -6,18 +6,30 @@ import { usePointerDrag } from '../../ui/usePointerDrag';
 import { panelDragPhase, subscribePanelDragPhase } from '../../ui/panelDragPhase';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
 
-const BREAKPOINTS = [
-  { key: 'desktop', labelKey: 'preview.canvas.desktop', width: 1_440, viewportHeight: 900 },
-  { key: 'tablet', labelKey: 'preview.canvas.tablet', width: 768, viewportHeight: 1_024 },
-  { key: 'phone', labelKey: 'preview.canvas.phone', width: 375, viewportHeight: 812 },
-] as const satisfies ReadonlyArray<{ readonly key: string; readonly labelKey: MessageKey; readonly width: number; readonly viewportHeight: number }>;
+interface CanvasBreakpoint {
+  readonly key: 'desktop' | 'laptop' | 'tablet' | 'phone';
+  readonly labelKey: MessageKey;
+  readonly width: number;
+  readonly viewportHeight: number;
+}
+// The all-breakpoints canvas draws Desktop at a fixed 1440 and the other three at the project's widths (`.stacki/breakpoints.json`).
+const DESKTOP_FRAME_WIDTH = 1_440;
+function canvasBreakpoints(widths: BreakpointWidths): readonly CanvasBreakpoint[] {
+  return [
+    { key: 'desktop', labelKey: 'preview.canvas.desktop', width: DESKTOP_FRAME_WIDTH, viewportHeight: 900 },
+    { key: 'laptop', labelKey: 'preview.canvas.laptop', width: widths.laptop, viewportHeight: 768 },
+    { key: 'tablet', labelKey: 'preview.canvas.tablet', width: widths.tablet, viewportHeight: 1_024 },
+    { key: 'phone', labelKey: 'preview.canvas.phone', width: widths.phone, viewportHeight: 812 },
+  ];
+}
 const GAP_PX = 120;
 const PAGE_HEIGHT_PX_MAX = 30_000;
 const PAGE_HEIGHT_PX_MIN = 200;
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 4;
-type BreakpointKey = (typeof BREAKPOINTS)[number]['key'];
+type BreakpointKey = CanvasBreakpoint['key'];
 // Per-breakpoint lookups that fill in as frames mount and report: a frame that
 // has not reported yet has no entry. Sparse maps, not update types, so absence
 // is part of the type.
@@ -29,6 +41,8 @@ interface ViewState {
   readonly scale: number;
 }
 interface CanvasViewProps {
+  /** The project's breakpoint widths: the Laptop, Tablet and Phone frames are drawn at them. */
+  readonly breakpoints: BreakpointWidths;
   readonly url: string;
   readonly refreshKey: string | number;
   readonly onPreviewLoaded?: () => void;
@@ -38,7 +52,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded }: CanvasViewProps) {
+export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded, breakpoints }: CanvasViewProps) {
   const startDrag = usePointerDrag();
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const iframesRef = React.useRef<FrameElements>({});
@@ -49,7 +63,7 @@ export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded
   const [heights, setHeights] = React.useState<FrameHeights>({});
   const viewRef = React.useRef<ViewState | undefined>(undefined);
   viewRef.current = view;
-  const frames = React.useMemo(() => layoutFrames(heights), [heights]);
+  const frames = React.useMemo(() => layoutFrames(heights, canvasBreakpoints(breakpoints)), [heights, breakpoints]);
   const lastFrame = frames.at(-1);
   if (!lastFrame) {
     throw new Error('Canvas requires at least one breakpoint');
@@ -61,7 +75,7 @@ export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded
   const worldRef = React.useRef(world);
   worldRef.current = world;
   const userMovedRef = React.useRef(false);
-  useFrameHeights(iframesRef, setHeights);
+  useFrameHeights(iframesRef, setHeights, frames);
   useStudioPatches(iframesRef, url);
   const fit = useFitCanvas(wrapRef, worldRef, setView);
   useCanvasFit(wrapRef, userMovedRef, world.width, world.height, fit);
@@ -129,9 +143,9 @@ function useCanvasPointer(
   };
 }
 
-function layoutFrames(heights: FrameHeights) {
+function layoutFrames(heights: FrameHeights, breakpoints: readonly CanvasBreakpoint[]) {
   let x = 0;
-  return BREAKPOINTS.map((breakpoint) => {
+  return breakpoints.map((breakpoint) => {
     // The frame freezes viewport units to viewportHeight before growing. Its
     // visible height can therefore follow the full page without enlarging heroes.
     const height = clamp(heights[breakpoint.key] ?? breakpoint.viewportHeight, PAGE_HEIGHT_PX_MIN, PAGE_HEIGHT_PX_MAX);
@@ -141,7 +155,11 @@ function layoutFrames(heights: FrameHeights) {
   });
 }
 
-function useFrameHeights(iframesRef: React.MutableRefObject<FrameElements>, setHeights: React.Dispatch<React.SetStateAction<FrameHeights>>): void {
+function useFrameHeights(
+  iframesRef: React.MutableRefObject<FrameElements>,
+  setHeights: React.Dispatch<React.SetStateAction<FrameHeights>>,
+  frames: Frames,
+): void {
   React.useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>): void => {
       const match = Object.entries(iframesRef.current).find(([, iframe]) => iframe?.contentWindow === event.source);
@@ -150,7 +168,7 @@ function useFrameHeights(iframesRef: React.MutableRefObject<FrameElements>, setH
         return;
       }
       if (isFrameReady(event.data)) {
-        const breakpoint = BREAKPOINTS.find((entry) => entry.key === key);
+        const breakpoint = frames.find((entry) => entry.key === key);
         const iframe = iframesRef.current[key];
         if (breakpoint && iframe) {
           // Ready precedes window.load when images are slow. Freeze before the
@@ -166,7 +184,7 @@ function useFrameHeights(iframesRef: React.MutableRefObject<FrameElements>, setH
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [iframesRef, setHeights]);
+  }, [iframesRef, setHeights, frames]);
 }
 
 function isFrameReady(input: unknown): boolean {
@@ -192,7 +210,7 @@ export function parsePageHeight(input: unknown): number | undefined {
 }
 
 function isBreakpointKey(value: string | undefined): value is BreakpointKey {
-  return BREAKPOINTS.some((breakpoint) => breakpoint.key === value);
+  return value === 'desktop' || value === 'laptop' || value === 'tablet' || value === 'phone';
 }
 
 function useFitCanvas(

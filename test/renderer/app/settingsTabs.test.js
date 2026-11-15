@@ -21,7 +21,10 @@ const stubs = {
   name: 'settings-section-stubs',
   setup(build) {
     build.onResolve(
-      { filter: /cmsConnections\/CmsConnections$|studioSetup\/StudioSetup$|\/FolderSettings$|\/RolesSettings$|\/InstructionsSettings$|\/AuditsSettings$/ },
+      {
+        filter:
+          /cmsConnections\/CmsConnections$|studioSetup\/StudioSetup$|\/FolderSettings$|\/RolesSettings$|\/InstructionsSettings$|\/AuditsSettings$|\/BreakpointsSettings$/,
+      },
       (args) => ({
         path: args.path,
         namespace: 'stub',
@@ -29,17 +32,19 @@ const stubs = {
     );
     build.onLoad({ filter: /.*/, namespace: 'stub' }, (args) => ({
       loader: 'jsx',
-      contents: args.path.includes('AuditsSettings')
-        ? 'export function AuditsSettings() { return <section aria-label="Audit checks">Audits stub</section>; }'
-        : args.path.includes('InstructionsSettings')
-          ? 'export function InstructionsSettings() { return <section aria-label="Hidden instructions">Instructions stub</section>; }'
-          : args.path.includes('RolesSettings')
-            ? 'export function RolesSettings() { return <section aria-label="Project roles">Roles stub</section>; }'
-            : args.path.includes('FolderSettings')
-              ? 'export function FolderSettings() { return <section aria-label="Project folders">Folders stub</section>; }'
-              : args.path.includes('CmsConnections')
-                ? 'export function CmsConnections() { return <section aria-label="CMS connections">CMS stub</section>; }'
-                : 'export default function StudioSetup() { return <section aria-label="Stacki Studio">Studio stub</section>; }',
+      contents: args.path.includes('BreakpointsSettings')
+        ? 'export function BreakpointsSettings() { return <section aria-label="Breakpoints">Breakpoints stub</section>; }'
+        : args.path.includes('AuditsSettings')
+          ? 'export function AuditsSettings() { return <section aria-label="Audit checks">Audits stub</section>; }'
+          : args.path.includes('InstructionsSettings')
+            ? 'export function InstructionsSettings() { return <section aria-label="Hidden instructions">Instructions stub</section>; }'
+            : args.path.includes('RolesSettings')
+              ? 'export function RolesSettings() { return <section aria-label="Project roles">Roles stub</section>; }'
+              : args.path.includes('FolderSettings')
+                ? 'export function FolderSettings() { return <section aria-label="Project folders">Folders stub</section>; }'
+                : args.path.includes('CmsConnections')
+                  ? 'export function CmsConnections() { return <section aria-label="CMS connections">CMS stub</section>; }'
+                  : 'export default function StudioSetup() { return <section aria-label="Stacki Studio">Studio stub</section>; }',
     }));
   },
 };
@@ -135,7 +140,7 @@ test('the tabs show their own panel and carry tab semantics', async () => {
   assert.ok(document.querySelector('.app-settings footer') === null, 'nothing is unsaved, so no action bar');
   assert.deepEqual(
     tabs().map((item) => item.textContent.trim()),
-    ['Editor settings', 'Folders', 'CMS connections', 'Stacki Studio', 'Instructions', 'Audits', 'Roles'],
+    ['Editor settings', 'Folders', 'CMS connections', 'Stacki Studio', 'Instructions', 'Audits', 'Breakpoints', 'Roles'],
   );
   assert.equal(document.querySelector('[role="tablist"]').getAttribute('aria-orientation'), 'vertical');
   for (const item of tabs()) {
@@ -193,6 +198,8 @@ test('the arrow keys move between tabs and wrap', async () => {
   assert.equal(selectedTab().textContent.trim(), 'Instructions');
   await pressKey(document.activeElement, 'ArrowDown');
   assert.equal(selectedTab().textContent.trim(), 'Audits');
+  await pressKey(document.activeElement, 'ArrowDown');
+  assert.equal(selectedTab().textContent.trim(), 'Breakpoints');
   await pressKey(document.activeElement, 'ArrowDown');
   assert.equal(selectedTab().textContent.trim(), 'Roles');
   await pressKey(document.activeElement, 'ArrowDown');

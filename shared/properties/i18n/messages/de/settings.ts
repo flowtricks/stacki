@@ -5,6 +5,25 @@ import type { MessageKey } from '../en/settings';
 export const messages = {
   'settings.audits.rules.px': 'px außerhalb von Variablen',
   'settings.audits.phrases.info': 'Ein einzelnes Wort zählt nur als gesamter Text; mehrere Wörter dürfen auch nur ein Teil davon sein.',
+  'settings.breakpoints.canvas': '{width}px Canvas',
+  'settings.breakpoints.desktop': 'Desktop', // same
+  'settings.breakpoints.desktopWidth': 'Volle Breite',
+  'settings.breakpoints.error.file':
+    'Die Breakpoint-Datei ist nicht nutzbar, daher werden die Standardwerte angezeigt und die Datei bleibt unverändert. {message}',
+  'settings.breakpoints.error.order': '{row} muss kleiner sein als {above} ({limit}).',
+  'settings.breakpoints.error.pxWhole': 'px-Breiten sind ganze Zahlen. Verwende rem für Dezimalstellen, etwa 62.5rem.',
+  'settings.breakpoints.error.range': 'Verwende eine Breite von {minimum} bis {maximum}, in px oder rem.',
+  'settings.breakpoints.error.save': 'Die Breakpoints konnten nicht gespeichert werden: {message}',
+  'settings.breakpoints.error.syntax': 'Gib eine Breite wie 64rem, 62.5rem oder 1024px ein. Eine bloße Zahl gilt als px.',
+  'settings.breakpoints.explain':
+    'Jeder Breakpoint ist die Breite, ab der sein Gerät beginnt, als width < Wert: 64rem bedeutet width < 64rem. Die Vorschau springt 1px darunter (64rem sind 1023px, 30rem sind 479px; 1rem sind 16px). Gib rem oder px ein, eine bloße Zahl gilt als px, und jeder Wert muss kleiner sein als der darüber.',
+  'settings.breakpoints.intro':
+    'Gespeichert in .stacki/breakpoints.json, daher teilen Stacki Desktop und Studio ihn. Desktop ist die volle Breite und hat keine Zahl.',
+  'settings.breakpoints.laptop': 'Laptop', // same
+  'settings.breakpoints.phone': 'Smartphone',
+  'settings.breakpoints.query': 'Entspricht {condition}',
+  'settings.breakpoints.tablet': 'Tablet', // same
+  'settings.breakpoints.widthLabel': 'Breite {device} in Pixeln',
   'settings.close': 'Einstellungen schließen',
   'settings.cms.empty': 'Noch kein CMS verbunden.',
   'settings.cms.payload.liveIn': 'Änderungen gelten live in: {names}',
@@ -88,6 +107,7 @@ export const messages = {
   'settings.editor.section.privacy': 'Datenschutz',
   'settings.editor.sound.label': 'Oberflächentöne',
   'settings.empty.audits': 'Öffne ein Projekt, um seine Audits zu konfigurieren.',
+  'settings.empty.breakpoints': 'Öffne ein Projekt, um seine Breakpoints festzulegen.',
   'settings.empty.cms': 'Öffne ein Projekt, um ein CMS zu verbinden.',
   'settings.empty.folders': 'Öffne ein Projekt, um seine Ordner auszuwählen.',
   'settings.empty.instructions': 'Öffne ein Projekt, um auszuwählen, was das Anweisungen-Panel ausblendet.',
@@ -227,6 +247,7 @@ export const messages = {
   'settings.studio.info':
     'Bearbeiten und Zusammenarbeiten im Browser für dieses Projekt. Die Einrichtung installiert Studio lokal und führt durch das Cloud-Deployment.',
   'settings.tab.audits': 'Audits', // same
+  'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'CMS-Verbindungen',
   'settings.tab.editor': 'Editor-Einstellungen',
   'settings.tab.folders': 'Ordner',

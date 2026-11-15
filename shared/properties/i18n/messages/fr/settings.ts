@@ -5,6 +5,25 @@ import type { MessageKey } from '../en/settings';
 export const messages = {
   'settings.audits.rules.px': 'px hors des variables',
   'settings.audits.phrases.info': 'Un seul mot doit constituer tout le texte pour compter ; plusieurs mots peuvent n’en être qu’une partie.',
+  'settings.breakpoints.canvas': 'Canevas de {width}px',
+  'settings.breakpoints.desktop': 'Bureau',
+  'settings.breakpoints.desktopWidth': 'Pleine largeur',
+  'settings.breakpoints.error.file':
+    'Le fichier des points d’arrêt est inutilisable : les valeurs par défaut s’affichent et le fichier reste intact. {message}',
+  'settings.breakpoints.error.order': '{row} doit être plus petit que {above} ({limit}).',
+  'settings.breakpoints.error.pxWhole': 'Les largeurs en px sont des nombres entiers. Utilisez rem pour les décimales, comme 62.5rem.',
+  'settings.breakpoints.error.range': 'Utilisez une largeur de {minimum} à {maximum}, en px ou rem.',
+  'settings.breakpoints.error.save': 'Impossible d’enregistrer les points d’arrêt : {message}',
+  'settings.breakpoints.error.syntax': 'Saisissez une largeur comme 64rem, 62.5rem ou 1024px. Un nombre seul est en px.',
+  'settings.breakpoints.explain':
+    'Chaque point d’arrêt est la largeur où commence son appareil, sous la forme width < valeur : 64rem signifie width < 64rem. L’aperçu saute 1px en dessous (64rem donne 1023px, 30rem donne 479px ; 1rem vaut 16px). Saisissez rem ou px, un nombre seul est en px, et chacun doit être plus petit que celui du dessus.',
+  'settings.breakpoints.intro':
+    'Enregistré dans .stacki/breakpoints.json, donc Stacki Desktop et Studio le partagent. Bureau est la pleine largeur et n’a pas de nombre.',
+  'settings.breakpoints.laptop': 'Ordinateur portable',
+  'settings.breakpoints.phone': 'Téléphone',
+  'settings.breakpoints.query': 'Correspond à {condition}',
+  'settings.breakpoints.tablet': 'Tablette',
+  'settings.breakpoints.widthLabel': 'Largeur : {device}, en pixels',
   'settings.close': 'Fermer les réglages',
   'settings.cms.empty': 'Aucun CMS connecté pour l’instant.',
   'settings.cms.payload.liveIn': 'Les modifications s’appliquent en ligne dans : {names}',
@@ -87,6 +106,7 @@ export const messages = {
   'settings.editor.section.privacy': 'Confidentialité',
   'settings.editor.sound.label': 'Sons de l’interface',
   'settings.empty.audits': 'Ouvrez un projet pour configurer ses audits.',
+  'settings.empty.breakpoints': 'Ouvrez un projet pour configurer ses points d’arrêt.',
   'settings.empty.cms': 'Ouvrez un projet pour connecter un CMS.',
   'settings.empty.folders': 'Ouvrez un projet pour choisir ses dossiers.',
   'settings.empty.instructions': 'Ouvrez un projet pour choisir ce que le panneau Instructions masque.',
@@ -226,6 +246,7 @@ export const messages = {
   'settings.studio.info':
     'Édition et collaboration dans le navigateur pour ce projet. La configuration installe Studio en local, puis guide le déploiement cloud.',
   'settings.tab.audits': 'Audits', // same
+  'settings.tab.breakpoints': 'Points d’arrêt',
   'settings.tab.cms': 'Connexions CMS',
   'settings.tab.editor': 'Réglages de l’éditeur',
   'settings.tab.folders': 'Dossiers',

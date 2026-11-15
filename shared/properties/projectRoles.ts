@@ -119,6 +119,7 @@ export const ACCESS_FEATURES = [
   'settings:studio',
   'settings:instructions',
   'settings:audits',
+  'settings:breakpoints',
   'settings:roles',
 ] as const;
 export type StaticAccessFeature = (typeof ACCESS_FEATURES)[number];
@@ -337,6 +338,7 @@ export const ACCESS_GROUPS: readonly {
       { feature: 'settings:studio', label: 'Stacki Studio', labelRef: messageRef('roles.feature.settingsStudio') },
       { feature: 'settings:instructions', label: 'Hidden instructions', labelRef: messageRef('roles.feature.settingsInstructions') },
       { feature: 'settings:audits', label: 'Audit checks', labelRef: messageRef('roles.feature.settingsAudits') },
+      { feature: 'settings:breakpoints', label: 'Breakpoints', labelRef: messageRef('roles.feature.settingsBreakpoints') },
     ],
   },
 ];

@@ -20,6 +20,7 @@ import { outlineInfo, outlineNode } from './outlineInfo';
 import { useMemo, useRef, type CSSProperties } from 'react';
 import { PreviewToolbar, type PreviewDevice, type PreviewInspectorActions } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
 import CanvasView from '../../../vendor/stacki/src/features/preview/CanvasView';
+import { useProjectBreakpoints } from '../../../vendor/stacki/src/ipc/useProjectBreakpoints';
 import { usePreviewSizing } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
 import type { usePreviewDimensions } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
 import '../../../vendor/stacki/src/features/preview/previewViewport.css';
@@ -66,7 +67,8 @@ export function PreviewCanvas(props: Props) {
     offSite: { clearOverlays: props.preview.clearOverlays },
     pages: props.sitePages,
   });
-  const sizing = usePreviewSizing(props.device, props.dimensions, props.onDevice);
+  const { widths: breakpoints } = useProjectBreakpoints(props.projectName);
+  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
     preview: props.preview,
@@ -83,6 +85,7 @@ export function PreviewCanvas(props: Props) {
     <main className="studio-center" data-canvas-interactive={interaction.active}>
       <div className="studio-preview-toolbar">
         <PreviewToolbar
+          breakpoints={breakpoints}
           crumbs={[...(props.pageLabel ? [{ id: undefined, label: props.pageLabel }] : []), ...crumbsFor(props.nodes, props.selected)]}
           onCrumb={(id) => props.select(id ?? 'layout')}
           activeDevice={sizing.activeDevice}
@@ -163,11 +166,12 @@ function PreviewSurface({
   readonly interactive?: boolean;
 }) {
   const loading = usePreviewLoading(props.preview.url, sizing.wrapRef, props.device === 'canvas', props.preview.retry);
+  const { widths: breakpoints } = useProjectBreakpoints(props.projectName);
   return (
     <div className="preview-frame-wrap" ref={sizing.wrapRef} data-preview-loading={!loading.ready} aria-busy={!loading.ready}>
       {props.preview.url &&
         (props.device === 'canvas' ? (
-          <CanvasView key={loading.attempt} url={props.preview.renderURL ?? props.preview.url} refreshKey={loading.attempt} />
+          <CanvasView breakpoints={breakpoints} key={loading.attempt} url={props.preview.renderURL ?? props.preview.url} refreshKey={loading.attempt} />
         ) : (
           <DesignFrame key={loading.attempt} interactive={interactive ?? false} props={props} sizing={sizing} shownGuide={shownGuide} />
         ))}

@@ -127,7 +127,8 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px var(--settings-gutter) var(--settings-gutter);
+  /* The first section sits one step below the header, so every tab's eyebrow has room above it. */
+  padding: 20px var(--settings-gutter) var(--settings-gutter);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--settings-fade-top), #000 calc(100% - var(--settings-fade-bottom)), transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0, #000 var(--settings-fade-top), #000 calc(100% - var(--settings-fade-bottom)), transparent 100%);
 }

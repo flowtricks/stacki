@@ -1,0 +1,112 @@
+/* Settings → Breakpoints: one card per device, filled surfaces and tints, never borders (the rest of Settings reads the same).
+   The cards share the Folders and Roles card language: --bg-hover fill, 12px padding rhythm, an 8px gap between cards. */
+.breakpoints-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.breakpoints-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.breakpoints-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 6px;
+  min-height: 64px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  transition: background-color 120ms ease;
+}
+.breakpoints-card:hover:not([data-breakpoint='desktop']),
+.breakpoints-card:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+}
+.breakpoints-card[data-invalid] {
+  background: rgba(255, 69, 58, 0.12);
+}
+.breakpoints-tile {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.breakpoints-card[data-invalid] .breakpoints-tile {
+  color: var(--red);
+}
+.breakpoints-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.breakpoints-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.breakpoints-query {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.breakpoints-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.breakpoints-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.breakpoints-input {
+  width: 112px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.breakpoints-input:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+.breakpoints-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.breakpoints-input[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
+}
+.breakpoints-input[aria-invalid='true']:focus-visible {
+  outline-color: var(--red);
+}
+.breakpoints-input:disabled {
+  opacity: 0.5;
+}
+.breakpoints-canvas {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.breakpoints-problem {
+  grid-column: 2 / -1;
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.4;
+}

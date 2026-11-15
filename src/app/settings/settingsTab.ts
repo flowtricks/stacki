@@ -8,7 +8,7 @@
 import { assert } from '../../../shared/core/assert';
 
 /** The tabs, in sidebar order. */
-export const SETTINGS_TABS = ['editor', 'folders', 'cms', 'studio', 'instructions', 'audits', 'roles'] as const;
+export const SETTINGS_TABS = ['editor', 'folders', 'cms', 'studio', 'instructions', 'audits', 'breakpoints', 'roles'] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const SETTINGS_TAB_DEFAULT: SettingsTab = 'editor';

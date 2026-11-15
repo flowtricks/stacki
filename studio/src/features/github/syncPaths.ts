@@ -20,6 +20,8 @@ export function independentlyDeployed(file: string): boolean {
 export const INCOMING_METADATA = {
   // The audits panel's ignore list, read when the panel loads (auditsBridge.ts).
   audits: { file: '.stacki/audits.json', sync: 'live' },
+  // Preview breakpoint widths, read by the preview bar (projectBreakpoints.ts).
+  breakpoints: { file: '.stacki/breakpoints.json', sync: 'live' },
   // Package component sources, read on each component scan (componentSources.ts).
   componentSources: { file: '.stacki/component-sources.json', sync: 'live' },
   // Insertion defaults, read on each defaults load (loadDefaults.ts).

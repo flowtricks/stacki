@@ -3,6 +3,7 @@ import { assert } from '../../../shared/core/assert';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { deviceForWidth, deviceWidth, type PreviewDevice } from './PreviewToolbar';
+import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
 import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
 import { panelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
@@ -14,7 +15,12 @@ export function usePreviewDimensions() {
   const [customHeight, setCustomHeight] = useState<number | undefined>(undefined);
   return { customWidth, setCustomWidth, customHeight, setCustomHeight };
 }
-export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<typeof usePreviewDimensions>, onDevice: (device: PreviewDevice) => void) {
+export function usePreviewSizing(
+  device: PreviewDevice,
+  dimensions: ReturnType<typeof usePreviewDimensions>,
+  breakpoints: BreakpointWidths,
+  onDevice: (device: PreviewDevice) => void,
+) {
   const startDrag = usePointerDrag();
   const wrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -24,7 +30,7 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
   // A custom width belongs to the custom device. Read on any other, it drew one frame at
   // the old custom width after a device button was pressed, until the effect below
   // cleared it.
-  const width = device === 'custom' ? (customWidth ?? deviceWidth(device)) : deviceWidth(device);
+  const width = device === 'custom' ? (customWidth ?? deviceWidth(device, breakpoints)) : deviceWidth(device, breakpoints);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
   useDeviceShortcuts(onDevice);
@@ -38,7 +44,7 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
   const viewport = previewViewport(width, available, customHeight);
-  const activeDevice = device === 'canvas' ? 'canvas' : (deviceForWidth(viewport.width) ?? device);
+  const activeDevice = device === 'canvas' ? 'canvas' : (deviceForWidth(viewport.width, breakpoints) ?? device);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
     onDevice('custom');
@@ -163,10 +169,12 @@ function deviceFromKey(key: string): PreviewDevice | undefined {
     case '1':
       return 'desktop';
     case '2':
-      return 'tablet';
+      return 'laptop';
     case '3':
-      return 'phone';
+      return 'tablet';
     case '4':
+      return 'phone';
+    case '5':
       return 'canvas';
     default:
       return undefined;

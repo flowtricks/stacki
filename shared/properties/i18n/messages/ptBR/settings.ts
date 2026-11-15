@@ -5,6 +5,23 @@ import type { MessageKey } from '../en/settings';
 export const messages = {
   'settings.audits.rules.px': 'px fora de variáveis',
   'settings.audits.phrases.info': 'Uma única palavra precisa ser o texto inteiro para contar; várias palavras podem ser só uma parte.',
+  'settings.breakpoints.canvas': 'Canvas de {width}px',
+  'settings.breakpoints.desktop': 'Desktop', // same
+  'settings.breakpoints.desktopWidth': 'Largura total',
+  'settings.breakpoints.error.file': 'Não foi possível usar o arquivo de breakpoints, então os padrões aparecem e o arquivo fica como está. {message}',
+  'settings.breakpoints.error.order': '{row} deve ser menor que {above} ({limit}).',
+  'settings.breakpoints.error.pxWhole': 'Larguras em px são números inteiros. Use rem para decimais, como 62.5rem.',
+  'settings.breakpoints.error.range': 'Use uma largura de {minimum} a {maximum}, em px ou rem.',
+  'settings.breakpoints.error.save': 'Não foi possível salvar os breakpoints: {message}',
+  'settings.breakpoints.error.syntax': 'Digite uma largura como 64rem, 62.5rem ou 1024px. Um número sozinho é px.',
+  'settings.breakpoints.explain':
+    'Cada breakpoint é a largura em que seu dispositivo começa, como width < valor: 64rem significa width < 64rem. A visualização salta 1px abaixo (64rem é 1023px, 30rem é 479px; 1rem é 16px). Digite rem ou px, um número sozinho é px, e cada um deve ser menor que o de cima.',
+  'settings.breakpoints.intro': 'Salvo em .stacki/breakpoints.json, então Stacki Desktop e Studio o compartilham. Desktop é a largura total e não tem número.',
+  'settings.breakpoints.laptop': 'Notebook',
+  'settings.breakpoints.phone': 'Celular',
+  'settings.breakpoints.query': 'Equivale a {condition}',
+  'settings.breakpoints.tablet': 'Tablet', // same
+  'settings.breakpoints.widthLabel': 'Largura de {device} em pixels',
   'settings.close': 'Fechar as configurações',
   'settings.cms.empty': 'Nenhum CMS conectado ainda.',
   'settings.cms.payload.liveIn': 'As edições são aplicadas ao vivo em: {names}',
@@ -86,6 +103,7 @@ export const messages = {
   'settings.editor.section.privacy': 'Privacidade',
   'settings.editor.sound.label': 'Sons da interface',
   'settings.empty.audits': 'Abra um projeto para configurar suas auditorias.',
+  'settings.empty.breakpoints': 'Abra um projeto para configurar seus breakpoints.',
   'settings.empty.cms': 'Abra um projeto para conectar um CMS.',
   'settings.empty.folders': 'Abra um projeto para escolher suas pastas.',
   'settings.empty.instructions': 'Abra um projeto para escolher o que o painel Instruções oculta.',
@@ -224,6 +242,7 @@ export const messages = {
   'settings.sections': 'Seções das configurações',
   'settings.studio.info': 'Edição e colaboração no navegador para este projeto. A configuração instala o Studio localmente e guia a implantação na nuvem.',
   'settings.tab.audits': 'Auditorias',
+  'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'Conexões de CMS',
   'settings.tab.editor': 'Configurações do editor',
   'settings.tab.folders': 'Pastas',

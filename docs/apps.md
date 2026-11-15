@@ -502,7 +502,7 @@ interface Stacki {
 ### Types
 
 ```ts
-type AppDevice = 'desktop' | 'tablet' | 'phone';
+type AppDevice = 'desktop' | 'laptop' | 'tablet' | 'phone';
 type AppLeftPanel = 'pages' | 'navigator' | 'properties' | 'components' | 'assets' | 'cms' | 'variables' | 'selectors' | 'code' | 'history' | 'apps' | 'instructions' | 'audits' | 'ai';
 type AppRightPanel = 'style' | 'settings';
 type AppChangeSource = 'page' | 'styles' | 'cms' | 'assets' | 'files';

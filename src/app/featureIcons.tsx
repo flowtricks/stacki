@@ -20,6 +20,7 @@ import {
   GearIcon,
   GitHubIcon,
   HistoryIcon,
+  AllBreakpointsIcon,
   InstructionsIcon,
   LayoutIcon,
   MoreIcon,
@@ -91,6 +92,7 @@ export const FEATURE_ICONS: Readonly<Record<StaticAccessFeature, FeatureIconComp
   'settings:studio': StackiMarkIcon,
   'settings:instructions': InstructionsIcon,
   'settings:audits': AuditsIcon,
+  'settings:breakpoints': AllBreakpointsIcon,
   'settings:roles': RolesIcon,
 };
 

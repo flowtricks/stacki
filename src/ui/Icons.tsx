@@ -319,6 +319,11 @@ export const MinimizeIcon = centralIcon(centralCollapse);
 
 export const DesktopIcon = centralIcon(centralStudioDisplay);
 
+// TEMPORARY: Central's macbook-air outline is not in this repository yet (its Figma file could not be reached), and path data is
+// never drawn by hand (docs/central-icons.md). Until `macbookAir` is added to central/centralGeometry.tsx from its Figma variants,
+// the laptop device wears the desktop glyph. Swap this one line when the geometry lands.
+export const LaptopIcon = centralIcon(centralStudioDisplay);
+
 export const TabletIcon = centralIcon(centralTablet);
 
 export const PhoneIcon = centralIcon(centralPhone);

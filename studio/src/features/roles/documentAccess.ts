@@ -31,6 +31,7 @@ export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeatu
   instructions: ['settings:instructions', 'instructions:edit'],
   // Ignoring an audit finding is part of working in the Audits panel.
   audits: ['panel:audits', 'settings:audits'],
+  breakpoints: ['settings:breakpoints'],
   pages: ['panel:pages'],
   publish: ['publish'],
   roles: ['settings:roles'],

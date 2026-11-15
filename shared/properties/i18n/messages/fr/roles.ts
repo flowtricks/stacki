@@ -3,6 +3,7 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/roles';
 
 export const messages = {
+  'roles.feature.settingsBreakpoints': 'Points d’arrêt',
   'roles.group.panels': 'Panneaux',
   'roles.group.pages': 'Pages', // same
   'roles.group.components': 'Composants',

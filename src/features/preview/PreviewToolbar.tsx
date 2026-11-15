@@ -2,7 +2,8 @@ import { centralIcon } from '../../ui/central/CentralIcon';
 import { cursorClick as centralCursorClick } from '../../ui/central/centralGeometry';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IconProps } from '../../ui/Icons';
-import { AllBreakpointsIcon, ChevronRightIcon, DesktopIcon, PanelRightIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
+import { AllBreakpointsIcon, ChevronRightIcon, DesktopIcon, LaptopIcon, PanelRightIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
+import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
 import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
@@ -12,23 +13,22 @@ import { ToolbarOverflow, type ToolbarItem } from './ToolbarOverflow';
 
 const InteractIcon = centralIcon(centralCursorClick);
 
-export type PreviewDevice = 'desktop' | 'tablet' | 'phone' | 'canvas' | 'custom';
+export type PreviewDevice = 'desktop' | 'laptop' | 'tablet' | 'phone' | 'canvas' | 'custom';
 type FixedDevice = Exclude<PreviewDevice, 'custom'>;
 
 interface DeviceDefinition {
   readonly key: FixedDevice;
   readonly Icon: React.ComponentType<IconProps>;
   readonly titleKey: MessageKey;
-  /** The viewport width it simulates; undefined for the full available width. */
-  readonly width: number | undefined;
-  readonly from?: number;
 }
 
+// Largest first. The widths are the project's (`.stacki/breakpoints.json`), never constants here: see deviceWidth.
 export const DEVICES: readonly DeviceDefinition[] = [
-  { key: 'desktop', Icon: DesktopIcon, titleKey: 'preview.device.desktop', width: undefined, from: 1024 },
-  { key: 'tablet', Icon: TabletIcon, titleKey: 'preview.device.tablet', width: 768, from: 768 },
-  { key: 'phone', Icon: PhoneIcon, titleKey: 'preview.device.phone', width: 375, from: 0 },
-  { key: 'canvas', Icon: AllBreakpointsIcon, titleKey: 'preview.device.canvas', width: undefined },
+  { key: 'desktop', Icon: DesktopIcon, titleKey: 'preview.device.desktop' },
+  { key: 'laptop', Icon: LaptopIcon, titleKey: 'preview.device.laptop' },
+  { key: 'tablet', Icon: TabletIcon, titleKey: 'preview.device.tablet' },
+  { key: 'phone', Icon: PhoneIcon, titleKey: 'preview.device.phone' },
+  { key: 'canvas', Icon: AllBreakpointsIcon, titleKey: 'preview.device.canvas' },
 ];
 
 export interface PreviewCrumb {
@@ -49,15 +49,41 @@ interface VisibleCrumb {
 
 type ToolbarCrumb = FoldedCrumb | VisibleCrumb;
 
-export function deviceForWidth(px: number): FixedDevice | undefined {
+/** The device a canvas width belongs to: the smallest whose width holds it, Desktop above the laptop width. */
+export function deviceForWidth(px: number, widths: BreakpointWidths): FixedDevice | undefined {
   if (!Number.isFinite(px) || px <= 0) {
     return undefined;
   }
-  return DEVICES.find((device) => device.from !== undefined && px >= device.from)?.key;
+  if (px > widths.laptop) {
+    return 'desktop';
+  }
+  if (px > widths.tablet) {
+    return 'laptop';
+  }
+  if (px > widths.phone) {
+    return 'tablet';
+  }
+  return 'phone';
 }
 
-export function deviceWidth(device: PreviewDevice): number | undefined {
-  return DEVICES.find((entry) => entry.key === device)?.width;
+/** The viewport width a device simulates; undefined for the full available width (Desktop, the all-breakpoints canvas, a custom drag). */
+export function deviceWidth(device: PreviewDevice, widths: BreakpointWidths): number | undefined {
+  switch (device) {
+    case 'laptop':
+      return widths.laptop;
+    case 'tablet':
+      return widths.tablet;
+    case 'phone':
+      return widths.phone;
+    case 'desktop':
+    case 'canvas':
+    case 'custom':
+      return undefined;
+    default: {
+      const exhaustive: never = device;
+      return exhaustive;
+    }
+  }
 }
 
 // In a collapsed editor the Style and Settings panel floats over the canvas; one toolbar
@@ -68,6 +94,8 @@ export interface PreviewInspectorActions {
 }
 
 interface PreviewToolbarProps {
+  /** The project's breakpoint widths: the pixel numbers in the device tooltips. */
+  readonly breakpoints: BreakpointWidths;
   readonly crumbs: readonly PreviewCrumb[];
   readonly onCrumb?: (id: string | undefined) => void;
   readonly activeDevice: PreviewDevice;
@@ -100,7 +128,7 @@ function toolbarItems(props: PreviewToolbarProps, translate: Translator): readon
   const devices: ToolbarItem = {
     id: 'devices',
     priority: 90,
-    content: <DeviceButtons activeDevice={props.activeDevice} onDevice={props.onDevice} />,
+    content: <DeviceButtons activeDevice={props.activeDevice} onDevice={props.onDevice} breakpoints={props.breakpoints} />,
     afterPress: 'close',
   };
   const sizing: readonly ToolbarItem[] = props.sizing
@@ -129,7 +157,7 @@ function toolbarItems(props: PreviewToolbarProps, translate: Translator): readon
 
 // Treat the original segmented switch as one overflow item so its shared surface
 // and sliding selection remain intact whenever the toolbar has room for it.
-function DeviceButtons({ activeDevice, onDevice }: Pick<PreviewToolbarProps, 'activeDevice' | 'onDevice'>) {
+export function DeviceButtons({ activeDevice, onDevice, breakpoints }: Pick<PreviewToolbarProps, 'activeDevice' | 'onDevice' | 'breakpoints'>) {
   const translate = useTranslate();
   const buttons = useRef(new Map<FixedDevice, HTMLButtonElement>());
   const [indicator, setIndicator] = useState<{ readonly left: number; readonly width: number } | undefined>();
@@ -140,27 +168,38 @@ function DeviceButtons({ activeDevice, onDevice }: Pick<PreviewToolbarProps, 'ac
   return (
     <div className="device-btns" role="group" aria-label={translate('preview.device.group')}>
       {indicator && <span className="device-indicator" style={indicator} />}
-      {DEVICES.map(({ key, Icon, titleKey }) => (
-        <button
-          key={key}
-          ref={(element) => {
-            if (element) {
-              buttons.current.set(key, element);
-            } else {
-              buttons.current.delete(key);
-            }
-          }}
-          className={activeDevice === key ? 'on' : ''}
-          data-tooltip={translate(titleKey)}
-          aria-label={translate(titleKey)}
-          aria-pressed={activeDevice === key}
-          onClick={() => onDevice(key)}
-        >
-          <Icon size={13} />
-        </button>
-      ))}
+      {DEVICES.map(({ key, Icon, titleKey }) => {
+        const title = deviceTitle(titleKey, deviceWidth(key, breakpoints), translate);
+        return (
+          <button
+            key={key}
+            ref={(element) => {
+              if (element) {
+                buttons.current.set(key, element);
+              } else {
+                buttons.current.delete(key);
+              }
+            }}
+            className={activeDevice === key ? 'on' : ''}
+            data-tooltip={title}
+            aria-label={title}
+            aria-pressed={activeDevice === key}
+            onClick={() => onDevice(key)}
+          >
+            <Icon size={13} />
+          </button>
+        );
+      })}
     </div>
   );
+}
+
+// Only the three fixed-width devices name a width; Desktop and the all-breakpoints canvas have none.
+function deviceTitle(titleKey: MessageKey, widthPx: number | undefined, translate: Translator): string {
+  if (widthPx === undefined) {
+    return translate(titleKey);
+  }
+  return translate(titleKey, { width: widthPx });
 }
 
 function inspectorItems(inspector: PreviewInspectorActions | undefined, translate: Translator): readonly ToolbarItem[] {

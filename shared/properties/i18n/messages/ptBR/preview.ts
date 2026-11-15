@@ -8,17 +8,19 @@ export const messages = {
   'preview.canvas.fitAll': 'Ajustar todos os breakpoints',
   'preview.canvas.frameLabel': '{device} · {width}px', // same
   'preview.canvas.frameTitle': 'Visualização: {device}',
+  'preview.canvas.laptop': 'Notebook',
   'preview.canvas.phone': 'Celular',
   'preview.canvas.tablet': 'Tablet', // same
   'preview.canvas.zoomIn': 'Aumentar zoom',
   'preview.canvas.zoomOut': 'Diminuir zoom',
   'preview.canvas.zoomReset': 'Zoom de 100%',
   'preview.crumbs.more': 'Mostrar mais {count}: {names}',
-  'preview.device.canvas': 'Canvas: todos os breakpoints — 4',
+  'preview.device.canvas': 'Canvas: todos os breakpoints — 5',
   'preview.device.desktop': 'Desktop — 1', // same
   'preview.device.group': 'Dispositivo de visualização',
-  'preview.device.phone': 'Celular (375px) — 3',
-  'preview.device.tablet': 'Tablet (768px) — 2', // same
+  'preview.device.laptop': 'Notebook ({width}px) — 2',
+  'preview.device.phone': 'Celular ({width}px) — 4',
+  'preview.device.tablet': 'Tablet ({width}px) — 3', // same
   'preview.frame.loading': 'Carregando página…',
   'preview.frame.previous': '{title} (página anterior)',
   'preview.guide.color': 'Cor',

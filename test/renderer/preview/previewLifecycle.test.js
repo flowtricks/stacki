@@ -302,7 +302,7 @@ test('wide preview keeps outline labels outside the scaled frame', async () => {
     const frame = document.querySelector('.frame-sized');
     const layer = document.querySelector('.preview-overlay-layer');
     assert.equal(frame.parentElement, layer.parentElement);
-    assert.match(frame.style.transform, /scale\(0\.48958/);
+    assert.match(frame.style.transform, /scale\(0\.4902/);
     assert.equal(layer.style.width, '376px');
     const send = (data) => act(() => window.dispatchEvent(new window.MessageEvent('message', { source: iframe.contentWindow, data })));
     await send({ type: 'avb:render', token: 'a'.repeat(64), stamps: [] });
@@ -314,9 +314,9 @@ test('wide preview keeps outline labels outside the scaled frame', async () => {
     });
     const outline = layer.querySelector('.node-outline.sel');
     assert.ok(outline);
-    assert.ok(Math.abs(Number.parseFloat(outline.style.left) - 48.958) < 0.01);
-    assert.ok(Math.abs(Number.parseFloat(outline.style.top) - 19.583) < 0.01);
-    assert.ok(Math.abs(Number.parseFloat(outline.style.width) - 146.875) < 0.01);
+    assert.ok(Math.abs(Number.parseFloat(outline.style.left) - 49.022) < 0.01);
+    assert.ok(Math.abs(Number.parseFloat(outline.style.top) - 19.609) < 0.01);
+    assert.ok(Math.abs(Number.parseFloat(outline.style.width) - 147.067) < 0.01);
     assert.ok(layer.contains(outline.querySelector('.node-outline-tag')));
     assert.equal(frame.contains(outline), false);
   } finally {
@@ -539,7 +539,7 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   await render({ device: 'canvas' });
   assert.equal(hasCanvas(), false);
   assert.equal(await pendingQuery, undefined);
-  assert.equal(document.querySelectorAll('iframe').length, 3);
+  assert.equal(document.querySelectorAll('iframe').length, 4, 'the all-breakpoints canvas draws Desktop, Laptop, Tablet and Phone');
   const canvasFrame = document.querySelector('iframe').contentWindow;
   const viewportMessages = [];
   canvasFrame.postMessage = (message) => viewportMessages.push(message);
@@ -561,9 +561,9 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   assert.equal(document.querySelector('.canvas-frame').style.height, '30000px');
   await send(canvasFrame, { type: 'avb:page-height', height: 600 });
   assert.equal(document.querySelector('.canvas-frame').style.height, '600px');
-  const phoneFrame = document.querySelectorAll('iframe')[2].contentWindow;
+  const phoneFrame = document.querySelectorAll('iframe')[3].contentWindow;
   await send(phoneFrame, { type: 'avb:page-height', height: 80000 });
-  assert.equal(document.querySelectorAll('.canvas-frame')[2].style.height, '30000px');
+  assert.equal(document.querySelectorAll('.canvas-frame')[3].style.height, '30000px');
   await render({ refreshKey: 1 });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
   await act(async () => {
@@ -581,7 +581,7 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   const replacementCalls = [];
   await render({ onDevice: (key) => replacementCalls.push(key) });
   await act(async () => {
-    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '3' }));
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '4' }));
     await settle();
   });
   assert.deepEqual(replacementCalls, ['phone']);
@@ -605,7 +605,11 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   await act(async () => root.unmount());
   assert.equal(document.body.style.cursor, 'crosshair');
   assert.equal(hasCanvas(), false);
-  assert.deepEqual([767, 768, 1023, 1024, NaN, 0].map(deviceForWidth), ['phone', 'tablet', 'tablet', 'desktop', undefined, undefined]);
+  const lumos = { laptop: 1023, tablet: 767, phone: 479 };
+  assert.deepEqual(
+    [479, 480, 767, 768, 1023, 1024, NaN, 0].map((px) => deviceForWidth(px, lumos)),
+    ['phone', 'tablet', 'tablet', 'laptop', 'laptop', 'desktop', undefined, undefined],
+  );
   dom.window.close();
 });
 
@@ -673,8 +677,8 @@ test('custom widths preserve layout size, scale ' + 'to fit, and reset with devi
     await act(() => document.querySelector('.rz-e').dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 800 })));
     await act(() => window.dispatchEvent(new window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 880 })));
     assert.equal(sized.style.width, '2400px', 'Dragging accounts for scale without capping at the panel');
-    await act(() => document.querySelector('[aria-label="Phone (375px) — 3"]').click());
-    assert.equal(sized.style.width, '375px');
+    await act(() => document.querySelector('[aria-label="Phone (479px) — 4"]').click());
+    assert.equal(sized.style.width, '479px');
     assert.match(sized.style.transform, /scale\(1\)/);
     await setWidth('7680');
     assert.equal(sized.style.width, '7680px');
@@ -875,20 +879,20 @@ test('canvas retains one loaded page per breakpoint until replacements load', as
   try {
     await render();
     const previous = [...document.querySelectorAll('iframe')];
-    assert.equal(previous.length, 3);
+    assert.equal(previous.length, 4);
     for (const frame of previous) {
       await load(frame);
     }
     props.route = '/about';
     await render();
-    assert.equal(document.querySelectorAll('iframe').length, 6);
+    assert.equal(document.querySelectorAll('iframe').length, 8);
     assert.ok(previous.every((frame) => frame.isConnected));
     const replacements = [...document.querySelectorAll('iframe[aria-hidden="false"]')];
     assert.ok(replacements.every((frame) => frame.style.visibility === 'hidden'));
     for (const frame of replacements) {
       await load(frame);
     }
-    assert.equal(document.querySelectorAll('iframe').length, 3);
+    assert.equal(document.querySelectorAll('iframe').length, 4);
     assert.ok(previous.every((frame) => !frame.isConnected));
     assert.ok(document.querySelector('[role="status"]') === null);
   } finally {

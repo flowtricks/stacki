@@ -3,6 +3,7 @@
 import type { CatalogOf } from '../../../../core/i18n/catalog';
 
 export const messages = {
+  'roles.feature.settingsBreakpoints': 'Breakpoints',
   'roles.group.panels': 'Panels',
   'roles.group.pages': 'Pages',
   'roles.group.components': 'Components',
