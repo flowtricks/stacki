@@ -1,0 +1,12 @@
+---
+// A component whose <style is:global> block is the only rule for its element: the panel edits that
+// block from the page, so the edit cycle's component-block source writes this file.
+---
+<p class="soak-gcard" id="soak-gcard">A component paragraph styled by its global block.</p>
+
+<style is:global>
+  .soak-gcard {
+    color: rgb(150, 60, 20);
+    font-size: 1.125rem;
+  }
+</style>

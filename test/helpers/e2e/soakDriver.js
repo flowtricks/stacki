@@ -30,6 +30,12 @@ const STILL_POLLS_NEEDED = 3;
 const MENU_ITEMS_MAX = 200;
 const FILM_FRAMES_MAX = 240;
 const EVALUATE_MS_MAX = 20000;
+// The grid a canvas press searches for a point the element itself receives. The soak page's
+// type overflows its boxes (Lumos headings over the paragraphs below them), so the first point
+// of an element can belong to its neighbour, and the press then selected that neighbour or the
+// container: SP-14's "external" cycle edited the wrong element. Bounded: 6 x 4 probes.
+const HIT_GRID_COLUMNS = 7;
+const HIT_GRID_ROWS = 5;
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -91,7 +97,7 @@ function createDriver(window, project) {
       `(() => { const f = [...document.querySelectorAll('iframe')].find((e) => e.getClientRects().length > 0); if (!f) return undefined; const r = f.getBoundingClientRect(); return { x: r.left + f.clientLeft, y: r.top + f.clientTop, scale: r.width / (f.clientWidth || r.width) }; })()`,
     );
     const inner = await canvasEvaluate(
-      `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return undefined; e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); const r = e.getBoundingClientRect(); return { x: r.left + Math.min(r.width / 2, 40), y: r.top + Math.min(r.height / 2, 20) }; })()`,
+      `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return undefined; e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); const r = e.getBoundingClientRect(); for (let row = 1; row < ${HIT_GRID_ROWS}; row += 1) { for (let column = 1; column < ${HIT_GRID_COLUMNS}; column += 1) { const x = r.left + (r.width * column) / ${HIT_GRID_COLUMNS}; const y = r.top + (r.height * row) / ${HIT_GRID_ROWS}; if (e.contains(document.elementFromPoint(x, y))) return { x, y }; } } return { x: r.left + Math.min(r.width / 2, 40), y: r.top + Math.min(r.height / 2, 20) }; })()`,
     );
     if (frameBox === undefined || inner === undefined) {
       throw new Error(`soakDriver: no canvas element ${selector}`);

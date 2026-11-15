@@ -1,0 +1,6 @@
+/* An external stylesheet the soak page imports: the only rule for .soak-ext, so the panel's edits
+   to that element land in this file (the edit cycle's external-CSS source). */
+.soak-ext {
+  color: rgb(20, 90, 160);
+  font-size: 1.125rem;
+}

@@ -28,6 +28,8 @@ const ELEMENTS = Object.freeze({
   nestedSpan: '#soak-nested-span',
   cardTitle: '#soak-card-title',
   cardText: '#soak-card-text',
+  external: '#soak-ext',
+  globalCard: '#soak-gcard',
   expressionOne: '#soak-expr-one',
   expressionTwo: '#soak-expr-two',
 });
@@ -624,12 +626,23 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     return controlValue(key === undefined ? undefined : snapshot.controls[key]);
   }
 
-  // (iv) set -> clear -> undo -> redo, with field, label, canvas and saved file compared.
-  async function editCycle({ element, family, value, file, selector, clearBy = 'menu' }) {
+  // (iv) set -> clear -> undo -> redo, with field, label, canvas and saved file compared, for
+  // one style source: the rule `selector` in `file` (a page or component <style> block, or an
+  // external stylesheet), or with `pick` pressed first (the inline chip) whatever `declaredIn`
+  // reads from the file instead.
+  async function editCycle({ element, family, value, file, selector, clearBy = 'menu', pick, declaredIn }) {
     scenario = 'edit-cycle';
     await closeEverything();
     await select(element, 'canvas');
     await driver.settle();
+    if (pick !== undefined) {
+      const picked = await pressPanel(pick, `pick the source for ${family.id}`);
+      if (!picked) {
+        return;
+      }
+      await driver.settle();
+    }
+    const declared = (source) => (declaredIn === undefined ? ruleDeclares(source, selector, family.property) : declaredIn(source));
     const expectations = [];
     // One reading of the four places the value shows: the field, its label's colour, the
     // canvas's computed style and the rule in the saved file.
@@ -639,7 +652,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
         field: controlValue(snapshot.controls?.[family.key]),
         label: snapshot.labels?.[family.label],
         style: await canvasStyle(family.property),
-        declared: ruleDeclares(driver.readProjectFile(file), selector, family.property),
+        declared: declared(driver.readProjectFile(file)),
       };
     };
     const base = await (async () => {
@@ -689,7 +702,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
       const wrong = (candidate) => {
         const problems = [];
         if (candidate.declared !== declares) {
-          problems.push(`file ${declares ? 'lacks' : 'still has'} ${family.property} in ${selector}`);
+          problems.push(`${file} ${declares ? 'lacks' : 'still has'} ${family.property} in ${selector}`);
         }
         if (want === undefined) {
           if (candidate.style === base.style) {

@@ -6,6 +6,8 @@ import Heading from "@/components/typography/Heading.astro";
 import Eyebrow from "@/components/typography/Eyebrow.astro";
 import Paragraph from "@/components/typography/Paragraph.astro";
 import SoakCard from "@/components/SoakCard.astro";
+import SoakGlobalCard from "@/components/SoakGlobalCard.astro";
+import "@/styles/soak.css";
 
 // Classes computed at render time: the panel cannot read them from the source, only from the
 // canvas, so its source-only pass for these elements lacks every class rule.
@@ -25,6 +27,8 @@ const expressionClasses = (suffix: string) => ["soak-expr", `soak-expr_${suffix}
       <div id="soak-expr-two" class={expressionClasses("two")}>Classes from an expression, two</div>
       <p id="soak-plain" class="soak-plain">A plain paragraph with no variables at all.</p>
       <p id="soak-inline" class="soak-plain" style="color: rgb(200, 40, 40); letter-spacing: 0.05em;">A paragraph with inline styles.</p>
+      <p id="soak-ext" class="soak-ext">A paragraph styled only by an external stylesheet.</p>
+      <SoakGlobalCard />
       <div id="soak-nested" class="soak-nest">
         <span id="soak-nested-span" class="soak-nest_label">Nested label</span>
       </div>

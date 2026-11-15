@@ -141,20 +141,21 @@ const KNOWN_FAILURES = Object.freeze([
     cause: 'no scroll anchoring across a switch: sections above Typography (Layout, Flex child, header chips) differ per element',
   },
   {
-    id: 'SP-13',
-    title: 'spacing box values move by about 1.5 px when its editor opens or a switch lands',
-    invariant: 'layout-shift',
-    pattern: /moved/,
-    cause: 'src/features/style/SpacingSection.tsx / SpacingBox.tsx: label boxes resize with their text',
+    id: 'SP-14',
+    title:
+      "a component's <style is:global> rule is not offered for its element on the page: #soak-gcard shows no .soak-gcard chip, and a set reaches the canvas through another selector while SoakGlobalCard.astro is never written",
+    invariant: 'state-disagrees',
+    pattern: /on globalCard after/,
+    cause:
+      'unconfirmed: the chips for an element inside a component instance come from the classes the canvas reports (renderedClasses / instanceClasses); the class rule in the component file never becomes the pick',
   },
   {
-    id: 'SP-06',
+    id: 'SP-15',
     title:
-      'the panel is one write behind its own edits to a page <style is:global>: after a set the label stays unset (so Clear cannot reach it), after undo and redo the field and label show the previous step',
+      'inline style attribute: after set, clear and undo, redo leaves the attribute declaring the value (the clear is not redone); the set can reach the canvas late',
     invariant: 'state-disagrees',
-    pattern: /after (clear|undo|redo)/,
-    cause:
-      "the resolved model re-reads the page's style block one edit late (useStyleFiles readAstroStyleFiles for the open page vs the page:edit write); canvas and file are right, the panel is not",
+    pattern: /on inline after (set|redo)/,
+    cause: 'unconfirmed: the inline path writes through setProp(style) (useInlineTarget), whose history step for a clear may coalesce with the set it undoes',
   },
 ]);
 
@@ -247,6 +248,37 @@ async function orchestrate() {
   }
 }
 
+// The opening tag of the soak page's inline-styled paragraph, and whether its style attribute
+// declares `property`.
+function inlineStyleDeclares(source, property) {
+  const tag = /<p id="soak-inline"[^>]*>/.exec(source);
+  if (tag === null) {
+    return false;
+  }
+  const style = /style="([^"]*)"/.exec(tag[0]);
+  return style !== null && new RegExp(`(^|;)\\s*${property}\\s*:`).test(style[1]);
+}
+
+// One set -> clear -> undo -> redo cycle for each kind of place a style lives: the page's own
+// <style is:global> block, a component's <style is:global> block, an external stylesheet, and
+// the element's style attribute (picked through the inline chip). Each element has exactly one
+// rule (or attribute) the edit can go to, so the file it must land in is known.
+async function editEverySource(runner, family) {
+  const textIndent = family('text-indent');
+  await runner.editCycle({ element: 'plain', family: textIndent, value: '12px', file: 'src/pages/index.astro', selector: '.soak-plain' });
+  await runner.editCycle({ element: 'globalCard', family: textIndent, value: '12px', file: 'src/components/SoakGlobalCard.astro', selector: '.soak-gcard' });
+  await runner.editCycle({ element: 'external', family: textIndent, value: '12px', file: 'src/styles/soak.css', selector: '.soak-ext' });
+  await runner.editCycle({
+    element: 'inline',
+    family: textIndent,
+    value: '12px',
+    file: 'src/pages/index.astro',
+    selector: '#soak-inline[style]',
+    pick: `document.querySelector('button.embed-editor_selector-chip.is-inline:not([aria-pressed="true"])') || undefined`,
+    declaredIn: (source) => inlineStyleDeclares(source, 'text-indent'),
+  });
+}
+
 // The Electron side: run the plan against the window and write the report.
 async function runInElectron({ window, project, options }) {
   const electron = require('electron');
@@ -324,7 +356,7 @@ async function runInElectron({ window, project, options }) {
         await runner.hoverPreview({ element: 'headingOne', families: [family('weight')], exitPaths: ['escape'] });
       });
       await guarded('edit-cycle', async () => {
-        await runner.editCycle({ element: 'plain', family: family('text-indent'), value: '12px', file: 'src/pages/index.astro', selector: '.soak-plain' });
+        await editEverySource(runner, family);
       });
       await guarded('random-walk', async () => {
         await runner.randomWalk({ steps: options.walkSteps, families: typeFamilies });
@@ -369,7 +401,7 @@ async function runInElectron({ window, project, options }) {
         });
       });
       await guarded('edit-cycle', async () => {
-        await runner.editCycle({ element: 'plain', family: family('text-indent'), value: '12px', file: 'src/pages/index.astro', selector: '.soak-plain' });
+        await editEverySource(runner, family);
         await runner.editCycle({
           element: 'nestedSpan',
           family: family('text-indent'),
