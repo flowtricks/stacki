@@ -25,6 +25,7 @@ import {
 import { parseRecord, parseRecordList, readInteger, readList, readOptionalString, readRecord, readString } from './releaseJson.mts';
 import { ok, type Result } from './releaseResult.mts';
 import { latestReleasedVersion, validatePatchBump } from './releaseVersion.mts';
+import { RELEASE_BUMP_PATHS } from './versionManifest.mts';
 
 export const STATUS_LIMITS = {
   /** Commits walked back from the SHA looking for a green check.yml; a release is a few commits. */
@@ -37,18 +38,22 @@ export const STATUS_LIMITS = {
 export const SOURCE_REPOSITORY = 'flowtricks/stacki';
 
 // check.yml's jobs by name. A rename that silently dropped a platform must not read as green.
-export const REQUIRED_CHECK_JOBS = ['policy', 'test (ubuntu-latest)', 'test (macos-latest)', 'test (windows-latest)'] as const;
+export const CHECK_OPERATING_SYSTEMS = ['ubuntu-latest', 'macos-latest', 'windows-latest'] as const;
+export const REQUIRED_CHECK_JOBS = ['policy', ...CHECK_OPERATING_SYSTEMS.map((os) => `test (${os})` as const)] as const;
 
-// The files a release bump rewrites (see `git show --stat` of any chore(release) commit).
-export const VERSION_ONLY_FILES = [
-  'package.json',
-  'package-lock.json',
-  'packages/create-stacki/package.json',
-  'studio/package.json',
-  'studio/package-lock.json',
-  'studio/src/shared/release.json',
-  'docs/releases.md',
-] as const;
+// check.yml splits each platform's suites into this many shards (`npm test -- --shard=k/n`), and
+// one `test (<os>)` job per platform aggregates its shards. A run that has shard jobs must have all
+// of them green: the aggregate already checks this (checkShards.mts), and checking it here too
+// means a broken aggregate cannot turn a red shard into a green release. The count is pinned
+// against check.yml's matrix by test/scripts/release/releaseWorkflows.test.ts.
+export const CHECK_SHARD_COUNT = 4;
+
+export function shardJobName(os: string, shard: number): string {
+  return `test shard (${os}, ${shard}/${CHECK_SHARD_COUNT})`;
+}
+
+// The files a release bump rewrites, from the one manifest prepare.mts writes them from.
+export const VERSION_ONLY_FILES: readonly string[] = RELEASE_BUMP_PATHS;
 
 export interface CheckRun {
   readonly id: number;
@@ -187,8 +192,7 @@ export function selectCheckRuns(
 }
 
 export function versionOnlyDelta(paths: readonly string[]): { readonly allowed: boolean; readonly offending: readonly string[] } {
-  const allowedFiles: readonly string[] = VERSION_ONLY_FILES;
-  const offending = paths.filter((path) => !allowedFiles.includes(path));
+  const offending = paths.filter((path) => !VERSION_ONLY_FILES.includes(path));
   return { allowed: offending.length === 0, offending };
 }
 
@@ -203,6 +207,29 @@ export function checkJobProblems(jobs: readonly CheckJob[]): readonly string[] {
       problems.push(`${name}: ${job.conclusion ?? job.status}`);
     }
   }
+  problems.push(...shardProblems(jobs));
+  return problems;
+}
+
+// Runs from before sharding have no shard jobs, and their `test (<os>)` job ran every suite.
+function shardProblems(jobs: readonly CheckJob[]): readonly string[] {
+  const problems: string[] = [];
+  for (const os of CHECK_OPERATING_SYSTEMS) {
+    const shards = jobs.filter((job) => job.name.startsWith(`test shard (${os}, `));
+    if (shards.length === 0) {
+      continue;
+    }
+    for (let shard = 1; shard <= CHECK_SHARD_COUNT; shard += 1) {
+      const job = shards.find((candidate) => candidate.name === shardJobName(os, shard));
+      if (job === undefined) {
+        problems.push(`${shardJobName(os, shard)}: missing from the run`);
+      } else if (job.conclusion !== 'success') {
+        problems.push(`${job.name}: ${job.conclusion ?? job.status}`);
+      }
+    }
+    const unexpected = shards.filter((job) => !Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => shardJobName(os, index + 1)).includes(job.name));
+    problems.push(...unexpected.map((job) => `${job.name}: not one of the ${CHECK_SHARD_COUNT} shards`));
+  }
   return problems;
 }
 
@@ -214,6 +241,18 @@ export function assessReadiness(facts: ReleaseFacts): Verdict {
   if (facts.tagOnOrigin) {
     return { ready: false, text: `tag v${facts.version} already exists on origin. Never move it: fix forward in the next patch.` };
   }
+  return assessCode(facts);
+}
+
+/** The facts about the code alone: what the version and tag rules leave to decide. */
+export type CodeFacts = Pick<ReleaseFacts, 'modifiedTrackedPaths' | 'exact' | 'base' | 'unpushedCount'>;
+
+/**
+ * Whether check.yml proved this code: a clean tree, and Check green on the exact SHA or on an
+ * ancestor with only version files changed since. The release controller's preflight applies this
+ * before the bump exists, when the version rule has nothing to say yet.
+ */
+export function assessCode(facts: CodeFacts): Verdict {
   if (facts.modifiedTrackedPaths.length > 0) {
     const shown = facts.modifiedTrackedPaths.slice(0, STATUS_LIMITS.pathsShownMax).join(', ');
     return { ready: false, text: `uncommitted changes to tracked files (${shown}); the pre-push gate builds the working tree, not the commit.` };
@@ -242,7 +281,7 @@ function exactRunProblem(exact: RunEvidence | undefined): string | undefined {
   return problems.length === 0 ? undefined : `check.yml succeeded but required jobs are not green (${problems.join('; ')}): ${exact.run.url}`;
 }
 
-function baseVerdict(facts: ReleaseFacts): Verdict {
+function baseVerdict(facts: CodeFacts): Verdict {
   if (facts.base === undefined) {
     return {
       ready: false,
@@ -312,6 +351,40 @@ function readRunEvidence(runner: CommandRunner, run: CheckRun): Result<RunEviden
   }
   const jobs = parseCheckJobs(jobsText.value);
   return jobs.ok ? ok({ run, jobs: jobs.value }) : jobs;
+}
+
+/**
+ * The newest check.yml run for exactly this commit, from any event, with its jobs; undefined when
+ * there is none. The release plan and the pre-push hook ask only this narrow question: a lookup by
+ * exact SHA cannot be satisfied by a different commit.
+ */
+export function readExactCheckRun(sha: string, runner: CommandRunner): Result<RunEvidence | undefined> {
+  assert(/^[0-9a-f]{40}$/.test(sha), 'readExactCheckRun: a full SHA');
+  const runsText = runner({
+    command: 'gh',
+    argumentsList: ['run', 'list', '--repo', SOURCE_REPOSITORY, '--workflow', 'check.yml', '--commit', sha, '--limit', '20', '--json', 'databaseId,headSha,status,conclusion,url'],
+  });
+  if (!runsText.ok) {
+    return runsText;
+  }
+  const runs = parseCheckRuns(runsText.value);
+  if (!runs.ok) {
+    return runs;
+  }
+  // Newest first, so the first match is the latest attempt on this commit.
+  const run = runs.value.find((candidate) => candidate.headSha === sha);
+  return run === undefined ? ok(undefined) : readRunEvidence(runner, run);
+}
+
+/** Why this evidence is not a fully green Check on its SHA, or undefined when it is. */
+export function exactCheckProblem(evidence: RunEvidence | undefined): string | undefined {
+  if (evidence === undefined) {
+    return 'no check.yml run for this exact SHA';
+  }
+  if (evidence.run.status !== 'completed') {
+    return `check.yml is still ${evidence.run.status}: ${evidence.run.url}`;
+  }
+  return exactRunProblem(evidence);
 }
 
 /** Everything the verdict needs, read once. A failed read is a failure value, never a guess. */

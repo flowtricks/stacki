@@ -90,6 +90,45 @@ export function validatePatchBump(previous: string, next: string): Result<string
   return ok(next);
 }
 
+/**
+ * Which bumps a release may make. `patch-only` is the rule. `minor-or-major` exists only for the
+ * maintainer's explicit, typed request (the Release workflow's `allow_minor` input or
+ * `--allow-minor`), and even then the version must be the very next patch, minor or major: a
+ * skipped number or a downgrade is refused in both policies.
+ */
+export type BumpPolicy = 'patch-only' | 'minor-or-major';
+
+export function validateBump(previous: string, next: string, policy: BumpPolicy): Result<string> {
+  const patch = validatePatchBump(previous, next);
+  switch (policy) {
+    case 'patch-only':
+      return patch;
+    case 'minor-or-major': {
+      if (patch.ok) {
+        return patch;
+      }
+      const before = parseVersion(previous);
+      const after = parseVersion(next);
+      if (!before.ok) {
+        return before;
+      }
+      if (!after.ok) {
+        return after;
+      }
+      const nextMinor = formatVersion({ major: before.value.major, minor: before.value.minor + 1, patch: 0 });
+      const nextMajor = formatVersion({ major: before.value.major + 1, minor: 0, patch: 0 });
+      if (next === nextMinor || next === nextMajor) {
+        return ok(next);
+      }
+      return fail('bump-not-next', `${previous} -> ${next}: with --allow-minor the version must be ${nextMinor} or ${nextMajor} (or the next patch).`);
+    }
+    default: {
+      const exhaustive: never = policy;
+      return exhaustive;
+    }
+  }
+}
+
 /** The highest vMAJOR.MINOR.PATCH among tag names; other tags are ignored. */
 export function latestReleasedVersion(tagNames: readonly string[]): Result<string> {
   if (tagNames.length > VERSION_LIMITS.tagCountMax) {
