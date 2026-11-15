@@ -13,7 +13,7 @@ import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar } from './PreviewToolbar';
-import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
+import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { usePreviewRuntime, type CanvasSelectInfo, type JudgeCanvasEvent, type PreviewRuntimeProps } from './previewRuntime';
 import type { CanvasNoticeEvent } from './canvasClickRetry';
@@ -105,7 +105,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   });
   const source = usePreviewSource(url, runtime.post);
   const dimensions = usePreviewDimensions();
-  const { widths: breakpoints } = useProjectBreakpoints(props.projectPath);
+  const { resolved: breakpoints } = useProjectBreakpoints(props.projectPath);
   const sizing = usePreviewSizing(props.device, dimensions, breakpoints, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
@@ -172,7 +172,7 @@ function PreviewContent({
   shownGuide,
   breakpoints,
 }: {
-  readonly breakpoints: BreakpointWidths;
+  readonly breakpoints: readonly ResolvedBreakpoint[];
   readonly props: PreviewPaneProps;
   readonly url: string | undefined;
   readonly runtime: Runtime;

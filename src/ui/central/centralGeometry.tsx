@@ -4410,6 +4410,33 @@ export const slot = {
   ),
 };
 
+export const smartwatch1 = {
+  name: 'smartwatch1',
+  // Figma variant 5595:55784 (file ZzsjnrZ9Xq5MxLHjuvrYLm, central-icon-system-v1.35; component set 5595:55679).
+  compact: (
+    <>
+      <path
+        d="M12 8.75V12L13.5 13.5M6.75 19.25H17.25C18.3546 19.25 19.25 18.3546 19.25 17.25V6.75C19.25 5.64543 18.3546 4.75 17.25 4.75H6.75C5.64543 4.75 4.75 5.64543 4.75 6.75V17.25C4.75 18.3546 5.64543 19.25 6.75 19.25ZM7 4.75L7.77208 2.43377C7.90819 2.02543 8.29033 1.75 8.72076 1.75H15.2792C15.7097 1.75 16.0918 2.02543 16.2279 2.43377L17 4.75H7ZM7 19.25L7.77208 21.5662C7.90819 21.9746 8.29033 22.25 8.72076 22.25H15.2792C15.7097 22.25 16.0918 21.9746 16.2279 21.5662L17 19.25H7Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  // Figma variant 5595:55849.
+  standard: (
+    <>
+      <path
+        d="M12 8.5V12L13.75 13.75M6.5 19.5H17.5C18.6046 19.5 19.5 18.6046 19.5 17.5V6.5C19.5 5.39543 18.6046 4.5 17.5 4.5H6.5C5.39543 4.5 4.5 5.39543 4.5 6.5V17.5C4.5 18.6046 5.39543 19.5 6.5 19.5ZM7 4.5L7.77208 2.18377C7.90819 1.77543 8.29033 1.5 8.72076 1.5H15.2792C15.7097 1.5 16.0918 1.77543 16.2279 2.18377L17 4.5H7ZM7 19.5L7.77208 21.8162C7.90819 22.2246 8.29033 22.5 8.72076 22.5H15.2792C15.7097 22.5 16.0918 22.2246 16.2279 21.8162L17 19.5H7Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+};
+
 export const sort = {
   name: 'sort',
   // Figma variant 11278:25609.
@@ -4613,6 +4640,35 @@ export const strike = {
         strokeLinecap="round"
       />
       <path d="M3.5 12L20.5 12" stroke="currentColor" strokeLinecap="round" />
+    </>
+  ),
+};
+
+export const studioDisplayXdr = {
+  name: 'studioDisplayXdr',
+  // Figma variant 14825:28187 (file ZzsjnrZ9Xq5MxLHjuvrYLm, central-icon-system-v1.35; component set 14825:28138).
+  compact: (
+    <>
+      <path
+        d="M19.25 3.75H4.75C3.64543 3.75 2.75 4.64543 2.75 5.75V13.25C2.75 14.3546 3.64543 15.25 4.75 15.25H19.25C20.3546 15.25 21.25 14.3546 21.25 13.25V5.75C21.25 4.64543 20.3546 3.75 19.25 3.75Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M9.25 15.75V20.25H14.75V15.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // Figma variant 14825:28217.
+  standard: (
+    <>
+      <path
+        d="M19.5 3.5H4.5C3.39543 3.5 2.5 4.39543 2.5 5.5V13.5C2.5 14.6046 3.39543 15.5 4.5 15.5H19.5C20.6046 15.5 21.5 14.6046 21.5 13.5V5.5C21.5 4.39543 20.6046 3.5 19.5 3.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M9.5 15.5V20.5H14.5V15.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
 };
@@ -4873,6 +4929,46 @@ export const target = {
       <path d="M22.5 12H15.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M12 15.5V22.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M8.5 12H1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
+export const television = {
+  name: 'television',
+  // Figma variant 5592:51690 (file ZzsjnrZ9Xq5MxLHjuvrYLm, central-icon-system-v1.35; component set 5592:51625).
+  compact: (
+    <>
+      <path
+        d="M2.75 5.75C2.75 4.64543 3.64543 3.75 4.75 3.75H19.25C20.3546 3.75 21.25 4.64543 21.25 5.75V14.25C21.25 15.3546 20.3546 16.25 19.25 16.25H4.75C3.64543 16.25 2.75 15.3546 2.75 14.25V5.75Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18 20.25C16.114 19.6013 14.0967 19.25 12 19.25C9.90334 19.25 7.88601 19.6013 6 20.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  // Figma variant 5592:51730.
+  standard: (
+    <>
+      <path
+        d="M2.5 5.5C2.5 4.39543 3.39543 3.5 4.5 3.5H19.5C20.6046 3.5 21.5 4.39543 21.5 5.5V15.5C21.5 16.6046 20.6046 17.5 19.5 17.5H4.5C3.39543 17.5 2.5 16.6046 2.5 15.5V5.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18 20.5C16.114 19.8513 14.0967 19.5 12 19.5C9.90334 19.5 7.88601 19.8513 6 20.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </>
   ),
 };

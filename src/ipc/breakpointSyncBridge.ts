@@ -11,7 +11,7 @@ import {
   type BreakpointSyncScanAnswer,
   type SyncRestoreDirection,
 } from '../../shared/properties/breakpointSyncPlan';
-import type { BreakpointKey, BreakpointSetting } from '../../shared/properties/projectBreakpoints';
+import type { Breakpoint } from '../../shared/properties/projectBreakpoints';
 
 const UNAVAILABLE = 'Syncing media queries is only available in the desktop app.';
 
@@ -22,12 +22,17 @@ export function breakpointSyncAvailable(): boolean {
 
 export async function scanBreakpointSyncRequest(
   projectPath: string,
-  request: { readonly key: BreakpointKey; readonly old: BreakpointSetting; readonly next: BreakpointSetting },
+  request: { readonly key: string; readonly old: Pick<Breakpoint, 'direction' | 'setting'>; readonly next: Pick<Breakpoint, 'direction' | 'setting'> },
 ): Promise<BreakpointSyncScanAnswer> {
   if (!breakpointSyncAvailable()) {
     return { ok: false, error: UNAVAILABLE };
   }
-  const payload = parseIpcPayload('breakpointSync:scan', { projectPath, ...request });
+  const payload = parseIpcPayload('breakpointSync:scan', {
+    projectPath,
+    id: request.key,
+    old: { direction: request.old.direction, ...request.old.setting },
+    next: { direction: request.next.direction, ...request.next.setting },
+  });
   return parseSyncScanAnswer(await window.avb.scanBreakpointSync(payload));
 }
 

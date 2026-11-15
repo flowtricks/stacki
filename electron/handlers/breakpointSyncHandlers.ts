@@ -17,7 +17,14 @@ export function registerBreakpointSyncHandlers({ ipcMain, send }: Pick<MainHost,
       return { ok: false, error: next.error.message };
     }
     try {
-      return { ok: true, scan: await scanBreakpointSync(request.projectPath, { key: request.key, old: old.value, next: next.value }) };
+      return {
+        ok: true,
+        scan: await scanBreakpointSync(request.projectPath, {
+          key: request.id,
+          old: { direction: request.old.direction, setting: old.value },
+          next: next.value,
+        }),
+      };
     } catch (error: unknown) {
       return { ok: false, error: errorMessage(error) };
     }

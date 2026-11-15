@@ -19,6 +19,7 @@ import { readLengthUnit } from './lengthUnitMarkers';
 import { readProjectMetadata, writeProjectMetadata } from './projectMetadata';
 import {
   EMPTY_SYNC_RECORD,
+  entryOf,
   canonicalRefs,
   parseBreakpointSyncSource,
   recordsEqual,
@@ -46,7 +47,7 @@ import {
   type TextReplacement,
   type WidthBound,
 } from '../../shared/properties/mediaBreakpointSync';
-import { BREAKPOINT_LIMITS, boundaryPx, checkedSetting, type BreakpointKey, type BreakpointSetting } from '../../shared/properties/projectBreakpoints';
+import { BREAKPOINT_LIMITS, boundaryPx, checkedSetting, type Breakpoint, type BreakpointSetting } from '../../shared/properties/projectBreakpoints';
 
 export const SYNC_SCAN_LIMITS = {
   /** Candidate files looked at in one scan. */
@@ -80,12 +81,12 @@ interface IgnoreRules {
 /** Scans the project for the bounds that equal `old`. Writes nothing. */
 export async function scanBreakpointSync(
   projectPath: string,
-  request: { readonly key: BreakpointKey; readonly old: BreakpointSetting; readonly next: BreakpointSetting },
+  request: { readonly key: string; readonly old: Pick<Breakpoint, 'direction' | 'setting'>; readonly next: BreakpointSetting },
 ): Promise<BreakpointSyncScan> {
   assert(path.isAbsolute(projectPath), 'scanBreakpointSync: the project path is absolute');
   const lumos = readLengthUnit(projectPath).kind === 'rem';
   const record = readRecord(projectPath);
-  const excluded = new Set(record.record[request.key].excluded.map((ref) => `${ref.file}\0${ref.locator}`));
+  const excluded = new Set(entryOf(record.record, request.key).excluded.map((ref) => `${ref.file}\0${ref.locator}`));
   const listing = listCandidates(projectPath);
   const files: SyncFile[] = [];
   let skipped = 0;
@@ -131,7 +132,7 @@ export function occurrencesIn(
   rel: string,
   text: string,
   request: {
-    readonly old: BreakpointSetting;
+    readonly old: Pick<Breakpoint, 'direction' | 'setting'>;
     readonly next: BreakpointSetting;
     readonly lumos: boolean;
     readonly excluded: ReadonlySet<string>;
@@ -336,7 +337,7 @@ function saveRecord(
     // A file that cannot be read is never written over.
     return undefined;
   }
-  const entry = parsed.value[request.key];
+  const entry = entryOf(parsed.value, request.key);
   const writtenFiles = new Set(written.map((file) => file.rel));
   const applied: SyncRef[] = request.files.flatMap((file) =>
     writtenFiles.has(file.rel) ? file.edits.map((edit) => ({ file: file.rel, locator: edit.locator })) : [],

@@ -2,7 +2,7 @@
 // answers a `BreakpointSyncScan`; the dialog turns the checked places into a `BreakpointSyncApply`; main checks every file is
 // still what the scan read before it writes one byte (electron/project/breakpointSync.ts).
 import { boolean, count, list, object, optional, pathText, text, type Parsed } from '../core/boundary';
-import { BREAKPOINT_KEYS, type BreakpointKey } from './projectBreakpoints';
+import { BREAKPOINT_LIMITS } from './projectBreakpoints';
 import { MEDIA_SYNC_LIMITS } from './mediaBreakpointSync';
 import { SYNC_RECORD_LIMITS, isProjectPath } from './breakpointSyncRecord';
 
@@ -20,8 +20,8 @@ export const SYNC_PLAN_LIMITS = {
 /** What kind of file a place is in, for the pill. */
 export type SyncFileKind = 'css' | 'style' | 'page' | 'component';
 
-/** Why a place is listed: `exact` is the old boundary, `inclusive` the old boundary less 1px in the form that includes its edge. */
-export type SyncReason = 'exact' | 'inclusive';
+/** Why a place is listed: `exact` is the old boundary, `inclusive` the old boundary less 1px in the form that includes its edge, `exclusive` an `up` breakpoint written `width > X`. */
+export type SyncReason = 'exact' | 'inclusive' | 'exclusive';
 
 export interface SyncOccurrence {
   readonly locator: string;
@@ -50,7 +50,8 @@ export interface SyncFile {
 }
 
 export interface BreakpointSyncScan {
-  readonly key: BreakpointKey;
+  /** The breakpoint's id. */
+  readonly key: string;
   readonly files: readonly SyncFile[];
   /** The project writes rem only: replacements are rem. */
   readonly lumos: boolean;
@@ -62,13 +63,20 @@ export interface BreakpointSyncScan {
   readonly recordProblem: string | undefined;
 }
 
-const key = (input: unknown): BreakpointKey => {
+const key = (input: unknown): string => {
   const value = text(input);
-  const found = BREAKPOINT_KEYS.find((candidate) => candidate === value);
-  if (found === undefined) {
+  if (value.length === 0 || value.length > BREAKPOINT_LIMITS.idCharsMax || !/^[a-z][a-z0-9-]*$/.test(value)) {
     throw new Error('Unknown breakpoint');
   }
-  return found;
+  return value;
+};
+
+const direction = (input: unknown): 'down' | 'up' => {
+  const value = text(input);
+  if (value !== 'down' && value !== 'up') {
+    throw new Error('Expected down or up');
+  }
+  return value;
 };
 
 const relative = (input: unknown): string => {
@@ -111,9 +119,9 @@ export type BreakpointSyncApply = Parsed<typeof parseSyncApply>;
 /** The request that scans: which breakpoint, from what it was, to what it is now. */
 export const parseSyncScan = object({
   projectPath: pathText,
-  key,
-  old: object({ value: count, unit: text }),
-  next: object({ value: count, unit: text }),
+  id: key,
+  old: object({ direction, value: count, unit: text }),
+  next: object({ direction, value: count, unit: text }),
 });
 export type BreakpointSyncScanRequest = Parsed<typeof parseSyncScan>;
 
@@ -153,7 +161,7 @@ const kindOf = (input: unknown): SyncFileKind => {
 };
 const reasonOf = (input: unknown): SyncReason => {
   const value = text(input);
-  if (value === 'exact' || value === 'inclusive') {
+  if (value === 'exact' || value === 'inclusive' || value === 'exclusive') {
     return value;
   }
   throw new Error('Unknown reason');

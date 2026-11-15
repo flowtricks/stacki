@@ -16,7 +16,7 @@
 // are equal bytes, and an unchanged record is not written.
 import { assert } from '../core/assert';
 import { err, ok, type AppError, type Result } from '../core/result';
-import { BREAKPOINT_KEYS, type BreakpointKey } from './projectBreakpoints';
+import { BREAKPOINT_LIMITS } from './projectBreakpoints';
 
 export const BREAKPOINT_SYNC_FILE = '.stacki/breakpoint-sync.json';
 
@@ -24,6 +24,8 @@ export const SYNC_RECORD_LIMITS = {
   fileBytesMax: 512 * 1024,
   /** Excluded or linked places kept for one breakpoint. */
   refsMax: 2_000,
+  /** Breakpoints with a remembered entry: the most a list can hold, with room for ones removed since. */
+  breakpointsMax: 32,
   /** Characters in a project-relative path. */
   fileCharsMax: 512,
   /** Characters in a locator (`2d535645:0`). */
@@ -42,11 +44,17 @@ export interface BreakpointSyncEntry {
   readonly appliedAt: string | undefined;
 }
 
-export type BreakpointSyncRecord = Readonly<Record<BreakpointKey, BreakpointSyncEntry>>;
+/** What each breakpoint's sync has been told, by the breakpoint's id (`laptop`, `bp-1`); a breakpoint absent here has nothing remembered. */
+export type BreakpointSyncRecord = Readonly<Record<string, BreakpointSyncEntry>>;
 
 export const EMPTY_SYNC_ENTRY: BreakpointSyncEntry = { excluded: [], linked: [], appliedAt: undefined };
 
-export const EMPTY_SYNC_RECORD: BreakpointSyncRecord = { laptop: EMPTY_SYNC_ENTRY, tablet: EMPTY_SYNC_ENTRY, phone: EMPTY_SYNC_ENTRY };
+export const EMPTY_SYNC_RECORD: BreakpointSyncRecord = {};
+
+/** The entry for a breakpoint id, empty when nothing is remembered. */
+export function entryOf(record: BreakpointSyncRecord, id: string): BreakpointSyncEntry {
+  return record[id] ?? EMPTY_SYNC_ENTRY;
+}
 
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 const LOCATOR = /^[0-9a-f]{8}:\d{1,6}$/;
@@ -76,27 +84,29 @@ export function parseBreakpointSyncRecord(input: unknown): Result<BreakpointSync
   if (fields.get('version') !== 1) {
     return failure('version', 'unsupported version, expected 1');
   }
-  for (const name of fields.keys()) {
-    if (name !== 'version' && !isBreakpointKey(name)) {
+  const entries: Record<string, BreakpointSyncEntry> = {};
+  let count = 0;
+  for (const [name, value] of fields) {
+    if (name === 'version') {
+      continue;
+    }
+    count += 1;
+    if (count > SYNC_RECORD_LIMITS.breakpointsMax) {
+      return failure('limit', `more than ${SYNC_RECORD_LIMITS.breakpointsMax} breakpoints`);
+    }
+    if (name.length > BREAKPOINT_LIMITS.idCharsMax || !/^[a-z][a-z0-9-]*$/.test(name)) {
       return failure('shape', `unknown field "${name}"`);
     }
-  }
-  const entries: Partial<Record<BreakpointKey, BreakpointSyncEntry>> = {};
-  for (const key of BREAKPOINT_KEYS) {
-    const entry = parseEntry(key, fields.get(key));
+    const entry = parseEntry(name, value);
     if (!entry.ok) {
       return entry;
     }
-    entries[key] = entry.value;
+    entries[name] = entry.value;
   }
-  const { laptop, tablet, phone } = entries;
-  assert(laptop !== undefined, 'parseBreakpointSyncRecord: laptop was read above');
-  assert(tablet !== undefined, 'parseBreakpointSyncRecord: tablet was read above');
-  assert(phone !== undefined, 'parseBreakpointSyncRecord: phone was read above');
-  return ok({ laptop, tablet, phone });
+  return ok(entries);
 }
 
-function parseEntry(key: BreakpointKey, input: unknown): Result<BreakpointSyncEntry> {
+function parseEntry(key: string, input: unknown): Result<BreakpointSyncEntry> {
   if (input === undefined) {
     return ok(EMPTY_SYNC_ENTRY);
   }
@@ -124,7 +134,7 @@ function parseEntry(key: BreakpointKey, input: unknown): Result<BreakpointSyncEn
   return ok({ excluded: excluded.value, linked: linked.value, appliedAt });
 }
 
-function parseRefs(key: BreakpointKey, field: string, input: unknown): Result<readonly SyncRef[]> {
+function parseRefs(key: string, field: string, input: unknown): Result<readonly SyncRef[]> {
   if (input === undefined) {
     return ok([]);
   }
@@ -188,8 +198,13 @@ export function canonicalRefs(refs: readonly SyncRef[]): readonly SyncRef[] {
 }
 
 /** A new entry for one breakpoint. Past the bound the oldest places are dropped, never the newest. */
-export function withEntry(record: BreakpointSyncRecord, key: BreakpointKey, entry: BreakpointSyncEntry): BreakpointSyncRecord {
-  return { ...record, [key]: { excluded: bounded(entry.excluded), linked: bounded(entry.linked), appliedAt: entry.appliedAt } };
+export function withEntry(record: BreakpointSyncRecord, id: string, entry: BreakpointSyncEntry): BreakpointSyncRecord {
+  return { ...record, [id]: { excluded: bounded(entry.excluded), linked: bounded(entry.linked), appliedAt: entry.appliedAt } };
+}
+
+/** The record without a breakpoint's entry (it was removed from the list). */
+export function withoutEntry(record: BreakpointSyncRecord, id: string): BreakpointSyncRecord {
+  return Object.fromEntries(Object.entries(record).filter(([name]) => name !== id));
 }
 
 export function recordsEqual(first: BreakpointSyncRecord, second: BreakpointSyncRecord): boolean {
@@ -199,8 +214,10 @@ export function recordsEqual(first: BreakpointSyncRecord, second: BreakpointSync
 /** The canonical file text. An empty record is `{ "version": 1 }`. */
 export function serializeBreakpointSyncRecord(record: BreakpointSyncRecord): string {
   const body: Record<string, unknown> = { version: 1 };
-  for (const key of BREAKPOINT_KEYS) {
-    const entry = record[key];
+  const ids = Object.keys(record).sort(compareText);
+  assert(ids.length <= SYNC_RECORD_LIMITS.breakpointsMax, 'serializeBreakpointSyncRecord: breakpoints within the bound');
+  for (const id of ids) {
+    const entry = entryOf(record, id);
     assert(entry.excluded.length <= SYNC_RECORD_LIMITS.refsMax, 'serializeBreakpointSyncRecord: excluded within the bound');
     assert(entry.linked.length <= SYNC_RECORD_LIMITS.refsMax, 'serializeBreakpointSyncRecord: linked within the bound');
     if (entry.excluded.length === 0 && entry.linked.length === 0 && entry.appliedAt === undefined) {
@@ -217,7 +234,7 @@ export function serializeBreakpointSyncRecord(record: BreakpointSyncRecord): str
       assert(TIMESTAMP.test(entry.appliedAt), 'serializeBreakpointSyncRecord: appliedAt is an ISO time');
       written['appliedAt'] = entry.appliedAt;
     }
-    body[key] = written;
+    body[id] = written;
   }
   const text = JSON.stringify(body, undefined, 2) + '\n';
   assert(text.length <= SYNC_RECORD_LIMITS.fileBytesMax, 'serializeBreakpointSyncRecord: within the file bound');
@@ -232,10 +249,6 @@ function bounded(refs: readonly SyncRef[]): readonly SyncRef[] {
 function compareText(first: string, second: string): number {
   // Code unit order: the same on every machine, unlike a locale-aware compare.
   return first < second ? -1 : first > second ? 1 : 0;
-}
-
-function isBreakpointKey(name: string): name is BreakpointKey {
-  return BREAKPOINT_KEYS.some((key) => key === name);
 }
 
 function failure(code: string, detail: string): Result<never, AppError> {

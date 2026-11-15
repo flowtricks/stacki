@@ -5,7 +5,6 @@
 // checked; inclusive 1px forms and places remembered as "Not synced" start unchecked. A file's box is checked when all its places
 // are, and half-checked when some are.
 import type { BreakpointSyncApply, BreakpointSyncScan, SyncFile, SyncOccurrence } from './breakpointSyncPlan';
-import type { BreakpointKey } from './projectBreakpoints';
 
 export type CheckedPlaces = ReadonlySet<string>;
 
@@ -72,17 +71,17 @@ export function allPlaces(scan: BreakpointSyncScan): CheckedPlaces {
 }
 
 /** The label a place wears: remembered exclusions win, then the inclusive form. */
-export type PlaceLabel = 'notSynced' | 'inclusive' | undefined;
+export type PlaceLabel = 'notSynced' | 'inclusive' | 'exclusive' | undefined;
 
 export function placeLabel(place: SyncOccurrence): PlaceLabel {
   if (place.excluded) {
     return 'notSynced';
   }
-  return place.reason === 'inclusive' ? 'inclusive' : undefined;
+  return place.reason === 'exact' ? undefined : place.reason;
 }
 
 /** The request the checked places make: those to write by file, and the unchecked ones to remember. */
-export function applyRequest(projectPath: string, key: BreakpointKey, scan: BreakpointSyncScan, checked: CheckedPlaces): BreakpointSyncApply {
+export function applyRequest(projectPath: string, key: string, scan: BreakpointSyncScan, checked: CheckedPlaces): BreakpointSyncApply {
   const files = scan.files.flatMap((file) => {
     const edits = file.occurrences
       .filter((place) => checked.has(placeKey(file.rel, place.locator)))

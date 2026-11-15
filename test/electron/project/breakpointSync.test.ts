@@ -11,7 +11,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { SYNC_SCAN_LIMITS, applyBreakpointSync, restoreBreakpointSync, scanBreakpointSync } from '#dist/electron/project/breakpointSync.js';
-import { parseBreakpointSyncSource, serializeBreakpointSyncRecord, EMPTY_SYNC_RECORD } from '#dist/shared/properties/breakpointSyncRecord.js';
+import { parseBreakpointSyncSource, serializeBreakpointSyncRecord, EMPTY_SYNC_RECORD, entryOf } from '#dist/shared/properties/breakpointSyncRecord.js';
 import { applyRequest, initialChecked } from '#dist/shared/properties/breakpointSyncSelection.js';
 import type { BreakpointSyncScan } from '#dist/shared/properties/breakpointSyncPlan.js';
 import type { BreakpointSetting } from '#dist/shared/properties/projectBreakpoints.js';
@@ -66,7 +66,7 @@ function savedRecord(root: string) {
 const key = (rel: string, locator: string): string => `${rel}\0${locator}`;
 
 async function scanOf(root: string, next: BreakpointSetting = NEXT, old: BreakpointSetting = OLD): Promise<BreakpointSyncScan> {
-  return scanBreakpointSync(root, { key: 'laptop', old, next });
+  return scanBreakpointSync(root, { key: 'laptop', old: { direction: 'down', setting: old }, next });
 }
 
 test('the scan lists every place in every kind of file, skips what is not the project, and writes nothing', async () => {
@@ -123,13 +123,13 @@ test('applying writes only the checked tokens, byte for byte, and remembers the 
   );
   assert.equal(read(root, 'public/legacy.html'), HTML.replace('(min-width: 1024px)', '(min-width: 70rem)'), 'the script string is untouched');
   assert.ok(read(root, 'src/styles/site.css').includes('(max-width: 1023px)'), 'the unchecked inclusive form stays');
-  const record = savedRecord(root);
+  const record = entryOf(savedRecord(root), 'laptop');
   assert.deepEqual(
-    record.laptop.excluded.map((ref) => ref.file),
+    record.excluded.map((ref) => ref.file),
     ['src/styles/site.css'],
   );
-  assert.equal(record.laptop.linked.length, 6);
-  assert.match(record.laptop.appliedAt ?? '', /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(record.linked.length, 6);
+  assert.match(record.appliedAt ?? '', /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test('a file that changed since the scan is skipped and reported; the others are written', async () => {
@@ -220,7 +220,7 @@ test('unchecked places are remembered and listed as not synced on the next chang
   all.add(key(css.rel, exact.locator));
   applyBreakpointSync(root, applyRequest(root, 'laptop', second, all));
   assert.ok(read(root, 'src/styles/site.css').includes('(max-width: 80rem)'));
-  assert.equal(savedRecord(root).laptop.excluded.length, 1, 'only the inclusive form is still left alone');
+  assert.equal(entryOf(savedRecord(root), 'laptop').excluded.length, 1, 'only the inclusive form is still left alone');
 });
 
 test('a Lumos project is written in rem, a px value converted at 16px per rem', async () => {

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   EMPTY_SYNC_RECORD,
   SYNC_RECORD_LIMITS,
+  entryOf,
   canonicalRefs,
   isProjectPath,
   parseBreakpointSyncRecord,
@@ -40,9 +41,9 @@ test('a missing file is the empty record, and the empty record writes the bare v
 test('the known-good file parses and keeps its places and time', () => {
   const parsed = parseBreakpointSyncSource(JSON.stringify(good));
   assert.equal(parsed.ok, true);
-  assert.deepEqual(parsed.ok ? parsed.value.laptop.excluded : [], good.laptop.excluded);
-  assert.equal(parsed.ok ? parsed.value.laptop.appliedAt : '', good.laptop.appliedAt);
-  assert.deepEqual(parsed.ok ? parsed.value.tablet : undefined, { excluded: [], linked: [], appliedAt: undefined });
+  assert.deepEqual(parsed.ok ? entryOf(parsed.value, 'laptop').excluded : [], good.laptop.excluded);
+  assert.equal(parsed.ok ? entryOf(parsed.value, 'laptop').appliedAt : '', good.laptop.appliedAt);
+  assert.deepEqual(parsed.ok ? entryOf(parsed.value, 'tablet') : undefined, { excluded: [], linked: [], appliedAt: undefined });
 });
 
 test('round trip is byte-stable, sorted and deduplicated', () => {
@@ -69,7 +70,8 @@ test('round trip is byte-stable, sorted and deduplicated', () => {
 test('shapes that are not this file are refused', () => {
   assert.equal(failureCode(parseBreakpointSyncRecord([])), 'breakpoint-sync-shape');
   assert.equal(failureCode(parseBreakpointSyncRecord({ version: 2 })), 'breakpoint-sync-version');
-  assert.equal(failureCode(parseBreakpointSyncRecord({ ...good, desktop: {} })), 'breakpoint-sync-shape');
+  assert.equal(failureCode(parseBreakpointSyncRecord({ ...good, 'Not An Id': {} })), 'breakpoint-sync-shape');
+  assert.equal(parseBreakpointSyncRecord({ ...good, 'bp-1': { linked: [] } }).ok, true, 'a breakpoint the project added has an entry too');
   assert.equal(failureCode(parseBreakpointSyncRecord({ version: 1, laptop: { extra: [] } })), 'breakpoint-sync-shape');
   assert.equal(failureCode(parseBreakpointSyncRecord({ version: 1, laptop: [] })), 'breakpoint-sync-shape');
   assert.equal(failureCode(parseBreakpointSyncRecord({ version: 1, laptop: { excluded: 'x' } })), 'breakpoint-sync-shape');
@@ -99,17 +101,17 @@ test('paths, locators and times are checked', () => {
 test('a list past the bound is refused, and serializing past it is a programmer error', () => {
   const many = Array.from({ length: SYNC_RECORD_LIMITS.refsMax + 1 }, (_, index) => ({ file: `f${index}.css`, locator: '00000001:0' }));
   assert.equal(failureCode(parseBreakpointSyncRecord({ version: 1, laptop: { excluded: many } })), 'breakpoint-sync-limit');
-  const over = { ...EMPTY_SYNC_RECORD, laptop: { excluded: many, linked: [], appliedAt: undefined } };
+  const over = { laptop: { excluded: many, linked: [], appliedAt: undefined } };
   assert.throws(() => serializeBreakpointSyncRecord(over), /Assertion failed: serializeBreakpointSyncRecord/);
   const kept = withEntry(EMPTY_SYNC_RECORD, 'laptop', { excluded: many, linked: [], appliedAt: undefined });
-  assert.equal(kept.laptop.excluded.length, SYNC_RECORD_LIMITS.refsMax, 'withEntry keeps the newest places within the bound');
+  assert.equal(entryOf(kept, 'laptop').excluded.length, SYNC_RECORD_LIMITS.refsMax, 'withEntry keeps the newest places within the bound');
 });
 
 test('records compare by bytes, and canonical lists drop duplicates', () => {
   assert.equal(recordsEqual(EMPTY_SYNC_RECORD, EMPTY_SYNC_RECORD), true);
   const one = withEntry(EMPTY_SYNC_RECORD, 'phone', { excluded: [{ file: 'a.css', locator: '00000001:0' }], linked: [], appliedAt: undefined });
   assert.equal(recordsEqual(EMPTY_SYNC_RECORD, one), false);
-  assert.equal(canonicalRefs([...one.phone.excluded, ...one.phone.excluded]).length, 1);
+  assert.equal(canonicalRefs([...entryOf(one, 'phone').excluded, ...entryOf(one, 'phone').excluded]).length, 1);
 });
 
 test('the metadata transport validates the file before any write', () => {

@@ -1,0 +1,103 @@
+// The devices of the preview bar, from the project's breakpoints (`.stacki/breakpoints.json`, shared/properties/projectBreakpoints.ts).
+//
+// The bar reads left to right: the `up` breakpoints widest first, Desktop (the base: full width), the `down` breakpoints widest
+// first, then the all-breakpoints canvas. A device is named by its breakpoint's id (`laptop`, `bp-1`), or `desktop`, `canvas` or
+// `custom` (a dragged width); the shortcuts 1 to 9 are the bar's positions, so they follow the list.
+//
+// The icon is chosen by position, never by name: the `up` breakpoint closest to Desktop is the studio display and every wider one
+// a television; the built-in Laptop, Tablet and Phone keep theirs; any other `down` breakpoint narrower than the Phone one is the
+// smartwatch, and one between wears the nearest of the three by width.
+import { BREAKPOINT_DEFAULTS, type Breakpoint, type ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
+
+/** `desktop`, `canvas`, `custom`, or a breakpoint's id. */
+export type PreviewDevice = string;
+
+export type DeviceIconKind = 'desktop' | 'laptop' | 'tablet' | 'phone' | 'studioDisplayXdr' | 'television' | 'smartwatch' | 'canvas';
+
+export interface BarDevice {
+  readonly key: PreviewDevice;
+  readonly icon: DeviceIconKind;
+  /** The breakpoint it stands for; undefined for Desktop and the canvas. */
+  readonly breakpoint: ResolvedBreakpoint | undefined;
+}
+
+/** The shortcuts bind digits 1 to 9. */
+export const SHORTCUTS_MAX = 9;
+
+const FIXED_WIDTH_ICONS: ReadonlyArray<{ readonly minWidthPx: number; readonly icon: DeviceIconKind }> = [
+  { minWidthPx: 895, icon: 'laptop' },
+  { minWidthPx: 623, icon: 'tablet' },
+  { minWidthPx: 0, icon: 'phone' },
+];
+
+/** The icon of one breakpoint within its list. */
+export function iconFor(breakpoint: ResolvedBreakpoint, resolved: readonly ResolvedBreakpoint[]): DeviceIconKind {
+  if (breakpoint.direction === 'up') {
+    const ups = resolved.filter((other) => other.direction === 'up');
+    const closest = ups[ups.length - 1];
+    return closest !== undefined && closest.id === breakpoint.id ? 'studioDisplayXdr' : 'television';
+  }
+  if (breakpoint.id === 'laptop' || breakpoint.id === 'tablet' || breakpoint.id === 'phone') {
+    return breakpoint.id;
+  }
+  const phone = resolved.find((other) => other.id === 'phone');
+  const phoneWidthPx = phone?.widthPx ?? BREAKPOINT_DEFAULTS.find((other) => other.id === 'phone')?.widthPx ?? 479;
+  if (breakpoint.widthPx < phoneWidthPx) {
+    return 'smartwatch';
+  }
+  return FIXED_WIDTH_ICONS.find((entry) => breakpoint.widthPx >= entry.minWidthPx)?.icon ?? 'phone';
+}
+
+/** The bar's devices in order. */
+export function barDevices(resolved: readonly ResolvedBreakpoint[]): readonly BarDevice[] {
+  const device = (breakpoint: ResolvedBreakpoint): BarDevice => ({ key: breakpoint.id, icon: iconFor(breakpoint, resolved), breakpoint });
+  return [
+    ...resolved.filter((breakpoint) => breakpoint.direction === 'up').map(device),
+    { key: 'desktop', icon: 'desktop', breakpoint: undefined },
+    ...resolved.filter((breakpoint) => breakpoint.direction === 'down').map(device),
+    { key: 'canvas', icon: 'canvas', breakpoint: undefined },
+  ];
+}
+
+/** The viewport width a device simulates; undefined for the full available width (Desktop, the all-breakpoints canvas, a custom drag). */
+export function deviceWidth(device: PreviewDevice, resolved: readonly ResolvedBreakpoint[]): number | undefined {
+  return resolved.find((breakpoint) => breakpoint.id === device)?.widthPx;
+}
+
+/**
+ * The device a canvas width belongs to. An `up` breakpoint holds every width from its own (the widest one that fits); between the
+ * widest `down` canvas and the smallest `up` one is Desktop; each `down` one holds up to its canvas, the narrowest that fits.
+ */
+export function deviceForWidth(px: number, resolved: readonly ResolvedBreakpoint[]): PreviewDevice | undefined {
+  if (!Number.isFinite(px) || px <= 0) {
+    return undefined;
+  }
+  for (const breakpoint of resolved) {
+    if (breakpoint.direction === 'up' && px >= breakpoint.widthPx) {
+      return breakpoint.id;
+    }
+  }
+  const downs = resolved.filter((breakpoint) => breakpoint.direction === 'down');
+  for (const breakpoint of [...downs].reverse()) {
+    if (px <= breakpoint.widthPx) {
+      return breakpoint.id;
+    }
+  }
+  return 'desktop';
+}
+
+/** The device a digit key selects: the bar's position of that digit, or undefined past the bar. */
+export function deviceForShortcut(key: string, resolved: readonly ResolvedBreakpoint[]): PreviewDevice | undefined {
+  if (!/^[1-9]$/.test(key)) {
+    return undefined;
+  }
+  return barDevices(resolved)[Number(key) - 1]?.key;
+}
+
+/** A device's shortcut digit, or undefined when it sits past the ninth position. */
+export function shortcutOf(device: BarDevice, devices: readonly BarDevice[]): number | undefined {
+  const position = devices.findIndex((other) => other.key === device.key) + 1;
+  return position >= 1 && position <= SHORTCUTS_MAX ? position : undefined;
+}
+
+export type BreakpointNameSource = Pick<Breakpoint, 'id' | 'name'>;

@@ -29,6 +29,9 @@ import {
   corner as centralCorner,
   database as centralDatabase,
   macbookAir as centralMacbookAir,
+  smartwatch1 as centralSmartwatch,
+  studioDisplayXdr as centralStudioDisplayXdr,
+  television as centralTelevision,
   studioDisplay as centralStudioDisplay,
   drag as centralDrag,
   droplet as centralDroplet,
@@ -333,6 +336,15 @@ export const DesktopIcon = centralIcon(centralStudioDisplay);
 
 // Central's macbook-air: the Laptop device in the preview bar and in Settings > Breakpoints.
 export const LaptopIcon = centralIcon(centralMacbookAir);
+
+// Central's studio-display (xdr, imac): the breakpoint just wider than Desktop.
+export const StudioDisplayXdrIcon = centralIcon(centralStudioDisplayXdr);
+
+// Central's smartwatch-1: a breakpoint narrower than the Phone.
+export const SmartwatchIcon = centralIcon(centralSmartwatch);
+
+// Central's television: each breakpoint wider than the first one past Desktop (Settings > Breakpoints, the preview bar).
+export const TelevisionIcon = centralIcon(centralTelevision);
 
 export const TabletIcon = centralIcon(centralTablet);
 

@@ -2,34 +2,48 @@ import { centralIcon } from '../../ui/central/CentralIcon';
 import { cursorClick as centralCursorClick } from '../../ui/central/centralGeometry';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IconProps } from '../../ui/Icons';
-import { AllBreakpointsIcon, ChevronRightIcon, DesktopIcon, LaptopIcon, PanelRightIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
-import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
+import {
+  AllBreakpointsIcon,
+  ChevronRightIcon,
+  DesktopIcon,
+  LaptopIcon,
+  PanelRightIcon,
+  PhoneIcon,
+  SmartwatchIcon,
+  StudioDisplayXdrIcon,
+  TabletIcon,
+  TelevisionIcon,
+} from '../../ui/Icons';
+import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
+import { barDevices, shortcutOf, type BarDevice, type DeviceIconKind, type PreviewDevice } from './breakpointDevices';
+import { breakpointLabel } from './breakpointLabel';
 import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { ToolbarOverflow, type ToolbarItem } from './ToolbarOverflow';
 
 const InteractIcon = centralIcon(centralCursorClick);
 
-export type PreviewDevice = 'desktop' | 'laptop' | 'tablet' | 'phone' | 'canvas' | 'custom';
-type FixedDevice = Exclude<PreviewDevice, 'custom'>;
+export type { PreviewDevice } from './breakpointDevices';
+export { deviceForWidth, deviceWidth } from './breakpointDevices';
 
-interface DeviceDefinition {
-  readonly key: FixedDevice;
-  readonly Icon: React.ComponentType<IconProps>;
-  readonly titleKey: MessageKey;
+const DEVICE_ICONS: Readonly<Record<DeviceIconKind, React.ComponentType<IconProps>>> = {
+  desktop: DesktopIcon,
+  laptop: LaptopIcon,
+  tablet: TabletIcon,
+  phone: PhoneIcon,
+  studioDisplayXdr: StudioDisplayXdrIcon,
+  television: TelevisionIcon,
+  smartwatch: SmartwatchIcon,
+  canvas: AllBreakpointsIcon,
+};
+
+/** The icon component of a device kind: the same ones Settings draws on its cards. */
+export function deviceIconComponent(kind: DeviceIconKind): React.ComponentType<IconProps> {
+  return DEVICE_ICONS[kind];
 }
-
-// Largest first. The widths are the project's (`.stacki/breakpoints.json`), never constants here: see deviceWidth.
-export const DEVICES: readonly DeviceDefinition[] = [
-  { key: 'desktop', Icon: DesktopIcon, titleKey: 'preview.device.desktop' },
-  { key: 'laptop', Icon: LaptopIcon, titleKey: 'preview.device.laptop' },
-  { key: 'tablet', Icon: TabletIcon, titleKey: 'preview.device.tablet' },
-  { key: 'phone', Icon: PhoneIcon, titleKey: 'preview.device.phone' },
-  { key: 'canvas', Icon: AllBreakpointsIcon, titleKey: 'preview.device.canvas' },
-];
 
 export interface PreviewCrumb {
   /** The node the crumb selects; undefined for the page itself. */
@@ -49,43 +63,6 @@ interface VisibleCrumb {
 
 type ToolbarCrumb = FoldedCrumb | VisibleCrumb;
 
-/** The device a canvas width belongs to: the smallest whose width holds it, Desktop above the laptop width. */
-export function deviceForWidth(px: number, widths: BreakpointWidths): FixedDevice | undefined {
-  if (!Number.isFinite(px) || px <= 0) {
-    return undefined;
-  }
-  if (px > widths.laptop) {
-    return 'desktop';
-  }
-  if (px > widths.tablet) {
-    return 'laptop';
-  }
-  if (px > widths.phone) {
-    return 'tablet';
-  }
-  return 'phone';
-}
-
-/** The viewport width a device simulates; undefined for the full available width (Desktop, the all-breakpoints canvas, a custom drag). */
-export function deviceWidth(device: PreviewDevice, widths: BreakpointWidths): number | undefined {
-  switch (device) {
-    case 'laptop':
-      return widths.laptop;
-    case 'tablet':
-      return widths.tablet;
-    case 'phone':
-      return widths.phone;
-    case 'desktop':
-    case 'canvas':
-    case 'custom':
-      return undefined;
-    default: {
-      const exhaustive: never = device;
-      return exhaustive;
-    }
-  }
-}
-
 // In a collapsed editor the Style and Settings panel floats over the canvas; one toolbar
 // button opens it and closes it again. The panel keeps its own Style and Settings tabs.
 export interface PreviewInspectorActions {
@@ -94,8 +71,8 @@ export interface PreviewInspectorActions {
 }
 
 interface PreviewToolbarProps {
-  /** The project's breakpoint widths: the pixel numbers in the device tooltips. */
-  readonly breakpoints: BreakpointWidths;
+  /** The project's breakpoints with their canvas widths: one button each, and the pixel numbers in the tooltips. */
+  readonly breakpoints: readonly ResolvedBreakpoint[];
   readonly crumbs: readonly PreviewCrumb[];
   readonly onCrumb?: (id: string | undefined) => void;
   readonly activeDevice: PreviewDevice;
@@ -159,32 +136,35 @@ function toolbarItems(props: PreviewToolbarProps, translate: Translator): readon
 // and sliding selection remain intact whenever the toolbar has room for it.
 export function DeviceButtons({ activeDevice, onDevice, breakpoints }: Pick<PreviewToolbarProps, 'activeDevice' | 'onDevice' | 'breakpoints'>) {
   const translate = useTranslate();
-  const buttons = useRef(new Map<FixedDevice, HTMLButtonElement>());
+  const devices = barDevices(breakpoints);
+  const buttons = useRef(new Map<PreviewDevice, HTMLButtonElement>());
   const [indicator, setIndicator] = useState<{ readonly left: number; readonly width: number } | undefined>();
+  const devicesSignature = devices.map((device) => device.key).join(',');
   useLayoutEffect(() => {
     const element = activeDevice === 'custom' ? undefined : buttons.current.get(activeDevice);
     setIndicator(element ? { left: element.offsetLeft, width: element.offsetWidth } : undefined);
-  }, [activeDevice]);
+  }, [activeDevice, devicesSignature]);
   return (
     <div className="device-btns" role="group" aria-label={translate('preview.device.group')}>
       {indicator && <span className="device-indicator" style={indicator} />}
-      {DEVICES.map(({ key, Icon, titleKey }) => {
-        const title = deviceTitle(titleKey, deviceWidth(key, breakpoints), translate);
+      {devices.map((device) => {
+        const Icon = deviceIconComponent(device.icon);
+        const title = deviceTitle(device, devices, translate);
         return (
           <button
-            key={key}
+            key={device.key}
             ref={(element) => {
               if (element) {
-                buttons.current.set(key, element);
+                buttons.current.set(device.key, element);
               } else {
-                buttons.current.delete(key);
+                buttons.current.delete(device.key);
               }
             }}
-            className={activeDevice === key ? 'on' : ''}
+            className={activeDevice === device.key ? 'on' : ''}
             data-tooltip={title}
             aria-label={title}
-            aria-pressed={activeDevice === key}
-            onClick={() => onDevice(key)}
+            aria-pressed={activeDevice === device.key}
+            onClick={() => onDevice(device.key)}
           >
             <Icon size={13} />
           </button>
@@ -194,12 +174,19 @@ export function DeviceButtons({ activeDevice, onDevice, breakpoints }: Pick<Prev
   );
 }
 
-// Only the three fixed-width devices name a width; Desktop and the all-breakpoints canvas have none.
-function deviceTitle(titleKey: MessageKey, widthPx: number | undefined, translate: Translator): string {
-  if (widthPx === undefined) {
-    return translate(titleKey);
+// A breakpoint names its width and its key (`Tablet (767px) — 3`); Desktop and the canvas name only their key. A device past the ninth
+// position has no key to name.
+function deviceTitle(device: BarDevice, devices: readonly BarDevice[], translate: Translator): string {
+  const key = shortcutOf(device, devices);
+  if (device.breakpoint === undefined) {
+    if (device.key === 'desktop') {
+      return key === undefined ? translate('preview.device.desktopNoKey') : translate('preview.device.desktop', { key });
+    }
+    return key === undefined ? translate('preview.device.canvasNoKey') : translate('preview.device.canvas', { key });
   }
-  return translate(titleKey, { width: widthPx });
+  const name = breakpointLabel(device.breakpoint, translate);
+  const width = device.breakpoint.widthPx;
+  return key === undefined ? translate('preview.device.itemNoKey', { name, width }) : translate('preview.device.item', { name, width, key });
 }
 
 function inspectorItems(inspector: PreviewInspectorActions | undefined, translate: Translator): readonly ToolbarItem[] {

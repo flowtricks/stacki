@@ -14,24 +14,34 @@
 import { assert } from '../../shared/core/assert';
 import { err, ok, type AppError, type Result } from '../../shared/core/result';
 import {
-  BREAKPOINT_DEFAULT_SETTINGS,
+  BREAKPOINT_DEFAULT_LIST,
   breakpointsEqual,
-  checkedSettings,
+  checkedList,
   parseBreakpointsSource,
-  resolveBreakpointWidths,
+  resolveBreakpoints,
   serializeBreakpoints,
-  type BreakpointSettings,
-  type BreakpointWidths,
+  type BreakpointList,
+  type ResolvedBreakpoint,
 } from '../../shared/properties/projectBreakpoints';
 import { readMetadata, writeMetadata } from './projectMetadataBridge';
 import { onWindowReturn } from '../lib/windowReturn';
 
 export type BreakpointsState =
   /** Nothing read yet: the defaults show until the file answers (a few milliseconds). */
-  | { readonly kind: 'loading'; readonly settings: BreakpointSettings; readonly widths: BreakpointWidths }
-  | { readonly kind: 'ready'; readonly settings: BreakpointSettings; readonly widths: BreakpointWidths; readonly source: string | undefined }
+  | { readonly kind: 'loading'; readonly list: BreakpointList; readonly resolved: readonly ResolvedBreakpoint[] }
+  | {
+      readonly kind: 'ready';
+      readonly list: BreakpointList;
+      readonly resolved: readonly ResolvedBreakpoint[];
+      readonly source: string | undefined;
+    }
   /** The file could not be read or is not valid: the defaults show, and the file is never written over. */
-  | { readonly kind: 'blocked'; readonly settings: BreakpointSettings; readonly widths: BreakpointWidths; readonly message: string };
+  | {
+      readonly kind: 'blocked';
+      readonly list: BreakpointList;
+      readonly resolved: readonly ResolvedBreakpoint[];
+      readonly message: string;
+    };
 
 /** The project file transport. Both calls throw an Error when the file cannot be read or written. */
 export interface BreakpointsStorage {
@@ -43,8 +53,8 @@ export interface BreakpointsStorage {
 const STORES_MAX = 8;
 
 // `widths` always comes from `resolveBreakpointWidths`: the one place settings become canvas widths.
-const DEFAULT_WIDTHS = resolveBreakpointWidths(BREAKPOINT_DEFAULT_SETTINGS);
-const LOADING: BreakpointsState = { kind: 'loading', settings: BREAKPOINT_DEFAULT_SETTINGS, widths: DEFAULT_WIDTHS };
+const DEFAULT_RESOLVED = resolveBreakpoints(BREAKPOINT_DEFAULT_LIST);
+const LOADING: BreakpointsState = { kind: 'loading', list: BREAKPOINT_DEFAULT_LIST, resolved: DEFAULT_RESOLVED };
 
 export function projectBreakpointsStorage(projectPath: string): BreakpointsStorage {
   assert(projectPath.length > 0, 'projectBreakpointsStorage: a project is open');
@@ -105,8 +115,8 @@ export class BreakpointsStore {
   }
 
   /** Saves the three breakpoints. An error value (never a throw) when the set is invalid, the file is blocked, or the write fails. */
-  save(settings: BreakpointSettings): Promise<Result<void>> {
-    return this.enqueue(() => this.change(settings));
+  save(list: BreakpointList): Promise<Result<void>> {
+    return this.enqueue(() => this.change(list));
   }
 
   private enqueue<T>(task: () => Promise<T>): Promise<T> {
@@ -119,7 +129,7 @@ export class BreakpointsStore {
     const before = this.current;
     const same =
       before.kind === next.kind &&
-      breakpointsEqual(before.settings, next.settings) &&
+      breakpointsEqual(before.list, next.list) &&
       (before.kind === 'ready' && next.kind === 'ready'
         ? before.source === next.source
         : before.kind === 'blocked' && next.kind === 'blocked'
@@ -139,21 +149,21 @@ export class BreakpointsStore {
       source = (await this.storage.read()).source;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.publish({ kind: 'blocked', settings: BREAKPOINT_DEFAULT_SETTINGS, widths: DEFAULT_WIDTHS, message });
+      this.publish({ kind: 'blocked', list: BREAKPOINT_DEFAULT_LIST, resolved: DEFAULT_RESOLVED, message });
       return err({ code: 'breakpoints-unreadable', message });
     }
     const parsed = parseBreakpointsSource(source);
     if (!parsed.ok) {
-      this.publish({ kind: 'blocked', settings: BREAKPOINT_DEFAULT_SETTINGS, widths: DEFAULT_WIDTHS, message: parsed.error.message });
+      this.publish({ kind: 'blocked', list: BREAKPOINT_DEFAULT_LIST, resolved: DEFAULT_RESOLVED, message: parsed.error.message });
       return parsed;
     }
-    const ready = { kind: 'ready', settings: parsed.value, widths: resolveBreakpointWidths(parsed.value), source } as const;
+    const ready = { kind: 'ready', list: parsed.value, resolved: resolveBreakpoints(parsed.value), source } as const;
     this.publish(ready);
     return ok(ready);
   }
 
-  private async change(settings: BreakpointSettings): Promise<Result<void>> {
-    const checked = checkedSettings(settings);
+  private async change(list: BreakpointList): Promise<Result<void>> {
+    const checked = checkedList(list);
     if (!checked.ok) {
       return checked;
     }
@@ -178,10 +188,10 @@ export class BreakpointsStore {
     return this.write(reread.value, checked.value);
   }
 
-  private async write(base: Extract<BreakpointsState, { kind: 'ready' }>, settings: BreakpointSettings): Promise<Result<void>> {
-    const text = serializeBreakpoints(settings);
+  private async write(base: Extract<BreakpointsState, { kind: 'ready' }>, list: BreakpointList): Promise<Result<void>> {
+    const text = serializeBreakpoints(list);
     if (base.source === undefined) {
-      if (breakpointsEqual(settings, BREAKPOINT_DEFAULT_SETTINGS)) {
+      if (breakpointsEqual(list, BREAKPOINT_DEFAULT_LIST)) {
         // No file and nothing to say: the defaults are already what every reader sees, so no file is made.
         return ok(undefined);
       }
@@ -189,17 +199,17 @@ export class BreakpointsStore {
       return ok(undefined);
     }
     // Shown at once; the write confirms it or the next read puts the file's truth back.
-    this.publish({ kind: 'ready', settings, widths: resolveBreakpointWidths(settings), source: base.source });
+    this.publish({ kind: 'ready', list, resolved: resolveBreakpoints(list), source: base.source });
     try {
       const saved = await this.storage.write({ source: text, ...(base.source === undefined ? {} : { base: base.source }) });
       assert(saved.source === text, 'BreakpointsStore.write: the file holds what was written');
-      this.publish({ kind: 'ready', settings, widths: resolveBreakpointWidths(settings), source: saved.source });
+      this.publish({ kind: 'ready', list, resolved: resolveBreakpoints(list), source: saved.source });
       return ok(undefined);
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AssertionError') {
         throw error;
       }
-      this.publish({ kind: 'ready', settings: base.settings, widths: base.widths, source: base.source });
+      this.publish({ kind: 'ready', list: base.list, resolved: base.resolved, source: base.source });
       return err({ code: 'breakpoints-write', message: error instanceof Error ? error.message : String(error) });
     }
   }

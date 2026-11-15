@@ -35,6 +35,12 @@ const KIND_LABELS: Readonly<Record<SyncFileKind, MessageKey>> = {
   component: 'settings.breakpoints.sync.kind.component',
 };
 
+const FLAG_LABELS = {
+  notSynced: 'settings.breakpoints.sync.notSynced',
+  inclusive: 'settings.breakpoints.sync.inclusive',
+  exclusive: 'settings.breakpoints.sync.exclusive',
+} as const satisfies Record<'notSynced' | 'inclusive' | 'exclusive', MessageKey>;
+
 export type SyncDialogState = { readonly kind: 'scanning' } | { readonly kind: 'ready'; readonly scan: BreakpointSyncScan };
 
 interface Props {
@@ -178,11 +184,7 @@ function FileRow(props: {
                   <code className="breakpoint-sync-before">{place.beforeText}</code>
                   <code className="breakpoint-sync-after">{place.afterText}</code>
                 </span>
-                {label !== undefined && (
-                  <span className="breakpoint-sync-flag">
-                    {translate(label === 'notSynced' ? 'settings.breakpoints.sync.notSynced' : 'settings.breakpoints.sync.inclusive')}
-                  </span>
-                )}
+                {label !== undefined && <span className="breakpoint-sync-flag">{translate(FLAG_LABELS[label])}</span>}
               </li>
             );
           })}

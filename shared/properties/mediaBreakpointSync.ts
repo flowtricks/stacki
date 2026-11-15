@@ -12,6 +12,8 @@
 //
 // What counts as a match (`classifyBound`), with the boundary in pixels (1rem = 16px, the root the canvas reads rem at):
 //   exact      the bound equals the old boundary in either unit (64rem and 1024px are the same boundary).
+//   exclusive  for a breakpoint that is `width >= X` (up): `(width > X)` or `(X < width)`, which starts a pixel later than the
+//              breakpoint does. It is the same boundary written another way, offered but never checked, and rewritten as it is.
 //   inclusive  the bound is 1px short of it in the form that includes its own edge: `(max-width: 1023px)`, `(width <= 1023px)`,
 //              `(width > 1023px)`, `63.9375rem`. This is how a boundary written as the old canvas width reads, so it may be a
 //              different intent: it is offered, but never checked for the person.
@@ -19,7 +21,7 @@
 // A bound's locator names it without its number or its line, so a record of it survives the number changing and lines moving:
 // the prelude with the bound masked, hashed, plus which of the identical preludes in the file's CSS section it is.
 import { assert } from '../core/assert';
-import { BREAKPOINT_LIMITS, boundaryPx, type BreakpointSetting } from './projectBreakpoints';
+import { BREAKPOINT_LIMITS, boundaryPx, type Breakpoint, type BreakpointSetting } from './projectBreakpoints';
 
 export const MEDIA_SYNC_LIMITS = {
   /** CSS text read per section: a stylesheet this large is not hand-written. */
@@ -40,7 +42,7 @@ export interface CssSyntax {
 }
 
 export type BoundSide = 'upper' | 'lower';
-export type BoundMatch = 'exact' | 'inclusive';
+export type BoundMatch = 'exact' | 'inclusive' | 'exclusive';
 
 /** One width bound in a `@media` prelude: where its number and unit sit, and how it bounds the width. */
 export interface WidthBound {
@@ -99,14 +101,17 @@ export function findWidthBounds(css: string, options: CssSyntax): readonly Width
 }
 
 /** How a bound relates to a breakpoint's old value, or undefined when it is unrelated. */
-export function classifyBound(bound: Pick<WidthBound, 'value' | 'unit' | 'side' | 'inclusive'>, old: BreakpointSetting): BoundMatch | undefined {
-  const bound_px = bound.unit === 'rem' ? bound.value * BREAKPOINT_LIMITS.remPx : bound.value;
-  const old_px = boundaryPx(old);
-  if (near(bound_px, old_px)) {
-    return 'exact';
+export function classifyBound(
+  bound: Pick<WidthBound, 'value' | 'unit' | 'side' | 'inclusive'>,
+  old: Pick<Breakpoint, 'direction' | 'setting'>,
+): BoundMatch | undefined {
+  const boundPx = bound.unit === 'rem' ? bound.value * BREAKPOINT_LIMITS.remPx : bound.value;
+  const oldPx = boundaryPx(old.setting);
+  if (near(boundPx, oldPx)) {
+    return old.direction === 'up' && bound.side === 'lower' && !bound.inclusive ? 'exclusive' : 'exact';
   }
   const inclusiveForm = (bound.side === 'upper' && bound.inclusive) || (bound.side === 'lower' && !bound.inclusive);
-  if (inclusiveForm && near(bound_px, old_px - 1)) {
+  if (inclusiveForm && near(boundPx, oldPx - 1)) {
     return 'inclusive';
   }
   return undefined;
@@ -120,7 +125,7 @@ export function classifyBound(bound: Pick<WidthBound, 'value' | 'unit' | 'side' 
 export function replacementText(match: BoundMatch, bound: Pick<WidthBound, 'unit'>, next: BreakpointSetting, options: { readonly lumos: boolean }): string {
   const nextPx = boundaryPx(next);
   assert(nextPx > 0, 'replacementText: the new boundary is positive');
-  if (match === 'exact') {
+  if (match === 'exact' || match === 'exclusive') {
     if (next.unit === 'rem') {
       return `${formatNumber(next.value)}rem`;
     }

@@ -157,12 +157,20 @@ export function StudioAppOverlays({ rects, scale, file }: { readonly rects: Meas
 }
 
 // The canvas as it is drawn: the shared preview's sized frame (previewViewport.css).
-function canvasViewport(device: AppViewportDevice): AppViewport {
+function canvasViewport(device: string): AppViewport {
   const sized = document.querySelector<HTMLElement>('.frame-sized') ?? undefined;
   const widthPx = sized?.offsetWidth ?? 0;
   const shown = sized?.getBoundingClientRect().width ?? 0;
   const scale = widthPx > 0 && shown > 0 ? Math.round((shown / widthPx) * 1000) / 1000 : 1;
-  return { widthPx, heightPx: sized?.offsetHeight ?? 0, scale, device };
+  return { widthPx, heightPx: sized?.offsetHeight ?? 0, scale, device: appViewportDevice(device) };
+}
+
+// The apps API names desktop, laptop, tablet and phone; a breakpoint the project added reports as a custom width.
+function appViewportDevice(device: string): AppViewportDevice {
+  if (device === 'desktop' || device === 'laptop' || device === 'tablet' || device === 'phone' || device === 'canvas' || device === 'custom') {
+    return device;
+  }
+  return 'custom';
 }
 
 function leftOf(panel: Panel | undefined): AppLeftPanel | undefined {

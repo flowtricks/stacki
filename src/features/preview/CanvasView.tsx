@@ -5,31 +5,53 @@ import { parsePreviewMessage } from './previewMessages';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { panelDragPhase, subscribePanelDragPhase } from '../../ui/panelDragPhase';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import type { MessageKey } from '../../lib/i18n/localeContext';
-import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
+import type { Translator } from '../../lib/i18n/localeContext';
+import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
+import { barDevices } from './breakpointDevices';
+import { breakpointLabel } from './breakpointLabel';
 
 interface CanvasBreakpoint {
-  readonly key: 'desktop' | 'laptop' | 'tablet' | 'phone';
-  readonly labelKey: MessageKey;
+  /** `desktop`, or a breakpoint's id. */
+  readonly key: string;
+  readonly label: string;
   readonly width: number;
   readonly viewportHeight: number;
 }
-// The all-breakpoints canvas draws Desktop at a fixed 1440 and the other three at the project's widths (`.stacki/breakpoints.json`).
+// The all-breakpoints canvas draws Desktop at a fixed 1440 and every breakpoint at the project's width (`.stacki/breakpoints.json`), in
+// the preview bar's order: the wider ones, Desktop, then the narrower ones.
 const DESKTOP_FRAME_WIDTH = 1_440;
-function canvasBreakpoints(widths: BreakpointWidths): readonly CanvasBreakpoint[] {
-  return [
-    { key: 'desktop', labelKey: 'preview.canvas.desktop', width: DESKTOP_FRAME_WIDTH, viewportHeight: 900 },
-    { key: 'laptop', labelKey: 'preview.canvas.laptop', width: widths.laptop, viewportHeight: 768 },
-    { key: 'tablet', labelKey: 'preview.canvas.tablet', width: widths.tablet, viewportHeight: 1_024 },
-    { key: 'phone', labelKey: 'preview.canvas.phone', width: widths.phone, viewportHeight: 812 },
-  ];
+function canvasBreakpoints(resolved: readonly ResolvedBreakpoint[], translate: Translator): readonly CanvasBreakpoint[] {
+  const frames: CanvasBreakpoint[] = [];
+  for (const device of barDevices(resolved)) {
+    if (device.breakpoint !== undefined) {
+      const width = device.breakpoint.widthPx;
+      frames.push({ key: device.key, label: breakpointLabel(device.breakpoint, translate), width, viewportHeight: viewportHeightFor(device.breakpoint) });
+    } else if (device.key === 'desktop') {
+      frames.push({ key: 'desktop', label: translate('preview.canvas.desktop'), width: DESKTOP_FRAME_WIDTH, viewportHeight: 900 });
+    }
+  }
+  return frames;
+}
+
+// A typical window height for the width: wide screens 1080, laptops 768, tablets 1024, phones 812, watches 400.
+function viewportHeightFor(breakpoint: ResolvedBreakpoint): number {
+  if (breakpoint.direction === 'up') {
+    return 1_080;
+  }
+  if (breakpoint.widthPx >= 895) {
+    return 768;
+  }
+  if (breakpoint.widthPx >= 623) {
+    return 1_024;
+  }
+  return breakpoint.widthPx >= 400 ? 812 : 400;
 }
 const GAP_PX = 120;
 const PAGE_HEIGHT_PX_MAX = 30_000;
 const PAGE_HEIGHT_PX_MIN = 200;
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 4;
-type BreakpointKey = CanvasBreakpoint['key'];
+type BreakpointKey = string;
 // Per-breakpoint lookups that fill in as frames mount and report: a frame that
 // has not reported yet has no entry. Sparse maps, not update types, so absence
 // is part of the type.
@@ -41,8 +63,8 @@ interface ViewState {
   readonly scale: number;
 }
 interface CanvasViewProps {
-  /** The project's breakpoint widths: the Laptop, Tablet and Phone frames are drawn at them. */
-  readonly breakpoints: BreakpointWidths;
+  /** The project's breakpoints: one frame each is drawn at its canvas width. */
+  readonly breakpoints: readonly ResolvedBreakpoint[];
   readonly url: string;
   readonly refreshKey: string | number;
   readonly onPreviewLoaded?: () => void;
@@ -63,7 +85,8 @@ export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded
   const [heights, setHeights] = React.useState<FrameHeights>({});
   const viewRef = React.useRef<ViewState | undefined>(undefined);
   viewRef.current = view;
-  const frames = React.useMemo(() => layoutFrames(heights, canvasBreakpoints(breakpoints)), [heights, breakpoints]);
+  const translate = useTranslate();
+  const frames = React.useMemo(() => layoutFrames(heights, canvasBreakpoints(breakpoints, translate)), [heights, breakpoints, translate]);
   const lastFrame = frames.at(-1);
   if (!lastFrame) {
     throw new Error('Canvas requires at least one breakpoint');
@@ -164,7 +187,7 @@ function useFrameHeights(
     const onMessage = (event: MessageEvent<unknown>): void => {
       const match = Object.entries(iframesRef.current).find(([, iframe]) => iframe?.contentWindow === event.source);
       const key = match?.[0];
-      if (!isBreakpointKey(key)) {
+      if (key === undefined || !frames.some((entry) => entry.key === key)) {
         return;
       }
       if (isFrameReady(event.data)) {
@@ -207,10 +230,6 @@ export function parsePageHeight(input: unknown): number | undefined {
     return undefined;
   }
   return clamp(Math.round(input.height), PAGE_HEIGHT_PX_MIN, PAGE_HEIGHT_PX_MAX);
-}
-
-function isBreakpointKey(value: string | undefined): value is BreakpointKey {
-  return value === 'desktop' || value === 'laptop' || value === 'tablet' || value === 'phone';
 }
 
 function useFitCanvas(
@@ -359,7 +378,7 @@ function CanvasFrames({
       {frames.map((frame) => (
         <div key={frame.key} className="canvas-frame" style={{ left: frame.x, top: 0, width: frame.width, height: frame.height }}>
           <div className="canvas-frame-label" style={{ fontSize: 13 / view.scale, paddingBottom: 8 / view.scale }}>
-            {translate('preview.canvas.frameLabel', { device: translate(frame.labelKey), width: frame.width })}
+            {translate('preview.canvas.frameLabel', { device: frame.label, width: frame.width })}
           </div>
           <PreviewFrame
             refreshKey={refreshKey}
@@ -371,7 +390,7 @@ function CanvasFrames({
               }
             }}
             url={url}
-            title={translate('preview.canvas.frameTitle', { device: translate(frame.labelKey) })}
+            title={translate('preview.canvas.frameTitle', { device: frame.label })}
             onLoad={(event) => {
               event.currentTarget.contentWindow?.postMessage({ type: 'avb:set-vh', px: frame.viewportHeight }, new URL(url, window.location.href).origin);
               onPreviewLoaded?.();

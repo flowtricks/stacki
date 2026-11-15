@@ -605,10 +605,19 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   await act(async () => root.unmount());
   assert.equal(document.body.style.cursor, 'crosshair');
   assert.equal(hasCanvas(), false);
-  const lumos = { laptop: 1023, tablet: 767, phone: 479 };
+  const lumos = [
+    { id: 'laptop', direction: 'down', widthPx: 1023 },
+    { id: 'tablet', direction: 'down', widthPx: 767 },
+    { id: 'phone', direction: 'down', widthPx: 479 },
+  ];
+  const withUps = [{ id: 'bp-2', direction: 'up', widthPx: 1920 }, { id: 'bp-1', direction: 'up', widthPx: 1600 }, ...lumos];
   assert.deepEqual(
     [479, 480, 767, 768, 1023, 1024, NaN, 0].map((px) => deviceForWidth(px, lumos)),
     ['phone', 'tablet', 'tablet', 'laptop', 'laptop', 'desktop', undefined, undefined],
+  );
+  assert.deepEqual(
+    [1599, 1600, 1919, 1920, 3000, 1023, 1024].map((px) => deviceForWidth(px, withUps)),
+    ['desktop', 'bp-1', 'bp-1', 'bp-2', 'bp-2', 'laptop', 'desktop'],
   );
   dom.window.close();
 });

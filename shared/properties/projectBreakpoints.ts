@@ -1,22 +1,28 @@
-// `.stacki/breakpoints.json`: the preview breakpoints the breakpoint bar jumps to.
+// `.stacki/breakpoints.json`: the breakpoints the preview bar jumps to.
 //
-//   { "version": 2, "laptop": { "value": 64, "unit": "rem" }, "tablet": { "value": 48, "unit": "rem" }, "phone": { "value": 30, "unit": "rem" } }
+//   { "version": 3,
+//     "breakpoints": [
+//       { "id": "bp-1", "name": "Large", "direction": "up",   "value": 100, "unit": "rem" },
+//       { "id": "laptop",                 "direction": "down", "value": 64,  "unit": "rem" },
+//       { "id": "tablet",                 "direction": "down", "value": 48,  "unit": "rem" },
+//       { "id": "phone",                  "direction": "down", "value": 30,  "unit": "rem" } ] }
 //
-// The bar lists four devices, largest first: Desktop (full width, no number), then these three. Each entry is the query
-// boundary of its device, `width < X`, in the unit the person typed: `64rem` reads as `width < 64rem`. The defaults are the
-// Lumos breakpoints (64rem, 48rem and 30rem), so a Lumos project needs no file at all. Any rem or px numbers work as long as
-// each is smaller than the one above it once converted to pixels (1rem = 16px, the root font size the canvas reads rem at).
+// The bar lists Desktop in the middle, always full width and always there. A `down` breakpoint is a device narrower than
+// Desktop: its entry is the query boundary `width < X`, and its canvas is the largest whole pixel below it (64rem is 1023px).
+// An `up` breakpoint is a device wider than Desktop: its entry is `width >= X`, mobile first, and its canvas is exactly X
+// (100rem is 1600px). A project with Lumos breakpoints (min-width 30rem, 48rem, 64rem) needs no file: those are the defaults,
+// as `down` breakpoints named by their ids. Any rem or px numbers work.
 //
-// The one resolver: `canvasWidthPx` turns an entry into the width the canvas shows for that device, the largest whole pixel
-// below the boundary (64rem is 1023, 48rem is 767, 30rem is 479, 1024px is 1023). The preview bar, the canvas sizing and the
-// all-breakpoints view read widths only through it. This file's numbers are not turned into media queries: Stacki writes no
-// query from them, and the queries a person authors keep their own unit (Base reads those, baseWidth.ts).
+// Order is part of the file: the list is strictly decreasing in pixels, every `up` before every `down`, so a card's neighbours
+// are its limits (an `up` is above all the `down` ones, whatever its unit). A breakpoint may be removed (the list may be empty),
+// and up to `BREAKPOINT_LIMITS.countMax` may exist. `id` is stable (the sync record and the preview device are named by it);
+// `name` is optional, and absent for a built-in one it reads as the translated Laptop, Tablet or Phone.
 //
-// It is a tracked project file in the same family as `.stacki/guide.json` and `.stacki/variables.json`, shared by Desktop and
-// Studio and committed with the project. The file is created by the first edit, never by reading, and never written with the
-// defaults unless the person edited. A version 1 file (whole pixel widths, written by an earlier build) is read as if it were
-// version 2 and is rewritten only by an edit: exactly the old defaults 1023/767/479 read as the rem defaults, anything else as
-// px entries whose boundary is the old width plus one pixel, so the canvas widths do not move.
+// It is a tracked project file in the same family as `.stacki/guide.json`, shared by Desktop and Studio and committed with the
+// project. The file is created by the first edit, never by reading, and never written with the defaults unless the person
+// edited. Versions 1 (whole pixel widths) and 2 (laptop, tablet and phone as `{ value, unit }`) are read as version 3 and
+// rewritten only by an edit: version 1's exactly-old-defaults read as the rem defaults, anything else as px entries one pixel
+// above the old canvas width, so no canvas width moves.
 //
 // Boundary: `parseBreakpointsSource` takes the file's bytes (or `undefined` when there is no file) and answers a `Result`.
 // A hand-edited, merged or truncated file is an error value, never a crash: callers show the defaults, say why, and refuse to
@@ -28,8 +34,8 @@ import { err, ok, type AppError, type Result } from '../core/result';
 export const BREAKPOINTS_FILE = '.stacki/breakpoints.json';
 
 export const BREAKPOINT_LIMITS = {
-  /** The file is a few short entries; anything larger is not this file. */
-  fileBytesMax: 4 * 1024,
+  /** The file is a handful of short entries; anything larger is not this file. */
+  fileBytesMax: 8 * 1024,
   /** The narrowest boundary: the canvas cannot draw below 280px, so a boundary must leave a 280px width under it. */
   boundaryPxMin: 281,
   /** The widest boundary: the canvas draws up to 7680px (8K), one pixel under the boundary. */
@@ -40,46 +46,53 @@ export const BREAKPOINT_LIMITS = {
   entryCharsMax: 16,
   /** Decimal places a rem entry keeps: enough for `62.5rem`, short enough to be a number a person meant. */
   remDecimalsMax: 4,
+  /** Breakpoints in one project: the three built-in ones and eight more. */
+  countMax: 11,
+  /** Characters in a breakpoint's name. */
+  nameCharsMax: 24,
+  /** Characters in a breakpoint's id (`bp-12`). */
+  idCharsMax: 24,
 } as const satisfies Record<string, number>;
-
-export const BREAKPOINT_KEYS = ['laptop', 'tablet', 'phone'] as const;
-export type BreakpointKey = (typeof BREAKPOINT_KEYS)[number];
 
 export type BreakpointUnit = 'rem' | 'px';
 
-/** One breakpoint: the boundary of `width < value unit`. */
+/** `down` is `width < X` (a device narrower than Desktop); `up` is `width >= X` (a device wider than Desktop). */
+export type BreakpointDirection = 'down' | 'up';
+
+/** The boundary a breakpoint stands for: a number and its unit. */
 export interface BreakpointSetting {
   readonly value: number;
   readonly unit: BreakpointUnit;
 }
 
-/** The three configured breakpoints, strictly decreasing from laptop to phone once converted to pixels. */
-export interface BreakpointSettings {
-  readonly laptop: BreakpointSetting;
-  readonly tablet: BreakpointSetting;
-  readonly phone: BreakpointSetting;
+export interface Breakpoint {
+  readonly id: string;
+  /** Typed by the person; undefined for a built-in one that was never renamed. */
+  readonly name: string | undefined;
+  readonly direction: BreakpointDirection;
+  readonly setting: BreakpointSetting;
 }
 
-/** The canvas widths the settings resolve to, in whole CSS pixels, strictly descending. */
-export interface BreakpointWidths {
-  readonly laptop: number;
-  readonly tablet: number;
-  readonly phone: number;
+/** The breakpoints, strictly decreasing in pixels, every `up` before every `down`. */
+export type BreakpointList = readonly Breakpoint[];
+
+/** A breakpoint with the canvas width it resolves to. */
+export interface ResolvedBreakpoint extends Breakpoint {
+  readonly widthPx: number;
 }
+
+/** The ids the built-in breakpoints carry; their names read in the person's language. */
+export const BUILTIN_BREAKPOINT_IDS = ['laptop', 'tablet', 'phone'] as const;
+export type BuiltinBreakpointId = (typeof BUILTIN_BREAKPOINT_IDS)[number];
+
+export function isBuiltinBreakpointId(id: string): id is BuiltinBreakpointId {
+  return BUILTIN_BREAKPOINT_IDS.some((builtin) => builtin === id);
+}
+
+const down = (id: string, value: number, unit: BreakpointUnit): Breakpoint => ({ id, name: undefined, direction: 'down', setting: { value, unit } });
 
 /** The Lumos breakpoints: `width < 64rem`, `width < 48rem` and `width < 30rem`. */
-export const BREAKPOINT_DEFAULT_SETTINGS: BreakpointSettings = {
-  laptop: { value: 64, unit: 'rem' },
-  tablet: { value: 48, unit: 'rem' },
-  phone: { value: 30, unit: 'rem' },
-};
-
-/** What the defaults resolve to: 1023, 767 and 479. */
-export const BREAKPOINT_DEFAULTS: BreakpointWidths = {
-  laptop: canvasWidthPx(BREAKPOINT_DEFAULT_SETTINGS.laptop),
-  tablet: canvasWidthPx(BREAKPOINT_DEFAULT_SETTINGS.tablet),
-  phone: canvasWidthPx(BREAKPOINT_DEFAULT_SETTINGS.phone),
-};
+export const BREAKPOINT_DEFAULT_LIST: BreakpointList = [down('laptop', 64, 'rem'), down('tablet', 48, 'rem'), down('phone', 30, 'rem')];
 
 /** The boundary in pixels: `64rem` is 1024. Rounded to a millionth so `rem * 16` float noise cannot move a width. */
 export function boundaryPx(setting: BreakpointSetting): number {
@@ -87,26 +100,33 @@ export function boundaryPx(setting: BreakpointSetting): number {
   return Math.round(pixels * 1e6) / 1e6;
 }
 
-/** The canvas width of a breakpoint: the largest whole pixel below its boundary (`width < 64rem` holds up to 1023). */
-export function canvasWidthPx(setting: BreakpointSetting): number {
-  const width = Math.ceil(boundaryPx(setting)) - 1;
+/**
+ * The canvas width of a breakpoint, the one place a boundary becomes a width. `down`: the largest whole pixel below it
+ * (`width < 64rem` holds up to 1023). `up`: the smallest whole pixel that is in it (`width >= 100rem` holds from 1600).
+ */
+export function canvasWidthPx(breakpoint: Pick<Breakpoint, 'direction' | 'setting'>): number {
+  const boundary = boundaryPx(breakpoint.setting);
+  const width = breakpoint.direction === 'down' ? Math.ceil(boundary) - 1 : Math.ceil(boundary);
   assert(Number.isSafeInteger(width), 'canvasWidthPx: a whole number of pixels');
   return width;
 }
 
-/** All three canvas widths. The only place settings become widths. */
-export function resolveBreakpointWidths(settings: BreakpointSettings): BreakpointWidths {
-  return { laptop: canvasWidthPx(settings.laptop), tablet: canvasWidthPx(settings.tablet), phone: canvasWidthPx(settings.phone) };
+/** Every breakpoint with its canvas width, in list order. */
+export function resolveBreakpoints(list: BreakpointList): readonly ResolvedBreakpoint[] {
+  return list.map((breakpoint) => ({ ...breakpoint, widthPx: canvasWidthPx(breakpoint) }));
 }
+
+/** The default list's widths: 1023, 767 and 479. */
+export const BREAKPOINT_DEFAULTS: readonly ResolvedBreakpoint[] = resolveBreakpoints(BREAKPOINT_DEFAULT_LIST);
 
 /** The setting as typed and shown: `64rem`, `62.5rem`, `1024px`. */
 export function formatBreakpoint(setting: BreakpointSetting): string {
   return `${setting.value}${setting.unit}`;
 }
 
-/** The setting as a query condition: `width < 64rem`. */
-export function breakpointCondition(setting: BreakpointSetting): string {
-  return `width < ${formatBreakpoint(setting)}`;
+/** The breakpoint as a query condition: `width < 64rem` (down) or `width >= 100rem` (up). */
+export function breakpointCondition(breakpoint: Pick<Breakpoint, 'direction' | 'setting'>): string {
+  return `width ${breakpoint.direction === 'down' ? '<' : '>='} ${formatBreakpoint(breakpoint.setting)}`;
 }
 
 /**
@@ -155,56 +175,101 @@ export function checkedSetting(candidate: { readonly value: unknown; readonly un
   return ok(setting);
 }
 
-/** The first row that is not smaller than the row above it (tablet against laptop, then phone against tablet), if any. */
-export function firstOutOfOrder(settings: BreakpointSettings): BreakpointKey | undefined {
-  if (boundaryPx(settings.tablet) >= boundaryPx(settings.laptop)) {
-    return 'tablet';
-  }
-  if (boundaryPx(settings.phone) >= boundaryPx(settings.tablet)) {
-    return 'phone';
+/** Which neighbour a breakpoint is out of order with: it must be smaller than the one above, or larger than the one below. */
+export interface OrderConflict {
+  readonly index: number;
+  readonly against: Breakpoint;
+  readonly relation: 'smaller' | 'larger';
+}
+
+/**
+ * The first breakpoint that is not smaller than the one above it, as `smaller` against that neighbour. `up` breakpoints come
+ * before `down` ones, so an `up` that is not larger than a `down` shows as the `down` not being smaller than it.
+ */
+export function firstOrderConflict(list: BreakpointList): OrderConflict | undefined {
+  for (let index = 1; index < list.length; index += 1) {
+    const above = list[index - 1];
+    const current = list[index];
+    assert(above !== undefined, 'firstOrderConflict: the neighbour above exists');
+    assert(current !== undefined, 'firstOrderConflict: the breakpoint exists');
+    if (boundaryPx(current.setting) >= boundaryPx(above.setting)) {
+      return { index, against: above, relation: 'smaller' };
+    }
   }
   return undefined;
 }
 
-/** Three settings checked as a set: each valid, and strictly decreasing from laptop to phone in pixels. */
-export function checkedSettings(candidate: { readonly laptop: unknown; readonly tablet: unknown; readonly phone: unknown }): Result<BreakpointSettings> {
-  const parsed: Partial<Record<BreakpointKey, BreakpointSetting>> = {};
-  for (const key of BREAKPOINT_KEYS) {
-    const entry = candidate[key];
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      return failure('shape', `${key} must be an object with a value and a unit`);
-    }
-    const fields = new Map<string, unknown>(Object.entries(entry));
-    for (const name of fields.keys()) {
-      if (name !== 'value' && name !== 'unit') {
-        return failure('shape', `unknown field "${name}" in ${key}`);
-      }
-    }
-    const setting = checkedSetting({ value: fields.get('value'), unit: fields.get('unit') });
-    if (!setting.ok) {
-      return failure(setting.error.code.replace('breakpoints-', ''), `${key}: ${setting.error.message.replace('.stacki/breakpoints.json: ', '')}`);
-    }
-    parsed[key] = setting.value;
+/** How the breakpoint at `index` conflicts with its neighbours, from its own side: smaller than above, else larger than below. */
+export function conflictAt(list: BreakpointList, index: number): OrderConflict | undefined {
+  const current = list[index];
+  if (current === undefined) {
+    return undefined;
   }
-  const { laptop, tablet, phone } = parsed;
-  assert(laptop !== undefined, 'checkedSettings: laptop was checked above');
-  assert(tablet !== undefined, 'checkedSettings: tablet was checked above');
-  assert(phone !== undefined, 'checkedSettings: phone was checked above');
-  const settings: BreakpointSettings = { laptop, tablet, phone };
-  const outOfOrder = firstOutOfOrder(settings);
-  if (outOfOrder === 'tablet') {
-    return failure('order', 'tablet must be smaller than laptop');
+  const above = list[index - 1];
+  if (above !== undefined && boundaryPx(current.setting) >= boundaryPx(above.setting)) {
+    return { index, against: above, relation: 'smaller' };
   }
-  if (outOfOrder === 'phone') {
-    return failure('order', 'phone must be smaller than tablet');
+  const below = list[index + 1];
+  if (below !== undefined && boundaryPx(current.setting) <= boundaryPx(below.setting)) {
+    return { index, against: below, relation: 'larger' };
   }
-  return ok(settings);
+  return undefined;
 }
 
-/** The file's bytes to settings. `undefined` (no file yet) reads as the defaults. */
-export function parseBreakpointsSource(source: string | undefined): Result<BreakpointSettings> {
+const ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+/** Whether a name is storable: 1 to 24 characters, no control characters, not only spaces. */
+export function isBreakpointName(name: string): boolean {
+  return name.trim().length > 0 && name.length <= BREAKPOINT_LIMITS.nameCharsMax && !/[\u0000-\u001f\u007f]/.test(name);
+}
+
+/** The list as a set of breakpoints: each valid, ids and names unique, the count bounded, strictly decreasing. */
+export function checkedList(list: BreakpointList): Result<BreakpointList> {
+  if (list.length > BREAKPOINT_LIMITS.countMax) {
+    return failure('count', `at most ${BREAKPOINT_LIMITS.countMax} breakpoints`);
+  }
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  let seenDown = false;
+  for (const breakpoint of list) {
+    if (breakpoint.id.length === 0 || breakpoint.id.length > BREAKPOINT_LIMITS.idCharsMax || !ID_PATTERN.test(breakpoint.id)) {
+      return failure('id', 'a breakpoint id is lower-case letters, digits and hyphens');
+    }
+    if (ids.has(breakpoint.id)) {
+      return failure('duplicate', `two breakpoints share the id "${breakpoint.id}"`);
+    }
+    ids.add(breakpoint.id);
+    if (breakpoint.name !== undefined) {
+      if (!isBreakpointName(breakpoint.name)) {
+        return failure('name', 'a name is 1 to 24 characters with no control characters');
+      }
+      const lowered = breakpoint.name.trim().toLowerCase();
+      if (names.has(lowered)) {
+        return failure('name-duplicate', `two breakpoints are named "${breakpoint.name}"`);
+      }
+      names.add(lowered);
+    }
+    const setting = checkedSetting(breakpoint.setting);
+    if (!setting.ok) {
+      return setting;
+    }
+    if (breakpoint.direction === 'down') {
+      seenDown = true;
+    } else if (seenDown) {
+      return failure('order', 'every wider breakpoint comes before every narrower one');
+    }
+  }
+  const conflict = firstOrderConflict(list);
+  if (conflict !== undefined) {
+    return failure('order', `${conflict.against.id} must be larger than ${list[conflict.index]?.id ?? ''}`);
+  }
+  return ok(list);
+}
+
+/** The file's bytes to the list. `undefined` (no file yet) reads as the defaults. */
+export function parseBreakpointsSource(source: string | undefined): Result<BreakpointList> {
   if (source === undefined) {
-    return ok(BREAKPOINT_DEFAULT_SETTINGS);
+    return ok(BREAKPOINT_DEFAULT_LIST);
   }
   if (source.length > BREAKPOINT_LIMITS.fileBytesMax) {
     return failure('limit', `larger than ${BREAKPOINT_LIMITS.fileBytesMax} bytes`);
@@ -218,73 +283,211 @@ export function parseBreakpointsSource(source: string | undefined): Result<Break
   return parseBreakpoints(input);
 }
 
-/** A parsed JSON value to settings, every field checked. Version 1 (whole pixel widths) is migrated in memory. */
-export function parseBreakpoints(input: unknown): Result<BreakpointSettings> {
+/** A parsed JSON value to the list, every field checked. Versions 1 and 2 are migrated in memory. */
+export function parseBreakpoints(input: unknown): Result<BreakpointList> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return failure('shape', 'expected an object');
   }
   const fields = new Map<string, unknown>(Object.entries(input));
   const version = fields.get('version');
-  if (version !== 1 && version !== 2) {
-    return failure('version', 'unsupported version, expected 2');
+  if (version === 3) {
+    return parseVersionThree(fields);
   }
+  if (version === 1 || version === 2) {
+    return parseLegacy(fields, version);
+  }
+  return failure('version', 'unsupported version, expected 3');
+}
+
+function parseVersionThree(fields: ReadonlyMap<string, unknown>): Result<BreakpointList> {
   for (const name of fields.keys()) {
-    if (name !== 'version' && !isBreakpointKey(name)) {
+    if (name !== 'version' && name !== 'breakpoints') {
       return failure('shape', `unknown field "${name}"`);
     }
   }
-  const candidate = { laptop: fields.get('laptop'), tablet: fields.get('tablet'), phone: fields.get('phone') };
-  if (version === 2) {
-    return checkedSettings(candidate);
+  const entries = fields.get('breakpoints');
+  if (!Array.isArray(entries)) {
+    return failure('shape', 'breakpoints must be an array');
   }
-  return migrateVersionOne(candidate);
+  if (entries.length > BREAKPOINT_LIMITS.countMax) {
+    return failure('count', `at most ${BREAKPOINT_LIMITS.countMax} breakpoints`);
+  }
+  const list: Breakpoint[] = [];
+  // The array is bounded above, so this loop is too.
+  for (const entry of entries) {
+    const breakpoint = parseEntry(entry);
+    if (!breakpoint.ok) {
+      return breakpoint;
+    }
+    list.push(breakpoint.value);
+  }
+  return checkedList(list);
 }
 
-// Version 1 held canvas widths in whole pixels, 280 to 7680, strictly descending. The boundary is the width plus one pixel, so
-// every canvas width stays what it was; exactly the old defaults become the rem defaults, which resolve to the same widths.
-function migrateVersionOne(candidate: { readonly laptop: unknown; readonly tablet: unknown; readonly phone: unknown }): Result<BreakpointSettings> {
-  const widths: Partial<Record<BreakpointKey, number>> = {};
-  for (const key of BREAKPOINT_KEYS) {
-    const width = candidate[key];
-    if (typeof width !== 'number') {
-      return failure('type', `${key} must be a number`);
-    }
-    if (!Number.isSafeInteger(width)) {
-      return failure('integer', `${key} must be a whole number of pixels`);
-    }
-    widths[key] = width;
+function parseEntry(input: unknown): Result<Breakpoint> {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return failure('shape', 'a breakpoint must be an object');
   }
-  const { laptop, tablet, phone } = widths;
-  assert(laptop !== undefined, 'migrateVersionOne: laptop was read above');
-  assert(tablet !== undefined, 'migrateVersionOne: tablet was read above');
-  assert(phone !== undefined, 'migrateVersionOne: phone was read above');
-  if (laptop === BREAKPOINT_DEFAULTS.laptop && tablet === BREAKPOINT_DEFAULTS.tablet && phone === BREAKPOINT_DEFAULTS.phone) {
-    return ok(BREAKPOINT_DEFAULT_SETTINGS);
+  const fields = new Map<string, unknown>(Object.entries(input));
+  for (const name of fields.keys()) {
+    if (name !== 'id' && name !== 'name' && name !== 'direction' && name !== 'value' && name !== 'unit') {
+      return failure('shape', `unknown field "${name}" in a breakpoint`);
+    }
   }
-  return checkedSettings({
-    laptop: { value: laptop + 1, unit: 'px' },
-    tablet: { value: tablet + 1, unit: 'px' },
-    phone: { value: phone + 1, unit: 'px' },
+  const id = fields.get('id');
+  const name = fields.get('name');
+  const direction = fields.get('direction');
+  if (typeof id !== 'string') {
+    return failure('id', 'a breakpoint needs an id');
+  }
+  if (name !== undefined && typeof name !== 'string') {
+    return failure('name', 'a name must be text');
+  }
+  if (direction !== 'up' && direction !== 'down') {
+    return failure('direction', 'direction must be "up" or "down"');
+  }
+  const setting = checkedSetting({ value: fields.get('value'), unit: fields.get('unit') });
+  if (!setting.ok) {
+    return setting;
+  }
+  return ok({ id, name, direction, setting: setting.value });
+}
+
+// Versions 1 and 2 held laptop, tablet and phone only. Version 2: `{ value, unit }` each. Version 1: whole pixel canvas widths,
+// whose boundary is one pixel more; exactly the old defaults become the rem defaults, which resolve to the same widths.
+function parseLegacy(fields: ReadonlyMap<string, unknown>, version: 1 | 2): Result<BreakpointList> {
+  for (const name of fields.keys()) {
+    if (name !== 'version' && !isBuiltinBreakpointId(name)) {
+      return failure('shape', `unknown field "${name}"`);
+    }
+  }
+  const settings: BreakpointSetting[] = [];
+  const widths: number[] = [];
+  for (const id of BUILTIN_BREAKPOINT_IDS) {
+    const entry = fields.get(id);
+    if (version === 1) {
+      if (typeof entry !== 'number') {
+        return failure('type', `${id} must be a number`);
+      }
+      if (!Number.isSafeInteger(entry)) {
+        return failure('integer', `${id} must be a whole number of pixels`);
+      }
+      widths.push(entry);
+      continue;
+    }
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      return failure('shape', `${id} must be an object with a value and a unit`);
+    }
+    const inner = new Map<string, unknown>(Object.entries(entry));
+    for (const name of inner.keys()) {
+      if (name !== 'value' && name !== 'unit') {
+        return failure('shape', `unknown field "${name}" in ${id}`);
+      }
+    }
+    const setting = checkedSetting({ value: inner.get('value'), unit: inner.get('unit') });
+    if (!setting.ok) {
+      return failure(setting.error.code.replace('breakpoints-', ''), `${id}: ${setting.error.message.replace('.stacki/breakpoints.json: ', '')}`);
+    }
+    settings.push(setting.value);
+  }
+  if (version === 1) {
+    const [laptop, tablet, phone] = widths;
+    assert(laptop !== undefined, 'parseLegacy: laptop was read above');
+    assert(tablet !== undefined, 'parseLegacy: tablet was read above');
+    assert(phone !== undefined, 'parseLegacy: phone was read above');
+    if (laptop === 1023 && tablet === 767 && phone === 479) {
+      return ok(BREAKPOINT_DEFAULT_LIST);
+    }
+    for (const width of widths) {
+      settings.push({ value: width + 1, unit: 'px' });
+    }
+  }
+  const list = BUILTIN_BREAKPOINT_IDS.map((id, index): Breakpoint => {
+    const setting = settings[index];
+    assert(setting !== undefined, 'parseLegacy: a setting exists for each built-in breakpoint');
+    return { id, name: undefined, direction: 'down', setting };
   });
+  return checkedList(list);
 }
 
-/** The pretty-printed version 2 file text: fixed key order, two-space indent, a trailing newline, so equal values are equal bytes. */
-export function serializeBreakpoints(settings: BreakpointSettings): string {
-  const checked = checkedSettings(settings);
-  assert(checked.ok, 'serializeBreakpoints: the settings are a valid set');
-  const entry = (setting: BreakpointSetting): { readonly value: number; readonly unit: BreakpointUnit } => ({ value: setting.value, unit: setting.unit });
-  const text =
-    JSON.stringify({ version: 2, laptop: entry(settings.laptop), tablet: entry(settings.tablet), phone: entry(settings.phone) }, undefined, 2) + '\n';
+/** The pretty-printed version 3 file text: fixed key order, two-space indent, a trailing newline, so equal lists are equal bytes. */
+export function serializeBreakpoints(list: BreakpointList): string {
+  const checked = checkedList(list);
+  assert(checked.ok, 'serializeBreakpoints: the breakpoints are a valid list');
+  const entries = list.map((breakpoint) => ({
+    id: breakpoint.id,
+    ...(breakpoint.name === undefined ? {} : { name: breakpoint.name }),
+    direction: breakpoint.direction,
+    value: breakpoint.setting.value,
+    unit: breakpoint.setting.unit,
+  }));
+  const text = JSON.stringify({ version: 3, breakpoints: entries }, undefined, 2) + '\n';
   assert(text.length <= BREAKPOINT_LIMITS.fileBytesMax, 'serializeBreakpoints: within the file bound');
   return text;
 }
 
-export function breakpointsEqual(first: BreakpointSettings, second: BreakpointSettings): boolean {
-  return BREAKPOINT_KEYS.every((key) => first[key].value === second[key].value && first[key].unit === second[key].unit);
+export function breakpointsEqual(first: BreakpointList, second: BreakpointList): boolean {
+  return (
+    first.length === second.length &&
+    first.every((breakpoint, index) => {
+      const other = second[index];
+      return (
+        other !== undefined &&
+        breakpoint.id === other.id &&
+        breakpoint.name === other.name &&
+        breakpoint.direction === other.direction &&
+        breakpoint.setting.value === other.setting.value &&
+        breakpoint.setting.unit === other.setting.unit
+      );
+    })
+  );
 }
 
-function isBreakpointKey(name: string): name is BreakpointKey {
-  return BREAKPOINT_KEYS.some((key) => key === name);
+/** The list with a breakpoint inserted where its boundary puts it: ups before downs, each strictly decreasing. */
+export function withBreakpointAdded(list: BreakpointList, breakpoint: Breakpoint): BreakpointList {
+  const pixels = boundaryPx(breakpoint.setting);
+  const at = list.findIndex((other) => boundaryPx(other.setting) < pixels);
+  return at === -1 ? [...list, breakpoint] : [...list.slice(0, at), breakpoint, ...list.slice(at)];
+}
+
+export function withBreakpointRemoved(list: BreakpointList, id: string): BreakpointList {
+  return list.filter((breakpoint) => breakpoint.id !== id);
+}
+
+export function withBreakpointSetting(list: BreakpointList, id: string, setting: BreakpointSetting): BreakpointList {
+  return list.map((breakpoint) => (breakpoint.id === id ? { ...breakpoint, setting } : breakpoint));
+}
+
+export function withBreakpointName(list: BreakpointList, id: string, name: string | undefined): BreakpointList {
+  return list.map((breakpoint) => (breakpoint.id === id ? { ...breakpoint, name } : breakpoint));
+}
+
+/** An id no breakpoint in the list has: `bp-1`, `bp-2`, … */
+export function nextBreakpointId(list: BreakpointList): string {
+  const taken = new Set(list.map((breakpoint) => breakpoint.id));
+  for (let number = 1; number <= BREAKPOINT_LIMITS.countMax + 1; number += 1) {
+    const id = `bp-${number}`;
+    if (!taken.has(id)) {
+      return id;
+    }
+  }
+  throw new Error('nextBreakpointId: the list is full');
+}
+
+/** `name`, or `name 2`, `name 3` … when the list already has a breakpoint by that name (compared without case). */
+export function uniqueBreakpointName(list: BreakpointList, name: string, label: (breakpoint: Breakpoint) => string): string {
+  const taken = new Set(list.map((breakpoint) => label(breakpoint).trim().toLowerCase()));
+  const base = name.slice(0, BREAKPOINT_LIMITS.nameCharsMax - 3).trim();
+  let candidate = base;
+  for (let number = 2; taken.has(candidate.toLowerCase()) && number <= BREAKPOINT_LIMITS.countMax + 2; number += 1) {
+    candidate = `${base} ${number}`;
+  }
+  return candidate;
+}
+
+/** The `up` breakpoints, widest first, then Desktop's place, then the `down` ones. The bar and the cards draw this order. */
+export function barOrder(list: BreakpointList): { readonly up: readonly Breakpoint[]; readonly down: readonly Breakpoint[] } {
+  return { up: list.filter((breakpoint) => breakpoint.direction === 'up'), down: list.filter((breakpoint) => breakpoint.direction === 'down') };
 }
 
 function failure(code: string, detail: string): Result<never, AppError> {

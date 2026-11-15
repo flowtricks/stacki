@@ -21,9 +21,9 @@ const css = { lineComments: false };
 const scss = { lineComments: true };
 const old: BreakpointSetting = { value: 64, unit: 'rem' };
 
-function matched(text: string, setting: BreakpointSetting = old, syntax = css): readonly string[] {
+function matched(text: string, setting: BreakpointSetting = old, syntax = css, direction: 'down' | 'up' = 'down'): readonly string[] {
   return findWidthBounds(text, syntax).flatMap((bound) => {
-    const kind = classifyBound(bound, setting);
+    const kind = classifyBound(bound, { direction, setting });
     return kind === undefined ? [] : [`${kind}:${text.slice(bound.start, bound.end)}`];
   });
 }
@@ -180,4 +180,25 @@ test('a hostile text is bounded, never a crash', () => {
   assert.doesNotThrow(() => findWidthBounds('@media ' + '(min-width: 64rem) and '.repeat(5000) + '{}', css));
   assert.doesNotThrow(() => findWidthBounds('/* unterminated @media (min-width: 64rem)', css));
   assert.doesNotThrow(() => findWidthBounds('@media (min-width: 64rem', css));
+});
+
+test('an up breakpoint (width >= X) matches the same bounds, and a width > X as the exclusive form', () => {
+  const large: BreakpointSetting = { value: 100, unit: 'rem' };
+  const up = (text: string, syntax = css) => matched(text, large, syntax, 'up');
+  assert.deepEqual(up('@media (width >= 100rem) { a {} }'), ['exact:100rem']);
+  assert.deepEqual(up('@media (min-width: 100rem) { a {} }'), ['exact:100rem']);
+  assert.deepEqual(up('@media (100rem <= width) { a {} }'), ['exact:100rem']);
+  assert.deepEqual(up('@media only screen and (min-width: 1600px) { a {} }'), ['exact:1600px']);
+  assert.deepEqual(up('@media (width < 100rem) { a {} }'), ['exact:100rem'], 'the complement is the same boundary');
+  assert.deepEqual(up('@media (width > 100rem) { a {} }'), ['exclusive:100rem']);
+  assert.deepEqual(up('@media (100rem < width) { a {} }'), ['exclusive:100rem']);
+  assert.deepEqual(up('@media (max-width: 99.9375rem) { a {} }'), ['inclusive:99.9375rem']);
+  assert.deepEqual(up('@media (width >= 99rem) { a {} }'), []);
+  // The same text is not exclusive for a down breakpoint: width > X is simply the boundary there.
+  assert.deepEqual(matched('@media (width > 100rem) { a {} }', large, css, 'down'), ['exact:100rem']);
+});
+
+test('an exclusive match is rewritten like an exact one, as the new breakpoint was typed', () => {
+  assert.equal(replacementText('exclusive', { unit: 'rem' }, { value: 120, unit: 'rem' }, { lumos: false }), '120rem');
+  assert.equal(replacementText('exclusive', { unit: 'rem' }, { value: 1920, unit: 'px' }, { lumos: true }), '120rem');
 });

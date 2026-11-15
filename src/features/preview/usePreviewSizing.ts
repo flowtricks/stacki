@@ -2,8 +2,8 @@
 import { assert } from '../../../shared/core/assert';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
-import { deviceForWidth, deviceWidth, type PreviewDevice } from './PreviewToolbar';
-import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
+import { deviceForShortcut, deviceForWidth, deviceWidth, type PreviewDevice } from './breakpointDevices';
+import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
 import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
 import { panelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
@@ -18,7 +18,7 @@ export function usePreviewDimensions() {
 export function usePreviewSizing(
   device: PreviewDevice,
   dimensions: ReturnType<typeof usePreviewDimensions>,
-  breakpoints: BreakpointWidths,
+  breakpoints: readonly ResolvedBreakpoint[],
   onDevice: (device: PreviewDevice) => void,
 ) {
   const startDrag = usePointerDrag();
@@ -33,7 +33,7 @@ export function usePreviewSizing(
   const width = device === 'custom' ? (customWidth ?? deviceWidth(device, breakpoints)) : deviceWidth(device, breakpoints);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
-  useDeviceShortcuts(onDevice);
+  useDeviceShortcuts(breakpoints, onDevice);
   useEffect(() => {
     if (device !== 'custom') {
       setCustomWidth(undefined);
@@ -44,7 +44,7 @@ export function usePreviewSizing(
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
   const viewport = previewViewport(width, available, customHeight);
-  const activeDevice = device === 'canvas' ? 'canvas' : (deviceForWidth(viewport.width, breakpoints) ?? device);
+  const activeDevice = device === 'canvas' || device === 'desktop' ? device : (deviceForWidth(viewport.width, breakpoints) ?? device);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
     onDevice('custom');
@@ -142,15 +142,17 @@ function usePanelSettling(phase: PanelDragPhase): boolean {
   return phase === 'dragging' || settling !== 'live';
 }
 
-function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {
+function useDeviceShortcuts(breakpoints: readonly ResolvedBreakpoint[], onDevice: (device: PreviewDevice) => void): void {
   const onDeviceRef = useRef(onDevice);
   onDeviceRef.current = onDevice;
+  const breakpointsRef = useRef(breakpoints);
+  breakpointsRef.current = breakpoints;
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target ?? undefined)) {
         return;
       }
-      const device = deviceFromKey(event.key);
+      const device = deviceForShortcut(event.key, breakpointsRef.current);
       if (device) {
         onDeviceRef.current(device);
       }
@@ -162,23 +164,6 @@ function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {
 
 function isTypingTarget(target: EventTarget | undefined): boolean {
   return target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable);
-}
-
-function deviceFromKey(key: string): PreviewDevice | undefined {
-  switch (key) {
-    case '1':
-      return 'desktop';
-    case '2':
-      return 'laptop';
-    case '3':
-      return 'tablet';
-    case '4':
-      return 'phone';
-    case '5':
-      return 'canvas';
-    default:
-      return undefined;
-  }
 }
 
 interface ResizeContext {

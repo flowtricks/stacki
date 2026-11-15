@@ -67,7 +67,7 @@ export function PreviewCanvas(props: Props) {
     offSite: { clearOverlays: props.preview.clearOverlays },
     pages: props.sitePages,
   });
-  const { widths: breakpoints } = useProjectBreakpoints(props.projectName);
+  const { resolved: breakpoints } = useProjectBreakpoints(props.projectName);
   const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
@@ -166,7 +166,7 @@ function PreviewSurface({
   readonly interactive?: boolean;
 }) {
   const loading = usePreviewLoading(props.preview.url, sizing.wrapRef, props.device === 'canvas', props.preview.retry);
-  const { widths: breakpoints } = useProjectBreakpoints(props.projectName);
+  const { resolved: breakpoints } = useProjectBreakpoints(props.projectName);
   return (
     <div className="preview-frame-wrap" ref={sizing.wrapRef} data-preview-loading={!loading.ready} aria-busy={!loading.ready}>
       {props.preview.url &&

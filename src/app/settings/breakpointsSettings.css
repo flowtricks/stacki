@@ -12,7 +12,7 @@
 }
 .breakpoints-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   column-gap: 12px;
   row-gap: 6px;
@@ -109,4 +109,132 @@
   color: var(--red);
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* A card's name is an input that reads as a title until it is hovered or focused. */
+.breakpoints-name-input {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  margin: -2px -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+.breakpoints-name-input:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+.breakpoints-name-input:focus-visible {
+  background: var(--bg-input);
+  outline: 2px solid var(--accent);
+}
+.breakpoints-name-input[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
+}
+.breakpoints-remove {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.breakpoints-remove:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.14);
+  color: var(--red);
+}
+.breakpoints-remove:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoints-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.breakpoints-card[data-breakpoint='desktop'] .breakpoints-pill {
+  grid-column: 3 / -1;
+}
+.breakpoints-add-card {
+  background: rgba(255, 255, 255, 0.07);
+}
+.breakpoints-direction {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-input);
+  align-self: flex-start;
+}
+.breakpoints-direction button {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.breakpoints-direction button.on {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+.breakpoints-direction button:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoints-add-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+.breakpoints-add-confirm,
+.breakpoints-add,
+.breakpoints-add-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.breakpoints-add-confirm {
+  background: var(--accent);
+  color: #fff;
+}
+.breakpoints-add-confirm:disabled,
+.breakpoints-add:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.breakpoints-add:hover:not(:disabled),
+.breakpoints-add-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.breakpoints-add:focus-visible,
+.breakpoints-add-confirm:focus-visible,
+.breakpoints-add-cancel:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoints-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.breakpoints-note {
+  color: var(--text-faint);
+  font-size: 11px;
 }

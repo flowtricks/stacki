@@ -373,7 +373,7 @@ function desktopViewport(app: ShellView): AppViewport {
   const heightPx = sized?.offsetHeight ?? 0;
   const shown = sized?.getBoundingClientRect().width ?? 0;
   const scale = widthPx > 0 && shown > 0 ? Math.round((shown / widthPx) * 1000) / 1000 : 1;
-  return { widthPx, heightPx, scale, device: app.device };
+  return { widthPx, heightPx, scale, device: appDeviceOf(app.device) };
 }
 
 function pageView(app: ShellView): AppPageView | undefined {
@@ -451,4 +451,12 @@ function hashOf(text: string): string {
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return hash.toString(16);
+}
+
+// The apps API names desktop, laptop, tablet and phone; a breakpoint the project added (`bp-1`) reports as a custom width.
+function appDeviceOf(device: string): AppViewport['device'] {
+  if (device === 'desktop' || device === 'laptop' || device === 'tablet' || device === 'phone' || device === 'canvas' || device === 'custom') {
+    return device;
+  }
+  return 'custom';
 }

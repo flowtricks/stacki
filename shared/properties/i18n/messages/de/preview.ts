@@ -8,19 +8,17 @@ export const messages = {
   'preview.canvas.fitAll': 'Alle Breakpoints einpassen',
   'preview.canvas.frameLabel': '{device} · {width}px', // same
   'preview.canvas.frameTitle': 'Vorschau: {device}',
-  'preview.canvas.laptop': 'Laptop', // same
-  'preview.canvas.phone': 'Smartphone',
-  'preview.canvas.tablet': 'Tablet', // same
   'preview.canvas.zoomIn': 'Vergrößern',
   'preview.canvas.zoomOut': 'Verkleinern',
   'preview.canvas.zoomReset': 'Auf 100 % zoomen',
   'preview.crumbs.more': '{count} weitere anzeigen: {names}',
-  'preview.device.canvas': 'Canvas: alle Breakpoints — 5',
-  'preview.device.desktop': 'Desktop — 1', // same
+  'preview.device.canvas': 'Canvas: alle Breakpoints — {key}',
+  'preview.device.canvasNoKey': 'Canvas: alle Breakpoints',
+  'preview.device.desktop': 'Desktop — {key}', // same
+  'preview.device.desktopNoKey': 'Desktop', // same
   'preview.device.group': 'Vorschaugerät',
-  'preview.device.laptop': 'Laptop ({width}px) — 2', // same
-  'preview.device.phone': 'Smartphone ({width}px) — 4',
-  'preview.device.tablet': 'Tablet ({width}px) — 3', // same
+  'preview.device.item': '{name} ({width}px) — {key}', // same
+  'preview.device.itemNoKey': '{name} ({width}px)', // same
   'preview.frame.loading': 'Seite wird geladen …',
   'preview.frame.previous': '{title} (vorherige Seite)',
   'preview.guide.color': 'Farbe',

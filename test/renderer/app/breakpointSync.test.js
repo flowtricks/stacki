@@ -219,8 +219,9 @@ test('a changed number scans, opens the dialog with the count, and writes nothin
   const { root } = await mount('sync-open');
   await commit('Laptop', '70rem');
   assert.equal(calls.scan.length, 1);
-  assert.deepEqual(calls.scan[0].old, { value: 64, unit: 'rem' });
-  assert.deepEqual(calls.scan[0].next, { value: 70, unit: 'rem' });
+  assert.equal(calls.scan[0].id, 'laptop');
+  assert.deepEqual(calls.scan[0].old, { direction: 'down', value: 64, unit: 'rem' });
+  assert.deepEqual(calls.scan[0].next, { direction: 'down', value: 70, unit: 'rem' });
   assert.ok(dialog(), 'the dialog is up');
   assert.equal(title(), 'Update 4 media queries?');
   assert.equal(calls.apply.length, 0, 'nothing is written before the primary button');
@@ -289,7 +290,7 @@ test('Just save the number sends nothing and closes; the number stays saved', as
   assert.ok(dialog() === null);
   assert.equal(calls.apply.length, 0);
   assert.equal(calls.restore.length, 0);
-  assert.equal(JSON.parse(storage.state.source).laptop.value, 70);
+  assert.equal(JSON.parse(storage.state.source).breakpoints[0].value, 70);
   root.unmount();
 });
 
@@ -317,10 +318,10 @@ test('Update sends exactly the checked places and the unchecked ones to remember
   assert.equal(undo[0].label, 'Sync breakpoint queries');
   await undo[0].undo();
   assert.deepEqual(calls.restore, [{ projectPath: 'sync-apply', journalId: 'journal-1', direction: 'undo' }]);
-  assert.equal(JSON.parse(storage.state.source).laptop.value, 64, 'undo puts the old number back too');
+  assert.equal(JSON.parse(storage.state.source).breakpoints[0].value, 64, 'undo puts the old number back too');
   await undo[0].redo();
   assert.equal(calls.restore[1].direction, 'redo');
-  assert.equal(JSON.parse(storage.state.source).laptop.value, 70);
+  assert.equal(JSON.parse(storage.state.source).breakpoints[0].value, 70);
   root.unmount();
 });
 

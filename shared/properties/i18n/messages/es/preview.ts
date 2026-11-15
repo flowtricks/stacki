@@ -8,19 +8,17 @@ export const messages = {
   'preview.canvas.fitAll': 'Ajustar todos los puntos de corte',
   'preview.canvas.frameLabel': '{device} · {width}px', // same
   'preview.canvas.frameTitle': 'Vista previa: {device}',
-  'preview.canvas.laptop': 'Portátil',
-  'preview.canvas.phone': 'Móvil',
-  'preview.canvas.tablet': 'Tableta',
   'preview.canvas.zoomIn': 'Acercar',
   'preview.canvas.zoomOut': 'Alejar',
   'preview.canvas.zoomReset': 'Zoom al 100 %',
   'preview.crumbs.more': 'Mostrar {count} más: {names}',
-  'preview.device.canvas': 'Lienzo: todos los puntos de corte — 5',
-  'preview.device.desktop': 'Escritorio — 1',
+  'preview.device.canvas': 'Lienzo: todos los puntos de corte — {key}',
+  'preview.device.canvasNoKey': 'Lienzo: todos los puntos de corte',
+  'preview.device.desktop': 'Escritorio — {key}',
+  'preview.device.desktopNoKey': 'Escritorio',
   'preview.device.group': 'Dispositivo de vista previa',
-  'preview.device.laptop': 'Portátil ({width}px) — 2',
-  'preview.device.phone': 'Móvil ({width}px) — 4',
-  'preview.device.tablet': 'Tableta ({width}px) — 3',
+  'preview.device.item': '{name} ({width}px) — {key}', // same
+  'preview.device.itemNoKey': '{name} ({width}px)', // same
   'preview.frame.loading': 'Cargando página…',
   'preview.frame.previous': '{title} (página anterior)',
   'preview.guide.color': 'Color', // same
