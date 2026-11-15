@@ -156,3 +156,137 @@ test('a remembered answer is keyed by the CSS it was read against, and the memor
   assert.equal(cache.readScanSnapshot(before), undefined, 'the oldest entries are dropped at the bound');
   assert.equal(cache.readScanSnapshot(cache.scanSnapshotKey(`e${cache.SCAN_SNAPSHOT_ENTRIES_MAX + 4}`, [])), snapshot, 'the newest are kept');
 });
+
+// ── Variable-connected rows across a switch between two connected elements ──
+//
+// Both elements set every Select-type typography property through a variable. The rows
+// must show the chip, or the chip-shaped placeholder, in every frame: never the plain
+// dropdown or input that a stage without the rule draws. Two pairs: one whose rules the
+// source can see (the element's own classes), one only the page can match (an ancestor a
+// component renders). The canvas answers at once, late, after its 1.5 s deadline, or
+// never; elements are toggled A→B→A→B, with an undo in between.
+
+const CONNECTED_ROWS = ['Font', 'Weight', 'Size', 'Height', 'Letter spacing'];
+const connectedDeclarations = (suffix) =>
+  `font-family: var(--f${suffix}); font-weight: var(--w${suffix}); font-size: var(--s${suffix}); line-height: var(--l${suffix}); letter-spacing: var(--t${suffix});`;
+const CONNECTED = {
+  sheets: [
+    {
+      rel: 'src/styles/base.css',
+      css: [
+        ':root { --fa: Inter; --wa: 600; --sa: 2rem; --la: 1.1; --ta: 0.01em; --fb: Lora; --wb: 700; --sb: 3rem; --lb: 1.2; --tb: 0.02em; }',
+        `.own-a { ${connectedDeclarations('a')} }`,
+        `.own-b { ${connectedDeclarations('b')} }`,
+        `.section .deep-a { ${connectedDeclarations('a')} }`,
+        `.section .deep-b { ${connectedDeclarations('b')} }`,
+      ].join('\n'),
+    },
+  ],
+  nodes: [
+    { id: 'a', kind: 'element', name: 'h2', props: { class: { type: 'string', value: 'own-a' } }, children: [] },
+    { id: 'b', kind: 'element', name: 'h2', props: { class: { type: 'string', value: 'own-b' } }, children: [] },
+    {
+      // A component renders the `.section` around its slot: the source cannot see it.
+      id: 'wrap',
+      kind: 'component',
+      name: 'Section',
+      props: {},
+      children: [
+        { id: 'da', kind: 'element', name: 'h2', props: { class: { type: 'string', value: 'deep-a' } }, children: [] },
+        { id: 'db', kind: 'element', name: 'h2', props: { class: { type: 'string', value: 'deep-b' } }, children: [] },
+      ],
+    },
+  ],
+  markup: [
+    '<h2 class="own-a" data-avb-p="a">a</h2><h2 class="own-b" data-avb-p="b">b</h2>',
+    '<section class="section" data-avb-p="wrap"><h2 class="deep-a" data-avb-p="da">c</h2><h2 class="deep-b" data-avb-p="db">d</h2></section>',
+  ].join(''),
+  selectedId: 'a',
+};
+
+// Each connected row as a person sees it: its chip, a placeholder, or a plain editor.
+function connectedRows(container) {
+  const placeholder = container.querySelectorAll('.embed-editor_decls .ui-skeleton').length > 0;
+  return Object.fromEntries(
+    CONNECTED_ROWS.map((caption) => {
+      if (placeholder) {
+        return [caption, 'placeholder'];
+      }
+      // In the Typography section: the Size section has a Height of its own.
+      const typography =
+        [...container.querySelectorAll('.embed-editor_decls > *')].find((section) => /^\s*Typography/.test(section.textContent ?? '')) ?? container;
+      const label = [...typography.querySelectorAll('.u-field-label, label')].find((element) => element.textContent.trim() === caption);
+      let box = label?.parentElement ?? undefined;
+      for (let depth = 0; box !== undefined && depth < 3 && box.querySelector('input, button.u-select-button, [data-chip]') === null; depth += 1) {
+        box = box.parentElement ?? undefined;
+      }
+      if (box === undefined) {
+        return [caption, 'missing'];
+      }
+      return [caption, box.querySelector('[data-chip]') === null ? 'plain' : 'chip'];
+    }),
+  );
+}
+
+const timers = require('node:timers');
+const longWait = (milliseconds) => new Promise((resolve) => timers.setTimeout(resolve, milliseconds));
+
+async function connectedSwitch(panel, id, timing) {
+  panel.bridge.mode = timing === 'at once' ? 'immediate' : 'held';
+  const recorder = recordFrames(panel, connectedRows);
+  panel.select(id);
+  await panel.settle();
+  if (timing === 'late') {
+    await longWait(200);
+    panel.bridge.release({ order: 'shuffle', seed: 4 });
+  } else if (timing === 'after its deadline') {
+    await longWait(1600);
+    panel.bridge.release({ order: 'reverse' });
+  } else if (timing === 'never') {
+    await longWait(1600);
+  }
+  await panel.settle();
+  panel.bridge.mode = 'immediate';
+  return recorder.stop();
+}
+
+for (const timing of ['at once', 'late', 'after its deadline', 'never']) {
+  for (const [first, second, pageOnly] of [
+    ['a', 'b', false],
+    ['da', 'db', true],
+  ]) {
+    test(`connected rows never show a plain editor (${pageOnly ? 'page-only rules' : 'own rules'}, canvas answers ${timing})`, async (context) => {
+      const panel = await mountStylePanel({ ...CONNECTED, selectedId: first });
+      context.after(() => panel.unmount());
+      // A rule only the page can match is unknowable without the canvas: when it never
+      // answers, the source's answer (no rule) is the truth there is.
+      const knowable = !pageOnly || timing === 'at once' || timing === 'late';
+      for (const [step, id] of [second, first, second, first].entries()) {
+        if (step === 2) {
+          // An undo in between: the history moves and the panel re-reads.
+          panel.rerender({ historyTick: (panel.props.historyTick ?? 0) + 1 });
+          await panel.settle();
+        }
+        const frames = await connectedSwitch(panel, id, timing);
+        const log = frames.map((frame) => Object.values(frame).join(','));
+        if (knowable) {
+          assert.ok(
+            frames.every((frame) => Object.values(frame).every((kind) => kind === 'chip' || kind === 'placeholder')),
+            `switch ${step} to ${id}: every frame is chips or a placeholder\n${log.join('\n')}`,
+          );
+          assert.ok(
+            Object.values(frames[frames.length - 1]).every((kind) => kind === 'chip'),
+            `and it ends on the chips\n${log.join('\n')}`,
+          );
+        } else {
+          assert.equal(
+            // Nothing to know but the source's answer: the frames still go straight to it.
+            frames.length === 1 ? undefined : directFailure(frames.slice(1), (frame) => Object.values(frame).includes('placeholder')),
+            undefined,
+            log.join('\n'),
+          );
+        }
+      }
+    });
+  }
+}

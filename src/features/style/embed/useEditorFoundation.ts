@@ -597,13 +597,15 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
       if (seq !== seqRef.current) {
         return;
       }
-      // A streamed partial is a step on the way (EditorBasics.tsx). So is a
-      // source-only pass that could not read the element's classes (markup a
-      // component renders): its list is the page's global selectors alone, and
-      // drawing it flashed them between two elements' chips. One that did read
-      // them is a real answer, shown while a busy canvas is still answering.
-      const sourceKnown = rootSnapshot.classList.length > 0;
-      const settled = !content.partial && (options.sourceOnly !== true || sourceKnown);
+      // A streamed partial is a step on the way (EditorBasics.tsx). So is every
+      // source-only pass, even one that read the element's classes: the source
+      // matcher cannot see past a component's edge or a class added at runtime, so a
+      // rule only the page can match (`.section .title { font-weight: var(--w) }`)
+      // is missing from it. Drawn, it showed the plain Weight dropdown until the
+      // canvas answered and the chip replaced it; replacing a remembered answer, it
+      // flipped a chip to that dropdown and back on every switch. Only the canvas's
+      // answer (or its deadline passing, which answers `undefined`) settles.
+      const settled = !content.partial && options.sourceOnly !== true;
       const elementKey = serializeElementId(element);
       // This element's settled answer is already drawn (a remembered one, or an earlier
       // pass): a step on the way to the next one must not replace it with less.

@@ -437,16 +437,19 @@ const contrastRatio = (first, second) => {
 
   // --- and on the next element, with the stylesheets already read -----------
   //
-  // Source-known classes can show from the scanned CSS while the canvas is
-  // still answering what the element actually renders as. A frame that never
-  // answers stands in for a busy one (the ask gives up after ~1.5s).
+  // Source-known classes are not shown while the canvas is still answering what
+  // the element renders as: the source matcher cannot see rules only the page
+  // matches, so its list was a stage that the answer then changed (a chip flipping
+  // to a plain field and back). The well holds a chip-shaped placeholder until the
+  // answer lands or the ask gives up (~1.5s). A frame that never answers stands in
+  // for a busy one.
   setCanvasFrame({ postMessage() {} });
   setHost({ selectedId: 'n2' }); // same nodes — only the selection moves, as in the app
   await wait(120);
   check('the CSS Code disclosure stays open when the element changes', cssCodeToggle()?.getAttribute('aria-expanded') === 'true');
   check(
-    'source-known selectors show before the canvas answers',
-    panelChips().some((chip) => chip.textContent === '.card'),
+    'before the canvas answers the well holds a placeholder, not a stage',
+    panelChips().length === 0 && panel.querySelector('.embed-editor_selector-chips.is-placeholder') !== null,
     `${panelChips().length} chips`,
   );
   check('the selected identity shows its class', panel.textContent.includes('div.card'));
@@ -519,8 +522,9 @@ const contrastRatio = (first, second) => {
   setHost({ nodes: [...NODES, clone], selectedId: clone.id });
   await wait(120);
   check('a fresh duplicate has its class in the identity immediately', panel.textContent.includes('div.card'));
+  await wait(1700);
   check(
-    'a fresh duplicate has its styled class before the canvas answers',
+    'a fresh duplicate has its styled class once the canvas answers or gives up',
     panelChips().some((chip) => chip.textContent === '.card'),
     panelChips()
       .map((chip) => chip.textContent)
