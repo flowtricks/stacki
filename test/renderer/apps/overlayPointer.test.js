@@ -236,7 +236,8 @@ function hostPage() {
          out.wheel = {};
          for (const capturing of [false, true]) {
            await run('window.render(' + JSON.stringify({ capturing, held: false }) + ')');
-           await sleep(100);
+           // The capture chip is drawn exactly while capturing: its presence says the render landed.
+           await pollUntil({ what: 'the overlay drawn with capturing ' + capturing, read: () => run('document.querySelector(".app-capture-chip") !== null'), until: (drawn) => drawn === capturing });
            const key = capturing ? 'capturing' : 'plain';
            out.wheel[key] = {
              heat: await wheel(120, 95),
