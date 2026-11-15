@@ -230,4 +230,4 @@ async function runSoak({ scenarioModule, options, keepDirectory }) {
   }
 }
 
-module.exports = { runSoak, soakUnavailableReason };
+module.exports = { cloneModules, copySite, removeWithRetries, runSoak, soakUnavailableReason };

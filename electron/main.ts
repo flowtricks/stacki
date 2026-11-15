@@ -49,7 +49,9 @@ import * as fs from 'fs';
 import { pathToFileURL } from 'url';
 import { stopAllServices } from './content/contentConfig';
 import * as thumbs from './project/thumbs';
-import { openingBounds } from './app/windowBounds';
+import { HEIGHT_PX_MIN, WIDTH_PX_MIN, openingBounds } from './app/windowBounds';
+import { fitWindowState, type FittedWindowState } from './app/windowState';
+import { readWindowState, toWindowDisplay, trackWindowState } from './app/windowStateStore';
 import { revealWhenPainted } from './app/windowReveal';
 import { describeStartup, markStartup } from './app/startupTiming';
 import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
@@ -328,14 +330,33 @@ function setApplicationIcon() {
   }
 }
 
+// The saved window state fitted to the displays connected now, or undefined when there is none to use.
+function restoredWindow(): FittedWindowState | undefined {
+  const saved = readWindowState(app.getPath('userData'));
+  if (!saved.ok) {
+    return undefined;
+  }
+  try {
+    const displays = screen.getAllDisplays().map(toWindowDisplay);
+    if (displays.length === 0) {
+      return undefined;
+    }
+    return fitWindowState(saved.value, displays, toWindowDisplay(screen.getPrimaryDisplay()));
+  } catch {
+    // No displays to ask: open as on a first launch.
+    return undefined;
+  }
+}
+
 function createWindow() {
-  // Opened filled: the display the pointer is on, minus what the OS keeps (see
-  // windowBounds.js). The display under the pointer rather than the primary
-  // one — on a laptop with a monitor beside it, the app should open where the
-  // person is looking.
+  // Where the last window was (its windowed size and place, maximized or full screen), fitted to the
+  // displays connected now (windowState.ts). Read before the window exists, so it is created at its final
+  // rectangle and never resizes in front of the person. With nothing saved (a first launch, a damaged
+  // file) it opens filled: the display the pointer is on, minus what the OS keeps (windowBounds.ts).
+  const restored = restoredWindow();
   let bounds;
   try {
-    bounds = openingBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
+    bounds = restored?.bounds ?? openingBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
   } catch {
     // No display to ask about (a headless run, an unusual session): a laptop
     // sized window is a fine thing to fall back to.
@@ -343,6 +364,9 @@ function createWindow() {
   }
   mainWindow = new BrowserWindow({
     ...bounds,
+    minWidth: WIDTH_PX_MIN,
+    minHeight: HEIGHT_PX_MIN,
+    ...(restored?.fullScreen === true ? { fullscreen: true } : {}),
     title: 'Stacki', // i18n-ignore: the product name.
     // The app's panel surface (--bg-panel), so the window is never white or another black before the page paints.
     backgroundColor: '#111111',
@@ -371,6 +395,11 @@ function createWindow() {
     },
   });
 
+  // Maximized is applied while the window is still hidden, so the first thing shown is the final size.
+  if (restored?.maximized === true && !restored.fullScreen) {
+    mainWindow.maximize();
+  }
+  trackWindowState(mainWindow, screen, app.getPath('userData'), { now: Date.now, setTimer: setTimeout, clearTimer: (timer) => clearTimeout(timer) });
   markStartup('windowCreated');
   revealWhenPainted(mainWindow, () => markStartup('windowShown'));
   mainWindow.webContents.once('did-start-loading', () => markStartup('rendererLoading'));
