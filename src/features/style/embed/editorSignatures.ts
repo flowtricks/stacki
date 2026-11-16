@@ -8,6 +8,7 @@ import { nativeSelectorChips } from '../model/nativeStyles';
 import { canonicalCompound, compareSpecificity } from '../model/selectors';
 import { getHost, walkNodes, type HostNode } from '../model/host';
 import type { ElementSnapshot, NativeModel, ParsedRule, Specificity } from '../model/styleTypes';
+import { matchedTexts, type CanvasAsk } from '../model/canvasAsk';
 
 // Re-read every embed no more than this often when just switching selection.
 export const BG_REFRESH_THROTTLE_MS = 4000;
@@ -55,6 +56,23 @@ export const selectorKeyOf = (rules: ParsedRule[]): string => rules.map((rule) =
 export function snapshotSignature(snap: ElementSnapshot): string {
   return JSON.stringify([snap.tag, snap.id, snap.classes, snap.attributes]);
 }
+// Whether the page now answers a selector differently from the match the panel is showing. A
+// structural edit next to the element (a deleted last sibling, an inserted first child) changes
+// `:last-child`, `:first-child`, `+` and `:has()` without touching the element's own tag, classes
+// or attributes, so the snapshot signature alone never noticed. Nothing is compared until the
+// panel has a match to compare with, and an unanswered question is not a change.
+export function domMatchesChanged(shown: ReadonlyMap<string, boolean> | undefined, ask: CanvasAsk): boolean {
+  if (shown === undefined || ask.kind !== 'asked' || ask.answer === undefined) {
+    return false;
+  }
+  for (const [text, hit] of matchedTexts(ask)) {
+    if (shown.get(text) !== hit) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // A fingerprint of the element's native Webflow class styles — changes when a
 // style value is edited on a class (even without touching the element's classes).
 export function nativeSignature(model: NativeModel | undefined): string {

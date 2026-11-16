@@ -57,6 +57,7 @@ export {
   DESIGNER_SYNC_INTERVAL_MS,
   selectorKeyOf,
   snapshotSignature,
+  domMatchesChanged,
   nativeSignature,
   chainPrefixDepth,
   selectorOrder,

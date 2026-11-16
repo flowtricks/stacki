@@ -73,7 +73,7 @@ async function panelEnvironment() {
       contents: [
         `export { default as StylePanel } from './src/features/style/StylePanel'`,
         `export { setHost, getHost } from './src/features/style/model/host'`,
-        `export { setCanvasFrame, receiveCanvasReply } from './src/editor/canvasQuery'`,
+        `export { setCanvasFrame, receiveCanvasReply, noteCanvasRendered } from './src/editor/canvasQuery'`,
       ].join('\n'),
       resolveDir: ROOT,
       loader: 'tsx',
@@ -224,6 +224,8 @@ async function mountStylePanel(fixture) {
     window: dom.window,
     container,
     bridge,
+    /** The fake canvas's document, for a test that changes the page around the selection. */
+    page,
     writes,
     popovers,
     get props() {
@@ -251,6 +253,8 @@ async function mountStylePanel(fixture) {
         render({ ...current, renderedClasses: [...classes], renderedClassesKnown: true });
       }
     },
+    /** The canvas announces a rendering (the frame patched, or showed a stand-in ahead of one). */
+    noteRendered: () => env.noteCanvasRendered(),
     settle: () => settle(container),
     user: (label, action) => popovers.step({ label, cause: 'user' }, action, () => settle(container)),
     data: (label, action) => popovers.step({ label, cause: 'data' }, action, () => settle(container)),

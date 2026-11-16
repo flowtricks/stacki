@@ -24,6 +24,7 @@ import {
 } from '../model/webflow';
 import { nodeById } from '../model/webflowElement';
 import { assert } from '../../../../shared/core/assert';
+import { onCanvasRendered } from '../../../editor/canvasQuery';
 import type { ElementSnapshot } from '../model/styleTypes';
 import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
 import { readScanSnapshot, registerSnapshotPreparer, rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
@@ -38,6 +39,7 @@ import {
   DESIGNER_SYNC_INTERVAL_MS,
   selectorKeyOf,
   snapshotSignature,
+  domMatchesChanged,
   nativeSignature,
   authoredClasses,
   contentForCurrentTree,
@@ -199,7 +201,7 @@ export function useDesignerSync(
   nativeState: ReturnType<typeof useNativeState>,
   rematch: ReturnType<typeof useRematch>,
 ) {
-  const { busyRef, contentRef, lastSnapSigRef, refreshingRef, selectedRef } = editorRefs;
+  const { busyRef, contentRef, lastSnapSigRef, refreshingRef, selectedRef, targetRef } = editorRefs;
   const { nativeModelRef, setNativeModel } = nativeState;
   const { rematchChanged } = rematch;
 
@@ -231,7 +233,11 @@ export function useDesignerSync(
     // flicker) 0–1500ms after every value edit or reset.
     const snapChanged = snapSig !== lastSnapSigRef.current;
     const nativeChanged = nativeSignature(native) !== nativeSignature(nativeModelRef.current);
-    if (!snapChanged && !nativeChanged) {
+    // The element itself is the same, but the page around it may have changed what its selectors
+    // match (a sibling deleted, a child inserted): the frame answers natively, so a differing
+    // answer is a change. The pick, scroll and open sections are not touched by a rematch.
+    const matchesChanged = domMatchesChanged(targetRef.current?.domMatched, asked);
+    if (!snapChanged && !nativeChanged && !matchesChanged) {
       return;
     }
     lastSnapSigRef.current = snapSig;
@@ -239,10 +245,10 @@ export function useDesignerSync(
       nativeModelRef.current = native;
       setNativeModel(native);
     }
-    if (snapChanged) {
+    if (snapChanged || matchesChanged) {
       await rematchChanged(element, content, { target, snap, asked });
     }
-  }, [rematchChanged, busyRef, contentRef, lastSnapSigRef, nativeModelRef, refreshingRef, selectedRef, setNativeModel]);
+  }, [rematchChanged, busyRef, contentRef, lastSnapSigRef, nativeModelRef, refreshingRef, selectedRef, setNativeModel, targetRef]);
   return { syncFromDesigner };
 }
 
@@ -679,6 +685,39 @@ export function useChangeSubscriptions(
     };
     onClasses();
     return onHostChange(onClasses);
+  }, [syncFromDesigner]);
+
+  // The page around the element changed (a structural edit to its siblings, parent or
+  // children, its own attribute or text, an undo, or the rendering that confirms any of them):
+  // what its selectors match may have changed with it. One re-ask per frame however many signals
+  // arrive, and nothing is cleared meanwhile: the chips stay until the new answer replaces them.
+  const nodesRef = useRef(getHost().nodes);
+  useEffect(() => {
+    let frame: number | undefined;
+    const ask = () => {
+      if (frame !== undefined) {
+        return;
+      }
+      frame = window.requestAnimationFrame(() => {
+        frame = undefined;
+        void syncFromDesigner();
+      });
+    };
+    const offHost = onHostChange(() => {
+      const nodes = getHost().nodes;
+      if (nodes !== nodesRef.current) {
+        nodesRef.current = nodes;
+        ask();
+      }
+    });
+    const offRender = onCanvasRendered(ask);
+    return () => {
+      offHost();
+      offRender();
+      if (frame !== undefined) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
   }, [syncFromDesigner]);
 
   // While an element is shown, poll for out-of-app edits and keep the panel in sync.

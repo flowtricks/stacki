@@ -167,6 +167,23 @@ export function onCanvasReady(listener: () => void): () => void {
   };
 }
 
+const renderedListeners = new Set<() => void>();
+
+/** Hears every rendering the canvas announces: a patch from the server, or a stand-in shown ahead of one. */
+export function onCanvasRendered(listener: () => void): () => void {
+  renderedListeners.add(listener);
+  return () => {
+    renderedListeners.delete(listener);
+  };
+}
+
+/** PreviewPane says the canvas announced a rendering; what the page's selectors match may have changed. */
+export function noteCanvasRendered(): void {
+  for (const listener of renderedListeners) {
+    listener();
+  }
+}
+
 // PreviewPane hands replies over; it already owns the message listener and
 // knows which frame they came from.
 export function receiveCanvasReply(input: unknown): void {

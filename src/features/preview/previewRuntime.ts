@@ -11,7 +11,7 @@ import { parsePreviewMessage } from './previewMessages';
 import { loopChildPaths, outlineBoxPath, sameCopy, type Box } from './outlineBoxes';
 import { assert } from '../../../shared/core/assert';
 import { setModifiers } from '../../editor/heldModifiers';
-import { noteCanvasReady, receiveCanvasReply, setCanvasFrame } from '../../editor/canvasQuery';
+import { noteCanvasReady, noteCanvasRendered, receiveCanvasReply, setCanvasFrame } from '../../editor/canvasQuery';
 import type { Digest } from '../../../shared/core/brand';
 import type { PreviewIteration } from '../../../shared/page/previewIteration';
 import { judgeEventToken, type PreviewRender, type PreviewVerdict } from '../../../shared/page/previewToken';
@@ -442,6 +442,7 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       break;
     case 'render':
       announceRender(refs.render, message.render);
+      noteCanvasRendered(); // The style panel re-asks what the selection matches.
       refs.clicks.current?.rendered();
       break;
     case 'render-problem':
