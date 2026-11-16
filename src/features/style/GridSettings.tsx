@@ -164,6 +164,51 @@ function RepeatSwitch({
   );
 }
 
+// The subgrid switch: this axis takes its tracks, lines and gap from the parent
+// grid. It only lines up with the parent when the parent is a grid and this
+// element spans the parent's tracks, which the tooltip says.
+function SubgridSwitch({ on, busy, axis, onChange }: { on: boolean; busy: boolean; axis: 'column' | 'row'; onChange: (on: boolean) => void }) {
+  const translate = useTranslate();
+  return (
+    <label
+      className={`embed-editor_switch ${on ? 'is-on' : ''}`}
+      title={on ? translate('style.gridSettings.subgridOn') : translate('style.gridSettings.subgridOff')}
+    >
+      <input
+        type="checkbox"
+        role="switch"
+        checked={on}
+        disabled={busy}
+        aria-label={axis === 'column' ? translate('style.gridSettings.subgridColumns') : translate('style.gridSettings.subgridRows')}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      {/* i18n-ignore: the CSS keyword the switch writes, kept as written like repeat(). */}
+      <span className="embed-editor_switch-label">subgrid</span>
+    </label>
+  );
+}
+
+// Switching subgrid on remembers the value it replaces, so switching it off while
+// the settings are open puts that value back; with nothing to put back, off clears
+// the property and the axis is an ordinary track list again.
+function useSubgridSwitch({ prop, list, setProp, clearProp }: { prop: string; list: TrackList; setProp: SetProp; clearProp: ClearProp }) {
+  const on = /^subgrid\b/i.test(list.rawTemplate);
+  const [replaced, setReplaced] = useState<{ value: string; important: boolean } | undefined>(undefined);
+  const switchOn = () => {
+    setReplaced(list.rawTemplate ? { value: list.rawTemplate, important: list.important } : undefined);
+    setProp(prop, 'subgrid', list.important);
+  };
+  const switchOff = () => {
+    if (replaced) {
+      setProp(prop, replaced.value, replaced.important);
+      setReplaced(undefined);
+    } else {
+      clearProp(prop);
+    }
+  };
+  return { on, switchOn, switchOff };
+}
+
 // Whether a list is several copies of one track — the only lists a repeat() can say.
 const sameTracks = (list: string[]) => list.length > 1 && list.every((x) => x === list[0]);
 
@@ -173,6 +218,7 @@ function TrackSection({ title, prop, axis, setProp, labels }: TrackSectionProps)
   const translate = useTranslate();
   const { busy, clearProp } = labels;
   const list = useTrackList({ prop, setProp, labels });
+  const subgrid = useSubgridSwitch({ prop, list, setProp, clearProp });
   const { tracks, rawTemplate, important } = list;
   // Editing the value as text rather than as tracks. Asked for with the braces
   // — or forced, when the value is one the track list cannot hold: showing
@@ -197,6 +243,7 @@ function TrackSection({ title, prop, axis, setProp, labels }: TrackSectionProps)
         setProp={setProp}
         tracksCanHold={tracksCanHold}
         asExpression={asExpression}
+        subgrid={subgrid}
         onToggleExpression={() => setExpression((wasOn) => !wasOn)}
         onAdd={edits.add}
       />
@@ -380,6 +427,7 @@ function TrackSectionHead({
   setProp,
   tracksCanHold,
   asExpression,
+  subgrid,
   onToggleExpression,
   onAdd,
 }: {
@@ -391,6 +439,7 @@ function TrackSectionHead({
   setProp: SetProp;
   tracksCanHold: boolean;
   asExpression: boolean;
+  subgrid: ReturnType<typeof useSubgridSwitch>;
   onToggleExpression: () => void;
   onAdd: () => void;
 }) {
@@ -419,6 +468,7 @@ function TrackSectionHead({
         axis={axis}
         onChange={(next) => switchRepeat({ next, prop, list, setProp })}
       />
+      <SubgridSwitch on={subgrid.on} busy={busy} axis={axis} onChange={(next) => (next ? subgrid.switchOn() : subgrid.switchOff())} />
       <ExpressionToggle title={title} axis={axis} busy={busy} tracksCanHold={tracksCanHold} asExpression={asExpression} onToggle={onToggleExpression} />
       {asExpression ? undefined : (
         <button

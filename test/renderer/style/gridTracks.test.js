@@ -122,6 +122,7 @@ const check = (what, condition, detail) => {
     // is this variable, so an edit is visible to the next one — without it the
     // modal would answer every question about a value it had already changed.
     const written = [];
+    const cleared = [];
     let columns = '';
     let important = false;
     const container = dom.window.document.getElementById('root');
@@ -147,7 +148,13 @@ const check = (what, condition, detail) => {
                 important = !!imp;
               }
             },
-            clearProp: () => {},
+            clearProp: (prop) => {
+              cleared.push(prop);
+              if (prop === 'grid-template-columns') {
+                columns = '';
+                important = false;
+              }
+            },
             onProvenance: () => {},
             onSelectSelector: () => {},
             onClose: () => {},
@@ -338,6 +345,138 @@ const check = (what, condition, detail) => {
     await show('var(--layout-columns)');
     check('a variable opens as an expression', !!field(), 'shown as a track called var(--layout-columns)');
     check('with the value in it', field()?.value === 'var(--layout-columns)', field()?.value);
+
+    // The subgrid switch writes subgrid, and off puts back what it replaced.
+    written.length = 0;
+    await show('repeat(2, minmax(0, 1fr))');
+    const subgridSwitch = () => button('Use subgrid for columns');
+    check('the subgrid switch is there', !!subgridSwitch(), 'no subgrid switch in the grid settings');
+    check('and off for a track list', subgridSwitch()?.checked === false);
+    await press('Use subgrid for columns');
+    check('switching it on writes subgrid', JSON.stringify(written[0]) === '["grid-template-columns","subgrid",false]', JSON.stringify(written[0]));
+    check('which then shows on', subgridSwitch()?.checked === true);
+    check('and the value in the field', field()?.value === 'subgrid', field()?.value);
+    await press('Use subgrid for columns');
+    check(
+      'switching it off puts the tracks back',
+      JSON.stringify(written[1]) === '["grid-template-columns","repeat(2, minmax(0, 1fr))",false]',
+      JSON.stringify(written[1]),
+    );
+    check('so the switch is off again', subgridSwitch()?.checked === false);
+
+    written.length = 0;
+    await show('repeat(2, 1fr)', true);
+    await press('Use subgrid for columns');
+    check('an !important is kept', JSON.stringify(written[0]) === '["grid-template-columns","subgrid",true]', JSON.stringify(written[0]));
+
+    written.length = 0;
+    cleared.length = 0;
+    await show('subgrid [start] [end]');
+    check('subgrid with line names shows on', subgridSwitch()?.checked === true);
+    await press('Use subgrid for columns');
+    check('off with nothing to put back clears the value', JSON.stringify(cleared) === '["grid-template-columns"]', JSON.stringify(cleared));
+    check('rather than writing one', written.length === 0, JSON.stringify(written));
+
+    // So does a repeat() counted by a variable, the way Lumos's Grid writes it.
+    await show('repeat(var(--_cols), minmax(0, 1fr))');
+    check('a repeat counted by a variable opens as an expression', field()?.value === 'repeat(var(--_cols), minmax(0, 1fr))', field()?.value);
+    await act(async () => {
+      root.unmount();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+
+    // --- the Columns and Rows counts in the Layout section ----------------------
+    // Mounted with each value on the selected selector: a value the count cannot
+    // say holds the field, its arrows and typing write nothing, and the gear is lit.
+    const controlsEntry = path.join(buildDirectory, 'grid-controls.entry.jsx');
+    fs.writeFileSync(controlsEntry, `export { default as GridControls } from ${JSON.stringify(repoPath('src/features/style/GridControls.tsx'))};\n`);
+    const controlsPath = path.join(buildDirectory, 'grid-controls.bundle.js');
+    await esbuild.build({
+      entryPoints: [controlsEntry],
+      outfile: controlsPath,
+      bundle: true,
+      format: 'cjs',
+      platform: 'node',
+      jsx: 'automatic',
+      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      loader: { '.tsx': 'tsx', '.ts': 'ts' },
+      logLevel: 'silent',
+    });
+    const { GridControls } = require(controlsPath);
+    // The Direction control measures itself; jsdom lays nothing out, so there is nothing to observe.
+    global.ResizeObserver = dom.window.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    const countWrites = [];
+    const mountCounts = async (values) => {
+      countWrites.length = 0;
+      root = createRoot(container);
+      await act(async () => {
+        root.render(
+          React.createElement(GridControls, {
+            read: (prop) =>
+              values[prop] === undefined
+                ? undefined
+                : {
+                    source: 'selected',
+                    selectedValue: { value: values[prop], important: false },
+                    winner: { value: values[prop], important: false },
+                    contributors: [],
+                  },
+            busy: false,
+            setProp: (prop, value, imp) => countWrites.push([prop, value, !!imp]),
+            clearProp: () => {},
+            liveSetProp: () => {},
+            onProvenance: () => {},
+            onSelectSelector: () => {},
+          }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    };
+    const unmountCounts = () =>
+      act(async () => {
+        root.unmount();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      });
+    const count = (label) => container.querySelector(`input[aria-label="${label}"]`);
+    const arrows = (label) => [...(count(label)?.parentElement?.querySelectorAll('button') ?? [])];
+    const gearLit = () => container.querySelector('button[aria-label="Configure grid"]')?.classList.contains('is-active') === true;
+
+    await mountCounts({ 'grid-template-columns': 'repeat(3, minmax(0, 1fr))', 'grid-template-rows': 'subgrid' });
+    check('a subgrid row count reads Subgrid', count('Grid rows')?.value === 'Subgrid', count('Grid rows')?.value);
+    check('it cannot be typed in', count('Grid rows')?.disabled === true);
+    check('it carries the value as its tooltip', count('Grid rows')?.title === 'subgrid', count('Grid rows')?.title);
+    check('its arrows are off', arrows('Grid rows').length === 2 && arrows('Grid rows').every((arrow) => arrow.disabled));
+    await act(async () => {
+      arrows('Grid rows').forEach((arrow) => arrow.click());
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check('and pressing them writes nothing over subgrid', countWrites.length === 0, JSON.stringify(countWrites));
+    check('the gear is lit', gearLit());
+    check('the other axis still counts', count('Grid columns')?.value === '3', count('Grid columns')?.value);
+    check('and steps', count('Grid columns')?.disabled === false);
+    await unmountCounts();
+
+    await mountCounts({ 'grid-template-columns': 'repeat(var(--_cols), minmax(0, 1fr))' });
+    check('a repeat counted by a variable reads Custom', count('Grid columns')?.value === 'Custom', count('Grid columns')?.value);
+    check('and lights the gear', gearLit());
+    await unmountCounts();
+
+    await mountCounts({ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' });
+    check('equal tracks leave the gear off', !gearLit());
+    await act(async () => {
+      arrows('Grid columns')[0]?.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check(
+      'and their count still steps',
+      JSON.stringify(countWrites[0]) === '["grid-template-columns","repeat(3, minmax(0, 1fr))",false]',
+      JSON.stringify(countWrites[0]),
+    );
+    await unmountCounts();
   }
 
   // --- what the track controls can hold ---------------------------------------
@@ -353,6 +492,24 @@ const check = (what, condition, detail) => {
     check('nor a keyword the panel does not lay out', !canEditAsTracks('inherit'));
     check('none is nothing, which the tracks can hold', canEditAsTracks('none'));
     check('and so is nothing at all', canEditAsTracks(''));
+    check('nor subgrid with line names', !canEditAsTracks('subgrid [start] [end]'));
+    check('nor a repeat whose count is a variable', !canEditAsTracks('repeat(var(--_cols), minmax(0, 1fr))'));
+    check('but auto-fill is a count the tracks keep', canEditAsTracks('repeat(auto-fill, minmax(12rem, 1fr))'));
+  }
+
+  // --- what the Columns and Rows counts show for a value they cannot count -----
+  // Stepping a count writes N plain tracks over the value, so a value with no
+  // count holds its counter: subgrid by name, anything else as Custom.
+  {
+    const { heldTrackCount } = require(bundlePath);
+    check('subgrid holds the count as a subgrid', heldTrackCount('subgrid') === 'subgrid', heldTrackCount('subgrid'));
+    check('whatever its case or line names', heldTrackCount('SubGrid [a] [b]') === 'subgrid', heldTrackCount('SubGrid [a] [b]'));
+    check('a variable for the list holds it as custom', heldTrackCount('var(--columns)') === 'custom', heldTrackCount('var(--columns)'));
+    check('so does a variable for the count', heldTrackCount('repeat(var(--_cols), minmax(0, 1fr))') === 'custom');
+    check('and a keyword', heldTrackCount('inherit') === 'custom');
+    check('a numbered repeat is counted', heldTrackCount('repeat(3, 1fr)') === undefined);
+    check('so are tracks written out', heldTrackCount('1fr 2fr') === undefined);
+    check('and nothing at all', heldTrackCount('') === undefined);
   }
 
   // --- a field that is already big doesn't open a box over itself -------------

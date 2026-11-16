@@ -12,6 +12,7 @@ import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
 import { countTracks, NEW_COLUMN, NEW_ROW, repeatTracks, isUniformTracks } from './gridTracks';
+import { heldTrackCount, type HeldTrackCount } from './model/gridTemplate';
 import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICONS, xAlignLabels, yAlignLabels, cap, CustomizeIcon } from './GridIcons';
 import { GridDirectionControl, GridContentControl, CountField } from './GridFlowControls';
 import { displayOf, displayText, parseImportant } from './model/styleDisplay';
@@ -266,6 +267,22 @@ function writeText(setProp: SetProp, prop: string, text: string): void {
   setProp(prop, parsed.value, parsed.important);
 }
 
+// The text a held Columns or Rows count shows in place of a number.
+function heldCountLabel(held: HeldTrackCount | undefined, translate: Translator): string | undefined {
+  switch (held) {
+    case undefined:
+      return undefined;
+    case 'subgrid':
+      return translate('style.gridControls.subgrid');
+    case 'custom':
+      return translate('style.gridControls.custom');
+    default: {
+      const exhaustive: never = held;
+      return exhaustive;
+    }
+  }
+}
+
 function resolvedValue(read: Read, prop: string): string {
   const resolved = read(prop);
   if (!resolved) {
@@ -327,9 +344,14 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
   };
   const columnsRaw = resolvedValue(read, 'grid-template-columns');
   const rowsRaw = resolvedValue(read, 'grid-template-rows');
+  // A value with no count (subgrid, a variable for the list or its count, a keyword)
+  // holds its counter, and the grid settings edit it as an expression.
+  const columnsHeld = heldCountLabel(heldTrackCount(columnsRaw), translate);
+  const rowsHeld = heldCountLabel(heldTrackCount(rowsRaw), translate);
   // The gear lights up when a track list isn't just N equal tracks — those can't be
   // represented as a count, so per-track sizing / reordering lives in the modal.
-  const customTracks = (!!columnsRaw && !isUniformTracks(columnsRaw)) || (!!rowsRaw && !isUniformTracks(rowsRaw));
+  const customTracks =
+    columnsHeld !== undefined || rowsHeld !== undefined || (!!columnsRaw && !isUniformTracks(columnsRaw)) || (!!rowsRaw && !isUniformTracks(rowsRaw));
   return (
     <div className="embed-editor_size-row embed-editor_bg-row-top">
       <GroupLabel
@@ -344,6 +366,8 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
               earlier tracks' sizes. Per-track values live behind the configure gear. */}
           <CountField
             value={countTracks(columnsRaw)}
+            held={columnsHeld}
+            title={columnsRaw}
             busy={busy}
             ariaLabel={translate('style.gridControls.gridColumns')}
             onCommit={(count) => setProp('grid-template-columns', repeatTracks(count, NEW_COLUMN), false)}
@@ -358,6 +382,8 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
         <div className="embed-editor_gap-cell">
           <CountField
             value={countTracks(rowsRaw)}
+            held={rowsHeld}
+            title={rowsRaw}
             busy={busy}
             ariaLabel={translate('style.gridControls.gridRows')}
             onCommit={(count) => setProp('grid-template-rows', repeatTracks(count, NEW_ROW), false)}
