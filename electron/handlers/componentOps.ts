@@ -66,13 +66,13 @@ export interface ComponentOpsHost {
 }
 
 /** One file of a target, read once: what a copy writes and what a restore puts back. */
-interface TargetFile {
+export interface TargetFile {
   readonly rel: string;
   readonly absolute: string;
   readonly text: string;
 }
 
-interface Resolved {
+export interface Resolved {
   readonly target: ComponentOpTarget;
   readonly absolute: string;
   readonly root: string;
@@ -91,7 +91,7 @@ interface RemovalRecord {
   readonly metadata: readonly MetadataChange[];
 }
 
-interface MetadataChange {
+export interface MetadataChange {
   readonly kind: MetadataKind;
   readonly before: string;
   readonly after: string;
@@ -122,13 +122,20 @@ export class ComponentRemovalStore {
   }
 }
 
-/** A copy of one component file, or of a folder and every component in it, under a name no sibling has. */
-export function duplicateComponentTarget(projectPath: string, target: ComponentOpTarget): Result<ComponentCopied, ComponentOpError> {
+/** What a copy would do, worked out and not written: the target as it is, the free name, and where the copy lands. */
+export interface DuplicatePlan {
+  readonly resolved: Resolved;
+  readonly destination: string;
+  readonly name: string;
+}
+
+/** The copy's name and place, with no write: the one rule the Components panel and the `stacki` command line share. */
+export function planDuplicateTarget(projectPath: string, target: ComponentOpTarget): Result<DuplicatePlan, ComponentOpError> {
   const resolved = resolveTarget(projectPath, target);
   if (!resolved.ok) {
     return resolved;
   }
-  const { absolute, files } = resolved.value;
+  const { absolute } = resolved.value;
   const parent = path.dirname(absolute);
   const taken = new Set(fs.readdirSync(parent).map((entry) => entry.toLowerCase()));
   const extension = target.kind === 'component' ? '.astro' : '';
@@ -139,13 +146,43 @@ export function duplicateComponentTarget(projectPath: string, target: ComponentO
   }
   const destination = path.join(parent, `${name}${extension}`);
   assert(!fs.existsSync(destination), 'A copy never lands on an existing path');
-  const written = writeCopy(absolute, destination, files);
+  return ok({ resolved: resolved.value, destination, name });
+}
+
+/** A copy of one component file, or of a folder and every component in it, under a name no sibling has. */
+export function duplicateComponentTarget(projectPath: string, target: ComponentOpTarget): Result<ComponentCopied, ComponentOpError> {
+  const planned = planDuplicateTarget(projectPath, target);
+  if (!planned.ok) {
+    return planned;
+  }
+  const { resolved, destination, name } = planned.value;
+  const written = writeCopy(resolved.absolute, destination, resolved.files);
   if (!written.ok) {
     return written;
   }
   const rel = toPosix(path.relative(projectPath, destination));
-  assert(written.value === files.length, 'Every file of the target was copied');
-  return ok({ kind: target.kind, path: rel, name, files: files.length });
+  assert(written.value === resolved.files.length, 'Every file of the target was copied');
+  return ok({ kind: target.kind, path: rel, name, files: resolved.files.length });
+}
+
+/** What a deletion would do, worked out and not written: the target, and the `.stacki` text it would clean. */
+export interface RemovalPlan {
+  readonly resolved: Resolved;
+  readonly changes: readonly MetadataChange[];
+}
+
+/** Refuses a target that is used or outside the component folders, else says what a deletion would remove and clean. No write. */
+export function planRemoveTarget(projectPath: string, target: ComponentOpTarget): Result<RemovalPlan, ComponentOpError> {
+  const resolved = resolveTarget(projectPath, target);
+  if (!resolved.ok) {
+    return resolved;
+  }
+  const used = firstUse(projectPath, resolved.value.files);
+  if (used !== undefined) {
+    return failure('in-use', translateMain('error.component.inUse', { name: used.name, count: used.count }));
+  }
+  const changes = planMetadataChanges(projectPath, target);
+  return changes.ok ? ok({ resolved: resolved.value, changes: changes.value }) : changes;
 }
 
 /**
@@ -213,8 +250,8 @@ export function restoreRemovedComponent(token: string, store: ComponentRemovalSt
   return ok({ files: restored, metadata: putMetadataBack(record) });
 }
 
-// What the project's settings say about the target now, cleaned. Nothing is written until both files parse.
-function cleanMetadata(projectPath: string, target: ComponentOpTarget): Result<readonly MetadataChange[], ComponentOpError> {
+// What the project's settings say about the target now, cleaned. Nothing is written: both files must parse first.
+export function planMetadataChanges(projectPath: string, target: ComponentOpTarget): Result<readonly MetadataChange[], ComponentOpError> {
   const planned: MetadataChange[] = [];
   const defaults = readProjectMetadata(projectPath, 'components');
   if (!defaults.ok) {
@@ -246,8 +283,17 @@ function cleanMetadata(projectPath: string, target: ComponentOpTarget): Result<r
       planned.push({ kind: 'roles', before: rolesSource, after: next.value });
     }
   }
+  return ok(planned);
+}
+
+// Writes the planned changes in order; a failure puts back the ones already written.
+function cleanMetadata(projectPath: string, target: ComponentOpTarget): Result<readonly MetadataChange[], ComponentOpError> {
+  const planned = planMetadataChanges(projectPath, target);
+  if (!planned.ok) {
+    return planned;
+  }
   const applied: MetadataChange[] = [];
-  for (const change of planned) {
+  for (const change of planned.value) {
     const written = writeProjectMetadata(projectPath, { kind: change.kind, source: change.after, base: change.before });
     if (!written.ok) {
       restoreMetadata(projectPath, applied, 'after');
@@ -320,7 +366,7 @@ function firstUse(projectPath: string, files: readonly TargetFile[]): { readonly
 }
 
 // Copies every file to the same relative place under the destination, all or nothing: a failure removes what this call made.
-function writeCopy(source: string, destination: string, files: readonly TargetFile[]): Result<number, ComponentOpError> {
+export function writeCopy(source: string, destination: string, files: readonly TargetFile[]): Result<number, ComponentOpError> {
   const made: string[] = [];
   const isFolder = fs.statSync(source).isDirectory();
   try {
@@ -367,7 +413,7 @@ function removeEmptyFolders(folder: string): void {
 }
 
 // The target as it is on disk: inside a component folder of this project, no links, only component files, within the bounds.
-function resolveTarget(projectPath: string, target: ComponentOpTarget): Result<Resolved, ComponentOpError> {
+export function resolveTarget(projectPath: string, target: ComponentOpTarget): Result<Resolved, ComponentOpError> {
   assert(projectPath.length > 0, 'A project is named');
   const rel = cleanRelative(target.path);
   if (rel === undefined) {

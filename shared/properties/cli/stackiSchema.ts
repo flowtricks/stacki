@@ -369,7 +369,7 @@ export function schemaAt(
 }
 
 function stepInto(schema: ValueSchema, segment: string | number, value: unknown): { readonly type: ValueSchema; readonly field?: FieldSchema } | undefined {
-  assert(String(segment).length > 0, 'A step names a key or a position');
+  assert(typeof segment === 'string' || typeof segment === 'number', 'A step is a key or a position');
   if (schema.kind === 'object' && typeof segment === 'string') {
     const known = Object.hasOwn(schema.fields, segment) ? schema.fields[segment] : undefined;
     return known === undefined || known.legacy === true ? undefined : { type: known.type, field: known };

@@ -257,6 +257,15 @@ export const COMMANDS: readonly CommandSpec[] = [
     args: [arg('kind', 'enum', 'Which list.', { required: true, positional: true, values: ['components', 'layouts', 'assets', 'styles', 'variables'] })],
   }),
   command(['apps', 'commands'], 'List the commands installed apps add to the CLI.', 'cli:read'),
+  command(['apps', 'add'], 'Install an app from a local folder or .zip (no downloads): its files and its lock entry.', 'cli:apps', {
+    write: true,
+    args: [
+      arg('source', 'string', 'A folder holding stacki-app.json, or a .zip of one. URLs are refused: install downloads from the Apps panel.', {
+        required: true,
+        positional: true,
+      }),
+    ],
+  }),
   command(['apps', 'remove'], 'Remove an installed app (its folder and lock entry) and its stored non-secret settings.', 'cli:apps', {
     write: true,
     destructive: true,
@@ -281,13 +290,23 @@ export const COMMANDS: readonly CommandSpec[] = [
     write: true,
     args: [arg('app', 'string', 'The app id.', { required: true, positional: true })],
   }),
-  command(['components', 'rename'], 'Rename a component and keep every reference in step (recipes, role rules, imports).', 'cli:components', {
-    write: true,
-    args: [
-      arg('path', 'string', 'The component file.', { required: true, positional: true }),
-      arg('name', 'string', 'The new name.', { required: true, positional: true }),
-    ],
-  }),
+  command(
+    ['components', 'rename'],
+    'Rename a component and keep every reference in step (recipes, role rules, imports). A typed human name is normalized like the Rename dialog does: "Accordion Cards" becomes AccordionCards (accordion-cards in a project whose components are dashed).',
+    'cli:components',
+    {
+      write: true,
+      args: [
+        arg('path', 'string', 'The component file.', { required: true, positional: true }),
+        arg(
+          'name',
+          'string',
+          'The new name, as a person would type it: spaces and case are normalized ("Accordion Cards" -> AccordionCards.astro, or accordion-cards.astro in a dashed project); a character that cannot be kept is refused by name. The plan notes what was normalized.',
+          { required: true, positional: true },
+        ),
+      ],
+    },
+  ),
   command(['components', 'move'], 'Move a component to another folder and keep every reference in step.', 'cli:components', {
     write: true,
     args: [

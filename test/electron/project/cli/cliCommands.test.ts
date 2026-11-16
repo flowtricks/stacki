@@ -115,13 +115,6 @@ test('list, schema and doctor read without writing', async () => {
   assert.ok(JSON.stringify(list.result).includes('src/components/Card.astro'));
 });
 
-test('a command whose planner is not built answers planner-unavailable and changes nothing', async () => {
-  const root = makeProject();
-  const result = await runCommand(request(root, ['components', 'rename'], { path: 'src/components/Card.astro', name: 'Tile' }, 'apply'));
-  assert.ok(!result.ok);
-  assert.equal(result.error.code, 'planner-unavailable');
-});
-
 test('an unknown command and a project that is not one are refused by code', async () => {
   const none = await runCommand(request(makeProject(), ['nope'], {}));
   assert.ok(!none.ok && none.error.code === 'usage');
