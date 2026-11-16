@@ -12,6 +12,7 @@ import { LayerRegistry, layerNamesOf, type LayerPosition } from './cascadeLayers
 import { parseSelectorList, selectorListMembers } from './selectors';
 import { ruleChainLevels, ruleHead, ruleLayout, sourceTextFromEditor } from './cssRuleText';
 import { assert } from '../../../../shared/core/assert';
+import type { TemplateWrapper } from '../../../../shared/properties/newStyleTag';
 import { LIMITS } from '../../../../shared/core/limits';
 import { failureOf, type Failure } from './failureMessage';
 import {
@@ -617,7 +618,14 @@ function ensureQueryChain(root: Root, segments: readonly string[]): Root | AtRul
  * Create `selector { prop: value }` at the region root (base, non-@ level). Returns false on
  * empty input.
  */
-export function createRuleAtRoot(region: StyleRegion, selector: string, prop: string, declared: DeclarationValue): boolean {
+export function createRuleAtRoot(
+  region: StyleRegion,
+  selector: string,
+  prop: string,
+  declared: DeclarationValue,
+  /** The at-rule blocks a new-style-tag template puts rules in (newStyleTag.ts); none writes at the root. */
+  wrappers: readonly TemplateWrapper[] = [],
+): boolean {
   if (!region.root) {
     return false;
   }
@@ -633,12 +641,41 @@ export function createRuleAtRoot(region: StyleRegion, selector: string, prop: st
     setDeclOnRule(existing, cleanProp, { value: cleanValue, important: declared.important });
     return true;
   }
+  // A tag that follows the project's template already holds its wrapper (`@layer components {}`):
+  // the rule goes inside it, after the rules there. A tag that does not hold it is written as ever.
+  const container = wrapperContainer(region.root, wrappers);
+  if (container !== undefined) {
+    return createRuleInAtRule(container, selector, prop, declared);
+  }
   // Attached first, as in createRuleInAtRule, so the body indents from the rule's line.
   const rule = postcss.rule({ selector });
   appendTopLevel(region.root, rule);
   setDeclOnRule(rule, cleanProp, { value: cleanValue, important: declared.important });
   placeNewRuleBody(rule);
   return true;
+}
+
+/**
+ * The innermost block of a template's wrapper chain, found at the top level of `root` by at-rule
+ * name and parameters (whitespace-insensitive); undefined when the chain is empty or any link is
+ * missing, so a tag that does not follow the template is never restructured. The chain is the
+ * template's own, a handful of links; the search visits each level's children once.
+ */
+export function wrapperContainer(root: Root, wrappers: readonly TemplateWrapper[]): AtRule | undefined {
+  assert(wrappers.length <= LIMITS.treeDepthMax, 'wrapperContainer: a template nests a bounded number of blocks');
+  let container: Root | AtRule = root;
+  let found: AtRule | undefined;
+  for (const wrapper of wrappers) {
+    const link: AtRule | undefined = (container.nodes ?? []).find(
+      (child): child is AtRule => child.type === 'atrule' && child.name.toLowerCase() === wrapper.name && squash(child.params) === wrapper.params,
+    );
+    if (link === undefined) {
+      return undefined;
+    }
+    found = link;
+    container = link;
+  }
+  return found;
 }
 
 /**

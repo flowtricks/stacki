@@ -4,6 +4,7 @@
 // `check-project` command, so every tool answers "may this go?" the same way.
 import { assert } from '../core/assert';
 import { list, record, text } from '../core/boundary';
+import { newStyleTagDocument, parseNewStyleTag, type NewStyleTagSettings } from './newStyleTag';
 
 export const STYLE_KEEP_LIMITS = {
   /** Patterns in one keep list. A design system's state classes fit in dozens. */
@@ -28,6 +29,11 @@ export interface StyleKeepList {
    * A folder covers every file under it, including files added later.
    */
   readonly lockedStylesheets: readonly string[];
+  /**
+   * What a `<style>` tag the Style panel creates starts with (newStyleTag.ts). Absent when the
+   * file never wrote it: the project keeps the behaviour it had, a scoped tag holding just rules.
+   */
+  readonly newStyleTag?: NewStyleTagSettings;
 }
 
 export const EMPTY_KEEP_LIST: StyleKeepList = { version: 1, keep: [], lockedStylesheets: [] };
@@ -53,7 +59,10 @@ export function parseStyleKeepList(input: unknown): StyleKeepList {
   // An earlier version also stored `trustedScripts`; scripts no longer affect
   // the check, so a file that still has the key reads the same and loses it on
   // its next save.
-  return { version: 1, keep, lockedStylesheets };
+  if (value['newStyleTag'] === undefined) {
+    return { version: 1, keep, lockedStylesheets };
+  }
+  return { version: 1, keep, lockedStylesheets, newStyleTag: parseNewStyleTag(value['newStyleTag']) };
 }
 
 /** The keep list as JSON text, in the stable shape a diff reviews easily. */
@@ -62,13 +71,17 @@ export function serializeStyleKeepList(keepList: StyleKeepList): string {
   const lockedStylesheets = [...new Set(keepList.lockedStylesheets)].sort();
   // The key is written only when something is locked, so a project that never
   // locks a stylesheet keeps the file shape it always had.
-  const shape = lockedStylesheets.length === 0 ? { version: 1, keep } : { version: 1, keep, lockedStylesheets };
+  const base = lockedStylesheets.length === 0 ? { version: 1, keep } : { version: 1, keep, lockedStylesheets };
+  // Likewise the new-style-tag section: written only once somebody set it.
+  const shape = keepList.newStyleTag === undefined ? base : { ...base, newStyleTag: newStyleTagDocument(keepList.newStyleTag) };
   const source = JSON.stringify(shape, undefined, 2) + '\n';
   // Pair assertion: what is written must read back as the same list.
   const written: unknown = JSON.parse(source);
   const reread = parseStyleKeepList(written);
   assert(reread.keep.length === keep.length, 'serializeStyleKeepList: keep patterns round-trip');
   assert(reread.lockedStylesheets.length === lockedStylesheets.length, 'serializeStyleKeepList: locked stylesheets round-trip');
+  assert(reread.newStyleTag?.scope === keepList.newStyleTag?.scope, 'serializeStyleKeepList: the new style tag scope round-trips');
+  assert(reread.newStyleTag?.content === keepList.newStyleTag?.content, 'serializeStyleKeepList: the new style tag template round-trips');
   return source;
 }
 

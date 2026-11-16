@@ -71,6 +71,12 @@ export type FirstStylesInput = {
   readonly takenClasses: ReadonlySet<string>;
   /** The file the edit lands in. */
   readonly filePath: string | undefined;
+  /**
+   * `chosen` when "Add custom styles in" is the virtual "Create <style>" entry
+   * (newStyleTarget.ts): the page has style sources of other files but no tag of its own, and the
+   * person, or the default, put the new rule in a tag that does not exist yet.
+   */
+  readonly createStyleTag?: 'chosen' | 'not-chosen';
 };
 
 /**
@@ -98,16 +104,19 @@ export const UNSUPPORTED_FILE_MESSAGE = UNSUPPORTED_FILE.message;
 
 export function planFirstStyles(input: FirstStylesInput): FirstStylesPlan {
   const { selector, tag, elementClasses, sourceCount, ruleSelectors, takenClasses, filePath } = input;
+  const createChosen = input.createStyleTag === 'chosen';
   assert(sourceCount >= 0, 'planFirstStyles: a count of sources is not negative');
   assert(Number.isSafeInteger(sourceCount), 'planFirstStyles: a count of sources is an integer');
   // The bare tag of an element with no class: the panel's fallback pick, and a rule that would
   // restyle every such element on the page.
   const bareTag = tag !== undefined && selector === tag && elementClasses.length === 0;
-  if (sourceCount === 0) {
+  if (sourceCount === 0 || createChosen) {
     if (!styleBlockFileSupported(filePath)) {
       return { kind: 'refused', ...UNSUPPORTED_FILE };
     }
-    return bareTag ? { kind: 'block-and-class', className: autoClassName(takenClasses) } : { kind: 'block' };
+    // With sources of the project's own, a class-less tag is written as the tag it is, as it is
+    // in any other source: inventing a class is for a project with no style at all.
+    return bareTag && sourceCount === 0 ? { kind: 'block-and-class', className: autoClassName(takenClasses) } : { kind: 'block' };
   }
   // Sources exist. They are this mode's own only when they hold rules and every one is an
   // auto class: an empty block, or any hand-written selector, is a project this does not touch.

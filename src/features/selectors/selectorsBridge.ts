@@ -16,6 +16,7 @@ import {
   type SelectorRemoval,
   type SelectorReport,
 } from '../../../shared/properties/selectorUsage';
+import { newStyleTagDocument } from '../../../shared/properties/newStyleTag';
 import { EMPTY_KEEP_LIST, parseStyleKeepList, serializeStyleKeepList, type StyleKeepList } from '../../../shared/properties/styleKeepList';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import type { KeepListChange } from './lockChanges';
@@ -132,7 +133,13 @@ export function changedKeepList(keepList: StyleKeepList, change: KeepListChange)
   const unlocked = new Set(change.unlock);
   const keep = [...keepList.keep.filter((pattern) => !removed.has(pattern)), ...change.add];
   const lockedStylesheets = [...keepList.lockedStylesheets.filter((entry) => !unlocked.has(entry)), ...change.lock];
-  const next = parseStyleKeepList({ version: 1, keep, lockedStylesheets });
+  // The new-style-tag section is not the Selectors panel's to change: it is carried over as it is.
+  const next = parseStyleKeepList({
+    version: 1,
+    keep,
+    lockedStylesheets,
+    ...(keepList.newStyleTag === undefined ? {} : { newStyleTag: newStyleTagDocument(keepList.newStyleTag) }),
+  });
   // Postconditions: what was asked to go is gone, whatever else was there stays.
   assert(
     change.unlock.every((entry) => !next.lockedStylesheets.includes(entry) || change.lock.includes(entry)),
