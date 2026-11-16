@@ -1,6 +1,8 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { code as centralCode } from '../../ui/central/centralGeometry';
 import { createContext, useContext } from 'react';
+import { createPortal } from 'react-dom';
+import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import type { Contributor } from './model/resolved';
 import { withImportant } from './model/styleDisplay';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -37,7 +39,6 @@ export default function ProvenanceList({
   onSelect?: (selectorText: string, prop?: string) => void;
 }) {
   const nav = useContext(ProvenanceEmbedNav);
-  const translate = useTranslate();
   if (!contributors.length) {
     return undefined;
   }
@@ -47,42 +48,97 @@ export default function ProvenanceList({
   const activeIndex = editingIndex >= 0 ? editingIndex : contributors.findIndex((contributor) => contributor.winning);
   return (
     <ul className="embed-editor_provenance-list">
-      {contributors.map((contributor, index) => {
-        const activeClass = index === activeIndex ? 'is-active' : '';
-        const className = `embed-editor_provenance-item ${activeClass}`;
-        const rawValue = withImportant(contributor);
-        const body = (
-          <>
-            <ProvenanceOrigin contributor={contributor} nav={nav} />
-            <div className="embed-editor_provenance-line">
-              <code className="embed-editor_provenance-sel">{contributor.display ?? contributor.selectorText}</code>
-              <span className="embed-editor_provenance-val" title={rawValue}>
-                {rawValue}
-              </span>
-            </div>
-          </>
-        );
-        // The row for the selector you're already editing isn't a navigation
-        // target — it stays a plain (non-clickable) row.
-        const select = contributor.editing ? undefined : onSelect;
-        return (
-          <li key={index}>
-            {select ? (
-              <button
-                type="button"
-                className={`${className} is-clickable`}
-                title={translate('style.provenanceList.edit', { selector: contributor.selectorText })}
-                onClick={() => select(contributor.selectorText, prop)}
-              >
-                {body}
-              </button>
-            ) : (
-              <div className={className}>{body}</div>
-            )}
-          </li>
-        );
-      })}
+      {contributors.map((contributor, index) => (
+        <ProvenanceItem
+          key={index}
+          contributor={contributor}
+          active={index === activeIndex}
+          winner={contributors.find((candidate) => candidate.winning)}
+          nav={nav}
+          prop={prop}
+          onSelect={onSelect}
+        />
+      ))}
     </ul>
+  );
+}
+
+// What a dimmed row says on hover: which declaration took its place, and the step at which this one lost.
+function lossTip(contributor: Contributor, winner: Contributor | undefined, translate: ReturnType<typeof useTranslate>): string | undefined {
+  if (contributor.origin === 'browser') {
+    return translate('style.provenanceList.usedValueTip');
+  }
+  if (contributor.lossReason === undefined) {
+    return undefined;
+  }
+  const selector = winner === undefined ? '' : (winner.display ?? winner.selectorText);
+  return translate(`style.provenanceList.loss.${contributor.lossReason}`, { selector });
+}
+
+function ProvenanceItem({
+  contributor,
+  active,
+  winner,
+  nav,
+  prop,
+  onSelect,
+}: {
+  readonly contributor: Contributor;
+  readonly active: boolean;
+  readonly winner: Contributor | undefined;
+  readonly nav: EmbedNav | undefined;
+  readonly prop: string | undefined;
+  readonly onSelect: ((selectorText: string, prop?: string) => void) | undefined;
+}) {
+  const translate = useTranslate();
+  const tooltip = useDelayedTooltip();
+  const className = `embed-editor_provenance-item ${active ? 'is-active' : ''}`;
+  const rawValue = withImportant(contributor);
+  const tip = lossTip(contributor, winner, translate);
+  const browserLabel =
+    contributor.display === undefined
+      ? translate('style.provenanceList.usedValue')
+      : translate('style.provenanceList.usedValueIn', { condition: contributor.display });
+  const body = (
+    <>
+      <ProvenanceOrigin contributor={contributor} nav={nav} />
+      <div className="embed-editor_provenance-line">
+        {contributor.origin === 'browser' ? (
+          <span className="embed-editor_provenance-sel">{browserLabel}</span>
+        ) : (
+          <code className="embed-editor_provenance-sel">{contributor.display ?? contributor.selectorText}</code>
+        )}
+        <span className="embed-editor_provenance-val" title={rawValue}>
+          {rawValue}
+        </span>
+      </div>
+    </>
+  );
+  // The row for the selector you're already editing isn't a navigation target, and a used value has no selector to jump to.
+  const select = contributor.editing || contributor.origin === 'browser' ? undefined : onSelect;
+  return (
+    <li onMouseEnter={tip === undefined ? undefined : tooltip.show} onMouseLeave={tooltip.hide}>
+      {select ? (
+        <button
+          type="button"
+          className={`${className} is-clickable`}
+          {...(tip === undefined ? { title: translate('style.provenanceList.edit', { selector: contributor.selectorText }) } : {})}
+          onClick={() => select(contributor.selectorText, prop)}
+        >
+          {body}
+        </button>
+      ) : (
+        <div className={className}>{body}</div>
+      )}
+      {tip !== undefined &&
+        tooltip.value !== undefined &&
+        createPortal(
+          <div className="rail-tooltip below" role="tooltip" style={tooltip.value}>
+            {tip}
+          </div>,
+          tooltipHost(undefined),
+        )}
+    </li>
   );
 }
 

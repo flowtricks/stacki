@@ -6,6 +6,7 @@ import { assert } from '../../shared/core/assert';
 import { PRELOAD_LIMITS } from './frameBasics';
 import { ownClasses } from './frameMeasure';
 import { inheritedProperty } from './styleInheritance';
+import { CASCADE_CANDIDATES_MAX, type CascadeOrigin, type CascadeProperty } from '../../shared/properties/cascadeOrigin';
 
 const STYLE_LIMITS = { rulesMax: 20_000, propertiesMax: 512, workMax: 200_000 } as const;
 type Probe = { readonly inherited: string; readonly local: string };
@@ -24,6 +25,8 @@ type Declaration = { readonly value: string; readonly priority: string };
 export type AuthoredInspection = {
   readonly values: Readonly<Record<string, string | undefined>>;
   readonly sources: Readonly<Record<string, Element | undefined>>;
+  /** The browser's own winner and the declarations that reach the element, per property it sets itself. */
+  readonly origins: Readonly<Record<string, CascadeProperty | undefined>>;
 };
 
 export function authoredProperties(element: Element, properties: readonly string[]) {
@@ -31,7 +34,7 @@ export function authoredProperties(element: Element, properties: readonly string
 }
 
 export function inspectAuthoredProperties(element: Element, properties: readonly string[]): AuthoredInspection {
-  const empty: AuthoredInspection = { values: {}, sources: {} };
+  const empty: AuthoredInspection = { values: {}, sources: {}, origins: {} };
   if (typeof window.CSS?.registerProperty !== 'function') {
     return empty;
   }
@@ -46,6 +49,7 @@ export function inspectAuthoredProperties(element: Element, properties: readonly
     return empty;
   }
   const values: string[] = [];
+  const records: DeclaredRecord[] = [];
   const patches = new Map<CSSStyleDeclaration, AuthoredPatch>();
   const names = properties.map((property) => ({ property, probe: registeredProbe(property) }));
   try {
@@ -56,6 +60,7 @@ export function inspectAuthoredProperties(element: Element, properties: readonly
           if (declaration.value) {
             const token = probeToken(declaration.value, values.length);
             values.push(declaration.value);
+            records.push({ property, style, value: declaration.value, important: declaration.priority === 'important' });
             const patch = patches.get(style) ?? authoredPatch(style);
             patches.set(style, patch);
             for (const name of [probe.inherited, probe.local]) {
@@ -69,7 +74,7 @@ export function inspectAuthoredProperties(element: Element, properties: readonly
     }
     assert(patches.size <= styles.declarations.length, 'Each declaration has one saved original');
     assert(values.length * 2 <= STYLE_LIMITS.workMax, 'Authored probe writes are bounded');
-    return inspectProbeResults(element, names, values);
+    return inspectProbeResults(element, names, values, records);
   } finally {
     restoreAuthoredStyles(patches, styles.inline);
   }
@@ -92,10 +97,13 @@ function inspectProbeResults(
   element: Element,
   names: readonly { readonly property: string; readonly probe: Probe | undefined }[],
   declarations: readonly string[],
+  records: readonly DeclaredRecord[],
 ): AuthoredInspection {
   const computed = getComputedStyle(element);
   const values: Record<string, string | undefined> = {};
   const sources: Record<string, Element | undefined> = {};
+  const origins: Record<string, CascadeProperty | undefined> = {};
+  const ranks = records.length > 0 ? documentRanks() : new Map<CSSStyleDeclaration, number>();
   for (const { property, probe } of names) {
     if (probe === undefined) {
       continue;
@@ -105,9 +113,117 @@ function inspectProbeResults(
     if (Number.isSafeInteger(index) && declarations[index] !== undefined) {
       values[property] = declarations[index];
       sources[property] = probeSource(element, probe.local, token);
+      const winner = records[index];
+      if (winner !== undefined && sources[property] === element) {
+        origins[property] = cascadeProperty({ element, property, winner, records, ranks, used: computed.getPropertyValue(property).trim() });
+      }
     }
   }
-  return { values, sources };
+  return { values, sources, origins };
+}
+
+// One declaration block that sets a property, as mirrored into a probe.
+type DeclaredRecord = {
+  readonly property: string;
+  readonly style: CSSStyleDeclaration;
+  readonly value: string;
+  readonly important: boolean;
+};
+
+function cascadeProperty(input: {
+  readonly element: Element;
+  readonly property: string;
+  readonly winner: DeclaredRecord;
+  readonly records: readonly DeclaredRecord[];
+  readonly ranks: ReadonlyMap<CSSStyleDeclaration, number>;
+  readonly used: string;
+}): CascadeProperty {
+  const { element, property, winner, records, ranks, used } = input;
+  const candidates = records
+    .filter((record) => record.property === property && (record === winner || reaches(record.style, element)))
+    .map((record) => originOf(record, ranks))
+    .sort((left, right) => left.order - right.order)
+    .slice(-CASCADE_CANDIDATES_MAX);
+  assert(candidates.length <= CASCADE_CANDIDATES_MAX, 'The reported candidates are bounded');
+  return { used, winner: originOf(winner, ranks), candidates };
+}
+
+// Whether a block's rule can apply to the element: false only when its selector provably does not match.
+// A nested or unparsable selector is kept, because the browser (not this list) decides the winner.
+function reaches(style: CSSStyleDeclaration, element: Element): boolean {
+  const rule = style.parentRule;
+  if (rule === null) {
+    return element instanceof HTMLElement && element.style === style;
+  }
+  if (!(rule instanceof CSSStyleRule) || rule.parentRule instanceof CSSStyleRule) {
+    return true;
+  }
+  try {
+    return element.matches(rule.selectorText);
+  } catch {
+    return true;
+  }
+}
+
+function originOf(record: DeclaredRecord, ranks: ReadonlyMap<CSSStyleDeclaration, number>): CascadeOrigin {
+  const where = describeDeclaration(record.style);
+  const context = ruleContext(record.style);
+  return {
+    selector: where.selector,
+    ...(where.file === undefined ? {} : { file: where.file }),
+    value: record.value.replace(/\s+/g, ' ').trim(),
+    important: record.important,
+    ...(context.layer === undefined ? {} : { layer: context.layer }),
+    conditions: context.conditions,
+    order: ranks.get(record.style) ?? Number.MAX_SAFE_INTEGER,
+  };
+}
+
+// The cascade layer and the conditions around a block's rule, outermost first.
+function ruleContext(style: CSSStyleDeclaration): { readonly layer: string | undefined; readonly conditions: string[] } {
+  const layers: string[] = [];
+  const conditions: string[] = [];
+  let rule: CSSRule | undefined = style.parentRule ?? undefined;
+  for (let depth = 0; rule !== undefined && depth < PRELOAD_LIMITS.cssRuleDepthMax; depth += 1) {
+    if (typeof CSSLayerBlockRule !== 'undefined' && rule instanceof CSSLayerBlockRule) {
+      layers.unshift(rule.name);
+    } else if (rule instanceof CSSMediaRule) {
+      conditions.unshift(`@media ${rule.conditionText}`.trim());
+    } else if (rule instanceof CSSSupportsRule) {
+      conditions.unshift(`@supports ${rule.conditionText}`.trim());
+    } else if (typeof CSSContainerRule !== 'undefined' && rule instanceof CSSContainerRule) {
+      conditions.unshift(`@container ${rule.conditionText}`.trim());
+    }
+    rule = rule.parentRule ?? undefined;
+  }
+  return { layer: layers.length === 0 ? undefined : layers.join('.'), conditions };
+}
+
+// The position of every declaration block in document order: sheets in order, rules depth-first,
+// an `@import` expanding in place. The probe list is breadth-first and cannot say this.
+function documentRanks(): Map<CSSStyleDeclaration, number> {
+  const ranks = new Map<CSSStyleDeclaration, number>();
+  const stack: CSSRule[] = [];
+  const sheets = [...Array.from(document.styleSheets), ...document.adoptedStyleSheets];
+  for (const sheet of sheets.reverse()) {
+    const rules = sheetRules(sheet);
+    if (rules !== undefined) {
+      stack.push(...Array.from(rules).reverse());
+    }
+  }
+  // Sheets are pushed last-first, so the first sheet's first rule is popped first.
+  for (let step = 0; step < STYLE_LIMITS.rulesMax * 4 && stack.length > 0; step += 1) {
+    const rule = stack.pop();
+    assert(rule !== undefined, 'The rank stack is non-empty inside the loop');
+    if (rule instanceof CSSStyleRule || (typeof CSSNestedDeclarations !== 'undefined' && rule instanceof CSSNestedDeclarations)) {
+      ranks.set(rule.style, ranks.size);
+    }
+    const children = authoredChildRules(rule);
+    if (children !== undefined) {
+      stack.push(...Array.from(children).reverse());
+    }
+  }
+  return ranks;
 }
 
 function probeSource(element: Element, name: string, token: string): Element | undefined {

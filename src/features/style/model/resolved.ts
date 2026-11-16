@@ -32,7 +32,7 @@ export type SourceKey = 'embed' | 'native';
 
 /** Where a contributed value comes from: a layer, or the element's own `style`
  *  attribute, which outranks every selector (model/inlineTarget.ts). */
-export type ContributorOrigin = SourceKey | 'inline';
+export type ContributorOrigin = SourceKey | 'inline' | 'browser';
 
 /** The selected element's inline declarations, folded in above every rule. */
 export type InlineResolveInput = {

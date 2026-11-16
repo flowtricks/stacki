@@ -35,9 +35,11 @@ export type CascadeCandidate = {
 };
 
 /** The step at which a declaration lost to the winner, in the order the steps are taken. */
-export type LossKind = 'condition' | 'importance' | 'inline' | 'layer' | 'specificity' | 'order';
+export type LossKind = 'condition' | 'importance' | 'inline' | 'layer' | 'specificity' | 'order' | 'other';
 
-export const LOSS_KINDS: readonly LossKind[] = ['condition', 'importance', 'inline', 'layer', 'specificity', 'order'];
+// `other` is never derived here: it marks a declaration the page's own cascade passed over for a
+// reason the panel's reading of the files does not explain (model/cascadeTruth.ts).
+export const LOSS_KINDS: readonly LossKind[] = ['condition', 'importance', 'inline', 'layer', 'specificity', 'order', 'other'];
 
 // Positive when `left` has the higher layer precedence; the pair shares one importance, which
 // decides whether later layers win (normal) or lose (important).
@@ -57,7 +59,7 @@ function layerPrecedence(left: CascadeCandidate, right: CascadeCandidate): numbe
 }
 
 /** The step that decides `left` against `right`, and which of them it favors (-1 left, 1 right); undefined on an exact tie. */
-function decidingStep(left: CascadeCandidate, right: CascadeCandidate): { readonly kind: LossKind; readonly favors: -1 | 1 } | undefined {
+function decidingStep(left: CascadeCandidate, right: CascadeCandidate): { readonly kind: Exclude<LossKind, 'other'>; readonly favors: -1 | 1 } | undefined {
   const leftApplies = left.applies !== false;
   const rightApplies = right.applies !== false;
   if (leftApplies !== rightApplies) {

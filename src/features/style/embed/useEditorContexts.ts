@@ -38,6 +38,8 @@ import { isGlobalSelector, type MatchTarget } from '../model/selectors';
 import { selectedInstanceMarkup, selectedInstanceMarkupPending, selectedInstanceScope } from '../model/webflowElement';
 import { rememberChipProvenance, rememberedGreenChips } from '../model/chipProvenanceMemory';
 import { componentSource, componentSourcePending } from '../model/componentSourceCache';
+import { applyCascadeTruth } from '../model/cascadeTruth';
+import { useCascadeTruth } from '../model/computedStyle';
 import { useComponentSourceTick } from './useComponentSourceTick';
 import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
@@ -432,7 +434,7 @@ export function useResolved(
   // eslint-disable-next-line react-hooks/exhaustive-deps -- inlineKey stands for inlineNow's contents
   const inline = useMemo(() => inlineNow, [inlineKey]);
 
-  const resolved = useMemo(
+  const ranked = useMemo(
     () =>
       resolveStyle(
         modelForContext(model ?? EMPTY_RULE_MODEL, currentContext),
@@ -450,6 +452,15 @@ export function useResolved(
       ),
     [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey, pseudoLayer, inline],
   );
+
+  // The page is asked which declaration it really applies, and the ranking is checked against it
+  // (model/cascadeTruth.ts). Only the element at rest in the base context is checked: the page
+  // answers for the element as it renders now, not for a hover state or a ::before box.
+  const checkable =
+    stateKey === '' && pseudoLayer === undefined && (currentContext.embedAtContext ?? ' native-only') === '' && !/::|:(before|after)\b/.test(activeSelector);
+  const checkedProps = useMemo(() => (checkable ? [...ranked.props.keys()] : []), [ranked, checkable]);
+  const cascadeTruth = useCascadeTruth(checkedProps);
+  const resolved = useMemo(() => (checkable ? applyCascadeTruth(ranked, cascadeTruth) : ranked), [ranked, checkable, cascadeTruth]);
 
   // The stylesheet the active selector's rule already lives in. resolveStyle
   // picks selectedRule by selector identity and explicitly does NOT scope it to

@@ -13,7 +13,8 @@ import { useStableStyleValue } from './useStableStyleValue';
 // use it to highlight options and show inherited source metadata. It never claims
 // that the selected selector owns the property; editing still uses the resolved model.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CASCADE_PROPERTIES_MAX, parseCascadeProperty, type CascadeProperty } from '../../../../shared/properties/cascadeOrigin';
 import { hasCanvas, onCanvasReady, queryCanvas } from '../../../editor/canvasQuery';
 import { assert } from '../../../../shared/core/assert';
 import { findNode, getHost, onHostChange } from './host';
@@ -23,7 +24,8 @@ import { textStyleContext } from './styleQuery';
 const AUTHORED_PREFIX = 'authored:';
 const SOURCE_LABEL_PREFIX = 'source-label:';
 const SOURCE_PATH_PREFIX = 'source-path:';
-const PREFIXES = [AUTHORED_PREFIX, SOURCE_LABEL_PREFIX, SOURCE_PATH_PREFIX];
+const CASCADE_PREFIX = 'cascade:';
+const PREFIXES = [AUTHORED_PREFIX, SOURCE_LABEL_PREFIX, SOURCE_PATH_PREFIX, CASCADE_PREFIX];
 // Answers are kept per element, under a key naming the node as well as its rendered path
 // (`nodeId NUL path`): the tag check and the text-node context belong to the node asked
 // about, which is not always the one selected. The panel asks about the NEXT element while
@@ -47,6 +49,10 @@ const cache = createQueryCache(async (elementKey, keys) => {
     keys.map((key) => {
       const property = propertyOf(key);
       const source = answer?.inheritedSources?.[property];
+      if (key.startsWith(CASCADE_PREFIX)) {
+        const origin = answer?.authoredOrigins[property];
+        return [key, origin === undefined ? undefined : JSON.stringify(origin)];
+      }
       if (key.startsWith(SOURCE_LABEL_PREFIX)) {
         return [key, source?.label];
       }
@@ -326,6 +332,81 @@ export function useInheritedSource(prop: string) {
   const label = useComputedAnswer(prop ? `${SOURCE_LABEL_PREFIX}${prop}` : '').value;
   const path = useComputedAnswer(prop ? `${SOURCE_PATH_PREFIX}${prop}` : '').value;
   return label ? { label, ...(path ? { path } : {}) } : undefined;
+}
+
+// The browser's cascade answer for one property, read from the answer's JSON text.
+function readCascadeProperty(text: string): CascadeProperty | undefined {
+  if (text.length === 0) {
+    return undefined;
+  }
+  try {
+    const raw: unknown = JSON.parse(text);
+    return parseCascadeProperty(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What the page's own cascade says about each of `props` for the selected element: the winning
+ * declaration, the used value and the declarations that reach it. A property the page did not
+ * answer for (no canvas, an inaccessible stylesheet, an inherited value) is absent, and the
+ * caller keeps what the panel read from the files. Shares the computed-value cache, so a switch,
+ * an edit or an undo drops these answers together with the values.
+ */
+export function useCascadeTruth(props: readonly string[]): ReadonlyMap<string, CascadeProperty> {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const sync = () => bump((tick) => tick + 1);
+    const offCache = cache.subscribe(sync);
+    const off = onHostChange(sync);
+    return () => {
+      offCache();
+      off();
+    };
+  }, []);
+  const path = hasCanvas() ? selectionKey() : undefined;
+  const asked = props.slice(0, CASCADE_PROPERTIES_MAX);
+  const reading = path === undefined ? undefined : currentCache();
+  const texts = asked.map((prop) => {
+    if (path === undefined || reading === undefined) {
+      return '';
+    }
+    learnKey(`${CASCADE_PREFIX}${prop}`);
+    const known = reading.read(path, `${CASCADE_PREFIX}${prop}`);
+    return known.kind === 'pending' ? '' : (known.answer ?? '');
+  });
+  useEffect(() => {
+    if (path === undefined) {
+      return;
+    }
+    for (const prop of asked) {
+      void currentCache().request(path, `${CASCADE_PREFIX}${prop}`);
+    }
+  });
+  const askedKey = asked.join(UNIT_SEPARATOR);
+  const textsKey = texts.join(UNIT_SEPARATOR);
+  return useMemo(() => cascadeTruthOf(askedKey, textsKey), [askedKey, textsKey]);
+}
+
+const UNIT_SEPARATOR = '\u0001';
+
+// The answers, rebuilt from the two joined strings that stand for them, so the result is
+// the same object until an answer or the question changes.
+function cascadeTruthOf(askedKey: string, textsKey: string): ReadonlyMap<string, CascadeProperty> {
+  const found = new Map<string, CascadeProperty>();
+  if (askedKey.length === 0) {
+    return found;
+  }
+  const names = askedKey.split(UNIT_SEPARATOR);
+  const answers = textsKey.split(UNIT_SEPARATOR);
+  names.forEach((name, index) => {
+    const parsed = readCascadeProperty(answers[index] ?? '');
+    if (parsed !== undefined) {
+      found.set(name, parsed);
+    }
+  });
+  return found;
 }
 
 /**

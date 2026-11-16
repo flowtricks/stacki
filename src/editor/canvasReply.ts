@@ -1,6 +1,7 @@
 // Replies come from a project's iframe, so validate before resolving a pending
 // query. Invalid messages remain unanswered and use the normal timeout fallback.
 import { boolean, count, dictionary, list, object, optional, text } from '../../shared/core/boundary';
+import { parseCascadeProperty } from '../../shared/properties/cascadeOrigin';
 import { parseStyleSource } from '../../shared/properties/styleSource';
 import { parseWinningDeclaration, WINNING_NAMES_MAX } from '../../shared/properties/winningDeclaration';
 import { parsePageImage, parsePageType } from '../../shared/properties/pageMetadata';
@@ -34,6 +35,7 @@ const reply = object({
   computedProps: optional(dictionary(optional(text))),
   authoredProps: optional(dictionary(optional(text))),
   inheritedSources: optional(dictionary(parseStyleSource)),
+  authoredOrigins: optional(dictionary(optional(parseCascadeProperty))),
   winning: optional(boundedWinning),
   scoped: optional(boundedWinning),
 });
@@ -50,6 +52,8 @@ export type CanvasAnswer = {
   readonly computedProps: NonNullable<CanvasReply['computedProps']>;
   readonly authoredProps: NonNullable<CanvasReply['authoredProps']>;
   readonly inheritedSources: NonNullable<CanvasReply['inheritedSources']>;
+  /** The browser's own winner per property the selected element's rules set, from the canvas's cascade. */
+  readonly authoredOrigins: NonNullable<CanvasReply['authoredOrigins']>;
   /** The winning declaration of each custom property asked about with `winning`, as written. */
   readonly winning: NonNullable<CanvasReply['winning']>;
   /** The custom properties declared in scope of the element, nearest declaration of each. */

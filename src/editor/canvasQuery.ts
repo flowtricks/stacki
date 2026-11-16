@@ -216,6 +216,7 @@ export function receiveCanvasReply(input: unknown): void {
           computedProps: data.computedProps || {},
           authoredProps: data.authoredProps || {},
           inheritedSources: data.inheritedSources || {},
+          authoredOrigins: data.authoredOrigins || {},
           winning: data.winning || {},
           scoped: data.scoped || {},
           ...(data.pageImage === undefined ? {} : { pageImage: data.pageImage }),

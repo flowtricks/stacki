@@ -27,5 +27,5 @@ export function queryAuthoredStyles(element: Element, properties: readonly strin
       ...(path === undefined ? {} : { path }),
     };
   }
-  return { authoredProps: inspection.values, inheritedSources };
+  return { authoredProps: inspection.values, inheritedSources, authoredOrigins: inspection.origins };
 }
