@@ -1,0 +1,106 @@
+// i18n-ignore-file: the CLI and its MCP tools speak to agents and scripts in English; none of this is interface text.
+// `.stacki/audits.json`: how the project audits itself: ignored findings and pages, which checks run and how loud, the design-token rules and the placeholder phrases.
+import {
+  AUDIT_IGNORE_LIMITS,
+  AUDIT_SETTING_PRIORITIES,
+  DEFAULT_PLACEHOLDERS,
+  DEFAULT_TOKEN_SETTINGS,
+  parseAuditIgnores,
+  serializeAuditIgnores,
+} from '../../auditIgnores';
+import { arrayOf, bool, field, literal, mapOf, objectOf, oneOf, text, type FileSchema } from '../stackiSchema';
+
+// The parser lowercases `allowed` and trims every list item; a registry value is checked as written.
+const listItem = text(AUDIT_IGNORE_LIMITS.listItemCharsMax, { charsMin: 1 });
+
+export const AUDITS_FILE: FileSchema = {
+  id: 'audits',
+  file: '.stacki/audits.json',
+  description:
+    'Audit configuration shared by the team: ignored findings and pages (each with a reason), per-check overrides, the design-token rules and the placeholder phrases.',
+  requires: 'panel:audits',
+  metadataKind: 'audits',
+  fields: {
+    version: field(literal(2), 'The file format version. Version 1 (ignores only) still reads and is written back as 2.', { required: true }),
+    ignored: field(
+      arrayOf(
+        objectOf({
+          id: field(
+            text(AUDIT_IGNORE_LIMITS.idCharsMax, { charsMin: 1 }),
+            'The finding id, as the audit reports it: check|file|path|detail. Unique in the list.',
+            { required: true },
+          ),
+          reason: field(text(AUDIT_IGNORE_LIMITS.reasonCharsMax, { charsMin: 1 }), 'Why the finding is ignored; not blank.', { required: true }),
+        }),
+        AUDIT_IGNORE_LIMITS.entriesMax,
+      ),
+      'Findings the project silenced, in the order they were added. An entry lapses when the markup it named moves.',
+      { required: true },
+    ),
+    ignoredPages: field(
+      arrayOf(
+        objectOf({
+          file: field(text(AUDIT_IGNORE_LIMITS.idCharsMax, { charsMin: 1 }), 'A project-relative path (no leading slash). Unique in the list.', {
+            required: true,
+          }),
+          reason: field(text(AUDIT_IGNORE_LIMITS.reasonCharsMax, { charsMin: 1 }), 'Why the page is ignored; not blank.', { required: true }),
+        }),
+        AUDIT_IGNORE_LIMITS.pagesMax,
+      ),
+      'Pages ignored whole: every finding of every check in the file. Written only when there is one.',
+      { default: 'none' },
+    ),
+    checks: field(
+      mapOf(
+        objectOf({
+          enabled: field(bool(), 'Whether the check runs.', { default: true }),
+          priority: field(oneOf(...AUDIT_SETTING_PRIORITIES), 'Louder or quieter than the check default; absent keeps the default.'),
+        }),
+        AUDIT_IGNORE_LIMITS.checksMax,
+        'a check id (lowercase letters, digits and hyphens, up to 40 characters)',
+        '^[a-z0-9-]{1,40}$',
+      ),
+      'Per-check overrides by check id. A check not named keeps its defaults.',
+      { default: 'no overrides' },
+    ),
+    tokens: field(
+      objectOf({
+        properties: field(
+          arrayOf(listItem, AUDIT_IGNORE_LIMITS.listItemsMax),
+          'CSS properties whose values must come from variables; a trailing * matches a prefix (padding* covers every padding longhand).',
+          {
+            default: DEFAULT_TOKEN_SETTINGS.properties.join(', '),
+          },
+        ),
+        colors: field(bool(), 'Flag raw hex, rgb() and hsl() colours.', { default: DEFAULT_TOKEN_SETTINGS.colors }),
+        px: field(bool(), 'Flag any px value outside a variable definition.', { default: DEFAULT_TOKEN_SETTINGS.px }),
+        remOutsideVariables: field(bool(), 'Flag any rem value outside a variable definition.', { default: DEFAULT_TOKEN_SETTINGS.remOutsideVariables }),
+        allowed: field(arrayOf(listItem, AUDIT_IGNORE_LIMITS.listItemsMax), 'Raw values that are fine as written, compared lower-cased: 0, auto, 1px, 100%.', {
+          default: DEFAULT_TOKEN_SETTINGS.allowed.join(', '),
+        }),
+      }),
+      'The design-token linter rules. Written only when they differ from the defaults.',
+      { default: 'the app defaults' },
+    ),
+    placeholders: field(
+      arrayOf(listItem, AUDIT_IGNORE_LIMITS.listItemsMax),
+      'Phrases that mark copy as placeholder: one word must be the whole text, several may be part of it. Written only when they differ from the defaults.',
+      { default: DEFAULT_PLACEHOLDERS.join(', ') },
+    ),
+  },
+  empty: { version: 2, ignored: [] },
+  // The app's writer leaves out settings at their defaults and an empty ignoredPages; the CLI writes the same bytes.
+  serialize: (document) => serializeAuditIgnores(parseAuditIgnores(document)),
+  commands: [],
+  parserSources: ['shared/properties/auditIgnores.ts', 'shared/properties/auditIgnoreList.ts', 'shared/page/auditTokens.ts'],
+  parserKeyExceptions: {
+    page: 'A type lookup (IgnoredGroup["page"]) in the ignore list, not a key read from the file.',
+    rel: 'Wire key of a scanned stylesheet handed to the token linter, not a setting of the file.',
+    declarations: 'Wire key of a scanned stylesheet handed to the token linter, not a setting of the file.',
+    selector: 'Wire key of a scanned CSS rule handed to the token linter, not a setting of the file.',
+    entries: 'Wire key of a scanned CSS rule handed to the token linter, not a setting of the file.',
+    kind: 'Wire key of a scanned CSS entry handed to the token linter, not a setting of the file.',
+    name: 'Wire key of a scanned CSS variable handed to the token linter, not a setting of the file.',
+    value: 'Wire key of a scanned CSS variable handed to the token linter, not a setting of the file.',
+  },
+};
