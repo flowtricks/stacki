@@ -102,7 +102,7 @@ test('a real style change compiles on the server first, then passes', async () =
   const { markers, morph, file, dispose } = await preview();
   try {
     const page = file('index.astro', PAGE('red'));
-    markers.load(page);
+    markers.load.handler(page);
     file('index.astro', PAGE('blue'));
     const { server, log } = fakeServer(page, ['client', 'ssr']);
     const returned = await hotUpdate(morph, page, server, log);
@@ -121,7 +121,7 @@ test('typing into the template never sends the stylesheet or compiles', async ()
   const { markers, morph, file, dispose } = await preview();
   try {
     const page = file('index.astro', PAGE('red'));
-    markers.load(page);
+    markers.load.handler(page);
     for (const heading of ['Hom', 'Ho', 'Hello']) {
       file('index.astro', PAGE('red', heading));
       const { server, log } = fakeServer(page, ['ssr']);
@@ -137,7 +137,7 @@ test('a compile that fails is not trusted: the next update compiles again', asyn
   const { markers, morph, file, dispose } = await preview();
   try {
     const page = file('index.astro', PAGE('red'));
-    markers.load(page);
+    markers.load.handler(page);
     file('index.astro', PAGE('blue'));
     const failing = fakeServer(page, ['ssr'], 'reject');
     assert.equal(await hotUpdate(morph, page, failing.server), undefined, 'Vite keeps its order');
@@ -155,7 +155,7 @@ test('a compile that outruns the bound gives way, and is not trusted', async () 
   const realSetTimeout = globalThis.setTimeout;
   try {
     const page = file('index.astro', PAGE('red'));
-    markers.load(page);
+    markers.load.handler(page);
     file('index.astro', PAGE('blue'));
     const hung = fakeServer(page, ['ssr'], 'hang');
     // The bound's timer fires at once, so the case needs no real wait.
@@ -179,7 +179,7 @@ test('two quick edits compile in order', async () => {
   const { markers, morph, file, dispose } = await preview();
   try {
     const page = file('index.astro', PAGE('red'));
-    markers.load(page);
+    markers.load.handler(page);
     const held = fakeServer(page, ['ssr'], 'manual');
     file('index.astro', PAGE('blue'));
     const first = hotUpdate(morph, page, held.server, held.log);
@@ -203,7 +203,7 @@ test('nothing compiles where there is nothing to refresh', async () => {
   const { markers, morph, file, dispose } = await preview();
   try {
     const page = file('index.astro', PAGE('red'));
-    markers.load(page);
+    markers.load.handler(page);
     file('index.astro', PAGE('blue'));
     const clientOnly = fakeServer(page, ['client']);
     assert.equal(await hotUpdate(morph, page, clientOnly.server), undefined);
@@ -211,7 +211,7 @@ test('nothing compiles where there is nothing to refresh', async () => {
     file('index.astro', PAGE('green'));
     assert.equal(await hotUpdate(morph, page, {}), undefined, 'Vite 5: no environments');
     const markdown = file('post.md', '# Post\n<style>.a { color: red; }</style>\n');
-    markers.load(markdown);
+    markers.load.handler(markdown);
     file('post.md', '# Post\n<style>.a { color: blue; }</style>\n');
     const md = fakeServer(markdown, ['ssr']);
     assert.equal(await hotUpdate(morph, markdown, md.server), undefined);
@@ -225,7 +225,7 @@ test('a page only the prerender environment holds is compiled there', async () =
   const { markers, morph, file, dispose } = await preview();
   try {
     const page = file('index.astro', PAGE('red'));
-    markers.load(page);
+    markers.load.handler(page);
     file('index.astro', PAGE('blue'));
     const { server, log } = fakeServer(page, ['client', 'prerender']);
     assert.equal(await hotUpdate(morph, page, server), undefined);

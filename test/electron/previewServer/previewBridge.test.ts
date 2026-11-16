@@ -405,7 +405,9 @@ function markerPlugin(config: unknown, name: string): MarkerPlugin {
   assert.ok(Array.isArray(plugins));
   const found: unknown = plugins.find((plugin: unknown) => typeof plugin === 'object' && plugin !== null && 'name' in plugin && plugin.name === name);
   assert.ok(typeof found === 'object' && found !== null && 'load' in found);
-  const load: unknown = found.load;
+  // A hook is a function or, when it states its `order`, an object holding the function as `handler`.
+  const hook: unknown = found.load;
+  const load: unknown = typeof hook === 'object' && hook !== null && 'handler' in hook ? hook.handler : hook;
   assert.ok(typeof load === 'function');
   return {
     load: (id) => {

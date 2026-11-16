@@ -524,10 +524,16 @@ const avbMorph = {
 const AVB_MORPH_TAG = `,
   `;
 
+// \`order: 'pre'\` is load-bearing: Vite takes the first plugin that returns
+// source from \`load\`, and a project plugin that marks .astro files itself
+// (\`load: { order: 'pre' }\`, as component-navigator integrations do) sorts
+// ahead of a bare \`load\` even when both are enforce:'pre'. Then no file of
+// the page carried a stamp and every click ended in "the canvas isn't showing
+// this file". Marking from the bytes on disk, first, is what the stamp means.
 const avbMarkers = {
   name: 'avb-node-markers',
   enforce: 'pre',
-  load(id) {
+  load: { order: 'pre', handler(id) {
     const qi = id.indexOf('?');
     const file = qi === -1 ? id : id.slice(0, qi);
     const query = qi === -1 ? '' : id.slice(qi + 1);
@@ -562,7 +568,7 @@ const avbMarkers = {
     } catch {
       return null;
     }
-  },
+  } },
 };
 
 // Markdown can't use the load hook above: Astro's own \`astro:markdown\` plugin
