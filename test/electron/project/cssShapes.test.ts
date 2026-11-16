@@ -40,6 +40,11 @@ for (const shape of shapes().filter((candidate) => candidate.area === 'css')) {
           readDeclarations(text);
         } catch (error: unknown) {
           assert.ok(error instanceof Error && error.message.length > 0, relative);
+          // The variables panel lists `.css` files only (stylesheetsSliced), so a Sass or Less file the parser
+          // refuses is never read by the panel and has no file entry to carry the failure.
+          if (!relative.endsWith('.css')) {
+            continue;
+          }
           const files = result['files'];
           assert.ok(
             Array.isArray(files) && files.some((file: unknown) => typeof toRecord(file)?.['error'] === 'string'),
