@@ -5,15 +5,26 @@ import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTransl
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import { noteCanvasTextEditing } from '../../editor/canvasTextFocus';
 import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
+import type { BoundTextBlockReason } from '../../editor/boundText';
+import { parsePreviewMessage } from './previewMessages';
 import { useEffect, useRef, type RefObject } from 'react';
-import { canvasTextUnfolded, parseCanvasTextEvent, type CanvasTextCatalog, type CanvasTextRunValue } from '../../../shared/properties/canvasText';
+import {
+  CANVAS_BLOCKED_LIMIT,
+  canvasTextUnfolded,
+  parseCanvasTextEvent,
+  type CanvasTextCatalog,
+  type CanvasTextRunValue,
+} from '../../../shared/properties/canvasText';
 import { applyCanvasText, applyCanvasTexts, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
+import { onCanvasTextRefresh } from './canvasTextRefresh';
+import { canvasSourceCue, canvasSourceHover, canvasSourceTargets, clearCanvasSourceCue, type CanvasSourceTarget } from '../../ui/canvasTextSourceCue';
 import {
   CANVAS_FOCUS_PATHS_MAX,
   canvasTextFocus,
   parseCanvasTextOverlay,
   parseCanvasTextSelection,
+  type CanvasTextBox,
   type CanvasTextSelection,
   type CanvasTextSelectionRange,
 } from '../../../shared/properties/canvasTextOverlay';
@@ -108,6 +119,7 @@ function startCanvasText(current: RefObject<Options>) {
   };
   refresh();
   const unsubscribeContent = cmsTransport.onCmsChanged(refresh);
+  const unsubscribeRefresh = onCanvasTextRefresh(refresh);
   const unsubscribe = current.current?.subscribeLoad(send);
   const receive = createCanvasTextReceiver({
     current,
@@ -117,12 +129,19 @@ function startCanvasText(current: RefObject<Options>) {
     plans: () => plans,
   });
   window.addEventListener('message', receive);
+  const hover = createSourceHover({ current, session, plans: () => plans });
+  window.addEventListener('message', hover);
   return () => {
+    window.removeEventListener('message', hover);
+    canvasSourceHover.set(undefined);
     disposed = true;
     overlay.close();
     clearCanvasTextDraft(session);
     clearCanvasTextSelection(session);
     unsubscribeContent();
+    unsubscribeRefresh();
+    clearCanvasSourceCue(session);
+    canvasSourceTargets.set(new Map());
     if (catalog) {
       current.current?.post({ ...catalog, session: crypto.randomUUID(), targets: [] });
     }
@@ -154,6 +173,7 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
     if (message.type === 'avb:text-active' || message.type === 'avb:text-inactive') {
       noteCanvasTextEditing(message.type === 'avb:text-active' ? 'active' : 'inactive');
       options.overlay.receive(message);
+      showSourceCue(message, options);
       if (!busy) {
         clearCanvasTextDraft(options.session);
       }
@@ -246,7 +266,8 @@ function canvasTextSessionMessage(event: MessageEvent<unknown>, options: CanvasT
     return undefined;
   }
   if (message.type === 'avb:text-refused') {
-    options.initial.report(refusalText(message, options.current.current?.translate ?? ENGLISH_TRANSLATE));
+    const translate = options.current.current?.translate ?? ENGLISH_TRANSLATE;
+    options.initial.report(blockedRefusal(message, options.plans(), options.initial.file, translate) ?? refusalText(message, translate));
     return undefined;
   }
   if (message.session !== options.session) {
@@ -300,16 +321,125 @@ async function publishCanvasTextSession(
   if (content.length) {
     // CMS refreshes invalidate only CMS tickets. Literal editing keeps its focus
     // while scans run; an old CMS commit cannot pick up a newer entry snapshot.
+    // Text printed from data is traced to its source here, so its target
+    // replaces the plain constant the page's own text pass already offered.
     const refreshed = content.map((plan) => ({
       ...plan,
-      target: { ...plan.target, key: `cms:${revision}:${plan.target.key}` },
+      target: plan.bound === undefined ? { ...plan.target, key: `cms:${revision}:${plan.target.key}` } : plan.target,
     }));
-    const combined = [...plans, ...refreshed].slice(0, 2_000);
+    const claimed = new Set(refreshed.filter((plan) => plan.bound !== undefined).map((plan) => plan.target.path));
+    const kept = plans.filter((plan) => !claimed.has(plan.target.path));
+    const combined = [...kept, ...refreshed].slice(0, 2_000);
+    const editable = combined.filter((plan) => plan.bound?.kind !== 'blocked');
+    const blocked = combined.filter((plan) => plan.bound?.kind === 'blocked').slice(0, CANVAS_BLOCKED_LIMIT);
+    canvasSourceTargets.set(sourceTargetsOf(combined));
     publish({
       plans: combined,
-      catalog: { ...catalog, targets: combined.map((plan) => plan.target) },
+      catalog: {
+        ...catalog,
+        targets: editable.map((plan) => plan.target),
+        ...(blocked.length === 0 ? {} : { blocked: blocked.map((plan) => ({ key: plan.target.key, path: plan.target.path })) }),
+      },
     });
   }
+}
+
+// The pointer on the element that prints bound text, while nothing is being typed: a hint that a double
+// click edits it, and where. The frame already reports what the pointer is over (avb:hover-node); this
+// reads that report and draws nothing of its own on the page.
+function createSourceHover(options: { readonly current: RefObject<Options>; readonly session: string; readonly plans: () => readonly CanvasTextEdit[] }) {
+  return (event: MessageEvent<unknown>) => {
+    const host = options.current.current;
+    if (!host?.url || event.source !== host.frame.current?.contentWindow || event.origin !== new URL(host.url).origin) {
+      return;
+    }
+    const message = parseHoverMessage(event.data);
+    const frame = host.frame.current;
+    if (message === undefined || !frame || canvasSourceCue.get() !== undefined) {
+      canvasSourceHover.set(undefined);
+      return;
+    }
+    const bound = options.plans().find((plan) => plan.target.parent === message.path && plan.bound?.kind === 'source')?.bound;
+    if (bound?.kind !== 'source' || message.box === undefined) {
+      canvasSourceHover.set(undefined);
+      return;
+    }
+    const origin = frame.getBoundingClientRect();
+    const scale = frame.clientWidth > 0 ? origin.width / frame.clientWidth : 1;
+    canvasSourceHover.set({
+      session: options.session,
+      expression: bound.expression,
+      file: bound.file,
+      uses: bound.uses,
+      box: { x: origin.left + message.box.x * scale, y: origin.top + message.box.y * scale, w: message.box.w * scale, h: message.box.h * scale },
+    });
+  };
+}
+
+function parseHoverMessage(input: unknown): { readonly path: string; readonly box: CanvasTextBox | undefined } | undefined {
+  try {
+    const message = parsePreviewMessage(input);
+    if (message?.kind !== 'hover-node' || message.path === undefined) {
+      return undefined;
+    }
+    return { path: message.path, box: message.boxes?.[0] };
+  } catch {
+    return undefined;
+  }
+}
+
+// The bound texts of the page by the expression that prints them, for the Settings hint.
+function sourceTargetsOf(plans: readonly CanvasTextEdit[]): ReadonlyMap<string, CanvasSourceTarget> {
+  const targets = new Map<string, CanvasSourceTarget>();
+  for (const plan of plans) {
+    if (plan.bound?.kind === 'source') {
+      targets.set(plan.bound.expression, { expression: plan.bound.expression, file: plan.bound.file, uses: plan.bound.uses });
+    }
+  }
+  return targets;
+}
+
+// The cue over the text being typed in: which source its words are written to.
+function showSourceCue(
+  message: { readonly type: string; readonly session: string; readonly key?: string; readonly rect?: CanvasTextBox },
+  options: CanvasTextReceiverOptions,
+) {
+  if (message.type !== 'avb:text-active' || message.key === undefined) {
+    clearCanvasSourceCue(options.session);
+    return;
+  }
+  const bound = options.plans().find((entry) => entry.target.key === message.key)?.bound;
+  const frame = options.current.current?.frame.current;
+  if (bound?.kind !== 'source' || message.rect === undefined || !frame) {
+    clearCanvasSourceCue(options.session);
+    return;
+  }
+  const origin = frame.getBoundingClientRect();
+  const scale = frame.clientWidth > 0 ? origin.width / frame.clientWidth : 1;
+  canvasSourceCue.set({
+    session: options.session,
+    expression: bound.expression,
+    file: bound.file,
+    uses: bound.uses,
+    box: { x: origin.left + message.rect.x * scale, y: origin.top + message.rect.y * scale, w: message.rect.w * scale, h: message.rect.h * scale },
+  });
+}
+
+// A double click on text whose source cannot be written: the file to edit instead, in the person's language.
+function blockedRefusal(
+  message: { readonly reason?: CanvasTextRefusal | undefined; readonly key?: string | undefined },
+  plans: readonly CanvasTextEdit[],
+  pageFile: string,
+  translate: Translator,
+): string | undefined {
+  if (message.reason !== 'source-blocked') {
+    return undefined;
+  }
+  const bound = plans.find((plan) => plan.target.key === message.key)?.bound;
+  if (bound?.kind !== 'blocked') {
+    return undefined;
+  }
+  return translate(BLOCKED_KEYS[bound.reason], { file: bound.file === '' ? pageFile : bound.file, path: bound.expression });
 }
 
 interface Takeover {
@@ -459,6 +589,23 @@ const REFUSAL_KEYS: Readonly<Record<CanvasTextRefusal, MessageKey>> = {
   'selection-reaches': 'preview.text.selectionReaches',
   unsafe: 'preview.text.unsafe',
   'page-changed': 'preview.text.pageChanged',
+  'source-blocked': 'preview.text.source.blocked.computed',
+};
+
+const BLOCKED_KEYS: Readonly<Record<BoundTextBlockReason, MessageKey>> = {
+  ambiguous: 'preview.text.source.blocked.ambiguous',
+  call: 'preview.text.source.blocked.call',
+  computed: 'preview.text.source.blocked.computed',
+  concatenation: 'preview.text.source.blocked.concatenation',
+  duplicate: 'preview.text.source.blocked.duplicate',
+  missing: 'preview.text.source.blocked.missing',
+  mutable: 'preview.text.source.blocked.mutable',
+  'not-text': 'preview.text.source.blocked.not-text',
+  prop: 'preview.text.source.blocked.prop',
+  runtime: 'preview.text.source.blocked.computed',
+  template: 'preview.text.source.blocked.template',
+  unreadable: 'preview.text.source.blocked.unreadable',
+  unsupported: 'preview.text.source.blocked.unsupported',
 };
 
 // The frame sends the English sentence and a code; the sentence is shown when the frame is older than this editor and sent no code.

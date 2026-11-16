@@ -20,6 +20,7 @@ import { BindHandle, FieldDataPicker, type FieldPickerAt, type FieldPosition } f
 import type { RichContext } from './RichContent';
 import { FIELD_UNFOCUSED } from './fieldFocus';
 import { propNamed } from '../../editor/loopProps';
+import { SourceHint } from './SourceHint';
 import { connectedPath, connectedPieces, disconnectedText, type TextPiece } from './textConnect';
 
 export interface TextConnectFieldProps {
@@ -108,6 +109,7 @@ export default function TextConnectField(props: TextConnectFieldProps) {
           </span>
         </div>
       )}
+      <SourceHint expression={path} />
       {picker && (
         <FieldDataPicker
           pos={picker}

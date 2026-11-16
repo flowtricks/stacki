@@ -4,6 +4,7 @@ import type { CanvasSitePages } from '../../../vendor/stacki/shared/properties/c
 import { useCanvasText } from '../../../vendor/stacki/src/features/preview/useCanvasText';
 import { studioCanvasText } from './studioCanvasText';
 import { CanvasTextFormatBar } from '../../../vendor/stacki/src/app/shell/CanvasTextFormatBar';
+import { CanvasTextSourceCue } from '../../../vendor/stacki/src/app/shell/CanvasTextSourceCue';
 import { useCanvasInteraction } from '../../../vendor/stacki/src/features/preview/useCanvasInteraction';
 import './previewToolbar.css';
 import { PreviewLoading, usePreviewLoading } from './PreviewLoading';
@@ -112,6 +113,7 @@ export function PreviewCanvas(props: Props) {
       )}
       {/* Desktop's bar over words selected on the canvas; it portals to the body. */}
       <CanvasTextFormatBar />
+      <CanvasTextSourceCue />
     </main>
   );
 }

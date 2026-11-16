@@ -1,5 +1,5 @@
 import type { CanvasTextTarget, CanvasTextCatalog } from '../../shared/properties/canvasText';
-import { pathsOf, canvasTextSourceMatches } from './frameRegions';
+import { pathsOf, canvasTextSourceMatches, runsOf } from './frameRegions';
 import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
@@ -53,6 +53,7 @@ export function installCanvasText(
     }
     const hit = findTextHit(catalog, event);
     if (!hit) {
+      refuseBlockedText(catalog, event, post);
       return;
     }
     event.preventDefault();
@@ -151,6 +152,30 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
     }
   }
   return nearest?.hit;
+}
+
+// Exported for the regression suite, with findTextHit. A double click on text
+// printed from data that has no string to write to: the
+// editor says why and where, in the person's language. The element is found by
+// the source path of its words, since there is no text to match.
+export function refuseBlockedText(catalog: CanvasTextCatalog, event: MouseEvent, post: (message: unknown) => void): void {
+  const clicked = event.target;
+  if (!(clicked instanceof Element)) {
+    return;
+  }
+  const blocked = (catalog.blocked ?? []).find((entry) => (runsOf(entry.path) ?? []).some((run) => run.some((node) => node.parentElement === clicked)));
+  if (!blocked) {
+    return;
+  }
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  post({
+    type: 'avb:text-refused',
+    // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
+    message: 'This text is computed in its source: edit it there.',
+    reason: 'source-blocked',
+    key: blocked.key,
+  });
 }
 
 type TextHit = {

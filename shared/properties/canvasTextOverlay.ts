@@ -4,7 +4,22 @@ import { CANVAS_TEXT_LIMIT } from './canvasText';
 
 // The host receives editing state only; the browser owns the text and caret.
 export type CanvasTextOverlayEvent =
-  { readonly type: 'avb:text-active'; readonly session: string; readonly key: string } | { readonly type: 'avb:text-inactive'; readonly session: string };
+  | {
+      readonly type: 'avb:text-active';
+      readonly session: string;
+      readonly key: string;
+      /** The editing element's box in the frame's own pixels, so the host can anchor a cue to it. Absent from an older frame. */
+      readonly rect?: CanvasTextBox;
+    }
+  | { readonly type: 'avb:text-inactive'; readonly session: string };
+
+/** A box in the frame's viewport pixels. */
+export interface CanvasTextBox {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
 
 export function parseCanvasTextOverlay(input: unknown): CanvasTextOverlayEvent | undefined {
   const data = record(input);
@@ -13,6 +28,7 @@ export function parseCanvasTextOverlay(input: unknown): CanvasTextOverlayEvent |
       type: 'avb:text-active',
       session: pathText(data['session']),
       key: pathText(data['key']),
+      ...(data['rect'] === undefined ? {} : { rect: parseBox(data['rect']) }),
     };
   }
   if (data['type'] === 'avb:text-inactive') {
@@ -117,6 +133,11 @@ function parseSelectionRange(input: unknown): CanvasTextSelectionRange {
       h: selectionSize(rect['h']),
     },
   };
+}
+
+function parseBox(input: unknown): CanvasTextBox {
+  const data = record(input);
+  return { x: selectionPixels(data['x']), y: selectionPixels(data['y']), w: selectionSize(data['w']), h: selectionSize(data['h']) };
 }
 
 function selectionOffset(input: unknown): number {

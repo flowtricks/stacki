@@ -13,6 +13,7 @@ import type { Attr, ImportDecl } from '../../../shared/page/pageNode';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { assert } from '../../../shared/core/assert';
 import { componentReference } from './componentReference';
+import type { BoundPropText } from './canvasBoundText';
 import {
   REPEATS,
   SITES_MAX,
@@ -38,6 +39,13 @@ export interface PropTextContext extends PropSiteContext {
   readonly nodes: readonly PropNode[];
   readonly imports: readonly ImportDecl[];
   readonly setProp: (nodeId: string, prop: string, value: Attr) => void;
+  /**
+   * Follows a prop the page sets to a binding (`body={aiCallout1.body}`) to the
+   * string it comes from: typing then writes that source, as the same words
+   * printed on the page directly would (canvasBoundText.ts). Absent: such a
+   * prop is the page's code and stays as it is.
+   */
+  readonly bound?: ((expression: string) => Promise<BoundPropText | undefined>) | undefined;
 }
 
 // Instances considered per page.
@@ -59,6 +67,11 @@ export async function canvasPropEdits(document: CanvasTextDocument, context: Pro
       continue;
     }
     for (const site of await sites(component)) {
+      const followed = await followedBinding(instance, site, context);
+      if (followed !== undefined) {
+        edits.push(boundPropEdit({ instance, site, followed, scope, label: context.label }));
+        continue;
+      }
       const value = shownValue(instance, component, site.prop);
       if (value === undefined) {
         continue;
@@ -69,6 +82,44 @@ export async function canvasPropEdits(document: CanvasTextDocument, context: Pro
   }
   assert(edits.length <= INSTANCES_MAX * SITES_MAX * 8, 'Prop text stays within its bounds');
   return edits;
+}
+
+// A prop the page sets to a binding that leads to one string, for a text site.
+async function followedBinding(instance: InstanceNode, site: PropTextSite, context: PropTextContext): Promise<BoundPropText | undefined> {
+  const attr = 'props' in instance ? instance.props?.[site.prop] : undefined;
+  if (attr?.type !== 'expr' || site.kind !== 'text' || context.bound === undefined) {
+    return undefined;
+  }
+  return context.bound(attr.value);
+}
+
+// `{prop}` printed from `prop={aiCallout1.body}`: the words belong to the source the binding names, so typing writes there and not to the attribute.
+function boundPropEdit(shown: {
+  readonly instance: InstanceNode;
+  readonly site: PropTextSite;
+  readonly followed: BoundPropText;
+  readonly scope: string;
+  readonly label: string;
+}): CanvasTextEdit {
+  const { instance, site, followed, scope } = shown;
+  assert(site.kind === 'text', 'A followed prop is printed as text');
+  return {
+    target: {
+      kind: site.parentKind,
+      key: `prop:${instance.id}:${site.prop}:${site.path}`,
+      path: site.path,
+      parent: site.parent,
+      value: followed.value,
+      label: shown.label,
+      tag: site.tag,
+      siblings: site.siblings,
+      nested: false,
+      scope,
+      from: 'prop',
+    },
+    bound: followed.bound,
+    apply: (typed) => followed.apply(typed),
+  };
 }
 
 interface ShownProp {

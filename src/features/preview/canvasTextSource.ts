@@ -4,6 +4,7 @@ import { textValueCanonical } from '../../../shared/page/htmlText';
 import { assert } from '../../../shared/core/assert';
 import { CANVAS_TARGET_LIMIT, CANVAS_TEXT_LIMIT, type CanvasTextTarget } from '../../../shared/properties/canvasText';
 import { canvasTextBinding } from './canvasTextBinding';
+import type { BoundTextBlockReason } from '../../editor/boundText';
 import type { CanvasFormatAction, CanvasFormatState } from './canvasTextSelection';
 
 export interface CanvasSourceNode {
@@ -13,6 +14,8 @@ export interface CanvasSourceNode {
   readonly value?: string;
   readonly start?: number;
   readonly end?: number;
+  /** A loop's head, `cards.map((card) => (`. Only `map` nodes have one. */
+  readonly head?: string;
   readonly children?: readonly CanvasSourceNode[] | undefined;
 }
 export interface CanvasTextPlan {
@@ -166,7 +169,14 @@ export interface CanvasTextEdit {
   };
   /** The format bar for text that is not the page's own inline content. */
   readonly format?: CanvasEditFormat;
+  /** For text printed from data: where its words are written, or why they cannot be (canvasBoundText.ts). */
+  readonly bound?: CanvasBoundText;
 }
+
+/** What the canvas says about a text printed from data, beside the edit itself. */
+export type CanvasBoundText =
+  | { readonly kind: 'source'; readonly expression: string; readonly file: string; readonly uses: number }
+  | { readonly kind: 'blocked'; readonly expression: string; readonly file: string; readonly reason: BoundTextBlockReason };
 
 /** The canvas format bar for one text: which buttons are lit, and one press. */
 export interface CanvasEditFormat {

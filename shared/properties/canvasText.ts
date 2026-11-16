@@ -46,6 +46,19 @@ export interface CanvasTextCatalog {
   readonly file: string;
   readonly checksum: string;
   readonly targets: readonly CanvasTextTarget[];
+  /** Data-bound texts a double click cannot edit in place (computed, joined, a call): the frame names them instead of staying silent. */
+  readonly blocked?: readonly CanvasTextBlocked[];
+}
+
+/**
+ * A text printed from data that has no string to write to. It has no words for
+ * the frame to match, so the frame finds it by its source path: the element that
+ * holds exactly that text. `key` is what the refusal names, and the editor
+ * words why.
+ */
+export interface CanvasTextBlocked {
+  readonly key: string;
+  readonly path: string;
 }
 
 /** The words of one text, in a save that changes several at once. */
@@ -70,11 +83,18 @@ export type CanvasTextEvent =
       readonly value: string;
     }
   /** `reason` is the stable code of `message`, which the editor words in the person's language; the frame has no catalog. */
-  | { readonly type: 'avb:text-refused'; readonly message: string; readonly reason?: CanvasTextRefusal | undefined };
+  | {
+      readonly type: 'avb:text-refused';
+      readonly message: string;
+      readonly reason?: CanvasTextRefusal | undefined;
+      /** For `source-blocked`: the blocked text the double click was on. */
+      readonly key?: string | undefined;
+    };
 
 export const CANVAS_TEXT_LIMIT = 10_000;
 export const CANVAS_TARGET_LIMIT = 2_000;
 export const CANVAS_RUNS_SAVED_MAX = 100;
+export const CANVAS_BLOCKED_LIMIT = 200;
 
 export function canvasTextValue(input: unknown): string {
   const value = text(input);
@@ -99,7 +119,19 @@ export function parseCanvasTextCatalog(input: unknown): CanvasTextCatalog {
     file: pathText(data['file']),
     checksum: digest(data['checksum']),
     targets,
+    ...(data['blocked'] === undefined ? {} : { blocked: parseBlocked(data['blocked']) }),
   };
+}
+
+function parseBlocked(input: unknown): readonly CanvasTextBlocked[] {
+  const blocked = list((entry) => {
+    const data = record(entry);
+    return { key: pathText(data['key']), path: pathText(data['path']) };
+  })(input);
+  if (blocked.length > CANVAS_BLOCKED_LIMIT) {
+    throw new Error('Too many blocked canvas texts');
+  }
+  return blocked;
 }
 
 function parseTarget(input: unknown): CanvasTextTarget {
@@ -175,7 +207,12 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
         value: canvasTextValue(data['value']),
       };
     case 'avb:text-refused':
-      return { type: 'avb:text-refused', message: pathText(data['message']), reason: canvasTextRefusal(data['reason']) };
+      return {
+        type: 'avb:text-refused',
+        message: pathText(data['message']),
+        reason: canvasTextRefusal(data['reason']),
+        ...(data['key'] === undefined ? {} : { key: pathText(data['key']) }),
+      };
     default:
       return undefined;
   }
@@ -263,7 +300,7 @@ export function canvasTextUnfolded(text: string, folded: number, edge: 'start' |
 }
 
 /** Why the canvas frame refused a text edit; each code has a catalog sentence in the editor (useCanvasText). */
-export const CANVAS_TEXT_REFUSALS = ['waiting-render', 'selection-reaches', 'unsafe', 'page-changed'] as const;
+export const CANVAS_TEXT_REFUSALS = ['waiting-render', 'selection-reaches', 'unsafe', 'page-changed', 'source-blocked'] as const;
 export type CanvasTextRefusal = (typeof CANVAS_TEXT_REFUSALS)[number];
 
 function canvasTextRefusal(input: unknown): CanvasTextRefusal | undefined {

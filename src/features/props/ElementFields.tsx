@@ -16,6 +16,7 @@ import { AttributesSection } from './propAttributes';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import AutoTextarea from '../../ui/AutoTextarea';
 import RichContent, { isInlineOnly } from './RichContent';
+import { SourceHint, singleChipPath } from './SourceHint';
 import { VariableTextSizeIcon, ChevronRightIcon } from '../../ui/Icons';
 import { noLabelActivation, CommentField } from './SourcePanels';
 import { type ElementState } from './elementState';
@@ -52,6 +53,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
             insertRef={contentInsertRef}
             onChange={onSetInline}
           />
+          <SourceHint expression={singleChipPath(isInlineOnly(node.children) ? node.children : [])} />
           {contentPicker && (
             <FieldDataPicker
               pos={contentPicker}

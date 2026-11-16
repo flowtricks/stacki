@@ -1,5 +1,6 @@
 import type { Translator } from '../../../vendor/stacki/src/lib/i18n/localeContext';
 import { canvasContentEdits } from '../../../vendor/stacki/src/app/model/canvasTextContent';
+import { canvasBoundEdits } from '../../../vendor/stacki/src/app/model/canvasBoundText';
 import { canvasPropEdits, type ComponentSource } from '../../../vendor/stacki/src/app/model/canvasPropText';
 import { canvasTextFormatter } from '../../../vendor/stacki/src/app/model/canvasTextFormat';
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
@@ -46,6 +47,16 @@ export function studioCanvasText(
     projectPath: ROOT,
     loadContent: async (canvas) => [
       ...(await canvasContentEdits(canvas, translate('shell.canvasText.sharedContent'))),
+      // The page's own frontmatter data: a data module beside the page is Desktop's to write.
+      ...(await canvasBoundEdits(
+        canvas,
+        { readModule: async () => undefined, readFile: async () => undefined },
+        {
+          saved: (path, file) => translate('preview.text.source.saved', { path, file }),
+          undo: translate('preview.text.source.undo'),
+          sourceChanged: translate('preview.text.sourceChanged'),
+        },
+      )),
       ...(await canvasPropEdits(canvas, {
         label: translate('shell.canvasText.componentText'),
         projectPath: ROOT,

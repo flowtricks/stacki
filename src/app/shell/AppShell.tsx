@@ -1,5 +1,6 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { CanvasTextFormatBar } from './CanvasTextFormatBar';
+import { CanvasTextSourceCue } from './CanvasTextSourceCue';
 import { ResizablePanel } from './ResizablePanel';
 import { desktopElementActions } from './desktopElementActions';
 import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanvasBar';
@@ -182,6 +183,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
         <CodeWindowHost app={app} />
       </PanelBoundary>
       <CanvasTextFormatBar />
+      <CanvasTextSourceCue />
       {app.insertOpen && <DesktopInsertSearch app={app} />}
       <ConflictNotice app={app} />
       <ErrorToast

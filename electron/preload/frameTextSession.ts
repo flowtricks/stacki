@@ -78,7 +78,8 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
         active = { catalog: current, editor };
         typing = { key: target.key, element: match.element };
         stopSelection = reportTextSelection({ catalog: current, opened, root: textEditorRoot(match), editor }, post);
-        post({ type: 'avb:text-active', session: current.session, key: target.key });
+        const box = match.element.getBoundingClientRect();
+        post({ type: 'avb:text-active', session: current.session, key: target.key, rect: { x: box.left, y: box.top, w: box.width, h: box.height } });
       } else {
         // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
         post({ type: 'avb:text-refused', message: 'This text cannot be edited safely.', reason: 'unsafe' });

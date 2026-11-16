@@ -4074,6 +4074,8 @@ body > .embed-editor_provenance {
   color: var(--text);
 }
 
+/* Why the drag over the Navigator cannot land where it is (the placement rule), pinned to the panel's bottom edge. */
+.navigator-drop-note {
   position: sticky;
   bottom: 8px;
   margin: 8px;
@@ -4085,15 +4087,19 @@ body > .embed-editor_provenance {
   line-height: 1.4;
   pointer-events: none;
 }
+.navigator-drop-note[data-tone='warning'] {
   color: var(--text-dim);
 }
 
 /* An insert-palette item with no valid place for the current selection: still listed, dimmed, with the reason below the list. */
+.insert-placement {
   display: contents;
 }
+.insert-placement[data-refused] .insert-item {
   opacity: 0.4;
   cursor: not-allowed;
 }
+.insert-placement-note {
   padding: 8px 12px;
   background: var(--bg-panel-2);
   color: var(--text-dim);
@@ -10205,4 +10211,46 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .attr-name-field > .bind-handle.on {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* The source cue over a bound text being edited, and the Settings line that says
+   the same: purple like the data chips, a background and no border. */
+.canvas-source-cue {
+  position: fixed;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(480px, calc(100vw - 16px));
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(146, 116, 255, 0.28);
+  color: #c4afff;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.canvas-source-cue-path,
+.source-hint-path {
+  min-width: 0;
+  overflow: hidden;
+  background: transparent;
+  font-size: 11px;
+}
+.canvas-source-cue-uses,
+.source-hint-uses {
+  opacity: 0.85;
+}
+.source-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(146, 116, 255, 0.16);
+  color: #c4afff;
+  font-size: 11px;
 }
