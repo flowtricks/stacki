@@ -1,15 +1,16 @@
-// Goal: every purple chip in the Style panel is a saturated purple fill with white text, as
-// the blue class chip is a saturated blue fill with white text, and keeps WCAG AA contrast in
-// every state. The owner found a dark-purple fill with light-purple text too faint, whatever
-// its ratio, so the direction is a bright fill, not a lighter text on a dark one.
+// Goal: the attribute-selector chips in the element tooltip ([data-x], [style="…"]) are a
+// saturated purple with white text, as the blue class chip beside them is a saturated blue
+// with white text, and hold WCAG AA. Every OTHER purple chip (the box-model's connected
+// spacing value, variable tokens, the inline ${prop} token) keeps its original colours:
+// an earlier change restyled them too, which the owner did not ask for, so they are pinned
+// to their original values here and cannot drift again.
 // Method: no pixels. The declared colours are read from the stylesheets themselves
 // (tokens.css, embedEditor.css), `var(--token)` is resolved, and the WCAG ratio is computed.
-// White text must reach 4.5:1 on the fill at rest and on hover (the tokens sit at about 5.4
-// and 5.0). The fill must stand off the tooltip's grey at least as far as the blue chip
-// does (about 2.1:1). It cannot reach 3:1 as well: 3:1 against that grey needs a fill so
-// bright that white text on it falls to about 3.7:1, so the two bars are mutually exclusive
-// for any grey surface, and the blue chip makes the same trade. The Navigator's flow purple
-// (styles.css) is not part of this.
+// White on the attribute fill must reach 4.5:1 (it is about 5.5). The fill must stand off the
+// tooltip's grey at least as far as the blue chip does (about 2.1:1). It cannot reach 3:1 as
+// well: 3:1 against that grey needs a fill so bright that white text falls to about 3.7:1,
+// so the two bars are mutually exclusive for any grey surface and the blue chip makes the
+// same trade.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -78,37 +79,50 @@ const SURFACES = {
   raised: parseColour('var(--color-bg-surface-raised)').rgb,
 };
 
-// [name, selector whose rule paints the chip, property holding its fill].
-const CHIPS = [
-  ['element tip attribute chip', '.embed-editor_element-tip-chip.is-attribute'],
-  ['connected spacing value', '.embed-editor_spacing-label.is-variable'],
-  ['connected spacing value, hover', '.embed-editor_spacing-label.is-variable:hover:not(:disabled)'],
-  ['variable token in a field', '.embed-editor_varconnect-token'],
-  ['variable token, hover and focus', '.embed-editor_varconnect-token:hover'],
-  ['inline ${prop} token', '.embed-editor_inline-token'],
-];
-
 const WHITE = [255, 255, 255];
 
-for (const [name, selector] of CHIPS) {
-  test(`purple chip contrast: ${name} is white on a bright purple, AA`, () => {
-    const text = parseColour(declaration(editor, selector, 'color'));
-    const fill = parseColour(declaration(editor, selector, 'background'));
-    assert.equal(fill.alpha, 1, 'the fill is solid');
-    assert.deepEqual(text.rgb, WHITE, 'the text is white');
-    const value = ratio(text.rgb, fill.rgb);
-    assert.ok(value >= 4.5, `${name} is ${value.toFixed(2)}:1, below 4.5:1`);
-    assert.ok(value >= 4.9, `${name} is ${value.toFixed(2)}:1, below the 4.9:1 this design keeps in every state`);
+test('attribute chip: white text on a bright purple fill, AA, as far off the tooltip as the blue chip', () => {
+  const selector = '.embed-editor_element-tip-chip.is-attribute';
+  const text = parseColour(declaration(editor, selector, 'color'));
+  const fill = parseColour(declaration(editor, selector, 'background'));
+  assert.equal(fill.alpha, 1, 'the fill is solid');
+  assert.deepEqual(text.rgb, WHITE, 'the text is white');
+  assert.ok(ratio(text.rgb, fill.rgb) >= 4.5, `white on the fill is ${ratio(text.rgb, fill.rgb).toFixed(2)}:1`);
+  assert.ok(ratio(text.rgb, fill.rgb) >= 5.4, 'and at least 5.4:1');
+  const blue = parseColour('var(--color-class-tag-bg)').rgb;
+  assert.ok(ratio(fill.rgb, SURFACES.raised) >= ratio(blue, SURFACES.raised) - 0.2, 'as far off the tooltip as the blue class chip');
+  assert.ok(luminance(fill.rgb) > luminance([0x45, 0x3b, 0x63]) * 2, 'much brighter than the old dark purple');
+  assert.ok(fill.rgb[2] > fill.rgb[0] && fill.rgb[2] > fill.rgb[1], 'a purple: blue is its strongest channel');
+});
+
+test('attribute chip: its tokens are used only by the tooltip chip', () => {
+  for (const [name, css] of [
+    ['embedEditor.css', editor],
+    ['styles.css', app],
+  ]) {
+    const uses = css.split('\n').filter((line) => line.includes('--color-attribute-chip'));
+    assert.ok(name === 'styles.css' ? uses.length === 0 : uses.length === 2, `${name}: ${uses.length} uses`);
+  }
+});
+
+// The pairings every other purple chip had before: (selector, property) -> declared text.
+const ORIGINAL = [
+  ['.embed-editor_spacing-label.is-variable,\n.embed-editor_spacing-label.is-variable:hover:not(:disabled)', 'color', '#c4afff'],
+  ['.embed-editor_spacing-label.is-variable,\n.embed-editor_spacing-label.is-variable:hover:not(:disabled)', 'background', '#453b63'],
+  ['.embed-editor_varconnect-token', 'color', '#cbbcff'],
+  ['.embed-editor_varconnect-token', 'background', 'rgba(124, 92, 255, 0.28)'],
+  ['.embed-editor_varconnect-token:hover', 'background', 'rgba(124, 92, 255, 0.42)'],
+  ['.embed-editor_inline-token', 'color', '#d8b4fe'],
+  ['.embed-editor_inline-token', 'background', 'rgba(168, 85, 247, 0.22)'],
+  ['.embed-editor_varpicker-item.is-selected', 'background', 'rgba(124, 92, 255, 0.18)'],
+  ['.embed-editor_varpicker-item-check', 'color', '#9980ff'],
+];
+
+for (const [selector, property, value] of ORIGINAL) {
+  test(`other purple chips keep their original ${property}: ${selector.split('\n')[0]}`, () => {
+    const block = editor.indexOf(`${selector} {`);
+    assert.ok(block >= 0, `rule ${selector} exists`);
+    const body = editor.slice(block, editor.indexOf('}', block));
+    assert.ok(new RegExp(`(?:^|[;{\\s])${property}:\\s*${value.replace(/[()., ]/g, (character) => `\\${character}`)};`).test(body), `${property} is ${value}`);
   });
 }
-
-test('purple chip contrast: the rest fill is as bright a purple as the app asks for, and clearly off the tooltip', () => {
-  const fill = parseColour('var(--color-attribute-chip-bg)').rgb;
-  const tooltip = SURFACES.raised;
-  const blue = parseColour('var(--color-class-tag-bg)').rgb;
-  assert.ok(ratio(WHITE, fill) >= 5.4, 'white on the rest fill is at least 5.4:1');
-  assert.ok(ratio(fill, tooltip) >= ratio(blue, tooltip) - 0.2, 'the fill stands off the tooltip as far as the blue class chip does');
-  assert.ok(ratio(fill, tooltip) >= 2, 'at least 2:1 against the tooltip');
-  assert.ok(luminance(fill) > luminance([0x3a, 0x2f, 0x66]) * 2, 'much brighter than the old dark purple');
-  assert.ok(fill[2] > fill[0] && fill[2] > fill[1], 'a purple: blue is its strongest channel');
-});

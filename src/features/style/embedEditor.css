@@ -698,13 +698,10 @@
 
 /* Connected spacing values use the variable treatment while keeping the full
    group/name available in the label's hover tooltip. */
-.embed-editor_spacing-label.is-variable {
-  color: var(--color-attribute-chip-text);
-  background: var(--color-attribute-chip-bg);
-}
+.embed-editor_spacing-label.is-variable,
 .embed-editor_spacing-label.is-variable:hover:not(:disabled) {
-  color: var(--color-attribute-chip-text);
-  background: var(--color-attribute-chip-bg-hover);
+  color: #c4afff;
+  background: #453b63;
 }
 
 /* …but only for a variable set on the SELECTED selector. Connected to one from
@@ -4098,8 +4095,8 @@
 .embed-editor_inline-token {
   padding: 0 3px;
   border-radius: var(--radius-xs);
-  background: var(--color-attribute-chip-bg);
-  color: var(--color-attribute-chip-text);
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
 }
 
 /* The "Inline styles" chip (InlineStyleChip.tsx) is amber in every state, with amber
@@ -5701,8 +5698,8 @@
   margin: 0 1px;
   padding: 1px var(--space-2);
   border-radius: var(--radius-sm);
-  background: var(--color-attribute-chip-bg);
-  color: var(--color-attribute-chip-text);
+  background: rgba(124, 92, 255, 0.28);
+  color: #cbbcff;
   font-family: var(--font-family-sans);
   font-size: var(--font-size-sm);
   line-height: 1.35;
@@ -5713,8 +5710,7 @@
 }
 .embed-editor_varconnect-editor:focus .embed-editor_varconnect-token,
 .embed-editor_varconnect-token:hover {
-  background: var(--color-attribute-chip-bg-hover);
-  color: var(--color-attribute-chip-text);
+  background: rgba(124, 92, 255, 0.42);
 }
 
 /* The gap between two chips (see spaceRun). `pre` so the space keeps its width —
