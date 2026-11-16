@@ -94,15 +94,10 @@ test('every bindable control kind carries the binding dot in its label row', asy
   }
 });
 
-test('the list has its dot, and a list item’s popup field has its own', async () => {
+test('a list item row has its own dot, and the list as a whole has one', async () => {
   await draw(KINDS.list, { type: 'expr', value: '[320, 480]' });
-  assert.equal(document.querySelectorAll('.props-field > label > .bind-handle').length >= 1, true, 'the list itself');
-  const row = document.querySelector('.list-field-text');
-  await act(async () => {
-    row.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
-    row.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-  });
-  assert.ok(document.querySelector('.list-item-editor .props-field > label .bind-handle .bind-dot'), 'the item being edited');
+  assert.equal(document.querySelectorAll('.list-scalar-item .bind-handle').length, 2, 'one per item');
+  assert.equal(document.querySelectorAll('.props-field > label > .bind-handle').length >= 1, true, 'and the list itself');
   await clear();
 });
 

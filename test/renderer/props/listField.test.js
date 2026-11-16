@@ -140,6 +140,25 @@ const check = (what, condition, detail) => {
       await render();
       return true;
     };
+    // A plain value is edited in its row: the field it is drawn with, typed into as any prop's is.
+    const rowField = (at) => host.querySelectorAll('.list-scalar-item')[at]?.querySelector('input, .bind-input');
+    const values = () => [...host.querySelectorAll('.list-scalar-item')].map((row) => row.querySelector('input, .bind-input')?.value ?? row.textContent);
+    const typeRow = async (at, text) => {
+      const input = rowField(at);
+      if (!input) {
+        return false;
+      }
+      await act(async () => {
+        if (input.tagName === 'INPUT') {
+          Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, text);
+        } else {
+          input.textContent = text;
+        }
+        input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      });
+      await render();
+      return true;
+    };
     // Anywhere else: the popup closes on a press outside it, which is when the
     // edit lands.
     const clickAway = async () => {
@@ -179,6 +198,9 @@ const check = (what, condition, detail) => {
       immediate,
       rows,
       labels,
+      values,
+      typeRow,
+      rowField,
       render,
       press,
       typeInto,
@@ -198,28 +220,23 @@ const check = (what, condition, detail) => {
   {
     const mounted = await mount('["Designer", "Developer", "Producer"]');
     check('one row per item', mounted.rows().length === 3, String(mounted.rows().length));
-    check('showing what is in it', mounted.labels().join() === 'Designer,Developer,Producer', mounted.labels().join());
+    check('showing what is in it', mounted.values().join() === 'Designer,Developer,Producer', mounted.values().join());
     await mounted.done();
   }
 
-  // --- clicking one to open it ------------------------------------------------------
+  // --- a plain value is edited where it stands ---------------------------------------
   {
     const mounted = await mount('["Designer", "Developer"]');
-    await mounted.press(mounted.host.querySelectorAll('.list-field-text')[1]);
-    check('a row opens a popup', !!mounted.popup(), mounted.host.innerHTML.slice(0, 200));
-    check('with one field, called what a word is', mounted.fieldNames().join() === 'value', mounted.fieldNames().join());
-    await mounted.typeInto('Engineer');
+    check('no popup to open for a word', mounted.host.querySelectorAll('.list-field-text').length === 0, 'rows are fields');
+    await mounted.typeRow(1, 'Engineer');
     check('typing shows on the canvas as it goes', mounted.wrote.pop() === '["Designer", "Engineer"]', JSON.stringify(mounted.wrote));
-    check('but not as the edit yet', mounted.immediate.pop() === false, JSON.stringify(mounted.immediate));
-    await mounted.clickAway();
-    check('closing it is the edit', mounted.immediate.pop() === true, JSON.stringify(mounted.immediate));
-    check('and the popup is gone', !mounted.popup());
+    check('and the popup never opens', !mounted.popup());
     await mounted.done();
   }
 
-  // An active trigger toggles closed after edits, without reopening on click.
+  // An object item's popup toggles closed after edits, without reopening on click.
   {
-    const mounted = await mount('["inherit", "light"]');
+    const mounted = await mount('[{ label: "inherit" }, { label: "light" }]');
     const trigger = () => mounted.host.querySelector('.list-field-text');
     await mounted.press(trigger());
     check('active row is expanded', trigger().getAttribute('aria-expanded') === 'true');
@@ -228,7 +245,7 @@ const check = (what, condition, detail) => {
     await mounted.press(trigger());
     check('pressing the active row closes it', !mounted.popup());
     check('closing commits once', mounted.wrote.length === writesBeforeClose + 1);
-    check('closing retains edits', mounted.wrote.at(-1) === '["brand", "light"]');
+    check('closing retains edits', mounted.wrote.at(-1) === '[{ label: "brand" }, { label: "light" }]');
     check('closed row is collapsed', trigger().getAttribute('aria-expanded') === 'false');
     await mounted.press(trigger());
     check('the row can reopen', mounted.input()?.value === 'brand');
@@ -240,7 +257,7 @@ const check = (what, condition, detail) => {
     await mounted.typeInto('dark');
     await mounted.add();
     check('the add trigger closes and retains its pending item', !mounted.popup());
-    check('pending item is added once', mounted.wrote.at(-1) === '["brand", "light", "dark"]');
+    check('pending item is added once', mounted.wrote.at(-1) === '[{ label: "brand" }, { label: "light" }, { label: "dark" }]');
     await mounted.done();
   }
 
@@ -266,10 +283,8 @@ const check = (what, condition, detail) => {
   // takes its place in the array, and the bin is how a row is removed.
   {
     const mounted = await mount('["Designer", "Developer"]');
-    await mounted.press(mounted.host.querySelector('.list-field-text'));
-    await mounted.typeInto('');
+    await mounted.typeRow(0, '');
     check('an emptied word is written as one', mounted.wrote.pop() === '["", "Developer"]', JSON.stringify(mounted.wrote));
-    await mounted.clickAway();
     await mounted.done();
   }
 
@@ -277,12 +292,10 @@ const check = (what, condition, detail) => {
   {
     const mounted = await mount('["Designer"]');
     await mounted.add();
-    check('the new item opens a popup', !!mounted.popup(), mounted.host.innerHTML.slice(0, 200));
-    check('and nothing is written yet', mounted.wrote.length === 0, JSON.stringify(mounted.wrote));
-    await mounted.typeInto('Producer');
-    check('still nothing while it is being typed', mounted.wrote.length === 0, JSON.stringify(mounted.wrote));
-    await mounted.clickAway();
-    check('the word is added when the popup closes', mounted.wrote.pop() === '["Designer", "Producer"]', JSON.stringify(mounted.wrote));
+    check('a word is added at once, empty', mounted.wrote.pop() === '["Designer", ""]', JSON.stringify(mounted.wrote));
+    check('with no popup', !mounted.popup());
+    await mounted.typeRow(1, 'Producer');
+    check('and typed in its row', mounted.wrote.pop() === '["Designer", "Producer"]', JSON.stringify(mounted.wrote));
     await mounted.done();
   }
 
@@ -291,9 +304,7 @@ const check = (what, condition, detail) => {
     const mounted = await mount('');
     check('an unset prop is an empty list', mounted.rows().length === 0, String(mounted.rows().length));
     await mounted.add();
-    await mounted.typeInto('First');
-    await mounted.clickAway();
-    check('and the first item makes the array', mounted.wrote.pop() === '["First"]', JSON.stringify(mounted.wrote));
+    check('and the first item makes the array', mounted.wrote.pop() === '[""]', JSON.stringify(mounted.wrote));
     await mounted.done();
   }
 
@@ -311,15 +322,6 @@ const check = (what, condition, detail) => {
       mounted.wrote.pop() === '[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]',
       JSON.stringify(mounted.wrote),
     );
-    await mounted.done();
-  }
-
-  // A row added and then left empty is not an item.
-  {
-    const mounted = await mount('["Designer"]');
-    await mounted.add();
-    await mounted.clickAway();
-    check('an empty new row writes nothing', mounted.wrote.length === 0, JSON.stringify(mounted.wrote));
     await mounted.done();
   }
 
@@ -394,7 +396,7 @@ const check = (what, condition, detail) => {
   }
   {
     const mounted = await mount('["Designer"]', '[]');
-    check('a list with something in it is unaffected', mounted.labels().join() === 'Designer', mounted.labels().join());
+    check('a list with something in it is unaffected', mounted.values().join() === 'Designer', mounted.values().join());
     check(
       'and draws no empty note either',
       mounted.host.querySelectorAll('.list-field-empty').length === 0,
@@ -407,8 +409,7 @@ const check = (what, condition, detail) => {
   {
     const mounted = await mount("['a', 'b']");
     await mounted.add();
-    await mounted.typeInto('c');
-    await mounted.clickAway();
+    await mounted.typeRow(2, 'c');
     check('a project that writes single quotes keeps them', mounted.wrote.pop() === "['a', 'b', 'c']", JSON.stringify(mounted.wrote));
     await mounted.done();
   }

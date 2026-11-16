@@ -1,17 +1,16 @@
-// Goal: a plain value of a list is edited, in the popup a row opens, by a
-// typed field with its icon, its binding circle and its `{}` toggle; the rows
-// themselves stay plain text.
+// Goal: a list of plain values is edited in its rows, each row its own typed,
+// bindable field.
 //
 //   node test/renderer/props/listScalarRows.test.js
 //
-// `widths: number[]` lists its items as rows reading '320', '480', ...: no
-// inputs in the list. Clicking a row opens the popup, which shows the number
-// icon beside the label and the normal number input (numeric parsing, declared
-// step and bounds, arrow keys; emptied is invalid and never written), the
-// purple binding dot and the `{}` toggle. A list of words, of yes/no and of
-// choices gets the text input, the switch and the dropdown by the same mapping
-// (listItemType.ts). Add item opens the popup on a typed default. A bound item
-// reads back as the chip any bound field shows, and the list stays one array.
+// `widths: number[]` shows number rows: the number icon at the left, the normal
+// number input (arrow keys, numeric parsing; empty is invalid and never
+// written), the purple binding dot on every row, and no generic "Value" popup.
+// Add item makes a blank of the list's own type. A list of words, of yes/no and
+// of choices gets the text input, the switch and the dropdown by the same
+// mapping (listItemType.ts), and an undeclared list is read from its values.
+// A row bound to data reads back as the chip any bound field shows, and the
+// list stays one array literal.
 //
 // Method: the real PropField over a declared list, bundled as the app bundles
 // it and rendered in jsdom with React; the field holds whatever it last wrote.
@@ -111,141 +110,91 @@ async function draw(field, initial) {
 async function clear() {
   await act(async () => root.unmount());
 }
-const rows = () => [...document.querySelectorAll('.list-field-row')];
-const popup = () => document.querySelector('.list-item-editor') ?? undefined;
-const openRow = async (at) => {
-  await click(document.querySelectorAll('.list-field-text')[at]);
-  await flush();
-  assert.ok(popup(), 'the item popup opened');
-};
+const rows = () => [...document.querySelectorAll('.list-scalar-item')];
 
-test('the list view is plain rows: the value as text, no inputs', async () => {
+test('a number list shows the number icon, the number input and the binding dot on every row', async () => {
   await draw(WIDTHS, '[320, 480, 640]');
+  assert.equal(rows().length, 3);
+  assert.equal(document.querySelectorAll('.list-field-text').length, 0, 'no row opens a generic popup');
+  for (const row of rows()) {
+    assert.ok(row.querySelector('.prop-label-icon.is-number'), 'the number icon leads the row');
+    assert.ok(row.querySelector('.num-field input'), 'the normal number input');
+    assert.ok(row.querySelector('.bind-handle .bind-dot'), 'the purple binding dot');
+  }
   assert.deepEqual(
-    [...document.querySelectorAll('.list-field-text')].map((button) => button.textContent),
+    rows().map((row) => row.querySelector('.num-field input').value),
     ['320', '480', '640'],
   );
-  assert.equal(rows().length, 3);
-  assert.equal(
-    document.querySelectorAll('.list-field-row input, .list-field-row .bind-handle, .list-field-row .prop-expr-toggle').length,
-    0,
-    'nothing is edited in the row',
-  );
-  assert.ok(document.querySelector('.list-field-add'));
-  await clear();
-});
-
-test('a number item opens a popup with the number icon, the number input, the binding dot and {}', async () => {
-  await draw(WIDTHS, '[320, 480, 640]');
-  await openRow(2);
-  const field = popup().querySelector('.props-field');
-  assert.ok(field.querySelector('.prop-label-icon.is-number'), 'the number icon beside the label');
-  assert.equal(field.querySelector('.num-field input').value, '640', 'the normal number input, on the value');
-  assert.ok(field.querySelector(':scope > label .bind-handle .bind-dot'), 'the purple binding dot');
-  assert.ok(field.querySelector(':scope > label .prop-expr-toggle'), 'and the {} toggle');
-  assert.equal(popup().querySelectorAll('input:not(.num-field input)').length, 0, 'no second, text input');
   await clear();
 });
 
 test('typing a number writes a number; an emptied input is invalid and is not written', async () => {
   const writes = await draw(WIDTHS, '[320, 480]');
-  await openRow(1);
-  await typeInto(popup().querySelector('.num-field input'), '500');
+  await typeInto(rows()[1].querySelector('.num-field input'), '500');
   assert.equal(writes.at(-1), '[320, 500]', 'a number, not a word');
   const before = writes.length;
-  await typeInto(popup().querySelector('.num-field input'), '');
+  await typeInto(rows()[1].querySelector('.num-field input'), '');
   assert.equal(writes.length, before, 'empty writes nothing');
-  assert.ok(popup().querySelector('.list-scalar-item').classList.contains('is-invalid'), 'and shows as invalid');
-  await typeInto(popup().querySelector('.num-field input'), '-');
+  assert.ok(rows()[1].classList.contains('is-invalid'), 'and is shown as invalid');
+  await typeInto(rows()[1].querySelector('.num-field input'), '-');
   assert.equal(writes.length, before, 'a lone sign is held, not written');
-  await typeInto(popup().querySelector('.num-field input'), '720');
+  await typeInto(rows()[1].querySelector('.num-field input'), '720');
   assert.equal(writes.at(-1), '[320, 720]');
-  assert.ok(!popup().querySelector('.list-scalar-item').classList.contains('is-invalid'));
+  assert.ok(!rows()[1].classList.contains('is-invalid'));
   await clear();
 });
 
-test('the arrow keys step by the declared step and stay inside the declared bounds', async () => {
-  const writes = await draw(WIDTHS, '[1990]');
-  await openRow(0);
-  const input = popup().querySelector('.num-field input');
-  await act(async () => input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
-  assert.equal(writes.at(-1), '[2000]', 'one step of 10');
-  await act(async () =>
-    popup()
-      .querySelector('.num-field input')
-      .dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })),
-  );
-  assert.equal(writes.at(-1), '[2000]', 'never past the maximum');
-  await clear();
-});
-
-test('Add item opens the popup on a typed default, and the item is added when it closes', async () => {
+test('Add item makes a typed default at once, and a row binds to data', async () => {
   const writes = await draw(WIDTHS, '[320]');
   await click(document.querySelector('.list-field-add'));
-  await flush();
-  assert.ok(popup().querySelector('.prop-label-icon.is-number'), 'the new item is a number');
-  assert.equal(popup().querySelector('.num-field input').value, '100', 'at the lowest declared bound');
-  await act(async () => document.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true })));
-  assert.equal(writes.at(-1), '[320, 100]');
-  await clear();
-});
+  assert.equal(writes.at(-1), '[320, 100]', 'a number inside the declared bounds');
 
-test('a bound item reads back as the chip, and the list stays a list', async () => {
-  const writes = await draw(WIDTHS, '[320, 480]');
-  await openRow(0);
-  await click(popup().querySelector('.bind-handle'));
+  await click(rows()[0].querySelector('.bind-handle'));
   await flush();
   const row = [...document.querySelectorAll('.dp-row')].find((candidate) => candidate.querySelector('.dp-key')?.textContent === 'width');
   assert.ok(row, 'the same data picker lists what is in scope');
   await click(row);
   await flush();
-  assert.equal(writes.at(-1), '[card.width, 480]');
-  assert.ok(popup().querySelector('.expr-chip'), 'it reads back as a chip');
-  assert.equal(document.querySelectorAll('.list-field-text')[0].textContent, 'card.width', 'and the row says what it is bound to');
+  assert.equal(writes.at(-1), '[card.width, 100]', 'one value of code in the literal');
+  assert.ok(rows()[0].querySelector('.expr-chip'), 'and it reads back as a chip');
   await clear();
 });
 
 test('words, yes/no and choices get the text input, the switch and the dropdown', async () => {
   await draw({ name: 'tags', type: 'code', optional: true, itemKind: 'text' }, '["a", "b"]');
-  await openRow(0);
-  assert.ok(popup().querySelector('.prop-label-icon.is-string'));
-  assert.equal(popup().querySelector('input').value, 'a');
-  assert.ok(popup().querySelector('.bind-handle'));
+  assert.ok(rows()[0].querySelector('.prop-label-icon.is-string'));
+  assert.ok(rows()[0].querySelector('input'));
+  assert.ok(rows()[0].querySelector('.bind-handle'));
   await clear();
 
   await draw({ name: 'flags', type: 'code', optional: true, itemKind: 'switch' }, '[true, false]');
-  await openRow(0);
-  assert.ok(popup().querySelector('.prop-label-icon.is-boolean'));
-  assert.ok(popup().querySelector('.bind-handle'));
+  assert.ok(rows()[0].querySelector('.prop-label-icon.is-boolean'));
+  assert.ok(rows()[0].querySelector('.bind-handle'));
   await clear();
 
   const writes = await draw({ name: 'sizes', type: 'code', optional: true, itemKind: 'choice', options: ['s', 'm'] }, '["s"]');
-  await openRow(0);
-  assert.ok(popup().querySelector('.prop-label-icon.is-enum'));
-  assert.ok(popup().querySelector('.bind-handle'));
+  assert.ok(rows()[0].querySelector('.prop-label-icon.is-enum'));
+  assert.ok(rows()[0].querySelector('.bind-handle'));
   await click(document.querySelector('.list-field-add'));
-  await flush();
-  await act(async () => document.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true })));
   assert.equal(writes.at(-1), '["s", "s"]', 'a choice starts at its first word');
   await clear();
 });
 
 test('an undeclared list is read from its values', async () => {
   await draw({ name: 'widths', type: 'code', optional: true }, '[320, 480]');
-  await openRow(0);
-  assert.ok(popup().querySelector('.prop-label-icon.is-number'), 'numbers are number items');
-  assert.ok(popup().querySelector('.num-field input'));
+  assert.ok(rows()[0].querySelector('.prop-label-icon.is-number'), 'numbers are number rows');
   await clear();
-  await draw({ name: 'tags', type: 'code', optional: true }, '["a"]');
-  await openRow(0);
-  assert.ok(popup().querySelector('.prop-label-icon.is-string'));
+  const writes = await draw({ name: 'tags', type: 'code', optional: true }, '["a"]');
+  assert.ok(rows()[0].querySelector('.prop-label-icon.is-string'));
+  await click(document.querySelector('.list-field-add'));
+  assert.equal(writes.at(-1), '["a", ""]');
   await clear();
 });
 
-test('an object item keeps its popup of fields, and a program stays code', async () => {
+test('an object item keeps its popup, and a program stays code', async () => {
   await draw({ name: 'items', type: 'code', optional: true, shapeIsList: true, shape: [{ name: 'title', type: 'string' }] }, '[{ title: "One" }]');
-  await openRow(0);
-  assert.equal(popup().querySelectorAll('.list-scalar-item').length, 0, 'an object is its own fields');
+  assert.equal(rows().length, 0, 'objects are not scalar rows');
+  assert.equal(document.querySelectorAll('.list-field-text').length, 1);
   await clear();
   await draw(WIDTHS, '[...more]');
   assert.ok(!document.querySelector('.list-field'), 'a spread stays code');

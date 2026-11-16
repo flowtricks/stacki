@@ -19,12 +19,16 @@
 //   share: it watches the scroll it made, lets a library's animation run out,
 //   and then jumps again, which the now-idle library adopts.
 //
-// Every scroll a reveal makes is instant. The browser's own smooth scroll is an
-// animation the reveal can neither see nor stop: on GitHub's Linux runner (xvfb)
-// one still in flight carried on after the reveal had jumped, and after the next
-// placement of the page, landing thousands of pixels past the box and moving a
-// page that should have stayed put. A jump is synchronous, so what the reveal
-// reads afterwards is what it did.
+// Every scroll a reveal makes is instant, and the smoothness is the reveal's own: a
+// glide (frameRevealGlide.ts) of instant scrolls, one per animation frame. The browser's
+// own smooth scroll is an animation the reveal can neither see nor stop: on GitHub's
+// Linux runner (xvfb) one still in flight carried on after the reveal had jumped, and
+// after the next placement of the page, landing thousands of pixels past the box and
+// moving a page that should have stayed put. An instant scroll is synchronous, so what
+// the reveal reads afterwards is what it did, and it ignores the site's
+// `scroll-behavior`, so a page that forces `auto` or `smooth` glides the same. A person
+// who scrolls, or asks for reduced motion, gets their way: the glide ends where they
+// put the page, and reduced motion lands in one jump.
 //
 // What is out of reach: a library that never scrolls natively and moves the page
 // with a transform instead (Locomotive v4's smooth mode). No scroll position
@@ -36,10 +40,14 @@ import type { Rect } from './frameBasics';
 import { isElement } from './frameBasics';
 import { rectsForPath } from './frameMeasure';
 import { elementsWithPath, runsOf, taggedPlaces } from './frameRegions';
+import type { GlideMove } from './frameRevealGlide';
+import { startGlide, TAKEOVER_EVENTS } from './frameRevealGlide';
+import { boxComfortable, INSET_FRACTION_MAX, landingTop } from './frameRevealMath';
 
-// Brings one occurrence of a path into view, when it is out of sight. Nothing
-// moves when the path has no box, is the page itself, or has any part showing
-// (boxShowing). Desktop and Studio both reveal through this, so a selection
+// Brings one occurrence of a path into view, when it is not comfortably in sight
+// (boxComfortable). Nothing moves when the path has no box, is the page itself, or is
+// fixed to the frame. The page glides there, and a selection that arrives mid-glide
+// starts a new one from wherever the page has got to. Desktop and Studio both reveal through this, so a selection
 // behaves the same on either canvas.
 //
 // Only ever vertically. A site is routinely wider than the frame on purpose — a
@@ -66,28 +74,59 @@ export const revealPath = (nodePath: string, occurrence: number): void => {
     return;
   }
   const anchor = anchorOf(nodePath, occurrence);
+  if (anchor !== undefined && isPinned(anchor)) {
+    return; // A fixed box does not move with the page: scrolling cannot bring it closer.
+  }
   const scroller = anchor === undefined ? undefined : nearestScroller(anchor);
   // Innermost first: a box in a scroller is brought into that scroller, then the page
   // is moved if the scroller itself is out of view, since a box "in view" of a panel
-  // below the fold is still nowhere the person can see. Both are instant, so the page
-  // measures the box where the scroller left it. Only the outermost move is watched:
-  // a smooth-scroll library fights the page, never a panel inside it.
+  // below the fold is still nowhere the person can see. The glide moves them together,
+  // so the page's landing is worked out as if the scroller had already landed the box.
+  // Only the outermost move is watched: a smooth-scroll library fights the page, never
+  // a panel inside it.
   const scrollports = scroller === undefined ? [PAGE_SCROLLPORT] : [elementScrollport(scroller), PAGE_SCROLLPORT];
+  const pageInsetTop = stickyInsetOf(anchor);
+  const insetOf = (scrollport: Scrollport): number => (scrollport === PAGE_SCROLLPORT ? pageInsetTop : 0);
+  const moves: GlideMove[] = [];
   let watched: Scrollport | undefined;
+  let shiftPx = 0; // How far the scrollers before this one will carry the box up.
   for (const scrollport of scrollports) {
-    const landing = landingOf(scrollport, boxOf(nodePath, occurrence)?.rect);
+    const rect = boxOf(nodePath, occurrence)?.rect;
+    const landing = landingOf(scrollport, rect === undefined ? undefined : { ...rect, y: rect.y - shiftPx }, insetOf(scrollport));
     if (landing === undefined) {
       return;
     }
     if (!landing.showing) {
-      scrollport.scrollTo(landing.top);
+      moves.push({ from: landing.position, to: landing.top, scrollTo: (top) => scrollport.scrollTo(top), events: scrollport.events });
+      shiftPx += landing.top - landing.position;
       watched = scrollport;
     }
   }
-  if (watched !== undefined) {
-    const moved = watched;
-    watchReveal(moved, () => landingOf(moved, boxOf(nodePath, occurrence)?.rect));
+  if (watched === undefined) {
+    return;
   }
+  const moved = watched;
+  const watchMoved = (): void => watchReveal(moved, () => landingOf(moved, boxOf(nodePath, occurrence)?.rect, insetOf(moved)));
+  if (prefersReducedMotion() || moves.every((move) => move.from === move.to)) {
+    for (const move of moves) {
+      move.scrollTo(move.to);
+    }
+    watchMoved();
+    return;
+  }
+  const stopGlide = startGlide(moves, (outcome) => {
+    stopWatch = undefined;
+    if (outcome === 'arrived') {
+      watchMoved();
+    }
+  });
+  const stopGlideAndForget = (): void => {
+    stopGlide();
+    if (stopWatch === stopGlideAndForget) {
+      stopWatch = undefined;
+    }
+  };
+  stopWatch = stopGlideAndForget;
 };
 
 // Ends the reveal in progress, if any. Every new reveal does this first, and a
@@ -157,17 +196,17 @@ interface Landing {
   readonly top: number;
 }
 
-const landingOf = (scrollport: Scrollport, rect: Rect | undefined): Landing | undefined => {
+const landingOf = (scrollport: Scrollport, rect: Rect | undefined, insetTop: number): Landing | undefined => {
   if (rect === undefined) {
     return undefined;
   }
   const viewHeight = scrollport.viewHeight();
   const position = scrollport.position();
   const inView = { ...rect, y: rect.y - scrollport.viewTop() };
-  const top = Math.min(landingTop(inView, viewHeight, position), scrollport.positionMax());
+  const top = Math.min(landingTop(inView, viewHeight, position, insetTop), scrollport.positionMax());
   assert(Number.isFinite(top), 'landingOf: a landing is a number');
   assert(top >= 0, 'landingOf: a landing is never above the top');
-  return { position, showing: boxShowing(inView, viewHeight), top };
+  return { position, showing: boxComfortable(inView, viewHeight, insetTop), top };
 };
 
 // The watch after a reveal's jump. A smooth-scroll library animating when the
@@ -208,7 +247,6 @@ const REST_QUIET_MS_MIN = 2_000;
 // slow frame, and must not stretch the wait.
 const FRAME_GAP_MS_MAX = 5_000;
 const ARRIVED_PX = 1;
-const TAKEOVER_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 
 let stopWatch: (() => void) | undefined;
 
@@ -412,46 +450,53 @@ const scrollsItself = (element: Element, root: Element): boolean => {
   return true;
 };
 
-// The scroll position that lands a box: centred in its scroller's visible area,
-// or, for a box too tall to centre, its top SCROLL_MARGIN below the top of that
-// area, since centring would push its beginning out. `rect.y` is measured from
-// the top of the visible area. Absolute, and stable: read again once the box is
-// there, it gives the same position, so repeating a jump never moves the page.
-// The margin says where a reveal lands, not what counts as seen (boxShowing).
-const SCROLL_MARGIN = 24;
+// Whether the person asked their system for less motion: the reveal then lands in one
+// jump. A frame without `matchMedia` (a test document) is read as no preference.
+const prefersReducedMotion = (): boolean => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const landingTop = (rect: Rect, viewportHeight: number, scrollTop: number): number => {
-  assert(viewportHeight >= 0, 'landingTop: a scroller has a height');
-  assert(Number.isFinite(scrollTop), 'landingTop: a scroller has a position');
-  const offset = rect.h >= viewportHeight - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : Math.floor((viewportHeight - rect.h) / 2);
-  const target = Math.max(0, Math.round(scrollTop + rect.y - offset));
-  assert(target >= 0, 'landingTop: a scroll position is never negative');
-  return target;
-};
-
-// Whether a reveal should leave a box alone. One pixel inside the view is
-// enough: the person can see where the box is, and moving the page under them to
-// show the rest costs more than it gives. A box that only touches the edge shows
-// nothing, so it is not in view.
-//
-// A box with no area has no part to show, so it stays judged whole: all of it
-// inside the view, edges included, or covering the view from edge to edge.
-const boxShowing = (rect: Rect, viewportHeight: number): boolean => {
-  assert(rect.w >= 0, 'boxShowing: a box has no negative width');
-  assert(rect.h >= 0, 'boxShowing: a box has no negative height');
-  const bottom = rect.y + rect.h;
-  if (rect.w > 0) {
-    if (rect.h > 0) {
-      return rect.y < viewportHeight ? bottom > 0 : false;
+// Whether a box, or something around it, is fixed to the frame: it stays where it is
+// however the page scrolls. A sticky box is not: it scrolls until it sticks.
+const isPinned = (element: Element): boolean => {
+  let ancestor: Element | undefined = element;
+  for (let depth = 0; depth < ANCESTORS_MAX; depth += 1) {
+    if (ancestor === undefined) {
+      return false;
     }
-  }
-  if (rect.y >= 0) {
-    if (bottom <= viewportHeight) {
+    if (getComputedStyle(ancestor).position === 'fixed') {
       return true;
     }
-  }
-  if (rect.y <= 0) {
-    return bottom >= viewportHeight;
+    ancestor = ancestor.parentElement ?? undefined;
   }
   return false;
+};
+
+// How many elements are looked at in the stack under the top edge.
+const STACK_MAX = 32;
+
+// The height of the sticky or fixed bar covering the top of the frame, or 0: a box
+// landed at the very top would sit under it. Only a bar counts, not a backdrop: taller
+// than INSET_FRACTION_MAX of the frame it is something else. Read once, when the
+// reveal starts, so the landing does not shift as the page moves under the bar.
+const stickyInsetOf = (anchor: Element | undefined): number => {
+  if (typeof document.elementsFromPoint !== 'function') {
+    return 0;
+  }
+  const viewHeight = PAGE_SCROLLPORT.viewHeight();
+  const heightMax = Math.floor(viewHeight * INSET_FRACTION_MAX);
+  const stack = document.elementsFromPoint(Math.floor(window.innerWidth / 2), 1).slice(0, STACK_MAX);
+  let insetTop = 0;
+  for (const element of stack) {
+    if (anchor !== undefined && (element.contains(anchor) || anchor.contains(element))) {
+      continue; // The target is not a bar over itself.
+    }
+    const position = getComputedStyle(element).position;
+    if (position === 'fixed' || position === 'sticky') {
+      const rect = element.getBoundingClientRect();
+      if (rect.top <= 1 && rect.bottom > 0 && rect.height <= heightMax) {
+        insetTop = Math.max(insetTop, Math.ceil(rect.bottom));
+      }
+    }
+  }
+  assert(insetTop >= 0, 'stickyInsetOf: a bar covers no negative height');
+  return Math.min(insetTop, heightMax);
 };

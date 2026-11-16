@@ -109,3 +109,25 @@ opens on those items. Signals, in order: the pager's own choice for this selecti
 the copy's occurrence when the loop sizes add up (pages that mark nothing), item 1. A loop whose
 callback is the general form (`bodyParts`), whose list is not a named value, a right-click selection and
 a component that strips comments from its slot fall back on the later signals.
+
+## Revealing a Navigator pick on the canvas
+
+A pick in the Navigator (or any panel selection that bumps `navigatorSelectionTick`) posts `avb:scroll-to`;
+a click on the canvas never does, since the person is already looking there. `frameReveal.ts` decides,
+`frameRevealGlide.ts` moves, `frameRevealMath.ts` holds the numbers; Desktop and Studio share all three.
+
+- **Comfortable means whole.** A box whole inside the frame (below any sticky or fixed bar at the top) stays
+  put; one cut by an edge, or hiding under the bar, glides. A box taller than the frame stays while half of
+  what the frame shows is that box. Fixed boxes, `display: none`, zero-size boxes and the page root never scroll.
+- **Where it lands.** Centred when it fits, a 24 px margin (plus the bar's height) below the top when it does
+  not. Boxes inside a scrolling ancestor move that scroller and the page together.
+- **How it moves.** About 300 to 450 ms (longer for longer trips, capped), ease-out, one *instant* scroll per
+  animation frame. Instant scrolls ignore the site's `scroll-behavior`, so `auto` or `smooth` change nothing.
+  Reduced motion lands in one jump. No frames (hidden window) land after 250 ms. At most 120 frames.
+- **Who wins.** A wheel, touch, key or press ends the glide where the person put the page. A newer selection
+  replaces it, starting from wherever the page is. After the glide the old watch still waits out a
+  smooth-scroll library (Lenis, ScrollSmoother) and jumps again if it pulled the page back; the preload's
+  isolated world cannot reach such a library's API.
+- **View only.** Nothing here writes a file.
+- Tests: `test/electron/preload/revealGlide.test.js` (arithmetic, stepped frame clock, cancellation, forced
+  `scroll-behavior: auto`), `revealScrollsDown.test.js` and `revealSmoothScroll.test.js` (real Chromium).

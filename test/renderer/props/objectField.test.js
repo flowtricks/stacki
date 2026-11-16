@@ -145,8 +145,8 @@ const check = (what, condition, detail) => {
   check('and the list is rows, not text', rows().length === 3, `${rows().length} rows`);
   check(
     'each row saying what its item says',
-    [...host.querySelectorAll('.list-field-text')].map((button) => button.textContent).join() === 'Pastors,Staff,Prayer',
-    [...host.querySelectorAll('.list-field-text')].map((button) => button.textContent).join(),
+    [...host.querySelectorAll('.list-scalar-item input:not([type="checkbox"])')].map((input) => input.value).join() === 'Pastors,Staff,Prayer',
+    [...host.querySelectorAll('.list-scalar-item input')].map((input) => input.value).join(),
   );
 
   // Typing in a field writes the whole object back — that is what the file

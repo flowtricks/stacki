@@ -1,4 +1,4 @@
-// Revealing a selection scrolls the page down to it, never sideways.
+// Revealing a selection glides the page to it vertically, never sideways.
 //
 //   node test/electron/preload/revealScrollsDown.test.js
 //
@@ -26,8 +26,10 @@
 // Whether a reveal moves the page at all is then tested from a known place: the
 // host scrolls a box to a chosen top in the frame, reveals it, and compares the
 // scroll position before and after. The rule under test:
-//   - a box with any part inside the frame stays put: whole, cut by any edge, or
-//     showing one pixel, however tall it is,
+//   - a box wholly inside the frame stays put, and so does one taller than the frame
+//     while half of what the frame shows is that box,
+//   - a box cut by the top or bottom edge, or a taller one showing less than half,
+//     scrolls until it shows (all of it, or aligned to its top when it is taller),
 //   - a box with no part inside the frame scrolls, in either direction, and one
 //     that only touches the edge shows nothing, so it scrolls too,
 //   - a box off to the side stays put when a vertical move could not help it,
@@ -595,20 +597,20 @@ const HOST_HELPERS = `
     stays('nor one inside the margin at the bottom', cases.nearBottom);
     stays('nor one touching the bottom of the frame', cases.touchingBottom);
 
-    stays('a box cut by the top of the frame does not move the page', cases.cutByTop);
-    stays('nor one cut by the bottom of the frame', cases.cutByBottom);
-    stays('nor one showing a single pixel at the top', cases.pixelAtTop);
-    stays('nor one showing a single pixel at the bottom', cases.pixelAtBottom);
+    scrollsOnScreen('a box cut by the top of the frame glides until all of it shows', cases.cutByTop);
+    scrollsOnScreen('nor one cut by the bottom of the frame', cases.cutByBottom);
+    scrollsOnScreen('and one showing a single pixel at the top', cases.pixelAtTop);
+    scrollsOnScreen('and one showing a single pixel at the bottom', cases.pixelAtBottom);
 
     scrollsOnScreen('a box ending exactly at the top of the frame shows nothing, so it scrolls', cases.sharingTopEdge);
     scrollsOnScreen('a box starting exactly at the bottom of the frame shows nothing, so it scrolls', cases.sharingBottomEdge);
     scrollsOnScreen('a box below the frame scrolls', cases.belowFrame);
     scrollsOnScreen('a box above the frame scrolls', cases.aboveFrame);
 
-    stays('a box cut by the right of the frame does not move the page', cases.cutByRight);
+    stays('a box cut by the right of the frame, whole vertically, does not move the page', cases.cutByRight);
     stays('nor one cut by the left of the frame', cases.cutByLeft);
-    stays('nor one cut by the right and the top', cases.cutByRightAndTop);
-    stays('nor one cut by the left and the bottom', cases.cutByLeftAndBottom);
+    scrollsOnScreen('one cut by the right and the top scrolls, vertically only', cases.cutByRightAndTop);
+    scrollsOnScreen('and one cut by the left and the bottom', cases.cutByLeftAndBottom);
     stays('a box wholly beside the frame stays put, since a vertical move could not help it', cases.awayBeside);
     check('and a box beside the frame and below it scrolls down', cases.awayBelow.scrollY !== cases.awayBelow.startY, JSON.stringify(cases.awayBelow));
     check('until it is level with the frame, not sideways', cases.awayBelow.scrollX === 0 && allZero(cases.awayBelow.lefts), JSON.stringify(cases.awayBelow));
@@ -626,15 +628,15 @@ const HOST_HELPERS = `
 
     stays('a box taller than the frame does not move the page while it covers the frame', cases.longCovering);
     stays('nor with its top exactly at the top of the frame', cases.longFlushTop);
-    stays('nor with only its top showing', cases.longTopShowing);
+    scrollsToTop('one with only a sliver of its top showing aligns to its top', cases.longTopShowing);
     stays('nor where a reveal lands it', cases.longLanded);
-    stays('nor with only its bottom showing', cases.longBottomShowing);
-    stays('nor with a single pixel of its bottom showing', cases.longPixelAtBottom);
+    stays('nor with half of it showing, from its bottom', cases.longBottomShowing);
+    scrollsToTop('and one with a single pixel of its bottom showing', cases.longPixelAtBottom);
     scrollsToTop('one wholly above the frame aligns to its top', cases.longAboveFrame);
     scrollsToTop('one wholly below the frame aligns to its top', cases.longBelowFrame);
 
     stays('a ::before with no box stays put while its host is in view', cases.bareInView);
-    stays('and while its host is partly in view', cases.bareCutByTop);
+    scrollsOnScreen('and reveals its host when that is cut by the frame', cases.bareCutByTop);
     scrollsOnScreen('and reveals its host when that is out of view', cases.bareBelowFrame);
 
     stays('a box with no height stays put inside the frame', cases.flatInside);
@@ -675,12 +677,17 @@ const HOST_HELPERS = `
       check(what, move.scroller === move.startScroller, JSON.stringify(move));
       check(`${what}, and the window stays put`, move.scrollY === 0, JSON.stringify(move));
     };
+    const scrollerMoves = (what, move) => {
+      check(`${what}: it started scrolled`, move.startScroller > 0, JSON.stringify(move));
+      check(what, move.scroller !== move.startScroller, JSON.stringify(move));
+      check(`${what}, until all of the box shows`, move.top >= 0 && move.bottom <= move.height, JSON.stringify(move));
+    };
     scrollerStays('<body> does not move a scrolling <body>', bodyScroller.body);
     scrollerStays('nor does <html>', bodyScroller.html);
-    scrollerStays('nor a box partly in view inside it', bodyScroller.cut);
+    scrollerMoves('a box partly in view inside it scrolls it', bodyScroller.cut);
     scrollerStays('<body> does not move a scrolling wrapper', innerScroller.body);
     scrollerStays('nor does <html>', innerScroller.html);
-    scrollerStays('nor a box partly in view inside it', innerScroller.cut);
+    scrollerMoves('and so does one in a scrolling wrapper', innerScroller.cut);
     // "In view" of its panel is not in view: the panel itself is a screen below the frame.
     check('a box in a panel below the fold moves the page to it', panelBelowFold.scrollY > 0, JSON.stringify(panelBelowFold));
     check('and ends up on screen', panelBelowFold.top >= 0 && panelBelowFold.bottom <= panelBelowFold.height, JSON.stringify(panelBelowFold));
@@ -691,7 +698,7 @@ const HOST_HELPERS = `
     console.error(`reveal-scrolls-down: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
-  console.log(`reveal-scrolls-down: ${checked} passed  [a reveal scrolls down, never sideways, and only when no part is in view]`);
+  console.log(`reveal-scrolls-down: ${checked} passed  [a reveal scrolls down, never sideways, and only when the box is not comfortably in view]`);
   process.exit(0);
 })().catch((error) => {
   console.error(error);
