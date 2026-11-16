@@ -246,7 +246,9 @@ export const messages = {
   'props.link.examplePhone': 'p. ex. +14155551212',
   'props.link.noSections':
     'Aucun élément de cette page n’a encore d’<code>id</code> : définissez-en un dans les attributs d’un élément pour y faire un lien d’ancre.',
+  'props.link.searchPages': 'Rechercher une page…',
   'props.link.subject': 'Objet (facultatif)',
+  'props.link.templateUnresolved': 'Entrées indisponibles',
   'props.link.type.asset': 'Fichier / ressource',
   'props.link.type.email': 'E-mail',
   'props.link.type.page': 'Page', // same

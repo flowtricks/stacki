@@ -44,6 +44,7 @@ export const messages = {
   'ui.dockableWindow.dock': 'Ancrer la fenêtre',
   'ui.dockableWindow.moveHint': 'Déplacer la fenêtre avec les touches fléchées',
   'ui.dockableWindow.undock': 'Détacher la fenêtre',
+  'ui.dropdown.more': '{count} de plus, continuez à saisir',
   'ui.dropdown.noMatch': 'Aucun résultat',
   'ui.handoff.copied': 'Prompt copié. Collez-le dans votre agent de code.',
   'ui.handoff.failed': 'Impossible de transmettre ceci : {reason}',

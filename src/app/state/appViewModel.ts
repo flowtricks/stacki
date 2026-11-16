@@ -15,7 +15,8 @@ import { findImportOf } from '../../editor/dataSuggest';
 import type { TagOption } from '../../features/props/propNodeEditors';
 import { codeWindowFor, fileWindowIndentation, FRONTMATTER_SUBJECT, type CodeSubject } from '../../features/code/codeWindowTarget';
 import { toEditorPageState } from '../../editor/pageState';
-import { readProjectAsset } from '../../ipc/appBridge';
+import { readDynamicPaths, readProjectAsset } from '../../ipc/appBridge';
+import { linkEntriesFromAnswer, type LinkEntryLoader } from '../../features/props/linkEntries';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
@@ -183,19 +184,38 @@ export function useInstanceProps(scopeContext: ReturnType<typeof useScopeContext
 
 // Link targets and the Tag field’s options.
 export function useTagOptions(coreState: ReturnType<typeof useCoreState>, pageOps: ReturnType<typeof usePageOps>, shortcuts: ReturnType<typeof useShortcuts>) {
-  const { insertables, project, scan } = coreState;
+  const { devStatus, devUrl, insertables, project, scan } = coreState;
   const { tree } = pageOps;
   const { model } = shortcuts;
 
   // Link settings (href fields): pages to link to and the ids on this page
   // that anchor links can target.
+  // A template page's entries come from the same dev-server read the canvas's entry picker uses
+  // (page:dynamicPaths). It only reads; with no dev server the template stays one row of its own.
+  const loadEntries = useCallback<LinkEntryLoader>(
+    async (route) => {
+      const page = scan.pages.find((candidate) => candidate.route === route);
+      if (project === undefined || page === undefined || devStatus !== 'on' || devUrl === undefined) {
+        return { kind: 'unavailable' };
+      }
+      try {
+        const answer = await readDynamicPaths(project.path, page.path, devUrl);
+        return linkEntriesFromAnswer(route, answer);
+      } catch {
+        // A page that cannot answer stays a template row, as the canvas previews it at its pattern.
+        return { kind: 'unavailable' };
+      }
+    },
+    [scan.pages, project, devStatus, devUrl],
+  );
   const linkContext = useMemo(
     () => ({
       pages: scan.pages,
       sectionIds: tree.sectionIds,
+      loadEntries,
       projectPath: project?.path ?? '',
     }),
-    [scan.pages, tree, project?.path],
+    [scan.pages, tree, project?.path, loadEntries],
   );
 
   // What the Tag field offers: every HTML tag, the project's components,

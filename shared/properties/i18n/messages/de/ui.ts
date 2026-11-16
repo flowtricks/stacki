@@ -44,6 +44,7 @@ export const messages = {
   'ui.dockableWindow.dock': 'Fenster andocken',
   'ui.dockableWindow.moveHint': 'Fenster mit den Pfeiltasten verschieben',
   'ui.dockableWindow.undock': 'Fenster abdocken',
+  'ui.dropdown.more': '{count} weitere, tippe weiter',
   'ui.dropdown.noMatch': 'Keine Treffer',
   'ui.handoff.copied': 'Prompt kopiert. Füge ihn in deinen Coding-Agenten ein.',
   'ui.handoff.failed': 'Übergabe fehlgeschlagen: {reason}',

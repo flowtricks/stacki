@@ -7,7 +7,9 @@ import { LIMITS } from '../../../shared/core/limits';
 import Dropdown from '../../ui/Dropdown';
 import AssetField from '../../ui/AssetField';
 import { ElementLinkIcon, FileIcon, PhoneIcon, ElementImageIcon } from '../../ui/Icons';
-import { anchorTargetExists, detectLinkType, linkPageOptions, type LinkPage, type LinkType, type LinkTypeContext } from './linkType';
+import LinkPageChooser from './LinkPageChooser';
+import type { LinkEntryLoader } from './linkEntries';
+import { anchorTargetExists, detectLinkType, type LinkPage, type LinkType, type LinkTypeContext } from './linkType';
 
 // Webflow-style link settings for href props: a Type segmented control
 // (URL / Page / Section / Email / Phone / Asset) whose fields all compile
@@ -42,6 +44,8 @@ function parseMailto(text: string) {
 interface LinkContext {
   readonly pages?: readonly LinkPage[];
   readonly sectionIds?: readonly string[];
+  /** Resolves a template page's entries (its CMS entries as concrete routes); absent where the host cannot. */
+  readonly loadEntries?: LinkEntryLoader | undefined;
   readonly projectPath: string;
 }
 interface LinkFieldProps {
@@ -52,6 +56,9 @@ interface LinkFieldProps {
 function linkTypeContext(context: LinkContext): LinkTypeContext {
   return { routes: (context.pages ?? []).map((page) => page.route), sectionIds: context.sectionIds ?? [] };
 }
+
+// One array for "no pages", so the page chooser's effects see the same value on every render.
+const NO_PAGES: readonly LinkPage[] = [];
 
 type Commit = (value: string, options?: { readonly immediate: boolean }) => void;
 export default function LinkField({ value, context, onChange }: LinkFieldProps) {
@@ -98,12 +105,11 @@ function LinkControl({
       return <input value={text} placeholder="#" spellCheck={false} onChange={(event) => commit(event.target.value)} />;
     case 'page':
       return (
-        <Dropdown
-          value={(context.pages || []).some((page) => page.route === text) ? text : ''}
-          placeholder={translate('props.link.choosePage')}
-          optionLayout="stacked"
-          options={linkPageOptions(context.pages ?? [], translate)}
-          onChange={(value) => commit(value, { immediate: true })}
+        <LinkPageChooser
+          text={text}
+          pages={context.pages ?? NO_PAGES}
+          loadEntries={context.loadEntries}
+          onPick={(route) => commit(route, { immediate: true })}
         />
       );
     case 'section':

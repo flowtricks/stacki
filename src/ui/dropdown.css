@@ -193,3 +193,14 @@
   font-size: 11.5px;
   color: var(--text-faint);
 }
+
+/* The list was cut at its row limit: typing narrows it. A note, not an option, so arrows skip it. */
+.dd-more {
+  padding: 8px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+/* Skeleton rows for options still arriving, at the width of a row's text. */
+.dd-loading {
+  padding: 4px 8px;
+}

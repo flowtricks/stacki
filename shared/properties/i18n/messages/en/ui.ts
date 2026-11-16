@@ -44,6 +44,7 @@ export const messages = {
   'ui.dockableWindow.dock': 'Dock window',
   'ui.dockableWindow.moveHint': 'Move window with arrow keys',
   'ui.dockableWindow.undock': 'Undock window',
+  'ui.dropdown.more': '{count} more, keep typing',
   'ui.dropdown.noMatch': 'Nothing matches',
   'ui.handoff.copied': 'Prompt copied. Paste it into your coding agent.',
   'ui.handoff.failed': 'Couldn’t hand this off: {reason}',

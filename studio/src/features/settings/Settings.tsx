@@ -14,6 +14,7 @@ import { type PropsPanelProps } from '../../../vendor/stacki/src/features/props/
 import { applyEdits, contentEdit, flatten, parsePage, type ParserNode } from '../source/source';
 import type { Project, Component } from '../project/projectClient';
 import { projectPages } from '../project/pageLabels';
+import { linkEntryLoader } from './linkEntryLoader';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { assetProp, frontmatterEdit, inlineContentEdit, nodeTextEdit } from './settingsEdits';
 import { renameAttribute, takesAttributes, writeAttributes } from './attributeEdit';
@@ -42,6 +43,7 @@ export function Settings(props: Props) {
   // On a component's own file, the binding picker can connect to its props and make new ones (Desktop's newPropHostOf).
   const scope = useBindContext(document.file, source, nodes, selected);
   const page = useMemo(() => loopPage(source), [source]);
+  const loadEntries = useMemo(() => linkEntryLoader(project), [project]);
   // What a pick writes before it binds (a collection's query, a data file's
   // import) is held for the field's own change and applied first in it, so
   // the page changes once: one undo step, as Desktop's holdForNextEdit.
@@ -88,6 +90,7 @@ export function Settings(props: Props) {
         frontmatterSource={/^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1] ?? ''}
         linkContext={{
           pages: projectPages(project),
+          loadEntries,
           sectionIds: flatten(nodes).flatMap((node) => (node.props?.['id']?.type === 'string' ? [node.props['id'].value] : [])),
           projectPath: 'studio',
         }}

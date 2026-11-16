@@ -44,6 +44,7 @@ export const messages = {
   'ui.dockableWindow.dock': 'Acoplar ventana',
   'ui.dockableWindow.moveHint': 'Mover la ventana con las teclas de flecha',
   'ui.dockableWindow.undock': 'Desacoplar ventana',
+  'ui.dropdown.more': '{count} más, sigue escribiendo',
   'ui.dropdown.noMatch': 'Sin coincidencias',
   'ui.handoff.copied': 'Prompt copiado. Pégalo en tu agente de código.',
   'ui.handoff.failed': 'No se pudo transferir esto: {reason}',

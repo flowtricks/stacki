@@ -4,6 +4,7 @@ import type { CSSProperties, KeyboardEvent, MutableRefObject, ReactNode, RefObje
 import { endDragNotes, hoverNote } from './sound';
 import { useSoundHere } from './soundScope';
 import { ChevronDownIcon, CheckIcon } from './Icons';
+import { SkeletonRows } from './Skeleton';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { useTranslate } from '../lib/i18n/useTranslate';
@@ -85,12 +86,21 @@ export interface DropdownProps<T = string> {
   readonly onHighlight?: (value: T | undefined) => void;
   readonly searchable?: boolean;
   readonly searchPlaceholder?: string;
+  /**
+   * The most rows the list draws. Past it the list ends with "N more, keep typing", so a search over
+   * thousands of options stays fast; typing narrows the matches before they are counted.
+   */
+  readonly rowsMax?: number;
+  /** More options are still arriving: the list ends with skeleton rows, and an empty list is not yet "nothing matches". */
+  readonly loading?: boolean;
 }
 interface Selection<T> {
   readonly open: boolean;
   readonly highlight: number;
   readonly query: string;
   readonly visible: readonly DropdownOption<T>[];
+  /** Matches left undrawn by `rowsMax`. */
+  readonly hiddenCount: number;
   readonly selected: DropdownOption<T> | undefined;
   readonly setOpen: (open: boolean) => void;
   readonly setHighlight: (highlight: number) => void;
@@ -177,15 +187,19 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
   const committed = useRef(props.value);
   const previewed = useRef<{ readonly value: T } | undefined>(undefined);
   const queryText = query.trim().toLowerCase();
-  const visible =
+  const matches =
     props.searchable && queryText
       ? props.options.filter(
           (option) =>
             option.pinned === true || `${option.label} ${option.hint || ''} ${option.group || ''} ${option.keywords || ''}`.toLowerCase().includes(queryText),
         )
       : props.options;
+  const rowsMax = props.rowsMax ?? matches.length;
+  assert(rowsMax >= 1, 'Dropdown rowsMax draws at least one row');
+  const visible = matches.length > rowsMax ? matches.slice(0, rowsMax) : matches;
   return {
     open,
+    hiddenCount: matches.length - visible.length,
     setOpen,
     highlight,
     setHighlight,
@@ -260,7 +274,7 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       cancelHover();
       onPrepare?.();
       initializeDropdown(state, value);
-      setHighlight(options.findIndex((option) => option.value === value));
+      setHighlight(options.slice(0, props.rowsMax ?? options.length).findIndex((option) => option.value === value));
       setOpen(true);
     },
     preview: (index) => {
@@ -546,8 +560,16 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
             <DropdownRow option={option} index={index} control={control} />
           </Fragment>
         ))}
+        {control.hiddenCount > 0 && <div className="dd-more">{translate('ui.dropdown.more', { count: control.hiddenCount })}</div>}
+        {props.loading === true && (
+          <div className="dd-loading">
+            <SkeletonRows count={2} />
+          </div>
+        )}
         {/* A pinned row is not a match, so the list still says nothing matched beside it. */}
-        {!control.visible.some((option) => option.pinned !== true) && <div className="dd-empty">{translate('ui.dropdown.noMatch')}</div>}
+        {props.loading !== true && !control.visible.some((option) => option.pinned !== true) && (
+          <div className="dd-empty">{translate('ui.dropdown.noMatch')}</div>
+        )}
       </div>
     </Popup>
   );

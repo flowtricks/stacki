@@ -44,6 +44,7 @@ export const messages = {
   'ui.dockableWindow.dock': 'Acoplar janela',
   'ui.dockableWindow.moveHint': 'Mover a janela com as teclas de seta',
   'ui.dockableWindow.undock': 'Desacoplar janela',
+  'ui.dropdown.more': 'mais {count}, continue digitando',
   'ui.dropdown.noMatch': 'Nenhuma correspondência',
   'ui.handoff.copied': 'Prompt copiado. Cole-o no seu agente de código.',
   'ui.handoff.failed': 'Não foi possível repassar isto: {reason}',
