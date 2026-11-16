@@ -3,7 +3,7 @@ import { itemFieldTitle } from '../../editor/itemFields';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
-import type { Item, ItemField, ScalarItem } from './arrayValue';
+import type { Item, ItemField } from './arrayValue';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { PlusIcon, CloseIcon, ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
@@ -57,12 +57,30 @@ interface ItemEditorProps {
   readonly projectPath: string | undefined;
   readonly bindContext: RichContext | undefined;
   readonly dataContext: SourceContext | undefined;
+  /** What the list's items are, and the type the component declares for them. */
+  readonly kind: ListItemKind;
+  readonly itemType: DeclaredItemType | undefined;
+  /** The quote the list's words are written in. */
+  readonly quote: string;
   readonly position: Position;
   readonly trigger: HTMLElement;
   readonly onChange: (item: Item) => void;
   readonly onClose: () => void;
 }
-function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext, position, trigger, onChange, onClose }: ItemEditorProps) {
+function ItemEditor({
+  item: given,
+  shape,
+  projectPath,
+  bindContext,
+  dataContext,
+  kind,
+  itemType,
+  quote,
+  position,
+  trigger,
+  onChange,
+  onClose,
+}: ItemEditorProps) {
   const translate = useTranslate();
   const ref = useListEditorDismiss(trigger, onClose);
 
@@ -74,11 +92,15 @@ function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext,
     }
   }, [ref]);
 
-  // An object item is its own fields, named as the file names them (every
-  // declared one, when the component declares them). A plain value is edited in
-  // its row (ListScalarItem.tsx), never here.
+  // A plain value is one field of the kind the list's items are (a number input
+  // with the number icon for `number[]`); an object is its own fields, named as
+  // the file names them (every declared one, when the component declares them).
+  // Either way the popup is a list of labelled fields, so there is one thing
+  // to learn rather than two.
   const item = conformedItem(given, shape, '"');
   const fields = item.fields;
+  // The kind of a plain value: the list's, or its own where the list has no one kind.
+  const scalarKind = kind === 'text' || kind === 'number' || kind === 'switch' || kind === 'choice' ? kind : kindOfItem(item);
   return (
     <div
       ref={ref}
@@ -93,17 +115,29 @@ function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext,
           <CloseIcon size={12} />
         </button>
       </div>
-      {fields?.map((field, at) => (
-        <ItemFieldControl
-          key={field.key}
-          field={field}
-          declaration={itemFieldDeclaration(field, shape)}
-          projectPath={projectPath}
+      {fields === undefined ? (
+        <ListScalarItem
+          item={item}
+          kind={scalarKind}
+          declared={itemType}
+          quote={quote}
           bindContext={bindContext}
           dataContext={dataContext}
-          onSet={(next) => onChange({ fields: fields.map((own, index) => (index === at ? next : own)) })}
+          onChange={onChange}
         />
-      ))}
+      ) : (
+        fields.map((field, at) => (
+          <ItemFieldControl
+            key={field.key}
+            field={field}
+            declaration={itemFieldDeclaration(field, shape)}
+            projectPath={projectPath}
+            bindContext={bindContext}
+            dataContext={dataContext}
+            onSet={(next) => onChange({ fields: fields.map((own, index) => (index === at ? next : own)) })}
+          />
+        ))
+      )}
     </div>
   );
 }
@@ -344,7 +378,7 @@ interface ListFieldProps {
   readonly valueCharsMax?: number;
   /** The fields every item has, when the component declares them. */
   readonly itemShape?: readonly ItemShapeField[] | undefined;
-  /** What each item is, when the component declares plain items (`number[]`): rows take that kind's control. */
+  /** What each item is, when the component declares plain items (`number[]`): the item's editor takes that kind's control. */
   readonly itemType?: DeclaredItemType | undefined;
   /** The items shown, dimmed, while no value is set: the component's default list. */
   readonly fallback?: string | undefined;
@@ -397,9 +431,7 @@ export default function ListField(props: ListFieldProps) {
         className="list-field-add"
         disabled={state.disabled || state.items.length >= state.itemsMax}
         onClick={(event) => {
-          if (state.inline) {
-            state.addInline();
-          } else if (state.editor.kind === 'pending') {
+          if (state.editor.kind === 'pending') {
             state.closePending();
           } else {
             state.openAt(event, undefined, state.blank());
@@ -489,24 +521,18 @@ function useListField(props: ListFieldProps) {
   // The next item: shaped as the component declares its items, else like the ones already there.
   const quote = items.find((item) => item.quote)?.quote ?? items.flatMap((item) => item.fields ?? []).find((field) => field.quote)?.quote ?? '"';
   const kind = listItemKindOf(props.itemType, items, itemShape);
-  // Plain values are edited in their rows, so a new one is made at once, typed as the list's are.
-  const inline = kind !== 'object' && !items.some((item) => item.fields !== undefined);
+  // A new plain value starts as the list's kind is blank: a number at 0 (inside its bounds), a switch off.
+  const plain = kind !== 'object' && !items.some((item) => item.fields !== undefined);
   const blank = (): Item => {
-    if (inline) {
+    if (plain) {
       return defaultItemOf(kind, props.itemType, quote);
     }
     return itemShape !== undefined && itemShape.length > 0 ? blankItemOf(itemShape, quote) : blankLike(items);
-  };
-  const addInline = (): void => {
-    assert(inline, 'ListField: only a list of plain values is added to in place');
-    write([...items, blank()], { immediate: true, change: { kind: 'add' } });
   };
   return {
     items,
     fallback,
     blank,
-    inline,
-    addInline,
     kind,
     itemType: props.itemType,
     quote,
@@ -624,35 +650,11 @@ function ListRow({ item, index, state }: { readonly item: Item; readonly index: 
       disabled={state.disabled}
       removeDisabled={state.disabled || state.items.length <= state.itemsMin}
       removeLabel={translate('props.list.removeItem', { item: itemLabel(item) || translate('props.list.item') })}
-      body={item.fields === undefined ? <ScalarRowBody item={item} index={index} state={state} /> : undefined}
       onOpen={(event) => toggleListRow(event, state, index, item)}
       onRemove={() => remove(index)}
     >
       {itemLabel(item) || <span className="list-field-blank">{translate('props.conditional.empty')}</span>}
     </ListFieldRow>
-  );
-}
-
-// A plain value edited where it stands: the control of the list's kind, or of the item's own kind in a list that has no one.
-function ScalarRowBody({ item, index, state }: { readonly item: ScalarItem; readonly index: number; readonly state: ListState }) {
-  const kind: ListItemKind = state.kind;
-  const rowKind = kind === 'text' || kind === 'number' || kind === 'switch' || kind === 'choice' ? kind : kindOfItem(item);
-  return (
-    <ListScalarItem
-      item={item}
-      index={index}
-      kind={rowKind}
-      declared={state.itemType}
-      quote={state.quote}
-      bindContext={state.bindContext}
-      dataContext={state.dataContext}
-      onChange={(next) =>
-        state.write(
-          state.items.map((own, at) => (at === index ? next : own)),
-          { immediate: false, change: { kind: 'edit', index } },
-        )
-      }
-    />
   );
 }
 
@@ -696,6 +698,9 @@ function ListEditor({ state }: { readonly state: ListState }) {
         <ItemEditor
           item={item}
           shape={state.itemShape}
+          kind={state.kind}
+          itemType={state.itemType}
+          quote={state.quote}
           projectPath={state.projectPath}
           bindContext={state.bindContext}
           dataContext={state.dataContext}
@@ -719,6 +724,9 @@ function ListEditor({ state }: { readonly state: ListState }) {
         <ItemEditor
           item={editor.item}
           shape={state.itemShape}
+          kind={state.kind}
+          itemType={state.itemType}
+          quote={state.quote}
           projectPath={state.projectPath}
           bindContext={state.bindContext}
           dataContext={state.dataContext}

@@ -1,43 +1,5 @@
-/* A row of a list of plain values is its own field, edited in place: the type
-   icon at its left, the control after it, and the purple binding dot a field
-   gets on hover. The prop field's label is only that icon here: the row is
-   named by its place in the list, not by a name to read. Fills, not borders. */
-.list-scalar-item {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-}
-.list-scalar-item .props-field {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.list-scalar-item .props-field > label {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  margin: 0;
-  /* Only the icon reads: the name is the row's place, which the list already says. */
-  font-size: 0;
-}
-.list-scalar-item .props-field > label .prop-label {
-  display: inline-flex;
-  align-items: center;
-}
-.list-scalar-item .props-field > label .bind-handle {
-  left: -10px;
-  bottom: auto;
-  top: 50%;
-  transform: translateY(-50%);
-}
-.list-scalar-item .props-field > :not(label) {
-  flex: 1;
-  min-width: 0;
-}
+/* A plain value of a list, in the popup a row opens: its own prop field, with the type icon and
+   the binding dot a field has. An emptied number is shown as the invalid state it is. A fill, not a border. */
 .list-scalar-item.is-invalid input {
   background: rgba(255, 90, 90, 0.16);
 }

@@ -13,8 +13,6 @@ interface ListFieldRowProps {
   readonly disabled: boolean;
   readonly removeDisabled: boolean;
   readonly removeLabel: string;
-  /** A row that edits in place draws its control here instead of the button that opens a popup. */
-  readonly body?: ReactNode;
   readonly onOpen: MouseEventHandler<HTMLButtonElement>;
   readonly onRemove: () => void;
   /** What closes the row after its remove button: a property's warning. */
@@ -31,24 +29,20 @@ export default function ListFieldRow(props: ListFieldRowProps) {
           <DragIcon size={12} />
         </span>
       )}
-      {props.body === undefined ? (
-        <button
-          type="button"
-          className={`list-field-text ${props.triggerClassName ?? ''}`}
-          aria-expanded={props.expanded}
-          disabled={props.disabled}
-          onClick={props.onOpen}
-        >
-          {props.icon && (
-            <span className="list-field-icon" aria-hidden="true">
-              {props.icon}
-            </span>
-          )}
-          {props.children}
-        </button>
-      ) : (
-        props.body
-      )}
+      <button
+        type="button"
+        className={`list-field-text ${props.triggerClassName ?? ''}`}
+        aria-expanded={props.expanded}
+        disabled={props.disabled}
+        onClick={props.onOpen}
+      >
+        {props.icon && (
+          <span className="list-field-icon" aria-hidden="true">
+            {props.icon}
+          </span>
+        )}
+        {props.children}
+      </button>
       <button
         type="button"
         className="ghost list-field-remove"
