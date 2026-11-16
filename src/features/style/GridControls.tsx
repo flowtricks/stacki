@@ -406,16 +406,7 @@ function TrackCountCell({
     case 'count':
       return <CountField value={classified.count} busy={busy} ariaLabel={ariaLabel} onCommit={(count) => setProp(prop, repeatTracks(count, cell), false)} />;
     case 'expression':
-      return (
-        <GridTrackExpression
-          value={value}
-          prop={prop}
-          ariaLabel={ariaLabel}
-          cell={cell}
-          busy={busy}
-          onCommit={(next, important) => setProp(prop, next, important)}
-        />
-      );
+      return <GridTrackExpression value={value} prop={prop} ariaLabel={ariaLabel} busy={busy} onCommit={(next, important) => setProp(prop, next, important)} />;
     default: {
       const exhaustive: never = classified;
       return exhaustive;

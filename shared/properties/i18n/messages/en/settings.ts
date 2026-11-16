@@ -320,20 +320,6 @@ export const messages = {
   'settings.secrets.valueHidden': 'Hidden value',
   'settings.sections': 'Settings sections',
   'settings.studio.info': 'Browser editing and collaboration for this project. Setup installs Studio locally, then guides cloud deployment.',
-  'settings.styleTags.caption':
-    'Write {token} where new rules go, for example inside @layer components. Without it, rules go inside a final @layer or @media block, or after the template.',
-  'settings.styleTags.content': 'Initial content of new <style> tags',
-  'settings.styleTags.error.inRule': 'The placeholder must sit at the top level or inside at-rule blocks such as @layer, not inside a style rule.',
-  'settings.styleTags.error.repeated': 'The template names the rules placeholder more than once.',
-  'settings.styleTags.error.save': 'The style tag settings could not be saved. {message}',
-  'settings.styleTags.error.unbalanced': 'The template has an unclosed brace, comment or string.',
-  'settings.styleTags.global': 'New <style> tags are global (is:global)',
-  'settings.styleTags.globalInfo':
-    'Astro scopes a plain <style> to its own file, which hides plain selectors from elements rendered through components. Existing tags are never changed.',
-  'settings.styleTags.info':
-    'What a <style> tag starts with when the Style panel creates one. Saved with the project in .stacki/styles.json, so everyone who opens it gets the same tags.',
-  'settings.styleTags.preview': 'The tag that would be created',
-  'settings.styleTags.title': 'Style tags',
   'settings.tab.audits': 'Audits',
   'settings.tab.breakpoints': 'Breakpoints',
   'settings.tab.cms': 'CMS connections',

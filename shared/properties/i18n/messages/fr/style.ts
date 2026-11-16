@@ -426,32 +426,17 @@ export const messages = {
   'style.gridIcons.stretch': 'Étirer',
   'style.gridIcons.top': 'Haut',
   'style.gridIcons.vertical': 'Vertical', // same
-  'style.gridSettings.addColumn': 'Ajouter une colonne',
-  'style.gridSettings.addRow': 'Ajouter une ligne',
   'style.gridSettings.autoColumns': 'Colonnes générées automatiquement',
   'style.gridSettings.autoRows': 'Lignes générées automatiquement',
-  'style.gridSettings.backToTracks': 'Retour aux pistes',
-  'style.gridSettings.cannotShowAsTracks': 'Cette valeur ne peut pas s’afficher en pistes',
   'style.gridSettings.columns': 'Colonnes',
-  'style.gridSettings.dragToReorder': 'Faites glisser pour réordonner',
-  'style.gridSettings.duplicateTrack': 'Dupliquer la piste',
-  'style.gridSettings.editColumnsAsExpression': 'Modifier les colonnes comme expression',
-  'style.gridSettings.editRowsAsExpression': 'Modifier les lignes comme expression',
-  'style.gridSettings.editWholeValue': 'Modifier toute la valeur comme expression',
+  'style.gridSettings.countAria': 'Nombre pour {title}', // review
   'style.gridSettings.expressionAria': 'Expression de {title}',
-  'style.gridSettings.noColumns': 'Aucune colonne',
-  'style.gridSettings.noRepeat': 'Des pistes différentes ne peuvent pas s’écrire avec repeat()',
-  'style.gridSettings.noRows': 'Aucune ligne',
-  'style.gridSettings.removeTrack': 'Retirer la piste',
-  'style.gridSettings.repeatColumns': 'Utiliser repeat() pour les colonnes',
-  'style.gridSettings.repeatRows': 'Utiliser repeat() pour les lignes',
+  'style.gridSettings.modeAria': 'Mode de {title}', // review
+  'style.gridSettings.modeCount': 'Nombre', // review
+  'style.gridSettings.modeCustom': 'Personnalisé', // review
+  'style.gridSettings.modeSubgrid': 'Subgrid', // same
   'style.gridSettings.rows': 'Lignes',
-  'style.gridSettings.subgridColumns': 'Utiliser subgrid pour les colonnes', // review
-  'style.gridSettings.subgridOff': 'Prendre ces pistes dans la grille parente. Il faut une grille parente, que cet élément couvre sur ses pistes.', // review
   'style.gridSettings.subgridOn': 'Ces pistes viennent de la grille parente. Il faut une grille parente, que cet élément couvre sur ses pistes.', // review
-  'style.gridSettings.subgridRows': 'Utiliser subgrid pour les lignes', // review
-  'style.gridSettings.writeAsRepeat': 'Écrire ces pistes avec repeat()',
-  'style.gridSettings.writtenAsRepeat': 'Écrit sous la forme repeat({tracks}, …)',
   'style.layerList.dragToReorder': 'Faites glisser pour réordonner',
   'style.layerList.editLayer': 'Modifier le calque',
   'style.layerList.hide': 'Masquer',

@@ -1,8 +1,6 @@
-// Model for editing grid-template-columns / -rows as an ordered list of tracks, with
-// per-track sizing (a "default" single size, or a minmax(min, max) pair). Reading
-// expands `repeat(n, …)` and drops [line-name] tokens so the list is one entry per
-// visible track; writing emits an explicit space-separated list (Webflow's native
-// API drops some CSS functions, so we avoid repeat() on write).
+// Model for grid-template-columns / -rows: the tracks of a value, per-track sizing
+// (a "default" single size, or a minmax(min, max) pair), which values a count can say
+// (classifyTrackCount) and what a typed track list may write (checkTrackExpression).
 import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
 import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 
@@ -58,101 +56,6 @@ export function parseTrackList(value: string): string[] {
     }
   }
   return out;
-}
-
-/** Join tracks back to a grid-template value ('' → clear the property). */
-export function serializeTrackList(tracks: string[]): string {
-  return tracks.length
-    ? tracks
-        .map((track) => track.trim())
-        .filter(Boolean)
-        .join(' ')
-    : '';
-}
-
-// Two ways of writing the same grid.
-//
-//   repeat(2, minmax(0, 1fr))        the count, said once
-//   minmax(0, 1fr) minmax(0, 1fr)    the tracks, written out
-//
-// Nothing chooses between them for the reader: the first is shorter and says
-// "these are all the same", the second is what you want in front of you when
-// one of them is about to stop being the same. Both are the same grid, so this
-// is a way of writing, not a change to the layout — and the panel's own
-// controls pick one each: the count stepper writes repeat(), and editing a
-// track in the grid settings writes them all out.
-
-/**
- * How a track list is written: a single `repeat()`, tracks written out that
- * could be a repeat(), tracks that differ (so they could not), or nothing.
- */
-export function trackForm(value: string): 'repeat' | 'list' | 'mixed' | 'none' {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'none') {
-    return 'none';
-  }
-  const top = splitTracks(trimmed).filter((x) => !x.startsWith('['));
-  if (top.length === 1) {
-    // `repeat(3, 1fr)` — a count and one track. `repeat(auto-fit, …)` is not a
-    // count and has its own control, so it is left alone here.
-    const rep = (top[0] ?? '').match(/^repeat\(\s*\d+\s*,(.*)\)$/is);
-    if (rep && splitTracks(rep[1] ?? '').filter((x) => !x.startsWith('[')).length === 1) {
-      return 'repeat';
-    }
-  }
-  const tracks = parseTrackList(trimmed);
-  if (tracks.length > 1 && tracks.every((x) => x === tracks[0])) {
-    return 'list';
-  }
-  return 'mixed';
-}
-
-/** The same tracks written out one by one, or '' if there is nothing to write. */
-export function asTrackList(value: string): string {
-  return serializeTrackList(parseTrackList(value));
-}
-
-/**
- * Whether the track list controls can hold this value — that is, whether it is
- * a list of tracks at all.
- *
- * `!important`, a CSS-wide keyword, `subgrid`, or a variable standing in for
- * the whole list are all values a grid can have and the track editors cannot:
- * shown as tracks they would read as one track with a strange name, and the
- * first edit would write that reading back over what was there. So the panel
- * keeps those in the expression field and says the tracks are not available.
- */
-export function canEditAsTracks(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return true;
-  }
-  if (/!\s*important/i.test(trimmed)) {
-    return false;
-  }
-  const lower = trimmed.toLowerCase();
-  if (/^(inherit|initial|unset|revert|revert-layer)$/.test(lower)) {
-    return false;
-  }
-  if (/\b(subgrid|masonry)\b/.test(lower)) {
-    return false;
-  }
-  const tracks = parseTrackList(trimmed);
-  if (!tracks.length) {
-    return lower === 'none';
-  }
-  // A variable in place of ONE track is a track — the editors hold it fine. One
-  // in place of the whole list only looks like a track.
-  if (tracks.length === 1 && /^var\(/i.test(tracks[0] ?? '')) {
-    return false;
-  }
-  // A repeat() that parsing left whole has no number for its count. auto-fill and
-  // auto-fit are counts the editors keep; a variable (`repeat(var(--columns), 1fr)`,
-  // Lumos's Grid) is one they cannot show, so it reads as a single strange track.
-  if (tracks.some((track) => /^repeat\(/i.test(track) && !/^repeat\(\s*auto-(fill|fit)\s*,/i.test(track))) {
-    return false;
-  }
-  return true;
 }
 
 /**
@@ -244,15 +147,6 @@ export function checkTrackExpression(text: string): TrackExpressionCheck {
   return closers.length === 0 ? { kind: 'ok', value, important: flag !== null } : { kind: 'invalid', problem: 'malformed' };
 }
 
-/** The same tracks as a `repeat()`, or '' when they differ and it cannot say them. */
-export function asRepeat(value: string): string {
-  const tracks = parseTrackList(value);
-  if (tracks.length < 2 || !tracks.every((x) => x === tracks[0])) {
-    return '';
-  }
-  return `repeat(${tracks.length}, ${tracks[0]})`;
-}
-
 export type TrackSize = { mode: 'default'; value: string } | { mode: 'minmax'; min: string; max: string };
 
 /** Parse a single track into its sizing (a minmax pair, or a single value). */
@@ -292,26 +186,6 @@ export function trackKind(track: string): TrackKind {
     return 'length';
   }
   return 'other';
-}
-
-/**
- * Whether a track is a `<fixed-size>` — the only track shape CSS permits inside an
- * auto-fit / auto-fill `repeat()`. Per the Grid spec that's:
- *   • a fixed `<length-percentage>` (20rem, 50%, …), OR
- *   • `minmax(<fixed-breadth>, <track-breadth>)` — a FIXED min, any max (so
- *     `minmax(20rem, 1fr)`, the canonical responsive pattern, qualifies), OR
- *   • `minmax(<inflexible-breadth>, <fixed-breadth>)` — an inflexible min (fixed /
- *     auto / min|max-content, but NOT fr) and a FIXED max.
- * Bare `fr`, `auto`, `min|max-content`, and `fit-content()` are NOT fixed-size.
- */
-export function isFixedSizeTrack(track: string): boolean {
-  const isFixedBreadth = (track: string) => trackKind(track) === 'length';
-  const isInflexibleBreadth = (track: string) => ['length', 'auto', 'content'].includes(trackKind(track));
-  const size = parseTrackSize(track);
-  if (size.mode === 'default') {
-    return isFixedBreadth(size.value);
-  }
-  return isFixedBreadth(size.min) || (isInflexibleBreadth(size.min) && isFixedBreadth(size.max));
 }
 
 /** Short human label for a track row (Webflow-style). */

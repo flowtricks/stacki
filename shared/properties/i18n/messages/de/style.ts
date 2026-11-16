@@ -425,34 +425,18 @@ export const messages = {
   'style.gridIcons.stretch': 'Strecken',
   'style.gridIcons.top': 'Oben',
   'style.gridIcons.vertical': 'Vertikal',
-  'style.gridSettings.addColumn': 'Spalte hinzufügen',
-  'style.gridSettings.addRow': 'Zeile hinzufügen',
   'style.gridSettings.autoColumns': 'Automatisch erzeugte Spalten',
   'style.gridSettings.autoRows': 'Automatisch erzeugte Zeilen',
-  'style.gridSettings.backToTracks': 'Zurück zu Tracks',
-  'style.gridSettings.cannotShowAsTracks': 'Dieser Wert lässt sich nicht als Tracks anzeigen',
   'style.gridSettings.columns': 'Spalten',
-  'style.gridSettings.dragToReorder': 'Zum Sortieren ziehen',
-  'style.gridSettings.duplicateTrack': 'Track duplizieren',
-  'style.gridSettings.editColumnsAsExpression': 'Spalten als Ausdruck bearbeiten',
-  'style.gridSettings.editRowsAsExpression': 'Zeilen als Ausdruck bearbeiten',
-  'style.gridSettings.editWholeValue': 'Ganzen Wert als Ausdruck bearbeiten',
+  'style.gridSettings.countAria': 'Anzahl für {title}', // review
   'style.gridSettings.expressionAria': 'Ausdruck für {title}',
-  'style.gridSettings.noColumns': 'Keine Spalten',
-  'style.gridSettings.noRepeat': 'Unterschiedliche Tracks lassen sich nicht als repeat() schreiben',
-  'style.gridSettings.noRows': 'Keine Zeilen',
-  'style.gridSettings.removeTrack': 'Track entfernen',
-  'style.gridSettings.repeatColumns': 'repeat() für Spalten verwenden',
-  'style.gridSettings.repeatRows': 'repeat() für Zeilen verwenden',
+  'style.gridSettings.modeAria': 'Modus für {title}', // review
+  'style.gridSettings.modeCount': 'Anzahl', // review
+  'style.gridSettings.modeCustom': 'Benutzerdefiniert', // review
+  'style.gridSettings.modeSubgrid': 'Subgrid', // same
   'style.gridSettings.rows': 'Zeilen',
-  'style.gridSettings.subgridColumns': 'subgrid für Spalten verwenden', // review
-  'style.gridSettings.subgridOff':
-    'Diese Tracks vom übergeordneten Grid übernehmen. Dafür braucht es ein übergeordnetes Grid, dessen Tracks dieses Element überspannt.', // review
   'style.gridSettings.subgridOn':
     'Diese Tracks kommen vom übergeordneten Grid. Dafür braucht es ein übergeordnetes Grid, dessen Tracks dieses Element überspannt.', // review
-  'style.gridSettings.subgridRows': 'subgrid für Zeilen verwenden', // review
-  'style.gridSettings.writeAsRepeat': 'Diese Tracks als repeat() schreiben',
-  'style.gridSettings.writtenAsRepeat': 'Geschrieben als repeat({tracks}, …)',
   'style.layerList.dragToReorder': 'Zum Sortieren ziehen',
   'style.layerList.editLayer': 'Ebene bearbeiten',
   'style.layerList.hide': 'Ausblenden',

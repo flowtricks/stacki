@@ -424,32 +424,17 @@ export const messages = {
   'style.gridIcons.stretch': 'Esticar',
   'style.gridIcons.top': 'Topo',
   'style.gridIcons.vertical': 'Vertical', // same
-  'style.gridSettings.addColumn': 'Adicionar uma coluna',
-  'style.gridSettings.addRow': 'Adicionar uma linha',
   'style.gridSettings.autoColumns': 'Colunas geradas automaticamente',
   'style.gridSettings.autoRows': 'Linhas geradas automaticamente',
-  'style.gridSettings.backToTracks': 'Voltar aos tracks',
-  'style.gridSettings.cannotShowAsTracks': 'Este valor não pode ser exibido como tracks',
   'style.gridSettings.columns': 'Colunas',
-  'style.gridSettings.dragToReorder': 'Arraste para reordenar',
-  'style.gridSettings.duplicateTrack': 'Duplicar track',
-  'style.gridSettings.editColumnsAsExpression': 'Editar as colunas como expressão',
-  'style.gridSettings.editRowsAsExpression': 'Editar as linhas como expressão',
-  'style.gridSettings.editWholeValue': 'Editar o valor inteiro como expressão',
+  'style.gridSettings.countAria': 'Quantidade de {title}', // review
   'style.gridSettings.expressionAria': 'Expressão de {title}',
-  'style.gridSettings.noColumns': 'Sem colunas',
-  'style.gridSettings.noRepeat': 'Tracks diferentes não podem ser escritos como repeat()',
-  'style.gridSettings.noRows': 'Sem linhas',
-  'style.gridSettings.removeTrack': 'Remover track',
-  'style.gridSettings.repeatColumns': 'Usar repeat() para as colunas',
-  'style.gridSettings.repeatRows': 'Usar repeat() para as linhas',
+  'style.gridSettings.modeAria': 'Modo de {title}', // review
+  'style.gridSettings.modeCount': 'Quantidade', // review
+  'style.gridSettings.modeCustom': 'Personalizado', // review
+  'style.gridSettings.modeSubgrid': 'Subgrid', // same
   'style.gridSettings.rows': 'Linhas',
-  'style.gridSettings.subgridColumns': 'Usar subgrid para as colunas', // review
-  'style.gridSettings.subgridOff': 'Pegar estes tracks do grid pai. Precisa de um grid pai, com este elemento ocupando os tracks dele.', // review
   'style.gridSettings.subgridOn': 'Estes tracks vêm do grid pai. Precisa de um grid pai, com este elemento ocupando os tracks dele.', // review
-  'style.gridSettings.subgridRows': 'Usar subgrid para as linhas', // review
-  'style.gridSettings.writeAsRepeat': 'Escrever estes tracks como repeat()',
-  'style.gridSettings.writtenAsRepeat': 'Escrito como repeat({tracks}, …)',
   'style.layerList.dragToReorder': 'Arraste para reordenar',
   'style.layerList.editLayer': 'Editar camada',
   'style.layerList.hide': 'Ocultar',

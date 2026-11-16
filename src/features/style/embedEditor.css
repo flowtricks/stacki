@@ -1812,7 +1812,7 @@
   width: 100%;
   min-width: 0;
 }
-.embed-editor_grid-count .u-input {
+.embed-editor_grid-count:not(.is-expression) .u-input {
   padding-right: 18px;
 }
 /* ▲▼ steppers pinned inside the field. */
@@ -1843,25 +1843,22 @@
 .embed-editor_grid-count-steppers button:disabled {
   cursor: not-allowed;
 }
-/* A track list that is not N equal tracks: the value as text in the stepper's own cell,
-   with a quiet "Switch to count" where the arrows would be. Refused text turns the field
-   danger-coloured by background, not border. */
-.embed-editor_grid-count-switch {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  bottom: 2px;
-  width: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-tertiary);
-  font: inherit;
-  cursor: pointer;
+/* A track list that is not N equal tracks: the value as text in the stepper's own cell.
+   Nothing sits over the text (no steppers here, so no reserved padding either), and a
+   value too long for the cell ends in an ellipsis so its start stays readable. Refused
+   text turns the field danger-coloured by background, not border. */
+.embed-editor_grid-count.is-expression .u-input {
+  text-overflow: ellipsis;
 }
-.embed-editor_grid-count-switch:hover:not(:disabled) {
-  color: var(--color-text-primary);
+/* The grid settings' axis: label, one mode control, then only that mode's control. */
+.embed-editor_grid-mode-body {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--space-3);
+}
+.embed-editor_grid-note {
+  padding-top: var(--space-3);
+  color: var(--color-text-tertiary);
 }
 .embed-editor_grid-count.is-invalid .u-input,
 .embed-editor_grid-count.is-invalid .embed-editor_varconnect-editor {

@@ -424,32 +424,17 @@ export const messages = {
   'style.gridIcons.stretch': 'Estirar',
   'style.gridIcons.top': 'Arriba',
   'style.gridIcons.vertical': 'Vertical', // same
-  'style.gridSettings.addColumn': 'Añadir una columna',
-  'style.gridSettings.addRow': 'Añadir una fila',
   'style.gridSettings.autoColumns': 'Columnas autogeneradas',
   'style.gridSettings.autoRows': 'Filas autogeneradas',
-  'style.gridSettings.backToTracks': 'Volver a los tracks',
-  'style.gridSettings.cannotShowAsTracks': 'Este valor no se puede mostrar como tracks',
   'style.gridSettings.columns': 'Columnas',
-  'style.gridSettings.dragToReorder': 'Arrastra para reordenar',
-  'style.gridSettings.duplicateTrack': 'Duplicar track',
-  'style.gridSettings.editColumnsAsExpression': 'Editar las columnas como expresión',
-  'style.gridSettings.editRowsAsExpression': 'Editar las filas como expresión',
-  'style.gridSettings.editWholeValue': 'Editar todo el valor como expresión',
+  'style.gridSettings.countAria': 'Cantidad de {title}', // review
   'style.gridSettings.expressionAria': 'Expresión de {title}',
-  'style.gridSettings.noColumns': 'Sin columnas',
-  'style.gridSettings.noRepeat': 'Los tracks distintos no se pueden escribir como repeat()',
-  'style.gridSettings.noRows': 'Sin filas',
-  'style.gridSettings.removeTrack': 'Quitar track',
-  'style.gridSettings.repeatColumns': 'Usar repeat() para las columnas',
-  'style.gridSettings.repeatRows': 'Usar repeat() para las filas',
+  'style.gridSettings.modeAria': 'Modo de {title}', // review
+  'style.gridSettings.modeCount': 'Cantidad', // review
+  'style.gridSettings.modeCustom': 'Personalizado', // review
+  'style.gridSettings.modeSubgrid': 'Subgrid', // same
   'style.gridSettings.rows': 'Filas',
-  'style.gridSettings.subgridColumns': 'Usar subgrid para las columnas', // review
-  'style.gridSettings.subgridOff': 'Tomar estos tracks del grid padre. Necesita un grid padre, con este elemento abarcando sus tracks.', // review
   'style.gridSettings.subgridOn': 'Estos tracks vienen del grid padre. Necesita un grid padre, con este elemento abarcando sus tracks.', // review
-  'style.gridSettings.subgridRows': 'Usar subgrid para las filas', // review
-  'style.gridSettings.writeAsRepeat': 'Escribir estos tracks como repeat()',
-  'style.gridSettings.writtenAsRepeat': 'Escrito como repeat({tracks}, …)',
   'style.layerList.dragToReorder': 'Arrastra para reordenar',
   'style.layerList.editLayer': 'Editar capa',
   'style.layerList.hide': 'Ocultar',

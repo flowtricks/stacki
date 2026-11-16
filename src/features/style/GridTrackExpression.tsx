@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { CodeInline } from '../../ui/CodeBlock';
-import { confirmDialog } from '../../ui/ConfirmDialog';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { commitInPlace } from './model/commitInPlace';
-import { checkTrackExpression, parseTrackList, type TrackExpressionProblem } from './model/gridTemplate';
-import { repeatTracks } from './gridTracks';
+import { checkTrackExpression, type TrackExpressionProblem } from './model/gridTemplate';
 import VariableConnect from './VariableConnect';
 
 // The Columns / Rows control for a track list that is not "N equal tracks"
@@ -15,8 +12,9 @@ import VariableConnect from './VariableConnect';
 // as CSS, and it is written the way the stepper writes: on Enter or blur, through
 // the style write pipeline, so it is undoable and a hover or selection never writes.
 //
-// Only the "Switch to count" button turns the value into a count, after a question:
-// typing here never does, and neither does anything automatic.
+// Nothing in the cell covers the text: the cell is the value and nothing else, and its
+// end is an ellipsis so the start (`repeat(auto-fit, …`) stays readable. "Switch to count"
+// lives in the grid settings (GridSwitchToCount), never typed here, never automatic.
 
 export interface GridTrackExpressionProps {
   /** The resolved value for the active selector, with its `!important` if it has one. */
@@ -25,8 +23,6 @@ export interface GridTrackExpressionProps {
   readonly prop: string;
   /** What the field is called ("Grid columns"). */
   readonly ariaLabel: string;
-  /** Said once by the question before the value is replaced: `repeat(N, cell)`'s cell. */
-  readonly cell: string;
   readonly busy: boolean;
   readonly onCommit: (value: string, important: boolean) => void;
 }
@@ -45,7 +41,7 @@ function problemKey(problem: TrackExpressionProblem): 'style.gridControls.trackE
 }
 
 export default function GridTrackExpression(props: GridTrackExpressionProps) {
-  const { value, prop, ariaLabel, cell, busy, onCommit } = props;
+  const { value, prop, ariaLabel, busy, onCommit } = props;
   const translate = useTranslate();
   const [draft, setDraft] = useState(value);
   const draftRef = useRef(value);
@@ -73,22 +69,6 @@ export default function GridTrackExpression(props: GridTrackExpressionProps) {
     const checked = checkTrackExpression(text);
     if (checked.kind === 'ok') {
       onCommit(checked.value, checked.important);
-    }
-  };
-  const switchToCount = async () => {
-    const count = Math.max(1, parseTrackList(value).length);
-    const answer = await confirmDialog({
-      title: translate('style.gridControls.switchToCountTitle'),
-      body: (
-        <>
-          <p>{translate('style.gridControls.switchToCountBody', { count })}</p>
-          <CodeInline text={value} language="css" />
-        </>
-      ),
-      confirmLabel: translate('style.gridControls.switchToCount'),
-    });
-    if (answer === true) {
-      onCommit(repeatTracks(count, cell), false);
     }
   };
   return (
@@ -123,22 +103,14 @@ export default function GridTrackExpression(props: GridTrackExpressionProps) {
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               commitInPlace(event.currentTarget);
-            } else if (event.key === 'Escape') {
+            } else if (event.key === 'Escape' && edited) {
+              // Reverting the text is all this Escape does: it must not also close the settings it is in.
+              event.stopPropagation();
               change(value);
             }
           }}
         />
       </VariableConnect>
-      <button
-        type="button"
-        className="embed-editor_grid-count-switch"
-        disabled={busy}
-        aria-label={translate('style.gridControls.switchToCount')}
-        title={translate('style.gridControls.switchToCount')}
-        onClick={() => void switchToCount()}
-      >
-        {/* i18n-ignore: the number sign, a symbol for "count". */}#
-      </button>
     </div>
   );
 }

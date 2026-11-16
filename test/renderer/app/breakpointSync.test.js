@@ -51,8 +51,6 @@ Object.assign(global, {
   HTMLDialogElement: window.HTMLDialogElement,
   Element: window.Element,
   Node: window.Node,
-  // The Style tags section below the breakpoints holds a CodeMirror editor, which watches its DOM.
-  MutationObserver: window.MutationObserver,
   IS_REACT_ACT_ENVIRONMENT: true,
   requestAnimationFrame: window.requestAnimationFrame.bind(window),
   cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
@@ -60,8 +58,6 @@ Object.assign(global, {
   matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
 });
 window.matchMedia = global.matchMedia;
-window.Range.prototype.getClientRects = () => [];
-window.Range.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 });
 window.HTMLDialogElement.prototype.showModal = function showModal() {
   this.setAttribute('open', '');
 };

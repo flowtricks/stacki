@@ -48,7 +48,6 @@ export function AutoSection({ title, prop, axis, setProp, labels }: TrackSection
             onProvenance={onProvenance}
             onSelectSelector={onSelectSelector}
           />
-          <span className="embed-editor_grid-section-count">(0)</span>
         </span>
       </div>
       <div className="embed-editor_grid-track-list">

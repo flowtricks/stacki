@@ -325,20 +325,6 @@ export const messages = {
   'settings.sections': 'Einstellungsbereiche',
   'settings.studio.info':
     'Bearbeiten und Zusammenarbeiten im Browser für dieses Projekt. Die Einrichtung installiert Studio lokal und führt durch das Cloud-Deployment.',
-  'settings.styleTags.caption':
-    'Schreibe {token} an die Stelle für neue Regeln, etwa in @layer components. Ohne Platzhalter landen Regeln in einem letzten @layer- oder @media-Block oder nach der Vorlage.',
-  'settings.styleTags.content': 'Anfangsinhalt neuer <style>-Tags',
-  'settings.styleTags.error.inRule': 'Der Platzhalter muss auf oberster Ebene oder in At-Regel-Blöcken wie @layer stehen, nicht in einer Style-Regel.',
-  'settings.styleTags.error.repeated': 'Die Vorlage nennt den Regel-Platzhalter mehrfach.',
-  'settings.styleTags.error.save': 'Die Einstellungen für Style-Tags konnten nicht gespeichert werden. {message}',
-  'settings.styleTags.error.unbalanced': 'In der Vorlage ist eine Klammer, ein Kommentar oder ein String nicht geschlossen.',
-  'settings.styleTags.global': 'Neue <style>-Tags sind global (is:global)',
-  'settings.styleTags.globalInfo':
-    'Astro beschränkt ein einfaches <style> auf die eigene Datei, wodurch einfache Selektoren Elemente aus Komponenten nicht erreichen. Bestehende Tags werden nie geändert.',
-  'settings.styleTags.info':
-    'Womit ein <style>-Tag beginnt, wenn das Style-Panel einen anlegt. Wird im Projekt in .stacki/styles.json gespeichert, sodass alle dieselben Tags erhalten.',
-  'settings.styleTags.preview': 'Das Tag, das angelegt würde',
-  'settings.styleTags.title': 'Style-Tags',
   'settings.tab.audits': 'Audits', // same
   'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'CMS-Verbindungen',

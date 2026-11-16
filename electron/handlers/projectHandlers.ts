@@ -7,7 +7,6 @@ import { assert } from '../../shared/core/assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { writeNewProjectDefaults } from '../project/newProjectDefaults';
 import { createStarter, newSiteDirectory, runCreateCommand, startSiteHistory, STARTERS } from '../project/starter';
 import { isWin } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
@@ -162,15 +161,6 @@ async function finishNewSite(
   },
 ): Promise<void> {
   const onLog = (text: string): void => send('create:log', text);
-  // Before the first commit, so the site starts with its setting in its history.
-  try {
-    const defaults = writeNewProjectDefaults(directory);
-    if (!defaults.written) {
-      onLog(`\n(${defaults.reason})\n`);
-    }
-  } catch (error: unknown) {
-    onLog(`\n(could not write the new-site settings: ${error instanceof Error ? error.message : String(error)})\n`);
-  }
   try {
     if (options.install) {
       // A starter's npm lockfile would sit beside the chosen manager's own and misname it.
