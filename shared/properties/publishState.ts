@@ -27,41 +27,64 @@ export const UNKNOWN_PUBLISH_AVAILABILITY: PublishAvailability = {
  * nothing left to commit, push or deploy, read from the same destination states the menu rows
  * use, so the button and the rows can never disagree. The button then rests as a neutral,
  * disabled control while its menu half stays open for settings.
+ *
+ * `ready` is only ever the answer to a check that confirmed changes. `unconfirmed` is "no
+ * check has answered yet": it looks neutral but stays clickable (Publish checks again itself),
+ * so the accent never appears for changes nobody has confirmed.
  */
-export type PublishButtonState = 'ready' | 'current';
+export type PublishButtonState = 'ready' | 'current' | 'unconfirmed';
+
+type DestinationNeed = 'done' | 'needed' | 'unconfirmed';
 
 export function publishButtonState(availability: PublishAvailability, target: PublishTarget): PublishButtonState {
   switch (target) {
     case 'github':
-      return availability.github === 'current' ? 'current' : 'ready';
+      return buttonStateOf([githubNeed(availability.github)]);
     case 'hosting':
-      return availability.hosting === 'current' ? 'current' : 'ready';
+      return buttonStateOf([hostingTargetNeed(availability.hosting)]);
     case 'all':
-      return publishButtonStateAll(availability);
+      // Publishing everything skips a destination that is not set up, so an unconfigured host
+      // is as finished as a current one.
+      return buttonStateOf([githubNeed(availability.github), hostingNeed(availability.hosting)]);
   }
 }
 
-// Publishing everything skips a destination that is not set up, so an unconfigured host is as
-// finished as a current one; an unknown status is never treated as finished.
-function publishButtonStateAll(availability: PublishAvailability): PublishButtonState {
-  switch (availability.github) {
-    case 'pending':
-    case 'unknown':
-      return 'ready';
+function buttonStateOf(needs: readonly DestinationNeed[]): PublishButtonState {
+  if (needs.includes('needed')) {
+    return 'ready';
+  }
+  if (needs.includes('unconfirmed')) {
+    return 'unconfirmed';
+  }
+  return 'current';
+}
+
+function githubNeed(state: PublishAvailability['github']): DestinationNeed {
+  switch (state) {
     case 'current':
-      return publishButtonStateHosting(availability.hosting);
+      return 'done';
+    case 'pending':
+      return 'needed';
+    case 'unknown':
+      return 'unconfirmed';
   }
 }
 
-function publishButtonStateHosting(hosting: PublishDestinationState): PublishButtonState {
-  switch (hosting) {
+function hostingNeed(state: PublishDestinationState): DestinationNeed {
+  switch (state) {
     case 'current':
     case 'unconfigured':
-      return 'current';
+      return 'done';
     case 'pending':
+      return 'needed';
     case 'unknown':
-      return 'ready';
+      return 'unconfirmed';
   }
+}
+
+// Hosting as the only default: an unconfigured host is not finished, the click opens its setup.
+function hostingTargetNeed(state: PublishDestinationState): DestinationNeed {
+  return state === 'unconfigured' ? 'needed' : hostingNeed(state);
 }
 
 export function parsePublishAvailability(input: unknown): PublishAvailability {

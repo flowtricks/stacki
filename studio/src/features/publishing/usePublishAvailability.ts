@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { parsePublishAvailability, UNKNOWN_PUBLISH_AVAILABILITY } from '../../../vendor/stacki/shared/properties/publishState';
+import { useCallback, useEffect, useRef } from 'react';
+import { parsePublishAvailability } from '../../../vendor/stacki/shared/properties/publishState';
+import { useConfirmedAvailability } from '../../../vendor/stacki/src/features/publishing/useConfirmedAvailability';
 import { request } from '../project/projectClient';
 import type { PublishState } from './publish';
 
 export function usePublishAvailability(state: PublishState) {
-  const [availability, setAvailability] = useState(UNKNOWN_PUBLISH_AVAILABILITY);
   const active = useRef<AbortController>();
+  const check = useRef<() => void>(() => undefined);
+  const confirmAgain = useCallback(() => check.current(), []);
+  const { availability, report } = useConfirmedAvailability(confirmAgain);
   const refresh = useCallback(() => {
     active.current?.abort();
     const controller = new AbortController();
@@ -16,15 +19,17 @@ export function usePublishAvailability(state: PublishState) {
       .then((input) => {
         const next = parsePublishAvailability(input);
         if (!controller.signal.aborted) {
-          setAvailability(next);
+          report({ kind: 'checked', result: next });
         }
       })
       .catch(() => {
+        // A failed check proves nothing; the button keeps its last confirmed state.
         if (!controller.signal.aborted) {
-          setAvailability(UNKNOWN_PUBLISH_AVAILABILITY);
+          report({ kind: 'failed' });
         }
       });
-  }, []);
+  }, [report]);
+  check.current = refresh;
   useEffect(() => {
     if (state.kind !== 'building') {
       refresh();
@@ -32,15 +37,15 @@ export function usePublishAvailability(state: PublishState) {
     return () => active.current?.abort();
   }, [state, refresh]);
   const invalidate = useCallback(() => {
+    // Only stop listening to the old check: the last confirmed answer stays on screen until a new check replies.
     active.current?.abort();
-    setAvailability(UNKNOWN_PUBLISH_AVAILABILITY);
   }, []);
   useDraftStatusRefresh(refresh, invalidate);
   return { availability, refresh };
 }
 
 // Source broadcasts include other editors and asset/project mutations. Debounce reads, but
-// immediately stop advertising an old snapshot as current while a new check is pending.
+// stop waiting on an old check; the button keeps drawing the last confirmed answer meanwhile.
 function useDraftStatusRefresh(refresh: () => void, reset: () => void) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;

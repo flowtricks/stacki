@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { UNKNOWN_PUBLISH_AVAILABILITY, type DesktopPublishState, type PublishAvailability } from '../../../shared/properties/publishState';
+import { useCallback, useEffect, useRef } from 'react';
+import type { DesktopPublishState, PublishAvailability } from '../../../shared/properties/publishState';
+import { PUBLISH_EVENT_QUIET_MS, publishRelevantChange } from '../../../shared/properties/publishAvailabilityMemory';
+import { useConfirmedAvailability } from '../../features/publishing/useConfirmedAvailability';
 import { readPublishAvailability } from '../../features/publishing/publishBridge';
 import { onFilesChanged, onCmsInventoryChanged } from '../../ipc/appBridge';
 import { onAssetEntriesChanged } from '../../ipc/assetBridge';
@@ -16,8 +18,9 @@ export function usePublishAvailability(
   repository?: IpcResults['git:info'],
   settingsRevision = 0,
 ): PublishAvailability {
-  const [availability, setAvailability] = useState<PublishAvailability>(UNKNOWN_PUBLISH_AVAILABILITY);
   const requestRefresh = useRef<() => void>(() => undefined);
+  const confirmAgain = useCallback(() => requestRefresh.current(), []);
+  const { availability, report } = useConfirmedAvailability(confirmAgain);
   useEffect(() => {
     let active = true;
     const coordinator = createCoalescedRun(async () => {
@@ -25,19 +28,26 @@ export function usePublishAvailability(
         return;
       }
       const result = await readPublishAvailability(projectPath);
-      // A failed check cannot prove that either destination is current.
-      const next = result.ok ? result.value : UNKNOWN_PUBLISH_AVAILABILITY;
+      // A failed check proves nothing, and a result a newer check supersedes is never shown.
       if (active && !coordinator.superseded()) {
-        setAvailability(next);
+        report(result.ok ? { kind: 'checked', result: result.value } : { kind: 'failed' });
       }
     });
     const refresh = () => void coordinator.request();
+    // An event only asks for a check. The button keeps drawing the last confirmed answer until that check replies.
+    requestRefresh.current = refresh;
+    // A burst of events costs one check: the check starts once the burst has been quiet for a moment.
+    let quiet: ReturnType<typeof setTimeout> | undefined;
     const invalidate = () => {
-      setAvailability(UNKNOWN_PUBLISH_AVAILABILITY);
-      refresh();
+      clearTimeout(quiet);
+      quiet = setTimeout(refresh, PUBLISH_EVENT_QUIET_MS);
     };
-    requestRefresh.current = invalidate;
-    const stopFiles = onFilesChanged(invalidate);
+    const stopFiles = onFilesChanged((event) => {
+      // Generated files and editor scratch files cannot change what Publish sends.
+      if (publishRelevantChange(event.files)) {
+        invalidate();
+      }
+    });
     const stopAssets = onAssetEntriesChanged(invalidate);
     const stopContent = onCmsInventoryChanged(invalidate);
     const stopStyles = onVariablesChanged(invalidate);
@@ -48,22 +58,16 @@ export function usePublishAvailability(
       active = false;
       requestRefresh.current = () => undefined;
       clearInterval(timer);
+      clearTimeout(quiet);
       stopFiles();
       stopAssets();
       stopContent();
       stopStyles();
       stopReturn();
     };
-  }, [projectPath]);
+  }, [projectPath, report]);
   useEffect(() => {
     requestRefresh.current();
   }, [projectPath, phase, saveState, repository, settingsRevision]);
-  // A draft not yet on disk must not inherit a previous successful status check.
-  if (saveState !== undefined && saveState.tag !== 'clean') {
-    return {
-      github: 'pending',
-      hosting: availability.hosting === 'unconfigured' ? 'unconfigured' : 'pending',
-    };
-  }
   return availability;
 }

@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { git, setToolPathHome } from '#dist/electron/lib/nodeTools.js';
+import { ensureExcluded } from '#dist/electron/lib/projectExclusions.js';
 import { readPublishAvailability } from '#dist/electron/project/publishAvailability.js';
 import { readPublishTree, createPublishSnapshot } from '#dist/electron/project/publishSnapshot.js';
 import { deploymentConfiguration, parseDeploymentReceipt, readDeploymentReceipt, recordDeployment } from '#dist/electron/project/publishReceipt.js';
@@ -287,4 +288,25 @@ test('snapshot bounds include files staged for removal', async (context) => {
   if (!snapshot.ok) {
     assert.match(snapshot.error.message, /256 MiB/);
   }
+});
+
+test('Content-identical writes and ignored files never read as changes to publish', async (context) => {
+  const root = await fixture(context);
+  // Opening a project in Stacki writes these local excludes; the check relies on them for generated preview files.
+  assert.equal(ensureExcluded(root), true);
+  const states: string[] = [(await readPublishAvailability(root)).github];
+  // A watcher fires for each of these, but none changes what Publish would send.
+  await writeFile(path.join(root, 'page.txt'), 'Published content');
+  states.push((await readPublishAvailability(root)).github);
+  await writeFile(path.join(root, '.env'), 'SECRET=1');
+  await mkdir(path.join(root, 'node_modules/pkg'), { recursive: true });
+  await writeFile(path.join(root, 'node_modules/pkg/index.js'), 'x');
+  await mkdir(path.join(root, '.stacki/preview'), { recursive: true });
+  await writeFile(path.join(root, '.stacki/preview/page.html'), '<p>preview</p>');
+  states.push((await readPublishAvailability(root)).github);
+  assert.deepEqual(states, ['current', 'current', 'current']);
+  await writeFile(path.join(root, 'page.txt'), 'Edited');
+  assert.equal((await readPublishAvailability(root)).github, 'pending');
+  await writeFile(path.join(root, 'page.txt'), 'Published content');
+  assert.equal((await readPublishAvailability(root)).github, 'current', 'An edit undone is clean again');
 });

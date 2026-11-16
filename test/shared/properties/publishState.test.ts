@@ -9,31 +9,42 @@ import { parseDesktopPublishState, publishButtonState } from '#dist/shared/prope
 const GITHUB = ['current', 'pending', 'unknown'] as const;
 const HOSTING = ['current', 'pending', 'unknown', 'unconfigured'] as const;
 
-test('publishing everything is current only when GitHub is current and hosting is current or not set up', () => {
+test('publishing everything is ready only on a confirmed need, current only when both destinations are done', () => {
   for (const github of GITHUB) {
     for (const hosting of HOSTING) {
+      const needed = github === 'pending' || hosting === 'pending';
       const finished = github === 'current' && (hosting === 'current' || hosting === 'unconfigured');
-      assert.equal(publishButtonState({ github, hosting }, 'all'), finished ? 'current' : 'ready', `${github}/${hosting}`);
+      const expected = needed ? 'ready' : finished ? 'current' : 'unconfirmed';
+      assert.equal(publishButtonState({ github, hosting }, 'all'), expected, `${github}/${hosting}`);
     }
   }
 });
 
 test('a single-destination default reads only its own destination', () => {
+  const answer = { current: 'current', pending: 'ready', unknown: 'unconfirmed' } as const;
   for (const github of GITHUB) {
     for (const hosting of HOSTING) {
-      assert.equal(publishButtonState({ github, hosting }, 'github'), github === 'current' ? 'current' : 'ready', `github ${github}/${hosting}`);
-      assert.equal(publishButtonState({ github, hosting }, 'hosting'), hosting === 'current' ? 'current' : 'ready', `hosting ${github}/${hosting}`);
+      assert.equal(publishButtonState({ github, hosting }, 'github'), answer[github], `github ${github}/${hosting}`);
+      // An unconfigured host cannot be finished: the click opens its setup.
+      const hostingAnswer = hosting === 'unconfigured' ? 'ready' : answer[hosting];
+      assert.equal(publishButtonState({ github, hosting }, 'hosting'), hostingAnswer, `hosting ${github}/${hosting}`);
     }
   }
 });
 
-test('the first change after a finished publish makes the button ready again', () => {
+test('the accent is never the answer to a check that has not replied', () => {
+  for (const target of ['all', 'github', 'hosting'] as const) {
+    assert.notEqual(publishButtonState({ github: 'unknown', hosting: 'unknown' }, target), 'ready', target);
+  }
+  assert.notEqual(publishButtonState({ github: 'current', hosting: 'unknown' }, 'all'), 'ready');
+  assert.notEqual(publishButtonState({ github: 'unknown', hosting: 'current' }, 'all'), 'ready');
+});
+
+test('the first confirmed change after a finished publish makes the button ready again', () => {
   const published = { github: 'current', hosting: 'current', githubPush: { commits: 0, repositoryUrl: 'https://github.com/a/b' } } as const;
   assert.equal(publishButtonState(published, 'all'), 'current');
-  // A new commit, a pending deploy, and a recheck that has not answered yet each count as work.
   assert.equal(publishButtonState({ ...published, github: 'pending', githubPush: { commits: 1, repositoryUrl: 'https://github.com/a/b' } }, 'all'), 'ready');
   assert.equal(publishButtonState({ ...published, hosting: 'pending' }, 'all'), 'ready');
-  assert.equal(publishButtonState({ github: 'unknown', hosting: 'unknown' }, 'all'), 'ready');
 });
 
 // A message reference beside the English text is optional on the wire (old producers send none) and dropped when invalid.

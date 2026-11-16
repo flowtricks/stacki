@@ -139,9 +139,10 @@ function PublishButtons(props: {
   // keeps its blue so "Publishing…" still reads as the app at work.
   const translate = useTranslate();
   const current = props.state === 'current';
-  const resting = current && !props.busy;
+  // An unconfirmed state rests as the same neutral control but stays clickable: no check has said there is anything to publish.
+  const resting = props.state !== 'ready' && !props.busy;
   return (
-    <div className="stacki-publish-split" data-state={resting ? 'current' : 'ready'}>
+    <div className="stacki-publish-split" data-state={resting ? props.state : 'ready'}>
       <span className="stacki-publish-main" title={current ? translate('publish.upToDate') : undefined}>
         <button
           className={resting ? undefined : 'primary'}

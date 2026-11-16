@@ -227,7 +227,9 @@ test('Push and deployment disable independently', async (context) => {
   assert.match(options()[1].textContent, /Deployment status unavailable/);
   assert.equal(document.querySelector('.publish-checking') === null, true);
   assert.equal(main().disabled, false);
-  assert.equal(split().dataset.state, 'ready', 'A recheck after an edit never shows as finished');
+  assert.equal(split().dataset.state, 'unconfirmed', 'An unanswered check rests neutral: it is never the accent, and never shown as finished');
+  assert.equal(main().classList.contains('primary'), false);
+  assert.equal(arrow().classList.contains('primary'), false);
   assert.equal(options()[0].disabled, false);
   assert.equal(options()[1].disabled, false);
   await show({ github: 'current', hosting: 'unconfigured' });

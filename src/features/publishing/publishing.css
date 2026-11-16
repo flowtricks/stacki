@@ -82,24 +82,30 @@
   min-width: 20px;
   padding-inline: 0;
 }
-.stacki-publish-split[data-state='current'] {
+.stacki-publish-split[data-state='current'],
+.stacki-publish-split[data-state='unconfirmed'] {
   /* Nothing is left to publish: both halves rest as one neutral control, split by a hairline
      of the title bar showing through rather than a border. */
   gap: 1px;
 }
-.stacki-publish-split[data-state='current'] > .stacki-publish-main > button:disabled {
+.stacki-publish-split[data-state='current'] > .stacki-publish-main > button:disabled,
+.stacki-publish-split[data-state='unconfirmed'] > .stacki-publish-main > button {
   /* The app's disabled fill with muted text, at full opacity so it matches the menu half. */
   opacity: 1;
   background: var(--bg-input);
   color: var(--text-dim);
 }
-.stacki-publish-split[data-state='current'] > .stacki-publish-arrow {
+.stacki-publish-split[data-state='current'] > .stacki-publish-arrow,
+.stacki-publish-split[data-state='unconfirmed'] > .stacki-publish-arrow {
   border-left: 0;
   background: var(--bg-input);
   color: var(--text-dim);
 }
 .stacki-publish-split[data-state='current'] > .stacki-publish-arrow:hover:not(:disabled),
-.stacki-publish-split[data-state='current'] > .stacki-publish-arrow[aria-expanded='true'] {
+.stacki-publish-split[data-state='current'] > .stacki-publish-arrow[aria-expanded='true'],
+.stacki-publish-split[data-state='unconfirmed'] > .stacki-publish-arrow:hover:not(:disabled),
+.stacki-publish-split[data-state='unconfirmed'] > .stacki-publish-arrow[aria-expanded='true'],
+.stacki-publish-split[data-state='unconfirmed'] > .stacki-publish-main > button:hover:not(:disabled) {
   background: var(--bg-active);
   color: var(--text);
 }
