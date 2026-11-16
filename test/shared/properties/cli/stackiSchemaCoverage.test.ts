@@ -17,7 +17,7 @@ import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
 const TEST_LIMITS = { depthMax: 12 } as const;
 
 function asRecord(value: unknown): Record<string, unknown> {
-  assert.ok(typeof value === 'object' && value !== undefined && value !== false && !Array.isArray(value), 'expected an object');
+  assert.ok(typeof value === 'object' && !!value && !Array.isArray(value), 'expected an object');
   return Object.fromEntries(Object.entries(value ?? {}));
 }
 

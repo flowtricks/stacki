@@ -74,6 +74,8 @@ export interface FileSchema {
   readonly parserSources: readonly string[];
   /** Keys the parsers read that are not settings (a legacy key, an internal marker), each with the reason. */
   readonly parserKeyExceptions?: Readonly<Record<string, string>>;
+  /** The installed app that declared this file; absent for the core files. Config edits of an app's file need `cli:apps`. */
+  readonly appId?: string;
 }
 
 /** A file the CLI will never read or write, and why. */

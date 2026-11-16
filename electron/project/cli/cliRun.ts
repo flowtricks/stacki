@@ -6,9 +6,10 @@
 import { err, ok, type Result } from '../../../shared/core/result';
 import { COMMANDS, commandByWords, type CommandSpec } from '../../../shared/properties/cli/stackiCommands';
 import { CLI_SCHEMA_VERSION, type CliEnvelope, type CliError, type CliFailure, type PlannedFile } from '../../../shared/properties/cli/stackiOutput';
-import { fileSchemaById } from '../../../shared/properties/cli/stackiFiles';
+import { fileSchemaById, registerAppFiles } from '../../../shared/properties/cli/stackiFiles';
 import type { CliAccessFeature } from '../../../shared/properties/cli/stackiFeatures';
 import { applyStaged, DEFAULT_WRITER, planUndo, type FileWriter } from './cliApply';
+import { APP_ADMIN_HANDLERS } from './cliAppAdmin';
 import { CORE_HANDLERS, schemaOfArgument, type Handler, type Outcome } from './cliCommands';
 import { findProject } from './cliFiles';
 import { plannedFiles, stage, type StagedFile } from './cliPlan';
@@ -33,6 +34,7 @@ export interface RunRequest {
 
 const HANDLERS: Readonly<Record<string, Handler>> = {
   ...CORE_HANDLERS,
+  ...APP_ADMIN_HANDLERS,
   'apps settings set': (context) => {
     const schema = fileSchemaById('appSettings');
     const [app, setting, value] = [context.args['app'], context.args['setting'], context.args['value']];
@@ -52,7 +54,7 @@ export function effectiveFeature(spec: CommandSpec, args: Readonly<Record<string
     if (schema.ok && (schema.value.id === 'roles' || schema.value.id === 'cli')) {
       return 'cli:roles';
     }
-    if (schema.ok && (schema.value.id === 'apps' || schema.value.id === 'appSettings')) {
+    if (schema.ok && (schema.value.id === 'apps' || schema.value.id === 'appSettings' || schema.value.appId !== undefined)) {
       return 'cli:apps';
     }
   }
@@ -66,6 +68,8 @@ export function visibleCommands(role: RoleContext, extensions: ExtensionProvider
 }
 
 export async function runCommand(request: RunRequest): Promise<CliEnvelope> {
+  // The registry's app files are this run's: the provider's active apps, or none (stackiFiles.ts says why this is module state).
+  registerAppFiles(request.extensions?.files ?? []);
   const name = request.words.join(' ');
   const spec = commandByWords(request.words) ?? request.extensions?.find(request.words);
   if (spec === undefined) {
@@ -82,6 +86,10 @@ export async function runCommand(request: RunRequest): Promise<CliEnvelope> {
   const denial = roleDenial(role.value.view, effectiveFeature(spec, request.args), spec.featureKey);
   if (denial !== undefined) {
     return failure(name, denial);
+  }
+  const appDenial = spec.appId === undefined ? undefined : request.extensions?.denial(role.value, spec);
+  if (appDenial !== undefined) {
+    return failure(name, appDenial);
   }
   if (name === 'undo') {
     return runUndo(request, root.value, role.value, spec);

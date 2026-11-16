@@ -7,7 +7,7 @@ export function parseJson(text: string | undefined): unknown {
 export function dig(value: unknown, ...path: readonly (string | number)[]): unknown {
   let current: unknown = value;
   for (const step of path) {
-    if (typeof current !== 'object' || current === undefined || current === false) {
+    if (typeof current !== 'object' || !current) {
       return undefined;
     }
     current = Reflect.get(Object(current), step);

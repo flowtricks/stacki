@@ -13,7 +13,7 @@ import { toRecord } from '../../../shared/core/record';
 import { checkArgs } from '../../../shared/properties/cli/stackiArgs';
 import { COMMANDS, toolNameOf, type ArgSpec, type CommandSpec } from '../../../shared/properties/cli/stackiCommands';
 import { exitCodeOf, type CliEnvelope } from '../../../shared/properties/cli/stackiOutput';
-import { STACKI_FILES } from '../../../shared/properties/cli/stackiFiles';
+import { allFiles } from '../../../shared/properties/cli/stackiFiles';
 import { describeFileSchema } from '../../../shared/properties/cli/stackiDescribe';
 import { findProject, readFileState } from './cliFiles';
 import { runCommand, visibleCommands } from './cliRun';
@@ -202,13 +202,15 @@ export class McpSession {
     if ('failure' in context) {
       return rpcResult(id, { resources: [] });
     }
-    const schemas = STACKI_FILES.map((file) => ({
+    // Loading the extensions replaces the registry's app files, so the schemas listed are those of the apps enabled right now.
+    await loadExtensions(context.root);
+    const schemas = allFiles().map((file) => ({
       uri: `stacki://schema/${file.id}`,
       name: `Key reference: ${file.file}`,
       mimeType: 'application/json',
       description: file.description,
     }));
-    const states = STACKI_FILES.flatMap((file) => {
+    const states = allFiles().flatMap((file) => {
       const state = readFileState(context.root, file);
       return state.ok && state.value.source !== undefined
         ? [{ uri: `stacki://state/${file.id}`, name: `Current: ${file.file}`, mimeType: 'application/json', description: `What ${file.file} holds now.` }]
@@ -219,9 +221,12 @@ export class McpSession {
 
   async #readResource(id: unknown, params: Json): Promise<Json> {
     const uri = typeof params['uri'] === 'string' ? params['uri'] : '';
-    const match = /^stacki:\/\/(schema|state)\/([A-Za-z0-9]+)$/.exec(uri);
-    const file = match === null ? undefined : STACKI_FILES.find((entry) => entry.id === match[2]);
+    const match = /^stacki:\/\/(schema|state)\/([A-Za-z0-9._-]+)$/.exec(uri);
     const context = await this.#context();
+    if (!('failure' in context)) {
+      await loadExtensions(context.root);
+    }
+    const file = match === null ? undefined : allFiles().find((entry) => entry.id === match[2]);
     if (match === null || file === undefined || 'failure' in context || roleDenial(context.role.view, 'cli:read', 'cli.resources') !== undefined) {
       return rpcError(id, -32002, `Resource not found: ${uri}`);
     }

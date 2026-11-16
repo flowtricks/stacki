@@ -11,7 +11,7 @@ import type { ConfigOperation } from '../../../shared/properties/cli/stackiConfi
 import { parseConfigPath } from '../../../shared/properties/cli/stackiConfigPath';
 import { readConfigValue } from '../../../shared/properties/cli/stackiConfigEdit';
 import { accessFeatureOf } from '../../../shared/properties/cli/stackiFeatures';
-import { fileSchemaById, fileSchemaByPath, STACKI_FILES, STACKI_UNSETTABLE } from '../../../shared/properties/cli/stackiFiles';
+import { allFiles, fileSchemaById, fileSchemaByPath, STACKI_UNSETTABLE } from '../../../shared/properties/cli/stackiFiles';
 import type { CliError } from '../../../shared/properties/cli/stackiOutput';
 import { describeFileSchema } from '../../../shared/properties/cli/stackiDescribe';
 import type { FileSchema } from '../../../shared/properties/cli/stackiSchema';
@@ -89,7 +89,12 @@ export function schemaOfArgument(name: string): Result<FileSchema, CliError> {
   if (unsettable !== undefined) {
     return err({ code: 'unsupported-file', message: `${unsettable.path} is not settable: ${unsettable.reason}` });
   }
-  return err({ code: 'unknown-file', message: `"${name}" is not a settings file. Known: ${STACKI_FILES.map((file) => file.id).join(', ')}.` });
+  return err({
+    code: 'unknown-file',
+    message: `"${name}" is not a settings file. Known: ${allFiles()
+      .map((file) => file.id)
+      .join(', ')}.`,
+  });
 }
 
 function schemaCommand(context: CommandContext): Result<Outcome, CliError> {
@@ -97,9 +102,9 @@ function schemaCommand(context: CommandContext): Result<Outcome, CliError> {
   if (name === '') {
     return ok({
       kind: 'read',
-      summary: `${STACKI_FILES.length} settings files; run "stacki schema <file>" for the keys.`,
+      summary: `${allFiles().length} settings files; run "stacki schema <file>" for the keys.`,
       result: {
-        files: STACKI_FILES.map((file) => ({ id: file.id, file: file.file, description: file.description, requires: file.requires, commands: file.commands })),
+        files: allFiles().map((file) => ({ id: file.id, file: file.file, description: file.description, requires: file.requires, commands: file.commands })),
         notSettable: STACKI_UNSETTABLE,
       },
     });
@@ -693,7 +698,7 @@ function componentFiles(root: string, folders: readonly string[]): readonly stri
 
 function doctorCommand(context: CommandContext): Result<Outcome, CliError> {
   const findings: Array<{ readonly file: string; readonly level: 'error' | 'warning' | 'ok'; readonly message: string }> = [];
-  for (const schema of STACKI_FILES) {
+  for (const schema of allFiles()) {
     const state = readFileState(context.root, schema);
     if (!state.ok) {
       findings.push({ file: schema.file, level: 'error', message: state.error.message });

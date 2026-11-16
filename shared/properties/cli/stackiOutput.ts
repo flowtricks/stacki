@@ -25,6 +25,8 @@ export const CLI_EXIT_CODES = {
   'apply-required': 1,
   'planner-unavailable': 1,
   'unsupported-file': 1,
+  /** An app's command was asked for while the app is disabled, not trusted, or changed since it was trusted: `stacki apps enable <app>` first. */
+  'app-untrusted': 1,
   /** Another writer holds the project or a file, or a file changed since the plan: retry. */
   locked: 3,
   conflict: 3,

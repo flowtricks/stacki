@@ -112,7 +112,8 @@ export function checkArgs(spec: CommandSpec, input: Readonly<Record<string, unkn
 }
 
 /** Splits a shell line (after the program name) into the command, its arguments and the global options. */
-export function parseLine(tokens: readonly string[]): Result<ParsedLine | 'top-help', CliError> {
+export function parseLine(tokens: readonly string[], extra: readonly CommandSpec[] = []): Result<ParsedLine | 'top-help', CliError> {
+  const table = [...COMMANDS, ...extra];
   if (tokens.length > ARGS_LIMITS.tokensMax) {
     return usage('Too many arguments.');
   }
@@ -120,7 +121,7 @@ export function parseLine(tokens: readonly string[]): Result<ParsedLine | 'top-h
   const index = { value: 0 };
   while (index.value < tokens.length && !(tokens[index.value] ?? '').startsWith('-') && words.length < 4) {
     const candidate = [...words, tokens[index.value] ?? ''];
-    if (!COMMANDS.some((entry) => candidate.every((word, position) => entry.words[position] === word))) {
+    if (!table.some((entry) => candidate.every((word, position) => entry.words[position] === word))) {
       break;
     }
     words.push(tokens[index.value] ?? '');
@@ -129,10 +130,12 @@ export function parseLine(tokens: readonly string[]): Result<ParsedLine | 'top-h
   if (words.length === 0) {
     return tokens.length === 0 || tokens.includes('--help') ? ok('top-help') : usage(`Unknown command "${tokens[0] ?? ''}". Run "stacki --help".`);
   }
-  const spec = commandByWords(words);
+  const spec =
+    commandByWords(words) ?? extra.find((entry) => entry.words.length === words.length && entry.words.every((word, position) => word === words[position]));
   if (spec === undefined) {
     return usage(
-      `"${words.join(' ')}" needs a subcommand: ${COMMANDS.filter((entry) => entry.words[0] === words[0])
+      `"${words.join(' ')}" needs a subcommand: ${table
+        .filter((entry) => entry.words[0] === words[0])
         .map((entry) => entry.words.join(' '))
         .join(', ')}.`,
     );

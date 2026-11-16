@@ -11,6 +11,7 @@ import { APPS_FILE } from './files/appsFile';
 import { APP_SETTINGS_FILE } from './files/appSettingsFile';
 import { BREAKPOINT_SYNC_FILE } from './files/breakpointSyncFile';
 import { BREAKPOINTS_FILE } from './files/breakpointsFile';
+import { CLI_FILE } from './files/cliFile';
 import { COMPONENT_SOURCES_FILE } from './files/componentSourcesFile';
 import { COMPONENTS_FILE } from './files/componentsFile';
 import { FOLDERS_FILE } from './files/foldersFile';
@@ -28,6 +29,7 @@ export const STACKI_FILES: readonly FileSchema[] = [
   APP_SETTINGS_FILE,
   BREAKPOINT_SYNC_FILE,
   BREAKPOINTS_FILE,
+  CLI_FILE,
   COMPONENT_SOURCES_FILE,
   COMPONENTS_FILE,
   FOLDERS_FILE,
@@ -63,12 +65,114 @@ export const STACKI_UNSETTABLE: readonly UnsettableEntry[] = [
   { path: '.stacki/app-data/', reason: 'Per-app stored data written by installed apps at runtime: app data, not project settings.' },
 ];
 
+// ----- Files installed apps declare -----
+//
+// Why module state: the registry is the one list `stacki schema`, `stacki config`, `stacki doctor` and the MCP schema resources read, and the
+// files an app declares exist only for one project (the apps installed, enabled and trusted there). Every entry point sets the list at the start
+// of its run from that project's enabled apps (`loadExtensions`, `runCommand`), and the MCP session reloads it on every call, so tools/list and the
+// schema resources follow an install, a removal or an `apps disable` between two calls. A run never reads another run's list: it replaces it first.
+// The core list, STACKI_FILES, never changes, and an app file can never take a core id or path.
+export const APP_FILE_LIMITS = {
+  /** Files one app declares. */
+  perAppMax: 8,
+  /** Files all apps declare together: the apps bound times the per-app bound. */
+  totalMax: 50 * 8,
+  /** Folders under `.stacki/apps/<id>/` a declared file may sit in. */
+  depthMax: 4,
+  /** The name after `<appId>.` in a file id. */
+  nameCharsMax: 32,
+} as const satisfies Record<string, number>;
+
+const APP_FILE_NAME = /^[a-z][a-z0-9-]*$/;
+const APP_FILE_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+const APP_OWN_FILES = new Set(['stacki-app.json', 'package.json']);
+
+let appFiles: readonly FileSchema[] = [];
+
+/** Why `file` cannot be the path of a settings file `appId` declares, or undefined: its own folder or `.stacki/<appId>.json`, never a core path. */
+export function appFilePathProblem(appId: string, file: string): string | undefined {
+  const own = `.stacki/${appId}.json`;
+  const folder = `.stacki/apps/${appId}/`;
+  if (file !== own && !file.startsWith(folder)) {
+    return `${file} is outside ${folder} and is not ${own}`;
+  }
+  if (STACKI_FILES.some((entry) => entry.file === file)) {
+    return `${file} is a core Stacki path`;
+  }
+  if (file === own) {
+    // `.stacki/<appId>.json` must not be one of the app-owned paths the CLI never touches (`.stacki/cms.json`); the app's own folder is under
+    // `.stacki/apps/`, which the unsettable list names as a whole for the bundles, so only this form is compared with it.
+    return STACKI_UNSETTABLE.some((entry) => file === entry.path || file.startsWith(entry.path)) ? `${file} is a path the CLI never touches` : undefined;
+  }
+  const segments = file.slice(folder.length).split('/');
+  if (segments.length > APP_FILE_LIMITS.depthMax || !segments.every((segment) => APP_FILE_SEGMENT.test(segment))) {
+    return `${file} must sit at most ${APP_FILE_LIMITS.depthMax} folders deep, with plain names`;
+  }
+  const last = segments[segments.length - 1] ?? '';
+  if (!last.endsWith('.json') || APP_OWN_FILES.has(last)) {
+    return `${file} must be a .json file other than the app's own manifest`;
+  }
+  return undefined;
+}
+
+/** Why `file` cannot be registered as an app's, or undefined: the checks every app file passes at load, the same for any app. */
+export function appFileProblem(file: FileSchema): string | undefined {
+  const appId = file.appId;
+  if (appId === undefined) {
+    return `${file.id} names no app`;
+  }
+  const name = file.id.startsWith(`${appId}.`) ? file.id.slice(appId.length + 1) : undefined;
+  if (name === undefined || name.length > APP_FILE_LIMITS.nameCharsMax || !APP_FILE_NAME.test(name)) {
+    return `file id "${file.id}" must be "${appId}.<name>" with a lowercase name of at most ${APP_FILE_LIMITS.nameCharsMax} characters`;
+  }
+  if (STACKI_FILES.some((entry) => entry.id === file.id)) {
+    return `file id "${file.id}" is a core file id`;
+  }
+  if (file.validate === undefined) {
+    return `${file.id} has no validator`;
+  }
+  return appFilePathProblem(appId, file.file);
+}
+
+/**
+ * Replaces the app files of this run. Throws when a file breaks a rule `appFileProblem` states or ids or paths repeat: the loader checked them
+ * first and refused the app, so a failure here is a bug in the loader, not a bad app.
+ */
+export function registerAppFiles(files: readonly FileSchema[]): void {
+  if (files.length > APP_FILE_LIMITS.totalMax) {
+    throw new Error(`Assertion failed: at most ${APP_FILE_LIMITS.totalMax} app files`);
+  }
+  const ids = new Set<string>();
+  const paths = new Set<string>();
+  for (const file of files) {
+    const problem = appFileProblem(file);
+    if (problem !== undefined) {
+      throw new Error(`Assertion failed: app file ${file.id}: ${problem}`);
+    }
+    if (ids.has(file.id) || paths.has(file.file)) {
+      throw new Error(`Assertion failed: app file ${file.id} repeats an id or a path`);
+    }
+    ids.add(file.id);
+    paths.add(file.file);
+  }
+  appFiles = [...files];
+}
+
+export function clearAppFiles(): void {
+  appFiles = [];
+}
+
+/** The core files, then the files of the apps enabled in this run's project. */
+export function allFiles(): readonly FileSchema[] {
+  return appFiles.length === 0 ? STACKI_FILES : [...STACKI_FILES, ...appFiles];
+}
+
 export function fileSchemaById(id: string): FileSchema | undefined {
-  return STACKI_FILES.find((file) => file.id === id);
+  return allFiles().find((file) => file.id === id);
 }
 
 export function fileSchemaByPath(file: string): FileSchema | undefined {
-  return STACKI_FILES.find((entry) => entry.file === file);
+  return allFiles().find((entry) => entry.file === file);
 }
 
 export function isMetadataKind(kind: string | undefined): kind is MetadataKind {

@@ -72,7 +72,9 @@ export async function main(argv: readonly string[], cwd: string, write: (text: s
     write('stacki 1\n');
     return 0;
   }
-  const parsed = parseLine(argv);
+  // The apps' commands are part of the table this line is read against, so the project is found first (from --project, else the cwd).
+  const extensions = await loadExtensions(projectOf(argv, cwd));
+  const parsed = parseLine(argv, extensions?.declared ?? []);
   if (!parsed.ok) {
     const failed: CliEnvelope = { schemaVersion: CLI_SCHEMA_VERSION, ok: false, command: argv.join(' '), error: parsed.error };
     write(argv.includes('--json') ? `${JSON.stringify(failed)}\n` : formatText(failed));
@@ -91,10 +93,17 @@ export async function main(argv: readonly string[], cwd: string, write: (text: s
     apply: options.apply,
     yes: options.yes,
     waitSeconds: options.waitSeconds,
-    ...extensionsFor(await loadExtensions(options.project ?? cwd)),
+    ...extensionsFor(extensions),
   });
   write(options.json === 'json' ? `${JSON.stringify(envelope)}\n` : formatText(envelope));
   return exitCodeOf(envelope);
+}
+
+/** The directory a line works in: the value of `--project` when it is named, else the current directory. */
+function projectOf(argv: readonly string[], cwd: string): string {
+  const flag = argv.findIndex((token) => token === '--project' || token.startsWith('--project='));
+  const token = argv[flag] ?? '';
+  return flag < 0 ? cwd : token.startsWith('--project=') ? token.slice('--project='.length) : (argv[flag + 1] ?? cwd);
 }
 
 function extensionsFor(provider: ExtensionProvider | undefined): { readonly extensions?: ExtensionProvider } {

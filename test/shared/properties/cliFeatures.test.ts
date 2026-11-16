@@ -88,9 +88,9 @@ test('every locale labels the group and each grantable CLI feature', () => {
   const keys = ACCESS_GROUPS.find((item) => item.label === 'Command line')?.features.map((item) => item.labelRef.key) ?? [];
   assert.equal(keys.length, CLI_ACCESS_FEATURES.length - 1);
   for (const catalog of [english, french, german, portuguese, spanish]) {
-    const record: Readonly<Record<string, string>> = catalog;
+    const record: Readonly<Record<string, unknown>> = catalog;
     for (const key of ['roles.group.cli', ...keys]) {
-      assert.ok((record[key] ?? '').length > 0, key);
+      assert.ok(String(record[key] ?? '').length > 0, key);
     }
   }
 });

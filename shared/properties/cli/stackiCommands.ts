@@ -31,6 +31,10 @@ export interface CommandSpec {
   /** The stable key of this command in the registry of command permissions: `cli.config.set`. */
   readonly featureKey: string;
   readonly args: readonly ArgSpec[];
+  /** The installed app that added this command (shared/properties/cli/stackiAppCli.ts); absent for the core table. Its words are `[appId, name]`. */
+  readonly appId?: string;
+  /** The permission the app declared in its manifest that the role must also hold (`appPermissionsFor`); only with `appId`. */
+  readonly permission?: string;
 }
 
 const arg = (
@@ -265,7 +269,10 @@ export const COMMANDS: readonly CommandSpec[] = [
   }),
   command(['apps', 'enable'], "Enable an installed app's CLI commands for this project and record that you trust it (.stacki/cli.json).", 'cli:roles', {
     write: true,
-    args: [arg('app', 'string', 'The app id.', { required: true, positional: true })],
+    args: [
+      arg('app', 'string', 'The app id.', { required: true, positional: true }),
+      arg('network', 'boolean', 'Also approve the network use the app declares (module handlers cannot be stopped from using it).'),
+    ],
   }),
   command(['apps', 'disable'], "Disable an app's CLI commands for this project.", 'cli:roles', {
     write: true,
