@@ -9,7 +9,7 @@ import { described, type MessageRef } from '../../shared/properties/i18n/message
 import { toPosix, stylesheetsSliced, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
 import { labelForRule, commonStem, namesOf, groupRules, findFamilies, prefixSections } from './cssVarGroups';
 import { shortLabel } from '../../shared/properties/variableGroups';
-import { resolveValue, colorOf, isUncomputableColor, kindOf } from './cssVarValues';
+import { resolveValue, colorOf, isUncomputableColor, kindOf, type ValueLookup } from './cssVarValues';
 import { astroSourcesSliced, isAstroFile, readAstroVariables, relativeTo, type VariableScope } from './cssVarRegions';
 
 export interface Column {
@@ -278,7 +278,7 @@ export interface DescribedCell extends Cell {
 
 // A cell's value said three ways: what the file holds, what it comes out as,
 // and what colour to draw beside it (if any).
-export function describeCell(cell: Cell | undefined, map: Map<string, string>): DescribedCell | undefined {
+export function describeCell(cell: Cell | undefined, map: ValueLookup): DescribedCell | undefined {
   if (!cell) {
     return undefined;
   }
@@ -463,18 +463,37 @@ function variableScopes(files: readonly FileModel[]) {
     }
   }
   assert(base.size <= fallback.size, 'Base values are a subset of every declared name');
-  const merged = new Map<string, Map<string, string>>();
-  const mapFor = (cell: Cell): Map<string, string> => {
+  // A cell's map is its scope's declarations over the file's base, the project's base and then any declaration. It is read
+  // through layers rather than copied: a copy per scope is the whole project's names once per scope, which for a stylesheet
+  // of tens of thousands of rules (each its own scope) is quadratic memory.
+  const layered = new Map<string, ValueLookup>();
+  const mapFor = (cell: Cell): ValueLookup => {
     const scope = scopeOfEntry.get(`${cell.file}:${cell.valueStart}`);
     assert(scope !== undefined, 'Every described cell was read from a rule');
-    const known = merged.get(scope);
+    const known = layered.get(scope);
     if (known !== undefined) {
       return known;
     }
-    const map = new Map([...fallback, ...base, ...(fileBases.get(cell.file) ?? []), ...(scopes.get(scope) ?? [])]);
-    assert(map.has(cell.name), 'A cell resolves in a scope that declares it');
-    merged.set(scope, map);
-    return map;
+    const layers: readonly ValueLookup[] = [
+      scopes.get(scope) ?? new Map<string, string>(),
+      fileBases.get(cell.file) ?? new Map<string, string>(),
+      base,
+      fallback,
+    ];
+    const lookup: ValueLookup = {
+      get(name: string): string | undefined {
+        for (const layer of layers) {
+          const found = layer.get(name);
+          if (found !== undefined) {
+            return found;
+          }
+        }
+        return undefined;
+      },
+    };
+    assert(lookup.get(cell.name) !== undefined, 'A cell resolves in a scope that declares it');
+    layered.set(scope, lookup);
+    return lookup;
   };
   return { mapFor };
 }
