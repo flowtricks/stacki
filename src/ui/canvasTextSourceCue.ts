@@ -39,13 +39,6 @@ export function clearCanvasSourceCue(session: string): void {
 /** The hint over a bound text the pointer is on, before any double click: the same box and source as the cue. */
 export const canvasSourceHover = createLiveValue<CanvasSourceCueState | undefined>(undefined);
 
-/**
- * The bound texts of the open page by expression, for the Settings Content
- * field: a chip `aiCallout1.body` can say where editing it writes. Replaced
- * whole each time the page's catalog is built.
- */
-export const canvasSourceTargets = createLiveValue<ReadonlyMap<string, CanvasSourceTarget>>(new Map());
-
 /** Where the words typed in a text that is not a plain literal stop: the file the person edits instead. */
 export interface CanvasSourceBlocked {
   readonly expression: string;

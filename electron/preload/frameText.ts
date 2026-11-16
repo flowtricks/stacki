@@ -4,6 +4,7 @@ import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
 import { installTextMarks } from './frameTextMarks';
+import { inlineTextRuns } from './inlineText';
 import { isTouchDoubleTap, type TapPoint } from './frameDoubleTap';
 
 export function installCanvasText(
@@ -163,7 +164,9 @@ export function refuseBlockedText(catalog: CanvasTextCatalog, event: MouseEvent,
   if (!(clicked instanceof Element)) {
     return;
   }
-  const blocked = (catalog.blocked ?? []).find((entry) => (runsOf(entry.path) ?? []).some((run) => run.some((node) => node.parentElement === clicked)));
+  const blocked = (catalog.blocked ?? []).find((entry) =>
+    [...(runsOf(entry.path) ?? []), ...inlineTextRuns(entry.path)].some((run) => run.some((node) => node.parentElement === clicked)),
+  );
   if (!blocked) {
     return;
   }

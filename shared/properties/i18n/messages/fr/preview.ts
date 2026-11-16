@@ -108,7 +108,6 @@ export const messages = {
   'preview.text.source.label': 'Modification de la source',
   'preview.text.source.pageFile': 'cette page',
   'preview.text.source.saved': '{path} mis à jour dans {file}',
-  'preview.text.source.settingsHint': 'Modifier ce texte met à jour {file} › {path}',
   'preview.text.source.undo': 'Annuler',
   'preview.text.source.uses': { one: 'Utilisé à 1 endroit', other: 'Utilisé à {count} endroits' },
   'preview.text.sourceChanged': 'Les données ont changé sur le disque pendant la modification. Le texte n’a pas été enregistré ; sélectionnez-le à nouveau.',

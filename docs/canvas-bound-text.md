@@ -58,7 +58,6 @@ its words and could not tell which of the two was meant.
 |---|---|---|
 | Pointer on the element | "Double-click to edit · updates `aiCallout1.body`" | `CanvasTextSourceCue` (`canvasSourceHover`) |
 | Typing in it | "Editing source" + `src/lib/homepage/content.ts › aiCallout1.body` (path highlighted, start-truncated), plus "Used in N places" when N is more than 1 | the same chip, anchored to the element (`canvasSourceCue`, from `avb:text-active`'s `rect`) |
-| Selected in Settings | "Editing this text updates {file} › {path}" under Content | `SourceHint` (`canvasSourceTargets`) |
 | Saved | toast "Updated {path} in {file}" with **Undo** | `reportActionToast` |
 | Not editable | the refusal sentence above | toast, from `avb:text-refused` with `reason: 'source-blocked'` and the blocked text's `key` |
 
@@ -82,4 +81,4 @@ the same module are not counted; their dev-server renders update when the write 
 `test/renderer/preview/boundText.test.js` (tracing for each source kind, escaping and round trips, byte-exact
 rewrites and undo, refusals, multiple use, loops, contracts, a JSDOM double click that opens the editor and a
 save that writes the source and not the markup, the refusal of blocked text) and
-`test/renderer/preview/canvasSourceCue.test.js` (the chip and the Settings hint).
+`test/renderer/preview/canvasSourceCue.test.js` (the chip; the Settings panel draws nothing).

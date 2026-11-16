@@ -108,7 +108,6 @@ export const messages = {
   'preview.text.source.label': 'Editing source',
   'preview.text.source.pageFile': 'this page',
   'preview.text.source.saved': 'Updated {path} in {file}',
-  'preview.text.source.settingsHint': 'Editing this text updates {file} › {path}',
   'preview.text.source.undo': 'Undo',
   'preview.text.source.uses': { one: '1 place', other: 'Used in {count} places' },
   'preview.text.sourceChanged': 'The data changed on disk while editing. The text was not saved; select it again.',

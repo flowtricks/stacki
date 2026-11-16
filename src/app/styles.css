@@ -10231,28 +10231,14 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   white-space: nowrap;
   pointer-events: none;
 }
-.canvas-source-cue-path,
-.source-hint-path {
+.canvas-source-cue-path {
   min-width: 0;
   overflow: hidden;
   background: transparent;
   font-size: 11px;
 }
-.canvas-source-cue-uses,
-.source-hint-uses {
+.canvas-source-cue-uses {
   opacity: 0.85;
-}
-.source-hint {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  margin-top: 6px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba(146, 116, 255, 0.16);
-  color: #c4afff;
-  font-size: 11px;
 }
 /* The component an element's hover label sits in ("in HomeHero"): a quiet hint after the name. */
 .node-outline-within {

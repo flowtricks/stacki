@@ -1096,7 +1096,6 @@
     "src/features/props/RichContent.tsx",
     "src/features/props/RichFormatButtons.tsx",
     "src/features/props/SegSwitch.tsx",
-    "src/features/props/SourceHint.tsx",
     "src/features/props/SourcePanels.tsx",
     "src/features/props/StyleEditor.tsx",
     "src/features/props/TextConnectField.tsx",

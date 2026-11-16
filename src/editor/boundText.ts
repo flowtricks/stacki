@@ -16,6 +16,7 @@
 import { parser } from '@lezer/javascript';
 import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
+import { LIMITS } from '../../shared/core/limits';
 import { parseLoopHead, loopSourcePath } from '../../shared/page/loopSource';
 
 export const BOUND_TEXT_LIMITS = {
@@ -344,7 +345,8 @@ function importOf(unit: Unit, name: string): ImportEntry | undefined {
     }
     const parts = children(declaration);
     const specifier = parts.find((part) => part.name === 'String');
-    if (specifier === undefined || parts[1]?.name === 'type') {
+    // `import * as ns` names the module, not an export of it (namespaceOf).
+    if (specifier === undefined || parts[1]?.name === 'type' || parts.some((part) => part.name === 'Star')) {
       continue;
     }
     const spec = decodeStringLiteral(text(unit, specifier));
@@ -395,26 +397,42 @@ async function lookup(context: Context, unit: Unit, name: string, steps: readonl
   if (imported !== undefined) {
     return exported(context, unit, imported, steps, want);
   }
+  const namespace = namespaceOf(unit, name);
+  const first = steps[0];
+  if (namespace !== undefined && first?.kind === 'key') {
+    return exported(context, unit, { spec: namespace, imported: first.name }, steps.slice(1), want);
+  }
+  const destructured = destructuredFrom(unit, name);
+  if (destructured?.kind === 'block') {
+    return destructured.found;
+  }
+  if (destructured?.kind === 'value') {
+    return evaluateFrom(context, unit, destructured.init, [{ kind: 'key', name: destructured.key }, ...steps], want);
+  }
   if (new RegExp(`\\{[^}]*\\b${name}\\b[^}]*\\}\\s*=\\s*Astro\\.props`).test(unit.code) || name === 'Astro') {
     return blocked('prop', unit.file, `${name} is a prop this file receives.`);
   }
   return blocked('runtime', unit.file, `${name} is not a constant this file writes out.`);
 }
 
-async function exported(context: Context, from: Unit, entry: ImportEntry, steps: readonly Step[], want: Want): Promise<Found> {
-  const key = `${from.file}\u0000${entry.spec}`;
+// A module by its specifier from `from`, read once per expression and bounded: the unit, or why there is none.
+async function loadUnit(context: Context, from: Unit, spec: string): Promise<Unit | Found> {
+  const key = `${from.file}\u0000${spec}`;
   if (!context.units.has(key)) {
     if (context.units.size >= BOUND_TEXT_LIMITS.modulesMax) {
-      return blocked('unsupported', from.file, 'More modules than one binding is followed through.');
+      return blocked('unsupported', spec, 'More modules than one binding is followed through.');
     }
-    const read = await context.environment.readModule(from.file, entry.spec).catch(() => undefined);
+    const read = await context.environment.readModule(from.file, spec).catch(() => undefined);
     context.units.set(key, read === undefined ? undefined : moduleUnit(read));
   }
-  const unit = context.units.get(key);
-  if (unit === undefined) {
-    return blocked('unsupported', from.file, `${entry.spec} is not a project script or JSON file.`);
-  }
-  return exportedFrom(context, unit, entry.imported, steps, want);
+  return context.units.get(key) ?? blocked('unsupported', from.file, `${spec} is not a project script or JSON file.`);
+}
+
+const isFound = (value: Unit | Found): value is Found => 'kind' in value && typeof value.kind === 'string' && !('root' in value);
+
+async function exported(context: Context, from: Unit, entry: ImportEntry, steps: readonly Step[], want: Want): Promise<Found> {
+  const unit = await loadUnit(context, from, entry.spec);
+  return isFound(unit) ? unit : exportedFrom(context, unit, entry.imported, steps, want);
 }
 
 async function exportedFrom(context: Context, unit: Unit, name: string, steps: readonly Step[], want: Want): Promise<Found> {
@@ -555,31 +573,38 @@ async function evaluateItem(context: Context, unit: Unit, node: SyntaxNode, step
 
 async function evaluateMember(context: Context, unit: Unit, node: SyntaxNode, step: Step, rest: readonly Step[], want: Want): Promise<Found> {
   const wanted = step.kind === 'key' ? step.name : String(step.at);
-  const matches: SyntaxNode[] = [];
-  let spread = false;
-  for (const property of children(node).filter((part) => part.name === 'Property')) {
-    const parts = children(property);
-    const key = parts[0];
-    if (key?.name === 'Spread') {
-      spread = true;
-    } else if (key?.name === 'PropertyDefinition' && text(unit, key) === wanted) {
-      matches.push(property);
-    } else if (key?.name === 'String' && decodeStringLiteral(text(unit, key)) === wanted) {
-      matches.push(property);
-    } else if (key?.name === 'Number' && text(unit, key) === wanted) {
-      matches.push(property);
-    }
-  }
-  const [property] = matches;
-  if (matches.length > 1) {
+  const properties = children(node).filter((part) => part.name === 'Property');
+  const named = properties.filter((property) => {
+    const key = children(property)[0];
+    return (
+      (key?.name === 'PropertyDefinition' && text(unit, key) === wanted) ||
+      (key?.name === 'String' && decodeStringLiteral(text(unit, key)) === wanted) ||
+      (key?.name === 'Number' && text(unit, key) === wanted)
+    );
+  });
+  if (named.length > 1) {
     return blocked('ambiguous', unit.file, `${wanted} is written more than once.`);
   }
-  if (property === undefined) {
-    return spread
-      ? blocked('computed', unit.file, `A spread may supply ${wanted}.`)
-      : blocked('missing', unit.file, `${wanted} is not written in this object.`);
+  // Later entries win over earlier ones, as the language reads them: the last spread or key that has the name decides.
+  for (let index = properties.length - 1; index >= 0; index--) {
+    const property = properties[index];
+    const parts = property === undefined ? [] : children(property);
+    if (property !== undefined && property === named[0]) {
+      return evaluateProperty(context, unit, parts, wanted, rest, want);
+    }
+    const spread = parts[0]?.name === 'Spread' ? parts[1] : undefined;
+    if (spread === undefined) {
+      continue;
+    }
+    const found = await evaluateFrom(context, unit, spread, [{ kind: 'key', name: wanted }, ...rest], want);
+    if (found.kind !== 'block' || found.block.reason !== 'missing') {
+      return found.kind === 'block' && found.block.reason === 'runtime' ? blocked('computed', unit.file, `A spread may supply ${wanted}.`) : found;
+    }
   }
-  const parts = children(property);
+  return blocked('missing', unit.file, `${wanted} is not written in this object.`);
+}
+
+async function evaluateProperty(context: Context, unit: Unit, parts: readonly SyntaxNode[], wanted: string, rest: readonly Step[], want: Want): Promise<Found> {
   const colon = parts.findIndex((part) => part.name === ':');
   if (colon === -1) {
     // `{ title }`: the value is the name.
@@ -605,6 +630,243 @@ function literalSite(unit: Unit, node: SyntaxNode): Found {
   assert(end - start === raw.length, 'A site spans exactly its literal');
   assert(start >= 0, 'A site starts inside its file');
   return { kind: 'site', site: { file: unit.file === '' ? '' : unit.file, start, end, quote, value, raw } };
+}
+
+// `import * as homeContent from "@lib/homepage/content"`: lezer reports the star as an error, so the line is read as text.
+function namespaceOf(unit: Unit, name: string): string | undefined {
+  for (const statement of children(unit.root)) {
+    if (statement.name !== 'ImportDeclaration') {
+      continue;
+    }
+    const match = /^import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])([^'"]+)\2/.exec(text(unit, statement));
+    if (match?.[1] === name && match[3] !== undefined) {
+      return match[3];
+    }
+  }
+  return undefined;
+}
+
+type Destructured = { readonly kind: 'value'; readonly init: SyntaxNode; readonly key: string } | { readonly kind: 'block'; readonly found: Found };
+
+// `const { a, b: c } = await getPage("home")`: the initialiser, and the property `name` is read from it.
+function destructuredFrom(unit: Unit, name: string): Destructured | undefined {
+  for (const statement of children(unit.root)) {
+    const declaration = statement.name === 'ExportDeclaration' ? statement.getChild('VariableDeclaration') : statement;
+    const parts = declaration?.name === 'VariableDeclaration' ? children(declaration) : [];
+    const pattern = parts.find((part) => part.name === 'ObjectPattern');
+    const equals = parts.findIndex((part) => part.name === 'Equals');
+    const init = equals === -1 ? undefined : parts[equals + 1];
+    if (pattern === undefined || init === undefined) {
+      continue;
+    }
+    for (const entry of children(pattern).filter((part) => part.name === 'PatternProperty')) {
+      const bits = children(entry);
+      const key = bits[0]?.name === 'PropertyName' ? text(unit, bits[0]) : undefined;
+      const local = bits[1]?.name === ':' && bits[2]?.name === 'VariableDefinition' ? text(unit, bits[2]) : key;
+      if (key === undefined || local !== name) {
+        continue;
+      }
+      return parts[0]?.name === 'const'
+        ? { kind: 'value', init, key }
+        : { kind: 'block', found: blocked('mutable', unit.file, `${name} can change while the page runs.`) };
+    }
+  }
+  return undefined;
+}
+
+// A value in the place `node` stands: a call is followed into the function it names, anything else is read as the value it is.
+async function evaluateFrom(context: Context, unit: Unit, node: SyntaxNode, steps: readonly Step[], want: Want): Promise<Found> {
+  let inner = unwrap(node);
+  if (inner.name === 'AwaitExpression') {
+    const awaited = children(inner)[1];
+    inner = awaited === undefined ? inner : unwrap(awaited);
+  }
+  if (inner.name !== 'CallExpression') {
+    return evaluate(context, unit, inner, steps, want);
+  }
+  const [callee, args] = children(inner);
+  if (callee?.name !== 'VariableName' || args?.name !== 'ArgList') {
+    return blocked('call', unit.file, 'A function call produces this value.');
+  }
+  const found = await functionNamed(context, unit, text(unit, callee), 0);
+  if (!('node' in found)) {
+    return found;
+  }
+  const literals = children(args)
+    .filter((part) => part.name !== '(' && part.name !== ')' && part.name !== ',')
+    .map((part) => (part.name === 'String' ? decodeStringLiteral(text(unit, part)) : undefined));
+  return returnedValue(context, found, literals, steps, want);
+}
+
+interface FunctionAt {
+  readonly unit: Unit;
+  readonly node: SyntaxNode;
+}
+
+// The top-level function `name` has in `unit` (a declaration with a body, or a const arrow), or in the module it imports or re-exports it from.
+async function functionNamed(context: Context, unit: Unit, name: string, depth: number): Promise<FunctionAt | Found> {
+  assert(depth <= LIMITS.treeDepthMax, 'A function is looked up through a bounded chain of re-exports');
+  context.hops++;
+  if (context.hops > BOUND_TEXT_LIMITS.hopsMax) {
+    return blocked('computed', unit.file, 'Too many names stand between the text and its value.');
+  }
+  for (const statement of children(unit.root)) {
+    const inner = statement.name === 'ExportDeclaration' ? (statement.getChild('FunctionDeclaration') ?? statement.getChild('VariableDeclaration')) : statement;
+    const parts = inner === null ? [] : children(inner);
+    if (
+      inner?.name === 'FunctionDeclaration' &&
+      parts.some((part) => part.name === 'Block') &&
+      parts.find((part) => part.name === 'VariableDefinition') !== undefined
+    ) {
+      if (text(unit, parts.find((part) => part.name === 'VariableDefinition') ?? inner) === name) {
+        return { unit, node: inner };
+      }
+    }
+    if (inner?.name === 'VariableDeclaration' && parts.find((part) => part.name === 'VariableDefinition') !== undefined) {
+      const arrow = parts.find((part) => part.name === 'ArrowFunction');
+      if (arrow !== undefined && text(unit, parts.find((part) => part.name === 'VariableDefinition') ?? inner) === name) {
+        return { unit, node: arrow };
+      }
+    }
+  }
+  const imported = importOf(unit, name);
+  const viaList = imported === undefined ? reexportOf(unit, name) : undefined;
+  const entry = imported ?? viaList;
+  if (entry === undefined) {
+    return blocked('runtime', unit.file, `${name} is not a function this file writes out.`);
+  }
+  const target = await loadUnit(context, unit, entry.spec);
+  return isFound(target) ? target : functionNamed(context, target, entry.imported, depth + 1);
+}
+
+// `export { a as b } from './x'` or `export * from './x'`: where `name` is exported from, when a module's own list does.
+function reexportOf(unit: Unit, name: string): ImportEntry | undefined {
+  for (const statement of children(unit.root)) {
+    if (statement.name !== 'ExportDeclaration') {
+      continue;
+    }
+    const source = /\bfrom\s+(['"])([^'"]+)\1/.exec(text(unit, statement))?.[2];
+    const list = /^export\s*\{([^}]*)\}/.exec(text(unit, statement))?.[1];
+    if (source === undefined || list === undefined) {
+      continue;
+    }
+    for (const part of list.split(',')) {
+      const [local, exportedName] = part.trim().split(/\s+as\s+/);
+      if ((exportedName ?? local) === name && local !== undefined) {
+        return { spec: source, imported: local.trim() };
+      }
+    }
+  }
+  return undefined;
+}
+
+// What the function returns for these literal arguments: the returns its own guards leave possible, each read for the property, and one answer or none.
+async function returnedValue(
+  context: Context,
+  called: FunctionAt,
+  literals: readonly (string | undefined)[],
+  steps: readonly Step[],
+  want: Want,
+): Promise<Found> {
+  const body = children(called.node).find((part) => part.name === 'Block');
+  const params = children(children(called.node).find((part) => part.name === 'ParamList') ?? called.node)
+    .filter((part) => part.name === 'VariableDefinition')
+    .map((part) => text(called.unit, part));
+  if (body === undefined) {
+    return blocked('computed', called.unit.file, 'This function has no body to read.');
+  }
+  const scope = new Map<string, string>();
+  params.forEach((param, index) => {
+    const literal = literals[index];
+    if (literal !== undefined) {
+      scope.set(param, literal);
+    }
+  });
+  const returns: SyntaxNode[] = [];
+  collectReturns(called.unit, body, scope, returns, 0);
+  if (returns.length === 0) {
+    return blocked('computed', called.unit.file, 'No return of this function can be read.');
+  }
+  const answers: Found[] = [];
+  for (const value of returns.slice(0, BOUND_TEXT_LIMITS.hopsMax)) {
+    answers.push(await evaluateFrom(context, called.unit, value, steps, want));
+  }
+  return oneAnswer(answers, called.unit.file);
+}
+
+// Answers that agree are one answer; a missing key in one return is no answer; the rest cannot be told apart, so none is chosen.
+function oneAnswer(answers: readonly Found[], file: string): Found {
+  const present = answers.filter((answer) => !(answer.kind === 'block' && answer.block.reason === 'missing'));
+  const [first] = present;
+  if (first === undefined) {
+    return answers[0] ?? blocked('missing', file, 'Nothing is returned for this.');
+  }
+  const same = (answer: Found) =>
+    answer.kind === 'site' && first.kind === 'site'
+      ? answer.site.file === first.site.file && answer.site.start === first.site.start
+      : answer.kind === 'list' && first.kind === 'list' && answer.count === first.count;
+  return present.every(same) ? first : present.length === 1 ? first : blocked('ambiguous', file, 'More than one return of this function can supply it.');
+}
+
+type Verdict = 'yes' | 'no' | 'unknown';
+
+// The returns a function can make for known literal arguments, in the order they read, stopping at the first that must happen.
+function collectReturns(unit: Unit, block: SyntaxNode, scope: ReadonlyMap<string, string>, into: SyntaxNode[], depth: number): boolean {
+  assert(depth <= LIMITS.treeDepthMax, 'Function bodies nest within the tree depth bound');
+  for (const statement of children(block).filter((part) => part.name !== '{' && part.name !== '}')) {
+    if (statement.name === 'ReturnStatement') {
+      const value = children(statement).find((part) => part.name !== 'return' && part.name !== ';');
+      if (value !== undefined) {
+        into.push(value);
+      }
+      return true;
+    }
+    if (statement.name !== 'IfStatement') {
+      continue;
+    }
+    const parts = children(statement);
+    const condition = parts.find((part) => part.name === 'ParenthesizedExpression');
+    const branches = parts.filter((part) => part.name === 'Block');
+    const verdict = condition === undefined ? 'unknown' : guard(unit, condition, scope, 0);
+    const [then, otherwise] = branches;
+    if (verdict !== 'no' && then !== undefined && collectReturns(unit, then, scope, into, depth + 1) && verdict === 'yes') {
+      return true;
+    }
+    if (verdict !== 'yes' && otherwise !== undefined) {
+      collectReturns(unit, otherwise, scope, into, depth + 1);
+    }
+  }
+  return false;
+}
+
+// `id === "home"`, `a || b`, `a && b`, `!==`: decided only from arguments the call wrote as literals.
+function guard(unit: Unit, node: SyntaxNode, scope: ReadonlyMap<string, string>, depth: number): Verdict {
+  assert(depth <= LIMITS.treeDepthMax, 'A condition nests within the tree depth bound');
+  const inner = node.name === 'ParenthesizedExpression' ? children(node)[1] : node;
+  const parts = inner === undefined ? [] : children(inner);
+  const [left, operator, right] = parts;
+  if (inner?.name !== 'BinaryExpression' || left === undefined || operator === undefined || right === undefined) {
+    return 'unknown';
+  }
+  const word = text(unit, operator);
+  if (word === '||' || word === '&&') {
+    const verdicts = [guard(unit, left, scope, depth + 1), guard(unit, right, scope, depth + 1)];
+    if (word === '||') {
+      return verdicts.includes('yes') ? 'yes' : verdicts.every((verdict) => verdict === 'no') ? 'no' : 'unknown';
+    }
+    return verdicts.includes('no') ? 'no' : verdicts.every((verdict) => verdict === 'yes') ? 'yes' : 'unknown';
+  }
+  if (!['===', '==', '!==', '!='].includes(word)) {
+    return 'unknown';
+  }
+  const name = left.name === 'VariableName' ? text(unit, left) : right.name === 'VariableName' ? text(unit, right) : undefined;
+  const literal = left.name === 'String' ? decodeStringLiteral(text(unit, left)) : right.name === 'String' ? decodeStringLiteral(text(unit, right)) : undefined;
+  const known = name === undefined ? undefined : scope.get(name);
+  if (known === undefined || literal === undefined) {
+    return 'unknown';
+  }
+  const equal = known === literal;
+  return word.startsWith('!') ? (equal ? 'no' : 'yes') : equal ? 'yes' : 'no';
 }
 
 const SIMPLE_ESCAPES: Readonly<Record<string, string>> = {

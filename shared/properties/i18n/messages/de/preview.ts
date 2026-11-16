@@ -109,7 +109,6 @@ export const messages = {
   'preview.text.source.label': 'Quelle wird bearbeitet',
   'preview.text.source.pageFile': 'diese Seite',
   'preview.text.source.saved': '{path} in {file} aktualisiert',
-  'preview.text.source.settingsHint': 'Das Bearbeiten dieses Texts aktualisiert {file} › {path}',
   'preview.text.source.undo': 'Rückgängig',
   'preview.text.source.uses': { one: 'An 1 Stelle verwendet', other: 'An {count} Stellen verwendet' },
   'preview.text.sourceChanged':

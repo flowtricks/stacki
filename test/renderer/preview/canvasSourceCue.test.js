@@ -1,6 +1,5 @@
-// Goal: a bound text says where editing it writes: the canvas cue over the text being typed in, and the Settings hint under its
-// Content field. The cue names the file and binding, says 'Used in N places' only when N is more than one, and gives up the START
-// of a long path first; the hint appears only for an expression the page's catalog marked as bound.
+// Goal: a bound text says where editing it writes: the canvas cue over the text being typed in. The Settings panel shows no hint. The cue names the file and binding, says 'Used in N places' only when N is more than one, and gives up the START
+// of a long path first.
 // Method: bundle the real components for the browser, mount them in jsdom with react-dom's act, set the live values the editor
 // sets, and read the text drawn. The pure path helper is tested directly.
 const test = require('node:test');
@@ -17,10 +16,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { CanvasTextSourceCue } from ${JSON.stringify(repoPath('src/app/shell/CanvasTextSourceCue.tsx'))};
-import { SourceHint } from ${JSON.stringify(repoPath('src/features/props/SourceHint.tsx'))};
-import { canvasSourceCue, canvasSourceTargets } from ${JSON.stringify(repoPath('src/ui/canvasTextSourceCue.ts'))};
+import { canvasSourceCue } from ${JSON.stringify(repoPath('src/ui/canvasTextSourceCue.ts'))};
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-globalThis.stacki = { React, createRoot, act, CanvasTextSourceCue, SourceHint, canvasSourceCue, canvasSourceTargets };
+globalThis.stacki = { React, createRoot, act, CanvasTextSourceCue, SourceHint, canvasSourceCue };
 `;
 
 function mount() {
@@ -94,21 +92,10 @@ test('a long path gives up its start, keeping the file name and the binding', ()
   assert.ok(shown.endsWith('content.ts › aiCallout1.body'));
 });
 
-test('the Settings hint appears only for an expression the catalog marked as bound', () => {
-  const dom = mount();
-  const { stacki } = dom.window;
-  const root = stacki.createRoot(dom.window.document.getElementById('root'));
-  const render = (expression) => stacki.act(() => root.render(stacki.React.createElement(stacki.SourceHint, { expression })));
-  stacki.act(() =>
-    stacki.canvasSourceTargets.set(new Map([['aiCallout1.body', { expression: 'aiCallout1.body', file: 'src/lib/homepage/content.ts', uses: 2 }]])),
-  );
-  render('aiCallout1.body');
-  const hint = dom.window.document.querySelector('.source-hint');
-  assert.ok(hint);
-  assert.match(hint.textContent, /src\/lib\/homepage\/content\.ts › aiCallout1\.body/);
-  assert.match(hint.textContent, /Used in 2 places/);
-  render('other.value');
-  assert.equal(dom.window.document.querySelector('.source-hint') ?? undefined, undefined);
-  render(undefined);
-  assert.equal(dom.window.document.querySelector('.source-hint') ?? undefined, undefined);
+test('the Settings panel draws no source hint: the files that render its Content field do not import one', () => {
+  const fs = require('node:fs');
+  for (const file of ['src/features/props/ElementFields.tsx', 'src/features/props/TextConnectField.tsx']) {
+    assert.doesNotMatch(fs.readFileSync(repoPath(file), 'utf8'), /SourceHint|source-hint|canvasTextSourceCue/, file);
+  }
+  assert.equal(fs.existsSync(repoPath('src/features/props/SourceHint.tsx')), false);
 });

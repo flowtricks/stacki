@@ -80,9 +80,16 @@ interface Resolved {
 }
 
 export async function canvasBoundEdits(document: CanvasTextDocument, host: BoundTextHost, words: BoundTextWords): Promise<CanvasTextEdit[]> {
+  // Every text of the page is traced against the same files: each is read once, not once per text.
+  const reads = new Map<string, Promise<BoundTextModule | undefined>>();
   const environment: BoundTextEnvironment = {
     page: { file: document.file, text: document.source },
-    readModule: (fromFile, spec) => host.readModule(fromFile, spec),
+    readModule: (fromFile, spec) => {
+      const key = `${fromFile}\u0000${spec}`;
+      const known = reads.get(key) ?? host.readModule(fromFile, spec);
+      reads.set(key, known);
+      return known;
+    },
   };
   const resolved: Resolved[] = [];
   for (const candidate of candidatesOf(document.source, document.nodes).slice(0, CANDIDATES_MAX)) {
@@ -142,31 +149,37 @@ async function resolveCandidate(environment: BoundTextEnvironment, candidate: Ca
   const parsed = parseBoundPath(candidate.expression);
   const usesLoop = parsed !== undefined && candidate.loops.some((loop) => loop.item === parsed.root);
   if (candidate.loops.length > 0 && !usesLoop) {
-    return []; // The same words in every pass: the canvas could not say which copy was meant.
+    // The same words in every pass: the canvas could not say which copy was meant.
+    return [refused(candidate, { reason: 'duplicate', file: '', detail: 'Every pass of the loop prints the same words.' })];
   }
   const combinations: BoundTextLoop[][] = [];
-  await enumerate(environment, candidate.loops, [], combinations, Math.min(budget, BOUND_TEXT_LIMITS.itemsMax));
+  const failures: { readonly block: BoundTextBlock | undefined }[] = [];
+  await enumerate(environment, candidate.loops, [], combinations, Math.min(budget, BOUND_TEXT_LIMITS.itemsMax), failures);
   const results: Resolved[] = [];
   for (const combination of combinations) {
     const path = expressionInLoops(candidate.expression, combination);
     const suffix = combination.map((loop) => `~${loop.index}`).join('');
     results.push({ candidate, suffix, path, outcome: await resolveBoundText(environment, path) });
   }
-  return results.filter((entry) => entry.outcome.ok || tracedTo(entry.outcome.block));
+  const editable = results.filter((entry) => entry.outcome.ok);
+  const first = results.find((entry) => !entry.outcome.ok)?.outcome;
+  // Every text that is not editable says why when it is double-clicked, one refusal per text however many items fail.
+  const block = first !== undefined && !first.ok ? first.block : failures[0]?.block;
+  return [...editable, ...(block === undefined || (editable.length > 0 && results.length === editable.length) ? [] : [refused(candidate, block)])];
 }
 
-// A text that is not a literal is worth a refusal only when the binding was traced to a file: a loop item of a CMS collection (a name the file does not write out) stays as it was, silent.
-function tracedTo(block: BoundTextBlock): boolean {
-  return block.reason !== 'runtime' && block.reason !== 'missing' && block.reason !== 'unsupported';
+function refused(candidate: Candidate, block: BoundTextBlock): Resolved {
+  return { candidate, suffix: '', path: candidate.expression, outcome: { ok: false, block } };
 }
 
-// The index combinations of the loops around a text, outermost first, in the order the page renders them.
+// The index combinations of the loops around a text, outermost first, in the order the page renders them. A list that cannot be counted says why in `failure`.
 async function enumerate(
   environment: BoundTextEnvironment,
   loops: Candidate['loops'],
   chosen: readonly BoundTextLoop[],
   into: BoundTextLoop[][],
   budget: number,
+  failure: { readonly block: BoundTextBlock | undefined }[],
 ): Promise<void> {
   const depth = chosen.length;
   assert(depth <= LIMITS.treeDepthMax, 'Loops nest within the tree depth bound');
@@ -177,25 +190,39 @@ async function enumerate(
   }
   const counted = await resolveBoundList(environment, expressionInLoops(loop.list, chosen));
   if (!counted.ok) {
+    failure.push({ block: counted.block });
     return;
   }
   for (let index = 0; index < counted.count && into.length < budget; index++) {
-    await enumerate(environment, loops, [...chosen, { item: loop.item, list: loop.list, index }], into, budget);
+    await enumerate(environment, loops, [...chosen, { item: loop.item, list: loop.list, index }], into, budget, failure);
   }
 }
 
-// Items that spell the same words as another of the same text, within one candidate, are dropped: the canvas finds a text by its words.
+// Items that spell the same words as another of the same text, within one candidate, are dropped: the canvas finds a text by its words. A text with some dropped is refused once, by name.
 function withoutRepeats(resolved: readonly Resolved[]): Resolved[] {
   const counts = new Map<string, number>();
+  const wordsKey = (entry: Resolved & { readonly outcome: { readonly ok: true; readonly site: BoundTextSite } }) =>
+    `${entry.candidate.node.id ?? ''}\u0000${entry.outcome.site.value.trim()}`;
   for (const entry of resolved) {
     if (entry.outcome.ok && entry.suffix !== '') {
-      const key = `${entry.candidate.node.id ?? ''}\u0000${entry.outcome.site.value.trim()}`;
+      const key = wordsKey({ ...entry, outcome: entry.outcome });
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
   }
-  return resolved.filter(
-    (entry) => !entry.outcome.ok || entry.suffix === '' || (counts.get(`${entry.candidate.node.id ?? ''}\u0000${entry.outcome.site.value.trim()}`) ?? 0) === 1,
-  );
+  const kept: Resolved[] = [];
+  const reported = new Set<string>();
+  for (const entry of resolved) {
+    if (!entry.outcome.ok || entry.suffix === '' || (counts.get(wordsKey({ ...entry, outcome: entry.outcome })) ?? 0) === 1) {
+      kept.push(entry);
+      continue;
+    }
+    const id = entry.candidate.node.id ?? '';
+    if (!reported.has(id)) {
+      reported.add(id);
+      kept.push(refused(entry.candidate, { reason: 'duplicate', file: '', detail: 'Several items print the same words.' }));
+    }
+  }
+  return kept;
 }
 
 function sourceEdit(

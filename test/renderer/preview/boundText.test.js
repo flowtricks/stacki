@@ -269,8 +269,9 @@ test('text that is computed is listed as blocked with the reason, and offers no 
       ['blocked', 'call'],
       ['blocked', 'template'],
       ['blocked', 'mutable'],
+      ['blocked', 'runtime'],
     ],
-    'a runtime value stays as silent as it always was',
+    'a runtime value is refused by name too: no text is ever left silent',
   );
   assert.equal(result[0].bound.file, 'src/lib/homepage/content.ts');
   await assert.rejects(result[0].apply('x'));
@@ -308,9 +309,10 @@ test('loop items spelled alike are not edited: the canvas could not tell which w
   const page = '---\nconst cards = [{ title: "Same" }, { title: "Same" }, { title: "Other" }];\n---\n' + '{cards.map((card) => (<h3>{card.title}</h3>))}';
   const { result } = await edits(page);
   assert.deepEqual(
-    result.map((edit) => edit.target.value),
+    result.filter((edit) => edit.bound.kind === 'source').map((edit) => edit.target.value),
     ['Other'],
   );
+  assert.equal(result.find((edit) => edit.bound.kind === 'blocked').bound.reason, 'duplicate', 'the repeated items say why');
 });
 
 test('a loop over an imported list edits the right module item, nested loops included', async () => {
@@ -334,10 +336,13 @@ test('a loop over an imported list edits the right module item, nested loops inc
   assert.equal(writes[0].after, files['@lib/cards'].text.replace('"b1"', '"B-one"'));
 });
 
-test('a loop over a computed list offers no edit and the same words in every pass are left alone', async () => {
+test('a loop over a computed list, and the same words in every pass, are refused by name', async () => {
   const page = '---\nconst cards = load();\nconst label = "Same";\n---\n{cards.map((card) => (<h3>{card.title}</h3>))}{[1, 2].map((n) => (<i>{label}</i>))}';
   const { result } = await edits(page);
-  assert.equal(result.length, 0);
+  assert.deepEqual(
+    result.map((edit) => [edit.bound.kind, edit.bound.reason]),
+    [['blocked', 'call']],
+  );
 });
 
 test('contracts: a blocked list, a refusal with its key and the editing box are bounded and parsed', () => {
@@ -444,4 +449,59 @@ test('a prop the page binds (`body={aiCallout1.body}`) is followed to the string
   assert.equal(writes[0].after.includes("body: 'From the card'"), true);
   assert.equal(await read('joined'), undefined, 'a joined value leads to no string to write');
   assert.equal(await read('compute(1)'), undefined);
+});
+
+// The shape of a real site: the page destructures its data from an awaited call to a function in another
+// module, which picks its content by a literal argument and spreads a namespace import.
+const CALLED = {
+  '@lib/content': { file: 'src/lib/content/index.ts', text: 'export { getPage } from "./pages";\n' },
+  './pages': {
+    file: 'src/lib/content/pages.ts',
+    text: [
+      'import * as homeContent from "@lib/homepage/content";',
+      'import * as otherContent from "@lib/other";',
+      'export async function getPage(id: "home"): Promise<typeof homeContent>;',
+      'export async function getPage(id: "other"): Promise<typeof otherContent>;',
+      'export async function getPage(id: "home" | "other") {',
+      '  if (id === "home") {',
+      '    const document = await load(id);',
+      '    return { ...homeContent, document };',
+      '  }',
+      '  return { ...otherContent, title: "Other" };',
+      '}',
+      '',
+    ].join('\n'),
+  },
+  '@lib/homepage/content': {
+    file: 'src/lib/homepage/content.ts',
+    text: 'export const aiCallout1 = {\n  body: "Webflow’s platform — for humans & machines.",\n};\nexport const title = "Home";\n',
+  },
+  '@lib/other': { file: 'src/lib/other.ts', text: 'export const aiCallout1 = { body: "Not this one" };\n' },
+};
+const CALLED_PAGE = (call) =>
+  `---\nimport { getPage } from "@lib/content";\nconst { aiCallout1, title, document } = await ${call};\n---\n<p>{aiCallout1.body}</p>`;
+
+test('data destructured from an awaited call is followed into the function, by its literal argument', async () => {
+  const { result, writes } = await edits(CALLED_PAGE('getPage("home")'), CALLED);
+  assert.deepEqual(result[0].bound, { kind: 'source', expression: 'aiCallout1.body', file: 'src/lib/homepage/content.ts', uses: 1 });
+  assert.equal(result[0].target.value, 'Webflow’s platform — for humans & machines.');
+  await result[0].apply('Edited ’ words');
+  assert.equal(writes[0].after.includes('body: "Edited ’ words"'), true);
+  const other = await edits(CALLED_PAGE('getPage("other")'), CALLED);
+  assert.equal(other.result[0].bound.file, 'src/lib/other.ts', 'the other argument reads the other module');
+});
+
+test('a call that cannot say which return it takes is refused, not guessed', async () => {
+  const { result } = await edits(CALLED_PAGE('getPage(which)'), CALLED);
+  assert.equal(result[0].bound.kind, 'blocked');
+  assert.equal(result[0].bound.reason, 'ambiguous');
+});
+
+test('a namespace import is a module, not a default export', async () => {
+  const files = { '@lib/n': { file: 'src/lib/n.ts', text: 'export const hero = { t: "Namespaced" };\nexport default { t: "Default" };\n' } };
+  const { result } = await edits('---\nimport * as ns from "@lib/n";\nconst { hero } = ns;\n---\n<h1>{hero.t}</h1><h2>{ns.hero.t}</h2>', files);
+  assert.deepEqual(
+    result.map((edit) => edit.target.value),
+    ['Namespaced', 'Namespaced'],
+  );
 });

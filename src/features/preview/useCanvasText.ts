@@ -18,7 +18,7 @@ import {
 import { applyCanvasText, applyCanvasTexts, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
 import { onCanvasTextRefresh } from './canvasTextRefresh';
-import { canvasSourceCue, canvasSourceHover, canvasSourceTargets, clearCanvasSourceCue, type CanvasSourceTarget } from '../../ui/canvasTextSourceCue';
+import { canvasSourceCue, canvasSourceHover, clearCanvasSourceCue } from '../../ui/canvasTextSourceCue';
 import {
   CANVAS_FOCUS_PATHS_MAX,
   canvasTextFocus,
@@ -141,7 +141,6 @@ function startCanvasText(current: RefObject<Options>) {
     unsubscribeContent();
     unsubscribeRefresh();
     clearCanvasSourceCue(session);
-    canvasSourceTargets.set(new Map());
     if (catalog) {
       current.current?.post({ ...catalog, session: crypto.randomUUID(), targets: [] });
     }
@@ -332,7 +331,6 @@ async function publishCanvasTextSession(
     const combined = [...kept, ...refreshed].slice(0, 2_000);
     const editable = combined.filter((plan) => plan.bound?.kind !== 'blocked');
     const blocked = combined.filter((plan) => plan.bound?.kind === 'blocked').slice(0, CANVAS_BLOCKED_LIMIT);
-    canvasSourceTargets.set(sourceTargetsOf(combined));
     publish({
       plans: combined,
       catalog: {
@@ -386,17 +384,6 @@ function parseHoverMessage(input: unknown): { readonly path: string; readonly bo
   } catch {
     return undefined;
   }
-}
-
-// The bound texts of the page by the expression that prints them, for the Settings hint.
-function sourceTargetsOf(plans: readonly CanvasTextEdit[]): ReadonlyMap<string, CanvasSourceTarget> {
-  const targets = new Map<string, CanvasSourceTarget>();
-  for (const plan of plans) {
-    if (plan.bound?.kind === 'source') {
-      targets.set(plan.bound.expression, { expression: plan.bound.expression, file: plan.bound.file, uses: plan.bound.uses });
-    }
-  }
-  return targets;
 }
 
 // The cue over the text being typed in: which source its words are written to.
