@@ -37,13 +37,12 @@
   /* Popover/menu surface. Aliased to `raised` so the ramp has one fewer near-duplicate
      grey (it was #363636, a hair off raised's #3b3b3b). */
   --color-bg-surface-overlay: var(--color-bg-surface-raised);
-  /* Attribute and variable chips (the element tip, a connected spacing value, a variable token): a
-     saturated purple with white text, as the blue class chip is a saturated blue with white text.
-     White on the fill holds AA on every state. The fill cannot also reach 3:1 against the grey
-     tooltip: that needs a fill brighter than white text can sit on (they are mutually exclusive
-     for any grey surface), so the fill is held at the blue chip's own distance from the surface. */
+  /* Attribute-selector chips in the element tooltip ([data-x], [style="…"]) only: a saturated purple
+     with white text, as the blue class chip beside them is a saturated blue with white text. White on
+     the fill is 5.5:1 at rest. The fill cannot also reach 3:1 against the grey tooltip, since that needs a
+     fill so bright that white text falls to about 3.7:1; it stands off the tooltip as far as the blue
+     chip does. Other purple chips (spacing, variables) keep their own colours. */
   --color-attribute-chip-bg: #6c4fe0;
-  --color-attribute-chip-bg-hover: #7357e6;
   --color-attribute-chip-text: #ffffff;
   --color-bg-hover: rgba(255, 255, 255, 0.05);
   --color-bg-active: rgba(255, 255, 255, 0.08);
