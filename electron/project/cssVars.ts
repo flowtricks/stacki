@@ -568,5 +568,5 @@ export { setSectionTitle, removeSection, addSection, moveHeading, setVariable, m
 // public names are still answered here, where every caller imports them from.
 export { readDeclarations, findStylesheets } from './cssVarRead';
 export { findFamilies, groupRules, labelForRule } from './cssVarGroups';
-export { readVariables } from './cssVarModel';
+export { readVariables, readVariablesSliced } from './cssVarModel';
 export { renameVariables } from './cssVarRename';

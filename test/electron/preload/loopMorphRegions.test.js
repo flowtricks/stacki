@@ -17,7 +17,6 @@ const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
 const loadRenderer = require('../../helpers/rendererModule');
 const loadMorphModules = require('../../helpers/morphModules.js');
-const { LIMITS } = require('#dist/shared/core/limits.js');
 
 const ENTRIES = ['61.4%', '43%', '0ish', '4.2 days'];
 const LOOP = '0.0.0';
@@ -86,7 +85,7 @@ function walk(steps) {
   global.document = dom.window.document;
   try {
     const regions = loadRenderer('electron/preload/frameRegions.ts');
-    const morph = loadMorphModules({ previewMarkersMax: LIMITS.previewMarkersMax, previewMorphWorkMax: LIMITS.previewMorphWorkMax });
+    const morph = loadMorphModules();
     const parse = (html) => new dom.window.DOMParser().parseFromString(`<!doctype html><body>${html}</body>`, 'text/html');
     const clean = (withAnchors) => {
       const copy = withAnchors.cloneNode(true);

@@ -47,13 +47,12 @@ test('nested imports, URLs, aliases and Sass partials retain their entry points'
   );
 });
 
-test('malformed, oversized and cyclic stylesheet graphs fail explicitly', () => {
+test('malformed and cyclic stylesheet graphs fail explicitly, and size never does', () => {
   assert.throws(() => componentPreviewStylePaths({ '/src/styles/base.css': {} }), /source text/);
-  assert.throws(() => componentPreviewStylePaths({ '/src/styles/base.css': 'x'.repeat(10 * 1024 * 1024 + 1) }), /source limit/);
-  assert.throws(
-    () => componentPreviewStylePaths(Object.fromEntries(Array.from({ length: 1025 }, (_, index) => [`/src/styles/${index}.css`, '']))),
-    /count exceeds limit/,
-  );
+  // No size limit: a stylesheet past the old 10 MB bound, and a project of thousands of them, still resolve.
+  assert.deepEqual(componentPreviewStylePaths({ '/src/styles/base.css': 'a{}'.repeat(4 * 1024 * 1024) }), ['/src/styles/base.css']);
+  const thousands = Object.fromEntries(Array.from({ length: 5000 }, (_, index) => [`/src/styles/${index}.css`, '']));
+  assert.equal(componentPreviewStylePaths(thousands).length, 5000);
   assert.throws(
     () =>
       componentPreviewStylePaths({

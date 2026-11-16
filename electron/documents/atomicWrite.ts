@@ -135,6 +135,15 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
         `${path.basename(target.value)} is hard-linked to another file, so Stacki will not ` + `save it: saving would leave the other copy with the old text.`,
     });
   }
+  // Replacing by rename would succeed even though the file itself forbids writing (the rename
+  // needs the folder's permission, not the file's), silently overriding a protection its owner
+  // set on purpose. Without any write bit the file is read-only, and the save says so.
+  if ((stats.mode & 0o222) === 0) {
+    return err({
+      code: 'filesystem',
+      message: `${path.basename(target.value)} is read-only, so Stacki will not save it. Make it writable to edit it here.`,
+    });
+  }
   const directory = prepareAtomicDirectory(target.value);
   if (!directory.ok) {
     return directory;

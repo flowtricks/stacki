@@ -1,0 +1,36 @@
+/* The window-wide recovery screen (RecoveryScreen.tsx): the app's panel colour, backgrounds instead of borders. */
+.recovery-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-panel);
+  color: var(--text);
+  overflow: auto;
+}
+.recovery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 40rem;
+}
+.recovery-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.recovery-reason,
+.recovery-reassurance {
+  margin: 0;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}

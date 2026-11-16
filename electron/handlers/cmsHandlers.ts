@@ -29,6 +29,7 @@ import {
   readCmsJson,
 } from './cmsFiles';
 import type { MainHost } from './mainHost';
+import { runSliced, type SlicedWork } from '../lib/slicedWork';
 import { readProjectFolders } from '../lib/projectFolders';
 import { cmsFilesFor, configOf, isAstroSource } from '../../shared/properties/projectFolders';
 
@@ -44,61 +45,67 @@ function registerCmsListHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
   // Data modules and root constants files may hold one record of site settings.
   // Other source files retain the stricter collection rule, so internal utility
   // constants do not become CMS entries.
-  ipcMain.handle('cms:list', async (_event, projectPath) => {
-    const root = path.join(projectPath, 'src');
-    const files: CmsFile[] = [];
-    if (!fs.existsSync(root)) {
-      return { files };
-    }
-    const checkDirectory = directoryBudget(root);
-    const walk = (directory: string, rel: string, depth: number, only: { readonly astroOnly: boolean } = { astroOnly: false }): void => {
-      let entries = [];
-      try {
-        entries = fs.readdirSync(directory, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      checkDirectory(directory, entries.length);
-      assert(depth <= MAIN_LIMITS.directoryDepthMax, 'cms:list: the budget bounds depth');
-      for (const entry of entries) {
-        if (entry.name.startsWith('.') || entry.name === 'node_modules') {
-          continue;
-        }
-        const full = path.join(directory, entry.name);
-        const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
-        if (entry.isDirectory()) {
-          // src/assets holds files the site imports (images, Lottie JSON), not content.
-          if (entryRel !== 'assets') {
-            walk(full, entryRel, depth + 1, only);
-          }
-        } else if (!only.astroOnly || isAstroSource(entry.name)) {
-          files.push(...cmsEntriesOf(full, entryRel, { includeGeneral: cmsIncludesGeneral(entryRel) }));
-        }
-      }
-    };
-    // The project may name its data files (.stacki/folders.json, `cms.files`):
-    // then exactly those are read, each with its single values, and nothing is
-    // detected. Without the key the walk below finds them, as it always has.
-    const folders = configOf(readProjectFolders(projectPath));
-    const chosen = cmsFilesFor(folders);
-    if (chosen === undefined) {
-      walk(root, '', 0);
-    } else {
-      // Astro files are sources whatever the list says (the open one is always
-      // included), so the walk still finds every one of them; the list names only the
-      // other data files, and an Astro file it names (saved before that rule) is ignored.
-      walk(root, '', 0, { astroOnly: true });
-      for (const file of chosen.filter((other) => !isAstroSource(other))) {
-        assert(file.startsWith('src/'), 'cms:list: a chosen data file is under src/');
-        const full = path.join(projectPath, ...file.split('/'));
-        if (fs.existsSync(full) && fs.statSync(full).isFile()) {
-          files.push(...cmsEntriesOf(full, file.slice('src/'.length), { includeGeneral: true }));
-        }
-      }
-    }
-    files.sort((left, right) => left.rel.localeCompare(right.rel));
+  ipcMain.handle('cms:list', async (_event, projectPath) => runSliced(cmsListSliced(projectPath)));
+}
+
+// Written once for both drivers (lib/slicedWork.ts): every file is parsed, so a project with
+// thousands of data files is one long run that yields after each, never a cap on how many are read.
+function* cmsListSliced(projectPath: string): SlicedWork<{ readonly files: CmsFile[] }> {
+  const root = path.join(projectPath, 'src');
+  const files: CmsFile[] = [];
+  if (!fs.existsSync(root)) {
     return { files };
-  });
+  }
+  const checkDirectory = directoryBudget(root);
+  function* walk(directory: string, rel: string, depth: number, only: { readonly astroOnly: boolean } = { astroOnly: false }): SlicedWork<void> {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    checkDirectory(directory, entries.length);
+    assert(depth <= MAIN_LIMITS.directoryDepthMax, 'cms:list: the budget bounds depth');
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+        continue;
+      }
+      const full = path.join(directory, entry.name);
+      const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        // src/assets holds files the site imports (images, Lottie JSON), not content.
+        if (entryRel !== 'assets') {
+          yield* walk(full, entryRel, depth + 1, only);
+        }
+      } else if (!only.astroOnly || isAstroSource(entry.name)) {
+        files.push(...cmsEntriesOf(full, entryRel, { includeGeneral: cmsIncludesGeneral(entryRel) }));
+        yield;
+      }
+    }
+  }
+  // The project may name its data files (.stacki/folders.json, `cms.files`):
+  // then exactly those are read, each with its single values, and nothing is
+  // detected. Without the key the walk below finds them, as it always has.
+  const folders = configOf(readProjectFolders(projectPath));
+  const chosen = cmsFilesFor(folders);
+  if (chosen === undefined) {
+    yield* walk(root, '', 0);
+  } else {
+    // Astro files are sources whatever the list says (the open one is always
+    // included), so the walk still finds every one of them; the list names only the
+    // other data files, and an Astro file it names (saved before that rule) is ignored.
+    yield* walk(root, '', 0, { astroOnly: true });
+    for (const file of chosen.filter((other) => !isAstroSource(other))) {
+      assert(file.startsWith('src/'), 'cms:list: a chosen data file is under src/');
+      const full = path.join(projectPath, ...file.split('/'));
+      if (fs.existsSync(full) && fs.statSync(full).isFile()) {
+        files.push(...cmsEntriesOf(full, file.slice('src/'.length), { includeGeneral: true }));
+        yield;
+      }
+    }
+  }
+  files.sort((left, right) => left.rel.localeCompare(right.rel));
+  return { files };
 }
 
 // What one file under src/ adds to the CMS panel, by its type: a data module's

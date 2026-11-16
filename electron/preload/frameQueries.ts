@@ -18,7 +18,6 @@ import { computeValues } from './frameColorProbe';
 import { queryAuthoredStyles } from './frameStyleSources';
 import { inspectScopedProperties, inspectWinningDeclarations, WINNING_LIMITS, type WinningDeclaration } from './frameAuthoredStyles';
 import { list, pathText, text } from '../../shared/core/boundary';
-import { LIMITS } from '../../shared/core/limits';
 import { renderedPageImage, renderedPageType } from './framePageMetadata';
 import { renderedPageText } from './framePageText';
 import { freezeViewportHeight, report } from './frameViewport';
@@ -229,7 +228,6 @@ function hidePending(input: unknown): void {
 }
 
 const CLASS_PATCH_NAMES_MAX = 64;
-const CLASS_PATCH_OCCURRENCES_MAX = 1024;
 
 function applyClassPatch(data: Record<string, unknown>): void {
   let path: string;
@@ -248,10 +246,7 @@ function applyClassPatch(data: Record<string, unknown>): void {
   if ([...add, ...remove].some((name) => !name || name.length > 256 || /\s/.test(name))) {
     return;
   }
-  const elements = allElementsWithPath(path, CLASS_PATCH_OCCURRENCES_MAX);
-  if (!elements) {
-    return;
-  }
+  const elements = allElementsWithPath(path);
   for (const element of elements) {
     for (const name of remove) {
       element.classList.remove(name);
@@ -361,16 +356,10 @@ function answerDeclarations(
 // at the parent instead of the selected node.
 function answerQueryTextHost(path: string, parent: unknown): Element | undefined {
   const runs = runsOf(path) ?? [];
-  if (runs.length > LIMITS.treeNodesMax) {
-    return undefined;
-  }
-  let visited = 0;
+  // No node cap: each loop below walks a finite array the page already holds, so
+  // its bound is that array's own length, and it stops at the first text node.
   for (const run of runs) {
     for (const node of run) {
-      visited += 1;
-      if (visited > LIMITS.treeNodesMax) {
-        return undefined;
-      }
       if (isText(node)) {
         if (node.isConnected) {
           if (node.data.trim().length > 0) {

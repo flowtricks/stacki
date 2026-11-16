@@ -16,7 +16,7 @@ const loadRenderer = require('../../helpers/rendererModule.js');
 
 const { EMPTY_CHAT, reduceChat, applyEvent, waitingPermissions, pendingChanges } = loadRenderer('src/features/ai/chatReducer.ts');
 const { matchingCommands } = loadRenderer('src/features/ai/composer/ComposerInput.tsx');
-const { lineDiff, compactRows } = loadRenderer('src/features/ai/lineDiff.ts');
+const { diffRows, compactRows } = loadRenderer('src/features/ai/lineDiff.ts');
 const { filterChats, sortChats } = loadRenderer('src/features/ai/sessions/SessionsView.tsx');
 
 function random(seed) {
@@ -182,7 +182,7 @@ test('the slash menu matches commands by name, prefix matches first, and closes 
 });
 
 test('the diff shows every line once, and compacts long runs of context', () => {
-  const rows = lineDiff('a\nb\nc\nd\ne\nf\ng\nh', 'a\nb\nC\nd\ne\nf\ng\nh\ni');
+  const rows = diffRows('a\nb\nc\nd\ne\nf\ng\nh', 'a\nb\nC\nd\ne\nf\ng\nh\ni').rows;
   assert.equal(
     rows
       .filter((row) => row.kind === 'added')
@@ -200,7 +200,7 @@ test('the diff shows every line once, and compacts long runs of context', () => 
   const compact = compactRows(rows, 1);
   assert.ok(compact.some((row) => row.kind === 'gap'));
   assert.deepEqual(
-    lineDiff(undefined, 'x\ny').map((row) => row.kind),
+    diffRows(undefined, 'x\ny').rows.map((row) => row.kind),
     ['added', 'added'],
   );
 });

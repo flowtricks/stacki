@@ -16,7 +16,6 @@ const { test } = require('node:test');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
-const { LIMITS } = require('#dist/shared/core/limits.js');
 
 const STAMP = (letter) => `avb-d:${letter.repeat(64)}:src/pages/index.astro`;
 const NODES = {
@@ -44,9 +43,6 @@ function load() {
     platform: 'browser',
     format: 'cjs',
     define: { 'import.meta.hot': 'undefined' },
-    banner: {
-      js: `const AVB_PREVIEW_LIMITS = Object.freeze(${JSON.stringify({ previewMarkersMax: LIMITS.previewMarkersMax, previewMorphWorkMax: LIMITS.previewMorphWorkMax })});`,
-    },
     logLevel: 'silent',
   });
   return { output, directory };

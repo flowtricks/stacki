@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
+import { runSync, type SlicedWork } from '../lib/slicedWork';
 
 export interface RenameFile {
   readonly file: string;
@@ -10,7 +11,6 @@ export interface PageRenameInventory {
   readonly pages: readonly string[];
   readonly folders: readonly string[];
   readonly files: readonly string[];
-  readonly texts: readonly RenameFile[];
 }
 const ignored = new Set([
   'node_modules',
@@ -28,20 +28,22 @@ const ignored = new Set([
 ]);
 const binary = /\.(png|jpe?g|webp|gif|ico|avif|pdf|woff2?|ttf|otf|eot|mp[34]|mov|webm|zip|gz|br|wasm)$/i;
 
-/** Inventory authored files once; never follow links into dependencies or another project. */
-export function pageRenameInventory(root: string): PageRenameInventory {
+/**
+ * Inventory authored files once; never follow links into dependencies or another project.
+ *
+ * No size limit (owner requirement): a project of any number of files, folders
+ * and levels is inventoried. A link is refused outright, so the walk cannot
+ * cycle and ends within the number of folders it discovers. The walk yields
+ * after each folder, so a caller on the main thread can run it sliced.
+ */
+export function* pageRenameInventoryWork(root: string): SlicedWork<PageRenameInventory> {
   const pending = [''];
   const files: string[] = [];
   const folders: string[] = [];
-  let count = 0;
   for (let index = 0; index < pending.length; index++) {
     const directory = pending[index];
     assert(directory !== undefined, 'Inventory queue contains its current directory');
     const entries = fs.readdirSync(path.join(root, directory), { withFileTypes: true });
-    count += entries.length;
-    if (count > 10_000 || directory.split('/').length > 32) {
-      throw new Error('Rename supports at most 10,000 project entries and 32 folder levels.');
-    }
     for (const entry of entries) {
       const file = directory ? directory + '/' + entry.name : entry.name;
       if (ignored.has(entry.name) || /^\.stacki\/(preview|canvas|io|studio)(\/|$)/.test(file)) {
@@ -59,39 +61,40 @@ export function pageRenameInventory(root: string): PageRenameInventory {
         files.push(file);
       }
     }
+    yield;
   }
-  assert(files.length <= 10_000, 'Rename files stay within the entry budget');
   return {
     files,
     folders,
     pages: files.filter((file) => /^src\/pages\/.*\.(astro|mdx?)$/i.test(file)).map((file) => file.slice(10)),
-    texts: inventoryTexts(root, files),
   };
 }
-function inventoryTexts(root: string, files: readonly string[]): readonly RenameFile[] {
-  const texts: RenameFile[] = [];
-  let total = 0;
-  for (const file of files) {
-    if (binary.test(file) || /(^|\/)(package-lock.json|pnpm-lock.yaml|yarn.lock)$/.test(file)) {
-      continue;
-    }
-    const full = path.join(root, file);
-    const size = fs.statSync(full).size;
-    total += size;
-    if (size > 5_000_000 || total > 100_000_000) {
-      throw new Error(`Rename text scan exceeds its 5 MB/file or 100 MB/project limit: ${file}`);
-    }
-    const bytes = fs.readFileSync(full);
-    if (bytes.length !== size) {
-      throw new Error(`${file} changed while preparing the rename. Try again.`);
-    }
-    if (bytes.includes(0)) {
-      continue;
-    }
-    const source = bytes.toString('utf8');
-    if (Buffer.from(source).equals(bytes)) {
-      texts.push({ file, source });
-    }
+
+/** The inventory in one go, for callers that already block. */
+export function pageRenameInventory(root: string): PageRenameInventory {
+  return runSync(pageRenameInventoryWork(root));
+}
+
+/** Whether a rewrite may read this file as text at all: binaries and lockfiles never. */
+export function isRenameTextCandidate(file: string): boolean {
+  return !binary.test(file) && !/(^|\/)(package-lock.json|pnpm-lock.yaml|yarn.lock)$/.test(file);
+}
+
+/**
+ * One file's text, of any size, or undefined when it is not UTF-8 text (a NUL
+ * byte, or bytes that do not survive a decode and encode). Reading the file
+ * whole is the point: a rewrite must see every byte it may change.
+ */
+export function readRenameText(root: string, file: string): RenameFile | undefined {
+  const full = path.join(root, file);
+  const size = fs.statSync(full).size;
+  const bytes = fs.readFileSync(full);
+  if (bytes.length !== size) {
+    throw new Error(`${file} changed while preparing the rename. Try again.`);
   }
-  return texts;
+  if (bytes.includes(0)) {
+    return undefined;
+  }
+  const source = bytes.toString('utf8');
+  return Buffer.from(source).equals(bytes) ? { file, source } : undefined;
 }

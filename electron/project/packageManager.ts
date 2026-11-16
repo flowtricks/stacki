@@ -27,23 +27,53 @@ export function installArguments(manager: PackageManager): readonly string[] {
   }
 }
 
-// The packageManager field in package.json names it outright; otherwise the
-// lockfile shows which one last installed; else npm.
+// The packageManager field in package.json names it outright; otherwise the lockfile shows
+// which one last installed; else npm. A package inside a workspace keeps neither (the root
+// owns the lockfile and the field), so each parent folder is asked in turn, nearest first.
 export function detectPackageManager(directory: string): PackageManager {
+  for (const folder of ancestorsOf(directory)) {
+    const found = managerIn(folder);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return 'npm';
+}
+
+/** The folder itself, then each parent up to the filesystem root. A monorepo package keeps its lockfile, node_modules and `astro` dependency in the workspace root. */
+export function ancestorsOf(directory: string): readonly string[] {
+  let current = path.resolve(directory);
+  const chain = [current];
+  let parent = path.dirname(current);
+  // Each step moves one folder up and stops where `dirname` stops changing: the root.
+  while (parent !== current) {
+    current = parent;
+    chain.push(current);
+    parent = path.dirname(current);
+  }
+  return chain;
+}
+
+// What one folder says: its package.json's field, then its lockfiles.
+function managerIn(directory: string): PackageManager | undefined {
   const declared = declaredPackageManager(directory);
   if (declared !== undefined) {
     return declared;
   }
-  if (fs.existsSync(path.join(directory, 'pnpm-lock.yaml'))) {
+  const has = (file: string): boolean => fs.existsSync(path.join(directory, file));
+  if (has('pnpm-lock.yaml') || has('pnpm-workspace.yaml')) {
     return 'pnpm';
   }
-  if (fs.existsSync(path.join(directory, 'yarn.lock'))) {
+  if (has('yarn.lock')) {
     return 'yarn';
   }
-  if (fs.existsSync(path.join(directory, 'bun.lockb')) || fs.existsSync(path.join(directory, 'bun.lock'))) {
+  if (has('bun.lockb') || has('bun.lock')) {
     return 'bun';
   }
-  return 'npm';
+  if (has('package-lock.json') || has('npm-shrinkwrap.json')) {
+    return 'npm';
+  }
+  return undefined;
 }
 
 function declaredPackageManager(directory: string): PackageManager | undefined {

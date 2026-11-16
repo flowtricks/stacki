@@ -8,6 +8,7 @@ import postcss from 'postcss';
 import type { Rule as PostcssRule, Root } from 'postcss';
 import path from 'path';
 import { assert } from '../../shared/core/assert';
+import { runSync, type SlicedWork } from '../lib/slicedWork';
 import { described, type Described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import { readAstroSheet, type StyleBlockWriting, type StyleRegion } from '../documents/astroStyleBlocks';
 import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, readDeclarations, toPosix, type Rule } from './cssVarRead';
@@ -36,9 +37,9 @@ export const isAstroFile = (file: string): boolean => /\.astro$/i.test(file);
 const DECLARATION = /--[^\s:;{}()'"\\,]+\s*:/;
 
 /** Every `.astro` file under `src`, the only place Astro takes pages and components from. */
-export function findAstroSources(projectPath: string): string[] {
+export function* astroSourcesSliced(projectPath: string): SlicedWork<string[]> {
   const found: string[] = [];
-  const walk = (directory: string, depth: number): void => {
+  function* walk(directory: string, depth: number): SlicedWork<void> {
     if (depth > CSS_VARIABLE_LIMITS.stylesheetDepthMax) {
       return;
     }
@@ -54,14 +55,19 @@ export function findAstroSources(projectPath: string): string[] {
       }
       const full = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        walk(full, depth + 1);
+        yield* walk(full, depth + 1);
       } else if (isAstroFile(entry.name)) {
         found.push(full);
       }
     }
-  };
-  walk(path.join(projectPath, 'src'), 0);
+    yield;
+  }
+  yield* walk(path.join(projectPath, 'src'), 0);
   return [...new Set(found)].sort();
+}
+
+export function findAstroSources(projectPath: string): string[] {
+  return runSync(astroSourcesSliced(projectPath));
 }
 
 // A `<style>` in an expression is left out: whether it renders is decided at run

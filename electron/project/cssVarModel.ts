@@ -3,14 +3,14 @@
 
 import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
-import { MAIN_LIMITS } from './variableWorkspace';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
 import { assert } from '../../shared/core/assert';
 import { described, type MessageRef } from '../../shared/properties/i18n/messageRef';
-import { toPosix, findStylesheets, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
+import { toPosix, stylesheetsSliced, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
 import { labelForRule, commonStem, namesOf, groupRules, findFamilies, prefixSections } from './cssVarGroups';
 import { shortLabel } from '../../shared/properties/variableGroups';
 import { resolveValue, colorOf, isUncomputableColor, kindOf } from './cssVarValues';
-import { findAstroSources, isAstroFile, readAstroVariables, relativeTo, type VariableScope } from './cssVarRegions';
+import { astroSourcesSliced, isAstroFile, readAstroVariables, relativeTo, type VariableScope } from './cssVarRegions';
 
 export interface Column {
   readonly id: string;
@@ -309,17 +309,18 @@ export { shortLabel };
  * panel is a place to find variables, not a file browser. Stylesheets come first:
  * where a name is declared in both, the stylesheet is the project-wide answer.
  */
-export function readVariables(projectPath: string): {
+export interface VariablesModel {
   files: FileModel[];
   values: Record<string, string>;
-} {
+}
+
+export function* variablesSliced(projectPath: string): SlicedWork<VariablesModel> {
   const files: FileModel[] = [];
-  for (const abs of findStylesheets(projectPath)) {
+  for (const abs of yield* stylesheetsSliced(projectPath)) {
+    // One stylesheet is one unit: a project with thousands of them is a longer run, never a refusal.
+    yield;
     let text: string;
     try {
-      if (fs.statSync(abs).size > MAIN_LIMITS.cssVariableFileBytesMax) {
-        continue;
-      }
       text = fs.readFileSync(abs, 'utf8');
     } catch {
       continue;
@@ -345,7 +346,7 @@ export function readVariables(projectPath: string): {
       count: rules.reduce((sum, rule) => sum + namesOf(rule).length, 0),
     });
   }
-  files.push(...readAstroFiles(projectPath));
+  files.push(...(yield* readAstroFiles(projectPath)));
   // Values reference each other across files as freely as within one, so the
   // map every value is resolved against is the project's, not the file's.
   const map = new Map<string, string>();
@@ -373,20 +374,27 @@ export function readVariables(projectPath: string): {
         }
       }
     }
+    yield;
   }
   return { files, values };
 }
 
+export function readVariables(projectPath: string): VariablesModel {
+  return runSync(variablesSliced(projectPath));
+}
+
+export function readVariablesSliced(projectPath: string): Promise<VariablesModel> {
+  return runSliced(variablesSliced(projectPath));
+}
+
 // One model per Astro file whose `<style>` blocks declare custom properties. Its
 // offsets are the file's, so a cell is written back exactly as a stylesheet's is.
-function readAstroFiles(projectPath: string): FileModel[] {
+function* readAstroFiles(projectPath: string): SlicedWork<FileModel[]> {
   const files: FileModel[] = [];
-  for (const abs of findAstroSources(projectPath)) {
+  for (const abs of yield* astroSourcesSliced(projectPath)) {
+    yield;
     let text: string;
     try {
-      if (fs.statSync(abs).size > MAIN_LIMITS.cssVariableFileBytesMax) {
-        continue;
-      }
       text = fs.readFileSync(abs, 'utf8');
     } catch {
       continue;

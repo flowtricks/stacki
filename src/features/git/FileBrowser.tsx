@@ -3,8 +3,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon } from '../../ui/Icons';
 import FileStatus from './FileStatus';
 import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
 
-const FILE_LIMITS = { entriesMax: 100_000, pathCharsMax: 8_192, depthMax: 64 } as const;
+// A project of any size lists whole: the entry bound is the platform's. Path width and depth are structural.
+const FILE_LIMITS = { entriesMax: LIMITS.scanEntriesMax, pathCharsMax: 8_192, depthMax: 64 } as const;
 export interface BrowserFile {
   readonly path: string;
   readonly name?: string;
@@ -139,7 +141,10 @@ function pathsUnder<T extends BrowserFile>(node: FileTree<T>): string[] {
     }
     assert(paths.length <= FILE_LIMITS.entriesMax, 'FileBrowser: subtree file limit exceeded');
     // Reversed children preserve the legacy depth-first order without shifting the worklist.
-    pending.push(...[...current.dirs.values()].reverse());
+    // A loop rather than a spread: a folder of very many folders would overflow the argument list.
+    for (const child of [...current.dirs.values()].reverse()) {
+      pending.push(child);
+    }
   }
   return paths;
 }

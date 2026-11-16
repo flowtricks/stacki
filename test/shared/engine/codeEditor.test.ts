@@ -5,8 +5,8 @@
 // error, visual edits are refused `source-invalid`, and visual editing resumes
 // as soon as a later save makes it parse. An outside edit elsewhere in the file
 // is merged; one that overlaps the patch is a `merge-conflict` with the disk
-// untouched, never an overwrite. A patch whose witnesses do not hold, or whose
-// payload is past `intentPayloadBytesMax`, is refused and writes nothing.
+// untouched, never an overwrite. A patch whose witnesses do not hold is refused
+// and writes nothing; one as large as a file is applied whole.
 // Method: the real main-process handlers in the windowless harness on
 // temporary files; outside edits are made directly on disk between requests.
 // The wire parser gets its known-good and each known-bad shape; the corpus is
@@ -20,7 +20,6 @@ import * as path from 'node:path';
 import { mainHarness } from '../../helpers/mainHarness.ts';
 import { diffCodePatch, type CodeHunk } from '#dist/shared/engine/codePatch.js';
 import { parseEditRequest, type Edit } from '#dist/shared/engine/editRequest.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
 import type { PageNode } from '#dist/shared/page/pageNode.js';
 import { toByteSpan, toUtf16Span } from '#dist/shared/core/span.js';
 import { parsePageDiskRead, parsePageEditResult, type PageDiskRead } from '#dist/shared/ipc/pageSave.js';
@@ -121,7 +120,6 @@ test('parseEditRequest takes a code patch and refuses each malformed shape', () 
     [[{ ...hunk, text: jsonNull }], /expected string/],
     [[{ span: { start: 2, end: 1 }, expected: '', text: '' }], /end/],
     [[hunk, hunk], /ascending disjoint/],
-    [Array.from({ length: LIMITS.splicesPerIntentMax + 1 }, () => hunk), /exceeds/],
   ];
   for (const [hunks, message] of bad) {
     assert.throws(() => parseEditRequest({ ...good, edit: { tag: 'code-patch', hunks } }), message);
@@ -242,23 +240,23 @@ test('hunks that are not of the named bytes are refused, writing nothing', async
   assert.equal(fs.readFileSync(file, 'utf8'), text);
 });
 
-test('a patch past intentPayloadBytesMax is a resource-limit, never truncated', async (context) => {
+test('a patch of many megabytes is applied whole, never refused for its size and never truncated', async (context) => {
   const harness = fixture();
   context.after(harness.dispose);
   const text = '<p>x</p>\n';
   const file = page(harness, 'index.astro', text);
   const before = await read(harness, file);
-  // Inside the wire bound in characters, past the payload bound in bytes.
-  const wide = 'é'.repeat(Math.floor(LIMITS.intentPayloadBytesMax / 2) + 1);
-  assert.ok(wide.length <= LIMITS.intentPayloadBytesMax);
+  // Eight megabytes of two-byte characters in one hunk: the payload is a whole file.
+  const wide = 'é'.repeat(4 * 1024 * 1024);
   const edit: Edit = {
     tag: 'code-patch',
     hunks: [{ span: toByteSpan(3, 4), expected: 'x', text: wide }],
   };
-  assert.equal(rejection(await send(harness, file, before.checksum, edit)), 'resource-limit');
-  assert.equal(fs.readFileSync(file, 'utf8'), text, 'nothing was written');
-  // The renderer's own diff refuses the same text before sending it.
-  assert.deepEqual(diffCodePatch(before.source, wide), { ok: false, error: 'resource-limit' });
+  const sent = await send(harness, file, before.checksum, edit);
+  assert.equal(sent.ok, true, 'the patch is accepted');
+  assert.equal(fs.readFileSync(file, 'utf8'), `<p>${wide}</p>\n`, 'every byte was written');
+  // The renderer's own diff produces the same patch, and refuses nothing.
+  assert.ok(diffCodePatch(before.source, `<p>${wide}</p>\n`).ok);
 });
 
 test('Markdown pages take code patches, and gestures on what they wrote', async (context) => {

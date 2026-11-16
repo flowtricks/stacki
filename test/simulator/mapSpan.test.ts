@@ -11,8 +11,9 @@
 // derived by hand and re-checked by the reference: identical attribute bytes on
 // different elements (hero and footer `title="Old"`), identical siblings,
 // moved and duplicated blocks, text inserted and deleted around and inside the
-// span, a deep restructure. (3) Budget exhaustion is `too-costly`, and a
-// precondition breach asserts with a pinned message.
+// span, a deep restructure. (3) Budget exhaustion degrades to a coarse diff and
+// never refuses: a span inside a proven block resolves, anything else is
+// `gone`; and a precondition breach asserts with a pinned message.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { diffBytes, DIFF_BUDGET } from '#dist/shared/engine/diff.js';
@@ -201,15 +202,22 @@ test('identical bytes map to themselves without a diff search', () => {
   }
 });
 
-test('exhausted budgets are too-costly; empty and out-of-file spans assert', () => {
+test('exhausted budgets degrade to proven blocks; empty and out-of-file spans assert', () => {
   const source = encodeUtf8(HERO_FOOTER);
   const target = encodeUtf8(`<Nav />\n${HERO_FOOTER}`);
   const span: ByteSpan = toByteSpan(1, 17);
   const budget = (workMax: number, distanceMax: number) => ({ workMax, distanceMax });
   const workMax = DIFF_BUDGET.workMax;
-  assert.deepEqual(mapSpan(source, target, span, budget(workMax, 7)), { tag: 'too-costly' });
-  assert.deepEqual(mapSpan(source, target, span, budget(10, 8)), { tag: 'too-costly' });
+  // A distance bound under the 8 bytes inserted: the diff is coarse. The common
+  // prefix is the `<` and the common suffix is the rest of the file, shifted by 8.
+  assert.deepEqual(mapSpan(source, target, span, budget(workMax, 7)), resolved(9, 25));
+  // A span across the two proven blocks is not proven whole: `gone`, not a guess.
+  assert.deepEqual(mapSpan(source, target, toByteSpan(0, source.length), budget(workMax, 7)), { tag: 'gone' });
   assert.deepEqual(mapSpan(source, target, span, budget(workMax, 8)), resolved(9, 25));
+  // A coarse diff proves nothing about bytes it did not align: a span over an
+  // edit is `gone`, and the mapper never guesses where it went.
+  const edited = encodeUtf8(HERO_FOOTER.replace('Old', 'Zzzzzzzzz'));
+  assert.deepEqual(mapSpan(source, edited, toByteSpan(10, 20), budget(0, 2)), { tag: 'gone' });
   assert.throws(() => mapSpan(source, target, toByteSpan(3, 3), DIFF_BUDGET), /Assertion failed: Only non-empty spans are mapped/);
   assert.throws(
     () => mapSpan(source, target, toByteSpan(40, source.length + 1), DIFF_BUDGET),

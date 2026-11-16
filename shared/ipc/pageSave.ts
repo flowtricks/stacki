@@ -5,8 +5,8 @@
 // expected operating failure, so it arrives as a Result value. A reply that
 // breaks this shape is a programmer error and throws here.
 import { toDigest, type Digest } from '../core/brand';
-import { parseRejectionReason, type RejectionReason, type SourceEdit } from '../engine/intent';
 import { LIMITS } from '../core/limits';
+import { parseRejectionReason, type RejectionReason, type SourceEdit } from '../engine/intent';
 import { parsePageReadResult, type ParsePageResult } from '../page/pageNode';
 import { toArray, toRecord } from '../core/record';
 import { err, ok, type Result } from '../core/result';
@@ -63,9 +63,6 @@ function parseInverse(input: unknown): readonly SourceEdit[] {
   if (hunks === undefined) {
     throw new Error('PageEdited.inverse: expected array');
   }
-  if (hunks.length > LIMITS.splicesPerIntentMax) {
-    throw new Error('PageEdited.inverse: exceeds limit');
-  }
   const parsed = hunks.map((hunk, index) => {
     const record = toRecord(hunk);
     if (record === undefined) {
@@ -74,9 +71,6 @@ function parseInverse(input: unknown): readonly SourceEdit[] {
     const text = record['text'];
     if (typeof text !== 'string') {
       throw new Error(`PageEdited.inverse[${index}].text: expected string`);
-    }
-    if (text.length > LIMITS.intentPayloadBytesMax) {
-      throw new Error(`PageEdited.inverse[${index}].text: exceeds limit`);
     }
     return { span: parseByteSpan(record['span'], `PageEdited.inverse[${index}].span`), text };
   });

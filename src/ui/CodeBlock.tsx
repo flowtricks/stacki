@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { astroCodeLines, astroCodeLinesNow } from './astroHighlight';
-import { codeTokenLines, languageFor, plainCodeLines, type CodeLanguage, type CodeLine } from './codeHighlight';
+import { assert } from '../../shared/core/assert';
+import { LIMITS } from '../../shared/core/limits';
+import { astroCodeLineBatches, astroCodeLinesNow } from './astroHighlight';
+import { codeLineBatches, codeTokenLines, languageFor, plainCodeLines, type CodeLanguage, type CodeLine } from './codeHighlight';
 import './codeBlock.css';
 
 // Code, shown rather than edited.
@@ -64,37 +66,71 @@ export function CodeTokens({ line }: { readonly line: CodeLine | undefined }) {
 /**
  * The text as coloured lines. Astro's grammar loads on demand: once loaded (the
  * app fetches it when a project opens) the first paint is coloured; before
- * that the text is plain until the lines arrive.
+ * that the text is plain until the lines arrive. Text longer than one slice is
+ * coloured the same way, top first: it shows plain at once, then the coloured
+ * top grows over it in batches, each of bounded work, so text of any length
+ * paints instantly and never blocks input.
  */
 export function useCodeLines(text: string, language: CodeLanguage | undefined): readonly CodeLine[] {
-  const [astro, setAstro] = useState<{ readonly text: string; readonly lines: readonly CodeLine[] }>();
-  // Undefined only for Astro text whose grammar is still loading.
-  const now = useMemo(() => (language === 'astro' ? astroCodeLinesNow(text) : codeTokenLines(text, language)), [text, language]);
+  const [grown, setGrown] = useState<{ readonly text: string; readonly language: CodeLanguage | undefined; readonly lines: readonly CodeLine[] }>();
+  // Undefined only for Astro text whose grammar is still loading, and for text longer than a slice.
+  const now = useMemo(() => {
+    if (text.length > LIMITS.syntaxHighlightSliceCharsMax) {
+      return undefined;
+    }
+    return language === 'astro' ? astroCodeLinesNow(text) : codeTokenLines(text, language);
+  }, [text, language]);
   const plain = useMemo(() => plainCodeLines(text), [text]);
   useEffect(() => {
-    if (now !== undefined) {
+    if (now !== undefined || language === undefined) {
       return;
     }
-    let active = true;
-    astroCodeLines(text)
-      .then((lines) => {
-        if (active) {
-          setAstro({ text, lines });
-        }
-      })
-      .catch((error: unknown) => {
-        // Highlighting is presentation, so a grammar failure must not take the
-        // code down with it: the plain lines stay on screen.
-        console.error('Astro syntax highlighting failed', error);
-      });
+    const stopper = new AbortController();
+    colourInBatches(text, language, { plain, signal: stopper.signal }, (lines) => {
+      setGrown({ text, language, lines });
+    }).catch((error: unknown) => {
+      // Highlighting is presentation, so a grammar failure must not take the
+      // code down with it: the plain lines stay on screen.
+      console.error('Syntax highlighting failed', error);
+    });
     return () => {
-      active = false;
+      // The pass ends at its next batch: a block that changed or went away is not coloured on.
+      stopper.abort();
     };
-  }, [text, now]);
+  }, [text, language, now, plain]);
   if (now !== undefined) {
     return now;
   }
-  return astro?.text === text ? astro.lines : plain;
+  return grown?.text === text && grown.language === language ? grown.lines : plain;
+}
+
+// Hands `publish` the coloured lines grown so far, laid over the plain rest, each
+// time the coloured part has doubled and once at the end: React redraws the
+// block a logarithmic number of times, and the joins cost the text's length in all.
+async function colourInBatches(
+  text: string,
+  language: CodeLanguage,
+  context: { readonly plain: readonly CodeLine[]; readonly signal: AbortSignal },
+  publish: (lines: readonly CodeLine[]) => void,
+): Promise<void> {
+  const { plain, signal } = context;
+  const batches = language === 'astro' ? astroCodeLineBatches(text) : codeLineBatches(text, language);
+  const coloured: CodeLine[] = [];
+  let publishAt = 1;
+  for await (const batch of batches) {
+    if (signal.aborted) {
+      return;
+    }
+    for (const line of batch) {
+      coloured.push(line);
+    }
+    if (coloured.length >= publishAt) {
+      publish([...coloured, ...plain.slice(coloured.length)]);
+      publishAt = coloured.length * 2;
+    }
+  }
+  assert(coloured.length === plain.length, 'colourInBatches: the coloured lines are the lines of the text');
+  publish(coloured);
 }
 
 function CodeLines({ lines }: { readonly lines: readonly CodeLine[] }) {

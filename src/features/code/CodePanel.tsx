@@ -32,7 +32,8 @@ export default function CodePanel(props: CodePanelProps) {
           {translate('workspace.code.title')}
         </span>
         <span className="code-panel-path" title={relativePath}>
-          {relativePath}
+          {/* Cut from the start so the file name stays visible; styles.css says how. */}
+          <bdi dir="ltr">{relativePath}</bdi>
         </span>
         {lineLabel && <span className="code-panel-lines">{lineLabel}</span>}
       </header>

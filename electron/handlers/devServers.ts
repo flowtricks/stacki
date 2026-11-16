@@ -7,7 +7,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execFile, type ChildProcess } from 'child_process';
 import { assert } from '../../shared/core/assert';
-import { LIMITS } from '../../shared/core/limits';
 import { toRecord } from '../../shared/core/record';
 import type { IpcResults } from '../../shared/ipc/ipcResults';
 import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
@@ -19,6 +18,9 @@ import { SHORT_COMMAND, errorMessage, isWin, parseOptionalString, parseRecord, r
 import { findFreePort, nodeCliCommand, resolveNodeBin, run, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
 import { PREVIEW_RECIPE_FILE, renderComponentPreviewPage, renderComponentPreviewRecipe } from '../previewServer/componentPreview';
 import { probeUrl } from '../preview/devProbe';
+import { inspectPreviewPage } from '../preview/previewInspect';
+import { PREVIEW_HEALTH_LIMITS, type PreviewHealth } from '../../shared/ipc/previewHealth';
+import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
 import { readDevServerLog } from '../preview/devServerLog';
 import {
   ASTRO_CONFIG_FILES,
@@ -65,16 +67,11 @@ function waitForPreviewExit(process: ChildProcess | undefined): Promise<void> {
 // browser and not in this process. If it cannot be read, pages simply reload
 // the way they always did.
 //
-// Its bounds come from shared/core/limits.ts, prepended here — the bridge boundary —
-// so the patcher in the page answers to the same numbers as the rest of the app
-// (step 7). The patcher declares the constant and reads nothing else.
+// It has no bounds to hand over: the patch scales with the page instead of
+// reloading past a size (electron/previewClient/morphPatch.ts).
 let MORPH_CLIENT = '';
 try {
-  const bounds = {
-    previewMarkersMax: LIMITS.previewMarkersMax,
-    previewMorphWorkMax: LIMITS.previewMorphWorkMax,
-  };
-  MORPH_CLIENT = `const AVB_PREVIEW_LIMITS = Object.freeze(${JSON.stringify(bounds)});\n` + readSource(RUNTIME_PATHS.morphClient);
+  MORPH_CLIENT = readSource(RUNTIME_PATHS.morphClient);
 } catch {
   MORPH_CLIENT = '';
 }
@@ -565,6 +562,24 @@ export class DevServers {
     this.host.send('dev:log', chunk);
   }
 
+  /** The end of the dev server's log with colour removed, for a notice that shows why a page failed. */
+  logTail(): string {
+    return this.recentLog(PREVIEW_HEALTH_LIMITS.logTailCharsMax);
+  }
+
+  /**
+   * Whether the page at `url` can be shown. Only the dev server's own origin is asked about: this is the app's
+   * question about its own preview, not a way for the renderer to make main fetch an address of its choosing.
+   */
+  async inspectPage(url: string): Promise<PreviewHealth> {
+    const ours = this.server?.url;
+    const address = parsePreviewFailure(url);
+    if (ours === undefined || new URL(address).origin !== new URL(ours).origin) {
+      return { kind: 'unreachable', status: 0, thrown: undefined, logTail: this.logTail() };
+    }
+    return inspectPreviewPage(address, this.logTail());
+  }
+
   private recentLog(charsMax = 1200): string {
     const text = this.logBuffer.join('').replace(/\x1b\[[0-9;]*m/g, '');
     return text.slice(-charsMax).trim();
@@ -587,6 +602,8 @@ export function registerDevServerHandlers({
   });
 
   ipcMain.handle('dev:probe', (_event, url) => probeUrl(url));
+
+  ipcMain.handle('dev:inspect', (_event, url) => devServers.inspectPage(url));
 
   ipcMain.handle('dev:diagnose', async (_event, projectPath) => {
     const nodePath = resolveNodeBin() ?? undefined;

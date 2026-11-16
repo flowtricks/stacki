@@ -3,7 +3,7 @@
 // edited line, and the bounds that keep a huge or hostile file from stalling the panel.
 // Method: bundle the pure modules (lineDiff, diffModel, messageModel, permissionModel) with esbuild
 // and call them with known-good inputs, then with the negative space: empty and absent files, CRLF,
-// binary text, a file too large to align, lines too long to compare, and a cap smaller than the diff.
+// binary text, a large file aligned by anchors, lines too long to compare, and a cap smaller than the diff.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -111,15 +111,23 @@ test('binary text (a NUL byte on either side) has no rows', () => {
   assert.deepEqual(model.buildFileDiff(undefined, 'a\u0000b'), { kind: 'binary' });
 });
 
-test('a change too large to align is flagged inexact and still counted without the row cap', () => {
+test('a large change with nothing in common is replaced outright, which is exact, and counted in full', () => {
   const before = lines(2500, (index) => `old ${index}`);
   const after = lines(2500, (index) => `new ${index}`);
   const diff = model.buildFileDiff(before, after);
   assert.equal(diff.kind, 'text');
-  assert.equal(diff.exact, false);
+  assert.equal(diff.exact, true, 'no line is shared, so removing all and adding all is the exact alignment');
   assert.deepEqual([diff.added, diff.removed], [2500, 2500]);
-  // The old row cap of lineDiff() still applies to that function, but the counts above came from every row.
-  assert.ok(model.lineDiff(before, after).length <= model.AI_DIFF_LIMITS.rowsMax);
+});
+
+test('a large file with edits in many places is aligned line by line, not replaced', () => {
+  // 6,000 lines each side, rewritten in the middle everywhere: past the table bound, aligned by anchors.
+  const before = lines(6000, (index) => `line ${index}`);
+  const after = lines(6000, (index) => (index % 100 === 50 ? `changed ${index}` : `line ${index}`));
+  const diff = model.buildFileDiff(`start\n${before}`, `begin\n${after}`);
+  assert.equal(diff.kind, 'text');
+  assert.deepEqual([diff.added, diff.removed], [61, 61]);
+  assert.equal(diff.exact, true);
 });
 
 test('every old line and every new line appears exactly once, for random edits', () => {
@@ -192,7 +200,7 @@ test('a stretch of one or two unchanged lines between changes is drawn, not hidd
   assert.equal(blocks.filter((block) => block.kind === 'gap').length, 0, 'a one-line stretch (line 12) after the last context is drawn');
 });
 
-test('a rewrite is cut at the row cap and says how many blocks it dropped', () => {
+test('a rewrite shows a page of rows and says how many blocks are still to come, until pages reach them all', () => {
   const diff = model.buildFileDiff(
     lines(1000, (index) => `old ${index}`),
     lines(1000, (index) => `new ${index}`),
@@ -201,8 +209,25 @@ test('a rewrite is cut at the row cap and says how many blocks it dropped', () =
   assert.equal(compact.blocks.length, 400);
   assert.equal(compact.cut, 2000 - 400);
   assert.equal(compact.total, 2000);
-  const full = model.visibleBlocks(diff.rows, { context: 3, revealed: new Map(), rowsMax: model.DIFF_VIEW_LIMITS.rowsFullMax });
-  assert.equal(full.cut, 0);
+  const next = model.visibleBlocks(diff.rows, {
+    context: 3,
+    revealed: new Map(),
+    rowsMax: model.DIFF_VIEW_LIMITS.rowsCompactMax + model.DIFF_VIEW_LIMITS.rowsPageMax,
+  });
+  assert.equal(next.cut, 0, 'one more page reaches every row of this diff');
+  // A diff longer than any page is still reachable: each page brings the next rows.
+  const long = model.buildFileDiff(
+    lines(30_000, (index) => `old ${index}`),
+    lines(30_000, (index) => `new ${index}`),
+  );
+  let shown = model.DIFF_VIEW_LIMITS.rowsCompactMax;
+  let pages = 0;
+  while (model.visibleBlocks(long.rows, { context: 3, revealed: new Map(), rowsMax: shown }).cut > 0) {
+    shown += model.DIFF_VIEW_LIMITS.rowsPageMax;
+    pages += 1;
+    assert.ok(pages < 100, 'pages reach the end');
+  }
+  assert.equal(model.visibleBlocks(long.rows, { context: 3, revealed: new Map(), rowsMax: shown }).total, 60_000);
 });
 
 test('negative space of visibleBlocks: a negative context or a zero cap is a programmer error', () => {

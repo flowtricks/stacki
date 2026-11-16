@@ -3,6 +3,7 @@ import type { Result } from '../../shared/core/result';
 import type { WireCell, WireColumn, WireVariableScope } from '../../shared/ipc/ipcResults';
 import { boolean, count, dictionary, object, optional, pathText, record, text } from '../../shared/core/boundary';
 import { parseOptionalMessageRef, type MessageRef } from '../../shared/core/i18n/messageReference';
+import { LIMITS } from '../../shared/core/limits';
 import { toArray } from '../../shared/core/record';
 import { readVariables } from './editorEnvironment';
 
@@ -53,7 +54,8 @@ export interface VariablesSnapshot {
   readonly files: readonly VariableFile[];
   readonly values: Readonly<Record<string, string>>;
 }
-export const VARIABLES_LIMITS = { entriesMax: 100_000, fileCharsMax: 1_048_576 } as const;
+// A variables file is a project file of any length: its bounds are the platform's, shared with every other reader.
+export const VARIABLES_LIMITS = { entriesMax: LIMITS.scanEntriesMax, fileCharsMax: LIMITS.ipcFieldCharsMax } as const;
 const PRIVATE_VARIABLE_PREFIX = '--_';
 
 export function parseCSSVariables(input: unknown): Result<VariablesSnapshot, string> {

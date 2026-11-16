@@ -25,6 +25,7 @@
 // exactly leads with a row that creates it (classRows).
 
 import { assert } from '../../shared/core/assert';
+import { LIMITS } from '../../shared/core/limits';
 
 export type FuzzyTier = 'exact' | 'prefix' | 'boundary' | 'substring' | 'subsequence';
 
@@ -47,9 +48,8 @@ export interface FuzzySegment {
   readonly hit: boolean;
 }
 
-// A project's class list is a few thousand names at most; the cap makes a
-// runaway list a loud failure rather than a frozen field.
-export const FUZZY_CANDIDATES_MAX = 100_000;
+// The candidates are bounded by what an array holds, like every other list; ranking is one linear pass.
+export const FUZZY_CANDIDATES_MAX = LIMITS.scanEntriesMax;
 // Nobody types a class name longer than this; past it there is nothing to rank.
 const FUZZY_QUERY_LENGTH_MAX = 256;
 

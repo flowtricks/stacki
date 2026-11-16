@@ -36,7 +36,7 @@ function registerCssVariablesHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain
   // themselves group them — see cssVars.js for what "the way" means.
   ipcMain.handle('css:variables', async (_event, projectPath) => {
     try {
-      return cssVars.readVariables(projectPath);
+      return await cssVars.readVariablesSliced(projectPath);
     } catch (error: unknown) {
       return { files: [], error: errorMessage(error) };
     }

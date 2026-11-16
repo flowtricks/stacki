@@ -1,5 +1,5 @@
 import { assert } from '../../../shared/core/assert';
-import { COMMIT_DIFF_LIMITS } from '../../../shared/ipc/gitCommitDiff';
+import { PLATFORM_LIMITS } from '../../../shared/core/limits';
 
 export type HistoryDiffLine =
   | { readonly kind: 'metadata' | 'hunk'; readonly text: string }
@@ -20,9 +20,7 @@ interface HunkPosition {
 }
 
 export function parseHistoryPatch(patch: string): readonly HistoryDiffLine[] {
-  assert(patch.length <= COMMIT_DIFF_LIMITS.charactersMax, 'Diff: character limit exceeded');
   const lines = patch.split('\n');
-  assert(lines.length <= COMMIT_DIFF_LIMITS.linesMax, 'Diff: line limit exceeded');
   const rows: HistoryDiffLine[] = [];
   let position: HunkPosition | undefined;
   for (const line of lines) {
@@ -92,7 +90,7 @@ function parseHistoryLineNumber(value: string | undefined): number {
   const parsed = Number(value);
   assert(Number.isSafeInteger(parsed), 'Diff: invalid line number');
   assert(parsed >= 0, 'Diff: negative line number');
-  assert(parsed <= Number.MAX_SAFE_INTEGER - COMMIT_DIFF_LIMITS.linesMax, 'Diff: line overflow');
+  assert(parsed <= Number.MAX_SAFE_INTEGER - PLATFORM_LIMITS.arrayLengthMax, 'Diff: line overflow');
   return parsed;
 }
 

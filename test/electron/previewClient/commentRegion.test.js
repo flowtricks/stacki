@@ -64,8 +64,7 @@ const FOOTER = `
 
     // The client's modules, bundled for jsdom; main prepends the patcher's
     // bounds from shared/core/limits.ts (step 7).
-    const { LIMITS } = require('#dist/shared/core/limits.js');
-    const { syncAnchors } = loadMorphModules(LIMITS);
+    const { syncAnchors } = loadMorphModules();
 
     const server = dom.window.document.createElement('div');
     server.innerHTML = FOOTER;

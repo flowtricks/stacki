@@ -1046,7 +1046,7 @@ class World {
       this.keepOrigins(generation, origins);
     }
     this.watched.add(path);
-    assert(this.watched.size <= LIMITS.watcherFilesPerTickMax, 'Watcher work per tick is bounded');
+    assert(this.watched.size <= this.disk.paths().length, 'Watcher work per tick is bounded by the files that exist');
     this.log(`  ${what} ${path} gen ${generation}`);
   }
 
@@ -1147,7 +1147,6 @@ class World {
   }
 
   private tickWatcher(): void {
-    assert(this.watched.size <= LIMITS.watcherFilesPerTickMax, 'Watcher work per tick is bounded');
     for (const path of this.watched) {
       const actor = this.actors.get(path);
       assert(actor !== undefined, 'The watcher only reports simulated files');

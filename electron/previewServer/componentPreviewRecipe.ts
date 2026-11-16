@@ -30,8 +30,6 @@ import { scanTag } from '../parse/astroTag';
 import { literalProps, type PreviewImport } from './componentPreviewContext';
 
 export const RECIPE_LIMITS = {
-  /** The largest component source read to learn its slots; the preview route reads the same bound. */
-  sourceBytesMax: 10 * 1024 * 1024,
   /**
    * Distinct slots one component's recipe children fill. Astro names a child's slot when it compiles
    * the template, so the node component has a fixed number of slot positions; a recipe that needs
@@ -237,9 +235,6 @@ function catalogEntry(projectDirectory: string, file: string): DefaultComponent 
   assert(absolute.startsWith(projectDirectory), 'Preview recipe: a component path stays inside the project');
   let source: string;
   try {
-    if (fs.statSync(absolute).size > RECIPE_LIMITS.sourceBytesMax) {
-      return undefined;
-    }
     source = fs.readFileSync(absolute, 'utf8');
   } catch {
     return undefined;
@@ -252,9 +247,6 @@ function catalogEntry(projectDirectory: string, file: string): DefaultComponent 
     slotText: defaultSlotInline(source),
   };
 }
-
-/** The longest instance children read into nodes; a larger body is not a sample worth the parse. */
-const instanceMarkupCharsMax = 64 * 1024;
 
 /** What an expression child (`{text}`) shows: the page's value is out of reach, so a neutral line stands in. */
 export const PREVIEW_EXPRESSION_TEXT = 'Lorem ipsum dolor sit amet';
@@ -277,16 +269,13 @@ interface MarkupFrame {
  * mismatched tags, a body past the bounds) answers undefined, and the preview keeps its placeholder.
  */
 export function instanceMarkupNodes(markup: string, imports: ReadonlyArray<PreviewImport>): readonly ResolvedNode[] | undefined {
-  if (markup.length > instanceMarkupCharsMax) {
-    return undefined;
-  }
   const root: MarkupFrame = { tag: undefined, node: undefined, props: {}, children: [] };
   const stack: MarkupFrame[] = [root];
   let nodes = 0;
   let position = 0;
   // Each pass consumes at least one character, so the loop ends within the markup's length.
   for (let pass = 0; position < markup.length; pass++) {
-    assert(pass <= instanceMarkupCharsMax, 'Preview instance: the markup walk advances');
+    assert(pass <= markup.length, 'Preview instance: the markup walk advances');
     const top = stack.at(-1);
     assert(top !== undefined, 'Preview instance: the root frame stays on the stack');
     if (markup.startsWith('<!--', position)) {

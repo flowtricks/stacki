@@ -235,7 +235,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
   assert.throws(() => parseAstroLock({ url: [] }), /string/);
 });
 
-test('content validation replies keep their issues and refuse corrupt or oversized ones', () => {
+test('content validation replies keep their issues, refuse corrupt ones and accept any size', () => {
   const issue = { path: ['posts', 0, 'title'], message: 'Required', code: 'invalid_type' };
   assert.deepEqual(parseValidationResult({ issues: [issue] }), { issues: [issue] });
   assert.deepEqual(parseValidationResult({ issues: [], unchecked: true, error: 'no schema' }), {
@@ -251,12 +251,15 @@ test('content validation replies keep their issues and refuse corrupt or oversiz
     { issues: [{ ...issue, message: 3 }] },
     { issues: [{ path: [], message: 'm' }] },
     { issues: [], unchecked: 'yes' },
-    { issues: [], error: 'x'.repeat(LIMITS.ipcFieldCharsMax + 1) },
-    { issues: Array.from({ length: LIMITS.ipcItemsMax + 1 }, () => issue) },
   ];
   for (const input of bad) {
     assert.throws(() => parseValidationResult(input));
   }
+  // There is no size limit on a reply: a long message and a long list of issues are both accepted whole.
+  const longError = 'x'.repeat(4 * 1024 * 1024);
+  assert.deepEqual(parseValidationResult({ issues: [], error: longError }), { issues: [], error: longError });
+  const many = Array.from({ length: 200_000 }, () => issue);
+  assert.equal(parseValidationResult({ issues: many }).issues.length, many.length);
 });
 
 test('CMS discovers data modules outside a content glob', async (context) => {
@@ -367,11 +370,16 @@ test('dev-server parsers support current and legacy responses', () => {
   assert.equal(parseContentConfig(manifest).collections[0]?.name, 'posts');
 });
 
-test('directory budgets reject both deep and wide projects without partial results', () => {
+test('directory budgets refuse malformed counts and absurd depth, but never a wide project', () => {
   const budget = directoryBudget('/site');
   assert.throws(() => budget('/site', -1), /Directory entry count must be nonnegative/);
   assert.throws(() => budget('/site', 1.5), /Directory entry count must be an integer/);
-  assert.throws(() => directoryBudget('/site')('/site', MAIN_LIMITS.directoryEntriesMax), /limit/);
+  // There is no entry cap: a folder of any size, and any number of folders together, is accepted.
+  assert.doesNotThrow(() => directoryBudget('/site')('/site', 50_000_000));
+  const wide = directoryBudget('/site');
+  for (let folder = 0; folder < 1_000; folder += 1) {
+    wide(`/site/folder-${folder}`, 1_000_000);
+  }
   const deep = '/site/' + 'nested/'.repeat(MAIN_LIMITS.directoryDepthMax + 1);
   assert.throws(() => directoryBudget('/site')(deep, 0), /depth/);
 });
@@ -401,7 +409,7 @@ test('Markdown array metadata and source-file size have explicit bounds', async 
   const file = path.join(harness.root, 'src/pages/large.astro');
   fs.writeFileSync(file, '');
   fs.truncateSync(file, LIMITS.sourceBytesMax + 1);
-  await assert.rejects(harness.invoke('page:read', file), /Source file exceeds 10 MB limit/);
+  await assert.rejects(harness.invoke('page:read', file), /platform string limit/);
 });
 
 test('an empty tsconfig alias map takes precedence over jsconfig', async (context) => {

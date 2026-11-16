@@ -51,7 +51,6 @@ export const messages = {
   'error.instructions.skillTooLarge': 'Este archivo de habilidad es demasiado grande para leerlo.',
   'error.media.hostSilent': 'El servidor de medios no respondió.',
   'error.pageRename.notUtf8': '{file} no está en UTF-8.',
-  'error.pageRename.tooManyFiles': 'Hay demasiados archivos enlazados para un solo cambio de nombre. Divide la refactorización.',
   'error.pageTemplate.connectionGone': 'Esa conexión de Sanity ya no existe. Vuelve a conectar Sanity.',
   'error.pageTemplate.generic': 'Stacki no pudo completar eso.',
   'error.pageTemplate.keyUnreadable': 'Stacki no pudo leer la clave de esta conexión. Vuelve a conectar Sanity.',

@@ -4,7 +4,6 @@
 // what the two renderings disagree about written.
 
 import { isAnchor, asElement, asText, asComment } from './morphNodes';
-import { spendMorphWork } from './morphBudget';
 
 // Never looked inside. A dev stylesheet belongs to Vite, which swaps it in by
 // data-vite-dev-id; an external script re-runs if it is re-inserted, which is
@@ -70,11 +69,31 @@ function keyFor(node: Node): string {
 // ahead always finds one, decides a node was inserted, and from there every
 // remaining sibling is rebuilt. An element that was only meant to keep still
 // loses its animation, its scroll position and anything the client hung on it.
-// Consume a shared prefix before building the matrix. Most edits change text
-// or attributes, leaving every child key in place; those lists, along with
-// appends and removals at the end, take linear time and memory. The remaining
-// matrix keeps the existing tie-breaking for repeated text and element keys.
+//
+// There is no size at which a patch gives up and reloads the page. What changes
+// with size is the algorithm, never the answer's correctness:
+//   1. A shared prefix is consumed first. Most edits change text or attributes,
+//      leaving every child key in place; those lists, along with appends and
+//      removals at the end, take linear time and memory.
+//   2. A small remainder is lined up by an exact matrix, which keeps the
+//      tie-breaking for repeated text and element keys that the rest of the
+//      patcher was tuned against.
+//   3. A large remainder trims its shared suffix, then runs Myers' O(ND) diff,
+//      which is linear in the list plus the square of the edits: a huge list
+//      with a handful of edits (the usual case) costs a few passes over it.
+//   4. If the edits are so many that even that would run long, the lists are
+//      lined up greedily in one linear pass. The result is still a correct edit
+//      script; only the choice of which equal-keyed nodes persist is cruder.
 type DiffOp = readonly [kind: number, i: number, j: number];
+
+// Matrix cells the exact diff may allocate (4 bytes each). This selects the
+// algorithm; it does not reject a larger list, which takes the path below.
+const EXACT_DIFF_CELLS_MAX = 1_000_000;
+// The edit distance Myers' trace is kept for (its memory is the square of it),
+// and the work (diagonals visited plus snake steps) it may spend before the
+// greedy pass takes over. Both only choose between algorithms.
+const MYERS_EDITS_MAX = 1024;
+const MYERS_WORK_MAX = 4_000_000;
 
 export function diffChildren(before: readonly string[], after: readonly string[]): DiffOp[] {
   const beforeCount = before.length;
@@ -85,23 +104,41 @@ export function diffChildren(before: readonly string[], after: readonly string[]
   while (i < beforeCount && j < afterCount && before[i] === after[j]) {
     ops.push([0, i++, j++]);
   }
-
-  const start = i;
-  const dp: Int32Array[] = [];
   if (i < beforeCount && j < afterCount) {
-    spendMorphWork((beforeCount - start + 1) * (afterCount - start + 1));
-    for (let row = 0; row <= beforeCount - start; row++) {
-      dp.push(new Int32Array(afterCount - start + 1));
+    if ((beforeCount - i + 1) * (afterCount - j + 1) <= EXACT_DIFF_CELLS_MAX) {
+      appendExactDiff(ops, before, after, i);
+      return ops;
     }
-    for (let row = beforeCount - start - 1; row >= 0; row--) {
-      const currentRow = dp[row];
-      const next = dp[row + 1];
-      if (!currentRow || !next) {
-        continue;
-      }
-      for (let col = afterCount - start - 1; col >= 0; col--) {
-        currentRow[col] = before[row + start] === after[col + start] ? (next[col + 1] ?? 0) + 1 : Math.max(next[col] ?? 0, currentRow[col + 1] ?? 0);
-      }
+    appendScalableDiff(ops, before, after, i);
+    return ops;
+  }
+  while (i < beforeCount) {
+    ops.push([-1, i++, -1]);
+  }
+  while (j < afterCount) {
+    ops.push([1, -1, j++]);
+  }
+  return ops;
+}
+
+// The exact matrix, from `start` (the lists agree before it), appended to `ops`.
+function appendExactDiff(ops: DiffOp[], before: readonly string[], after: readonly string[], start: number): void {
+  const beforeCount = before.length;
+  const afterCount = after.length;
+  let i = start;
+  let j = start;
+  const dp: Int32Array[] = [];
+  for (let row = 0; row <= beforeCount - start; row++) {
+    dp.push(new Int32Array(afterCount - start + 1));
+  }
+  for (let row = beforeCount - start - 1; row >= 0; row--) {
+    const currentRow = dp[row];
+    const next = dp[row + 1];
+    if (!currentRow || !next) {
+      continue;
+    }
+    for (let col = afterCount - start - 1; col >= 0; col--) {
+      currentRow[col] = before[row + start] === after[col + start] ? (next[col + 1] ?? 0) + 1 : Math.max(next[col] ?? 0, currentRow[col + 1] ?? 0);
     }
   }
   while (i < beforeCount && j < afterCount) {
@@ -120,6 +157,161 @@ export function diffChildren(before: readonly string[], after: readonly string[]
   }
   while (j < afterCount) {
     ops.push([1, -1, j++]);
+  }
+}
+
+// Large lists: trim the shared suffix, diff what is left between, then keep the suffix.
+function appendScalableDiff(ops: DiffOp[], before: readonly string[], after: readonly string[], start: number): void {
+  let beforeEnd = before.length;
+  let afterEnd = after.length;
+  while (start < beforeEnd && start < afterEnd && before[beforeEnd - 1] === after[afterEnd - 1]) {
+    beforeEnd--;
+    afterEnd--;
+  }
+  const middle = myersDiff(before, after, start, beforeEnd, afterEnd) ?? greedyDiff(before, after, start, beforeEnd, afterEnd);
+  for (const op of middle) {
+    ops.push(op);
+  }
+  for (let offset = 0; beforeEnd + offset < before.length; offset++) {
+    ops.push([0, beforeEnd + offset, afterEnd + offset]);
+  }
+}
+
+// Myers' greedy O(ND) diff of before[start..beforeEnd) against after[start..afterEnd),
+// or undefined when the edits or the work pass what it keeps a trace for. Ops carry
+// absolute indexes, in list order.
+function myersDiff(before: readonly string[], after: readonly string[], start: number, beforeEnd: number, afterEnd: number): DiffOp[] | undefined {
+  const beforeCount = beforeEnd - start;
+  const afterCount = afterEnd - start;
+  if (beforeCount === 0 || afterCount === 0) {
+    return trivialDiff(start, beforeEnd, afterEnd);
+  }
+  const editsLimit = Math.min(beforeCount + afterCount, MYERS_EDITS_MAX);
+  const furthest = new Int32Array(2 * editsLimit + 3);
+  const middle = editsLimit + 1;
+  // trace[d] holds the frontier as step d found it (diagonals -d..d), which is what backtracking reads.
+  const trace: Int32Array[] = [];
+  let work = 0;
+  for (let edits = 0; edits <= editsLimit; edits++) {
+    trace.push(furthest.slice(middle - edits, middle + edits + 1));
+    for (let diagonal = -edits; diagonal <= edits; diagonal += 2) {
+      let x: number;
+      if (diagonal === -edits || (diagonal !== edits && (furthest[middle + diagonal - 1] ?? 0) < (furthest[middle + diagonal + 1] ?? 0))) {
+        x = furthest[middle + diagonal + 1] ?? 0;
+      } else {
+        x = (furthest[middle + diagonal - 1] ?? 0) + 1;
+      }
+      let y = x - diagonal;
+      while (x < beforeCount && y < afterCount && before[start + x] === after[start + y]) {
+        x++;
+        y++;
+        work++;
+      }
+      furthest[middle + diagonal] = x;
+      work++;
+      if (x >= beforeCount && y >= afterCount) {
+        return myersBacktrack(trace, start, beforeCount, afterCount, edits);
+      }
+    }
+    if (MYERS_WORK_MAX < work) {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function myersBacktrack(trace: readonly Int32Array[], start: number, beforeCount: number, afterCount: number, edits: number): DiffOp[] {
+  const reversed: DiffOp[] = [];
+  let x = beforeCount;
+  let y = afterCount;
+  for (let step = edits; step > 0; step--) {
+    const frontier = trace[step];
+    if (frontier === undefined) {
+      throw Ambiguous('trace gap in diff');
+    }
+    const at = (diagonal: number): number => frontier[diagonal + step] ?? 0;
+    const diagonal = x - y;
+    const previousDiagonal = diagonal === -step || (diagonal !== step && at(diagonal - 1) < at(diagonal + 1)) ? diagonal + 1 : diagonal - 1;
+    const previousX = at(previousDiagonal);
+    const previousY = previousX - previousDiagonal;
+    while (x > previousX && y > previousY) {
+      x--;
+      y--;
+      reversed.push([0, start + x, start + y]);
+    }
+    if (x === previousX) {
+      reversed.push([1, -1, start + previousY]); // down: an insertion
+    } else {
+      reversed.push([-1, start + previousX, -1]); // right: a removal
+    }
+    x = previousX;
+    y = previousY;
+  }
+  while (x > 0 && y > 0) {
+    x--;
+    y--;
+    reversed.push([0, start + x, start + y]);
+  }
+  if (x !== 0 || y !== 0) {
+    throw Ambiguous('trace end in diff');
+  }
+  return reversed.reverse();
+}
+
+// One linear pass that always yields a correct edit script: each before key takes
+// the next unused position of the same key in after, when there is one, and is
+// removed when there is not. What it gives up against an exact diff is only which
+// equal-keyed nodes persist; none is ever matched to a node of another key.
+function greedyDiff(before: readonly string[], after: readonly string[], start: number, beforeEnd: number, afterEnd: number): DiffOp[] {
+  const positions = new Map<string, number[]>();
+  for (let j = start; j < afterEnd; j++) {
+    const key = after[j];
+    if (key === undefined) {
+      continue;
+    }
+    const list = positions.get(key);
+    if (list === undefined) {
+      positions.set(key, [j]);
+    } else {
+      list.push(j);
+    }
+  }
+  const cursors = new Map<string, number>();
+  const ops: DiffOp[] = [];
+  let j = start;
+  for (let i = start; i < beforeEnd; i++) {
+    const key = before[i];
+    const list = key === undefined ? undefined : positions.get(key);
+    let cursor = key === undefined ? 0 : (cursors.get(key) ?? 0);
+    while (list !== undefined && cursor < list.length && (list[cursor] ?? 0) < j) {
+      cursor++;
+    }
+    const matched = list === undefined ? undefined : list[cursor];
+    if (key !== undefined) {
+      cursors.set(key, cursor + 1);
+    }
+    if (matched === undefined) {
+      ops.push([-1, i, -1]);
+      continue;
+    }
+    while (j < matched) {
+      ops.push([1, -1, j++]);
+    }
+    ops.push([0, i, j++]);
+  }
+  while (j < afterEnd) {
+    ops.push([1, -1, j++]);
+  }
+  return ops;
+}
+
+function trivialDiff(start: number, beforeEnd: number, afterEnd: number): DiffOp[] {
+  const ops: DiffOp[] = [];
+  for (let i = start; i < beforeEnd; i++) {
+    ops.push([-1, i, -1]);
+  }
+  for (let j = start; j < afterEnd; j++) {
+    ops.push([1, -1, j]);
   }
   return ops;
 }

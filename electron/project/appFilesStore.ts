@@ -102,9 +102,6 @@ function dispatch(
       return { kind: 'content', content: readFile(root, appId, operation.path) };
     case 'write': {
       const bytes = operation.encoding === 'base64' ? Buffer.from(operation.content, 'base64') : Buffer.from(operation.content, 'utf8');
-      if (bytes.byteLength > APP_FILE_LIMITS.fileBytesMax) {
-        throw new Error(`A file an app writes is at most ${APP_FILE_LIMITS.fileBytesMax} bytes`);
-      }
       const target = resolveInside(root, appId, operation.path);
       if (isDirectory(target)) {
         throw new Error(`${operation.path} is a folder`);
@@ -233,10 +230,6 @@ function stateOf(root: string, appId: string, relative: string): AppFileState {
   if (stats.isDirectory()) {
     return { path: relative, kind: 'directory' };
   }
-  assert(stats.size <= APP_FILE_LIMITS.fileBytesMax * 2, 'A file an app changed is near the file bound');
-  if (stats.size > APP_FILE_LIMITS.fileBytesMax) {
-    throw new Error(`${relative} exceeds ${APP_FILE_LIMITS.fileBytesMax} bytes; apps change only files within the bound`);
-  }
   return { path: relative, kind: 'file', base64: fs.readFileSync(target).toString('base64') };
 }
 
@@ -246,7 +239,6 @@ function listFolder(root: string, appId: string, relative: string): AppFileListi
     throw new Error(`${relative} is not a folder`);
   }
   const entries: AppFileEntry[] = [];
-  let truncated = false;
   const names = fs.readdirSync(folder, { withFileTypes: true }).sort((left, right) => (left.name < right.name ? -1 : 1));
   for (const entry of names) {
     const child = relative === '' ? entry.name : `${relative}/${entry.name}`;
@@ -254,19 +246,15 @@ function listFolder(root: string, appId: string, relative: string): AppFileListi
     if (entry.isSymbolicLink() || appFilePathRefusal(child, appId) !== undefined) {
       continue;
     }
-    if (entries.length >= APP_FILE_LIMITS.listEntriesMax) {
-      truncated = true;
-      break;
-    }
     if (entry.isDirectory()) {
       entries.push({ path: child, kind: 'directory', sizeBytes: 0 });
     } else if (entry.isFile()) {
       const sizeBytes = fs.statSync(path.join(folder, entry.name)).size;
-      entries.push({ path: child, kind: 'file', sizeBytes: Math.min(sizeBytes, APP_FILE_LIMITS.fileBytesMax) });
+      entries.push({ path: child, kind: 'file', sizeBytes });
     }
   }
-  assert(entries.length <= APP_FILE_LIMITS.listEntriesMax, 'A listing is bounded');
-  return { entries, truncated };
+  assert(entries.length <= names.length, 'A listing holds no more entries than the folder');
+  return { entries, truncated: false };
 }
 
 function readFile(root: string, appId: string, relative: string): AppFileContent {
@@ -274,9 +262,6 @@ function readFile(root: string, appId: string, relative: string): AppFileContent
   const stats = lstatOf(target);
   if (stats === undefined || !stats.isFile()) {
     throw new Error(`${relative} is not a file`);
-  }
-  if (stats.size > APP_FILE_LIMITS.fileBytesMax) {
-    throw new Error(`${relative} exceeds ${APP_FILE_LIMITS.fileBytesMax} bytes`);
   }
   const bytes = fs.readFileSync(target);
   const text = textOf(bytes);

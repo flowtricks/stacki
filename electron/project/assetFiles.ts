@@ -9,6 +9,7 @@ import { described, type Described } from '../../shared/properties/i18n/messageR
 import type { AssetEntry } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
 import { capture, toPosix } from '../lib/mainHelpers';
 import { projectFoldersFor } from '../lib/projectFolders';
 import { folderHolding, isAboveFolder } from '../../shared/properties/projectFolders';
@@ -89,7 +90,12 @@ export function assetWriteRefusal(rel: string): Described | undefined {
  * media is listed. With the default folders this is both roots' whole trees,
  * as it always was.
  */
-export function listAssetEntries(projectPath: string): { readonly entries: AssetEntry[]; readonly hasPublic: boolean } {
+export interface AssetListing {
+  readonly entries: AssetEntry[];
+  readonly hasPublic: boolean;
+}
+
+export function* assetEntriesSliced(projectPath: string): SlicedWork<AssetListing> {
   const folders = projectFoldersFor(projectPath, 'assets');
   const entries: AssetEntry[] = [];
   let hasPublic = false;
@@ -121,7 +127,7 @@ export function listAssetEntries(projectPath: string): { readonly entries: Asset
           entries.push({ rel, name: segments[depth - 1] ?? rel, parent: segments.slice(0, depth - 1).join('/'), isDir: true, root });
         }
       }
-      for (const entry of listAssetTree(directory, folder, { mediaOnly: root === 'src' })) {
+      for (const entry of yield* assetTreeSliced(directory, folder, { mediaOnly: root === 'src' })) {
         if (!listed.has(entry.rel)) {
           listed.add(entry.rel);
           entries.push(entry);
@@ -133,16 +139,28 @@ export function listAssetEntries(projectPath: string): { readonly entries: Asset
   return { entries, hasPublic };
 }
 
+export function listAssetEntries(projectPath: string): AssetListing {
+  return runSync(assetEntriesSliced(projectPath));
+}
+
+export function listAssetEntriesSliced(projectPath: string): Promise<AssetListing> {
+  return runSliced(assetEntriesSliced(projectPath));
+}
+
 // A destination name that doesn't collide: name.ext, name-1.ext, name-2.ext and on.
 export function uniqueTarget(directory: string, name: string) {
   const ext = path.extname(name);
   const base = path.basename(name, ext);
   let candidate = name;
   let i = 1;
+  // Each retry meets a name already taken, so the directory's own entry count bounds how many
+  // there can be: one more than that always finds a free name. Read once, on the first collision.
+  let attemptsMax = 0;
   while (fs.existsSync(path.join(directory, candidate))) {
-    if (i > MAIN_LIMITS.fileNameAttemptsMax) {
-      throw new Error('File name attempts exceed limit');
+    if (attemptsMax === 0) {
+      attemptsMax = fs.readdirSync(directory).length + 1;
     }
+    assert(i <= attemptsMax, 'uniqueTarget: a directory cannot hold more taken names than it has entries');
     candidate = `${base}-${i++}${ext}`;
   }
   return path.join(directory, candidate);
@@ -227,13 +245,17 @@ export function imageSizeOf(abs: string) {
 }
 
 export function listAssetTree(root: string, rel: string, options: { readonly mediaOnly: boolean }): AssetEntry[] {
+  return runSync(assetTreeSliced(root, rel, options));
+}
+
+export function* assetTreeSliced(root: string, rel: string, options: { readonly mediaOnly: boolean }): SlicedWork<AssetEntry[]> {
   const entries: AssetEntry[] = [];
   // Folders are only worth showing when something is in them, which for src/
   // means "holds media somewhere below" — otherwise every component folder in
   // the project would show up as an empty asset folder.
   const checkDirectory = directoryBudget(root);
   const mediaOnly = options.mediaOnly;
-  const walk = (directory: string, rel: string, depth: number): boolean => {
+  function* walk(directory: string, rel: string, depth: number): SlicedWork<boolean> {
     let held = false;
     let names = [];
     try {
@@ -259,7 +281,7 @@ export function listAssetTree(root: string, rel: string, options: { readonly med
           root: rootOfRel(rel),
         };
         entries.push(placeholder);
-        const any = walk(full, entryRel, depth + 1);
+        const any = yield* walk(full, entryRel, depth + 1);
         if (any) {
           held = true;
         } else if (mediaOnly) {
@@ -285,12 +307,14 @@ export function listAssetTree(root: string, rel: string, options: { readonly med
           abs: full,
           root: rootOfRel(rel),
         });
+        // A folder of tens of thousands of files is that many units, each a stat and a push.
+        yield;
       }
     }
     return held;
-  };
+  }
 
-  walk(root, rel, 0);
+  yield* walk(root, rel, 0);
   return entries;
 }
 

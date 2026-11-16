@@ -98,8 +98,13 @@ export function AppShell({ app }: { readonly app: ShellView }) {
         />
         {leftTab && <LeftPanel app={app} tab={leftTab} />}
         <div className="center">
-          <CanvasPane app={app} />
-          <CanvasCovers app={app} />
+          {/* Each pane is its own boundary, so one that throws names itself and the rest of the window keeps working. */}
+          <PanelBoundary name="The canvas" label={translate('recovery.pane.canvas')} resetKey={app.pageUrlPath}>
+            <CanvasPane app={app} />
+          </PanelBoundary>
+          <PanelBoundary name="The canvas cover" label={translate('recovery.pane.canvas')} resetKey={app.leftTab}>
+            <CanvasCovers app={app} />
+          </PanelBoundary>
         </div>
         {app.assetPick?.presentation === 'overlay' && (
           <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
@@ -123,7 +128,9 @@ export function AppShell({ app }: { readonly app: ShellView }) {
           // Settings panel's width too. Hidden, not unmounted: closing the CMS
           // returns the panel as it was, on the same tab and scroll.
           <div style={{ display: cmsCovering(app) ? 'none' : 'contents' }}>
-            <RightPanel app={app} />
+            <PanelBoundary name="The right panel" label={translate('recovery.pane.rightPanel')} resetKey={app.selectedId}>
+              <RightPanel app={app} />
+            </PanelBoundary>
           </div>
         )}
       </div>
@@ -166,7 +173,9 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
           shell until then, and once open it hides rather than unmounting, so
           toggling it doesn't discard the scrollback — see TerminalDock. */}
       <TerminalDock projectPath={app.project.path} open={app.termOpen && canCode} onClose={() => app.setTermOpen(false)} />
-      <CodeWindowHost app={app} />
+      <PanelBoundary name="The code window" label={translate('recovery.pane.codeView')} resetKey={app.codeWin?.targetId}>
+        <CodeWindowHost app={app} />
+      </PanelBoundary>
       <CanvasTextFormatBar />
       {app.insertOpen && <DesktopInsertSearch app={app} />}
       <ConflictNotice app={app} />
@@ -429,8 +438,19 @@ function variablePlace(app: ShellView): VariablePlace {
 // few lists of data rather than a few thousand DOM nodes per panel
 // (test/renderer/app/panelSwitch.test.js holds this).
 export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab: LeftTabName }) {
+  const translate = useTranslate();
   return (
     <ResizablePanel kind={tab === 'code' ? 'code' : 'left'}>
+      <PanelBoundary name="The left panel" label={translate('recovery.pane.leftPanel')} resetKey={tab}>
+        <LeftPanelBody app={app} tab={tab} />
+      </PanelBoundary>
+    </ResizablePanel>
+  );
+}
+
+function LeftPanelBody({ app, tab }: { readonly app: ShellView; readonly tab: LeftTabName }) {
+  return (
+    <>
       {tab === 'properties' && <PropertiesTab app={app} />}
       {tab === 'pages' && <PagesTab app={app} />}
       {tab === 'navigator' && <NavigatorTab app={app} />}
@@ -455,7 +475,7 @@ export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab:
           onRecordUndo={app.pushCommand}
         />
       )}
-    </ResizablePanel>
+    </>
   );
 }
 

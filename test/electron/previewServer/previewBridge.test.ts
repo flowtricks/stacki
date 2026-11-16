@@ -74,7 +74,7 @@ test('a stamp is written and read back; anything else in a comment is not one', 
     `avb-d:${firstDigest}:src//x.astro`,
     `avb-d:${firstDigest}:src\\x.astro`,
     `avb-d:${firstDigest}:src/x.astro\n`,
-    `avb-d:${firstDigest}:${'x'.repeat(LIMITS.previewStampPathCharsMax + 1)}`,
+    `avb-d:${firstDigest}:${'x'.repeat(LIMITS.ipcPathCharsMax + 1)}`,
   ]) {
     assert.equal(parseStampData(data), undefined, JSON.stringify(data));
   }
@@ -92,14 +92,17 @@ test('a manifest is sorted, one entry per file, and refuses a rendering of two v
     ok: false,
     error: 'conflicting-stamps',
   });
-  const many = Array.from({ length: LIMITS.previewManifestFilesMax + 1 }, (_, index) => ({
+  // No size limit: a render of any number of files, and of any number of copies of
+  // one, has a manifest. The counts here are far past the old caps (512 files, 20 000 stamps).
+  const many = Array.from({ length: 60_000 }, (_, index) => ({
     file: `src/components/C${index}.astro`,
     checksum: firstDigest,
   }));
-  assert.deepEqual(manifestOf(many), { ok: false, error: 'too-many-files' });
-  assert.equal(manifestOf(many.slice(1)).ok, true, 'the bound itself is allowed');
-  const copies = Array.from({ length: LIMITS.previewMarkersMax + 1 }, () => card);
-  assert.deepEqual(manifestOf(copies), { ok: false, error: 'too-many-files' });
+  const grown = manifestOf(many);
+  assert.ok(grown.ok, 'tens of thousands of distinct files still form a manifest');
+  assert.equal(grown.value.length, many.length, 'and none is dropped');
+  const copies = Array.from({ length: 200_000 }, () => card);
+  assert.deepEqual(manifestOf(copies), { ok: true, value: [card] }, 'hundreds of thousands of copies collapse to one entry');
   assert.equal(canonicalManifest([card, page]), `${firstDigest} src/components/Card.astro\n${secondDigest} src/pages/index.astro\n`);
   assert.throws(() => canonicalManifest([page, card]), /sorted/);
 });
@@ -121,16 +124,6 @@ test('a rendering parses when well formed and fails at the field that is wrong',
     [{ ...good, stamps: [{ file: '/abs.astro', checksum: firstDigest }] }, /absolute/],
     [{ ...good, stamps: [{ file: 'src/a.astro', checksum: 'x' }] }, /Digest/],
     [{ ...good, stamps: [{ file: 7, checksum: firstDigest }] }, /file/],
-    [
-      {
-        ...good,
-        stamps: Array.from({ length: LIMITS.previewManifestFilesMax + 1 }, (_, i) => ({
-          file: `src/c${String(i).padStart(4, '0')}.astro`,
-          checksum: firstDigest,
-        })),
-      },
-      /exceeds limit/,
-    ],
   ];
   for (const [input, message] of bad) {
     assert.throws(() => parsePreviewRender(input), message, JSON.stringify(input)?.slice(0, 80));
@@ -164,11 +157,6 @@ test('the judge: token first, then every stamped file, each state named', () => 
     tag: 'stale',
     reason: 'file-missing',
     file: 'src/components/Card.astro',
-  });
-  assert.deepEqual(judgePreviewRender(render, now(present(firstDigest), { tag: 'over-limit' }), tokenOf), {
-    tag: 'stale',
-    reason: 'file-changed',
-    file: 'src/pages/index.astro',
   });
   // A token that is not the manifest's digest vouches for nothing.
   const forged = { ...render, token: firstDigest };
@@ -310,20 +298,10 @@ test('markers live in memory only; the token follows the rendering chain', async
     const module: unknown = await import(pathToFileURL(configPath).href);
     assert.ok(typeof module === 'object' && module !== null && 'default' in module);
     const plugin = markerPlugin(module.default, 'avb-node-markers');
-    // The canvas patcher, as the config serves it: its bounds are LIMITS'.
+    // The canvas patcher, as the config serves it: it carries no size bounds.
     const patcher = markerPlugin(module.default, 'avb-morph').load('\0virtual:avb-morph');
     assert.equal(typeof patcher, 'string');
-    assert.ok(
-      String(patcher).startsWith(
-        'const AVB_PREVIEW_LIMITS = Object.freeze(' +
-          JSON.stringify({
-            previewMarkersMax: LIMITS.previewMarkersMax,
-            previewMorphWorkMax: LIMITS.previewMorphWorkMax,
-          }) +
-          ');\n',
-      ),
-      'the served patcher opens with the bounds from shared/core/limits.ts',
-    );
+    assert.ok(!String(patcher).includes('AVB_PREVIEW_LIMITS'), 'the served patcher has no size caps to receive');
     const load = (rel: string): string => {
       const code = plugin.load(path.join(root, ...rel.split('/')));
       assert.equal(typeof code, 'string', `${rel} is marked`);

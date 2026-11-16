@@ -1,4 +1,3 @@
-import { COMMIT_DIFF_LIMITS } from '../../shared/ipc/gitCommitDiff';
 import type { CommitDiffRequest, CommitDiffResult } from '../../shared/ipc/gitCommitDiff';
 import { described } from '../../shared/properties/i18n/messageRef';
 import { gitErrorDetail } from './git';
@@ -45,14 +44,6 @@ export async function readCommitDiff(git: Git, request: CommitDiffRequest): Prom
     }
     const unreadable = described('history.error.diffUnreadable');
     return { ok: false, error: unreadable.message, errorRef: unreadable.messageRef };
-  }
-  if (patch.length > COMMIT_DIFF_LIMITS.charactersMax) {
-    const tooLarge = described('history.error.diffTooLarge');
-    return { ok: false, error: tooLarge.message, errorRef: tooLarge.messageRef };
-  }
-  if (patch.split('\n').length > COMMIT_DIFF_LIMITS.linesMax) {
-    const tooLong = described('history.error.diffTooManyLines');
-    return { ok: false, error: tooLong.message, errorRef: tooLong.messageRef };
   }
   return { ok: true, value: patch };
 }

@@ -24,7 +24,6 @@ const { build } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
 const loadMorphModules = require('../../helpers/morphModules.js');
-const { LIMITS } = require('#dist/shared/core/limits.js');
 
 const FALLBACK = `
   <style>
@@ -56,7 +55,7 @@ ${body}
 function livePage(html) {
   const dom = new JSDOM(html, { runScripts: 'dangerously' });
   global.document = dom.window.document;
-  const morph = loadMorphModules(LIMITS);
+  const morph = loadMorphModules();
   return { dom, document: dom.window.document, morph };
 }
 

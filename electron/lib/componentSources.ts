@@ -4,13 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
-import {
-  COMPONENT_SOURCE_FILE,
-  COMPONENT_SOURCE_LIMITS,
-  componentSourceRoot,
-  parseComponentSources,
-  type PackageComponentSource,
-} from '../../shared/properties/componentSources';
+import { runSync, type SlicedWork } from './slicedWork';
+import { COMPONENT_SOURCE_FILE, componentSourceRoot, parseComponentSources, type PackageComponentSource } from '../../shared/properties/componentSources';
 
 export function readComponentSources(root: string): readonly PackageComponentSource[] {
   const file = path.join(root, COMPONENT_SOURCE_FILE);
@@ -20,25 +15,24 @@ export function readComponentSources(root: string): readonly PackageComponentSou
   if (fs.lstatSync(file).isSymbolicLink() || fs.lstatSync(path.dirname(file)).isSymbolicLink()) {
     throw new Error('Component source settings cannot be symbolic links.');
   }
-  const input: unknown = JSON.parse(readBounded(file, COMPONENT_SOURCE_LIMITS.configBytesMax));
+  const input: unknown = JSON.parse(readUtf8(file));
   return parseComponentSources(input).sources;
 }
 
-export function packageComponentFiles(root: string): readonly string[] {
+/**
+ * Every component file in the configured packages, written once for both
+ * drivers (slicedWork.ts). A package can hold any number of components, so
+ * there is no cap on files, folders or bytes: the queue ends when the tree does,
+ * and each folder is a unit the sliced driver may yield after.
+ */
+export function* packageComponentFilesSliced(root: string): SlicedWork<readonly string[]> {
   const files: string[] = [];
-  let sizeBytes = 0;
   const queue = readComponentSources(root).map(componentSourceRoot);
   for (let index = 0; index < queue.length; index++) {
-    if (queue.length > COMPONENT_SOURCE_LIMITS.directoriesMax) {
-      throw new Error('Package component directory limit exceeded.');
-    }
     const directory = queue[index];
     assert(directory !== undefined, 'Package scan queue entry exists');
     const absolute = packageSourcePath(root, directory);
     const entries = fs.readdirSync(absolute, { withFileTypes: true });
-    if (entries.length > COMPONENT_SOURCE_LIMITS.filesMax) {
-      throw new Error('Package component directory is too large.');
-    }
     for (const entry of entries) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') {
         continue;
@@ -50,23 +44,22 @@ export function packageComponentFiles(root: string): readonly string[] {
       if (entry.isDirectory()) {
         queue.push(file);
       } else if (entry.isFile() && file.endsWith('.astro')) {
-        sizeBytes += fs.statSync(path.join(absolute, entry.name)).size;
-        if (sizeBytes > COMPONENT_SOURCE_LIMITS.sourceBytesTotalMax) {
-          throw new Error('Package component sources exceed the 16 MiB scan limit.');
-        }
         files.push(file);
       }
-      if (files.length > COMPONENT_SOURCE_LIMITS.filesMax) {
-        throw new Error('Package component file limit exceeded.');
-      }
     }
+    // Every queued folder is one found below a folder already read, so the queue ends with the tree.
+    assert(queue.length >= index + 1, 'Package scan: the queue only grows by folders found');
+    yield;
   }
-  assert(files.length <= COMPONENT_SOURCE_LIMITS.filesMax, 'Package scan is bounded');
   return files.sort();
 }
 
+export function packageComponentFiles(root: string): readonly string[] {
+  return runSync(packageComponentFilesSliced(root));
+}
+
 export function readPackageSource(root: string, file: string): string {
-  return readBounded(packageSourcePath(root, file), COMPONENT_SOURCE_LIMITS.sourceBytesMax);
+  return readUtf8(packageSourcePath(root, file));
 }
 
 export function readPackagePreviews(root: string) {
@@ -107,13 +100,7 @@ export function packageComponentImport(root: string, file: string): string | und
   return source.importPrefix + relative.slice(componentSourceRoot(source).length + 1);
 }
 
-function readBounded(file: string, maximum: number): string {
-  if (fs.statSync(file).size > maximum) {
-    throw new Error('Component source exceeds its byte limit.');
-  }
-  const bytes = fs.readFileSync(file);
-  if (bytes.length > maximum) {
-    throw new Error('Component source exceeds its byte limit.');
-  }
-  return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes);
+// A source of any size is read whole: the platform's string length is the only ceiling.
+function readUtf8(file: string): string {
+  return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(fs.readFileSync(file));
 }

@@ -68,9 +68,10 @@ export type PreviewStaleReason = (typeof PREVIEW_STALE_REASONS)[number];
 export const FRAME_RENDER_PROBLEMS = [
   /** One file stamped with two checksums: the rendering mixes versions of it. */
   'conflicting-stamps',
-  /** More stamps, or stamped files, than one manifest may name. */
+  /** Retired: a manifest has no size limit. The names stay in the list because
+   * the app's recovery planner still switches over them (parseFrameRenderProblem). */
   'too-many-stamps',
-  /** More elements than the stamp walk visits. */
+  /** Retired, like `too-many-stamps`: the stamp walk visits every element. */
   'page-too-large',
   /** The frame could not compute the manifest's digest. */
   'no-digest',
@@ -84,12 +85,7 @@ export function parseFrameRenderProblem(input: unknown): FrameRenderProblem | un
 }
 
 /** What main found on disk for one stamped file. */
-export type StampedFileState =
-  | { readonly tag: 'present'; readonly checksum: Digest }
-  | { readonly tag: 'missing' }
-  /** Past `sourceBytesMax`: the dev plugin never stamps such a file, so it has
-   * changed since its stamp — and main does not read it to prove so. */
-  | { readonly tag: 'over-limit' };
+export type StampedFileState = { readonly tag: 'present'; readonly checksum: Digest } | { readonly tag: 'missing' };
 
 export type PreviewVerdict =
   | { readonly tag: 'current' }
@@ -105,7 +101,7 @@ export function stampPathProblem(file: string): string | undefined {
   if (file.length === 0) {
     return 'empty';
   }
-  if (LIMITS.previewStampPathCharsMax < file.length) {
+  if (LIMITS.ipcPathCharsMax < file.length) {
     return 'too long';
   }
   if (/[\0\\\r\n]/.test(file) || file.includes('-->')) {
@@ -153,16 +149,13 @@ export function parseStampData(data: string): PreviewStamp | undefined {
   return { file, checksum: toDigest(checksum) };
 }
 
-export type ManifestProblem = 'too-many-files' | 'conflicting-stamps';
+export type ManifestProblem = 'conflicting-stamps';
 
 /** The manifest of one rendering: its stamps sorted by path, one per file.
  * Every rendered copy of a component stamps the same entry; two different
  * checksums for one file mean the rendering mixes versions of it, which no
  * token can name. */
 export function manifestOf(stamps: readonly PreviewStamp[]): Result<readonly PreviewStamp[], ManifestProblem> {
-  if (LIMITS.previewMarkersMax < stamps.length) {
-    return err('too-many-files');
-  }
   const byFile = new Map<string, Digest>();
   for (const stamp of stamps) {
     const seen = byFile.get(stamp.file);
@@ -171,9 +164,6 @@ export function manifestOf(stamps: readonly PreviewStamp[]): Result<readonly Pre
     } else if (seen !== stamp.checksum) {
       return err('conflicting-stamps');
     }
-  }
-  if (LIMITS.previewManifestFilesMax < byFile.size) {
-    return err('too-many-files');
   }
   const files = [...byFile.keys()].sort(compareCodeUnits);
   const manifest = files.map((file) => {
@@ -205,9 +195,6 @@ export function parsePreviewRender(input: unknown): PreviewRender {
   }
   if (!Array.isArray(stamps)) {
     throw new Error('PreviewRender.stamps: expected list');
-  }
-  if (LIMITS.previewManifestFilesMax < stamps.length) {
-    throw new Error('PreviewRender.stamps: exceeds limit');
   }
   const parsed = stamps.map(parseStamp);
   if (!manifestSorted(parsed)) {
@@ -261,8 +248,6 @@ export function judgePreviewRender(
         break;
       case 'missing':
         return stale('file-missing', stamp.file);
-      case 'over-limit':
-        return stale('file-changed', stamp.file);
       default: {
         const exhaustive: never = now;
         return exhaustive;

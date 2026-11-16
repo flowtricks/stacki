@@ -10,13 +10,7 @@ import test from 'node:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  SYNC_SCAN_LIMITS,
-  applyBreakpointSync,
-  restoreBreakpointSync,
-  scanBreakpointSync,
-  scanBreakpointUsage,
-} from '#dist/electron/project/breakpointSync.js';
+import { applyBreakpointSync, restoreBreakpointSync, scanBreakpointSync, scanBreakpointUsage } from '#dist/electron/project/breakpointSync.js';
 import { parseBreakpointSyncSource, serializeBreakpointSyncRecord, EMPTY_SYNC_RECORD, entryOf } from '#dist/shared/properties/breakpointSyncRecord.js';
 import { applyRequest, initialChecked, recordWithChoices } from '#dist/shared/properties/breakpointSyncSelection.js';
 import type { BreakpointSyncScan } from '#dist/shared/properties/breakpointSyncPlan.js';
@@ -281,12 +275,16 @@ test('a hand-broken record is reported, nothing is remembered, and the file is n
   assert.equal(read(root, '.stacki/breakpoint-sync.json'), '{ nope');
 });
 
-test('files past the size bound are counted, not read', async () => {
+test('a file of any size is read in full: nothing is skipped for being big', async () => {
   const root = fixture();
-  fs.writeFileSync(path.join(root, 'src/styles/huge.css'), '/* ' + 'x'.repeat(SYNC_SCAN_LIMITS.fileBytesMax) + ' */');
+  // Four megabytes of comment, then one place: past the old two-megabyte read bound.
+  fs.writeFileSync(path.join(root, 'src/styles/huge.css'), '/* ' + 'x'.repeat(4 * 1024 * 1024) + ' */\n@media (min-width: 64rem) { a { color: red } }\n');
   const scan = await scanOf(root);
-  assert.equal(scan.skipped, 1);
-  assert.equal(scan.files.length, 4);
+  assert.equal(scan.skipped, 0);
+  assert.equal(scan.truncated, false);
+  assert.equal(scan.files.length, 5);
+  const huge = scan.files.find((file) => file.rel === 'src/styles/huge.css');
+  assert.equal(huge?.occurrences.length, 1, 'the place after the big comment is found');
 });
 
 test('a scan that finds nothing lists nothing', async () => {

@@ -47,7 +47,8 @@ export function checkCommitted(effect: Committed): void {
   const before = effect.base.bytes;
   const after = effect.candidate.bytes;
   const splices = orderedSplices(effect.plan.splices);
-  assert(splices.length <= LIMITS.splicesPerIntentMax, 'Invariant 8: splice count is bounded');
+  // Disjoint, ordered splices: at most one per byte of the base, plus one insertion at its end.
+  assert(splices.length <= before.length + 1, 'Invariant 8: splice count is bounded by the file');
   let cursorBefore = 0;
   let cursorAfter = 0;
   for (const splice of splices) {

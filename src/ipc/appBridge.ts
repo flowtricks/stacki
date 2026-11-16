@@ -1,6 +1,7 @@
 import { sendPageEditWithRetry } from './saveRetry';
 import { parseAstroFileChanges, type AstroFileChange } from '../../shared/properties/astroFileChanges';
 import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
+import { parsePreviewHealth } from '../../shared/ipc/previewHealth';
 import type { Data } from '../../shared/core/boundary';
 import type { IpcResults, WireDataRecord, WireInjectedRoute, WireRouteParams, WireUsageFile } from '../../shared/ipc/ipcResults';
 import { boolean, count, data, dictionary, digest, list, optional, pathText, record, text } from '../../shared/core/boundary';
@@ -65,6 +66,12 @@ export function startProjectPreview(projectPath: string): Promise<IpcResults['de
 
 export function stopProjectPreview(): Promise<IpcResults['dev:stop']> {
   return window.avb.stopDevServer().then(parseOkResult);
+}
+
+/** Whether the page at `url` can be shown: the dev server's answer, judged in main (shared/ipc/previewHealth.ts). */
+export function inspectProjectPreview(url: string): Promise<IpcResults['dev:inspect']> {
+  const payload = parseIpcPayload('dev:inspect', url);
+  return window.avb.inspectDevPage(payload).then(parsePreviewHealth);
 }
 
 export function probeProjectPreview(url: string): Promise<IpcResults['dev:probe']> {

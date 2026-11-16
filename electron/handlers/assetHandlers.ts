@@ -1,7 +1,7 @@
 // The assets panel's IPC: listing, uploading, moving, renaming and deleting a
 // project's asset files, and reading and writing the text ones.
 
-import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
+import { readSource } from '../lib/mainLimits';
 import { writeProjectText } from '../documents/documentWrites';
 import { isPathWithin, sameFilesystemPath } from '../lib/platform';
 import { toPosix } from '../lib/mainHelpers';
@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import type { MainHost } from './mainHost';
 import { translateMain, translateMainDescribed } from '../lib/mainLocale';
 import { describeReplacementRefusal } from '../../shared/properties/mediaHosting';
-import { rootOfRel, assetAbs, assetWriteRefusal, uniqueTarget, imageSizeOf, listAssetEntries } from '../project/assetFiles';
+import { rootOfRel, assetAbs, assetWriteRefusal, uniqueTarget, imageSizeOf, listAssetEntriesSliced } from '../project/assetFiles';
 
 export function registerAssetHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'>): void {
   registerAssetsListHandlers(host);
@@ -27,7 +27,7 @@ function registerAssetsListHandlers({
   ipcMain.handle('assets:list', async (_event, projectPath) => {
     // Which folders under public/ and src/ hold assets is the project's choice
     // (.stacki/folders.json); by default, all of both.
-    const { entries, hasPublic } = listAssetEntries(projectPath);
+    const { entries, hasPublic } = await listAssetEntriesSliced(projectPath);
     return { entries, missing: !hasPublic };
   });
 
@@ -168,10 +168,6 @@ function registerAssetsReadTextHandlers({
   // Text assets (css/js/json/svg/…) are editable in the floating code window.
   ipcMain.handle('assets:readText', async (_event, { projectPath, rel }) => {
     const abs = assetAbs(projectPath, rel);
-    const stat = fs.statSync(abs);
-    if (stat.size > MAIN_LIMITS.editableFileBytesMax) {
-      throw new Error(translateMain('assets.error.tooLarge'));
-    }
     return { text: readSource(abs) };
   });
 

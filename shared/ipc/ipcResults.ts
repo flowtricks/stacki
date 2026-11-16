@@ -6,6 +6,7 @@ import type { AppFileAnswer } from '../properties/appFiles';
 import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
 import type { AppNetResponse } from '../properties/appNet';
 import type { AccountState } from './publishAccount';
+import type { PreviewHealth } from './previewHealth';
 import type { CmsCheckResult, CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
 import type {
   RemoteCollection,
@@ -428,6 +429,7 @@ export interface IpcResults extends AiResults {
     readonly requires: undefined | string;
     readonly launchedFromGui: boolean;
   };
+  readonly 'dev:inspect': PreviewHealth;
   readonly 'dev:probe': {
     readonly ok: boolean;
     readonly status: number;

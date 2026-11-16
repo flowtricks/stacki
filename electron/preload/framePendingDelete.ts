@@ -19,13 +19,8 @@ import { STAMP_ATTRIBUTE, allElementsWithPath, runsOf } from './frameRegions';
 
 export const PENDING_DELETE_ATTR = 'data-avb-pending-delete';
 
-// Elements one delete may hide: a node in a loop is one element per item.
-const PENDING_ELEMENTS_MAX = 1024;
 // How long a hidden node waits for the patch that confirms it.
 const PENDING_CLEAR_MS = 5000;
-
-// Marks every pending delete may hold at once, across deletes in a row.
-const PENDING_MARKS_MAX = 4096;
 
 let stylesheet: CSSStyleSheet | undefined;
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
@@ -61,18 +56,20 @@ export function clearPendingDeletes(): void {
   clearTimer = undefined;
   hiddenFrom = undefined;
   const marked = document.querySelectorAll(`[${PENDING_DELETE_ATTR}]`);
-  const count = Math.min(marked.length, PENDING_MARKS_MAX);
-  for (let index = 0; index < count; index += 1) {
-    marked.item(index)?.removeAttribute(PENDING_DELETE_ATTR);
+  // Every mark, however many: a node in a loop is one element per item, and one left
+  // hidden would stay hidden after the patch that confirms the delete. The list is
+  // static, so the walk's bound is its own length.
+  const elements = Array.from(marked);
+  for (const element of elements) {
+    element.removeAttribute(PENDING_DELETE_ATTR);
   }
 }
 
 // Which source the page is rendered from: every file's stamp, in page order.
 function sourceStamps(): string {
   const stamped = document.querySelectorAll(`[${STAMP_ATTRIBUTE}]`);
-  const count = Math.min(stamped.length, PENDING_MARKS_MAX);
   const stamps: string[] = [];
-  for (let index = 0; index < count; index += 1) {
+  for (let index = 0; index < stamped.length; index += 1) {
     stamps.push(stamped.item(index)?.getAttribute(STAMP_ATTRIBUTE) ?? '');
   }
   return stamps.join(' ');
@@ -80,9 +77,9 @@ function sourceStamps(): string {
 
 // The node's own elements: tagged with its path, or inside its marker runs.
 function pendingElements(path: string): Element[] {
-  const tagged = allElementsWithPath(path, PENDING_ELEMENTS_MAX) ?? [];
+  const tagged = allElementsWithPath(path);
   const marked = (runsOf(path) ?? []).flatMap((run) => run.filter(isElement));
-  return [...new Set([...tagged, ...marked])].slice(0, PENDING_ELEMENTS_MAX);
+  return [...new Set([...tagged, ...marked])];
 }
 
 function installPendingStyle(): void {

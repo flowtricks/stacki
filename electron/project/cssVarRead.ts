@@ -5,15 +5,20 @@ import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
 import postcss from 'postcss';
 import type { Declaration, Rule as PostcssRule } from 'postcss';
+import { LIMITS } from '../../shared/core/limits';
+import { runSync, type SlicedWork } from '../lib/slicedWork';
 import { commentLabel } from '../../shared/page/commentLabel';
 import { PROJECT_FOLDERS_FILE, configOf, foldersFor, readProjectFoldersSource } from '../../shared/properties/projectFolders';
 
-// Folders deeper than the stylesheet bound are not where a project keeps its CSS; the rename walk
-// covers the whole project, where a config or a helper module can sit two levels deeper. A
-// `var()` chain longer than the resolve bound is shown as written rather than followed.
+// The walks descend as deep as a path can name: a path is at most ipcPathCharsMax units and each level
+// costs a name unit and a separator, so no real tree is deeper (the same derivation as
+// MAIN_LIMITS.directoryDepthMax). A fixed small depth would hide a stylesheet in a deep project; the
+// depth is structural, not a size limit. A `var()` chain longer than the resolve bound is shown as
+// written rather than followed.
+const WALK_DEPTH_MAX = Math.floor(LIMITS.ipcPathCharsMax / 2);
 export const CSS_VARIABLE_LIMITS = {
-  stylesheetDepthMax: 8,
-  renameTargetDepthMax: 10,
+  stylesheetDepthMax: WALK_DEPTH_MAX,
+  renameTargetDepthMax: WALK_DEPTH_MAX,
   resolveDepthMax: 8,
 } as const;
 
@@ -23,11 +28,11 @@ export const toPosix = (filePath: string): string => filePath.split(path.sep).jo
 
 // --- reading ---------------------------------------------------------------
 
-export function findStylesheets(projectPath: string): string[] {
+export function* stylesheetsSliced(projectPath: string): SlicedWork<string[]> {
   // The variables panel's folders (.stacki/folders.json), else src/, public/ and styles/.
   const roots = variableFolders(projectPath).map((folder) => path.join(projectPath, ...folder.split('/')));
   const found: string[] = [];
-  const walk = (directory: string, depth: number): void => {
+  function* walk(directory: string, depth: number): SlicedWork<void> {
     if (depth > CSS_VARIABLE_LIMITS.stylesheetDepthMax) {
       return;
     }
@@ -43,16 +48,21 @@ export function findStylesheets(projectPath: string): string[] {
       }
       const full = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        walk(full, depth + 1);
+        yield* walk(full, depth + 1);
       } else if (/\.css$/i.test(entry.name)) {
         found.push(full);
       }
     }
-  };
+    yield;
+  }
   for (const root of roots) {
-    walk(root, 0);
+    yield* walk(root, 0);
   }
   return [...new Set(found)].sort();
+}
+
+export function findStylesheets(projectPath: string): string[] {
+  return runSync(stylesheetsSliced(projectPath));
 }
 
 /**

@@ -7,7 +7,7 @@ import { documentHost } from '../documents/documentWrites';
 import { assetAbs } from './assetFiles';
 import { isPathWithin } from '../lib/platform';
 import { encodeImage, IMAGE_BYTES_MAX } from './imageEncoder';
-import { planImageReferences, imageReferenceDigest } from './imageReferences';
+import { planImageReferencesSliced, imageReferenceDigest } from './imageReferences';
 import type { ImageReferenceEdit, ImageAliases } from './imageReferences';
 import { translateMain } from '../lib/mainLocale';
 
@@ -28,7 +28,7 @@ export async function convertImage(options: {
   if (!encoded.ok) {
     return encoded;
   }
-  const staged = stageImage(options.projectPath, from, to, encoded.value, options.aliases ?? []);
+  const staged = await stageImage(options.projectPath, from, to, encoded.value, options.aliases ?? []);
   if (!staged.ok) {
     return staged;
   }
@@ -82,9 +82,9 @@ function prepareImage(projectPath: string, rel: string, format: ImageFormat) {
     return { ok: false as const, error: String(error) };
   }
 }
-function stageImage(projectPath: string, from: string, to: string, bytes: Buffer, aliases: ImageAliases) {
+async function stageImage(projectPath: string, from: string, to: string, bytes: Buffer, aliases: ImageAliases) {
   try {
-    const edits = planImageReferences(projectPath, from, to, aliases);
+    const edits = await planImageReferencesSliced(projectPath, from, to, aliases);
     // Exclusive binary creation never overwrites an asset; text uses actors below.
     if (!isPathWithin(fs.realpathSync(projectPath), fs.realpathSync(path.dirname(to)))) {
       throw new Error(translateMain('error.images.directoryMoved'));

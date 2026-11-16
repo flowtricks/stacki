@@ -157,17 +157,16 @@ export const messages = {
   'ai.dictation.unavailable': 'A entrada de voz não está disponível aqui.',
   'ai.diff.binary': 'Arquivo binário, sem pré-visualização.',
   'ai.diff.changesTo': 'Alterações em {name}',
-  'ai.diff.cut': 'O diff é cortado em {rows} linhas. Abra o arquivo para ver o resto.',
   'ai.diff.deleted': 'Excluído',
   'ai.diff.large': 'Uma alteração grande: mostrada como as linhas antigas removidas e as novas adicionadas.',
   'ai.diff.lineEndings': 'Apenas as quebras de linha mudaram.',
   'ai.diff.newFile': 'Arquivo novo',
   'ai.diff.noChanges': 'Nenhuma alteração para mostrar.',
-  'ai.diff.showFull': 'Mostrar diff completo',
   'ai.diff.showLines': {
     one: 'Mostrar {count} linha',
     other: 'Mostrar {count} linhas',
   },
+  'ai.diff.showMore': 'Mostrar mais linhas',
   'ai.diff.showSome': {
     one: 'Mostrar {step} de {count} linha',
     other: 'Mostrar {step} de {count} linhas',

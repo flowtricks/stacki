@@ -6,6 +6,7 @@ import { LIMITS } from '../core/limits';
 import { parseComponentOrigin, type ComponentOrigin } from './componentSources';
 import { parseField, type PropField } from './propSchema';
 import { parseLengthUnit, type LengthUnit } from './lengthUnit';
+import { PACKAGE_MANAGERS, type PackageManager } from './packageManager';
 
 export interface ScanPage {
   readonly path: string;
@@ -21,6 +22,40 @@ export interface ScanPage {
 export interface RenderTag {
   readonly tag?: string;
   readonly prop?: string;
+}
+
+/**
+ * What a scan could not do, or did by assumption, and which file it concerns. A warning never
+ * blocks the project: everything else is still listed. The code is stable and machine-readable
+ * (the UI picks its wording and its action from it); `message` is the English sentence naming
+ * the file and the reason, for a log or a UI with nothing better.
+ */
+export const SCAN_WARNING_CODES = [
+  /** The project's packages are not installed (`detail`: the package manager that would install them). */
+  'dependencies-missing',
+  /** A folder could not be listed (`detail`: the system error code). Its contents are missing from the lists. */
+  'folder-unreadable',
+  /** A symbolic link points at nothing or at something unreadable (`detail`: the error code). It is skipped. */
+  'link-broken',
+  /** A symbolic link leads back into a folder already listed. It is skipped, so the walk ends. */
+  'link-cycle',
+  /** The astro.config exists but could not be read (`detail`: the error code). Astro's defaults are assumed. */
+  'config-unreadable',
+  /** The astro.config computes a setting (`detail`: its name) that Stacki reads as text. Astro's default is assumed. */
+  'config-computed',
+  /** The astro.config moves a source folder away from its default (`detail`: `srcDir=website`). */
+  'config-folder-custom',
+  /** One step of the scan failed (`detail`: the step). The other steps' results are still here. */
+  'scan-step-failed',
+] as const;
+export type ScanWarningCode = (typeof SCAN_WARNING_CODES)[number];
+
+export interface ScanWarning {
+  readonly code: ScanWarningCode;
+  readonly message: string;
+  /** The project-relative POSIX path the warning is about; absent when it concerns the project as a whole. */
+  readonly file?: string | undefined;
+  readonly detail?: string | undefined;
 }
 
 export interface ScanComponent {
@@ -55,6 +90,10 @@ export interface ScanResult {
   readonly pagesFolder?: string;
   /** The astro.config file Astro loads, project-relative; absent when there is none. */
   readonly astroConfig?: string;
+  /** The package manager the project uses (package.json's `packageManager`, else its lockfile, else npm), looking through parent folders. */
+  readonly packageManager?: PackageManager;
+  /** What the scan could not read or had to assume; absent from an older host, empty when nothing. */
+  readonly warnings?: readonly ScanWarning[];
 }
 
 function fail(where: string, what: string): never {
@@ -212,7 +251,39 @@ export function parseScanResult(input: unknown): ScanResult {
       result[key] = value;
     }
   }
+  if (record['packageManager'] !== undefined) {
+    const manager = PACKAGE_MANAGERS.find((candidate) => candidate === record['packageManager']);
+    if (manager === undefined) {
+      fail('packageManager', `expected ${PACKAGE_MANAGERS.join(', ')}`);
+    }
+    result['packageManager'] = manager;
+  }
+  if (record['warnings'] !== undefined) {
+    result['warnings'] = parseScanWarnings(record['warnings']);
+  }
   return result as unknown as ScanResult;
+}
+
+export function parseScanWarnings(input: unknown): readonly ScanWarning[] {
+  return asArray(input, 'warnings', LIMITS.scanEntriesMax).map((entry, index) => parseScanWarning(entry, `warnings[${index}]`));
+}
+
+function parseScanWarning(input: unknown, where: string): ScanWarning {
+  const record = asRecord(input, where);
+  const code = SCAN_WARNING_CODES.find((candidate) => candidate === record['code']);
+  if (code === undefined) {
+    fail(`${where}.code`, `expected one of ${SCAN_WARNING_CODES.join(', ')}`);
+  }
+  const message = asString(record['message'], `${where}.message`);
+  if (message.length === 0) {
+    fail(`${where}.message`, 'expected a sentence naming the problem');
+  }
+  const file = record['file'] === undefined ? undefined : asString(record['file'], `${where}.file`);
+  if (file !== undefined && (file.length === 0 || file.startsWith('/') || file.split('/').includes('..'))) {
+    fail(`${where}.file`, 'expected a project-relative path');
+  }
+  const detail = record['detail'] === undefined ? undefined : asString(record['detail'], `${where}.detail`);
+  return { code, message, ...(file === undefined ? {} : { file }), ...(detail === undefined ? {} : { detail }) };
 }
 
 export function parseScanPages(input: unknown): readonly ScanPage[] {

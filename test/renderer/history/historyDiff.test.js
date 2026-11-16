@@ -32,13 +32,20 @@ test('line numbers distinguish both sides of a change', () => {
   assert.equal(parseHistoryPatch('@@ -0,0 +1 @@\n+line\n\\ No newline at end of file')[2].kind, 'metadata');
 });
 
-test('malformed and oversized hunks fail loudly', () => {
+test('malformed hunks fail loudly', () => {
   assert.throws(() => parseHistoryPatch('@@ -1,2 +1,2 @@\n one'), /incomplete original hunk/);
   assert.throws(() => parseHistoryPatch('@@ -1 +1 @@\n?broken'), /unknown hunk line/);
   assert.throws(() => parseHistoryPatch('@@ -1 +1 @@\n+one\n+two'), /added line exceeds/);
   assert.throws(() => parseHistoryPatch('@@ -999999999999999999 +1 @@'), /invalid line number/);
-  assert.throws(() => parseHistoryPatch('a'.repeat(500_001)), /character limit/);
-  assert.throws(() => parseHistoryPatch('\n'.repeat(10_000)), /line limit/);
+});
+
+test('a patch of any length is read whole, past the old character and line caps', () => {
+  const lineCount = 200_000;
+  const patch = `@@ -1,${lineCount} +1,${lineCount} @@\n${Array.from({ length: lineCount }, (_, index) => ` line ${index} of a very long diff`).join('\n')}`;
+  assert.ok(patch.length > 500_000 && lineCount > 10_000);
+  const rows = parseHistoryPatch(patch);
+  assert.equal(rows.length, lineCount + 1);
+  assert.equal(rows.at(-1).after, lineCount);
 });
 
 test('diff bridge validates both sides and represents transport errors', async () => {

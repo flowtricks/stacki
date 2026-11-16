@@ -270,12 +270,13 @@ test('negative space: an instance body that cannot be read leaves the placeholde
     '<script>run()</script>',
     '<p>{unclosed</p>',
     '<!-- never closed',
-    'x'.repeat(64 * 1024 + 1),
     '<div>'.repeat(20) + '</div>'.repeat(20),
   ]) {
     assert.equal(instanceMarkupNodes(markup, imports), undefined, markup.slice(0, 40));
   }
   assert.deepEqual(instanceMarkupNodes('  \n ', imports), [], 'whitespace is no content');
+  // No size limit: text past the old 64 KiB bound is read like any other.
+  assert.deepEqual(instanceMarkupNodes('x'.repeat(64 * 1024 + 1), imports), [{ literal: 'x'.repeat(64 * 1024 + 1) }]);
 });
 
 test('without a recipe, the first instance on a page renders with its nested components', (context) => {

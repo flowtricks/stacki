@@ -1,13 +1,12 @@
 // The style and source IPC: the stylesheets the style panel can author, and
 // the source files behind a symbol, read and written inside the open project.
 
-import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
+import { readSource } from '../lib/mainLimits';
 import { writeProjectText } from '../documents/documentWrites';
 import * as path from 'path';
-import * as fs from 'fs';
 import { toPosix } from '../lib/mainHelpers';
 import { resolveImportPath, declarationLine } from '../properties/importPaths';
-import { listCssFiles, listAstroStyleFiles } from '../project/styleFiles';
+import { listCssFilesSliced, listAstroStyleFilesSliced } from '../project/styleFiles';
 import { announceVariableWrite } from './cssVariableHandlers';
 import type { MainHost } from './mainHost';
 
@@ -21,14 +20,14 @@ function registerStyleListFilesHandlers({ ipcMain, assertInProject, send }: Pick
     if (!projectPath) {
       return { files: [] };
     }
-    return { files: listCssFiles(projectPath) };
+    return { files: await listCssFilesSliced(projectPath) };
   });
 
   ipcMain.handle('style:listAstroStyles', async (_event, projectPath) => {
     if (!projectPath) {
       return { files: [] };
     }
-    return { files: listAstroStyleFiles(projectPath) };
+    return { files: await listAstroStyleFilesSliced(projectPath) };
   });
 
   ipcMain.handle('style:readFile', async (_event, filePath) => {
@@ -56,10 +55,6 @@ function registerStyleListFilesHandlers({ ipcMain, assertInProject, send }: Pick
       return { ok: false as const, reason: 'not-found' };
     }
     assertInProject(abs);
-    const stat = fs.statSync(abs);
-    if (stat.size > MAIN_LIMITS.editableFileBytesMax) {
-      return { ok: false as const, reason: 'too-large' };
-    }
     const text = readSource(abs);
     return {
       ok: true as const,

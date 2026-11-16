@@ -13,9 +13,10 @@ import { messages as dialogEnglish } from '../../shared/properties/i18n/messages
 import { messages as errorEnglish } from '../../shared/properties/i18n/messages/en/error';
 import { messages as menuEnglish } from '../../shared/properties/i18n/messages/en/menu';
 import { messages as pagesEnglish } from '../../shared/properties/i18n/messages/en/pages';
+import { messages as recoveryEnglish } from '../../shared/properties/i18n/messages/en/recovery';
 
 /** Every key a main-process caller may use: the English `assets`, `dialog`, `error`, `menu` and `pages` namespaces. */
-const ENGLISH = { ...assetsEnglish, ...dialogEnglish, ...errorEnglish, ...menuEnglish, ...pagesEnglish } as const;
+const ENGLISH = { ...assetsEnglish, ...dialogEnglish, ...errorEnglish, ...menuEnglish, ...pagesEnglish, ...recoveryEnglish } as const;
 export type MainMessageKey = keyof typeof ENGLISH;
 
 export interface MainLocale {
@@ -35,6 +36,7 @@ const SHIPPED_IMPORTER: MainCatalogImporter = async (locale) => {
         import('../../shared/properties/i18n/messages/es/error'),
         import('../../shared/properties/i18n/messages/es/menu'),
         import('../../shared/properties/i18n/messages/es/pages'),
+        import('../../shared/properties/i18n/messages/es/recovery'),
       ]);
     case 'fr':
       return Promise.all([
@@ -43,6 +45,7 @@ const SHIPPED_IMPORTER: MainCatalogImporter = async (locale) => {
         import('../../shared/properties/i18n/messages/fr/error'),
         import('../../shared/properties/i18n/messages/fr/menu'),
         import('../../shared/properties/i18n/messages/fr/pages'),
+        import('../../shared/properties/i18n/messages/fr/recovery'),
       ]);
     case 'de':
       return Promise.all([
@@ -51,6 +54,7 @@ const SHIPPED_IMPORTER: MainCatalogImporter = async (locale) => {
         import('../../shared/properties/i18n/messages/de/error'),
         import('../../shared/properties/i18n/messages/de/menu'),
         import('../../shared/properties/i18n/messages/de/pages'),
+        import('../../shared/properties/i18n/messages/de/recovery'),
       ]);
     case 'pt-BR':
       return Promise.all([
@@ -59,6 +63,7 @@ const SHIPPED_IMPORTER: MainCatalogImporter = async (locale) => {
         import('../../shared/properties/i18n/messages/ptBR/error'),
         import('../../shared/properties/i18n/messages/ptBR/menu'),
         import('../../shared/properties/i18n/messages/ptBR/pages'),
+        import('../../shared/properties/i18n/messages/ptBR/recovery'),
       ]);
     default: {
       const exhaustive: never = locale;

@@ -131,10 +131,10 @@ test('files shared by a majority of the pages are global, in page import order',
   assert.deepEqual(componentPreviewGlobalFiles(pages), ['src/layouts/Layout.astro', 'src/components/Global.astro']);
   assert.deepEqual(componentPreviewGlobalFiles([]), []);
   assert.deepEqual(componentPreviewGlobalFiles([['src/components/Only.astro']]), ['src/components/Only.astro'], 'a one-page site shares everything');
-  assert.throws(
-    () => componentPreviewGlobalFiles([Array.from({ length: 513 }, (_, index) => `src/components/C${index}.astro`)]),
-    /imports per page exceed limit/,
-  );
+  // No size limit: a page importing thousands of files, and a site of thousands of pages, still resolve.
+  const wide = Array.from({ length: 5000 }, (_, index) => `src/components/C${index}.astro`);
+  assert.equal(componentPreviewGlobalFiles([wide]).length, wide.length);
+  assert.deepEqual(componentPreviewGlobalFiles(Array.from({ length: 9000 }, () => ['src/layouts/Layout.astro'])), ['src/layouts/Layout.astro']);
 });
 
 test('only literal inline and global CSS is copied from a template', () => {
@@ -166,8 +166,8 @@ test('the first instance supplies literal props and plain children, never expres
   assert.deepEqual(componentPreviewInstance('<Card title=`${x}` size={1e9} label={"Saved"}>', 'Card'), { props: { label: 'Saved' }, slot: { kind: 'name' } });
   assert.equal(componentPreviewInstance('<CardList />', 'Card'), undefined, 'a longer tag name is another component');
   assert.throws(() => componentPreviewInstance('<a />', 'a b'), /identifier/);
-  const many = Array.from({ length: 257 }, (_, at) => `p${at}="x"`).join(' ');
-  assert.throws(() => componentPreviewInstance(`<Card ${many} />`, 'Card'), /props exceed limit/);
+  const many = Array.from({ length: 2000 }, (_, at) => `p${at}="x"`).join(' ');
+  assert.equal(Object.keys(componentPreviewInstance(`<Card ${many} />`, 'Card')?.props ?? {}).length, 2000, 'no prop is dropped, however many');
 });
 
 test('the homepage instance is preferred, and aliases resolve to project files', (context) => {

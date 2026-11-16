@@ -244,7 +244,8 @@ test('project watchers route batched edits once ' + 'and cancel all pending even
     projectPath,
     watch: (directory, _options, handler) => {
       handlers.set(path.basename(directory), handler);
-      return { close: () => closed.push(directory) };
+      // The watcher is armed with an `error` listener, so the stand-in has `on` like a real one.
+      return { close: () => closed.push(directory), on: () => undefined };
     },
     send: (channel, payload) => events.push({ channel, payload }),
     isSelfWrite: (file) => {

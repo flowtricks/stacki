@@ -14,7 +14,7 @@ import type { Capability } from './capability';
 import { LIMITS } from '../core/limits';
 import type { Attr, AttrSpan, PageModel, PageNode, ParsePageResult } from './pageNode';
 import { toChildIndex, type NodeKind, type StructuralPath } from './ref';
-import { encodeUtf8, spanContains, spansAscending, toByteSpan, utf16ToByteOffsets, utf8ByteLength, type ByteSpan, type Utf16Span } from '../core/span';
+import { spanContains, spansAscending, toByteSpan, utf16ToByteOffsets, utf8ByteLength, type ByteSpan, type Utf16Span } from '../core/span';
 
 export interface ProjectedAttribute {
   readonly name: string;
@@ -63,8 +63,8 @@ export type Projection =
       /** Length of the bytes this was derived from: the snapshot checks it. */
       readonly byteLength: number;
       /** UTF-16 code units of the same text. The parser bounds a page in these
-       * (`ipcFieldCharsMax`), so a projection derived without reparsing
-       * (projectionPatch.ts) carries them to stay inside the parser's bound. */
+       * (`ipcFieldCharsMax`, the platform string length), so a projection derived without
+       * reparsing (projectionPatch.ts) carries them to stay inside the parser's bound. */
       readonly utf16Length: number;
       /** The fenced frontmatter block, `---` to `---` inclusive, when present. */
       readonly frontmatter: ByteSpan | undefined;
@@ -95,10 +95,10 @@ export function projectionAcceptsVisualIntents(projection: Projection): boolean 
  * exactly `text` with source offsets on: `parsePage(text, { locs })` for an
  * `.astro` page, `parseMarkdownPage(text)` for Markdown and MDX (step 10). */
 export function projectPage(text: string, result: ParsePageResult): Projection {
-  if (LIMITS.ipcFieldCharsMax < text.length) {
-    assert(!result.editable, 'The parser refuses a page past its UTF-16 bound');
-    return overlong(text);
-  }
+  // A page of any size projects: the only ceiling is the platform's string length, which a string
+  // cannot pass, so this states the fact rather than refusing a page (a page once projected as a
+  // parse error past a fixed 10 MB).
+  assert(text.length <= LIMITS.ipcFieldCharsMax, 'A page is no longer than the platform string');
   const byteLength = utf8ByteLength(text);
   assert(byteLength <= LIMITS.sourceBytesMax, 'Projected source is inside the file bound');
   if (!result.editable) {
@@ -129,9 +129,7 @@ export function projectPage(text: string, result: ParsePageResult): Projection {
  * written through its own actor (plan §3.3). Valid, with no nodes: document
  * anchors and code patches may target it, visual node intents may not. */
 export function projectOpaqueDocument(text: string): Projection {
-  if (LIMITS.ipcFieldCharsMax < text.length) {
-    return overlong(text);
-  }
+  assert(text.length <= LIMITS.ipcFieldCharsMax, 'A document is no longer than the platform string');
   const byteLength = utf8ByteLength(text);
   assert(byteLength <= LIMITS.sourceBytesMax, 'Projected source is inside the file bound');
   assert(byteLength >= text.length, 'UTF-8 never takes fewer bytes than UTF-16 units');
@@ -139,17 +137,6 @@ export function projectOpaqueDocument(text: string): Projection {
 }
 
 // --- Internal ----------------------------------------------------------------
-
-// A file inside the byte bound can still exceed the UTF-16 bound the parser and
-// the offset converter keep: 10 MB of ASCII is 10 485 760 units, over
-// ipcFieldCharsMax. That is user input, so it projects as a parse error; before
-// this check it reached the converter's assertion and crashed (found at step 4).
-function overlong(text: string): Projection {
-  const byteLength = encodeUtf8(text).length;
-  assert(byteLength >= text.length, 'UTF-8 never takes fewer bytes than UTF-16 units');
-  const message = `Source exceeds ${LIMITS.ipcFieldCharsMax} UTF-16 units.`;
-  return { tag: 'parse-error', byteLength, diagnostics: [{ message, near: undefined }] };
-}
 
 interface PendingNode {
   readonly node: PageNode;

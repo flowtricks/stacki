@@ -25,6 +25,7 @@ import { messages as palette } from './palette';
 import { messages as preview } from './preview';
 import { messages as props } from './props';
 import { messages as publish } from './publish';
+import { messages as recovery } from './recovery';
 import { messages as rail } from './rail';
 import { messages as roles } from './roles';
 import { messages as selectors } from './selectors';
@@ -65,6 +66,7 @@ export const messages = {
   ...preview,
   ...props,
   ...publish,
+  ...recovery,
   ...rail,
   ...roles,
   ...selectors,

@@ -27,8 +27,6 @@ import {
 } from './componentPreviewRecipe';
 
 const PREVIEW_LIMITS = {
-  sourceCharsMax: 10 * 1024 * 1024,
-  fieldsMax: 1024,
   nameCharsMax: 200,
   rootsMax: 8,
 } as const;
@@ -53,10 +51,10 @@ export interface ComponentPreviewInputs {
  * props and plain children win over invented ones.
  */
 export function componentPreviewInputs(source: unknown, name: unknown, sample?: PreviewSample, recipe?: PreviewRecipe): ComponentPreviewInputs {
-  const text = previewText(source, PREVIEW_LIMITS.sourceCharsMax, 'Component source');
-  const label = previewText(name, PREVIEW_LIMITS.nameCharsMax, 'Component name');
+  const text = previewString(source, 'Component source');
+  const label = previewString(name, 'Component name');
+  assert(label.length <= PREVIEW_LIMITS.nameCharsMax, 'Component name: exceeds length limit');
   const schema = parsePropSchema(text);
-  assert(schema.length <= PREVIEW_LIMITS.fieldsMax, 'Preview prop count exceeds limit');
   const props: Record<string, PreviewSampleValue> = {};
   for (const field of schema) {
     if (field.name === 'preview' && field.type === 'boolean') {
@@ -221,8 +219,6 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
         .map((candidate) => path.relative(candidate, file).split(path.sep).join('/'))
         .find((candidate) => /^src\/.+\.astro$/.test(candidate) && !isWithin(PAGES_FOLDER, candidate));
       assert(relative !== undefined, 'Preview metadata must belong to a project component or layout');
-      const bytes = fs.statSync(file).size;
-      assert(bytes <= PREVIEW_LIMITS.sourceCharsMax, 'Component source exceeds size limit');
       const source = fs.readFileSync(file, 'utf8');
       const name = path.basename(file, '.astro');
       // Saving a recipe changes what the preview should show, even before the file exists.
@@ -340,9 +336,9 @@ function packagePreviewModule(sources: readonly PackagePreviewSource[]): string 
   );
 }
 
-function previewText(input: unknown, maximum: number, label: string): string {
+// A source is any length: a component's size is the component's own business.
+function previewString(input: unknown, label: string): string {
   assert(typeof input === 'string', label + ': expected string');
-  assert(input.length <= maximum, label + ': exceeds length limit');
   return input;
 }
 

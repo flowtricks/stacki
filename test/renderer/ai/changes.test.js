@@ -276,13 +276,13 @@ test('unchanged lines fold behind "Show N lines", which unfolds them; header "no
   assert.equal(container.querySelectorAll('.ai-diffview-gap').length, 1, 'the other gap is still folded');
 });
 
-test('a huge rewrite draws a capped number of rows and "Show full diff" raises the cap', async (context) => {
+test('a huge rewrite draws a page of rows and "Show more rows" brings the next page, until every row is drawn', async (context) => {
   const old = Array.from({ length: 300 }, (_, index) => `old ${index}`).join('\n');
   const next = Array.from({ length: 300 }, (_, index) => `new ${index}`).join('\n');
   const { container, root } = await mountDiff({ path: '/site/big.txt', oldText: old, newText: next });
   context.after(() => act(() => root.unmount()));
   assert.equal(container.querySelectorAll('.history-diff-line').length, 400);
-  await click(button(container, 'Show full diff'));
+  await click(button(container, 'Show more rows'));
   assert.equal(container.querySelectorAll('.history-diff-line').length, 600);
-  assert.equal([...container.querySelectorAll('button')].filter((element) => element.textContent === 'Show full diff').length, 0);
+  assert.equal([...container.querySelectorAll('button')].filter((element) => element.textContent === 'Show more rows').length, 0, 'every row is drawn');
 });

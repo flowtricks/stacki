@@ -1,8 +1,9 @@
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { translateReference } from '../../lib/i18n/translateErrorText';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { assert } from '../../../shared/core/assert';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CodeTokens, useCodeLines } from '../../ui/CodeBlock';
 import { languageFor } from '../../ui/codeHighlight';
 import { ChevronLeftIcon } from '../../ui/Icons';
@@ -10,6 +11,11 @@ import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
 import { readHistoryDiff } from './historyDiffBridge';
 import { parseHistoryPatch } from './historyDiffModel';
 import type { HistoryDiffLine } from './historyDiffModel';
+
+// A diff of any length scrolls: only a window of rows is in the page. Every row is one line of
+// 20 px (`.history-diff-line`, `white-space: pre`), so the rows above and below the window are
+// stood in for by padding of exactly their height and the scrollbar is the whole diff's.
+const HISTORY_DIFF_WINDOW = { rowHeightPx: 20, rowsInWindow: 600, rowsAbove: 150, snapRows: 100 } as const;
 
 type DiffState =
   | { readonly kind: 'loading' }
@@ -52,7 +58,7 @@ export default function HistoryFileDiff({
           recovery={[{ label: translate('ui.retry'), run: () => setRevision((value) => value + 1) }]}
         />
       )}
-      {state.kind === 'ready' && <HistoryDiffLines rows={state.rows} path={file.path} />}
+      {state.kind === 'ready' && <HistoryDiffLines key={`${commit.hash}:${file.path}`} rows={state.rows} path={file.path} />}
     </div>
   );
 }
@@ -88,6 +94,7 @@ function HistoryDiffTable({ rows, path }: { readonly rows: readonly HistoryDiffL
   // The code rows are coloured as one text, so a comment or a tag that spans
   // lines keeps its colour on all of them. Both sides of a change share the text:
   // a diff is the only place they sit together, and a parser recovers past the seam.
+  const [firstRow, setFirstRow] = useState(0);
   const lines = useCodeLines(
     rows
       .filter(isCodeRow)
@@ -95,12 +102,24 @@ function HistoryDiffTable({ rows, path }: { readonly rows: readonly HistoryDiffL
       .join('\n'),
     languageFor(path),
   );
-  let codeIndex = 0;
+  // The window's rows are lines of the one coloured text, found by the count of code rows before them.
+  const codeIndexes = useMemo(() => codeRowIndexes(rows), [rows]);
+  const first = Math.min(firstRow, rows.length);
+  const end = Math.min(rows.length, first + HISTORY_DIFF_WINDOW.rowsInWindow);
   return (
-    <div className="history-diff-scroll" tabIndex={0} aria-label={translate('history.diff.label')}>
-      <div className="history-diff-lines">
-        {rows.map((row, index) => {
-          const line = isCodeRow(row) ? lines[codeIndex++] : undefined;
+    <div
+      className="history-diff-scroll"
+      tabIndex={0}
+      aria-label={translate('history.diff.label')}
+      onScroll={(event) => setFirstRow(windowStart(event.currentTarget.scrollTop, rows.length))}
+    >
+      <div
+        className="history-diff-lines"
+        style={{ paddingTop: first * HISTORY_DIFF_WINDOW.rowHeightPx, paddingBottom: (rows.length - end) * HISTORY_DIFF_WINDOW.rowHeightPx }}
+      >
+        {rows.slice(first, end).map((row, offset) => {
+          const index = first + offset;
+          const line = isCodeRow(row) ? lines[codeIndexes[index] ?? 0] : undefined;
           return (
             <div key={index} className={`history-diff-line ${row.kind}`}>
               {isCodeRow(row) ? (
@@ -119,6 +138,29 @@ function HistoryDiffTable({ rows, path }: { readonly rows: readonly HistoryDiffL
       </div>
     </div>
   );
+}
+
+// The first row to draw for a scroll position: a few rows above what is on screen, snapped so a scroll
+// redraws the window once per `snapRows` rows rather than once per row.
+function windowStart(scrollTop: number, rowCount: number): number {
+  assert(scrollTop >= 0, 'windowStart: a scroll position is not negative');
+  const top = Math.floor(scrollTop / HISTORY_DIFF_WINDOW.rowHeightPx) - HISTORY_DIFF_WINDOW.rowsAbove;
+  const snapped = Math.floor(Math.max(top, 0) / HISTORY_DIFF_WINDOW.snapRows) * HISTORY_DIFF_WINDOW.snapRows;
+  return Math.min(snapped, rowCount);
+}
+
+// For every row, how many code rows come before it: the index of its line in the coloured text.
+function codeRowIndexes(rows: readonly HistoryDiffLine[]): readonly number[] {
+  const indexes: number[] = [];
+  let codeRows = 0;
+  for (const row of rows) {
+    indexes.push(codeRows);
+    if (isCodeRow(row)) {
+      codeRows += 1;
+    }
+  }
+  assert(indexes.length === rows.length, 'codeRowIndexes: one index per row');
+  return indexes;
 }
 
 function isCodeRow(row: HistoryDiffLine): boolean {

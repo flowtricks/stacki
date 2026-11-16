@@ -45,8 +45,6 @@ function mappingReason(mapping: SpanMapping): RejectionReason | undefined {
       return 'anchor-ambiguous';
     case 'gone':
       return 'anchor-moved';
-    case 'too-costly':
-      return 'resource-limit';
     default: {
       const exhaustive: never = mapping;
       return exhaustive;
@@ -57,8 +55,10 @@ function mappingReason(mapping: SpanMapping): RejectionReason | undefined {
 export function mappingTypeChecks(mapping: SpanMapping, outcome: DiffOutcome, diff: ByteDiff, base: PlanningBase, plan: Plan): void {
   // @ts-expect-error Only a resolved mapping carries a span: no "best guess" on the others.
   void mapping.span;
-  // @ts-expect-error A too-costly diff carries no partial diff to map through.
-  void outcome.diff;
+  if (outcome.tag === 'coarse') {
+    // @ts-expect-error A coarse diff proves blocks equal; it has no edit distance to read.
+    void outcome.diff.distance;
+  }
   // @ts-expect-error The frontiers stay private to the diff; callers read distances.
   void diff.forward;
   // @ts-expect-error A diff is immutable once computed.

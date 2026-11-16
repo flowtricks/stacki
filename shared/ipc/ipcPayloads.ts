@@ -404,6 +404,7 @@ export const IPC_PAYLOADS = {
   }),
   'css:variables': pathText,
   'dev:diagnose': pathText,
+  'dev:inspect': pathText,
   'dev:probe': pathText,
   'dev:start': pathText,
   'dev:stop': nothing,

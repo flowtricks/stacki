@@ -6,6 +6,7 @@ import { assert } from '../../shared/core/assert';
 import type { StyleFile } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
 import { toPosix } from '../lib/mainHelpers';
 import { isStudioDirectory } from '../lib/studioDirectory';
 import { projectFoldersFor } from '../lib/projectFolders';
@@ -19,11 +20,11 @@ export const CSS_SKIP_DIRECTORIES = new Set(['node_modules', 'dist', '.git', '.a
 // above them, because the project root also holds whatever else its owner keeps
 // there: a 1.7 GB backup folder beside the site made this synchronous walk
 // stall the main process, dev server start included (issue #67).
-export function listCssFiles(root: string) {
+export function* cssFilesSliced(root: string): SlicedWork<StyleFile[]> {
   const folders = projectFoldersFor(root, 'styles');
   const out: StyleFile[] = [];
   const checkDirectory = directoryBudget(root);
-  const walk = (directory: string, rel: string, depth: number): void => {
+  function* walk(directory: string, rel: string, depth: number): SlicedWork<void> {
     let entries;
     try {
       entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -50,7 +51,7 @@ export function listCssFiles(root: string) {
         if (isStudioDirectory(full, entry.name)) {
           continue;
         }
-        walk(full, relPath, depth + 1);
+        yield* walk(full, relPath, depth + 1);
       } else if (/\.(css|scss|sass|less)$/i.test(entry.name)) {
         // A stylesheet at the project root is listed as it always was; deeper ones only inside a style folder.
         if (depth > 0) {
@@ -67,8 +68,9 @@ export function listCssFiles(root: string) {
         out.push({ rel: toPosix(relPath), name: entry.name, path: full, size });
       }
     }
-  };
-  walk(root, '', 0);
+    yield;
+  }
+  yield* walk(root, '', 0);
   // Shallow paths first (src/styles/global.css before a deeply nested partial),
   // then alphabetical — the file you want is usually near the top of the tree.
   return out.sort((left, right) => {
@@ -78,6 +80,14 @@ export function listCssFiles(root: string) {
   });
 }
 
+export function listCssFiles(root: string): StyleFile[] {
+  return runSync(cssFilesSliced(root));
+}
+
+export function listCssFilesSliced(root: string): Promise<StyleFile[]> {
+  return runSliced(cssFilesSliced(root));
+}
+
 // A component's `<style is:global>` is page CSS. Astro leaves those rules
 // unhashed, so they style whatever the page renders — including elements that
 // live in a different file from the one being edited, which is exactly the case
@@ -85,12 +95,11 @@ export function listCssFiles(root: string) {
 // left out: Astro hashes them to their own component's elements, so their rules
 // can't reach a selection made from another file.
 export const ASTRO_GLOBAL_STYLE = /<style\b[^>]*\bis:global\b[^>]*>/i;
-export const ASTRO_SCAN_LIMIT = 512 * 1024; // a .astro file this big isn't a component
 
-export function listAstroStyleFiles(root: string) {
+export function* astroStyleFilesSliced(root: string): SlicedWork<StyleFile[]> {
   const out: StyleFile[] = [];
   const checkDirectory = directoryBudget(root);
-  const walk = (directory: string, rel: string, depth: number): void => {
+  function* walk(directory: string, rel: string, depth: number): SlicedWork<void> {
     let entries;
     try {
       entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -112,7 +121,7 @@ export function listAstroStyleFiles(root: string) {
         if (isStudioDirectory(full, entry.name)) {
           continue;
         }
-        walk(full, relPath, depth + 1);
+        yield* walk(full, relPath, depth + 1);
         continue;
       }
       if (!/\.astro$/i.test(entry.name)) {
@@ -120,9 +129,6 @@ export function listAstroStyleFiles(root: string) {
       }
       try {
         const { size } = fs.statSync(full);
-        if (size > ASTRO_SCAN_LIMIT) {
-          continue;
-        }
         if (!ASTRO_GLOBAL_STYLE.test(readSource(full))) {
           continue;
         }
@@ -130,10 +136,20 @@ export function listAstroStyleFiles(root: string) {
       } catch {
         /* unreadable — nothing to offer for it */
       }
+      // Reading and testing a file is the unit of work; a project of any size is a longer run of units.
+      yield;
     }
-  };
+  }
   // Only src/: components elsewhere aren't part of the page's CSS, and this
   // keeps the scan off node_modules and build output entirely.
-  walk(path.join(root, 'src'), 'src', 0);
+  yield* walk(path.join(root, 'src'), 'src', 0);
   return out.sort((left, right) => left.rel.localeCompare(right.rel));
+}
+
+export function listAstroStyleFiles(root: string): StyleFile[] {
+  return runSync(astroStyleFilesSliced(root));
+}
+
+export function listAstroStyleFilesSliced(root: string): Promise<StyleFile[]> {
+  return runSliced(astroStyleFilesSliced(root));
 }

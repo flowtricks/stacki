@@ -20,8 +20,6 @@ export const messages = {
   'history.diff.loading': 'Carregando diferenças…',
   'history.diff.noTextChanges': 'Nenhuma alteração de texto neste arquivo.',
   'history.diff.restoreFile': 'Restaurar arquivo…',
-  'history.error.diffTooLarge': 'O diff deste arquivo é grande demais para ser exibido.',
-  'history.error.diffTooManyLines': 'O diff deste arquivo tem linhas demais para ser exibido.',
   'history.error.diffUnreadable': 'Não foi possível ler o diff deste commit.',
   'history.files.added': {
     one: '{count} arquivo adicionado',

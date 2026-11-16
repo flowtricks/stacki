@@ -51,7 +51,6 @@ export const messages = {
   'error.instructions.skillTooLarge': 'Diese Skill-Datei ist zu groß zum Lesen.',
   'error.media.hostSilent': 'Der Medien-Host hat nicht geantwortet.',
   'error.pageRename.notUtf8': '{file} ist nicht UTF-8-kodiert.',
-  'error.pageRename.tooManyFiles': 'Zu viele verknüpfte Dateien für eine Umbenennung. Teile die Umstrukturierung auf.',
   'error.pageTemplate.connectionGone': 'Diese Sanity-Verbindung gibt es nicht mehr. Verbinde Sanity erneut.',
   'error.pageTemplate.generic': 'Stacki konnte das nicht abschließen.',
   'error.pageTemplate.keyUnreadable': 'Stacki konnte den Schlüssel dieser Verbindung nicht lesen. Verbinde Sanity erneut.',

@@ -22,10 +22,6 @@ import { toArray } from '../core/record';
 import { APPS_DIRECTORY, parseAppId } from './apps';
 
 export const APP_FILE_LIMITS = {
-  /** One file an app reads or writes: the editor's own editable file bound (MAIN_LIMITS.editableFileBytesMax). */
-  fileBytesMax: 5 * 1024 * 1024,
-  /** Entries one `files.list` answers with; past it, `truncated` is true. */
-  listEntriesMax: 1000,
   /** A project path an app names. */
   pathCharsMax: 512,
   /** Segments in one project path. */
@@ -62,7 +58,10 @@ export interface AppFileEntry {
 
 export interface AppFileListing {
   readonly entries: readonly AppFileEntry[];
-  /** Whether the folder held more than APP_FILE_LIMITS.listEntriesMax entries. */
+  /**
+   * Always false: a listing carries every entry, however many the folder holds. The field stays
+   * because the wire contract names it and an older app may read it.
+   */
   readonly truncated: boolean;
 }
 
@@ -194,7 +193,7 @@ export function appFilePathRefusal(path: string, appId: string | undefined): str
 // Params, as the RPC parses them (appsRpc.ts APP_METHODS)
 // ---------------------------------------------------------------------------
 
-/** `files.write`'s content: bounded, and base64 only when it is base64. */
+/** `files.write`'s content: any length a string holds (text() bounds it), and base64 only when it is base64. */
 export function parseAppFileContent(content: unknown, encoding: unknown): { readonly content: string; readonly encoding: AppFileEncoding } {
   const parsedEncoding = encoding === undefined ? 'utf8' : APP_FILE_ENCODINGS.find((known) => known === encoding);
   if (parsedEncoding === undefined) {
@@ -202,17 +201,10 @@ export function parseAppFileContent(content: unknown, encoding: unknown): { read
   }
   const value = text(content);
   if (parsedEncoding === 'base64') {
-    if (value.length > Math.ceil(APP_FILE_LIMITS.fileBytesMax / 3) * 4) {
-      throw new Error(`content exceeds ${APP_FILE_LIMITS.fileBytesMax} bytes`);
-    }
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
       throw new Error('content is not base64');
     }
     return { content: value, encoding: 'base64' };
-  }
-  // A UTF-8 character is at most 3 bytes per UTF-16 unit; the store checks the exact size.
-  if (value.length > APP_FILE_LIMITS.fileBytesMax) {
-    throw new Error(`content exceeds ${APP_FILE_LIMITS.fileBytesMax} bytes`);
   }
   return { content: value, encoding: 'utf8' };
 }
@@ -306,8 +298,8 @@ export function parseAppFileAnswer(input: unknown, appId: string): AppFileAnswer
 function parseListing(input: unknown, appId: string): AppFileListing {
   const value = record(input);
   const items = toArray(value['entries']);
-  if (items === undefined || items.length > APP_FILE_LIMITS.listEntriesMax) {
-    throw new Error('A listing holds a bounded list of entries');
+  if (items === undefined) {
+    throw new Error('A listing holds a list of entries');
   }
   if (typeof value['truncated'] !== 'boolean') {
     throw new Error('A listing says whether it was cut');
@@ -343,8 +335,8 @@ function parseChange(input: unknown, appId: string): AppFileChange {
 }
 
 function sizeOf(input: unknown): number {
-  if (typeof input !== 'number' || !Number.isSafeInteger(input) || input < 0 || input > APP_FILE_LIMITS.fileBytesMax) {
-    throw new Error('A size is a whole number of bytes within the file bound');
+  if (typeof input !== 'number' || !Number.isSafeInteger(input) || input < 0) {
+    throw new Error('A size is a whole number of bytes');
   }
   return input;
 }

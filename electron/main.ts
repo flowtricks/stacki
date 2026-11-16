@@ -13,6 +13,9 @@ import { registerProjectMetadataHandlers } from './handlers/projectMetadataHandl
 import { registerImageConversionHandler } from './handlers/imageConversionHandler';
 import { registerGitRepositoryHandlers } from './handlers/gitRepositoryHandlers';
 import { listenForPreviewFailures } from './preview/previewFailure';
+import { attachWindowRecovery, type WindowRecovery } from './app/windowRecovery';
+import { installProcessGuards } from './app/processGuards';
+import type { CrashRecord } from './app/crashLog';
 import { keepPreviewsOnSite } from './app/previewNavigation';
 import { registerStudioHandlers } from './handlers/studioHandlers';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
@@ -58,7 +61,7 @@ import { registerBootChannels } from './boot/bootChannels';
 import { describeStartup, markStartup } from './app/startupTiming';
 import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
 import { buildApplicationMenuTemplate } from './app/applicationMenu';
-import { loadMainLocale, setMainLocale, translateMain } from './lib/mainLocale';
+import { activeMainLocale, loadMainLocale, setMainLocale, translateMain } from './lib/mainLocale';
 import { openMicrophoneSettings, microphoneStatus, requestMicrophone, type MicrophoneSystem } from './app/microphoneAccess';
 import { LOCALE_PREFERENCE_DEFAULT } from '../shared/core/i18n/locales';
 import { resolveLocale } from '../shared/core/i18n/parseLocale';
@@ -419,9 +422,9 @@ function createWindow() {
   keepPreviewsOnSite(mainWindow.webContents, openExternalLink);
   keepAppFramesHome(mainWindow.webContents, openExternalLink);
 
-  // A renderer that does not load leaves an empty window; the log says why.
-  const loaded = process.env['VITE_DEV_SERVER_URL'] ? mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL']) : mainWindow.loadFile(RUNTIME_PATHS.rendererIndex);
-  loaded.catch((error: unknown) => {
+  watchWindowHealth(mainWindow);
+  // A renderer that does not load leaves an empty window; the log says why, and the health watch above shows the recovery screen.
+  loadApp(mainWindow).catch((error: unknown) => {
     console.error('[window] the renderer did not load:', error);
   });
 
@@ -447,6 +450,95 @@ function createWindow() {
     cleanupTerminals();
   });
 }
+
+// The app's own page, in `window`.
+function loadApp(window: Window): Promise<void> {
+  const devServerUrl = process.env['VITE_DEV_SERVER_URL'];
+  return devServerUrl ? window.loadURL(devServerUrl) : window.loadFile(RUNTIME_PATHS.rendererIndex);
+}
+
+// Errors from before the window exists, and ones that arrive while it is being made, wait here until the recovery
+// watch can keep them with the rest of the crash log (electron/app/windowRecovery.ts).
+const pendingCrashNotes: Array<Pick<CrashRecord, 'source' | 'reason' | 'detail'>> = [];
+let windowRecovery: WindowRecovery | undefined;
+
+function noteCrash(entry: Pick<CrashRecord, 'source' | 'reason' | 'detail'>): void {
+  if (windowRecovery) {
+    windowRecovery.note(entry);
+  } else if (pendingCrashNotes.length < 50) {
+    pendingCrashNotes.push(entry);
+  }
+}
+
+// A window that fails to load, loses its renderer or hangs is reloaded a bounded number of times and then replaced by the
+// recovery screen, never left black (electron/app/windowHealth.ts holds the decision, windowRecovery.ts the actions).
+function watchWindowHealth(window: Window): void {
+  const { webContents } = window;
+  const recovery = attachWindowRecovery({
+    contents: webContents,
+    directory: app.getPath('userData'),
+    homeDirectory: app.getPath('home'),
+    now: Date.now,
+    setTimer: (action, delayMs) => {
+      const handle = setTimeout(action, delayMs);
+      return { cancel: () => clearTimeout(handle) };
+    },
+    translate: () => translateMain,
+    locale: () => activeMainLocale(),
+    loadApp: () => loadApp(window),
+    // A window still waiting for its first frame would stay hidden behind the recovery page.
+    onRecoveryShown: firstFrame.fire,
+    openProject: () => {
+      void pickProjectFromRecovery(window);
+    },
+    copyText: (text) => {
+      clipboard.writeText(text).catch((error: unknown) => console.error('[recovery] could not copy the details:', error));
+    },
+    log: (message) => console.error(message),
+  });
+  windowRecovery = recovery;
+  for (const entry of pendingCrashNotes.splice(0)) {
+    recovery.note(entry);
+  }
+  webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    // A failed subframe is the preview's business (preview/previewFailure.ts), not the app window's.
+    if (isMainFrame) {
+      recovery.handle({ kind: 'load-failed', code, description, url });
+    }
+  });
+  webContents.on('render-process-gone', (_event, details) => recovery.handle({ kind: 'renderer-gone', reason: details.reason, exitCode: details.exitCode }));
+  webContents.on('unresponsive', () => recovery.handle({ kind: 'unresponsive' }));
+  webContents.on('responsive', () => recovery.handle({ kind: 'responsive' }));
+  // Before keepOnAppPage's own listener cancels every address that is not the app's page.
+  webContents.on('will-navigate', (event) => {
+    if (recovery.handleNavigation(event.url)) {
+      event.preventDefault();
+    }
+  });
+}
+
+// The recovery screen's "Open another project": the person picks a folder, and the window loads the app with it.
+async function pickProjectFromRecovery(window: Window): Promise<void> {
+  const picked = await dialog.showOpenDialog(window, { title: translateMain('dialog.open.project.title'), properties: ['openDirectory'] });
+  const directory = picked.filePaths[0];
+  if (picked.canceled || directory === undefined) {
+    return;
+  }
+  pendingProject = directory;
+  await loadApp(window);
+}
+
+// An error nobody caught goes to the crash log instead of a native box or nowhere (electron/app/processGuards.ts), and a
+// helper process that died (the GPU, a utility) is recorded as the window's health sees it.
+installProcessGuards({
+  onUncaughtException: (listener) => process.on('uncaughtException', listener),
+  onUnhandledRejection: (listener) => process.on('unhandledRejection', listener),
+  note: noteCrash,
+  log: (message) => console.error(message),
+});
+app.on('child-process-gone', (_event, details) => {
+  windowRecovery?.handle({ kind: 'child-gone', processType: details.type, reason: details.reason, exitCode: details.exitCode });
+});
 
 // Links open in the user's browser. There is no one to tell when the browser
 // cannot be started, so the failure goes to the log.

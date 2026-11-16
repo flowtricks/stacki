@@ -647,6 +647,49 @@ filesystem is reachable). The step-5 parallel run against the pre-step-5
 build (`test/legacy-parity.bench.js`) was retired at step 10 with the
 `page:write` channel it drove; its results are in the tracker, Step 5.
 
+## Scan warnings (`shared/properties/projectScan.ts`)
+
+A project that is odd must still open. `project:scan` never throws for a project's contents: each
+step of the scan (config, folders, pages, components, instance counts, titles) runs guarded, and a
+step that fails is replaced by an empty result plus a warning. `ScanResult.warnings` lists what the
+scan could not read or had to assume; `parseScanResult` refuses a warning with an unknown code, an
+empty message, or a file that is not project-relative. A warning never blocks anything: the UI
+shows it (the notice is the UI's work, not the scan's) and everything else stays usable.
+
+| Code | `file` | `detail` | Meaning |
+|---|---|---|---|
+| `dependencies-missing` | none | the package manager | Astro is not installed in the project or any parent folder (`hasDependencies`); the preview cannot start until the manager installs. |
+| `folder-unreadable` | the folder | system error code | A folder could not be listed (`EACCES`, `ENOTDIR`); what it holds is missing from the lists. A folder that is simply absent is not a warning. |
+| `link-broken` | the link | error code | A symbolic link points at nothing; it is skipped. |
+| `link-cycle` | the link | none | A link leads back into a folder already listed; it is skipped, which is what ends the walk. |
+| `config-unreadable` | the config | error code | The astro.config exists but cannot be read; Astro's default folders are assumed. |
+| `config-computed` | the config | `srcDir`, `publicDir`, `outDir`, `root` or `cacheDir` | The config builds that setting in code (an environment read, a variable, a spread that may override it, a config that is itself a call); Astro's default is assumed. |
+| `config-folder-custom` | the config | `srcDir=<folder>` | A literal `srcDir` other than `src`: pages are read from `<folder>/pages`. |
+| `scan-step-failed` | none | the step | One step threw; the others' results are still here. |
+
+`ScanResult.packageManager` is `package.json`'s `packageManager` field, else the lockfile
+(`pnpm-lock.yaml`, `pnpm-workspace.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb`, `package-lock.json`),
+else npm, asked of the project folder and then each parent, nearest first, because a workspace
+package keeps neither in its own folder (`detectPackageManager`).
+
+How the scan reads the disk:
+
+- Every folder walk is `walkFolderSliced` (`electron/project/projectWalk.ts`): iterative, links are
+  followed, each real folder is opened once (a set of real paths ends any cycle, so the bound is the
+  tree's own size and no cap applies), unreadable folders and broken links are returned as data.
+  `node_modules` and `.stacki` are not walked.
+- A page is a `.astro` file, or a `.md` / `.mdx` file, under the pages folder. A file or folder whose
+  name starts with `_` is not a route (Astro's rule) and is not listed; endpoints (`.ts`, `.js`),
+  images, styles and text files under `src/pages` are not pages. Markdown counts as a page only
+  inside the pages folder, whatever the project's own path is called.
+- `astro.config.*` is read as text by `shared/properties/astroConfigText.ts`: it finds the exported
+  object (`export default {…}`, `defineConfig({…})`, an arrow or function returning one,
+  `module.exports =`, a named `const`), walks only its top-level keys, and reports each as a literal,
+  computed or unset. Comments, nested blocks (`vite: { … }`), strings and regular expressions that look like
+  settings are never mistaken for them.
+- A save never replaces a read-only file: `replaceFileAtomic` answers a `filesystem` failure naming
+  the file (renaming over it would succeed and quietly override the protection).
+
 ## Other shared contracts
 
 - `brand.ts` constructs `NodeId`, `FilePath`, `ProjectPath`, `Digest`,
@@ -1030,15 +1073,16 @@ one of its exports (`src/consts.ts#SITE`, an identifier or `default` for a JSON 
 content collection (`blog`, no `/`). An export is also left out with its whole file. No key, or an
 empty list (never written), shows everything (`isPickerShown`).
 
-Pages are shown, not configured: `project:scan` reports `pagesFolder` (`<srcDir>/pages`, `srcDir` read
-from the first `astro.config.*` Astro loads, as a string literal only; the config never runs) and
-`astroConfig`. Everything else still assumes `src/pages`: the scan's page list and `routeForPage`,
-page create/rename/delete (`pageHandlers.ts`, `pageRequests.ts`, `pageRename*.ts`), page templates
+Pages follow the config: `project:scan` reports `pagesFolder` (`<srcDir>/pages`, `srcDir` read from
+the first `astro.config.*` Astro loads, as a plain value only; the config never runs, see
+"Scan warnings") and `astroConfig`, and lists pages from that folder (`routeForPage` takes it, page
+create, delete and `page:dynamicPaths` use `pagesDirectoryOf`). Still assuming `src/pages`: page
+rename and move (`pageRename*.ts`, refused with the reason when the folder moved), page templates
 (`pageTemplatePlan.ts`), `.stacki/pages.json` keys, preview markers (`previewMarkers.ts`,
 `markerConfig.ts`'s page glob, `componentPreviewContext.ts`), `defaultsCanvas.ts`, the components
 folder rules, and Studio's paths (`shared/validation.ts` accepts only `src/` and `public/`), its
-page list and route helpers. A project with another `srcDir` is shown its real pages folder but not
-yet edited there. Every scanner asks `foldersFor(kind, config)`: Desktop's project scan,
+page list and route helpers. A project with another `srcDir` is shown and edited in its real pages
+folder, with a `config-folder-custom` warning. Every scanner asks `foldersFor(kind, config)`: Desktop's project scan,
 component creation and undo, the component preview route's globs (written at dev server start),
 the assets panel listing and every asset write (`assetAbs`), the style panel, the variables panel,
 the unused-selector check, and Studio's scan, asset catalog and writes, style list and variable

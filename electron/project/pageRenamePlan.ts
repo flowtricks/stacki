@@ -4,7 +4,9 @@ import { ok, type Result } from '../../shared/core/result';
 import { parsePageOrder } from '../../shared/properties/pageOrder';
 import { renamedPagePath, type PageRename } from '../../shared/properties/pageRename';
 import { pageRenameConflicts } from './pageRenameConflicts';
-import { pageRenameInventory, type RenameFile } from './pageRenameInventory';
+import { isRenameTextCandidate, pageRenameInventoryWork, readRenameText } from './pageRenameInventory';
+import { createHash } from 'node:crypto';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
 import { renamePageImports, renamePageLinks } from './pageRenameLinks';
 
 export interface RenameText {
@@ -12,24 +14,37 @@ export interface RenameText {
   readonly before: string;
   readonly after: string;
 }
+/** A file the plan read, held as its digest so a project of any size is witnessed without holding all its text. */
+export interface RenameWitness {
+  readonly file: string;
+  readonly digest: string;
+}
 export interface PageRenamePlan {
   readonly root: string;
   readonly change: PageRename;
   readonly texts: readonly RenameText[];
-  readonly witnesses: readonly RenameFile[];
+  readonly witnesses: readonly RenameWitness[];
   readonly relocated: ReadonlyMap<string, string>;
 }
 
-export function planPageRename(
+/** SHA-256 of a text: what a witness holds in place of the text. */
+export function renameDigest(source: string): string {
+  return createHash('sha256').update(source).digest('hex');
+}
+
+/**
+ * Plan a rename over a project of any size. Written once as a generator that
+ * yields after each folder and file, and run two ways: `planPageRename` drains
+ * it in one go, `planPageRenameSliced` returns to the event loop between
+ * slices. Memory holds the changed files' text, not every file's.
+ */
+export function* planPageRenameWork(
   root: string,
   change: PageRename,
   projectAliases: readonly (readonly [string, readonly string[]])[] = [],
-): Result<PageRenamePlan> {
+): SlicedWork<Result<PageRenamePlan>> {
   assert(path.isAbsolute(root), 'Rename root must be absolute');
-  if (projectAliases.length > 100 || projectAliases.some(([, targets]) => targets.length > 100)) {
-    throw new Error('Too many import aliases to rename safely.');
-  }
-  const inventory = pageRenameInventory(root);
+  const inventory = yield* pageRenameInventoryWork(root);
   const conflict = pageRenameConflicts(change, inventory);
   if (!conflict.ok) {
     return conflict;
@@ -43,16 +58,43 @@ export function planPageRename(
       }
     }
   }
-  const origins = renameOrigins(inventory.texts);
+  const candidates = inventory.files.filter(isRenameTextCandidate);
+  const origins = renameOrigins(root, candidates);
   const aliases = projectAliases.map(([prefix, targets]) => [prefix.replace(/\/$/, ''), targets.map((target) => target.replace(/\/$/, ''))] as const);
-  const texts = inventory.texts.flatMap(({ file, source }) => {
-    const linked = renamePageLinks(source, { change, origins, file });
-    const imported = renamePageImports(linked, file, relocated, aliases);
-    const after = file === '.stacki/pages.json' ? renameOrder(source, change) : imported;
-    return source === after ? [] : [{ file, before: source, after }];
-  });
-  assert(texts.length <= 10_000, 'Rename changes stay inside the scanned inventory');
-  return ok({ root, change, texts, relocated, witnesses: inventory.texts });
+  const texts: RenameText[] = [];
+  const witnesses: RenameWitness[] = [];
+  for (const candidate of candidates) {
+    const read = readRenameText(root, candidate);
+    if (read !== undefined) {
+      const { file, source } = read;
+      witnesses.push({ file, digest: renameDigest(source) });
+      const linked = renamePageLinks(source, { change, origins, file });
+      const imported = renamePageImports(linked, file, relocated, aliases);
+      const after = file === '.stacki/pages.json' ? renameOrder(source, change) : imported;
+      if (source !== after) {
+        texts.push({ file, before: source, after });
+      }
+    }
+    yield;
+  }
+  assert(texts.length <= witnesses.length, 'Every changed text was witnessed');
+  return ok({ root, change, texts, relocated, witnesses });
+}
+
+export function planPageRename(
+  root: string,
+  change: PageRename,
+  projectAliases: readonly (readonly [string, readonly string[]])[] = [],
+): Result<PageRenamePlan> {
+  return runSync(planPageRenameWork(root, change, projectAliases));
+}
+
+export function planPageRenameSliced(
+  root: string,
+  change: PageRename,
+  projectAliases: readonly (readonly [string, readonly string[]])[] = [],
+): Promise<Result<PageRenamePlan>> {
+  return runSliced(planPageRenameWork(root, change, projectAliases));
 }
 
 function renameOrder(source: string, change: PageRename): string {
@@ -65,17 +107,20 @@ function renameOrder(source: string, change: PageRename): string {
   // Revalidation catches stale metadata that would otherwise merge two identities.
   return JSON.stringify(parsePageOrder({ ...order, entries }), undefined, 2) + '\n';
 }
-function renameOrigins(files: readonly RenameFile[]): readonly string[] {
+
+// The site origins a rename must treat as internal: only the config files name them.
+function renameOrigins(root: string, files: readonly string[]): readonly string[] {
   const origins = new Set<string>();
-  for (const { file, source } of files) {
+  for (const file of files) {
     if (/^astro\.config\./.test(file) || file === '.stacki/publish.json') {
+      const read = readRenameText(root, file);
+      if (read === undefined) {
+        continue;
+      }
       const pattern = file.endsWith('.json') ? /"(?:url|publishedSite)"\s*:\s*"(https?:\/\/[^"\s]+)"/g : /\bsite\s*:\s*['"](https?:\/\/[^'"\s]+)['"]/g;
-      for (const match of source.matchAll(pattern)) {
+      for (const match of read.source.matchAll(pattern)) {
         if (match[1]) {
           origins.add(new URL(match[1]).origin);
-        }
-        if (origins.size > 32) {
-          throw new Error('Too many configured site origins to rename safely.');
         }
       }
     }

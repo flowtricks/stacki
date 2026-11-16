@@ -44,15 +44,9 @@ global.document = dom.window.document;
 // The client's modules, bundled for jsdom (test/helpers/morphModules.js); its
 // whole source, for the checks below that read it as text.
 const source = readFolderSource('electron/previewClient');
-// Main prepends the patcher's bounds from shared/core/limits.ts (step 7); the
-// bundle takes them as a parameter, so the cap tests below can shrink them.
-const { LIMITS } = require('#dist/shared/core/limits.js');
 const assert = require('node:assert/strict');
-const lift = (limits) => loadMorphModules(limits);
-const morph = lift({
-  previewMarkersMax: LIMITS.previewMarkersMax,
-  previewMorphWorkMax: LIMITS.previewMorphWorkMax,
-});
+const { LIMITS } = require('#dist/shared/core/limits.js');
+const morph = loadMorphModules();
 const { patchChildren, findLive, syncAnchors, syncStamps } = morph;
 
 // The other half of the same decision: whether to patch at all.
@@ -358,49 +352,113 @@ const LIVE_TABS = (labels, active) =>
   check('the moved one is rebuilt, not carried', live.children[2] !== first && !first.isConnected);
 }
 
-// The caps (step 7). Past the marker cap or the diff-work cap the patch throws
-// the cap's own reason, and update() turns that into an announced reload; under
-// them it patches as before. A shrunken copy of the patcher shows both edges.
+// No size at which the patch reloads (owner requirement: no size limit). A list of
+// any length is lined up by an algorithm chosen for its size, and the page ends up
+// exactly as the new rendering says; only the choice of which equal-keyed nodes
+// persist may differ between algorithms. Both ends of the choice are exercised: the
+// exact matrix (small remainders), Myers (large remainders with few edits) and the
+// greedy pass (large remainders with many edits).
 {
-  const tiny = lift({ previewMarkersMax: 3, previewMorphWorkMax: 40 });
-  const reasonOf = (run) => {
-    try {
-      run();
-      return undefined;
-    } catch (error) {
-      return error instanceof tiny.OverCap ? error.reason : `not a cap: ${error.message}`;
-    }
-  };
-  const marked = (i) => `<!--avb-s:${i}--><p>${i}</p><!--avb-e:${i}-->`;
-  const markers = (count) => tree(Array.from({ length: count }, (_, i) => marked(i)).join(''));
-  check('a rendering at the marker cap patches', reasonOf(() => tiny.checkMarkerCap(markers(3))) === undefined);
-  check('one marker past it reloads, and says why', reasonOf(() => tiny.checkMarkerCap(markers(4))) === 'markers-over-cap');
-  // A middle edit in a list of n children builds an (n+1)² matrix after the
-  // shared prefix: five children changed at the head cost 36 cells, under 40.
   const list = (items) => items.map((item) => `<i id="${item}">${item}</i>`).join('');
-  const five = ['a', 'b', 'c', 'd', 'e'];
-  const small = [tree(list(five)), tree(list(five)), tree(list(['z', ...five.slice(1)]))];
-  tiny.refillMorphWork();
-  check('a diff inside the work cap patches', reasonOf(() => tiny.patchChildren(...small)) === undefined);
-  check('and the live list shows the edit', small[0].firstElementChild.id === 'z', small[0].innerHTML);
-  const names = Array.from({ length: 8 }, (_, i) => `n${i}`);
-  const large = [tree(list(names)), tree(list(names)), tree(list(['x', ...names.slice(1)]))];
-  tiny.refillMorphWork();
-  check('a diff past the work cap reloads, and says why', reasonOf(() => tiny.patchChildren(...large)) === 'diff-over-cap');
-  // The budget is per patch: refilled, the small edit fits again.
-  tiny.refillMorphWork();
-  const again = [tree(list(['a', 'b'])), tree(list(['a', 'b'])), tree(list(['q', 'b']))];
-  check('the next patch starts with the whole budget', reasonOf(() => tiny.patchChildren(...again)) === undefined);
-  // The shipped bounds are the ones in shared/core/limits.ts, prepended by main.
-  const main = readSource('electron/handlers/devServers.ts');
+  const names = (count) => Array.from({ length: count }, (_, index) => `n${index}`);
+  const patched = (from, to) => {
+    const live = tree(list(from));
+    const threw = patch(live, tree(list(from)), tree(list(to)));
+    return { live, threw };
+  };
+  // A script of ops is correct when replaying it turns the old keys into the new ones, keeping only equal keys.
+  const replay = (from, to) => {
+    const ops = morph.diffChildren(from, to);
+    const out = [];
+    let nextBefore = 0;
+    let nextAfter = 0;
+    for (const [kind, i, j] of ops) {
+      if (kind === 0) {
+        if (from[i] !== to[j] || i !== nextBefore || j !== nextAfter) {
+          return `bad keep ${i},${j}`;
+        }
+        out.push(to[j]);
+        nextBefore++;
+        nextAfter++;
+      } else if (kind === -1) {
+        if (i !== nextBefore) {
+          return `bad removal ${i}`;
+        }
+        nextBefore++;
+      } else {
+        if (j !== nextAfter) {
+          return `bad insertion ${j}`;
+        }
+        out.push(to[j]);
+        nextAfter++;
+      }
+    }
+    if (nextBefore !== from.length || nextAfter !== to.length) {
+      return 'script ends early';
+    }
+    return out.join() === to.join() ? undefined : 'replay differs';
+  };
+
+  const small = patched(names(5), ['z', ...names(5).slice(1)]);
+  check('a small edit patches', small.threw === undefined && small.live.firstElementChild.id === 'z', small.live.innerHTML);
+
+  // Past the exact matrix's size: 3 000 children with the middle one replaced is 9·10⁶ cells.
+  const big = names(3000);
+  const middle = big.map((name, index) => (index === 1500 ? 'edited' : name));
+  const edited = patched(big, middle);
+  check('a long list with a middle edit patches without a reload', edited.threw === undefined, edited.threw);
+  check('and the live list is the new rendering', edited.live.innerHTML === tree(list(middle)).innerHTML);
+  check('the siblings that stayed are the same live elements', edited.live.children[0].id === 'n0' && edited.live.children[2999].id === 'n2999');
+
+  const scattered = big.filter((_, index) => index % 7 !== 0);
+  const dropped = patched(big, scattered);
   check(
-    'main prepends the patcher its bounds from LIMITS',
-    /const AVB_PREVIEW_LIMITS = Object\.freeze\(\$\{JSON\.stringify\(bounds\)\}\)/.test(main) &&
-      /previewMarkersMax: (\w+_1\.)?LIMITS\.previewMarkersMax/.test(main) &&
-      /previewMorphWorkMax: (\w+_1\.)?LIMITS\.previewMorphWorkMax/.test(main),
+    'a long list losing every seventh child patches',
+    dropped.threw === undefined && dropped.live.innerHTML === tree(list(scattered)).innerHTML,
+    dropped.threw,
   );
-  check('the patcher declares the bounds, never defines its own', !/AVB_PREVIEW_LIMITS\s*=/.test(source));
-  check('and announces a reload before it happens', /postMessage\(\{ type: 'avb:preview-reload', reason \}/.test(source));
+
+  // Nothing in common at all: the cheapest correct script, and still a patch, not a reload.
+  const unrelated = names(3000).map((name) => `other-${name}`);
+  const replaced = patched(big, unrelated);
+  check('a long list replaced wholesale patches', replaced.threw === undefined && replaced.live.innerHTML === tree(list(unrelated)).innerHTML, replaced.threw);
+
+  // Many edits in a long list: past what Myers keeps a trace for, so the greedy pass takes over.
+  const shuffled = names(6000)
+    .map((name, index) => (index % 3 === 0 ? `new-${name}` : name))
+    .reverse();
+  const heavy = patched(names(6000), shuffled);
+  check('a long list with thousands of edits patches', heavy.threw === undefined && heavy.live.innerHTML === tree(list(shuffled)).innerHTML, heavy.threw);
+
+  // The edit script itself, over seeded random lists of repeated keys (as whitespace text nodes make them).
+  let seed = 12345;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const alphabet = ['t', 'c', 'e:DIV#', 'e:P#', 'e:LI#'];
+  const keys = (count) => Array.from({ length: count }, () => alphabet[Math.floor(random() * alphabet.length)]);
+  const failures = [];
+  for (const [beforeCount, afterCount] of [
+    [0, 0],
+    [0, 40],
+    [40, 0],
+    [1, 1],
+    [30, 25],
+    [200, 210],
+    [1200, 1100],
+    [2500, 2600],
+  ]) {
+    for (let round = 0; round < 3; round++) {
+      const problem = replay(keys(beforeCount), keys(afterCount));
+      if (problem !== undefined) {
+        failures.push(`${beforeCount}x${afterCount}: ${problem}`);
+      }
+    }
+  }
+  check('edit scripts replay to the new list for random repeated keys, small and large', failures.length === 0, failures.join('; '));
+  check('the page announces a reload before it happens', /postMessage\(\{ type: 'avb:preview-reload', reason \}/.test(source));
+  check('and no size cap is left in the patcher', !/AVB_PREVIEW_LIMITS|OverCap|over-cap/.test(source));
 }
 
 // --- a page's own stylesheet follows the edit ----------------------------------

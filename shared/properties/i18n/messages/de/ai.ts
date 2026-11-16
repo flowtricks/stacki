@@ -157,17 +157,16 @@ export const messages = {
   'ai.dictation.unavailable': 'Spracheingabe ist hier nicht verfügbar.',
   'ai.diff.binary': 'Binärdatei, keine Vorschau.',
   'ai.diff.changesTo': 'Änderungen an {name}',
-  'ai.diff.cut': 'Der Diff ist bei {rows} Zeilen abgeschnitten. Öffne die Datei, um den Rest zu sehen.',
   'ai.diff.deleted': 'Gelöscht',
   'ai.diff.large': 'Eine große Änderung: angezeigt als entfernte alte und hinzugefügte neue Zeilen.',
   'ai.diff.lineEndings': 'Nur die Zeilenenden wurden geändert.',
   'ai.diff.newFile': 'Neue Datei',
   'ai.diff.noChanges': 'Keine Änderungen anzuzeigen.',
-  'ai.diff.showFull': 'Vollständigen Diff anzeigen',
   'ai.diff.showLines': {
     one: '{count} Zeile anzeigen',
     other: '{count} Zeilen anzeigen',
   },
+  'ai.diff.showMore': 'Mehr Zeilen anzeigen',
   'ai.diff.showSome': {
     one: '{step} von {count} Zeile anzeigen',
     other: '{step} von {count} Zeilen anzeigen',

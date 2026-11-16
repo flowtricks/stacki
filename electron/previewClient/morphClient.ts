@@ -24,7 +24,6 @@
 
 import { stripTemplateMarkers, asDocument, inertNoscripts } from './morphNodes';
 import { parsePreviewRoute } from '../../shared/properties/previewRoute';
-import { type ReloadReason, OverCap, refillMorphWork, checkMarkerCap } from './morphBudget';
 import { previewHost, stripAnchors, stripPreviewInstrumentation, syncAnchors, syncStamps } from './morphAnchors';
 import { patchAttrs, patchChildren } from './morphPatch';
 import { addedScripts, noteScripts, runScripts, noteStyles, loadStyles, refreshDevStyles } from './morphAssets';
@@ -118,9 +117,12 @@ const ready =
       )
     : Promise.resolve();
 
-// A reload is honest: the app hears why before the page goes, and shows it when
-// a cap was the reason — the canvas lost its running state on purpose, not by
-// accident.
+// Why the page reloaded instead of patching. There is no size at which it does:
+// the patch scales with the page (morphPatch.ts), so these are the only two.
+type ReloadReason = 'scripts-changed' | 'patch-failed';
+
+// A reload is honest: the app hears why before the page goes, so the canvas
+// shows that it lost its running state on purpose, not by accident.
 function reloadFor(reason: ReloadReason): void {
   try {
     window.parent.postMessage({ type: 'avb:preview-reload', reason }, '*');
@@ -241,7 +243,7 @@ async function update(): Promise<void> {
       // throw it caused skipped the reload line below, which is the whole point
       // of the catch. Log and reload.
       console.error('[stacki] could not patch the page, reloading:', error);
-      reloadFor(error instanceof OverCap ? error.reason : 'patch-failed');
+      reloadFor('patch-failed');
       return;
     }
   } finally {
@@ -260,13 +262,11 @@ function applyRendering(next: FetchedDocument): void {
   if (!previousDocument) {
     throw new Error('no baseline rendering to compare against');
   }
-  checkMarkerCap(next.withAnchors);
   const added = addedScripts(previousDocument, next.clean);
   if (added === undefined) {
     reloadFor('scripts-changed');
     return;
   }
-  refillMorphWork();
   const liveRoot = document.documentElement;
   const previousRoot = previousDocument.documentElement;
   const nextRoot = next.clean.documentElement;

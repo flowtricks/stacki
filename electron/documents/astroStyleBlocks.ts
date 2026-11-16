@@ -11,6 +11,7 @@ import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import type { SelectorScope } from '../../shared/properties/selectorUsage';
+import { frontmatterOf } from '../parse/astroFence';
 import { parsePage } from '../parse/astroParser';
 import type { ParserNode } from '../parse/astroParserTypes';
 
@@ -331,8 +332,7 @@ function attrText(node: Extract<ParserNode, { kind: 'raw' }>, name: string): str
 
 function templateStart(source: string): number {
   const bom = source.startsWith('﻿') ? 1 : 0;
-  const fence = /^---\r?\n(?:---|[\s\S]*?\r?\n---)\r?\n?/.exec(source.slice(bom));
-  return bom + (fence === null ? 0 : fence[0].length);
+  return frontmatterOf(source)?.length ?? bom;
 }
 
 function lineAt(source: string, offset: number): number {

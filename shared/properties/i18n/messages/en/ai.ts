@@ -157,17 +157,16 @@ export const messages = {
   'ai.dictation.unavailable': 'Voice input is not available here.',
   'ai.diff.binary': 'Binary file, no preview.',
   'ai.diff.changesTo': 'Changes to {name}',
-  'ai.diff.cut': 'The diff is cut at {rows} rows. Open the file to see the rest.',
   'ai.diff.deleted': 'Deleted',
   'ai.diff.large': 'A large change: shown as the old lines removed and the new ones added.',
   'ai.diff.lineEndings': 'Only line endings changed.',
   'ai.diff.newFile': 'New file',
   'ai.diff.noChanges': 'No changes to show.',
-  'ai.diff.showFull': 'Show full diff',
   'ai.diff.showLines': {
     one: 'Show {count} line',
     other: 'Show {count} lines',
   },
+  'ai.diff.showMore': 'Show more rows',
   'ai.diff.showSome': {
     one: 'Show {step} of {count} line',
     other: 'Show {step} of {count} lines',

@@ -51,7 +51,6 @@ export const messages = {
   'error.instructions.skillTooLarge': 'This skill file is too large to read.',
   'error.media.hostSilent': 'The media host did not answer.',
   'error.pageRename.notUtf8': '{file} is not UTF-8.',
-  'error.pageRename.tooManyFiles': 'Too many linked files for one rename. Split the refactor.',
   'error.pageTemplate.connectionGone': 'That Sanity connection is no longer there. Connect Sanity again.',
   'error.pageTemplate.generic': 'Stacki could not finish that.',
   'error.pageTemplate.keyUnreadable': 'Stacki could not read this connection’s key. Connect Sanity again.',

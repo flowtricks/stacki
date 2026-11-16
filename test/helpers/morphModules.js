@@ -1,8 +1,7 @@
 // The canvas's morph client, bundled from its source modules for a test in
 // jsdom: every module but the entry (morphClient.ts fetches the page at load),
 // in one bundle, so the functions share one module state as they do in the
-// page. The shipped client gets its caps prepended by main; here a banner
-// declares them, so a test can bundle a copy with caps of its own.
+// page. The client has no size caps to hand it, so there is nothing to prepend.
 // The modules read the page through the global `document`, which the test sets.
 const { buildSync } = require('esbuild');
 const fs = require('node:fs');
@@ -10,9 +9,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { repoPath } = require('./sources.js');
 
-const MODULES = ['morphNodes', 'morphBudget', 'morphAnchors', 'morphPatch', 'morphAssets'];
+const MODULES = ['morphNodes', 'morphAnchors', 'morphPatch', 'morphAssets'];
 
-module.exports = function loadMorphModules(limits) {
+module.exports = function loadMorphModules() {
   const folder = repoPath('electron/previewClient');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-morph-modules-'));
   const output = path.join(directory, 'morph.cjs');
@@ -27,7 +26,6 @@ module.exports = function loadMorphModules(limits) {
       bundle: true,
       platform: 'browser',
       format: 'cjs',
-      banner: { js: `const AVB_PREVIEW_LIMITS = Object.freeze(${JSON.stringify(limits)});` },
       logLevel: 'silent',
     });
     return require(output);

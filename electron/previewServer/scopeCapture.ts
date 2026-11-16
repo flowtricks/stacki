@@ -25,8 +25,6 @@ import { PREVIEW_SCOPE_LIMITS, SCOPE_STORE_KEY } from '../../shared/page/preview
 export const SCOPE_CAPTURE_LIMITS = {
   // The record's own bound on names (shared/page/previewScope.ts).
   bindingsMax: PREVIEW_SCOPE_LIMITS.namesMax,
-  // A frontmatter longer than this is not parsed for its bindings.
-  frontmatterCharsMax: 200_000,
   // Destructuring patterns nest; deeper than this is not a page's frontmatter.
   patternDepthMax: 16,
 } as const;
@@ -44,9 +42,6 @@ const STORE_LOCAL = '__stackiScope';
  * left out: a type has no value to read, and code is not data.
  */
 export function frontmatterBindings(frontmatter: string): readonly string[] {
-  if (SCOPE_CAPTURE_LIMITS.frontmatterCharsMax < frontmatter.length) {
-    return [];
-  }
   const file = parseFrontmatter(frontmatter);
   if (file === undefined) {
     return [];

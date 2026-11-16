@@ -9,14 +9,13 @@
 // against the bytes the checksum names before it builds the intent, so a
 // renderer whose text is not of those bytes is refused, not trusted.
 //
-// Bounds (AGENTS.md §10): the text is at most `sourceBytesMax` bytes, the diff
-// spends at most the shared diff budget (past it the patch is the one region
-// between the common prefix and suffix — coarser, never wrong), a patch has at
-// most `splicesPerIntentMax` hunks, and its replacement bytes are at most
-// `intentPayloadBytesMax`: past that it fails with `resource-limit`, never
-// truncated.
+// No size limit (owner requirement): a text of any size the platform can hold
+// as a string patches. The diff spends at most the shared diff budget; past it
+// the patch is the regions between the blocks the coarse diff proves equal
+// (diff.ts) — coarser, never wrong. Only a text longer than the platform's
+// string fails, with `resource-limit`, and nothing is ever truncated.
 import { assert } from '../core/assert';
-import { DIFF_BUDGET, diffBytes, diffHunks, type Hunk } from './diff';
+import { DIFF_BUDGET, coarseHunks, diffBytes, diffHunks, type Hunk } from './diff';
 import { LIMITS } from '../core/limits';
 import { err, ok, type Result } from '../core/result';
 import { decodeUtf8, encodeUtf8, toByteSpan, toByteString, utf8ByteLength, type ByteSpan, type ByteString } from '../core/span';
@@ -46,16 +45,12 @@ export function diffCodePatch(baseline: string, next: string): Result<readonly C
     return err('resource-limit');
   }
   if (utf8ByteLength(next) > LIMITS.sourceBytesMax) {
-    return err('resource-limit'); // Not a file this app writes, patched or whole.
+    return err('resource-limit'); // Longer than the platform's string: no file this app can hold.
   }
   const source = encodeUtf8(baseline);
   const target = encodeUtf8(next);
   const regions = changedRegions(source, target);
   const hunks = regions.map((region) => codeHunk(source, target, region));
-  if (codePatchBytes(hunks) > LIMITS.intentPayloadBytesMax) {
-    return err('resource-limit');
-  }
-  assert(hunks.length <= LIMITS.splicesPerIntentMax, 'A patch fits one intent');
   assert(applyCodePatch(baseline, hunks) === next, 'The patch turns the baseline into the text');
   return ok(hunks);
 }
@@ -128,8 +123,8 @@ interface Region {
 
 // The regions a minimum edit script changes, inside the part the common prefix
 // and suffix leave, widened to whole code points and joined across small
-// islands. Past the diff budget, or with more regions than one intent carries,
-// the whole middle is one region.
+// islands. Past the diff budget the regions are the gaps between the blocks the
+// coarse diff proves equal.
 function changedRegions(source: ByteString, target: ByteString): readonly Region[] {
   const middle = trimmedMiddle(source, target);
   if (middle === undefined) {
@@ -140,15 +135,9 @@ function changedRegions(source: ByteString, target: ByteString): readonly Region
     toByteString(target.subarray(middle.target.start, middle.target.end)),
     DIFF_BUDGET,
   );
-  if (inner.tag === 'too-costly') {
-    return [middle];
-  }
-  const shifted = diffHunks(inner.diff).map((hunk) => shiftHunk(hunk, middle));
-  const regions = joinRegions(shifted.map((hunk) => widenRegion(source, target, hunk)));
-  if (regions.length > LIMITS.splicesPerIntentMax) {
-    return [middle];
-  }
-  return regions;
+  const hunks = inner.tag === 'computed' ? diffHunks(inner.diff) : coarseHunks(inner.diff);
+  const shifted = hunks.map((hunk) => shiftHunk(hunk, middle));
+  return joinRegions(shifted.map((hunk) => widenRegion(source, target, hunk)));
 }
 
 function trimmedMiddle(source: ByteString, target: ByteString): Region | undefined {

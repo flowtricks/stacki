@@ -14,7 +14,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { toFilePath, toIntentId } from '#dist/shared/core/brand.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
 import type { ProjectedNode } from '#dist/shared/page/sourceProjection.js';
 import { encodeUtf8 } from '#dist/shared/core/span.js';
 import { oracleIntent, oracleSplices } from './oracleIntent.ts';
@@ -119,5 +118,4 @@ test('duplicate attribute names are ambiguous, and ' + 'a file that does not par
     ok: false,
     error: 'source-invalid',
   });
-  assert.ok(LIMITS.splicesPerIntentMax >= 3, 'the loop rename fits the splice bound');
 });

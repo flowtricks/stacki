@@ -127,6 +127,7 @@ interface InvokeChannels {
   readonly startDevServer: 'dev:start';
   readonly stopDevServer: 'dev:stop';
   readonly diagnoseDev: 'dev:diagnose';
+  readonly inspectDevPage: 'dev:inspect';
   readonly probeDevPage: 'dev:probe';
   readonly listStyleFiles: 'style:listFiles';
   readonly listAstroStyleFiles: 'style:listAstroStyles';

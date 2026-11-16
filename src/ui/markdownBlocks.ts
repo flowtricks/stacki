@@ -29,9 +29,6 @@ import { safeHTMLLink } from './htmlFieldModel';
 import { escapeHTML } from './richTextModel';
 
 export const MARKDOWN_LIMITS = {
-  /** The longest body read; Markdown past it is kept as one block. */
-  charsMax: 1_000_000,
-  linesMax: 50_000,
   /** How deep quotes and lists nest before the block is kept as written. */
   depthMax: 8,
   /** How deep inline formatting nests (`**_[a](b)_**`) before the text is kept. */
@@ -121,8 +118,7 @@ export function parseMarkdown(markdown: string, options: MarkdownReadOptions = {
   const lines = splitLines(markdown);
   const references = linkDefinitions(lines.map((line) => line.text));
   const context: RenderContext = { style, references, depth: 0, gfm: options.extensions === 'gfm' };
-  const scanned =
-    markdown.length > MARKDOWN_LIMITS.charsMax || lines.length > MARKDOWN_LIMITS.linesMax ? wholeBlock(lines) : scanBlocks(lines.map((line) => line.text));
+  const scanned = scanBlocks(lines.map((line) => line.text));
   const blocks: MarkdownPlacedBlock[] = [];
   let previousEnd = 0;
   let lead = '';
@@ -178,21 +174,13 @@ function splitLines(markdown: string): readonly Line[] {
   return lines;
 }
 
-type ScanKind = 'paragraph' | 'setext' | 'heading' | 'fence' | 'indented' | 'rule' | 'quote' | 'list' | 'table' | 'html' | 'definition' | 'esm' | 'whole';
+type ScanKind = 'paragraph' | 'setext' | 'heading' | 'fence' | 'indented' | 'rule' | 'quote' | 'list' | 'table' | 'html' | 'definition' | 'esm';
 
 /** A block's lines, `first` up to (not including) `end`. */
 interface Scan {
   readonly kind: ScanKind;
   readonly first: number;
   readonly end: number;
-}
-
-function wholeBlock(lines: readonly Line[]): readonly Scan[] {
-  const end = lastContentLine(
-    lines.map((line) => line.text),
-    lines.length,
-  );
-  return end === 0 ? [] : [{ kind: 'whole', first: 0, end }];
 }
 
 // One past the last line that is not blank, at or before `end`.
@@ -713,7 +701,6 @@ function renderScan(
     case 'html':
     case 'definition':
     case 'esm':
-    case 'whole':
       return undefined;
     default: {
       const exhaustive: never = scan.kind;

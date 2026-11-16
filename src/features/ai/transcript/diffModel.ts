@@ -2,9 +2,10 @@
 // words inside a changed line changed, and how many lines were added and removed. DiffView.tsx
 // only draws what this module decides, so every rule here is testable without a DOM.
 //
-// Everything is bounded (AGENTS.md section 10): rows come from `diffRows` (itself bounded by the
-// alignment table), the rows drawn are capped by DIFF_VIEW_LIMITS, and the word comparison is
-// capped in lines per view, tokens per line and characters per line.
+// A diff has no size limit (AGENTS.md section 10 bounds each step, never the file): rows come from
+// `diffRows`, the rows drawn grow a page at a time (DIFF_VIEW_LIMITS), and the word comparison is
+// capped in pairs per view, tokens per line and characters per line, because it is a nicety on top
+// of rows that are always complete.
 import { assert } from '../../../../shared/core/assert';
 import type { CodeLine, CodeTokenStyle } from '../../../ui/codeHighlight';
 import { diffRows, type DiffRow } from '../lineDiff';
@@ -16,12 +17,10 @@ export const DIFF_VIEW_LIMITS = {
   gapInlineMax: 2,
   /** Lines one "Show N lines" press brings back. */
   revealStep: 40,
-  /** Rows (changed lines, context and gap rows) drawn before "Show full diff". */
+  /** Rows (changed lines, context and gap rows) drawn before the first "Show more". */
   rowsCompactMax: 400,
-  /** Rows drawn after "Show full diff"; a longer diff says where it stops. */
-  rowsFullMax: 4_000,
-  /** Both sides together; past this the file is shown uncoloured so a huge file never stalls the panel. */
-  highlightCharsMax: 300_000,
+  /** Rows one "Show more" brings: a page of the diff, so the DOM grows by a bounded step. A diff of any length is reachable by pressing it. */
+  rowsPageMax: 4_000,
   /** Changed-line pairs given a word comparison per view. */
   wordPairsMax: 300,
   /** A line with more tokens or characters than this is not compared word by word. */
@@ -145,7 +144,7 @@ function deletionsFirst(rows: readonly DiffRow[]): readonly DiffRow[] {
  * The rows to draw: every changed row, `context` unchanged rows around each, and a gap in place of
  * each longer unchanged stretch. `revealed` maps a gap's key (the index of its first hidden row) to
  * how many of its lines the person asked for: from the end nearest the change, so the lines next to
- * a change come first. The row cap keeps the DOM bounded; `cut` says how many blocks it dropped.
+ * a change come first. The row cap is one page of the DOM; `cut` says how many blocks are still to come.
  */
 export function visibleBlocks(
   rows: readonly DiffRow[],

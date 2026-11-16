@@ -307,6 +307,7 @@ function pageBridge() {
     startDevServer: invoke('dev:start'),
     stopDevServer: invoke('dev:stop'),
     diagnoseDev: invoke('dev:diagnose'),
+    inspectDevPage: invoke('dev:inspect'),
     probeDevPage: invoke('dev:probe'),
 
     // Style panel targets:

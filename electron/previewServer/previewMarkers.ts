@@ -21,7 +21,6 @@ import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { isDefaultsCanvas } from '../../shared/properties/defaultsCanvas';
 import { toDigest } from '../../shared/core/brand';
-import { LIMITS } from '../../shared/core/limits';
 import { stampComment, stampPathProblem, type PreviewStamp } from '../../shared/page/previewToken';
 import { markChunkHtml, parsePage, resolveChunks, serializePageMarked } from '../parse/astroParser';
 import { withScopeCapture } from './scopeCapture';
@@ -56,10 +55,9 @@ export function markSourceFile(file: string, projectDirectories: readonly string
   if (projectFile === undefined) {
     return undefined;
   }
+  // Any size: a page is marked whole, however long. The cost is linear in its
+  // bytes, and this runs in the project's dev server process, never the app's UI.
   const bytes = readFileSync(file);
-  if (LIMITS.sourceBytesMax < bytes.length) {
-    return undefined; // Past the file bound: the editor shows it as code, not nodes.
-  }
   const source = bytes.toString('utf8');
   // Located, so the marked copy takes the whitespace between nodes from the
   // file itself and renders exactly the spaces the real build does
@@ -131,8 +129,5 @@ export function variantScopeMiddleware(request: IncomingMessage, _response: Serv
  * gets a marker pair of its own, since nothing in the page wraps it. */
 export function markChunkFile(file: string, prefix: string, { group }: { readonly group: boolean }): string | undefined {
   const bytes = readFileSync(file);
-  if (LIMITS.sourceBytesMax < bytes.length) {
-    return undefined;
-  }
   return markChunkHtml(bytes.toString('utf8'), prefix, { group });
 }

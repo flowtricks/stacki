@@ -16,17 +16,6 @@ import { parseAttrs } from '../parse/astroAttrs';
 import { scanTag } from '../parse/astroTag';
 import { assert } from '../../shared/core/assert';
 
-export const PREVIEW_CONTEXT_LIMITS = {
-  astroFilesMax: 4000,
-  directoriesMax: 1024,
-  propsMax: 256,
-  slotCharsMax: 4096,
-  sourceBytesMax: 32 * 1024 * 1024,
-  stylesCharsMax: 2 * 1024 * 1024,
-  globalFilesMax: 64,
-  importsPerFileMax: 512,
-} as const satisfies Record<string, number>;
-
 export type PreviewSampleValue = string | boolean | number;
 
 export type PreviewSlot = { readonly kind: 'name' } | { readonly kind: 'none' } | { readonly kind: 'html'; readonly html: string };
@@ -80,10 +69,9 @@ export function readPreviewProjectIndex(projectDirectory: string): PreviewProjec
   const files = astroFilesUnder(path.join(root, 'src'));
   const pages: PreviewProjectFile[] = [];
   const others: PreviewProjectFile[] = [];
-  let sourceBytes = 0;
+  // Every file is read whole, however many or large: the index is one linear
+  // pass over the project's .astro files, in the dev server's own process.
   for (const file of files) {
-    sourceBytes += fs.statSync(file).size;
-    assert(sourceBytes <= PREVIEW_CONTEXT_LIMITS.sourceBytesMax, 'Preview context sources exceed limit');
     const relative = path.relative(root, file).split(path.sep).join('/');
     const source = fs.readFileSync(file, 'utf8');
     const entry = { relative, source, imports: previewImports(source, relative) };
@@ -106,7 +94,6 @@ export function componentPreviewContextModule(projectDirectory: string, index: P
   const styles: string[] = [];
   let html: Record<string, string> = {};
   let body: Record<string, string> = {};
-  let stylesChars = 0;
   for (const relative of globals) {
     const source = sources.get(relative);
     if (source === undefined) {
@@ -114,8 +101,6 @@ export function componentPreviewContextModule(projectDirectory: string, index: P
       continue;
     }
     for (const css of componentPreviewInlineStyles(source)) {
-      stylesChars += css.length;
-      assert(stylesChars <= PREVIEW_CONTEXT_LIMITS.stylesCharsMax, 'Preview context styles exceed limit');
       styles.push(css);
     }
     const attributes = componentPreviewDocumentAttributes(source);
@@ -124,7 +109,7 @@ export function componentPreviewContextModule(projectDirectory: string, index: P
     body = { ...attributes.body, ...body };
   }
   const watchFiles = globals.filter((relative) => sources.has(relative)).map((relative) => path.join(path.resolve(projectDirectory), relative));
-  assert(watchFiles.length <= PREVIEW_CONTEXT_LIMITS.globalFilesMax, 'Preview context dependencies are bounded');
+  assert(watchFiles.length <= globals.length, 'Only shared files that exist are watched');
   const code =
     `export const contextStyles = ${JSON.stringify(styles)};\n` +
     `export const htmlAttributes = ${JSON.stringify(html)};\n` +
@@ -138,20 +123,18 @@ export function componentPreviewContextModule(projectDirectory: string, index: P
  * a section used on one page does not.
  */
 export function componentPreviewGlobalFiles(pages: ReadonlyArray<ReadonlyArray<string>>): readonly string[] {
-  assert(pages.length <= PREVIEW_CONTEXT_LIMITS.astroFilesMax, 'Preview context page count exceeds limit');
   if (pages.length === 0) {
     return [];
   }
   const counts = new Map<string, number>();
   for (const imports of pages) {
-    assert(imports.length <= PREVIEW_CONTEXT_LIMITS.importsPerFileMax, 'Preview context imports per page exceed limit');
     for (const relative of new Set(imports)) {
       counts.set(relative, (counts.get(relative) ?? 0) + 1);
     }
   }
   const globals = [...counts].filter(([, count]) => count * 2 > pages.length).map(([relative]) => relative);
   assert(globals.length <= counts.size, 'Global files are a subset of imported files');
-  return globals.slice(0, PREVIEW_CONTEXT_LIMITS.globalFilesMax);
+  return globals;
 }
 
 /**
@@ -240,9 +223,6 @@ function plainSlot(children: string, name: string): PreviewSlot {
   }
   // Expressions, components, scripts and named slots need the host page's scope.
   // The component's own name stays a recognisable placeholder for them.
-  if (html.length > PREVIEW_CONTEXT_LIMITS.slotCharsMax) {
-    return { kind: 'name' };
-  }
   if (/[{}]|<[A-Z]|<\/?(script|style)\b|\sslot\s*=/.test(html) || html.includes(`<${name}`)) {
     return { kind: 'name' };
   }
@@ -252,7 +232,6 @@ function plainSlot(children: string, name: string): PreviewSlot {
 /** The literal props of a tag's attribute text: strings, bare flags and literal expressions. Directives and `slot` are left out. */
 export function literalProps(attributes: string): Readonly<Record<string, PreviewSampleValue>> {
   const props: Record<string, PreviewSampleValue> = {};
-  let count = 0;
   // The attribute scanner does not read template literals; blank them so their
   // interpolations cannot surface as bare attributes.
   const scannable = attributes.replace(/=\s*`[^`]*`/g, '={_}');
@@ -264,8 +243,6 @@ export function literalProps(attributes: string): Readonly<Record<string, Previe
     const value =
       attribute.type === 'string' ? attribute.value : attribute.type === 'bare' ? true : attribute.type === 'expr' ? literal(attribute.value) : undefined;
     if (value !== undefined) {
-      count += 1;
-      assert(count <= PREVIEW_CONTEXT_LIMITS.propsMax, 'Preview sample props exceed limit');
       props[key] = value;
     }
   }
@@ -322,7 +299,6 @@ export function previewImports(source: string, relative: string): ReadonlyArray<
     assert(specifier !== undefined, 'An import match has a specifier');
     const target = resolvePreviewImport(relative, specifier);
     if (target !== undefined) {
-      assert(imports.length < PREVIEW_CONTEXT_LIMITS.importsPerFileMax, 'Preview imports per file exceed limit');
       imports.push({ name, relative: target });
     }
   }
@@ -352,7 +328,7 @@ function astroFilesUnder(root: string): readonly string[] {
   if (!fs.existsSync(root)) {
     return [];
   }
-  // A breadth-first queue with a stated bound replaces recursion over an untrusted tree.
+  // A breadth-first queue replaces recursion over an untrusted tree; its bound is the tree itself, since every directory is queued once.
   const directories = [root];
   const files: string[] = [];
   for (let index = 0; index < directories.length; index++) {
@@ -362,10 +338,8 @@ function astroFilesUnder(root: string): readonly string[] {
     for (const entry of entries) {
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        assert(directories.length < PREVIEW_CONTEXT_LIMITS.directoriesMax, 'Preview context directories exceed limit');
         directories.push(file);
       } else if (entry.isFile() && entry.name.endsWith('.astro')) {
-        assert(files.length < PREVIEW_CONTEXT_LIMITS.astroFilesMax, 'Preview context files exceed limit');
         files.push(file);
       }
     }

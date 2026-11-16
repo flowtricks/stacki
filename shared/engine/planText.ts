@@ -6,7 +6,6 @@
 // with the region they sit in, and only exactly.
 import { assert } from '../core/assert';
 import { TAG_NAME_RE, type Operation, type RejectionReason, type SourceEdit } from './intent';
-import { LIMITS } from '../core/limits';
 import type { CandidatePolicy, Plan, Splice } from './planner';
 import { nodeEditable, nodeRewriteable, nodeUnchanged, resolveTarget, sameSpan, slice, validProjections, type PlanContext } from './planSupport';
 import type { AnchorRef } from '../page/ref';
@@ -150,8 +149,6 @@ export function planFrontmatterSlot(
       return err('anchor-ambiguous');
     case 'gone':
       return err('region-externally-modified');
-    case 'too-costly':
-      return err('resource-limit');
     default: {
       const exhaustive: never = mapped;
       return exhaustive;
@@ -248,7 +245,6 @@ export function planRewriteText(
   }
   const bytes = context.current.bytes;
   const splices = operation.hunks.map((hunk) => spliceAt(bytes, hunk.span, hunk.text));
-  assert(splices.length <= LIMITS.splicesPerIntentMax, 'A rewrite fits one intent');
   return ok({ splices, postKinds: [], candidate: 'may-be-invalid' });
 }
 
@@ -298,8 +294,6 @@ function mapHunk(context: PlanContext, span: ByteSpan, stale: RejectionReason): 
     case 'ambiguous':
     case 'gone':
       return err(stale);
-    case 'too-costly':
-      return err('resource-limit');
     default: {
       const exhaustive: never = mapped;
       return exhaustive;

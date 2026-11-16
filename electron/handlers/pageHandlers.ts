@@ -1,8 +1,8 @@
 import { projectAliases } from '../properties/importPaths';
 import { desktopRenameWriter } from '../project/pageRenameDesktop';
 import { parsePageRename } from '../../shared/properties/pageRename';
-import { planPageRename } from '../project/pageRenamePlan';
-import { applyPageRename } from '../project/pageRenameWrite';
+import { planPageRenameSliced } from '../project/pageRenamePlan';
+import { applyPageRenameSliced } from '../project/pageRenameWrite';
 // The page IPC: reading, parsing and editing a page through its document
 // actor, and creating, moving and deleting pages, folders and dynamic routes.
 
@@ -22,6 +22,7 @@ import { newPageText } from '../documents/componentFile';
 import { toPosix, errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
 import { routeForPage } from '../project/projectFiles';
+import { pagesDirectoryOf, readAstroPages } from '../lib/astroConfig';
 import { emDashPageEntries } from '../content/emdashPaths';
 import { detectEmDash } from '../content/emdashProject';
 import { registerEmDashInstallHandlers } from './emdashInstall';
@@ -168,7 +169,7 @@ function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<Mai
   });
 
   ipcMain.handle('page:create', async (_event, { projectPath, name, layout }) => {
-    const pagesDirectory = path.join(projectPath, 'src', 'pages');
+    const pagesDirectory = pagesDirectoryOf(projectPath);
     let fileName = name.trim().replace(/\.astro$/i, '');
     fileName = fileName.replace(/[^a-zA-Z0-9/_-]+/g, '-');
     if (!fileName) {
@@ -198,13 +199,14 @@ function registerPageMoveHandlers({ ipcMain, noteAppWrite }: Pick<MainHost, 'ipc
   // the pages dir (with extension). When the folder changes, relative imports
   // in the file's frontmatter are rewritten so they keep resolving.
   ipcMain.handle('page:move', async (_event, { projectPath, from, to }) => {
-    const pagesDirectory = path.join(projectPath, 'src', 'pages');
+    requireDefaultPagesFolder(projectPath);
+    const pagesDirectory = pagesDirectoryOf(projectPath);
     const change = parseRenameRequest({
       kind: 'page',
       from: toPosix(path.relative(pagesDirectory, from)),
       to,
     });
-    renameProjectPages(projectPath, change);
+    await renameProjectPages(projectPath, change);
     noteAppWrite();
     return { newPath: path.join(pagesDirectory, change.to) };
   });
@@ -215,14 +217,15 @@ function registerPageMoveHandlers({ ipcMain, noteAppWrite }: Pick<MainHost, 'ipc
   });
 
   ipcMain.handle('pagefolder:rename', async (_event, { projectPath, from, to }) => {
-    renameProjectPages(projectPath, parseRenameRequest({ kind: 'folder', from, to }));
+    requireDefaultPagesFolder(projectPath);
+    await renameProjectPages(projectPath, parseRenameRequest({ kind: 'folder', from, to }));
     noteAppWrite();
     return { ok: true as const };
   });
 
   ipcMain.handle('pagefolder:delete', async (_event, { projectPath, dir: directory }) => {
     const full = resolvePagesDirectory(projectPath, directory);
-    const pagesDirectory = path.join(projectPath, 'src', 'pages');
+    const pagesDirectory = pagesDirectoryOf(projectPath);
     if (sameFilesystemPath(full, pagesDirectory)) {
       throw new Error('Invalid folder.');
     }
@@ -248,7 +251,7 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
   ipcMain.handle('emdash:project', (_event, { projectPath }) => detectEmDash(path.resolve(projectPath)));
 
   ipcMain.handle('page:dynamicPaths', async (_event, { projectPath, pagePath, devUrl }) => {
-    const pattern = routeForPage(projectPath, pagePath);
+    const pattern = routeForPage(pagesDirectoryOf(projectPath), pagePath);
     if (!pattern.includes('[') || !devUrl) {
       return { entries: [] };
     }
@@ -300,6 +303,17 @@ function readThroughActor({ documents }: Pick<MainHost, 'documents'>, pagePath: 
 }
 
 /** `parsePageRename`, with its refusal worded in the language main speaks: the renderer shows a rejected invoke's message as received. */
+// Renames rewrite links and imports by their `src/pages/` paths (electron/project/pageRename*.ts),
+// so a project whose astro.config moves the pages folder is refused with the reason, not half-renamed.
+function requireDefaultPagesFolder(projectPath: string): void {
+  const { pagesFolder, configFile } = readAstroPages(projectPath);
+  if (pagesFolder !== 'src/pages') {
+    throw new Error(
+      `Renaming pages is not supported when ${configFile ?? 'astro.config'} moves the pages folder to ${pagesFolder}. Rename the file in your editor.`,
+    );
+  }
+}
+
 function parseRenameRequest(input: unknown): ReturnType<typeof parsePageRename> {
   try {
     return parsePageRename(input);
@@ -311,12 +325,13 @@ function parseRenameRequest(input: unknown): ReturnType<typeof parsePageRename> 
   }
 }
 
-function renameProjectPages(projectPath: string, change: ReturnType<typeof parsePageRename>): void {
-  const planned = planPageRename(projectPath, change, projectAliases(projectPath));
+// Planning reads and rewrites every text file of the project, so it runs in slices that hand the main thread back: a project of any size renames without freezing the window.
+async function renameProjectPages(projectPath: string, change: ReturnType<typeof parsePageRename>): Promise<void> {
+  const planned = await planPageRenameSliced(projectPath, change, projectAliases(projectPath));
   if (!planned.ok) {
     throw new Error(translateMainDescribed(planned.error));
   }
-  const saved = applyPageRename(planned.value, desktopRenameWriter());
+  const saved = await applyPageRenameSliced(planned.value, desktopRenameWriter());
   if (!saved.ok) {
     throw new Error(translateMainDescribed(saved.error));
   }

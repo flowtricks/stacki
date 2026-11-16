@@ -2,7 +2,6 @@ import { assert } from '../core/assert';
 import { boolean, optional, pathText, record, text } from '../core/boundary';
 import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
-export const COMMIT_DIFF_LIMITS = { charactersMax: 500_000, linesMax: 10_000 } as const;
 /**
  * The diff text, or why there is none. `error` is the English sentence (git's own wording when git refused); `errorRef` names our own
  * sentence so the renderer shows it in the person's language, and is absent for git's raw text.
@@ -35,8 +34,6 @@ export function parseCommitDiffResult(input: unknown): CommitDiffResult {
   const value = record(input);
   if (boolean(value['ok'])) {
     const patch = text(value['value']);
-    assert(patch.length <= COMMIT_DIFF_LIMITS.charactersMax, 'Commit diff: character limit exceeded');
-    assert(patch.split('\n').length <= COMMIT_DIFF_LIMITS.linesMax, 'Commit diff: line limit exceeded');
     return { ok: true, value: patch };
   }
   const errorRef = parseOptionalMessageRef(value['errorRef']);

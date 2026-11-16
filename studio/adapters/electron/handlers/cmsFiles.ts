@@ -1,7 +1,7 @@
 // The files behind the CMS panel: collection folders, an entry's
 // frontmatter, its asset imports, and the panel's own field metadata.
 
-import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
+import { readSource } from '../lib/mainLimits';
 import { isPathWithin } from '../lib/platform';
 import { parseContentConfig } from '../app/mainValidation';
 import type { CmsFile } from '../lib/mainTypes';
@@ -115,9 +115,6 @@ const fileName = (rel: string): string => rel.slice(rel.lastIndexOf('/') + 1);
 export function readCmsSource(full: string, entryRel: string, options: { readonly page: boolean; readonly includeGeneralOnly?: boolean }): CmsFile[] {
   let source: string;
   try {
-    if (fs.statSync(full).size > MAIN_LIMITS.cmsFileBytesMax) {
-      return [];
-    }
     source = readSource(full);
   } catch {
     return [];
@@ -167,9 +164,6 @@ export function readCmsJson(full: string, entryRel: string, rel: string, name: s
   try {
     const stat = fs.statSync(full);
     file = { ...file, size: stat.size };
-    if (stat.size > MAIN_LIMITS.cmsFileBytesMax) {
-      return { ...file, error: 'This file is too large to edit here (over 2 MB).' };
-    }
     return { ...file, data: parseData(readJson(full)) };
   } catch (error: unknown) {
     return {

@@ -8,7 +8,8 @@ import { assert } from '../../shared/core/assert';
 import { parseValidationResult, parseContentConfig, parseSampleEntry, parseSampleValue } from '../app/mainValidation';
 import { resolveImport } from '../content/cmsRefs';
 import { readContentConfig, validateEntry } from '../content/contentConfig';
-import { listEntries, writeEntry, countEntries, coveredPaths } from '../content/contentEntries';
+import { listEntriesSliced, writeEntry, countEntriesSliced, coveredPathsSliced } from '../content/contentEntries';
+import { createSliceClock } from '../lib/slicedWork';
 import { planRename, applyRename } from '../content/contentRefs';
 import { astroRemoteService, firstImageField, type AstroRemoteService } from '../content/astroRemoteService';
 import { entryImage } from '../content/astroRecordReferences';
@@ -121,18 +122,23 @@ function registerContentConfigHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
     if (config.missing || config.error) {
       return { ...config, collections: [] };
     }
-    const collections = (config.collections || []).map((collection) => ({
-      name: collection.name,
-      editable: collection.editable,
-      loader: collection.loader,
-      hasSchema: !!collection.schema,
-      freeform: !!collection.freeform,
-      error: collection.error || undefined,
-      count: countEntries(projectPath, collection),
-    }));
+    // One collection at a time, each counted in slices, so a project with many large collections
+    // never holds the main thread for the whole panel.
+    const collections = [];
+    for (const collection of config.collections || []) {
+      collections.push({
+        name: collection.name,
+        editable: collection.editable,
+        loader: collection.loader,
+        hasSchema: !!collection.schema,
+        freeform: !!collection.freeform,
+        error: collection.error || undefined,
+        count: await countEntriesSliced(projectPath, collection),
+      });
+    }
     return {
       collections,
-      covered: coveredPaths(projectPath, config.collections || []),
+      covered: await coveredPathsSliced(projectPath, config.collections || []),
       configPath: config.configPath,
     };
   });
@@ -141,12 +147,15 @@ function registerContentConfigHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
   // field names), so a list of entries to pick from can show them.
   ipcMain.handle('content:entries', async (_event, { projectPath, name }) => {
     const { collection } = await collectionOf(projectPath, name);
-    const listed = listEntries(projectPath, collection);
+    const listed = await listEntriesSliced(projectPath, collection);
     const imageField = firstImageField(collection);
-    const entries = listed.entries.map((entry) => {
+    const clock = createSliceClock();
+    const entries = [];
+    for (const entry of listed.entries) {
       const imageFile = entryImage(projectPath, entry, imageField);
-      return imageFile === undefined ? entry : { ...entry, imageFile };
-    });
+      entries.push(imageFile === undefined ? entry : { ...entry, imageFile });
+      await clock.yieldIfDue();
+    }
     assert(entries.length === listed.entries.length, 'Every entry is listed');
     return { collection, ...listed, entries };
   });
@@ -207,7 +216,7 @@ function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
   // reference field offers instead of asking the user to remember ids.
   ipcMain.handle('content:targets', async (_event, { projectPath, name }) => {
     const { collection } = await collectionOf(projectPath, name);
-    const { entries } = listEntries(projectPath, collection);
+    const { entries } = await listEntriesSliced(projectPath, collection);
     return { targets: entries.map((entry) => ({ id: entry.id, title: entry.title })) };
   });
 

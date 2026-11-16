@@ -51,7 +51,6 @@ export const messages = {
   'error.instructions.skillTooLarge': 'Ce fichier de compétence est trop volumineux pour être lu.',
   'error.media.hostSilent': 'L’hébergeur de médias n’a pas répondu.',
   'error.pageRename.notUtf8': '{file} n’est pas en UTF-8.',
-  'error.pageRename.tooManyFiles': 'Trop de fichiers liés pour un seul renommage. Scindez la refactorisation.',
   'error.pageTemplate.connectionGone': 'Cette connexion Sanity n’existe plus. Reconnectez Sanity.',
   'error.pageTemplate.generic': 'Stacki n’a pas pu terminer cette opération.',
   'error.pageTemplate.keyUnreadable': 'Stacki n’a pas pu lire la clé de cette connexion. Reconnectez Sanity.',

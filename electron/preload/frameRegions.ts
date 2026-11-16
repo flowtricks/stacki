@@ -173,11 +173,10 @@ export const announceMapped = () => {
 // file rendered.
 const STAMP_PREFIX = PREVIEW_STAMP_PREFIX;
 export const STAMP_ATTRIBUTE = 'data-avb-d';
-const STAMPS_MAX = 20000; // LIMITS.previewMarkersMax
-const MANIFEST_FILES_MAX = 512; // LIMITS.previewManifestFilesMax
-// Elements the stamp walk visits: far past any page a person builds, and a
-// stated end for one that is not (a script appending forever).
-const MANIFEST_WALK_ELEMENTS_MAX = 2_000_000;
+// No size limit: a page of any length, with any number of stamps and files, has
+// a token. What scales instead is the walk: it works in slices of a few
+// milliseconds and yields between them (readManifest), so a page of hundreds of
+// thousands of nodes never freezes the canvas while its stamps are gathered.
 export let renderToken: string | undefined = undefined;
 let renderStamps: { readonly file: string; readonly checksum: string }[] | undefined;
 let renderSeq = 0;
@@ -189,16 +188,23 @@ type ManifestReading =
   | { readonly kind: 'manifest'; readonly stamps: readonly { readonly file: string; readonly checksum: string }[] }
   | { readonly kind: 'problem'; readonly problem: FrameRenderProblem };
 
-// The page's stamps as one manifest, or why they cannot form one: too many,
-// or one file stamped with two checksums (a rendering mixing versions of it).
-const readManifest = (): ManifestReading => {
+// How long one slice of the stamp walk runs before it hands the thread back,
+// and how many elements it visits between looks at the clock (a clock read per
+// element would cost more than the visit). Eight milliseconds leaves a frame's
+// budget for input and paint at 60 Hz.
+const MANIFEST_SLICE_MS = 8;
+const MANIFEST_SLICE_CHECK_ELEMENTS = 512;
+
+// One turn of the event loop, taken with a timer so a pending click or paint
+// runs first; the walk resumes after them.
+const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+// The page's stamps as one manifest, or why they cannot form one: one file
+// stamped with two checksums (a rendering mixing versions of it). Undefined when
+// a newer rendering announced itself during a yield: this walk's answer is moot.
+const readManifest = async (seq: number): Promise<ManifestReading | undefined> => {
   const byFile = new Map<string, string>();
-  let stamps = 0;
   const record = (data: string): FrameRenderProblem | undefined => {
-    stamps += 1;
-    if (stamps > STAMPS_MAX) {
-      return 'too-many-stamps';
-    }
     const stamp = parseStampData(data);
     if (stamp === undefined) {
       return undefined; // Not a stamp, or a forged one: never trusted, never fatal.
@@ -211,9 +217,16 @@ const readManifest = (): ManifestReading => {
     return undefined;
   };
   const stack: Node[] = [document];
-  for (let visited = 0; stack.length > 0; visited++) {
-    if (MANIFEST_WALK_ELEMENTS_MAX < visited) {
-      return { kind: 'problem', problem: 'page-too-large' };
+  let sliceStartedMs = performance.now();
+  for (let visited = 1; stack.length > 0; visited++) {
+    if (visited % MANIFEST_SLICE_CHECK_ELEMENTS === 0) {
+      if (MANIFEST_SLICE_MS < performance.now() - sliceStartedMs) {
+        await yieldToEventLoop();
+        if (seq !== renderSeq) {
+          return undefined;
+        }
+        sliceStartedMs = performance.now();
+      }
     }
     const parent = stack.pop();
     if (!parent) {
@@ -223,17 +236,13 @@ const readManifest = (): ManifestReading => {
       if (isElement(node)) {
         const carried = node.getAttribute(STAMP_ATTRIBUTE);
         if (carried !== null) {
-          if (STAMPS_MAX * (65 + 1_024) < carried.length) {
-            return { kind: 'problem', problem: 'too-many-stamps' };
-          }
           // Newlines cannot occur in a stamped path, unlike spaces, so a file
           // such as `Hero Card.astro` remains one token while inherited stamps
           // can still travel together through component props.
-          const tokens = carried.split('\n').filter(Boolean);
-          if (STAMPS_MAX < tokens.length) {
-            return { kind: 'problem', problem: 'too-many-stamps' };
-          }
-          for (const token of tokens) {
+          for (const token of carried.split('\n')) {
+            if (token.length === 0) {
+              continue;
+            }
             const problem = record(token);
             if (problem !== undefined) {
               return { kind: 'problem', problem };
@@ -251,9 +260,6 @@ const readManifest = (): ManifestReading => {
         return { kind: 'problem', problem };
       }
     }
-  }
-  if (byFile.size > MANIFEST_FILES_MAX) {
-    return { kind: 'problem', problem: 'too-many-stamps' };
   }
   const files = [...byFile.keys()].sort((left, right) => (left < right ? -1 : left === right ? 0 : 1));
   return { kind: 'manifest', stamps: files.map((file) => ({ file, checksum: byFile.get(file) ?? '' })) };
@@ -279,13 +285,23 @@ const reportRenderProblem = (problem: FrameRenderProblem): void => {
   }
 };
 
-const announceRender = () => {
+const announceRender = (): void => {
   renderSeq += 1;
   const seq = renderSeq;
   renderToken = undefined; // Until this rendering's digest is known, events carry none.
   renderStamps = undefined;
   renderProblem = undefined;
-  const reading = readManifest();
+  void finishRender(seq);
+};
+
+// The rest of an announcement, after the walk: the digest, then the report. Each
+// step first asks whether a newer rendering has announced itself meanwhile, since
+// the walk and the digest both yield.
+const finishRender = async (seq: number): Promise<void> => {
+  const reading = await readManifest(seq);
+  if (reading === undefined || seq !== renderSeq) {
+    return;
+  }
   if (reading.kind === 'problem') {
     reportRenderProblem(reading.problem);
     return;
@@ -297,23 +313,23 @@ const announceRender = () => {
   }
   const stamps = [...reading.stamps];
   const canonical = stamps.map((stamp) => `${stamp.checksum} ${stamp.file}\n`).join('');
-  subtle.digest('SHA-256', new TextEncoder().encode(canonical)).then(
-    (digest) => {
-      if (seq !== renderSeq) {
-        return;
-      } // A newer rendering has announced itself.
-      const bytes = Array.from(new Uint8Array(digest));
-      renderToken = bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
-      renderStamps = stamps;
-      reportRender();
-      renderListener?.();
-    },
-    () => {
-      if (seq === renderSeq) {
-        reportRenderProblem('no-digest'); // No digest, no token: the app refuses this rendering's events.
-      }
-    },
-  );
+  let digest: ArrayBuffer;
+  try {
+    digest = await subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+  } catch {
+    if (seq === renderSeq) {
+      reportRenderProblem('no-digest'); // No digest, no token: the app refuses this rendering's events.
+    }
+    return;
+  }
+  if (seq !== renderSeq) {
+    return; // A newer rendering has announced itself.
+  }
+  const bytes = Array.from(new Uint8Array(digest));
+  renderToken = bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  renderStamps = stamps;
+  reportRender();
+  renderListener?.();
 };
 
 // The first announcement can precede the editor's message listener on a fast
@@ -500,12 +516,32 @@ const addPath = (element: Element, nodePath: string): void => {
 // spacing lists, which are one entry per occurrence, disagree with the boxes.
 export const elementsWithPath = (nodePath: string): Element[] => {
   const all: Element[] = Array.from(elementsTaggedForPath(nodePath)).filter((element) => pathsOf(element).includes(nodePath) && inFocus(element));
-  return all.filter((element) => !all.some((other) => other !== element && other.contains(element)));
+  return outermostElements(all);
 };
+
+// The elements none of the others contain. `all` is in document order, which is
+// what makes one pass enough: a container comes before everything inside it, and
+// whatever sits between a kept container and its last descendant is inside it too,
+// so the last element kept is the only candidate that can contain the next one.
+// (The obvious `some(contains)` per element is quadratic: a loop of a few hundred
+// thousand copies would stall the frame for minutes.)
+function outermostElements(all: readonly Element[]): Element[] {
+  const outermost: Element[] = [];
+  let container: Element | undefined;
+  for (const element of all) {
+    if (container !== undefined && container.contains(element)) {
+      continue;
+    }
+    outermost.push(element);
+    container = element;
+  }
+  assert(outermost.length <= all.length, 'The outermost elements are a subset');
+  return outermost;
+}
 
 // A source class edit changes every rendering of that node, including loop
 // copies outside the focused instance. Measurement still uses the focused set.
-export const allElementsWithPath = (nodePath: string, countMax: number): Element[] | undefined => {
+export const allElementsWithPath = (nodePath: string): Element[] => {
   const all: Element[] = [];
   const tagged = elementsTaggedForPath(nodePath);
   for (let index = 0; index < tagged.length; index += 1) {
@@ -517,11 +553,8 @@ export const allElementsWithPath = (nodePath: string, countMax: number): Element
       continue;
     }
     all.push(element);
-    if (all.length > countMax) {
-      return undefined;
-    }
   }
-  return all.filter((element) => !all.some((other) => other !== element && other.contains(element)));
+  return outermostElements(all);
 };
 
 function elementsTaggedForPath(nodePath: string): NodeListOf<Element> {
@@ -613,8 +646,6 @@ export const collectRegions = () => {
 // the path look carried by an element on the next pass) and are recollected each
 // pass, so a page whose markers come back drops them.
 const hollowPaths = new Set<string>();
-// Tagged elements read per pass for it; past this, the rest of a giant page derives nothing.
-const HOLLOW_TAGGED_ELEMENTS_MAX = 100_000;
 
 const forgetHollowRegions = () => {
   for (const nodePath of hollowPaths) {
@@ -624,7 +655,7 @@ const forgetHollowRegions = () => {
 };
 
 const collectHollowRegions = () => {
-  const elements = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).slice(0, HOLLOW_TAGGED_ELEMENTS_MAX);
+  const elements = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`));
   const carried = new Set<string>();
   for (const element of elements) {
     for (const nodePath of pathsOf(element)) {
@@ -651,7 +682,10 @@ const collectHollowRegions = () => {
       const key = hollowCopyKey(holderIndex, nodePath, pathsOf(element));
       const run = copies.get(key) ?? [];
       copies.set(key, run);
-      if (!run.includes(element)) {
+      // The last element pushed is the only one that can repeat: an element visits
+      // its paths one after another, so a second path of the same copy comes right
+      // behind the first. (`includes` over the whole run is quadratic in a loop's size.)
+      if (run.at(-1) !== element) {
         run.push(element);
       }
     }
@@ -775,19 +809,45 @@ const runAfter = (start: Node, nodePath: string): Node[] => {
 // fourteen edits was painted fourteen times, an opaque wash over the
 // page), and every count of "which copy" off by however many edits had
 // been made.
+// Which run holds each node of a path's runs, so that finding the run a new one
+// replaces costs the new run's length, not a scan of every run recorded so far (a
+// loop of a few hundred thousand copies records that many runs under one path).
+const runOwners = new WeakMap<Node[][], Map<Node, number>>();
+
 const recordRun = (fresh: Map<string, Node[][]>, nodePath: string, run: Node[]) => {
   const runs = fresh.get(nodePath) ?? [];
   if (!fresh.has(nodePath)) {
     fresh.set(nodePath, runs);
   }
-  const again = runs.findIndex((other) => other.some((node) => run.includes(node)));
+  let owners = runOwners.get(runs);
+  if (owners === undefined) {
+    owners = new Map<Node, number>();
+    runOwners.set(runs, owners);
+  }
+  let again = -1;
+  for (const node of run) {
+    const owner = owners.get(node);
+    if (owner !== undefined && (again < 0 || owner < again)) {
+      again = owner;
+    }
+  }
+  let index = again;
   if (again >= 0) {
+    for (const node of runs[again] ?? []) {
+      if (owners.get(node) === again) {
+        owners.delete(node);
+      }
+    }
     runs[again] = run;
   } else {
+    index = runs.length;
     runs.push(run);
   }
+  for (const node of run) {
+    owners.set(node, index);
+  }
   if (run.length > 0) {
-    assert(runs.includes(run), 'recordRun: a collected run is recorded for its path');
+    assert(runs[index] === run, 'recordRun: a collected run is recorded for its path');
   }
 };
 

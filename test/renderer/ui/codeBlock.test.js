@@ -3,7 +3,7 @@
 // Method: the tokenisers run on one sample per language, and the colours are
 // compared with the rule table CodeEditor builds its highlight style from, so a
 // token is known to match the editor rather than merely to have a colour. Invalid
-// input follows: unknown languages, text over the limit and unterminated quotes
+// input follows: unknown languages, text over one slice and unterminated quotes
 // must still give the text back. Then the real components are bundled and mounted
 // in jsdom, each site with the smallest props it needs and its IPC modules stubbed,
 // and each must show `.code-token` spans, or CodeMirror's for the editable fields.
@@ -221,9 +221,10 @@ test('the text survives colouring, whatever it is', () => {
   }
 });
 
-test('text in no known language, or past the limit, shows plain', () => {
+test('text in no known language, or longer than one slice, shows plain at once', () => {
   const { codeTokenLines, languageFor, languageNamed } = code;
   assert.deepEqual(codeTokenLines('a: 1\nb: 2', undefined), [[{ text: 'a: 1' }], [{ text: 'b: 2' }]]);
+  // Text past one slice is coloured in batches (codeHighlightScale.test.js), never refused.
   const long = 'x'.repeat(1_000_001);
   assert.deepEqual(codeTokenLines(long, 'typescript'), [[{ text: long }]]);
   assert.equal(languageFor('src/data/site.yaml'), undefined);

@@ -282,17 +282,26 @@ test('BYTES CANNOT TELL: a unique region planned where only history could object
   assert.deepEqual(spliceStarts({ authored, current }, footer), [59]);
 });
 
-test('stale intent past the diff bound, or into a file that no longer parses', () => {
+// Size never rejects: past the exact diff's distance bound the diff degrades to
+// the blocks it can prove equal (shared/engine/coarseDiff.ts). An element in an
+// unchanged block still plans at the right bytes; a repeated one is refused as
+// ambiguous, as it is for any edit, and nothing is refused as a resource limit.
+test('stale intent past the exact diff bound plans from what is proven; or into a file that no longer parses', () => {
+  const { authored: siblings } = secondCardIntent();
+  const heroIntent = intentOn(siblings, anchorAt(siblings, [0]), setAttribute('title', 'New'));
   // 3 000 bytes appended exceed LIMITS.diffDistanceMax (2 048) by size alone.
   const appended = `${SIBLINGS}<p>${'x'.repeat(2_993)}</p>`;
-  assert.equal(againstCurrent(appended).result, 'rejected: resource-limit');
-  // Same size, 1 100 bytes rewritten: distance 2 200, found only by searching.
+  assert.deepEqual(spliceStarts({ authored: siblings, current: snapshotText(appended) }, heroIntent), [14]);
+  assert.equal(againstCurrent(appended).result, 'rejected: anchor-ambiguous');
+  // Same size, 1 100 bytes rewritten: distance 2 200, past the exact search.
   const authored = snapshotText(`${SIBLINGS}<p>${'a'.repeat(1_100)}</p>\n`);
   const rewritten = snapshotText(`${SIBLINGS}<p>${'b'.repeat(1_100)}</p>\n`);
+  const authoredHero = intentOn(authored, anchorAt(authored, [0]), setAttribute('title', 'New'));
+  assert.deepEqual(spliceStarts({ authored, current: rewritten }, authoredHero), [14]);
   const cardIntent = intentOn(authored, anchorAt(authored, [3]), setAttribute('title', 'New'));
   assert.deepEqual(planIntent({ authored, current: rewritten }, cardIntent), {
     ok: false,
-    error: 'resource-limit',
+    error: 'anchor-ambiguous',
   });
   assert.equal(againstCurrent(`${SIBLINGS}<div`).result, 'rejected: source-invalid');
   const { intent } = secondCardIntent();

@@ -69,10 +69,13 @@ type Props = {
   });
 });
 
-test('preview metadata rejects malformed and oversized inputs', () => {
+test('preview metadata rejects malformed inputs and an oversized name, never a large source', () => {
   assert.throws(() => componentPreviewInputs({}, 'Card'), /expected string/);
   assert.throws(() => componentPreviewInputs('', 'x'.repeat(201)), /exceeds length limit/);
-  assert.throws(() => componentPreviewInputs('x'.repeat(10 * 1024 * 1024 + 1), 'Card'), /exceeds length limit/);
+  assert.doesNotThrow(
+    () => componentPreviewInputs(`---\n---\n<p>${'x'.repeat(10 * 1024 * 1024 + 1)}</p>`, 'Card'),
+    'a source past the old 10 MB bound previews',
+  );
 });
 
 test('required page data blocks standalone rendering without inventing object values', () => {

@@ -20,8 +20,6 @@ export const messages = {
   'history.diff.loading': 'Cargando diferencias…',
   'history.diff.noTextChanges': 'No hay cambios de texto en este archivo.',
   'history.diff.restoreFile': 'Restaurar archivo…',
-  'history.error.diffTooLarge': 'La diferencia de este archivo es demasiado grande para mostrarla.',
-  'history.error.diffTooManyLines': 'La diferencia de este archivo tiene demasiadas líneas para mostrarla.',
   'history.error.diffUnreadable': 'No se pudo leer la diferencia de esta confirmación.',
   'history.files.added': {
     one: '{count} archivo añadido',

@@ -574,9 +574,6 @@ function checkDecisionFollowsMapping(decision: RemapDecision, mapping: SpanMappi
   if (mapping.tag === 'ambiguous') {
     assert(reason !== 'anchor-moved', 'An ambiguous mapping never reads as a move');
   }
-  if (mapping.tag === 'too-costly') {
-    assert(reason === 'resource-limit', 'An exhausted diff is a resource limit');
-  }
 }
 
 /** The authored node the intent names: its own view's projection holds it. */

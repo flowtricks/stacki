@@ -15,7 +15,6 @@ import { test } from 'node:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { applyCodePatch, codePatchBytes, diffCodePatch, mergeTyping, type CodeHunk } from '#dist/shared/engine/codePatch.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
 import { shiftUntouched } from '#dist/shared/engine/rebase.js';
 import { encodeUtf8, toByteSpan } from '#dist/shared/core/span.js';
 
@@ -141,19 +140,25 @@ test('a change past the diff budget is one region, still exact', () => {
   assert.equal(applyCodePatch(baseline, hunks), next);
 });
 
-test('a text past the file bound fails with resource-limit, never a truncated patch', () => {
-  const huge = 'x'.repeat(LIMITS.sourceBytesMax + 1);
-  assert.deepEqual(diffCodePatch('<p/>', huge), {
-    ok: false,
-    error: 'resource-limit',
-  });
+// Stacki has no size limit: only a text longer than the platform's string could
+// be refused, and no such text can be built to ask. So the bound is pinned from
+// the other side: texts of many megabytes, one-byte and multi-byte, patch whole.
+test('a text of many megabytes patches whole, never refused and never truncated', () => {
+  const huge = 'x'.repeat(24 * 1024 * 1024);
+  const small = diffCodePatch('<p/>', huge);
+  assert.ok(small.ok);
+  if (small.ok) {
+    assert.equal(applyCodePatch('<p/>', small.value), huge);
+  }
   // Multi-byte text is measured in bytes, not characters.
-  const wide = 'é'.repeat(Math.floor(LIMITS.sourceBytesMax / 2) + 1);
-  assert.ok(wide.length < LIMITS.sourceBytesMax, 'the character count alone fits');
-  assert.deepEqual(diffCodePatch('', wide), {
-    ok: false,
-    error: 'resource-limit',
-  });
+  const wide = 'é'.repeat(6 * 1024 * 1024);
+  const whole = diffCodePatch('', wide);
+  assert.ok(whole.ok);
+  if (whole.ok) {
+    assert.equal(whole.value.length, 1);
+    assert.equal(codePatchBytes(whole.value), 12 * 1024 * 1024, 'twice the characters');
+    assert.equal(applyCodePatch('', whole.value), wide);
+  }
 });
 
 test('applying a patch checks every witness', () => {

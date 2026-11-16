@@ -6,7 +6,6 @@ import path from 'node:path';
 import { stackiFavicon } from '../src/shared/stackiBrand';
 import { prepareSiteCache } from './siteCache';
 import { mkdir, writeFile, copyFile } from 'node:fs/promises';
-import { LIMITS } from '../vendor/stacki/shared/core/limits';
 
 // esbuild's `alias` refuses a key that looks like an absolute path.
 const staticHot: Plugin = {
@@ -46,12 +45,6 @@ await build({
   platform: 'browser',
   minify: true,
   format: 'esm',
-  define: {
-    AVB_PREVIEW_LIMITS: JSON.stringify({
-      previewMarkersMax: LIMITS.previewMarkersMax,
-      previewMorphWorkMax: LIMITS.previewMorphWorkMax,
-    }),
-  },
 });
 await build({
   entryPoints: ['src/server/integration.ts'],

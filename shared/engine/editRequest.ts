@@ -385,14 +385,11 @@ function parseHunks(input: unknown): readonly SourceEdit[] {
   if (hunks === undefined) {
     throw new Error('Edit.hunks: expected array');
   }
-  if (hunks.length > LIMITS.splicesPerIntentMax) {
-    throw new Error(`Edit.hunks: exceeds ${LIMITS.splicesPerIntentMax} items`);
-  }
   return hunks.map((hunk, index) => {
     const record = requireRecord(hunk, `Edit.hunks[${index}]`);
     return {
       span: parseByteSpan(record['span'], `Edit.hunks[${index}].span`),
-      text: boundedText(record['text'], `Edit.hunks[${index}].text`, LIMITS.intentPayloadBytesMax),
+      text: requireString(record['text'], `Edit.hunks[${index}].text`),
     };
   });
 }
@@ -409,16 +406,13 @@ function parseCodeHunks(input: unknown): readonly CodeHunk[] {
   if (hunks.length === 0) {
     throw new Error('Edit.hunks: a code patch has at least one hunk');
   }
-  if (hunks.length > LIMITS.splicesPerIntentMax) {
-    throw new Error(`Edit.hunks: exceeds ${LIMITS.splicesPerIntentMax} items`);
-  }
   const parsed = hunks.map((hunk, index) => {
     const where = `Edit.hunks[${index}]`;
     const record = requireRecord(hunk, where);
     return {
       span: parseByteSpan(record['span'], `${where}.span`),
-      expected: boundedText(record['expected'], `${where}.expected`, LIMITS.intentPayloadBytesMax),
-      text: boundedText(record['text'], `${where}.text`, LIMITS.intentPayloadBytesMax),
+      expected: requireString(record['expected'], `${where}.expected`),
+      text: requireString(record['text'], `${where}.text`),
     };
   });
   if (!spansAscending(parsed.map((hunk) => hunk.span))) {
@@ -493,6 +487,14 @@ function identifier(input: unknown, where: string): string {
     throw new Error(`${where}: expected an identifier`);
   }
   return name;
+}
+
+// A payload string may be as long as a whole file: the string type is its only bound.
+function requireString(input: unknown, where: string): string {
+  if (typeof input !== 'string') {
+    throw new Error(`${where}: expected string`);
+  }
+  return input;
 }
 
 function boundedText(input: unknown, where: string, charsMax: number): string {

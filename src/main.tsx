@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { assert } from '../shared/core/assert';
 import App from './app/App';
+import { AppBoundary } from './app/recovery/AppBoundary';
 import { mirrorLocalePreference } from './ipc/localeBridge';
 import { LocaleProvider } from './lib/i18n/LocaleProvider';
 import { runAfterFirstPaint } from './app/startupMarks';
@@ -28,9 +29,11 @@ const shellReady =
 void shellReady.then(() => {
   createRoot(rootElement).render(
     <LocaleProvider onPreference={mirrorLocalePreference}>
-      <React.Suspense fallback={undefined}>
-        <App />
-      </React.Suspense>
+      <AppBoundary>
+        <React.Suspense fallback={undefined}>
+          <App />
+        </React.Suspense>
+      </AppBoundary>
     </LocaleProvider>,
   );
   runAfterFirstPaint();

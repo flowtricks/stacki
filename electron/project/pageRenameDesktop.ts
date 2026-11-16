@@ -1,4 +1,3 @@
-import { LIMITS } from '../../shared/core/limits';
 import { err, ok } from '../../shared/core/result';
 import { decodeUtf8 } from '../../shared/core/span';
 import { digestOf } from '../documents/atomicWrite';
@@ -11,12 +10,8 @@ export function desktopRenameWriter(): RenameWriter {
   const { documents, noteWrite } = documentHost();
   return {
     lease: (texts, run) => {
-      if (texts.length > LIMITS.documentActorsMax) {
-        return err({
-          code: 'limit',
-          message: translateMain('error.pageRename.tooManyFiles'),
-        });
-      }
+      // Any number of files: the actors are a cache, so a rename of every page
+      // of a large site leases them all and never holds more than the cache bounds.
       const leased = documents.withLeases(texts, run);
       return leased.ok ? leased.value : err({ code: 'filesystem', message: leased.error });
     },

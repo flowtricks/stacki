@@ -9,7 +9,7 @@
 // diffs are; the diff.css beside this file only lays them out for the narrow panel.
 import { useMemo, useState } from 'react';
 import type { Translator } from '../../../lib/i18n/localeContext';
-import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { CodeTokens, useCodeLines } from '../../../ui/CodeBlock';
 import { languageFor, type CodeLine } from '../../../ui/codeHighlight';
 import { ExpandVerticalIcon } from '../../../ui/Icons';
@@ -88,11 +88,10 @@ function DiffBody({ model, path, name }: { readonly model: FileDiff; readonly pa
 
 function TextRows({ model, path, name }: { readonly model: TextDiff; readonly path: string; readonly name: string }) {
   const translate = useTranslate();
-  const { formatNumber } = useFormat();
   const [revealed, setRevealed] = useState<ReadonlyMap<number, number>>(new Map());
-  const [extent, setExtent] = useState<'compact' | 'full'>('compact');
-  // A very large pair is shown uncoloured: colouring both sides whole is the one cost that grows with the file.
-  const language = model.oldText.length + model.newText.length <= DIFF_VIEW_LIMITS.highlightCharsMax ? languageFor(path) : undefined;
+  const [rowsShown, setRowsShown] = useState<number>(DIFF_VIEW_LIMITS.rowsCompactMax);
+  // Colouring is lazy (useCodeLines): a file of any length shows plain at once and is coloured top first.
+  const language = languageFor(path);
   const oldLines = useCodeLines(model.oldText, language);
   const newLines = useCodeLines(model.newText, language);
   const visible = useMemo(
@@ -100,9 +99,9 @@ function TextRows({ model, path, name }: { readonly model: TextDiff; readonly pa
       visibleBlocks(model.rows, {
         context: DIFF_VIEW_LIMITS.contextLines,
         revealed,
-        rowsMax: extent === 'compact' ? DIFF_VIEW_LIMITS.rowsCompactMax : DIFF_VIEW_LIMITS.rowsFullMax,
+        rowsMax: rowsShown,
       }),
-    [model.rows, revealed, extent],
+    [model.rows, revealed, rowsShown],
   );
   const words = useMemo(() => wordRangesByRow(model.rows), [model.rows]);
   const reveal = (block: Extract<DiffBlock, { readonly kind: 'gap' }>): void => {
@@ -128,13 +127,10 @@ function TextRows({ model, path, name }: { readonly model: TextDiff; readonly pa
           ),
         )}
       </div>
-      {visible.cut > 0 && extent === 'compact' && (
-        <button className="ai-diffview-gap" onClick={() => setExtent('full')}>
-          {translate('ai.diff.showFull')}
+      {visible.cut > 0 && (
+        <button className="ai-diffview-gap" onClick={() => setRowsShown((previous) => previous + DIFF_VIEW_LIMITS.rowsPageMax)}>
+          {translate('ai.diff.showMore')}
         </button>
-      )}
-      {visible.cut > 0 && extent === 'full' && (
-        <p className="ai-diffview-note">{translate('ai.diff.cut', { rows: formatNumber(DIFF_VIEW_LIMITS.rowsFullMax) })}</p>
       )}
     </div>
   );

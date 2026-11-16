@@ -32,7 +32,7 @@ import { diffBytes, DIFF_BUDGET } from './diff';
 import { editInlineStyle } from './inlineStyle';
 import type { AttributeValue, Intent, Operation, RejectionReason } from './intent';
 import { LIMITS } from '../core/limits';
-import { mapSpanThroughDiff, type SpanMapping } from './mapSpan';
+import { mapSpanThroughOutcome, type SpanMapping } from './mapSpan';
 import {
   byteOffsetsIn,
   closeTagStart,
@@ -123,16 +123,10 @@ export function planIntentThroughDiff(base: PlanningBase, intent: Intent): Resul
   let computed: ReturnType<typeof diffBytes> | undefined;
   return planWith(base, intent, (span) => {
     computed ??= diffBytes(base.authored.bytes, base.current.bytes, DIFF_BUDGET);
-    switch (computed.tag) {
-      case 'computed':
-        return uniqueOrAmbiguous(base, computed.diff.distance, mapSpanThroughDiff(computed.diff, span));
-      case 'too-costly':
-        return { tag: 'too-costly' };
-      default: {
-        const exhaustive: never = computed;
-        return exhaustive;
-      }
-    }
+    // A coarse diff has no exact distance; the sum of both lengths is the most
+    // any script could cost, and it only has to say the files differ.
+    const distance = computed.tag === 'computed' ? computed.diff.distance : base.authored.bytes.length + base.current.bytes.length;
+    return uniqueOrAmbiguous(base, distance, mapSpanThroughOutcome(computed, span));
   });
 }
 

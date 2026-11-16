@@ -14,7 +14,6 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const loadMorphModules = require('../../helpers/morphModules.js');
-const { LIMITS } = require('#dist/shared/core/limits.js');
 
 const HEADING = (style, className, text) =>
   `<!--avb-s:0.1--><h1 style="${style}" class="${className}" data-avb-p="Heading.astro|0.0.0 0.1">\n  ${text}\n</h1><!--avb-e:0.1-->`;
@@ -37,7 +36,7 @@ function setup() {
   const first = PAGE(HEADING('--_mw: 17ch;', 'heading text-style-display', 'Edit Astro sites visually'));
   const dom = new JSDOM(first);
   global.document = dom.window.document;
-  const morph = loadMorphModules(LIMITS);
+  const morph = loadMorphModules();
   const document = dom.window.document;
   // What the page's entrance script does: the text becomes one wrapper per line.
   const heading = document.querySelector('h1');
@@ -81,7 +80,7 @@ test('a run of attribute-only prop changes patches the attribute in place and ke
 test('negative space: when the children did change, they are still patched', () => {
   const dom = new JSDOM(PAGE(HEADING('--_mw: 17ch;', 'heading', 'Old words')));
   global.document = dom.window.document;
-  const morph = loadMorphModules(LIMITS);
+  const morph = loadMorphModules();
   const previous = rendering(dom, morph, PAGE(HEADING('--_mw: 17ch;', 'heading', 'Old words')));
   const next = rendering(dom, morph, PAGE(HEADING('--_mw: 20ch;', 'heading', 'New words')));
   patch(dom.window.document, morph, previous, next);

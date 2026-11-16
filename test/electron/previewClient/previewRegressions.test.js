@@ -19,8 +19,7 @@ const document = dom.window.document;
 global.document = document;
 // The client's modules, bundled for jsdom; main prepends the patcher's bounds
 // from shared/core/limits.ts (step 7).
-const { LIMITS } = require('#dist/shared/core/limits.js');
-const morph = loadMorphModules(LIMITS);
+const morph = loadMorphModules();
 // The diff alone, with a counting Int32Array, from its own module's source.
 const source = transpileSource('electron/previewClient/morphPatch.ts');
 

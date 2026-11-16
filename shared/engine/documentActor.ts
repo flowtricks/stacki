@@ -437,9 +437,6 @@ export function candidateOf(
   projector: Pick<ActorDependencies['projector'], 'candidate'>,
 ): Result<Snapshot, { readonly reason: RejectionReason; readonly parses: 0 | 1 }> {
   assert(base.path === path, 'A candidate is of the file its base is');
-  if (plan.splices.length > LIMITS.splicesPerIntentMax) {
-    return err({ reason: 'resource-limit', parses: 0 });
-  }
   if (!witnessesHold(base.bytes, plan.splices)) {
     return err({ reason: 'region-externally-modified', parses: 0 });
   }

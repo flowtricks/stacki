@@ -92,8 +92,6 @@ export function resolveTarget(context: PlanContext, anchor: AnchorRef): Result<T
       return err('anchor-ambiguous');
     case 'gone':
       return err('anchor-moved');
-    case 'too-costly':
-      return err('resource-limit');
     default: {
       const exhaustive: never = mapped;
       return exhaustive;

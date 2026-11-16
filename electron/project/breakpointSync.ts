@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import postcss from 'postcss';
 import { assert } from '../../shared/core/assert';
+import { createSliceClock } from '../lib/slicedWork';
 import { err, ok, type Result } from '../../shared/core/result';
 import { readAstroSheet } from '../documents/astroStyleBlocks';
 import { writeProjectText } from '../documents/documentWrites';
@@ -49,23 +50,18 @@ import {
 } from '../../shared/properties/mediaBreakpointSync';
 import { BREAKPOINT_LIMITS, boundaryPx, checkedSetting, type Breakpoint, type BreakpointSetting } from '../../shared/properties/projectBreakpoints';
 
+// No size limit (owner requirement): a project of any number of files, files of
+// any size and any number of places are scanned in full. What remains here is how
+// the scan is paced and what it caches: files read at once, the journal's depth
+// for Undo, and the bytes the usage cache keeps between scans.
 export const SYNC_SCAN_LIMITS = {
-  /** Candidate files looked at in one scan. */
-  filesMax: 6_000,
-  /** One file: a stylesheet or page larger than this is not read. */
-  fileBytesMax: 2 * 1024 * 1024,
-  /** Everything read in one scan. */
-  totalBytesMax: 96 * 1024 * 1024,
-  /** Folders deep the walk goes. */
-  depthMax: 14,
-  /** Folders visited. */
-  directoriesMax: 8_000,
-  /** Places listed in one scan. */
-  placesMax: 2_000,
   /** Files read at once. */
   concurrency: 16,
   /** Syncs the journal keeps for Undo and Redo. */
   journalMax: 8,
+  /** Text the usage cache keeps between scans, in UTF-16 units. A cache size:
+   * a file that does not fit is read again by the next scan, never skipped. */
+  usageCacheCharsMax: 32 * 1024 * 1024,
 } as const satisfies Record<string, number>;
 
 const STYLESHEETS = /\.(css|scss|sass|less|pcss|postcss)$/i;
@@ -89,44 +85,30 @@ export async function scanBreakpointSync(
   const entry = entryOf(record.record, request.key);
   const excluded = new Set(entry.excluded.map((ref) => `${ref.file}\0${ref.locator}`));
   const linked = new Set(entry.linked.map((ref) => `${ref.file}\0${ref.locator}`));
-  const listing = listCandidates(projectPath);
+  const clock = createSliceClock();
+  const listing = await listCandidates(projectPath, clock);
   const files: SyncFile[] = [];
-  let skipped = 0;
-  let truncated = listing.truncated;
-  let totalBytes = 0;
-  let places = 0;
-  for (let from = 0; from < listing.files.length && !truncated; from += SYNC_SCAN_LIMITS.concurrency) {
-    const batch = listing.files.slice(from, from + SYNC_SCAN_LIMITS.concurrency);
+  for (let from = 0; from < listing.length; from += SYNC_SCAN_LIMITS.concurrency) {
+    const batch = listing.slice(from, from + SYNC_SCAN_LIMITS.concurrency);
     const reads = await Promise.all(batch.map((abs) => readCandidate(abs)));
     for (const [index, read] of reads.entries()) {
       const abs = batch[index];
       assert(abs !== undefined, 'scanBreakpointSync: a batch entry exists');
-      if (read.kind === 'large') {
-        skipped += 1;
-        continue;
-      }
       if (read.kind === 'unreadable') {
         continue;
       }
-      totalBytes += read.text.length;
-      if (totalBytes > SYNC_SCAN_LIMITS.totalBytesMax) {
-        truncated = true;
-        break;
-      }
       const rel = toRelative(projectPath, abs);
       const found = occurrencesIn(rel, read.text, { ...request, lumos, excluded, linked, includeUnchanged: false });
-      if (found.length === 0) {
-        continue;
+      if (found.length > 0) {
+        files.push({ rel, kind: kindOf(rel), digest: digestOf(read.text), occurrences: found });
       }
-      places += found.length;
-      if (places > SYNC_SCAN_LIMITS.placesMax) {
-        truncated = true;
-        break;
-      }
-      files.push({ rel, kind: kindOf(rel), digest: digestOf(read.text), occurrences: found });
+      // One file's CSS can be tens of megabytes: hand the thread back between files.
+      await clock.yieldIfDue();
     }
   }
-  return { key: request.key, files, lumos, truncated, skipped, recordProblem: record.problem };
+  // Nothing is skipped or cut off any more; the wire shape still carries both
+  // fields for the dialog that used to warn about them.
+  return { key: request.key, files, lumos, truncated: false, skipped: 0, recordProblem: record.problem };
 }
 
 /** The places in one file's text, as the dialog lists them. */
@@ -203,7 +185,7 @@ export function applyBreakpointSync(projectPath: string, request: BreakpointSync
   const planned: Array<{ abs: string; rel: string; before: string; after: string; places: number }> = [];
   for (const file of request.files) {
     const abs = path.join(projectPath, ...file.rel.split('/'));
-    const text = readIfSmall(abs);
+    const text = readIfReadable(abs);
     if (text === undefined || digestOf(text) !== file.digest) {
       skipped.push({ rel: file.rel, reason: 'stale' });
       continue;
@@ -407,9 +389,6 @@ function kindOf(rel: string): SyncFileKind {
 // The file's CSS as one text: a stylesheet is itself; a page, component or HTML file is its `<style>` blocks with everything else
 // blanked (newlines kept), so every offset is the file's own and a comment or string outside a style tag cannot be read as CSS.
 function cssView(rel: string, text: string): string | undefined {
-  if (text.length > SYNC_SCAN_LIMITS.fileBytesMax) {
-    return undefined;
-  }
   if (STYLESHEETS.test(rel)) {
     return text;
   }
@@ -439,7 +418,8 @@ function htmlSections(text: string): ReadonlyArray<{ readonly start: number; rea
   const sections: Array<{ start: number; end: number }> = [];
   const lower = text.toLowerCase();
   let index = 0;
-  while (sections.length < MEDIA_BLOCKS_MAX) {
+  // Each pass moves `index` past a closing tag, so the loop ends within the text's own length.
+  for (let pass = 0; pass <= lower.length; pass++) {
     const open = lower.indexOf('<style', index);
     if (open === -1) {
       break;
@@ -455,68 +435,57 @@ function htmlSections(text: string): ReadonlyArray<{ readonly start: number; rea
   return sections;
 }
 
-const MEDIA_BLOCKS_MAX = 512;
+type Candidate = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'unreadable' };
 
-type Candidate = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'large' } | { readonly kind: 'unreadable' };
-
+// A file the platform cannot hold as one string (past 2^29 units) is unreadable
+// like any other read failure: the only size at which a read can fail.
 async function readCandidate(abs: string): Promise<Candidate> {
   try {
-    const stat = await fs.promises.stat(abs);
-    if (stat.size > SYNC_SCAN_LIMITS.fileBytesMax) {
-      return { kind: 'large' };
-    }
     return { kind: 'text', text: await fs.promises.readFile(abs, 'utf8') };
   } catch {
     return { kind: 'unreadable' };
   }
 }
 
-function readIfSmall(abs: string): string | undefined {
+function readIfReadable(abs: string): string | undefined {
   try {
-    if (fs.statSync(abs).size > SYNC_SCAN_LIMITS.fileBytesMax) {
-      return undefined;
-    }
     return fs.readFileSync(abs, 'utf8');
   } catch {
     return undefined;
   }
 }
 
-// Every stylesheet and markup file under the project, by an iterative walk with stated limits. The root `.gitignore` is honoured
-// for plain folder names (`dist/`, `/out`) and `*.ext` file patterns; anything fancier is not interpreted.
-function listCandidates(projectPath: string): { readonly files: readonly string[]; readonly truncated: boolean } {
+// Every stylesheet and markup file under the project, by an iterative walk of any size, handing the thread back between folders. The
+// root `.gitignore` is honoured for plain folder names (`dist/`, `/out`) and `*.ext` file patterns; anything fancier is not interpreted.
+// Links are not followed (a Dirent for a link is neither a directory nor a file), so no cycle can make the walk endless; the walk
+// ends within the number of folders it discovers, which `visited` is held to.
+async function listCandidates(projectPath: string, clock: { readonly yieldIfDue: () => Promise<void> }): Promise<readonly string[]> {
   const ignore = readIgnore(projectPath);
   const files: string[] = [];
-  const queue: Array<{ readonly directory: string; readonly depth: number }> = [{ directory: projectPath, depth: 0 }];
-  let visited = 0;
-  let truncated = false;
-  while (queue.length > 0) {
-    const next = queue.shift();
-    assert(next !== undefined, 'listCandidates: the queue is not empty');
-    visited += 1;
-    if (visited > SYNC_SCAN_LIMITS.directoriesMax || files.length > SYNC_SCAN_LIMITS.filesMax) {
-      truncated = true;
-      break;
-    }
+  const queue: string[] = [projectPath];
+  for (let visited = 0; visited < queue.length; visited++) {
+    const directory = queue[visited];
+    assert(directory !== undefined, 'listCandidates: the walk stays inside its queue');
     let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(next.directory, { withFileTypes: true });
+      entries = await fs.promises.readdir(directory, { withFileTypes: true });
     } catch {
       continue;
     }
     for (const entry of entries.sort((first, second) => (first.name < second.name ? -1 : 1))) {
-      const full = path.join(next.directory, entry.name);
+      const full = path.join(directory, entry.name);
       if (entry.isDirectory()) {
         const skip = entry.name.startsWith('.') || SKIPPED.has(entry.name) || ignore.folders.has(entry.name);
-        if (!skip && next.depth < SYNC_SCAN_LIMITS.depthMax) {
-          queue.push({ directory: full, depth: next.depth + 1 });
+        if (!skip) {
+          queue.push(full);
         }
       } else if ((STYLESHEETS.test(entry.name) || MARKUP.test(entry.name)) && !ignore.suffixes.some((suffix) => entry.name.endsWith(suffix))) {
         files.push(full);
       }
     }
+    await clock.yieldIfDue();
   }
-  return { files, truncated };
+  return files;
 }
 
 function readIgnore(projectPath: string): IgnoreRules {
@@ -524,11 +493,11 @@ function readIgnore(projectPath: string): IgnoreRules {
   const suffixes: string[] = [];
   let source = '';
   try {
-    source = fs.readFileSync(path.join(projectPath, '.gitignore'), 'utf8').slice(0, 64 * 1024);
+    source = fs.readFileSync(path.join(projectPath, '.gitignore'), 'utf8');
   } catch {
     return { folders, suffixes };
   }
-  for (const raw of source.split('\n').slice(0, 2_000)) {
+  for (const raw of source.split('\n')) {
     const line = raw.trim().replace(/\r$/, '');
     if (line === '' || line.startsWith('#') || line.startsWith('!')) {
       continue;
@@ -573,9 +542,11 @@ export interface BreakpointUsageResult {
 }
 
 // What the usage scan remembers of a file between scans, so a rescan reads only what changed: its text when it has `@media` in it
-// (the only files that can hold a place), keyed by when it was last written and how big it is. Bounded, oldest dropped first.
+// (the only files that can hold a place), keyed by when it was last written and how big it is. A cache, bounded by count and by
+// the text it holds: oldest dropped first, and a file too big to keep is read again each scan, never skipped.
 const usageCache = new Map<string, { readonly stamp: string; readonly text: string | undefined; readonly digest: string }>();
 const USAGE_CACHE_MAX = 4_000;
+let usageCacheChars = 0;
 
 /**
  * Where each breakpoint is used: the places in the project that equal its CURRENT value, per file, with the person's remembered
@@ -588,29 +559,17 @@ export async function scanBreakpointUsage(
   assert(path.isAbsolute(projectPath), 'scanBreakpointUsage: the project path is absolute');
   const lumos = readLengthUnit(projectPath).kind === 'rem';
   const record = readRecord(projectPath);
-  const listing = listCandidates(projectPath);
+  const clock = createSliceClock();
+  const listing = await listCandidates(projectPath, clock);
   const found = new Map<string, SyncFile[]>(breakpoints.map((breakpoint) => [breakpoint.id, []]));
-  let skipped = 0;
-  let truncated = listing.truncated;
-  let totalBytes = 0;
-  let places = 0;
-  for (let from = 0; from < listing.files.length && !truncated; from += SYNC_SCAN_LIMITS.concurrency) {
-    const batch = listing.files.slice(from, from + SYNC_SCAN_LIMITS.concurrency);
+  for (let from = 0; from < listing.length; from += SYNC_SCAN_LIMITS.concurrency) {
+    const batch = listing.slice(from, from + SYNC_SCAN_LIMITS.concurrency);
     const reads = await Promise.all(batch.map((abs) => readForUsage(abs)));
     for (const [index, read] of reads.entries()) {
       const abs = batch[index];
       assert(abs !== undefined, 'scanBreakpointUsage: a batch entry exists');
-      if (read.kind === 'large') {
-        skipped += 1;
-        continue;
-      }
       if (read.kind === 'unreadable' || read.text === undefined) {
         continue;
-      }
-      totalBytes += read.text.length;
-      if (totalBytes > SYNC_SCAN_LIMITS.totalBytesMax) {
-        truncated = true;
-        break;
       }
       const rel = toRelative(projectPath, abs);
       for (const breakpoint of breakpoints) {
@@ -624,36 +583,39 @@ export async function scanBreakpointUsage(
           includeUnchanged: true,
         });
         if (occurrences.length > 0) {
-          places += occurrences.length;
           found.get(breakpoint.id)?.push({ rel, kind: kindOf(rel), digest: read.digest, occurrences });
         }
       }
-      if (places > SYNC_SCAN_LIMITS.placesMax * Math.max(1, breakpoints.length)) {
-        truncated = true;
-        break;
-      }
+      await clock.yieldIfDue();
     }
   }
-  while (usageCache.size > USAGE_CACHE_MAX) {
-    const oldest = usageCache.keys().next().value;
-    if (oldest === undefined) {
-      break;
-    }
-    usageCache.delete(oldest);
-  }
+  trimUsageCache();
   const entries = breakpoints.map((breakpoint) => ({ id: breakpoint.id, files: found.get(breakpoint.id) ?? [] }));
-  return { entries, lumos, truncated, skipped, recordProblem: record.problem };
+  return { entries, lumos, truncated: false, skipped: 0, recordProblem: record.problem };
 }
 
-type UsageRead =
-  { readonly kind: 'text'; readonly text: string | undefined; readonly digest: string } | { readonly kind: 'large' } | { readonly kind: 'unreadable' };
+type UsageRead = { readonly kind: 'text'; readonly text: string | undefined; readonly digest: string } | { readonly kind: 'unreadable' };
+
+function trimUsageCache(): void {
+  // Each pass drops one entry, so the loop ends within the cache's own size.
+  for (let pass = usageCache.size; pass > 0; pass--) {
+    if (usageCache.size <= USAGE_CACHE_MAX && usageCacheChars <= SYNC_SCAN_LIMITS.usageCacheCharsMax) {
+      return;
+    }
+    const oldest = usageCache.entries().next().value;
+    if (oldest === undefined) {
+      return;
+    }
+    usageCache.delete(oldest[0]);
+    usageCacheChars -= oldest[1].text?.length ?? 0;
+  }
+  assert(usageCache.size === 0, 'trimUsageCache: a full pass empties the cache');
+  assert(usageCacheChars === 0, 'trimUsageCache: an empty cache holds no text');
+}
 
 async function readForUsage(abs: string): Promise<UsageRead> {
   try {
     const stat = await fs.promises.stat(abs);
-    if (stat.size > SYNC_SCAN_LIMITS.fileBytesMax) {
-      return { kind: 'large' };
-    }
     const stamp = `${stat.mtimeMs}:${stat.size}`;
     const cached = usageCache.get(abs);
     if (cached !== undefined && cached.stamp === stamp) {
@@ -663,8 +625,13 @@ async function readForUsage(abs: string): Promise<UsageRead> {
     const digest = digestOf(text);
     // Only a file with `@media` can hold a place; the rest is not kept.
     const kept = /@media/i.test(text) ? text : undefined;
+    const previous = usageCache.get(abs);
+    usageCacheChars -= previous?.text?.length ?? 0;
     usageCache.delete(abs);
-    usageCache.set(abs, { stamp, text: kept, digest });
+    if (kept === undefined || kept.length <= SYNC_SCAN_LIMITS.usageCacheCharsMax) {
+      usageCache.set(abs, { stamp, text: kept, digest });
+      usageCacheChars += kept?.length ?? 0;
+    }
     return { kind: 'text', text: kept, digest };
   } catch {
     return { kind: 'unreadable' };

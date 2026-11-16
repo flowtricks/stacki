@@ -4,8 +4,8 @@
 
 import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
+import { runSync, type SlicedWork } from '../lib/slicedWork';
 import { writeProjectText } from './variableWorkspace';
-import { MAIN_LIMITS } from './variableWorkspace';
 import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, findStylesheets } from './cssVarRead';
 import { described, type Described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import { astroDeclaredNames, findAstroSources, relativeTo } from './cssVarRegions';
@@ -43,9 +43,9 @@ export const RENAME_EXTS = /\.(css|s[ac]ss|less|pcss|postcss|astro|html|htm|md|m
  * resolving somewhere the panel cannot see, which is the failure that has no
  * symptom until someone looks at the page.
  */
-export function findRenameTargets(projectPath: string): string[] {
+export function* renameTargetsSliced(projectPath: string): SlicedWork<string[]> {
   const found: string[] = [];
-  const walk = (directory: string, depth: number): void => {
+  function* walk(directory: string, depth: number): SlicedWork<void> {
     if (depth > CSS_VARIABLE_LIMITS.renameTargetDepthMax) {
       return;
     }
@@ -63,14 +63,19 @@ export function findRenameTargets(projectPath: string): string[] {
         if (entry.name.startsWith('.') || SKIPPED_DIRECTORIES.has(entry.name)) {
           continue;
         }
-        walk(path.join(directory, entry.name), depth + 1);
+        yield* walk(path.join(directory, entry.name), depth + 1);
       } else if (RENAME_EXTS.test(entry.name)) {
         found.push(path.join(directory, entry.name));
       }
     }
-  };
-  walk(projectPath, 0);
+    yield;
+  }
+  yield* walk(projectPath, 0);
   return [...new Set(found)].sort();
+}
+
+export function findRenameTargets(projectPath: string): string[] {
+  return runSync(renameTargetsSliced(projectPath));
 }
 
 /** A custom property name, as a name and not as a prefix of a longer one. */
@@ -120,9 +125,6 @@ export function renameVariables(
   for (const abs of findRenameTargets(projectPath)) {
     let text: string;
     try {
-      if (fs.statSync(abs).size > MAIN_LIMITS.cssVariableFileBytesMax) {
-        continue;
-      }
       text = fs.readFileSync(abs, 'utf8');
     } catch {
       continue;

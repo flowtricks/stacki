@@ -157,17 +157,16 @@ export const messages = {
   'ai.dictation.unavailable': 'La saisie vocale n’est pas disponible ici.',
   'ai.diff.binary': 'Fichier binaire, pas d’aperçu.',
   'ai.diff.changesTo': 'Modifications de {name}',
-  'ai.diff.cut': 'Le diff est tronqué à {rows} lignes. Ouvrez le fichier pour voir la suite.',
   'ai.diff.deleted': 'Supprimé',
   'ai.diff.large': 'Une grosse modification : affichée comme les anciennes lignes supprimées et les nouvelles ajoutées.',
   'ai.diff.lineEndings': 'Seules les fins de ligne ont changé.',
   'ai.diff.newFile': 'Nouveau fichier',
   'ai.diff.noChanges': 'Aucune modification à afficher.',
-  'ai.diff.showFull': 'Afficher le diff complet',
   'ai.diff.showLines': {
     one: 'Afficher {count} ligne',
     other: 'Afficher {count} lignes',
   },
+  'ai.diff.showMore': 'Afficher plus de lignes',
   'ai.diff.showSome': {
     one: 'Afficher {step} sur {count} ligne',
     other: 'Afficher {step} sur {count} lignes',

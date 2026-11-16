@@ -1,17 +1,25 @@
-// Disk work is bounded before allocating or recursing. These limits leave room
-// for large sites while making a pathological project fail near its cause.
+// Disk work has no product size limit: a project of any size opens (owner
+// requirement). What remains is structural, or the platform's own ceiling
+// (PLATFORM_LIMITS in shared/core/limits.ts). Work proportional to a project's
+// size is sliced where it runs on the UI path, so size shows up as time, never
+// as a refusal.
 import * as fs from 'fs';
 import * as path from 'path';
 import { assert } from '../../shared/core/assert';
-import { LIMITS } from '../../shared/core/limits';
+import { LIMITS, PLATFORM_LIMITS } from '../../shared/core/limits';
 
 // The source-file bound lives in shared/core/limits.ts (plan §8), because the actor,
-// the renderer and these readers must all refuse the same file.
+// the renderer and these readers must all refuse the same file: only a file the
+// platform cannot hold as a string.
 export const MAIN_LIMITS = {
-  directoryEntriesMax: 100000,
-  directoryDepthMax: 64,
+  /**
+   * Directory levels a walker descends. Not a size bound: a path is at most
+   * ipcPathCharsMax units and each level costs at least a name unit and a
+   * separator, so no real tree is deeper. The walkers do not follow symlinks,
+   * so the depth also stops a cycle made of bind mounts or junctions.
+   */
+  directoryDepthMax: Math.floor(LIMITS.ipcPathCharsMax / 2),
   portAttemptsMax: 100,
-  fileNameAttemptsMax: 10000,
   previewServersMax: 16,
   logChunkCharsMax: 64000,
   /** One JSON line from the content-config runner. Sized as one IPC field: a
@@ -20,20 +28,6 @@ export const MAIN_LIMITS = {
   runnerLineCharsMax: LIMITS.ipcFieldCharsMax,
   /** The runner's stderr tail kept for an error message. */
   runnerStderrCharsMax: 4000,
-  /** One content-collection entry file. An entry is a page's worth of data. */
-  contentEntryBytesMax: 2 * 1024 * 1024,
-  /**
-   * One data file holding a whole content collection (Astro's `file()` loader):
-   * every entry at once, so a few hundred sermons with transcripts run past 10 MB.
-   * Matches Studio's bound on a whole CMS scan, which must hold the file too.
-   */
-  contentDataFileBytesMax: 32 * 1024 * 1024,
-  /** One JSON data file edited as a CMS collection. */
-  cmsFileBytesMax: 2 * 1024 * 1024,
-  /** One stylesheet scanned for CSS variables. */
-  cssVariableFileBytesMax: 1024 * 1024,
-  /** One text asset opened in the floating code window. */
-  editableFileBytesMax: 5 * 1024 * 1024,
   /** Output one command (git, the package manager, astro) may print before it
    * is killed. Node's own default, stated so no call relies on it. */
   commandOutputBytesMax: 1024 * 1024,
@@ -48,16 +42,19 @@ export function readSource(file: string): string {
 export function readSourceBytes(file: string): Buffer {
   const size = fs.statSync(file).size;
   if (size > LIMITS.sourceBytesMax) {
-    throw new Error('Source file exceeds 10 MB limit');
+    throw new Error(`Source file exceeds the ${LIMITS.sourceBytesMax} byte platform string limit`);
   }
   const bytes = fs.readFileSync(file);
   // A writer may grow the file between stat and read, so check both sides.
   if (bytes.length > LIMITS.sourceBytesMax) {
-    throw new Error('Source file exceeds 10 MB limit');
+    throw new Error(`Source file exceeds the ${LIMITS.sourceBytesMax} byte platform string limit`);
   }
   return bytes;
 }
 
+/** Counts a walk for progress and depth. There is no entry total: a walk of
+ * any size completes, and its bound is the tree's own size. `visited` still
+ * counts so a test can prove every entry was seen. */
 export function directoryBudget(root: string): (directory: string, entries: number) => void {
   // This closure owns the total; nested directory readers cannot reset it.
   let visited = 0;
@@ -69,8 +66,6 @@ export function directoryBudget(root: string): (directory: string, entries: numb
       throw new Error('Directory depth exceeds limit');
     }
     visited += entries + 1;
-    if (visited > MAIN_LIMITS.directoryEntriesMax) {
-      throw new Error('Directory entries exceed limit');
-    }
+    assert(visited <= PLATFORM_LIMITS.safeIntegerMax, 'The visited count stays an exact integer');
   };
 }

@@ -55,6 +55,7 @@ const pathPayload = new Set([
   'style:listFiles',
   'style:listAstroStyles',
   'dev:diagnose',
+  'dev:inspect',
   'git:info',
   'git:ghStatus',
   'git:init',

@@ -26,7 +26,6 @@
 
 import { assert } from '../../shared/core/assert';
 import { CODE_INDENT_UNIT, leadingIndent, measuredIndent } from '../../shared/core/indent';
-import { LIMITS } from '../../shared/core/limits';
 
 /** A block is the inside of a tag and is dedented; a document is shown from column 0. */
 export type CodeExtent = 'block' | 'document';
@@ -198,11 +197,18 @@ export function keepUntouchedLines(edit: LineEdit, write: (line: string, index: 
   return written;
 }
 
+// The longest text whose tabs-for-spaces view is re-derived on every keystroke.
+// Each edit re-parses the shown text to find the lines inside strings and
+// comments, which is work in proportion to the text, so past this the editor
+// shows the source's own indentation instead. This is a cost bound on a display
+// convenience, not a size limit: the page still opens, edits and saves whole,
+// and the view maps every offset one to one.
+const INDENT_VIEW_CHARS_MAX = 1_000_000;
+
 // A document with no space indentation and no carriage return already shows as
 // it should, which is every file Stacki wrote, so it costs no parse per keystroke.
-// Past the highlight bound a parse per keystroke is not affordable at all.
 function showsAsIs(source: string, extent: CodeExtent): boolean {
-  if (source.length > LIMITS.syntaxHighlightCharsMax) {
+  if (source.length > INDENT_VIEW_CHARS_MAX) {
     return true;
   }
   if (extent === 'block') {

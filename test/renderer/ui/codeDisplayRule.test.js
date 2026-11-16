@@ -23,6 +23,7 @@ const SHARED_COMPONENTS = new Set(['src/ui/CodeBlock.tsx', 'src/ui/CodeEditor.ts
 
 // A <pre> that is not plain code, by what it holds.
 const PRE_ALLOWED = {
+  'src/ui/LogBlock.tsx': 'Log: a dev server’s output or a crash record, shown for a person to read, which is not code.',
   'src/features/ai/SignInCard.tsx': 'Log: the agent’s own words about a failed sign-in, behind Details, which are not code.',
   'src/features/ai/transcript/ErrorRow.tsx': 'Log: the agent’s own error message for a reply that did not finish, behind Details, which is not code.',
   'src/features/studioSetup/InstallProgress.tsx': 'Log: the output of the Studio installer, which is not code.',
@@ -55,6 +56,7 @@ const CODE_LABELS_ALLOWED = {
 
 // Stylesheet rules that look like a code block and are not one.
 const STYLE_ALLOWED = {
+  '.log-block': 'Log: the <pre> of LogBlock, a program’s output.',
   '.create-log': 'Log: the <pre> of a project being created.',
   '.embed-editor_css-code-preview': 'Highlighted already: the element CssCodePreview draws.',
   '.html-content pre': 'Rich text: a block in the content being written, drawn as that content.',

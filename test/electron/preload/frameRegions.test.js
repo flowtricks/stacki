@@ -73,15 +73,14 @@ test('token matching, nested copies and clone changes preserve exact results', (
     view.add('0\tother');
     assert.deepEqual(regions.elementsWithPath('0'), [first, second]);
     assert.deepEqual(regions.elementsWithPath('src/components/Card.astro|0.1'), [first]);
-    assert.equal(regions.allElementsWithPath('0', 2), undefined);
-    assert.deepEqual(regions.allElementsWithPath('0', 3), [first, second]);
+    assert.deepEqual(regions.allElementsWithPath('0'), [first, second], 'every occurrence is returned, never refused for being many');
     first.remove();
     const clone = second.cloneNode(true);
     document.body.append(clone);
     assert.deepEqual(regions.elementsWithPath('0'), [second, clone]);
     second.setAttribute('data-avb-p', '1');
     assert.deepEqual(regions.elementsWithPath('0'), [clone]);
-    assert.equal(regions.allElementsWithPath('0', 0), undefined);
+    assert.deepEqual(regions.allElementsWithPath('0'), [clone]);
   } finally {
     view.close();
   }
@@ -94,7 +93,7 @@ test('unusual tokens cannot inject selectors or change matching semantics', () =
     for (const value of values) {
       const element = view.add(value);
       assert.deepEqual(regions.elementsWithPath(value), [element]);
-      assert.deepEqual(regions.allElementsWithPath(value, 1), [element]);
+      assert.deepEqual(regions.allElementsWithPath(value), [element]);
     }
     view.add('with space');
     assert.deepEqual(regions.elementsWithPath('with space'), []);

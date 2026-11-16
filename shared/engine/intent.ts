@@ -179,7 +179,7 @@ export function parseRejectionReason(input: unknown, where: string): RejectionRe
   throw new Error(`${where}: unknown rejection reason ${JSON.stringify(input)}`);
 }
 
-/** UTF-8 bytes of every string the intent carries, summed (LIMITS.intentPayloadBytesMax). */
+/** UTF-8 bytes of every string the intent carries, summed. Reported, never bounded: an intent may carry a whole file. */
 export function intentPayloadBytes(operation: Operation): number {
   return operationTexts(operation).reduce((total, text) => total + utf8ByteLength(text), 0);
 }
@@ -223,11 +223,7 @@ function operationTexts(operation: Operation): readonly string[] {
  * operation is checked here, so a parsed Intent is one the planner may trust. */
 export function toIntent(input: Intent): Intent {
   checkOperationAnchor(input.operation, input.anchor);
-  const payloadBytes = intentPayloadBytes(input.operation);
-  if (payloadBytes > LIMITS.intentPayloadBytesMax) {
-    throw new Error(`Intent: payload exceeds ${LIMITS.intentPayloadBytesMax} bytes`);
-  }
-  assert(payloadBytes >= 0, 'Payload size is a count');
+  assert(intentPayloadBytes(input.operation) >= 0, 'Payload size is a count');
   return input;
 }
 
@@ -339,9 +335,6 @@ function requireSites(tag: OperationTag, anchor: ByteSpan, sites: readonly ByteS
   if (sites.length === 0) {
     throw new Error(`Intent: ${tag} needs at least one site`);
   }
-  if (sites.length > LIMITS.splicesPerIntentMax) {
-    throw new Error(`Intent: ${tag} exceeds ${LIMITS.splicesPerIntentMax} sites`);
-  }
   if (!spansAscending(sites)) {
     throw new Error(`Intent: ${tag} sites must ascend without overlapping`);
   }
@@ -445,7 +438,7 @@ function parseRenameBinding(record: Record<string, unknown>): Operation {
   if (from === to) {
     throw new Error('Operation.to: a rename must change the name');
   }
-  const sites = boundedArray(record['sites'], 'Operation.sites', LIMITS.splicesPerIntentMax);
+  const sites = requireArray(record['sites'], 'Operation.sites');
   return {
     tag: 'rename-binding',
     from,
@@ -478,7 +471,7 @@ function parseSetInlineStyle(record: Record<string, unknown>): Operation {
 }
 
 function parseHunks(input: unknown): readonly SourceEdit[] {
-  const hunks = boundedArray(input, 'Operation.hunks', LIMITS.splicesPerIntentMax);
+  const hunks = requireArray(input, 'Operation.hunks');
   return hunks.map((hunk, index) => {
     const record = requireRecord(hunk, `Operation.hunks[${index}]`);
     return {
@@ -530,7 +523,7 @@ export function parseOutcome(input: unknown): Outcome {
   const tag = record['tag'];
   switch (tag) {
     case 'applied': {
-      const ranges = boundedArray(record['changedRanges'], 'Outcome.changedRanges', LIMITS.splicesPerIntentMax);
+      const ranges = requireArray(record['changedRanges'], 'Outcome.changedRanges');
       const changedRanges = ranges.map((range, index) => parseByteSpan(range, `Outcome.changedRanges[${index}]`));
       if (!spansAscending(changedRanges)) {
         throw new Error('Outcome.changedRanges: expected ascending disjoint ranges');
@@ -567,13 +560,10 @@ function requireRecord(input: unknown, where: string): Record<string, unknown> {
   return record;
 }
 
-function boundedArray(input: unknown, where: string, itemsMax: number): readonly unknown[] {
+function requireArray(input: unknown, where: string): readonly unknown[] {
   const items = toArray(input);
   if (items === undefined) {
     throw new Error(`${where}: expected array`);
-  }
-  if (items.length > itemsMax) {
-    throw new Error(`${where}: exceeds ${itemsMax} items`);
   }
   return items;
 }
@@ -588,9 +578,13 @@ function boundedText(input: unknown, where: string, charsMax: number): string {
   return input;
 }
 
-// A payload string may be as long as a whole file; toIntent then bounds the sum.
+// A payload string may be as long as a whole file, and a sum of them as long as
+// the platform lets strings be: nothing here bounds it, the string type does.
 function payloadText(input: unknown, where: string): string {
-  return boundedText(input, where, LIMITS.intentPayloadBytesMax);
+  if (typeof input !== 'string') {
+    throw new Error(`${where}: expected string`);
+  }
+  return input;
 }
 
 function attributeName(input: unknown, where: string): string {

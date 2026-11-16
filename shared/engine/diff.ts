@@ -10,21 +10,37 @@
 //
 // Why not the line diff in electron/git/conflicts.ts (plan §11 step 2): it fills an
 // n·m table and, past 250 000 cells, silently returns the whole region as one
-// change. Here the cost grows with the edit, not the file, and exhaustion is a
-// typed outcome, never a silent loss of fidelity (plan §14).
+// change. Here the cost grows with the edit, not the file.
 //
-// Bounds (AGENTS.md §10): LIMITS.diffWorkMax counts byte comparisons and
-// frontier cells; LIMITS.diffDistanceMax caps the frontier memory. Both are
-// checked while the work is done, so a hopeless diff stops near its cause. No
-// recursion; every loop is bounded by the file length or the distance.
+// No size limit (owner requirement): a file of any size is diffed. What an exact
+// minimum script costs is not bounded by the file but by the edit (and by
+// repetitive content), so two internal budgets decide when exact is worth it:
+// LIMITS.diffWorkMax counts byte comparisons and frontier cells beyond the
+// linear scan every diff pays, and LIMITS.diffDistanceMax caps the frontier
+// memory. Past either, the diff DEGRADES instead of refusing: it returns a
+// `coarse` outcome (coarseDiff.ts), the blocks it can prove equal, which the
+// span mapper maps through only when a span lies wholly inside one block. The
+// budgets are checked while the work is done, so a hopeless exact search stops
+// near its cause. No recursion; every loop is bounded by the file length or
+// the distance.
 import { assert } from '../core/assert';
 import { LIMITS } from '../core/limits';
 import { toByteSpan, type ByteSpan, type ByteString } from '../core/span';
+import { alignedBlocks, type EqualBlock } from './coarseDiff';
 
+export type { EqualBlock } from './coarseDiff';
+
+/** Work a diff may spend beyond its linear scan, and the edit distance it
+ * searches to. Past either, the diff degrades to a coarse one. */
 export interface DiffBudget {
   readonly workMax: number;
   readonly distanceMax: number;
 }
+
+/** Linear passes over both files every exact diff is allowed on top of its
+ * budget: each direction scans the common prefix and suffix once, so a small
+ * edit in a file of any size never trips the work budget by size alone. */
+const LINEAR_PASSES = 4;
 
 /** The production budget. Tests pass smaller ones to reach exhaustion cheaply. */
 export const DIFF_BUDGET: DiffBudget = {
@@ -40,6 +56,8 @@ export interface ByteDiff {
   /** Bytes deleted plus bytes inserted by every minimum edit script. */
   readonly distance: number;
   readonly budget: DiffBudget;
+  /** Work units the diff may spend in all: the budget plus the linear scans. */
+  readonly workLimit: number;
   /** Work units the diff spent; mappings through it may spend the rest. */
   readonly workSpent: number;
   /** Edit distance between `source[0, x)` and `target[0, y)`, or undefined
@@ -50,7 +68,15 @@ export interface ByteDiff {
   readonly distanceAfter: (x: number, y: number) => number | undefined;
 }
 
-export type DiffOutcome = { readonly tag: 'computed'; readonly diff: ByteDiff } | { readonly tag: 'too-costly' };
+/** What a diff too costly to compute exactly still proves: the blocks of bytes
+ * that are equal and aligned in both files. Anything between blocks is unknown. */
+export interface CoarseDiff {
+  readonly source: ByteString;
+  readonly target: ByteString;
+  readonly blocks: readonly EqualBlock[];
+}
+
+export type DiffOutcome = { readonly tag: 'computed'; readonly diff: ByteDiff } | { readonly tag: 'coarse'; readonly diff: CoarseDiff };
 
 /** One region a minimum edit script replaces: `source` bytes out, `target` in. */
 export interface Hunk {
@@ -76,15 +102,16 @@ export function diffBytes(source: ByteString, target: ByteString, budget: DiffBu
   if (Math.abs(source.length - target.length) > budget.distanceMax) {
     // Every script deletes or inserts at least the size change: no search can
     // come in under the bound, so none is started.
-    return { tag: 'too-costly' };
+    return coarse(source, target);
   }
-  const forward = runFrontiers(source, target, budget, 0);
+  const workLimit = budget.workMax + LINEAR_PASSES * (source.length + target.length);
+  const forward = runFrontiers(source, target, workLimit, budget.distanceMax, 0);
   if (forward === undefined) {
-    return { tag: 'too-costly' };
+    return coarse(source, target);
   }
-  const backward = runFrontiers(reversed(source), reversed(target), budget, forward.workSpent);
+  const backward = runFrontiers(reversed(source), reversed(target), workLimit, budget.distanceMax, forward.workSpent);
   if (backward === undefined) {
-    return { tag: 'too-costly' };
+    return coarse(source, target);
   }
   const distance = forward.distance;
   assert(backward.distance === distance, 'Both directions find the same minimum distance');
@@ -96,6 +123,7 @@ export function diffBytes(source: ByteString, target: ByteString, budget: DiffBu
     target,
     distance,
     budget,
+    workLimit,
     workSpent: backward.workSpent,
     distanceBefore: (x, y) => {
       checkPoint(source, target, x, y);
@@ -110,6 +138,26 @@ export function diffBytes(source: ByteString, target: ByteString, budget: DiffBu
   assert(endDistance === distance, 'The end costs the distance');
   assert(diff.distanceAfter(0, 0) === distance, 'The start costs the distance, read backward');
   return { tag: 'computed', diff };
+}
+
+/** The regions a coarse diff does not prove equal, ascending, as hunks: each is
+ * replaced as a whole. Their source and target gaps pair up one to one, and a
+ * gap empty on both sides is no hunk. */
+export function coarseHunks(diff: CoarseDiff): readonly Hunk[] {
+  const hunks: Hunk[] = [];
+  let sourceAt = 0;
+  let targetAt = 0;
+  for (const block of diff.blocks) {
+    if (block.sourceStart > sourceAt || block.targetStart > targetAt) {
+      hunks.push({ source: toByteSpan(sourceAt, block.sourceStart), target: toByteSpan(targetAt, block.targetStart) });
+    }
+    sourceAt = block.sourceStart + block.length;
+    targetAt = block.targetStart + block.length;
+  }
+  if (sourceAt < diff.source.length || targetAt < diff.target.length) {
+    hunks.push({ source: toByteSpan(sourceAt, diff.source.length), target: toByteSpan(targetAt, diff.target.length) });
+  }
+  return hunks;
 }
 
 /** One minimum edit script as hunks, ascending — the forward traceback. Where
@@ -156,6 +204,10 @@ export function diffHunks(diff: ByteDiff): readonly Hunk[] {
 
 // --- Internal ----------------------------------------------------------------
 
+function coarse(source: ByteString, target: ByteString): DiffOutcome {
+  return { tag: 'coarse', diff: { source, target, blocks: alignedBlocks(source, target) } };
+}
+
 function matchesBehind(source: ByteString, target: ByteString, x: number, y: number): boolean {
   if (x > 0) {
     if (y > 0) {
@@ -184,13 +236,13 @@ function checkPoint(source: ByteString, target: ByteString, x: number, y: number
 // Myers' greedy loop, keeping every row for the distance lookups. Row d is
 // complete when the loop stops, so a lookup at the final distance is exact on
 // every diagonal, not only on the one that reached the end.
-function runFrontiers(source: Uint8Array, target: Uint8Array, budget: DiffBudget, workStart: number): FrontierRun | undefined {
+function runFrontiers(source: Uint8Array, target: Uint8Array, workLimit: number, distanceMax: number, workStart: number): FrontierRun | undefined {
   const rows: Int32Array[] = [];
   let work = workStart;
   const endDiagonal = source.length - target.length;
-  for (let distance = 0; distance <= budget.distanceMax; distance++) {
+  for (let distance = 0; distance <= distanceMax; distance++) {
     work += 2 * distance + 1;
-    if (work > budget.workMax) {
+    if (work > workLimit) {
       return undefined;
     }
     const row = new Int32Array(2 * distance + 1).fill(-1);
@@ -199,7 +251,7 @@ function runFrontiers(source: Uint8Array, target: Uint8Array, budget: DiffBudget
       if (start < 0) {
         continue;
       }
-      const end = snake(source, target, start, start - diagonal, budget.workMax - work);
+      const end = snake(source, target, start, start - diagonal, workLimit - work);
       if (end === undefined) {
         return undefined;
       }

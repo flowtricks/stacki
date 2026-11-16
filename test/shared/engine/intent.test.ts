@@ -116,13 +116,6 @@ test('malformed intents fail at the field that is wrong', () => {
     [wire(element, { tag: 'teleport' }), /unknown operation/],
     [wire(element, { ...set, name: 'bad name' }), /expected an attribute name/],
     [wire(element, { ...set, value: { type: 'spread', value: 'x' } }), /value.type: unknown/],
-    [
-      wire(element, {
-        ...set,
-        value: { type: 'string', value: 'x'.repeat(LIMITS.attrCharsMax + 1) },
-      }),
-      /exceeds/,
-    ],
     [wire(element, { tag: 'insert-node', placement: 'inside', source: '' }), /placement: unknown/],
     [
       wire(element, {
@@ -201,20 +194,20 @@ test('multi-span sites lie inside the anchor, ascend, do not overlap, and are bo
       ),
     /ascend/,
   );
-  const tooMany = Array.from({ length: LIMITS.splicesPerIntentMax + 1 }, (_, index) => ({
-    start: index,
-    end: index,
-  }));
-  assert.throws(() => parseIntent(rename(tooMany)), /exceeds/);
+  // No count refuses a rename: tens of thousands of sites parse, in order.
+  const wide = { span: { start: 0, end: 300_000 }, path: [1], expectedKind: 'map' };
+  const many = Array.from({ length: 60_000 }, (_, index) => ({ start: 4 * index, end: 4 * index + 1 }));
+  const parsed = parseIntent(wire(wide, { tag: 'rename-binding', from: 'a', to: 'b', sites: many }));
+  assert.equal(parsed.operation.tag, 'rename-binding');
   const slot = { tag: 'edit-frontmatter-slot', slot: { start: 25, end: 31 }, text: '' };
   assert.throws(() => parseIntent(wire(frontmatter, slot)), /outside its anchor/);
 });
 
-test('the summed payload is bounded in UTF-8 bytes, not characters', () => {
-  const text = '🎉'.repeat(Math.floor(LIMITS.intentPayloadBytesMax / 4) + 1);
-  assert.ok(text.length <= LIMITS.intentPayloadBytesMax, 'the character count alone fits');
+test('the summed payload is measured in UTF-8 bytes, not characters, and never refused for its size', () => {
+  const text = '🎉'.repeat(3 * 1024 * 1024);
   const rewrite = { tag: 'rewrite-text', hunks: [{ span: { start: 0, end: 0 }, text }] };
-  assert.throws(() => parseIntent(wire(documentAnchor, rewrite)), /payload exceeds/);
+  const big = parseIntent(wire(documentAnchor, rewrite));
+  assert.equal(intentPayloadBytes(big.operation), 12 * 1024 * 1024, 'a 12 MB payload is four bytes a character');
   const intent = parseIntent(wire(element, { tag: 'set-attribute', name: 'title', value: { type: 'string', value: 'é' } }));
   assert.equal(intentPayloadBytes(intent.operation), 'title'.length + 2);
 });
@@ -276,16 +269,6 @@ test('outcomes: applied, rejected and uncertain parse; everything else fails', (
         ],
       },
       /ascending/,
-    ],
-    [
-      {
-        ...applied,
-        changedRanges: Array.from({ length: LIMITS.splicesPerIntentMax + 1 }, () => ({
-          start: 0,
-          end: 0,
-        })),
-      },
-      /exceeds/,
     ],
     [{ tag: 'rejected', intentId: 'i1', reason: 'queue-full' }, /unknown rejection reason/],
     [{ tag: 'uncertain', intentId: 'i1', candidateChecksum: 'nope' }, /Digest/],

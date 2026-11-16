@@ -144,9 +144,9 @@ test('a file change answers before and after states, and restoring them undoes a
   const folder = store(root, { kind: 'mkdir', path: 'src/reports/2026' });
   assert.ok(folder.answer.ok && folder.answer.value.kind === 'changed');
   assert.deepEqual(folder.answer.value.change.paths, ['src/reports', 'src/reports/2026']);
-  // Too large is refused at the boundary, before anything is written.
-  assert.throws(() => parseAppFileOperation({ kind: 'write', path: 'big.txt', content: 'x'.repeat(APP_FILE_LIMITS.fileBytesMax + 1) }, APP), /exceeds/);
-  assert.equal(fs.existsSync(path.join(root, 'big.txt')), false);
+  // A big file is not refused for its size: only the per-minute write budget bounds an app.
+  const big = parseAppFileOperation({ kind: 'write', path: 'big.txt', content: 'x'.repeat(6 * 1024 * 1024) }, APP);
+  assert.equal(big.kind, 'write');
 });
 
 test('a symbolic link cannot lead an app out of the project or into a refused folder', () => {

@@ -7,6 +7,7 @@ import type { MessageRef } from '../../shared/core/i18n/messageReference';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { toRecord, toArray } from '../../shared/core/record';
 import { MAIN_LIMITS } from '../lib/mainLimits';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
 import { writeProjectText } from '../documents/documentWrites';
 import { assertContentWitness } from './contentWitness';
 import { entryTitleOf, titleFieldsOf } from '../../shared/properties/entryTitle';
@@ -95,7 +96,9 @@ function globToRegExp(pattern: string): RegExp {
   return new RegExp(`^${out}$`);
 }
 
-function walkFiles(directory: string, base = directory, out: string[] = [], depth = 0): string[] {
+// Every file below a folder, written once for both drivers (lib/slicedWork.ts): a collection of
+// thousands of entries is a longer walk that yields after each folder, never a cap on the listing.
+function* walkFilesSliced(directory: string, base = directory, out: string[] = [], depth = 0): SlicedWork<string[]> {
   // A project's folders are not ours to trust: a tree deeper than any real one stops the walk
   // there, before it can exhaust the stack.
   if (depth > MAIN_LIMITS.directoryDepthMax) {
@@ -113,11 +116,12 @@ function walkFiles(directory: string, base = directory, out: string[] = [], dept
     }
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      walkFiles(full, base, out, depth + 1);
+      yield* walkFilesSliced(full, base, out, depth + 1);
     } else {
       out.push(toPosix(path.relative(base, full)));
     }
   }
+  yield;
   return out;
 }
 
@@ -183,9 +187,18 @@ function parserNoteFields(problem: Described): Pick<ListResult, 'parserNote' | '
  * Every entry of one collection, as { id, file, format, locator, data, body }.
  */
 function listEntries(projectPath: string, collection: ContentCollection): ListResult {
+  return runSync(entriesSliced(projectPath, collection));
+}
+
+/** The same listing in slices of the event loop: the handler's way in (lib/slicedWork.ts). */
+function listEntriesSliced(projectPath: string, collection: ContentCollection): Promise<ListResult> {
+  return runSliced(entriesSliced(projectPath, collection));
+}
+
+function* entriesSliced(projectPath: string, collection: ContentCollection): SlicedWork<ListResult> {
   const loader = collection.loader ?? {};
   if (loader.kind === 'glob') {
-    return globEntries(projectPath, collection);
+    return yield* globEntries(projectPath, collection);
   }
   if (loader.kind === 'file') {
     return fileEntries(projectPath, collection);
@@ -212,11 +225,11 @@ const patternsOf = (pattern: LoaderInfo['pattern']): RegExp[] => {
   return list.map(globToRegExp);
 };
 
-function globEntries(projectPath: string, collection: ContentCollection): ListResult {
+function* globEntries(projectPath: string, collection: ContentCollection): SlicedWork<ListResult> {
   const loader = collection.loader ?? {};
   const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
   const matchers = patternsOf(loader.pattern);
-  const files = walkFiles(root).filter((rel) => matchers.some((re) => re.test(rel)));
+  const files = (yield* walkFilesSliced(root)).filter((rel) => matchers.some((re) => re.test(rel)));
   files.sort();
 
   const titleFields = titleFieldsOf(collection.schema);
@@ -229,9 +242,6 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
     }
     let text = '';
     try {
-      if (fs.statSync(abs).size > MAIN_LIMITS.contentEntryBytesMax) {
-        continue;
-      }
       text = fs.readFileSync(abs, 'utf8');
     } catch {
       continue;
@@ -256,6 +266,8 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
       entry = { ...base, error: String(error instanceof Error ? error.message : error), data: {} };
     }
     entries.push({ ...entry, title: entryTitleOf(entry.data, { id: entry.id, fields: titleFields }) });
+    // Parsing one entry is the unit of work: thousands of entries are thousands of short slices.
+    yield;
   }
 
   const generated = loader.generateId;
@@ -371,9 +383,6 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
   }
   let text = '';
   try {
-    if (fs.statSync(abs).size > MAIN_LIMITS.contentDataFileBytesMax) {
-      return { entries: [], readOnly: true, ...reasonFields(described('cmsBackend.data.tooLarge', { file: rel })) };
-    }
     text = fs.readFileSync(abs, 'utf8');
   } catch (error: unknown) {
     return {
@@ -440,19 +449,8 @@ function writeEntry(
   if (!format) {
     throw new Error(`Stacki cannot write ${path.extname(entry.file)} files.`);
   }
-  // The larger of the readers' bounds (a whole data file): a file can grow between
-  // listing and edit, and nothing larger was ever listed to be edited.
-  const size = fs.statSync(abs).size;
-  if (size > MAIN_LIMITS.contentDataFileBytesMax) {
-    throw new Error('This file is too large to edit here.');
-  }
-  // Every project write goes through the document layer, which holds at most a source file's
-  // bound: a data file listed above it reads, but says why it cannot be saved.
-  if (size > LIMITS.sourceBytesMax) {
-    const sizeMb = Math.ceil((size / (1024 * 1024)) * 10) / 10;
-    const limitMb = Math.floor(LIMITS.sourceBytesMax / (1024 * 1024));
-    throw new Error(`${entry.file} is ${sizeMb} MB; Stacki saves files up to ${limitMb} MB.`);
-  }
+  // A data file of any size is edited whole: the document layer holds a file up to the platform's
+  // string length, which is the only ceiling on what this can read.
   const text = fs.readFileSync(abs, 'utf8');
 
   const locator = entry.locator ?? [];
@@ -487,15 +485,23 @@ function writeEntry(
  * a number is a cost with nothing to show for it.
  */
 function countEntries(projectPath: string, collection: ContentCollection): number {
+  return runSync(countEntriesWork(projectPath, collection));
+}
+
+function countEntriesSliced(projectPath: string, collection: ContentCollection): Promise<number> {
+  return runSliced(countEntriesWork(projectPath, collection));
+}
+
+function* countEntriesWork(projectPath: string, collection: ContentCollection): SlicedWork<number> {
   const loader = collection.loader ?? {};
   if (loader.kind === 'glob') {
     const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
     const matchers = patternsOf(loader.pattern);
-    return walkFiles(root).filter((rel) => matchers.some((re) => re.test(rel))).length;
+    return (yield* walkFilesSliced(root)).filter((rel) => matchers.some((re) => re.test(rel))).length;
   }
   if (loader.kind === 'file') {
     try {
-      return listEntries(projectPath, collection).entries.length;
+      return (yield* entriesSliced(projectPath, collection)).entries.length;
     } catch {
       return 0;
     }
@@ -515,6 +521,19 @@ function coveredPaths(
   files: string[];
   dirs: string[];
 } {
+  return runSync(coveredSliced(projectPath, collections));
+}
+
+function coveredPathsSliced(projectPath: string, collections: readonly ContentCollection[]): Promise<CoveredPaths> {
+  return runSliced(coveredSliced(projectPath, collections));
+}
+
+interface CoveredPaths {
+  files: string[];
+  dirs: string[];
+}
+
+function* coveredSliced(projectPath: string, collections: readonly ContentCollection[]): SlicedWork<CoveredPaths> {
   const files: string[] = [];
   const directories: string[] = [];
   for (const collection of collections) {
@@ -531,7 +550,7 @@ function coveredPaths(
       if (isDataDirectory(base)) {
         const root = cmsDirectoryPath(projectPath, base);
         const matchers = patternsOf(loader.pattern);
-        for (const relative of walkFiles(root)) {
+        for (const relative of yield* walkFilesSliced(root)) {
           if (matchers.some((matcher) => matcher.test(relative))) {
             files.push(toPosix(path.relative(projectPath, path.join(root, relative))));
           }
@@ -554,4 +573,16 @@ function isDataDirectory(directory: string): boolean {
   return directory.startsWith('src/data/');
 }
 
-export { listEntries, writeEntry, countEntries, coveredPaths, locateRecords, globToRegExp, formatFor, formatName };
+export {
+  listEntries,
+  listEntriesSliced,
+  writeEntry,
+  countEntries,
+  countEntriesSliced,
+  coveredPaths,
+  coveredPathsSliced,
+  locateRecords,
+  globToRegExp,
+  formatFor,
+  formatName,
+};
