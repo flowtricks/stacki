@@ -25,12 +25,12 @@ const { readAppSource, readSource, sourceBlock } = require('../../helpers/source
 const { repoPath } = require('../../helpers/sources.js');
 
 // The dialog's half of a plan: what the rows show, with the rest of the plan empty.
-const dialogPlan = (names, locked, asProp) => ({
+const dialogPlan = (names, locked, asProp, notes = {}) => ({
   values: names.map((name) => {
     if (locked[name] !== undefined) {
       return { kind: 'locked', name, reason: locked[name] };
     }
-    return asProp.has(name) ? { kind: 'prop', name } : { kind: 'move', name, note: undefined };
+    return asProp.has(name) ? { kind: 'prop', name } : { kind: 'move', name, note: notes[name] };
   }),
   props: [],
   moved: { imports: [], code: '' },
@@ -525,7 +525,7 @@ const check = (what, condition, detail) => {
           ? {
               kind: 'ready',
               label: source.label || 'the selection',
-              plan: (asProp) => dialogPlan(source.props || [], source.locked || {}, asProp),
+              plan: (asProp) => dialogPlan(source.props || [], source.locked || {}, asProp, source.notes || {}),
               name: source.name,
             }
           : { kind: 'unavailable', reason: source.reason };
@@ -641,7 +641,8 @@ const check = (what, condition, detail) => {
         .map((row) => row.textContent)
         .join(' | '),
     );
-    check('Move is the default', /Move into this component/.test(rowOf('title')?.textContent || ''), rowOf('title')?.textContent);
+    const segment = (name, label) => [...(rowOf(name)?.querySelectorAll('[role="tab"]') || [])].find((tab) => tab.textContent === label);
+    check('Move is the default', segment('title', 'Move in')?.getAttribute('aria-selected') === 'true', rowOf('title')?.textContent);
     check('no checkbox is left from before', !dom.window.document.querySelector('.modal input[type="checkbox"]'), 'a checkbox remains');
     check('its name is highlighted code', !!rowOf('title')?.querySelector('code.code-inline'), rowOf('title')?.innerHTML);
     await act(async () => {
@@ -657,21 +658,85 @@ const check = (what, condition, detail) => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     await act(async () => {
-      rowOf('items').querySelector('button').click();
+      segment('items', 'Pass as prop').click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    const propOption = [...dom.window.document.querySelectorAll('.dd-option')].find((option) => /Pass in as a prop/.test(option.textContent));
-    check('the prop option is on offer', !!propOption, dom.window.document.body.textContent);
-    await act(async () => {
-      propOption.click();
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
-    check('and it shows as chosen', /Pass in as a prop/.test(rowOf('items')?.textContent || ''), rowOf('items')?.textContent);
+    check('and it shows as chosen', segment('items', 'Pass as prop')?.getAttribute('aria-selected') === 'true', rowOf('items')?.textContent);
+    check('the other value is untouched', segment('title', 'Move in')?.getAttribute('aria-selected') === 'true', rowOf('title')?.textContent);
     await act(async () => {
       createButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     check('which is passed through', JSON.stringify(created[0]?.asProp) === '["items"]', JSON.stringify(created));
+
+    // ── The layout ──────────────────────────────────────────────────────────
+    // One summary line, a bulk control, compact rows, the "also used here" sentence once
+    // as a tag (never a paragraph per row), and a list that scrolls on its own.
+    created.length = 0;
+    const noted = 'A copy stays on this page because it’s also used here.';
+    await render({ name: 'Card', label: '<article>', props: ['a', 'b', 'c'], notes: { a: noted, c: noted } });
+    await act(async () => {
+      makeButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    const modalText = () => dom.window.document.querySelector('.modal')?.textContent || '';
+    check('a one-line summary counts the values', /Reads 3 values/.test(modalText()), modalText());
+    check('no paragraph is repeated under each row', !dom.window.document.querySelector('.extract-value-note'), 'a per-row note remains');
+    check('the sentence is not drawn in the rows', !rows().some((row) => row.querySelector('.hint-text')), 'a row holds a paragraph');
+    check(
+      'rows that keep a copy carry a small tag',
+      rowOf('a')?.querySelector('.extract-value-tag')?.textContent.includes('Also used here') &&
+        !rowOf('b')?.querySelector('.extract-value-tag') &&
+        !!rowOf('c')?.querySelector('.extract-value-tag'),
+      rows()
+        .map((row) => row.textContent)
+        .join(' | '),
+    );
+    check('the tag holds the full sentence for a tooltip', rowOf('a')?.querySelector('.info-hint-text')?.textContent === noted, rowOf('a')?.innerHTML);
+    check('a counts line says what moves and what is passed', /3 moving in, 0 passed as props/.test(modalText()), modalText());
+    const list = dom.window.document.querySelector('.extract-value-list');
+    check('the list is one scroll container of rows', !!list && list.querySelectorAll('.extract-value').length === 3, list?.innerHTML);
+    // Jsdom does no layout, so the guards against a clipped last row are the stylesheet's rules.
+    const css = readSource('src/app/styles.css');
+    const listRule = sourceBlock(css, css.indexOf('.extract-value-list {'));
+    check('the list scrolls inside a bounded height', /max-height:\s*\d+px/.test(listRule) && /overflow-y:\s*auto/.test(listRule), listRule);
+    check('with padding past the last row so it is never cut', /padding:\s*\d+px \d+px (1[0-9]|[2-9]\d)px/.test(listRule), listRule);
+    check('and rows snap so none stops half in view', /scroll-snap-type:\s*y/.test(listRule) && /scroll-snap-align:\s*start/.test(css), listRule);
+    check(
+      'the dialog is capped to the window with the footer outside the scroller',
+      /\.modal\.create-component \.modal-body\s*\{[^}]*overflow-y:\s*auto/.test(css) && !!dom.window.document.querySelector('.modal > .modal-footer'),
+      'no capped dialog',
+    );
+    check('the dialog never draws the primary button grey on hover', !/\.modal\.create-component[^{]*button\.primary:hover/.test(css), 'a hover rule');
+    const bulk = (label) => [...dom.window.document.querySelectorAll('.extract-bulk [role="tab"]')].find((tab) => tab.textContent === label);
+    check('a bulk control sits in the header', !!bulk('Move all') && !!bulk('Pass all as props'), modalText());
+    check('it starts on Move all', bulk('Move all')?.getAttribute('aria-selected') === 'true', modalText());
+    await act(async () => {
+      bulk('Pass all as props').click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check(
+      'Pass all sets every row at once',
+      ['a', 'b', 'c'].every((name) => segment(name, 'Pass as prop')?.getAttribute('aria-selected') === 'true'),
+      rows()
+        .map((row) => row.textContent)
+        .join(' | '),
+    );
+    check('the counts follow', /0 moving in, 3 passed as props/.test(modalText()), modalText());
+    await act(async () => {
+      segment('b', 'Move in').click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check(
+      'one row changed makes the bulk control read mixed',
+      !bulk('Move all')?.classList.contains('on') && !bulk('Pass all as props')?.classList.contains('on'),
+      modalText(),
+    );
+    await act(async () => {
+      createButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check('the payload is the same as clicking each row', JSON.stringify(created[0]?.asProp) === '["a","c"]', JSON.stringify(created));
 
     // A value that can't move has no choice to offer, and says why.
     created.length = 0;
@@ -680,7 +745,7 @@ const check = (what, condition, detail) => {
       makeButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('a locked value has no menu', !rowOf('item')?.querySelector('button'), rowOf('item')?.innerHTML);
+    check('a locked value has no choice', !rowOf('item')?.querySelector('[role="tab"]'), rowOf('item')?.innerHTML);
     check('it says what happens', /Passed in as a prop/.test(rowOf('item')?.textContent || ''), rowOf('item')?.textContent);
     check('and why', /loop around this element/.test(rowOf('item')?.textContent || ''), rowOf('item')?.textContent);
     await act(async () => {

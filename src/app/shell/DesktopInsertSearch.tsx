@@ -23,7 +23,6 @@ export function DesktopInsertSearch({ app }: { readonly app: ShellView }) {
       trailingSlash={app.trailingSlash}
       apps={apps}
       onInsert={app.insertItem}
-      placementOf={app.placementForItem}
       onClose={() => app.setInsertOpen(false)}
     />
   );

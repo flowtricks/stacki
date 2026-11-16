@@ -526,7 +526,7 @@ export function useSourceCard(
 ) {
   const { busy } = busyState;
   const { phase, scanningMore } = scanState;
-  const { manualSourcePickRef, pendingKeys, selectionKeyRef, setSourceSelection } = nativeState;
+  const { pendingKeys, setSourceSelection } = nativeState;
   const { resolving } = refreshHook;
   const { onRemoveRule, onSaveCssRule } = ruleActions;
   const { effectiveSourceSelection } = nativeTarget;
@@ -540,7 +540,6 @@ export function useSourceCard(
     sourceValue: effectiveSourceSelection,
     sourceOptions,
     onSourceChange: (value: string) => {
-      manualSourcePickRef.current = { selectionKey: selectionKeyRef.current, sourceKey: value };
       setSourceSelection(value);
       saveEmbedSource(value);
     },

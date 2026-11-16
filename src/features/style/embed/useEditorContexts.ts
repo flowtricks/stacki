@@ -6,7 +6,6 @@ import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { chipStyleOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  contextKeyOf,
   resolveStyle,
   selectorKey,
   selectorsMatch,
@@ -44,7 +43,6 @@ import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
 import { getHost, onHostChange } from '../model/host';
 import { instanceSourceKey, type InstanceStyleDocument } from '../model/instanceClasses';
-import { followSource, selectorHomeKey } from '../model/selectorHome';
 import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
 import { chipsFor, pseudoLayerChips, readPanelLayer, styledSelectorsFor, usePanelLayer, usePseudoTarget } from './editorModel';
@@ -453,45 +451,23 @@ export function useResolved(
     [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey, pseudoLayer, inline],
   );
 
-  // The stylesheet the active selector's rules already live in: its selected rule's file
-  // (resolveStyle picks that by selector identity and does NOT scope it to the source
-  // dropdown, so reading it here can't feed back into itself), else the file of a rule
-  // for part of it, such as `.home-hero_height` for `div.home-hero_height[data-x]`.
-  const homeEmbedKey = useMemo(
-    () =>
-      resolved.selectedRule?.embedKey ??
-      selectorHomeKey(
-        [...(model?.base ?? []), ...(model?.conditional ?? [])].map((matched) => ({
-          embedKey: matched.rule.embedKey,
-          order: matched.rule.order,
-          context: contextKeyOf(matched.rule),
-          selectorTexts: [matched.rule.selectorText, ...matched.matchedSelectors.map((selector) => selector.text)],
-        })),
-        currentContext.embedAtContext ?? '',
-        activeSelector,
-      ),
-    [resolved.selectedRule, model, currentContext, activeSelector],
-  );
+  // The stylesheet the active selector's rule already lives in. resolveStyle
+  // picks selectedRule by selector identity and explicitly does NOT scope it to
+  // the source dropdown, so reading it here can't feed back into itself.
+  const homeEmbedKey = resolved.selectedRule?.embedKey;
 
-  // Selecting an element or a selector points "Add custom styles in" at the file that
-  // already defines it, so a new declaration joins the rule that's there instead of
-  // landing in whichever stylesheet happens to be first in page order (followSource,
-  // model/selectorHome.ts). The person's own pick wins until the element or selector
-  // changes. Selecting only reads; nothing is written. Left alone inside a component,
-  // where the source is pinned to that component's own embed.
-  const { manualSourcePickRef, selectionKeyRef } = nativeState;
-  const selectionKey = `${elementIdentity}\u0000${activeSelector}`;
-  selectionKeyRef.current = selectionKey;
+  // Selecting an element points "Add custom styles in" at the file that already
+  // defines its selector, so a new declaration joins the rule that's there
+  // instead of landing in whichever stylesheet happens to be first in page
+  // order. An explicit pick still wins: the effect only re-runs when the element
+  // or the selector's home changes, not on every render. Left alone inside a
+  // component, where the source is pinned to that component's own embed.
   useEffect(() => {
-    if (inComponentContext) {
+    if (!homeEmbedKey || inComponentContext) {
       return;
     }
-    const follow = followSource({ selectionKey, homeKey: homeEmbedKey, manualPick: manualSourcePickRef.current });
-    manualSourcePickRef.current = follow.manualPick;
-    if (follow.kind === 'move') {
-      setSourceSelection((previous) => (previous === follow.sourceKey ? previous : follow.sourceKey));
-    }
-  }, [selectionKey, homeEmbedKey, inComponentContext, manualSourcePickRef, setSourceSelection]);
+    setSourceSelection((previous) => (previous === homeEmbedKey ? previous : homeEmbedKey));
+  }, [elementIdentity, activeSelector, homeEmbedKey, inComponentContext, setSourceSelection]);
 
   useInstanceSource({
     activeSelector,

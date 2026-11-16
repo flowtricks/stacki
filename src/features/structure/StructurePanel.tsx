@@ -23,10 +23,6 @@ import CodeEditor from '../../ui/CodeEditor';
 import { NodeList } from './StructureTree';
 import { clearDrag } from '../../editor/dragState';
 import { parseNavigatorDrop } from './navigatorDrop';
-import { dropPlacement, type DropPlacement } from './dropPlacement';
-import { documentOfPath, type PlacementEnvironment, type PlacementInsertable } from '../../editor/placementCheck';
-import { getDrag } from '../../editor/dragState';
-import type { PlacementMessage } from '../../../shared/page/placement';
 import { type LiveValue } from '../../ui/liveValue';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
@@ -41,12 +37,9 @@ interface StructurePanelProps {
         readonly kind: string;
         readonly route?: string;
         readonly from?: string;
-        readonly path?: string;
       }
     | undefined;
   readonly layouts: readonly unknown[];
-  /** The project's components, for the placement rule: a component is judged by the tag it renders. */
-  readonly insertables?: readonly PlacementInsertable[];
   readonly currentLayoutName: string;
   readonly selectedId: string | undefined;
   readonly emptyNodeIds?: ReadonlySet<string>;
@@ -176,15 +169,7 @@ function EditableStructurePanel(props: EditableProps) {
   );
 }
 
-/** What the Navigator says about the drop in flight (the placement rule): why a place refuses, where it lands instead, or a caution. */
-interface DropNote {
-  readonly tone: 'refused' | 'snapped' | 'warning';
-  readonly reason: PlacementMessage;
-}
-
 interface TreeState {
-  readonly dropNote: DropNote | undefined;
-  readonly setDropNote: React.Dispatch<React.SetStateAction<DropNote | undefined>>;
   readonly dropTarget: DropTarget | undefined;
   readonly setDropTarget: React.Dispatch<React.SetStateAction<DropTarget | undefined>>;
   readonly toggled: ReadonlyMap<string, boolean>;
@@ -201,7 +186,6 @@ interface TreeState {
 
 function useTreeState(props: EditableProps): TreeState {
   const [dropTarget, setDropTarget] = useState<DropTarget | undefined>(undefined);
-  const [dropNote, setDropNote] = useState<DropNote | undefined>(undefined);
   // The first frame already has the selected row's ancestors open: opening them in
   // an effect drew the tree folded for a frame, then pushed every row below the
   // selection down, on each open of the Navigator.
@@ -215,14 +199,11 @@ function useTreeState(props: EditableProps): TreeState {
   useTreeDragCleanup(() => {
     clearDrag();
     setDropTarget(undefined);
-    setDropNote(undefined);
   });
   useArrowNavigation(props, toggled, setToggled);
   useSelectionExpansion(props, setToggled);
   useRevealRow(bodyRef, props.revealTick ?? 0, props.selectedId, props.selectedPseudo);
   return {
-    dropNote,
-    setDropNote,
     dropTarget,
     setDropTarget,
     toggled,
@@ -429,8 +410,6 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
     isCollapsed,
     isDndPayload,
     performDrop: (event, target) => dropOnTree(event, target, props, state),
-    placementFor: (location) => dropPlacement(props.pageState.model.nodes, getDrag(), location, placementEnvironment(props)),
-    noteDrop: (placement) => state.setDropNote((previous) => noteOf(placement, previous)),
     nodeById: (id) => findNavigatorNode(props.pageState.model.nodes, id) ?? undefined,
     onSelect: (id) => {
       if (canEditNode(props, id)) {
@@ -469,70 +448,21 @@ function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, p
   if (drop === undefined) {
     return;
   }
-  // The rule is asked again at the drop, not trusted from the last dragover: a refused place writes nothing,
-  // and one with a valid neighbour lands there, as the indicator showed.
-  const drag = drop.kind === 'component' ? ({ kind: 'component', name: drop.name } as const) : ({ kind: 'node', id: drop.id, nodeKind: 'node' } as const);
-  const placement = dropPlacement(props.pageState.model.nodes, drag, target, placementEnvironment(props));
-  state.setDropNote(undefined);
-  if (placement.kind === 'refused') {
-    return;
-  }
-  const landing = placement.kind === 'snap' ? placement.to : target;
   switch (drop.kind) {
     case 'component':
-      props.onDropComponent(drop.path ?? drop.name, landing);
+      props.onDropComponent(drop.path ?? drop.name, target);
       return;
     case 'node':
       if (drop.id === props.editRootId || !canEditNode(props, drop.id)) {
         return;
       }
-      props.onMoveNode(drop.id, landing);
+      props.onMoveNode(drop.id, target);
       return;
     default: {
       const exhaustive: never = drop;
       return exhaustive;
     }
   }
-}
-
-function placementEnvironment(props: EditableProps): PlacementEnvironment {
-  return { insertables: props.insertables, document: documentOfPath(props.currentPage?.path) };
-}
-
-// The note a place's placement leaves; the same note again is the same state, so a drag over one row does not re-render the tree on every move.
-function noteOf(placement: DropPlacement, previous: DropNote | undefined): DropNote | undefined {
-  let next: DropNote | undefined = undefined;
-  switch (placement.kind) {
-    case 'refused':
-      next = { tone: 'refused', reason: placement.reason };
-      break;
-    case 'snap':
-      next = { tone: 'snapped', reason: placement.reason };
-      break;
-    case 'valid':
-      next = placement.warning === undefined ? undefined : { tone: 'warning', reason: placement.warning };
-      break;
-    case 'open':
-      break;
-    default: {
-      const exhaustive: never = placement;
-      return exhaustive;
-    }
-  }
-  return previous?.tone === next?.tone && previous?.reason.reason === next?.reason.reason ? previous : next;
-}
-
-function DropNoteChip({ note }: { readonly note: DropNote | undefined }) {
-  const translate = useTranslate();
-  if (note === undefined) {
-    return undefined;
-  }
-  const reason = translate(note.reason.messageKey, note.reason.params);
-  return (
-    <div className="navigator-drop-note" role="status" data-tone={note.tone}>
-      {note.tone === 'snapped' ? translate('structure.placement.snapped', { reason }) : reason}
-    </div>
-  );
 }
 
 function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly nodes: readonly NavigatorNode[] }) {
@@ -602,7 +532,6 @@ function NavigatorBody({
       {!props.clientMode && !props.editRootId && <FrontmatterRow props={props} />}
       <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
       {!props.clientMode && nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
-      <DropNoteChip note={state.dropNote} />
     </div>
   );
 }

@@ -275,10 +275,10 @@ function rejectionToastKind(reason: RejectionReason): UndoRefusal['kind'] {
     case 'resource-limit':
     case 'write-race':
     case 'merge-conflict':
+    case 'invalid-placement':
       return 'warning';
     case 'unsupported-operation':
     case 'write-failed':
-    case 'invalid-placement':
       return 'error';
     default: {
       const exhaustive: never = reason;

@@ -25,7 +25,6 @@ import {
   type EmbedScan,
 } from '../model/webflow';
 import type { ElementSnapshot, NativeModel } from '../model/styleTypes';
-import type { ManualSourcePick } from '../model/selectorHome';
 import { type ScanState, type Phase } from './EditorBasics';
 import { rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
 import {
@@ -275,10 +274,6 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
     sourceSelectionRef.current = sourceSelection;
   }, [sourceSelection]);
   const previousInComponentRef = useRef(false);
-  // The person's own pick of "Add custom styles in", with the selection it was made for, and
-  // the current selection: a pick holds until the element or selector changes (model/selectorHome.ts).
-  const manualSourcePickRef = useRef<ManualSourcePick | undefined>(undefined);
-  const selectionKeyRef = useRef('');
   // The page pick, stashed while in a component.
   const pageSourceRef = useRef<string | undefined>(undefined);
   const wantCompSourceRef = useRef(false); // pending switch until the component embed loads
@@ -299,14 +294,12 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
   const activeSelectorRef = useRef('');
   return {
     activeSelectorRef,
-    manualSourcePickRef,
     nativeIdentityRef,
     nativeModel,
     nativeModelRef,
     pageSourceRef,
     pendingKeys,
     previousInComponentRef,
-    selectionKeyRef,
     setNativeModel,
     setPendingKeys,
     setSourceSelection,

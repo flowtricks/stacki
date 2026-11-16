@@ -5039,41 +5039,102 @@ body > .embed-editor_provenance {
   color: var(--text-dim);
 }
 
-/* A row per value the new component reads. A long list scrolls so the dialog keeps its
-   footer in view; most sections read one or two. */
-.extract-values {
-  margin-top: 12px;
-}
-.extract-value-list {
+/* The values the new component reads: a header (summary and the bulk control), one filled list
+   of compact rows, and a counts line. The dialog is a column capped to the window, so the footer
+   and its Create button never leave view; only the list scrolls, with soft shadows on the edges
+   that still have rows past them (the cover layers scroll with the content, the shadow layers
+   stay put) and padding at the end so the last row is never cut by the scroll edge. Fills, not borders. */
+.modal.create-component {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 176px;
+  max-height: calc(100vh - 48px);
+}
+.modal.create-component .modal-body {
+  min-height: 0;
   overflow-y: auto;
 }
-.extract-value-row {
+.extract-values {
+  --extract-list-fill: #252525;
+  margin-top: 4px;
+}
+.extract-values-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 26px;
+  margin-bottom: 6px;
+}
+.extract-values-head label {
+  margin-bottom: 0;
+}
+.extract-value-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 212px;
+  padding: 4px 4px 12px;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  scroll-padding: 4px 0 12px;
+  border-radius: 8px;
+  background:
+    linear-gradient(var(--extract-list-fill) 30%, transparent) top / 100% 24px no-repeat local,
+    linear-gradient(transparent, var(--extract-list-fill) 70%) bottom / 100% 24px no-repeat local,
+    linear-gradient(rgba(0, 0, 0, 0.35), transparent) top / 100% 12px no-repeat scroll,
+    linear-gradient(transparent, rgba(0, 0, 0, 0.35)) bottom / 100% 12px no-repeat scroll,
+    var(--extract-list-fill);
+}
+.extract-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 4px 0 8px;
+  border-radius: 6px;
+  scroll-snap-align: start;
+}
+.extract-value:hover {
+  background: var(--bg-hover);
 }
 .extract-value-name {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.extract-value-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 1px 4px 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  line-height: 16px;
+  white-space: nowrap;
+}
 .extract-value-choice {
-  flex: 0 0 190px;
+  flex: 0 0 168px;
+  margin-left: auto;
+}
+.ui-tabs.extract-bulk {
+  flex: 0 0 auto;
 }
 .extract-value-fixed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
-  font-size: 12px;
+  margin-left: auto;
+  font-size: 11.5px;
   color: var(--text-dim);
 }
-.hint-text.extract-value-note {
-  margin-top: 2px;
+.hint-text.extract-values-foot {
+  margin-top: 6px;
   color: var(--text-dim);
 }
 

@@ -1,7 +1,8 @@
 import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
-import type { MessageKey } from '../../lib/i18n/localeContext';
 import { CodeInline } from '../../ui/CodeBlock';
-import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
+import InfoHint from '../../ui/InfoHint';
+import { SegmentedTabs, type SegmentedTab } from '../../ui/SegmentedTabs';
+import { assert } from '../../../shared/core/assert';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -73,7 +74,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
     }
   };
   return (
-    <Popup className="modal" onClose={props.onClose} dismissible={true}>
+    <Popup className="modal create-component" onClose={props.onClose} dismissible={true}>
       {({ close }) => (
         <>
           <div className="modal-header">{translate('palette.create.title')}</div>
@@ -157,15 +158,16 @@ function ComponentNameField({
 }
 
 type ValueChoice = 'move' | 'prop';
+/** The bulk control's state: one choice for every value that has one, or `mixed` when they differ. */
+type BulkChoice = ValueChoice | 'mixed';
 
-const VALUE_CHOICE_KEYS: Readonly<Record<ValueChoice, MessageKey>> = {
-  move: 'palette.create.value.move',
-  prop: 'palette.create.value.prop',
-};
+/** The most values a dialog lists; a piece reading more is a caller bug, not a list to draw. */
+const VALUE_ROWS_MAX = 256;
 
 // What the page does with each value the piece reads. Move leads because the
 // section and its data belong together; a value that can't move says why, in place
-// of a choice it doesn't have.
+// of a choice it doesn't have. The header summarises and sets every row at once; the
+// rows are one compact filled list that scrolls inside the dialog, so Create stays in view.
 function ValueChoices({
   values,
   asProp,
@@ -179,6 +181,8 @@ function ValueChoices({
   if (values.length === 0) {
     return undefined;
   }
+  assert(values.length <= VALUE_ROWS_MAX, 'ValueChoices: the values fit the list');
+  const choosable = values.filter((value) => value.kind !== 'locked');
   const choose = (name: string, choice: ValueChoice): void => {
     const next = new Set(asProp);
     if (choice === 'prop') {
@@ -188,42 +192,99 @@ function ValueChoices({
     }
     onChange(next);
   };
+  // A locked value is already a prop and has no choice, so the bulk control leaves it alone.
+  const chooseAll = (choice: ValueChoice): void => {
+    const next = new Set(asProp);
+    for (const value of choosable) {
+      if (choice === 'prop') {
+        next.add(value.name);
+      } else {
+        next.delete(value.name);
+      }
+    }
+    onChange(next);
+  };
+  const propCount = choosable.filter((value) => value.kind === 'prop').length;
+  const bulk: BulkChoice = propCount === 0 ? 'move' : propCount === choosable.length ? 'prop' : 'mixed';
+  const movedIn = values.filter((value) => value.kind === 'move').length;
+  const passed = values.length - movedIn;
+  const bulkTabs: readonly SegmentedTab<BulkChoice>[] = [
+    { value: 'move', label: translate('palette.create.value.bulkMove') },
+    { value: 'prop', label: translate('palette.create.value.bulkProp') },
+  ];
   return (
     <div className="extract-values">
-      <label>{translate('palette.create.value.reads', { count: values.length })}</label>
-      <div className="extract-value-list">
+      <div className="extract-values-head">
+        <label>{translate('palette.create.value.reads', { count: values.length })}</label>
+        {choosable.length > 1 ? (
+          <SegmentedTabs<BulkChoice>
+            tabs={bulkTabs}
+            value={bulk}
+            label={translate('palette.create.value.bulkAria')}
+            className={{ track: 'extract-bulk' }}
+            onPick={(choice) => chooseAll(choice === 'prop' ? 'prop' : 'move')}
+          />
+        ) : undefined}
+      </div>
+      <div className="extract-value-list" onKeyDown={moveBetweenRows}>
         {values.map((value) => (
           <ValueRow key={value.name} value={value} onChoose={choose} />
         ))}
       </div>
+      <div className="hint-text extract-values-foot">{translate('palette.create.value.counts', { moved: movedIn, props: passed })}</div>
     </div>
   );
+}
+
+// Up and Down walk the rows' choices, landing on each row's chosen segment, so a long list is
+// scanned from the keyboard without tabbing through every button.
+function moveBetweenRows(event: React.KeyboardEvent<HTMLDivElement>): void {
+  const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+  if (step === 0) {
+    return;
+  }
+  const chosen = [...event.currentTarget.querySelectorAll<HTMLElement>('.extract-value [role="tab"][aria-selected="true"]')];
+  const row = event.target instanceof Element ? (event.target.closest('.extract-value') ?? undefined) : undefined;
+  const at = chosen.findIndex((element) => element.closest('.extract-value') === row);
+  const target = chosen[at + step];
+  if (at >= 0 && target !== undefined) {
+    event.preventDefault();
+    target.focus();
+    target.scrollIntoView?.({ block: 'nearest' });
+  }
 }
 
 function ValueRow({ value, onChoose }: { readonly value: ExtractionValue; readonly onChoose: (name: string, choice: ValueChoice) => void }) {
   const translate = useTranslate();
   const note = valueNote(value);
-  const choices: readonly DropdownOption<ValueChoice>[] = [
-    { value: 'move', label: translate(VALUE_CHOICE_KEYS.move) },
-    { value: 'prop', label: translate(VALUE_CHOICE_KEYS.prop) },
+  const choices: readonly SegmentedTab<ValueChoice>[] = [
+    { value: 'move', label: translate('palette.create.value.move') },
+    { value: 'prop', label: translate('palette.create.value.prop') },
   ];
   return (
     <div className="extract-value">
-      <div className="extract-value-row">
-        <CodeInline className="extract-value-name" text={value.name} language="typescript" />
-        {value.kind === 'locked' ? (
-          <span className="extract-value-fixed">{translate('palette.create.value.passed')}</span>
-        ) : (
-          <Dropdown<ValueChoice>
-            ariaLabel={translate('palette.create.value.choiceAria', { name: value.name })}
-            className="extract-value-choice"
-            value={value.kind}
-            options={choices}
-            onChange={(choice) => onChoose(value.name, choice)}
-          />
-        )}
-      </div>
-      {note === undefined ? undefined : <div className="hint-text extract-value-note">{note}</div>}
+      <CodeInline className="extract-value-name" text={value.name} language="typescript" />
+      {value.kind === 'move' && note !== undefined ? (
+        <span className="extract-value-tag">
+          {translate('palette.create.value.alsoUsed')}
+          <InfoHint text={note} />
+        </span>
+      ) : undefined}
+      {value.kind === 'locked' ? (
+        <span className="extract-value-fixed">
+          {translate('palette.create.value.passed')}
+          {note === undefined ? undefined : <InfoHint text={note} />}
+        </span>
+      ) : (
+        <SegmentedTabs<ValueChoice>
+          tabs={choices}
+          value={value.kind}
+          label={translate('palette.create.value.choiceAria', { name: value.name })}
+          layout="equal"
+          className={{ track: 'extract-value-choice' }}
+          onPick={(choice) => onChoose(value.name, choice)}
+        />
+      )}
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { canContainTag } from './elementSchemas';
 import { findWithParent } from './treeSelection';
 import { treeBudget, type TreeView } from './treeView';
 import { findEditorNodeById } from './pageState';
-import { checkWrap } from './placementCheck';
 
 export type WrapperTag = 'div' | 'a';
 export type TextTag = 'div' | 'span';
@@ -42,11 +41,10 @@ export function canWrapNode(nodes: readonly PageNode[], nodeId: string, name: Wr
       return false;
     }
   }
-  if (name === 'a' && containsLinkContent(node)) {
-    return false;
+  if (name === 'a') {
+    return !containsLinkContent(node);
   }
-  // The same rule as every other way of placing a node: the wrapper where the node stands, and the node inside it.
-  return checkWrap(nodes, nodeId, name, { insertables: undefined, document: 'unknown' }).ok;
+  return true;
 }
 
 /** Whether a bare text run can become `<name>text</name>` where it stands.

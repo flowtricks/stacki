@@ -18,8 +18,6 @@ import { appInsertGesture, withStringProps } from '../model/appInsertGesture';
 import { componentInstancePlacement, loadComponentInstance } from '../model/componentInstances';
 import { newId } from '../model/nodeFactory';
 import { insertedNode } from '../model/pageGestures';
-import { gatePlacement } from '../model/placementGate';
-import { documentOfPath, placementNodeOf } from '../../editor/placementCheck';
 import type { ImportDecl } from '../../../shared/page/pageNode';
 import type { useCoreState } from './appLifecycle';
 import type { useHistory } from './appNodeEdits';
@@ -85,18 +83,6 @@ export function useAppInsert(coreState: ReturnType<typeof useCoreState>, history
       const target = appInsertTarget(state.model, place, selectedIdRef.current, paletteItem, insertables);
       if (target.kind === 'refused') {
         return { applied: false, reason: target.reason };
-      }
-      // The place an app names is never moved: the one placement rule either takes it or says no.
-      const pagePlace = { insertables, pagePath };
-      const gate = gatePlacement(
-        state.model,
-        { kind: 'new', node: placementNodeOf(prepared.node, { insertables, document: documentOfPath(pagePath) }, 'deep') },
-        target.target,
-        pagePlace,
-      );
-      const refused = gate.kind === 'stop' ? gate.refusal : gate.moved;
-      if (refused !== undefined) {
-        return { applied: false, reason: `The place cannot take that node (${refused.reason})` };
       }
       const replacedId = place.kind === 'replace' ? place.nodeId : undefined;
       const committed = commitEdit(appInsertGesture(state.model, { node: prepared.node, place: target.target, replacedId, imports: prepared.imports }));
