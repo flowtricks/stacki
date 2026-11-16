@@ -5,6 +5,7 @@ import { LIMITS } from '../../../shared/core/limits';
 import { treeBudget } from '../../editor/treeView';
 import { rowChildren, rowHost } from '../../editor/branches';
 import { hidesChildRows } from '../../editor/treeSelection';
+import { isDataBound } from '../../editor/bindings';
 
 export type NavigatorNode = PageNode;
 export type NavigatorModel = Pick<PageModel, 'nodes' | 'imports'>;
@@ -181,4 +182,31 @@ function collapseMapWalk(
       collapseMapWalk(children, options, result, depth + 1, visit);
     }
   }
+}
+
+/** The colour family a row and its open subtree block share. Plain markup has none: it uses the accent. */
+export type NavigatorFamily = 'component' | 'loop' | 'cond';
+
+/**
+ * Which family a row belongs to. Why one function: the row's own colour and its subtree's tint both read this
+ * answer, so a block can never be drawn in a different colour than the row that heads it. Loops and conditions (and
+ * their else) share one purple, a component is green; a row bound to data without being a component reads as a loop.
+ */
+export function navigatorFamily(node: NavigatorNode, options: { readonly componentRow: boolean }): NavigatorFamily | undefined {
+  if (options.componentRow) {
+    return 'component';
+  }
+  if (node.kind === 'cond' || node.kind === 'branch') {
+    return 'cond';
+  }
+  if (node.kind === 'map') {
+    return 'loop';
+  }
+  const props = 'props' in node ? node.props : undefined;
+  const children = 'children' in node ? node.children : undefined;
+  const bound = isDataBound({
+    ...(props === undefined ? {} : { props }),
+    ...(children === undefined ? {} : { children }),
+  });
+  return bound ? 'loop' : undefined;
 }

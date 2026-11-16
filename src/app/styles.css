@@ -51,6 +51,11 @@
   /* Pages Astro generates from a collection ([id], [...slug]) read in this
      purple wherever pages are listed. */
   --collection-purple: #c4afff;
+  /* Flow purple: loops and conditionals (if, else) are one family, as everywhere else in the app (the insert
+     palette, the linked bars, the conditional chip), told apart by icon, not hue. The soft fill is a selected
+     row; a subtree block mixes the solid colour at --subtree-tint. */
+  --flow-purple: #c4afff;
+  --flow-purple-soft: rgba(146, 116, 255, 0.32);
   --red: #ff453a;
   --amber: #ffd60a;
   --orange: #ff9f0a;
@@ -2550,6 +2555,10 @@ html[data-platform='win32'] .titlebar {
   font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Cut from the start so the file name stays visible; the <bdi dir="ltr"> inside keeps
+     the path's own order (a leading "/" or "." would otherwise move to the far end). */
+  direction: rtl;
+  text-align: left;
 }
 .code-panel-lines {
   flex-shrink: 0;
@@ -3033,6 +3042,11 @@ body > .embed-editor_provenance {
     border-color 0.1s,
     background 0.1s;
 }
+/* The code editor's version of the field (CodeBindInput.tsx) is the .expr-input
+   inside it: this wrapper only carries focus and key events, so it takes no box. */
+.code-bind-input {
+  display: contents;
+}
 .bind-input:hover {
   background: rgba(255, 255, 255, 0.08);
 }
@@ -3042,11 +3056,6 @@ body > .embed-editor_provenance {
   background: var(--bg-input);
 }
 .bind-input:empty::before {
-/* The code editor's version of the field (CodeBindInput.tsx) is the .expr-input
-   inside it: this wrapper only carries focus and key events, so it takes no box. */
-.code-bind-input {
-  display: contents;
-}
   content: attr(data-placeholder);
   color: var(--text-faint);
   pointer-events: none;
@@ -3800,6 +3809,12 @@ body > .embed-editor_provenance {
 .structure-subtree.is-component {
   background: color-mix(in srgb, var(--component-green) var(--subtree-tint), transparent);
 }
+.structure-subtree.is-loop {
+  background: color-mix(in srgb, var(--flow-purple) var(--subtree-tint), transparent);
+}
+.structure-subtree.is-cond {
+  background: color-mix(in srgb, var(--flow-purple) var(--subtree-tint), transparent);
+}
 /* Hovering must not repaint the selected row's icon — the :hover rule below
    has the same specificity and would otherwise win on source order. */
 .structure-node.selected .icon,
@@ -3811,6 +3826,7 @@ body > .embed-editor_provenance {
 }
 .structure-node .icon {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   color: var(--navigator-icon-color, var(--text-faint));
 }
@@ -3895,22 +3911,38 @@ body > .embed-editor_provenance {
   background: var(--bg-hover);
 }
 
-/* Map/loop layers — purple */
-.structure-node.is-map,
-.structure-node.is-map:hover,
-.structure-node.is-map.selected {
-  color: #c4afff;
+/* Loop layers, conditions and their else (and rows bound to data) — one purple, one token. */
+.structure-node.is-loop,
+.structure-node.is-loop:hover,
+.structure-node.is-loop.selected {
+  color: var(--flow-purple);
 }
-.structure-node.is-map .icon,
-.structure-node.is-map:hover .icon,
-.structure-node.is-map.selected .icon {
-  color: #c4afff;
+.structure-node.is-loop .icon,
+.structure-node.is-loop:hover .icon,
+.structure-node.is-loop.selected .icon {
+  color: var(--flow-purple);
 }
-.structure-node.is-map:hover {
+.structure-node.is-loop:hover {
   background: var(--bg-active);
 }
-.structure-node.is-map.selected {
-  background: rgba(146, 116, 255, 0.32);
+.structure-node.is-loop.selected {
+  background: var(--flow-purple-soft);
+}
+.structure-node.is-cond,
+.structure-node.is-cond:hover,
+.structure-node.is-cond.selected {
+  color: var(--flow-purple);
+}
+.structure-node.is-cond .icon,
+.structure-node.is-cond:hover .icon,
+.structure-node.is-cond.selected .icon {
+  color: var(--flow-purple);
+}
+.structure-node.is-cond:hover {
+  background: var(--bg-active);
+}
+.structure-node.is-cond.selected {
+  background: var(--flow-purple-soft);
 }
 
 /* Component instances — Webflow-style green */

@@ -3,11 +3,11 @@ import { TreeDragRow, TreeDropGap, TreeDragHandle } from '../../ui/TreeDragDrop'
 import React, { useEffect, useRef } from 'react';
 import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
 import { canContainTag } from '../../editor/elementSchemas';
-import { isDataBound } from '../../editor/bindings';
 import { allowDragEffect, clearDrag, getDrag, setDrag } from '../../editor/dragState';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
 import { PseudoElementIcon, HideIcon, LayoutIcon, PointerEventsNoneIcon } from '../../ui/Icons';
-import { defaultCollapsed, navigatorChildren, navigatorHost } from './structureModel';
+import { defaultCollapsed, navigatorChildren, navigatorFamily, navigatorHost } from './structureModel';
+import type { NavigatorFamily } from './structureModel';
 import { navigatorHostsDrop } from './navigatorDrop';
 import { isFragmentNode } from '../../editor/liveClasses';
 import { labelsNode } from '../../../shared/page/leadingNote';
@@ -198,7 +198,7 @@ function TreeNode(props: TreeNodeProps) {
       {showChildren && !view.collapsed && (
         // The selected row's subtree sits in a tinted block under the row, so the
         // selection reads as one container. The tint follows the row's own colour.
-        <div className={subtreeClassName({ rowSelected, component: view.component })}>
+        <div className={subtreeClassName({ rowSelected, family: navigatorFamily(node, { componentRow: view.component }) })}>
           {/* The guide drops from the parent's chevron; CSS shows it while the pointer is over the tree. */}
           <span className="structure-guide" aria-hidden="true" style={{ left: navigatorGuideLeft(depth) }} />
           {pseudoRow('before')}
@@ -498,35 +498,20 @@ function NodeStatus({ rendersNothing, hidden, inert }: { readonly rendersNothing
 }
 
 function rowClassName(view: NodeView & { readonly node: NavigatorNode }): string {
-  const { node } = view;
-  const mapped = node.kind === 'map' || node.kind === 'cond' || node.kind === 'branch' || (nodeIsDataBound(node) && !view.component);
-  return [
-    'structure-node',
-    view.component ? 'is-component' : '',
-    mapped ? 'is-map' : '',
-    view.layout ? 'layout-node' : '',
-    view.selected ? 'selected' : '',
-  ].join(' ');
-}
-
-function nodeIsDataBound(node: NavigatorNode): boolean {
-  const props = 'props' in node ? node.props : undefined;
-  const children = 'children' in node ? node.children : undefined;
-  return isDataBound({
-    ...(props === undefined ? {} : { props }),
-    ...(children === undefined ? {} : { children }),
-  });
+  const family = navigatorFamily(view.node, { componentRow: view.component });
+  return ['structure-node', family === undefined ? '' : `is-${family}`, view.layout ? 'layout-node' : '', view.selected ? 'selected' : ''].join(' ');
 }
 
 const fragmentTitle = 'Inline group in this file. Expand it to edit its children; there is no separate file to open.';
 
 export { defaultCollapsed };
 
-// Only the selected row's subtree is tinted; a component's block takes the component colour.
-function subtreeClassName(row: { readonly rowSelected: boolean; readonly component: boolean }): string {
+// Only the selected row's subtree is tinted, in its row's own family (component green, loops and
+// conditions one flow purple); plain markup takes the accent. The class is `is-<family>`, the one the row carries.
+function subtreeClassName(row: { readonly rowSelected: boolean; readonly family: NavigatorFamily | undefined }): string {
   if (row.rowSelected) {
     // i18n-ignore: CSS class names, not text.
-    return row.component ? 'structure-children structure-subtree is-component' : 'structure-children structure-subtree';
+    return row.family === undefined ? 'structure-children structure-subtree' : `structure-children structure-subtree is-${row.family}`;
   }
   return 'structure-children';
 }
