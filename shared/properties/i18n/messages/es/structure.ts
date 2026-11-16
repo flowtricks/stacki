@@ -58,6 +58,7 @@ export const messages = {
   'structure.placement.unknownComponentParent': '“{child}” va dentro de {parent}. Comprueba que este componente lo genere.',
   'structure.placement.voidParent': '“{parent}” no puede tener nada dentro.',
   'structure.row.imported': 'Importado desde {file}',
+  'structure.binding.label': 'Vínculo de datos {path}',
   'structure.status.empty': 'No muestra nada en la página con sus props actuales',
   'structure.status.hidden': 'display: none — está en la página, pero no se dibuja',
   'structure.status.inert': 'pointer-events: none — se dibuja, pero no recibe clics',

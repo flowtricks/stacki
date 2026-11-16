@@ -260,6 +260,7 @@ function DesignPreview({
         <PreviewOverlays
           {...measuredOutlines(runtime)}
           scale={scale}
+          viewport={{ w: sizing.viewport.width, h: sizing.viewport.height }}
           {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
           selPath={runtime.pendingSelection?.path ?? props.selPath}
           selPseudo={runtime.pendingSelection === undefined ? props.selPseudo : runtime.pendingSelection.pseudo}

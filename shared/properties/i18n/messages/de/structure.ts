@@ -58,6 +58,7 @@ export const messages = {
   'structure.placement.unknownComponentParent': '“{child}” gehört in {parent}. Prüfe, ob diese Komponente eines ausgibt.',
   'structure.placement.voidParent': 'In “{parent}” kann nichts stehen.',
   'structure.row.imported': 'Importiert aus {file}',
+  'structure.binding.label': 'Datenbindung {path}',
   'structure.status.empty': 'Zeigt mit den aktuellen Props nichts auf der Seite an',
   'structure.status.hidden': 'display: none – auf der Seite, aber nicht gezeichnet',
   'structure.status.inert': 'pointer-events: none – wird gezeichnet, nimmt aber keine Klicks an',
