@@ -16,6 +16,7 @@ import { isNonNegative } from './model/cssProperties';
 import { hasOwnedPopup, inOwnedPopup } from '../../ui/popupOwnership';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
+import { settleCaretAfterChips } from './TokenField';
 import { type ResolvedProp } from './model/resolved';
 import { useDebouncedLive } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
@@ -409,6 +410,11 @@ export function useEditorFocus(rootRef: React.RefObject<HTMLDivElement>, inputRe
     const rich = rootRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor');
     if (rich) {
       rich.focus();
+      // A lone variable opens with the caret behind its chip, so one Backspace takes it off;
+      // selecting the whole value drew a fat bar over the chip with the caret nowhere.
+      if (settleCaretAfterChips(rich)) {
+        return;
+      }
       const range = document.createRange();
       range.selectNodeContents(rich);
       const selection = window.getSelection();

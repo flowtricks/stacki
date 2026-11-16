@@ -13,7 +13,7 @@
 // The negative space: presses over text and modified or double presses are left
 // to the browser, and a chip with no text beside it is given a slot rather than
 // an element-level caret a browser cannot type at. Arrowing across a chip (jumpCaretPastChip)
-// is checked for a chip-only value, a chip in the middle and at the end, adjacent chips, and
+// is checked for a chip-only value (and on open the caret settles behind a lone chip, never selecting it, so one Backspace empties the field), a chip in the middle and at the end, adjacent chips, and
 // the zero-width caret slot at the far left. Run it alone with
 // `node test/renderer/style/tokenFieldCaret.test.js`.
 
@@ -38,7 +38,7 @@ const check = (what, condition, detail) => {
   const entry = path.join(buildDirectory, 'token-field-caret.entry.jsx');
   fs.writeFileSync(
     entry,
-    `export { bracketEdit, buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress } from ${JSON.stringify(repoPath('src/features/style/TokenField.tsx'))};\n` +
+    `export { bracketEdit, buildTokenHtml, chipBesideCaret, jumpCaretPastChip, removeChip, serializeTokens, settleCaretAfterChips, tokenFieldPress } from ${JSON.stringify(repoPath('src/features/style/TokenField.tsx'))};\n` +
       `export { caretPlacementAt, CARET_SLOT } from ${JSON.stringify(repoPath('src/features/style/tokenFieldCaret.ts'))};\n`,
   );
   const out = path.join(buildDirectory, 'token-field-caret.bundle.js');
@@ -60,7 +60,18 @@ const check = (what, condition, detail) => {
   global.document = dom.window.document;
   global.Node = dom.window.Node;
   global.HTMLElement = dom.window.HTMLElement;
-  const { bracketEdit, buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress, caretPlacementAt, CARET_SLOT } = require(out);
+  const {
+    bracketEdit,
+    buildTokenHtml,
+    chipBesideCaret,
+    jumpCaretPastChip,
+    removeChip,
+    serializeTokens,
+    settleCaretAfterChips,
+    tokenFieldPress,
+    caretPlacementAt,
+    CARET_SLOT,
+  } = require(out);
 
   // --- the opening bracket ----------------------------------------------------
   //
@@ -306,6 +317,38 @@ const check = (what, condition, detail) => {
   field.innerHTML = buildTokenHtml(binding, chips);
   fieldSelection.setBaseAndExtent(field.firstChild, 0, field.lastChild, 1);
   check('a selection is the browser’s (Shift+Arrow, Home, End stay native)', jumpCaretPastChip(field, 'right') === false);
+
+  // --- opening on a lone chip: caret behind it, one Backspace empties the field ----
+  //
+  // The reported case: the Padding top popup opened with the whole value selected (a fat bar
+  // over the chip) and no caret behind it. Opening settles a chip-only value's caret flush
+  // against the chip's far side; Backspace there takes the chip whole, Delete from its near side too.
+  draw(binding);
+  fieldSelection.setBaseAndExtent(field.firstChild, 0, field.lastChild, field.lastChild.length);
+  check('a chip-only value settles on open', settleCaretAfterChips(field) === true);
+  check('the selection is a collapsed caret', fieldSelection.isCollapsed === true);
+  check('the caret is behind the chip', atEdgeOf(chipAt(0), 'after'), `caret in ${caret().node.nodeName} at ${caret().offset}`);
+  check('one Backspace finds the chip', chipBesideCaret(field, 'Backspace') === chipAt(0));
+  check('Delete from behind does not', chipBesideCaret(field, 'Delete') === undefined);
+  removeChip(field, chipBesideCaret(field, 'Backspace'));
+  check('the chip is gone and the value is empty', field.querySelector('[data-chip]') === null && written() === '', written());
+  draw(binding);
+  fieldSelection.collapse(field.firstChild, 0);
+  check('Delete with the caret in front finds the chip', chipBesideCaret(field, 'Delete') === chipAt(0));
+  field.innerHTML = buildTokenHtml(binding, chips);
+  fieldSelection.collapse(field.lastChild, 1);
+  check('a caret one slot behind the chip (past the zero-width space) still counts as against it', chipBesideCaret(field, 'Backspace') === chipAt(0));
+  // The negative space: an expression edits normally.
+  field.innerHTML = buildTokenHtml(`calc(${binding} * 2)`, chips);
+  check('a value with text does not settle on open', settleCaretAfterChips(field) === false);
+  fieldSelection.collapse(field.firstChild, 3);
+  check('Backspace away from the chip is the browser’s', chipBesideCaret(field, 'Backspace') === undefined);
+  fieldSelection.collapse(field.lastChild, 0);
+  check('Backspace right after a chip in an expression takes only the chip', chipBesideCaret(field, 'Backspace') === chipAt(0));
+  removeChip(field, chipAt(0));
+  check('the text around it stays', written() === 'calc( * 2)', written());
+  field.innerHTML = buildTokenHtml('12px', []);
+  check('a plain value does not settle', settleCaretAfterChips(field) === false);
 
   // --- the assertions that pin the inputs -------------------------------------
   let message = '';

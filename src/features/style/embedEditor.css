@@ -5734,7 +5734,8 @@
      single-line field is a flex row, and align-self above does the same there. */
   vertical-align: middle;
   gap: var(--space-2);
-  margin: 0 1px;
+  /* No margin: the caret behind a chip stands flush with its right edge. */
+  margin: 0;
   padding: 1px var(--space-2);
   border-radius: var(--radius-sm);
   background: rgba(124, 92, 255, 0.28);
@@ -5750,6 +5751,11 @@
 .embed-editor_varconnect-editor:focus .embed-editor_varconnect-token,
 .embed-editor_varconnect-token:hover {
   background: rgba(124, 92, 255, 0.42);
+}
+
+/* Chips welded together keep a hairline between them now the chip has no margin of its own. */
+.embed-editor_varconnect-token + .embed-editor_varconnect-token {
+  margin-left: 1px;
 }
 
 /* The gap between two chips (see spaceRun). `pre` so the space keeps its width —

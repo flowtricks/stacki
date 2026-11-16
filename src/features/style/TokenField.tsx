@@ -284,6 +284,61 @@ export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'
   return false;
 }
 
+// Whether the field holds chips and nothing else: no text, only the zero-width caret slots.
+// Such a value has one place worth putting a caret, right behind the chip, where Backspace
+// takes the whole variable off in one press.
+export function fieldHoldsOnlyChips(root: HTMLElement): boolean {
+  const text = fieldText(root)
+    .replace(/\u200B/g, '')
+    .replace(/\s/g, '');
+  return text !== '' && text.replace(new RegExp(CHIP_MARK, 'g'), '') === '';
+}
+
+// Put the caret against the far side of the last chip of a chip-only field, replacing
+// whatever selection the browser or an opener gave it (the whole value selected on open
+// drew as a fat bar over the chip, with the caret nowhere). Returns whether it did.
+export function settleCaretAfterChips(root: HTMLElement): boolean {
+  if (!fieldHoldsOnlyChips(root)) {
+    return false;
+  }
+  const chips = [...root.querySelectorAll<HTMLElement>('[data-chip]')];
+  assert(chips.length <= TOKEN_FIELD_LIMITS.chipsMax, 'settleCaretAfterChips: the field holds a bounded number of chips');
+  const last = chips[chips.length - 1];
+  assert(last !== undefined, 'settleCaretAfterChips: a chip-only field has a chip');
+  const slot = slotBeside(last, 'after');
+  placeCaret(root, { kind: 'text', node: slot, offset: 0 });
+  return true;
+}
+
+// The chip Backspace (caret against its far side) or Delete (against its near side) would take,
+// if the caret is collapsed and right against one. The browser removes a chip too, but not the
+// same way every time: a caret one zero-width slot away from the chip spent its first Backspace
+// on the slot, so the field answers these keys itself, in one press.
+export function chipBesideCaret(root: HTMLElement, key: 'Backspace' | 'Delete'): HTMLElement | undefined {
+  const selection = root.ownerDocument.getSelection();
+  if (selection === null || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return undefined;
+  }
+  const { startContainer: node, startOffset: offset } = selection.getRangeAt(0);
+  if (!root.contains(node)) {
+    return undefined;
+  }
+  const chips = [...root.querySelectorAll<HTMLElement>('[data-chip]')];
+  assert(chips.length <= TOKEN_FIELD_LIMITS.chipsMax, 'chipBesideCaret: the field holds a bounded number of chips');
+  const side = key === 'Backspace' ? 'after' : 'before';
+  return chips.find((chip) => caretBesideChip(chip, node, offset, side));
+}
+
+// Take one chip out whole; the caret stays where it was, in the text that ended before it.
+export function removeChip(root: HTMLElement, chip: HTMLElement): void {
+  assert(root.contains(chip), 'removeChip: the chip is in the field');
+  const before = root.querySelectorAll('[data-chip]').length;
+  const slot = slotBeside(chip, 'before');
+  chip.remove();
+  placeCaret(root, { kind: 'text', node: slot, offset: slot.length });
+  assert(root.querySelectorAll('[data-chip]').length === before - 1, 'removeChip: exactly one chip went');
+}
+
 // The text node a caret on `side` of `chip` sits in. A neighbour may be a coloured run, or
 // the `.cx-space` element a gap is drawn in, whose text node holds the caret: the element
 // itself never does. Where no text is there (a chip welded to another chip, or to the end
@@ -397,7 +452,11 @@ export function TokenField({
       aria-label={ariaLabel}
       data-placeholder={placeholder || undefined}
       spellCheck={false}
-      onFocus={onFocusField}
+      onFocus={(event) => {
+        // A chip-only value opens with the caret behind the chip, never in front of it or over it.
+        settleCaretAfterChips(event.currentTarget);
+        onFocusField();
+      }}
       onBlur={() => {
         const element = editorRef.current;
         onCommit(element ? serializeTokens(element, chipBare, chipVar) : '');
@@ -439,12 +498,29 @@ export function TokenField({
           travel(event.currentTarget, direction);
           return;
         }
+        if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !disabled) {
+          const element = event.currentTarget;
+          // Recorded first, so the removal is a step ⌘Z takes back.
+          const beside = chipBesideCaret(element, event.key);
+          if (beside !== undefined) {
+            event.preventDefault();
+            record(element, `key:${event.key}`);
+            removeChip(element, beside);
+            if (code) {
+              paint(element, fieldText(element), caretOffset(element), chipsOf(element));
+            }
+            report(element);
+            return;
+          }
+        }
         tokenFieldKeyDown(event, { code: !!code, stepMin, report, record });
       }}
       onMouseDown={(event) => {
         const chip = pressedChip(event.currentTarget, event.target);
         if (chip !== undefined) {
           event.preventDefault();
+          // The press opens the chooser; the caret still ends up behind a lone chip.
+          settleCaretAfterChips(event.currentTarget);
           onChipClick(chip);
           return;
         }
