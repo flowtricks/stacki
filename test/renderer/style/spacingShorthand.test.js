@@ -183,7 +183,8 @@ test('values the box cannot read side by side set no side', async () => {
   }
   assert.equal(model.spacingSides('padding', '').size, 0, 'an empty value');
   assert.equal(model.spacingSides('padding-top', '1px 2px').size, 0, 'two parts on one side');
-  assert.equal(model.spacingSides('margin-inline', '1px').size, 0, 'a property the box skips');
+  assert.equal(model.spacingSides('margin-inline', '1px 2px 3px').size, 0, 'too many parts for an axis');
+  assert.equal(model.spacingSides('margin-collapse', '1px').size, 0, 'a property the box skips');
   assert.equal(model.spacingSides('border-width', '1px 2px').size, 0, 'another box shorthand');
   assert.deepEqual(
     [...model.spacingSides('padding-block', '1rem 3rem')],

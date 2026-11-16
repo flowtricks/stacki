@@ -31,13 +31,30 @@ const SHORTHANDS: ReadonlyMap<string, Shorthand> = new Map<string, Shorthand>([
   ['padding-left', { box: 'padding', sides: ['left'] }],
 ]);
 
+// Logical properties, read onto the same physical sides. The box draws a horizontal
+// writing mode (as the header says), so block is top/bottom and inline is left/right.
+// They are read-only here: a padding edit still rewrites the physical padding
+// properties above, and the margin box writes through the rule's own declarations.
+// Without this a `margin-block: 2rem` rule never reached the margin fields, so
+// an earlier `margin-top` from another rule kept showing as the winner.
+const LOGICAL: ReadonlyMap<string, Shorthand> = new Map<string, Shorthand>(
+  (['margin', 'padding'] as const).flatMap((box): Array<[string, Shorthand]> => [
+    [`${box}-block`, { box, sides: ['top', 'bottom'] }],
+    [`${box}-inline`, { box, sides: ['left', 'right'] }],
+    [`${box}-block-start`, { box, sides: ['top'] }],
+    [`${box}-block-end`, { box, sides: ['bottom'] }],
+    [`${box}-inline-start`, { box, sides: ['left'] }],
+    [`${box}-inline-end`, { box, sides: ['right'] }],
+  ]),
+);
+
 const NO_SIDES: ReadonlyMap<string, string> = new Map<string, string>();
 
 /** The side longhands `prop: value` sets, by property name (`padding-left` → its
  *  value). Empty for a property the spacing box does not read, and for a value
  *  with more parts than the property has sides. `prop` is lowercase. */
 export function spacingSides(prop: string, value: string): ReadonlyMap<string, string> {
-  const shorthand = SHORTHANDS.get(prop);
+  const shorthand = SHORTHANDS.get(prop) ?? LOGICAL.get(prop);
   if (shorthand === undefined) {
     return NO_SIDES;
   }

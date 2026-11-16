@@ -11,6 +11,7 @@
 import type { LayerPosition } from './cascadeLayers';
 import { compareCandidates, type CascadeCandidate } from './cascadeResolve';
 import { canonicalCompound, compareSpecificity, matchSelectorList, type MatchTarget } from './selectors';
+import { spacingSides } from './spacingShorthand';
 import type { ParsedRule, SelectorInfo, Specificity } from './styleTypes';
 import { assert } from '../../../../shared/core/assert';
 
@@ -149,15 +150,21 @@ function cascadeWinners(hits: readonly Hit[]): Map<string, Winner> {
       continue;
     }
     for (const decl of hit.rule.declarations) {
-      contributions.push({
-        declId: decl.declId,
-        prop: decl.prop,
-        important: decl.important,
-        layer: hit.rule.layer,
-        specificity: hit.strongestBase.specificity,
-        seq: seq++,
-        selectorText: hit.strongestBase.selector.text,
-      });
+      // A box shorthand also ranks for each side it sets (`margin-block` for the top and the
+      // bottom), so a `margin-top` it beats is flagged as overridden, as the panel's value is.
+      const props = [decl.prop, ...spacingSides(decl.prop, decl.value).keys()];
+      const order = seq++;
+      for (const prop of props) {
+        contributions.push({
+          declId: decl.declId,
+          prop,
+          important: decl.important,
+          layer: hit.rule.layer,
+          specificity: hit.strongestBase.specificity,
+          seq: order,
+          selectorText: hit.strongestBase.selector.text,
+        });
+      }
     }
   }
 
