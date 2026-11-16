@@ -301,8 +301,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
           value: `${GROUP_HEADING_PREFIX}${group.key.source ?? ''}\u0000${group.key.wrapper ?? ''}`,
           label,
           heading: true,
-          // One header for every group: a component or file chip with its selector, or (no selector) the file's own icon and path.
-          ...(group.key.wrapper === undefined || tag === undefined ? (tag?.icon === undefined ? {} : { icon: tag.icon }) : { tag }),
+          // A header is a label, never an option: no icon of its own. A component or file chip beside its selector, or the file's path alone.
+          ...(group.key.wrapper === undefined || tag === undefined ? {} : { tag }),
         });
         for (const item of group.items) {
           options.push(optionFor(item.context, 'section'));
@@ -320,7 +320,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
   }
   // The queries that are not about width close the list as one plain section, labelled Other.
   if (otherRows.length > 0) {
-    options.push({ value: OTHER_HEADING, label: translate('styleModel.embed.card.other'), heading: true, icon: <FilterIcon /> }, ...otherRows);
+    options.push({ value: OTHER_HEADING, label: translate('styleModel.embed.card.other'), heading: true }, ...otherRows);
   }
   return (
     <Select

@@ -924,6 +924,33 @@ body.is-scrubbing * {
   width: 12px;
   height: 12px;
 }
+/* The chip never outgrows its row: it shrinks, and its label gives way. */
+.u-select.is-link {
+  min-width: 0;
+  max-width: 100%;
+}
+.u-select-link {
+  min-width: 0;
+  max-width: 100%;
+}
+.u-select-link .u-select-icon,
+.u-select-link .u-select-chevron {
+  flex: none;
+}
+/* A path is cut from its start so its end, the file name, stays visible. An RTL box
+   puts the ellipsis on the left, and the `<bdi dir="ltr">` inside keeps the path's own
+   order: without it the bidi algorithm moves a leading `/` or `.` to the far end
+   (`src/a.css` would draw as `src/a.css/`). CSS rather than measuring, so the text
+   stays whole in the DOM and refits at any width. */
+.u-select-label.is-path {
+  direction: rtl;
+  text-align: left;
+}
+.u-select-link-tip-code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 /* Anchored to the trigger's left with a fixed width, capped to the panel width on a
    narrow sidebar (the JS clamp then nudges it away from the edge). Border-box so
    the clamp's pixel cap is the menu's outer width, padding included. */
@@ -1154,20 +1181,22 @@ body.is-scrubbing * {
 .embed-editor_context-select .u-select-value {
   flex: 1 1 auto;
 }
-/* A breakpoint or query is the target, not Base: the whole trigger is filled with the accent blue, brighter
-   than the neutral control, so it is clear the styles apply to that screen size only. A background fill,
-   never a border. Hover and press change the blue's strength and never turn it grey; focus keeps it. */
+/* A breakpoint or query is the target, not Base: the whole trigger is filled with the app's attribute-chip
+   purple mixed into the control surface, so it is clear the styles apply to that screen size only. Mid
+   luminance and softer than the chip itself; the light text and glyphs keep at least 7:1 contrast
+   (7.97 at rest, more on hover and press). A background fill, never a border. Hover and press and the
+   open list deepen the same purple and never turn it grey; focus keeps it. */
 .embed-editor_context-select.is-query .u-select-button {
-  background: color-mix(in srgb, var(--color-selection-bg) 60%, transparent);
+  background: color-mix(in srgb, var(--color-attribute-chip-bg) 50%, var(--surface-control));
   color: var(--color-text-primary);
 }
 .embed-editor_context-select.is-query .u-select-button:hover {
-  background-color: color-mix(in srgb, var(--color-selection-bg) 72%, transparent);
+  background-color: color-mix(in srgb, var(--color-attribute-chip-bg) 58%, var(--surface-control));
   background-image: none;
 }
 .embed-editor_context-select.is-query .u-select-button:active,
 .embed-editor_context-select.is-query .u-select-button[aria-expanded='true'] {
-  background-color: color-mix(in srgb, var(--color-selection-bg) 82%, transparent);
+  background-color: color-mix(in srgb, var(--color-attribute-chip-bg) 66%, var(--surface-control));
   background-image: none;
 }
 .embed-editor_context-select.is-query .u-select-icon,
@@ -1456,6 +1485,32 @@ body.is-scrubbing * {
   font-family: var(--font-family-mono);
   font-weight: var(--font-weight-regular, 400);
   color: var(--color-text-tertiary);
+}
+/* A header is a label, not an option: smaller and muted, uppercase when it is a plain name, with no icon,
+   no hover state, no pointer cursor and no focus (it is role="presentation" and arrow keys skip it). Its
+   source pill is the same chip, smaller and softer. Options below keep the 20px icon column, the hover
+   and selected fills and the dots; only they are clickable. Background fills only, no lines. */
+.embed-editor_context-select .u-select-heading {
+  pointer-events: none;
+  cursor: default;
+  color: var(--color-text-tertiary);
+  font-size: 0.6875rem;
+  margin-top: 0.875rem;
+}
+.embed-editor_context-select .u-select-heading:not(.has-tag) .u-select-heading-label {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.embed-editor_context-select .u-select-heading .u-select-tag {
+  opacity: 0.7;
+  font-size: 0.6875rem;
+}
+/* "Add query" is an action, not a choice: accent text and the plus. */
+.embed-editor_context-select .u-select-option.is-footer {
+  color: var(--color-info);
+}
+.embed-editor_context-select .u-select-option.is-footer .u-select-icon {
+  color: var(--color-info);
 }
 /* The icon column of every row is 20px, so labels start together. */
 .embed-editor_context-select .u-select-option > .u-select-icon {

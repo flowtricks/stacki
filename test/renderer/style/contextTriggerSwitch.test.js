@@ -5,6 +5,8 @@
 //   - The pin on the trigger is always there, a toggle (aria-pressed) that follows or holds the
 //     canvas width without opening the list.
 //   - A breakpoint target tints the trigger (is-query); Base keeps the plain look.
+//   - The list's group headers are labels, not options: no icon, not focusable, not clickable, skipped by
+//     the arrow keys; the options are, and "Add query" stays the action row at the foot.
 // Method: the real StylePanel in jsdom over the shared harness (test/helpers/stylePanelHarness.js)
 // with two elements styled by min-width queries, the canvas at a width inside the 48rem query.
 // The fake canvas holds every reply and releases them one at a time, so each stage of a switch
@@ -12,7 +14,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mountStylePanel, recordFrames, press } = require('../../helpers/stylePanelHarness.js');
+const { mountStylePanel, recordFrames, press, key } = require('../../helpers/stylePanelHarness.js');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
 const FIXTURE = {
@@ -23,6 +25,7 @@ const FIXTURE = {
         '.grid { @media (width >= 30rem) { gap: 1rem; } @media (width >= 48rem) { gap: 2rem; } @media (width >= 64rem) { gap: 3rem; } }',
         '.grid .item { @media (width >= 48rem) { padding: 2rem; } }',
         '.plain { color: red; }',
+        '@media (prefers-reduced-motion: reduce) { .grid { transition: none; } }',
       ].join('\n'),
     },
   ],
@@ -150,4 +153,120 @@ test('a following panel retargets only once the element has been read', async ()
   assert.equal(followRetargetKey({ ...state, following: false }), undefined, 'held: stay');
   assert.equal(followRetargetKey({ ...state, matchedKey: undefined }), undefined, 'no canvas width: stay');
   assert.equal(followRetargetKey({ ...state, context: 'bp:tablet' }), undefined, 'already there: no move');
+});
+
+test('held at a breakpoint, the target ignores every canvas width and device change; following still retargets', async (context) => {
+  const panel = await mount(1000);
+  context.after(() => panel.unmount());
+  pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
+  await panel.settle();
+  assert.equal(pin(panel).getAttribute('aria-pressed'), 'false', 'held');
+  const held = text(trigger(panel));
+  assert.match(held, /≥ 48rem/);
+  const steps = [
+    ['phone', 400],
+    ['tablet', 800],
+    ['laptop', 1100],
+    ['desktop', 1440],
+    ['desktop', 1440],
+  ];
+  for (const [device, widthPx] of steps) {
+    await panel.data(`canvas ${device} ${widthPx}px`, () => panel.rerender({ device, canvasWidthPx: widthPx }));
+    assert.equal(text(trigger(panel)), held, `held through ${device} at ${widthPx}px`);
+  }
+  pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
+  await panel.settle();
+  assert.match(text(trigger(panel)), /≥ 64rem/, 'following again: the query that holds at 1440px');
+  await panel.data('phone again', () => panel.rerender({ device: 'phone', canvasWidthPx: 400 }));
+  assert.match(text(trigger(panel)), /≥ 30rem|Base/, 'and following moves with the canvas');
+});
+
+test('the off-Base trigger tint is one hue family at rest, hover, press and open, and never grey or bordered', () => {
+  const css = require('node:fs').readFileSync(require('../../helpers/sources.js').repoPath('src/features/style/utilities.css'), 'utf8');
+  const rules = [...css.matchAll(/\.embed-editor_context-select\.is-query \.u-select-button[^{]*\{([^}]*)\}/g)].map((match) => match[1]);
+  assert.ok(rules.length >= 3, 'rest, hover and press/open are each styled');
+  for (const body of rules) {
+    assert.match(body, /var\(--color-attribute-chip-bg\)|color: var\(--color-text-primary\)/, 'drawn from the app purple, with the primary text colour');
+    assert.equal(/border|--color-bg-hover/.test(body), false, 'no border, and no grey hover overlay');
+  }
+});
+
+// What the open dropdown shows: the trigger's label, every row in order with its checked mark and its
+// "has styles" dot, and the group headings.
+function openMenuPicture(container) {
+  const list = document.querySelector('.embed-editor_context-select .u-select-list');
+  if (list === null) {
+    return 'closed';
+  }
+  const rows = [...list.querySelectorAll('[role="option"], .u-select-heading')].map(
+    (row) =>
+      `${text(row)}${row.getAttribute('aria-selected') === 'true' ? ' [checked]' : ''}${row.querySelector('.is-marked, .u-select-dot') === null ? '' : ' [dot]'}`,
+  );
+  return { label: projectTrigger(container), rows };
+}
+
+for (const order of ['fifo', 'reverse']) {
+  test(`the open dropdown goes straight from the previous element's picture to the new one's (${order})`, async (context) => {
+    const panel = await mount(1000);
+    context.after(() => panel.unmount());
+    await panel.user('open the list', () => press(panel, trigger(panel)));
+    for (const id of ['n3', 'n2', 'n1', 'n3', 'n1']) {
+      const before = JSON.stringify(openMenuPicture(panel.container));
+      panel.bridge.mode = 'held';
+      const recorder = recordFrames(panel, openMenuPicture);
+      panel.select(id);
+      await panel.settle();
+      for (let round = 0; round < 64 && panel.bridge.held > 0; round += 1) {
+        panel.bridge.release({ order, seed: round, count: 1 });
+        await panel.settle();
+      }
+      panel.bridge.mode = 'immediate';
+      await panel.settle();
+      const frames = recorder.stop().map((frame) => JSON.stringify(frame));
+      const after = frames[frames.length - 1];
+      for (const [index, frame] of frames.entries()) {
+        assert.ok(frame === before || frame === after, `switch to ${id}, frame ${index}: neither the previous picture nor the final one: ${frame}`);
+      }
+      const firstAfter = frames.indexOf(after);
+      assert.ok(
+        frames.slice(firstAfter).every((frame) => frame === after),
+        `switch to ${id}: the picture went back after reaching the final one`,
+      );
+    }
+  });
+}
+
+test('group headers are labels: no icon, not focusable, not clickable, skipped by the arrow keys; options are and Add query is the action row', async (context) => {
+  const panel = await mount(1000);
+  context.after(() => panel.unmount());
+  await panel.user('open the list', () => press(panel, trigger(panel)));
+  const list = document.querySelector('.embed-editor_context-select .u-select-list');
+  const headings = [...list.querySelectorAll('.u-select-heading')];
+  assert.ok(headings.length >= 2, 'a source group and Other are headed');
+  for (const heading of headings) {
+    assert.equal(heading.getAttribute('role'), 'presentation', `${text(heading)}: a presentation label`);
+    assert.equal(heading.hasAttribute('tabindex'), false, `${text(heading)}: not focusable`);
+    assert.equal(heading.querySelector('.u-select-icon') === null, true, `${text(heading)}: no icon, so it never looks like an option`);
+  }
+  const options = [...list.querySelectorAll('[role="option"]')];
+  assert.ok(options.length >= 5, 'the options are real options');
+  const checkedBefore = text(list.querySelector('[role="option"][aria-selected="true"]'));
+  await panel.user('click a header', () => press(panel, headings[headings.length - 1]));
+  assert.equal(document.querySelector('.embed-editor_context-select .u-select-list') === null, false, 'a header click does not close the list');
+  assert.equal(
+    text(document.querySelector('.embed-editor_context-select .u-select-list [role="option"][aria-selected="true"]')),
+    checkedBefore,
+    'nor choose anything',
+  );
+  const visited = new Set();
+  for (let step = 0; step < options.length + 2; step += 1) {
+    await panel.user('arrow down', () => key(panel, document.querySelector('.embed-editor_context-select .u-select-list'), 'ArrowDown'));
+    const active = document.querySelector('.embed-editor_context-select .u-select-list [data-active="true"]');
+    assert.ok(active !== null && active.getAttribute('role') === 'option', 'the arrow keys land on options only');
+    visited.add(text(active));
+  }
+  assert.ok(visited.has('Add query'), 'the action row is reachable from the keyboard');
+  assert.ok(visited.size >= options.length - 1, 'and every option is visited');
+  const footer = list.querySelector('.u-select-option.is-footer');
+  assert.ok(footer.querySelector('.u-select-icon'), 'Add query keeps its plus');
 });

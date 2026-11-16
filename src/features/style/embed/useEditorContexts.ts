@@ -126,7 +126,7 @@ export function useStyleContexts(
   const { nativeModel } = nativeState;
   const { allContextKeys } = contextKeys;
   const { sourceContexts, styledEmbedContexts } = embedContexts;
-  const { reachOf } = wrapperReachHook;
+  const { reachOf, reachPending } = wrapperReachHook;
 
   // The unified context list: Base + the breakpoints/queries that are written
   // somewhere (never a preset nobody authored). Drives the dropdown and which
@@ -167,12 +167,12 @@ export function useStyleContexts(
       setContext(currentContext.key);
     }
   }, [currentContext, context, stickyContextRef, setContext]);
-  // While the panel follows the canvas width, the device change moves the target by width (it
-  // is the canvas width that changed); the Desktop-returns-to-Base rule is for a panel that
-  // does not follow, and would fight the follow here.
-  const [followMode] = useFollowMode(getHost().projectPath);
+  // Where a canvas width is known the panel owns its target: following moves it with the width, and
+  // holding leaves it exactly where the person put it, through every width and device change (a held
+  // breakpoint must not fall back to Base on Desktop). The Desktop-returns-to-Base rule is only for a
+  // panel with no canvas width to follow or hold against.
   const canvasWidthKnown = useCanvasWidthPx() !== undefined;
-  const followsCanvas = followMode === 'follow' && canvasWidthKnown;
+  const followsCanvas = canvasWidthKnown;
   useDesktopReturnsToBase({ currentContext, followsCanvas }, setContext);
   // The selection moved somewhere the chosen nested query cannot reach: writing
   // there would do nothing, so the panel goes back to Base.
@@ -182,7 +182,7 @@ export function useStyleContexts(
       setContext('');
     }
   }, [contextReach, setContext]);
-  return { currentContext, styleContexts };
+  return { currentContext, styleContexts, reachPending };
 }
 
 /**
@@ -252,7 +252,10 @@ export function useWrapperReach(
     },
     [answers, layer, selectedRef, targetRef],
   );
-  return { reachOf };
+  // The answers are for another element than the one selected: nested rows are undecided and shown, and
+  // would then be dropped, so the list is not yet the one to draw.
+  const reachPending = wrappers.length > 0 && answers.target !== (selectedRef.current ? targetRef.current : undefined);
+  return { reachOf, reachPending };
 }
 
 // Switching the canvas to desktop takes an `@media` context back to Base
@@ -773,10 +776,10 @@ export function useContextChange(
 ) {
   const { context, pendingDefaultRef, setContext } = selectionState;
   const { nativeModel } = nativeState;
-  const { model } = elementTokens;
+  const { model, scan } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { selectActiveSelector } = selectorPick;
-  const { styleContexts } = styleContextsHook;
+  const { styleContexts, reachPending } = styleContextsHook;
   const [followMode, setFollowMode] = useFollowMode(getHost().projectPath);
   const canvasWidthPx = useCanvasWidthPx();
   // The row that holds at the canvas's width, whether or not the panel is following it.
@@ -875,7 +878,8 @@ export function useContextChange(
   // target only: no write, no canvas move, and the active selector stays where it is. The
   // dropdown, if open, just checks the new row in place.
   const following = followMode === 'follow' && matchedKey !== undefined;
-  const settled = model !== undefined;
+  // The element's rules and the reach of its nested queries have both been answered.
+  const settled = (scan === undefined || scan.settled) && !reachPending;
   useEffect(() => {
     const target = followRetargetKey({ following, settled, matchedKey, context });
     if (target !== undefined) {
@@ -894,5 +898,5 @@ export function useContextChange(
           onFollow: () => setFollowMode('follow'),
           onHold: () => setFollowMode('pinned'),
         };
-  return { onContextChange, contextFollow };
+  return { onContextChange, contextFollow, contextsSettled: settled };
 }

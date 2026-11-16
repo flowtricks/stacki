@@ -4,7 +4,7 @@
 
 import { CREATE_STYLE_TAG_KEY } from '../model/newStyleTarget';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { saveEmbedSource } from '../model/toolPreferences';
 import { hslaToRgba } from '../model/colorWrite';
 import { writtenValue } from '../model/lengthUnit';
@@ -490,18 +490,22 @@ export function useContextCard(
   const { querySuggestions } = querySuggestionsHook;
   const { resolved } = resolvedHook;
   const { contextInfos, orderedContexts } = selectorChipsHook;
-  const { onContextChange, contextFollow } = contextChange;
+  const { onContextChange, contextFollow, contextsSettled } = contextChange;
   const { onAddQuery } = addQuery;
   const { embedLabelByKey } = embedNavHook;
 
+  // The dropdown's rows, their dots and the checked row are one picture. While the next element's rules
+  // are still arriving they are rebuilt from partial answers, so the open list reshuffles and the trigger
+  // changes label and back; the last settled picture stays until the settled one replaces it.
+  const held = useHeldWhileUnsettled({ contexts: orderedContexts, contextInfos, context }, { settled: contextsSettled });
   const cardContexts = {
     cssCodeOpen,
     onToggleCssCode: () => setCssCodeOpen((open) => !open),
     model: model ?? EMPTY_RULE_MODEL,
     resolved: resolved ?? EMPTY_RESOLVED,
-    contexts: orderedContexts,
-    contextInfos,
-    context,
+    contexts: held.contexts,
+    contextInfos: held.contextInfos,
+    context: held.context,
     onContext: onContextChange,
     contextFollow,
     onAddQuery,
@@ -566,4 +570,17 @@ export function useSourceCard(
     onRemoveRule,
   };
   return { cardSource, cardWrites };
+}
+
+/**
+ * `value` while `state.settled`, else the last value that was drawn settled (the first value if none yet).
+ * Holding is bounded: it ends the render a settled answer lands, and a value never held back is the
+ * one drawn on the very first render.
+ */
+function useHeldWhileUnsettled<T>(value: T, state: { readonly settled: boolean }): T {
+  const heldRef = useRef(value);
+  if (state.settled) {
+    heldRef.current = value;
+  }
+  return heldRef.current;
 }
