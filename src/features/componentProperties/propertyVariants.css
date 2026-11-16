@@ -1,12 +1,12 @@
 /* "Controlled by" in a prop's settings, and the prop list's conditional mark
    (PropertyVariants.tsx). Two columns throughout: what (a controller, an
    option's name) on the left, taking the room; the control on the right at a
-   fixed width, so nothing is cut at the panel's 320–480px. Every row is the
+   fixed width (three 28px icon buttons), so nothing is cut at the panel's 320–480px. Every row is the
    height of a form field. Fills, never outlines: Required is the accent,
    Allowed its soft tint, Not allowed the field fill with its row muted. The
    accent stays the accent on hover, press and focus. */
 .variant-rules {
-  --variant-state-width: 128px;
+  --variant-state-width: calc(3 * var(--variant-row-height) + 4px);
   --variant-row-height: 28px;
   display: flex;
   flex-direction: column;
@@ -93,22 +93,48 @@
 .variant-rule-row.is-forbidden .variant-rule-option {
   color: var(--text-dim);
 }
-.variant-rule-row .variant-state {
-  min-width: 0;
-  min-height: var(--variant-row-height);
+.variant-states {
+  display: grid;
+  grid-template-columns: repeat(3, var(--variant-row-height));
+  gap: 2px;
+  justify-self: end;
 }
-.variant-rule-row .variant-state.is-forbidden {
+.variant-state-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--variant-row-height);
+  height: var(--variant-row-height);
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-dim);
+  opacity: 0.6;
 }
-.variant-rule-row .variant-state.is-optional,
-.variant-rule-row .variant-state.is-optional:hover:not(:disabled) {
+.variant-state-button:hover:not(:disabled):not(.on) {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
+}
+.variant-state-button.on {
+  opacity: 1;
+}
+.variant-state-button.on[data-state='forbidden'],
+.variant-state-button.on[data-state='forbidden']:hover:not(:disabled) {
+  background: var(--bg-input);
+  color: var(--text);
+}
+.variant-state-button.on[data-state='optional'],
+.variant-state-button.on[data-state='optional']:hover:not(:disabled),
+.variant-state-button.on[data-state='optional']:active,
+.variant-state-button.on[data-state='optional']:focus-visible {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.variant-rule-row .variant-state.is-required,
-.variant-rule-row .variant-state.is-required:hover:not(:disabled),
-.variant-rule-row .variant-state.is-required:active,
-.variant-rule-row .variant-state.is-required:focus-visible {
+.variant-state-button.on[data-state='required'],
+.variant-state-button.on[data-state='required']:hover:not(:disabled),
+.variant-state-button.on[data-state='required']:active,
+.variant-state-button.on[data-state='required']:focus-visible {
   background: var(--accent);
   color: #fff;
 }

@@ -15,7 +15,8 @@
 // - A group main cannot edit faithfully is drawn the same, disabled, with one
 //   word for why.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
@@ -23,7 +24,11 @@ import { VARIANT_LIMITS } from '../../../shared/properties/variantRules';
 import type { VariantGroup, VariantGroupReason, VariantRuleEdit, VariantRuleState } from '../../../shared/properties/variantRules';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { createPortal } from 'react-dom';
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { block as centralBlock, checkCircle as centralCheckCircle, star as centralStar } from '../../ui/central/centralGeometry';
 import Dropdown from '../../ui/Dropdown';
+import type { DropdownOption } from '../../ui/Dropdown';
+import { kindIcon } from './PropertyType';
 import { BranchIcon, CloseIcon } from '../../ui/Icons';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import type { ListFieldChange } from '../props/ListField';
@@ -236,10 +241,8 @@ export function VariantControlledBy(props: {
     }
   };
   const choices = (current: VariantGroup | undefined) => [
-    ...(current === undefined
-      ? [{ value: NO_CONTROLLER, label: translate('componentProps.variants.none') }]
-      : [{ value: current.controller, label: current.controller }]),
-    ...role.available.map((candidate) => ({ value: candidate.controller, label: candidate.controller })),
+    ...(current === undefined ? [{ value: NO_CONTROLLER, label: translate('componentProps.variants.none') }] : [controllerChoice(current)]),
+    ...role.available.map(controllerChoice),
   ];
   return (
     <div className="variant-rules" role="group" aria-label={label} aria-busy={pending}>
@@ -297,10 +300,7 @@ export function VariantControlledBy(props: {
             className="variant-add-condition"
             ariaLabel={translate('componentProps.variants.addCondition')}
             value={NO_CONTROLLER}
-            options={[
-              { value: NO_CONTROLLER, label: translate('componentProps.variants.addCondition') },
-              ...role.available.map((candidate) => ({ value: candidate.controller, label: candidate.controller })),
-            ]}
+            options={[{ value: NO_CONTROLLER, label: translate('componentProps.variants.addCondition') }, ...role.available.map(controllerChoice)]}
             disabled={pending}
             onChange={attach}
           />
@@ -308,6 +308,16 @@ export function VariantControlledBy(props: {
       )}
     </div>
   );
+}
+
+/**
+ * A controller as a Dropdown row: its name, with the icon the prop list gives
+ * a prop of its kind (kindIcon): a Choice for string options, a Switch for
+ * true / false. Every controller is one or the other.
+ */
+export function controllerChoice(group: VariantGroup): DropdownOption {
+  const type = group.optionKind === 'boolean' ? 'boolean' : group.options.map((option) => JSON.stringify(option.value)).join(' | ');
+  return { value: group.controller, label: group.controller, icon: kindIcon({ type, description: '' }) };
 }
 
 /** Where a conditional prop is allowed, one line per controller (`variant: play, close, arrow`), for its row's tip. */
@@ -343,7 +353,16 @@ export function VariantConditionMark({ lines }: { readonly lines: readonly strin
   );
 }
 
-// One full-width row per option: its name, and its state as a compact Dropdown.
+// The states' marks, from the Central set: Allowed a checked circle
+// (Figma 5441:1558), Required a star (5440:1500), Not allowed a blocked
+// circle (7511:66225).
+const STATE_ICONS = {
+  optional: centralIcon(centralCheckCircle, 12),
+  required: centralIcon(centralStar, 12),
+  forbidden: centralIcon(centralBlock, 12),
+} as const satisfies Record<VariantRuleState, ReturnType<typeof centralIcon>>;
+
+// One full-width row per option: its name, and its state as three icon buttons.
 function VariantRuleRows(props: {
   readonly name: string;
   readonly group: VariantGroup;
@@ -354,7 +373,6 @@ function VariantRuleRows(props: {
   const { name, group, translate } = props;
   const index = group.props.indexOf(name);
   assert(index >= 0, 'VariantRuleRows: the prop is one the group rules');
-  const states = STATE_ORDER.map((state) => ({ value: state, label: translate(STATE_KEYS[state]) }));
   return (
     <div className="variant-rule-rows">
       {group.options.map((option) => {
@@ -365,21 +383,104 @@ function VariantRuleRows(props: {
             <span className="variant-rule-option" title={option.value}>
               {option.value}
             </span>
-            <Dropdown<VariantRuleState>
-              className={`variant-state is-${rule.state}`}
-              ariaLabel={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
-              value={rule.state}
-              options={states}
+            <VariantStateButtons
+              label={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
+              state={rule.state}
               disabled={props.disabled}
-              onChange={(state) => {
-                if (state !== rule.state) {
-                  void props.run({ kind: 'setRule', controller: group.controller, option: option.value, prop: name, state });
-                }
-              }}
+              translate={translate}
+              onPick={(state) => void props.run({ kind: 'setRule', controller: group.controller, option: option.value, prop: name, state })}
             />
           </div>
         );
       })}
     </div>
+  );
+}
+
+// Allowed, Required, Not allowed as a radio group of icon buttons, each named
+// and tipped with its state. Left and right arrows pick and focus the one beside.
+function VariantStateButtons(props: {
+  readonly label: string;
+  readonly state: VariantRuleState;
+  readonly disabled: boolean;
+  readonly translate: Translate;
+  readonly onPick: (state: VariantRuleState) => void;
+}) {
+  const buttons = useRef(new Map<VariantRuleState, HTMLButtonElement>());
+  const keys = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+    if (step !== 0 && !props.disabled) {
+      event.preventDefault();
+      const next = STATE_ORDER[(STATE_ORDER.indexOf(props.state) + step + STATE_ORDER.length) % STATE_ORDER.length];
+      assert(next !== undefined, 'VariantStateButtons: the next state exists');
+      buttons.current.get(next)?.focus();
+      props.onPick(next);
+    }
+  };
+  return (
+    <div className="variant-states" role="radiogroup" aria-label={props.label} onKeyDown={keys}>
+      {STATE_ORDER.map((state) => (
+        <VariantStateButton
+          key={state}
+          state={state}
+          label={props.translate(STATE_KEYS[state])}
+          checked={state === props.state}
+          disabled={props.disabled}
+          register={(element) => {
+            if (element === null) {
+              buttons.current.delete(state);
+            } else {
+              buttons.current.set(state, element);
+            }
+          }}
+          onPick={() => {
+            if (state !== props.state) {
+              props.onPick(state);
+            }
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function VariantStateButton(props: {
+  readonly state: VariantRuleState;
+  readonly label: string;
+  readonly checked: boolean;
+  readonly disabled: boolean;
+  // eslint-disable-next-line stacki/no-null -- React hands a ref callback null when the element goes
+  readonly register: (element: HTMLButtonElement | null) => void;
+  readonly onPick: () => void;
+}) {
+  const tip = useDelayedTooltip();
+  const Icon = STATE_ICONS[props.state];
+  return (
+    <>
+      <button
+        ref={props.register}
+        type="button"
+        role="radio"
+        className={`variant-state-button${props.checked ? ' on' : ''}`}
+        data-state={props.state}
+        aria-label={props.label}
+        aria-checked={props.checked}
+        tabIndex={props.checked ? 0 : -1}
+        disabled={props.disabled}
+        onMouseEnter={tip.show}
+        onMouseLeave={tip.hide}
+        onFocus={tip.hide}
+        onClick={props.onPick}
+      >
+        <Icon size={12} />
+      </button>
+      {tip.value !== undefined &&
+        createPortal(
+          <div className="rail-tooltip below" style={tip.value} role="tooltip" aria-hidden="true">
+            {props.label}
+          </div>,
+          tooltipHost(undefined),
+        )}
+    </>
   );
 }

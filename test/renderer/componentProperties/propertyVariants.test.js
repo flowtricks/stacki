@@ -116,6 +116,17 @@ async function mountPanel(source) {
       await click(row);
     },
     labelled: (label) => container.querySelector(`[aria-label="${label}"]`),
+    // An option row's state, by its radio group's label and the state's own label.
+    state: async (label, text) => {
+      await click(container.querySelector(`[role="radiogroup"][aria-label="${label}"] [aria-label="${text}"]`));
+    },
+    checked: (label) => {
+      const on = [...container.querySelectorAll(`[role="radiogroup"][aria-label="${label}"] [role="radio"]`)].filter(
+        (button) => button.getAttribute('aria-checked') === 'true',
+      );
+      assert.equal(on.length, 1, `${label} has one state on`);
+      return on[0].dataset.state;
+    },
     // A Dropdown, by its label, opened and set to the option that reads `text`.
     pick: async (label, text) => {
       await click(container.querySelector(`.dd-trigger[aria-label="${label}"]`));
@@ -190,7 +201,7 @@ test('every ruled prop shows Controlled by and one state per option, in place of
       const editor = panel.section();
       assert.equal(editor.querySelector('.variant-controller-choice')?.textContent.trim(), controller, prop);
       assert.deepEqual(
-        [...editor.querySelectorAll('.variant-rule-row .variant-state')].map((trigger) => trigger.getAttribute('aria-label')),
+        [...editor.querySelectorAll('.variant-rule-row [role="radiogroup"]')].map((group) => group.getAttribute('aria-label')),
         OPTIONS[controller].map((value) => `${prop} when ${controller} is ${value}`),
         prop,
       );
@@ -205,14 +216,14 @@ test('a state pick writes its rule, and a Not allowed row is dimmed', async () =
   const panel = await mountPanel(BUTTON);
   await panel.open('label');
   assert.ok(panel.labelled('label when variant is main').closest('.variant-rule-row').classList.contains('is-forbidden'));
-  assert.ok(panel.labelled('label when variant is play').classList.contains('is-optional'));
-  await panel.pick('label when variant is play', 'Required');
+  assert.equal(panel.checked('label when variant is play'), 'optional');
+  await panel.state('label when variant is play', 'Required');
   assert.equal(
     panel.source(),
     replaced(BUTTON, 'Defaults to `Play` or `Pause`. */\n      label?: string;', 'Defaults to `Play` or `Pause`. */\n      label: string;'),
   );
-  assert.ok(panel.labelled('label when variant is play').classList.contains('is-required'));
-  await panel.pick('label when variant is main', 'Allowed');
+  assert.equal(panel.checked('label when variant is play'), 'required');
+  await panel.state('label when variant is main', 'Allowed');
   assert.match(panel.source(), /variant\?: "main";\n {6}\/\*\* Visual emphasis\. \*\/\n {6}emphasis\?: Emphasis;\n {6}label\?: string;/);
   await panel.unmount();
 });
@@ -305,7 +316,7 @@ test('any prop with no rules yet picks a controller from every prop that could b
   await panel.click([...document.querySelectorAll('.dd-option')].find((item) => item.textContent.trim() === 'variant'));
   const kind = panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props'));
   assert.equal(kind.split('badge?: string;').length, 6);
-  await panel.pick('badge when variant is link', 'Not allowed');
+  await panel.state('badge when variant is link', 'Not allowed');
   assert.match(panel.source(), /variant: "link";[^}]*badge\?: never;/s);
   await panel.unmount();
 });
@@ -326,7 +337,7 @@ test('with no controller yet, a prop of string options or a boolean becomes one'
   const panel = await mountPanel(plain);
   await panel.open('icon');
   await panel.pick('Controlled by', 'size');
-  await panel.pick('icon when size is s', 'Not allowed');
+  await panel.state('icon when size is s', 'Not allowed');
   assert.equal(
     panel.source(),
     plain.replace(
@@ -344,7 +355,7 @@ test('two controllers: Add condition, a state under the second, and its own remo
   const editor = panel.section();
   assert.equal(editor.querySelectorAll('.variant-block').length, 2);
   assert.equal(editor.querySelector('.variant-and').textContent, 'and');
-  await panel.pick('disabled when variant is link', 'Not allowed');
+  await panel.state('disabled when variant is link', 'Not allowed');
   const kind = panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props'));
   assert.equal(kind.split('disabled?: never;').length, 2);
   assert.equal(panel.source().slice(0, panel.source().indexOf('type Kind')), BUTTON.slice(0, BUTTON.indexOf('type Kind')));
@@ -403,4 +414,68 @@ test('a read-only group is drawn disabled with its reason; a plain prop has no r
   await plain.open('title');
   assert.equal(plain.section().querySelector('.variant-rules') ?? undefined, undefined);
   await plain.unmount();
+});
+
+test('each state is an icon button: named, tipped, one on at a time, arrow keys move it', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  const group = panel.labelled('label when variant is play');
+  const buttons = [...group.querySelectorAll('[role="radio"]')];
+  assert.deepEqual(
+    buttons.map((button) => [button.getAttribute('aria-label'), button.textContent.trim(), Boolean(button.querySelector('svg'))]),
+    [
+      ['Allowed', '', true],
+      ['Required', '', true],
+      ['Not allowed', '', true],
+    ],
+  );
+  assert.deepEqual(
+    buttons.map((button) => button.tabIndex),
+    [0, -1, -1],
+  );
+  // The tip names the state after a resting pointer's wait.
+  const React = require('react');
+  await React.act(async () => {
+    buttons[1].dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  });
+  assert.equal(document.querySelector('.rail-tooltip')?.textContent, 'Required');
+  await React.act(async () => buttons[1].dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true })));
+  await panel.key(buttons[0], 'ArrowRight');
+  assert.equal(panel.checked('label when variant is play'), 'required');
+  assert.match(panel.source(), /Defaults to `Play` or `Pause`\. \*\/\n {6}label: string;/);
+  await panel.key(panel.labelled('label when variant is play').querySelector('[aria-checked="true"]'), 'ArrowRight');
+  assert.equal(panel.checked('label when variant is play'), 'forbidden');
+  await panel.unmount();
+});
+
+test('every controller choice shows the icon its prop kind has in the prop list', async () => {
+  const panel = await mountPanel(BUTTON);
+  // The list's own icon for each prop, by its row.
+  const listIcon = (name) =>
+    [...document.querySelectorAll('.property-row')]
+      .find((row) => row.querySelector('.property-row-main')?.textContent.startsWith(name))
+      ?.querySelector('.list-field-icon svg')?.innerHTML;
+  const names = ['element', 'variant', 'render', 'type', 'disabled', 'emphasis', 'pressed', 'direction'];
+  const icons = new Map(names.map((name) => [name, listIcon(name)]));
+  assert.ok(
+    [...icons.values()].every((icon) => icon !== undefined),
+    'every list row has an icon',
+  );
+  await panel.open('href');
+  await panel.click(panel.section().querySelector('.variant-controller-choice'));
+  const rows = [...document.querySelectorAll('.dd-option')];
+  assert.deepEqual(
+    rows.map((row) => row.textContent.trim()),
+    names,
+  );
+  for (const row of rows) {
+    const icon = row.querySelector('.dd-icon svg');
+    assert.ok(icon, `${row.textContent.trim()} has an icon`);
+    assert.equal(icon.innerHTML, icons.get(row.textContent.trim()), `${row.textContent.trim()} has its list icon`);
+  }
+  // The closed trigger shows the chosen controller's icon too.
+  await panel.key(document.activeElement ?? document.body, 'Escape');
+  assert.ok(panel.section().querySelector('.variant-controller-choice .dd-icon svg'));
+  await panel.unmount();
 });

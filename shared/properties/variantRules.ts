@@ -72,8 +72,13 @@ export interface VariantGroup {
   /** Props every option shares that this group could rule (`attachProp`): the panel offers them "Only for". */
   readonly attachable: readonly string[];
   readonly options: readonly VariantOption[];
+  /** What the controller's options are: string literals, or `true` / `false`. */
+  readonly optionKind: VariantOptionKind;
   readonly editing: VariantGroupEditing;
 }
+
+export const VARIANT_OPTION_KINDS = ['string', 'boolean'] as const;
+export type VariantOptionKind = (typeof VARIANT_OPTION_KINDS)[number];
 
 /**
  * The edits the panel can ask for. Each names its group by controller, and is
@@ -145,6 +150,7 @@ function parseVariantGroup(input: unknown): VariantGroup {
     props: (item) => boundedList(item, VARIANT_LIMITS.propsMax, propertyName),
     attachable: (item) => boundedList(item, VARIANT_LIMITS.propsMax, propertyName),
     options: (item) => boundedList(item, VARIANT_LIMITS.optionsMax, parseVariantOption),
+    optionKind: parseVariantOptionKind,
     editing: parseVariantGroupEditing,
   })(input);
   if (new Set(value.props).size !== value.props.length) {
@@ -313,6 +319,14 @@ function parseVariantRuleState(input: unknown): VariantRuleState {
     throw new Error('Unknown variant rule state');
   }
   return state;
+}
+
+function parseVariantOptionKind(input: unknown): VariantOptionKind {
+  const kind = VARIANT_OPTION_KINDS.find((candidate) => candidate === input);
+  if (kind === undefined) {
+    throw new Error('Unknown variant option kind');
+  }
+  return kind;
 }
 
 function parseVariantGroupReason(input: unknown): VariantGroupReason {

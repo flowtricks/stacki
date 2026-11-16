@@ -18,7 +18,7 @@ back as the smallest edit to the TypeScript that says it.
 
 Every control lives in a prop's own Property settings; nothing is text.
 Two columns throughout: the controller or the option's name on the left, the
-control on the right at a fixed width, every row a form field's height, so
+control on the right at a fixed width (three 28px icon buttons), every row a form field's height, so
 nothing is cut at the panel's 320–480px widths.
 
 - **Controlled by**, on every existing prop that is not a controller:
@@ -26,11 +26,18 @@ nothing is cut at the panel's 320–480px widths.
     one block per controller that rules it, joined by "and" (every one must
     allow the prop). Each block has the controller as a Dropdown (switching
     it is `switchController`), a remove (`detachProp`), and one row per option
-    with an Allowed / Required / Not allowed Dropdown (`setRule`): Allowed is
-    the soft accent, Required the solid accent, Not allowed mutes the row.
+    with three icon buttons, Allowed (Central `checkCircle`, 5441:1558),
+    Required (`star`, 5440:1500) and Not allowed (`block`, 7511:66225), a
+    radio group whose arrow keys move the choice, each named and with the
+    app's delayed tip (`setRule`). The one on is filled: Allowed the soft
+    accent, Required the solid accent, Not allowed the neutral fill, and the
+    row's name mutes.
     "Add condition" joins another controller (`attachProp`).
   - A prop with no rules yet (a fresh one too) keeps Required and picks its
     first controller from None.
+  - Every controller in these Dropdowns, open or closed, carries the icon the
+    prop list gives its kind (`kindIcon`): Choice for string options, Switch
+    for a boolean.
   - The controllers offered are the component's controllers and every prop
     that could become one: two or more string options (written, or a local
     alias such as `Emphasis`) or a boolean, never the prop itself and never a

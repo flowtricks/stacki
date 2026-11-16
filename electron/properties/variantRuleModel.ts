@@ -257,6 +257,7 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
       props: group.props,
       attachable,
       options,
+      optionKind: group.members.every((member) => ts.isStringLiteral(member.literalNode)) ? 'string' : 'boolean',
       editing: group.reason === undefined ? { kind: 'editable' } : { kind: 'readonly', reason: group.reason },
     };
   });
@@ -266,6 +267,7 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
     props: [],
     attachable: attachableProps(syntax).filter((name) => name !== candidate.controller),
     options: candidate.values.map((value) => ({ value, fallback: value === candidate.fallback, rules: [] })),
+    optionKind: candidate.spelling.kind,
     editing: { kind: 'candidate' },
   }));
   assert(groups.length <= VARIANT_LIMITS.groupsMax, 'variantGroupsOf: groups are bounded');
