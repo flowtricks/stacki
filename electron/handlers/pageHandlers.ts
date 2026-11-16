@@ -104,7 +104,7 @@ function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<Mai
     // A <style> edit reaches the canvas fresh on this one write: the preview
     // config compiles the file before Vite announces the new stylesheet
     // (avbRecompile in the generated avb-morph plugin).
-    noteAppWrite();
+    noteAppWrite(pagePath);
     const reply = { ...parsePageSource(pagePath, text), checksum: report.checksum };
     return { ok: true as const, ...reply, inverse: report.inverse };
   });
@@ -140,7 +140,7 @@ function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<Mai
       return { ok: false as const, error: pageEditError(pagePath, report) };
     }
     assert(report.checksum === planned.value.checksum, 'The batch wrote the bytes it planned');
-    noteAppWrite();
+    noteAppWrite(pagePath);
     const reply = { ...parsePageSource(pagePath, text), checksum: report.checksum };
     return { ok: true as const, ...reply, inverse: report.inverse };
   });

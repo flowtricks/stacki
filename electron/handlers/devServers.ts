@@ -108,6 +108,11 @@ export function startProjectPreview(
   });
 }
 
+/** Page files the preview config can be told about (its `/__avb/touch` takes the same). */
+const TOUCHABLE_FILE = /\.(astro|md|mdx)$/i;
+/** A touch that gets no answer by now is left to the file watcher. */
+const TOUCH_TIMEOUT_MS = 1500;
+
 export class DevServers {
   private server: DevServer | undefined = undefined;
   // Whether the running server's project had a content config when it started.
@@ -130,6 +135,24 @@ export class DevServers {
   /** The dev server the canvas shows, while one runs. */
   current(): DevServer | undefined {
     return this.server;
+  }
+
+  /**
+   * Tells the running dev server a page file was just written by the app, so it compiles and
+   * announces the change now instead of when its file watcher notices (the preview config's
+   * `/__avb/touch`, which drops the watcher's later event for the same bytes). Best effort and
+   * never awaited by a write: a server that does not answer is left to its watcher.
+   */
+  touch(file: string): void {
+    const server = this.server;
+    if (server === undefined || !TOUCHABLE_FILE.test(file)) {
+      return;
+    }
+    const projectRoot = path.resolve(server.projectPath);
+    if (!path.resolve(file).startsWith(projectRoot + path.sep)) {
+      return;
+    }
+    fetch(`${server.url}/__avb/touch?f=${encodeURIComponent(path.resolve(file))}`, { signal: AbortSignal.timeout(TOUCH_TIMEOUT_MS) }).catch(() => undefined);
   }
 
   /** A checkout must wait until the old watcher stops before replacing its files. */

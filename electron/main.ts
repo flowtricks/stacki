@@ -1113,8 +1113,11 @@ function notePageMayHaveChanged(external = false) {
 
 // The app changed a project file: its own text write (through the file's
 // actor), or a move, rename or delete. The canvas may need to hear of it.
-function noteAppWrite(): void {
+function noteAppWrite(file?: string): void {
   notePageMayHaveChanged();
+  if (file !== undefined) {
+    devServers.touch(file);
+  }
 }
 
 // The main process's document actors (plan §2 layer 2): from step 5 every

@@ -17,7 +17,7 @@ export interface MainHost {
   readonly clipboard: Pick<Electron.Clipboard, 'writeText'>;
   readonly documents: DocumentActors;
   /** The app changed a project file; the canvas may need to hear of it. */
-  readonly noteAppWrite: () => void;
+  readonly noteAppWrite: (file?: string) => void;
   /** The root of the project the app has open, or undefined when none is. */
   readonly openProject: () => string | undefined;
   /** The project the app has open, which file access is scoped to. */
