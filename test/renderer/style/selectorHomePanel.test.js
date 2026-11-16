@@ -211,3 +211,27 @@ test('a manual pick holds while the selection stays, and a new selector goes bac
   assert.match(panel.target(), /base\.css/, `a new selector follows its file again: ${panel.target()}`);
   assert.deepEqual(panel.writes, [], 'choosing a target writes nothing');
 });
+
+// The owner's heading: component styles are written `:where(.heading)`, and the only plain
+// class rules are utilities. The default chip is the component's, and so is the file.
+test('h2.heading.heading--2.u-text-center.u-text-balance starts on :where(.heading) and targets the file defining it', async (context) => {
+  const utilities = sheet('src/styles/utilities.css');
+  const components = sheet('src/styles/heading.css');
+  const disk = {
+    [utilities.path]: '.u-text-center { text-align: center; }\n.u-text-balance { text-wrap: balance; }',
+    [components.path]: ':where(.heading) { margin: 0; }\n:where(.heading--2) { font-size: 2rem; }',
+  };
+  const heading = {
+    id: 'n1',
+    kind: 'element',
+    name: 'h2',
+    props: { class: classAttr('heading heading--2 u-text-center u-text-balance') },
+    children: [],
+  };
+  const panel = await mountPanel({ nodes: [heading], files: [utilities, components], disk });
+  context.after(panel.unmount);
+  const active = [...panel.container.querySelectorAll('.embed-editor_selector-chip.is-active')].map((chip) => chip.textContent);
+  assert.deepEqual(active, [':where(.heading)'], `the default chip is the component's: ${active}`);
+  assert.match(panel.target(), /heading\.css/, `and the target is the file defining it: ${panel.target()}`);
+  assert.deepEqual(panel.writes, []);
+});

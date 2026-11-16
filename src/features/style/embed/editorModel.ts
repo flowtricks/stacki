@@ -3,6 +3,7 @@
 // scan's state and signature, and the session caches that keep a scan and a
 // view across remounts (EmbedEditor.tsx).
 
+import { defaultSelectorPick, isUtilityClassName } from '../model/defaultSelector';
 import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { type RuleModel } from '../model/cascade';
@@ -428,8 +429,24 @@ export function upgradedDefault(
 ): MatchedSelector | undefined {
   const { tokens, classList } = element;
   const defaultSelector = tokensToSelector(element.defaultTokens, tokens);
-  if (defaultSelector && local.some((entry) => selectorsMatch(entry.text, defaultSelector))) {
+  const defaultClass = /^\.([\w-]+)$/.exec(defaultSelector)?.[1];
+  // A styled default stays, unless it is a utility: that is nobody's own selector.
+  if (
+    defaultSelector &&
+    !(defaultClass !== undefined && isUtilityClassName(defaultClass)) &&
+    local.some((entry) => selectorsMatch(entry.text, defaultSelector))
+  ) {
     return undefined;
+  }
+  // A regular class, else the component's `:where(.base)`, else the tag (model/defaultSelector.ts).
+  const pickedText = defaultSelectorPick({
+    styled: local.map((entry) => entry.text),
+    classes: tokens.filter((token) => token.kind === 'class').map((token) => token.label ?? token.name.slice('class:'.length)),
+    tag: tokens.find((token) => token.kind === 'tag')?.label,
+  });
+  const picked = pickedText === undefined ? undefined : local.find((entry) => entry.text === pickedText);
+  if (picked !== undefined) {
+    return picked;
   }
   // Fall back to the FIRST applied class that has styles (the primary block class in
   // Lumos) rather than styled[last] — utility classes (u-*) sort last by name and
