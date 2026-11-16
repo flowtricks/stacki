@@ -5,7 +5,9 @@ import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
 import { canContainTag } from '../../editor/elementSchemas';
 import { allowDragEffect, clearDrag, getDrag, setDrag } from '../../editor/dragState';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
-import { PseudoElementIcon, LayoutIcon } from '../../ui/Icons';
+import { PseudoElementIcon, LayoutIcon, VariableTextSizeIcon } from '../../ui/Icons';
+import DataChip from '../../ui/DataChip';
+import { pureBindingPath } from '../../editor/bindingPath';
 import NodeStatus from './NodeStatus';
 import { defaultCollapsed, navigatorChildren, navigatorFamily, navigatorHost } from './structureModel';
 import type { NavigatorFamily } from './structureModel';
@@ -340,6 +342,8 @@ interface TreeRowProps extends TreeNodeProps, NodeView {
 function TreeRow(props: TreeRowProps) {
   const translate = useTranslate();
   const { node, description } = props;
+  // A pure `{a.b}` is a data binding: its row is the purple chip, not braces.
+  const bindingPath = node.kind === 'expr' ? pureBindingPath(node.value) : undefined;
   const handlers = treeRowHandlers(props);
   return (
     <TreeDragRow
@@ -361,8 +365,8 @@ function TreeRow(props: TreeRowProps) {
       {...handlers}
     >
       <TreeDragHandle {...(props.showChildren ? { expansion: { collapsed: props.collapsed, toggle: () => props.toggleCollapse(node) } } : {})} />
-      <span className="icon">{description.icon}</span>
-      <RowLabel node={node} label={description.label} note={props.note} />
+      <span className="icon">{bindingPath === undefined ? description.icon : <VariableTextSizeIcon size={12} />}</span>
+      <RowLabel node={node} label={description.label} note={props.note} {...(bindingPath === undefined ? {} : { bindingPath })} />
       {props.hint && (
         <span className="prop-preview" title={translate('structure.row.imported', { file: `${props.hint}.astro` })}>
           {props.hint}
@@ -458,11 +462,21 @@ function treeRowDropBehavior(props: TreeRowProps) {
   };
 }
 
-function RowLabel({ node, label, note }: { readonly node: NavigatorNode; readonly label: string; readonly note: NavigatorNode | undefined }) {
+function RowLabel({
+  node,
+  label,
+  note,
+  bindingPath,
+}: {
+  readonly node: NavigatorNode;
+  readonly label: string;
+  readonly note: NavigatorNode | undefined;
+  readonly bindingPath?: string;
+}) {
   const noteValue = note?.kind === 'comment' ? note.value : undefined;
   return (
     <span className="label" style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
-      {label}
+      {bindingPath === undefined ? label : <DataChip path={bindingPath} />}
       {noteValue !== undefined && (
         <span className="node-note" title={noteValue.trim()}>
           {' / '}

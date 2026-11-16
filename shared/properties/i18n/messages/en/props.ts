@@ -577,6 +577,7 @@ export const messages = {
   'props.sources.doctypeNote': 'Written out verbatim at the top of the page. Not an element — it has no tag or attributes.',
   'props.sources.editCode': 'Edit code',
   'props.sources.expression': 'Expression',
+  'props.sources.binding': 'Data',
   'props.sources.frontmatter': 'Frontmatter',
   'props.sources.frontmatterNote':
     'Imports, constants, and data for this page. Opens in a floating editor you can move and resize while working with the canvas.',

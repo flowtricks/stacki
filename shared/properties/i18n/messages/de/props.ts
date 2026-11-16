@@ -593,6 +593,7 @@ export const messages = {
   'props.sources.doctypeNote': 'Wird unverändert am Anfang der Seite ausgegeben. Kein Element – es hat weder Tag noch Attribute.',
   'props.sources.editCode': 'Code bearbeiten',
   'props.sources.expression': 'Ausdruck',
+  'props.sources.binding': 'Daten',
   'props.sources.frontmatter': 'Frontmatter', // same
   'props.sources.frontmatterNote':
     'Importe, Konstanten und Daten dieser Seite. Öffnet sich in einem schwebenden Editor, den du beim Arbeiten auf der Arbeitsfläche verschieben und in der Größe ändern kannst.',

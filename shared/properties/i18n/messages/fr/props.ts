@@ -589,6 +589,7 @@ export const messages = {
   'props.sources.doctypeNote': 'Écrit tel quel en haut de la page. Ce n’est pas un élément : il n’a ni balise ni attributs.',
   'props.sources.editCode': 'Modifier le code',
   'props.sources.expression': 'Expression', // same
+  'props.sources.binding': 'Données',
   'props.sources.frontmatter': 'Frontmatter', // same
   'props.sources.frontmatterNote':
     'Imports, constantes et données de cette page. S’ouvre dans un éditeur flottant que vous pouvez déplacer et redimensionner pendant que vous travaillez sur le canevas.',

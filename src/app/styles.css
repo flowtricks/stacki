@@ -10254,3 +10254,9 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   color: #c4afff;
   font-size: 11px;
 }
+
+/* A data chip in a Navigator row: the chip keeps its own purple (never restyled); the row only lets it shrink. */
+.structure-node .label .data-chip {
+  vertical-align: middle;
+  margin: 0;
+}
