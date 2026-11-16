@@ -186,7 +186,14 @@ export function selectCanvasPath(
   app: ShellView,
   path: string | undefined,
   info:
-    { readonly outside: boolean; readonly pseudo?: PseudoLayer | undefined; readonly occurrence?: number; readonly copies?: number | undefined } | undefined,
+    | {
+        readonly outside: boolean;
+        readonly pseudo?: PseudoLayer | undefined;
+        readonly occurrence?: number;
+        readonly copies?: number | undefined;
+        readonly iterations?: readonly { readonly path: string; readonly index: number }[] | undefined;
+      }
+    | undefined,
 ): void {
   const reveal = (node: EditorNode | undefined) => {
     if (!node) {
@@ -194,7 +201,9 @@ export function selectCanvasPath(
     }
     app.setSelectedId(node.id);
     // The copy clicked, for the data picker's loop items (editor/loopSelection.ts).
-    app.setCanvasCopy(info?.occurrence === undefined ? undefined : { nodeId: node.id, occurrence: info.occurrence, copies: info.copies });
+    app.setCanvasCopy(
+      info?.occurrence === undefined ? undefined : { nodeId: node.id, occurrence: info.occurrence, copies: info.copies, iterations: info.iterations },
+    );
     // A click on a ::before or ::after picks it as its navigator row does; a
     // click on the element itself puts down whatever pseudo-element was held.
     if (info?.pseudo === undefined) {

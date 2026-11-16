@@ -12,6 +12,7 @@ import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
 import { resolveInstanceProps } from '../../editor/instanceProps';
 import { cleanError } from '../../lib/cleanError';
 import { findImportOf } from '../../editor/dataSuggest';
+import type { DataContext } from '../../editor/dataScope';
 import type { TagOption } from '../../features/props/propNodeEditors';
 import { codeWindowFor, fileWindowIndentation, FRONTMATTER_SUBJECT, type CodeSubject } from '../../features/code/codeWindowTarget';
 import { toEditorPageState } from '../../editor/pageState';
@@ -64,6 +65,23 @@ export function usePageOps(
   };
 }
 
+/**
+ * The scope at the selection: the file's frontmatter and imports, and the loops around the selected
+ * node, outermost first, each by its head and by its node id (the canvas names a pass by its loop).
+ */
+export function loopScopeOf(
+  model: { readonly extraFrontmatter?: string | undefined; readonly imports?: DataContext['imports'] | undefined },
+  selectedAncestors: readonly { readonly kind: string; readonly head?: string; readonly id: string }[],
+) {
+  const loops = selectedAncestors.slice(0, -1).filter((node) => node.kind === 'map');
+  return {
+    frontmatter: model.extraFrontmatter || '',
+    imports: model.imports || [],
+    ancestorHeads: loops.map((node) => String(node.head)),
+    ancestorIds: loops.map((node) => node.id),
+  };
+}
+
 // Slots, loop scope, and the instance a component was opened from.
 export function useScopeContext(
   shortcuts: ReturnType<typeof useShortcuts>,
@@ -97,17 +115,7 @@ export function useScopeContext(
   // In-scope data at the selection: the file's frontmatter declarations and
   // imports, plus the item/index variables of every enclosing loop. Feeds the
   // loop editor's source list and the content editor's expression chips.
-  const loopContext =
-    model && selectedNode
-      ? {
-          frontmatter: model.extraFrontmatter || '',
-          imports: model.imports || [],
-          ancestorHeads: selectedAncestors
-            .slice(0, -1)
-            .filter((node) => node.kind === 'map')
-            .map((node) => node.head),
-        }
-      : undefined;
+  const loopContext = model && selectedNode ? loopScopeOf(model, selectedAncestors) : undefined;
 
   // What the instance being edited is given.
   //

@@ -118,6 +118,8 @@ export interface CanvasCopy {
   readonly nodeId: string;
   readonly occurrence: number;
   readonly copies: number | undefined;
+  /** The pass of each loop around the node the click landed in, by the loop's canvas path; undefined from a page that marks none. */
+  readonly iterations: readonly { readonly path: string; readonly index: number }[] | undefined;
 }
 export type GitInfo = IpcResults['git:info'];
 export type RepositoryInfo = WireGitInfo;

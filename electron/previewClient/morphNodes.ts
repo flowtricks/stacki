@@ -64,7 +64,7 @@ export function inertNoscripts(page: ParentNode): void {
 // in the comparison.
 export const isAnchor = (node: Node | undefined): boolean => {
   const comment = node !== undefined && asComment(node) ? node : undefined;
-  return comment !== undefined && /^avb-[sed]:/.test(comment.data);
+  return comment !== undefined && /^avb-[sedi]:/.test(comment.data);
 };
 
 // How deep the patch walks a page. An HTML parser stops nesting elements at

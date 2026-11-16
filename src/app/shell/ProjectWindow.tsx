@@ -12,7 +12,7 @@ import { type DynamicEntry, type ProjectIdentity } from '../appTypes';
 import { collectionReader } from '../../editor/collectionReader';
 import { canvasPageOf } from '../../editor/pageState';
 import { readPropsDestructure } from '../../editor/loopProps';
-import { steppedLoopIndex } from '../../editor/loopSelection';
+import { loopSelectionOf, steppedLoopIndex } from '../../editor/loopSelection';
 import { readRestBinding } from '../../editor/propDeclaration';
 import { imagePropsOf, propKeysByLocal, type NewPropHost, type PropSettingsOffer } from '../../features/props/newPropModel';
 import PropertySettingsDialog from '../../features/componentProperties/PropertySettingsDialog';
@@ -84,9 +84,15 @@ function canvasRouteOf(app: AppView) {
 //     dynamic route, so `post.data.title` shows this post's actual title
 //   this file's own `interface Props` — no values, but every prop still says
 //     what it is, which is all a component outside a page can offer.
-function bindContextOf(app: AppView, route: CanvasRoute) {
+export function bindContextOf(app: AppView, route: CanvasRoute) {
   const { dynamicEntry } = route;
-  const selection = loopSelectionOf(app);
+  const selection = loopSelectionOf({
+    selectedId: app.selectedId,
+    clicked: app.canvasCopy,
+    loopIds: app.loopContext?.ancestorIds ?? [],
+    pathFor: (id) => app.pathFor(id),
+  });
+  const paging = app.itemPaging.key === selection.key ? app.itemPaging.pages : {};
   const editedEntry = app.insertables.find((component) => {
     return component.path === app.currentPage?.path;
   });
@@ -105,8 +111,9 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // Until the arrows are used, the loops follow the canvas selection: the
       // copy of the selected node the click named is the item it was made from
       // (editor/loopSelection.ts). Using the arrows is for this selection only.
-      itemIndex: selection.pages,
+      itemIndex: paging,
       selectedCopy: selection.copy,
+      selectedItems: selection.items,
       onStepItem: (name: string, step: -1 | 1, count: number, index: number) =>
         app.setItemPaging((current) => ({
           key: selection.key,
@@ -240,16 +247,4 @@ function valueSamplesOf(samples: Readonly<Record<string, unknown>>, file: string
       .filter(([key]) => file !== undefined && key.startsWith(prefix))
       .map(([key, value]) => [key.slice(prefix.length), value]),
   );
-}
-
-// What the picker's loop items follow for the current selection: the canvas
-// copy the selection was clicked in, and the arrows' choices made under it.
-function loopSelectionOf(app: AppView) {
-  const clicked = app.canvasCopy !== undefined && app.canvasCopy.nodeId === app.selectedId ? app.canvasCopy : undefined;
-  const key = `${app.selectedId ?? ''}|${clicked?.occurrence ?? ''}`;
-  return {
-    key,
-    copy: clicked === undefined ? undefined : { occurrence: clicked.occurrence, copies: clicked.copies },
-    pages: app.itemPaging.key === key ? app.itemPaging.pages : {},
-  };
 }

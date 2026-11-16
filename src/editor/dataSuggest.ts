@@ -709,13 +709,16 @@ function buildLoopNodes(
   values: readonly TreeNode[],
   itemIndex: Record<string, number> | undefined,
   selection: LoopCopy | undefined,
+  selectedItems: readonly (number | undefined)[] | undefined,
   seen: Set<string>,
 ): TreeNode[] {
   // The pager's own choices win; what the canvas selection is in fills the rest.
   // Counts come from a first read with only the pager's choices, since an inner
   // list is a field of the outer item and is sized by it.
   const first = resolveLoops(ancestorHeads, props, values, itemIndex);
-  const indexes = selection === undefined ? undefined : loopIndexesOfCopy(selection, first.counts);
+  // The passes the preview marks are what the canvas says; the copy's place is the guess for a page that marks none.
+  const marked = selectedItems !== undefined && selectedItems.length === ancestorHeads.length ? selectedItems : undefined;
+  const indexes = marked === undefined ? (selection === undefined ? undefined : loopIndexesOfCopy(selection, first.counts)) : marked;
   const settled = indexes === undefined ? first : resolveLoops(ancestorHeads, props, values, withSelectionIndexes(first.items, indexes, itemIndex));
   const resolved = settled.nodes;
   assert(resolved.length <= ancestorHeads.length, 'One loop item per loop head at most');
@@ -734,7 +737,7 @@ function buildLoopNodes(
 // The pager's choices, with each loop the selection is in filled in beside them.
 function withSelectionIndexes(
   items: readonly (string | undefined)[],
-  indexes: readonly number[],
+  indexes: readonly (number | undefined)[],
   manual: Record<string, number> | undefined,
 ): Record<string, number> {
   assert(items.length === indexes.length, 'withSelectionIndexes: one index per loop');
@@ -898,7 +901,7 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
     assert(node.importNeed !== undefined, 'A project source carries the import it needs');
     addUnique(values, node, seen);
   }
-  const loops = buildLoopNodes(context?.ancestorHeads ?? [], props, values, context?.itemIndex, context?.selectedCopy, seen);
+  const loops = buildLoopNodes(context?.ancestorHeads ?? [], props, values, context?.itemIndex, context?.selectedCopy, context?.selectedItems, seen);
 
   // The loop item leads: inside a loop, it is what the markup is FOR — every
   // field in there is a field of that item. Then this file's props, then

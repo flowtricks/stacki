@@ -13,6 +13,7 @@ import { assert } from '../../../shared/core/assert';
 import { setModifiers } from '../../editor/heldModifiers';
 import { noteCanvasReady, receiveCanvasReply, setCanvasFrame } from '../../editor/canvasQuery';
 import type { Digest } from '../../../shared/core/brand';
+import type { PreviewIteration } from '../../../shared/page/previewIteration';
 import { judgeEventToken, type PreviewRender, type PreviewVerdict } from '../../../shared/page/previewToken';
 import type { CanvasSelectionVerdict } from './previewSelection';
 import { CanvasClickRetry, type CanvasNoticeEvent } from './canvasClickRetry';
@@ -81,6 +82,8 @@ export interface CanvasSelectInfo {
   readonly occurrence: number;
   /** How many copies the frame drew, when it measured them with the click. */
   readonly copies: number | undefined;
+  /** The pass of each loop around the node the clicked copy is in, when the page marks them. */
+  readonly iterations: readonly PreviewIteration[] | undefined;
 }
 
 // Why bounded: a pending selection is a picture drawn while main judges a click, and a judgement
@@ -687,19 +690,29 @@ function publishSelectedClasses(classes: Readonly<Record<string, readonly (reado
   }
 }
 
-function applyClick(
-  message: Pick<Extract<PreviewMessage, { readonly kind: 'click-node' }>, 'path' | 'occurrence' | 'outside' | 'pseudo'> & {
-    readonly boxes?: readonly unknown[] | undefined;
-  },
-  refs: RuntimeRefs,
-  setters: RuntimeSetters,
-): void {
+/** What a click says about the copy it landed in, as the editor's selection takes it. */
+export function canvasSelectInfoOf(message: ClickedNodeMessage): CanvasSelectInfo {
+  return {
+    outside: message.outside,
+    pseudo: message.pseudo,
+    occurrence: message.occurrence,
+    copies: message.boxes?.length,
+    iterations: message.iterations,
+  };
+}
+
+type ClickedNodeMessage = Pick<Extract<PreviewMessage, { readonly kind: 'click-node' }>, 'path' | 'occurrence' | 'outside' | 'pseudo'> & {
+  readonly boxes?: readonly unknown[] | undefined;
+  readonly iterations?: readonly PreviewIteration[] | undefined;
+};
+
+function applyClick(message: ClickedNodeMessage, refs: RuntimeRefs, setters: RuntimeSetters): void {
   const { clickPending: clickPendingRef, lastClick: lastClickRef } = refs;
   const path = message.path;
   clickPendingRef.current = true;
   lastClickRef.current = { path };
   setters.setSelectedOccurrence(message.occurrence);
-  refs.props.current.onSelectPath?.(path, { outside: message.outside, pseudo: message.pseudo, occurrence: message.occurrence, copies: message.boxes?.length });
+  refs.props.current.onSelectPath?.(path, canvasSelectInfoOf(message));
 }
 
 function useFrameRegistration(props: PreviewRuntimeProps, url: string | undefined, registerFrame: () => void, sendTrack: () => void): void {

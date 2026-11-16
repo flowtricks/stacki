@@ -11,6 +11,7 @@ import { serializeAttrs } from './astroAttrs';
 import { blockHead } from './astroScan';
 import { isInlineRun, loopBodyWrapper, tagInlineRun, serializeNode } from './astroSerialize';
 import { serializeMapCallback } from './astroMapSerialize';
+import { iterationMarkerExpression } from '../../shared/page/previewIteration';
 
 // Where one node sits for the marked writer: its path, whether it is slot content (which decides
 // how its markers are written), whether it is one of its file's own roots (see `atRoot` below),
@@ -332,7 +333,11 @@ function markedMap(node: MapNode, indent: string, place: MarkedPlace): string {
     stamp,
     source,
   }));
-  const body = `<Fragment>${inner}</Fragment>`;
+  // Each pass says which item of the list it is (shared/page/previewIteration.ts), so the editor
+  // can tell the card a node is in even when a condition leaves the node out of the other cards.
+  const expression = iterationMarkerExpression(node.head, path);
+  const marker = expression === undefined ? '' : `<Fragment set:html={${expression}} />`;
+  const body = `<Fragment>${marker}${inner}</Fragment>`;
   if (node.body && node.body.length) {
     const statements = node.body.map((line) => `${indent}    ${line}`);
     return [

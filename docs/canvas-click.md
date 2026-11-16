@@ -93,3 +93,19 @@ token gate, so it never showed "Click not applied". It shares `frameRegions.ts` 
 
 Ask for the notice text, the page (or error) the canvas showed, whether it happens on the first click
 or only after edits, and the **Copy details** text.
+
+## Which item of a loop a click is in
+
+A node in `cards.map((card) => …)` renders once per card, and a condition can leave it out of all but
+one, so counting copies of the node cannot say which card it is in. The marked page therefore writes
+`<!--avb-i:<index>:<loop path>-->` at the start of every pass of a loop (`shared/page/previewIteration.ts`):
+the loop's own path, and the item's place in the list the loop reads, found at render time by looking
+the item up (so a filtered, sorted or sliced loop names the place in the list the picker shows, and an
+item that appears twice or is not in the list says -1, unknown). The frame keeps where each pass began
+(`frameIterations.ts`, markers are taken out of the page like the others) and a click carries
+`iterations`: the pass of each loop around the node, found by the last mark before the clicked copy.
+The editor matches them to the selected node's loops by path (`loopSelectionOf`) and the data picker
+opens on those items. Signals, in order: the pager's own choice for this selection, the marked passes,
+the copy's occurrence when the loop sizes add up (pages that mark nothing), item 1. A loop whose
+callback is the general form (`bodyParts`), whose list is not a named value, a right-click selection and
+a component that strips comments from its slot fall back on the later signals.

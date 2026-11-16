@@ -116,6 +116,12 @@ export interface DataContext {
    */
   readonly selectedCopy?: LoopCopy | undefined;
   /**
+   * The item of each loop in `ancestorHeads` (same order) the canvas says the
+   * selected node is in, read from the passes the preview marks; undefined
+   * where a loop marked none or could not say. It outranks `selectedCopy`.
+   */
+  readonly selectedItems?: readonly (number | undefined)[] | undefined;
+  /**
    * What a value the file computes by calling an import returned, sampled by
    * the dev server — `campusPastors` for `await getCampusPastors()`. Keyed by
    * the value's name.

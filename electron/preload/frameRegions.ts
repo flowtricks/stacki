@@ -6,6 +6,8 @@
 import { assert } from '../../shared/core/assert';
 import type { Box, Rect, TaggedPlace } from './frameBasics';
 import { PRELOAD_LIMITS, isChildNode, isComment, isElement, isText } from './frameBasics';
+import { isIterationData, recordIterationMarks } from './frameIterations';
+import { parentPath } from './framePaths';
 import { PREVIEW_STAMP_PREFIX, parseStampData, type FrameRenderProblem } from '../../shared/page/previewToken';
 
 // --- Node outlines --------------------------------------------------------
@@ -594,7 +596,7 @@ export const runOrder = (run: readonly Node[]): number | undefined => runOrders.
 export const collectRegions = () => {
   forgetHollowRegions();
   pruneRegions();
-  const { starts, markers } = findMarkers();
+  const { starts, markers, iterations } = findMarkers();
   // What each path was found to hold this pass, so a tag left on an element
   // the region no longer contains can be taken off again (untagStale).
   const collected = new Map<string, Set<Node>>();
@@ -622,7 +624,9 @@ export const collectRegions = () => {
   }
   replaceRuns(fresh, collected);
   untagStale(collected);
-  for (const node of markers) {
+  // Where each pass of a loop began, kept before the comments that say so go with the markers.
+  recordIterationMarks(iterations);
+  for (const node of [...markers, ...iterations]) {
     if (isChildNode(node)) {
       node.remove();
     }
@@ -710,20 +714,7 @@ function hollowCopyKey(holderIndex: number, nodePath: string, paths: readonly st
   return `${holderIndex} ${others.join(' ')}`;
 }
 
-// The path a node's parent has: `0.1.5` for `0.1.5.6`, inside the same file's
-// namespace. A file's top node (`0`, `Card.astro|0`) has none.
-export const parentPath = (nodePath: string): string | undefined => {
-  const bar = nodePath.lastIndexOf('|');
-  const indexes = nodePath.slice(bar + 1);
-  const dot = indexes.lastIndexOf('.');
-  if (dot < 0) {
-    return undefined;
-  }
-  if (!/^\d+(\.\d+)*$/.test(indexes)) {
-    return undefined;
-  }
-  return nodePath.slice(0, bar + 1) + indexes.slice(0, dot);
-};
+export { parentPath } from './framePaths';
 
 // Runs that have left the document go first. A patched page collects
 // again, and what it collected last time is either the same nodes (the
@@ -747,9 +738,10 @@ const pruneRegions = () => {
 // keeps it working whatever that world does or doesn't expose. It is also
 // the only thing standing between the page and no outlines at all —
 // startOutlines gives up entirely when nothing is recorded.
-const findMarkers = (): { starts: Node[]; markers: Node[] } => {
+const findMarkers = (): { starts: Node[]; markers: Node[]; iterations: Comment[] } => {
   const starts: Node[] = [];
   const markers: Node[] = [];
+  const iterations: Comment[] = [];
   const visit = (parent: Node, depth: number) => {
     if (depth > PRELOAD_LIMITS.domDepthMax) {
       return;
@@ -762,13 +754,16 @@ const findMarkers = (): { starts: Node[]; markers: Node[] } => {
       if (isStart || markerPath(node, 'e') !== undefined) {
         markers.push(node);
       }
+      if (isComment(node) && isIterationData(node.data)) {
+        iterations.push(node);
+      }
       if (isElement(node)) {
         visit(node, depth + 1);
       }
     }
   };
   visit(document, 0);
-  return { starts, markers };
+  return { starts, markers, iterations };
 };
 
 // The run a start marker opens, tagging each element in it with the path.

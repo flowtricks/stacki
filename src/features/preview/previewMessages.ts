@@ -6,6 +6,8 @@ import type { Box } from './outlineBoxes';
 import type { Spacing } from './spacingBands';
 import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
+import { LIMITS } from '../../../shared/core/limits';
+import { ITERATION_LIMITS, type PreviewIteration } from '../../../shared/page/previewIteration';
 import { parseFrameRenderProblem, parsePreviewRender, type FrameRenderProblem, type PreviewRender } from '../../../shared/page/previewToken';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
@@ -54,6 +56,8 @@ export type PreviewMessage =
       readonly replay: number | undefined;
       /** As for a hover: the boxes of the node the click named. */
       readonly boxes: readonly Box[] | undefined;
+      /** The pass of each loop around the node the clicked copy is in; undefined from a page that marks none. */
+      readonly iterations: readonly PreviewIteration[] | undefined;
     } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
   | ({ readonly kind: 'context-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent & ContextPoint)
@@ -229,6 +233,7 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         box: canvasClickBox(value['box']),
         replay: optional(parseReplayId)(value['replay']),
         boxes: parseSentBoxes(value['boxes']),
+        iterations: parseIterations(value['iterations']),
       };
     case 'avb:context-node':
       return {
@@ -385,6 +390,33 @@ function parseSentBoxes(input: unknown): readonly Box[] | undefined {
   } catch {
     return undefined;
   }
+}
+
+// The passes a click names: they only point the data picker at an item, so a list that does not
+// parse is dropped (the occurrence is the fallback), never the click.
+function parseIterations(input: unknown): readonly PreviewIteration[] | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  try {
+    const passes = list(parseIteration)(input);
+    return passes.length > ITERATION_LIMITS.loopsMax ? undefined : passes;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseIteration(input: unknown): PreviewIteration {
+  const value = record(input);
+  const path = value['path'];
+  const index = value['index'];
+  if (typeof path !== 'string' || path.length === 0 || path.length > LIMITS.attrCharsMax) {
+    throw new Error('Preview iteration: expected a path');
+  }
+  if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < -1) {
+    throw new Error('Preview iteration: expected an item index or -1');
+  }
+  return { path, index };
 }
 
 function parseBox(input: unknown): Box {

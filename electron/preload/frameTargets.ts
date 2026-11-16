@@ -26,6 +26,7 @@ import { type PseudoLayer } from '../../shared/page/pseudoPath';
 import type { FramePointHit } from './framePointQuery';
 import { LOOK_EVERY, mutationKind, occurrenceOf, queueRects, remeasure, remeasureStyles, watchMotion } from './frameReports';
 import { deepHoverAt } from './frameOutlineMode';
+import { iterationsForRun } from './frameIterations';
 
 // The app tracks a node, so the frame is the canvas: clicks select.
 export function enterDesignMode(): void {
@@ -423,6 +424,7 @@ export function answerClickQuery(id: number, x: number, y: number): void {
     y,
     box: nodePath ? rectsForPath(nodePath)?.[occurrence] : undefined,
     replay: id,
+    ...iterationsField(nodePath, occurrence),
     ...pseudoField(pseudo),
   });
 }
@@ -513,6 +515,7 @@ const listenForPointer = () => {
         y: event.clientY,
         box: nodePath ? rectsForPath(nodePath)?.[occurrence] : undefined,
         pressedAtMs: pressedAtMsOf(event),
+        ...iterationsField(nodePath, occurrence),
         ...pseudoField(pseudo),
         ...boxesField(nodePath, { measurable: pseudo === undefined }),
       });
@@ -568,6 +571,19 @@ function startOutlinesClearHover(): void {
 function forgetKeptBoxes(): void {
   forgetPseudoBoxes();
   forgetUnionBoxes();
+}
+
+// Which pass of each loop around the node the clicked copy is in, said only when a loop around it
+// marked its passes: the editor points the data picker at that item (shared/page/previewIteration.ts).
+function iterationsField(
+  nodePath: string | undefined,
+  occurrence: number,
+): { readonly iterations?: readonly { readonly path: string; readonly index: number }[] } {
+  if (nodePath === undefined || nodePath === '') {
+    return {};
+  }
+  const iterations = iterationsForRun(nodePath, runsOf(nodePath)?.[occurrence]);
+  return iterations.length === 0 ? {} : { iterations };
 }
 
 // The pseudo-element a hover or click landed on, said only when there is one:
