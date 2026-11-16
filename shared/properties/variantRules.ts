@@ -64,6 +64,8 @@ export interface VariantGroup {
   readonly controller: string;
   /** Every prop an option names, the controller excluded, in first-written order. */
   readonly props: readonly string[];
+  /** Props every option shares that this group could rule (`attachProp`): the panel offers them "Only for". */
+  readonly attachable: readonly string[];
   readonly options: readonly VariantOption[];
   readonly editing: VariantGroupEditing;
 }
@@ -80,7 +82,8 @@ export type VariantRuleEdit =
   | { readonly kind: 'moveOption'; readonly controller: string; readonly value: string; readonly index: number }
   | { readonly kind: 'setFallback'; readonly controller: string; readonly value: string }
   | { readonly kind: 'addProp'; readonly controller: string; readonly prop: string; readonly type: string }
-  | { readonly kind: 'removeProp'; readonly controller: string; readonly prop: string };
+  | { readonly kind: 'removeProp'; readonly controller: string; readonly prop: string }
+  | { readonly kind: 'attachProp'; readonly controller: string; readonly prop: string; readonly options: readonly string[] };
 
 /** The group that controls or rules `name`, if any: the panel draws variant settings for both. */
 export function variantGroupOf(groups: readonly VariantGroup[] | undefined, name: string): VariantGroup | undefined {
@@ -132,6 +135,7 @@ function parseVariantGroup(input: unknown): VariantGroup {
   const value = object({
     controller: propertyName,
     props: (item) => boundedList(item, VARIANT_LIMITS.propsMax, propertyName),
+    attachable: (item) => boundedList(item, VARIANT_LIMITS.propsMax, propertyName),
     options: (item) => boundedList(item, VARIANT_LIMITS.optionsMax, parseVariantOption),
     editing: parseVariantGroupEditing,
   })(input);
@@ -140,6 +144,9 @@ function parseVariantGroup(input: unknown): VariantGroup {
   }
   if (value.props.includes(value.controller)) {
     throw new Error('A controller does not rule itself');
+  }
+  if (value.attachable.some((name) => name === value.controller || value.props.includes(name)) || new Set(value.attachable).size !== value.attachable.length) {
+    throw new Error('An attachable prop is one the group does not rule yet');
   }
   if (new Set(value.options.map((option) => option.value)).size !== value.options.length) {
     throw new Error('Variant options repeat');
@@ -225,6 +232,17 @@ export function parseVariantRuleEdit(input: unknown): VariantRuleEdit {
       return { kind, ...object({ controller: propertyName, prop: propertyName, type: parseTypeText })(input) };
     case 'removeProp':
       return { kind, ...object({ controller: propertyName, prop: propertyName })(input) };
+    case 'attachProp': {
+      const attach = object({
+        controller: propertyName,
+        prop: propertyName,
+        options: (item) => boundedList(item, VARIANT_LIMITS.optionsMax, parseOptionValue),
+      })(input);
+      if (attach.options.length === 0 || new Set(attach.options).size !== attach.options.length) {
+        throw new Error('A prop is attached for one or more distinct options');
+      }
+      return { kind, ...attach };
+    }
     default:
       throw new Error('Unknown variant rule edit');
   }

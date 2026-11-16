@@ -12,7 +12,26 @@ back as the smallest edit to the TypeScript that says it.
 | Reader: frontmatter to model, with the syntax the writer edits | `electron/properties/variantRuleModel.ts` |
 | Writer: one edit to minimal text edits | `electron/properties/variantRuleEdits.ts` |
 | Plan: the instances a rename or removal touches | `electron/properties/variantRulePlan.ts` |
-| Panel | `src/features/componentProperties/PropertyVariants.tsx` |
+| Panel controls | `src/features/componentProperties/PropertyVariants.tsx` |
+
+## In the panel
+
+Every control lives in a prop's own Property settings; nothing is text.
+
+- **A ruled prop** (`label`, `href`, `disabled`): in place of Required,
+  "Controlled by" names the controller (a Dropdown when two groups rule it),
+  then one Allowed / Required / Not allowed switch per option (`setRule`).
+- **The controller** (`variant`, `element`): the panel's own Options list and
+  Default value dropdown, with no Required checkbox and no `{}` code switch.
+  Adding, renaming (on commit), removing or dragging an option in the list is
+  `addOption`, `renameOption`, `removeOption` or `moveOption`; picking another
+  default is `setFallback`. A refusal shows on the form's error line.
+- **A prop every option shares** (`render`): "Only for" with the controller
+  and its options; a pick is `attachProp` for that option, after which the
+  prop is ruled and the switches take over.
+
+`addProp` and `removeProp` stay in the writer, but no control sends them:
+a new prop is created in the prop list and given rules with "Only for".
 
 ## The model
 
@@ -70,6 +89,7 @@ parses, and asserts that the result reads back as asked.
 | `setFallback` | The `?` moves to the option; the destructure default follows |
 | `addProp` | `prop?: type` in every member, in the runtime type, and a local before `...rest` |
 | `removeProp` | The prop's declaration in every member (comments with it), in the runtime type, and its local |
+| `attachProp` | A prop the shared object type declares (`{ render?: boolean } & Tag & Kind`) leaves it, comment included, and every member declares it: as it was where picked, `never` elsewhere |
 
 The runtime type (`Astro.props as AllProps`) is kept in step only where it
 lists exactly the options, as string literals; one written another way
@@ -95,5 +115,8 @@ lists exactly the options, as string literals; one written another way
   written, but not edited apart.
 - Template mentions are found textually (`<style>` and `<script>` blanked);
   an option built at runtime (`variant + "-x"`) cannot be seen.
-- Moving a prop between groups, or between a group and the common object type,
-  is not an edit; it is a source change.
+- Moving a prop between groups, or back out of a group into the shared object
+  type, is not an edit; it is a source change. `attachProp` does not check
+  instances that pass the prop under an option that now forbids it.
+- The controller's Kind dropdown still saves a type change through the
+  ordinary save, which would rewrite the union's members; leave its Kind alone.

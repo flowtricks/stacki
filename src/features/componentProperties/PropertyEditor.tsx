@@ -1,7 +1,8 @@
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
-import { PropertyVariants, useVariantHost } from './PropertyVariants';
+import { VariantOnlyFor, VariantPropRules, fallbackEdit, optionListEdit, useVariantHost, useVariantRun, variantRoleOf } from './PropertyVariants';
+import type { VariantHost } from './PropertyVariants';
 import type { VariantGroup } from '../../../shared/properties/variantRules';
 import { TrashIcon } from '../../ui/Icons';
 import { PropertyOptions } from './PropertyOptions';
@@ -93,8 +94,8 @@ export function PropertyEditor(props: PropertyEditorProps) {
               ×
             </button>
           </header>
-          {/* An existing prop's variant rules are controls; a new one has none yet. */}
-          <PropertyVariants name={draft.exists ? draft.savedName : ''} host={variants} fallback={<PropertyConditions property={props.property} />} />
+          {/* Variant rules are controls among the fields; a union with no controller keeps its conditions. */}
+          {variantRoleOf(variants?.groups, draft.exists ? draft.savedName : '').kind === 'none' && <PropertyConditions property={props.property} />}
           <PropertyShareNotice property={props.property} onOpenFile={props.onOpenFile} />
           {props.property.editing?.kind === 'override' && (
             <p className="property-help">{translateDescribed({ message: props.property.editing.reason, messageRef: props.property.editing.reasonRef })}</p>
@@ -105,6 +106,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
             frontmatter={props.frontmatter}
             access={props.access}
             projectPath={undefined}
+            variants={draft.exists ? variants : undefined}
             actions={
               <PropertyActions
                 name={draft.exists ? draft.savedName : ''}
@@ -143,8 +145,16 @@ export function PropertySettingsFields(props: {
   assert(property.name !== '', 'PropertySettingsFields: the prop exists');
   return (
     <>
-      <PropertyVariants name={draft.savedName} host={variants} fallback={<PropertyConditions property={property} />} />
-      <PropertyEditorFields form={draft} creating={false} frontmatter={frontmatter} access="editable" projectPath={projectPath} actions={undefined} />
+      {variantRoleOf(variants?.groups, draft.savedName).kind === 'none' && <PropertyConditions property={property} />}
+      <PropertyEditorFields
+        form={draft}
+        creating={false}
+        frontmatter={frontmatter}
+        access="editable"
+        projectPath={projectPath}
+        variants={variants}
+        actions={undefined}
+      />
     </>
   );
 }
@@ -223,9 +233,16 @@ interface PropertyEditorFieldsProps {
   readonly projectPath: string | undefined;
   /** The host's buttons, closing the form. */
   readonly actions: ReactNode;
+  /** The component's variant rules, for an existing prop (PropertyVariants.tsx). */
+  readonly variants: VariantHost | undefined;
 }
-function PropertyEditorFields({ form, creating, frontmatter, access, projectPath, actions }: PropertyEditorFieldsProps) {
+function PropertyEditorFields({ form, creating, frontmatter, access, projectPath, actions, variants }: PropertyEditorFieldsProps) {
   const { property, update, error, notice } = form;
+  const role = variantRoleOf(variants?.groups, creating ? '' : form.savedName);
+  const report = (message: string): void => form.report({ error: message, notice: '' });
+  const variantRun = useVariantRun(variants, report);
+  // A controller's option being renamed, shown until its edit lands: the file holds the old name meanwhile.
+  const [optionDraft, setOptionDraft] = useState<string | undefined>(undefined);
   const inherited = property.editing?.kind === 'override';
   const listFields = usePropertyListFields(property, frontmatter);
   const code = usePropertyCodeMode(property);
@@ -246,25 +263,64 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
           }
         }}
       />
-      {code.optionsHoldCode && (
+      {role.kind === 'controller' ? (
+        // The controller's options are the union's members: each list change is one option edit, never a new type.
         <PropertyOptions
-          type={property.type}
-          disabled={access === 'saving'}
+          type={optionDraft ?? property.type}
+          disabled={access === 'saving' || variantRun.pending || role.group.editing.kind !== 'editable'}
           code={code.mode}
-          onChange={form.changeOptions}
-          onTypeChange={(type) => form.change('typing', (current) => ({ property: { ...current.property, type }, optionRenames: [] }))}
+          onChange={() => undefined}
+          onTypeChange={() => undefined}
+          onListChange={(change, _options, next, commit) => {
+            const edit = optionListEdit(role.group.controller, literalOptions(property.type) ?? [], next, change, commit);
+            setOptionDraft(edit === undefined && commit === 'immediate' ? undefined : next.join(' | '));
+            if (edit !== undefined) {
+              void variantRun.run(edit).then(() => setOptionDraft(undefined));
+            }
+          }}
         />
+      ) : (
+        code.optionsHoldCode && (
+          <PropertyOptions
+            type={property.type}
+            disabled={access === 'saving'}
+            code={code.mode}
+            onChange={form.changeOptions}
+            onTypeChange={(type) => form.change('typing', (current) => ({ property: { ...current.property, type }, optionRenames: [] }))}
+          />
+        )
       )}
       <PropertyKindSettings key={`${property.type} settings`} property={property} onChange={(description) => update('description', description)} />
       {listFields !== undefined && <PropertyItemFields form={form} frontmatter={frontmatter} fields={listFields} />}
-      {/* The same Required the Settings panel's Property settings has (PropertySections.tsx); readonly is kept as read. */}
-      <PropertyFlagsFields
-        required={property.required}
-        readonly={property.readonly}
-        onChange={(flags) => form.edit('at-once', (current) => ({ ...current, ...flags }))}
-      />
+      {/* A prop with variant rules is required per option, and a controller by its Default: neither has the one checkbox. */}
+      {role.kind === 'ruled' && variants !== undefined ? (
+        <VariantPropRules name={form.savedName} groups={role.groups} host={variants} onProblem={report} />
+      ) : (
+        role.kind !== 'controller' && (
+          // The same Required the Settings panel's Property settings has (PropertySections.tsx); readonly is kept as read.
+          <PropertyFlagsFields
+            required={property.required}
+            readonly={property.readonly}
+            onChange={(flags) => form.edit('at-once', (current) => ({ ...current, ...flags }))}
+          />
+        )
+      )}
+      {role.kind === 'attachable' && variants !== undefined && <VariantOnlyFor name={form.savedName} groups={role.groups} host={variants} onProblem={report} />}
       {listFields === undefined ? (
-        <PropertyDefault key={property.type} property={property} frontmatter={frontmatter} onChange={(value, pace) => update('defaultValue', value, pace)} />
+        <PropertyDefault
+          key={property.type}
+          property={property}
+          frontmatter={frontmatter}
+          onChange={(value, pace) => {
+            // A controller's default is its fallback option: picking another moves it, with the destructure's default.
+            const fallback = role.kind === 'controller' ? fallbackEdit(role.group, value) : undefined;
+            if (fallback === undefined) {
+              update('defaultValue', value, pace);
+            } else {
+              void variantRun.run(fallback);
+            }
+          }}
+        />
       ) : (
         // A list's default items are edited in the field an instance edits the list in, with its `{}` toggle.
         <ListDefaultField

@@ -25,14 +25,21 @@ interface PropertyOptionsProps {
   readonly onChange: (change: PropertyOptionChange) => void;
   /** A code edit of the union, which no option rename can follow. */
   readonly onTypeChange: (type: string) => void;
+  /**
+   * For a variant controller (PropertyVariants.tsx): each list change as what
+   * it did, with the options before and after, instead of a new type. Its
+   * options are a union's members, so they are edited one by one and the
+   * union is never written as code here: the `{}` switch is not offered.
+   */
+  readonly onListChange?: ((change: ListFieldChange, options: readonly string[], next: readonly string[], commit: 'immediate' | 'draft') => void) | undefined;
 }
 
-export function PropertyOptions({ type, disabled, code, onChange, onTypeChange }: PropertyOptionsProps) {
+export function PropertyOptions({ type, disabled, code, onChange, onTypeChange, onListChange }: PropertyOptionsProps) {
   const translate = useTranslate();
   // Retain the original scalar kind through intermediate edits such as '-' in a number.
   const scalarKind = useRef<'text' | 'literal'>();
   const options = literalOptions(type);
-  if (code.open) {
+  if (code.open && onListChange === undefined) {
     // While the code is edited the union may stop being options; the field stays where it was opened.
     return (
       <div className="property-options props-field">
@@ -62,6 +69,10 @@ export function PropertyOptions({ type, disabled, code, onChange, onTypeChange }
     if (commit === 'immediate') {
       scalarKind.current = undefined;
     }
+    if (onListChange !== undefined) {
+      onListChange(listChange, options, next.options, commit);
+      return;
+    }
     const nextType = next.options.join(' | ');
     onChange(listChange.kind === 'move' ? { kind: 'reorder', type: nextType } : { kind: 'draft', type: nextType, rename: next.rename });
   };
@@ -69,7 +80,7 @@ export function PropertyOptions({ type, disabled, code, onChange, onTypeChange }
     <div className="property-options props-field">
       <div className="property-options-heading">
         <span>{translate('componentProps.options.title')}</span>
-        <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />
+        {onListChange === undefined && <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />}
       </div>
       <ListField
         value={value}

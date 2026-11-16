@@ -324,3 +324,20 @@ test('every successful edit leaves source the reader models as editable', () => 
   assert.ok(source.includes('element?: "button" | "link" | "submit";') || source.includes('element?: "link" | "button" | "submit";'));
   assert.equal(source.slice(source.indexOf('\n---\n')), BUTTON.slice(BUTTON.indexOf('\n---\n')));
 });
+
+test('attachProp: a shared prop moves into every option, allowed where picked, with its comment', () => {
+  const output = edited(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'render', options: ['link'] });
+  assert.equal(
+    output,
+    replaced(BUTTON, [
+      ['type Props = {\n  /** Set to `false` to omit the component. */\n  render?: boolean;\n} & Tag &', 'type Props = {\n} & Tag &'],
+      ['      href?: never;\n    })', '      href?: never;\n      render?: never;\n    })'],
+      ['      disabled?: never;\n    });', '      disabled?: never;\n      /** Set to `false` to omit the component. */\n      render?: boolean;\n    });'],
+    ]),
+  );
+  const element = readVariantGroups(output).find((group) => group.controller === 'element');
+  assert.deepEqual(element?.props, ['type', 'disabled', 'href', 'render']);
+  assert.deepEqual(element?.attachable, []);
+  assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'label', options: ['link'] }), 'missing');
+  assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'render', options: ['span'] }), 'missing');
+});

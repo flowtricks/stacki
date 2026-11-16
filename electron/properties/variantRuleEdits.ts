@@ -20,6 +20,7 @@ import { VARIANT_LIMITS, variantOptionValue } from '../../shared/properties/vari
 import type { VariantRuleEdit, VariantRuleState } from '../../shared/properties/variantRules';
 import { applySourceEdits, propertyKey, readPropertySyntax, replaceFrontmatter, syntaxError, syntaxNodes, validatePropertyCode } from './propertySyntax';
 import type { SourceEdit } from './propertySyntax';
+import { memberComment } from './propertyMemberEdits';
 import { readVariantSyntax, ruleOf, stringLiteralOf, variantGroupsOf } from './variantRuleModel';
 import type { VariantGroupSyntax, VariantSyntax } from './variantRuleModel';
 
@@ -90,6 +91,8 @@ function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: Varian
       return planAddProp(syntax, group, edit.prop, edit.type);
     case 'removeProp':
       return planRemoveProp(syntax, group, edit.prop);
+    case 'attachProp':
+      return planAttachProp(syntax, group, edit.prop, edit.options);
     default: {
       const exhaustive: never = edit;
       return exhaustive;
@@ -290,6 +293,50 @@ function planAddProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: str
   }
   edits.push(bindingInsert(frontmatter, pattern, prop));
   return ok({ frontmatter: edits, template: [] });
+}
+
+// A prop every option shared, given this group's rules: its declaration
+// leaves the shared object type, with its comment, and each option declares
+// it again: as it was where it is allowed, `never` where it is not. The runtime
+// type and the destructure already have it.
+function planAttachProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: string, options: readonly string[]): Result<PlannedEdits> {
+  const field = syntax.common.get(prop);
+  if (field === undefined || group.props.includes(prop) || prop === group.controller) {
+    return err(refusal('missing', 'componentProps.variants.cannotAttach', { name: prop }));
+  }
+  const missing = options.find((value) => !group.members.some((member) => member.value === value));
+  if (missing !== undefined) {
+    return err(refusal('missing', 'componentProps.variants.missingOption', { value: missing }));
+  }
+  const type = field.type;
+  assert(type !== undefined, 'planAttachProp: a shared prop has a type');
+  if (type.kind === ts.SyntaxKind.NeverKeyword) {
+    return err(refusal('type', 'componentProps.variants.noType', { name: prop }));
+  }
+  const frontmatter = syntax.document.frontmatter;
+  const comment = memberComment(frontmatter, field);
+  const documentation = comment?.kind === 'jsdoc' ? frontmatter.slice(comment.start, comment.end) : '';
+  const state = field.questionToken === undefined ? 'required' : 'optional';
+  const allowed = declarationText(prop, state, type.getText());
+  const edits: SourceEdit[] = [{ start: field.getFullStart(), end: field.end, text: '' }];
+  for (const member of group.members) {
+    const declaration = options.includes(member.value) ? allowed : `${prop}?: never`;
+    const documented =
+      options.includes(member.value) && documentation !== '' ? documentedDeclaration(frontmatter, member.literal, documentation, declaration) : declaration;
+    edits.push(insertField(frontmatter, member.literal, documented));
+  }
+  return ok({ frontmatter: edits, template: [] });
+}
+
+// The comment goes above the declaration on its own line in a multi-line
+// object type, and before it on the same line in a one-line one.
+function documentedDeclaration(frontmatter: string, literal: ts.TypeLiteralNode, documentation: string, declaration: string): string {
+  const last = literal.members.at(-1);
+  const multiline = frontmatter.slice(literal.getStart(), literal.end).includes('\n');
+  if (multiline && last !== undefined) {
+    return `${documentation}\n${lineIndent(frontmatter, last.getStart())}${declaration}`;
+  }
+  return `${documentation} ${declaration}`;
 }
 
 function planRemoveProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: string): Result<PlannedEdits> {
@@ -612,6 +659,15 @@ function verifyEdit(output: string, edit: VariantRuleEdit): void {
     case 'removeProp':
       assert(!group.props.includes(edit.prop), 'verifyEdit: the removed prop is gone');
       return;
+    case 'attachProp': {
+      const index = group.props.indexOf(edit.prop);
+      assert(index >= 0, 'verifyEdit: the attached prop is ruled');
+      for (const option of group.options) {
+        const allowed = option.rules[index]?.state !== 'forbidden';
+        assert(allowed === edit.options.includes(option.value), 'verifyEdit: the prop is allowed exactly where asked');
+      }
+      return;
+    }
     default: {
       const exhaustive: never = edit;
       return exhaustive;

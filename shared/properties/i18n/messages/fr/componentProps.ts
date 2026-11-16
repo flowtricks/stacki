@@ -126,42 +126,34 @@ export const messages = {
   'componentProps.type.noType': 'Aucun type',
   'componentProps.type.search': 'Rechercher des genres…', // review
   'componentProps.type.typescript': 'TypeScript', // same
-  'componentProps.variants.addOption': 'Ajouter une option', // review
-  'componentProps.variants.addProp': 'Ajouter une propriété', // review
   'componentProps.variants.badIndex': 'Cette position est en dehors des options.', // review
   'componentProps.variants.badValue': 'Utilisez un nom court sans guillemets ni barres obliques inverses.', // review
+  'componentProps.variants.cannotAttach':
+    '{name} n’est pas déclarée dans les propriétés partagées par toutes les options ; elle ne peut donc pas recevoir de règles de variante ici.', // review
   'componentProps.variants.cell': '{prop} quand {controller} vaut {value}', // review
   'componentProps.variants.controlledBy': 'Contrôlé par', // review
   'componentProps.variants.duplicateOption': 'Une option {value} existe déjà.', // review
-  'componentProps.variants.fallback': 'Par défaut', // review
   'componentProps.variants.lastOptions': 'Gardez au moins deux options.', // review
-  'componentProps.variants.makeFallback': 'Faire de {value} l’option par défaut', // review
-  'componentProps.variants.matrix': 'Règles de {controller}', // review
   'componentProps.variants.missingGroup': 'Aucune règle de variante n’est contrôlée par {name}.', // review
   'componentProps.variants.missingOption': 'L’option {value} n’existe pas.', // review
   'componentProps.variants.missingProp': '{name} ne fait pas partie de ces règles de variante.', // review
-  'componentProps.variants.moveOption': 'Déplacer {value}', // review
-  'componentProps.variants.newOption': 'option', // same
   'componentProps.variants.noDestructure':
+    'Le composant ne lit pas ses propriétés par une seule déstructuration ; la propriété ne peut donc pas être ajoutée ici.', // review
   'componentProps.variants.noRuntimeType': 'Le type d’exécution du composant ne peut pas recevoir de nouvelle propriété ici.', // review
   'componentProps.variants.noType': '{name} n’a pas de type à autoriser. Donnez-lui d’abord un type.', // review
+  'componentProps.variants.onlyFor': 'Seulement pour', // review
   'componentProps.variants.optionInCode':
-  'componentProps.variants.optionName': 'Option {number}', // same
+    'Le code du composant utilise {value} d’une façon que Stacki ne peut pas mettre à jour. Modifiez-le dans le code source.', // review
   'componentProps.variants.optionPassed': '{file} transmet {value} comme {name}. Modifiez d’abord cette instance.', // review
-  'componentProps.variants.options': 'Options', // same
   'componentProps.variants.optionsLimit': 'Une propriété peut avoir au plus {max} options.', // review
-  'componentProps.variants.propName': 'Nom de la nouvelle propriété', // review
   'componentProps.variants.readOnly': 'Les règles de variante contrôlées par {name} ne peuvent être modifiées que dans le code source.', // review
   'componentProps.variants.reason.nested': 'Imbriqué', // review
   'componentProps.variants.reason.runtime': 'Exécution', // review
   'componentProps.variants.reason.shape': 'Complexe', // review
   'componentProps.variants.reason.shared': 'Partagé', // review
   'componentProps.variants.removeFallback': '{value} est l’option par défaut. Choisissez d’abord une autre option par défaut.', // review
-  'componentProps.variants.removeOption': 'Supprimer {value}', // review
-  'componentProps.variants.removeProp': 'Supprimer {name}', // review
   'componentProps.variants.rules': 'Règles', // review
   'componentProps.variants.state.forbidden': 'Non autorisé', // review
   'componentProps.variants.state.optional': 'Autorisé', // review
   'componentProps.variants.state.required': 'Obligatoire', // review
-  'componentProps.variants.title': 'Variantes', // review
 } as const satisfies CatalogOf<MessageKey>;

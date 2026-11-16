@@ -1,9 +1,11 @@
-// Goal: a prop with variant rules is configured with controls, never text: the
-// controller (`variant`, `element`) shows its options (rename, Default, add,
-// delete) and the grid of every prop against every option; a ruled prop
-// (`label`, `href`) shows one Allowed / Required / Not allowed switch per
-// option; each control writes exactly the TypeScript edit it stands for; a
-// read-only group is drawn disabled with its one-word reason.
+// Goal: variant rules are configured with controls in each prop's own
+// settings, never text. A ruled prop (`type`, `disabled`, `href`, `emphasis`,
+// `label`, `pressed`, `direction`) shows "Controlled by" with one Allowed /
+// Required / Not allowed switch per option in place of Required. The
+// controller (`variant`, `element`) keeps the panel's one Options list and
+// Default value dropdown, which write the union's option edits. A prop every
+// option shares offers "Only for". A read-only group is drawn disabled with
+// its one-word reason. Each control writes exactly the edit it stands for.
 // Method: the real Properties panel is mounted in jsdom over the Lumos Button
 // fixture, with main's real reader and writer (`readComponentProperties`,
 // `editPropertyDefinition`) behind a stub bridge. Each test drives the controls
@@ -28,7 +30,7 @@ async function bundle() {
   await esbuild.build({
     stdin: {
       contents: `export {default as Panel} from './src/features/componentProperties/ComponentPropertiesPanel';
-       export { NEXT_STATE, newOptionValue } from './src/features/componentProperties/PropertyVariants';`,
+       export { optionListEdit, fallbackEdit, optionValueOf } from './src/features/componentProperties/PropertyVariants';`,
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -101,7 +103,7 @@ async function mountPanel(source) {
     assert.ok(element, 'the control exists');
     await act(async () => element.click());
   };
-  const section = () => container.querySelector('.property-variants');
+  const section = () => container.querySelector('.property-editor');
   return {
     source: () => data.source,
     section,
@@ -124,151 +126,109 @@ async function mountPanel(source) {
   };
 }
 
-test('helpers: a cell turns Not allowed, Allowed, Required, round again; new options take a free name', () => {
-  assert.deepEqual(modules.NEXT_STATE, { forbidden: 'optional', optional: 'required', required: 'forbidden' });
-  const options = (values) => ({ options: values.map((value) => ({ value, fallback: false, rules: [] })) });
-  assert.equal(modules.newOptionValue(options(['main']), 'option'), 'option');
-  assert.equal(modules.newOptionValue(options(['option', 'option 2']), 'option'), 'option 3');
-  assert.equal(modules.newOptionValue(options([]), 'bad"word'), 'option');
+const RULED = { element: ['type', 'disabled', 'href'], variant: ['emphasis', 'label', 'pressed', 'direction'] };
+const OPTIONS = { element: ['button', 'link'], variant: ['main', 'link', 'play', 'close', 'arrow'] };
+
+test('helpers: each Options list change is one option edit, and a Default pick moves the fallback', () => {
+  const { optionListEdit, fallbackEdit, optionValueOf } = modules;
+  const options = ['"main"', '"link"', '"play"'];
+  assert.equal(optionValueOf('"main"'), 'main');
+  assert.equal(optionValueOf("'main'"), 'main');
+  assert.deepEqual(optionListEdit('variant', options, [...options, '"ghost"'], { kind: 'add' }, 'immediate'), {
+    kind: 'addOption',
+    controller: 'variant',
+    value: 'ghost',
+  });
+  assert.deepEqual(optionListEdit('variant', options, ['"main"', '"play"'], { kind: 'remove', index: 1 }, 'immediate'), {
+    kind: 'removeOption',
+    controller: 'variant',
+    value: 'link',
+  });
+  assert.deepEqual(optionListEdit('variant', options, ['"play"', '"main"', '"link"'], { kind: 'move', index: 2, gap: 0 }, 'immediate'), {
+    kind: 'moveOption',
+    controller: 'variant',
+    value: 'play',
+    index: 0,
+  });
+  assert.equal(optionListEdit('variant', options, options, { kind: 'move', index: 0, gap: 0 }, 'immediate'), undefined);
+  // A name being typed is no edit yet; the commit is the rename.
+  assert.equal(optionListEdit('variant', options, ['"pri"', '"link"', '"play"'], { kind: 'edit', index: 0 }, 'draft'), undefined);
+  assert.deepEqual(optionListEdit('variant', options, ['"primary"', '"link"', '"play"'], { kind: 'edit', index: 0 }, 'immediate'), {
+    kind: 'renameOption',
+    controller: 'variant',
+    from: 'main',
+    to: 'primary',
+  });
+  assert.equal(optionListEdit('variant', options, options, { kind: 'edit', index: 0 }, 'immediate'), undefined);
+  const group = {
+    controller: 'variant',
+    options: [
+      { value: 'main', fallback: true },
+      { value: 'play', fallback: false },
+    ],
+  };
+  assert.deepEqual(fallbackEdit(group, '"play"'), { kind: 'setFallback', controller: 'variant', value: 'play' });
+  assert.equal(fallbackEdit(group, '"main"'), undefined);
+  assert.equal(fallbackEdit(group, 'someExpression'), undefined);
 });
 
-test('the controller shows its options and the grid, with no text rules', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('variant');
-  const section = panel.section();
-  assert.ok(section, 'the Variants section is drawn');
-  assert.equal(document.querySelector('.property-conditions') ?? undefined, undefined);
-  assert.deepEqual(
-    [...section.querySelectorAll('.variant-option input')].map((input) => input.value),
-    ['main', 'link', 'play', 'close', 'arrow'],
-  );
-  assert.deepEqual(
-    [...section.querySelectorAll('.variant-default')].map((button) => button.getAttribute('aria-pressed')),
-    ['true', 'false', 'false', 'false', 'false'],
-  );
-  assert.deepEqual(
-    [...section.querySelectorAll('.variant-matrix-prop')].map((cell) => cell.textContent),
-    ['emphasis', 'label', 'pressed', 'direction'],
-  );
-  assert.equal(section.querySelectorAll('.variant-cell[aria-label]').length, 20);
-  // The fallback cannot be deleted.
-  assert.equal(panel.labelled('Delete main').disabled, true);
-  assert.equal(panel.labelled('Delete link').disabled, false);
-  await panel.unmount();
+test('every ruled prop shows Controlled by and one switch per option, in place of Required', async () => {
+  for (const [controller, props] of Object.entries(RULED)) {
+    for (const prop of props) {
+      const panel = await mountPanel(BUTTON);
+      await panel.open(prop);
+      const editor = panel.section();
+      assert.equal(editor.querySelector('.variant-chip')?.textContent, controller, prop);
+      assert.deepEqual(
+        [...editor.querySelectorAll('[role="radiogroup"]')].map((group) => group.getAttribute('aria-label')),
+        OPTIONS[controller].map((value) => `${prop} when ${controller} is ${value}`),
+        prop,
+      );
+      assert.ok(![...editor.querySelectorAll('label')].some((label) => label.textContent.trim() === 'Required'), `${prop} has no Required checkbox`);
+      assert.equal(editor.querySelector('.property-conditions') ?? undefined, undefined);
+      await panel.unmount();
+    }
+  }
 });
 
-test('a grid cell writes its next state', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('variant');
-  const cell = panel.labelled('label when variant is main: Not allowed');
-  await panel.click(cell);
-  assert.equal(
-    panel.source(),
-    replaced(
-      BUTTON,
-      '      label?: never;\n      pressed?: never;\n      direction?: never;\n    }\n  | {\n      variant: "link";',
-      '      label?: string;\n      pressed?: never;\n      direction?: never;\n    }\n  | {\n      variant: "link";',
-    ),
-  );
-  assert.ok(panel.labelled('label when variant is main: Allowed'), 'the cell reads back as Allowed');
-  await panel.unmount();
-});
-
-test('arrow keys move between grid cells', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('variant');
-  const first = panel.labelled('emphasis when variant is main: Allowed');
-  first.focus();
-  await panel.key(first, 'ArrowRight');
-  assert.equal(document.activeElement.getAttribute('aria-label'), 'emphasis when variant is link: Not allowed');
-  await panel.key(document.activeElement, 'ArrowDown');
-  assert.equal(document.activeElement.getAttribute('aria-label'), 'label when variant is link: Not allowed');
-  await panel.unmount();
-});
-
-test('a ruled prop shows one switch per option, and a pick writes it', async () => {
+test('a switch pick writes its rule', async () => {
   const panel = await mountPanel(BUTTON);
   await panel.open('label');
-  const section = panel.section();
-  assert.ok(section);
-  assert.equal(document.querySelector('.property-conditions') ?? undefined, undefined);
-  assert.equal(section.querySelector('.variant-chip').textContent, 'variant');
-  const groups = [...section.querySelectorAll('[role="radiogroup"]')];
-  assert.deepEqual(
-    groups.map((group) => [group.getAttribute('aria-label'), group.querySelector('[aria-checked="true"]').textContent]),
-    [
-      ['label when variant is main', 'Not allowed'],
-      ['label when variant is link', 'Not allowed'],
-      ['label when variant is play', 'Allowed'],
-      ['label when variant is close', 'Allowed'],
-      ['label when variant is arrow', 'Allowed'],
-    ],
-  );
-  const play = groups[2];
+  const play = panel.labelled('label when variant is play');
   await panel.click([...play.querySelectorAll('button')].find((button) => button.textContent === 'Required'));
   assert.equal(
     panel.source(),
     replaced(BUTTON, 'Defaults to `Play` or `Pause`. */\n      label?: string;', 'Defaults to `Play` or `Pause`. */\n      label: string;'),
   );
+  await panel.click([...panel.labelled('label when variant is main').querySelectorAll('button')].find((button) => button.textContent === 'Allowed'));
+  assert.match(panel.source(), /variant\?: "main";\n {6}\/\*\* Visual emphasis\. \*\/\n {6}emphasis\?: Emphasis;\n {6}label\?: string;/);
   await panel.unmount();
 });
 
-test('the element group: href is ruled by element, element shows its two options', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('href');
-  assert.equal(panel.section().querySelector('.variant-chip').textContent, 'element');
-  await panel.unmount();
-  const again = await mountPanel(BUTTON);
-  await again.open('element');
-  assert.deepEqual(
-    [...again.section().querySelectorAll('.variant-option input')].map((input) => input.value),
-    ['button', 'link'],
-  );
-  // Two options are the fewest a controller can have.
-  assert.equal(again.labelled('Delete link').disabled, true);
-  await again.unmount();
+test('the controller has one Options list and its Default value, no rules, no Required', async () => {
+  for (const [controller, values] of Object.entries(OPTIONS)) {
+    const panel = await mountPanel(BUTTON);
+    await panel.open(controller);
+    const editor = panel.section();
+    assert.equal(editor.querySelectorAll('.property-options').length, 1);
+    assert.equal(editor.querySelectorAll('.variant-rules').length, 0);
+    assert.equal(editor.querySelectorAll('.property-options .prop-code-toggle, .property-options [aria-pressed]').length, 0);
+    for (const value of values) {
+      assert.ok(panel.labelled(`Remove ${value}`), `${controller} lists ${value}`);
+    }
+    assert.ok(![...editor.querySelectorAll('label')].some((label) => label.textContent.trim() === 'Required'));
+    assert.ok(editor.querySelector('.property-default'));
+    await panel.unmount();
+  }
 });
 
-test('options: add, rename, Default and delete each write their edit', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('variant');
-  await panel.click(panel.section().querySelector('.variant-add'));
-  assert.match(panel.source(), /variant: "option";/);
-  assert.match(panel.source(), /variant\?: "main" \| "link" \| "play" \| "close" \| "arrow" \| "option";/);
-  const input = panel.labelled('Option 1');
-  await panel.type(input, 'primary');
-  await panel.key(input, 'Enter');
-  assert.match(panel.source(), /variant\?: "primary";/);
-  assert.match(panel.source(), / {2}variant = "primary",/);
-  await panel.click(panel.labelled('Make play the default'));
-  assert.match(panel.source(), /variant\?: "play";/);
-  assert.match(panel.source(), / {2}variant = "play",/);
-  await panel.click(panel.labelled('Delete option'));
-  assert.doesNotMatch(panel.source(), /"option"/);
-  await panel.unmount();
-});
-
-test('a refused rename says why and puts the name back', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('variant');
-  const input = panel.labelled('Option 3');
-  await panel.type(input, 'start');
-  await panel.key(input, 'Enter');
-  assert.equal(panel.source(), BUTTON);
-  assert.match(panel.section().querySelector('[role="alert"]').textContent, /play/);
-  assert.equal(panel.labelled('Option 3').value, 'play');
-  await panel.type(panel.labelled('Option 3'), 'pl"ay');
-  await panel.key(panel.labelled('Option 3'), 'Enter');
-  assert.match(panel.section().querySelector('[role="alert"]').textContent, /quotes/);
-  await panel.unmount();
-});
-
-test('a new prop is added to every option, and a ruled prop deleted from all', async () => {
+test('removing an option from the Options list writes the union edit, refusals show under the fields', async () => {
   const small = [
     '---',
     'type Props =',
     '  | { tone?: "calm"; icon?: never }',
-    '  | { tone: "loud"; icon?: string };',
+    '  | { tone: "loud"; icon?: string }',
+    '  | { tone: "quiet"; icon?: never };',
     'const { tone = "calm", icon } = Astro.props;',
     '---',
     '<i>{tone}</i>',
@@ -276,21 +236,50 @@ test('a new prop is added to every option, and a ruled prop deleted from all', a
   ].join('\n');
   const panel = await mountPanel(small);
   await panel.open('tone');
-  await panel.type(panel.labelled('New property name'), 'size');
-  await panel.key(panel.labelled('New property name'), 'Enter');
+  await panel.click(panel.labelled('Remove quiet'));
+  assert.equal(panel.source(), small.replace('\n  | { tone: "quiet"; icon?: never }', ''));
+  await panel.unmount();
+  const button = await mountPanel(BUTTON);
+  await button.open('variant');
+  await button.click(button.labelled('Remove close'));
+  assert.equal(button.source(), BUTTON);
+  assert.match(button.section().querySelector('.property-error').textContent, /close/);
+  await button.unmount();
+});
+
+test('the Default value pick moves the fallback and the destructure default', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('variant');
+  await panel.click(panel.section().querySelector('.property-default .dd-trigger'));
+  const option = [...document.querySelectorAll('.dd-option')].find((item) => item.textContent.includes('play'));
+  await panel.click(option);
   assert.equal(
     panel.source(),
-    small
-      .replace('{ tone?: "calm"; icon?: never }', '{ tone?: "calm"; icon?: never; size?: string }')
-      .replace('{ tone: "loud"; icon?: string }', '{ tone: "loud"; icon?: string; size?: string }')
-      .replace('const { tone = "calm", icon }', 'const { tone = "calm", icon, size }'),
+    BUTTON.replace('variant?: "main";', 'variant: "main";')
+      .replace('variant: "play";', 'variant?: "play";')
+      .replace('  variant = "main",', '  variant = "play",'),
   );
-  await panel.click(panel.labelled('Delete icon'));
-  assert.doesNotMatch(panel.source(), /icon/);
   await panel.unmount();
 });
 
-test('a read-only group is drawn disabled with its reason; a plain prop has no section', async () => {
+test('a shared prop offers Only for; a pick gives it rules there', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('render');
+  const editor = panel.section();
+  const only = editor.querySelector('[aria-label="Only for"]');
+  assert.ok(only, 'render offers Only for');
+  assert.deepEqual(
+    [...only.querySelectorAll('.variant-only-option')].map((button) => button.textContent),
+    ['button', 'link'],
+  );
+  await panel.click(panel.labelled('render when element is link'));
+  assert.match(panel.source(), /type Props = \{\n\} & Tag &/);
+  assert.match(panel.source(), /href\?: never;\n {6}render\?: never;\n {4}\}\)/);
+  assert.match(panel.source(), /disabled\?: never;\n {6}\/\*\* Set to `false` to omit the component\. \*\/\n {6}render\?: boolean;\n {4}\}\);/);
+  await panel.unmount();
+});
+
+test('a read-only group is drawn disabled with its reason; a plain prop has no rules', async () => {
   const exported = [
     '---',
     'type Props = Kind;',
@@ -303,13 +292,13 @@ test('a read-only group is drawn disabled with its reason; a plain prop has no s
     '',
   ].join('\n');
   const panel = await mountPanel(exported);
-  await panel.open('variant');
-  const section = panel.section();
-  assert.equal(section.querySelector('.variant-reason').textContent, 'Shared');
-  assert.ok([...section.querySelectorAll('button')].every((button) => button.disabled));
+  await panel.open('label');
+  const rules = panel.section().querySelector('.variant-rules');
+  assert.equal(rules.querySelector('.variant-reason').textContent, 'Shared');
+  assert.ok([...rules.querySelectorAll('[role="radio"]')].every((button) => button.disabled));
   await panel.unmount();
-  const plain = await mountPanel(BUTTON);
-  await plain.open('render');
-  assert.equal(plain.section() ?? undefined, undefined);
+  const plain = await mountPanel(['---', 'interface Props { title?: string }', 'const { title } = Astro.props;', '---', '<h1>{title}</h1>', ''].join('\n'));
+  await plain.open('title');
+  assert.equal(plain.section().querySelector('.variant-rules') ?? undefined, undefined);
   await plain.unmount();
 });

@@ -57,6 +57,12 @@ export interface VariantSyntax {
   readonly runtime: VariantRuntimeSyntax | undefined;
   /** The one destructure of `Astro.props`, when there is exactly one. */
   readonly pattern: ts.ObjectBindingPattern | undefined;
+  /**
+   * The props every option shares: declared in an object type `Props`
+   * intersects outside any union (`{ render?: boolean } & Tag & Kind`), in this
+   * file and not exported. Each can be given variant rules (`attachProp`).
+   */
+  readonly common: ReadonlyMap<string, ts.PropertySignature>;
 }
 
 type Declaration = ts.TypeAliasDeclaration | ts.InterfaceDeclaration;
@@ -65,6 +71,13 @@ interface Candidate {
   readonly union: ts.UnionTypeNode;
   readonly exported: boolean;
 }
+
+interface PropsParts {
+  readonly candidates: readonly Candidate[];
+  readonly common: ReadonlyMap<string, ts.PropertySignature>;
+}
+
+const NO_COMMON: ReadonlyMap<string, ts.PropertySignature> = new Map();
 
 /** The variant groups of a component's source, as the panel draws them. */
 export function readVariantGroups(source: string): readonly VariantGroup[] {
@@ -82,10 +95,11 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
   const pattern = patterns.length === 1 ? patterns[0] : undefined;
   const props = declarations?.get('Props');
   if (declarations === undefined || props === undefined || !ts.isTypeAliasDeclaration(props) || props.typeParameters !== undefined) {
-    return { document, groups: [], runtime: runtime.syntax, pattern };
+    return { document, groups: [], runtime: runtime.syntax, pattern, common: NO_COMMON };
   }
   const groups: VariantGroupSyntax[] = [];
-  for (const candidate of unionCandidates(props, declarations)) {
+  const parts = propsParts(props, declarations);
+  for (const candidate of parts.candidates) {
     const group = readGroup(candidate, declarations);
     if (group !== undefined) {
       assert(groups.length < VARIANT_LIMITS.groupsMax, 'readVariantSyntax: variant groups are bounded');
@@ -97,7 +111,7 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
     new Set(groups.map((group) => group.controller)).size === groups.length || groups.every((group) => group.reason !== undefined),
     'Editable groups have distinct controllers',
   );
-  return { document, groups: distinctControllers(groups), runtime: runtime.syntax, pattern };
+  return { document, groups: distinctControllers(groups), runtime: runtime.syntax, pattern, common: parts.common };
 }
 
 /** The panel's model of the groups: names, options and each prop's rule, no syntax. */
@@ -109,9 +123,12 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
       rules: group.props.map((prop) => ruleOf(member, prop)),
     }));
     assert(options.length === group.members.length, 'variantGroupsOf: one option per member');
+    // A shared prop no group rules yet can be given this group's rules; one this group rules cannot.
+    const attachable = group.reason === undefined ? [...syntax.common.keys()].filter((name) => name !== group.controller && !group.props.includes(name)) : [];
     return {
       controller: group.controller,
       props: group.props,
+      attachable,
       options,
       editing: group.reason === undefined ? { kind: 'editable' } : { kind: 'readonly', reason: group.reason },
     };
@@ -151,14 +168,15 @@ function localDeclarations(syntax: ts.SourceFile): ReadonlyMap<string, Declarati
 // The unions `Props` intersects, through local aliases: `Props = A & Tag & Kind`
 // or `Props = Kind`. A union nested deeper (inside a member) belongs to that
 // member, and makes its own group read-only instead (readMember).
-function unionCandidates(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<string, Declaration>): readonly Candidate[] {
+function propsParts(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<string, Declaration>): PropsParts {
   const candidates: Candidate[] = [];
+  const common = new Map<string, ts.PropertySignature>();
   const work: { readonly node: ts.TypeNode; readonly exported: boolean; readonly path: readonly string[] }[] = [
     { node: props.type, exported: isExported(props), path: ['Props'] },
   ];
   for (let steps = 0; steps < PROPERTY_LIMITS.nodesMax && work.length > 0; steps++) {
     const item = work.pop();
-    assert(item !== undefined, 'unionCandidates: a work item exists');
+    assert(item !== undefined, 'propsParts: a work item exists');
     const node = item.node;
     if (ts.isParenthesizedTypeNode(node)) {
       work.push({ ...item, node: node.type });
@@ -167,6 +185,13 @@ function unionCandidates(props: ts.TypeAliasDeclaration, declarations: ReadonlyM
       work.push(...[...node.types].reverse().map((type) => ({ ...item, node: type })));
     } else if (ts.isUnionTypeNode(node)) {
       candidates.push({ union: node, exported: item.exported });
+    } else if (ts.isTypeLiteralNode(node) && !item.exported) {
+      for (const field of node.members) {
+        const name = ts.isPropertySignature(field) ? plainName(field) : undefined;
+        if (name !== undefined && ts.isPropertySignature(field) && field.type !== undefined && !common.has(name)) {
+          common.set(name, field);
+        }
+      }
     } else if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName) && node.typeArguments === undefined) {
       const declaration = declarations.get(node.typeName.text);
       // A cycle stops at the first repeat; an interface holds no union.
@@ -176,10 +201,11 @@ function unionCandidates(props: ts.TypeAliasDeclaration, declarations: ReadonlyM
         }
       }
     }
-    assert(work.length <= PROPERTY_LIMITS.nodesMax, 'unionCandidates: the queue is bounded');
+    assert(work.length <= PROPERTY_LIMITS.nodesMax, 'propsParts: the queue is bounded');
   }
-  assert(work.length === 0, 'unionCandidates: the walk finishes within its budget');
-  return candidates;
+  assert(work.length === 0, 'propsParts: the walk finishes within its budget');
+  assert(common.size <= PROPERTY_LIMITS.fieldsMax, 'propsParts: shared props are bounded');
+  return { candidates, common };
 }
 
 interface MemberReading {

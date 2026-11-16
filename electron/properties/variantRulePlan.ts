@@ -41,6 +41,7 @@ export function planVariantRuleChanges(request: VariantPlanRequest, component: V
     case 'moveOption':
     case 'setFallback':
     case 'addProp':
+    case 'attachProp':
       return ok([component]);
     default: {
       const exhaustive: never = edit;

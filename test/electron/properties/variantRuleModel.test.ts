@@ -122,6 +122,19 @@ test('a required prop, an unlisted prop and a union written as Props itself', ()
   );
 });
 
+test('the props every option shares can be attached to each editable group', () => {
+  const groups = readVariantGroups(BUTTON);
+  assert.deepEqual(
+    groups.map((group) => [group.controller, group.attachable]),
+    [
+      ['element', ['render']],
+      ['variant', ['render']],
+    ],
+  );
+  const exported = readVariantGroups(component(['export type Props = { size?: string } & (', '  | { variant?: "a" }', '  | { variant: "b" });'].join('\n')));
+  assert.deepEqual(exported[0]?.attachable, []);
+});
+
 test('the group of a prop is the one it controls, else the one that rules it', () => {
   const groups = readVariantGroups(BUTTON);
   assert.equal(variantGroupOf(groups, 'variant')?.controller, 'variant');
@@ -198,6 +211,7 @@ test('the boundary parser accepts the Button model and refuses each broken shape
       'an unlisted prop that is allowed',
       [{ ...variant, options: [{ ...variant.options[2], rules: variant.options[2]?.rules.map((rule) => ({ ...rule, listed: false })) }] }],
     ],
+    ['an attachable prop the group rules', [{ ...variant, attachable: ['label'] }]],
     ['an unknown reason', [{ ...variant, editing: { kind: 'readonly', reason: 'other' } }]],
     ['a quoted option', [{ ...variant, options: [{ ...variant.options[0], value: 'ma"in' }] }]],
     ['too many groups', Array.from({ length: 17 }, () => variant)],
@@ -230,6 +244,7 @@ test('the edit parser accepts each edit and refuses its broken forms', () => {
     { kind: 'setFallback', controller: 'variant', value: 'play' },
     { kind: 'addProp', controller: 'variant', prop: 'icon', type: 'string' },
     { kind: 'removeProp', controller: 'variant', prop: 'label' },
+    { kind: 'attachProp', controller: 'variant', prop: 'render', options: ['link', 'play'] },
   ];
   for (const edit of good) {
     assert.deepEqual(parseVariantRuleEdit(edit), edit);
@@ -243,6 +258,8 @@ test('the edit parser accepts each edit and refuses its broken forms', () => {
     { kind: 'moveOption', controller: 'variant', value: 'link', index: -1 },
     { kind: 'moveOption', controller: 'variant', value: 'link', index: 64 },
     { kind: 'addProp', controller: 'variant', prop: 'icon', type: '  ' },
+    { kind: 'attachProp', controller: 'variant', prop: 'render', options: [] },
+    { kind: 'attachProp', controller: 'variant', prop: 'render', options: ['link', 'link'] },
     { kind: 'unknown' },
     'setRule',
   ];
