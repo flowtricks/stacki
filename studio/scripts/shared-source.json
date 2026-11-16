@@ -1422,6 +1422,7 @@
     "src/features/style/model/spacingShorthand.ts",
     "src/features/style/model/styleDisplay.ts",
     "src/features/style/model/styleQuery.ts",
+    "src/features/style/model/styleTarget.ts",
     "src/features/style/model/styleTypes.ts",
     "src/features/style/model/templateRoot.ts",
     "src/features/style/model/textShadow.ts",

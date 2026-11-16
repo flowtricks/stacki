@@ -5,6 +5,7 @@ import { useStyleFiles } from './useStyleFiles';
 import type { ClassOutcome, HostNode, HostState, StyleBlockRequest } from './model/host';
 import type { ClassPlacement } from '../../editor/classAttr';
 import { findNode } from './model/host';
+import { styleableSelection } from './model/styleTarget';
 import { setHost } from './model/host';
 import { prefetchComponentSources } from './model/componentSourceCache';
 import { awaitComputedStyles, computedStylesSettled, prefetchComputedStyles } from './model/computedStyle';
@@ -68,7 +69,10 @@ type StyleFiles = HostState['files'];
 
 const NO_PATHS: readonly string[] = [];
 
-export default function StylePanel(props: StylePanelProps) {
+export default function StylePanel(rawProps: StylePanelProps) {
+  // A node that puts no element on the page (Fragment, if/else, loop, slot, expression) is no
+  // selection here: the empty state shows at once, not the chips of an element beneath it.
+  const props = withStyleableNode(rawProps);
   const files = useStyleFiles(props.project?.path, undefined, readStyleFiles);
   const translate = useTranslate();
   const astroFiles = useStyleFiles(props.project?.path, props.openFilePath, readAstroStyleFiles);
@@ -106,6 +110,11 @@ export default function StylePanel(props: StylePanelProps) {
       </div>
     </SoundHere>
   );
+}
+
+function withStyleableNode(props: StylePanelProps): StylePanelProps {
+  const node = styleableSelection(props.model, props.node);
+  return node === props.node ? props : { ...props, node: undefined };
 }
 
 // What the panel is told about the selected element. Everything here describes ONE
