@@ -44,7 +44,13 @@ export const CANVAS_CLICK_LIMITS = {
 /** Why a click could not be applied as it came. Stable codes: they name each entry of the click log. */
 export type CanvasClickProblem =
   /** The gate refused the rendering the click landed on. */
-  | { readonly kind: 'stale'; readonly reason: PreviewStaleReason; readonly file: string | undefined }
+  | {
+      readonly kind: 'stale';
+      readonly reason: PreviewStaleReason;
+      readonly file: string | undefined;
+      /** How many files the rendering carried a stamp for, when the frame had announced one: 0 means no marker reached the page at all. */
+      readonly stamped: number | undefined;
+    }
   /** Main could not be asked (the preview check rejected): nothing vouches for the rendering. */
   | { readonly kind: 'check-failed' }
   /** The frame did not answer a fresh look in time: its bridge is gone or the page is stuck. */
@@ -54,7 +60,12 @@ export type CanvasClickProblem =
 
 /** What the person is told when the ladder runs out. Each says what happened, never that they did something wrong. */
 export type CanvasNotice =
-  { readonly kind: 'out-of-step' } | { readonly kind: 'other-page'; readonly file: string } | { readonly kind: 'too-large' } | { readonly kind: 'unreachable' };
+  | { readonly kind: 'out-of-step' }
+  | { readonly kind: 'other-page'; readonly file: string }
+  /** The page rendered with no marker from any project file: something else loaded the files first, or marking failed. */
+  | { readonly kind: 'unmarked'; readonly file: string }
+  | { readonly kind: 'too-large' }
+  | { readonly kind: 'unreachable' };
 
 export type CanvasClickStep =
   | { readonly kind: 'retry'; readonly delayMs: number }
@@ -115,7 +126,8 @@ export function planCanvasEventRefusal(problem: CanvasClickProblem, renderProble
 export function canvasClickProblemCode(problem: CanvasClickProblem): string {
   switch (problem.kind) {
     case 'stale':
-      return `stale:${problem.reason}`;
+      // The count of stamped files says whether the page was marked at all; it names no file.
+      return problem.stamped === undefined ? `stale:${problem.reason}` : `stale:${problem.reason} stamped-files=${problem.stamped}`;
     case 'check-failed':
     case 'frame-silent':
     case 'no-point':
@@ -131,7 +143,8 @@ export function canvasClickProblemCode(problem: CanvasClickProblem): string {
 export function canvasNoticeKey(notice: CanvasNotice): string {
   switch (notice.kind) {
     case 'other-page':
-      return `other-page:${notice.file}`;
+    case 'unmarked':
+      return `${notice.kind}:${notice.file}`;
     case 'out-of-step':
     case 'too-large':
     case 'unreachable':
@@ -194,6 +207,10 @@ function planStale(
       // a node of that file, now or after any wait. The page is still there.
       if (problem.file === undefined) {
         return { kind: 'select-page', notice: OUT_OF_STEP };
+      }
+      if (problem.stamped === 0) {
+        // Not an error page or a redirect: a rendering with no marker in it at all.
+        return { kind: 'select-page', notice: { kind: 'unmarked', file: problem.file } };
       }
       return { kind: 'select-page', notice: { kind: 'other-page', file: problem.file } };
     case 'shown-page-differs':

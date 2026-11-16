@@ -15,6 +15,8 @@ export const messages = {
   'shell.canvas.reload': 'Recarregar canvas',
   'shell.canvas.tooLarge':
     'Esta página é maior do que o canvas consegue relacionar aos arquivos, então os cliques não conseguem selecionar. Selecione os elementos no Navegador.',
+  'shell.canvas.unmarked':
+    'O canvas mostrou {file} sem as marcações do Stacki, então os cliques selecionam a página em vez dos elementos dela. Outro plugin do projeto pode estar carregando os arquivos .astro antes de o Stacki marcá-los. Recarregue o canvas e use Copiar detalhes se persistir.',
   'shell.canvas.unreachable': 'O canvas parou de responder, então esse clique não selecionou nada. Recarregue o canvas para iniciá-lo de novo.',
   'shell.canvasText.componentText': 'Texto do componente · esta instância',
   'shell.canvasText.sharedContent': 'Conteúdo compartilhado do CMS · muda também os outros usos',

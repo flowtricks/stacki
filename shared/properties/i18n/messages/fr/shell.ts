@@ -15,6 +15,8 @@ export const messages = {
   'shell.canvas.reload': 'Recharger le canevas',
   'shell.canvas.tooLarge':
     'Cette page est trop grande pour que le canevas la relie à ses fichiers : les clics ne peuvent pas sélectionner. Sélectionnez les éléments dans le Navigateur.',
+  'shell.canvas.unmarked':
+    'Le canevas a affiché {file} sans les repères de Stacki : les clics sélectionnent donc la page plutôt que ses éléments. Un autre plugin du projet charge peut-être les fichiers .astro avant que Stacki ne les marque. Rechargez le canevas et utilisez Copier les détails si cela persiste.',
   'shell.canvas.unreachable': 'Le canevas ne répond plus : ce clic n’a rien sélectionné. Rechargez le canevas pour le relancer.',
   'shell.canvasText.componentText': 'Texte du composant · cette instance',
   'shell.canvasText.sharedContent': 'Contenu CMS partagé · modifie aussi les autres usages',

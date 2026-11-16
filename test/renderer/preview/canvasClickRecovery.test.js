@@ -48,6 +48,7 @@ const {
   canvasClickEntries,
   canvasClickLogText,
   canvasClickProblemCode,
+  canvasNoticeKey,
   clearCanvasClickLog,
   planCanvasClickRecovery,
   planCanvasEventRefusal,
@@ -298,6 +299,36 @@ test('a canvas showing another page selects the page and says so once', () => {
   assert.equal(events.pages, 5, 'every click still selects something');
   assert.equal(events.notices.length, 1);
   assert.deepEqual(events.notices[0], { kind: 'show', notice: { kind: 'other-page', file: 'src/pages/index.astro' } });
+});
+
+// The notice names the real cause. A rendering with no stamp at all is not an error page or a
+// redirect (those still carry the project's other files): nothing marked the page, which is
+// what a project plugin that loads .astro files ahead of the marker plugin produces.
+test('a page rendered with no marker says so, apart from a page of other files', () => {
+  const unmarked = { ...stale('unstamped-file'), stamped: 0 };
+  assert.deepEqual(planCanvasClickRecovery(unmarked, FRESH, undefined), {
+    kind: 'select-page',
+    notice: { kind: 'unmarked', file: 'src/pages/index.astro' },
+  });
+  const elsewhere = { ...stale('unstamped-file'), stamped: 3 };
+  assert.deepEqual(planCanvasClickRecovery(elsewhere, FRESH, undefined), {
+    kind: 'select-page',
+    notice: { kind: 'other-page', file: 'src/pages/index.astro' },
+  });
+  assert.notEqual(
+    canvasNoticeKey({ kind: 'unmarked', file: 'a' }),
+    canvasNoticeKey({ kind: 'other-page', file: 'a' }),
+    'the two notices never silence each other',
+  );
+  const gate = new CanvasNoticeGate();
+  assert.equal(gate.admit({ kind: 'unmarked', file: 'a' }, 0), true);
+  assert.equal(gate.admit({ kind: 'unmarked', file: 'a' }, 1), false, 'the same notice is quiet');
+});
+
+test('Copy details carries how many files the rendering stamped, and no file name', () => {
+  assert.equal(canvasClickProblemCode({ ...stale('unstamped-file'), stamped: 0 }), 'stale:unstamped-file stamped-files=0');
+  assert.equal(canvasClickProblemCode({ ...stale('unstamped-file'), stamped: 12 }), 'stale:unstamped-file stamped-files=12');
+  assert.equal(canvasClickProblemCode(stale('unstamped-file')), 'stale:unstamped-file', 'no frame rendering, no count');
 });
 
 test('a mixed rendering reloads the canvas once by itself', () => {

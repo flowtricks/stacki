@@ -161,7 +161,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
           ladder.succeeded(id);
           remember(state.selections, { path, kind: 'node' });
         } else {
-          ladder.failed(id, { kind: 'stale', reason: verdict.reason, file: verdict.file });
+          ladder.failed(id, { kind: 'stale', reason: verdict.reason, file: verdict.file, stamped: undefined });
         }
       });
       return;

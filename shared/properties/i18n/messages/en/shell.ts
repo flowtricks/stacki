@@ -16,6 +16,8 @@ export const messages = {
   'shell.canvas.reload': 'Reload canvas',
   'shell.canvas.tooLarge':
     'This page is larger than the canvas can match to its files, so clicks on it can’t select. Select elements in the Navigator instead.',
+  'shell.canvas.unmarked':
+    'The canvas rendered {file} without Stacki’s markers, so clicks select the page instead of elements in it. Another plugin in the project may be loading .astro files before Stacki marks them. Reload the canvas, and use Copy details if it persists.',
   'shell.canvas.unreachable': 'The canvas stopped answering, so that click didn’t select anything. Reload the canvas to start it again.',
   'shell.canvasText.componentText': 'Component text · this instance',
   'shell.canvasText.sharedContent': 'Shared CMS content · changes other uses too',

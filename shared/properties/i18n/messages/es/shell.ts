@@ -15,6 +15,8 @@ export const messages = {
   'shell.canvas.reload': 'Recargar lienzo',
   'shell.canvas.tooLarge':
     'Esta página es más grande de lo que el lienzo puede relacionar con sus archivos, así que los clics no pueden seleccionar. Selecciona los elementos en el Navegador.',
+  'shell.canvas.unmarked':
+    'El lienzo mostró {file} sin los marcadores de Stacki, así que los clics seleccionan la página en lugar de sus elementos. Puede que otro plugin del proyecto cargue los archivos .astro antes de que Stacki los marque. Recarga el lienzo y usa Copiar detalles si persiste.',
   'shell.canvas.unreachable': 'El lienzo dejó de responder, así que ese clic no seleccionó nada. Recarga el lienzo para iniciarlo de nuevo.',
   'shell.canvasText.componentText': 'Texto del componente · esta instancia',
   'shell.canvasText.sharedContent': 'Contenido compartido del CMS · cambia también los demás usos',

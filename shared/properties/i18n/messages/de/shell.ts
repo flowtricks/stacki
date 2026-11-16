@@ -16,6 +16,8 @@ export const messages = {
   'shell.canvas.reload': 'Canvas neu laden',
   'shell.canvas.tooLarge':
     'Diese Seite ist größer, als der Canvas ihren Dateien zuordnen kann, daher können Klicks nichts auswählen. Wähle Elemente stattdessen im Navigator aus.',
+  'shell.canvas.unmarked':
+    'Der Canvas hat {file} ohne die Markierungen von Stacki gerendert, daher wählen Klicks die Seite statt ihrer Elemente aus. Möglicherweise lädt ein anderes Plugin im Projekt .astro-Dateien, bevor Stacki sie markiert. Lade den Canvas neu und nutze „Details kopieren“, falls es bleibt.',
   'shell.canvas.unreachable': 'Der Canvas antwortet nicht mehr, daher hat dieser Klick nichts ausgewählt. Lade den Canvas neu, um ihn neu zu starten.',
   'shell.canvasText.componentText': 'Komponententext · diese Instanz',
   'shell.canvasText.sharedContent': 'Geteilter CMS-Inhalt · ändert auch andere Verwendungen',

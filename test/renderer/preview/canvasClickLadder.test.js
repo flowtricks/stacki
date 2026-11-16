@@ -191,13 +191,28 @@ test('rapid clicks while the canvas re-renders coalesce into the last one', asyn
 test('a canvas showing another page selects the page and says so once', async () => {
   const pane = await mount(async () => ({ tag: 'stale', reason: 'unstamped-file', file: 'src/pages/index.astro' }));
   try {
-    await pane.send({ type: 'avb:render', token: TOKEN_OLD, stamps: [] });
+    // The rendering carries a stamp, but of another file: a 404, an error page or a redirect target.
+    await pane.send({ type: 'avb:render', token: TOKEN_OLD, stamps: [{ file: 'src/pages/404.astro', checksum: 'c'.repeat(64) }] });
     for (let index = 0; index < 3; index++) {
       await pane.send({ type: 'avb:click-node', path: undefined, occurrence: 0, outside: false, x: 1, y: 1, token: TOKEN_OLD });
     }
     await pane.until(() => pane.seen.selected.length === 3, 'three selections');
     assert.deepEqual(pane.seen.selected, [undefined, undefined, undefined], 'each click selects what the open file owns: the page');
     assert.deepEqual(pane.seen.notices, [{ kind: 'show', notice: { kind: 'other-page', file: 'src/pages/index.astro' } }]);
+  } finally {
+    await pane.close();
+  }
+});
+
+// A page no marker reached (a project plugin loading .astro files ahead of Stacki's): the notice
+// says the markers are missing, not that the canvas may be on another page.
+test('a canvas rendered with no marker says its markers are missing', async () => {
+  const pane = await mount(async () => ({ tag: 'stale', reason: 'unstamped-file', file: 'src/pages/index.astro' }));
+  try {
+    await pane.send({ type: 'avb:render', token: TOKEN_OLD, stamps: [] });
+    await pane.send({ type: 'avb:click-node', path: undefined, occurrence: 0, outside: false, x: 1, y: 1, token: TOKEN_OLD });
+    await pane.until(() => pane.seen.selected.length === 1, 'the page is selected');
+    assert.deepEqual(pane.seen.notices, [{ kind: 'show', notice: { kind: 'unmarked', file: 'src/pages/index.astro' } }]);
   } finally {
     await pane.close();
   }

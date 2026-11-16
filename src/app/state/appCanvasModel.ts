@@ -470,6 +470,8 @@ export function describeCanvasNotice(notice: CanvasNotice, translate: Translator
       return translate('shell.canvas.outOfStep');
     case 'other-page':
       return translate('shell.canvas.otherPage', { file: notice.file });
+    case 'unmarked':
+      return translate('shell.canvas.unmarked', { file: notice.file });
     case 'too-large':
       return translate('shell.canvas.tooLarge');
     case 'unreachable':
