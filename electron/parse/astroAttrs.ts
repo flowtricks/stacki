@@ -7,7 +7,7 @@ import { toUtf16Span } from '../../shared/core/span';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode } from './astroParserTypes';
-import { findMatchingBrace } from './astroLexical';
+import { findMatchingBrace, skipStringOrComment } from './astroLexical';
 
 export { HTML_VOID_TAGS as VOID_ELEMENTS } from '../../shared/page/htmlTags';
 export const RAW_ELEMENTS = new Set(['style', 'script']);
@@ -66,33 +66,62 @@ interface ScannedAttr {
   readonly shorthand?: true;
 }
 
-const ATTR_NAME = /[\w@:.-]+/y;
+// An attribute name is whatever HTML allows: anything but whitespace, quotes,
+// angle brackets, `/`, `=` and braces. Naming only `[\w@:.-]` read `data-é` as
+// `data-` plus a stray `1`, `#ref` as `ref` and `?on` as `on`: the preview's
+// marked copy then wrote a different attribute than the file did.
+const ATTR_NAME = /[^\s"'<>/={}]+/y;
 
-function scanAttrs(source: string): readonly ScannedAttr[] {
-  const found: ScannedAttr[] = [];
-  // Each pass consumes a full attribute or one character, bounded by source length.
-  for (let position = 0; position < source.length;) {
-    const attribute = scanAttr(source, position);
-    if (attribute) {
-      assert(attribute.to > position, 'An attribute scan advances');
-      assert(attribute.to <= source.length, 'An attribute stays inside its source');
-      found.push(attribute);
-      position = attribute.to;
-    } else {
-      position++;
-    }
-  }
-  return found;
+/** What a tag's attribute string holds, and the first thing in it the model cannot carry. */
+interface AttrScan {
+  readonly attrs: readonly ScannedAttr[];
+  /** Names the construct, for "Found … on line N"; undefined when every character is accounted for. */
+  readonly problem: string | undefined;
 }
 
-function scanAttr(source: string, from: number): ScannedAttr | undefined {
+// Props are keyed by name and hold only the four forms below, so an attribute
+// the scan cannot carry would vanish from every copy the editor writes (the
+// preview's marked copy, a regenerated tag). The scan therefore says so, and
+// the parse stops on it: a page the editor reads wrongly is a page it must not
+// edit or preview as read.
+function scanAttrsChecked(source: string): AttrScan {
+  const found: ScannedAttr[] = [];
+  const names = new Set<string>();
+  // Each pass consumes a full attribute or one character, bounded by source length.
+  for (let position = 0; position < source.length;) {
+    const character = source.charAt(position);
+    if (character === '/' || /\s/.test(character)) {
+      position++;
+      continue;
+    }
+    const attribute = scanAttr(source, position);
+    if (typeof attribute === 'string') {
+      return { attrs: found, problem: attribute };
+    }
+    assert(attribute.to > position, 'An attribute scan advances');
+    assert(attribute.to <= source.length, 'An attribute stays inside its source');
+    if (names.has(attribute.name)) {
+      return { attrs: found, problem: `a duplicate ${attribute.attr.type === 'spread' ? 'spread' : `${attribute.name} attribute`}` };
+    }
+    names.add(attribute.name);
+    found.push(attribute);
+    position = attribute.to;
+  }
+  return { attrs: found, problem: undefined };
+}
+
+function scanAttrs(source: string): readonly ScannedAttr[] {
+  return scanAttrsChecked(source).attrs;
+}
+
+function scanAttr(source: string, from: number): ScannedAttr | string {
   if (source.charAt(from) === '{') {
-    return scanSpreadAttr(source, from);
+    return scanSpreadAttr(source, from) ?? 'an attribute written as braces the editor cannot read';
   }
   ATTR_NAME.lastIndex = from;
   const match = ATTR_NAME.exec(source);
   if (!match) {
-    return undefined;
+    return 'an attribute the editor cannot read';
   }
   const name = match[0];
   const end = from + name.length;
@@ -106,7 +135,7 @@ function scanAttr(source: string, from: number): ScannedAttr | undefined {
   if (quote === '"' || quote === "'") {
     const close = source.indexOf(quote, valueStart + 1);
     if (close === -1) {
-      return undefined;
+      return `an unclosed quote in the ${name} attribute`;
     }
     return {
       name,
@@ -118,11 +147,13 @@ function scanAttr(source: string, from: number): ScannedAttr | undefined {
     };
   }
   if (quote !== '{') {
-    return undefined;
+    // An unquoted or backtick-quoted value has no quote for an edit to keep,
+    // so the editor cannot change it without breaking the tag.
+    return quote === '`' ? `the ${name} attribute written with a backtick template` : `the ${name} attribute written without quotes`;
   }
   const close = findMatchingBrace(source, valueStart);
   if (close === -1) {
-    return undefined;
+    return `an unclosed { in the ${name} attribute`;
   }
   const valueAt = scanAttrTrim(source, valueStart + 1, close);
   return {
@@ -170,11 +201,6 @@ function scanShorthandAttr(source: string, from: number, close: number): Scanned
     return undefined;
   }
   return { name, attr: { type: 'expr', value: name }, from, to: close + 1, nameAt: bodyAt, valueAt: bodyAt, shorthand: true };
-}
-
-/** True when a tag's attribute string writes any `{name}` shorthand. */
-export function hasShorthandAttr(attrs: string): boolean {
-  return scanAttrs(attrs).some((found) => found.shorthand === true);
 }
 
 /** The attribute string with every `{name}` shorthand spelled `name={name}`. */
@@ -257,16 +283,32 @@ export function attrsAsWritten(node: ParserNode): string | undefined {
 // `attrsAt` is where the attribute string starts in the file, or undefined when no
 // offsets were asked for; with it, every attribute also reports its spans.
 export function tagProps(attrs: string, attrsAt: number | undefined): { props: Record<string, Attr>; attrOrder?: string[]; attrSpans?: AttrSpan[] } {
-  // One scan serves both the props and their spans: scanning twice doubled the
-  // cost of every tag with attributes.
-  const scanned = scanAttrs(attrs);
+  return tagFields(attrs, attrsAt).fields;
+}
+
+/**
+ * A tag's attribute fields from one scan, with the first attribute the model
+ * cannot carry. `attrSource` rides along when the tag's own layout is worth
+ * keeping (several lines, or a `{name}` shorthand).
+ */
+export function tagFields(
+  attrs: string,
+  attrsAt: number | undefined,
+): {
+  readonly problem: string | undefined;
+  readonly fields: { props: Record<string, Attr>; attrOrder?: string[]; attrSpans?: AttrSpan[]; attrSource?: string };
+} {
+  // One scan serves the props, their spans and the shorthand check: scanning
+  // three times tripled the cost of every tag with attributes.
+  const { attrs: scanned, problem } = scanAttrsChecked(attrs);
   const props = propsOf(scanned);
   const attrOrder = Object.keys(props);
   const spans = attrsAt === undefined ? {} : { attrSpans: attrSpansOf(scanned, attrsAt) };
+  const source = attrs && (attrs.includes('\n') || scanned.some((found) => found.shorthand === true)) ? { attrSource: attrs } : {};
   // The props are always present — even empty — because writers mutate node.props
   // in place (e.g. fragment tests and panel edits). attrOrder only exists
   // when there is something to order.
-  return attrOrder.length ? { props, attrOrder, ...spans } : { props, ...spans };
+  return { problem, fields: attrOrder.length ? { props, attrOrder, ...spans, ...source } : { props, ...spans, ...source } };
 }
 
 // What the file had, where it had it, then anything added since.
@@ -291,15 +333,33 @@ function orderedProps(props: Readonly<Record<string, Attr>> | undefined, order?:
   return out;
 }
 
+// An expression whose last line is a `//` comment must close on a line of its
+// own: the scan trims the value, and written back as `{a // note}` the comment
+// would swallow the brace and everything after it in the tag.
+function closed(value: string): string {
+  let lineComment = false;
+  // Each pass moves forward by at least one character.
+  for (let position = 0; position < value.length; position++) {
+    const skipped = skipStringOrComment(value, position);
+    if (skipped !== position) {
+      lineComment = value.startsWith('//', position) && !value.includes('\n', position);
+      position = skipped - 1;
+    } else if (value.charAt(position).trim() !== '') {
+      lineComment = false;
+    }
+  }
+  return lineComment ? `${value}\n` : value;
+}
+
 export function serializeAttrs(props: Readonly<Record<string, Attr>> | undefined, order?: readonly string[]): string {
   const parts = [];
   for (const [name, attr] of orderedProps(props, order)) {
     if (attr?.type === 'spread') {
-      parts.push(`{...${attr.value}}`);
+      parts.push(`{...${closed(attr.value)}}`);
     } else if (attr === undefined || attr.type === 'bare') {
       parts.push(name);
     } else if (attr.type === 'expr') {
-      parts.push(`${name}={${attr.value}}`);
+      parts.push(`${name}={${closed(attr.value)}}`);
     } else {
       parts.push(`${name}="${String(attr.value).replace(/"/g, '&quot;')}"`);
     }

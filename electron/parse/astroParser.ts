@@ -20,8 +20,9 @@ import type { FrontmatterModel, ImportMember } from '../../shared/page/frontmatt
 import { assertTreeInvariants } from '../../shared/page/pageNode';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
-import type { ParserNode, ParsedPage, SourceLocation } from './astroParserTypes';
+import type { ParserNode, ParserPageModel, ParsedPage, SourceLocation } from './astroParserTypes';
 import { assignPathIds, parseAttrs, serializeAttrs, required } from './astroAttrs';
+import { readFence } from './astroFence';
 import { parseState, resetParseBail } from './astroParseState';
 import { serializeNode, serializeNodes } from './astroSerialize';
 import { parseTemplate } from './astroTemplate';
@@ -70,17 +71,21 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
       bail: undefined,
     };
   }
-  // Try the empty block first.
-  // Otherwise `---\n---\n--- prose` consumes the real close as code and
-  // mistakes the start of the prose for a second closing fence.
   // A leading byte-order mark is an encoding signal, not content (plan §3.2):
-  // the fences are matched past it, and offsets still count it so they index
-  // the file as read. No write touches it: an edit is splices of other bytes.
-  const bom = source.startsWith('\uFEFF') ? 1 : 0;
-  const fm = source.slice(bom).match(/^---\r?\n(?:---|([\s\S]*?\r?\n)---)\r?\n?/);
-  const frontmatter = fm ? fm[1] || '' : '';
-  const hadFrontmatter = !!fm;
-  const bodyStart = bom + (fm ? fm[0].length : 0);
+  // the fence is read past it, and offsets still count it so they index the
+  // file as read. No write touches it: an edit is splices of other bytes.
+  const fence = readFence(source);
+  if (fence.kind === 'unreadable') {
+    return {
+      editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
+      reason: `Page contains markup the visual editor cannot represent. Found ${fence.what}.`,
+      bail: { what: fence.what, near: fence.near },
+    };
+  }
+  const frontmatter = fence.kind === 'fence' ? fence.code : '';
+  const hadFrontmatter = fence.kind === 'fence';
+  const bodyStart = fence.kind === 'fence' ? fence.length : source.startsWith('\uFEFF') ? 1 : 0;
   const body = source.slice(bodyStart);
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
 
@@ -144,19 +149,39 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
   // boundary): a tree that violates this never leaves the parser.
   assertTreeInvariants(topNodes);
 
-  return {
-    editable: true,
-    model: {
-      ...frontmatterModel,
-      hadFrontmatter,
-      trailingBlank,
-      eol,
-      nodes: topNodes,
-      // Only when offsets were asked for: it describes the file on disk, and
-      // the live model is edited out from under it.
-      ...(options.locs ? { bodyStart } : {}),
-    },
+  const model: ParserPageModel = {
+    ...frontmatterModel,
+    hadFrontmatter,
+    trailingBlank,
+    eol,
+    nodes: topNodes,
+    // Only when offsets were asked for: it describes the file on disk, and
+    // the live model is edited out from under it.
+    ...(options.locs ? { bodyStart } : {}),
   };
+  // A model the writers would refuse (a value or a list past the serializer's
+  // bounds) is a page the editor cannot save or preview, so it is reported
+  // here, as code, rather than throwing at the first write.
+  const refusal = writerRefusal(model);
+  if (refusal !== undefined) {
+    return {
+      editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
+      reason: `Page contains markup the visual editor cannot represent. Found ${refusal}.`,
+      bail: { what: refusal, near: '' },
+    };
+  }
+  return { editable: true, model };
+}
+
+// The bound the page writers enforce, named as the page's own problem.
+function writerRefusal(model: ParserPageModel): string | undefined {
+  try {
+    parseSerializePage(model);
+    return undefined;
+  } catch (failure: unknown) {
+    return `a part of the page past the editor's limits (${failure instanceof Error ? failure.message : String(failure)})`;
+  }
 }
 
 // A shared source-aware writer keeps the preview, file and code editor in

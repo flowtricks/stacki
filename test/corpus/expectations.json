@@ -61,11 +61,11 @@
     "identity": "fail",
     "severity": "formatting",
     "note": [
-      "A blank line before the `---` fence, which Astro does not accept as frontmatter",
-      "either — so the block is body text, and `const { href = \"/\" } = Astro.props;`",
-      "parses as text, an expression and more text, landing on three lines. Astro",
-      "renders both the same. The fixture is here because this is what a half-written",
-      "file looks like mid-edit."
+      "A blank line before the `---` fence. The compiler, and a real `astro build` (checked",
+      "on Astro 5.14), read that block as frontmatter, so Stacki does too (astroFence.ts, the",
+      "one fence reader). Before, the block was taken for body text. The serializer still",
+      "drops the blank line and re-indents the four-space markup: formatting only, an edit",
+      "is a splice and leaves them alone."
     ]
   }
 }

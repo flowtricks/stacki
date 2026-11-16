@@ -5,6 +5,7 @@ import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { refusal } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import { isAstroProps, syntaxNodes } from '../parse/astroSyntax';
+import { frontmatterOf } from '../parse/astroFence';
 
 export interface SourceEdit {
   readonly start: number;
@@ -21,10 +22,9 @@ export interface PropertySyntax {
 
 export function readPropertySyntax(source: string): PropertySyntax {
   assert(source.length <= PROPERTY_LIMITS.sourceCharsMax, 'Component source is bounded');
-  const match = /^(?:\uFEFF)?---[^\S\r\n]*\r?\n([\s\S]*?)^---[^\S\r\n]*(?:\r?\n|$)/m.exec(source);
-  const found = match?.index === 0 ? match : undefined;
-  const frontmatter = found?.[1] ?? '';
-  const start = found ? found[0].indexOf('\n') + 1 : 0;
+  const found = frontmatterOf(source);
+  const frontmatter = found?.code ?? '';
+  const start = found?.codeStart ?? 0;
   assert(start >= 0, 'Frontmatter starts inside source');
   return {
     source,

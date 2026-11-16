@@ -34,6 +34,10 @@ const ADDED_KEYS = new Set(['deprecated', 'usage']);
 // Deliberate differences, keyed `file#reader.prop.key` (`reader` is schema or
 // panel; `names` is the order of the list). Each states the old and new value.
 const INTENDED = {
+  // A blank line before the opening fence: the compiler (and a real `astro build`)
+  // read the block as frontmatter, so its props are the component's. The old
+  // reader took the block for page text and found none (astroFence.ts).
+  'test/corpus/frontmatter-after-blank-line.astro#panel.names': { old: [], new: ['href'] },
   // The regex reader skipped a member that shares its line with a block
   // comment (`/* A block comment. */ subtitle?: string;`), so subtitle was
   // found only later in the destructure, sorted last, and the comment landed

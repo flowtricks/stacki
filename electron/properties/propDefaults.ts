@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag, rootComponent } from '../parse/astroParser';
 import { forwardsRest } from '../parse/astroComponentApi';
+import { frontmatterOf } from '../parse/astroFence';
 import { capture } from '../lib/mainHelpers';
 import { resolveImportPath } from './importPaths';
 import ts from 'typescript';
@@ -25,11 +26,11 @@ const IMPORTED_DECLARATIONS_MAX = 64;
 // tree, the way the prop model reads the component itself; an import renamed
 // with `as` is declared under the name the component uses.
 export function importedTypes(source: string, filePath: string, projectPath: string) {
-  const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const fm = frontmatterOf(source);
   if (!fm) {
     return '';
   }
-  const frontmatter = ts.createSourceFile('component.ts', capture(fm, 1), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const frontmatter = ts.createSourceFile('component.ts', fm.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const out: string[] = [];
   const seen = new Set<string>();
   for (const statement of frontmatter.statements) {
@@ -286,11 +287,11 @@ function resolvedDefault(field: SchemaField, literal: { readonly value: SchemaFi
 // `NAME.key` of a `const NAME = { key: <literal> }` in the component's frontmatter,
 // read on the same syntax tree the prop model reads its `as const` lists from.
 export function constMemberLiteralIn(source: string, name: string, key: string) {
-  const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const frontmatter = frontmatterOf(source);
   if (!frontmatter) {
     return undefined;
   }
-  const file = ts.createSourceFile('component.ts', capture(frontmatter, 1), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const file = ts.createSourceFile('component.ts', frontmatter.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const list = typeScope([file]).constLists.get(name);
   if (list === undefined || list.kind !== 'object') {
     return undefined;
@@ -311,11 +312,11 @@ const ALIAS_STEPS_MAX = 1;
 // `heroImage.src`, which a page may not spell as a path. Follows
 // `= heroImage`, `= heroImage.src`, and one local const naming either.
 export function defaultAssetIn(source: string, expression: string, filePath: string, projectPath: string): string | undefined {
-  const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const frontmatter = frontmatterOf(source);
   if (!frontmatter) {
     return undefined;
   }
-  const code = capture(frontmatter, 1);
+  const code = frontmatter.code;
   let name = importedNameOf(expression);
   for (let step = 0; name !== undefined && step <= ALIAS_STEPS_MAX; step++) {
     const spec = defaultImportSpec(code, name);

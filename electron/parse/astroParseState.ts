@@ -4,7 +4,7 @@
 
 import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, BranchNode, ParseBail, ParsedTemplate } from './astroParserTypes';
-import { makeId, required } from './astroAttrs';
+import { makeId, required, type tagFields } from './astroAttrs';
 import { findMatchingParen } from './astroScan';
 
 // A branch spans its side of the conditional as written, whitespace trimmed:
@@ -104,6 +104,8 @@ export interface TemplateTagOpen {
   readonly base: number | undefined;
   readonly name: string;
   readonly attrs: string;
+  /** The tag's attribute fields, scanned once by parseTemplateTag (astroAttrs.ts, tagFields). */
+  readonly fields: ReturnType<typeof tagFields>['fields'];
   readonly afterOpen: number;
   readonly shorthand: boolean;
   readonly kind: 'component' | 'element';

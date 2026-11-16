@@ -6,7 +6,7 @@ import { textValue } from '../../shared/page/htmlText';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, MapNode, CondNode, ParsedTemplate } from './astroParserTypes';
-import { VOID_ELEMENTS, RAW_ELEMENTS, makeId, assignPathIds, tagProps, hasShorthandAttr, required } from './astroAttrs';
+import { VOID_ELEMENTS, RAW_ELEMENTS, makeId, assignPathIds, tagFields, required } from './astroAttrs';
 import {
   findMatchingBrace,
   findMatchingParen,
@@ -603,6 +603,11 @@ function parseTemplateTag(template: string, lt: number, base: number | undefined
     return { kind: 'bail', what: 'a stray < or unclosed tag attribute' };
   }
   const { full, name, attrs, selfClose } = match;
+  const attributes = tagFields(attrs, base === undefined || shorthand ? undefined : base + lt + 1 + name.length);
+  if (attributes.problem !== undefined) {
+    return { kind: 'bail', what: attributes.problem };
+  }
+  const { fields } = attributes;
   const isComponent = /^[A-Z]/.test(name);
   const kind = isComponent ? 'component' : 'element';
   const afterOpen = lt + full.length;
@@ -615,8 +620,7 @@ function parseTemplateTag(template: string, lt: number, base: number | undefined
           id: makeId(),
           kind,
           name,
-          ...tagProps(attrs, base === undefined ? undefined : base + lt + 1 + name.length),
-          ...(attrs && (attrs.includes('\n') || hasShorthandAttr(attrs)) ? { attrSource: attrs } : {}),
+          ...fields,
           // `<x/>` and `<x />` mean the same thing and are not the same text.
           ...(selfClose === '/' && !/\s\/>$/.test(full) ? { tightClose: true } : {}),
           children: undefined,
@@ -646,8 +650,7 @@ function parseTemplateTag(template: string, lt: number, base: number | undefined
           id: makeId(),
           kind: 'raw',
           name,
-          ...tagProps(attrs, base === undefined ? undefined : base + lt + 1 + name.length),
-          ...(attrs && (attrs.includes('\n') || hasShorthandAttr(attrs)) ? { attrSource: attrs } : {}),
+          ...fields,
           inner: template.slice(afterOpen, close),
         },
         base,
@@ -658,7 +661,7 @@ function parseTemplateTag(template: string, lt: number, base: number | undefined
     };
   }
 
-  return parseTemplateTagPaired({ template, lt, base, name, attrs, afterOpen, shorthand, kind });
+  return parseTemplateTagPaired({ template, lt, base, name, attrs, fields, afterOpen, shorthand, kind });
 }
 
 function parseTemplateExpression(exprText: string, base: number | undefined): ParserNode {
@@ -738,7 +741,7 @@ function parseTemplateGaps(
   }
 }
 function parseTemplateTagPaired(open: TemplateTagOpen): TemplateTagResult {
-  const { template, lt, base, name, attrs, afterOpen, shorthand, kind } = open;
+  const { template, lt, base, name, fields, afterOpen, shorthand, kind } = open;
   const closeIndex = shorthand ? findMatchingFragmentClose(template, afterOpen) : findMatchingClose(template, afterOpen, name);
   if (closeIndex === -1) {
     return { kind: 'bail', what: `an unclosed <${shorthand ? '' : name}> tag` };
@@ -770,8 +773,7 @@ function parseTemplateTagPaired(open: TemplateTagOpen): TemplateTagResult {
         ...(shorthand ? { shorthand: true } : {}),
         ...(source === undefined ? {} : { source }),
         ...(blankAfter ? { blankAfter } : {}),
-        ...tagProps(attrs, base === undefined || shorthand ? undefined : base + lt + 1 + name.length),
-        ...(attrs && (attrs.includes('\n') || hasShorthandAttr(attrs)) ? { attrSource: attrs } : {}),
+        ...fields,
         ...(closeText.includes('\n') ? { closeSource: closeText } : {}),
         children: innerResult.nodes,
       },

@@ -227,7 +227,9 @@ test('a refusal not about the name is the plan’s, with the plan’s reason', (
   const tag = component(`${PROPS}\nconst { features } = Astro.props;`, '<features.Icon />');
   assert.deepEqual(refusal(tag), { code: 'name', message: '“features” is used as a tag, <features>, so it can’t be renamed here. Rename it in the code.' });
   const unreadable = component(`${PROPS}\nconst { features } = Astro.props;`, '<div {features.length}></div>');
-  assert.deepEqual(refusal(unreadable), { code: 'name', message: 'This code can’t be read to rename it safely: features.length. Rename it in the code.' });
+  // Braces that hold more than a name are not an attribute the parser can carry, so the page itself is the refusal.
+  assert.equal(refusal(unreadable).code, 'name');
+  assert.match(refusal(unreadable).message, /^This component can’t be read to rename “features” safely\. .*braces/);
 });
 
 test('a template the parser cannot represent refuses, and says what it found', () => {

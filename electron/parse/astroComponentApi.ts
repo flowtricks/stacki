@@ -4,6 +4,7 @@
 import type { RenderTag } from './astroParserTypes';
 import { VOID_ELEMENTS, required } from './astroAttrs';
 import { skipStringOrComment } from './astroScan';
+import { frontmatterOf } from './astroFence';
 
 // The slot a use of `Astro.slots` is about, and the const it was read into.
 //
@@ -79,7 +80,7 @@ function slotApiUses(source: string): { slot: string; varName: string | undefine
 // more likely to be the middle of a URL than the start of a comment. Html
 // comments are blanked wherever they are.
 function withoutComments(source: string): string {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
+  const fm = frontmatterOf(source);
   const chars = [...source];
   const blank = (from: number, to: number) => {
     for (let i = from; i < to && i < chars.length; i++) {
@@ -88,7 +89,7 @@ function withoutComments(source: string): string {
       }
     }
   };
-  const end = fm ? fm[0].length : 0;
+  const end = fm ? fm.length : 0;
   for (let i = 0; i < end; i++) {
     const skipped = skipStringOrComment(source, i);
     if (skipped === i) {
@@ -110,8 +111,8 @@ function withoutComments(source: string): string {
 // `Astro.slots` (see slotApiUses). Default first, then named in appearance
 // order.
 export function parseSlots(source: string): string[] {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
-  const body = fm ? source.slice(fm[0].length) : source;
+  const fm = frontmatterOf(source);
+  const body = fm ? source.slice(fm.length) : source;
   const found = new Set<string>();
   const re = /<slot\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)\/?>/g;
   let match;
@@ -289,9 +290,9 @@ export function rootComponent(source: string): string | undefined {
 // The first element of the template that isn't a wrapper Astro strips, with
 // the frontmatter that declares what a capitalised name might be.
 function rootElement(source: string): { readonly name: string; readonly frontmatter: string } | undefined {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
-  const frontmatter = fm ? fm[0] : '';
-  const body = fm ? source.slice(fm[0].length) : source;
+  const fm = frontmatterOf(source);
+  const frontmatter = fm ? source.slice(0, fm.length) : '';
+  const body = fm ? source.slice(fm.length) : source;
   const re = /<(\/?)([A-Za-z][\w.-]*)\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)(\/?)>/g;
   let match;
   while ((match = re.exec(body)) !== null) {
@@ -318,9 +319,9 @@ function rootElement(source: string): { readonly name: string; readonly frontmat
 // inside a <Tag> is where the default slot renders. Which const holds it comes
 // from slotApiUses.
 export function defaultSlotInline(source: string): boolean {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
-  const frontmatter = fm ? fm[0] : '';
-  const body = fm ? source.slice(fm[0].length) : source;
+  const fm = frontmatterOf(source);
+  const frontmatter = fm ? source.slice(0, fm.length) : '';
+  const body = fm ? source.slice(fm.length) : source;
   const heldBy = new Set(
     slotApiUses(source)
       .filter((use) => use.slot === 'default' && use.varName)
@@ -368,8 +369,7 @@ export function defaultSlotInline(source: string): boolean {
 // Extracts the tag from `interface Props extends HTMLAttributes<"button">`
 // so the UI can offer that element's built-in attributes (type, disabled, …).
 export function parseExtendsTag(source: string): string | undefined {
-  const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  const frontmatter = fm ? required(fm[1], 'Frontmatter capture') : '';
+  const frontmatter = frontmatterOf(source)?.code ?? '';
   const match = frontmatter.match(new RegExp('interface\\s+Props\\s+extends\\s+(?:astroHTML\\.JSX\\' + '.)?HTMLAttributes\\s*<\\s*[\'"](\\w+)[\'"]\\s*>', ''));
   if (match) {
     return required(match[1], 'Extended HTML tag capture');

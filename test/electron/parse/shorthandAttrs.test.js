@@ -38,9 +38,6 @@ const marked = serializePageMarked(parsed.model, '', { file: 'src/pages/x.astro'
 check('the marked copy never writes a bare identifier for a shorthand', !/<Foo title a=/.test(marked) && /title=\{title\}/.test(marked));
 
 const odd = parsePage('<Foo {} {-} />\n', { locs: true });
-check(
-  'braces that hold no identifier never become a shorthand prop',
-  odd.editable && Object.values(odd.model.nodes[0].props).every((prop) => prop.type !== 'expr'),
-);
+check('braces that hold no identifier are never a shorthand prop: the page opens as code, naming them', !odd.editable && /braces/.test(odd.reason));
 
 console.log(`shorthand-attrs: ${checked} passed  [parse, round trip, edit, marked copy, negative space]`);

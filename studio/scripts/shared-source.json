@@ -81,6 +81,7 @@
     "electron/parse/astroAttrs.ts",
     "electron/parse/astroChunks.ts",
     "electron/parse/astroComponentApi.ts",
+    "electron/parse/astroFence.ts",
     "electron/parse/astroLexical.ts",
     "electron/parse/astroMapSerialize.ts",
     "electron/parse/astroMapSyntax.ts",
