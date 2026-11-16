@@ -27,7 +27,10 @@ const check = (what, condition, detail) => {
 
 const PAGE = 'src/pages/index.astro';
 const WORDS = 'Build sites that rank in search, convert visitors and keep every team moving for high-performing brands';
-const SOURCE = `<h2 class="hero">\n    ${WORDS}\n  </h2>\n<h1 class="hero">${WORDS}</h1>\n<p class="lead">${WORDS}</p>\n<div class="row"><button class="cta">${WORDS}</button></div>\n<div class="row2"><span class="tag">${WORDS}</span> and more</div>\n`;
+// The Webflow home page heading: a component's slot leaves a newline before and after the words, and
+// its two balanced lines grew a third while editing.
+const HEADING = 'Webflow is the agentic web marketing platform for high-performing brands';
+const SOURCE = `<h2 class="bal">\n  ${HEADING}\n</h2>\n<h1 class="hero">${WORDS}</h1>\n<p class="lead">${WORDS}</p>\n<div class="row"><button class="cta">${WORDS}</button></div>\n<div class="row2"><span class="tag">${WORDS}</span> and more</div>\n`;
 const STYLE = `<style>
   body { margin: 0; font-family: Georgia, serif; }
   .hero { width: 420px; margin: 20px auto; text-align: center; font-size: 44px; line-height: 0.95; letter-spacing: -0.02em; text-wrap: balance; font-weight: 700; }
@@ -36,6 +39,7 @@ const STYLE = `<style>
   .cta { display: block; width: 100%; font: 600 18px/1.2 Georgia, serif; padding: 10px 14px; text-align: center; }
   .row2 { width: 300px; margin: 10px auto; font-size: 18px; line-height: 1.3; }
   .tag { background: #def; }
+  .bal { width: 749px; margin: 30px auto; font: 600 42.6px/44.3px Georgia, serif; text-align: center; text-wrap: balance; }
 </style>`;
 
 (async () => {
@@ -60,7 +64,7 @@ const STYLE = `<style>
   const marked = (node, inner) => `<!--avb-s:${node}-->${inner}<!--avb-e:${node}-->`;
   const html =
     `<!doctype html><meta charset=utf-8>${STYLE}<body>${stampComment({ file: PAGE, checksum })}` +
-    marked('0', `<h2 class="hero" data-avb-p="0">\n    <!--x-->${WORDS}<!--y-->\n  </h2>`) +
+    marked('0', `<h2 class="bal" data-avb-p="0">\n  <!--x-->${HEADING}<!--y-->\n</h2>`) +
     marked('1', `<h1 class="hero" data-avb-p="1">${WORDS}</h1>`) +
     marked('2', `<p class="lead" data-avb-p="2">${WORDS}</p>`) +
     marked('3', `<div class="row" data-avb-p="3">${marked('3.0', `<button class="cta" data-avb-p="3.0">${WORDS}</button>`)}</div>`) +
@@ -123,7 +127,7 @@ const STYLE = `<style>
          await post({ type: 'avb:text-close', session: 'one', action: 'cancel' });
          await new Promise((resolve) => setTimeout(resolve, 400));
          const after = await read(selector);
-         out[selector] = { before, during, typing, after, editing, tail };
+         out[selector] = { before, during, typing, after, editing, tail, posts: await run('JSON.stringify(window.posts.filter((m) => /^avb:text/.test(m.type)).map((m) => m.type + (m.reason ? ":" + m.reason : "")))') };
        }
        console.log('RESULT ' + JSON.stringify(out));
        app.quit();

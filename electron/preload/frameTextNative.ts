@@ -30,14 +30,38 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
     return undefined;
   }
   const { changed, refused, done } = callbacks;
-  const buffer = createTextBuffer(root, space, changed);
-  if (!buffer) {
-    return undefined;
-  }
   const attributes = ['contenteditable', 'data-avb-text-editor'].map((name) => ({
     name,
     value: root.getAttribute(name),
   }));
+  const restoreAttributes = () => {
+    for (const attribute of attributes) {
+      if (attribute.value === null) {
+        root.removeAttribute(attribute.name);
+      } else {
+        root.setAttribute(attribute.name, attribute.value);
+      }
+    }
+  };
+  const heightBefore = root.getBoundingClientRect().height;
+  installNativeTextStyle(root);
+  root.setAttribute('contenteditable', 'true');
+  root.setAttribute('data-avb-text-editor', '');
+  // Opening the editor must not move a pixel. In Chromium an editable block with
+  // `text-wrap: balance` gives the whitespace a component's slot leaves after its
+  // words (the newline before the closing tag) a line of its own: the Webflow
+  // heading went from 88.6px to 132.9px, 44px of blank band under its last line.
+  // That whitespace is collapsed and invisible while the page is not editable, so
+  // the editor keeps it out of the text it edits and puts it back on close.
+  const trimmed = root.getBoundingClientRect().height > heightBefore + GROWTH_TOLERANCE_PX ? trimEdgeWhitespace(root, match.nodes) : [];
+  const buffer = createTextBuffer(root, space, changed);
+  if (!buffer) {
+    restoreAttributes();
+    for (const edge of trimmed) {
+      edge.node.data = edge.data;
+    }
+    return undefined;
+  }
   let closed = false;
   const finish = (action: 'apply' | 'cancel') => {
     if (closed) {
@@ -49,20 +73,14 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
     const changes = action === 'apply' ? buffer.changes() : [];
     // The original words come back first: the save is checked against them.
     const { restored, keep } = buffer.restore();
-    for (const attribute of attributes) {
-      if (attribute.value === null) {
-        root.removeAttribute(attribute.name);
-      } else {
-        root.setAttribute(attribute.name, attribute.value);
-      }
+    restoreAttributes();
+    for (const edge of trimmed) {
+      edge.node.data = edge.data;
     }
     editingRoot = undefined;
     root.blur();
     done({ changes, restored, keep });
   };
-  installNativeTextStyle(root);
-  root.setAttribute('contenteditable', 'true');
-  root.setAttribute('data-avb-text-editor', '');
   editingRoot = root;
   const { cleanup, pressed } = installNativeTextEvents({ root, space, buffer, finish, refused });
   root.focus({ preventScroll: true });
@@ -120,4 +138,42 @@ function installNativeTextStyle(root: HTMLElement): void {
       ` white-space: ${whitespace} !important; }` +
       '[data-avb-text-editor], [data-avb-text-editor] * { cursor: text !important; }',
   );
+}
+
+/** Height growth that is layout noise, not a new line: sub-pixel rounding. */
+const GROWTH_TOLERANCE_PX = 0.5;
+
+interface TrimmedEdge {
+  readonly node: Text;
+  readonly data: string;
+}
+
+// Whitespace-only text nodes at the very start and end of the editing root, emptied for as long as it is
+// edited. Only where whitespace collapses and the root is not inline (inside a line it separates words).
+function trimEdgeWhitespace(root: HTMLElement, nodes: readonly Text[]): TrimmedEdge[] {
+  const style = getComputedStyle(root);
+  if (style.display === 'inline' || !/^(normal|nowrap|pre-line)$/.test(style.whiteSpace)) {
+    return [];
+  }
+  const edges: TrimmedEdge[] = [];
+  const blank = (node: Text) => node.data.length > 0 && /^[\t\n\f\r ]*$/.test(node.data);
+  const content = (node: Node) => !(node instanceof Comment) && !(node instanceof Text && node.data.length === 0);
+  for (const direction of ['previousSibling', 'nextSibling'] as const) {
+    for (const node of direction === 'previousSibling' ? nodes : [...nodes].reverse()) {
+      if (!blank(node) || node.parentNode !== root) {
+        break;
+      }
+      let sibling = node[direction] ?? undefined;
+      while (sibling !== undefined && !content(sibling)) {
+        sibling = sibling[direction] ?? undefined;
+      }
+      const others = sibling !== undefined && !(sibling instanceof Text && blank(sibling) && nodes.includes(sibling));
+      if (others) {
+        break;
+      }
+      edges.push({ node, data: node.data });
+      node.data = '';
+    }
+  }
+  return edges;
 }
