@@ -667,6 +667,7 @@
     "src/editor/attrOrder.ts",
     "src/editor/attributesBinding.ts",
     "src/editor/bindings.ts",
+    "src/editor/boundText.ts",
     "src/editor/branches.ts",
     "src/editor/canvasQuery.ts",
     "src/editor/canvasReply.ts",
