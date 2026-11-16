@@ -323,6 +323,20 @@ export const messages = {
   'settings.sections': 'Secciones de los ajustes',
   'settings.studio.info':
     'Edición y colaboración en el navegador para este proyecto. La configuración instala Studio en local y guía el despliegue en la nube.',
+  'settings.styleTags.caption':
+    'Escribe {token} donde van las reglas nuevas, por ejemplo dentro de @layer components. Sin él, las reglas van a un último bloque @layer o @media, o después de la plantilla.',
+  'settings.styleTags.content': 'Contenido inicial de las nuevas etiquetas <style>',
+  'settings.styleTags.error.inRule': 'El marcador debe estar en el nivel superior o dentro de bloques @ como @layer, no dentro de una regla de estilo.',
+  'settings.styleTags.error.repeated': 'La plantilla nombra el marcador de reglas más de una vez.',
+  'settings.styleTags.error.save': 'No se pudo guardar la configuración de las etiquetas style. {message}',
+  'settings.styleTags.error.unbalanced': 'La plantilla tiene una llave, un comentario o una cadena sin cerrar.',
+  'settings.styleTags.global': 'Las nuevas etiquetas <style> son globales (is:global)',
+  'settings.styleTags.globalInfo':
+    'Astro limita un <style> simple a su propio archivo, lo que oculta los selectores simples a los elementos que pintan los componentes. Las etiquetas existentes nunca se cambian.',
+  'settings.styleTags.info':
+    'Con qué empieza una etiqueta <style> cuando el panel Estilo crea una. Se guarda con el proyecto en .stacki/styles.json, así que todos obtienen las mismas etiquetas.',
+  'settings.styleTags.preview': 'La etiqueta que se crearía',
+  'settings.styleTags.title': 'Etiquetas style',
   'settings.tab.audits': 'Auditorías',
   'settings.tab.breakpoints': 'Puntos de corte',
   'settings.tab.cms': 'Conexiones de CMS',

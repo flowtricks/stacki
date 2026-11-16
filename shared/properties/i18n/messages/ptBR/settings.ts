@@ -321,6 +321,20 @@ export const messages = {
   'settings.secrets.valueHidden': 'Valor oculto',
   'settings.sections': 'Seções das configurações',
   'settings.studio.info': 'Edição e colaboração no navegador para este projeto. A configuração instala o Studio localmente e guia a implantação na nuvem.',
+  'settings.styleTags.caption':
+    'Escreva {token} onde as novas regras vão, por exemplo dentro de @layer components. Sem ele, as regras vão para um último bloco @layer ou @media, ou depois do modelo.',
+  'settings.styleTags.content': 'Conteúdo inicial de novas tags <style>',
+  'settings.styleTags.error.inRule': 'O marcador deve ficar no nível superior ou dentro de blocos @ como @layer, não dentro de uma regra de estilo.',
+  'settings.styleTags.error.repeated': 'O modelo cita o marcador de regras mais de uma vez.',
+  'settings.styleTags.error.save': 'Não foi possível salvar as configurações das tags style. {message}',
+  'settings.styleTags.error.unbalanced': 'O modelo tem uma chave, um comentário ou uma string sem fechar.',
+  'settings.styleTags.global': 'Novas tags <style> são globais (is:global)',
+  'settings.styleTags.globalInfo':
+    'O Astro limita um <style> simples ao próprio arquivo, o que esconde seletores simples de elementos renderizados por componentes. Tags existentes nunca são alteradas.',
+  'settings.styleTags.info':
+    'Com o que começa uma tag <style> quando o painel Estilo cria uma. Salvo com o projeto em .stacki/styles.json, então todos recebem as mesmas tags.',
+  'settings.styleTags.preview': 'A tag que seria criada',
+  'settings.styleTags.title': 'Tags style',
   'settings.tab.audits': 'Auditorias',
   'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'Conexões de CMS',

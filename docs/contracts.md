@@ -1025,6 +1025,37 @@ writes every other selector it held as a name lock, one write and one undo step,
 style selectors panel writes the file through `project:writeMetadata` against the bytes it read.
 A `trustedScripts` key from an earlier version is read and dropped.
 
+**New style tags** (`newStyleTag`, `shared/properties/newStyleTag.ts`). An optional section of
+`.stacki/styles.json`, `{ version?: 1, isGlobal?: boolean, content?: string }`, says what a
+`<style>` tag the Style panel creates starts with. Absent (every project made before it existed)
+means a plain `<style>` holding just the rules; projects made by Stacki are written with
+`isGlobal: true` (`electron/project/newProjectDefaults.ts`, called by `finishNewSite` for the starter
+and the Astro wizard; create-stacki and opened existing sites keep the legacy default). In code the
+setting is `scope: 'global' | 'scoped'`. `content` is a template; the rules placeholder is the CSS comment
+`/* stacki:rules */`, at most once, at the top level or inside at-rule blocks (never inside a style
+rule). With no placeholder, a template ending in a block `@layer`/`@media`/`@supports`/`@container`/`@scope`
+takes rules inside that block, after what it holds; any other template gets rules after it, at the top
+level. A placeholder at the top level means after the template's own content. A template that does not
+parse (unclosed brace, comment or string, repeated or misplaced placeholder) is refused by the file
+parser and by the Settings page, which never saves it. A tag follows the template when its top level
+already holds the wrapper chain (same at-rule names and parameters, whitespace-insensitive): new rules
+go inside the innermost wrapper after the rules there; any other tag is written exactly as before.
+Stacki never wraps or moves rules a person wrote. Settings > Breakpoints > Style tags edits it; the CLI
+reaches it as `newStyleTag.isGlobal` and `newStyleTag.content` (`stacki config set styles
+newStyleTag.isGlobal true`).
+
+**Where a new selector's first style goes** (`model/newStyleTarget.ts`, consumed by
+`embed/useEditorContexts.ts`). A selector with rules keeps going to the file that defines them
+(`selectorHome.ts`). A selector with none goes to the open page's or component's own `<style>`: the
+first that is not `define:vars`, preferring one whose scope matches the setting, else the first. With no
+`<style>` in an `.astro` file the dropdown lists a virtual `Create <style>` entry first and the chip shows
+it with a plus icon. Selecting, hovering and choosing it write nothing: the tag is created, with the template
+and `is:global` per the setting, by the first style written, as one page edit (one undo step; undo removes
+the tag, and the class it needed). It is appended at the end of the file, never inside the frontmatter.
+Picking another source holds until the element or selector changes; inside a component opened from an
+instance the source stays pinned as before. Studio uses the same panel code; its `styleBlockEdit.ts`
+writes `<style>` or `<style is:global>` from the request's `scope`.
+
 The unused-selector check (`electron/properties/selector*.ts`) reports through
 `style:selectorUsage` as a `SelectorReport` (`shared/properties/selectorUsage.ts`). A verdict
 is `unused` only when no project text, installed package or code that assembles class names
