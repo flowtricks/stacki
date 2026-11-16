@@ -1158,24 +1158,28 @@ body.is-scrubbing * {
 .u-select-pin {
   display: inline-flex;
   align-items: center;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.u-select-pin:hover {
-  color: var(--color-text-primary);
-}
-/* The toggle has no fill of its own: the glyph is at full strength while the target follows the canvas
-   (on) and dimmed while it is held (off). Hover and press keep the same blue-or-neutral colour. */
+/* The toggle has no fill at rest. Its glyph is at full strength while the target follows the canvas (on)
+   and dimmed while it is held (off): the dimming is on the glyph, so the hover fill below is never dimmed.
+   Hover lays a 10% fill of the text colour behind it and press 16%, on the plain trigger and on the tinted
+   (off-Base) one alike. Background only, never a border; the glyph's opacity logic does not change. */
 .u-select-pin {
   padding: 0.125rem;
   color: var(--color-text-primary);
+}
+.u-select-pin svg {
   opacity: 0.5;
 }
-.u-select-pin.is-on {
+.u-select-pin.is-on svg {
   opacity: 1;
 }
 .u-select-pin:hover {
-  opacity: 1;
+  background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+.u-select-pin:active {
+  background: color-mix(in srgb, var(--color-text-primary) 16%, transparent);
 }
 /* The value fills the trigger, so the follow toggle (margin-left: auto) sits at the right end, beside the chevron. */
 .embed-editor_context-select .u-select-value {

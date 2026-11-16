@@ -270,3 +270,15 @@ test('group headers are labels: no icon, not focusable, not clickable, skipped b
   const footer = list.querySelector('.u-select-option.is-footer');
   assert.ok(footer.querySelector('.u-select-icon'), 'Add query keeps its plus');
 });
+
+test('the follow toggle has its own hover and press fills, without touching the glyph opacity logic', () => {
+  const css = require('node:fs').readFileSync(require('../../helpers/sources.js').repoPath('src/features/style/utilities.css'), 'utf8');
+  const rule = (selector) => [...css.matchAll(new RegExp(`${selector.replace(/[.:]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'g'))].map((match) => match[1]).join('\n');
+  assert.match(rule('.u-select-pin:hover'), /background:\s*color-mix\(in srgb, var\(--color-text-primary\) 10%, transparent\)/, 'hover is a 10% fill');
+  assert.match(rule('.u-select-pin:active'), /background:\s*color-mix\(in srgb, var\(--color-text-primary\) 16%, transparent\)/, 'press is a 16% fill');
+  assert.match(rule('.u-select-pin'), /border-radius:\s*var\(--radius-sm\)/, 'the panel icon buttons radius');
+  assert.equal(/border(?!-radius)/.test(rule('.u-select-pin:hover') + rule('.u-select-pin:active')), false, 'no border');
+  assert.equal(/opacity/.test(rule('.u-select-pin:hover') + rule('.u-select-pin:active')), false, 'hover and press leave the opacity logic alone');
+  assert.match(rule('.u-select-pin svg'), /opacity:\s*0\.5/, 'off is dimmed on the glyph');
+  assert.match(rule('.u-select-pin.is-on svg'), /opacity:\s*1/, 'on is full');
+});
