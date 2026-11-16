@@ -54,11 +54,6 @@ export const messages = {
   'palette.other.text': 'Text', // same
   'palette.panel.checking': 'Instanzen werden geprüft ...',
   'palette.panel.instances': { one: '{count} Instanz', other: '{count} Instanzen' },
-  'palette.roles.menu': 'Rollen',
-  'palette.roles.hiddenByFolder': 'ausgeblendet durch Ordner {folder}',
-  'palette.roles.showInstances': 'Instanzen anzeigen',
-  'palette.roles.someVisible': '{visible} von {total} sichtbar',
-  'palette.roles.options': 'Optionen für {name}',
   'palette.panel.itemHint': 'In den Navigator ziehen oder doppelklicken, um es zur Seite hinzuzufügen',
   'palette.panel.new': 'Neue Komponente',
   'palette.panel.newShortcut': 'Neue Komponente ({shortcut})',

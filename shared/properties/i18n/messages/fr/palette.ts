@@ -54,11 +54,6 @@ export const messages = {
   'palette.other.text': 'Texte',
   'palette.panel.checking': 'Vérification des instances...',
   'palette.panel.instances': { one: '{count} instance', other: '{count} instances' }, // same
-  'palette.roles.menu': 'Rôles',
-  'palette.roles.hiddenByFolder': 'masqué par le dossier {folder}',
-  'palette.roles.showInstances': 'Afficher les instances',
-  'palette.roles.someVisible': '{visible} sur {total} visibles',
-  'palette.roles.options': 'Options pour {name}',
   'palette.panel.itemHint': 'Glissez dans le Navigateur ou double-cliquez pour l’ajouter à la page',
   'palette.panel.new': 'Nouveau composant',
   'palette.panel.newShortcut': 'Nouveau composant ({shortcut})',
