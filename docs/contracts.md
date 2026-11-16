@@ -976,6 +976,17 @@ nothing. Removing a breakpoint never edits project CSS. Desktop and Studio read 
 state carries `config`, `list`, `resolved` and `desktop`). Stacki writes no media query from these numbers; authored queries keep
 their own unit and Base (`baseWidth.ts`) is read from those.
 
+**Following the canvas in a desktop-first component.** The style panel's Follow canvas size toggle normally checks the query that
+already holds at the canvas width (`followWidth.ts`). When the component is desktop-first, the breakpoint that holds at the canvas
+width is the target even with no rule written for it: Tablet at 700px reads `< 48rem`, never Base (`embed/followBreakpoint.ts`).
+The direction is read from the component's own width queries (mostly `width >= X` is mobile-first, mostly `width < X` is
+desktop-first, the Add query form's `detectConvention`); with no width query or an even split the project's breakpoints decide
+(breakpoints narrower than Desktop are desktop-first, and a project with only wider ones is mobile-first), so a silent guess never
+picks the direction. A mobile-first component keeps Base at the smallest width. Selecting writes nothing: the breakpoint is
+registered like a typed query, and the first style written under it creates `@media (width < 48rem)` after the existing rules, in the
+same file the panel writes Base to, as one edit; later styles go into that block. A held panel (Follow canvas size off) ignores
+the canvas width entirely.
+
 **Where breakpoints are used.** Settings > Breakpoints shows each breakpoint's places before anything is changed: `breakpointSync:usage`
 (`scanBreakpointUsage`) answers, for the breakpoints' CURRENT saved values, the places per file (one pass for all, files cached
 by time and size, re-run when the tab opens, a value is saved, the window returns or a sync is applied). A card says

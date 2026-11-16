@@ -34,6 +34,8 @@ import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/quer
 import { canvasWidthForQuery } from '../model/queryWidth';
 import { baseCanvasTarget } from '../model/baseWidth';
 import { followedContextKey } from '../model/followWidth';
+import { followBreakpoint } from './followBreakpoint';
+import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { followRetargetKey, useCanvasWidthPx, useFollowMode } from './contextFollow';
 import { isGlobalSelector, type MatchTarget } from '../model/selectors';
 import { selectedInstanceMarkup, selectedInstanceMarkupPending, selectedInstanceScope } from '../model/webflowElement';
@@ -778,15 +780,28 @@ export function useContextChange(
   const { nativeModel } = nativeState;
   const { model, scan } = elementTokens;
   const { activeSelector } = activeSelectorHook;
-  const { selectActiveSelector } = selectorPick;
+  const { selectActiveSelector, setTypedContexts } = selectorPick;
   const { styleContexts, reachPending } = styleContextsHook;
   const [followMode, setFollowMode] = useFollowMode(getHost().projectPath);
   const canvasWidthPx = useCanvasWidthPx();
-  // The row that holds at the canvas's width, whether or not the panel is following it.
-  const matchedKey = useMemo(
-    () => (canvasWidthPx === undefined ? undefined : followedContextKey(styleContexts, canvasWidthPx, ROOT_FONT_SIZE_PX)),
-    [canvasWidthPx, styleContexts],
+  // In a desktop-first component the breakpoint that holds at the canvas width is the target even before
+  // any rule is written for it (embed/followBreakpoint.ts); its row is added to the ones that hold.
+  const { resolved: projectBreakpoints } = useProjectBreakpoints(getHost().projectPath);
+  const breakpointTarget = useMemo(
+    () => (canvasWidthPx === undefined ? undefined : followBreakpoint(styleContexts, canvasWidthPx, projectBreakpoints)),
+    [canvasWidthPx, styleContexts, projectBreakpoints],
   );
+  // The row that holds at the canvas's width, whether or not the panel is following it.
+  const matchedKey = useMemo(() => {
+    if (canvasWidthPx === undefined) {
+      return undefined;
+    }
+    const rows =
+      breakpointTarget === undefined || breakpointTarget.existingKey !== undefined
+        ? styleContexts
+        : [...styleContexts, { key: breakpointTarget.query, embedAtContext: breakpointTarget.query }];
+    return followedContextKey(rows, canvasWidthPx, ROOT_FONT_SIZE_PX);
+  }, [canvasWidthPx, styleContexts, breakpointTarget]);
 
   // Switching context auto-selects a selector that has styles in the new query:
   // keep the current pick if it's styled there, otherwise jump to the strongest.
@@ -883,9 +898,14 @@ export function useContextChange(
   useEffect(() => {
     const target = followRetargetKey({ following, settled, matchedKey, context });
     if (target !== undefined) {
+      // A breakpoint nobody has written yet is registered like a typed query: it is listed and checked, and the
+      // first style written under it creates the block. Nothing is written here.
+      if (breakpointTarget !== undefined && breakpointTarget.existingKey === undefined && target === breakpointTarget.query) {
+        setTypedContexts((previous) => (previous.includes(target) ? previous : [...previous, target]));
+      }
       changeContextRef.current(target, { canvas: 'keep', selector: 'keep' });
     }
-  }, [following, settled, matchedKey, context]);
+  }, [following, settled, matchedKey, context, breakpointTarget, setTypedContexts]);
 
   // The follow control exists only where there is a canvas width to follow. Checking the
   // matching row, the Follow canvas size row or the pin on the trigger lets go of a hold;

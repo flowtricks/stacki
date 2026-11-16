@@ -1337,6 +1337,7 @@
     "src/features/style/embed/contextRows.ts",
     "src/features/style/embed/editorModel.ts",
     "src/features/style/embed/editorSignatures.ts",
+    "src/features/style/embed/followBreakpoint.ts",
     "src/features/style/embed/scanSnapshotCache.ts",
     "src/features/style/embed/useComponentSourceTick.ts",
     "src/features/style/embed/useEditorContexts.ts",
