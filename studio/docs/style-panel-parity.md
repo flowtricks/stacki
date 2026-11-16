@@ -34,7 +34,7 @@ Adding classes uses Stacki's class-expression handling. A page with no `<style>`
 has nowhere to write the first style, so the panel adds a `<style is:global>` block at the end of
 that page and puts `.class` (then `.class-2`, `.class-3`) on the selected element, in one undo step
 (`src/features/style/model/firstStyleBlock.ts`; Desktop applies it as one gesture, Studio as one
-source edit); a project with any style or stylesheet of its own is written as before. File edits and history use
+source edit); a page with stylesheets but no `<style>` offers a virtual `Create <style>` entry for a selector with no rules, and the tag is written by the first style, `is:global` per `.stacki/styles.json` `newStyleTag` (docs/contracts.md); a project with any style of its own is written as before. File edits and history use
 shared draft rooms and expected-source comparisons, protecting newer collaborator
 changes. Upstream's desktop filesystem is replaced by Studio's existing editable
 `src` and `public` roots; this is not a desktop filesystem access implementation.

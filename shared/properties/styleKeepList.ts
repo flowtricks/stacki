@@ -4,7 +4,7 @@
 // `check-project` command, so every tool answers "may this go?" the same way.
 import { assert } from '../core/assert';
 import { list, record, text } from '../core/boundary';
-import { newStyleTagDocument, parseNewStyleTag, type NewStyleTagSettings } from './newStyleTag';
+import { NEW_PROJECT_NEW_STYLE_TAG, newStyleTagDocument, parseNewStyleTag, type NewStyleTagSettings } from './newStyleTag';
 
 export const STYLE_KEEP_LIMITS = {
   /** Patterns in one keep list. A design system's state classes fit in dozens. */
@@ -196,4 +196,27 @@ function lockedPath(input: unknown): string {
     }
   }
   return value;
+}
+
+/**
+ * The `.stacki/styles.json` text a project made by Stacki starts with: `newStyleTag.isGlobal` on,
+ * because the Style panel writes plain selectors and a scoped tag would hash them away from the
+ * element. An existing file keeps everything it holds, and a section it already wrote is kept as it
+ * is. Undefined when the existing text is not a styles file the parser accepts: such a file is never
+ * overwritten.
+ */
+export function newProjectStylesSource(existing: string | undefined): string | undefined {
+  if (existing === undefined) {
+    return serializeStyleKeepList({ version: 1, keep: [], lockedStylesheets: [], newStyleTag: NEW_PROJECT_NEW_STYLE_TAG });
+  }
+  let keepList: StyleKeepList;
+  try {
+    const input: unknown = JSON.parse(existing);
+    keepList = parseStyleKeepList(input);
+  } catch {
+    return undefined;
+  }
+  return keepList.newStyleTag === undefined
+    ? serializeStyleKeepList({ ...keepList, newStyleTag: NEW_PROJECT_NEW_STYLE_TAG })
+    : serializeStyleKeepList(keepList);
 }
