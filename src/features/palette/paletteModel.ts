@@ -120,7 +120,7 @@ export function prettyComponentName(name: string): string {
 }
 
 /** How the preview route lays a component out; see ComponentPreviewLayout in the route. `popup` is what it always did. */
-export type PreviewLayout = 'popup' | 'page';
+export type PreviewLayout = 'popup' | 'page' | 'snapshot';
 
 export function componentPreviewURL(
   devURL: string,
@@ -139,8 +139,8 @@ export function componentPreviewURL(
       : (component.file ?? [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/'));
   const query = new URLSearchParams({ c: component.name, p: file });
   // The popup layout is the route's default, so its URL stays exactly as it was.
-  if (options.layout === 'page') {
-    query.set('layout', 'page');
+  if (options.layout === 'page' || options.layout === 'snapshot') {
+    query.set('layout', options.layout);
   }
   // Astro 5 returns a 404 when an injected page violates the project's slash policy.
   const route = trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';

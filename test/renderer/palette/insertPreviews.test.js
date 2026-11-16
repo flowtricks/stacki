@@ -122,24 +122,29 @@ async function setup(options = {}) {
     logLevel: 'silent',
     external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
   });
+  delete require.cache[require.resolve(output)];
   const InsertSearch = require(output).default;
   const container = document.getElementById('root');
-  const root = createRoot(container);
+  let root = createRoot(container);
   const events = { inserted: [], closed: 0 };
-  await React.act(async () => {
-    root.render(
-      React.createElement(InsertSearch, {
-        components: options.components,
-        devUrl: 'devUrl' in options ? options.devUrl : DEV_URL,
-        projectKey: 'projectKey' in options ? options.projectKey : '/p',
-        trailingSlash: 'never',
-        onInsert: (item) => events.inserted.push(item),
-        onClose: () => {
-          events.closed += 1;
-        },
-      }),
-    );
-  });
+  const element = () =>
+    React.createElement(InsertSearch, {
+      components: options.components,
+      devUrl: 'devUrl' in options ? options.devUrl : DEV_URL,
+      projectKey: 'projectKey' in options ? options.projectKey : '/p',
+      trailingSlash: 'never',
+      onInsert: (item) => events.inserted.push(item),
+      onClose: () => {
+        events.closed += 1;
+      },
+    });
+  await React.act(async () => root.render(element()));
+  /** The palette closed and opened again, in the same window: the stores outlive it. */
+  const remount = async () => {
+    await React.act(async () => root.unmount());
+    root = createRoot(container);
+    await React.act(async () => root.render(element()));
+  };
   const act = (work) => React.act(async () => work());
   const labels = () => [...container.querySelectorAll('.insert-item-label')].map((element) => element.textContent);
   const input = () => container.querySelector('.insert-search-row input');
@@ -158,10 +163,25 @@ async function setup(options = {}) {
       for (const card of cards()) {
         observers.show(card, true);
         observers.size(card.querySelector('.insert-surface'), width);
+        const snapshot = card.querySelector('.insert-snapshot');
+        if (snapshot !== null) {
+          observers.size(snapshot, width);
+        }
       }
     });
   };
   const finish = async () => {
+    // Answer every picture still being made, so no render timer outlives the test.
+    for (let round = 0; round < 200; round++) {
+      const left = [...document.querySelectorAll('body > div[aria-hidden="true"] iframe')];
+      if (left.length === 0) {
+        break;
+      }
+      for (const frame of left) {
+        const data = { type: 'avb:component-preview', status: 'empty', reason: 'done' };
+        await act(() => window.dispatchEvent(new dom.window.MessageEvent('message', { source: frame.contentWindow, data })));
+      }
+    }
     await React.act(async () => root.unmount());
     dom.window.close();
     delete global.IntersectionObserver;
@@ -183,6 +203,7 @@ async function setup(options = {}) {
     }
   };
   return {
+    remount,
     settleFrames,
     scrolled,
     Simulate,
@@ -492,13 +513,28 @@ test('Escape closes the palette, and Tab walks the tabs', async () => {
   }
 });
 
-test('no observers: no frame loads, nothing throws, the card says it is loading', async () => {
+/** The frames the store renders pictures in: hidden, off screen, never inside the grid. */
+const producers = () => [...document.querySelectorAll('body > div[aria-hidden="true"] iframe')];
+const tileMessage = (key = 'a'.repeat(28), html = '<p>Hero</p>') => ({
+  type: 'avb:component-preview-snapshot',
+  key,
+  html,
+  attempt: 'sample',
+  box: { left: 0, top: 0, width: 400, height: 200 },
+});
+const send = (view, frame, data) => view.act(() => window.dispatchEvent(new view.dom.window.MessageEvent('message', { source: frame.contentWindow, data })));
+
+test('no observers: every card is still asked for, shows a skeleton and not words, and nothing throws', async () => {
   const view = await setup({ components: mixed(), observers: false });
   try {
     assert.equal(view.frames().length, 0);
     assert.equal(view.cards().length, 7);
-    const notes = view.cards().map((card) => card.querySelector('.insert-surface-note').textContent);
-    assert.ok(notes.slice(0, 5).every((note) => note.includes('Loading preview…')));
+    assert.equal(producers().length, 3, 'a few pictures are made at once whatever is on screen');
+    const first = view.cards()[0];
+    assert.ok(first.querySelector('.insert-skeleton'), 'the tile waits as a skeleton');
+    assert.equal(first.querySelector('.insert-surface-note') ?? undefined, undefined, 'a tile that is only waiting never says there is no preview');
+    assert.ok(!first.textContent.includes('Loading preview'), 'no loading text');
+    const notes = view.cards().map((card) => card.querySelector('.insert-surface-note')?.textContent);
     assert.deepEqual(notes.slice(5), ['No preview available', 'No preview available'], "Astro's own components have no file to preview");
   } finally {
     await view.finish();
@@ -508,8 +544,7 @@ test('no observers: no frame loads, nothing throws, the card says it is loading'
 test('without a dev server the card says there is no preview, and the card still inserts', async () => {
   const view = await setup({ components: mixed(), devUrl: undefined });
   try {
-    await view.reveal();
-    assert.equal(view.frames().length, 0);
+    assert.equal(producers().length, 0);
     const note = view.cards()[0].querySelector('.insert-surface-note');
     assert.equal(note.textContent, 'No preview available');
     assert.equal(note.getAttribute('title'), 'The project dev server is not running.', 'the reason is on hover');
@@ -524,8 +559,7 @@ test('without a dev server the card says there is no preview, and the card still
 test('a component without a file has no preview either', async () => {
   const view = await setup({ components: [{ name: 'Loose', renderTag: { tag: 'section' } }] });
   try {
-    await view.reveal();
-    assert.equal(view.frames().length, 0);
+    assert.equal(producers().length, 0);
     assert.equal(view.cards()[0].querySelector('.insert-surface-note').textContent, 'No preview available');
     assert.equal(view.cards()[0].querySelector('.insert-surface-note').getAttribute('title'), 'This component has no file the preview can load.');
   } finally {
@@ -533,118 +567,169 @@ test('a component without a file has no preview either', async () => {
   }
 });
 
-test('a visible card loads the hover preview route, recipe defaults and all, in an inert frame', async () => {
+test('each card is rendered once through the preview route as a snapshot, three at a time, in a hidden frame', async () => {
   const view = await setup({ components: mixed() });
   try {
-    assert.equal(view.frames().length, 0, 'nothing loads before a card is seen');
-    await view.reveal(360);
-    const frames = view.frames();
+    const frames = producers();
     assert.equal(frames.length, 3);
-    const first = frames[0];
-    const url = new URL(first.getAttribute('src'));
+    const url = new URL(frames[0].getAttribute('src'));
     assert.equal(url.origin + url.pathname, `${DEV_URL}/__avb/preview`);
     assert.equal(url.searchParams.get('c'), 'Hero');
     assert.equal(url.searchParams.get('p'), 'src/components/Section/Hero.astro');
-    // The route reads the recipe from .stacki/components.json itself, so the card asks exactly what the
-    // Components panel's hover card asks: no layout of its own, no page, no isolate hash.
-    assert.equal(url.searchParams.has('layout'), false, 'the hover card layout, which fits the component into the frame');
-    assert.equal(url.hash, '');
-    assert.deepEqual([...url.searchParams.keys()].sort(), ['c', 'p']);
-    assert.equal(first.getAttribute('aria-hidden'), 'true');
-    assert.equal(first.getAttribute('tabindex'), '-1');
-    // A live component that runs its scripts and loads the dev server's modules, but cannot submit a form,
-    // open a window or navigate the editor.
-    assert.equal(first.getAttribute('sandbox'), 'allow-scripts allow-same-origin');
-    await view.act(() => view.pills()[1].click());
-    await view.reveal(360);
-    assert.equal(new URL(view.frames()[0].getAttribute('src')).searchParams.get('c'), 'Button', 'a block loads the same route');
+    assert.equal(url.searchParams.get('layout'), 'snapshot');
+    assert.equal(url.searchParams.has('known'), false, 'nothing is held yet, so nothing to check');
+    assert.equal(frames[0].getAttribute('sandbox'), 'allow-scripts allow-same-origin');
+    assert.equal(frames[0].getAttribute('tabindex'), '-1');
+    assert.equal(view.frames().length, 0, 'no frame sits in the grid');
+    await send(view, frames[0], tileMessage());
+    assert.equal(producers().filter((frame) => frame.getAttribute('src').includes('c=Hero')).length, 0, 'an answered frame is removed');
+    assert.equal(producers().length, 3, 'its place goes to the next card');
   } finally {
     await view.finish();
   }
 });
 
-test('the card shows its loading reason until the frame reports, then the page; an empty report says there is none', async () => {
-  const view = await setup({ components: mixed() });
+test('the visible card is rendered before the ones above and below it', async () => {
+  const components = Array.from({ length: 12 }, (_, at) => section(`S${String(at).padStart(2, '0')}`));
+  const view = await setup({ components });
   try {
-    await view.reveal();
-    const [first, second] = view.frames();
-    assert.equal(first.style.opacity, '0');
-    assert.ok(view.cards()[0].textContent.includes('Loading preview…'));
-    const send = (source, status) =>
-      view.act(() => window.dispatchEvent(new view.dom.window.MessageEvent('message', { source, data: { type: 'avb:component-preview', status } })));
-    await send(first.contentWindow, 'ready');
-    assert.equal(view.frames()[0].style.opacity, '1');
-    assert.equal(view.cards()[0].querySelector('.insert-surface-note') ?? undefined, undefined);
-    await view.act(() =>
-      window.dispatchEvent(
-        new view.dom.window.MessageEvent('message', {
-          source: second.contentWindow,
-          data: { type: 'avb:component-preview', status: 'empty', reason: 'Preview needs data for: items.' },
-        }),
-      ),
+    await view.act(() => view.observers.show(view.cards()[9], true));
+    await send(view, producers()[0], tileMessage());
+    assert.ok(
+      producers().some((frame) => frame.getAttribute('src').includes('c=S09')),
+      'the card on screen takes the next place, not the next in the list',
     );
-    const note = view.cards()[1].querySelector('.insert-surface-note');
-    assert.equal(note.textContent, 'No preview available');
-    assert.equal(note.getAttribute('title'), 'Preview needs data for: items.', "the route's reason is on hover");
-    await send(view.dom.window, 'ready');
-    assert.equal(view.cards()[2].querySelector('.insert-frame').style.opacity, '0', 'a message from another window changes nothing');
   } finally {
     await view.finish();
   }
 });
 
-test('a page that loads and never reports is given up on, with the reason on hover', async () => {
+test('a snapshot becomes the card picture; another window cannot paint one', async () => {
   const view = await setup({ components: mixed() });
   try {
     await view.reveal();
-    const [first, second] = view.frames();
-    // A page that reports is never given up on; one that loads and stays silent threw before its script ran.
-    await view.act(() =>
-      window.dispatchEvent(
-        new view.dom.window.MessageEvent('message', { source: first.contentWindow, data: { type: 'avb:component-preview', status: 'ready' } }),
-      ),
+    const [first] = producers();
+    await send(view, { contentWindow: view.dom.window }, tileMessage());
+    assert.equal(view.cards()[0].querySelector('.insert-snapshot') ?? undefined, undefined, 'a message from another window changes nothing');
+    await send(view, first, tileMessage('a'.repeat(28), '<base href="__AVB_ORIGIN__/"><p>Hero</p>'));
+    await view.reveal();
+    const picture = view.cards()[0].querySelector('iframe.insert-snapshot-frame');
+    assert.ok(picture, 'the card has its picture');
+    assert.equal(picture.getAttribute('sandbox'), 'allow-same-origin', 'a picture runs no script');
+    assert.equal(picture.getAttribute('aria-hidden'), 'true');
+    assert.ok(picture.getAttribute('srcdoc').includes('http://localhost:4321/'), "the dev server's own address replaces the token");
+    assert.ok(!picture.getAttribute('srcdoc').includes('__AVB_ORIGIN__'));
+  } finally {
+    await view.finish();
+  }
+});
+
+test('a card with a picture is never remounted, blanked or put back to a skeleton by scrolling', async () => {
+  const view = await setup({ components: mixed() });
+  try {
+    await view.reveal();
+    await send(view, producers()[0], tileMessage());
+    await view.reveal();
+    const picture = view.cards()[0].querySelector('iframe.insert-snapshot-frame');
+    await view.act(() => picture.dispatchEvent(new view.dom.window.Event('load')));
+    assert.equal(view.cards()[0].querySelector('.insert-skeleton') ?? undefined, undefined);
+    for (const visible of [false, true, false, true]) {
+      await view.act(() => view.observers.show(view.cards()[0], visible));
+      assert.equal(view.cards()[0].querySelector('iframe.insert-snapshot-frame'), picture, 'the same frame, never replaced');
+      assert.equal(view.cards()[0].querySelector('.insert-skeleton') ?? undefined, undefined, 'never a skeleton again');
+      assert.equal(view.cards()[0].querySelector('.insert-surface-note') ?? undefined, undefined);
+    }
+  } finally {
+    await view.finish();
+  }
+});
+
+test('a skeleton has the tile size, and the picture takes its place inside the same surface', async () => {
+  const view = await setup({ components: mixed() });
+  try {
+    const surface = view.cards()[1].querySelector('.insert-surface');
+    const skeleton = surface.querySelector('.insert-skeleton');
+    assert.equal(skeleton.parentElement, surface, 'the skeleton fills the surface, whose 16:10 box does not depend on its content');
+    const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
+    assert.match(css, /\.insert-surface-card \{[^}]*aspect-ratio: 16 \/ 10/);
+    assert.match(css, /\.insert-skeleton \{[^}]*position: absolute;[^}]*inset: 0/);
+    assert.match(css, /\.insert-snapshot \{[^}]*position: absolute;[^}]*inset: 0/);
+  } finally {
+    await view.finish();
+  }
+});
+
+test('reopening the palette finds the pictures waiting: no skeleton, a check behind them', async () => {
+  const view = await setup({ components: mixed() });
+  try {
+    await view.reveal();
+    await send(view, producers()[0], tileMessage());
+    await view.reveal();
+    await view.remount();
+    await view.reveal();
+    assert.ok(view.cards()[0].querySelector('iframe.insert-snapshot-frame'), 'the picture is there on the first paint');
+    assert.equal(view.cards()[0].querySelector('.insert-skeleton') ?? undefined, undefined);
+  } finally {
+    await view.finish();
+  }
+});
+
+test('an empty report says why on hover, and Try with sample data renders the tile again without inserting it', async () => {
+  const view = await setup({ components: mixed() });
+  try {
+    const [first] = producers();
+    await send(view, first, { type: 'avb:component-preview', status: 'empty', reason: 'Preview needs data for: items, band. Open an instance on a page.' });
+    const note = view.cards()[0].querySelector('.insert-surface-note');
+    assert.equal(note.textContent.startsWith('No preview available'), true);
+    assert.equal(note.getAttribute('title'), 'Needs a value for: items, band. Open an instance on a page to preview it.');
+    const retry = note.querySelector('button');
+    assert.equal(retry.textContent, 'Try with sample data');
+    const before = producers().length;
+    await view.act(() => retry.click());
+    assert.deepEqual(view.events.inserted, [], 'the retry is not a click on the card');
+    assert.ok(view.cards()[0].querySelector('.insert-skeleton'), 'the tile waits again');
+    assert.equal(producers().length, before, 'the three places are taken; the retry waits for one');
+    await send(view, producers()[0], tileMessage());
+    const again = producers().find((frame) => frame.getAttribute('src').includes('c=Hero'));
+    assert.ok(again, 'the retried tile is rendered next');
+    assert.equal(new URL(again.getAttribute('src')).searchParams.get('attempts'), 'sample', 'with the project instance set aside');
+  } finally {
+    await view.finish();
+  }
+});
+
+test('a thrown error is named on hover, and a page that loads and never answers is given up on', async () => {
+  const { mock } = require('node:test');
+  const view = await setup({ components: mixed() });
+  try {
+    const [first, second] = producers();
+    await send(view, first, { type: 'avb:component-preview', status: 'empty', reason: "Threw: Cannot read properties of undefined (reading 'x')" });
+    assert.match(
+      view.cards()[0].querySelector('.insert-surface-note').getAttribute('title'),
+      /The component threw an error: Cannot read properties of undefined/,
     );
-    await view.act(() => {
-      first.dispatchEvent(new view.dom.window.Event('load'));
-      second.dispatchEvent(new view.dom.window.Event('load'));
-    });
-    assert.ok(view.cards()[1].textContent.includes('Loading preview…'), 'silence is not failure yet');
-    await view.act(() => new Promise((resolve) => setTimeout(resolve, 3100)));
-    assert.equal(view.frames()[0].style.opacity, '1', 'the page that answered stays');
-    const note = view.cards()[1].querySelector('.insert-surface-note');
-    assert.equal(note.textContent, 'No preview available');
-    assert.match(note.getAttribute('title'), /did not render the component; it may have thrown an error/);
+    mock.timers.enable({ apis: ['setTimeout'] });
+    await view.act(() => second.dispatchEvent(new view.dom.window.Event('load')));
+    await view.act(() => mock.timers.tick(6100));
+    mock.timers.reset();
+    assert.match(view.cards()[1].querySelector('.insert-surface-note').getAttribute('title'), /did not render the component/);
   } finally {
+    mock.timers.reset();
     await view.finish();
   }
 });
 
-test('a card scrolled out of view loses its frame, and gets a new one when it returns', async () => {
-  const view = await setup({ components: mixed() });
-  try {
-    await view.reveal();
-    assert.equal(view.frames().length, 3);
-    await view.act(() => view.observers.show(view.cards()[0], false));
-    assert.equal(view.cards()[0].querySelector('iframe') ?? undefined, undefined);
-    assert.equal(view.frames().length, 3, 'the next visible card takes the place');
-    await view.act(() => view.observers.show(view.cards()[0], true));
-    assert.ok(view.cards()[0].querySelector('iframe'), 'grid order wins the place back');
-    assert.equal(view.frames().length, 3);
-  } finally {
-    await view.finish();
-  }
-});
-
-test('never more frames than the limit', async () => {
+test('never more than three pictures are made at once, however many cards there are', async () => {
   const components = Array.from({ length: 40 }, (_, at) => section(`S${String(at).padStart(2, '0')}`));
   const view = await setup({ components });
   try {
-    await view.reveal();
     assert.equal(view.cards().length, 42, "the forty sections and Astro's two components");
-    assert.equal(view.frames().length, 3, 'only a few pages load at once');
-    await view.settleFrames();
-    assert.equal(view.frames().length, 12, 'the limit, and no more');
-    assert.equal(view.frames()[0].getAttribute('src').includes('c=S00'), true, 'the first cards in grid order get them');
+    assert.equal(producers().length, 3);
+    for (let round = 0; round < 6; round++) {
+      await send(view, producers()[0], tileMessage());
+      assert.ok(producers().length <= 3);
+    }
+    assert.equal(view.frames().length, 6 > 0 ? view.frames().length : 0);
   } finally {
     await view.finish();
   }
@@ -659,7 +744,7 @@ test('there is no large view: Space does nothing on the grid, and the footer onl
     const shifted = await view.press(' ', { shiftKey: true });
     assert.equal(shifted.prevented, false);
     assert.equal(view.container.querySelector('[role="dialog"]') ?? undefined, undefined);
-    assert.equal(view.frames().length, 3, 'no extra frame opens');
+    assert.equal(view.frames().length, 0, 'no extra frame opens');
     assert.equal(view.container.querySelector('.insert-footer').textContent, '↵ insert');
     assert.equal(view.events.inserted.length, 0);
   } finally {
@@ -718,62 +803,6 @@ test('a pointer at rest does not take the highlight from the keyboard, and one t
     assert.equal(marked(), 1, 'entering a card under a resting pointer changes nothing');
     await view.act(() => view.Simulate.mouseMove(view.cards()[3]));
     assert.equal(marked(), 3, 'moving the pointer over a card marks it');
-  } finally {
-    await view.finish();
-  }
-});
-
-/** A fake plan source: the instances it answers with, or a failure, and whether it has answered yet. */
-test('frames load a few at a time in grid order, and the next start as earlier ones answer', async () => {
-  const components = Array.from({ length: 9 }, (_, at) => section(`S${at}`));
-  const view = await setup({ components });
-  try {
-    await view.reveal();
-    // The nine project cards; Astro's two follow them and never load a frame.
-    const loaded = () =>
-      view
-        .cards()
-        .slice(0, 9)
-        .map((card) => card.querySelector('iframe') !== null);
-    assert.deepEqual(loaded(), [true, true, true, false, false, false, false, false, false]);
-    const first = view.frames()[0];
-    await view.act(() =>
-      window.dispatchEvent(
-        new view.dom.window.MessageEvent('message', { source: first.contentWindow, data: { type: 'avb:component-preview', status: 'ready' } }),
-      ),
-    );
-    assert.deepEqual(loaded(), [true, true, true, true, false, false, false, false, false], 'an answer frees a loading place');
-    await view.act(() => view.press('ArrowDown'));
-    assert.equal(view.cards()[0].querySelector('iframe') !== null, true, 'moving the highlight takes no frame away');
-    await view.settleFrames();
-    assert.equal(view.frames().length, 9);
-  } finally {
-    await view.finish();
-  }
-});
-
-test('the pointer inside a live preview highlights its card, a click there inserts, and other windows are ignored', async () => {
-  const view = await setup({ components: mixed() });
-  try {
-    await view.reveal(360);
-    const gesture = (frame, data) => view.act(() => window.dispatchEvent(new view.dom.window.MessageEvent('message', { source: frame.contentWindow, data })));
-    const [, second] = view.frames();
-    await gesture(second, { type: 'avb:component-preview-gesture', gesture: 'pointer' });
-    assert.ok(view.cards()[1].classList.contains('highlight'), 'the pointer coming into the preview marks its card');
-    assert.deepEqual(view.events.inserted, []);
-    await view.act(() =>
-      window.dispatchEvent(new view.dom.window.MessageEvent('message', { source: window, data: { type: 'avb:component-preview-gesture', gesture: 'click' } })),
-    );
-    assert.deepEqual(view.events.inserted, [], 'a message from another window is not a click on the card');
-    await gesture(second, { type: 'avb:component-preview-gesture', gesture: 'drag' });
-    await gesture(second, { type: 'avb:component-preview-gesture' });
-    assert.deepEqual(view.events.inserted, [], 'an unknown gesture does nothing');
-    await gesture(second, { type: 'avb:component-preview-gesture', gesture: 'click' });
-    assert.deepEqual(
-      view.events.inserted.map((item) => item.name),
-      ['Pricing'],
-      'a click in the preview inserts its card',
-    );
   } finally {
     await view.finish();
   }

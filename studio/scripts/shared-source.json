@@ -998,6 +998,7 @@
     "src/features/palette/paletteApps.ts",
     "src/features/palette/paletteModel.ts",
     "src/features/palette/paletteResize.ts",
+    "src/features/palette/previewSnapshotStore.ts",
     "src/features/palette/previewSource.ts",
     "src/features/preview/CanvasView.tsx",
     "src/features/palette/PaletteRowMenu.tsx",

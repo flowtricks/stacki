@@ -1902,17 +1902,64 @@ html[data-platform='win32'] .titlebar {
   box-shadow: inset 0 0 0 2px var(--text);
   pointer-events: none;
 }
-.insert-frame {
+.insert-snapshot {
   position: absolute;
   inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: none;
   background: #f2f2f2;
-  /* A live picture: the pointer reaches the page so hover states show, and the page refuses presses and
-     reports them to the card, which inserts (componentPreview.ts, ComponentPreviewFrame). */
-  pointer-events: auto;
+}
+/* The rendered component, cut to its own box and fitted into the tile (previewSnapshot.ts fitSnapshot). */
+.insert-snapshot-clip {
+  position: absolute;
+  overflow: hidden;
+}
+/* A picture: the pointer passes through to the card, which highlights and inserts. */
+.insert-snapshot-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: none;
+  background: transparent;
+  transform-origin: 0 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.insert-snapshot[data-loaded='true'] .insert-snapshot-frame {
+  opacity: 1;
+  transition: opacity 0.18s ease-out;
+}
+/* The tile before its picture exists: the tile's own size, so the picture replaces it without anything moving. */
+.insert-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, var(--bg-panel-2) 30%, var(--bg-hover) 50%, var(--bg-panel-2) 70%);
+  background-size: 300% 100%;
+  animation: insert-skeleton 1.6s ease-in-out infinite;
+}
+@keyframes insert-skeleton {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .insert-skeleton {
+    animation: none;
+  }
+}
+.insert-surface-retry {
+  margin-top: 2px;
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.insert-surface-retry:hover {
+  background: var(--bg-active);
 }
 .insert-surface-note {
   position: absolute;
@@ -4025,6 +4072,33 @@ body > .embed-editor_provenance {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--text);
+}
+
+  position: sticky;
+  bottom: 8px;
+  margin: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--bg-panel-2);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+  color: var(--text-dim);
+}
+
+/* An insert-palette item with no valid place for the current selection: still listed, dimmed, with the reason below the list. */
+  display: contents;
+}
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+  padding: 8px 12px;
+  background: var(--bg-panel-2);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 /* ------------------------------------------------------------------ */

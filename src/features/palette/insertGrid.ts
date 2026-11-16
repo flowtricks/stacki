@@ -14,50 +14,6 @@ export const INSERT_COLUMNS = 3;
  */
 export const insertResultsMax = 200;
 
-/**
- * Most preview frames mounted at once. A frame runs a whole render
- * of a component on the dev server; the grid keeps the visible ones and drops the rest.
- */
-export const previewFramesMax = 12;
-
-/**
- * Most card frames loading at once. Each one is a full render of a page by the dev server the canvas
- * also uses, so a palette opening on nine visible cards asks for three pages, then the next three as
- * those answer, instead of nine at once. A frame that has answered keeps its place without counting.
- */
-export const frameLoadsMax = 3;
-
-/**
- * The cards that get a frame now: visible ones in grid order, up to `framesMax`, of which at most
- * `frameLoadsMax` are still loading. Grid order and not highlight order, so moving the highlight never
- * takes a frame away from a card that is half loaded.
- */
-export function mountedFrameKeys(
-  orderedKeys: readonly string[],
-  { visible, settled, framesMax }: { readonly visible: ReadonlySet<string>; readonly settled: ReadonlySet<string>; readonly framesMax: number },
-): ReadonlySet<string> {
-  assert(framesMax >= 0, 'The frame limit is not negative');
-  assert(orderedKeys.length <= insertResultsMax, 'Only shown cards are ordered');
-  const keys = new Set<string>();
-  let loading = 0;
-  for (const key of orderedKeys) {
-    if (keys.size >= framesMax) {
-      break;
-    }
-    if (!visible.has(key)) {
-      continue;
-    }
-    if (settled.has(key)) {
-      keys.add(key);
-    } else if (loading < frameLoadsMax) {
-      keys.add(key);
-      loading += 1;
-    }
-  }
-  assert(loading <= frameLoadsMax, 'Never more frames loading than the limit');
-  return keys;
-}
-
 export interface ViewItem {
   readonly cat?: string;
   /** Where a card sits; absent on everything that is not a card. */

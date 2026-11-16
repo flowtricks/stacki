@@ -9,9 +9,10 @@ import { rankInsertItems, tagSearchText } from '../../lib/insertRank';
 import { ASTRO_ASSETS } from './astroAssets';
 import { useAddableComponents } from './componentVisibility';
 import { insertFolderOf, type InsertFolderKey } from './insertFolders';
-import { insertResultsMax, insertView, mountedFrameKeys, moveHighlight, previewFramesMax, type GridMove, type InsertTab } from './insertGrid';
+import { insertResultsMax, insertView, moveHighlight, type GridMove, type InsertTab } from './insertGrid';
 import type { InsertItem } from './insertItem';
 import { InsertCard, InsertHints, InsertPills, InsertRow, type InsertPreviewHost } from './InsertCards';
+import { previewStoreFor, tileId, tileRequests } from './previewTiles';
 import { INSERT_TAB_DEFAULT, loadInsertFolder, loadInsertTab, saveInsertFolder, saveInsertTab } from './insertPreferences';
 import type { AppsEmpty } from './InsertAppRows';
 import { usePaletteResize } from './paletteResize';
@@ -98,6 +99,7 @@ export default function InsertSearch(props: InsertSearchProps) {
   // An app opens rather than inserts; either way the palette's work is done.
   const choose = (entry: PaletteEntry): void => {
     if (entry.type === 'app') {
+  const highlighted = view.shown[highlight];
       onClose();
       entry.app.open();
     } else if (entry.type === 'marketplace') {
@@ -107,11 +109,11 @@ export default function InsertSearch(props: InsertSearchProps) {
       props.onInsert(entry);
     }
   };
-  const host: InsertPreviewHost = {
-    devURL: props.devUrl,
-    trailingSlash: props.trailingSlash ?? 'ignore',
-    resolvePreviewURL: props.resolvePreviewURL,
-  };
+  const store =
+    props.devUrl === undefined || props.projectKey === undefined
+      ? undefined
+      : previewStoreFor(props.projectKey, { devURL: props.devUrl, resolvePreviewURL: props.resolvePreviewURL });
+  const host: InsertPreviewHost = { devURL: props.devUrl, store };
   // Only Components is a grid of live previews; the other tabs are the plain list, which reads faster for tags and names.
   const grid = tab === 'components';
   const paletteRef = useRef<HTMLDivElement>(null);
@@ -178,6 +180,7 @@ export default function InsertSearch(props: InsertSearchProps) {
 function InsertEmpty({ state, onClose }: { readonly state: InsertState; readonly onClose: () => void }) {
   const translate = useTranslate();
   const empty = state.appsEmpty;
+        />
   if (empty === undefined) {
     return <div className="props-empty">{translate('palette.search.noMatches')}</div>;
   }
@@ -186,6 +189,17 @@ function InsertEmpty({ state, onClose }: { readonly state: InsertState; readonly
       empty={empty}
       actions={state.emptyActions}
       highlight={state.highlight}
+/** The reason the highlighted item cannot go where the page's selection points; nothing when it can. */
+  const translate = useTranslate();
+  if (refusal === undefined) {
+    return undefined;
+  }
+  return (
+      {translate(refusal.messageKey, refusal.params)}
+    </div>
+  );
+}
+
       onHover={(index) => {
         state.noteMove('pointer');
         state.setHighlight(index);
@@ -255,7 +269,7 @@ function insertItemKey(item: PaletteEntry): string {
   return JSON.stringify([item.type, item.label]);
 }
 
-function useInsertSearch({ components, allowSlot, projectKey, apps }: InsertSearchProps) {
+function useInsertSearch({ components, allowSlot, projectKey, apps, devUrl, trailingSlash, resolvePreviewURL }: InsertSearchProps) {
   const [query, setQuery] = useState('');
   const role = useCurrentRole();
   const appsShown = apps !== undefined && canSeePaletteApps(role);
@@ -282,8 +296,6 @@ function useInsertSearch({ components, allowSlot, projectKey, apps }: InsertSear
   );
   const [highlight, setHighlight] = useState(0);
   const [visibleKeys, setVisibleKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
-  // Cards whose frame has answered (or given up) since they last came into view; they no longer count as loading.
-  const [settledKeys, setSettledKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
   const listRef = useRef<HTMLDivElement>(null);
   // What last moved the highlight. Only the keyboard scrolls the list to it: a pointer resting on a cut-off
   // card must not make the list slide under the pointer.
@@ -349,39 +361,25 @@ function useInsertSearch({ components, allowSlot, projectKey, apps }: InsertSear
       assert(next.size <= insertResultsMax, 'Only shown cards can be visible');
       return next;
     });
-    if (!visible) {
-      // A card that leaves the view loses its frame; when it comes back its page loads again, and counts as loading.
-      setSettledKeys((current) => {
-        if (!current.has(key)) {
-          return current;
-        }
-        const next = new Set(current);
-        next.delete(key);
-        return next;
-      });
+  }, []);
+
+  // Ask the store for every shown card's picture, the visible ones first. A card never loads or unloads as it
+  // scrolls: pictures that exist are shown, the rest are made a few at a time in the order of this list.
+  useEffect(() => {
+    if (projectKey === undefined || devUrl === undefined) {
+      return;
     }
-  }, []);
-
-  const reportSettled = useCallback((key: string) => {
-    setSettledKeys((current) => {
-      if (current.has(key)) {
-        return current;
-      }
-      assert(current.size < insertResultsMax, 'Only shown cards can settle');
-      return new Set([...current, key]);
-    });
-  }, []);
-
-  // The visible cards that get a frame: the first ones in grid order, so a very tall window cannot
-  // push the number of running pages past the limit, and only a few loading at once (insertGrid.ts).
-  const mountedKeys = useMemo((): ReadonlySet<string> => {
-    // Only a card with something to preview takes a frame: Astro's own components have no file, and would hold a loading place forever.
-    const cardKeys = view.shown
-      .filter(isInsertItem)
-      .filter((item) => item.card !== undefined && item.preview !== undefined)
-      .map(insertItemKey);
-    return mountedFrameKeys(cardKeys, { visible: visibleKeys, settled: settledKeys, framesMax: previewFramesMax });
-  }, [view.shown, visibleKeys, settledKeys]);
+    const store = previewStoreFor(projectKey, { devURL: devUrl, resolvePreviewURL });
+    const shown = view.shown.filter(isInsertItem).flatMap((item) => (item.card !== undefined && item.preview !== undefined ? [item.preview] : []));
+    const visibleIds = new Set(
+      view.shown
+        .filter(isInsertItem)
+        .filter((item) => visibleKeys.has(insertItemKey(item)))
+        .flatMap((item) => (item.preview === undefined ? [] : [tileId(item.preview)])),
+    );
+    store.request(tileRequests(shown, devUrl, trailingSlash ?? 'ignore', visibleIds));
+    store.prioritize(new Map([...visibleIds].map((id) => [id, 'visible' as const])));
+  }, [view.shown, visibleKeys, projectKey, devUrl, trailingSlash, resolvePreviewURL]);
 
   return {
     query,
@@ -396,9 +394,7 @@ function useInsertSearch({ components, allowSlot, projectKey, apps }: InsertSear
     setHighlight,
     listRef,
     view,
-    mountedKeys,
     reportVisible,
-    reportSettled,
     noteMove: (by: 'keyboard' | 'pointer') => {
       movedBy.current = by;
     },

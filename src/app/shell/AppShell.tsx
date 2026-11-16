@@ -23,6 +23,7 @@ import LeftRail from '../LeftRail';
 import PageSwitcher from '../../features/pages/PageSwitcher';
 import DynamicPicker from '../DynamicPicker';
 import { DesktopInsertSearch } from './DesktopInsertSearch';
+import { usePreviewPrewarm } from '../../features/palette/previewTiles';
 import AssetsPanel from '../../features/assets/AssetsPanel';
 import TerminalDock from '../../features/terminal/TerminalDock';
 import { cleanError, cleanErrorKeepingReference } from '../../lib/cleanError';
@@ -71,6 +72,8 @@ export function AppShell({ app }: { readonly app: ShellView }) {
   useEffect(() => prewarmSelectorReport(projectPath), [projectPath]);
   // The other panels' chunks and first reads, so each opens on its content the first time.
   useEffect(() => prefetchPanels({ projectPath, preloadChunks: preloadPanels, hostReads: desktopPanelReads(projectPath) }), [projectPath]);
+  // The component pictures of the insert palette, made in the background once the dev server is up, so the palette opens on them.
+  usePreviewPrewarm(projectPath, app.insertables, { devURL: app.devUrl, trailingSlash: app.trailingSlash });
   const gitRepository = app.gitInfo?.isRepo ? app.gitInfo : undefined;
   const gitBranch = gitRepository?.branch;
   const gitHead = gitRepository?.head;
@@ -556,6 +559,7 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
         pageState={app.pageState}
         currentPage={page?.kind === 'route' ? { kind: 'route', route: page.route } : page}
         layouts={app.scan.layouts}
+        insertables={app.insertables}
         currentLayoutName={app.currentLayoutName}
         selectedId={app.selectedId}
         emptyNodeIds={app.emptyNodeIds ?? new Set<string>()}
