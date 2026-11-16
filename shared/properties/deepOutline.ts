@@ -77,17 +77,6 @@ export function parseDeepHoverNode(input: unknown): DeepHoverNode | undefined {
   return undefined;
 }
 
-/**
- * The component a hover inside a closed component says it is in, for the quiet "in HomeHero" hint
- * beside the label: a message's `within`, or undefined when it is not a bounded non-empty name.
- */
-export function parseWithin(input: unknown): string | undefined {
-  if (typeof input !== 'string' || input.length === 0 || input.length > DEEP_COMPONENT_CHARS_MAX) {
-    return undefined;
-  }
-  return input;
-}
-
 /** The message that tells a canvas frame an app's highlight (`canvas.highlight`), or that there is none. */
 export const HIGHLIGHT_MESSAGE = 'avb:highlight';
 

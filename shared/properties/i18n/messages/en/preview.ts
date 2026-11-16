@@ -67,7 +67,6 @@ export const messages = {
   'preview.offline.start': 'Start dev server',
   'preview.offline.title': 'Preview is offline.',
   'preview.offline.usingNode': 'Using Node {version} — {path}',
-  'preview.overlay.within': 'in {name}',
   'preview.overlay.editComponent': 'Edit {name} component',
   'preview.overlay.editTip': 'Edit component',
   'preview.pane.empty': 'Nothing selected to preview. Pick a page on the left.',

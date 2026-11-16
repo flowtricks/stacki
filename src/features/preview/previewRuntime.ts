@@ -424,7 +424,7 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       // it said why it cannot) still shows what the pointer is over: an outline
       // drawn from the frame's own boxes selects nothing.
       if (hoverShown(message.token, refs.render.current)) {
-        noteDeepHover(message.path, message.deep, message.within);
+        noteDeepHover(message.path, message.deep);
         drawSentBoxes(message.path, message.boxes, setters);
         setters.setCanvasHover(message.path);
         setters.setCanvasHoverPseudo(message.pseudo);

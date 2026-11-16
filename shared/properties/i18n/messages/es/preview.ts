@@ -67,7 +67,6 @@ export const messages = {
   'preview.offline.start': 'Iniciar servidor de desarrollo',
   'preview.offline.title': 'La vista previa está sin conexión.',
   'preview.offline.usingNode': 'Usando Node {version} — {path}',
-  'preview.overlay.within': 'en {name}',
   'preview.overlay.editComponent': 'Editar el componente {name}',
   'preview.overlay.editTip': 'Editar componente',
   'preview.pane.empty': 'No hay nada seleccionado para previsualizar. Elige una página a la izquierda.',

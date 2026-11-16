@@ -1,5 +1,5 @@
 import { outsideScope } from '../../../shared/properties/deepOutline';
-import { canvasHighlight, deepHoverNode, deepHoverWithin, subscribeCanvasHighlight } from '../../ui/canvasOutlineMode';
+import { canvasHighlight, deepHoverNode, subscribeCanvasHighlight } from '../../ui/canvasOutlineMode';
 import type { CanvasHighlight } from '../../../shared/properties/deepOutline';
 import React, { useSyncExternalStore } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -37,8 +37,6 @@ export interface OverlayInfo {
   readonly childCount: number;
   readonly isLayout: boolean;
   readonly bound: boolean;
-  /** The component an element's markup lives in, when the label names the element under the pointer rather than the instance: shown as a quiet hint. */
-  readonly within?: string | undefined;
 }
 
 export interface SpacingHover {
@@ -101,7 +99,6 @@ export function deepOutlineInfo(path: string): OverlayInfo | undefined {
     bound: false,
   };
 }
-    within: deepHoverWithin(path),
 
 export function PreviewOverlays(props: PreviewOverlaysProps) {
   return (
@@ -173,7 +170,6 @@ function NodeOutlines(props: PreviewOverlaysProps) {
           {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (
             <span className="node-outline-edit" aria-hidden="true">
               <ComponentEditIcon size={12} />
-  const translate = useTranslate();
             </span>
           )}
         </span>
@@ -203,7 +199,6 @@ function ComponentEditButton({
   if (info.dynamicTag) {
     return undefined;
   }
-          {info.within !== undefined && <span className="node-outline-within">{translate('preview.overlay.within', { name: info.within })}</span>}
   if (!onOpen) {
     return undefined;
   }

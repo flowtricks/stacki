@@ -46,51 +46,24 @@ export interface DeepHover {
   readonly node: DeepHoverNode;
 }
 
-// A deep hover, with the instance the open file owns that holds it: what a click selects.
-interface InnerNode extends DeepHover {
-  readonly owner: string;
-}
-
 /**
- * What the editor would outline under `target` with the closed component the pointer is in open
- * for editing: the deepest node of that component's own file inside the instance (frameLayers.ts).
- * The page's layout counts as the page, as the editor treats its chrome, so a link in the layout's
- * Nav is Nav's, not BaseLayout's. A component instance in that file is labelled as an instance; an
- * element by its first class, else its tag (the Navigator's row name), never by the enclosing
- * component, which it is not.
- *
- * In normal mode the component's own root element is the instance the open file wrote, so it keeps
- * the instance's outline and name (undefined here); deep mode names that root element too. A click
- * never takes this path: it still selects the instance the open file owns. Undefined on the open
- * file's own markup outside any closed component.
+ * In deep mode, what the editor would outline under `target` with the closed component the
+ * pointer is in open for editing: the deepest node of that component's own file inside the
+ * instance (frameLayers.ts). The page's layout counts as the page, as the editor treats its
+ * chrome, so a link in the layout's Nav is Nav's, not BaseLayout's. A component instance in
+ * that file is labelled as an instance; an element by its first class, else its tag.
+ * Undefined in normal mode, and on the open file's own markup outside any closed component.
  */
 export function deepHoverAt(target: Element | undefined, path: string | undefined): DeepHover | undefined {
-  const found = innerNodeAt(target, path);
-  if (found === undefined || target === undefined) {
-    return undefined;
-  }
-  if (mode === 'normal' && elementOf(target, found.owner) === elementOf(target, found.path)) {
-    return undefined;
-  }
-  return { path: found.path, occurrence: found.occurrence, node: found.node };
-}
-
-/** The component a normal-mode hover is inside, for the "in HomeHero" hint; undefined in deep mode, where the node stands alone. */
-export function hoverWithin(hover: DeepHover): string | undefined {
-  return mode === 'normal' ? componentNameOf(hover.path) : undefined;
-}
-
-function innerNodeAt(target: Element | undefined, path: string | undefined): InnerNode | undefined {
-  if (target === undefined) {
+  if (mode !== 'deep' || target === undefined) {
     return undefined;
   }
   const outerFirst = [...layersAt(target)].reverse();
   const outermost = outerFirst[0];
   // The page's layout renders the document itself: its markup is the page's, and the closed component is inside it.
   const start = outermost !== undefined && outerFirst.length > 1 && rendersDocument(target, outermost.path) ? 1 : 0;
-  const owner = outerFirst[start];
   const shown = outerFirst[start + 1];
-  if (owner === undefined || shown === undefined) {
+  if (shown === undefined) {
     return undefined;
   }
   if (path !== undefined && namespaceOf(shown.path) === namespaceOf(path)) {
@@ -98,7 +71,7 @@ function innerNodeAt(target: Element | undefined, path: string | undefined): Inn
   }
   const rendered = outerFirst[start + 2];
   const node = rendered === undefined ? elementNode(target, shown.path) : componentNode(rendered.path);
-  return node === undefined ? undefined : { path: shown.path, occurrence: shown.occurrence, node, owner: owner.path };
+  return node === undefined ? undefined : { path: shown.path, occurrence: shown.occurrence, node };
 }
 
 // A component instance, named for the component its rendered markup belongs to.

@@ -6,7 +6,7 @@
 // instance there, with its component's name, so it draws as any instance does; but a click and the context menu still name what the open page
 // owns, the closed instance. Selection is the one way the editor's Delete, cut,
 // paste, duplicate and drag reach a node, so none of them can reach an element
-// inside a closed component. Normal mode labels the hover the same way, with the component as a hint.
+// inside a closed component. Normal mode is unchanged.
 //
 // Method: the built preload over jsdom markup written as the marker serializer
 // writes it (instanceRoot.test.js's harness), driven by the messages and pointer
@@ -66,11 +66,7 @@ const LINK = 'src/components/NavLink.astro|';
   const fire = (element, type) => element.dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true }));
 
   fire(home, 'mousemove');
-  // Normal mode names what is under the pointer too, never the enclosing component: the NavLink instance
-  // inside Nav, with Nav as the quiet hint. Only the hover moves; the click below still selects '0'.
-  assert.equal(last('avb:hover-node')?.path, `${NAV}0.0`, 'normal mode: the hover names the node under the pointer');
-  assert.equal(last('avb:hover-node')?.deep?.label, 'NavLink');
-  assert.equal(last('avb:hover-node')?.within, 'Nav');
+  assert.equal(last('avb:hover-node')?.path, '0', 'normal mode: the hover names the closed instance');
 
   tell({ type: 'avb:outline-mode', mode: 'deep' });
   fire(window.document.getElementById('hero'), 'mousemove');
@@ -88,8 +84,7 @@ const LINK = 'src/components/NavLink.astro|';
   tell({ type: 'avb:outline-mode', mode: 'normal' });
   fire(window.document.getElementById('hero'), 'mousemove');
   fire(home, 'mousemove');
-  assert.equal(last('avb:hover-node')?.path, `${NAV}0.0`, 'back to normal: the node under the pointer again');
-  assert.equal(last('avb:hover-node')?.within, 'Nav');
+  assert.equal(last('avb:hover-node')?.path, '0', 'back to normal: the instance again');
   console.log('deep-outline-safety: passed');
   dom.window.close();
   process.exit(0);
