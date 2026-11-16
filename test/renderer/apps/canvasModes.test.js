@@ -40,7 +40,8 @@ test('deep mode outlines what editing the closed component would, and only on ho
     frame.resetFocusCache();
     frame.collectRegions();
     const home = document.getElementById('home');
-    assert.equal(frame.deepHoverAt(home, '0'), undefined, 'normal mode: the open page owns the hover');
+    // Normal mode names what is under the pointer too (hoverLabel.test.js); here the link is NavLink's root, so the page keeps it.
+    assert.equal(frame.deepHoverAt(home, '0')?.node.label, 'NavLink');
     assert.equal(frame.receiveOutlineMode({ type: 'avb:outline-mode', mode: 'deep' }), true);
     assert.equal(frame.outlineMode(), 'deep');
     // The innermost instance: the <NavLink> in Nav.astro, named as the component it renders.

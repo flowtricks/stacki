@@ -3,4 +3,4 @@
 export { collectRegions, setTracking, resetFocusCache } from '../../../electron/preload/frameRegions';
 export { layersAt, resolveChain, parseFrameChain } from '../../../electron/preload/frameLayers';
 export { receivePointQuery } from '../../../electron/preload/framePointQuery';
-export { receiveOutlineMode, deepHoverAt, outlineMode } from '../../../electron/preload/frameOutlineMode';
+export { receiveOutlineMode, deepHoverAt, hoverWithin, outlineMode } from '../../../electron/preload/frameOutlineMode';

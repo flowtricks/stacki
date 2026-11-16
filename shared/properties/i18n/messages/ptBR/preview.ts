@@ -67,6 +67,7 @@ export const messages = {
   'preview.offline.start': 'Iniciar servidor de desenvolvimento',
   'preview.offline.title': 'A visualização está offline.',
   'preview.offline.usingNode': 'Usando Node {version} — {path}',
+  'preview.overlay.within': 'em {name}',
   'preview.overlay.editComponent': 'Editar o componente {name}',
   'preview.overlay.editTip': 'Editar componente',
   'preview.pane.empty': 'Nada selecionado para visualizar. Escolha uma página à esquerda.',

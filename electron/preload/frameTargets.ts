@@ -25,7 +25,7 @@ import { forgetUnionBoxes, unionTargetAt } from './frameUnionTarget';
 import { type PseudoLayer } from '../../shared/page/pseudoPath';
 import type { FramePointHit } from './framePointQuery';
 import { LOOK_EVERY, mutationKind, occurrenceOf, queueRects, remeasure, remeasureStyles, watchMotion } from './frameReports';
-import { deepHoverAt } from './frameOutlineMode';
+import { deepHoverAt, hoverWithin } from './frameOutlineMode';
 import { iterationsForRun } from './frameIterations';
 
 // The app tracks a node, so the frame is the canvas: clicks select.
@@ -39,10 +39,25 @@ let lastHover: { readonly path: string | undefined; readonly occurrence: number;
 // still pointer is hit-tested again rather than leaving the old outline behind.
 let lastPointer: { readonly x: number; readonly y: number } | undefined;
 
+// The deep hover of the last element the pointer was on: moving inside one element asks the layers once, not per move.
+let lastDeep: { readonly element: Element; readonly path: string | undefined; readonly deep: ReturnType<typeof deepHoverAt> } | undefined;
+
+function deepHoverOf(element: Element | undefined, path: string | undefined): ReturnType<typeof deepHoverAt> {
+  if (element === undefined) {
+    return undefined;
+  }
+  if (lastHover !== undefined && lastDeep !== undefined && lastDeep.element === element && lastDeep.path === path) {
+    return lastDeep.deep;
+  }
+  const deep = deepHoverAt(element, path);
+  lastDeep = { element, path, deep };
+  return deep;
+}
+
 // Tells the app what the pointer is over, when that changed.
 function reportHover(scoped: ReturnType<typeof nodeAt>, element: Element | undefined): void {
-  // In deep outline mode a hover inside a closed component names the element there (frameOutlineMode.ts); a click never does.
-  const deep = deepHoverAt(element, scoped.path);
+  // A hover inside a closed component names the node there, not the instance (frameOutlineMode.ts); a click never does.
+  const deep = deepHoverOf(element, scoped.path);
   const { path: nodePath, occurrence, pseudo } = deep === undefined ? scoped : { ...deep, pseudo: undefined };
   if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence || pseudo !== lastHover.pseudo) {
     lastHover = { path: nodePath, occurrence, pseudo };
@@ -52,6 +67,7 @@ function reportHover(scoped: ReturnType<typeof nodeAt>, element: Element | undef
       occurrence,
       ...pseudoField(pseudo),
       ...(deep === undefined ? {} : { deep: deep.node }),
+      ...(deep === undefined || hoverWithin(deep) === undefined ? {} : { within: hoverWithin(deep) }),
       ...boxesField(nodePath, { measurable: pseudo === undefined && deep === undefined }),
     });
   }

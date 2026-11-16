@@ -47,11 +47,11 @@ export function subscribeCanvasOutlineMode(listener: () => void): () => void {
 // How the latest deep hover's node is labelled, by its canvas path: the frame says it
 // with the hover (previewRuntime.ts), and the outline reads it to draw the node as the
 // editor draws one with its component open (PreviewOverlays.tsx).
-let deepHover: { readonly path: string; readonly node: DeepHoverNode } | undefined;
+let deepHover: { readonly path: string; readonly node: DeepHoverNode; readonly within: string | undefined } | undefined;
 
 /** Notes the canvas's latest hover: a deep one with its node, or any other, which clears it. */
-export function noteDeepHover(path: string | undefined, node: DeepHoverNode | undefined): void {
-  deepHover = path === undefined || node === undefined ? undefined : { path, node };
+export function noteDeepHover(path: string | undefined, node: DeepHoverNode | undefined, within: string | undefined): void {
+  deepHover = path === undefined || node === undefined ? undefined : { path, node, within };
   assert(deepHover === undefined || deepHover.node.label.length > 0, 'noteDeepHover: a deep hover labels its node');
 }
 
@@ -61,6 +61,11 @@ export function deepHoverNode(path: string): DeepHoverNode | undefined {
     return highlight.node;
   }
   return deepHover?.path === path ? deepHover.node : undefined;
+}
+
+/** The component the latest deep hover at `path` is inside, for the "in HomeHero" hint. */
+export function deepHoverWithin(path: string): string | undefined {
+  return deepHover?.path === path ? deepHover.within : undefined;
 }
 
 /** Shows a highlight, or clears it with undefined, and tells the canvas (Studio's frame draws it). */

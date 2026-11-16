@@ -1,4 +1,4 @@
-import { parseDeepHoverNode, type DeepHoverNode } from '../../../shared/properties/deepOutline';
+import { parseDeepHoverNode, parseWithin, type DeepHoverNode } from '../../../shared/properties/deepOutline';
 import { isReservedShortcut, type AppReservedShortcut } from '../../../shared/properties/appShortcuts';
 import { parseContextPoint, type ContextPoint } from './contextPosition';
 import { canvasClickBox, coordinateOf, type CanvasClickBox } from '../../ui/canvasClickSlot';
@@ -42,6 +42,8 @@ export type PreviewMessage =
       readonly kind: 'hover-node';
       readonly pseudo: PseudoLayer | undefined;
       readonly deep: DeepHoverNode | undefined;
+      /** `within` is the closed component a deep hover is in, for the "in HomeHero" hint beside its label. */
+      readonly within: string | undefined;
       readonly boxes: readonly Box[] | undefined;
     } & LocatedEvent)
   | ({
@@ -220,6 +222,7 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         ...parseLocatedMessage(value),
         pseudo: parseLocatedPseudo(value),
         deep: parseDeepHoverNode(value['deep']),
+        within: parseWithin(value['within']),
         boxes: parseSentBoxes(value['boxes']),
       };
     case 'avb:click-node':
