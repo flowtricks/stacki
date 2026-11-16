@@ -16,6 +16,7 @@ import { canvasSelects } from './frameInteraction';
 import { exposeBridge } from './preloadBridge';
 import { listenForDesign, markFrameMode } from './frameDesign';
 import { listenForQueries, startWhenReady } from './frameQueries';
+import { rememberScrollAcrossRecovery } from './frameScrollMemory';
 
 // A Stacki app's frame (stacki-app:) is the app's own sandboxed document: it
 // gets neither half. It talks to Stacki only through postMessage and the RPC.
@@ -39,6 +40,7 @@ if (location.protocol === 'stacki-app:') {
     });
   });
   markFrameMode();
+  rememberScrollAcrossRecovery();
   listenForDesign();
   listenForQueries();
   startWhenReady();

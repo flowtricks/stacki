@@ -9,9 +9,11 @@ export const messages = {
   'shell.ai.yourFileNow': 'Votre fichier actuel',
   'shell.apps.tooLargeToUndo': '{label} : trop volumineux pour être annulé',
   'shell.canvas.copyDetails': 'Copier les détails',
+  'shell.canvas.errorShown': 'La page ne peut pas s’afficher : {message}',
   'shell.canvas.otherPage':
     'Le canevas n’affiche pas {file} pour le moment. Il affiche peut-être une erreur, une redirection ou une autre page : les clics sélectionnent donc la page plutôt que ses éléments.',
   'shell.canvas.outOfStep': 'Le canevas n’a pas rattrapé vos fichiers à temps : ce clic n’a rien sélectionné. Rechargez le canevas pour le resynchroniser.',
+  'shell.canvas.recovered': 'Corrigé : la page est de retour',
   'shell.canvas.reload': 'Recharger le canevas',
   'shell.canvas.tooLarge':
     'Cette page est trop grande pour que le canevas la relie à ses fichiers : les clics ne peuvent pas sélectionner. Sélectionnez les éléments dans le Navigateur.',

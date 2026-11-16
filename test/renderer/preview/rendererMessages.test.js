@@ -111,18 +111,6 @@ async function main() {
     true,
   );
 
-  const { createPreviewWatch } = loadRenderer('src/features/preview/previewRecovery.ts');
-  for (const duration of [-1, NaN, Infinity, 0.5, 2_147_483_648]) {
-    assert.throws(
-      () =>
-        createPreviewWatch({
-          probe: async () => ({ ok: true }),
-          onRecover() {},
-          retryMs: duration,
-        }),
-      /Preview interval/,
-    );
-  }
   console.log('renderer-messages: parser rejection, held replies, cancellation and bounds passed');
 }
 main().catch((error) => {

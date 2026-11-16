@@ -9,7 +9,8 @@ import { astroChangeMessages } from '../../../shared/properties/astroFileChanges
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToastStack, type ToastNotice } from '../../features/notifications/useToastStack';
 import type { ScanResult } from '../../../shared/properties/projectScan';
-import { createPreviewWatch } from '../../features/preview/previewRecovery';
+import { createCanvasRecovery, isCurrentPageFailure, type CanvasRecovery } from '../../features/preview/canvasRecovery';
+import { publishCanvasRecovery } from '../../features/preview/canvasRecoveryBus';
 import { tellCanvas } from '../../editor/canvasQuery';
 import { readPage, scanProject } from '../../ipc/bridge';
 import { assert } from '../../../shared/core/assert';
@@ -32,7 +33,7 @@ import {
   onPreviewFailed,
   onDevLog,
   onPageMaybeChanged,
-  probeProjectPreview,
+  inspectProjectPreview,
   readProjectClasses,
   startProjectPreview,
   stopProjectPreview,
@@ -216,52 +217,64 @@ export function useDevEvents(coreState: ReturnType<typeof useCoreState>, assetPi
   return recovery;
 }
 
-// Recovering the preview after a compile error. The frame load seeds a check,
-// so startup and navigation errors recover even when no file watcher fires.
+// Getting the canvas back from an error page by itself (src/features/preview/canvasRecovery.ts, docs/canvas-recovery.md).
+// Everything that could have fixed the page is a trigger: the app's own writes (apply, undo, redo), a change made
+// outside the app, a dev server that came back, the window coming back to the front, and a bounded poll.
 function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
   const { devUrl, livePathRef, setRefreshKey } = coreState;
-  const previewWatchRef = useRef<ReturnType<typeof createPreviewWatch> | undefined>(undefined);
+  const recoveryRef = useRef<CanvasRecovery | undefined>(undefined);
   const previewLoadPendingRef = useRef(false);
+  const shownPathRef = useRef<string | undefined>(undefined);
   const previewLoaded = useCallback((): void => {
-    const watch = previewWatchRef.current;
-    if (watch === undefined) {
+    const recovery = recoveryRef.current;
+    if (recovery === undefined) {
       previewLoadPendingRef.current = true;
       return;
     }
-    watch.poke();
-  }, []);
-  // See src/features/preview/previewRecovery.ts for what this is for and why it asks the server
-  // rather than reading the error screen or the log.
+    // A load of another page is a new page: nothing is known about it yet.
+    const path = livePathRef.current || '/';
+    if (shownPathRef.current !== undefined && shownPathRef.current !== path) {
+      recovery.pageChanged();
+    }
+    shownPathRef.current = path;
+    recovery.loaded();
+  }, [livePathRef]);
   // The route is read through `livePathRef` rather than named as a dependency:
   // it is assigned far below this hook, so a dep array mentioning it reads it
   // before its declaration and the whole app throws (see test/renderer/app/appRenders.test.js,
   // which is here because that has happened before). The ref is current by the
-  // time a probe actually runs, and the watch has no reason to be rebuilt just
+  // time a check actually runs, and the controller has no reason to be rebuilt just
   // because the route changed.
   useEffect(() => {
     if (!devUrl) {
       return undefined;
     }
-    // Both of these arrive with the main process, which does not reload when the
+    // These arrive with the main process, which does not reload when the
     // renderer does (see VITE_DEV_SERVER_URL): a renderer newer than the bridge
     // would call undefined and take the app down with it. Absent means there is
     // nothing to ask, which is the same answer as having no dev server.
-    if (typeof window.avb.probeDevPage !== 'function' || typeof window.avb.onPageMaybeChanged !== 'function') {
+    if (typeof window.avb.inspectDevPage !== 'function' || typeof window.avb.onPageMaybeChanged !== 'function') {
       return undefined;
     }
-    const watch = createPreviewWatch({
-      probe: () => probeProjectPreview(devUrl + (livePathRef.current || '/')),
-      onRecover: () => setRefreshKey((count) => count + 1),
+    const pageUrl = (): string => new URL(livePathRef.current || '/', devUrl).href;
+    const recovery = createCanvasRecovery({
+      pageUrl,
+      inspect: inspectProjectPreview,
+      reload: () => setRefreshKey((count) => count + 1),
+      visible: () => document.visibilityState === 'visible',
+      onEvent: publishCanvasRecovery,
     });
-    previewWatchRef.current = watch;
+    recoveryRef.current = recovery;
+    // A dev server that has just started (or restarted) may be serving an error the canvas was never told of.
+    recovery.trigger('restart');
     if (previewLoadPendingRef.current) {
       previewLoadPendingRef.current = false;
-      watch.poke();
+      recovery.loaded();
     }
-    const offFailure = subscribePreviewFailure(devUrl, livePathRef, watch);
+    const offFailure = subscribePreviewFailure(recovery, pageUrl);
     // Every write the app makes, plus every change made outside it.
     const offWrite = onPageMaybeChanged((event) => {
-      watch.poke();
+      recovery.trigger(event.external ? 'external' : 'write');
       // A change from outside the app — an editor, a script, a checkout. The
       // canvas normally hears about it over the dev server's HMR socket, and
       // when that socket has gone quiet (a dev server restarted under a canvas
@@ -272,27 +285,32 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
         tellCanvas({ type: 'avb:patch-now' });
       }
     });
+    const onVisible = (): void => recovery.visibilityChanged();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
     return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
       offWrite();
       offFailure();
-      watch.stop();
-      if (previewWatchRef.current === watch) {
-        previewWatchRef.current = undefined;
+      recovery.stop();
+      if (recoveryRef.current === recovery) {
+        recoveryRef.current = undefined;
       }
     };
   }, [devUrl, livePathRef, setRefreshKey]);
   return { previewLoaded };
 }
 
-// Only the currently displayed page may trigger recovery; a late failure from
+// Only the currently displayed page may start recovery; a late failure from
 // a previous page or another iframe must not interrupt the user's navigation.
-function subscribePreviewFailure(origin: string, path: { readonly current: string | undefined }, watch: ReturnType<typeof createPreviewWatch>): () => void {
+function subscribePreviewFailure(recovery: CanvasRecovery, pageUrl: () => string): () => void {
   if (typeof window.avb.onPreviewFailed !== 'function') {
     return () => {};
   }
   return onPreviewFailed((failedURL) => {
-    if (failedURL === new URL(path.current || '/', origin).href) {
-      watch.failed();
+    if (isCurrentPageFailure(failedURL, pageUrl())) {
+      recovery.failed(failedURL);
     }
   });
 }

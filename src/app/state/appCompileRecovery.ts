@@ -1,16 +1,17 @@
-// The notice for a page that stopped compiling right after an edit (compileRecovery.ts): the
-// compiler's message, with "Undo last change" as the first action. The undo is the app's own
-// (history, the same one ⌘Z runs), so the file is restored through the normal path and the
-// preview recovers by itself once it compiles again.
+// The notice for a page the canvas cannot show (src/features/preview/canvasRecovery.ts finds the error and
+// brings the canvas back by itself): the dev server's own words, "Undo last change" when the failure follows the
+// app's own write (the app's history, the same one ⌘Z runs, so the file is restored through the normal path), and
+// "Reload canvas". A different error replaces the notice; the page coming back takes it down and says so briefly.
 import { useEffect, useRef } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { inspectProjectPreview, onPageMaybeChanged, onPreviewFailed } from '../../ipc/appBridge';
+import { onPageMaybeChanged } from '../../ipc/appBridge';
+import { onCanvasRecovery } from '../../features/preview/canvasRecoveryBus';
 import { dismissErrorToast, reportActionToast } from '../../ui/errorNotices';
-import { compileFailureMessage, failureFollowsEdit } from '../model/compileRecovery';
+import { failureFollowsEdit } from '../model/compileRecovery';
 import type { useCoreState } from './appLifecycle';
 
 export function useCompileFailureNotice(coreState: ReturnType<typeof useCoreState>, undo: () => Promise<void>): void {
-  const { devUrl, livePathRef } = coreState;
+  const { devUrl, setRefreshKey } = coreState;
   const translate = useTranslate();
   const lastWriteRef = useRef(-Infinity);
   const shownRef = useRef<string | undefined>(undefined);
@@ -20,53 +21,72 @@ export function useCompileFailureNotice(coreState: ReturnType<typeof useCoreStat
     if (!devUrl) {
       return undefined;
     }
-    // Both arrive with the main process, which a newer renderer may outrun: absent means nothing to ask.
-    if (
-      typeof window.avb.onPreviewFailed !== 'function' ||
-      typeof window.avb.onPageMaybeChanged !== 'function' ||
-      typeof window.avb.inspectDevPage !== 'function'
-    ) {
+    // The bridge arrives with the main process, which a newer renderer may outrun: absent means nothing to hear.
+    if (typeof window.avb.onPageMaybeChanged !== 'function') {
       return undefined;
     }
-    const dismiss = (): void => {
-      if (shownRef.current !== undefined) {
-        dismissErrorToast(shownRef.current);
-        shownRef.current = undefined;
+    const dismiss = (): boolean => {
+      const shown = shownRef.current;
+      if (shown === undefined) {
+        return false;
       }
+      dismissErrorToast(shown);
+      shownRef.current = undefined;
+      return true;
     };
     const offWrite = onPageMaybeChanged((event) => {
       if (!event.external) {
         lastWriteRef.current = Date.now();
       }
     });
-    const offFailure = onPreviewFailed((failedURL) => {
-      // Only the page on show, and only a failure that follows the app's own write: an old page's failure is nobody's undo.
-      if (failedURL !== new URL(livePathRef.current || '/', devUrl).href || !failureFollowsEdit(lastWriteRef.current, Date.now())) {
-        return;
-      }
-      inspectProjectPreview(failedURL)
-        .then((health) => {
-          const message = compileFailureMessage(health);
+    const offRecovery = onCanvasRecovery((event) => {
+      switch (event.kind) {
+        case 'failed': {
+          // Until the dev server has said why there is nothing to show; Astro's own page is on the canvas meanwhile.
+          const message = event.error.message;
           if (message === undefined) {
             return;
           }
           dismiss();
-          shownRef.current = reportActionToast(translate('structure.placement.compileFailed', { message }), 'error', [
-            {
-              label: translate('structure.placement.undoLast'),
-              run: () => {
-                dismiss();
-                void undoRef.current();
-              },
+          const afterEdit = failureFollowsEdit(lastWriteRef.current, Date.now());
+          const reload = { label: translate('shell.canvas.reload'), run: () => setRefreshKey((count) => count + 1) };
+          const undoLast = {
+            label: translate('structure.placement.undoLast'),
+            run: () => {
+              dismiss();
+              void undoRef.current();
             },
-          ]);
-        })
-        .catch(() => {});
+          };
+          shownRef.current = reportActionToast(
+            translate(afterEdit ? 'structure.placement.compileFailed' : 'shell.canvas.errorShown', { message }),
+            'error',
+            afterEdit ? [undoLast, reload] : [reload],
+          );
+          return;
+        }
+        case 'recovered': {
+          if (dismiss()) {
+            reportActionToast(translate('shell.canvas.recovered'), 'info', []);
+          }
+          return;
+        }
+        case 'left': {
+          dismiss();
+          return;
+        }
+        case 'gave-up': {
+          return;
+        }
+        default: {
+          const unreachable: never = event;
+          return unreachable;
+        }
+      }
     });
     return () => {
       offWrite();
-      offFailure();
+      offRecovery();
       dismiss();
     };
-  }, [devUrl, livePathRef, translate]);
+  }, [devUrl, setRefreshKey, translate]);
 }

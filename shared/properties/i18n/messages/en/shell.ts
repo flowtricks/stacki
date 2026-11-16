@@ -9,10 +9,12 @@ export const messages = {
   'shell.ai.yourFileNow': 'Your file now',
   'shell.apps.tooLargeToUndo': '{label}: too large to undo',
   'shell.canvas.copyDetails': 'Copy details',
+  'shell.canvas.errorShown': 'The page can’t be shown: {message}',
   'shell.canvas.otherPage':
     'The canvas isn’t showing {file} right now. It may be showing an error, a redirect or another page, so clicks select the page instead of elements in it.',
   'shell.canvas.outOfStep':
     'The canvas didn’t catch up with your files in time, so that click didn’t select anything. Reload the canvas to bring it back in step.',
+  'shell.canvas.recovered': 'Fixed: the page is back',
   'shell.canvas.reload': 'Reload canvas',
   'shell.canvas.tooLarge':
     'This page is larger than the canvas can match to its files, so clicks on it can’t select. Select elements in the Navigator instead.',

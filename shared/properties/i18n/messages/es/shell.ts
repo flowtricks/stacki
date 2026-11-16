@@ -9,9 +9,11 @@ export const messages = {
   'shell.ai.yourFileNow': 'Tu archivo ahora',
   'shell.apps.tooLargeToUndo': '{label}: demasiado grande para deshacer',
   'shell.canvas.copyDetails': 'Copiar detalles',
+  'shell.canvas.errorShown': 'No se puede mostrar la página: {message}',
   'shell.canvas.otherPage':
     'El lienzo no está mostrando {file} ahora mismo. Puede que muestre un error, una redirección u otra página, así que los clics seleccionan la página en lugar de sus elementos.',
   'shell.canvas.outOfStep': 'El lienzo no se puso al día con tus archivos a tiempo, así que ese clic no seleccionó nada. Recarga el lienzo para sincronizarlo.',
+  'shell.canvas.recovered': 'Arreglado: la página ha vuelto',
   'shell.canvas.reload': 'Recargar lienzo',
   'shell.canvas.tooLarge':
     'Esta página es más grande de lo que el lienzo puede relacionar con sus archivos, así que los clics no pueden seleccionar. Selecciona los elementos en el Navegador.',

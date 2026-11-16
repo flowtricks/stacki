@@ -9,10 +9,12 @@ export const messages = {
   'shell.ai.yourFileNow': 'Deine Datei jetzt',
   'shell.apps.tooLargeToUndo': '{label}: zu groß zum Rückgängigmachen',
   'shell.canvas.copyDetails': 'Details kopieren',
+  'shell.canvas.errorShown': 'Die Seite kann nicht angezeigt werden: {message}',
   'shell.canvas.otherPage':
     'Der Canvas zeigt {file} gerade nicht. Möglicherweise zeigt er einen Fehler, eine Weiterleitung oder eine andere Seite, daher wählen Klicks die Seite statt ihrer Elemente aus.',
   'shell.canvas.outOfStep':
     'Der Canvas hat deine Dateien nicht rechtzeitig eingeholt, daher hat dieser Klick nichts ausgewählt. Lade den Canvas neu, um ihn wieder abzugleichen.',
+  'shell.canvas.recovered': 'Behoben: Die Seite ist wieder da',
   'shell.canvas.reload': 'Canvas neu laden',
   'shell.canvas.tooLarge':
     'Diese Seite ist größer, als der Canvas ihren Dateien zuordnen kann, daher können Klicks nichts auswählen. Wähle Elemente stattdessen im Navigator aus.',
