@@ -145,6 +145,7 @@ export function planSharedPropertyChange(location: SharedLocation, source: strin
       return planSharedSave(location, source, type, sharedSaveOf(change, type, local));
     case 'order':
     case 'source':
+    case 'variantRules':
       return undefined;
     default: {
       const exhaustive: never = change;
@@ -162,6 +163,7 @@ function sharedChangeName(change: PropertyChange): string | undefined {
       return change.name;
     case 'order':
     case 'source':
+    case 'variantRules':
       return undefined;
     default: {
       const exhaustive: never = change;

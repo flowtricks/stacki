@@ -9,6 +9,7 @@ import { literalOptions } from '../../shared/properties/propertyOptions';
 import { sameFilesystemPath } from '../lib/platform';
 import { readComponentProperties } from './propertyDefinitions';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
+import { planVariantRuleChanges } from './variantRulePlan';
 interface PropertyLocation {
   readonly projectPath: string;
   readonly file: string;
@@ -28,6 +29,9 @@ export function planPropertyChanges(request: PropertyEditRequest, source: string
   const first = { file: request.file, before: request.source, after: source };
   if (change.kind === 'remove') {
     return planPropertyRemoval(request, first, change.name);
+  }
+  if (change.kind === 'variantRules') {
+    return planVariantRuleChanges(request, first, change.edit);
   }
   const propertyRename = propertyRenameForChange(change);
   const optionRenames = change.kind === 'save' ? (change.optionRenames ?? []) : [];

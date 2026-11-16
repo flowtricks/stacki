@@ -6,6 +6,7 @@ import { toRecord } from '../core/record';
 import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import type { Result } from '../core/result';
 import { parseRefusal, type PropertyError } from './propertyErrors';
+import { parseVariantGroups, parseVariantRuleEdit, type VariantGroup, type VariantRuleEdit } from './variantRules';
 
 export const PROPERTY_LIMITS = {
   fieldsMax: LIMITS.propSchemaFieldsMax,
@@ -72,6 +73,8 @@ export interface ComponentProperties {
   readonly properties: readonly ComponentProperty[];
   readonly frontmatter: string;
   readonly advanced: boolean;
+  /** The discriminated unions the props combine, which the panel edits as variant rules (variantRules.ts). */
+  readonly variantGroups?: readonly VariantGroup[];
 }
 export interface PropertyOptionRename {
   readonly from: string;
@@ -87,7 +90,8 @@ export type PropertyChange =
   | { readonly kind: 'remove'; readonly name: string }
   | { readonly kind: 'order'; readonly names: readonly string[] }
   | { readonly kind: 'options'; readonly name: string; readonly type: string }
-  | { readonly kind: 'source'; readonly frontmatter: string };
+  | { readonly kind: 'source'; readonly frontmatter: string }
+  | { readonly kind: 'variantRules'; readonly edit: VariantRuleEdit };
 
 export function propertyText(input: unknown): string {
   const value = text(input);
@@ -231,6 +235,8 @@ export function parsePropertyChange(input: unknown): PropertyChange {
         kind: 'source',
         frontmatter: propertySource(value['frontmatter']),
       };
+    case 'variantRules':
+      return { kind: 'variantRules', edit: parseVariantRuleEdit(value['edit']) };
     default:
       throw new Error('Unknown component property change');
   }
@@ -252,6 +258,7 @@ export function parseComponentProperties(input: unknown): ComponentProperties {
     frontmatter: propertySource,
     advanced: boolean,
     properties: (value) => propertyList(value, parseComponentProperty),
+    variantGroups: optional(parseVariantGroups),
   })(input);
 }
 export function parsePropertiesResult<T>(input: unknown, parse: (value: unknown) => T): Result<T, PropertyError> {

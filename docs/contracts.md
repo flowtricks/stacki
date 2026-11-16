@@ -458,6 +458,13 @@ token, and `component:revertProperties` applies that batch's inverse — every
 file checked against the bytes the batch left — and answers with the redo
 token. Main keeps the batches; the renderer holds tokens only.
 
+A component's variant rules travel on the same channels: `component:properties`
+answers with `variantGroups` (`shared/properties/variantRules.ts`, parsed by
+`parseVariantGroups`), and a `{ kind: 'variantRules', edit }` property change
+carries one `VariantRuleEdit`, parsed by `parseVariantRuleEdit` and applied by
+main against the current source as one undoable batch
+(docs/props-variant-rules.md).
+
 The renderer's half (`src/editor/pageEdits.ts`, `src/editor/editGestures.ts`) and the gesture
 parity suite (`test/renderer/editor/gestureParity.test.js`) are described in the tracker,
 Step 6.

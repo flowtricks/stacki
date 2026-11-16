@@ -136,4 +136,42 @@ export const messages = {
   'componentProps.type.noType': 'Kein Typ',
   'componentProps.type.search': 'Arten suchen …', // review
   'componentProps.type.typescript': 'TypeScript', // same
+  'componentProps.variants.addOption': 'Option hinzufügen', // review
+  'componentProps.variants.addProp': 'Eigenschaft hinzufügen', // review
+  'componentProps.variants.badIndex': 'Diese Position liegt außerhalb der Optionen.', // review
+  'componentProps.variants.badValue': 'Verwende einen kurzen Namen ohne Anführungszeichen oder Backslashes.', // review
+  'componentProps.variants.cell': '{prop}, wenn {controller} {value} ist', // review
+  'componentProps.variants.controlledBy': 'Gesteuert von', // review
+  'componentProps.variants.duplicateOption': 'Es gibt bereits eine Option {value}.', // review
+  'componentProps.variants.fallback': 'Standard', // review
+  'componentProps.variants.lastOptions': 'Behalte mindestens zwei Optionen.', // review
+  'componentProps.variants.makeFallback': '{value} zum Standard machen', // review
+  'componentProps.variants.matrix': 'Regeln für {controller}', // review
+  'componentProps.variants.missingGroup': 'Keine Variantenregeln werden von {name} gesteuert.', // review
+  'componentProps.variants.missingOption': 'Es gibt keine Option {value}.', // review
+  'componentProps.variants.missingProp': '{name} gehört nicht zu diesen Variantenregeln.', // review
+  'componentProps.variants.moveOption': '{value} verschieben', // review
+  'componentProps.variants.newOption': 'option', // same
+  'componentProps.variants.noDestructure':
+  'componentProps.variants.noRuntimeType': 'Der Laufzeittyp der Komponente kann hier keine neue Eigenschaft aufnehmen.', // review
+  'componentProps.variants.noType': '{name} hat keinen Typ, der erlaubt werden kann. Gib ihr zuerst einen Typ.', // review
+  'componentProps.variants.optionInCode': 'Der Code der Komponente verwendet {value} auf eine Weise, die Stacki nicht anpassen kann. Ändere es im Quellcode.', // review
+  'componentProps.variants.optionName': 'Option {number}', // same
+  'componentProps.variants.optionPassed': '{file} übergibt {value} als {name}. Ändere zuerst diese Instanz.', // review
+  'componentProps.variants.options': 'Optionen', // review
+  'componentProps.variants.optionsLimit': 'Eine Eigenschaft kann höchstens {max} Optionen haben.', // review
+  'componentProps.variants.propName': 'Name der neuen Eigenschaft', // review
+  'componentProps.variants.readOnly': 'Die von {name} gesteuerten Variantenregeln lassen sich nur im Quellcode ändern.', // review
+  'componentProps.variants.reason.nested': 'Verschachtelt', // review
+  'componentProps.variants.reason.runtime': 'Laufzeit', // review
+  'componentProps.variants.reason.shape': 'Komplex', // review
+  'componentProps.variants.reason.shared': 'Geteilt', // review
+  'componentProps.variants.removeFallback': '{value} ist der Standard. Mache zuerst eine andere Option zum Standard.', // review
+  'componentProps.variants.removeOption': '{value} löschen', // review
+  'componentProps.variants.removeProp': '{name} löschen', // review
+  'componentProps.variants.rules': 'Regeln', // review
+  'componentProps.variants.state.forbidden': 'Nicht erlaubt', // review
+  'componentProps.variants.state.optional': 'Erlaubt', // review
+  'componentProps.variants.state.required': 'Erforderlich', // review
+  'componentProps.variants.title': 'Varianten', // review
 } as const satisfies CatalogOf<MessageKey>;

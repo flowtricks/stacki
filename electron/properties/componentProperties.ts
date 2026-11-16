@@ -24,6 +24,7 @@ import type { DocumentActors, WriteReport } from '../documents/documentActors';
 import { editPropertyDefinition, readComponentProperties } from './propertyDefinitions';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
 import { planSharedPropertyChange, withSharedProperties } from './sharedProperties';
+import { planVariantRuleChanges } from './variantRulePlan';
 
 interface PropertyLocation {
   readonly projectPath: string;
@@ -183,6 +184,9 @@ function planPropertyChanges(request: PropertyEditRequest, source: string): Resu
   const first = { file: request.file, before: request.source, after: source };
   if (change.kind === 'remove') {
     return planPropertyRemoval(request, first, change.name);
+  }
+  if (change.kind === 'variantRules') {
+    return planVariantRuleChanges(request, first, change.edit);
   }
   const propertyRename = propertyRenameForChange(change);
   const optionRenames = change.kind === 'save' ? (change.optionRenames ?? []) : [];

@@ -29,6 +29,8 @@ import {
   validatePropertyCode,
 } from './propertySyntax';
 import type { PropertySyntax, SourceEdit } from './propertySyntax';
+import { editVariantRules } from './variantRuleEdits';
+import { readVariantSyntax, variantGroupsOf } from './variantRuleModel';
 import { bindingEdits, memberComment, memberEdits, sameDeclaration, sameProperty } from './propertyMemberEdits';
 
 interface Definitions {
@@ -53,6 +55,7 @@ export function readComponentProperties(source: string): ComponentProperties {
     properties: [...fields.values()].map((property) => sourcedProperty(property, definitions, origins, contracts)),
     frontmatter: definitions.document.frontmatter,
     advanced: definitions.advanced,
+    variantGroups: variantGroupsOf(readVariantSyntax(definitions.document)),
   };
 }
 
@@ -220,6 +223,9 @@ function editDefinition(source: string, change: PropertyChange): Result<string> 
     }
     return ok(replaceFrontmatter(definitions.document, change.frontmatter.replace(/\s*$/, '\n')));
   }
+  if (change.kind === 'variantRules') {
+    return editVariantRules(source, change.edit);
+  }
   if (definitions.advanced) {
     return editCommonDefinition(definitions, change);
   }
@@ -235,7 +241,7 @@ function editDefinition(source: string, change: PropertyChange): Result<string> 
   return saveDefinition(definitions, change.originalName, change.property);
 }
 
-function editCommonDefinition(definitions: Definitions, change: Exclude<PropertyChange, { readonly kind: 'source' }>): Result<string> {
+function editCommonDefinition(definitions: Definitions, change: Exclude<PropertyChange, { readonly kind: 'source' | 'variantRules' }>): Result<string> {
   if (change.kind === 'order' || (change.kind === 'save' && !change.originalName)) {
     return err(refusal('advanced', 'props.edit.combinedAdd'));
   }
