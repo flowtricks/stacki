@@ -5,6 +5,14 @@
 // these checks still cannot reach disk.
 import { assert } from '../../../shared/core/assert';
 import { APP_PERMISSION_LIMITS } from '../../../shared/properties/appPermissions';
+import {
+  COMPONENT_ACCESS_LIMITS,
+  ComponentRulesBoundError,
+  setComponentState,
+  type ComponentRule,
+  type ComponentState,
+  type ComponentTarget,
+} from '../../../shared/properties/componentAccess';
 import { DescribedError } from '../../../shared/properties/describedError';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { described, type Described, type Translator } from '../../../shared/properties/i18n/messageRef';
@@ -331,6 +339,45 @@ export function movedPin(pinned: readonly string[], source: number, gap: number)
   const at = gap > source ? gap - 1 : gap;
   const next = [...rest.slice(0, at), moving, ...rest.slice(at)];
   assert(next.length === pinned.length, 'Moving a pin keeps every pin');
+  return next;
+}
+
+/**
+ * Shows or hides one component, or a whole folder, for role `id` (admin's too: hiding never limits Settings).
+ * A folder sets everything under it. Refused with the bound when the role would hold too many rules.
+ */
+export function setComponentVisibility(roles: ProjectRoles, id: string, target: ComponentTarget, state: ComponentState): ProjectRoles {
+  const current = roleOf(roles, id);
+  let rules: ProjectRole['componentRules'];
+  try {
+    rules = setComponentState(current.componentRules, target, state);
+  } catch (failure: unknown) {
+    if (!(failure instanceof ComponentRulesBoundError)) {
+      throw failure;
+    }
+    throw new DescribedError(described('roles.error.componentRulesMax', { count: COMPONENT_ACCESS_LIMITS.rulesMax }));
+  }
+  const next = updateRole(roles, id, (role) => ({ ...role, componentRules: rules }));
+  assert(roleOf(next, id).componentRules.length <= COMPONENT_ACCESS_LIMITS.rulesMax, 'A role keeps its rules within the bound');
+  return next;
+}
+
+/** Drops one stored rule, such as one for a path that no longer exists. */
+export function removeComponentRule(roles: ProjectRoles, id: string, rule: ComponentRule): ProjectRoles {
+  const next = updateRole(roles, id, (role) => ({
+    ...role,
+    componentRules: role.componentRules.filter((item) => item.kind !== rule.kind || item.path !== rule.path),
+  }));
+  assert(roleOf(next, id).componentRules.length <= roleOf(roles, id).componentRules.length, 'Removing a rule never adds one');
+  return next;
+}
+
+/** Gives role `id` the hidden components of role `fromId`, replacing its own. */
+export function copyComponentRules(roles: ProjectRoles, id: string, fromId: string): ProjectRoles {
+  assert(id !== fromId, 'A role copies from another role');
+  const source = roleOf(roles, fromId);
+  const next = updateRole(roles, id, (role) => ({ ...role, componentRules: source.componentRules }));
+  assert(roleOf(next, id).componentRules === source.componentRules, 'The copy holds the source rules');
   return next;
 }
 

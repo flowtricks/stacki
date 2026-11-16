@@ -89,7 +89,8 @@
 }
 /* The permissions disclosure. Height animates through a grid row (0fr to 1fr), so
    the grid inside keeps its own layout; reduced motion opens it at once. */
-.app-role-permissions-toggle {
+.app-role-permissions-toggle,
+.app-role-components-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -104,7 +105,8 @@
   font-weight: 600;
   text-align: left;
 }
-.app-role-permissions-toggle:hover {
+.app-role-permissions-toggle:hover,
+.app-role-components-toggle:hover {
   background: #ffffff10;
   color: var(--text);
 }
@@ -117,11 +119,13 @@
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
-.app-role-permissions-toggle svg {
+.app-role-permissions-toggle svg,
+.app-role-components-toggle svg {
   flex: none;
   transition: transform 160ms ease;
 }
-.app-role-permissions[data-open='true'] .app-role-permissions-toggle svg {
+.app-role-permissions[data-open='true'] .app-role-permissions-toggle svg,
+.app-role-components[data-open='true'] .app-role-components-toggle svg {
   transform: rotate(90deg);
 }
 .app-role-permissions-body {

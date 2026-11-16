@@ -567,3 +567,142 @@ button.app-role-name-button:hover:not(:disabled) {
 .app-role-app-group.is-off .app-role-app-permission {
   opacity: 0.5;
 }
+
+/* A role's Components section (RoleComponents.tsx): a quiet disclosure like Permissions, then a search row and a
+   windowed tree of 32px rows (COMPONENT_ROW_HEIGHT). Switches are fills; rows sit on a soft fill, never lines. */
+.app-role-components-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.app-role-components-info,
+.app-role-components-empty {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.app-role-components-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-role-components-search {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-faint);
+}
+.app-role-components-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.app-role-components-tree {
+  overflow-y: auto;
+  border-radius: 6px;
+  background: var(--bg-hover);
+}
+.app-role-components-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-right: 8px;
+  font-size: 12px;
+}
+.app-role-components-missing-row {
+  position: static;
+  padding-left: 8px;
+}
+.app-role-components-missing h4 {
+  margin: 0 0 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+.app-role-components-twist {
+  display: grid;
+  flex: 0 0 16px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+}
+.app-role-components-twist[data-open='true'] svg {
+  transform: rotate(90deg);
+}
+.app-role-components-icon {
+  display: grid;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+.app-role-components-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-components-folder-count,
+.app-role-components-note {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.app-role-components-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-role-components-check {
+  position: relative;
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-active);
+}
+.app-role-components-check span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.app-role-components-check[data-state='visible'] {
+  background: var(--accent);
+}
+.app-role-components-check[data-state='visible'] span {
+  left: 14px;
+  background: #fff;
+}
+.app-role-components-check[data-state='mixed'] span {
+  left: 8px;
+  background: var(--text);
+}
+.app-role-components-check:disabled {
+  opacity: 0.5;
+}

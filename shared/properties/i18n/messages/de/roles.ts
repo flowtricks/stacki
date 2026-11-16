@@ -71,6 +71,7 @@ export const messages = {
     other: 'Eine Rolle speichert höchstens {count} Berechtigungen für eine App',
   },
   'roles.error.pinsMax': { one: 'Eine Rolle pinnt höchstens {count} App', other: 'Eine Rolle pinnt höchstens {count} Apps' },
+  'roles.error.componentRulesMax': 'Eine Rolle hat höchstens {count} Komponentenregeln. Blende lieber ganze Ordner statt einzelner Komponenten aus.',
   'roles.error.componentHidden': 'Deine Rolle ({role}) darf {name} nicht hinzufügen. Bitte einen Admin, sie einzublenden.',
   'roles.error.lockout': 'Damit wärst du ({login}) {role} und hättest keinen Admin-Zugriff mehr. Bleib Admin.',
   'roles.error.loginLength': 'Ein GitHub-Benutzername hat 1 bis {max} Zeichen',

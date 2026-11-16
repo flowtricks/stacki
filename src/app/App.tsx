@@ -1,5 +1,5 @@
 import { useDesktopDefaultsCanvas } from './state/useDesktopDefaultsCanvas';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import Settings from './settings/LazySettings';
 import { useProjectRoles } from './roles/useProjectRoles';
 import { type ProjectIdentity } from './appTypes';
@@ -10,12 +10,23 @@ import type { BindContext, CanvasRoute } from './shell/ProjectWindow';
 import { useBootSnapshotWriter } from './boot/useBootSnapshotWriter';
 import { WelcomeView } from './shell/WelcomeView';
 import PanelBoundary from '../ui/PanelBoundary';
+import { componentRuleFile } from '../../shared/properties/componentAccess';
+import type { ScanComponent } from '../../shared/properties/projectScan';
 
 // The project window (the editor shell and everything only it needs) loads behind the start screen
 // (lazyShell.ts). A window that opens a project awaits it before its first render (src/main.tsx), so the first
 // frame is the real shell; a project opened from the start screen before the chunk has arrived stays on the
 // start screen, which is real, until it does. No skeleton or placeholder stands in for the shell.
 const ProjectWindow = lazy(() => loadShell());
+
+/** The project files of the components the palette lists, which a role's hidden components are keyed by. */
+function componentFilesOf(components: readonly ScanComponent[]): readonly string[] {
+  const files = components.flatMap((component) => {
+    const file = componentRuleFile(component);
+    return file === undefined ? [] : [file];
+  });
+  return [...new Set(files)];
+}
 
 export default function App() {
   const scope = useAppScope();
@@ -25,6 +36,7 @@ export default function App() {
   useProjectRoles(scope.project?.path);
   // Keeps the next session's first frame real (src/app/boot): the page list, the open page and the left panel.
   useBootSnapshotWriter({ project: scope.project, scan: scope.scan, pageName: scope.currentPage?.name, leftTab: scope.leftTab });
+  const componentFiles = useMemo(() => componentFilesOf(scope.insertables), [scope.insertables]);
   const app: AppView = {
     ...scope,
     ...actions,
@@ -42,6 +54,7 @@ export default function App() {
         pages={{ folder: app.scan.pagesFolder ?? 'src/pages', configFile: app.scan.astroConfig }}
         onOpenFile={(rel) => void app.openProjectFile(rel)}
         onRecordUndo={app.pushCommand}
+        componentFiles={componentFiles}
       />
     </>
   );

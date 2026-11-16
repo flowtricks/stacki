@@ -38,6 +38,8 @@ interface Props {
   readonly onOpenFile?: (rel: string) => void;
   /** Records a step the Undo list can take back: the breakpoint sync's files and number. */
   readonly onRecordUndo?: (command: BreakpointSyncUndo) => void;
+  /** The project's component files (project-relative), for each role's Components section. */
+  readonly componentFiles?: readonly string[];
 }
 
 // Who opens Settings besides the File menu: the title bar's gear on Windows and
@@ -261,7 +263,11 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
       );
     case 'roles':
       return props.projectPath ? (
-        <RolesSettings key={`roles:${props.projectPath}`} projectPath={props.projectPath} />
+        <RolesSettings
+          key={`roles:${props.projectPath}`}
+          projectPath={props.projectPath}
+          {...(props.componentFiles === undefined ? {} : { componentFiles: props.componentFiles })}
+        />
       ) : (
         <SettingsEmpty icon={icon}>{translate('settings.empty.roles')}</SettingsEmpty>
       );

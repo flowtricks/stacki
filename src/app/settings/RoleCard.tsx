@@ -49,6 +49,11 @@ import { useInstalledApps } from './RoleAppPicker';
 import { RoleAppPermissions } from './RoleAppPermissions';
 import { RolePermissions } from './RolePermissions';
 import { RolePinnedApps } from './RolePinnedApps';
+import { RoleComponents } from './RoleComponents';
+import type { ComponentRule, ComponentState, ComponentTarget } from '../../../shared/properties/componentAccess';
+
+const NO_FILES: readonly string[] = [];
+const NO_SOURCES: readonly { readonly id: string; readonly name: string }[] = [];
 
 /** More people than this scroll inside the members card. */
 export const MEMBER_ROWS_VISIBLE_MAX = 6;
@@ -69,6 +74,12 @@ export interface RoleCardActions {
   readonly setPinnedApp: (appId: string, change: 'pin' | 'unpin') => void;
   /** Puts the role's pins in this order, top to bottom. */
   readonly orderPinnedApps: (appIds: readonly string[]) => void;
+  /** Shows or hides a component or folder for the role: it may or may not add it. */
+  readonly setComponentVisibility: (target: ComponentTarget, state: ComponentState) => void;
+  /** Takes another role's hidden components. */
+  readonly copyComponentRules: (fromRoleId: string) => void;
+  /** Drops one stored rule. */
+  readonly removeComponentRule: (rule: ComponentRule) => void;
   /** Copies the role, without its members, into a new role right after it. */
   readonly duplicate: () => void;
 }
@@ -85,6 +96,10 @@ export function RoleCard(props: {
   readonly currentLogin?: string | undefined;
   /** The card opens with its name field focused: the role was just made by Duplicate. */
   readonly naming?: 'rename' | undefined;
+  /** The project's component files, for the Components section; without them it lists none. */
+  readonly componentFiles?: readonly string[];
+  /** The other roles whose component choices can be copied. */
+  readonly copySources?: readonly { readonly id: string; readonly name: string }[];
 }) {
   const { role, editable, actions } = props;
   const projectPath = props.projectPath;
@@ -108,6 +123,16 @@ export function RoleCard(props: {
       {props.notice}
       <Members role={role} editable={editable} actions={actions} projectPath={projectPath} currentLogin={props.currentLogin} />
       <RolePins role={role} editable={editable} actions={actions} projectPath={projectPath} />
+      {/* Every role, admin included, may have components hidden: it narrows the palette, never Settings. */}
+      <div className="app-role-section">
+        <RoleComponents
+          role={role}
+          editable={editable}
+          files={props.componentFiles ?? NO_FILES}
+          copySources={props.copySources ?? NO_SOURCES}
+          actions={{ setVisibility: actions.setComponentVisibility, copyFrom: actions.copyComponentRules, removeRule: actions.removeComponentRule }}
+        />
+      </div>
       {role.id !== ADMIN_ROLE_ID && (
         <RolePermissions role={role} projectPath={projectPath}>
           <Access role={role} editable={editable} actions={actions} projectPath={projectPath} />

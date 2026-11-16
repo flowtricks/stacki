@@ -71,6 +71,7 @@ export const messages = {
     other: 'Um papel guarda no máximo {count} permissões para um app',
   },
   'roles.error.pinsMax': { one: 'Um papel fixa no máximo {count} app', other: 'Um papel fixa no máximo {count} apps' },
+  'roles.error.componentRulesMax': 'Um papel tem no máximo {count} regras de componentes. Oculte pastas inteiras em vez de componentes avulsos.',
   'roles.error.componentHidden': 'Seu papel ({role}) não pode adicionar {name}. Peça a um admin para exibi-lo.',
   'roles.error.lockout': 'Isso faria de você ({login}) {role} e removeria seu acesso de admin. Continue sendo admin.',
   'roles.error.loginLength': 'Um usuário do GitHub tem de 1 a {max} caracteres',

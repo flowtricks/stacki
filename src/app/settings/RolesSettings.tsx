@@ -48,6 +48,9 @@ import {
   setGroupAccess,
   orderPinnedApps,
   setPinnedApp,
+  setComponentVisibility,
+  copyComponentRules,
+  removeComponentRule,
 } from './rolesEdits';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { DescribedError } from '../../../shared/properties/describedError';
@@ -59,7 +62,7 @@ import './roles.css';
 
 type Loaded = { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly stored: StoredRoles };
 
-export function RolesSettings(props: { readonly projectPath: string }) {
+export function RolesSettings(props: { readonly projectPath: string; readonly componentFiles?: readonly string[] }) {
   const { projectPath } = props;
   const translate = useTranslate();
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
@@ -93,7 +96,7 @@ export function RolesSettings(props: { readonly projectPath: string }) {
     case 'failed':
       return <ErrorToast message={loaded.message} />;
     case 'ready':
-      return <RolesEditor projectPath={projectPath} stored={loaded.stored} login={login} />;
+      return <RolesEditor projectPath={projectPath} stored={loaded.stored} login={login} componentFiles={props.componentFiles} />;
     default: {
       const exhaustive: never = loaded;
       return exhaustive;
@@ -144,7 +147,12 @@ export function rolesRefusal(next: ProjectRoles, login: string | undefined): Des
   }
 }
 
-function RolesEditor(props: { readonly projectPath: string; readonly stored: StoredRoles; readonly login: string | undefined }) {
+function RolesEditor(props: {
+  readonly projectPath: string;
+  readonly stored: StoredRoles;
+  readonly login: string | undefined;
+  readonly componentFiles: readonly string[] | undefined;
+}) {
   const { stored, login } = props;
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
@@ -264,6 +272,8 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
             editable={editable}
             projectPath={props.projectPath}
             currentLogin={login}
+            {...(props.componentFiles === undefined ? {} : { componentFiles: props.componentFiles })}
+            copySources={shown.roles.filter((other) => other.id !== item.id).map((other) => ({ id: other.id, name: other.name }))}
             notice={noticeFor({ kind: 'role', id: item.id })}
             naming={item.id === naming ? 'rename' : undefined}
             actions={cardActions(
@@ -345,6 +355,9 @@ function cardActions(
     toggleGroup: (features, change) => void apply((roles) => setGroupAccess(roles, id, features, change)),
     setAppAccess: (appId, change) => void apply((roles) => setAppAccess(roles, id, appId, change)),
     setAppPermissions: (appId, permissionIds, change) => void apply((roles) => setAppPermissions(roles, id, appId, permissionIds, change)),
+    setComponentVisibility: (target, state) => void apply((roles) => setComponentVisibility(roles, id, target, state)),
+    copyComponentRules: (fromId) => void apply((roles) => copyComponentRules(roles, id, fromId)),
+    removeComponentRule: (rule) => void apply((roles) => removeComponentRule(roles, id, rule)),
     setPinnedApp: (appId, change) => void apply((roles) => setPinnedApp(roles, id, appId, change)),
     orderPinnedApps: (appIds) => void apply((roles) => orderPinnedApps(roles, id, appIds)),
     duplicate: () => {
