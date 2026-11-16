@@ -16,7 +16,7 @@ import type { MenuEntry } from '../../ui/Menu';
 import { rolesSubmenu } from './componentRolesMenu';
 import { componentRuleFile } from '../../../shared/properties/componentAccess';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
-import { ElementComponentIcon, LayoutIcon, PlusIcon } from '../../ui/Icons';
+import { CopyIcon, ElementComponentIcon, GearIcon, LayoutIcon, PlusIcon, TargetIcon, TrashIcon, UsersIcon } from '../../ui/Icons';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
@@ -304,12 +304,21 @@ function ItemRoles({ component, props }: { readonly component: ScanComponent; re
   const entries = (anchor: HTMLElement | undefined): readonly MenuEntry[] => {
     const settings: readonly MenuEntry[] =
       management !== undefined && file !== undefined && can(role, 'panel:properties')
-        ? [{ kind: 'item', id: 'settings', label: translate('palette.menu.editSettings'), onSelect: () => management.editSettings(component) }]
+        ? [
+            {
+              kind: 'item',
+              id: 'settings',
+              label: translate('palette.menu.editSettings'),
+              icon: <GearIcon size={14} />,
+              onSelect: () => management.editSettings(component),
+            },
+          ]
         : [];
     const instances: MenuEntry = {
       kind: 'item',
       id: 'instances',
       label: translate('palette.roles.showInstances'),
+      icon: <TargetIcon size={14} />,
       disabled: anchor === undefined || component.instances === undefined || component.instances === 0,
       onSelect: () => {
         if (anchor !== undefined) {
@@ -318,7 +327,9 @@ function ItemRoles({ component, props }: { readonly component: ScanComponent; re
       },
     };
     const roles: readonly MenuEntry[] =
-      rules === undefined || file === undefined ? [] : [rolesSubmenu(rules, { kind: 'component', path: file }, [file], translate)];
+      rules === undefined || file === undefined
+        ? []
+        : [{ ...rolesSubmenu(rules, { kind: 'component', path: file }, [file], translate), icon: <UsersIcon size={14} /> }];
     return [...settings, instances, ...roles, ...componentChanges(component, file, props, role, translate)];
   };
   return <PaletteRowMenu entries={entries} name={prettyComponentName(component.name)} onOpenChange={props.preview.block} />;
@@ -337,7 +348,7 @@ function componentChanges(
   }
   const item: ManagedItem = { kind: 'component', path: file, name: component.name, files: 1 };
   const duplicate: readonly MenuEntry[] = can(role, 'component:create')
-    ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), onSelect: () => management.duplicate(item) }]
+    ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), icon: <CopyIcon size={14} />, onSelect: () => management.duplicate(item) }]
     : [];
   const remove: readonly MenuEntry[] = can(role, 'component:edit')
     ? [deleteRow({ instances: component.instances, translate }, () => management.remove(item))]
@@ -351,7 +362,7 @@ function deleteRow(
   onSelect: () => void,
 ): MenuEntry {
   const used = usedPlaces(instances);
-  const base = { kind: 'item', id: 'delete', label: translate('palette.menu.delete'), danger: true, onSelect } as const;
+  const base = { kind: 'item', id: 'delete', label: translate('palette.menu.delete'), icon: <TrashIcon size={14} />, danger: true, onSelect } as const;
   if (instances === undefined) {
     return { ...base, disabled: true, info: translate('palette.panel.checking') };
   }
@@ -376,7 +387,7 @@ function FolderRoles({ folder, props }: { readonly folder: string; readonly prop
   }
   const under = props.allComponents.filter((component) => componentRuleFile(component)?.startsWith(`${path}/`) === true);
   const entries = (): readonly MenuEntry[] => [
-    ...(rules === undefined ? [] : [rolesSubmenu(rules, { kind: 'folder', path }, files, translate)]),
+    ...(rules === undefined ? [] : [{ ...rolesSubmenu(rules, { kind: 'folder', path }, files, translate), icon: <UsersIcon size={14} /> }]),
     ...folderChanges({ folder, path, under }, props, role, translate),
   ];
   return <PaletteRowMenu entries={entries} name={folder} onOpenChange={props.preview.block} />;
@@ -396,7 +407,7 @@ function folderChanges(
   const unknown = folder.under.some((component) => component.instances === undefined);
   const total = folder.under.reduce((sum, component) => sum + (component.instances ?? 0), 0);
   const duplicate: readonly MenuEntry[] = can(role, 'component:create')
-    ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), onSelect: () => management.duplicate(item) }]
+    ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), icon: <CopyIcon size={14} />, onSelect: () => management.duplicate(item) }]
     : [];
   const remove: readonly MenuEntry[] = can(role, 'component:edit')
     ? [deleteRow({ instances: unknown ? undefined : total, translate }, () => management.remove(item))]

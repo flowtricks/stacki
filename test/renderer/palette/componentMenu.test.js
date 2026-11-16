@@ -187,3 +187,19 @@ test('without a host that can do it, or a role that may, the rows are left out',
 function clientRole() {
   return { id: 'client', name: 'Client', isAdmin: false, features: new Set(), appPermissions: {}, pinnedApps: [], componentRules: [] };
 }
+
+test('every row of every "…" menu has an icon, whatever rows are added: the check reads the rendered rows, not a list', async () => {
+  const view = await mount([component('Avatar', 'ui', 0), component('Arrow', 'ui', 13)]);
+  const roles = lib.parseProjectRoles({ version: 1, roles: [{ id: 'admin', members: ['o'] }, { id: 'client' }] });
+  assert.ok(roles);
+  for (const button of view.buttons()) {
+    await view.open(button);
+    const rows = [...document.querySelectorAll('[role="menuitem"], [role="menuitemcheckbox"]')];
+    assert.ok(rows.length >= 2, 'the menu has rows');
+    for (const row of rows) {
+      assert.ok(row.querySelector('.menu-icon svg'), `"${row.textContent}" has an icon`);
+    }
+    await view.act(() => document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  }
+  await view.unmount();
+});

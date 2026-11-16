@@ -54,6 +54,9 @@
 .menu-row.is-danger {
   color: #ff9b9b;
 }
+.menu-row.is-danger .menu-icon {
+  color: inherit;
+}
 .menu-row.is-danger:hover:not(:disabled),
 .menu-row.is-danger:focus-visible {
   background: rgba(255, 90, 90, 0.16);

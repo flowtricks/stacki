@@ -72,7 +72,9 @@ import {
   properties as centralProperties,
   repeat as centralRepeat,
   search as centralSearch,
+  roles as centralRoles,
   settings as centralSettings,
+  target as centralTarget,
   sort as centralSort,
   sparkle as centralSparkle,
   sync as centralSync,
@@ -422,6 +424,9 @@ export const HelpCircleIcon = centralIcon(centralHelp);
 export const WarningTriangleIcon = centralIcon(centralWarning);
 
 export const GearIcon = centralIcon(centralSettings);
+// A crosshair: "Show instances" finds where a component sits. Two people: the Roles submenu, as on the Roles tab.
+export const TargetIcon = centralIcon(centralTarget);
+export const UsersIcon = centralIcon(centralRoles);
 
 export const TrashIcon = centralIcon(centralTrashCanSimple);
 

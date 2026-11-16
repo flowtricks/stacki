@@ -1,5 +1,6 @@
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { RESERVED_COMPONENT_NAMES } from '../../../shared/properties/componentRename';
 import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 
 // What a component may be called.
@@ -32,10 +33,6 @@ export function toComponentName(input: unknown): string {
   );
 }
 
-// Astro's own tag. A component file called Fragment.astro would be imported
-// under a name that already means something else in every Astro file.
-const RESERVED = new Set(['Fragment', 'Astro', 'Component', 'Props', 'Slot']);
-
 /**
  * Why this name can't be used, or undefined when it can. `taken` is every name
  * already spoken for — components and layouts both, since the palette lists
@@ -57,7 +54,7 @@ export function componentNameProblem(input: unknown, taken: readonly string[] = 
   if (!/^[A-Za-z][A-Za-z0-9]*$/.test(name)) {
     return described('palette.name.lettersOnly');
   }
-  if (RESERVED.has(name)) {
+  if (RESERVED_COMPONENT_NAMES.has(name)) {
     return described('palette.name.reserved', { name });
   }
   // Case-insensitively: two files whose names differ only in case can't both
