@@ -1,0 +1,38 @@
+/* A question with several answers (ConfirmDialog.tsx choiceDialog): each answer is a full-width
+   button with a line saying what it does. Filled backgrounds, never borders; the recommended
+   answer is the blue primary button and stays blue on hover. */
+.choice-dialog-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  white-space: normal;
+}
+.choice-dialog .choice-dialog-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--bg-input);
+}
+.choice-dialog .choice-dialog-option:hover {
+  background: var(--bg-hover);
+}
+.choice-dialog .choice-dialog-option.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.choice-dialog .choice-dialog-option.primary:hover {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.choice-dialog-label {
+  font-weight: 600;
+}
+.choice-dialog-hint {
+  font-size: 11px;
+  opacity: 0.8;
+}

@@ -1,5 +1,6 @@
 // The application shell's own types: history, toasts, tabs, the project and
 // what the shell keeps about it. A page's state is src/editor/pageState.ts.
+import type { PasteSource } from '../editor/pasteDependencies';
 import type { Data } from '../../shared/core/boundary';
 import type { IpcResults, WireGitInfo, WireInjectedRoute } from '../../shared/ipc/ipcResults';
 import type { ScanResult } from '../../shared/properties/projectScan';
@@ -139,4 +140,6 @@ export interface NodeClipboard {
   readonly frontmatter: string;
   readonly imports: readonly { readonly name: string; readonly path: string }[];
   readonly pagePath: string | undefined;
+  /** The whole file the node was copied from, for the context-aware paste (src/editor/pasteDependencies.ts). */
+  readonly source?: PasteSource;
 }

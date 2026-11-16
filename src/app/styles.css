@@ -1,5 +1,6 @@
 /* Shared component sheets, first so the cascade is the one they had inline here.
    The app UI kit builds from the same files (scripts/build/appUiKit.mts). */
+@import '../ui/choiceDialog.css';
 @import '../ui/controls.css';
 @import '../ui/dropdown.css';
 @import '../ui/resetLabel.css';

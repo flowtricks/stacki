@@ -31,6 +31,43 @@ interface Question {
 }
 let open: ((question: Question) => void) | undefined;
 
+/** One answer of a choice dialog: a button with a line under it saying what it does. */
+export interface DialogChoice {
+  readonly id: string;
+  readonly label: string;
+  readonly hint?: string;
+  /** Drawn as the primary button and focused first. */
+  readonly recommended?: boolean;
+}
+interface ChoiceQuestion {
+  readonly title: ReactNode;
+  readonly body: ReactNode;
+  readonly choices: readonly DialogChoice[];
+  readonly cancelLabel: string | undefined;
+  readonly resolve: (answer: string | undefined) => void;
+}
+let openChoice: ((question: ChoiceQuestion) => void) | undefined;
+
+/**
+ * A question with more than two answers, in the same window slot as confirmDialog: resolves to
+ * the chosen id, or undefined on Cancel, Escape or a click outside.
+ */
+export function choiceDialog(options: {
+  readonly title: ReactNode;
+  readonly body?: ReactNode;
+  readonly choices: readonly DialogChoice[];
+  readonly cancelLabel?: string;
+}): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    if (!openChoice) {
+      console.error('choiceDialog: no <ConfirmHost /> is mounted; answering cancel.');
+      resolve(undefined);
+      return;
+    }
+    openChoice({ title: options.title, body: options.body, choices: options.choices, cancelLabel: options.cancelLabel, resolve });
+  });
+}
+
 export function confirmDialog({ title, body, confirmLabel, cancelLabel, danger = false, checkbox }: ConfirmOptions = {}): Promise<ConfirmAnswer> {
   return new Promise((resolve) => {
     if (!open) {
@@ -45,6 +82,7 @@ export function confirmDialog({ title, body, confirmLabel, cancelLabel, danger =
 /** One host owns the window's single confirmation slot. */
 export function ConfirmHost() {
   const [ask, setAsk] = useState<Question | undefined>(undefined);
+  const [choice, setChoice] = useState<ChoiceQuestion | undefined>(undefined);
   const [checked, setChecked] = useState(false);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -55,9 +93,13 @@ export function ConfirmHost() {
   }, [ask]);
   useEffect(() => {
     open = setAsk;
+    openChoice = setChoice;
     return () => {
       if (open === setAsk) {
         open = undefined;
+      }
+      if (openChoice === setChoice) {
+        openChoice = undefined;
       }
     };
   }, []);
@@ -76,6 +118,17 @@ export function ConfirmHost() {
     },
     [ask, checked],
   );
+  if (choice) {
+    return (
+      <ChoiceSurface
+        question={choice}
+        answer={(id) => {
+          choice.resolve(id);
+          setChoice(undefined);
+        }}
+      />
+    );
+  }
   if (!ask) {
     return undefined;
   }
@@ -118,6 +171,43 @@ function ConfirmSurface({ ask, checked, setChecked, answer, confirmRef, cancelRe
             <button ref={confirmRef} className={ask.danger ? 'danger' : 'primary'} onClick={() => finish(() => answer(true))}>
               {ask.confirmLabel ?? translate('ui.continue')}
             </button>
+          </div>
+        </>
+      )}
+    </Popup>
+  );
+}
+
+function ChoiceSurface({ question, answer }: { readonly question: ChoiceQuestion; readonly answer: (id: string | undefined) => void }) {
+  const translate = useTranslate();
+  const firstRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    firstRef.current?.focus();
+  }, []);
+  const ordered = [...question.choices].sort((first, second) => Number(second.recommended === true) - Number(first.recommended === true));
+  return (
+    <Popup className="modal confirm-dialog choice-dialog" role="alertdialog" onClose={() => answer(undefined)}>
+      {({ close, finish }) => (
+        <>
+          <div className="modal-header">{question.title}</div>
+          <div className="modal-body confirm-body">
+            {question.body && <div>{question.body}</div>}
+            <div className="choice-dialog-options">
+              {ordered.map((option, index) => (
+                <button
+                  key={option.id}
+                  ref={index === 0 ? firstRef : undefined}
+                  className={option.recommended === true ? 'primary choice-dialog-option' : 'choice-dialog-option'}
+                  onClick={() => finish(() => answer(option.id))}
+                >
+                  <span className="choice-dialog-label">{option.label}</span>
+                  {option.hint && <span className="choice-dialog-hint">{option.hint}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button onClick={close}>{question.cancelLabel ?? translate('ui.cancel')}</button>
           </div>
         </>
       )}

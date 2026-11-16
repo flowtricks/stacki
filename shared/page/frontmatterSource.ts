@@ -280,6 +280,18 @@ function moveOffsets(before: string, after: string, offsets: readonly number[]):
   if (before === after || !offsets.length) {
     return [...offsets];
   }
+  if (before.trim() === '') {
+    // There was no code for the imports to sit between, so every slot stayed at the top, and code
+    // written into the empty block goes after them. The line diff below would read the new code as
+    // an insertion at offset 0 and carry the slots past its end, printing it above the imports.
+    const lead = after.length - after.trimStart().length;
+    const kept = offsets.map((offset) => Math.min(offset, lead));
+    assert(
+      kept.every((offset) => offset <= lead),
+      'moveOffsets: imports of an empty block stay above the new code',
+    );
+    return safeImportOffsets(after, kept);
+  }
   const split = (text: string): string[] => text.match(/[^\n]*\n|[^\n]+$/g) || [];
   const beforeLines = split(before);
   const afterLines = split(after);

@@ -101,7 +101,10 @@ const PLAIN_DECLARATIONS: ReadonlySet<JsStatement['kind']> = new Set(['const', '
 
 const ASTRO_MEMBER_RE = /^\s*\??\.\s*([\p{ID_Start}$_][\p{ID_Continue}$]*)/u;
 
-interface Statement extends JsStatement {
+type Statement = FrontmatterStatement;
+
+/** One top-level statement of a frontmatter with the names it binds, reads and changes (paste reads these too). */
+export interface FrontmatterStatement extends JsStatement {
   /** The top-level names it binds, values only. */
   readonly declares: readonly string[];
   /** Top-level names, imports and globals its code reads. */
@@ -223,7 +226,8 @@ interface StatementParts {
   readonly astroMembers: (string | undefined)[];
 }
 
-function readStatements(code: string, analysis: JsAnalysis): readonly Statement[] {
+/** The frontmatter's statements, each with what it binds and reads at the top level: the one reader extraction and paste share. */
+export function readStatements(code: string, analysis: JsAnalysis): readonly Statement[] {
   const statements = readModuleStatements(code);
   const parts = statements.map((): StatementParts => ({ declares: [], reads: [], typeReads: [], writes: [], astroMembers: [] }));
   const at = (position: number): StatementParts | undefined =>

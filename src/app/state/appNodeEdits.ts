@@ -45,6 +45,8 @@ import { namesInSubtree, offerStyleCleanup } from '../../features/selectors/dele
 import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatterOf } from '../model/nodeFactory';
 import { extractionGesture, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
+import { copiedFile, pasteSourceOf } from '../model/contextPaste';
+import { useContextPaste } from './appContextPaste';
 import { prunedAfterRemoval } from '../model/pageQueries';
 import { structuralSelection } from '../model/selectionStructure';
 import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
@@ -588,6 +590,8 @@ export function useCopyNode(
           path: i.path,
         })),
         pagePath: pageStateRef.current.currentPage?.path || undefined,
+        // The whole file, for a paste into another one: its props, styles and code (appContextPaste.ts).
+        source: pasteSourceOf(state.model, copiedFile(pageStateRef.current.currentPage), node),
       };
       // Copying is silent, as it is everywhere else: a notice for it only gets in the way.
     },
@@ -656,6 +660,7 @@ export function usePasteNode(
   const { resolveImportPath } = addComponentScope;
   const { showToast } = lifecycle;
   const { commitEdit } = history;
+  const { contextPaste } = useContextPaste(coreState, addComponentScope, lifecycle, history);
 
   // Pastes into the current selection when it can host children (a non-void
   // element, or a component with a default slot), otherwise after it (same
@@ -704,6 +709,10 @@ export function usePasteNode(
     if (removed) {
       showToast(translate('shell.paste.bindingsRemoved', { count: removed, names: lost.join(', ') }), 'info');
     }
+    // Into another file: what the markup needs comes with it, or the person chooses how to paste it.
+    if ((await contextPaste(clip, pasted, place)) === 'handled') {
+      return;
+    }
     const insert = insertGesture(withImports, pasted, place, { urgency: true });
     const options = { coalesceKey: undefined, urgency: true };
     commitEdit(frontmatterOf(withImports) === frontmatterOf(shown) ? insert : sequence(frontmatterGesture(shown, options, imported), insert));
@@ -712,7 +721,7 @@ export function usePasteNode(
     if (brought !== undefined) {
       showToast(brought, 'info');
     }
-  }, [commitEdit, insertables, resolveImportPath, showToast, nodeClipboardRef, pageStateRef, selectedIdRef, setSelectedId, translate]);
+  }, [commitEdit, contextPaste, insertables, resolveImportPath, showToast, nodeClipboardRef, pageStateRef, selectedIdRef, setSelectedId, translate]);
   return { pasteNode };
 }
 
