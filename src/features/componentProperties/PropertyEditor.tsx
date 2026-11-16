@@ -4,7 +4,7 @@ import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarati
 import { VariantControlledBy, fallbackEdit, optionListEdit, useVariantHost, useVariantRun, variantRoleOf } from './PropertyVariants';
 import type { VariantHost } from './PropertyVariants';
 import type { VariantGroup } from '../../../shared/properties/variantRules';
-import { TrashIcon } from '../../ui/Icons';
+import { CloseIcon, TrashIcon } from '../../ui/Icons';
 import { PropertyOptions } from './PropertyOptions';
 import { PropertyShareNotice, shareRenameFiles } from './PropertyShareNotice';
 import type { PropertyOptionChange } from './PropertyOptions';
@@ -91,7 +91,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
               <PropertyDeclarationInfo property={props.property} />
             </div>
             <button aria-label={translate('componentProps.dialog.close')} disabled={props.access === 'saving'} onClick={close}>
-              ×
+              <CloseIcon size={12} />
             </button>
           </header>
           {/* Variant rules are controls among the fields; a union with no controller keeps its conditions. */}

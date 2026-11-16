@@ -71,7 +71,9 @@
   height: 24px;
   padding: 0;
   border-radius: 6px;
-  font-size: 18px;
+  /* No margin or offset: the mark sits in the box centre, nothing nudges it. */
+  margin: 0;
+  line-height: 0;
   background: transparent;
 }
 .property-editor header button:hover:not(:disabled) {
