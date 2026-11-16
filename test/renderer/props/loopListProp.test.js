@@ -206,7 +206,8 @@ test('steps no setting can say are kept, and offered for replacing', () => {
 
 test('an invalid list query is a programmer error', () => {
   assert.throws(() => loopQuery.assertLoopQuery({ ...empty, parameter: { kind: 'data' } }), /A list prop’s filter names its item/);
-  assert.throws(() => loopQuery.assertLoopQuery({ ...empty, selection: [] }), /A list prop’s items have no ids to pick by/);
+  assert.throws(() => loopQuery.assertLoopQuery({ ...empty, selection: ['x'] }), /A picked position is a whole number/);
+  assert.throws(() => loopQuery.assertLoopQuery({ ...empty, selectionField: 'slug' }), /A list that picks nothing has no pick field/);
   assert.throws(() => loopQuery.listQueryCode(loopQuery.emptyQuery({ kind: 'astro', collection: 'posts' })), /A list query reads a List prop/);
 });
 
@@ -369,7 +370,7 @@ test('a plain loop over a list prop shows Filters, Sort and Limit, and writes no
   for (const label of ['Source', 'Filters', 'Sort', 'Limit items']) {
     assert.ok(shown.includes(label), `${label} in ${shown.join(', ')}`);
   }
-  assert.ok(!shown.includes('Items'), 'a list prop’s items have no ids to pick by');
+  assert.ok(shown.includes('Items'), 'a list prop has the Items switch, with Selected off while its items are unseen');
   assert.ok(host.querySelector('.loop-settings-list') === null, 'no filter or sort rows');
   assert.equal(host.querySelector('[role="switch"]').getAttribute('aria-checked'), 'false', 'no limit');
   assert.deepEqual(applied, []);

@@ -883,6 +883,89 @@
 .loop-source-extras .dp-row:hover:not(:disabled) {
   background: var(--bg-hover);
 }
+.loop-field-extras {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+.loop-field-extras .dp-row {
+  width: 100%;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  text-align: left;
+  justify-content: flex-start;
+}
+.loop-field-extras .dp-row:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* A field typed by name: labels in a column as wide as the longest, controls
+   that shrink with the pop-up, one primary action. Fills, never rules. */
+.loop-typed-form {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  margin: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.loop-settings-popup .loop-typed-form {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.loop-typed-label {
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.loop-typed-input {
+  min-width: 0;
+}
+.loop-typed-form input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.loop-typed-form .dd-trigger {
+  width: 100%;
+  min-width: 0;
+}
+.loop-quiet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.loop-quiet-row:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.loop-typed-note {
+  grid-column: 1 / -1;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.loop-typed-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+}
 .loop-source-extras .dp-preview {
   margin-left: auto;
   color: var(--text-faint);

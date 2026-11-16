@@ -1084,6 +1084,7 @@
     "src/features/props/listItemType.ts",
     "src/features/props/listScalar.css",
     "src/features/props/loopCatalog.ts",
+    "src/features/props/loopPickModel.ts",
     "src/features/props/loopProjectData.ts",
     "src/features/props/loopSettings.css",
     "src/features/props/loopSettingsData.ts",

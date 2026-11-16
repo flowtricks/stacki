@@ -24,7 +24,7 @@ import { listCollectionOf, readOptionsQuery, type OptionsHome } from './optionsQ
 import { chainOf, conditionOf } from './loopConditionRead';
 import { curatedSelection, entriesSelection, pickedIds } from './loopSelectionRead';
 import { readComparator } from './loopSortRead';
-import { LOOP_QUERY_LIMITS, assertLoopQuery, chainableListCode, emptyQuery, listExpressionProblem } from './loopQuery';
+import { LOOP_QUERY_LIMITS, assertLoopQuery, chainableListCode, emptyQuery, isFieldPath, isItemId, listExpressionProblem } from './loopQuery';
 import type { AstroItemParameter, LoopCondition, LoopFieldKind, LoopQuery, LoopSort, LoopSortOrder, LoopSource } from './loopQuery';
 import { namePath, parseExpression, parseFrontmatter, textOf, type Js, type ParsedFrontmatter } from './loopSyntax';
 import { issue, type Issue } from './issue';
@@ -128,6 +128,12 @@ function readLoopAsWritten(input: LoopReadInput): LoopReading {
   const frontmatter = parseFrontmatter(input.frontmatter);
   const context: Context = { input, frontmatter };
   const pipeline = pipelineOf({ source: parsed.source, node: parsed.expression }, context, []);
+  if (pipeline.kind === 'value' || pipeline.kind === 'unknown') {
+    const picked = pickedListReading({ source: parsed.source, node: parsed.expression });
+    if (picked !== undefined) {
+      return picked;
+    }
+  }
   if (pipeline.kind === 'value') {
     const origin = originOf(pipeline.root, context);
     const held = listPropReading(pipeline, context);
@@ -222,6 +228,10 @@ export function readPipeline(input: LoopReadInput): LoopPipeline | undefined {
     source: step.call.source,
     call: step.call.node,
   });
+  if ((pipeline.kind === 'unknown' || pipeline.kind === 'value') && pickedListOf({ source: parsed.source, node: parsed.expression }) !== undefined) {
+    // Picked items are not a list's steps: there is nothing here for a section to rewrite.
+    return undefined;
+  }
   if (pipeline.kind === 'unknown') {
     return headListPipeline({ source: parsed.source, node: parsed.expression }, context, { chain: [], headOffset });
   }
@@ -265,6 +275,86 @@ export function readPipeline(input: LoopReadInput): LoopPipeline | undefined {
     chain: pipeline.chain,
     headOffset,
   };
+}
+
+// Items picked by hand from a list, in the order picked:
+//   ["a", "b"].map((key) => list.find((item) => item.slug === key)).filter(Boolean)
+//   [0, 2].map((index) => list[index]).filter(Boolean)
+// The list is whatever expression the picks are found in. The picks are ids of
+// a field of the item, or positions; any other shape of code is not a pick.
+interface PickedList {
+  readonly list: Located;
+  readonly picks: readonly string[];
+  readonly field: string | undefined;
+}
+
+function pickedListOf(start: Located): PickedList | undefined {
+  const node = start.node;
+  const filtered =
+    node.kind === 'call' && node.callee.kind === 'member' && node.callee.property === 'filter' && node.args.length === 1 && node.args[0]?.kind === 'name';
+  if (!filtered || node.kind !== 'call' || node.callee.kind !== 'member' || node.args[0]?.kind !== 'name' || node.args[0].name !== 'Boolean') {
+    return undefined;
+  }
+  const mapped = node.callee.object;
+  if (mapped.kind !== 'call' || mapped.callee.kind !== 'member' || mapped.callee.property !== 'map' || mapped.args.length !== 1) {
+    return undefined;
+  }
+  const picks = mapped.callee.object;
+  const callback = mapped.args[0];
+  if (picks.kind !== 'array' || picks.items.length > LOOP_QUERY_LIMITS.selectionMax || callback?.kind !== 'function') {
+    return undefined;
+  }
+  const parameter = callback.parameters[0];
+  const body = callback.body;
+  if (parameter?.kind !== 'name' || callback.parameters.length !== 1 || body === undefined) {
+    return undefined;
+  }
+  if (body.kind === 'index' && body.index.kind === 'name' && body.index.name === parameter.name) {
+    const positions = picks.items.flatMap((item) =>
+      item.kind === 'number' && Number.isSafeInteger(item.value) && item.value >= 0 ? [String(item.value)] : [],
+    );
+    return positions.length === picks.items.length ? { list: { source: start.source, node: body.object }, picks: positions, field: undefined } : undefined;
+  }
+  const field = findField(body, parameter.name);
+  const keys = picks.items.flatMap((item) => (item.kind === 'string' && isItemId(item.value) ? [item.value] : []));
+  if (field === undefined || keys.length !== picks.items.length) {
+    return undefined;
+  }
+  return { list: { source: start.source, node: field.list }, picks: keys, field: field.path };
+}
+
+// `list.find((item) => item.slug === key)`: the list, and the field compared.
+function findField(body: Js, key: string): { readonly list: Js; readonly path: string } | undefined {
+  if (body.kind !== 'call' || body.callee.kind !== 'member' || body.callee.property !== 'find' || body.args.length !== 1) {
+    return undefined;
+  }
+  const finder = body.args[0];
+  const item = finder?.kind === 'function' ? finder.parameters[0] : undefined;
+  const test = finder?.kind === 'function' ? finder.body : undefined;
+  if (item?.kind !== 'name' || test?.kind !== 'binary' || test.operator !== '===') {
+    return undefined;
+  }
+  const [read, compared] = test.right.kind === 'name' ? [test.left, test.right] : [test.right, test.left];
+  const path = namePath(read);
+  if (compared.kind !== 'name' || compared.name !== key || path?.[0] !== item.name || path.length < 2) {
+    return undefined;
+  }
+  const field = path.slice(1).join('.');
+  return isFieldPath(field) ? { list: body.callee.object, path: field } : undefined;
+}
+
+function pickedListReading(start: Located): LoopReading | undefined {
+  const picked = pickedListOf(start);
+  if (picked === undefined) {
+    return undefined;
+  }
+  const text = textOf(picked.list, picked.list.node);
+  if (listExpressionProblem(text) !== undefined) {
+    return undefined;
+  }
+  const source: LoopSource = { kind: 'list', collection: text };
+  const query: LoopQuery = { ...emptyQuery(source), selection: picked.picks, selectionField: picked.field };
+  return checked(query, { chain: [] }, undefined);
 }
 
 // A list read where the loop reads it: the head's trailing method calls are the

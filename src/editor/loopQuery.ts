@@ -143,6 +143,12 @@ export interface LoopQuery {
    */
   readonly selection?: readonly string[] | undefined;
   /**
+   * For a list (not a collection), the field of each item the picked ids are
+   * matched against (`slug`); absent, the picks are positions in the list, as
+   * decimal text. A collection's entries have ids of their own, so it has none.
+   */
+  readonly selectionField?: string | undefined;
+  /**
    * A sort written as code, kept verbatim in place of sort keys: a comparator,
    * `(a, b) => …`, run after the items are read. What a person or an AI wrote
    * that no sort key can say still shows, and stays editable, as code.
@@ -359,7 +365,9 @@ export function assertLoopQuery(query: LoopQuery): void {
   }
   if (query.source.kind === 'list') {
     assert(query.parameter.kind === 'entry', 'A list prop’s filter names its item');
-    assert(query.selection === undefined, 'A list prop’s items have no ids to pick by');
+    assertListPicks(query);
+  } else {
+    assert(query.selectionField === undefined, 'Only a list picks by one of its fields');
   }
   for (const condition of query.conditions) {
     assertCondition(condition);
@@ -396,6 +404,23 @@ function assertSelection(query: LoopQuery): void {
   for (const id of selection) {
     assert(isItemId(id), 'A selected item is named by an id');
   }
+}
+
+// A list's picked items are found by a field of the item, or by position: the
+// field is a checked name, and a position is a whole number written out.
+function assertListPicks(query: LoopQuery): void {
+  if (query.selection === undefined) {
+    assert(query.selectionField === undefined, 'A list that picks nothing has no pick field');
+    return;
+  }
+  if (query.selectionField === undefined) {
+    for (const position of query.selection) {
+      assert(/^\d{1,6}$/.test(position), 'A picked position is a whole number');
+    }
+    return;
+  }
+  assertFieldPath(query.selectionField);
+  assert(query.selectionField !== ITEM_FIELD, 'A pick field is a field of the item');
 }
 
 /** Whether a text can name a selected item: present, one line, bounded. */
@@ -561,6 +586,9 @@ export function listQueryCode(query: LoopQuery): string {
   assertLoopQuery(query);
   assert(query.source.kind === 'list', 'A list query reads a List prop');
   assert(query.parameter.kind === 'entry', 'A list prop’s filter names its item');
+  if (query.selection !== undefined) {
+    return listPickedCode(query.source.collection, query.selection, query.selectionField);
+  }
   const parameter = query.parameter.name;
   const joiner = query.match === 'all' ? ' && ' : ' || ';
   const clauses = query.conditions.map((condition) => astroConditionCode(condition, parameter));
@@ -569,6 +597,26 @@ export function listQueryCode(query: LoopQuery): string {
   const code = `${base}${filter}${sortStepCode(query, [], 'toSorted')}${sliceCode(query.offset, query.limit)}`;
   assert(code.startsWith(base), 'A list query starts from its list');
   return code;
+}
+
+/**
+ * A list's picked items, in the order picked: each pick is found in the list by
+ * a field of the item (`slug`) or by its position, and one no longer in the
+ * list is dropped. The list is named once, so the code reads as the picks do.
+ */
+export function listPickedCode(list: string, picks: readonly string[], field: string | undefined): string {
+  assert(listExpressionProblem(list) === undefined, 'A picked list is an expression');
+  assert(picks.length <= LOOP_QUERY_LIMITS.selectionMax, 'A selection is bounded');
+  const base = chainableListCode(list);
+  if (field === undefined) {
+    const positions = picks.map((position) => {
+      assert(/^\d{1,6}$/.test(position), 'A picked position is a whole number');
+      return String(Number(position));
+    });
+    return `[${positions.join(', ')}].map((index) => ${base}[index]).filter(Boolean)`;
+  }
+  assertFieldPath(field);
+  return `${idsCode(picks)}.map((key) => ${base}.find((item) => ${fieldAccess('item', field)} === key)).filter(Boolean)`;
 }
 
 /**

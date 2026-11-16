@@ -17,7 +17,7 @@ import type { DescribedTranslator } from '../../lib/i18n/localeContext';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import type { Described, Translator } from '../../../shared/properties/i18n/messageRef';
-import { AstroIcon, SanityIcon, CloseIcon, CmsIcon, FileIcon, LayersIcon, TextIcon } from '../../ui/Icons';
+import { AstroIcon, SanityIcon, CloseIcon, CmsIcon, TextIcon } from '../../ui/Icons';
 import type { TreeNode } from '../../editor/dataSample';
 import { treeListFields } from './loopProjectData';
 import { assert } from '../../../shared/core/assert';
@@ -50,6 +50,7 @@ import type { BindingContext } from './LoopBinding';
 import { LOOP_SETTINGS, type LoopSetting, type SettingHome } from '../../editor/optionsQuery';
 import { LoopLineage, tracedCollection, useLoopTrace, type TracedCollection } from './LoopLineage';
 import { FilterSection } from './LoopFilters';
+import { listItemsModeQuery, listPicks, type ListPicks, type PickRefusal } from './loopPickModel';
 import { withTypedFields } from './loopTypedField';
 import type { TypedFieldSupport } from './LoopTypedFieldForm';
 import { LimitSection, SortSection } from './LoopOrder';
@@ -163,6 +164,11 @@ export default function LoopSettings(props: LoopSettingsProps) {
   // Section code boxes rewrite steps where they are written, which needs the list read as written.
   const sections = kept || calledList ? undefined : asCalled.sections;
   const holder = readingChain(reading)[0];
+  const listSource = reading.kind === 'query' ? reading.query.source : undefined;
+  const picks = useMemo(
+    () => (listSource?.kind === 'list' ? listPicks({ frontmatter: props.input.frontmatter, expression: listSource.collection, tree }) : undefined),
+    [listSource, props.input.frontmatter, tree],
+  );
   const apply = (target: LoopTarget): void => {
     const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
     const before = readingLabel(reading, props.input.data, catalog);
@@ -224,6 +230,7 @@ export default function LoopSettings(props: LoopSettingsProps) {
         onItemsCode={applyItemsCode}
         code={code}
         item={props.item}
+        picks={picks}
         kept={kept}
         onApply={apply}
       />
@@ -359,6 +366,8 @@ function ReadingSettings(props: {
   readonly code: SectionCodeContext | undefined;
   /** The loop's item name, for typing a field. */
   readonly item: string | undefined;
+  /** The items a list can be picked from, when they can be seen. */
+  readonly picks: ListPicks | undefined;
   /** Whether the list's own steps are kept as written, with what is set here applied after them. */
   readonly kept: boolean;
   readonly onApply: (target: LoopTarget) => void;
@@ -375,6 +384,9 @@ function ReadingSettings(props: {
       {/* Custom code in a section: that section is code, and the rest stay
           controls. There is no Items switch: picking items would replace the code. */}
       {reading.kind === 'partial' && code !== undefined && (
+        <ItemsSwitch current="dynamic" selectedReason={refusalText('custom', translate)} onPick={() => undefined} />
+      )}
+      {reading.kind === 'partial' && code !== undefined && (
         <QuerySections
           {...shared}
           query={code.sections.query}
@@ -388,14 +400,13 @@ function ReadingSettings(props: {
       )}
       {props.kept && <div className="loop-lineage-note">{translate('props.loop.note.kept')}</div>}
       {reading.kind === 'query' && reading.query.source.kind === 'list' && (
-        <QuerySections
+        <ListSettings
           {...shared}
           query={reading.query}
-          item={props.item}
           fields={fields}
-          stored="code"
-          itemPath={[]}
+          item={props.item}
           code={code}
+          picks={props.picks}
           onChange={(query) => onApply({ kind: 'query', query, fields: [] })}
         />
       )}
@@ -478,7 +489,6 @@ function CollectionSettings(props: {
   readonly code: SectionCodeContext | undefined;
   readonly onChange: (query: LoopQuery) => void;
 }) {
-  const translate = useTranslate();
   const { home } = props;
   // A builder export's items carry the CMS's own ids, which its code matches.
   const ids = home?.kind === 'options' || (home?.kind === 'chain' && home.itemPath[0] === 'fields') ? 'export' : 'entry';
@@ -492,19 +502,7 @@ function CollectionSettings(props: {
   };
   return (
     <>
-      <div className="props-field loop-settings-row loop-settings-mode">
-        <label>
-          <span className="prop-label">{translate('props.loop.settings.items')}</span>
-        </label>
-        <SegSwitch
-          options={[
-            { value: 'dynamic', label: translate('props.loop.settings.dynamic') },
-            { value: 'selected', label: translate('props.loop.settings.selected') },
-          ]}
-          current={query.selection === undefined ? 'dynamic' : 'selected'}
-          onPick={switchTo}
-        />
-      </div>
+      <ItemsSwitch current={query.selection === undefined ? 'dynamic' : 'selected'} selectedReason={undefined} onPick={switchTo} />
       {query.selection === undefined ? (
         <QuerySections
           {...props}
@@ -519,6 +517,101 @@ function CollectionSettings(props: {
   );
 }
 
+// The Items switch: every item of the source, narrowed by Filters, Sort and
+// Limit (Dynamic), or a hand-picked set (Selected). Where the items cannot be
+// picked, Selected is there, off, and its tooltip says why.
+function ItemsSwitch(props: {
+  readonly current: 'dynamic' | 'selected';
+  readonly selectedReason: string | undefined;
+  readonly onPick: (mode: 'dynamic' | 'selected') => void;
+}) {
+  const translate = useTranslate();
+  return (
+    <div className="props-field loop-settings-row loop-settings-mode">
+      <label>
+        <span className="prop-label">{translate('props.loop.settings.items')}</span>
+      </label>
+      <SegSwitch
+        options={[
+          { value: 'dynamic', label: translate('props.loop.settings.dynamic') },
+          { value: 'selected', label: translate('props.loop.settings.selected'), disabledReason: props.selectedReason },
+        ]}
+        current={props.current}
+        onPick={props.onPick}
+      />
+    </div>
+  );
+}
+
+function refusalText(reason: PickRefusal, translate: Translator): string {
+  switch (reason) {
+    case 'unknown':
+      return translate('props.loop.settings.selectedUnknown');
+    case 'custom':
+      return translate('props.loop.settings.selectedCustom');
+    case 'traced':
+      return translate('props.loop.settings.selectedTraced');
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
+  }
+}
+
+// A list that is not a collection: Dynamic (filters, sort, limit) or Selected
+// (items picked by hand from what the list holds), as a collection's list has.
+function ListSettings(props: {
+  readonly query: LoopQuery;
+  readonly fields: readonly CatalogField[] | undefined;
+  readonly catalog: LoopCatalog | undefined;
+  readonly projectPath: string | undefined;
+  readonly code: SectionCodeContext | undefined;
+  readonly item: string | undefined;
+  readonly picks: ListPicks | undefined;
+  readonly onChange: (query: LoopQuery) => void;
+}) {
+  const translate = useTranslate();
+  const { query } = props;
+  const switchTo = (mode: 'dynamic' | 'selected'): void => {
+    const next = listItemsModeQuery(query, mode, props.picks);
+    if (next !== undefined) {
+      props.onChange(next);
+    }
+  };
+  const selected = query.selection !== undefined;
+  return (
+    <>
+      <ItemsSwitch
+        current={selected ? 'selected' : 'dynamic'}
+        selectedReason={props.picks === undefined && !selected ? refusalText('unknown', translate) : undefined}
+        onPick={switchTo}
+      />
+      {selected ? (
+        <ItemsSection
+          query={query}
+          catalog={props.catalog}
+          projectPath={props.projectPath}
+          ids="entry"
+          items={props.picks?.items ?? []}
+          onChange={props.onChange}
+        />
+      ) : (
+        <QuerySections
+          catalog={props.catalog}
+          projectPath={props.projectPath}
+          query={query}
+          item={props.item}
+          fields={props.fields}
+          stored="code"
+          itemPath={[]}
+          code={props.code}
+          onChange={props.onChange}
+        />
+      )}
+    </>
+  );
+}
+
 // A traced list's settings, when they can be edited where its query lives.
 function TracedSettings(props: {
   readonly traced: ReturnType<typeof useTracedEditing>;
@@ -526,15 +619,19 @@ function TracedSettings(props: {
   readonly projectPath: string | undefined;
 }) {
   const editable = props.traced.editable;
+  const translate = useTranslate();
   return editable === undefined ? undefined : (
-    <QuerySections
-      catalog={props.catalog}
-      projectPath={props.projectPath}
-      query={editable.query}
-      fields={props.traced.fields}
-      stored="traced"
-      onChange={props.traced.apply}
-    />
+    <>
+      <ItemsSwitch current="dynamic" selectedReason={refusalText('traced', translate)} onPick={() => undefined} />
+      <QuerySections
+        catalog={props.catalog}
+        projectPath={props.projectPath}
+        query={editable.query}
+        fields={props.traced.fields}
+        stored="traced"
+        onChange={props.traced.apply}
+      />
+    </>
   );
 }
 
@@ -884,7 +981,7 @@ function sourceOptions(
       label: list.label,
       group: project ? translate('props.dataPicker.section.projectData') : translate('props.dataPicker.section.onPage'),
       hint: list.hint,
-      icon: project ? <FileIcon size={13} /> : <LayersIcon size={13} />,
+      icon: <CmsIcon size={13} />,
     });
   }
   // What the loop reads now is always listed, even before the catalog loads
@@ -913,7 +1010,7 @@ function currentOption(props: SourceRowProps, current: string, translate: Transl
         label: source.collection,
         group: project ? translate('props.dataPicker.section.projectData') : translate('props.dataPicker.section.onPage'),
         hint: '',
-        icon: project ? <FileIcon size={13} /> : <LayersIcon size={13} />,
+        icon: <CmsIcon size={13} />,
       };
     }
     return {
@@ -947,7 +1044,7 @@ function currentOption(props: SourceRowProps, current: string, translate: Transl
           : origin.kind === 'frontmatter'
             ? translate('props.loop.source.thisFile')
             : '';
-    return { value: current, label: props.data.trim(), group: translate('props.dataPicker.section.onPage'), hint, icon: <LayersIcon size={13} /> };
+    return { value: current, label: props.data.trim(), group: translate('props.dataPicker.section.onPage'), hint, icon: <CmsIcon size={13} /> };
   }
   return { value: current, label: translate('props.loop.customCode'), hint: translate('props.loop.source.editBelow') };
 }

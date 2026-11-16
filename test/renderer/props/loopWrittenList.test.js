@@ -363,7 +363,7 @@ test('the page’s loop shows Filters, Sort and Limit, and writes nothing on ope
   for (const label of ['Source', 'Filters', 'Sort', 'Limit items']) {
     assert.ok(shown.includes(label), `${label} in ${shown.join(', ')}`);
   }
-  assert.ok(!shown.includes('Items'), 'a written-out list’s items have no ids to pick by');
+  assert.ok(shown.includes('Items'), 'a written-out list has the Items switch');
   assert.ok(host.querySelector('.loop-settings-list') === null, 'no filter or sort rows yet');
   assert.ok(header(host, 'Filters').querySelector('.loop-settings-add'), 'a filter can be added, as code');
   assert.ok(header(host, 'Sort').querySelector('.loop-settings-add'), 'a sort can be added, as code');

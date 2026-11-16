@@ -222,7 +222,7 @@ function NewFilterRow(props: {
         first === undefined && !custom && typed !== undefined ? (
           <>
             <TypedFieldForm item={typed.item} onUse={setPicked} />
-            <button type="button" className="loop-settings-link" onClick={() => setCustom(true)}>
+            <button type="button" className="loop-quiet-row" onClick={() => setCustom(true)}>
               {translate('props.loop.customCode')}
             </button>
           </>

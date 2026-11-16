@@ -74,7 +74,7 @@ export function projectDataNames(tree: readonly TreeNode[], modules: Readonly<Re
 }
 
 // The node whose path is `name`, at the top or inside another (`page.cards`): bounded by the tree's own caps.
-function nodeAt(tree: readonly TreeNode[] | undefined, name: string): TreeNode | undefined {
+export function nodeAt(tree: readonly TreeNode[] | undefined, name: string): TreeNode | undefined {
   const pending: TreeNode[] = [...(tree ?? [])];
   for (let visited = 0; pending.length > 0 && visited < LIMITS.treeNodesMax; visited++) {
     const node = pending.shift();

@@ -11,7 +11,7 @@
 import { useCallback, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import DataPicker, { type PickerNode } from './DataPicker';
-import { ChevronDownIcon } from '../../ui/Icons';
+import { ChevronDownIcon, PlusIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { sampleAt, samplePreview } from '../../editor/dataSample';
@@ -21,6 +21,8 @@ import { TypedFieldForm, type TypedFieldSupport } from './LoopTypedFieldForm';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 
 const PICKER_HEIGHT_PX_MAX = 420;
+// Wide enough for a field's name, its type and the form that types another field, whatever the row it opens from.
+const PICKER_WIDTH_PX_MIN = 300;
 
 /** A choice above the tree that is not a field: custom code, a shuffle. */
 export interface FieldExtra {
@@ -44,6 +46,7 @@ export function FieldPicker(props: {
 }) {
   const translate = useTranslate();
   const [open, setOpen] = useState(false);
+  const [typing, setTyping] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
   const attach = useCallback<RefCallback<HTMLButtonElement>>((element) => setAnchor(element ?? undefined), []);
   const choose = (value: string, typed?: CatalogField): void => {
@@ -70,19 +73,15 @@ export function FieldPicker(props: {
         </span>
       </button>
       {open && (
-        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label={translate('props.loop.field')} onClose={() => setOpen(false)}>
+        <RowPopup
+          anchor={anchor}
+          heightPxMax={PICKER_HEIGHT_PX_MAX}
+          widthPxMin={PICKER_WIDTH_PX_MIN}
+          label={translate('props.loop.field')}
+          onClose={() => setOpen(false)}
+        >
           <div className="loop-source-picker">
-            {props.extras.length > 0 && (
-              <div className="loop-source-extras">
-                {props.extras.map((candidate) => (
-                  <button key={candidate.value} type="button" className="dp-row" onClick={() => choose(candidate.value)}>
-                    {candidate.icon}
-                    <span className="dp-key">{candidate.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {props.typed !== undefined && <TypedFieldForm item={props.typed.item} onUse={(field) => choose(field.path, field)} />}
+            {/* The search is first, then the fields; what is not a field comes after, quietly. */}
             <DataPicker
               tree={fieldTree(props.fields, props.sample, props.usable)}
               current={field?.path}
@@ -93,6 +92,25 @@ export function FieldPicker(props: {
                 }
               }}
             />
+            {(props.extras.length > 0 || props.typed !== undefined) && (
+              <div className="loop-field-extras">
+                {props.extras.map((candidate) => (
+                  <button key={candidate.value} type="button" className="dp-row" onClick={() => choose(candidate.value)}>
+                    {candidate.icon}
+                    <span className="dp-key">{candidate.label}</span>
+                  </button>
+                ))}
+                {props.typed !== undefined &&
+                  (typing ? (
+                    <TypedFieldForm item={props.typed.item} onUse={(typed) => choose(typed.path, typed)} />
+                  ) : (
+                    <button type="button" className="dp-row" onClick={() => setTyping(true)}>
+                      <PlusIcon size={13} />
+                      <span className="dp-key">{translate('props.loop.typed.open')}</span>
+                    </button>
+                  ))}
+              </div>
+            )}
           </div>
         </RowPopup>
       )}

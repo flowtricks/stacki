@@ -34,7 +34,15 @@ const directory = repoPath('node_modules/.stacki-test/loop-any-list');
 fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'loop-any-list.cjs');
 buildSync({
-  stdin: { contents: "export { default as LoopSettings } from './src/features/props/LoopSettings';", resolveDir: ROOT, loader: 'ts' },
+  stdin: {
+    contents: [
+      "export { default as LoopSettings } from './src/features/props/LoopSettings';",
+      "export { CmsIcon } from './src/ui/Icons';",
+      "export { EditorView } from '@codemirror/view';",
+    ].join('\n'),
+    resolveDir: ROOT,
+    loader: 'ts',
+  },
   outfile: output,
   bundle: true,
   platform: 'node',
@@ -281,6 +289,8 @@ function installDom() {
   dom.window.Range.prototype.getClientRects = () => [];
   dom.window.Range.prototype.getBoundingClientRect = () => ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 });
   installPopupDOM(dom.window);
+  // The project's files, which a picked item's thumbnail is read from.
+  dom.window.avb = { listAssets: async () => ({ entries: [] }), onAssetsChanged: () => () => {} };
   React = require('react');
   ({ createRoot } = require('react-dom/client'));
   ({ act } = React);
@@ -328,6 +338,14 @@ async function panel(context, data, frontmatter = FRONTMATTER) {
   return { host, state };
 }
 
+// The field name is code, so it is the highlighted editor: typed through its view, used with Enter.
+const fieldInput = () => document.querySelector('.loop-typed-form .cm-content');
+async function typeField(text) {
+  const view = modules.EditorView.findFromDOM(fieldInput());
+  await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
+}
+const enterField = async () =>
+  act(async () => fieldInput().dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
 const press = async (element) => {
   assert.ok(element, 'the control is there');
   await act(async () => element.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
@@ -361,8 +379,9 @@ test('an untyped list says its fields are not seen, and a field typed by name ma
     });
   // Filters: add, name a field, give a value: the filter is written after the list as written.
   await press(sectionNamed(host, 'Filters').querySelector('.loop-settings-add'));
-  await setValue(document.querySelector('input[aria-label="Field name"]'), 'card.title');
-  await press([...document.querySelectorAll('button.loop-settings-link')].find((button) => button.textContent === 'Use this field'));
+  assert.ok(fieldInput().closest('.loop-typed-form'), 'the field name is the highlighted editor, in the form');
+  await typeField('card.title');
+  await press([...document.querySelectorAll('button.primary')].find((button) => button.textContent === 'Use field'));
   assert.equal(state.applied.length, 0, 'choosing a field writes nothing until its filter is valid');
   assert.equal(state.head, start);
   const value = document.querySelector('.loop-settings-editor input[placeholder="Value"]');
@@ -380,12 +399,8 @@ test('an untyped list says its fields are not seen, and a field typed by name ma
 test('a sort on an untyped list starts by naming its field', async (context) => {
   const { host, state } = await panel(context, 'items');
   await press(sectionNamed(host, 'Sort').querySelector('.loop-settings-add'));
-  const input = document.querySelector('input[aria-label="Field name"]');
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value').set.call(input, 'order');
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
-  });
-  await act(async () => input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await typeField('order');
+  await enterField();
   assert.equal(state.applied.length, 1, 'a text field sorts by its text');
   assert.match(state.head, /^items\.toSorted\(/);
   assert.equal(state.frontmatter, FRONTMATTER);
@@ -398,4 +413,223 @@ test('a loop nobody touches stays byte for byte, and hovering controls writes no
     assert.equal(state.applied.length, 0, name);
     assert.ok(host.querySelector('.loop-settings'), name);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Items: Dynamic or Selected, on every loop.
+// ---------------------------------------------------------------------------
+
+const pickModel = load('src/features/props/loopPickModel.ts');
+const CARDS_FRONTMATTER = `const cards = [
+  { slug: 'fast', title: 'Fast', image: 'https://example.com/fast.png' },
+  { slug: 'safe', title: 'Safe' },
+  { slug: 'free', title: 'Free' },
+];
+`;
+
+test('the items of a list are read where they can be seen, and named by their key field when they have one', () => {
+  const written = pickModel.listPicks({ frontmatter: CARDS_FRONTMATTER, expression: 'cards', tree: undefined });
+  assert.equal(written.field, 'slug');
+  assert.deepEqual(
+    written.items.map((item) => [item.id, item.title]),
+    [
+      ['fast', 'Fast'],
+      ['safe', 'Safe'],
+      ['free', 'Free'],
+    ],
+  );
+  assert.deepEqual(written.items[0].picture, { kind: 'url', url: 'https://example.com/fast.png' }, 'a picture field is the thumbnail');
+  assert.equal(written.items[1].picture, undefined);
+  // A list typed in the loop, plain words, is picked by position.
+  const inline = pickModel.listPicks({ frontmatter: '', expression: '["a", "b"]', tree: undefined });
+  assert.equal(inline.field, undefined);
+  assert.deepEqual(
+    inline.items.map((item) => [item.id, item.title]),
+    [
+      ['0', 'a'],
+      ['1', 'b'],
+    ],
+  );
+  // A key two items share names nothing: positions.
+  const clash = pickModel.listPicks({ frontmatter: "const xs = [{ id: 'a', title: 'A' }, { id: 'a', title: 'B' }];", expression: 'xs', tree: undefined });
+  assert.equal(clash.field, undefined);
+  // Nothing to see: no items, so nothing to pick.
+  assert.equal(pickModel.listPicks({ frontmatter: '', expression: 'items', tree: undefined }), undefined);
+  assert.equal(pickModel.listPicks({ frontmatter: 'const xs = [];', expression: 'xs', tree: undefined }), undefined);
+});
+
+test('the items of a sampled list come from the page’s data', () => {
+  const leaf = (key, preview, kind = 'text') => ({ path: key, key, kind, preview, children: undefined });
+  const tree = [
+    {
+      path: 'items',
+      key: 'items',
+      kind: 'list',
+      preview: '',
+      children: [
+        {
+          path: 'items[0]',
+          key: '0',
+          kind: 'object',
+          preview: '',
+          children: [leaf('id', 'one'), leaf('name', 'One'), leaf('photo', 'https://x.test/1.png', 'image')],
+        },
+        { path: 'items[1]', key: '1', kind: 'object', preview: '', children: [leaf('id', 'two'), leaf('name', 'Two')] },
+      ],
+    },
+  ];
+  const picks = pickModel.listPicks({ frontmatter: '', expression: 'items', tree });
+  assert.equal(picks.field, 'id');
+  assert.deepEqual(
+    picks.items.map((item) => [item.id, item.title]),
+    [
+      ['one', 'One'],
+      ['two', 'Two'],
+    ],
+  );
+  assert.equal(picks.items[0].picture.kind, 'url');
+});
+
+test('picked items are written as a readable expression and read back as Selected', () => {
+  const source = { kind: 'list', collection: 'cards' };
+  const byKey = { ...loopQuery.emptyQuery(source), selection: ['safe', 'fast'], selectionField: 'slug' };
+  const keyCode = loopQuery.listQueryCode(byKey);
+  assert.equal(keyCode, "['safe', 'fast'].map((key) => cards.find((item) => item.slug === key)).filter(Boolean)");
+  const keyed = readLoop({ frontmatter: FRONTMATTER, imports: IMPORTS, data: keyCode });
+  assert.deepEqual([keyed.query.selection, keyed.query.selectionField, keyed.query.source.collection], [['safe', 'fast'], 'slug', 'cards']);
+  const byPosition = { ...loopQuery.emptyQuery({ kind: 'list', collection: '["a", "b", "c"]' }), selection: ['2', '0'] };
+  const positionCode = loopQuery.listQueryCode(byPosition);
+  assert.equal(positionCode, '[2, 0].map((index) => ["a", "b", "c"][index]).filter(Boolean)');
+  const positioned = readLoop({ frontmatter: '', imports: [], data: positionCode });
+  assert.deepEqual(
+    [positioned.query.selection, positioned.query.selectionField, positioned.query.source.collection],
+    [['2', '0'], undefined, '["a", "b", "c"]'],
+  );
+  // A list that is not a bare name is wrapped, in either form.
+  const wrapped = { ...loopQuery.emptyQuery({ kind: 'list', collection: 'a ?? []' }), selection: ['1'] };
+  assert.equal(loopQuery.listQueryCode(wrapped), '[1].map((index) => (a ?? [])[index]).filter(Boolean)');
+  // A field that is not a plain name is written as a key.
+  const odd = { ...loopQuery.emptyQuery(source), selection: ['a'], selectionField: 'the-slug' };
+  assert.match(loopQuery.listQueryCode(odd), /item\['the-slug'\] === key/);
+  // Nothing picked yet writes an empty pick, which reads back as Selected too.
+  const none = { ...loopQuery.emptyQuery(source), selection: [], selectionField: 'slug' };
+  assert.equal(readLoop({ frontmatter: FRONTMATTER, imports: IMPORTS, data: loopQuery.listQueryCode(none) }).query.selection.length, 0);
+});
+
+test('code that only looks like picks is not read as picks, and is never rewritten', () => {
+  const read = (data) => readLoop({ frontmatter: FRONTMATTER, imports: IMPORTS, data });
+  for (const data of [
+    '["a"].map((key) => cards.find((item) => item.slug !== key)).filter(Boolean)',
+    '["a"].map((key) => cards.find((item) => item.slug === other)).filter(Boolean)',
+    '[x].map((key) => cards.find((item) => item.slug === key)).filter(Boolean)',
+    '[-1].map((index) => cards[index]).filter(Boolean)',
+    '[1.5].map((index) => cards[index]).filter(Boolean)',
+    '["a"].map((key) => cards.find((item) => item.slug === key)).filter(Boolean).slice(0, 1)',
+    '["a"].map((key, at) => cards.find((item) => item.slug === key)).filter(Boolean)',
+  ]) {
+    const reading = read(data);
+    assert.equal(reading.query?.selection, undefined, data);
+    assert.ok(reading.kind === 'query' || reading.kind === 'partial', data);
+  }
+  assert.throws(() => loopQuery.listPickedCode('cards', ['x'], undefined), /A picked position is a whole number/);
+  assert.throws(() => loopQuery.listPickedCode('cards', ['1'], 'a b'));
+  assert.throws(() => loopQuery.listPickedCode('cards.(', ['1'], undefined), /A picked list is an expression/);
+});
+
+test('the Items switch moves between the modes, and Selected needs items to pick from', () => {
+  const source = { kind: 'list', collection: 'cards' };
+  const dynamic = { ...loopQuery.emptyQuery(source), limit: 2 };
+  const picks = pickModel.listPicks({ frontmatter: CARDS_FRONTMATTER, expression: 'cards', tree: undefined });
+  const selected = pickModel.listItemsModeQuery(dynamic, 'selected', picks);
+  assert.deepEqual([selected.selection, selected.selectionField, selected.limit], [[], 'slug', undefined], 'the settings of the other mode go');
+  assert.equal(pickModel.listItemsModeQuery(selected, 'selected', picks), undefined, 'already Selected');
+  assert.equal(pickModel.listItemsModeQuery(dynamic, 'dynamic', picks), undefined, 'already Dynamic');
+  assert.equal(pickModel.listItemsModeQuery(dynamic, 'selected', undefined), undefined, 'no items to pick from');
+  const back = pickModel.listItemsModeQuery({ ...selected, selection: ['fast'] }, 'dynamic', picks);
+  assert.deepEqual([back.selection, back.selectionField], [undefined, undefined]);
+});
+
+const switchOf = (host) => host.querySelector('.loop-settings-mode .bool-seg');
+const buttonNamed = (host, label) => [...switchOf(host).querySelectorAll('button')].find((button) => button.textContent === label);
+
+test('every kind of loop has the Items switch, Selected on only where its items can be seen', async (context) => {
+  for (const [name, data] of Object.entries(KINDS)) {
+    const { host } = await panel(context, data);
+    assert.ok(switchOf(host), `${name} has Items`);
+    assert.ok(buttonNamed(host, 'Dynamic'), name);
+    assert.equal(buttonNamed(host, 'Dynamic').getAttribute('aria-pressed'), 'true', name);
+    const selected = buttonNamed(host, 'Selected');
+    assert.ok(selected, name);
+    if (selected.disabled) {
+      assert.ok(selected.title.length > 20, `${name}: the reason is specific (${selected.title})`);
+    }
+  }
+  const inline = await panel(context, '["a", "b", "c"]');
+  assert.equal(buttonNamed(inline.host, 'Selected').disabled, false, 'an inline array can be picked from');
+  const unseen = await panel(context, 'items');
+  assert.equal(buttonNamed(unseen.host, 'Selected').disabled, true);
+  assert.match(buttonNamed(unseen.host, 'Selected').title, /not known here/);
+});
+
+test('Selected on a list picks its items by their key and writes the picks, in the order picked', async (context) => {
+  const { host, state } = await panel(context, 'cards', CARDS_FRONTMATTER);
+  const before = state.frontmatter;
+  await press(buttonNamed(host, 'Selected'));
+  assert.equal(state.head, '[].map((key) => cards.find((item) => item.slug === key)).filter(Boolean).map((card) => (');
+  assert.equal(buttonNamed(host, 'Selected').getAttribute('aria-pressed'), 'true', 'it opens in Selected mode, as the code says');
+  assert.equal(state.frontmatter, before, 'the frontmatter is untouched');
+  await press(sectionNamed(host, 'Select items').querySelector('.loop-settings-add'));
+  const rows = [...document.querySelectorAll('.loop-settings-picker-row:not(.all)')];
+  assert.deepEqual(
+    rows.map((row) => row.textContent),
+    ['Fast', 'Safe', 'Free'],
+  );
+  await act(async () => rows[2].querySelector('input').click());
+  await act(async () => rows[0].querySelector('input').click());
+  assert.equal(state.head, "['free', 'fast'].map((key) => cards.find((item) => item.slug === key)).filter(Boolean).map((card) => (");
+  // A head that already picks opens in Selected, and Dynamic gives the whole list back.
+  await press(buttonNamed(host, 'Dynamic'));
+  assert.equal(state.head, 'cards.map((card) => (');
+});
+
+test('an inline array is picked by position', async (context) => {
+  const { host, state } = await panel(context, '["a", "b", "c"]');
+  await press(buttonNamed(host, 'Selected'));
+  await press(sectionNamed(host, 'Select items').querySelector('.loop-settings-add'));
+  const rows = [...document.querySelectorAll('.loop-settings-picker-row:not(.all)')];
+  await act(async () => rows[1].querySelector('input').click());
+  assert.equal(state.head, '[1].map((index) => ["a", "b", "c"][index]).filter(Boolean).map((card) => (');
+});
+
+// A list typed in the loop keeps its own Text icon: its Source entry is "Custom list", on purpose.
+test('a list source shows the CMS icon, like a collection', async (context) => {
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const cms = renderToStaticMarkup(React.createElement(modules.CmsIcon, { size: 13 }));
+  const name = /data-central-icon="([^"]+)"/.exec(cms)[1];
+  for (const data of ['platformIntro.cards', 'cards', 'Object.entries(platformIntro)']) {
+    const { host } = await panel(context, data);
+    assert.ok(host.querySelector('.loop-source-trigger .dd-icon').innerHTML.includes(`data-central-icon="${name}"`), data);
+  }
+});
+
+test('the field picker leads with the search, then the fields, then a quiet row for another field name', async (context) => {
+  const { host } = await panel(context, 'cards', CARDS_FRONTMATTER);
+  await press(sectionNamed(host, 'Filters').querySelector('.loop-settings-add'));
+  assert.ok(document.querySelector('.loop-typed-form') === null, 'with fields to pick, the form is not open');
+  await press(document.querySelector('button[aria-label="Field"]'));
+  const picker = document.querySelector('.loop-source-picker');
+  assert.ok(picker, 'the picker is open');
+  const parts = [...picker.children].map((child) => child.className.split(' ')[0]);
+  assert.deepEqual(parts, ['data-picker', 'loop-field-extras'], 'the data picker, with its search first, then the extras');
+  assert.ok(picker.querySelector('.data-picker').firstElementChild.classList.contains('dp-search'), 'the search comes first');
+  const more = [...picker.querySelectorAll('.loop-field-extras .dp-row')].at(-1);
+  assert.equal(more.textContent, 'Use a custom field name…');
+  await press(more);
+  const form = picker.querySelector('.loop-typed-form');
+  assert.ok(form, 'the form opens in place');
+  assert.deepEqual(
+    [...form.querySelectorAll('.loop-typed-label')].map((label) => label.textContent),
+    ['Field name', 'Type'],
+  );
+  assert.ok(form.querySelector('button.primary'), 'one primary action');
 });
