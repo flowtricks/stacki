@@ -82,6 +82,10 @@ export function savePhaseOf(change: PropertyChange): 'saving' | 'autosaving' {
   if (change.kind === 'save' && change.originalName !== change.property.name) {
     return 'saving';
   }
+  // Renaming an option renames it in every instance that passes it, as a prop rename does.
+  if (change.kind === 'variantRules' && change.edit.kind === 'renameOption') {
+    return 'saving';
+  }
   return 'autosaving';
 }
 
@@ -364,6 +368,19 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
     /** Whether a field is part-way through something it cannot write; it says why itself. */
     hold: (hold: Autosave['hold']): void => {
       state.current.hold = hold;
+    },
+    /**
+     * The file was changed beside the form (a variant rule edit, PropertyVariants.tsx):
+     * the fields this form changed are laid over what the file holds now, and
+     * later saves start from it, so they never write back what that edit replaced.
+     */
+    rebase: (fresh: ComponentProperty): void => {
+      const own = state.current;
+      assert(fresh.name === own.saved.name, 'rebase: the file holds the prop by the name the form saved');
+      const property = mergedProperty(own.saved, own.draft.property, fresh);
+      own.saved = fresh;
+      own.refused = undefined;
+      replaceDraft({ ...own.draft, property });
     },
     /** Forgets what is pending, for a prop about to be deleted. */
     discard: (): void => {
