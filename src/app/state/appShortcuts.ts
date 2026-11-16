@@ -10,6 +10,8 @@ import type { ImportDecl } from '../../../shared/page/pageNode';
 import { loadCatalog } from '../../features/props/loopCatalog';
 import { loadSanitySample } from '../../features/props/loopSettingsData';
 import { insertTargetFor as placeInsert } from '../../editor/insertTarget';
+import { documentOfPath, placementNodeOfItem } from '../../editor/placementCheck';
+import { gatePlacement, placementNotice } from '../model/placementGate';
 import { frontmatterGesture, insertGesture } from '../../editor/editGestures';
 import {
   collectionsInScope,
@@ -58,7 +60,7 @@ import {
 
 // Editing nodes from the navigator and the palette.
 export function useNodeEdits(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
-  const addComponentScope = useAddComponent(coreState, history);
+  const addComponentScope = useAddComponent(coreState, history, lifecycle);
   const componentQueries = useComponentQueries(coreState);
   const createComponent = useCreateComponent(coreState, componentQueries, lifecycle, history);
   const moveNodeScope = useMoveNode(coreState, history, lifecycle);
@@ -91,8 +93,9 @@ export function useInsertItem(
   const { cmsRel, contentName, insertables, leftTab, pageStateRef, selectedIdRef } = coreState;
   const { setSelectedId } = coreState;
   const { addComponent, setInsertOpen } = nodeEdits;
-  const { reportFailure } = lifecycle;
+  const { reportFailure, showToast } = lifecycle;
   const { commitEdit } = history;
+  const translate = useTranslate();
 
   // Where a new node goes — see insertTarget.js. The rule lives there so the
   // "why did that land next to the section instead of in it?" answer can be
@@ -109,12 +112,25 @@ export function useInsertItem(
       if (!state?.editable) {
         return;
       }
-      const target = insertTargetFor(state.model, selectedIdRef.current, item);
+      const aimed = insertTargetFor(state.model, selectedIdRef.current, item);
 
+      // A component is placed (and refused, or moved with a note) by addComponent, which asks the same rule once it has read the component.
       if (item.type === 'component') {
-        void addComponent(item.path ?? item.name, target).catch(reportFailure);
+        void addComponent(item.path ?? item.name, aimed).catch(reportFailure);
         return;
       }
+      // The one placement rule: a refusal writes nothing; the nearest valid place is used, with a note saying so.
+      const pagePath = pageStateRef.current.currentPage?.path;
+      const subject = placementNodeOfItem(item, { insertables, document: documentOfPath(pagePath) });
+      const gate = subject === undefined ? undefined : gatePlacement(state.model, { kind: 'new', node: subject }, aimed, { insertables, pagePath });
+      const notice = gate === undefined ? undefined : placementNotice(gate, translate);
+      if (notice !== undefined) {
+        showToast(notice.text, notice.tone);
+      }
+      if (gate?.kind === 'stop') {
+        return;
+      }
+      const target = gate === undefined ? aimed : gate.target;
 
       // <Image>/<Picture> need `import { … } from 'astro:assets'` — a named
       // import of a virtual module, so there is no file path to resolve the
@@ -135,14 +151,35 @@ export function useInsertItem(
       commitEdit(insertGesture(state.model, node, target, { urgency: true }));
       setSelectedId(id);
     },
-    [insertTargetFor, addComponent, commitEdit, reportFailure, pageStateRef, selectedIdRef, setInsertOpen, setSelectedId],
+    [insertTargetFor, addComponent, commitEdit, reportFailure, showToast, translate, insertables, pageStateRef, selectedIdRef, setInsertOpen, setSelectedId],
+  );
+
+  // Why the palette cannot put an item where the selection points: the refusal, or undefined when it can (or lands beside, with a note).
+  const placementForItem = useCallback(
+    (item: InsertItem) => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable || item.type === 'component' || item.type === 'astroAsset') {
+        return undefined;
+      }
+      const pagePath = pageStateRef.current.currentPage?.path;
+      const subject = placementNodeOfItem(item, { insertables, document: documentOfPath(pagePath) });
+      if (subject === undefined) {
+        return undefined;
+      }
+      const gate = gatePlacement(state.model, { kind: 'new', node: subject }, insertTargetFor(state.model, selectedIdRef.current, item), {
+        insertables,
+        pagePath,
+      });
+      return gate.kind === 'stop' ? gate.refusal : undefined;
+    },
+    [insertTargetFor, insertables, pageStateRef, selectedIdRef],
   );
 
   // True while the CMS covers the canvas: the page-editing shortcuts below
   // would act on a selection the user can't see.
   const cmsOpenRef = useRef(false);
   cmsOpenRef.current = leftTab === 'cms' && (!!cmsRel || !!contentName);
-  return { cmsOpenRef, insertItem };
+  return { cmsOpenRef, insertItem, placementForItem };
 }
 
 // The app’s keyboard shortcuts.

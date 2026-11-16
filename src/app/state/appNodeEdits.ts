@@ -4,6 +4,9 @@
 
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assertCanAddComponent } from '../../features/palette/componentVisibility';
+import { gatePlacement, placementNotice } from '../model/placementGate';
+import { useCompileFailureNotice } from './appCompileRecovery';
+import { documentOfPath, placementNodeOf, placementNodeOfItem } from '../../editor/placementCheck';
 import { currentRole } from '../../lib/currentRole';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tellCanvas } from '../../editor/canvasQuery';
@@ -72,6 +75,7 @@ export function useHistory(
   const typedParse = useTypedParse(coreState, lifecycle);
   const stepEditsScope = useStepEdits(lifecycle, coreState);
   const undoRedo = useUndoRedo(coreState, typedParse, lifecycle, stepEditsScope);
+  useCompileFailureNotice(coreState, undoRedo.undo);
   const scheduleSaveScope = useScheduleSave(coreState, lifecycle, typedParse, historyPush);
   const commitEditScope = useCommitEdit(lifecycle, coreState, scheduleSaveScope, historyPush);
   const codeSource = useCodeSource(coreState, historyPush, lifecycle, scheduleSaveScope, typedParse);
@@ -91,9 +95,15 @@ export function useHistory(
 }
 
 // Placing a project component.
-export function useAddComponent(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
+export function useAddComponent(
+  coreState: ReturnType<typeof useCoreState>,
+  history: ReturnType<typeof useHistory>,
+  lifecycle: ReturnType<typeof useLifecycle>,
+) {
+  const translate = useTranslate();
   const { insertables, pageStateRef, projectRef, setSelectedId } = coreState;
   const { commitEdit } = history;
+  const { showToast } = lifecycle;
 
   const resolveImportPath = useCallback(
     async (targetPath: string) => {
@@ -138,8 +148,19 @@ export function useAddComponent(coreState: ReturnType<typeof useCoreState>, hist
         return;
       }
       const { node, imports } = componentInstancePlacement(state.model, instance, resolved);
+      // The one placement rule: a refusal writes nothing, and the nearest valid place is used, with a note saying so.
+      const environment = { insertables, document: documentOfPath(page.path) };
+      const subject = placementNodeOfItem({ type: 'component', name: comp.name }, environment);
+      const gate = subject === undefined ? undefined : gatePlacement(state.model, { kind: 'new', node: subject }, target, { insertables, pagePath: page.path });
+      const notice = gate === undefined ? undefined : placementNotice(gate, translate);
+      if (notice !== undefined) {
+        showToast(notice.text, notice.tone);
+      }
+      if (gate?.kind === 'stop') {
+        return;
+      }
       // Nested defaults and all their imports are one insertion and undo step.
-      const insert = insertGesture(state.model, node, target, { urgency: true });
+      const insert = insertGesture(state.model, node, gate?.kind === 'place' && gate.moved !== undefined ? gate.target : target, { urgency: true });
       if (imports.length === state.model.imports.length) {
         commitEdit(insert);
       } else {
@@ -152,7 +173,7 @@ export function useAddComponent(coreState: ReturnType<typeof useCoreState>, hist
       }
       setSelectedId(node.id);
     },
-    [insertables, commitEdit, resolveImportPath, pageStateRef, projectRef, setSelectedId],
+    [insertables, commitEdit, resolveImportPath, pageStateRef, projectRef, setSelectedId, showToast, translate],
   );
   return { addComponent, resolveImportPath };
 }
@@ -376,11 +397,25 @@ export function useMoveNode(coreState: ReturnType<typeof useCoreState>, history:
   // `slot` that means nothing where it lands is dropped, and leaving a loop,
   // what read the loop's item becomes placeholder text (editGestures.ts).
   const moveNode = useCallback(
-    (nodeId: string, target: InsertTarget | undefined) => {
+    (nodeId: string, requested: InsertTarget | undefined) => {
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
       }
+      // The one placement rule, for a drop from the Navigator or the canvas and any other move: a refused place writes
+      // nothing, and a valid neighbour is used with a note saying so.
+      const gate = gatePlacement(state.model, { kind: 'existing', id: nodeId }, requested, {
+        insertables,
+        pagePath: pageStateRef.current.currentPage?.path,
+      });
+      const notice = placementNotice(gate, translate);
+      if (notice !== undefined) {
+        showToast(notice.text, notice.tone);
+      }
+      if (gate.kind === 'stop') {
+        return;
+      }
+      const target = gate.moved === undefined ? requested : gate.target;
       // `slot` is a word addressed to the component the node sat inside, and
       // means nothing anywhere else (src/editor/slotAttr.ts).
       const rules = {
@@ -545,12 +580,32 @@ export function useCopyNode(
         return;
       }
       const clone = withNewIds(sourceNode);
+      // The copy stands right after the original; where that is not allowed (a second doctype) nothing is written.
+      const found = findWithParent(state.model.nodes, nodeId);
+      if (found) {
+        const gate = gatePlacement(
+          state.model,
+          {
+            kind: 'new',
+            node: placementNodeOf(clone, { insertables: coreState.insertables, document: documentOfPath(pageStateRef.current.currentPage?.path) }, 'deep'),
+          },
+          { parentId: found.parent?.id, index: found.index + 1 },
+          { insertables: coreState.insertables, pagePath: pageStateRef.current.currentPage?.path },
+        );
+        if (gate.kind === 'stop' || gate.moved !== undefined) {
+          const reason = gate.kind === 'stop' ? gate.refusal : gate.moved;
+          if (reason !== undefined) {
+            showToast(translate(reason.messageKey, reason.params), 'error');
+          }
+          return;
+        }
+      }
       // Step 6, insert: the copy is the node's own bytes, its note's with them,
       // spliced after it (electron/documents/editRequests.ts, labelledSpan).
       commitEdit(duplicateGesture(nodeId, clone, { urgency: true }));
       setSelectedId(clone.id);
     },
-    [commitEdit, showToast, pageStateRef, setSelectedId, translate],
+    [commitEdit, showToast, pageStateRef, setSelectedId, translate, coreState.insertables],
   );
   return { copyNode, duplicateNode };
 }
@@ -598,7 +653,21 @@ export function usePasteNode(
     const shown = now.model;
     const imported = pastedImports(needs);
     const withImports = imported(shown);
-    const place = pastePlace(withImports, selectionId, insertables);
+    const aimed = pastePlace(withImports, selectionId, insertables);
+    // The one placement rule: a pasted doctype or list item goes only where it may, or nowhere, and says so.
+    const pagePath = pageStateRef.current.currentPage?.path;
+    const gate = gatePlacement(withImports, { kind: 'new', node: placementNodeOf(clone, { insertables, document: documentOfPath(pagePath) }, 'deep') }, aimed, {
+      insertables,
+      pagePath,
+    });
+    const notice = placementNotice(gate, translate);
+    if (notice !== undefined) {
+      showToast(notice.text, notice.tone);
+    }
+    if (gate.kind === 'stop') {
+      return;
+    }
+    const place = gate.target;
     const { pasted, removed, lost } = pastedInScope(withImports, clone, place, clip.vars || []);
     if (removed) {
       showToast(translate('shell.paste.bindingsRemoved', { count: removed, names: lost.join(', ') }), 'info');

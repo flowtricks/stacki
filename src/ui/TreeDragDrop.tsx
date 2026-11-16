@@ -7,6 +7,8 @@ export interface TreeDropBehavior {
   readonly accepts: (event: React.DragEvent<HTMLDivElement>) => boolean;
   readonly enter: (event: React.DragEvent<HTMLDivElement>) => void;
   readonly drop: (event: React.DragEvent<HTMLDivElement>) => void;
+  /** Called while a drag is over a target that does not accept it, when the target can say why (the placement rule). */
+  readonly refuse?: (event: React.DragEvent<HTMLDivElement>) => void;
 }
 
 type RowProps = Omit<React.HTMLAttributes<HTMLDivElement>, 'onDragOver' | 'onDrop'> & {
@@ -89,6 +91,12 @@ function treeDropHandlers(behavior: TreeDropBehavior | undefined) {
       event.preventDefault();
       event.stopPropagation();
       behavior[kind](event);
+    } else if (kind === 'enter' && behavior?.refuse !== undefined) {
+      // No preventDefault: the browser shows its not-allowed cursor, and the event goes on to the body,
+      // which clears the indicator. The effect is set too, for drags that already allowed one.
+      // eslint-disable-next-line no-param-reassign -- The drag API is an assignment on DataTransfer.
+      event.dataTransfer.dropEffect = 'none';
+      behavior.refuse(event);
     }
   };
   return {

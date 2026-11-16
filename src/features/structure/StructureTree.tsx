@@ -2,13 +2,13 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { TreeDragRow, TreeDropGap, TreeDragHandle } from '../../ui/TreeDragDrop';
 import React, { useEffect, useRef } from 'react';
 import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
-import { canContainTag } from '../../editor/elementSchemas';
-import { allowDragEffect, clearDrag, getDrag, setDrag } from '../../editor/dragState';
+import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
 import { PseudoElementIcon, HideIcon, LayoutIcon, PointerEventsNoneIcon } from '../../ui/Icons';
 import { defaultCollapsed, navigatorChildren, navigatorFamily, navigatorHost } from './structureModel';
 import type { NavigatorFamily } from './structureModel';
 import { navigatorHostsDrop } from './navigatorDrop';
+import type { DropPlacement } from './dropPlacement';
 import { isFragmentNode } from '../../editor/liveClasses';
 import { labelsNode } from '../../../shared/page/leadingNote';
 import { describeNode, truncate } from '../../ui/navigatorLabel';
@@ -33,6 +33,10 @@ export interface StructureTreeContext {
   readonly isCollapsed: (node: NavigatorNode) => boolean;
   readonly isDndPayload: (event: React.DragEvent<HTMLElement>) => boolean;
   readonly performDrop: (event: React.DragEvent<HTMLElement>, target: DropLocation) => void;
+  /** What the drag in flight may do at a place: the placement rule's answer (dropPlacement.ts). */
+  readonly placementFor: (location: DropLocation) => DropPlacement;
+  /** The note the Navigator shows about the drop in flight: why a target refuses, or where it will land instead. */
+  readonly noteDrop: (placement: DropPlacement) => void;
   readonly nodeById: (id: string) => NavigatorNode | undefined;
   readonly onSelect: (id: string) => void;
   readonly onHoverNode?: (id: string | undefined) => void;
@@ -101,8 +105,10 @@ function Gap(props: GapProps) {
   const active = dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
   const parent = parentId === undefined ? undefined : props.nodeById(parentId);
   // A gap is a drop inside its parent, so the parent's own rule decides it too.
-  const accepted = (parent === undefined || navigatorHostsDrop(parent)) && acceptsDrag(parent);
+  const hosted = parent === undefined || navigatorHostsDrop(parent);
   const location = { parentId, index };
+  // Read when the pointer moves, not when the row draws: the drag it asks about starts after the tree rendered.
+  const placementNow = (): DropPlacement => (hosted ? props.placementFor(location) : { kind: 'open' });
   if (props.editRootId && (!parentId || !props.canEdit(parentId))) {
     return undefined;
   }
@@ -117,23 +123,18 @@ function Gap(props: GapProps) {
       index={index}
       behavior={{
         active,
-        accepts: (event) => accepted && isDndPayload(event),
-        enter: () => setDropTarget({ kind: 'gap', ...location }),
+        accepts: (event) => hosted && placementNow().kind !== 'refused' && isDndPayload(event),
+        // A place that cannot take the drag but has a valid neighbour shows its indicator there, and the drop lands there.
+        enter: () => {
+          const placement = placementNow();
+          props.noteDrop(placement);
+          setDropTarget({ kind: 'gap', ...(placement.kind === 'snap' ? placement.to : location) });
+        },
         drop: (event) => performDrop(event, location),
+        refuse: () => props.noteDrop(placementNow()),
       }}
     />
   );
-}
-
-function acceptsDrag(parent: NavigatorNode | undefined): boolean {
-  const drag = getDrag();
-  if (!drag || drag.kind !== 'node' || drag.nodeKind !== 'element' || !drag.tag) {
-    return true;
-  }
-  if (!parent || parent.kind !== 'element') {
-    return true;
-  }
-  return canContainTag(parent.name, drag.tag);
 }
 
 interface TreeNodeProps extends StructureTreeContext {
@@ -277,6 +278,8 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     isCollapsed: props.isCollapsed,
     isDndPayload: props.isDndPayload,
     performDrop: props.performDrop,
+    placementFor: props.placementFor,
+    noteDrop: props.noteDrop,
     nodeById: props.nodeById,
     onSelect: props.onSelect,
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
@@ -447,12 +450,19 @@ function openComponent(event: React.MouseEvent<HTMLDivElement>, props: TreeRowPr
 }
 
 function treeRowDropBehavior(props: TreeRowProps) {
+  const location = { parentId: props.host.id, index: props.children.length };
+  const hosted = props.canEdit(props.node.id) && props.canHostChildren;
+  const placementNow = (): DropPlacement => (hosted ? props.placementFor(location) : { kind: 'open' });
   return {
     active: props.dropInto,
-    accepts: (event: React.DragEvent<HTMLDivElement>) =>
-      props.canEdit(props.node.id) && props.canHostChildren && acceptsDrag(props.node) && props.isDndPayload(event),
-    enter: () => props.setDropTarget({ kind: 'into', intoId: props.node.id }),
-    drop: (event: React.DragEvent<HTMLDivElement>) => props.performDrop(event, { parentId: props.host.id, index: props.children.length }),
+    accepts: (event: React.DragEvent<HTMLDivElement>) => hosted && placementNow().kind !== 'refused' && props.isDndPayload(event),
+    enter: () => {
+      const placement = placementNow();
+      props.noteDrop(placement);
+      props.setDropTarget(placement.kind === 'snap' ? { kind: 'gap', ...placement.to } : { kind: 'into', intoId: props.node.id });
+    },
+    drop: (event: React.DragEvent<HTMLDivElement>) => props.performDrop(event, location),
+    refuse: () => props.noteDrop(placementNow()),
   };
 }
 
