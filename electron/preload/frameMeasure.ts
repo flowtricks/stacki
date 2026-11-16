@@ -398,6 +398,84 @@ export const gapBandsFor = (element: Element, cs: CSSStyleDeclaration): GapBand[
   return [...(colGap > 0 ? columnGapBands(rows, colGap) : []), ...(rowGap > 0 ? rowGapBands(rows, rowGap) : [])];
 };
 
+// Which margin an element's top and bottom margins are adjoining, so the app can say that a margin that
+// adds no space is not missing but collapsed. CSS 2.1 §8.3.1: vertical margins of in-flow block boxes
+// collapse with the next or previous in-flow sibling's, and with the parent's when no border, padding or
+// formatting context stands between. Flex and grid items, floats and positioned boxes never collapse.
+//
+// The parent case is read from the layout rather than from rules: when the child's border box starts
+// exactly where the parent's content starts, its margin was pushed outside the parent, which is what
+// collapsing through it means.
+const COLLAPSING_DISPLAYS = new Set(['block', 'list-item', 'flow-root']);
+const ADJOINING_SLACK_PX = 0.5;
+
+// A style that reports no float (an engine without the property) is not floated.
+const floated = (cs: CSSStyleDeclaration): boolean => cs.float !== 'none' && cs.float !== '';
+
+const inNormalFlow = (cs: CSSStyleDeclaration): boolean =>
+  COLLAPSING_DISPLAYS.has(cs.display) && !floated(cs) && (cs.position === 'static' || cs.position === 'relative' || cs.position === 'sticky');
+
+// The nearest sibling in `direction` that takes part in the flow; text between is only skipped when blank.
+const flowSibling = (element: Element, direction: 'previous' | 'next'): Element | 'text' | undefined => {
+  let node: Node | undefined = (direction === 'previous' ? element.previousSibling : element.nextSibling) ?? undefined;
+  for (let steps = 0; node && steps < 1000; steps++) {
+    if (isElement(node)) {
+      const cs = window.getComputedStyle(node);
+      if (cs.display !== 'none' && cs.position !== 'absolute' && cs.position !== 'fixed' && !floated(cs)) {
+        return node;
+      }
+    } else if (node.nodeType === 3 && (node.textContent || '').trim() !== '') {
+      return 'text';
+    }
+    node = (direction === 'previous' ? node.previousSibling : node.nextSibling) ?? undefined;
+  }
+  return undefined;
+};
+
+const sideMargin = (cs: CSSStyleDeclaration, side: 'top' | 'bottom'): number => parseFloat(cs.getPropertyValue(`margin-${side}`)) || 0;
+
+const collapseOnSide = (element: Element, cs: CSSStyleDeclaration, side: 'top' | 'bottom') => {
+  const parent = element.parentElement;
+  if (!parent || !inNormalFlow(cs)) {
+    return undefined;
+  }
+  const parentStyle = window.getComputedStyle(parent);
+  if (parentStyle.display !== 'block' && parentStyle.display !== 'flow-root' && parentStyle.display !== 'list-item') {
+    return undefined; // Flex, grid, table and inline parents lay their children out without collapsing.
+  }
+  const sibling = flowSibling(element, side === 'top' ? 'previous' : 'next');
+  if (sibling === 'text') {
+    return undefined;
+  }
+  if (sibling) {
+    const siblingStyle = window.getComputedStyle(sibling);
+    if (!inNormalFlow(siblingStyle)) {
+      return undefined;
+    }
+    return { partner: side === 'top' ? ('previous' as const) : ('next' as const), margin: sideMargin(siblingStyle, side === 'top' ? 'bottom' : 'top') };
+  }
+  const box = element.getBoundingClientRect();
+  const parentBox = parent.getBoundingClientRect();
+  const edge = side === 'top' ? box.top - parentBox.top : parentBox.bottom - box.bottom;
+  const inset =
+    side === 'top'
+      ? (parseFloat(parentStyle.borderTopWidth) || 0) + (parseFloat(parentStyle.paddingTop) || 0)
+      : (parseFloat(parentStyle.borderBottomWidth) || 0) + (parseFloat(parentStyle.paddingBottom) || 0);
+  if (Math.abs(edge - inset) > ADJOINING_SLACK_PX) {
+    return undefined; // The margin sits inside the parent: nothing it collapses with.
+  }
+  return { partner: 'parent' as const, margin: sideMargin(parentStyle, side) };
+};
+
+export const marginCollapses = (element: Element, cs: CSSStyleDeclaration): Spacing['collapse'] => {
+  const top = collapseOnSide(element, cs, 'top');
+  const bottom = collapseOnSide(element, cs, 'bottom');
+  if (!top && !bottom) {
+    return undefined;
+  }
+  return { ...(top ? { top } : {}), ...(bottom ? { bottom } : {}) };
+};
+
 export const spacingForPath = (nodePath: string): (Spacing | undefined)[] => {
   const out: Element[] = [];
   for (const run of runsOf(nodePath) || []) {
@@ -424,7 +502,8 @@ export const spacingForPath = (nodePath: string): (Spacing | undefined)[] => {
         vh: window.innerHeight / 100,
       };
       const gaps = gapBandsFor(element, cs);
-      return { padding: box('padding'), margin: box('margin'), gaps, units };
+      const collapse = marginCollapses(element, cs);
+      return { padding: box('padding'), margin: box('margin'), ...(collapse ? { collapse } : {}), gaps, units };
     } catch {
       // Whatever went wrong measuring one element, the boxes everything else
       // depends on still have to be reported.

@@ -6,15 +6,47 @@ interface SpacingSides {
   readonly bottom?: number;
   readonly left?: number;
 }
+/** What a margin's edge meets: the previous or next in-flow sibling, or the parent's own margin when a first or last child's margin passes through it. */
+export type CollapsePartner = 'previous' | 'next' | 'parent';
+
+/** A margin that is adjoining another margin: the two collapse into the larger (CSS 2.1 §8.3.1), and `margin` is the partner's in px. */
+export interface MarginCollapse {
+  readonly partner: CollapsePartner;
+  readonly margin: number;
+}
+
 export interface Spacing {
   readonly padding?: SpacingSides;
   readonly margin?: SpacingSides;
+  /** Per vertical margin side, the margin it collapses with. Absent where the side is not adjoining one (flex and grid items never are). */
+  readonly collapse?: { readonly top?: MarginCollapse; readonly bottom?: MarginCollapse };
   readonly gaps?: readonly (Box & { readonly axis: 'row' | 'column' })[];
   /** What one `em`, `rem`, `vw` and `vh` is worth in px for this element. */
   readonly units?: Readonly<Record<string, number>>;
 }
-interface Band extends Box {
+export interface Band extends Box {
   readonly side: string;
+  /** Set on a margin that adds nothing because it collapses into a larger one: the band is a thin marker line at the box edge, not the strip. */
+  readonly collapsedInto?: CollapsePartner;
+}
+
+/** How thick the marker line of a collapsed margin is, in frame px. */
+export const COLLAPSE_MARKER_PX = 2;
+
+/**
+ * What a margin adds to the layout, in px: the part of `own` the margin it is adjoining does not already
+ * supply. Two adjoining positive margins collapse into the larger, so the smaller adds nothing; every
+ * other combination (a negative margin, nothing adjoining) adds what it says. The band is the whole strip
+ * when this is more than 0, because then the margin IS the larger one and the strip is exactly the gap.
+ */
+export function marginContribution(own: number, adjoining: number | undefined): number {
+  if (adjoining === undefined) {
+    return own;
+  }
+  if (own > 0 && adjoining > 0) {
+    return Math.max(0, own - adjoining);
+  }
+  return own;
 }
 
 // Where a side's spacing is on the page.
@@ -101,10 +133,46 @@ export function spacingBands(
     },
   };
 
-  return SIDES.filter((side) => want.has(side) && bands[side].w > 0 && bands[side].h > 0).map((side) => ({
-    side,
-    ...bands[side],
-  }));
+  const drawn = SIDES.filter((side) => want.has(side) && bands[side].w > 0 && bands[side].h > 0).map((side): Band => ({ side, ...bands[side] }));
+  return kind === 'margin' ? drawn.map((band) => collapsedMarker(band, box, spacing.collapse)) : drawn;
+}
+
+// A top or bottom margin that adds nothing (it is the smaller of two adjoining margins) has a strip that
+// is inside its partner's, so drawing the strip would say the margin holds that space open. A thin line at
+// the box edge says where it is and, with its label, why it shows no space.
+function collapsedMarker(band: Band, box: Box, collapse: Spacing['collapse']): Band {
+  if (band.side !== 'top' && band.side !== 'bottom') {
+    return band;
+  }
+  const partner = collapse?.[band.side];
+  if (!partner) {
+    return band;
+  }
+  if (marginContribution(band.h, partner.margin) > 0) {
+    return band;
+  }
+  const y = band.side === 'top' ? box.y - COLLAPSE_MARKER_PX : box.y + box.h;
+  return { ...band, y, h: COLLAPSE_MARKER_PX, collapsedInto: partner.partner };
+}
+
+/**
+ * `band` cut to the frame (`viewport`, in the frame's own px) so the label stays centred on what can be
+ * seen: a margin hanging above the top of the page is mostly out of the frame, and a label centred on all
+ * of it would be out of the frame too. Undefined when none of the band is inside. A band the frame does
+ * not size is returned whole.
+ */
+export function clipBand(band: Band, viewport: { readonly w: number; readonly h: number } | undefined): Band | undefined {
+  if (!viewport) {
+    return band;
+  }
+  const left = Math.max(0, band.x);
+  const top = Math.max(0, band.y);
+  const right = Math.min(viewport.w, band.x + band.w);
+  const bottom = Math.min(viewport.h, band.y + band.h);
+  if (right <= left || bottom <= top) {
+    return undefined;
+  }
+  return { ...band, x: left, y: top, w: right - left, h: bottom - top };
 }
 
 const LENGTH = /^\s*(-?(?:\d+\.?\d*|\.\d+))\s*(px|rem|em|vw|vh)?\s*(?:!important)?\s*$/i;
