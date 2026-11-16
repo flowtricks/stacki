@@ -33,6 +33,7 @@ import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
 import type { ComponentOpError } from '../properties/componentOps';
+import type { ComponentRenameSummary } from '../properties/componentRename';
 import type { MetadataFile } from '../properties/projectMetadata';
 import type { InstructionListing, InstructionWriteResult } from '../properties/instructions';
 import type { LengthUnit } from '../properties/lengthUnit';
@@ -253,6 +254,9 @@ export interface IpcResults extends AiResults {
     readonly name: string;
     readonly checksum: Digest;
   };
+  readonly 'component:planRename': Result<ComponentRenameSummary>;
+  readonly 'component:rename': Result<ComponentRenameSummary & { readonly undo: string }>;
+  readonly 'component:revertRename': Result<{ readonly files: number }>;
   readonly 'component:duplicate': Result<
     { readonly kind: 'component' | 'folder'; readonly path: string; readonly name: string; readonly files: number },
     ComponentOpError

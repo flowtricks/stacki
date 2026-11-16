@@ -445,6 +445,12 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     files: [{ rel: 'src/styles/a.css', digest: 'd'.repeat(64), edits: [{ locator: 'media:0', start: 0, end: 5, before: '991px', after: '1000px' }] }],
     unchecked: [{ file: 'src/styles/b.css', locator: 'media:1' }],
   },
+  'component:duplicate': { projectPath: '/site', target: { kind: 'component', path: 'src/components/Button.astro' } },
+  'component:remove': { projectPath: '/site', target: { kind: 'folder', path: 'src/components/ui' } },
+  'component:restoreRemoved': { token: 'component-removal-1' },
+  'component:planRename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/forms/Button.astro' } },
+  'component:rename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/ContactButton.astro' } },
+  'component:revertRename': { token: 'component-rename-1', direction: 'undo' },
   'breakpointSync:restore': { projectPath: '/site', journalId: 'journal-1', direction: 'undo' },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
   'content:sampleValue': {
@@ -711,4 +717,21 @@ test('the microphone channels take no payload: a renderer can never choose the a
       assert.throws(() => parseIpcPayload(channel, supplied), /Expected no payload/, `${channel} ${JSON.stringify(supplied)}`);
     }
   }
+});
+
+test('component operation payloads refuse paths that climb, other kinds, and names that are not components', () => {
+  const bad = (channel: 'component:duplicate' | 'component:remove', target: unknown) =>
+    assert.throws(() => parseIpcPayload(channel, { projectPath: '/site', target }));
+  for (const channel of ['component:duplicate', 'component:remove'] as const) {
+    bad(channel, { kind: 'component', path: '../outside.astro' });
+    bad(channel, { kind: 'component', path: 'src/../x.astro' });
+    bad(channel, { kind: 'page', path: 'src/components/A.astro' });
+    bad(channel, 'src/components/A.astro');
+  }
+  const rename = (request: unknown) => assert.throws(() => parseIpcPayload('component:rename', { projectPath: '/site', request }));
+  rename({ from: 'src/components/A.astro', to: 'src/components/a.astro' });
+  rename({ from: 'src/components/A.astro', to: 'src/components/A.tsx' });
+  rename({ from: 'src/components/A.astro', to: '../A.astro' });
+  rename({ from: 'src/components/A.astro', to: 'src/components/Fragment.astro' });
+  assert.throws(() => parseIpcPayload('component:revertRename', { token: 'x', direction: 'sideways' }));
 });

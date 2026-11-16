@@ -39,6 +39,15 @@ export function parseComponentRenameRequest(input: unknown): ComponentRenameRequ
   return { from, to };
 }
 
+export type RenameDirection = 'undo' | 'redo';
+
+export function parseRenameDirection(input: unknown): RenameDirection {
+  if (input === 'undo' || input === 'redo') {
+    return input;
+  }
+  throw new Error('A rename is undone or redone');
+}
+
 /** How a changed file is described in the summary: where it lives decides how the dialog words it. */
 export const RENAME_FILE_KINDS = ['component', 'page', 'layout', 'code', 'settings', 'content'] as const;
 export type RenameFileKind = (typeof RENAME_FILE_KINDS)[number];

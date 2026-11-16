@@ -12,9 +12,10 @@ import {
 } from '../properties/componentProperties';
 import { createProjectText } from '../documents/documentWrites';
 import { definedFields } from '../../shared/core/boundary';
+import { translateMain } from '../lib/mainLocale';
 import { isPathDescendant } from '../lib/platform';
 import { assert } from '../../shared/core/assert';
-import { ok } from '../../shared/core/result';
+import { err, ok } from '../../shared/core/result';
 import * as path from 'path';
 import * as fs from 'fs';
 import { componentFile, discardComponentFile } from '../documents/componentFile';
@@ -22,6 +23,10 @@ import { componentUsage } from '../properties/componentUsage';
 import { toPosix } from '../lib/mainHelpers';
 import { selectionTrail } from '../documents/pageRequests';
 import type { MainHost } from './mainHost';
+import { applyComponentRename, ComponentRenameStore, revertComponentRename } from './componentRenameApply';
+import { planComponentRenameWork } from './componentRenamePlan';
+import { desktopRenameWriter } from '../project/pageRenameDesktop';
+import { runSliced } from '../lib/slicedWork';
 import { ComponentRemovalStore, duplicateComponentTarget, removeComponentTarget, restoreRemovedComponent } from './componentOps';
 import { projectFoldersFor } from '../lib/projectFolders';
 import { componentSpecifier } from '../properties/componentImports';
@@ -31,6 +36,7 @@ import { componentSpecifier } from '../properties/componentImports';
 const propertyUndo = new PropertyUndoStore();
 // What each deletion from the Components panel removed, so Undo can put it back (componentOps.ts).
 const removalUndo = new ComponentRemovalStore();
+const renameUndo = new ComponentRenameStore();
 
 export function registerComponentHandlers(host: Pick<MainHost, 'clipboard' | 'documents' | 'ipcMain' | 'noteAppWrite' | 'shell'>): void {
   registerComponentCreateHandlers(host);
@@ -56,6 +62,30 @@ function registerComponentCreateHandlers({
 
   // The Components panel's "…" menu. Expected refusals (used, outside the component folders, a name that cannot be found)
   // come back as typed errors with nothing changed; see componentOps.ts for what each writes.
+  // Rename or move a component and everything that names it: a preview of the files that change, the rename itself (all
+  // files or none, one undo token), and its undo and redo. See componentRenamePlan.ts for what counts as a reference.
+  ipcMain.handle('component:planRename', async (_event, { projectPath, request }) => {
+    const plan = await runSliced(planComponentRenameWork(projectPath, request));
+    return plan.ok ? ok(plan.value.summary) : err(plan.error);
+  });
+  ipcMain.handle('component:rename', async (_event, { projectPath, request }) => {
+    noteAppWrite();
+    const plan = await runSliced(planComponentRenameWork(projectPath, request));
+    if (!plan.ok) {
+      return err(plan.error);
+    }
+    const applied = applyComponentRename(plan.value, desktopRenameWriter());
+    return applied.ok ? ok({ ...plan.value.summary, undo: renameUndo.record(plan.value) }) : err(applied.error);
+  });
+  ipcMain.handle('component:revertRename', async (_event, { token, direction }) => {
+    noteAppWrite();
+    const plan = renameUndo.get(token);
+    if (plan === undefined) {
+      return err({ code: 'unknown-undo', message: translateMain('error.component.unknownUndo') });
+    }
+    const done = direction === 'undo' ? revertComponentRename(plan, desktopRenameWriter()) : applyComponentRename(plan, desktopRenameWriter());
+    return done.ok ? ok({ files: plan.texts.length }) : err(done.error);
+  });
   ipcMain.handle('component:duplicate', async (_event, { projectPath, target }) => duplicateComponentTarget(projectPath, target));
   ipcMain.handle('component:remove', async (_event, { projectPath, target }) => {
     noteAppWrite();

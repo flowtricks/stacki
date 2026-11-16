@@ -21,6 +21,8 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   'pagefolder:rename': ['page:rename'],
   'component:create': ['component:create'],
   'component:duplicate': ['component:create'],
+  'component:rename': ['component:edit'],
+  'component:revertRename': ['component:edit'],
   'component:remove': ['component:edit'],
   'component:restoreRemoved': ['component:edit'],
   'component:editProperties': ['panel:properties'],

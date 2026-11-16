@@ -110,6 +110,9 @@ interface InvokeChannels {
   readonly createComponent: 'component:create';
   readonly discardComponent: 'component:discard';
   readonly duplicateComponent: 'component:duplicate';
+  readonly planComponentRename: 'component:planRename';
+  readonly renameComponent: 'component:rename';
+  readonly revertComponentRename: 'component:revertRename';
   readonly removeComponent: 'component:remove';
   readonly restoreRemovedComponent: 'component:restoreRemoved';
   readonly componentProperties: 'component:properties';

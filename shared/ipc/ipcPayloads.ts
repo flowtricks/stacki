@@ -52,6 +52,7 @@ import { parsePublishCommitMessage, parsePublishTarget } from '../properties/pub
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
 import { parseInstructionFilePath, parseInstructionPath } from '../properties/instructions';
 import { parseComponentOpTarget } from '../properties/componentOps';
+import { parseComponentRenameRequest, parseRenameDirection } from '../properties/componentRename';
 import { parseGitHubLoginQuery } from '../properties/projectRoles';
 import { parseSelectorFileChanges, parseSelectorFileDigests, parseSelectorIds } from '../properties/selectorUsage';
 import { parseCreatePackageManager } from '../properties/packageManager';
@@ -338,6 +339,10 @@ export const IPC_PAYLOADS = {
     frontmatter: optional(object({ imports: list(componentImport), code: text })),
   }),
   // The Components panel's "…" menu: a copy of a component or folder, its deletion, and the undo of a deletion (componentOps.ts).
+  // Renaming or moving a component: the plan's summary for the dialog, the rename itself, and its undo and redo (componentRename.ts).
+  'component:planRename': object({ ...project, request: parseComponentRenameRequest }),
+  'component:rename': object({ ...project, request: parseComponentRenameRequest }),
+  'component:revertRename': object({ token: text, direction: parseRenameDirection }),
   'component:duplicate': object({ ...project, target: parseComponentOpTarget }),
   'component:remove': object({ ...project, target: parseComponentOpTarget }),
   'component:restoreRemoved': object({ token: text }),

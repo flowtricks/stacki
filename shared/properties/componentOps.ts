@@ -68,6 +68,14 @@ export const COMPONENT_OP_ERROR_CODES = [
   'name-unavailable',
   'write-failed',
   'unknown-undo',
+  // Renaming and moving (componentRename.ts) refuses with these as well.
+  'invalid',
+  'exists',
+  'unsafe-file',
+  'defaults-taken',
+  'filesystem',
+  'conflict',
+  'rollback',
 ] as const;
 
 export type ComponentOpErrorCode = (typeof COMPONENT_OP_ERROR_CODES)[number];
