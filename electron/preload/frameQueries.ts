@@ -7,6 +7,8 @@ import { receiveAppScroll, receiveAppWheel } from './frameAppScroll';
 import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
 import { hidePendingDelete, settlePendingDeletes } from './framePendingDelete';
 import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
+import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from './framePendingInsert';
+import { parseCanvasInsert } from '../../shared/page/canvasInsert';
 import { parseCanvasMove } from '../../shared/page/canvasMove';
 import { setCanvasInteraction, setCanvasSitePages } from './frameInteraction';
 // The app asking the frame: a path's elements and computed values, the paths
@@ -123,6 +125,8 @@ export function listenForQueries(): void {
   document.addEventListener('avb:morphed', () => setTimeout(settlePendingDeletes, 0));
   // A reorder shown at once, and reconciled by the patch that follows (frameMove.ts).
   listenForCanvasMoves();
+  // A palette pick drawn at once, and reconciled the same way (framePendingInsert.ts).
+  listenForCanvasInserts();
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window.parent) {
       return;
@@ -195,6 +199,18 @@ export function listenForQueries(): void {
         showCanvasMove(move);
         sendRects();
       }
+      return;
+    }
+    if (data['type'] === 'avb:optimistic-insert') {
+      const insert = parseCanvasInsert(data['insert']);
+      if (insert !== undefined && showCanvasInsert(insert)) {
+        sendRects();
+      }
+      return;
+    }
+    if (data['type'] === 'avb:insert-revert') {
+      revertCanvasInserts();
+      sendRects();
       return;
     }
     if (data['type'] === 'avb:move-revert') {

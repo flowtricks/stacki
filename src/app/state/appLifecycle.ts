@@ -470,6 +470,7 @@ export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: Retur
         },
         onRefusedGesture: () => {
           tellCanvas({ type: 'avb:move-revert' });
+          tellCanvas({ type: 'avb:insert-revert' });
         },
         edit: editProjectPage,
         editBatch: editProjectPageBatch,

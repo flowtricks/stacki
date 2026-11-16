@@ -7,6 +7,7 @@ import { assertCanAddComponent } from '../../features/palette/componentVisibilit
 import { currentRole } from '../../lib/currentRole';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tellCanvas } from '../../editor/canvasQuery';
+import { showInsertOnCanvas } from '../../editor/canvasInsertShow';
 import { planCanvasMove } from '../../../shared/page/canvasMove';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { findWithParent, selectionAfterDelete } from '../../editor/treeSelection';
@@ -92,7 +93,7 @@ export function useHistory(
 
 // Placing a project component.
 export function useAddComponent(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
-  const { insertables, pageStateRef, projectRef, setSelectedId } = coreState;
+  const { canvasPathForRef, insertables, pageStateRef, projectRef, setSelectedId } = coreState;
   const { commitEdit } = history;
 
   const resolveImportPath = useCallback(
@@ -140,19 +141,27 @@ export function useAddComponent(coreState: ReturnType<typeof useCoreState>, hist
       const { node, imports } = componentInstancePlacement(state.model, instance, resolved);
       // Nested defaults and all their imports are one insertion and undo step.
       const insert = insertGesture(state.model, node, target, { urgency: true });
+      // A labelled block stands in on the canvas until the component renders (framePendingInsert.ts).
+      const showStandIn = (): void => {
+        showInsertOnCanvas(state.model, target, node, (nodeId) => canvasPathForRef.current(nodeId));
+      };
       if (imports.length === state.model.imports.length) {
-        commitEdit(insert);
+        if (commitEdit(insert)) {
+          showStandIn();
+        }
       } else {
         const imported = (model: EditorModel): EditorModel => ({
           ...model,
           imports,
         });
         const options = { coalesceKey: undefined, urgency: true };
-        commitEdit(sequence(frontmatterGesture(state.model, options, imported), insert));
+        if (commitEdit(sequence(frontmatterGesture(state.model, options, imported), insert))) {
+          showStandIn();
+        }
       }
       setSelectedId(node.id);
     },
-    [insertables, commitEdit, resolveImportPath, pageStateRef, projectRef, setSelectedId],
+    [insertables, commitEdit, resolveImportPath, canvasPathForRef, pageStateRef, projectRef, setSelectedId],
   );
   return { addComponent, resolveImportPath };
 }

@@ -10,6 +10,7 @@ import type { ImportDecl } from '../../../shared/page/pageNode';
 import { loadCatalog } from '../../features/props/loopCatalog';
 import { loadSanitySample } from '../../features/props/loopSettingsData';
 import { insertTargetFor as placeInsert } from '../../editor/insertTarget';
+import { showInsertOnCanvas } from '../../editor/canvasInsertShow';
 import { frontmatterGesture, insertGesture } from '../../editor/editGestures';
 import {
   collectionsInScope,
@@ -89,7 +90,7 @@ export function useInsertItem(
   history: ReturnType<typeof useHistory>,
 ) {
   const { cmsRel, contentName, insertables, leftTab, pageStateRef, selectedIdRef } = coreState;
-  const { setSelectedId } = coreState;
+  const { canvasPathForRef, setSelectedId } = coreState;
   const { addComponent, setInsertOpen } = nodeEdits;
   const { reportFailure } = lifecycle;
   const { commitEdit } = history;
@@ -132,10 +133,13 @@ export function useInsertItem(
         return;
       }
       // Step 6, insert: a new node needs no import, so it is one request.
-      commitEdit(insertGesture(state.model, node, target, { urgency: true }));
+      if (commitEdit(insertGesture(state.model, node, target, { urgency: true }))) {
+        // Drawn on the canvas at once, planned against the tree as it stood; the rebuilt page replaces it.
+        showInsertOnCanvas(state.model, target, node, (nodeId) => canvasPathForRef.current(nodeId));
+      }
       setSelectedId(id);
     },
-    [insertTargetFor, addComponent, commitEdit, reportFailure, pageStateRef, selectedIdRef, setInsertOpen, setSelectedId],
+    [insertTargetFor, addComponent, commitEdit, canvasPathForRef, reportFailure, pageStateRef, selectedIdRef, setInsertOpen, setSelectedId],
   );
 
   // True while the CMS covers the canvas: the page-editing shortcuts below

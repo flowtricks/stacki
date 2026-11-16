@@ -48,7 +48,7 @@ const STAMP_PREFIX = 'avb-d:';
 const MARKER = /^avb-([se]):(.*)$/;
 
 /** What one shown move changed, to put back exactly. */
-interface Undo {
+export interface Undo {
   readonly nodes: readonly ChildNode[];
   readonly parent: ParentNode;
   /** The sibling the run sat before; undefined when it ended its parent. */
@@ -219,6 +219,15 @@ function applyMove(move: CanvasMove): Undo | undefined {
   return { nodes: moved, parent, next, ...renumbered };
 }
 
+export function putBackPaths(undo: Pick<Undo, 'attributes' | 'comments'>): void {
+  for (const { element, value } of undo.attributes) {
+    element.setAttribute(PATH_ATTRIBUTE, value);
+  }
+  for (const { comment, data } of undo.comments) {
+    comment.data = data;
+  }
+}
+
 function undoMove(undo: Undo): void {
   const next = undo.next !== undefined && undo.next.parentNode === undo.parent ? undo.next : undefined;
   for (const node of undo.nodes) {
@@ -228,12 +237,7 @@ function undoMove(undo: Undo): void {
       undo.parent.insertBefore(node, next);
     }
   }
-  for (const { element, value } of undo.attributes) {
-    element.setAttribute(PATH_ATTRIBUTE, value);
-  }
-  for (const { comment, data } of undo.comments) {
-    comment.data = data;
-  }
+  putBackPaths(undo);
   assert(
     undo.nodes.every((node) => node.parentNode === undo.parent),
     'undoMove: the run is back where it was',
@@ -242,7 +246,7 @@ function undoMove(undo: Undo): void {
 
 // The node's run of sibling DOM nodes: its marker pair and what lies between when the
 // page has markers, else its outermost tagged elements, which must sit side by side.
-function runOf(token: string): ChildNode[] | undefined {
+export function runOf(token: string): ChildNode[] | undefined {
   return markedRun(token) ?? taggedRun(token);
 }
 
@@ -317,6 +321,14 @@ function hasTaggedAncestor(element: Element, token: string): boolean {
 // Every tagged element and marker of the move's file, renumbered; the old values kept
 // for the undo.
 function renumber(move: CanvasMove): Pick<Undo, 'attributes' | 'comments'> {
+  return renumberPaths((token) => renumberedCanvasPath(token, move));
+}
+
+/**
+ * Every `data-avb-p` token and marker path on the page renamed by `rename`, the old values
+ * kept to put back. A shown insert (framePendingInsert.ts) renumbers the same way a move does.
+ */
+export function renumberPaths(rename: (token: string) => string): Pick<Undo, 'attributes' | 'comments'> {
   const attributes: { readonly element: Element; readonly value: string }[] = [];
   const tagged = document.querySelectorAll(`[${PATH_ATTRIBUTE}]`);
   const count = Math.min(tagged.length, FRAME_MOVE_LIMITS.stampedMax);
@@ -328,7 +340,7 @@ function renumber(move: CanvasMove): Pick<Undo, 'attributes' | 'comments'> {
     }
     const next = value
       .split(' ')
-      .map((token) => (token === '' ? token : renumberedCanvasPath(token, move)))
+      .map((token) => (token === '' ? token : rename(token)))
       .join(' ');
     if (next !== value) {
       attributes.push({ element, value });
@@ -343,7 +355,7 @@ function renumber(move: CanvasMove): Pick<Undo, 'attributes' | 'comments'> {
     if (side === undefined || path === undefined) {
       continue;
     }
-    const data = `avb-${side}:${renumberedCanvasPath(path, move)}`;
+    const data = `avb-${side}:${rename(path)}`;
     if (data !== comment.data) {
       comments.push({ comment, data: comment.data });
       comment.data = data;
@@ -370,7 +382,7 @@ function commentsWhere(accept: (data: string) => boolean): Comment[] {
 // Which source a page is rendered from: every file's stamp, as a set. Empty when the
 // page carries none; undefined past the bound, which settles a move rather than
 // keeping it on a guess.
-function sourceStamps(root: Document): string | undefined {
+export function sourceStamps(root: Document): string | undefined {
   const stamps = new Set<string>();
   const tagged = root.querySelectorAll(`[${STAMP_ATTRIBUTE}]`);
   if (tagged.length > FRAME_MOVE_LIMITS.stampsMax) {
