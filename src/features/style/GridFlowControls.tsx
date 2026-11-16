@@ -297,7 +297,36 @@ export function ContentPresetItems({ pickPreset }: { pickPreset: (option: string
 export const clampCount = (count: number) => Math.min(500, Math.max(1, count));
 
 // A whole-number track-count field with ▲▼ steppers (Webflow's Columns/Rows inputs).
-export function CountField({ value, busy, ariaLabel, onCommit }: { value: number; busy: boolean; ariaLabel: string; onCommit: (n: number) => void }) {
+// `held` is shown in place of a count the value does not have (heldTrackCount):
+// the field cannot be typed in or stepped, so no count overwrites the value, and
+// the full value is its tooltip.
+export function CountField({
+  value,
+  held,
+  title,
+  busy,
+  ariaLabel,
+  onCommit,
+}: {
+  value: number;
+  held?: string | undefined;
+  title?: string | undefined;
+  busy: boolean;
+  ariaLabel: string;
+  onCommit: (n: number) => void;
+}) {
+  if (held !== undefined) {
+    return (
+      <div className="embed-editor_grid-count">
+        <input className="u-input embed-editor_size-input" value={held} readOnly disabled aria-label={ariaLabel} title={title} />
+        <CountSteppers busy step={() => undefined} />
+      </div>
+    );
+  }
+  return <CountInput value={value} busy={busy} ariaLabel={ariaLabel} onCommit={onCommit} />;
+}
+
+function CountInput({ value, busy, ariaLabel, onCommit }: { value: number; busy: boolean; ariaLabel: string; onCommit: (n: number) => void }) {
   const [text, setText] = useState(value > 0 ? String(value) : '');
   const focused = useRef(false);
   useEffect(() => {
