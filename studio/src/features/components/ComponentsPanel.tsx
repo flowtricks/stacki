@@ -38,6 +38,7 @@ export function ComponentsPanel({
           const instances = counts.get(component.file);
           return {
             name: component.name,
+            file: component.file,
             path: component.file,
             ...(component.origin === undefined ? {} : { origin: component.origin }),
             folder:

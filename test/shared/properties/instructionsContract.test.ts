@@ -282,7 +282,15 @@ test('the panel and its editing are role features; editing needs the panel', () 
     );
   }
   assert.equal(can(ADMIN_VIEW, 'instructions:edit'), true);
-  const editorOnly = { id: 'writer', name: 'Writer', isAdmin: false, features: new Set(['instructions:edit'] as const), appPermissions: {}, pinnedApps: [] };
+  const editorOnly = {
+    id: 'writer',
+    name: 'Writer',
+    isAdmin: false,
+    features: new Set(['instructions:edit'] as const),
+    appPermissions: {},
+    pinnedApps: [],
+    componentRules: [],
+  };
   assert.equal(can(editorOnly, 'instructions:edit'), false, 'a grant without the panel gives nothing');
   const both = { ...editorOnly, features: new Set(['instructions:edit', 'panel:instructions'] as const) };
   assert.equal(can(both, 'instructions:edit'), true);

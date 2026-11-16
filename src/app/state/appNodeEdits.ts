@@ -3,6 +3,8 @@
 // composing the history (App.tsx).
 
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { assertCanAddComponent } from '../../features/palette/componentVisibility';
+import { currentRole } from '../../lib/currentRole';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tellCanvas } from '../../editor/canvasQuery';
 import { planCanvasMove } from '../../../shared/page/canvasMove';
@@ -114,6 +116,8 @@ export function useAddComponent(coreState: ReturnType<typeof useCoreState>, hist
       if (!comp || !page || !projectPath) {
         return;
       }
+      // The palette already leaves a hidden component out; this refuses one asked for another way (a drag, a stale list).
+      assertCanAddComponent(currentRole(), comp);
       const instance = await loadComponentInstance(comp, insertables, projectPath);
       const resolved = await Promise.all(
         instance.components.map(async (component) => ({

@@ -74,6 +74,7 @@ test('custom roles keep their members, access and app grants', () => {
     access: ['panel:cms', 'panel:apps', 'app:seo'],
     appPermissions: {},
     pinnedApps: [],
+    componentRules: [],
   });
   assert.equal(roles.defaultRole, 'writer');
 });

@@ -18,10 +18,17 @@
 // Each role, admin included, may pin installed apps to the left rail
 // (`pinnedApps`). The rail shows a pinned app only while the role may use it and
 // it is installed; other ids are kept, so access or a reinstall brings them back.
+//
+// Each role, admin included, may hide components from its insert surfaces
+// (`componentRules`, shared/properties/componentAccess.ts): a deny-list of component
+// and folder paths, so every component is enabled for every role until a rule says
+// otherwise. These rules narrow what a role may ADD from the palette and never what
+// it may open, so admin keeps its access to Settings however its components are hidden.
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
 import { toArray } from '../core/record';
 import { APP_PERMISSION_LIMITS, parseAppPermissionId, type AppPermissionDeclaration } from './appPermissions';
+import { parseComponentRules, storedComponentRule, type ComponentRule } from './componentAccess';
 import { DescribedError } from './describedError';
 import { described, messageRef, type TypedMessageRef } from './i18n/messageRef';
 
@@ -151,6 +158,8 @@ export interface RoleView {
   readonly appPermissions: AppPermissionGrants;
   /** App ids pinned to the left rail, in the order they were pinned. The rail skips ids the role cannot use or that are not installed. */
   readonly pinnedApps: readonly string[];
+  /** Components hidden from, or re-shown to, this role's insert surfaces; admin's too. Empty shows every component. */
+  readonly componentRules: readonly ComponentRule[];
 }
 
 /** Whether `role` may use `feature`. Admin is always allowed everything. */
@@ -225,6 +234,7 @@ export const ADMIN_VIEW: RoleView = {
   features: new Set(ACCESS_FEATURES),
   appPermissions: {},
   pinnedApps: [],
+  componentRules: [],
 };
 
 export interface ProjectRole {
@@ -238,6 +248,8 @@ export interface ProjectRole {
   readonly appPermissions: AppPermissionGrants;
   /** App ids pinned to the left rail, unique, in pin order; admin may pin too. */
   readonly pinnedApps: readonly string[];
+  /** Hidden and re-shown components, as the file stores them; admin may have rules too. */
+  readonly componentRules: readonly ComponentRule[];
 }
 
 export interface ProjectRoles {
@@ -253,8 +265,8 @@ export const DEFAULT_PROJECT_ROLES: ProjectRoles = {
   version: 1,
   defaultRole: ADMIN_ROLE_ID,
   roles: [
-    { id: ADMIN_ROLE_ID, name: 'Admin', members: [], access: [], appPermissions: {}, pinnedApps: [] },
-    { id: CLIENT_ROLE_ID, name: 'Client', members: [], access: CLIENT_DEFAULT_ACCESS, appPermissions: {}, pinnedApps: [] },
+    { id: ADMIN_ROLE_ID, name: 'Admin', members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [] },
+    { id: CLIENT_ROLE_ID, name: 'Client', members: [], access: CLIENT_DEFAULT_ACCESS, appPermissions: {}, pinnedApps: [], componentRules: [] },
   ],
 };
 
@@ -401,7 +413,7 @@ export function parseProjectRolesSource(source: string): ProjectRoles {
 
 /**
  * Parses the roles file. Shape: `{ version: 1, defaultRole?, roles: [{ id, name?,
- * members?, access?, appPermissions?, pinnedApps? }] }`. Admin and client are always present in the result,
+ * members?, access?, appPermissions?, pinnedApps?, componentRules? }] }`. Admin and client are always present in the result,
  * whether or not the file lists them; admin must name at least one member.
  */
 export function parseProjectRoles(input: unknown): ProjectRoles {
@@ -442,11 +454,12 @@ export function serializeProjectRoles(roles: ProjectRoles): string {
     roles: checked.roles.map((role) => {
       // Written only when set, so a file without pins or app permissions reads exactly as before.
       const pinned = role.pinnedApps.length > 0 ? { pinnedApps: role.pinnedApps } : {};
+      const components = role.componentRules.length > 0 ? { componentRules: role.componentRules.map(storedComponentRule) } : {};
       if (role.id === ADMIN_ROLE_ID) {
-        return { id: role.id, name: role.name, members: role.members, ...pinned };
+        return { id: role.id, name: role.name, members: role.members, ...pinned, ...components };
       }
       const stored = Object.keys(role.appPermissions).length > 0 ? { appPermissions: role.appPermissions } : {};
-      return { id: role.id, name: role.name, members: role.members, access: role.access, ...stored, ...pinned };
+      return { id: role.id, name: role.name, members: role.members, access: role.access, ...stored, ...pinned, ...components };
     }),
   };
   const source = `${JSON.stringify(body, undefined, 2)}\n`;
@@ -470,8 +483,10 @@ export function roleViewOf(roles: ProjectRoles, id: string): RoleView {
 /** The view of one role as given, such as a role the Roles tab is editing before it is saved. */
 export function roleView(role: ProjectRole): RoleView {
   if (role.id === ADMIN_ROLE_ID) {
-    // Admin's access is fixed; only its pins are its own.
-    return role.pinnedApps.length === 0 ? ADMIN_VIEW : { ...ADMIN_VIEW, pinnedApps: role.pinnedApps };
+    // Admin's access is fixed, but its pins and hidden components are its own.
+    return role.pinnedApps.length === 0 && role.componentRules.length === 0
+      ? ADMIN_VIEW
+      : { ...ADMIN_VIEW, pinnedApps: role.pinnedApps, componentRules: role.componentRules };
   }
   const view: RoleView = {
     id: role.id,
@@ -480,6 +495,7 @@ export function roleView(role: ProjectRole): RoleView {
     features: new Set(role.access),
     appPermissions: role.appPermissions,
     pinnedApps: role.pinnedApps,
+    componentRules: role.componentRules,
   };
   assert(!view.features.has('settings:roles'), 'No role but admin edits roles');
   assert(!view.isAdmin, 'Only the admin role is admin');
@@ -620,15 +636,17 @@ function parseRole(input: unknown): ProjectRole {
   const name = value['name'] === undefined ? builtInName(id) : roleName(value['name']);
   const members = parseMembers(value['members']);
   const pinnedApps = parsePinnedApps(value['pinnedApps']);
+  const componentRules = parseComponentRules(value['componentRules']);
   if (id === ADMIN_ROLE_ID) {
     // Admin has everything: an access list or app permissions on it are ignored, never a restriction.
-    return { id, name: 'Admin', members, access: [], appPermissions: {}, pinnedApps };
+    // Hidden components are not access: they only narrow the insert palette, so admin keeps them.
+    return { id, name: 'Admin', members, access: [], appPermissions: {}, pinnedApps, componentRules };
   }
   const access = value['access'] === undefined && id === CLIENT_ROLE_ID ? CLIENT_DEFAULT_ACCESS : parseAccess(value['access']);
   assert(!access.includes('settings:roles'), 'parseAccess refuses the roles tab');
   // Client's name is the project's to choose, like a custom role's; only its
   // id (`client`) carries meaning to grants, the default role and the servers.
-  return { id, name, members, access, appPermissions: parseAppPermissionGrants(value['appPermissions']), pinnedApps };
+  return { id, name, members, access, appPermissions: parseAppPermissionGrants(value['appPermissions']), pinnedApps, componentRules };
 }
 
 /** `pinnedApps: ["<appId>", …]`: app ids, at most `pinnedAppsMax`, read once each. Absent is none. */
@@ -783,6 +801,7 @@ function withBuiltInRoles(parsed: readonly ProjectRole[]): readonly ProjectRole[
     access: [],
     appPermissions: {},
     pinnedApps: [],
+    componentRules: [],
   };
   const client = parsed.find((role) => role.id === CLIENT_ROLE_ID) ?? {
     id: CLIENT_ROLE_ID,
@@ -791,6 +810,7 @@ function withBuiltInRoles(parsed: readonly ProjectRole[]): readonly ProjectRole[
     access: CLIENT_DEFAULT_ACCESS,
     appPermissions: {},
     pinnedApps: [],
+    componentRules: [],
   };
   const custom = parsed.filter((role) => role.id !== ADMIN_ROLE_ID && role.id !== CLIENT_ROLE_ID);
   for (const id of [ADMIN_ROLE_ID, CLIENT_ROLE_ID]) {

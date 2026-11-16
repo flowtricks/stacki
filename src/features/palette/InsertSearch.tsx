@@ -7,6 +7,7 @@ import { HTML_TAGS } from '../../editor/elementSchemas';
 import type { TrailingSlash } from '../../editor/pageState';
 import { rankInsertItems, tagSearchText } from '../../lib/insertRank';
 import { ASTRO_ASSETS } from './astroAssets';
+import { useAddableComponents } from './componentVisibility';
 import { insertFolderOf, type InsertFolderKey } from './insertFolders';
 import { insertResultsMax, insertView, mountedFrameKeys, moveHighlight, previewFramesMax, type GridMove, type InsertTab } from './insertGrid';
 import type { InsertItem } from './insertItem';
@@ -70,6 +71,8 @@ const GRID_KEYS: Readonly<Record<string, GridMove>> = { ArrowLeft: 'left', Arrow
 // cards with a live picture of the component, filtered by the project's component folders (insertFolders.ts).
 // Each card is the Components panel's hover preview: the component with its insertion recipe (InsertPreview.tsx).
 export interface InsertComponent extends Pick<ScanComponent, 'name' | 'origin' | 'instances' | 'isLayout'> {
+  /** The project-relative file, which a role's hidden components are keyed by (shared/properties/componentAccess.ts). */
+  readonly file?: string;
   readonly path?: string;
   readonly folder?: string;
 }
@@ -286,7 +289,9 @@ function useInsertSearch({ components, allowSlot, projectKey, apps }: InsertSear
   // card must not make the list slide under the pointer.
   const movedBy = useRef<'keyboard' | 'pointer'>('keyboard');
 
-  const allItems = useMemo(() => insertItems(components ?? [], { allowSlot }), [components, allowSlot]);
+  // The components this role may add: hidden ones leave the results, the counts and the folder pills together.
+  const addable = useAddableComponents(components);
+  const allItems = useMemo(() => insertItems(addable, { allowSlot }), [addable, allowSlot]);
   const appList = apps?.list;
   // The apps this role may open, as search rows; none while they load, or when the role has no Apps panel.
   const appItems = useMemo(

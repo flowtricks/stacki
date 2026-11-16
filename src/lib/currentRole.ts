@@ -9,6 +9,7 @@
 // feature modules below the app layer and the app shell read the same one. Framework-free on purpose: React callers use `useCurrentRole`
 // (useCurrentRole.ts), and Studio sets the same store.
 import { assert } from '../../shared/core/assert';
+import { sameComponentRules } from '../../shared/properties/componentAccess';
 import { ADMIN_VIEW, sameAppPermissions, type RoleView } from '../../shared/properties/projectRoles';
 
 /** Listeners are components and apps; a leak past this is a bug, not growth. */
@@ -88,7 +89,12 @@ function sameView(left: RoleView, right: RoleView): boolean {
   }
   // App permission values are part of the role: an admin switching one must reach apps as `role.change`.
   // Rail pins are too: pinning an app must reach the rail at once.
-  return sameAppPermissions(left.appPermissions, right.appPermissions) && samePins(left.pinnedApps, right.pinnedApps);
+  // Hidden components are too: hiding one must leave the palette at once.
+  return (
+    sameAppPermissions(left.appPermissions, right.appPermissions) &&
+    samePins(left.pinnedApps, right.pinnedApps) &&
+    sameComponentRules(left.componentRules, right.componentRules)
+  );
 }
 
 // Order matters: the rail draws pins in the order they were pinned.

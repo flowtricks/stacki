@@ -313,7 +313,15 @@ test('Settings → Instructions empty state offers quick-add chips that hide on 
 
 test('without instructions:edit the files show but nothing creates or hides', async () => {
   reset({ 'AGENTS.md': '# A\n' });
-  panel.setActualRole({ id: 'client', name: 'Client', isAdmin: false, features: new Set(['panel:instructions']), appPermissions: {}, pinnedApps: [] });
+  panel.setActualRole({
+    id: 'client',
+    name: 'Client',
+    isAdmin: false,
+    features: new Set(['panel:instructions']),
+    appPermissions: {},
+    pinnedApps: [],
+    componentRules: [],
+  });
   await mount(React.createElement(panel.InstructionsPanel, { projectPath: '/project' }));
   assert.deepEqual(labels('Rules'), ['AGENTS.md']);
   assert.equal(byLabel('New skill') ?? undefined, undefined);

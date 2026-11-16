@@ -72,6 +72,7 @@ function QuickInsertSearch({
       projectKey={project.workspaceId ?? project.name}
       components={project.components.map((component) => ({
         name: component.name,
+        file: component.file,
         path: component.file,
         folder:
           component.folder ??

@@ -37,15 +37,15 @@ export function addRole(roles: ProjectRoles, name: string): ProjectRoles {
     trimmed,
     roles.roles.map((role) => role.id),
   );
-  const next = { ...roles, roles: [...roles.roles, { id, name: trimmed, members: [], access: [], appPermissions: {}, pinnedApps: [] }] };
+  const next = { ...roles, roles: [...roles.roles, { id, name: trimmed, members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [] }] };
   assert(next.roles.length === roles.roles.length + 1, 'Adding a role adds one');
   return next;
 }
 
 /**
  * Copies role `id` into a new custom role right after it, named "<Name> copy" (then
- * "copy 2", "copy 3" while taken), with the same access, app permissions and pins in
- * order, and no members: a person belongs to one role, so members never copy. A copy
+ * "copy 2", "copy 3" while taken), with the same access, app permissions, pins in
+ * order and hidden components, and no members: a person belongs to one role, so members never copy. A copy
  * of admin is an ordinary role holding every grantable feature and every app.
  * Admin and client always lead the file (the parser puts them there), so a copy of
  * either goes first among the custom roles.
@@ -68,7 +68,15 @@ export function duplicateRole(
   );
   const access: readonly AccessFeature[] =
     source.id === ADMIN_ROLE_ID ? [...ACCESS_FEATURES.filter((feature) => feature !== 'settings:roles'), APP_ACCESS_ALL] : source.access;
-  const copy: ProjectRole = { id: copyId, name, members: [], access, appPermissions: source.appPermissions, pinnedApps: [...source.pinnedApps] };
+  const copy: ProjectRole = {
+    id: copyId,
+    name,
+    members: [],
+    access,
+    appPermissions: source.appPermissions,
+    pinnedApps: [...source.pinnedApps],
+    componentRules: source.componentRules,
+  };
   const at = Math.max(sourceIndex + 1, BUILT_IN_ROLE_COUNT);
   const next = { ...roles, roles: [...roles.roles.slice(0, at), copy, ...roles.roles.slice(at)] };
   assert(next.roles.length === roles.roles.length + 1, 'Duplicating adds one role');

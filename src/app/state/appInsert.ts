@@ -12,6 +12,8 @@ import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { anchoredInsertTarget, insertTargetFor, type InsertTarget } from '../../editor/insertTarget';
 import type { EditorModel, EditorNode } from '../../editor/pageView';
 import { findImportPath } from '../../ipc/appBridge';
+import { canAddComponent } from '../../features/palette/componentVisibility';
+import { currentRole } from '../../lib/currentRole';
 import { appInsertGesture, withStringProps } from '../model/appInsertGesture';
 import { componentInstancePlacement, loadComponentInstance } from '../model/componentInstances';
 import { newId } from '../model/nodeFactory';
@@ -47,6 +49,9 @@ export function useAppInsert(coreState: ReturnType<typeof useCoreState>, history
         const projectPath = projectRef.current?.path;
         if (component === undefined || projectPath === undefined) {
           return { applied: false, reason: `This project has no component named ${item.name}` };
+        }
+        if (!canAddComponent(currentRole(), component)) {
+          return { applied: false, reason: `The current role cannot add ${item.name}` };
         }
         const instance = await loadComponentInstance(component, insertables, projectPath);
         const resolved = await Promise.all(

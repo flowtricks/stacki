@@ -7,6 +7,7 @@ import { cleanError } from '../../lib/cleanError';
 import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { rankInsertItems } from '../../lib/insertRank';
 import { ComponentPreviewPopup } from './ComponentPreviewPopup';
+import { useAddableComponents } from './componentVisibility';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
 import { ComponentPlusIcon, ElementComponentIcon, LayoutIcon } from '../../ui/Icons';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
@@ -46,7 +47,9 @@ export default function PalettePanel(props: PalettePanelProps) {
   const usage = useUsagePopup(props.onUsage, preview.cancel);
   const usageRef = useRef<HTMLDivElement>(null);
   useCreateRequest(props.createRequest ?? 0, props.createFrom, setCreating);
-  const list = useMemo(() => rankInsertItems(props.components, query), [props.components, query]);
+  // The list shows what this role may add; a new component's name is still checked against every component (PalettePopups).
+  const addable = useAddableComponents(props.components);
+  const list = useMemo(() => rankInsertItems(addable, query), [addable, query]);
   const groups = useMemo(() => groupPaletteComponents(list), [list]);
   return (
     <div className="panel-section grow">
@@ -55,7 +58,7 @@ export default function PalettePanel(props: PalettePanelProps) {
       <PaletteList
         groups={groups}
         query={query}
-        componentCount={props.components.length}
+        componentCount={addable.length}
         onInsert={props.onInsert}
         {...(props.onDragBegin === undefined ? {} : { onDragBegin: props.onDragBegin })}
         preview={preview}

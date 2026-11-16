@@ -71,7 +71,7 @@ const allowed = [];
 async function mount(members = ['flowtricks'], access = []) {
   added.length = 0;
   allowed.length = 0;
-  role = { id: 'writer', name: 'Writer', members, access, appPermissions: {}, pinnedApps: [] };
+  role = { id: 'writer', name: 'Writer', members, access, appPermissions: {}, pinnedApps: [], componentRules: [] };
   const actions = {
     rename: () => undefined,
     remove: () => undefined,

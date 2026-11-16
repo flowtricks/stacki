@@ -330,7 +330,7 @@ function railPanels(state) {
     apps: () =>
       create(modules.AppsPanel, {
         projectPath: PROJECT,
-        role: { id: 'admin', name: 'Admin', isAdmin: true, features: new Set(), appPermissions: {}, pinnedApps: [] },
+        role: { id: 'admin', name: 'Admin', isAdmin: true, features: new Set(), appPermissions: {}, pinnedApps: [], componentRules: [] },
         notify: noop,
       }),
   };

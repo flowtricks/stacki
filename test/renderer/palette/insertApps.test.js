@@ -52,7 +52,7 @@ function app(id, name, description, opened) {
 }
 
 function clientRole(features) {
-  return { id: 'client', name: 'Client', isAdmin: false, features: new Set(features), appPermissions: {}, pinnedApps: [] };
+  return { id: 'client', name: 'Client', isAdmin: false, features: new Set(features), appPermissions: {}, pinnedApps: [], componentRules: [] };
 }
 
 async function mount({ apps, storedTab }) {
