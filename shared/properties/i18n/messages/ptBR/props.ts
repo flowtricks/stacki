@@ -581,7 +581,6 @@ export const messages = {
   'props.sources.doctypeNote': 'Escrito exatamente como está no topo da página. Não é um elemento: não tem tag nem atributos.',
   'props.sources.editCode': 'Editar código',
   'props.sources.expression': 'Expressão',
-  'props.sources.binding': 'Dados',
   'props.sources.frontmatter': 'Frontmatter', // same
   'props.sources.frontmatterNote':
     'Importações, constantes e dados desta página. Abre em um editor flutuante que você pode mover e redimensionar enquanto trabalha no canvas.',

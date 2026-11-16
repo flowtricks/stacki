@@ -8,6 +8,8 @@
 // winner (by !important, then specificity, then document order); losing
 // declarations are flagged `overriddenBy` so you still see what actually applies.
 
+import type { LayerPosition } from './cascadeLayers';
+import { compareCandidates, type CascadeCandidate } from './cascadeResolve';
 import { canonicalCompound, compareSpecificity, matchSelectorList, type MatchTarget } from './selectors';
 import type { ParsedRule, SelectorInfo, Specificity } from './styleTypes';
 import { assert } from '../../../../shared/core/assert';
@@ -58,24 +60,12 @@ type Hit = {
 };
 
 /**
- * Cascade tie-break for one property, winner-first: `!important`, then
- * specificity, then document order (later wins). Shared by computeRuleModel and
- * the resolved-style model (lib/resolved.ts) so both agree on who wins.
+ * Cascade tie-break for one property, winner-first: importance, the style attribute, layers,
+ * specificity, then document order (later wins), as cascadeResolve.ts ranks them. Shared by
+ * computeRuleModel and the resolved-style model (resolved.ts) so both agree on who wins.
  */
-export function compareCascade(
-  left: { important: boolean; specificity: Specificity },
-  right: { important: boolean; specificity: Specificity },
-  leftOrder: number,
-  rightOrder: number,
-): number {
-  if (left.important !== right.important) {
-    return left.important ? -1 : 1;
-  }
-  const spec = compareSpecificity(right.specificity, left.specificity);
-  if (spec !== 0) {
-    return spec;
-  }
-  return rightOrder - leftOrder; // later wins on a tie
+export function compareCascade(left: Omit<CascadeCandidate, 'order'>, right: Omit<CascadeCandidate, 'order'>, leftOrder: number, rightOrder: number): number {
+  return compareCandidates({ ...left, order: leftOrder }, { ...right, order: rightOrder });
 }
 
 function strongestOf(selectors: SelectorInfo[]): { selector: SelectorInfo; specificity: Specificity } | undefined {
@@ -143,6 +133,7 @@ type Contribution = {
   declId: string;
   prop: string;
   important: boolean;
+  layer: LayerPosition | undefined;
   specificity: Specificity;
   seq: number;
   selectorText: string;
@@ -162,6 +153,7 @@ function cascadeWinners(hits: readonly Hit[]): Map<string, Winner> {
         declId: decl.declId,
         prop: decl.prop,
         important: decl.important,
+        layer: hit.rule.layer,
         specificity: hit.strongestBase.specificity,
         seq: seq++,
         selectorText: hit.strongestBase.selector.text,

@@ -58,7 +58,6 @@ export const messages = {
   'structure.placement.unknownComponentParent': '“{child}” va dans {parent}. Vérifiez que ce composant en produit un.',
   'structure.placement.voidParent': '“{parent}” ne peut rien contenir.',
   'structure.row.imported': 'Importé depuis {file}',
-  'structure.binding.label': 'Liaison de données {path}',
   'structure.status.empty': 'N’affiche rien sur la page avec ses props actuelles',
   'structure.status.hidden': 'display: none — présent sur la page, mais non affiché',
   'structure.status.inert': 'pointer-events: none — affiché, mais ne reçoit aucun clic',

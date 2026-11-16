@@ -257,15 +257,6 @@ export const COMMANDS: readonly CommandSpec[] = [
     args: [arg('kind', 'enum', 'Which list.', { required: true, positional: true, values: ['components', 'layouts', 'assets', 'styles', 'variables'] })],
   }),
   command(['apps', 'commands'], 'List the commands installed apps add to the CLI.', 'cli:read'),
-  command(['apps', 'add'], 'Install an app from a local folder or .zip (no downloads): its files and its lock entry.', 'cli:apps', {
-    write: true,
-    args: [
-      arg('source', 'string', 'A folder holding stacki-app.json, or a .zip of one. URLs are refused: install downloads from the Apps panel.', {
-        required: true,
-        positional: true,
-      }),
-    ],
-  }),
   command(['apps', 'remove'], 'Remove an installed app (its folder and lock entry) and its stored non-secret settings.', 'cli:apps', {
     write: true,
     destructive: true,

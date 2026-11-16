@@ -9,7 +9,7 @@ import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
 import { copiesToDraw, hoverIsSelection, loopChildPaths, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
-import { clipBand, spacingBands, withLiveSpacing, type CollapsePartner } from './spacingBands';
+import { spacingBands, withLiveSpacing } from './spacingBands';
 import {
   BranchIcon,
   CodeIcon,
@@ -57,8 +57,6 @@ interface PreviewOverlaysProps {
   readonly rects: RectMap;
   readonly spacing: SpacingMap;
   readonly scale: number;
-  /** The frame's size in its own px: a spacing band is cut to it so its label stays on what is visible. */
-  readonly viewport?: { readonly w: number; readonly h: number } | undefined;
   readonly spacingHover?: SpacingHover | undefined;
   readonly selPath: string | undefined;
   readonly selOcc: number | undefined;
@@ -120,12 +118,7 @@ function FocusOverlays({ path, rects, scale }: { readonly path: string | undefin
   return onePerPlace(rects[path] ?? undefined).map((box, index) => <div key={`focus-${index}`} className="node-focus" style={boxStyle(box, scale)} />);
 }
 
-// What hovering a side of the Spacing box shows on the canvas: that side's strip, from the page as laid
-// out (the used geometry, so a margin the page collapsed is not drawn as if it held space open).
-// Drawn in the overlay layer, above the page and in the frame's own coordinates, so no ancestor's
-// `overflow: hidden` in the page can cut it. Purely a view: nothing here writes.
 function SpacingOverlays(props: PreviewOverlaysProps) {
-  const translate = useTranslate();
   const { spacingHover, selPath: selectedPath } = props;
   if (!spacingHover || !selectedPath) {
     return undefined;
@@ -135,38 +128,11 @@ function SpacingOverlays(props: PreviewOverlaysProps) {
   const box = boxes[props.selOcc ?? 0] ?? boxes[0];
   const measurement = measurements[props.selOcc ?? 0] ?? measurements[0] ?? undefined;
   const sized = withLiveSpacing(measurement, spacingHover.kind, spacingHover.live);
-  return spacingBands(box, sized, spacingHover.kind, spacingHover.sides).flatMap((drawn, index) => {
-    const band = clipBand(drawn, props.viewport);
-    if (!band) {
-      return [];
-    }
-    const collapsed = band.collapsedInto;
-    const label = collapsed === undefined ? (spacingHover.labels?.[band.side] ?? spacingLabel(band)) : translate(collapseKey(collapsed));
-    return [
-      <div
-        key={`sp-${band.side}-${index}`}
-        className={`spacing-band is-${spacingHover.kind}${collapsed === undefined ? '' : ` is-collapsed is-${band.side}`}`}
-        style={boxStyle(band, props.scale)}
-      >
-        <span className="spacing-band-label">{label}</span>
-      </div>,
-    ];
-  });
-}
-
-function collapseKey(partner: CollapsePartner) {
-  switch (partner) {
-    case 'previous':
-      return 'preview.spacing.collapsedPrevious';
-    case 'next':
-      return 'preview.spacing.collapsedNext';
-    case 'parent':
-      return 'preview.spacing.collapsedParent';
-    default: {
-      const exhaustive: never = partner;
-      return exhaustive;
-    }
-  }
+  return spacingBands(box, sized, spacingHover.kind, spacingHover.sides).map((band, index) => (
+    <div key={`sp-${band.side}-${index}`} className={`spacing-band is-${spacingHover.kind}`} style={boxStyle(band, props.scale)}>
+      <span className="spacing-band-label">{spacingHover.labels?.[band.side] ?? spacingLabel(band)}</span>
+    </div>
+  ));
 }
 
 function NodeOutlines(props: PreviewOverlaysProps) {

@@ -6038,9 +6038,7 @@ body > .embed-editor_provenance {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* The label of a thin band is taller than the band, and must still be read: the overlay layer is
-     what clips, at the edge of the frame, and the band is cut to that edge so the label stays on it. */
-  overflow: visible;
+  overflow: hidden;
   background-color: color-mix(in srgb, var(--band) 14%, transparent);
   background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--band) 42%, transparent) 0 1px, transparent 1px 6px);
   outline: 1px solid color-mix(in srgb, var(--band) 45%, transparent);
@@ -6057,22 +6055,6 @@ body > .embed-editor_provenance {
    with either would say they were the same kind of space. */
 .spacing-band.is-gap {
   --band: #a855f7;
-}
-/* A margin that collapsed into a larger one holds no space open: a line at the box edge, its label
-   beside it on the element's side so the reason is read where the margin would have been. */
-.spacing-band.is-collapsed {
-  background-image: none;
-  background-color: var(--band);
-  outline: none;
-}
-.spacing-band.is-collapsed .spacing-band-label {
-  position: absolute;
-  left: 6px;
-  top: 4px;
-}
-.spacing-band.is-collapsed.is-bottom .spacing-band-label {
-  top: auto;
-  bottom: 4px;
 }
 .spacing-band-label {
   padding: 1px 5px 2px;
@@ -10271,10 +10253,4 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   background: rgba(146, 116, 255, 0.16);
   color: #c4afff;
   font-size: 11px;
-}
-
-/* A data chip in a Navigator row: the chip keeps its own purple (never restyled); the row only lets it shrink. */
-.structure-node .label .data-chip {
-  vertical-align: middle;
-  margin: 0;
 }

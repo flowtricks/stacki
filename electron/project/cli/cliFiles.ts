@@ -112,16 +112,7 @@ export function writeFileText(root: string, schema: FileSchema, source: string, 
 /** Removes a file the CLI created, to undo it. Only ever called for a file whose `before` was absent. */
 export function removeFile(root: string, schema: FileSchema): Result<void, CliError> {
   try {
-    const absolute = path.join(root, schema.file);
-    fs.rmSync(absolute, { force: true });
-    // A folder the CLI made for the file goes with it, never `.stacki` itself and never a folder that still holds something.
-    const stop = path.join(root, '.stacki');
-    for (let directory = path.dirname(absolute); directory !== stop && directory.startsWith(`${stop}${path.sep}`); directory = path.dirname(directory)) {
-      if (!fs.existsSync(directory) || fs.readdirSync(directory).length > 0) {
-        break;
-      }
-      fs.rmdirSync(directory);
-    }
+    fs.rmSync(path.join(root, schema.file), { force: true });
     return ok(undefined);
   } catch (error: unknown) {
     return err({ code: 'write-failed', message: `${schema.file} could not be removed: ${error instanceof Error ? error.message : String(error)}` });

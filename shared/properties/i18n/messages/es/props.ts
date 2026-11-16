@@ -583,7 +583,6 @@ export const messages = {
   'props.sources.doctypeNote': 'Se escribe tal cual al principio de la página. No es un elemento: no tiene etiqueta ni atributos.',
   'props.sources.editCode': 'Editar código',
   'props.sources.expression': 'Expresión',
-  'props.sources.binding': 'Datos',
   'props.sources.frontmatter': 'Frontmatter', // same
   'props.sources.frontmatterNote':
     'Importaciones, constantes y datos de esta página. Se abre en un editor flotante que puedes mover y redimensionar mientras trabajas en el lienzo.',

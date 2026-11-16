@@ -8,6 +8,7 @@
 
 import postcss, { type Root, type Rule, type AtRule, type ChildNode } from 'postcss';
 import type { ParsedDeclaration, ParsedRule, StyleRegion } from './styleTypes';
+import { LayerRegistry, layerNamesOf, type LayerPosition } from './cascadeLayers';
 import { parseSelectorList, selectorListMembers } from './selectors';
 import { ruleChainLevels, ruleHead, ruleLayout, sourceTextFromEditor } from './cssRuleText';
 import { assert } from '../../../../shared/core/assert';
@@ -38,6 +39,11 @@ type WalkContext = {
   idSeed: string;
   /** Shared running counter assigning cascade document order across embeds. */
   order: { n: number };
+  /** The page's layer registry, shared by every source so a layer keeps one place in the order.
+   *  A call without one numbers the layers of its own region only. */
+  layers?: LayerRegistry;
+  /** The layer the whole region sits in: a stylesheet imported with `layer(name)`. */
+  baseLayer?: readonly string[] | undefined;
 };
 
 /** Split a selector list on top-level commas (ignoring commas inside `()`/`[]`). */
@@ -119,6 +125,12 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
   }
   const rules: ParsedRule[] = [];
   let ruleCounter = 0;
+  // The layers around the walk's position, outermost first. Local mutation, centralized here:
+  // a layer block pushes its names for the length of its walk and pops them after.
+  const layers = context.layers ?? new LayerRegistry();
+  const layerStack: string[] = [...(context.baseLayer ?? [])];
+  const layerOfRule = () => (layerStack.length === 0 ? undefined : layers.positionOf(layerStack));
+  let anonymousLayers = 0;
 
   // parentSelectors: undefined at the top level; the enclosing rule's RESOLVED selectors
   // once inside one. ancestorDisplay: the enclosing rules' RAW selectors plus `@`
@@ -142,7 +154,7 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
         // the query position (shown when viewing that query).
         const nestedDisplay = selectorsOnly.length > 1 ? renderNestedPath(selectorsOnly) : undefined;
         const queryDisplay = displayPath.includes('@') ? renderNestedPath(displayPath) : undefined;
-        rules.push(buildRule(node, atContext, context, ruleCounter++, resolved, nestedDisplay, queryDisplay));
+        rules.push(withLayer(buildRule(node, atContext, context, ruleCounter++, resolved, nestedDisplay, queryDisplay), layerOfRule()));
         const nextSelectors = resolved ?? splitTopLevelCommas(node.selector);
         walk(node, atContext, nextSelectors, displayPath, depth + 1);
       } else if (child.type === 'atrule') {
@@ -162,11 +174,26 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
             const selectorsOnly = nextDisplay.filter((part) => part !== '@');
             const nestedDisplay = selectorsOnly.length > 1 ? renderNestedPath(selectorsOnly) : undefined;
             const queryDisplay = renderNestedPath(nextDisplay);
-            rules.push(buildRule(at as unknown as Rule, nextContext, context, ruleCounter++, parentSelectors, nestedDisplay, queryDisplay));
+            rules.push(
+              withLayer(buildRule(at as unknown as Rule, nextContext, context, ruleCounter++, parentSelectors, nestedDisplay, queryDisplay), layerOfRule()),
+            );
           }
           walk(at, nextContext, parentSelectors, nextDisplay, depth + 1);
-        } else if (name === 'layer' && at.nodes) {
-          walk(at, atContext, parentSelectors, ancestorDisplay, depth + 1);
+        } else if (name === 'layer') {
+          const names = layerNamesOf(at.params);
+          if (at.nodes === undefined) {
+            // `@layer a, b;` only fixes the order: it holds no rules.
+            for (const path of names) {
+              layers.positionOf([...layerStack, ...path]);
+            }
+          } else {
+            // A block names one layer, or none: each anonymous block is a layer of its own.
+            const path = names[0] ?? [`\u0000anonymous-${context.embedKey}-${anonymousLayers++}`];
+            const outer = layerStack.length;
+            layerStack.push(...path);
+            walk(at, atContext, parentSelectors, ancestorDisplay, depth + 1);
+            layerStack.length = outer;
+          }
         }
         // @keyframes / @font-face / @import etc. inject no element styles — skip.
       }
@@ -657,6 +684,11 @@ export function ensureNestPath(region: StyleRegion, path: NestStep[]): boolean {
     container = level.node;
   }
   return true;
+}
+
+// A rule with its layer position, written only when the rule is layered.
+function withLayer(rule: ParsedRule, layer: LayerPosition | undefined): ParsedRule {
+  return layer === undefined ? rule : { ...rule, layer };
 }
 
 function buildRule(

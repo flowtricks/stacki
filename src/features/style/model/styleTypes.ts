@@ -7,6 +7,7 @@
 // come from.
 
 import type { Root, Rule, Declaration as PostcssDeclaration } from 'postcss';
+import type { LayerPosition } from './cascadeLayers';
 
 /** A `<style>...</style>` region located inside an embed's code string. */
 export type StyleRegion = {
@@ -65,6 +66,8 @@ export type ParsedRule = {
   written?: { readonly parents: readonly string[]; readonly head: string };
   selectors: SelectorInfo[];
   declarations: ParsedDeclaration[];
+  /** The cascade layer the rule is written in, absent when it is unlayered (model/cascadeLayers.ts). */
+  layer?: LayerPosition;
 };
 
 export type ParsedDeclaration = {

@@ -19,6 +19,8 @@ import { styleTransport } from '../../../ipc/editorEnvironment';
 // just text with CSS regions in it, and a stylesheet is that with one region
 // covering the whole file.
 
+import { LayerRegistry } from './cascadeLayers';
+import { orderByImports } from './cssImportOrder';
 import { collectRules, parseRegion, renderEmbed, splitEmbed } from './css';
 import { assert } from '../../../../shared/core/assert';
 import { englishText, messageRef } from '../../../../shared/properties/i18n/messageRef';
@@ -676,7 +678,9 @@ export function rebuildRules(docs: EmbedDocument[]): ParsedRule[] {
   // One running counter across every source, so document order — and with it
   // the cascade — is comparable between a stylesheet and a <style> block.
   const order = { n: 0 };
-  const ordered = [...docs].sort((left, right) => left.source.order - right.source.order);
+  // One layer registry for the whole page, so a layer keeps one place in the order wherever it is named.
+  const layers = new LayerRegistry();
+  const { ordered, baseLayers } = documentsInCascadeOrder(docs);
 
   for (const embedDocument of ordered) {
     const origin = embedDocument.source.origin;
@@ -693,6 +697,8 @@ export function rebuildRules(docs: EmbedDocument[]): ParsedRule[] {
         regionIndex,
         idSeed: embedDocument.source.key,
         order,
+        layers,
+        baseLayer: baseLayers.get(embedDocument.source.key),
       });
       // A scoped block of the page reaches the open component only through
       // selectors written `:global(…)`; its other rules style the page alone.
@@ -701,6 +707,38 @@ export function rebuildRules(docs: EmbedDocument[]): ParsedRule[] {
     });
   }
   return rules;
+}
+
+// The documents in the order the page applies them. Stylesheets come first, in the order their
+// `@import`s put them (cssImportOrder.ts); a file nothing imports keeps its listing place. Then
+// the components' global styles and the page's own `<style>` blocks, which come later in the
+// document and win ties. Also the layer each imported file sits in, by embed key.
+function documentsInCascadeOrder(docs: readonly EmbedDocument[]): {
+  readonly ordered: EmbedDocument[];
+  readonly baseLayers: ReadonlyMap<string, readonly string[]>;
+} {
+  const listed = [...docs].sort((left, right) => left.source.order - right.source.order);
+  const files = listed.flatMap((document) => (document.source.origin.kind === 'file' ? [{ document, path: document.source.origin.path }] : []));
+  const placements = orderByImports(files.map(({ document, path }) => ({ path, code: document.code })));
+  const rankByPath = new Map(placements.map((placement) => [placement.path, placement]));
+  const baseLayers = new Map<string, readonly string[]>();
+  const fileDocuments = files.map(({ document }) => document);
+  fileDocuments.sort((left, right) => {
+    const leftPath = left.source.origin.kind === 'file' ? left.source.origin.path : '';
+    const rightPath = right.source.origin.kind === 'file' ? right.source.origin.path : '';
+    return (rankByPath.get(leftPath)?.rank ?? 0) - (rankByPath.get(rightPath)?.rank ?? 0);
+  });
+  for (const document of fileDocuments) {
+    const origin = document.source.origin;
+    const layer = origin.kind === 'file' ? rankByPath.get(origin.path)?.layer : undefined;
+    if (layer !== undefined) {
+      baseLayers.set(document.source.key, layer);
+    }
+  }
+  const others = listed.filter((document) => document.source.origin.kind !== 'file');
+  const ordered = [...fileDocuments, ...others];
+  assert(ordered.length === docs.length, 'documentsInCascadeOrder: every document is placed once');
+  return { ordered, baseLayers };
 }
 
 function reachesComponent(rule: ParsedRule): boolean {

@@ -55,9 +55,7 @@ export interface JsonChange {
 export interface PlannedFile {
   /** Project-relative, with `/`. */
   readonly file: string;
-  readonly action: 'create' | 'modify' | 'delete' | 'move';
-  /** For a move: where the file was. */
-  readonly from?: string;
+  readonly action: 'create' | 'modify' | 'delete';
   readonly beforeDigest?: string;
   readonly afterDigest?: string;
   /** What changes inside a JSON file, bounded; empty for a file that is not JSON. */

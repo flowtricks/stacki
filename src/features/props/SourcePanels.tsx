@@ -15,8 +15,6 @@ import ExprInput from '../../ui/ExprInput';
 import { scopeCompletions } from '../../editor/dataSuggest';
 import { CommentIcon, CodeIcon, CornerIcon } from '../../ui/Icons';
 import { type PropsPanelProps, type NodePanelProps, type SourceDimensionsOptions } from './propsPanelTypes';
-import ExprBindingField from './ExprBindingField';
-import { pureBindingPath } from '../../editor/bindingPath';
 import TextConnectField, { type TextConnectFieldProps } from './TextConnectField';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 
@@ -137,16 +135,12 @@ export function ExprPanel(props: NodePanelProps<'expr'>) {
       <div className="panel-header">
         <h2>{translate('props.sources.expression')}</h2>
       </div>
-      {pureBindingPath(node.value) === undefined ? (
-        <div className="props-field" style={{ marginTop: 8 }}>
-          <label onClick={noLabelActivation}>
-            <span className="prop-label">{translate('props.sources.code')}</span>
-          </label>
-          <ExprInput key={node.id} value={node.value} syncValue={node.value} completions={scope} onCommit={(next) => next !== node.value && onSetText(next)} />
-        </div>
-      ) : (
-        <ExprBindingField key={node.id} nodeId={node.id} value={node.value} bindContext={bindContext || loopContext} onSetText={onSetText} />
-      )}
+      <div className="props-field" style={{ marginTop: 8 }}>
+        <label onClick={noLabelActivation}>
+          <span className="prop-label">{translate('props.sources.code')}</span>
+        </label>
+        <ExprInput key={node.id} value={node.value} syncValue={node.value} completions={scope} onCommit={(next) => next !== node.value && onSetText(next)} />
+      </div>
     </div>
   );
 }

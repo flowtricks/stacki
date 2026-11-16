@@ -3,7 +3,7 @@ import { isReservedShortcut, type AppReservedShortcut } from '../../../shared/pr
 import { parseContextPoint, type ContextPoint } from './contextPosition';
 import { canvasClickBox, coordinateOf, type CanvasClickBox } from '../../ui/canvasClickSlot';
 import type { Box } from './outlineBoxes';
-import type { MarginCollapse, Spacing } from './spacingBands';
+import type { Spacing } from './spacingBands';
 import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
 import { LIMITS } from '../../../shared/core/limits';
@@ -446,32 +446,14 @@ function parseSpacing(input: unknown): Spacing {
   // rects message, every outline and band with it, for a value the bands
   // already clamp to nothing (spacingBands.ts).
   const margin = optional(parseSides(finite))(value['margin']);
-  const collapse = optional(parseCollapse)(value['collapse']);
   const gaps = optional(list(parseGap))(value['gaps']);
   const units = optional(dictionary(nonnegativeFinite))(value['units']);
   return {
     ...(padding === undefined ? {} : { padding }),
     ...(margin === undefined ? {} : { margin }),
-    ...(collapse === undefined ? {} : { collapse }),
     ...(gaps === undefined ? {} : { gaps }),
     ...(units === undefined ? {} : { units }),
   };
-}
-
-function parseCollapse(input: unknown): NonNullable<Spacing['collapse']> {
-  const value = record(input);
-  const top = optional(parseMarginCollapse)(value['top']);
-  const bottom = optional(parseMarginCollapse)(value['bottom']);
-  return { ...(top === undefined ? {} : { top }), ...(bottom === undefined ? {} : { bottom }) };
-}
-
-function parseMarginCollapse(input: unknown): MarginCollapse {
-  const value = record(input);
-  const partner = value['partner'];
-  if (partner !== 'previous' && partner !== 'next' && partner !== 'parent') {
-    throw new Error('Preview margin collapse: unknown partner');
-  }
-  return { partner, margin: finite(value['margin']) };
 }
 
 function parseSides(side: (input: unknown) => number) {

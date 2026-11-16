@@ -59,7 +59,6 @@ import {
 } from '../../../shared/properties/projectRoles';
 import { setComponentState, parseComponentPath } from '../../../shared/properties/componentAccess';
 import { configEdit, documentEdit, type Edit } from './cliPlan';
-import type { EffectRecord } from './cliEffects';
 import { documentOf, readFileState, type FileState } from './cliFiles';
 import { loadRoles } from './cliRole';
 
@@ -70,14 +69,7 @@ export interface CommandContext {
 
 export type Outcome =
   | { readonly kind: 'read'; readonly result: unknown; readonly summary: string; readonly notes?: readonly string[] }
-  | {
-      readonly kind: 'write';
-      readonly edits: readonly Edit[];
-      /** Changes that are not settings text (moves, created and removed files); applied before the edits, all or nothing. */
-      readonly effects?: readonly EffectRecord[];
-      readonly summary: string;
-      readonly notes?: readonly string[];
-    };
+  | { readonly kind: 'write'; readonly edits: readonly Edit[]; readonly summary: string; readonly notes?: readonly string[] };
 
 export type Handler = (context: CommandContext) => Result<Outcome, CliError> | Promise<Result<Outcome, CliError>>;
 
@@ -574,13 +566,7 @@ const foldersAdd = foldersWrite(
   (context) => `Add folder ${text(context, 'folder')} to ${text(context, 'kind')}.`,
 );
 const foldersRemove = foldersWrite(
-  (config, context) =>
-    foldersFor(kindOf(context), config).includes(text(context, 'folder'))
-      ? ok(removeFolder(config, kindOf(context), text(context, 'folder')))
-      : refused(
-          `${text(context, 'folder')} is not one of the ${text(context, 'kind')} folders (${foldersFor(kindOf(context), config).join(', ')}).`,
-          'missing',
-        ),
+  (config, context) => ok(removeFolder(config, kindOf(context), text(context, 'folder'))),
   (context) => `Remove folder ${text(context, 'folder')} from ${text(context, 'kind')}.`,
 );
 const foldersReset = foldersWrite(

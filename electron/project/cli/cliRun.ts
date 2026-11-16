@@ -6,14 +6,12 @@
 import { err, ok, type Result } from '../../../shared/core/result';
 import { COMMANDS, commandByWords, type CommandSpec } from '../../../shared/properties/cli/stackiCommands';
 import { CLI_SCHEMA_VERSION, type CliEnvelope, type CliError, type CliFailure, type PlannedFile } from '../../../shared/properties/cli/stackiOutput';
-import { fileSchemaById, fileSchemaByPath, registerAppFiles } from '../../../shared/properties/cli/stackiFiles';
+import { fileSchemaById, registerAppFiles } from '../../../shared/properties/cli/stackiFiles';
 import type { CliAccessFeature } from '../../../shared/properties/cli/stackiFeatures';
 import { applyStaged, DEFAULT_WRITER, planUndo, type FileWriter } from './cliApply';
-import { describeEffect, type EffectApplier, type EffectRecord } from './cliEffects';
 import { APP_ADMIN_HANDLERS } from './cliAppAdmin';
 import { CORE_HANDLERS, schemaOfArgument, type Handler, type Outcome } from './cliCommands';
 import { findProject } from './cliFiles';
-import { appsAdd, appsRemove } from './cliAppsInstall';
 import { plannedFiles, stage, type StagedFile } from './cliPlan';
 import { fileDenial, resolveRoleContext, roleDenial, type RoleContext, type RoleRequest } from './cliRole';
 import type { ExtensionProvider } from './cliExtensionTypes';
@@ -30,28 +28,17 @@ export interface RunRequest {
   readonly waitSeconds: number;
   /** Tests replace the file writer to inject a failure. */
   readonly writer?: FileWriter;
-  /** Tests replace the effect applier to inject a failure. */
-  readonly effectApplier?: EffectApplier;
   /** Commands installed apps contribute (cliExtensions.ts); absent means none. */
   readonly extensions?: ExtensionProvider;
 }
 
-// Handlers registered at startup by modules that live where their planners do (electron/handlers/cliComponentCommands.ts); written only at load.
-const registered = new Map<string, Handler>();
-
-export function registerCommandHandler(name: string, handler: Handler): void {
-  registered.set(name, handler);
-}
-
 const HANDLERS: Readonly<Record<string, Handler>> = {
   ...CORE_HANDLERS,
-  'apps add': appsAdd,
-  'apps remove': appsRemove,
   ...APP_ADMIN_HANDLERS,
   'apps settings set': (context) => {
     const schema = fileSchemaById('appSettings');
     const [app, setting, value] = [context.args['app'], context.args['setting'], context.args['value']];
-    if (schema === undefined || typeof app !== 'string' || typeof setting !== 'string' || typeof value !== 'string' || app === '' || setting === '') {
+    if (schema === undefined || typeof app !== 'string' || typeof setting !== 'string' || typeof value !== 'string') {
       return err({ code: 'usage', message: 'apps settings set <app> <setting> <value>' });
     }
     return ok({ kind: 'write', summary: `Set ${app} ${setting}.`, edits: [configEdit(schema, [{ kind: 'set', path: ['apps', app, setting], value }])] });
@@ -107,7 +94,7 @@ export async function runCommand(request: RunRequest): Promise<CliEnvelope> {
   if (name === 'undo') {
     return runUndo(request, root.value, role.value, spec);
   }
-  const handler = HANDLERS[name] ?? registered.get(name) ?? request.extensions?.handler(request.words);
+  const handler = HANDLERS[name] ?? request.extensions?.handler(request.words);
   if (handler === undefined) {
     return failure(name, {
       code: 'planner-unavailable',
@@ -146,26 +133,11 @@ async function finish(request: RunRequest, spec: CommandSpec, root: string, role
       return failure(name, refusal);
     }
   }
-  let staged: ReturnType<typeof stage>;
-  try {
-    staged = stage(root, outcome.edits);
-  } catch (error: unknown) {
-    // A planner that asserts on input it was never meant to get is a refusal here, not a crash of the shell or the MCP server.
-    return failure(name, { code: 'refused', message: `The change was refused: ${error instanceof Error ? error.message : String(error)}` });
-  }
+  const staged = stage(root, outcome.edits);
   if (!staged.ok) {
     return failure(name, staged.error);
   }
-  const effects = outcome.effects ?? [];
-  for (const file of effects.flatMap(describeEffect)) {
-    // Effects touching a settings file need the same access as editing it.
-    const schema = fileSchemaByPath(file.file);
-    const refusal = schema === undefined ? undefined : fileDenial(role.view, schema.requires, schema.file);
-    if (refusal !== undefined) {
-      return failure(name, refusal);
-    }
-  }
-  return writeOrPlan(request, spec, root, base, staged.value, effects);
+  return writeOrPlan(request, spec, root, base, staged.value);
 }
 
 async function writeOrPlan(
@@ -182,11 +154,10 @@ async function writeOrPlan(
     readonly summary: string;
   },
   staged: readonly StagedFile[],
-  effects: readonly EffectRecord[],
 ): Promise<CliEnvelope> {
-  const files: readonly PlannedFile[] = [...effects.flatMap(describeEffect), ...plannedFiles(staged)];
-  const summary = staged.length === 0 && effects.length === 0 ? `${base.summary} No change: the files already hold this.` : base.summary;
-  if (request.apply === 'plan' || (staged.length === 0 && effects.length === 0)) {
+  const files: readonly PlannedFile[] = plannedFiles(staged);
+  const summary = staged.length === 0 ? `${base.summary} No change: the files already hold this.` : base.summary;
+  if (request.apply === 'plan' || staged.length === 0) {
     return { ...base, summary, mode: 'plan', applied: false, files };
   }
   if (spec.destructive && request.yes !== 'yes') {
@@ -195,11 +166,7 @@ async function writeOrPlan(
       message: `"${base.command}" removes things people made. Show the plan to the person; apply it with --apply --yes only when they approve.`,
     });
   }
-  const applied = await applyStaged(root, base.command, staged, effects, {
-    waitSeconds: request.waitSeconds,
-    writer: request.writer ?? DEFAULT_WRITER,
-    ...(request.effectApplier === undefined ? {} : { effects: request.effectApplier }),
-  });
+  const applied = await applyStaged(root, base.command, staged, { waitSeconds: request.waitSeconds, writer: request.writer ?? DEFAULT_WRITER });
   if (!applied.ok) {
     return failure(base.command, applied.error);
   }
@@ -216,7 +183,7 @@ async function runUndo(request: RunRequest, root: string, role: RoleContext, spe
   if (!staged.ok) {
     return failure(name, staged.error);
   }
-  for (const file of staged.value.files) {
+  for (const file of staged.value) {
     const refusal = fileDenial(role.view, file.schema.requires, file.schema.file);
     if (refusal !== undefined) {
       return failure(name, refusal);
@@ -227,7 +194,6 @@ async function runUndo(request: RunRequest, root: string, role: RoleContext, spe
     spec,
     root,
     { schemaVersion: CLI_SCHEMA_VERSION, ok: true, command: name, project: root, role: role.view.id, notes: [], summary: `Put back what ${id} changed.` },
-    staged.value.files,
-    staged.value.effects,
+    staged.value,
   );
 }

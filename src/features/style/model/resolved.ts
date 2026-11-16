@@ -6,6 +6,8 @@
 // so switching selector/context/state just re-derives — no re-scan.
 
 import { compareCascade } from './cascade';
+import type { LayerPosition } from './cascadeLayers';
+import type { LossKind } from './cascadeResolve';
 import type { MatchedRule, RuleModel } from './cascade';
 import { assert } from '../../../../shared/core/assert';
 import {
@@ -155,6 +157,12 @@ export type Contributor = {
   winning: boolean;
   /** True when the selector can't be a token chip (combinator / :is / :has / …). */
   complexOnly: boolean;
+  /** The cascade layer the rule is written in, absent when unlayered (model/cascadeLayers.ts). */
+  layer?: LayerPosition | undefined;
+  /** True for the element's own `style` attribute, which the cascade ranks above every rule. */
+  inline?: boolean;
+  /** Why this declaration is not the one in use, once the page has been asked (model/cascadeTruth.ts). */
+  lossReason?: LossKind;
 };
 
 export type ResolvedProp = {
@@ -766,6 +774,7 @@ function foldEmbedRule(matched: MatchedRule, view: ResolveView): FoldedRule | un
       isSelected,
       winning: false,
       complexOnly: !winner.simple,
+      ...(matched.rule.layer === undefined ? {} : { layer: matched.rule.layer }),
     },
   }));
   return { isSelected, contributors };
@@ -849,6 +858,7 @@ function inlineContributors(inline: InlineResolveInput | undefined): ReadonlyMap
       isSelected: inline.selected,
       winning: false,
       complexOnly: false,
+      inline: true,
     });
   };
   for (const declaration of inline.declarations) {
