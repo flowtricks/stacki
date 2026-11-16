@@ -20,6 +20,8 @@ import ObjectField from './ObjectField';
 import ClassInput from './ClassInput';
 import Dropdown from '../../ui/Dropdown';
 import AutoTextarea from '../../ui/AutoTextarea';
+import CodeTextField from './CodeTextField';
+import { attributeLanguage } from '../../ui/attributeLanguage';
 import HtmlField from '../../ui/HtmlField';
 import DateField from '../../ui/DateField';
 import { containsHTML } from '../../ui/htmlFieldModel';
@@ -42,6 +44,7 @@ import {
 } from './propFieldModel';
 import { codeRowValue, objectSeed, optionAttr, optionValue, previewsOptions } from './propKinds';
 import { itemShapeOf } from './listItemShape';
+import { declaredItemTypeOf } from './listItemType';
 import { readPropDocumentation } from '../../editor/propDocumentation';
 
 export function AssetImportField({ binding, name, assetContext, onChange }: AssetImportFieldProps) {
@@ -559,6 +562,7 @@ export function ListControl({ state }: { readonly state: PropControlState }) {
         value={valueText}
         placeholder={placeholderFor(field)}
         itemShape={itemShape}
+        itemType={declaredItemTypeOf(field)}
         fallback={fallback}
         projectPath={state.assetContext?.projectPath}
         bindContext={state.bindContext}
@@ -658,6 +662,23 @@ export function TextControl({ state }: { readonly state: PropControlState }) {
       <div className="props-field">
         {label}
         <DateField value={content} label={name} onChange={(next) => onChange({ type: 'string', value: next })} />
+      </div>
+    );
+  }
+  // A value that is code in its own right (`sizes`, `srcset`, a handler) is a
+  // line of code, coloured as such, whatever its length.
+  const language = attributeLanguage(name);
+  if (language !== undefined) {
+    return (
+      <div className="props-field">
+        {label}
+        <CodeTextField
+          value={content}
+          language={language}
+          ariaLabel={name}
+          placeholder={placeholderFor(field)}
+          onChange={(next) => onChange({ type: 'string', value: next })}
+        />
       </div>
     );
   }

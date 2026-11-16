@@ -95,6 +95,10 @@ export interface BindFieldProps extends BindingContextProps {
   readonly field?: FieldDefinition;
   readonly placeholder?: string | undefined;
   readonly wrapCode?: boolean;
+  /** The attribute's name where `field` is absent (a hand-written attribute); it decides how the text is coloured. */
+  readonly attributeName?: string | undefined;
+  /** The element the attribute is on, for the few names that mean something only on one (`<meta content>`). */
+  readonly elementName?: string | undefined;
   readonly apiRef?: MutableRefObject<InsertAPI | undefined>;
   readonly onChange: ValueChange;
 }

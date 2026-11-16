@@ -16,6 +16,8 @@ import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { BracesIcon, PlusIcon, TrashIcon, elementIcon } from '../../ui/Icons';
 import type { Attr } from '../../../shared/page/pageNode';
+import { CodeTextField } from '../props/propBindings';
+import { attributeLanguage } from '../../ui/attributeLanguage';
 import { defaultsAgree, sameDefaults, type AttributesProperty } from './attributesProperty';
 
 /** What the panel can do to the page's elements, when the app provides it. */
@@ -185,14 +187,27 @@ function AttributeDefaultRows({
             onBlur={onLeave}
             onChange={(event) => edit(index, { ...row, name: event.target.value })}
           />
-          <input
-            aria-label={translate('componentProps.attributes.defaultValue', { number: index + 1 })}
-            placeholder={translate('componentProps.attributes.valuePlaceholder')}
-            value={row.value}
-            readOnly={!editable.allowed}
-            onBlur={onLeave}
-            onChange={(event) => edit(index, { ...row, value: event.target.value })}
-          />
+          {attributeLanguage(row.name) === undefined ? (
+            <input
+              aria-label={translate('componentProps.attributes.defaultValue', { number: index + 1 })}
+              placeholder={translate('componentProps.attributes.valuePlaceholder')}
+              value={row.value}
+              readOnly={!editable.allowed}
+              onBlur={onLeave}
+              onChange={(event) => edit(index, { ...row, value: event.target.value })}
+            />
+          ) : (
+            // A value that is code in its own right is coloured as that.
+            <CodeTextField
+              value={row.value}
+              language={attributeLanguage(row.name) ?? 'tokens'}
+              ariaLabel={translate('componentProps.attributes.defaultValue', { number: index + 1 })}
+              placeholder={translate('componentProps.attributes.valuePlaceholder')}
+              readOnly={!editable.allowed}
+              onBlur={onLeave}
+              onChange={(value) => edit(index, { ...row, value })}
+            />
+          )}
           {editable.allowed && (
             <button
               type="button"

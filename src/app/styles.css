@@ -3042,6 +3042,11 @@ body > .embed-editor_provenance {
   background: var(--bg-input);
 }
 .bind-input:empty::before {
+/* The code editor's version of the field (CodeBindInput.tsx) is the .expr-input
+   inside it: this wrapper only carries focus and key events, so it takes no box. */
+.code-bind-input {
+  display: contents;
+}
   content: attr(data-placeholder);
   color: var(--text-faint);
   pointer-events: none;

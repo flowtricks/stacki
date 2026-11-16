@@ -165,6 +165,8 @@ export interface ExprInputProps {
   readonly invalid?: boolean;
   readonly multiline?: boolean;
   readonly wrap?: boolean;
+  /** Pasted line breaks become one space, as an input takes them; typing Enter already commits. */
+  readonly singleLine?: boolean;
   readonly className?: string;
   readonly chip?: string;
   readonly chipsOf?: ChipsOf | undefined;
@@ -273,6 +275,7 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
         ...((initial.wrap ?? true) ? [EditorView.lineWrapping] : []),
         cmPlaceholder(initial.placeholder ?? ''),
         exprEvents(refs),
+        ...(initial.singleLine === true ? [singleLinePaste] : []),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             if (!update.transactions.some(typedHere)) {
@@ -288,6 +291,21 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
     }),
   });
 }
+
+// A one-line field is shaped like an input, which never holds a line break: a
+// paste of several lines lands as one, the breaks and the space around them
+// folded to a single space.
+const singleLinePaste = EditorView.domEventHandlers({
+  paste: (event, view) => {
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (!/[\r\n]/.test(text)) {
+      return false;
+    }
+    event.preventDefault();
+    view.dispatch(view.state.replaceSelection(text.replace(/\s*[\r\n]+\s*/g, ' ')), { userEvent: 'input.paste', scrollIntoView: true });
+    return true;
+  },
+});
 
 function exprKeys(initial: ExprInputProps, refs: ExprRefs): readonly KeyBinding[] {
   if (initial.multiline) {

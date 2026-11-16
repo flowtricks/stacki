@@ -794,6 +794,8 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
           placeholder={translate('props.attributes.typeOrInsert')}
           bindContext={bindContext}
           dataContext={dataContext}
+          attributeName={state.draftName}
+          elementName={state.tag}
           wrapCode
           apiRef={bindApiRef}
           onChange={(next) => {

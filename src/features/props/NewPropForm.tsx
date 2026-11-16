@@ -23,6 +23,8 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { CloseIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import AutoTextarea from '../../ui/AutoTextarea';
+import CodeTextField from './CodeTextField';
+import { attributeLanguage } from '../../ui/attributeLanguage';
 import AssetField from '../../ui/AssetField';
 import Dropdown from '../../ui/Dropdown';
 import { assert } from '../../../shared/core/assert';
@@ -457,6 +459,30 @@ export function NumberSettingsEditor(props: { readonly settings: NumberSettings;
   );
 }
 
+// A default's value is code when its attribute's is (`sizes`, `onclick`): coloured as that, in the field it was.
+function AttributeDefaultValue(props: {
+  readonly name: string;
+  readonly value: string;
+  readonly ariaLabel: string;
+  readonly placeholder: string;
+  readonly onChange: (value: string) => void;
+}) {
+  const language = attributeLanguage(props.name);
+  if (language !== undefined) {
+    return <CodeTextField value={props.value} language={language} ariaLabel={props.ariaLabel} placeholder={props.placeholder} onChange={props.onChange} />;
+  }
+  return (
+    <input
+      className="new-prop-input"
+      aria-label={props.ariaLabel}
+      placeholder={props.placeholder}
+      spellCheck={false}
+      value={props.value}
+      onChange={(event) => props.onChange(event.target.value)}
+    />
+  );
+}
+
 /** An attributes prop's defaults: `name = value` rows, with + to add one. */
 export function AttributeDefaultsEditor(props: {
   readonly defaults: readonly AttributeDefault[];
@@ -478,13 +504,12 @@ export function AttributeDefaultsEditor(props: {
             onChange={(event) => set(index, { ...entry, name: event.target.value.replace(/[^\w@:.-]/g, '') })}
           />
           <span className="attr-eq">=</span>
-          <input
-            className="new-prop-input"
-            aria-label={translate('props.newProp.form.attributeValue')}
-            placeholder={translate('props.newProp.form.attributeValueHint')}
-            spellCheck={false}
+          <AttributeDefaultValue
+            name={entry.name}
             value={entry.value}
-            onChange={(event) => set(index, { ...entry, value: event.target.value })}
+            ariaLabel={translate('props.newProp.form.attributeValue')}
+            placeholder={translate('props.newProp.form.attributeValueHint')}
+            onChange={(value) => set(index, { ...entry, value })}
           />
           <button
             type="button"

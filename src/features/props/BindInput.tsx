@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import type { Part } from '../../editor/bindings';
+import type { Part, TemplateHole } from '../../editor/bindings';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { deleteChipAtCaret } from './chipKeys';
@@ -81,7 +81,7 @@ function readParts(host: HTMLElement): Part[] {
 
 export interface BindInputHandle {
   readonly insert: (path: string) => void;
-  readonly replace: (chip: Element | undefined, path: string) => void;
+  readonly replace: (chip: Element | TemplateHole | undefined, path: string) => void;
   readonly focus: () => void;
 }
 interface BindInputProps {
@@ -234,10 +234,12 @@ function bindHandle(state: BindState): BindInputHandle {
   };
 }
 
-function bindReplace(chipElement: Element | undefined, path: string, emit: () => void): void {
-  if (!chipElement) {
+function bindReplace(chip: Element | TemplateHole | undefined, path: string, emit: () => void): void {
+  // A hole is a chip of the code field (CodeBindInput.tsx), not of this one.
+  if (!chip || !('getAttribute' in chip)) {
     return;
   }
+  const chipElement = chip;
   const full = chipElement.getAttribute('data-full');
   if (full) {
     // A chip reached through a `?` writes only its tail. Repointing it
