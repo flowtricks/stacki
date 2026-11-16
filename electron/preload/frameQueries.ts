@@ -5,7 +5,7 @@ import { receivePointQuery } from './framePointQuery';
 import { receiveOutlineMode } from './frameOutlineMode';
 import { receiveAppScroll, receiveAppWheel } from './frameAppScroll';
 import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
-import { hidePendingDelete, settlePendingDeletes } from './framePendingDelete';
+import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from './framePendingDelete';
 import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
 import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from './framePendingInsert';
 import { parseCanvasInsert } from '../../shared/page/canvasInsert';
@@ -122,7 +122,7 @@ const recordPayload = (x: unknown): x is Record<string, unknown> => typeof x ===
 // The app's questions and instructions, from its own window only.
 export function listenForQueries(): void {
   // After the patch has swapped the nodes and their stamps (see the listener's note).
-  document.addEventListener('avb:morphed', () => setTimeout(settlePendingDeletes, 0));
+  listenForPendingDeletes();
   // A reorder shown at once, and reconciled by the patch that follows (frameMove.ts).
   listenForCanvasMoves();
   // A palette pick drawn at once, and reconciled the same way (framePendingInsert.ts).
@@ -210,6 +210,7 @@ export function listenForQueries(): void {
     }
     if (data['type'] === 'avb:insert-revert') {
       revertCanvasInserts();
+      clearPendingDeletes();
       sendRects();
       return;
     }
