@@ -39,6 +39,8 @@ interface Definitions {
   readonly patterns: readonly ts.ObjectBindingPattern[];
   readonly container: ts.InterfaceDeclaration | ts.TypeLiteralNode | undefined;
   readonly advanced: boolean;
+  /** The runtime type's own declarations of the edited prop, written with its public one. */
+  readonly mirrors: readonly ts.PropertySignature[];
 }
 
 export function readComponentProperties(source: string): ComponentProperties {
@@ -256,7 +258,7 @@ function editCommonDefinition(definitions: Definitions, change: Exclude<Property
   const member = contracts.editable.get(name);
   assert(member !== undefined, 'An editable common property has a declaration');
   assert(propertyKey(member.name) === name, 'The edit targets the requested declaration');
-  const common = { ...definitions, members: [member] };
+  const common = { ...definitions, members: [member], mirrors: contracts.mirrors.get(name) ?? [] };
   if (change.kind === 'remove') {
     return removeDefinition(common, name);
   }
@@ -304,6 +306,7 @@ function readDefinitions(source: string): Definitions {
     bindings,
     container,
     advanced,
+    mirrors: [],
   };
 }
 
@@ -400,7 +403,12 @@ function declarationEdits(
     // Options kept in a same-file alias are written there, so the alias stays the one place they live.
     const alias = optionAliasOf(definitions.document.syntax, member);
     const target = alias !== undefined && literalOptions(property.type) !== undefined ? alias.declaration.type : member.type;
-    return ok(memberEdits(definitions.document.frontmatter, member, previous, property, target));
+    // The runtime type states the prop again: it takes the same name, type and
+    // required mark, but keeps its own tooltip, which this save did not write.
+    const mirrored = definitions.mirrors.flatMap((mirror) =>
+      memberEdits(definitions.document.frontmatter, mirror, { ...previous, description: property.description }, property),
+    );
+    return ok([...memberEdits(definitions.document.frontmatter, member, previous, property, target), ...mirrored]);
   }
   if (previous !== undefined && sameDeclaration(previous, property)) {
     return ok([]);
@@ -546,7 +554,9 @@ function removeDefinition(definitions: Definitions, name: string): Result<string
   if (!member && !binding) {
     return err(refusal('missing', 'props.edit.notFound'));
   }
-  const edits: SourceEdit[] = member ? [{ start: member.getFullStart(), end: member.end, text: '' }] : [];
+  const edits: SourceEdit[] = [member, ...definitions.mirrors].flatMap((declared) =>
+    declared ? [{ start: declared.getFullStart(), end: declared.end, text: '' }] : [],
+  );
   if (binding) {
     const pattern = definitions.patterns.find((item) => item.elements.includes(binding));
     assert(pattern !== undefined, 'A prop binding belongs to an Astro.props pattern');

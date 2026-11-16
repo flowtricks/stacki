@@ -617,9 +617,8 @@ test('ambiguous common declarations remain restricted without flattening their c
     'export type Base = { eyebrow?: string }; type Props = Base;',
     'type Props = { [Key in "eyebrow" | "other"]?: string } & { eyebrow?: string };',
     'import type { Theme } from "./shared"; type Props = { a?: string } & { eyebrow?: Theme };',
-    'type Props = { eyebrow?: string }; type AllProps = { eyebrow?: string };',
   ]) {
-    const assertion = declaration.includes('type AllProps') ? ' as AllProps' : '';
+    const assertion = '';
     const source = `---\n${declaration}\nconst { eyebrow } = Astro.props${assertion};\n---\n`;
     const eyebrow = readComponentProperties(source).properties.find((property) => property.name === 'eyebrow');
     assert.equal(eyebrow.editing.kind, 'restricted', declaration);
@@ -1137,4 +1136,55 @@ test('the undo store keeps at most LIMITS.undoEntriesMax batches, oldest out fir
     store.record([]);
   }
   assert.equal(store.take(first), undefined, 'the oldest went');
+});
+
+// Goal: a prop the public Props type and the runtime `as AllProps` type both declare is
+// editable, and a save writes both declarations, the destructure default and every
+// usage together.
+// Method: the Lumos Button's shape (a Props intersection beside a flat AllProps), saved
+// through each field, renamed and removed; plus the shapes the writer cannot keep in
+// step (a runtime type that omits the prop or states it per variant) stay read-only.
+const mirrored = `---
+type Kind = { variant?: "main" } | { variant: "link" };
+type Props = {
+  /** Set to \`false\` to omit. */
+  render?: boolean;
+} & Kind;
+type AllProps = {
+  render?: boolean;
+  variant?: "main" | "link";
+};
+const { render = true, variant = "main" } = Astro.props as AllProps;
+---
+{render && <b>{variant}</b>}`;
+
+test('a prop declared in both the public and the runtime type is editable and written in both', () => {
+  const render = readComponentProperties(mirrored).properties.find((property) => property.name === 'render');
+  assert.deepEqual(render.editing, { kind: 'editable' });
+  const saved = value(
+    editPropertyDefinition(mirrored, {
+      kind: 'save',
+      originalName: 'render',
+      property: { ...render, type: 'boolean | undefined', required: true, defaultValue: 'false', description: 'Show it' },
+    }),
+  );
+  assert.equal((saved.match(/render: boolean \| undefined/g) ?? []).length, 2, 'both declarations take the type and required mark');
+  assert.match(saved, /render = false/);
+  assert.match(saved, /Show it/);
+  assert.equal((saved.match(/Show it/g) ?? []).length, 1, 'the tooltip is written once, on the public type');
+  assert.match(saved, /variant\?: "main" \| "link"/, 'neighbours are untouched');
+  const renamed = value(editPropertyDefinition(mirrored, { kind: 'save', originalName: 'render', property: { ...render, name: 'visible' } }));
+  assert.equal((renamed.match(/visible\?: boolean/g) ?? []).length, 2);
+  assert.match(renamed, /\{visible &&/);
+  assert.doesNotMatch(renamed, /render/);
+  const removed = value(editPropertyDefinition(mirrored.replace('{render && <b>{variant}</b>}', '<b>{variant}</b>'), { kind: 'remove', name: 'render' }));
+  assert.doesNotMatch(removed, /render/, 'both declarations and the default go');
+});
+
+test('a runtime type that omits the prop or states it per variant keeps it read-only', () => {
+  for (const runtime of ['type AllProps = { variant?: string };', 'type AllProps = { render?: boolean; variant: "a" } | { render: boolean; variant: "b" };']) {
+    const source = `---\ntype Props = { render?: boolean; variant?: string };\n${runtime}\nconst { render = true } = Astro.props as AllProps;\n---\n`;
+    const render = readComponentProperties(source).properties.find((property) => property.name === 'render');
+    assert.equal(render.editing.kind, 'restricted', runtime);
+  }
 });

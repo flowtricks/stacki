@@ -13,24 +13,31 @@
 
 import { assert } from '../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
-import { propsInterfaceBody, propsPattern, readPropsDestructure } from './loopProps';
+import { propsPattern, readPropsDestructure, typeDeclarationSpans } from './loopProps';
 
 /** The declared prop names nothing in the component reads. */
 export function unusedProps(source: string, names: readonly string[]): ReadonlySet<string> {
   assert(names.length <= PROPERTY_LIMITS.fieldsMax, 'unusedProps: property count is bounded');
-  if (source.length > PROPERTY_LIMITS.sourceCharsMax) {
+  const { frontmatter, body } = split(source);
+  const destructure = readPropsDestructure(frontmatter);
+  // Props read through something this scan does not follow (`const props = Astro.props`,
+  // a call, a spread of the whole object) are unknown, not unused: no warning.
+  if (destructure === undefined && /Astro\.props(?!\s*\.\s*[\w$]|\s*\[)/.test(withoutDeclarations(frontmatter) + markupExpressions(body).join('\n'))) {
     return new Set();
   }
-  const { frontmatter, body } = split(source);
-  const locals = new Map((readPropsDestructure(frontmatter)?.entries ?? []).map((entry) => [entry.key, entry.local]));
+  const locals = new Map((destructure?.entries ?? []).map((entry) => [entry.key, entry.local]));
   const reading = `${withoutDeclarations(frontmatter)}\n${markupExpressions(body).join('\n')}`;
+  // A prop the destructure leaves to `...rest` is read wherever the rest is.
+  const pattern = propsPattern(frontmatter);
+  const restLocal = pattern === undefined ? undefined : /\.\.\.\s*([A-Za-z_$][\w$]*)/.exec(frontmatter.slice(pattern.from, pattern.to))?.[1];
+  const restRead = restLocal !== undefined && identifierIn(reading, restLocal);
   const unused = new Set<string>();
   for (const name of names) {
     const local = locals.get(name);
     // A prop the destructure does not read may still be read as `Astro.props.name`.
     const used =
       local === undefined
-        ? !/^[A-Za-z_$][\w$]*$/.test(name) || new RegExp(`Astro\\.props\\s*(\\.\\s*${name}\\b|\\[\\s*["']${name}["']\\s*\\])`).test(source)
+        ? restRead || !/^[A-Za-z_$][\w$]*$/.test(name) || new RegExp(`Astro\\.props\\s*(\\.\\s*${name}\\b|\\[\\s*["']${name}["']\\s*\\])`).test(source)
         : identifierIn(reading, local);
     if (!used) {
       unused.add(name);
@@ -48,10 +55,10 @@ function split(source: string): { readonly frontmatter: string; readonly body: s
   return { frontmatter: match[1] ?? '', body: source.slice(match[0].length) };
 }
 
-// The frontmatter without `interface Props` and the destructure pattern, which
-// name every prop without reading it; comments go too.
+// The frontmatter without its `type` and `interface` declarations and the
+// destructure pattern, which name every prop without reading it; comments go too.
 function withoutDeclarations(frontmatter: string): string {
-  const spans = [propsInterfaceBody(frontmatter), propsPattern(frontmatter)].filter((node) => node !== undefined);
+  const spans = [...typeDeclarationSpans(frontmatter), propsPattern(frontmatter)].filter((node) => node !== undefined);
   let out = frontmatter;
   for (const span of [...spans].sort((left, right) => right.from - left.from)) {
     out = `${out.slice(0, span.from)}${' '.repeat(span.to - span.from)}${out.slice(span.to)}`;

@@ -52,3 +52,28 @@ test('a property of another value, a style block and Astro.props reads', () => {
   const direct = file('interface Props { heading?: string }', '<h1>{Astro.props.heading}</h1>');
   assert.deepEqual(unused(direct, ['heading', 'missing']), ['missing']);
 });
+
+// The Lumos starter's Button reads `Astro.props as AllProps`: a cast destructure
+// source must still be found, or every prop looks unread and the whole panel warns.
+const castSource = (initializer) =>
+  file(
+    `type AllProps = { render?: boolean; variant?: string; label?: string; unusedOne?: string };\nconst {\n  render = true,\n  variant = "main",\n  label,\n  unusedOne,\n  class: className,\n  ...rest\n} = ${initializer};`,
+    '{render && (variant === "play" ? <b class:list={["a", className]} aria-label={label} {...rest} /> : true)}',
+  );
+
+for (const initializer of ['Astro.props as AllProps', '(Astro.props as AllProps)', 'Astro.props satisfies AllProps', '<AllProps>Astro.props']) {
+  test(`a destructure of ${initializer} still finds what is read`, () => {
+    assert.deepEqual(unused(castSource(initializer), ['render', 'variant', 'label', 'unusedOne', 'class']), ['unusedOne']);
+  });
+}
+
+test('a component whose props destructure cannot be located reports nothing unused', () => {
+  const source = file('const props = Astro.props;\nconst { a } = props.nested;', '<p>{props.a}</p>');
+  assert.deepEqual(unused(source, ['a', 'b']), [], 'unknown is not unused');
+});
+
+test('a declared prop left to ...rest is read where the rest is', () => {
+  const source = file('const { label, ...rest } = Astro.props;', '<a {...rest}>{label}</a>');
+  assert.deepEqual(unused(source, ['label', 'title']), []);
+  assert.deepEqual(unused(file('const { label, ...rest } = Astro.props;', '<a>{label}</a>'), ['label', 'title']), ['title']);
+});

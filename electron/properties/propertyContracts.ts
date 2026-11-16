@@ -31,12 +31,16 @@ interface Contract {
 export interface PropertyContracts {
   readonly names: ReadonlySet<string>;
   readonly editable: ReadonlyMap<string, ts.PropertySignature>;
+  /** Per editable prop, the runtime assertion's own declarations of it: written together with the public one. */
+  readonly mirrors: ReadonlyMap<string, readonly ts.PropertySignature[]>;
   readonly editing: (name: string) => PropertyEditing;
   readonly conditions: (name: string) => readonly Described[];
 }
 
-// A common member must be the same declaration in both the public contract and
-// the runtime assertion. Editing it then preserves every variant and runtime type.
+// A common member is one declaration in the public contract. When the runtime
+// assertion (`Astro.props as AllProps`) declares it again as its own member,
+// that declaration is a mirror: an edit writes both, so the two types cannot
+// drift apart. Editing it preserves every variant and runtime type.
 export function readPropertyContracts(document: PropertySyntax): PropertyContracts {
   const declarations = new Map<string, Declaration>();
   for (const statement of document.syntax.statements) {
@@ -56,21 +60,25 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
   const runtimeContracts = assertions.map((node) => readContract(node.type, declarations, attributes, imports));
   const contracts = [publicContract, ...runtimeContracts];
   const editable = new Map<string, ts.PropertySignature>();
+  const mirrors = new Map<string, readonly ts.PropertySignature[]>();
   const reasons = new Map<string, Described>();
   for (const [name, usages] of publicContract.members) {
     const member = usages[0]?.member;
     assert(member !== undefined, 'Contract field has a declaration');
-    const reason = commonMemberRestriction(name, publicContract, runtimeContracts) ?? memberTypeRestriction(member, declarations, imports);
+    const common = commonMember(name, publicContract, runtimeContracts);
+    const reason = common.reason ?? memberTypeRestriction(member, declarations, imports);
     if (reason) {
       reasons.set(name, reason);
     } else {
       editable.set(name, member);
+      mirrors.set(name, common.mirrors);
     }
   }
   assert(editable.size <= PROPERTY_LIMITS.fieldsMax, 'Editable contract fields are bounded');
   return {
     names: new Set(contracts.flatMap((contract) => [...contract.names])),
     editable,
+    mirrors,
     editing: (name) =>
       editable.has(name)
         ? { kind: 'editable' }
@@ -90,6 +98,7 @@ function unavailableContracts(reason: Described): PropertyContracts {
   return {
     names: new Set(),
     editable: new Map(),
+    mirrors: new Map(),
     editing: () => withReason('restricted', reason),
     conditions: () => [],
   };
@@ -103,25 +112,40 @@ function inheritedAttributeCanOverride(name: string, contracts: readonly Contrac
   return contracts.every((contract) => contract.inheritedAttributes && !contract.members.has(name));
 }
 
-function commonMemberRestriction(name: string, contract: Contract, runtimeContracts: readonly Contract[]): Described | undefined {
+// Why a public member cannot be edited, or the runtime declarations that
+// mirror it. A runtime type that states the prop once, outside any variant, is
+// a mirror; one that omits it, is computed or states it per variant is not
+// something the writer can keep in step, so the prop stays read-only.
+function commonMember(
+  name: string,
+  contract: Contract,
+  runtimeContracts: readonly Contract[],
+): { readonly reason: Described | undefined; readonly mirrors: readonly ts.PropertySignature[] } {
   const usages = contract.members.get(name) ?? [];
   if (usages.some((usage) => usage.conditional)) {
-    return described('props.contract.variantRules');
+    return { reason: described('props.contract.variantRules'), mirrors: [] };
   }
   if (new Set(usages.map((usage) => usage.member)).size !== 1) {
-    return described('props.contract.separateDeclarations');
+    return { reason: described('props.contract.separateDeclarations'), mirrors: [] };
   }
   if (!contract.complete) {
-    return described('props.contract.computedType');
+    return { reason: described('props.contract.computedType'), mirrors: [] };
   }
   const member = usages[0]?.member;
+  const mirrors = new Set<ts.PropertySignature>();
   for (const runtime of runtimeContracts) {
     const matches = runtime.members.get(name) ?? [];
-    if (!runtime.complete || matches.length === 0 || matches.some((match) => match.member !== member || match.conditional)) {
-      return described('props.contract.runtimeType');
+    if (!runtime.complete || new Set(matches.map((match) => match.member)).size !== 1 || matches.some((match) => match.conditional)) {
+      return { reason: described('props.contract.runtimeType'), mirrors: [] };
+    }
+    const match = matches[0]?.member;
+    assert(match !== undefined, 'A runtime member has a declaration');
+    if (match !== member) {
+      mirrors.add(match);
     }
   }
-  return undefined;
+  assert(mirrors.size <= runtimeContracts.length, 'Mirrors come from the runtime contracts');
+  return { reason: undefined, mirrors: [...mirrors] };
 }
 
 // A member whose own type is defined elsewhere or computed: its options (or
