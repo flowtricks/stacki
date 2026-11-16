@@ -261,8 +261,8 @@ const check = (what, condition, detail) => {
           JSON.stringify(heading),
         );
         check(
-          `${name}: header "${heading.text}" has ${heading.afterBase ? 16 : 12}px above and 4px below`,
-          Math.abs(heading.above - (heading.afterBase ? 16 : 12)) <= 1 && Math.abs(heading.below - 4) <= 1,
+          `${name}: header "${heading.text}" has 16px above and 4px below`,
+          Math.abs(heading.above - 16) <= 1 && Math.abs(heading.below - 4) <= 1,
           JSON.stringify(heading),
         );
       }
@@ -273,7 +273,7 @@ const check = (what, condition, detail) => {
     check('Other has the same left edge as the Grid header', Math.abs(grid.leadLeft - other.leadLeft) <= 1, JSON.stringify([grid.leadLeft, other.leadLeft]));
     check(
       'Other has the same spacing as the Grid header',
-      Math.abs(grid.below - other.below) <= 1 && Math.abs(grid.above - other.above - 4) <= 1,
+      Math.abs(grid.below - other.below) <= 1 && Math.abs(grid.above - other.above) <= 1,
       JSON.stringify([grid.above, other.above]),
     );
     check('the list is flat: no group cards', out.typical900.cards === 0, `${out.typical900.cards} cards`);
