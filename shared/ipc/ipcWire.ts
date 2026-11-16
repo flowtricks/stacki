@@ -308,6 +308,7 @@ export type WireSchemaField = {
   readonly doc?: undefined | string;
   readonly shape?: ReadonlyArray<WirePropShapeField>;
   readonly shapeIsList?: boolean;
+  readonly itemKind?: 'text' | 'number' | 'switch' | 'choice';
   readonly unions?: undefined | ReadonlyArray<WirePropUnion>;
   readonly min?: number;
   readonly max?: number;

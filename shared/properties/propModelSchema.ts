@@ -8,7 +8,7 @@
 
 import { assert } from '../core/assert';
 import { LIMITS } from '../core/limits';
-import type { CodeKind, PropDefault, PropShapeField, PropUnion } from './propSchema';
+import type { CodeKind, PropDefault, PropItemKind, PropShapeField, PropUnion } from './propSchema';
 import type { ComponentPropModel, PropControl, PropMember, PropModel, PropUsage } from './propModel';
 
 /** The schema's own word for each kind of value a field takes. */
@@ -35,6 +35,7 @@ export interface ModelSchemaField {
   readonly maxExclusive?: boolean;
   readonly shape?: readonly PropShapeField[];
   readonly shapeIsList?: boolean;
+  readonly itemKind?: PropItemKind;
   readonly unions?: readonly PropUnion[] | undefined;
   // The `@deprecated` text ('' for the bare tag); absent when the prop is not deprecated.
   readonly deprecated?: string;
@@ -132,7 +133,10 @@ function schemaFieldOf(prop: PropModel, unions: readonly PropUnion[]): ModelSche
 
 function declaredField(prop: PropModel, type: SchemaFieldType, codeKind: CodeKind | undefined, unions: readonly PropUnion[]): ModelSchemaField {
   const control = prop.control;
-  const choice = control.kind === 'choice' ? control : undefined;
+  // A list of plain values states its items' kind; a list of choices lists the words.
+  const items = control.kind === 'list' ? control.item : undefined;
+  const choice = control.kind === 'choice' ? control : items?.kind === 'choice' ? items : undefined;
+  const itemKind = items === undefined ? undefined : itemKindOf(items);
   const written =
     choice === undefined || choice.numeric ? [] : choice.options.filter((option) => option.written === 'expression').map((option) => option.value);
   const shape = shapeOf(control, 1);
@@ -148,14 +152,39 @@ function declaredField(prop: PropModel, type: SchemaFieldType, codeKind: CodeKin
     ...(codeKind === undefined ? {} : typed ? { codeKind, typeText: shownTypeText(prop.typeText) } : { codeKind }),
     optional: prop.presence === 'optional',
     ...(shape === undefined ? {} : { shape: shape.fields, shapeIsList: shape.list }),
+    ...(itemKind === undefined ? {} : { itemKind }),
     default: undefined,
     doc: prop.documentation === '' ? undefined : prop.documentation,
-    ...(control.kind === 'number' ? numberKeys(control) : {}),
+    ...(control.kind === 'number' ? numberKeys(control) : items?.kind === 'number' ? numberKeys(items) : {}),
     // The union shapes this component declares, so the panel can show only the
     // branch that matches what's set. The same table on every field: it
     // describes the type, not the prop.
     unions: unions.length > 0 ? unions : undefined,
   };
+}
+
+// The kind of a list's items when they are plain values, as the editor names it.
+function itemKindOf(item: PropControl): PropItemKind | undefined {
+  switch (item.kind) {
+    case 'text':
+      return 'text';
+    case 'number':
+      return 'number';
+    case 'switch':
+      return 'switch';
+    case 'choice':
+      return 'choice';
+    case 'attributes':
+    case 'list':
+    case 'group':
+    case 'callback':
+    case 'code':
+      return undefined;
+    default: {
+      const exhaustive: never = item;
+      return exhaustive;
+    }
+  }
 }
 
 function undeclaredField(prop: PropModel, type: SchemaFieldType, codeKind: CodeKind | undefined): ModelSchemaField {

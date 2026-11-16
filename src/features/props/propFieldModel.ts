@@ -134,7 +134,7 @@ export function isBoundValue(field: FieldDefinition, value: Attr | undefined) {
     return objectFields(source) === undefined;
   }
   if (field.type === 'code') {
-    return arrayItems(source) === undefined;
+    return arrayItems(source, 0, 'bindable') === undefined;
   }
   return true;
 }
@@ -159,7 +159,7 @@ export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undef
   }
   // An array of plain items survives the trip: the list can show it, so going
   // back to the control keeps the value rather than dropping the prop.
-  if (field.type === 'code' && arrayItems(source)) {
+  if (field.type === 'code' && arrayItems(source, 0, 'bindable')) {
     return { type: 'expr', value: source };
   }
   return undefined;

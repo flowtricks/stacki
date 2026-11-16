@@ -43,6 +43,13 @@ export interface PropShapeField {
 // a function (an action) or a type no field can fill in (`any`, a promise).
 export const CODE_KINDS = ['object', 'function', 'opaque'] as const;
 export type CodeKind = (typeof CODE_KINDS)[number];
+/**
+ * What each item of a list prop is when its type says so (`widths: number[]`,
+ * `Array<string>`, `("a" | "b")[]`): the editor draws every item with that kind's control.
+ * Absent for a list of objects (its `shape` says) and for one whose type does not say.
+ */
+export const PROP_ITEM_KINDS = ['text', 'number', 'switch', 'choice'] as const;
+export type PropItemKind = (typeof PROP_ITEM_KINDS)[number];
 export interface PropField {
   readonly name: string;
   // Type text stays open: local schema readers may retain the authored type name.
@@ -69,6 +76,8 @@ export interface PropField {
   readonly maxExclusive?: boolean;
   readonly shape?: readonly PropShapeField[];
   readonly shapeIsList?: boolean;
+  // The kind of each item of a list prop whose items are plain values; a choice's words are `options`.
+  readonly itemKind?: PropItemKind;
   readonly unions?: readonly PropUnion[];
   // The prop's `@deprecated` notice ('' for the bare tag); absent when it is not deprecated.
   readonly deprecated?: string;
@@ -95,6 +104,7 @@ export function parseField(input: unknown, where: string): PropField {
       options: schemaOptional(value, 'options', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
       expressionOptions: schemaOptional(value, 'expressionOptions', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
       codeKind: schemaOptional(value, 'codeKind', where, schemaCodeKind),
+      itemKind: schemaOptional(value, 'itemKind', where, schemaItemKind),
       usage: schemaOptional(value, 'usage', where, schemaUsage),
       shape: schemaOptional(value, 'shape', where, (input, at) => schemaShape(input, at, 1, shapeBudget())),
       unions: schemaOptional(value, 'unions', where, (input, at) => schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at))),
@@ -229,6 +239,13 @@ function schemaCodeKind(input: unknown, where: string): CodeKind {
   const kind = CODE_KINDS.find((candidate) => candidate === input);
   if (kind === undefined) {
     fail(where, `expected one of ${CODE_KINDS.join(', ')}`);
+  }
+  return kind;
+}
+function schemaItemKind(input: unknown, where: string): PropItemKind {
+  const kind = PROP_ITEM_KINDS.find((candidate) => candidate === input);
+  if (kind === undefined) {
+    fail(where, `expected one of ${PROP_ITEM_KINDS.join(', ')}`);
   }
   return kind;
 }

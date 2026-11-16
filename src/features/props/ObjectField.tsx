@@ -66,7 +66,7 @@ function ObjectRowControl({ field, onChange }: RowProps) {
       <ListField
         value={arrayText(field.items)}
         onChange={(text, immediate) => {
-          const items = arrayItems(text);
+          const items = arrayItems(text, 0, 'bindable');
           assert(items !== undefined, 'ObjectField: list editor produces an array literal');
           onChange({ ...field, items }, { immediate: immediate !== false });
         }}

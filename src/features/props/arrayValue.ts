@@ -269,7 +269,7 @@ function splitTop(body: string): string[] | undefined {
  * empty array is an empty list, which is not the same as undefined: one is a list
  * with nothing in it, the other is not a list.
  */
-export function arrayItems(source: unknown, nesting = 0): Item[] | undefined {
+export function arrayItems(source: unknown, nesting = 0, mode: ItemMode = 'literal'): Item[] | undefined {
   assert(nesting <= NESTING_DEPTH_MAX, 'arrayItems: a list nests within its bound');
   const text = String(source ?? '').trim();
   if (!text.startsWith('[') || !text.endsWith(']')) {
@@ -290,13 +290,38 @@ export function arrayItems(source: unknown, nesting = 0): Item[] | undefined {
       }
       return undefined;
     }
-    const item = itemFrom(part, nesting);
+    const item = itemFrom(part, nesting) ?? (mode === 'bindable' ? scalarCodeFrom(part) : undefined);
     if (!item) {
       return undefined;
     }
     items.push(item);
   }
   return items;
+}
+
+/**
+ * What an item that is not a literal counts as. `literal`: nothing, so a list
+ * with an item bound to data is a program the list editor leaves alone (every
+ * caller that reads items as words, options and defaults). `bindable`: one
+ * value of code (`card.width`, `format(date)`, `true`), so each item of a list
+ * can be bound as any field is; a spread, a hole, an object or a list inside
+ * is still a program.
+ */
+export type ItemMode = 'literal' | 'bindable';
+
+// An item's value as code, written back exactly as it reads.
+function scalarCodeFrom(source: string): ScalarItem | undefined {
+  const text = source.trim();
+  if (text === '' || text.startsWith('...') || text.startsWith('{') || text.startsWith('[')) {
+    return undefined;
+  }
+  assert(text.length <= LIMITS.attrCharsMax, 'scalarCodeFrom: an item is bounded');
+  return { text, quote: undefined };
+}
+
+/** Whether a scalar item is code (data or an expression) rather than a word, a number or a yes/no. */
+export function itemHoldsCode(item: Item): boolean {
+  return item.fields === undefined && item.quote === undefined && item.text !== 'true' && item.text !== 'false' && !NUMBER_TEXT.test(item.text);
 }
 
 /** How a string is written back, in the quote it was written with. */

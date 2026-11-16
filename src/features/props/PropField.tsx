@@ -130,7 +130,7 @@ function propFieldControl(view: PropControlState) {
   if (type === 'code' && !showExpr && valueText && objectFields(valueText)) {
     return <ObjectControl state={view} />;
   }
-  if (type === 'code' && !showExpr && (value === undefined || arrayItems(valueText))) {
+  if (type === 'code' && !showExpr && (value === undefined || arrayItems(valueText, 0, 'bindable'))) {
     return <ListControl state={view} />;
   }
   if (isExpr) {

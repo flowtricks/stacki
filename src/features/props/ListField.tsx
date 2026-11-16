@@ -3,7 +3,7 @@ import { itemFieldTitle } from '../../editor/itemFields';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
-import type { Item, ItemField } from './arrayValue';
+import type { Item, ItemField, ScalarItem } from './arrayValue';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { PlusIcon, CloseIcon, ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
@@ -12,6 +12,8 @@ import type { PickedAsset } from '../../ui/AssetField';
 import { allowDragEffect } from '../../editor/dragState';
 import { arrayItems, arrayText, blankLike, itemLabel, moveItem, nestedItems } from './arrayValue';
 import type { SourceContext } from './bindingTypes';
+import ListScalarItem from './ListScalarItem';
+import { defaultItemOf, kindOfItem, listItemKindOf, type DeclaredItemType, type ListItemKind } from './listItemType';
 import { blankItemOf, conformedItem, itemFieldDeclaration, itemFieldDefinition, itemFieldOf, itemFieldValue, type ItemShapeField } from './listItemShape';
 import PropField from './PropField';
 import type { RichContext } from './RichContent';
@@ -72,10 +74,9 @@ function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext,
     }
   }, [ref]);
 
-  // A word is one field called Value; an object is its own fields, named as the
-  // file names them (every declared one, when the component declares them).
-  // Either way the popup is a list of labelled fields, so there is one thing
-  // to learn rather than two.
+  // An object item is its own fields, named as the file names them (every
+  // declared one, when the component declares them). A plain value is edited in
+  // its row (ListScalarItem.tsx), never here.
   const item = conformedItem(given, shape, '"');
   const fields = item.fields;
   return (
@@ -86,27 +87,23 @@ function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext,
       onKeyDown={(event) => closeOnEnter(event, onClose)}
     >
       <div className="var-src-head">
-        <span className="var-src-name">{item.fields ? translate('props.list.item') : translate('props.list.value')}</span>
+        <span className="var-src-name">{translate('props.list.item')}</span>
         <span style={{ flex: 1 }} />
         <button className="ghost" title={translate('ui.close')} onClick={onClose}>
           <CloseIcon size={12} />
         </button>
       </div>
-      {fields === undefined ? (
-        <WordItemInput text={item.text} onSet={(text) => onChange({ ...item, text })} />
-      ) : (
-        fields.map((field, at) => (
-          <ItemFieldControl
-            key={field.key}
-            field={field}
-            declaration={itemFieldDeclaration(field, shape)}
-            projectPath={projectPath}
-            bindContext={bindContext}
-            dataContext={dataContext}
-            onSet={(next) => onChange({ fields: fields.map((own, index) => (index === at ? next : own)) })}
-          />
-        ))
-      )}
+      {fields?.map((field, at) => (
+        <ItemFieldControl
+          key={field.key}
+          field={field}
+          declaration={itemFieldDeclaration(field, shape)}
+          projectPath={projectPath}
+          bindContext={bindContext}
+          dataContext={dataContext}
+          onSet={(next) => onChange({ fields: fields.map((own, index) => (index === at ? next : own)) })}
+        />
+      ))}
     </div>
   );
 }
@@ -288,24 +285,6 @@ function heldDraft(value: Attr | undefined, kind: ItemShapeField['kind']): Attr 
   return value;
 }
 
-// A list of words holds no fields to bind: an item that is code is a program
-// rather than a row (arrayValue.ts), so its one field stays a box for words.
-function WordItemInput(props: { readonly text: string; readonly onSet: (text: string) => void }) {
-  const translate = useTranslate();
-  return (
-    <label className="list-item-field">
-      <span>value</span>
-      <input
-        value={props.text}
-        aria-label={translate('props.list.value')}
-        spellCheck={false}
-        maxLength={LIMITS.attrCharsMax}
-        onChange={(event) => props.onSet(event.target.value)}
-      />
-    </label>
-  );
-}
-
 function useListEditorDismiss(trigger: HTMLElement, onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -365,6 +344,8 @@ interface ListFieldProps {
   readonly valueCharsMax?: number;
   /** The fields every item has, when the component declares them. */
   readonly itemShape?: readonly ItemShapeField[] | undefined;
+  /** What each item is, when the component declares plain items (`number[]`): rows take that kind's control. */
+  readonly itemType?: DeclaredItemType | undefined;
   /** The items shown, dimmed, while no value is set: the component's default list. */
   readonly fallback?: string | undefined;
   /** The project, for an image field's asset card. */
@@ -416,7 +397,9 @@ export default function ListField(props: ListFieldProps) {
         className="list-field-add"
         disabled={state.disabled || state.items.length >= state.itemsMax}
         onClick={(event) => {
-          if (state.editor.kind === 'pending') {
+          if (state.inline) {
+            state.addInline();
+          } else if (state.editor.kind === 'pending') {
             state.closePending();
           } else {
             state.openAt(event, undefined, state.blank());
@@ -458,9 +441,9 @@ function useItemsScroll(count: number) {
 function useListField(props: ListFieldProps) {
   const { value, onChange, disabled = false, itemsMin = 0, itemsMax = LIMITS.scanEntriesMax, valueCharsMax = LIMITS.attrCharsMax, itemShape } = props;
   assert((value?.length ?? 0) <= valueCharsMax, 'ListField: value limit exceeded');
-  const own = arrayItems(value);
+  const own = arrayItems(value, 0, 'bindable');
   // Nothing set: the component's default items stand in, and the first change writes from them.
-  const fallbackItems = own === undefined && (value ?? '').trim() === '' ? arrayItems(props.fallback) : undefined;
+  const fallbackItems = own === undefined && (value ?? '').trim() === '' ? arrayItems(props.fallback, 0, 'bindable') : undefined;
   const fallback = fallbackItems !== undefined && fallbackItems.length > 0;
   const items = own || fallbackItems || [];
   assert(items.length <= itemsMax, 'ListField: item count limit exceeded');
@@ -504,14 +487,29 @@ function useListField(props: ListFieldProps) {
     );
   };
   // The next item: shaped as the component declares its items, else like the ones already there.
+  const quote = items.find((item) => item.quote)?.quote ?? items.flatMap((item) => item.fields ?? []).find((field) => field.quote)?.quote ?? '"';
+  const kind = listItemKindOf(props.itemType, items, itemShape);
+  // Plain values are edited in their rows, so a new one is made at once, typed as the list's are.
+  const inline = kind !== 'object' && !items.some((item) => item.fields !== undefined);
   const blank = (): Item => {
-    const quote = items.find((item) => item.quote)?.quote ?? items.flatMap((item) => item.fields ?? []).find((field) => field.quote)?.quote ?? '"';
+    if (inline) {
+      return defaultItemOf(kind, props.itemType, quote);
+    }
     return itemShape !== undefined && itemShape.length > 0 ? blankItemOf(itemShape, quote) : blankLike(items);
+  };
+  const addInline = (): void => {
+    assert(inline, 'ListField: only a list of plain values is added to in place');
+    write([...items, blank()], { immediate: true, change: { kind: 'add' } });
   };
   return {
     items,
     fallback,
     blank,
+    inline,
+    addInline,
+    kind,
+    itemType: props.itemType,
+    quote,
     itemShape,
     projectPath: props.projectPath,
     bindContext: props.bindContext,
@@ -626,11 +624,35 @@ function ListRow({ item, index, state }: { readonly item: Item; readonly index: 
       disabled={state.disabled}
       removeDisabled={state.disabled || state.items.length <= state.itemsMin}
       removeLabel={translate('props.list.removeItem', { item: itemLabel(item) || translate('props.list.item') })}
+      body={item.fields === undefined ? <ScalarRowBody item={item} index={index} state={state} /> : undefined}
       onOpen={(event) => toggleListRow(event, state, index, item)}
       onRemove={() => remove(index)}
     >
       {itemLabel(item) || <span className="list-field-blank">{translate('props.conditional.empty')}</span>}
     </ListFieldRow>
+  );
+}
+
+// A plain value edited where it stands: the control of the list's kind, or of the item's own kind in a list that has no one.
+function ScalarRowBody({ item, index, state }: { readonly item: ScalarItem; readonly index: number; readonly state: ListState }) {
+  const kind: ListItemKind = state.kind;
+  const rowKind = kind === 'text' || kind === 'number' || kind === 'switch' || kind === 'choice' ? kind : kindOfItem(item);
+  return (
+    <ListScalarItem
+      item={item}
+      index={index}
+      kind={rowKind}
+      declared={state.itemType}
+      quote={state.quote}
+      bindContext={state.bindContext}
+      dataContext={state.dataContext}
+      onChange={(next) =>
+        state.write(
+          state.items.map((own, at) => (at === index ? next : own)),
+          { immediate: false, change: { kind: 'edit', index } },
+        )
+      }
+    />
   );
 }
 
