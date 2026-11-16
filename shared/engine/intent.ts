@@ -114,6 +114,7 @@ export const REJECTION_REASONS = [
   'write-race',
   'merge-conflict',
   'invalid-placement',
+  'would-break-page',
 ] as const;
 
 export type RejectionReason = (typeof REJECTION_REASONS)[number];
@@ -166,6 +167,8 @@ export function describeRejection(reason: RejectionReason): string {
       return 'Your code edit overlaps another change to the file, so it was not merged.';
     case 'invalid-placement':
       return 'That change would put something where it cannot go and break the page, so nothing was written.';
+    case 'would-break-page':
+      return 'Stacki didn’t make this change because it would break the page.';
     default: {
       const exhaustive: never = reason;
       return exhaustive;

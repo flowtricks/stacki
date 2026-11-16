@@ -14,4 +14,5 @@ export const REJECTION_KEYS: Readonly<Record<RejectionReason, MessageKey>> = {
   'write-race': 'shell.rejection.writeRace',
   'merge-conflict': 'shell.rejection.mergeConflict',
   'invalid-placement': 'shell.rejection.invalidPlacement',
+  'would-break-page': 'editor.preflight.refused',
 };

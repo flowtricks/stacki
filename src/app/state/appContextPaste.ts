@@ -7,6 +7,8 @@
 
 import { useCallback } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { preflightVerdict } from '../../../shared/engine/preflight';
+import { preflightRefusalText } from '../../../shared/ipc/preflightMessages';
 import type { EditorNode } from '../../editor/pageView';
 import type { InsertPlace } from '../../editor/editGestures';
 import { planPaste, type PasteBundle, type PastePlan } from '../../editor/pasteDependencies';
@@ -85,6 +87,16 @@ export function useContextPaste(
       }
       const style = styleBlockFileSupported(targetPath) ? carriedStyleNode(bundle, settings, now.source) : undefined;
       const gesture = contextPasteGesture(now.model, { node: bundle.node, place, style }, withBundleFrontmatter(imports, bundle.statements));
+      // Pre-flight on the model the paste leaves (shared/engine/preflight.ts): the same check main runs
+      // on the bytes, here first so the reason is said exactly and in the person's language.
+      const verdict = preflightVerdict('insert-node', {
+        before: { path: targetPath, model: now.model },
+        after: { path: targetPath, model: gesture.apply(now.model) },
+      });
+      if (!verdict.ok) {
+        reportActionToast(preflightRefusalText(verdict.error.findings, translate), 'error', []);
+        return 'handled';
+      }
       if (!commitEdit(gesture)) {
         return 'handled';
       }

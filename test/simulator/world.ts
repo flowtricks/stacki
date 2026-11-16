@@ -525,6 +525,8 @@ class World {
       case 'disk-error':
         this.log(`  disk error for ${effect.intentId}`);
         return;
+      case 'preflight-refused':
+        throw new Error('Assertion failed: the simulator runs the actor without a pre-flight gate');
       case 'lock-leaked':
         throw new Error('Assertion failed: the fake disk never fails to release a lock');
       default: {

@@ -30,7 +30,7 @@
 // deliberate resubmission by the persistence layer.
 import { assert } from '../core/assert';
 import type { Digest, FilePath } from '../core/brand';
-import type { Intent, Outcome, RejectionReason, SubmissionResult } from './intent';
+import type { Intent, Operation, Outcome, RejectionReason, SubmissionResult } from './intent';
 import { LIMITS } from '../core/limits';
 import type { Plan, PlanningBase } from './planner';
 import { err, ok, type Result } from '../core/result';
@@ -91,10 +91,22 @@ export interface Projector {
   candidate(path: FilePath, base: Snapshot, plan: Plan, bytes: ByteString): Snapshot;
 }
 
+/**
+ * Pre-flight (shared/engine/preflight.ts, docs/error-proofing.md): the candidate checked before it
+ * is written. `refuse` carries the plain-language reason for the notice; anything else lets the
+ * write go ahead. Optional, so the simulator's actor runs the protocol alone.
+ */
+export type PreflightGate = (
+  base: Snapshot,
+  candidate: Snapshot,
+  operation: Operation,
+) => { readonly tag: 'pass' } | { readonly tag: 'refuse'; readonly message: string };
+
 export interface ActorDependencies {
   readonly disk: DocumentDisk;
   readonly planner: Planner;
   readonly projector: Projector;
+  readonly preflight?: PreflightGate;
 }
 
 // --- State -----------------------------------------------------------------------
@@ -148,6 +160,8 @@ export type ActorEffect =
   | ({ readonly tag: 'unchanged' } & InFlight)
   /** Why a disk call failed, for the rejection notice; never logged. */
   | { readonly tag: 'disk-error'; readonly intentId: Intent['id']; readonly message: string }
+  /** Why pre-flight held the write, in plain words, for the rejection notice; never logged. */
+  | { readonly tag: 'preflight-refused'; readonly intentId: Intent['id']; readonly message: string }
   /** The lock could not be released. The real disk breaks a lock whose owner is
    * gone, so this costs cooperating writers a `write-race`, never a deadlock. */
   | { readonly tag: 'lock-leaked'; readonly path: FilePath };
@@ -360,6 +374,12 @@ function stepIdle(state: ActorState, dependencies: ActorDependencies): ActorStep
   const candidate = checked.value;
   if (candidate.checksum === base.checksum) {
     return unchanged(current, { intent, base, plan, candidate }, parses + 1, earlier);
+  }
+  const verdict = dependencies.preflight?.(base, candidate, intent.operation) ?? { tag: 'pass' };
+  if (verdict.tag === 'refuse') {
+    assert(verdict.message.length > 0, 'A pre-flight refusal says why');
+    const refused: ActorEffect = { tag: 'preflight-refused', intentId: intent.id, message: verdict.message };
+    return reject(current, intent, 'would-break-page', parses + 1, [...earlier, refused]);
   }
   const phase: ActorPhase = { tag: 'planned', intent, base, plan, candidate };
   return { state: { ...current, phase }, effects: earlier, parses: parses + 1 };

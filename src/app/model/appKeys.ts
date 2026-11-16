@@ -276,6 +276,7 @@ function rejectionToastKind(reason: RejectionReason): UndoRefusal['kind'] {
     case 'write-race':
     case 'merge-conflict':
       return 'warning';
+    case 'would-break-page':
     case 'unsupported-operation':
     case 'write-failed':
     case 'invalid-placement':

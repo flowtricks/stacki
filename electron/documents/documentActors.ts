@@ -52,6 +52,7 @@ import { encodeUtf8, toByteSpan } from '../../shared/core/span';
 import { planIntent } from '../../shared/engine/planner';
 import { NODE_PROJECTOR, NodeDocumentDisk, type CreateError } from './documentDisk';
 import { createDocumentTelemetry } from './documentTelemetry';
+import { createDocumentPreflight } from './documentPreflight';
 import {
   type WriteReport,
   type EditReport,
@@ -85,6 +86,7 @@ export function createNodeDocumentActors(input: { readonly log: (line: string) =
     disk: new NodeDocumentDisk(),
     projector: NODE_PROJECTOR,
     planner: planIntent,
+    preflight: createDocumentPreflight({ log: input.log }),
     telemetry: createDocumentTelemetry(input.log),
     drain: 'immediate',
     schedule: input.schedule,
@@ -112,6 +114,7 @@ export class DocumentActors {
       disk: options.disk,
       planner: options.planner,
       projector: options.projector,
+      ...(options.preflight === undefined ? {} : { preflight: options.preflight }),
     };
   }
 
@@ -539,6 +542,7 @@ export class DocumentActors {
         return;
       }
       case 'disk-error':
+      case 'preflight-refused':
         seen.messages.set(effect.intentId, effect.message);
         return;
       case 'lock-leaked':

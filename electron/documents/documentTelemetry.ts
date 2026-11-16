@@ -151,5 +151,6 @@ function rejectionCounts(input: Record<string, number>): Record<RejectionReason,
     'write-race': count('write-race'),
     'merge-conflict': count('merge-conflict'),
     'invalid-placement': count('invalid-placement'),
+    'would-break-page': count('would-break-page'),
   };
 }

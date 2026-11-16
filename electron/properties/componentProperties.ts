@@ -328,6 +328,7 @@ function failureOf(file: string, report: Exclude<WriteReport, { tag: 'applied' }
         case 'write-failed':
         case 'merge-conflict':
         case 'invalid-placement':
+        case 'would-break-page':
           return {
             code: 'filesystem',
             error: report.message ? { code: 'filesystem', message: report.message } : refusal('filesystem', 'props.edit.couldNotSave', { file }),
