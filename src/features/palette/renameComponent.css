@@ -1,0 +1,53 @@
+/* The rename dialog: a live line under the name, the folder, the resulting path and the files that will change. Backgrounds only, no borders. */
+.rename-component .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rename-component .rename-status {
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--text-dim, #b8b8b8);
+}
+.rename-component .rename-status.is-available {
+  color: #7ad9a0;
+}
+.rename-component .rename-status.is-taken,
+.rename-component .rename-status.is-invalid {
+  color: #ff9b9b;
+}
+.rename-component .rename-warning {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 190, 80, 0.14);
+  color: #ffd08a;
+  font-size: 12px;
+}
+.rename-component .rename-path {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  color: var(--text-dim, #b8b8b8);
+}
+.rename-component .rename-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.rename-component .rename-file-list {
+  max-height: 160px;
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  list-style: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.rename-component .rename-notices-title {
+  color: var(--text-dim, #b8b8b8);
+}

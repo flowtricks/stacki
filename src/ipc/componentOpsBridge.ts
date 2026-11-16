@@ -3,6 +3,13 @@
 import { boolean, count, record, text } from '../../shared/core/boundary';
 import { err, ok, type Result } from '../../shared/core/result';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
+import {
+  parseComponentRenameApplied,
+  parseComponentRenameSummary,
+  type ComponentRenameRequest,
+  type ComponentRenameSummary,
+  type RenameDirection,
+} from '../../shared/properties/componentRename';
 import { parseComponentOpError, type ComponentOpError, type ComponentOpTarget } from '../../shared/properties/componentOps';
 
 export interface ComponentCopy {
@@ -61,4 +68,27 @@ function readReply<T>(input: unknown, parseValue: (value: Record<string, unknown
     return ok(parseValue(record(reply['value'])));
   }
   return err(parseComponentOpError(reply['error']));
+}
+
+/** The files a rename would change, worked out by main without writing anything. */
+export async function planProjectComponentRename(
+  projectPath: string,
+  request: ComponentRenameRequest,
+): Promise<Result<ComponentRenameSummary, ComponentOpError>> {
+  const payload = parseIpcPayload('component:planRename', { projectPath, request });
+  return readReply(await window.avb.planComponentRename(payload), parseComponentRenameSummary);
+}
+
+/** Renames or moves the component and everything that names it, all files or none. `undo` is the token for the whole step. */
+export async function renameProjectComponent(
+  projectPath: string,
+  request: ComponentRenameRequest,
+): Promise<Result<ComponentRenameSummary & { readonly undo: string }, ComponentOpError>> {
+  const payload = parseIpcPayload('component:rename', { projectPath, request });
+  return readReply(await window.avb.renameComponent(payload), parseComponentRenameApplied);
+}
+
+export async function revertProjectComponentRename(undo: string, direction: RenameDirection): Promise<Result<{ readonly files: number }, ComponentOpError>> {
+  const payload = parseIpcPayload('component:revertRename', { token: undo, direction });
+  return readReply(await window.avb.revertComponentRename(payload), (value) => ({ files: count(value['files']) }));
 }

@@ -56,7 +56,7 @@ global.HTMLElement = dom.window.HTMLElement;
 global.KeyboardEvent = dom.window.KeyboardEvent;
 global.localStorage = dom.window.localStorage;
 
-async function mount(components, { management = true, role = lib.ADMIN_VIEW } = {}) {
+async function mount(components, { management = true, role = lib.ADMIN_VIEW, rename } = {}) {
   document.body.innerHTML = '<div id="root"></div>';
   global.IS_REACT_ACT_ENVIRONMENT = true;
   dom.window.cancelAnimationFrame = (handle) => clearTimeout(handle);
@@ -72,6 +72,7 @@ async function mount(components, { management = true, role = lib.ADMIN_VIEW } = 
     editSettings: (item) => calls.push(['settings', item.name]),
     duplicate: (item) => calls.push(['duplicate', item]),
     remove: (item) => calls.push(['remove', item]),
+    ...(rename ? { rename } : {}),
   };
   await React.act(async () =>
     root.render(
@@ -201,5 +202,89 @@ test('every row of every "…" menu has an icon, whatever rows are added: the ch
     }
     await view.act(() => document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
   }
+  await view.unmount();
+});
+
+// The rename dialog, through the real panel: open "…", choose Rename, type, and read the live line.
+test('Rename and Move to folder… sit between Roles and Duplicate, and the dialog says live whether a name is taken', async () => {
+  const requests = [];
+  const applied = [];
+  const rename = {
+    roots: ['src/components'],
+    plan: async (request) => {
+      requests.push(request);
+      return {
+        ok: true,
+        value: {
+          from: request.from,
+          to: request.to,
+          files: [
+            { file: 'src/pages/index.astro', kind: 'page' },
+            { file: 'src/components/Hero.astro', kind: 'component' },
+          ],
+          notices: [{ file: 'src/styles/a.css', kind: 'mention' }],
+        },
+      };
+    },
+    apply: (component, request, change) => applied.push([component.name, request, change]),
+  };
+  const view = await mount([component('Card', '', 0), component('Taken', '', 0), component('Button', 'forms', 0)], { rename });
+  await view.open(view.buttons()[0]);
+  assert.deepEqual(
+    view.rows().map((row) => row.label),
+    ['Edit settings', 'Show instances', 'Rename', 'Move to folder…', 'Duplicate', 'Delete'],
+  );
+  await view.act(() =>
+    view
+      .rows()
+      .find((row) => row.label === 'Rename')
+      .row.click(),
+  );
+  const dialog = () => document.querySelector('.rename-component');
+  assert.ok(dialog(), 'the dialog is open');
+  const input = () => dialog().querySelector('input');
+  const status = () => dialog().querySelector('.rename-status').textContent;
+  const primary = () => [...dialog().querySelectorAll('button')].find((button) => button.className.includes('primary'));
+  const type = async (value) => {
+    const { Simulate } = require('react-dom/test-utils');
+    await view.act(() => {
+      input().value = value;
+      Simulate.change(input());
+    });
+  };
+  assert.equal(status(), 'This is the current name and folder.');
+  assert.equal(primary().disabled, true, 'unchanged: nothing to apply');
+  await type('Taken');
+  assert.equal(status(), 'Already taken by src/components/Taken.astro');
+  assert.equal(primary().disabled, true);
+  await type('TAKEN');
+  assert.match(status(), /^Already taken by src\/components\/Taken\.astro/, 'case-insensitively');
+  await type('my card');
+  assert.match(status(), /letters and numbers/i);
+  await type('Card.astro');
+  assert.match(status(), /Leave out/);
+  await type('a/b');
+  assert.match(status(), /can’t contain/);
+  assert.equal(primary().disabled, true);
+  assert.deepEqual(requests, [], 'nothing is asked of main while the name is not usable');
+  await type('Button');
+  assert.equal(status(), 'Available');
+  assert.match(
+    dialog().textContent,
+    /Another component is also called Button \(src\/components\/forms\/Button\.astro\)/,
+    'the same name in another folder is warned about',
+  );
+  await type('ContactCard');
+  assert.equal(status(), 'Available');
+  assert.match(dialog().textContent, /src\/components\/ContactCard\.astro/, 'the resulting path is previewed');
+  await view.act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+  assert.match(dialog().textContent, /2 files will be updated/);
+  assert.match(dialog().textContent, /Not changed/);
+  assert.equal(primary().disabled, false);
+  assert.equal(primary().textContent, 'Rename');
+  assert.deepEqual(requests.at(-1), { from: 'src/components/Card.astro', to: 'src/components/ContactCard.astro' });
+  await view.act(() => primary().click());
+  assert.deepEqual(applied, [['Card', { from: 'src/components/Card.astro', to: 'src/components/ContactCard.astro' }, 'rename']]);
+  assert.equal(dialog() === null, true, 'the dialog closes when applied');
   await view.unmount();
 });

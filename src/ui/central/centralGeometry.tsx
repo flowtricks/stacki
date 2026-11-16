@@ -3526,6 +3526,39 @@ export const move = {
   ),
 };
 
+export const moveFolder = {
+  name: 'moveFolder',
+  // Figma move-folder, variant 15460:28048 (stroke 1.5, radius 2, round).
+  compact: (
+    <>
+      <g>
+        <path
+          d="M11.25 19.25H4.75C3.64543 19.25 2.75 18.3546 2.75 17.25V5.75C2.75 4.64543 3.64543 3.75 4.75 3.75H8.92963C9.59834 3.75 10.2228 4.0842 10.5937 4.6406L11.4063 5.8594C11.7772 6.4158 12.4017 6.75 13.0704 6.75H19.25C20.3546 6.75 21.25 7.64543 21.25 8.75V11.25"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          stroke="currentColor"
+        />
+        <path d="M14.75 17.25H18H21.25" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" stroke="currentColor" />
+        <path d="M19.25 14.5L22 17.25L19.25 20" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" stroke="currentColor" />
+      </g>
+    </>
+  ),
+  // Figma move-folder, variant 15460:28078 (stroke 1, radius 2, round).
+  standard: (
+    <>
+      <path
+        d="M12.5 19.5H4.5C3.39543 19.5 2.5 18.6046 2.5 17.5V5.5C2.5 4.39543 3.39543 3.5 4.5 3.5H8.92963C9.59834 3.5 10.2228 3.8342 10.5937 4.3906L11.4063 5.6094C11.7772 6.1658 12.4017 6.5 13.0704 6.5H19.5C20.6046 6.5 21.5 7.39543 21.5 8.5V11.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M15.5 17.5H18.5H21.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19.5 14.5L22.5 17.5L19.5 20.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
 export const number = {
   name: 'number',
   // Figma variant 7315:66170.

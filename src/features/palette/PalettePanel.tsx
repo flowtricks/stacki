@@ -9,14 +9,15 @@ import { rankInsertItems } from '../../lib/insertRank';
 import { ComponentPreviewPopup } from './ComponentPreviewPopup';
 import { useAddableComponents } from './componentVisibility';
 import type { PaletteRoleRules } from './componentRolesMenu';
-import type { ManagedItem, PaletteManagement } from './paletteManagement';
+import type { ManagedItem, PaletteManagement, RenameHost } from './paletteManagement';
 import { usedPlaces } from '../../../shared/properties/componentOps';
 import { PaletteRowMenu } from './PaletteRowMenu';
 import type { MenuEntry } from '../../ui/Menu';
 import { rolesSubmenu } from './componentRolesMenu';
 import { componentRuleFile } from '../../../shared/properties/componentAccess';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
-import { CopyIcon, ElementComponentIcon, GearIcon, LayoutIcon, PlusIcon, TargetIcon, TrashIcon, UsersIcon } from '../../ui/Icons';
+import { CopyIcon, ElementComponentIcon, GearIcon, LayoutIcon, MoveFolderIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon, UsersIcon } from '../../ui/Icons';
+import { RenameComponentDialog } from './RenameComponentDialog';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
@@ -53,6 +54,7 @@ interface Point {
 export default function PalettePanel(props: PalettePanelProps) {
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState<RenameRequest | undefined>(undefined);
   const tooltip = useDelayedTooltip();
   const preview = useComponentPreview();
   const usage = useUsagePopup(props.onUsage, preview.cancel);
@@ -77,8 +79,18 @@ export default function PalettePanel(props: PalettePanelProps) {
         {...(props.onDragBegin === undefined ? {} : { onDragBegin: props.onDragBegin })}
         preview={preview}
         openUsage={usage.open}
+        onRename={setRenaming}
       />
-      <PalettePopups props={props} creating={creating} setCreating={setCreating} usage={usage} usageRef={usageRef} preview={preview.value} />
+      <PalettePopups
+        props={props}
+        creating={creating}
+        setCreating={setCreating}
+        usage={usage}
+        usageRef={usageRef}
+        preview={preview.value}
+        renaming={renaming}
+        setRenaming={setRenaming}
+      />
     </div>
   );
 }
@@ -228,6 +240,13 @@ interface PaletteListProps {
   readonly onDragBegin?: () => void;
   readonly preview: ReturnType<typeof useComponentPreview>;
   readonly openUsage: (component: ScanComponent, anchor: HTMLElement) => Promise<void>;
+  /** Opens the rename and move dialog on a component, focused on the name or on the folder. */
+  readonly onRename: (request: RenameRequest) => void;
+}
+
+interface RenameRequest {
+  readonly component: ScanComponent;
+  readonly focus: 'name' | 'folder';
 }
 
 function PaletteList(props: PaletteListProps) {
@@ -347,13 +366,32 @@ function componentChanges(
     return [];
   }
   const item: ManagedItem = { kind: 'component', path: file, name: component.name, files: 1 };
+  const renamable: readonly MenuEntry[] =
+    management.rename !== undefined && can(role, 'component:edit')
+      ? [
+          {
+            kind: 'item',
+            id: 'rename',
+            label: translate('palette.menu.rename'),
+            icon: <PencilIcon size={14} />,
+            onSelect: () => props.onRename({ component, focus: 'name' }),
+          },
+          {
+            kind: 'item',
+            id: 'move',
+            label: translate('palette.menu.move'),
+            icon: <MoveFolderIcon size={14} />,
+            onSelect: () => props.onRename({ component, focus: 'folder' }),
+          },
+        ]
+      : [];
   const duplicate: readonly MenuEntry[] = can(role, 'component:create')
     ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), icon: <CopyIcon size={14} />, onSelect: () => management.duplicate(item) }]
     : [];
   const remove: readonly MenuEntry[] = can(role, 'component:edit')
     ? [deleteRow({ instances: component.instances, translate }, () => management.remove(item))]
     : [];
-  return duplicate.length + remove.length === 0 ? [] : [{ kind: 'divider', id: 'changes' }, ...duplicate, ...remove];
+  return renamable.length + duplicate.length + remove.length === 0 ? [] : [{ kind: 'divider', id: 'changes' }, ...renamable, ...duplicate, ...remove];
 }
 
 // Delete, disabled while anything uses what it would remove: the reason is the row's own info mark.
@@ -443,6 +481,8 @@ function PalettePopups({
   usage,
   usageRef,
   preview,
+  renaming,
+  setRenaming,
 }: {
   readonly props: PalettePanelProps;
   readonly creating: boolean;
@@ -450,6 +490,8 @@ function PalettePopups({
   readonly usage: ReturnType<typeof useUsagePopup>;
   readonly usageRef: React.RefObject<HTMLDivElement>;
   readonly preview: ReturnType<typeof useComponentPreview>['value'];
+  readonly renaming: RenameRequest | undefined;
+  readonly setRenaming: (request: RenameRequest | undefined) => void;
 }) {
   const source = props.createFrom;
   return (
@@ -481,6 +523,9 @@ function PalettePopups({
           }}
         />
       )}
+      {renaming !== undefined && props.management?.rename !== undefined && (
+        <RenameDialogHost request={renaming} components={props.components} rename={props.management.rename} onClose={() => setRenaming(undefined)} />
+      )}
       {preview && props.devUrl && (
         <ComponentPreviewPopup
           preview={preview}
@@ -490,5 +535,42 @@ function PalettePopups({
         />
       )}
     </>
+  );
+}
+
+// The dialog over the panel's components: names and files come from the scan, so a taken name is known without asking main.
+function RenameDialogHost(props: {
+  readonly request: RenameRequest;
+  readonly components: readonly ScanComponent[];
+  readonly rename: RenameHost;
+  readonly onClose: () => void;
+}) {
+  const { component } = props.request;
+  const file = componentRuleFile(component);
+  const candidates = useMemo(
+    () =>
+      props.components.flatMap((other) => {
+        const otherFile = componentRuleFile(other);
+        return otherFile === undefined ? [] : [{ file: otherFile, name: other.name }];
+      }),
+    [props.components],
+  );
+  if (file === undefined) {
+    return undefined;
+  }
+  return (
+    <RenameComponentDialog
+      file={file}
+      name={component.name}
+      components={candidates}
+      roots={props.rename.roots}
+      focus={props.request.focus}
+      plan={props.rename.plan}
+      onClose={props.onClose}
+      onApply={(request, change) => {
+        props.onClose();
+        props.rename.apply(component, request, change);
+      }}
+    />
   );
 }

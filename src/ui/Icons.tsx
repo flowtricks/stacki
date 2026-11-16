@@ -72,6 +72,7 @@ import {
   properties as centralProperties,
   repeat as centralRepeat,
   search as centralSearch,
+  moveFolder as centralMoveFolder,
   roles as centralRoles,
   settings as centralSettings,
   target as centralTarget,
@@ -425,6 +426,8 @@ export const WarningTriangleIcon = centralIcon(centralWarning);
 
 export const GearIcon = centralIcon(centralSettings);
 // A crosshair: "Show instances" finds where a component sits. Two people: the Roles submenu, as on the Roles tab.
+// A folder with an arrow leaving it: "Move to folder…" (Figma move-folder).
+export const MoveFolderIcon = centralIcon(centralMoveFolder);
 export const TargetIcon = centralIcon(centralTarget);
 export const UsersIcon = centralIcon(centralRoles);
 
