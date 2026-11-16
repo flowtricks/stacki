@@ -28,6 +28,8 @@ type ItemsSectionProps = {
   readonly projectPath: string | undefined;
   /** Which id the list's code matches items by (a builder export's, or the entry's). */
   readonly ids: 'entry' | 'export';
+  /** The items to pick from when the list is not a collection and they are known here. */
+  readonly items?: readonly PickableItem[] | undefined;
   readonly binding?: BindingContext | undefined;
   /** The section's label, when it says more than its title (a page's own value). */
   readonly label?: ReactNode;
@@ -52,7 +54,8 @@ export function ItemsSection(props: ItemsSectionProps) {
 function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
   const translate = useTranslate();
   const selection = props.query.selection ?? [];
-  const items = useItems(props.projectPath, props.catalog, { query: props.query, ids: props.ids });
+  const loaded = useItems(props.projectPath, props.catalog, { query: props.query, ids: props.ids });
+  const items = props.items ?? loaded;
   const [picking, setPicking] = useState(false);
   const [header, setHeader] = useState<HTMLDivElement | undefined>(undefined);
   const attachHeader = useCallback<RefCallback<HTMLDivElement>>((element) => setHeader(element ?? undefined), []);
@@ -310,7 +313,8 @@ function useItems(projectPath: string | undefined, catalog: LoopCatalog | undefi
   const key = `${kind}:${collection}:${target.ids}`;
   const [loaded, setLoaded] = useState<{ readonly key: string; readonly items: readonly PickableItem[] } | undefined>(undefined);
   useEffect(() => {
-    if (projectPath === undefined || catalog === undefined) {
+    // A list that is not a collection has its items given, read from the code.
+    if (projectPath === undefined || catalog === undefined || kind === 'list') {
       return undefined;
     }
     let live = true;
