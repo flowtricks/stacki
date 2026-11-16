@@ -91,3 +91,34 @@ const readCanvasWidth = (): number | undefined => {
 export function useCanvasWidthPx(): number | undefined {
   return useSyncExternalStore(subscribeHost, readCanvasWidth);
 }
+
+/**
+ * Flips the hold for the open project: following becomes held and held becomes following. Only
+ * where a canvas width is known (without one there is nothing to follow). True when it flipped.
+ * The "0" key calls this (model/appKeys.ts); the toggle on the trigger sets the same record.
+ */
+export function toggleFollowMode(projectKey: string | undefined): boolean {
+  if (readCanvasWidth() === undefined) {
+    return false;
+  }
+  setModeOf(projectKey, modeOf(projectKey) === 'follow' ? 'pinned' : 'follow');
+  return true;
+}
+
+/**
+ * Where a following panel moves its target, or undefined to leave it. It moves only once the
+ * element's rules have been read: until then the list of queries is the partial one the element
+ * has before its scan lands, and the row that holds at the canvas width is picked from it, so
+ * the trigger would show Base (or another row) for a frame and then jump back.
+ */
+export function followRetargetKey(state: {
+  readonly following: boolean;
+  readonly settled: boolean;
+  readonly matchedKey: string | undefined;
+  readonly context: string;
+}): string | undefined {
+  if (!state.following || !state.settled || state.matchedKey === undefined) {
+    return undefined;
+  }
+  return state.matchedKey === state.context ? undefined : state.matchedKey;
+}

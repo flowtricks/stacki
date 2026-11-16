@@ -157,6 +157,8 @@ export const messages = {
   'styleModel.embed.card.addIn': 'Eigene Stile hinzufügen in:',
   'styleModel.embed.card.addQuery': 'Abfrage hinzufügen',
   'styleModel.embed.card.followCanvas': 'Der Leinwandgröße folgen',
+  'styleModel.embed.card.followCanvasFollow': 'Der Leinwandgröße folgen (0)',
+  'styleModel.embed.card.followCanvasHold': 'Der Leinwandgröße nicht mehr folgen (0)',
   'styleModel.embed.card.other': 'Andere',
   'styleModel.embed.card.context': 'Stilkontext',
   'styleModel.embed.card.editQuery': '{query} bearbeiten',

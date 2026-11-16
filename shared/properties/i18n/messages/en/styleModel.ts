@@ -157,6 +157,8 @@ export const messages = {
   'styleModel.embed.card.addIn': 'Add custom styles in:',
   'styleModel.embed.card.addQuery': 'Add query',
   'styleModel.embed.card.followCanvas': 'Follow canvas size',
+  'styleModel.embed.card.followCanvasFollow': 'Follow the canvas size (0)',
+  'styleModel.embed.card.followCanvasHold': 'Stop following the canvas size (0)',
   'styleModel.embed.card.other': 'Other',
   'styleModel.embed.card.context': 'Style context',
   'styleModel.embed.card.editQuery': 'Edit {query}',

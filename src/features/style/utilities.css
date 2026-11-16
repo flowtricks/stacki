@@ -1137,6 +1137,43 @@ body.is-scrubbing * {
 .u-select-pin:hover {
   color: var(--color-text-primary);
 }
+/* The toggle has no fill of its own: the glyph is at full strength while the target follows the canvas
+   (on) and dimmed while it is held (off). Hover and press keep the same blue-or-neutral colour. */
+.u-select-pin {
+  padding: 0.125rem;
+  color: var(--color-text-primary);
+  opacity: 0.5;
+}
+.u-select-pin.is-on {
+  opacity: 1;
+}
+.u-select-pin:hover {
+  opacity: 1;
+}
+/* The value fills the trigger, so the follow toggle (margin-left: auto) sits at the right end, beside the chevron. */
+.embed-editor_context-select .u-select-value {
+  flex: 1 1 auto;
+}
+/* A breakpoint or query is the target, not Base: the whole trigger is filled with the accent blue, brighter
+   than the neutral control, so it is clear the styles apply to that screen size only. A background fill,
+   never a border. Hover and press change the blue's strength and never turn it grey; focus keeps it. */
+.embed-editor_context-select.is-query .u-select-button {
+  background: color-mix(in srgb, var(--color-selection-bg) 60%, transparent);
+  color: var(--color-text-primary);
+}
+.embed-editor_context-select.is-query .u-select-button:hover {
+  background-color: color-mix(in srgb, var(--color-selection-bg) 72%, transparent);
+  background-image: none;
+}
+.embed-editor_context-select.is-query .u-select-button:active,
+.embed-editor_context-select.is-query .u-select-button[aria-expanded='true'] {
+  background-color: color-mix(in srgb, var(--color-selection-bg) 82%, transparent);
+  background-image: none;
+}
+.embed-editor_context-select.is-query .u-select-icon,
+.embed-editor_context-select.is-query .u-select-mark {
+  color: var(--color-text-primary);
+}
 .u-select-mark svg {
   width: 0.75rem;
   height: 0.75rem;

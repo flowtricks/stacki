@@ -8,8 +8,9 @@ import type { ReactNode } from 'react';
 import Select from '../components/Select';
 import type { SelectOption, SelectTag } from '../components/selectTypes';
 import { centralIcon } from '../../../ui/central/CentralIcon';
-import { homeRoundDoor as centralHomeRoundDoor } from '../../../ui/central/centralGeometry';
-import { FilterIcon, PinIcon } from '../../../ui/Icons';
+import { homeRoundDoor as centralHomeRoundDoor, link as centralLink } from '../../../ui/central/centralGeometry';
+import { FilterIcon, UnlinkIcon } from '../../../ui/Icons';
+import { useHoverTip } from '../components/CssPropertyTip';
 import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { breakpointLabel } from '../../../lib/breakpointLabel';
 import { iconFor } from '../../../../shared/properties/breakpointIcon';
@@ -263,8 +264,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       // The selectors written inside a query that is not about width go under it, as they sit in the code.
       ...(placement === 'other' && info?.querySelectors !== undefined ? { subline: info.querySelectors } : {}),
       ...(icon === undefined ? {} : { icon }),
-      // A held choice says so on the closed trigger, beside its name, and the pin lets go of it.
-      ...(card.contextFollow !== undefined && !card.contextFollow.following ? { triggerMark: <FollowPin onFollow={card.contextFollow.onFollow} /> } : {}),
+      // The closed trigger always carries the Follow canvas size toggle, so it turns on and off without opening the list.
+      ...(card.contextFollow === undefined ? {} : { triggerMark: <FollowPin follow={card.contextFollow} /> }),
       marked: info?.hasStyles ?? false,
       ...(uses > 0
         ? {
@@ -323,35 +324,12 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
   }
   return (
     <Select
-      className="embed-editor_context-select"
+      className={card.context === '' ? 'embed-editor_context-select' : 'embed-editor_context-select is-query'}
       value={card.context}
-      options={[
-        // Follow canvas size heads the list as a switch: on, the target follows the canvas width.
-        ...(card.contextFollow === undefined
-          ? []
-          : [
-              {
-                value: FOLLOW_CANVAS,
-                label: translate('styleModel.embed.card.followCanvas'),
-                icon: <PinIcon />,
-                header: true,
-                switch: true,
-                checked: card.contextFollow.following,
-              },
-            ]),
-        ...options,
-        { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon />, footer: true },
-      ]}
+      options={[...options, { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon />, footer: true }]}
       onChange={(next) => {
         if (next === ADD_QUERY) {
           onAddQuery();
-        } else if (next === FOLLOW_CANVAS) {
-          // A switch: on it holds where the panel is, off it follows the canvas again.
-          if (card.contextFollow?.following === true) {
-            card.contextFollow.onHold();
-          } else {
-            card.contextFollow?.onFollow();
-          }
         } else {
           card.onContext(next);
         }
@@ -364,31 +342,45 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
 // The Other section label's value: never a context key nor ADD_QUERY.
 const OTHER_HEADING = '\u0000other';
 
-// The Follow canvas size row's value: neither a context key nor ADD_QUERY.
-const FOLLOW_CANVAS = '\u0000follow-canvas';
-
-// The pin on the closed trigger while the target is held: pressing it follows the canvas again.
-// A span, not a button: it sits inside the trigger's own button.
-function FollowPin({ onFollow }: { onFollow: () => void }) {
+// The Follow canvas size toggle on the closed trigger, the only control for it (the list has no row for it):
+// a linked chain on a filled accent chip while the target follows the canvas width, an unlinked, muted
+// one while it is held. Always shown, so it turns on and off without opening the list; the "0" key does
+// the same (model/appKeys.ts). A span, not a button: it sits inside the trigger's own button. Its tooltip is
+// the app's own, after the usual hover rest, and names the action and the key.
+function FollowPin({ follow }: { follow: NonNullable<StyleCardProps['contextFollow']> }) {
   const translate = useTranslate();
-  const label = translate('styleModel.embed.card.followCanvas');
+  const tipText = translate(follow.following ? 'styleModel.embed.card.followCanvasHold' : 'styleModel.embed.card.followCanvasFollow');
+  const { ref, hoverProps, hide, tip } = useHoverTip<HTMLSpanElement>(tipText);
   return (
-    <span
-      role="button"
-      tabIndex={-1}
-      className="u-select-pin"
-      title={label}
-      aria-label={label}
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.stopPropagation();
-        onFollow();
-      }}
-    >
-      <PinIcon />
-    </span>
+    <>
+      <span
+        ref={ref}
+        {...hoverProps}
+        role="button"
+        tabIndex={-1}
+        className={follow.following ? 'u-select-pin is-on' : 'u-select-pin'}
+        aria-label={translate('styleModel.embed.card.followCanvas')}
+        aria-pressed={follow.following}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          hide();
+          if (follow.following) {
+            follow.onHold();
+          } else {
+            follow.onFollow();
+          }
+        }}
+      >
+        {follow.following ? <FollowLinkIcon /> : <UnlinkIcon />}
+      </span>
+      {tip}
+    </>
   );
 }
+
+// Following is a link to the canvas width (Central chain link, Figma 5473:1103; its broken pair, 5475:1102, is held).
+const FollowLinkIcon = centralIcon(centralLink);
 
 // A group heading's value: never a context key ('' or an `@…`/`bp:…` string) nor ADD_QUERY.
 const GROUP_HEADING_PREFIX = '\u0000group:';

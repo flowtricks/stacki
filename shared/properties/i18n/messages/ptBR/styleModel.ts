@@ -158,6 +158,8 @@ export const messages = {
   'styleModel.embed.card.addIn': 'Adicionar estilos personalizados em:',
   'styleModel.embed.card.addQuery': 'Adicionar consulta',
   'styleModel.embed.card.followCanvas': 'Seguir o tamanho da tela',
+  'styleModel.embed.card.followCanvasFollow': 'Seguir o tamanho da tela (0)',
+  'styleModel.embed.card.followCanvasHold': 'Parar de seguir o tamanho da tela (0)',
   'styleModel.embed.card.other': 'Outras',
   'styleModel.embed.card.context': 'Contexto de estilo',
   'styleModel.embed.card.editQuery': 'Editar {query}',

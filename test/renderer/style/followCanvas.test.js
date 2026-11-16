@@ -45,6 +45,7 @@ async function mount(widthPx) {
 }
 
 const trigger = (panel) => panel.container.querySelector('.embed-editor_context-select .u-select-button');
+const pinOf = (panel) => trigger(panel).querySelector('.u-select-pin');
 const list = () => document.querySelector('.embed-editor_context-select .u-select-list') ?? undefined;
 const text = (element) => element.textContent.replace(/\s+/g, ' ').trim();
 const shown = (panel) => text(trigger(panel));
@@ -75,7 +76,7 @@ test('unchecking the matched row edits every size: Base, canvas where it was, pi
   await panel.user('uncheck the matched row', () => press(panel, row('Tablet')));
   assert.equal(shown(panel), 'Base', 'the target is Base');
   assert.deepEqual(canvasRequests, [], 'the canvas did not move: uncheck is not a click on Base');
-  assert.ok(trigger(panel).querySelector('.u-select-mark'), 'the trigger says it is pinned');
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'false', 'the trigger says it is held');
   await resizeTo(panel, 1300);
   assert.equal(shown(panel), 'Base', 'a pinned target ignores canvas resizes');
   await resizeTo(panel, 500);
@@ -94,7 +95,7 @@ test('checking the matched row again follows again, without moving the canvas', 
   assert.equal(checkedRow(), 'Base', 'pinned: Base is checked, not the row that holds');
   await panel.user('check the matching row', () => press(panel, row('Laptop')));
   assert.match(shown(panel), /≥ 64rem/);
-  assert.ok(trigger(panel).querySelector('.u-select-mark') === null, 'no pin once following');
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'true', 'the toggle is on once following');
   assert.deepEqual(canvasRequests, [], 'the canvas is already inside that query');
   await resizeTo(panel, 500);
   assert.match(shown(panel), /≥ 30rem/, 'and the target follows again');
@@ -107,7 +108,7 @@ test('choosing Base by hand moves the canvas under the smallest query and pins',
   await panel.user('click Base', () => press(panel, row('Base')));
   assert.deepEqual(canvasRequests, [479], 'Base lands one pixel under 30rem');
   assert.equal(shown(panel), 'Base');
-  assert.ok(trigger(panel).querySelector('.u-select-mark'), 'a choice is pinned');
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'false', 'a choice is held');
   await resizeTo(panel, 479);
   await resizeTo(panel, 1100);
   assert.equal(shown(panel), 'Base', 'and stays pinned while the canvas moves');
@@ -146,7 +147,7 @@ test('with no known canvas width nothing follows, and a pick is not pinned', asy
   assert.equal(shown(panel), 'Base');
   await open(panel);
   await panel.user('pick 48rem', () => press(panel, row('Tablet')));
-  assert.ok(trigger(panel).querySelector('.u-select-mark') === null);
+  assert.equal(pinOf(panel) === null, true, 'with no canvas width there is no toggle');
 });
 
 const STALE_KEY = (path) => `stacki.styleContext:${path}`;
@@ -165,43 +166,8 @@ test('a fresh session follows even when an old stored pin exists, and the old re
   panel.rerender({ project: { path: project }, canvasWidthPx: 1000 });
   await panel.settle();
   assert.match(shown(panel), /≥ 48rem/, 'it follows: the stored pin is not read');
-  assert.ok(trigger(panel).querySelector('.u-select-mark') === null);
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'true');
   assert.equal(stored.has(STALE_KEY(project)), false, 'and the stale record is gone');
-});
-
-test('the Follow canvas size switch heads the list: on while following, off when held, on again when checked', async (context) => {
-  const { panel, canvasRequests } = await mount(1000);
-  context.after(() => panel.unmount());
-  await open(panel);
-  const strip = list().querySelector(':scope > .u-select-header');
-  assert.ok(strip !== null, 'the strip is pinned at the top, outside the scrolling rows');
-  assert.ok(strip.querySelector('[role="switch"]'), 'drawn with the app switch');
-  assert.ok(strip.querySelector('.u-select-check svg') === null, 'with no check mark');
-  assert.equal(row('Follow canvas size').getAttribute('aria-selected'), 'true', 'on by default');
-  const element = list();
-  await panel.user('switch it off', () => press(panel, row('Follow canvas size')));
-  assert.equal(list(), element, 'the list stays open while the switch changes');
-  assert.equal(row('Follow canvas size').getAttribute('aria-selected'), 'false');
-  assert.match(shown(panel), /≥ 48rem/, 'holding keeps the target where it is');
-  assert.ok(trigger(panel).querySelector('.u-select-mark'), 'and the trigger shows the pin');
-  await resizeTo(panel, 1100);
-  assert.match(shown(panel), /≥ 48rem/, 'a held target ignores the resize');
-  assert.equal(list(), element, 'and the open list is not disturbed');
-  await panel.user('switch it on', () => press(panel, row('Follow canvas size')));
-  assert.match(shown(panel), /≥ 64rem/, 'following resumes at the canvas width, in place');
-  assert.equal(row('Follow canvas size').getAttribute('aria-selected'), 'true');
-  assert.deepEqual(canvasRequests, [], 'none of it moved the canvas');
-});
-
-test('Space on the switch row toggles it from the keyboard', async (context) => {
-  const { panel } = await mount(1000);
-  context.after(() => panel.unmount());
-  await open(panel);
-  await panel.user('arrow up to the strip', () => key(panel, list(), 'Home'));
-  assert.equal(list().querySelector('[data-active="true"]').parentElement.className, 'u-select-header');
-  await panel.user('Space', () => key(panel, list(), ' '));
-  assert.equal(row('Follow canvas size').getAttribute('aria-selected'), 'false');
-  assert.ok(list() !== undefined, 'still open');
 });
 
 test('the pin on the trigger lets go of the hold', async (context) => {
@@ -211,7 +177,7 @@ test('the pin on the trigger lets go of the hold', async (context) => {
   await panel.user('uncheck the matched row', () => press(panel, row('Tablet')));
   assert.equal(shown(panel), 'Base');
   const pin = trigger(panel).querySelector('.u-select-pin');
-  assert.equal(pin.title, 'Follow canvas size');
+  assert.equal(pin.getAttribute('aria-label'), 'Follow canvas size');
   await panel.user('press the pin', () => press(panel, pin));
   assert.match(shown(panel), /≥ 48rem/, 'following again');
   assert.ok(list() === undefined, 'the press on the pin did not open the list');

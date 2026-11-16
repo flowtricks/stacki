@@ -34,7 +34,7 @@ import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/quer
 import { canvasWidthForQuery } from '../model/queryWidth';
 import { baseCanvasTarget } from '../model/baseWidth';
 import { followedContextKey } from '../model/followWidth';
-import { useCanvasWidthPx, useFollowMode } from './contextFollow';
+import { followRetargetKey, useCanvasWidthPx, useFollowMode } from './contextFollow';
 import { isGlobalSelector, type MatchTarget } from '../model/selectors';
 import { selectedInstanceMarkup, selectedInstanceMarkupPending, selectedInstanceScope } from '../model/webflowElement';
 import { rememberChipProvenance, rememberedGreenChips } from '../model/chipProvenanceMemory';
@@ -875,11 +875,13 @@ export function useContextChange(
   // target only: no write, no canvas move, and the active selector stays where it is. The
   // dropdown, if open, just checks the new row in place.
   const following = followMode === 'follow' && matchedKey !== undefined;
+  const settled = model !== undefined;
   useEffect(() => {
-    if (following && matchedKey !== undefined && matchedKey !== context) {
-      changeContextRef.current(matchedKey, { canvas: 'keep', selector: 'keep' });
+    const target = followRetargetKey({ following, settled, matchedKey, context });
+    if (target !== undefined) {
+      changeContextRef.current(target, { canvas: 'keep', selector: 'keep' });
     }
-  }, [following, matchedKey, context]);
+  }, [following, settled, matchedKey, context]);
 
   // The follow control exists only where there is a canvas width to follow. Checking the
   // matching row, the Follow canvas size row or the pin on the trigger lets go of a hold;

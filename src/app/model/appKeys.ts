@@ -22,6 +22,8 @@ import { toEditorPageState, carriedParse, type EditorPageState, type OpenFile, t
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { copyEditorSelection, runNativeEdit, editProjectPage } from '../../ipc/appBridge';
 import { revertedOrigin } from './nodeFactory';
+import { toggleFollowMode } from '../../features/style/embed/contextFollow';
+import { getHost } from '../../features/style/model/host';
 import { structuralSelection } from './selectionStructure';
 import { type PasteNeeds } from './pageGestures';
 export { layoutWrapperGesture, markdownLayoutGesture, withImportsGesture } from './pageModelGestures';
@@ -198,6 +200,14 @@ export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
   if (!mod && !event.altKey && (event.key === 's' || event.key === 'S')) {
     event.preventDefault();
     keys.setRightTab('style');
+    return;
+  }
+  // 0 turns Follow canvas size on or off (the toggle on the style panel's breakpoint dropdown). A plain
+  // key, so it only fires outside fields (the check above) and never collides with ⌘0 or a digit typed in one.
+  if (!mod && !event.altKey && !event.shiftKey && event.key === '0') {
+    if (toggleFollowMode(getHost().projectPath)) {
+      event.preventDefault();
+    }
     return;
   }
   if (!mod && !event.altKey && (event.key === 'd' || event.key === 'D')) {
