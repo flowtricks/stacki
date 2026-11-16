@@ -80,6 +80,13 @@ test('a connection dropped after the headers is a dropped page, with whatever ar
   assert.equal(classifyPreviewResponse(sample({ reading: 'dropped', body: '' })).kind, 'dropped');
 });
 
+test('a marked page, with Stacki comments and the page script after the closing html tag, is ok', () => {
+  const marked = `${GOOD_PAGE}<!--avb-e:0--><!--avb-d:${'a'.repeat(64)}:src/pages/index.astro-->\n<script type="module" src="/src/pages/index.astro?astro&type=script&index=0&lang.ts"></script>`;
+  assert.equal(classifyPreviewResponse(sample({ body: marked })).kind, 'ok');
+  const cut = marked.replace('</html>', '');
+  assert.equal(classifyPreviewResponse(sample({ body: cut })).kind, 'truncated', 'without the closing tag it is still cut off');
+});
+
 test('a body the reader stopped at its cap is not judged truncated: the end was never seen', () => {
   const capped = GOOD_PAGE.slice(0, GOOD_PAGE.indexOf('</body>'));
   assert.equal(classifyPreviewResponse(sample({ body: capped, reading: 'capped' })).kind, 'ok');

@@ -157,8 +157,14 @@ function isDocument(body: string): boolean {
   return /^\s*(?:<!doctype\s+html|<html)/i.test(body);
 }
 
+// A document ends at its closing html tag, then only what the dev server and Stacki append after it: the page-mark
+// comments (`<!--avb-e:0-->`, the stamp) and the page's script modules. Judging the bare tail called every marked
+// page cut off, so a healthy canvas looked broken and a recovered one never looked healthy.
+const DOCUMENT_TAIL_CHARS = 4_096;
+const AFTER_CLOSING_HTML = /<\/html\s*>(?:\s|<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>)*$/i;
+
 function endsDocument(body: string): boolean {
-  return /<\/html\s*>\s*$/i.test(body.slice(-256));
+  return AFTER_CLOSING_HTML.test(body.slice(-DOCUMENT_TAIL_CHARS));
 }
 
 // The dev server's error screen: Vite's overlay element, or the script that creates it. The message is in the
