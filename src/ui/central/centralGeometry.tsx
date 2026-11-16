@@ -3837,9 +3837,19 @@ export const pin = {
   ),
 };
 
+// Optical placement of the play triangle, in 24-unit viewBox units. The authored path has its
+// area centroid on the viewBox centre horizontally (x 12.005) but its bounding box already sits
+// 1.67 units right of centre, past the usual one-eighth-of-width nudge, so the triangle reads
+// slightly right-heavy. We settle between centroid and bounding box: x -0.5 puts the bounding box
+// centre at 13.17 (about a tenth of the triangle's width right of centre) and the centroid at
+// 11.50. The authored y is 0.5 high (centroid and box centre both 11.5), so y +0.5 centres it
+// exactly. Pinned by test/renderer/style/playOpticalOffset.test.js.
+export const PLAY_OPTICAL_OFFSET = { x: -0.5, y: 0.5 } as const;
+
 // A filled, rounded triangle for "run" actions; drawn in the Central fill style.
 export const play = {
   name: 'play',
+  opticalOffset: PLAY_OPTICAL_OFFSET,
   compact: (
     <>
       <path

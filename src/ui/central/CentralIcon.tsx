@@ -6,6 +6,9 @@ interface CentralGeometry {
   readonly name: string;
   readonly compact: ReactNode;
   readonly standard: ReactNode;
+  // Optical correction in viewBox units, applied as one translate around the drawing so the Figma
+  // geometry stays byte-identical to its source and every use of the icon is corrected at once.
+  readonly opticalOffset?: { readonly x: number; readonly y: number };
 }
 
 const ICON_SIZES = [12, 16, 20, 24, 32] as const;
@@ -37,7 +40,7 @@ export function centralIcon(geometry: CentralGeometry, defaultSize: IconSize = 1
         data-central-icon={geometry.name}
       >
         {title === undefined ? undefined : <title>{title}</title>}
-        {drawing}
+        {geometry.opticalOffset === undefined ? drawing : <g transform={`translate(${geometry.opticalOffset.x} ${geometry.opticalOffset.y})`}>{drawing}</g>}
       </svg>
     );
   };
