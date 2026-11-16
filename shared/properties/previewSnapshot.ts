@@ -120,6 +120,27 @@ export function previewRendersOnlyName(markup: string, name: string): boolean {
   return text === name.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+/**
+ * Whether rendered markup has nothing a person could see: no text and no picture, control or frame. The route
+ * then tries its next attempt, which puts the component's name in its slot so the tile shows something. Emitted
+ * into the generated preview page with `toString()`, so it uses no outside names.
+ */
+export function previewRendersNoContent(markup: string): boolean {
+  if (typeof markup !== 'string') {
+    throw new Error('previewRendersNoContent: expected a string');
+  }
+  const body = markup.replace(/<(script|style|template|noscript)[\s\S]*?<\/\1>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
+  if (/<(img|svg|video|canvas|picture|iframe|object|embed|input|textarea|select|hr)\b/i.test(body)) {
+    return false;
+  }
+  return (
+    body
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&[#\w]+;/g, ' ')
+      .trim() === ''
+  );
+}
+
 /** A snapshot as the preview page hands it over (`avb:component-preview-snapshot`). */
 export interface PreviewSnapshotMessage {
   readonly key: string;

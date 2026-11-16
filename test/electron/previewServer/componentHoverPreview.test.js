@@ -11,7 +11,10 @@ const {
   componentPreviewInputs,
   componentPreviewPath,
   componentPreviewPlugin,
+  renderComponentPreviewAttempt,
+  renderComponentPreviewGuard,
   renderComponentPreviewPage,
+  previewSupportFiles,
 } = require('#dist/electron/previewServer/componentPreview.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
@@ -174,10 +177,22 @@ test('preview canvas keeps authored html and body backgrounds with their text co
 test('generated Astro route keeps its default slot and loads the selected source', async () => {
   const template = renderComponentPreviewPage();
   assert.match(template, /src\/layouts\/\*\*\/\*\.astro/);
-  assert.match(template, /<C \{\.\.\.props\}>/);
-  assert.match(template, /<C \{\.\.\.props\}>\{name\}<\/C>/);
-  assert.match(template, /<C \{\.\.\.props\}><Fragment set:html=\{slot\.html\} \/><\/C>/, 'sampled plain children fill the slot');
-  assert.match(template, /<C \{\.\.\.props\} \/>/, 'a self-closing instance renders without slot content');
+  // The component itself is drawn by the attempt component, inside a guard that catches a throw.
+  const attempt = renderComponentPreviewAttempt();
+  assert.match(attempt, /<C \{\.\.\.attempt\.props\}>\{name\}<\/C>/);
+  assert.match(attempt, /<C \{\.\.\.attempt\.props\}><Fragment set:html=\{slot\.html\} \/>/, 'sampled plain children fill the slot');
+  assert.match(attempt, /<C \{\.\.\.attempt\.props\} \/>/, 'a self-closing instance renders without slot content');
+  assert.match(attempt, /<Fragment slot="fallback">/, "the next attempt is the guard's fallback");
+  assert.doesNotMatch(attempt, /__STACKI_/);
+  const guard = renderComponentPreviewGuard();
+  assert.match(guard, /await Astro\.slots\.render\('default'\)/);
+  assert.match(guard, /catch \(error\)/, 'a throw is caught and becomes a reason');
+  assert.match(guard, /function previewRendersOnlyName/);
+  assert.doesNotMatch(guard, /__STACKI_/);
+  for (const [name, text] of Object.entries(previewSupportFiles())) {
+    const compiledSupport = await compiler.transform(text, { filename: name });
+    assert.equal(compiledSupport.diagnostics.filter((item) => item.severity === 1).length, 0, name);
+  }
   assert.match(template, /<html \{\.\.\.htmlAttributes\} class=\{\[htmlAttributes\.class, 'stacki-designer'\]/, "the page is in the project's design mode");
   assert.match(template, /<body \{\.\.\.bodyAttributes\}>\s*\{contextStyles\.map/, 'site-wide styles follow the project stylesheets');
   assert.match(template, /avb:component-preview/);
@@ -206,7 +221,8 @@ test('generated Astro route keeps its default slot and loads the selected source
       file,
       async () => {
         loaded.push(file + '?raw&stacki-preview-props');
-        return componentPreviewInputs(accordion, path.basename(file, '.astro'));
+        const inputs = componentPreviewInputs(accordion, path.basename(file, '.astro'));
+        return { key: 'k', missing: [], attempts: [{ label: 'authored', props: inputs.props, slot: inputs.slot }] };
       },
     ]),
   );
@@ -216,10 +232,10 @@ test('generated Astro route keeps its default slot and loads the selected source
     .replace("import 'virtual:stacki-component-preview-styles';", '')
     .replace("import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-component-preview-context';", '')
     .replace("import { packageModules, packageInputs } from 'virtual:stacki-package-components';", '')
-    .replace("import RecipeNode from './stacki-preview-recipe.astro';", '')
+    .replace("import Attempt from './stacki-preview-attempt.astro';", '')
     .replaceAll('import.meta.glob', 'glob');
   assert.doesNotMatch(frontmatter, /import /, 'every virtual import is removed before the frontmatter runs');
-  const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props, slot, recipeModules }; })`, {
+  const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, attempts, missing, recipeModules }; })`, {
     Astro: { url: new URL('http://localhost/__avb/preview?p=' + selected) },
     packageModules: {},
     packageInputs: {},
@@ -227,21 +243,25 @@ test('generated Astro route keeps its default slot and loads the selected source
   });
   const result = await run();
   assert.equal(result.name, 'Card');
-  assert.deepEqual({ ...result.props }, { heading: 'Card' });
-  assert.equal(result.slot.kind, 'name');
+  assert.deepEqual({ ...result.attempts[0].props }, { heading: 'Card' });
+  assert.equal(result.attempts[0].slot.kind, 'name');
   assert.deepEqual(loaded, [selected + '?raw&stacki-preview-props', selected]);
 
   // A recipe's nested components load before rendering, keyed as the recipe names them.
   loaded.length = 0;
   const nested = 'src/components/One/Card.astro';
-  sources[selected] = async () => ({ props: {}, missing: [], slot: { kind: 'recipe', node: {}, files: ['src/components/Two/Card.astro', nested] } });
+  sources[selected] = async () => ({
+    key: 'k',
+    missing: [],
+    attempts: [{ label: 'authored', props: {}, slot: { kind: 'recipe', node: {}, files: ['src/components/Two/Card.astro', nested] } }],
+  });
   const recipe = await run();
-  assert.equal(recipe.slot.kind, 'recipe');
+  assert.equal(recipe.attempts[0].slot.kind, 'recipe');
   assert.deepEqual(Object.keys(recipe.recipeModules), ['src/components/Two/Card.astro', nested]);
   assert.deepEqual(loaded, [selected, '/' + nested], 'the owner loads once as the component, then the nested one');
 
   loaded.length = 0;
-  sources[selected] = async () => componentPreviewInputs('---\ninterface Props { data: PageData; }\n---\n<div />', 'Overview');
+  sources[selected] = async () => ({ key: 'k', attempts: [], missing: ['data'] });
   const unavailable = await run();
   assert.equal(unavailable.C, jsonNull, 'missing required data must prevent component execution');
   assert.deepEqual(loaded, [], 'the component module is not even imported without its data');
@@ -259,9 +279,16 @@ test('Vite metadata exports plain ESM data and reflects source edits', async (co
   assert.match(first, /^export default /);
   assert.doesNotMatch(first, /require|exports|node:|Astro\.props/);
   const imported = await import('data:text/javascript,' + encodeURIComponent(first));
-  assert.deepEqual(imported.default, { props: { heading: 'AccordionItem' }, missing: [], slot: { kind: 'name' } });
+  assert.deepEqual(imported.default.missing, []);
+  assert.match(imported.default.key, /^[0-9a-f]{28}$/, 'every module names the key of its snapshot');
+  const labels = imported.default.attempts.map((item) => item.label);
+  assert.deepEqual(labels, ['sample', 'sample-minimal', 'sample-bare'], 'with no instance the route tries sample content, then plainer ones');
+  assert.deepEqual(imported.default.attempts[0].props, { heading: 'AccordionItem' });
+  assert.equal(imported.default.attempts[0].slot.kind, 'sample');
   fs.writeFileSync(file, accordion.replace('heading, headingTag', "heading = 'Saved', headingTag"));
-  assert.equal(plugin.load(id), 'export default {"props":{},"missing":[],"slot":{"kind":"name"}};', 'a later load sees authored defaults after a source edit');
+  const edited = await import('data:text/javascript,' + encodeURIComponent(plugin.load(id)));
+  assert.deepEqual(edited.default.attempts[0].props, {}, 'a later load sees authored defaults after a source edit');
+  assert.notEqual(edited.default.key, imported.default.key, 'an edit changes the key, so its snapshot is made again');
   for (const query of ['', '?raw', '?stacki-preview-props', '?raw&not-stacki-preview-props']) {
     assert.equal(plugin.load(file + query), undefined);
   }

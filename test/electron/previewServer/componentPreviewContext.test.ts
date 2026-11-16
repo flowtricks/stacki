@@ -221,10 +221,23 @@ test('the Vite plugin samples instances from a cached index and watches what it 
   assert.deepEqual(fake.watched, [path.join(root, 'src/layouts/Layout.astro'), path.join(root, 'src/components/global/GlobalStyles.astro')]);
 
   const propsID = path.join(root, 'src/components/button/ButtonMain.astro') + '?raw&stacki-preview-props';
+  // The route tries the page's own instance first.
+  const authored = (code: string | undefined): string => {
+    assert.ok(code !== undefined);
+    assert.ok(code.startsWith('export default '));
+    const parsed: unknown = JSON.parse(code.slice('export default '.length, -1));
+    assert.ok(typeof parsed === 'object' && parsed !== null && 'attempts' in parsed && Array.isArray(parsed.attempts));
+    const first: unknown = parsed.attempts[0];
+    assert.ok(typeof first === 'object' && first !== null);
+    const label: unknown = Reflect.get(first, 'label');
+    const props: unknown = Reflect.get(first, 'props');
+    const slot: unknown = Reflect.get(first, 'slot');
+    return JSON.stringify({ label, props, slot });
+  };
   const expected =
-    'export default {"props":{"text":"Choose a campus","variant":"primary","link":"/campuses","count":2,"wide":true},"missing":[],"slot":{"kind":"none"}};';
+    '{"label":"authored","props":{"text":"Choose a campus","variant":"primary","link":"/campuses","count":2,"wide":true},"slot":{"kind":"none"}}';
   const first = watcher();
-  assert.equal(plugin.load.call(first, propsID), expected);
+  assert.equal(authored(plugin.load.call(first, propsID)), expected);
   assert.deepEqual(
     first.watched,
     [path.join(root, '.stacki/components.json'), path.join(root, 'src/pages/index.astro')],
@@ -233,13 +246,13 @@ test('the Vite plugin samples instances from a cached index and watches what it 
 
   // The second open reads no page: removing every page leaves the cached sample in place.
   fs.rmSync(path.join(root, 'src/pages'), { recursive: true });
-  assert.equal(plugin.load.call(watcher(), propsID), expected);
+  assert.equal(authored(plugin.load.call(watcher(), propsID)), expected);
   plugin.watchChange(path.join(root, 'src/styles/site.css'));
-  assert.equal(plugin.load.call(watcher(), propsID), expected, 'non-Astro edits keep the index');
+  assert.equal(authored(plugin.load.call(watcher(), propsID)), expected, 'non-Astro edits keep the index');
   plugin.watchChange(path.join(root, 'src/pages/index.astro'));
   assert.equal(
-    plugin.load.call(watcher(), propsID),
-    'export default {"props":{},"missing":[],"slot":{"kind":"name"}};',
-    'an Astro edit discards the index, so the deleted pages no longer supply a sample',
+    authored(plugin.load.call(watcher(), propsID)).includes('"label":"sample"'),
+    true,
+    'an Astro edit discards the index, so the deleted pages no longer supply an instance and the component gets sample data',
   );
 });

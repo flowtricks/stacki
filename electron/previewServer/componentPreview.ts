@@ -4,7 +4,11 @@ import { parsePropSchema } from '../parse/astroParser';
 import { assert } from '../../shared/core/assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { componentPreviewStylesModule } from './componentPreviewStyles';
+import { componentPreviewStylesModule, componentPreviewStyleText } from './componentPreviewStyles';
+import { readPropModel } from '../parse/propModel/readPropModel';
+import { previewRendersNoContent, previewRendersOnlyName } from '../../shared/properties/previewSnapshot';
+import { ATTEMPT_LIMITS, buildPreviewAttempts, previewDependencySources, previewKey, type PreviewAttempt } from './previewAttempts';
+import { previewTypePrelude, readPathAliases, type PreludeFiles } from './previewTypePrelude';
 import { PAGES_FOLDER, foldersFor, isWithin, type ProjectFolders } from '../../shared/properties/projectFolders';
 import {
   componentPreviewContextModule,
@@ -152,14 +156,15 @@ export function componentPreviewPath(paths: readonly string[], requestedPath: un
 /**
  * How the route lays the component out. `popup` fits a fixed 1200 px stage into the hover card,
  * centred and scaled to its height. `page` gives the stage the width of the frame, anchored top
- * left at scale 1 and cut off at the bottom, so the host can scale the whole frame instead.
+ * left at scale 1 and cut off at the bottom, so the host can scale the whole frame instead. `snapshot` lays
+ * the stage out as `popup` does but never scales it, and hands the host the rendered markup to keep.
  */
-export type ComponentPreviewLayout = 'popup' | 'page';
+export type ComponentPreviewLayout = 'popup' | 'page' | 'snapshot';
 
 export function componentPreviewLayout(requested: unknown): ComponentPreviewLayout {
   // Emitted into the Astro page like componentPreviewPath: self-contained, no outside names.
   // Anything but the exact word keeps the popup layout the route always had.
-  return requested === 'page' ? 'page' : 'popup';
+  return requested === 'page' ? 'page' : requested === 'snapshot' ? 'snapshot' : 'popup';
 }
 
 export function componentPreviewPlugin(projectDirectories: readonly string[], packages: (root: string) => readonly PackagePreviewSource[] = () => []) {
@@ -175,6 +180,23 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
     index ??= readPreviewProjectIndex(root);
     return index;
   };
+  // What the key of every snapshot depends on besides the component: the project's styles and page context.
+  // Read once, and again after any style or component file changes.
+  let stylesText: string | undefined;
+  const projectStyles = (): string => {
+    stylesText ??= componentPreviewStyleText(root) + '\n' + componentPreviewContextModule(root, projectIndex()).code;
+    return stylesText;
+  };
+  const files: PreludeFiles = { read: readTextFile };
+  let aliases: ReturnType<typeof readPathAliases> | undefined;
+  let aliasesRead = false;
+  const pathAliases = () => {
+    if (!aliasesRead) {
+      aliases = readPathAliases(root, files);
+      aliasesRead = true;
+    }
+    return aliases;
+  };
   return {
     name: 'avb-component-preview',
     enforce: 'pre' as const,
@@ -184,6 +206,12 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
     watchChange(id: string): void {
       if (id.endsWith('.astro')) {
         index = undefined;
+      }
+      if (/\.(astro|css|scss)$/.test(id)) {
+        stylesText = undefined;
+      }
+      if (id.endsWith('tsconfig.json')) {
+        aliasesRead = false;
       }
     },
     load(this: unknown, id: string): string | undefined {
@@ -197,7 +225,7 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
       if (id === '\0virtual:stacki-package-components') {
         const root = roots[0];
         assert(root !== undefined, 'Package preview requires a project root');
-        return packagePreviewModule(packages(root));
+        return packagePreviewModule(packages(root), root);
       }
       if (id === '\0virtual:stacki-component-preview-styles') {
         const root = roots[0];
@@ -225,24 +253,24 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
       addWatchFile(this, previewDefaultsPath(root));
       const config = readPreviewDefaults(root);
       const recipe = config === undefined ? undefined : componentPreviewRecipe(root, relative, config);
+      let authored: ComponentPreviewInputs | undefined;
       if (recipe !== undefined) {
         // The owner is this module's own file; the components it nests are watched here.
         for (const file of recipe.files.filter((candidate) => candidate !== relative)) {
           addWatchFile(this, path.join(root, file));
         }
-        return 'export default ' + JSON.stringify(componentPreviewInputs(source, name, undefined, recipe)) + ';';
-      }
-      const found = componentPreviewSample(projectIndex(), relative);
-      if (found !== undefined) {
-        // Editing the sampled instance changes what the preview should show.
-        addWatchFile(this, path.join(root, found.host));
-        // Children with components or named slots render through the recipe node component, as the page has them.
-        const instance = instanceRecipe(projectIndex(), relative, found.host, found.sample);
-        if (instance !== undefined) {
-          return 'export default ' + JSON.stringify(componentPreviewInputs(source, name, undefined, instance)) + ';';
+        authored = componentPreviewInputs(source, name, undefined, recipe);
+      } else {
+        const found = componentPreviewSample(projectIndex(), relative);
+        if (found !== undefined) {
+          // Editing the sampled instance changes what the preview should show.
+          addWatchFile(this, path.join(root, found.host));
+          // Children with components or named slots render through the recipe node component, as the page has them.
+          const instance = instanceRecipe(projectIndex(), relative, found.host, found.sample);
+          authored = componentPreviewInputs(source, name, instance === undefined ? found.sample : undefined, instance);
         }
       }
-      return 'export default ' + JSON.stringify(componentPreviewInputs(source, name, found?.sample)) + ';';
+      return 'export default ' + JSON.stringify(previewModuleData(root, file, relative, source, name, authored, projectStyles(), pathAliases(), files)) + ';';
     },
   };
 }
@@ -255,6 +283,50 @@ function instanceRecipe(index: PreviewProjectIndex, relative: string, host: stri
   assert(file !== undefined, 'Preview instance: the sampled host is in the index');
   const children = instanceMarkupNodes(sample.markup, file.imports);
   return children === undefined ? undefined : instancePreviewRecipe(relative, sample.props, children);
+}
+
+function readTextFile(file: string): string | undefined {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+/** Everything the route needs to draw one component: its attempts in order, and the key of the result. */
+export interface ComponentPreviewModule {
+  readonly key: string;
+  readonly attempts: readonly PreviewAttempt<ComponentPreviewSlot>[];
+  /** Why there is nothing to draw, when there are no attempts. */
+  readonly missing: readonly string[];
+}
+
+export function previewModuleData(
+  root: string,
+  file: string,
+  relative: string,
+  source: string,
+  name: string,
+  authored: ComponentPreviewInputs | undefined,
+  styles: string,
+  aliases: ReturnType<typeof readPathAliases>,
+  files: PreludeFiles,
+): ComponentPreviewModule {
+  assert(path.isAbsolute(file), 'A preview module is built for an absolute file');
+  const prelude = previewTypePrelude(file, source, aliases, files);
+  const model = readPropModel(source, prelude);
+  const base = componentPreviewInputs(source, name);
+  const attempts = buildPreviewAttempts<ComponentPreviewSlot>({
+    source,
+    name,
+    model,
+    authored: authored === undefined ? undefined : { props: authored.props, slot: authored.slot, complete: authored.missing.length === 0 },
+    baseProps: base.props,
+  });
+  const dependencies = previewDependencySources(file, source, aliases, files);
+  const key = previewKey({ source, dependencies, styles, attempts });
+  assert(attempts.length > 0, 'A preview module has an attempt: ' + relative + ' under ' + root);
+  return { key, attempts, missing: [] };
 }
 
 const PREVIEW_VIRTUAL_MODULES: readonly string[] = [
@@ -280,6 +352,34 @@ function addWatchFile(context: unknown, file: string): void {
 /** The recipe node component, written beside the route's page: the page imports it by this name. */
 export const PREVIEW_RECIPE_FILE = 'stacki-preview-recipe.astro';
 
+/** The guard and attempt components, written beside the route's page: the page imports the attempt by this name. */
+export const PREVIEW_ATTEMPT_FILE = 'stacki-preview-attempt.astro';
+export const PREVIEW_GUARD_FILE = 'stacki-preview-guard.astro';
+
+/** Every generated file the route imports from beside its page, by file name. */
+export function previewSupportFiles(): Readonly<Record<string, string>> {
+  return {
+    [PREVIEW_RECIPE_FILE]: renderComponentPreviewRecipe(),
+    [PREVIEW_ATTEMPT_FILE]: renderComponentPreviewAttempt(),
+    [PREVIEW_GUARD_FILE]: renderComponentPreviewGuard(),
+  };
+}
+
+export function renderComponentPreviewGuard(): string {
+  return PREVIEW_GUARD.replace('__STACKI_ONLY_NAME__', () => previewRendersOnlyName.toString() + '\n' + previewRendersNoContent.toString());
+}
+
+export function renderComponentPreviewAttempt(): string {
+  // One slot position per possible named slot; Astro needs each one written out in the template.
+  const positions = Array.from(
+    { length: ATTEMPT_LIMITS.namedSlotsMax },
+    (_, index) => `<Fragment slot={namedName(${index})} set:html={namedHtml(${index})} />`,
+  );
+  return PREVIEW_ATTEMPT.replace('__STACKI_PREVIEW_RECIPE__', PREVIEW_RECIPE_FILE)
+    .replace('__STACKI_PREVIEW_GUARD__', PREVIEW_GUARD_FILE)
+    .replace('__STACKI_NAMED_POSITIONS__', () => positions.join('\n      '));
+}
+
 export function renderComponentPreviewRecipe(): string {
   // One slot position per possible group; Astro needs each one written out in the template.
   const positions = Array.from(
@@ -300,7 +400,7 @@ export function renderComponentPreviewPage(config?: ProjectFolders): string {
   // An empty glob list would be a Vite error; a pattern no file matches previews nothing instead.
   const list = '[' + (globs.length === 0 ? ["'/src/__stacki_no_components__/*.astro'"] : globs).join(', ') + ']';
   return PREVIEW_PAGE.replace('__STACKI_PREVIEW_PATH__', () => componentPreviewPath.toString() + '\n' + componentPreviewLayout.toString())
-    .replace('__STACKI_PREVIEW_RECIPE__', PREVIEW_RECIPE_FILE)
+    .replace('__STACKI_PREVIEW_ATTEMPT__', PREVIEW_ATTEMPT_FILE)
     .replaceAll('__STACKI_PREVIEW_GLOBS__', () => list);
 }
 
@@ -320,10 +420,11 @@ interface PackagePreviewSource {
   readonly source: string;
 }
 
-function packagePreviewModule(sources: readonly PackagePreviewSource[]): string {
+function packagePreviewModule(sources: readonly PackagePreviewSource[], root: string): string {
   assert(sources.length <= 10000, 'Package previews are bounded');
+  const files: PreludeFiles = { read: readTextFile };
   const entries = sources.map(({ file, importPath, source }) => {
-    const inputs = componentPreviewInputs(source, path.basename(file, '.astro'));
+    const inputs = previewModuleData(root, path.resolve(root, file), file, source, path.basename(file, '.astro'), undefined, '', undefined, files);
     return { key: JSON.stringify('/' + file), specifier: JSON.stringify(importPath), inputs };
   });
   return (
@@ -355,7 +456,7 @@ __STACKI_PREVIEW_PATH__
 import 'virtual:stacki-component-preview-styles';
 import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-component-preview-context';
 import { packageModules, packageInputs } from 'virtual:stacki-package-components';
-import RecipeNode from './__STACKI_PREVIEW_RECIPE__';
+import Attempt from './__STACKI_PREVIEW_ATTEMPT__';
 const mods = {
   ...import.meta.glob(__STACKI_PREVIEW_GLOBS__), ...packageModules,
 };
@@ -373,21 +474,32 @@ const selected = componentPreviewPath(
 const layout = componentPreviewLayout(Astro.url.searchParams.get('layout'));
 const name = selected ? selected.split('/').pop().replace(/\\.astro$/, '') : '';
 let C = null;
-let props = {};
+let attempts = [];
 let missing = [];
-let slot = { kind: 'name' };
-// The components a recipe nests inside this one, loaded before rendering: the node component renders synchronously.
+let key = '';
+// The components a recipe nests inside an attempt, loaded before rendering: the node component renders synchronously.
 const recipeModules = {};
+// A snapshot request that names the key the host already holds gets a page that only confirms it, without
+// rendering the component or loading its styles' worth of markup.
+const known = Astro.url.searchParams.get('known') || '';
+let unchanged = false;
 if (selected) {
-  ({ props, missing, slot } = await inputs[selected]());
-  if (missing.length === 0) {
+  ({ attempts, missing, key } = await inputs[selected]());
+  // "Try with sample data": skip the project's own instance and draw from the component's types.
+  if (Astro.url.searchParams.get('attempts') === 'sample') {
+    const sampled = attempts.filter((attempt) => attempt.label !== 'authored');
+    if (sampled.length > 0) attempts = sampled;
+  }
+  unchanged = layout === 'snapshot' && known !== '' && known === key;
+  if (attempts.length > 0 && !unchanged) {
     C = (await mods[selected]()).default;
-    if (slot.kind === 'recipe') {
-      for (const file of slot.files.slice(0, 256)) {
+    for (const attempt of attempts) {
+      if (attempt.slot.kind !== 'recipe') continue;
+      for (const file of attempt.slot.files.slice(0, 256)) {
         // The owner is already loaded as C; the components it nests load here.
         const load = '/' + file === selected ? null : mods['/' + file];
         if ('/' + file === selected) recipeModules[file] = C;
-        else if (load) recipeModules[file] = (await load()).default;
+        else if (load && !recipeModules[file]) recipeModules[file] = (await load()).default;
       }
     }
   }
@@ -397,6 +509,8 @@ if (selected) {
   <head>
     <meta charset="utf-8" />
     <meta name="avb-layout" content={layout} />
+    <meta name="avb-key" content={key} />
+    <meta name="avb-unchanged" content={unchanged ? '1' : ''} />
     <style>
       /* Keep authored backgrounds paired with the project's text colors. */
       html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -424,12 +538,10 @@ if (selected) {
   </head>
   <body {...bodyAttributes}>
     {contextStyles.map((css) => <style is:inline set:html={css}></style>)}
-    <div id="avb-stage">{C ? (slot.kind === 'html' ? <C {...props}><Fragment set:html={slot.html} /></C>
-      : slot.kind === 'recipe' ? <RecipeNode node={slot.node} modules={recipeModules} />
-      : slot.kind === 'none' ? <C {...props} /> : <C {...props}>{name}</C>) : null}</div>
+    <div id="avb-stage">{C ? <Attempt component={C} attempts={attempts} index={0} name={name} modules={recipeModules} /> : null}</div>
     <div id="avb-empty">{missing.length > 0
       ? 'Preview needs data for: ' + missing.join(', ') + '. Open an instance on a page.'
-      : 'Nothing to preview — this component needs props or slot content.'}</div>
+      : 'The component rendered nothing.'}</div>
     <script is:inline>
       (function () {
         var stage = document.getElementById('avb-stage');
@@ -459,6 +571,114 @@ if (selected) {
         }
         var scheduled = false;
         var lastStatus = '';
+        var lastBox = null;
+        var captures = 0;
+        var captureTimer = 0;
+        var capturedBox = null;
+        // CSS the stage can use: every rule whose selector matches something on the page, with the dynamic
+        // pseudo-classes and pseudo-elements stripped before matching so :hover and ::before rules stay.
+        var DYNAMIC = /::?(?:hover|focus-visible|focus-within|focus|active|visited|target|link|any-link|before|after|first-line|first-letter|placeholder|selection|marker|backdrop|file-selector-button|-[a-z-]+)(?:\\([^)]*\\))?/g;
+        function selectorUsed(text) {
+          var parts = text.split(',');
+          for (var i = 0; i < parts.length; i++) {
+            var q = parts[i].replace(DYNAMIC, '').trim();
+            if (q === '' || /[>+~]$/.test(q)) q += '*';
+            try {
+              if (document.querySelector(q)) return true;
+            } catch (e) {
+              return true;
+            }
+          }
+          return false;
+        }
+        function walkRules(rules, depth, budget, keyframes) {
+          var out = '';
+          for (var i = 0; i < rules.length && budget.left > 0; i++) {
+            var r = rules[i];
+            budget.left--;
+            if (r.type === 1) {
+              if (selectorUsed(r.selectorText)) out += r.cssText + '\\n';
+            } else if (r.type === 7) {
+              keyframes.push({ name: r.name, text: r.cssText });
+            } else if (r.cssRules && depth < 8) {
+              var inner = walkRules(r.cssRules, depth + 1, budget, keyframes);
+              if (inner) out += r.cssText.slice(0, r.cssText.indexOf('{')) + '{' + inner + '}\\n';
+            } else {
+              out += r.cssText + '\\n';
+            }
+          }
+          return out;
+        }
+        function usedCSS() {
+          var css = '';
+          var links = '';
+          var keyframes = [];
+          var budget = { left: 60000 };
+          for (var i = 0; i < document.styleSheets.length; i++) {
+            var sheet = document.styleSheets[i];
+            var rules = null;
+            try { rules = sheet.cssRules; } catch (e) { rules = null; }
+            if (rules) css += walkRules(rules, 0, budget, keyframes);
+            else if (sheet.href) links += '<link rel="stylesheet" href="' + sheet.href.replace(/"/g, '&quot;') + '">';
+          }
+          for (var k = 0; k < keyframes.length; k++) {
+            if (css.indexOf(keyframes[k].name) >= 0) css += keyframes[k].text + '\\n';
+          }
+          return { css: css, links: links };
+        }
+        function attrText(el) {
+          var text = '';
+          for (var i = 0; i < el.attributes.length; i++) {
+            var a = el.attributes[i];
+            if (/^on/i.test(a.name)) continue;
+            text += ' ' + a.name + '="' + a.value.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"';
+          }
+          return text;
+        }
+        // The stage as a standalone document with no script: what the host shows in a tile without the dev
+        // server. The origin is a token the host replaces, since the dev server's port changes between runs.
+        function capture() {
+          captureTimer = 0;
+          var box = lastBox;
+          if (!box || captures >= 3) return;
+          captures++;
+          capturedBox = box;
+          var clone = stage.cloneNode(true);
+          var drop = clone.querySelectorAll('script,noscript,iframe,link');
+          for (var i = 0; i < drop.length; i++) drop[i].remove();
+          var all = clone.querySelectorAll('*');
+          for (var j = 0; j < all.length; j++) {
+            var el = all[j];
+            for (var n = el.attributes.length - 1; n >= 0; n--) {
+              if (/^on/i.test(el.attributes[n].name)) el.removeAttribute(el.attributes[n].name);
+            }
+            if (el.hasAttribute('loading')) el.removeAttribute('loading');
+          }
+          var used = usedCSS();
+          var keyMeta = document.querySelector('meta[name="avb-key"]');
+          var marker = document.getElementById('avb-attempt');
+          var origin = location.origin;
+          var doc = '<!doctype html><html' + attrText(document.documentElement) + '><head><meta charset="utf-8"><base href="' + origin + '/">' + used.links +
+            '<style>' + used.css.replace(/<\\/style/gi, '<\\\\/style') + '</style><style>html,body{margin:0!important;height:auto!important;overflow:hidden!important;background:transparent!important}</style></head><body' +
+            attrText(document.body) + '><div id="avb-stage" style="position:absolute;visibility:visible;width:1200px;left:0;top:0">' +
+            clone.innerHTML + '</div></body></html>';
+          doc = doc.split(origin).join('__AVB_ORIGIN__');
+          window.parent.postMessage({
+            type: 'avb:component-preview-snapshot',
+            key: keyMeta ? keyMeta.getAttribute('content') : '',
+            html: doc,
+            box: { left: box.l, top: box.t, width: Math.ceil(box.w), height: Math.ceil(box.h) },
+            attempt: marker ? marker.getAttribute('data-label') : 'authored'
+          }, '*');
+        }
+        // Wait for the page to settle (load, fonts, a steady box), then capture; again if it changes later, three times at most.
+        function scheduleCapture() {
+          if (captures >= 3) return;
+          if (document.readyState !== 'complete') return;
+          if (capturedBox && Math.abs(capturedBox.w - lastBox.w) < 2 && Math.abs(capturedBox.h - lastBox.h) < 2) return;
+          if (captureTimer) clearTimeout(captureTimer);
+          captureTimer = setTimeout(capture, 150);
+        }
         function reportStatus(status, reason) {
           if (status === lastStatus) return;
           lastStatus = status;
@@ -475,7 +695,9 @@ if (selected) {
         function fit() {
           scheduled = false;
           var layoutMeta = document.querySelector('meta[name="avb-layout"]');
-          var page = !!layoutMeta && layoutMeta.getAttribute('content') === 'page';
+          var mode = layoutMeta ? layoutMeta.getAttribute('content') : '';
+          var page = mode === 'page';
+          var snap = mode === 'snapshot';
           // Measure at the width it will be shown at: the frame's in the page layout, else the CSS 1200 px.
           stage.style.width = page ? window.innerWidth + 'px' : '';
           stage.style.transform = 'none';
@@ -486,7 +708,9 @@ if (selected) {
             document.body.classList.add('avb-is-empty');
             stage.style.visibility = 'hidden';
             var note = document.getElementById('avb-empty');
-            reportStatus('empty', note && note.textContent ? note.textContent.trim() : 'The component rendered nothing.');
+            var failure = document.getElementById('avb-error');
+            // A throw says what threw; the rest say why nothing showed.
+            reportStatus('empty', failure ? failure.getAttribute('data-message') : note && note.textContent ? note.textContent.trim() : 'The component rendered nothing.');
             return;
           }
           document.body.classList.remove('avb-is-empty');
@@ -494,6 +718,14 @@ if (selected) {
             // The page layout: top left, unscaled, cut off at the bottom.
             stage.style.visibility = 'visible';
             reportStatus('ready');
+            return;
+          }
+          if (snap) {
+            // Unscaled at the stage's own width: the host fits the snapshot to its tile.
+            stage.style.visibility = 'visible';
+            reportStatus('ready');
+            lastBox = box;
+            scheduleCapture();
             return;
           }
           var aw = window.innerWidth - PAD * 2;
@@ -510,6 +742,12 @@ if (selected) {
           if (scheduled) return;
           scheduled = true;
           requestAnimationFrame(fit);
+        }
+        var unchangedMeta = document.querySelector('meta[name="avb-unchanged"]');
+        if (unchangedMeta && unchangedMeta.getAttribute('content') === '1') {
+          var heldKey = document.querySelector('meta[name="avb-key"]');
+          window.parent.postMessage({ type: 'avb:component-preview-unchanged', key: heldKey ? heldKey.getAttribute('content') : '' }, '*');
+          return;
         }
         fit();
         // The page is a live picture: the pointer reaches it, so :hover, hover-driven scripts and
@@ -591,4 +829,53 @@ const Tag = node && typeof node.element === 'string' ? node.element : undefined;
     : content.kind === 'children' ? <Tag {...props}>{children.map((child) => <Astro.self node={child} modules={modules} />)}</Tag>
     : <Tag {...props} />)
   : null}
+`;
+
+// Renders its default slot inside a try, so a component that throws is a reason and not a blank page. When the
+// attempt fails (it threw, or drew nothing but the component's own name) and a later attempt exists, that one
+// is drawn instead (the `fallback` slot, rendered only here); the last attempt is kept whatever it drew.
+const PREVIEW_GUARD = `---
+// Generated by Stacki (dev preview only) — do not edit.
+__STACKI_ONLY_NAME__
+const { name, label, last } = Astro.props;
+let html = '';
+let failure = '';
+try {
+  html = await Astro.slots.render('default');
+  if (!last && previewRendersOnlyName(html, name)) failure = 'It drew only its own name.';
+  else if (!last && previewRendersNoContent(html)) failure = 'It drew nothing.';
+} catch (error) {
+  failure = 'Threw: ' + String(error && error.message ? error.message : error).slice(0, 300);
+}
+const useFallback = failure !== '' && !last;
+const fallbackHtml = useFallback ? await Astro.slots.render('fallback') : '';
+---
+{useFallback ? <Fragment set:html={fallbackHtml} /> : <Fragment set:html={html} />}
+{failure !== '' && last ? <div id="avb-error" hidden data-message={failure}></div> : null}
+{failure === '' ? <div id="avb-attempt" hidden data-label={label}></div> : null}
+`;
+
+// One attempt: the component with one set of props and slot content, inside a guard whose fallback is the next attempt.
+const PREVIEW_ATTEMPT = `---
+// Generated by Stacki (dev preview only) — do not edit.
+import Guard from './__STACKI_PREVIEW_GUARD__';
+import RecipeNode from './__STACKI_PREVIEW_RECIPE__';
+const { component: C, attempts, index, name, modules } = Astro.props;
+const attempt = attempts[index];
+const next = index + 1 < attempts.length;
+const slot = attempt.slot;
+const named = slot.kind === 'sample' ? slot.named : [];
+const namedName = (position) => (named[position] ? named[position].name : 'stacki-unused-' + position);
+const namedHtml = (position) => (named[position] ? named[position].html : '');
+---
+<Guard name={name} label={attempt.label} last={!next}>
+  {slot.kind === 'recipe' ? <RecipeNode node={slot.node} modules={modules} />
+    : slot.kind === 'html' ? <C {...attempt.props}><Fragment set:html={slot.html} /></C>
+    : slot.kind === 'sample' ? <C {...attempt.props}><Fragment set:html={slot.html} />
+      __STACKI_NAMED_POSITIONS__
+    </C>
+    : slot.kind === 'none' ? <C {...attempt.props} />
+    : <C {...attempt.props}>{name}</C>}
+  <Fragment slot="fallback">{next ? <Astro.self component={C} attempts={attempts} index={index + 1} name={name} modules={modules} /> : null}</Fragment>
+</Guard>
 `;

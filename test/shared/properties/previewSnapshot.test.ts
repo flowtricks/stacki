@@ -10,6 +10,7 @@ import {
   isSnapshotKey,
   parsePreviewSnapshotMessage,
   parsePreviewUnchangedMessage,
+  previewRendersNoContent,
   previewRendersOnlyName,
   snapshotKey,
   SNAPSHOT_TILE_PADDING,
@@ -91,4 +92,13 @@ test('fit shrinks, never enlarges, and centres', () => {
   const wide = fitSnapshot({ left: 0, top: 0, width: 1200, height: 100 }, { width: 224, height: 140 });
   assert.equal(wide.scale, 200 / 1200);
   assert.throws(() => fitSnapshot({ left: 0, top: 0, width: 0, height: 5 }, { width: 10, height: 10 }), /has width/);
+});
+
+test('markup with no text, picture or control draws nothing', () => {
+  assert.equal(previewRendersNoContent('<div class="a"><span></span></div>'), true);
+  assert.equal(previewRendersNoContent('<style>.a{}</style><!-- c --><div> &nbsp; </div>'), true);
+  assert.equal(previewRendersNoContent('<div>Hello</div>'), false);
+  assert.equal(previewRendersNoContent('<div><svg></svg></div>'), false);
+  assert.equal(previewRendersNoContent('<input>'), false);
+  assert.throws(() => Reflect.apply(previewRendersNoContent, undefined, [3]), /expected a string/);
 });

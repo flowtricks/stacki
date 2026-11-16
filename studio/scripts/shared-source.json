@@ -154,6 +154,7 @@
     "electron/previewServer/componentPreviewContext.ts",
     "electron/previewServer/componentPreviewRecipe.ts",
     "electron/previewServer/componentPreviewStyles.ts",
+    "electron/previewServer/previewAttempts.ts",
     "electron/previewServer/previewMarkers.ts",
     "electron/previewServer/previewSampleProps.ts",
     "electron/previewServer/previewTypePrelude.ts",

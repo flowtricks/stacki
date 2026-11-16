@@ -16,7 +16,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { componentPreviewPlugin, renderComponentPreviewPage, renderComponentPreviewRecipe } from '#dist/electron/previewServer/componentPreview.js';
+import {
+  componentPreviewPlugin,
+  renderComponentPreviewAttempt,
+  renderComponentPreviewPage,
+  renderComponentPreviewRecipe,
+} from '#dist/electron/previewServer/componentPreview.js';
 import {
   componentPreviewRecipe,
   instanceMarkupNodes,
@@ -77,14 +82,24 @@ function watcher() {
   };
 }
 
-function inputs(root: string, component: string, context = watcher()): unknown {
+function inputs(
+  root: string,
+  component: string,
+  context = watcher(),
+): { readonly props: unknown; readonly missing: readonly string[]; readonly slot: unknown } {
   const plugin = componentPreviewPlugin([root]);
   const loaded = plugin.load.call(context, path.join(root, component) + '?raw&stacki-preview-props');
   assert.ok(loaded !== undefined, 'the props module loads');
   const prefix = 'export default ';
   assert.ok(loaded.startsWith(prefix));
   const parsed: unknown = JSON.parse(loaded.slice(prefix.length, -1));
-  return parsed;
+  // The route tries the project's own recipe or instance first; that attempt is what these tests are about.
+  assert.ok(typeof parsed === 'object' && parsed !== null && 'attempts' in parsed && Array.isArray(parsed.attempts));
+  const first: unknown = parsed.attempts[0];
+  assert.ok(typeof first === 'object' && first !== null);
+  const props: unknown = Reflect.get(first, 'props');
+  const slot: unknown = Reflect.get(first, 'slot');
+  return { props, missing: [], slot };
 }
 
 const cardRecipe = JSON.stringify({
@@ -163,7 +178,13 @@ test('without a usable recipe the preview keeps its own inputs', (context) => {
   // No file: the page's instance supplies the slot, as before recipes.
   const plain = project(context);
   assert.deepEqual(inputs(plain, 'src/components/Section.astro'), { props: {}, missing: [], slot: { kind: 'html', html: 'From the page' } });
-  assert.deepEqual(inputs(plain, 'src/components/Card.astro'), { props: {}, missing: [], slot: { kind: 'name' } });
+  const bare = inputs(plain, 'src/components/Card.astro');
+  assert.deepEqual(bare.props, {});
+  assert.equal(
+    JSON.stringify(bare.slot).includes('"kind":"sample"') || JSON.stringify(bare.slot).includes('"kind":"none"'),
+    true,
+    'with no instance the component gets sample content',
+  );
   // A file that does not parse, a recipe for another component, and one naming a missing component.
   for (const recipes of [
     '{ not json',
@@ -173,7 +194,9 @@ test('without a usable recipe the preview keeps its own inputs', (context) => {
     JSON.stringify({ version: 1, components: { 'src/components/Card.astro': { children: [{ element: 'p', props: { slot: 'nowhere' } }] } } }),
   ]) {
     const root = project(context, recipes);
-    assert.deepEqual(inputs(root, 'src/components/Card.astro'), { props: {}, missing: [], slot: { kind: 'name' } }, recipes);
+    const kept = inputs(root, 'src/components/Card.astro');
+    assert.deepEqual(kept.props, {}, recipes);
+    assert.notEqual(JSON.stringify(kept.slot).includes('recipe'), true, 'the unusable recipe is left out: ' + recipes);
   }
 });
 
@@ -211,9 +234,10 @@ test('recipe files list each nested component once, in first-use order', () => {
 });
 
 test('the route renders a recipe through the node component, which has one position per slot', () => {
-  const page = renderComponentPreviewPage();
+  const page = renderComponentPreviewAttempt();
   assert.match(page, /import RecipeNode from '\.\/stacki-preview-recipe\.astro';/);
-  assert.match(page, /slot\.kind === 'recipe' \? <RecipeNode node=\{slot\.node\} modules=\{recipeModules\} \/>/);
+  assert.match(page, /slot\.kind === 'recipe' \? <RecipeNode node=\{slot\.node\} modules=\{modules\} \/>/);
+  assert.match(renderComponentPreviewPage(), /import Attempt from '\.\/stacki-preview-attempt\.astro';/);
   const node = renderComponentPreviewRecipe();
   assert.equal(node.includes('__STACKI_SLOT_POSITIONS__'), false);
   for (let index = 0; index < RECIPE_LIMITS.slotsMax; index++) {

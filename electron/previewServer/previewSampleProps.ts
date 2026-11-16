@@ -95,17 +95,17 @@ function wantsSample(prop: PropModel, scope: SampleScope): boolean {
   return /^(heading|title|label|text|description|caption|summary|content|eyebrow|subtitle|body|image|src|alt|href|name)$/i.test(prop.name);
 }
 
-function sampleMember(member: PropMember, label: string, depth: number): PreviewJSON | undefined {
+function sampleMember(member: PropMember, label: string, depth: number, parent = ''): PreviewJSON | undefined {
   if (depth > SAMPLE_LIMITS.depthMax) {
     return sampleByName(member.name, label);
   }
-  return sampleControl(member.control, member, label, depth);
+  return sampleControl(member.control, member, label, depth, parent);
 }
 
-function sampleControl(control: PropControl, member: PropMember, label: string, depth: number): PreviewJSON | undefined {
+function sampleControl(control: PropControl, member: PropMember, label: string, depth: number, parent: string): PreviewJSON | undefined {
   switch (control.kind) {
     case 'text':
-      return sampleText(member, control.format, label);
+      return sampleText(member, control.format, label, parent);
     case 'number':
       return sampleNumber(control, member.name);
     case 'switch':
@@ -127,7 +127,7 @@ function sampleControl(control: PropControl, member: PropMember, label: string, 
       return items;
     }
     case 'group':
-      return sampleGroup(control.fields, label, depth);
+      return sampleGroup(control.fields, label, depth, member.name);
     case 'callback':
       return undefined;
     case 'code':
@@ -139,10 +139,10 @@ function sampleControl(control: PropControl, member: PropMember, label: string, 
   }
 }
 
-function sampleGroup(fields: readonly PropMember[], label: string, depth: number): PreviewJSON {
+function sampleGroup(fields: readonly PropMember[], label: string, depth: number, groupName: string): PreviewJSON {
   const value: Record<string, PreviewJSON> = {};
   for (const field of fields.slice(0, SAMPLE_LIMITS.membersMax)) {
-    const member = sampleMember(field, label, depth + 1);
+    const member = sampleMember(field, label, depth + 1, groupName);
     if (member !== undefined) {
       value[field.name] = member;
     }
@@ -150,7 +150,7 @@ function sampleGroup(fields: readonly PropMember[], label: string, depth: number
   return value;
 }
 
-function sampleText(member: PropMember, format: string | undefined, label: string): PreviewJSON {
+function sampleText(member: PropMember, format: string | undefined, label: string, parent: string): PreviewJSON {
   if (format === 'color') {
     return '#3b6ef5';
   }
@@ -160,18 +160,23 @@ function sampleText(member: PropMember, format: string | undefined, label: strin
   if (format === 'longtext') {
     return SAMPLE_PARAGRAPH;
   }
-  return sampleByName(member.name, label);
+  return sampleByName(member.name, label, parent);
 }
 
 const SAMPLE_PARAGRAPH = 'This is sample text that shows how the component lays out a sentence or two of content.';
 
 /** The value a prop of this name most likely wants, when its type says only "string". */
-export function sampleByName(name: string, label: string): PreviewJSON {
+export function sampleByName(name: string, label: string, parent = ''): PreviewJSON {
+  // A member of a picture's own group (`image: { url, alt }`) is the picture's address, not a link.
+  if (/^(url|src|href|path|source)$/i.test(name) && /(image|img|logo|photo|picture|poster|thumbnail|avatar|icon|media)/i.test(parent)) {
+    return SAMPLE_IMAGE_URL;
+  }
+  // A picture first: `imageUrl` and `logoHref` name a picture, though they end like a link.
+  if (/^(src|image|img|poster|photo|picture|thumbnail|avatar|logo|icon)$/i.test(name) || /(Src|Image|Img|Poster|Photo|Thumbnail)(Url|Href)?$/.test(name)) {
+    return SAMPLE_IMAGE_URL;
+  }
   if (/^(href|url|link|to|action|cta(Href|Url)|.*(Href|Url|Link))$/i.test(name) || /href$|url$/i.test(name)) {
     return '#';
-  }
-  if (/^(src|image|img|poster|photo|picture|thumbnail|avatar|logo|icon)$/i.test(name) || /(Src|Image|Img|Poster|Photo|Thumbnail)$/.test(name)) {
-    return SAMPLE_IMAGE_URL;
   }
   if (/^(alt|.*Alt)$/.test(name)) {
     return 'Sample image';

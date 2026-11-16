@@ -82,3 +82,10 @@ test('a missing file, a package and bad tsconfig are skipped, not thrown', () =>
   assert.equal(previewTypePrelude('/p/a.astro', "---\nimport type { X } from 'pkg';\nimport { Y } from './nope';\n---\n", undefined, io), '');
   assert.equal(readPathAliases('/p', { read: () => '{ nope' }), undefined);
 });
+
+test('a member of a picture group is a picture, and the same word elsewhere is a link', () => {
+  const source = component('  image: { url: string; alt: string };\n  link: { url: string };');
+  const { props } = sampleInputs(readPropModel(source), 'Demo', 'required');
+  assert.deepEqual(props['image'], { url: SAMPLE_IMAGE_URL, alt: 'Sample image' });
+  assert.deepEqual(props['link'], { url: '#' });
+});

@@ -11,6 +11,11 @@ export function componentPreviewStylesModule(projectDirectory: string): string {
   return entries.map((file) => `import ${JSON.stringify(file)};`).join('\n');
 }
 
+/** The text of every stylesheet the preview imports, for the key of a snapshot: a style edit changes how every tile looks. */
+export function componentPreviewStyleText(projectDirectory: string): string {
+  return Object.values(componentPreviewStyleSources(projectDirectory)).join('\n');
+}
+
 export function componentPreviewStylePaths(sources: Readonly<Record<string, string>>): readonly string[] {
   const paths = Object.keys(sources);
   const imported = new Set<string>();
