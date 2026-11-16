@@ -2127,9 +2127,9 @@ html[data-platform='win32'] .titlebar {
   white-space: nowrap;
 }
 
-/* A node that renders nothing: the label keeps its colour (it's a real node
-   in the file, not disabled) and the struck-through eye rides the right edge,
-   the way a hidden layer reads. */
+/* A node that renders nothing keeps its label colour (it's a real node in the
+   file, not disabled); its dashed-frame mark rides the right edge. The slashed
+   eye is only for an element the page reports as display:none. */
 /* The markers at the end of a navigator row: renders nothing, display:none,
    pointer-events:none. More than one can be true at once (a hidden element that
    is also inert), so they sit in a row with a gap rather than one slot. */

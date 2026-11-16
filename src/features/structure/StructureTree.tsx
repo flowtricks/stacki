@@ -5,7 +5,8 @@ import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
 import { canContainTag } from '../../editor/elementSchemas';
 import { allowDragEffect, clearDrag, getDrag, setDrag } from '../../editor/dragState';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
-import { PseudoElementIcon, HideIcon, LayoutIcon, PointerEventsNoneIcon } from '../../ui/Icons';
+import { PseudoElementIcon, LayoutIcon } from '../../ui/Icons';
+import NodeStatus from './NodeStatus';
 import { defaultCollapsed, navigatorChildren, navigatorFamily, navigatorHost } from './structureModel';
 import type { NavigatorFamily } from './structureModel';
 import { navigatorHostsDrop } from './navigatorDrop';
@@ -368,6 +369,7 @@ function TreeRow(props: TreeRowProps) {
         </span>
       )}
       <NodeStatus
+        node={node}
         rendersNothing={props.emptyNodeIds?.has(node.id) ?? false}
         hidden={props.hiddenNodeIds?.has(node.id) ?? false}
         inert={props.inertNodeIds?.has(node.id) ?? false}
@@ -465,32 +467,6 @@ function RowLabel({ node, label, note }: { readonly node: NavigatorNode; readonl
         <span className="node-note" title={noteValue.trim()}>
           {' / '}
           {truncate(noteText(noteValue).replace(/\s+/g, ' '), 44)}
-        </span>
-      )}
-    </span>
-  );
-}
-
-function NodeStatus({ rendersNothing, hidden, inert }: { readonly rendersNothing: boolean; readonly hidden: boolean; readonly inert: boolean }) {
-  const translate = useTranslate();
-  if (!rendersNothing && !hidden && !inert) {
-    return undefined;
-  }
-  return (
-    <span className="node-empty">
-      {rendersNothing && (
-        <span title={translate('structure.status.empty')}>
-          <HideIcon size={12} />
-        </span>
-      )}
-      {hidden && !rendersNothing && (
-        <span title={translate('structure.status.hidden')}>
-          <HideIcon size={12} />
-        </span>
-      )}
-      {inert && (
-        <span title={translate('structure.status.inert')}>
-          <PointerEventsNoneIcon size={12} />
         </span>
       )}
     </span>
