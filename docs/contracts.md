@@ -765,6 +765,19 @@ transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`)
   has installed as its own button below the panels; other ids are kept and ignored. The Roles tab pins
   only apps the role may use. `RoleView.pinnedApps` carries them, so "View as" shows another role's pins;
   admin resolves to the file's admin role (`roleViewOf(roles, 'admin')`) for the same reason.
+- Hidden components: any role, admin included, may hold `componentRules: [{ kind: "component" | "folder",
+  path, effect?: "hide" | "show" }]` (shared/properties/componentAccess.ts), at most 1024 rules, project-relative
+  `/` paths (`src/components/interactive`), `effect` defaulting to `hide` and written only for `show`. It is a
+  deny-list: no rule means visible, so new, moved and renamed components are enabled for every role with no
+  migration. The most specific rule wins (component, then the nearest folder above it); a `show` rule
+  re-enables one component inside a hidden folder. A rule for a path that no longer exists is kept, listed as
+  missing in the Roles tab and ignored. It only stops ADDING: the palette's All and Components results, folder
+  pills and counts, the Components panel, Desktop's `addComponent` and apps' `node.insert`, and Studio's room
+  (`insert` actions, and a text edit that newly imports a hidden component, refused with a typed
+  `component-hidden` Result before any write). Instances already on a page stay, stay editable, show in the
+  Navigator, and may be copied, pasted or duplicated. It never changes `can()`, so a restricted admin keeps
+  Settings. Nothing in the app moves or renames a component yet; `moveComponentRules` is ready for the
+  rename that does, and until then a moved path shows as missing.
 - No file means everyone is admin, exactly as before. Studio gives a signed-in GitHub user the role
   naming them, else `defaultRole` (admin unless set). A local Studio, with no sign-in, is admin.
   Desktop resolves the GitHub account it publishes with (the project's `githubAccount` when signed

@@ -1,0 +1,45 @@
+/* The "…" on a Components panel row: hidden until the row is hovered, focused or its menu is open. A fill, never a border. */
+.palette-item,
+.palette-folder {
+  position: relative;
+}
+.panel-body .palette-item,
+.panel-body .palette-folder {
+  padding-right: 36px;
+}
+.palette-row-menu {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  opacity: 0;
+  transform: translateY(-50%);
+}
+.palette-item:hover .palette-row-menu,
+.palette-folder:hover .palette-row-menu,
+.palette-item:focus-within .palette-row-menu,
+.palette-item.is-selected .palette-row-menu,
+.palette-row-menu:focus-visible,
+.palette-row-menu.is-open {
+  opacity: 1;
+}
+.palette-row-menu:hover,
+.palette-row-menu.is-open {
+  background: var(--bg-hover);
+}
+
+/* The menus of a row's "…", the Roles submenu too, sit above the hover card (.comp-preview is a fixed card at 550; the shared
+   menu surface is 300 and portals to the body, so it would be cut by the card). The layer is raised only while a row menu is
+   open, so every other menu in the app keeps its place; the panel also keeps the card away while one is open. */
+:root {
+  --layer-palette-menu: 600;
+}
+:root:has(.palette-row-menu.is-open) .menu-surface {
+  z-index: var(--layer-palette-menu);
+}

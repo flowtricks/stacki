@@ -8,8 +8,13 @@ import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { rankInsertItems } from '../../lib/insertRank';
 import { ComponentPreviewPopup } from './ComponentPreviewPopup';
 import { useAddableComponents } from './componentVisibility';
+import type { PaletteRoleRules } from './componentRolesMenu';
+import { PaletteRowMenu } from './PaletteRowMenu';
+import type { MenuEntry } from '../../ui/Menu';
+import { rolesSubmenu } from './componentRolesMenu';
+import { componentRuleFile } from '../../../shared/properties/componentAccess';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
-import { ComponentPlusIcon, ElementComponentIcon, LayoutIcon } from '../../ui/Icons';
+import { ElementComponentIcon, LayoutIcon, PlusIcon } from '../../ui/Icons';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
@@ -20,6 +25,8 @@ import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib
 
 interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
+  /** The project's roles and how to change one's hidden components; the rows' "…" menu offers a Roles submenu with it. Absent: no menu. */
+  readonly roleRules?: PaletteRoleRules | undefined;
   readonly devUrl: string | undefined;
   readonly resolvePreviewURL?: (url: string) => Promise<string>;
   readonly trailingSlash: TrailingSlash;
@@ -59,6 +66,8 @@ export default function PalettePanel(props: PalettePanelProps) {
         groups={groups}
         query={query}
         componentCount={addable.length}
+        roleRules={props.roleRules}
+        allComponents={props.components}
         onInsert={props.onInsert}
         {...(props.onDragBegin === undefined ? {} : { onDragBegin: props.onDragBegin })}
         preview={preview}
@@ -85,7 +94,13 @@ function useCreateRequest(request: number, source: ComponentCreationSource, setC
 
 function useComponentPreview() {
   const [value, setValue] = useState<(Point & { readonly component: ScanComponent }) | undefined>(undefined);
+  // While a row's menu is open the hover card stays away: it is a fixed card at a higher layer than panel content, and a menu being
+  // navigated, its submenu included, must never sit behind it.
+  const blocked = useRef(false);
   const show = useCallback((component: ScanComponent, anchor: HTMLElement): void => {
+    if (blocked.current) {
+      return;
+    }
     const rect = anchor.getBoundingClientRect();
     const left = rect.right + 10;
     const top = Math.max(8, Math.min(rect.top, window.innerHeight - 260));
@@ -94,7 +109,13 @@ function useComponentPreview() {
   const cancel = useCallback((): void => {
     setValue(undefined);
   }, []);
-  return { value, show, cancel };
+  const block = useCallback((menuOpen: boolean): void => {
+    blocked.current = menuOpen;
+    if (menuOpen) {
+      setValue(undefined);
+    }
+  }, []);
+  return { value, show, cancel, block };
 }
 
 function useUsagePopup(onUsage: PalettePanelProps['onUsage'], cancelPreview: () => void) {
@@ -166,7 +187,7 @@ function PaletteHeader({
               setCreating(true);
             }}
           >
-            <ComponentPlusIcon size={14} />
+            <PlusIcon size={14} />
           </button>
         </span>
       </div>
@@ -194,6 +215,9 @@ interface PaletteListProps {
   readonly groups: readonly (readonly [string, readonly ScanComponent[]])[];
   readonly query: string;
   readonly componentCount: number;
+  readonly roleRules: PaletteRoleRules | undefined;
+  /** Every component of the project, hidden ones too, for a folder's counts in the Roles submenu. */
+  readonly allComponents: readonly ScanComponent[];
   readonly onInsert: (name: string) => void;
   readonly onDragBegin?: () => void;
   readonly preview: ReturnType<typeof useComponentPreview>;
@@ -206,7 +230,12 @@ function PaletteList(props: PaletteListProps) {
     <div className="panel-body" onMouseLeave={props.preview.cancel}>
       {props.groups.map(([folder, items]) => (
         <React.Fragment key={folder || '__root'}>
-          {folder && <div className="palette-folder">{folder}</div>}
+          {folder && (
+            <div className="palette-folder">
+              {folder}
+              <FolderRoles folder={folder} props={props} />
+            </div>
+          )}
           {items.map((component) => (
             <PaletteItem key={component.path} component={component} props={props} />
           ))}
@@ -230,6 +259,7 @@ function PaletteItem({ component, props }: { readonly component: ScanComponent; 
       onDoubleClick={() => props.onInsert(component.path)}
     >
       <span className="icon">{component.isLayout ? <LayoutIcon size={14} /> : <ElementComponentIcon size={14} />}</span>
+      <ItemRoles component={component} props={props} />
       <span className="label">
         {prettyComponentName(component.name)}
         <div className="sub">
@@ -255,6 +285,47 @@ function PaletteItem({ component, props }: { readonly component: ScanComponent; 
       </span>
     </div>
   );
+}
+
+// The "…" for one component: Show instances (what the instances count opens) and, when the project has roles, Roles.
+function ItemRoles({ component, props }: { readonly component: ScanComponent; readonly props: PaletteListProps }) {
+  const translate = useTranslate();
+  const file = componentRuleFile(component);
+  const rules = props.roleRules;
+  const entries = (anchor: HTMLElement | undefined): readonly MenuEntry[] => [
+    {
+      kind: 'item',
+      id: 'instances',
+      label: translate('palette.roles.showInstances'),
+      disabled: anchor === undefined || component.instances === undefined || component.instances === 0,
+      onSelect: () => {
+        if (anchor !== undefined) {
+          void props.openUsage(component, anchor);
+        }
+      },
+    },
+    ...(rules === undefined || file === undefined ? [] : [rolesSubmenu(rules, { kind: 'component', path: file }, [file], translate)]),
+  ];
+  return <PaletteRowMenu entries={entries} name={prettyComponentName(component.name)} onOpenChange={props.preview.block} />;
+}
+
+// The same for a folder header: Roles over the folder, counting every component the folder holds (nothing else applies to a folder here).
+function FolderRoles({ folder, props }: { readonly folder: string; readonly props: PaletteListProps }) {
+  const translate = useTranslate();
+  const files = props.allComponents
+    .filter((component) => component.folder === folder)
+    .flatMap((component) => {
+      const file = componentRuleFile(component);
+      return file === undefined ? [] : [file];
+    });
+  const first = files[0];
+  const rules = props.roleRules;
+  const path = first === undefined ? '' : first.slice(0, first.lastIndexOf('/'));
+  if (rules === undefined || path === '') {
+    return undefined;
+  }
+  const entries = (): readonly MenuEntry[] => [rolesSubmenu(rules, { kind: 'folder', path }, files, translate)];
+  return <PaletteRowMenu entries={entries} name={folder} onOpenChange={props.preview.block} />;
 }
 
 function startComponentDrag(event: React.DragEvent<HTMLDivElement>, component: ScanComponent, props: PaletteListProps): void {

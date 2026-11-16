@@ -13,6 +13,7 @@ import ComponentPropertiesPanel from '../../features/componentProperties/Compone
 import PagesPanel from '../../features/pages/PagesPanel';
 import { ConnectSanity } from '../../features/cmsConnections/ConnectSanity';
 import PalettePanel from '../../features/palette/PalettePanel';
+import { useComponentRoleRules } from '../roles/componentRoleRules';
 import StructurePanel from '../../features/structure/StructurePanel';
 import PanelBoundary from '../../ui/PanelBoundary';
 import GitChip from '../../features/git/GitChip';
@@ -592,9 +593,11 @@ export function PaletteTab({ app }: { readonly app: ShellView }) {
     <PalettePanel
       components={app.insertables}
       devUrl={app.devUrl}
+  const roleRules = useComponentRoleRules(app.project.path, app.reportFailure);
       trailingSlash={app.trailingSlash}
       onInsert={(name) => {
         void app.addComponent(name, undefined).catch(app.reportFailure);
+      roleRules={roleRules}
       }}
       onDragBegin={() => app.setLeftTab('navigator')}
       createFrom={app.createFrom}

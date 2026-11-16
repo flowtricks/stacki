@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { ADMIN_VIEW, resolveRole } from '../../../shared/properties/projectRoles';
 import { setActualRole } from '../../lib/currentRole';
+import { setStoredProjectRoles } from '../../lib/projectRolesStore';
 import { readRolesIdentity, readStoredRoles, type StoredRoles } from './rolesBridge';
 
 const reloaders = new Set<() => void>();
@@ -23,6 +24,7 @@ export function useProjectRoles(projectPath: string | undefined): void {
   useEffect(() => {
     if (projectPath === undefined) {
       setActualRole(ADMIN_VIEW);
+      setStoredProjectRoles(undefined);
       return undefined;
     }
     let lifetime: 'active' | 'disposed' = 'active';
@@ -34,6 +36,7 @@ export function useProjectRoles(projectPath: string | undefined): void {
         ([stored, login]) => {
           if (lifetime === 'active' && mine === generation) {
             setActualRole(desktopRoleOf(stored, login));
+            setStoredProjectRoles(stored.kind === 'ready' ? stored.roles : undefined);
           }
         },
         () => undefined,
