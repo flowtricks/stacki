@@ -10,7 +10,7 @@
 // never gets here: it stays the code editor it always was.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { HTMLAttributes, RefCallback, RefObject } from 'react';
+import type { HTMLAttributes, ReactNode, RefCallback, RefObject } from 'react';
 import useListReorder from '../../ui/useListReorder';
 import { DropLine } from '../../ui/DropLine';
 import { assert } from '../../../shared/core/assert';
@@ -18,10 +18,13 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Attr } from '../../../shared/page/pageNode';
 import {
   CONDITIONAL_LIMITS,
+  emitConditionalExpression,
   isReferencePath,
+  readConditionalExpression,
   type ConditionalResult,
   type ConditionLiteral,
   type ConditionalValue,
+  type GroupMatch,
   type TemplatePart,
 } from '../../editor/conditionalValue';
 import { templateHoles, type TemplateHole } from '../../editor/bindings';
@@ -36,6 +39,8 @@ import { BranchIcon, CloseIcon, CornerIcon, DragIcon, PlusIcon, TrashIcon, Unlin
 import { BindHandle, FieldDataPicker } from './BindingEditors';
 import type { FieldPickerAt, InsertAPI } from './bindingTypes';
 import { BindField } from './propBindings';
+import { ConditionCodeBox, ConditionCodeNote, ConditionCodeToggle } from './ConditionCodeToggle';
+import { appliedCode, CONTROLS_DECISION, decideConditionView, type ConditionView } from './conditionViewDecision';
 import {
   appliedAttr,
   writeOptionsFor,
@@ -49,6 +54,7 @@ import {
   literalOfInput,
   literalWords,
   matchOptions,
+  modelOf,
   operatorsFor,
   propOf,
   summaryLines,
@@ -80,6 +86,8 @@ const EDITOR_HEIGHT_PX_MAX = 640;
 // Wide enough for a property, an operator and its values on one line; it slides left over the canvas to fit.
 const EDITOR_WIDTH_PX_MIN = 520;
 const MENU_WIDTH_PX_MIN = 200;
+
+const isReadableConditional = (source: string): boolean => readConditionalExpression(source) !== undefined;
 
 // An empty branch: the attribute is left out (`undefined`).
 const NO_VALUE: ConditionalResult = { kind: 'none', word: 'undefined' };
@@ -287,13 +295,24 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
   // never written twice.
   const written = useRef(false);
   const frontmatter = props.bindContext?.frontmatter ?? '';
-  const latest = useRef({ draft, value: props.value, onApply: props.onApply, frontmatter });
-  latest.current = { draft, value: props.value, onApply: props.onApply, frontmatter };
+  // The {} swaps the controls for the expression; code the controls cannot show stays code (conditionViewDecision.ts).
+  const [view, setView] = useState<ConditionView>('visual');
+  const [code, setCode] = useState('');
+  const [codeSeed, setCodeSeed] = useState('');
+  const latest = useRef({ draft, value: props.value, onApply: props.onApply, frontmatter, view, code });
+  latest.current = { draft, value: props.value, onApply: props.onApply, frontmatter, view, code };
   const apply = (from: ConditionalDraft): void => {
     if (written.current) {
       return;
     }
     written.current = true;
+    if (latest.current.view === 'code') {
+      const typed = appliedCode(latest.current.code, latest.current.value);
+      if (typed.kind === 'write') {
+        latest.current.onApply(typed.value);
+      }
+      return;
+    }
     const next = appliedAttr(from, latest.current.value, writeOptionsFor(latest.current.value, latest.current.frontmatter));
     if (next.kind === 'write') {
       latest.current.onApply(next.value);
@@ -309,6 +328,25 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
   const close = (): void => {
     apply(draft);
     props.onClose();
+  };
+  const decision = view === 'code' ? decideConditionView({ source: code, readable: isReadableConditional, chosen: 'code' }) : CONTROLS_DECISION;
+  const choose = (next: ConditionView): void => {
+    if (next === 'code') {
+      const model = modelOf(draft);
+      const before = latest.current.value;
+      // With no finished group the draft has no expression of its own: the field's own code is what there is to edit.
+      const text =
+        model.groups.length > 0 ? emitConditionalExpression(model, writeOptionsFor(before, frontmatter)) : before?.type === 'expr' ? before.value : '';
+      setCode(text);
+      setCodeSeed(text);
+      setView('code');
+      return;
+    }
+    const model = readConditionalExpression(code);
+    if (model !== undefined) {
+      setDraft(draftOf(model));
+      setView('visual');
+    }
   };
   // As the {} toggle goes back to a plain value: the whole value is cleared
   // to an empty input, one undo step, with a notice that offers it back.
@@ -331,6 +369,7 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
       <div className="conditional-editor">
         <div className="loop-property-head">
           <span className="loop-bind-title">{translate('props.conditional.editorTitle')}</span>
+          <ConditionCodeToggle decision={decision} onChoose={choose} />
           <button
             type="button"
             className="loop-settings-remove"
@@ -341,28 +380,27 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
             <UnlinkIcon size={12} />
           </button>
         </div>
-        <GroupList draft={draft} catalog={catalog} bindContext={props.bindContext} language={props.language} setDraft={setDraft} />
-        <div className="conditional-add-group-row">
-          <button
-            type="button"
-            className="conditional-add-group"
-            disabled={draft.groups.length >= CONDITIONAL_LIMITS.groupsMax}
-            onClick={() => setDraft((current) => withGroupAdded(current, catalog))}
-          >
-            <PlusIcon size={11} />
-            {translate('props.conditional.newGroup')}
-          </button>
-        </div>
-        <div className="conditional-group conditional-else">
-          <div className="conditional-group-head">{translate('props.conditional.summary.else')}</div>
-          <ResultField
-            label={translate('props.conditional.elseValue')}
-            result={draft.otherwise}
-            bindContext={props.bindContext}
-            language={props.language}
-            onChange={(otherwise) => setDraft((current) => ({ ...current, otherwise }))}
-          />
-        </div>
+        {view === 'code' ? (
+          <>
+            <ConditionCodeNote decision={decision} />
+            <ConditionCodeBox code={code} seed={codeSeed} context={props.bindContext} onChange={setCode} />
+          </>
+        ) : (
+          <>
+            <GroupList draft={draft} catalog={catalog} bindContext={props.bindContext} language={props.language} setDraft={setDraft} />
+            <AddGroupRow disabled={draft.groups.length >= CONDITIONAL_LIMITS.groupsMax} onAdd={() => setDraft((current) => withGroupAdded(current, catalog))} />
+            <div className="conditional-group conditional-else">
+              <div className="conditional-group-head">{translate('props.conditional.summary.else')}</div>
+              <ResultField
+                label={translate('props.conditional.elseValue')}
+                result={draft.otherwise}
+                bindContext={props.bindContext}
+                language={props.language}
+                onChange={(otherwise) => setDraft((current) => ({ ...current, otherwise }))}
+              />
+            </div>
+          </>
+        )}
       </div>
     </RowPopup>
   );
@@ -458,36 +496,13 @@ function GroupEditor(props: {
             <DropLine />
           </span>
         )}
-        <div className="conditional-group-head">
-          <button
-            type="button"
-            className="conditional-grip"
-            aria-label={translate('props.conditional.dragGroup', { number: props.groupIndex + 1 })}
-            data-drag-through
-            tabIndex={-1}
-          >
-            <DragIcon size={12} />
-          </button>
-          {translate('props.conditional.if')}
-          <Dropdown
-            ariaLabel={translate('props.conditional.match')}
-            className="conditional-match"
-            menuClassName="conditional-match-menu"
-            value={group.match}
-            options={matchOptions(translate)}
-            onChange={(match) => onChange((current) => ({ ...current, match }))}
-          />
-          <span className="conditional-phrase">{translate('props.conditional.groupPhrase')}</span>
-          <button
-            type="button"
-            className="loop-settings-remove"
-            aria-label={translate('props.conditional.removeGroup')}
-            title={translate('props.conditional.removeGroup')}
-            onClick={props.onRemove}
-          >
-            <TrashIcon size={12} />
-          </button>
-        </div>
+        <GroupHeading
+          groupIndex={props.groupIndex}
+          match={group.match}
+          onMatch={(match) => onChange((current) => ({ ...current, match }))}
+          onRemove={props.onRemove}
+          dragGroupLabel={translate('props.conditional.dragGroup', { number: props.groupIndex + 1 })}
+        />
         {group.conditions.map((condition, conditionIndex) => (
           <ConditionRow
             key={conditionIndex}
@@ -505,15 +520,10 @@ function GroupEditor(props: {
             }}
           />
         ))}
-        <button
-          type="button"
-          className="conditional-add"
+        <AddConditionButton
           disabled={group.conditions.length >= CONDITIONAL_LIMITS.conditionsPerGroupMax}
-          onClick={() => onChange((current) => withConditionAdded(current, catalog))}
-        >
-          <PlusIcon size={11} />
-          {translate('props.conditional.newCondition')}
-        </button>
+          onAdd={() => onChange((current) => withConditionAdded(current, catalog))}
+        />
         <div className="conditional-divider" />
         <ResultField
           label={translate('props.conditional.valueLabel')}
@@ -540,31 +550,88 @@ export function ConditionRow(props: {
   const subjects = prop === undefined || catalog.some((entry) => entry.name === prop.name) ? catalog : [...catalog, prop];
   const operators = operatorsWith(prop?.kind ?? 'text', condition.operator, translate);
   return (
+    <ConditionLine
+      onRemove={props.onRemove}
+      subject={
+        <Dropdown
+          ariaLabel={translate('props.conditional.property')}
+          className="conditional-subject"
+          value={condition.subject ?? ''}
+          placeholder={translate('props.conditional.property')}
+          // The menu is as wide as its longest name, so no prop is cut short.
+          menuWidthMin={MENU_WIDTH_PX_MIN}
+          options={subjects.map((entry) => ({
+            value: entry.name,
+            label: entry.label,
+            icon: <FieldTypeIcon type={FIELD_TYPES[entry.kind]} name={entry.name} />,
+          }))}
+          onChange={(subject) => props.onChange(withSubject(condition, catalog, subject))}
+        />
+      }
+      operator={
+        <Dropdown
+          ariaLabel={translate('props.conditional.operator.label')}
+          className="conditional-operator"
+          value={condition.operator}
+          options={operators}
+          onChange={(operator) => props.onChange({ ...condition, operator, values: takesValues(operator) ? condition.values : [] })}
+        />
+      }
+      values={takesValues(condition.operator) && prop !== undefined ? <ValuesInput condition={condition} prop={prop} onChange={props.onChange} /> : undefined}
+    />
+  );
+}
+
+/** "If [all] conditions in this group are true" with the group's remove: the head every conditions editor draws. */
+export function GroupHeading(props: {
+  readonly groupIndex: number;
+  readonly match: GroupMatch;
+  readonly onMatch: (match: GroupMatch) => void;
+  readonly onRemove: () => void;
+  /** Present where groups can be dragged: the grip's label. */
+  readonly dragGroupLabel?: string | undefined;
+}) {
+  const translate = useTranslate();
+  return (
+    <div className="conditional-group-head">
+      {props.dragGroupLabel !== undefined && (
+        <button type="button" className="conditional-grip" aria-label={props.dragGroupLabel} data-drag-through tabIndex={-1}>
+          <DragIcon size={12} />
+        </button>
+      )}
+      {translate('props.conditional.if')}
+      <Dropdown
+        ariaLabel={translate('props.conditional.match')}
+        className="conditional-match"
+        menuClassName="conditional-match-menu"
+        value={props.match}
+        options={matchOptions(translate)}
+        onChange={props.onMatch}
+      />
+      <span className="conditional-phrase">{translate('props.conditional.groupPhrase')}</span>
+      <button
+        type="button"
+        className="loop-settings-remove"
+        aria-label={translate('props.conditional.removeGroup')}
+        title={translate('props.conditional.removeGroup')}
+        onClick={props.onRemove}
+      >
+        <TrashIcon size={12} />
+      </button>
+    </div>
+  );
+}
+
+/** One condition's line: the name, the operator, the values and the row's one remove. */
+export function ConditionLine(props: { readonly subject: ReactNode; readonly operator: ReactNode; readonly values: ReactNode; readonly onRemove: () => void }) {
+  const translate = useTranslate();
+  return (
     <div className="conditional-condition">
-      <Dropdown
-        ariaLabel={translate('props.conditional.property')}
-        className="conditional-subject"
-        value={condition.subject ?? ''}
-        placeholder={translate('props.conditional.property')}
-        // The menu is as wide as its longest name, so no prop is cut short.
-        menuWidthMin={MENU_WIDTH_PX_MIN}
-        options={subjects.map((entry) => ({ value: entry.name, label: entry.label, icon: <FieldTypeIcon type={FIELD_TYPES[entry.kind]} name={entry.name} /> }))}
-        onChange={(subject) => props.onChange(withSubject(condition, catalog, subject))}
-      />
-      <Dropdown
-        ariaLabel={translate('props.conditional.operator.label')}
-        className="conditional-operator"
-        value={condition.operator}
-        options={operators}
-        onChange={(operator) => props.onChange({ ...condition, operator, values: takesValues(operator) ? condition.values : [] })}
-      />
+      {props.subject}
+      {props.operator}
       {/* Prop, operator, values and the row's one remove, on one line; the
           values shrink, and their chips wrap inside their own box. */}
-      {takesValues(condition.operator) && prop !== undefined ? (
-        <ValuesInput condition={condition} prop={prop} onChange={props.onChange} />
-      ) : (
-        <span className="conditional-values-none" />
-      )}
+      {props.values ?? <span className="conditional-values-none" />}
       <button
         type="button"
         className="loop-settings-remove"
@@ -573,6 +640,30 @@ export function ConditionRow(props: {
         onClick={props.onRemove}
       >
         <CloseIcon size={12} />
+      </button>
+    </div>
+  );
+}
+
+/** "+ New condition", left under the conditions it adds to. */
+export function AddConditionButton(props: { readonly disabled: boolean; readonly onAdd: () => void }) {
+  const translate = useTranslate();
+  return (
+    <button type="button" className="conditional-add" disabled={props.disabled} onClick={props.onAdd}>
+      <PlusIcon size={11} />
+      {translate('props.conditional.newCondition')}
+    </button>
+  );
+}
+
+/** "+ New group" on its full-width line. */
+export function AddGroupRow(props: { readonly disabled: boolean; readonly onAdd: () => void }) {
+  const translate = useTranslate();
+  return (
+    <div className="conditional-add-group-row">
+      <button type="button" className="conditional-add-group" disabled={props.disabled} onClick={props.onAdd}>
+        <PlusIcon size={11} />
+        {translate('props.conditional.newGroup')}
       </button>
     </div>
   );

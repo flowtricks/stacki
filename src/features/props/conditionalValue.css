@@ -351,3 +351,41 @@
 .conditional-group-head > .loop-settings-remove {
   margin-left: auto;
 }
+
+/* The template condition editor (ConditionExpressionEditor.tsx): its value is a field of its own beside the operator. */
+.conditional-condition > .conditional-value-input,
+.conditional-condition > .dd-trigger.conditional-value-pick {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.conditional-condition > .dd-trigger.conditional-subject .code-inline {
+  background: transparent;
+  padding: 0;
+}
+.condition-expression {
+  min-width: 0;
+}
+/* In the narrow Settings column a row stays on one line, its remove at the right end: the name and the operator
+   give way (their labels clip) before the row wraps. */
+.condition-expression .conditional-condition {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.condition-expression .conditional-condition > .dd-trigger.conditional-subject,
+.condition-expression .conditional-condition > .dd-trigger.conditional-operator {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.condition-expression .conditional-condition > .conditional-values-none {
+  flex: 0 0 0;
+}
+.condition-expression .conditional-condition > .conditional-value-input,
+.condition-expression .conditional-condition > .dd-trigger.conditional-value-pick {
+  flex: 1 1 60px;
+}
+.condition-expression .conditional-condition > .loop-settings-remove {
+  flex: 0 0 auto;
+}
+.conditional-else > .conditional-add {
+  align-self: flex-start;
+}

@@ -8,15 +8,15 @@ import { resolveAssetImport, readAssetDimensions } from '../../ipc/assetBridge';
 import { MapEditor } from './propNodeEditors';
 import { assetImportOf } from './PropField';
 import { AttributesSection } from './propAttributes';
-import { ConditionField } from './propBindings';
+import { ConditionExpressionField } from './ConditionExpressionEditor';
 import React, { useEffect, useRef, useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import ExprInput from '../../ui/ExprInput';
-import { scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import { CommentIcon, CodeIcon, BranchIcon, CornerIcon } from '../../ui/Icons';
+import { scopeCompletions } from '../../editor/dataSuggest';
+import { CommentIcon, CodeIcon, CornerIcon } from '../../ui/Icons';
 import { type PropsPanelProps, type NodePanelProps, type SourceDimensionsOptions } from './propsPanelTypes';
 import TextConnectField, { type TextConnectFieldProps } from './TextConnectField';
-import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // Edits the props of the selected node. Fields come from the component's
 // prop schema (interface Props / Astro.props destructure), plus any props
@@ -210,37 +210,24 @@ export function MapPanel(props: NodePanelProps<'map'>) {
 }
 export function CondPanel(props: NodePanelProps<'cond'>) {
   const translate = useTranslate();
-  const translateRich = useTranslateRich();
   const { node, loopContext, bindContext, onSetText, onToggleElse } = props;
-  const scope = scopeCompletions(bindContext || loopContext || {});
-  const scopeNames = new Set(scope.map((completion) => completion.label.split('.')[0] ?? ''));
-  const chipsInScope = (text: string) => scopeChips(text, scopeNames);
-
   const hasElse = (node.children || []).length > 1;
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
       <div className="panel-header">
         <h2>{translate('props.sources.condition')}</h2>
       </div>
-      <div className="props-field" style={{ marginTop: 8 }}>
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">
-            <BranchIcon size={12} className="prop-label-icon" />
-            {translate('props.sources.showWhen')}
-          </span>
-        </label>
-        <ConditionField key={node.id} test={node.test} scope={scope} chipsOf={chipsInScope} bindContext={bindContext || loopContext} onSetText={onSetText} />
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
-          {translateRich(hasElse ? 'props.sources.conditionNoteElse' : 'props.sources.conditionNote', { strong: (text) => <strong>{text}</strong> })}
+      <ConditionExpressionField key={node.id} test={node.test} bindContext={bindContext || loopContext} onSetText={onSetText} />
+      <div className="props-field">
+        <div className="conditional-group conditional-else">
+          <div className="conditional-group-head">{translate('props.condition.otherwise')}</div>
+          {onToggleElse && (
+            <button type="button" className="conditional-add" onClick={() => onToggleElse(!hasElse)}>
+              {hasElse ? translate('props.sources.removeElse') : translate('props.sources.addElse')}
+            </button>
+          )}
         </div>
       </div>
-      {onToggleElse && (
-        <div className="props-field">
-          <button style={{ width: '100%' }} onClick={() => onToggleElse(!hasElse)}>
-            {hasElse ? translate('props.sources.removeElse') : translate('props.sources.addElse')}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -253,7 +240,7 @@ export function BranchPanel(props: NodePanelProps<'branch'>) {
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
       <div className="props-title">
         <CornerIcon size={14} className="props-title-icon" />
-        {isElse ? 'else' : 'then'}
+        {isElse ? translate('props.condition.otherwise') : 'then'}
       </div>
       <div className="props-empty">{isElse ? translate('props.sources.renderedFalse') : translate('props.sources.renderedTrue')}</div>
     </div>

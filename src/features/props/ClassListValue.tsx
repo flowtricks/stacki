@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { Attr } from '../../../shared/page/pageNode';
-import { CLASS_LIST_LIMITS, type ClassListValue } from '../../editor/conditionalValue';
+import { CLASS_LIST_LIMITS, emitClassListExpression, readClassListExpression, type ClassListValue } from '../../editor/conditionalValue';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
 import useListReorder from '../../ui/useListReorder';
@@ -20,6 +20,7 @@ import { ConditionRow, ResultField, ResultWords, useConditionCatalog } from './C
 import {
   appliedClassList,
   classDraftOf,
+  classModelOf,
   matchOptions,
   whenWords,
   withClassEntry,
@@ -33,6 +34,8 @@ import {
   type ConditionProp,
 } from './conditionalModel';
 import { RowPopup } from './LoopRows';
+import { ConditionCodeBox, ConditionCodeNote, ConditionCodeToggle } from './ConditionCodeToggle';
+import { appliedCode, CONTROLS_DECISION, decideConditionView, type ConditionView } from './conditionViewDecision';
 import type { RichContext } from './RichContent';
 import './conditionalValue.css';
 
@@ -93,6 +96,8 @@ export interface ClassListEditorProps {
   readonly onClose: () => void;
 }
 
+const isReadableClassList = (source: string): boolean => readClassListExpression(source) !== undefined;
+
 /** The Class list pop-up, writing its draft once as it closes (as the Value conditions editor does). */
 export function ClassListEditor(props: ClassListEditorProps) {
   const translate = useTranslate();
@@ -100,13 +105,24 @@ export function ClassListEditor(props: ClassListEditorProps) {
   const [draft, setDraft] = useState<ClassListDraft>(() => classDraftOf(props.model));
   const written = useRef(false);
   const frontmatter = props.bindContext?.frontmatter ?? '';
-  const latest = useRef({ draft, value: props.value, onApply: props.onApply, frontmatter });
-  latest.current = { draft, value: props.value, onApply: props.onApply, frontmatter };
+  // The {} swaps the entries for the expression; code the controls cannot show stays code (conditionViewDecision.ts).
+  const [view, setView] = useState<ConditionView>('visual');
+  const [code, setCode] = useState('');
+  const [codeSeed, setCodeSeed] = useState('');
+  const latest = useRef({ draft, value: props.value, onApply: props.onApply, frontmatter, view, code });
+  latest.current = { draft, value: props.value, onApply: props.onApply, frontmatter, view, code };
   const apply = (from: ClassListDraft): void => {
     if (written.current) {
       return;
     }
     written.current = true;
+    if (latest.current.view === 'code') {
+      const typed = appliedCode(latest.current.code, latest.current.value);
+      if (typed.kind === 'write') {
+        latest.current.onApply(typed.value);
+      }
+      return;
+    }
     const next = appliedClassList(from, latest.current.value, writeOptionsFor(latest.current.value, latest.current.frontmatter));
     if (next.kind === 'write') {
       latest.current.onApply(next.value);
@@ -122,25 +138,53 @@ export function ClassListEditor(props: ClassListEditorProps) {
     apply(draft);
     props.onClose();
   };
+  const decision = view === 'code' ? decideConditionView({ source: code, readable: isReadableClassList, chosen: 'code' }) : CONTROLS_DECISION;
+  const choose = (next: ConditionView): void => {
+    if (next === 'code') {
+      const model = classModelOf(draft);
+      const before = latest.current.value;
+      const text =
+        model.entries.length > 0 ? emitClassListExpression(model, writeOptionsFor(before, frontmatter)) : before?.type === 'expr' ? before.value : '';
+      setCode(text);
+      setCodeSeed(text);
+      setView('code');
+      return;
+    }
+    const model = readClassListExpression(code);
+    if (model !== undefined) {
+      setDraft(classDraftOf(model));
+      setView('visual');
+    }
+  };
   return (
     <RowPopup anchor={anchor} heightPxMax={EDITOR_HEIGHT_PX_MAX} widthPxMin={EDITOR_WIDTH_PX_MIN} label={translate('props.classList.title')} onClose={close}>
       <div className="conditional-editor class-list-editor">
         <div className="loop-property-head">
           <span className="loop-bind-title">{translate('props.classList.title')}</span>
+          <ConditionCodeToggle decision={decision} onChoose={choose} />
           <button type="button" className="loop-settings-remove" aria-label={translate('props.classList.close')} title={translate('ui.close')} onClick={close}>
             <CloseIcon size={12} />
           </button>
         </div>
-        <EntryList draft={draft} catalog={catalog} bindContext={props.bindContext} setDraft={setDraft} />
-        <button
-          type="button"
-          className="conditional-add"
-          disabled={draft.entries.length >= CLASS_LIST_LIMITS.entriesMax}
-          onClick={() => setDraft((current) => withClassEntryAdded(current))}
-        >
-          <PlusIcon size={11} />
-          {translate('props.classList.add')}
-        </button>
+        {view === 'code' ? (
+          <>
+            <ConditionCodeNote decision={decision} />
+            <ConditionCodeBox code={code} seed={codeSeed} context={props.bindContext} onChange={setCode} />
+          </>
+        ) : (
+          <>
+            <EntryList draft={draft} catalog={catalog} bindContext={props.bindContext} setDraft={setDraft} />
+            <button
+              type="button"
+              className="conditional-add"
+              disabled={draft.entries.length >= CLASS_LIST_LIMITS.entriesMax}
+              onClick={() => setDraft((current) => withClassEntryAdded(current))}
+            >
+              <PlusIcon size={11} />
+              {translate('props.classList.add')}
+            </button>
+          </>
+        )}
       </div>
     </RowPopup>
   );

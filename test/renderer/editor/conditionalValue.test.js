@@ -95,7 +95,8 @@ test('the model parser holds every bound: at the limit it passes, past it it fai
   const values = (count) => ({ groups: [group([isAny('a', ...Array.from({ length: count }, (_, i) => `v${i}`))], text(''))], otherwise: text('') });
   assert.equal(conditional.parseConditionalValue(values(valuesPerConditionMax)).ok, true);
   assert.match(conditional.parseConditionalValue(values(valuesPerConditionMax + 1)).error, /more than 32/);
-  assert.match(conditional.parseConditionalValue({ groups: [], otherwise: text('x'.repeat(8_193)) }).error, /exceeds/);
+  // There is no text size limit any more (a805ae62): a long branch is a valid one.
+  assert.equal(conditional.parseConditionalValue({ groups: [], otherwise: text('x'.repeat(8_193)) }).ok, true);
   assert.equal(conditional.parseConditionalValue({ groups: [], otherwise: reference('a'.repeat(201)) }).ok, false);
 });
 

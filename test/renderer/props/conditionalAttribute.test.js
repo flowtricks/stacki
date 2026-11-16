@@ -834,7 +834,7 @@ const styles = ["color: red", "margin: 0"];
 <p style={styles.join("; ")}>Hi</p>
 `;
 
-test('back to a plain value: code it can hold converts, code it cannot is cleared as one undo step with a notice', async (context) => {
+test('back to a plain value: code it can hold converts, code it cannot stays code, never deleted', async (context) => {
   const { harness, file, read } = await project(context, CODED);
   installDom();
   const paragraph = elementOf(read.model.nodes, 'p');
@@ -863,17 +863,10 @@ test('back to a plain value: code it can hold converts, code it cannot is cleare
   writes.length = 0;
   await draw(paragraph.props.style);
   await click(container.querySelector('.prop-expr-toggle'));
-  assert.deepEqual(writes, [{ next: undefined, immediate: true }], 'code it cannot hold is cleared: one write');
-  assert.equal(notices(), before + 1, 'and a notice says so');
-  assert.equal(container.querySelector('.prop-field-note.problem') ?? undefined, undefined, 'never a blocking error');
-  await draw(undefined);
-  assert.equal(container.querySelector('.prop-expr-toggle')?.getAttribute('aria-pressed'), 'false', 'the plain editor shows, empty');
-
-  // The clearing write and its undo, as the app sends them.
-  const record = await sent(harness, file, read, modules.propsGesture(paragraph.id, { style: undefined }, { coalesceKey: undefined, urgency: true }));
-  assert.equal(fs.readFileSync(file, 'utf8'), CODED.replace(' style={styles.join("; ")}', ''));
-  await undo(harness, file, record);
-  assert.equal(fs.readFileSync(file, 'utf8'), CODED, 'one undo brings the code back');
+  // Code the plain editor cannot hold is never deleted (dab8f4aa): nothing is written and no notice offers it back.
+  assert.deepEqual(writes, [], 'code it cannot hold stays: nothing is written');
+  assert.equal(notices(), before, 'so there is nothing to offer back');
+  assert.equal(container.querySelector('.prop-expr-toggle')?.getAttribute('aria-pressed'), 'true', 'the field stays on its code');
   await act(async () => root.unmount());
 });
 
