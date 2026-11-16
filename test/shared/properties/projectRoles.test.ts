@@ -177,7 +177,7 @@ test('generated role ids are unique slugs that never take a built-in name', () =
 
 test('every grantable feature has one toggle in the Roles tab', () => {
   const listed = ACCESS_GROUPS.flatMap((group) => group.features.map((item) => item.feature));
-  assert.deepEqual([...listed].sort(), ACCESS_FEATURES.filter((feature) => feature !== 'settings:roles').sort());
+  assert.deepEqual([...listed].sort(), ACCESS_FEATURES.filter((feature) => feature !== 'settings:roles' && feature !== 'cli:roles').sort());
   assert.equal(new Set(listed).size, listed.length);
 });
 

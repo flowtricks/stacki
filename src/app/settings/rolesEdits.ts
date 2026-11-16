@@ -35,7 +35,10 @@ import {
   type ProjectRoles,
 } from '../../../shared/properties/projectRoles';
 
-/** Adds a custom role named `name` with no members and no access. */
+/** What a new custom role may do: `cli:read`, which every role holds by default. */
+const NEW_ROLE_ACCESS: readonly AccessFeature[] = ['cli:read'];
+
+/** Adds a custom role named `name` with no members and only the access every role starts with: reading through the command line. */
 export function addRole(roles: ProjectRoles, name: string): ProjectRoles {
   const trimmed = roleNameFor(roles, undefined, name);
   if (roles.roles.length >= ROLE_LIMITS.rolesMax) {
@@ -45,7 +48,10 @@ export function addRole(roles: ProjectRoles, name: string): ProjectRoles {
     trimmed,
     roles.roles.map((role) => role.id),
   );
-  const next = { ...roles, roles: [...roles.roles, { id, name: trimmed, members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [] }] };
+  const next = {
+    ...roles,
+    roles: [...roles.roles, { id, name: trimmed, members: [], access: NEW_ROLE_ACCESS, appPermissions: {}, pinnedApps: [], componentRules: [] }],
+  };
   assert(next.roles.length === roles.roles.length + 1, 'Adding a role adds one');
   return next;
 }
@@ -75,7 +81,9 @@ export function duplicateRole(
     roles.roles.map((role) => role.id),
   );
   const access: readonly AccessFeature[] =
-    source.id === ADMIN_ROLE_ID ? [...ACCESS_FEATURES.filter((feature) => feature !== 'settings:roles'), APP_ACCESS_ALL] : source.access;
+    source.id === ADMIN_ROLE_ID
+      ? [...ACCESS_FEATURES.filter((feature) => feature !== 'settings:roles' && feature !== 'cli:roles'), APP_ACCESS_ALL]
+      : source.access;
   const copy: ProjectRole = {
     id: copyId,
     name,
@@ -189,6 +197,7 @@ export function removeMember(roles: ProjectRoles, id: string, login: string): Pr
 export function setAccess(roles: ProjectRoles, id: string, feature: AccessFeature, change: 'grant' | 'withdraw'): ProjectRoles {
   assert(id !== ADMIN_ROLE_ID, 'Admin access is not editable');
   assert(feature !== 'settings:roles', 'Only admin edits roles');
+  assert(feature !== 'cli:roles', 'Only admin edits roles');
   return updateRole(roles, id, (role) => {
     const without = role.access.filter((item) => item !== feature);
     return { ...role, access: change === 'grant' ? [...without, feature] : without };

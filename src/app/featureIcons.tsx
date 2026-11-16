@@ -94,6 +94,15 @@ export const FEATURE_ICONS: Readonly<Record<StaticAccessFeature, FeatureIconComp
   'settings:audits': AuditsIcon,
   'settings:breakpoints': AllBreakpointsIcon,
   'settings:roles': RolesIcon,
+  // The command line: code brackets for reading and the commands that edit settings, the owning panel's icon for the rest.
+  'cli:read': RailCodeIcon,
+  'cli:config': GearIcon,
+  'cli:guides': GearIcon,
+  'cli:breakpoints': AllBreakpointsIcon,
+  'cli:folders': FolderIcon,
+  'cli:components': ComponentFillIcon,
+  'cli:apps': AppsIcon,
+  'cli:roles': RolesIcon,
 };
 
 /** The rail's More button (RailMore.tsx), shared by Desktop and Studio. */

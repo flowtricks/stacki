@@ -26,7 +26,7 @@ esbuild.buildSync({
   stdin: {
     contents: [
       "export { RolesSettings } from './src/app/settings/RolesSettings';",
-      "export { roleNameFor, renameRole } from './src/app/settings/rolesEdits';",
+      "export { addRole, duplicateRole, roleNameFor, renameRole } from './src/app/settings/rolesEdits';",
       "export * from './src/lib/currentRole';",
       "export { subscribeErrorToasts } from './src/ui/errorNotices';",
       "export { ConfirmHost } from './src/ui/ConfirmDialog';",
@@ -172,7 +172,7 @@ test('each change saves at once: the first creates the file, and each writes a v
   assert.deepEqual(file.roles[0].members, ['owner']);
   const savedWriter = file.roles.find((role) => role.id === 'writer');
   assert.deepEqual(savedWriter.members, ['Sam']);
-  assert.deepEqual(savedWriter.access, ['panel:cms']);
+  assert.deepEqual(savedWriter.access, ['cli:read', 'panel:cms'], 'a new role starts with cli:read, then holds the switch');
   await unmount();
 });
 
@@ -718,4 +718,14 @@ test('"Add app" pins an app the role cannot use in one step, granting it (and th
   assert.ok(!pinRows('Client')[0].classList.contains('is-ignored'), 'the new pin is live on the rail');
   delete window.avb.listApps;
   await unmount();
+});
+
+test('a new custom role starts with cli:read only, and a copy of admin never carries cli:roles', () => {
+  const added = roles.addRole(roles.DEFAULT_PROJECT_ROLES, 'Writer').roles[2];
+  assert.deepEqual(added.access, ['cli:read']);
+  const copy = roles.duplicateRole(roles.DEFAULT_PROJECT_ROLES, 'admin');
+  const access = copy.roles.roles.find((role) => role.id === copy.id).access;
+  assert.ok(access.includes('cli:config'), 'a copy of admin holds the grantable CLI features');
+  assert.ok(!access.includes('cli:roles'));
+  assert.ok(!access.includes('settings:roles'));
 });

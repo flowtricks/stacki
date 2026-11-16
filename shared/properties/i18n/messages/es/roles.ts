@@ -10,6 +10,14 @@ export const messages = {
   'roles.group.codeAndPublishing': 'Código y publicación',
   'roles.group.apps': 'Apps', // same
   'roles.group.settings': 'Ajustes',
+  'roles.group.cli': 'Línea de comandos',
+  'roles.feature.cliRead': 'Leer ajustes',
+  'roles.feature.cliConfig': 'Cambiar archivos de ajustes',
+  'roles.feature.cliGuides': 'Editar guías de columnas',
+  'roles.feature.cliBreakpoints': 'Editar puntos de corte',
+  'roles.feature.cliFolders': 'Editar carpetas',
+  'roles.feature.cliComponents': 'Gestionar componentes',
+  'roles.feature.cliApps': 'Gestionar apps',
   'roles.feature.panelPages': 'Páginas',
   'roles.feature.panelNavigator': 'Navegador', // same
   'roles.feature.panelProperties': 'Propiedades del componente',

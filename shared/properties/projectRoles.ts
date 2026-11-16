@@ -65,9 +65,9 @@ export const ROLE_LIMITS = {
 
 /**
  * Every part of Stacki a role can be allowed, as `area:part` ids. The groups
- * below (`ACCESS_GROUPS`) order them for the Roles tab. `settings:roles` is in
- * the union so callers can ask about it, but it is never grantable: only admin
- * edits roles.
+ * below (`ACCESS_GROUPS`) order them for the Roles tab. `settings:roles` and
+ * `cli:roles` are in the union so callers can ask about them, but they are never
+ * grantable: only admin edits roles, by any route.
  */
 export const ACCESS_FEATURES = [
   // Left rail panels.
@@ -128,6 +128,23 @@ export const ACCESS_FEATURES = [
   'settings:audits',
   'settings:breakpoints',
   'settings:roles',
+  // The `stacki` command line and its MCP server (shared/properties/cli/stackiFeatures.ts).
+  /** Every read-only command: list, schema, doctor, config get. Granted to every role by default. */
+  'cli:read',
+  /** Generic config set, unset, add and remove on the settings files that are not roles. */
+  'cli:config',
+  /** Column guide edits (`.stacki/guide.json`). */
+  'cli:guides',
+  /** Breakpoint edits. */
+  'cli:breakpoints',
+  /** Folder edits. */
+  'cli:folders',
+  /** Rename, move, duplicate and delete components, and their insertion defaults. */
+  'cli:components',
+  /** Add and remove apps, change app settings and run the app commands the role is granted. */
+  'cli:apps',
+  /** Edit roles, enable apps' commands and trust apps through the command line. Never grantable, like `settings:roles`. */
+  'cli:roles',
 ] as const;
 export type StaticAccessFeature = (typeof ACCESS_FEATURES)[number];
 
@@ -169,7 +186,7 @@ export function can(role: RoleView, feature: AccessFeature): boolean {
   if (role.isAdmin) {
     return true;
   }
-  if (feature === 'settings:roles') {
+  if (feature === 'settings:roles' || feature === 'cli:roles') {
     return false;
   }
   if (isAppFeature(feature)) {
@@ -224,6 +241,8 @@ export const CLIENT_DEFAULT_ACCESS: readonly StaticAccessFeature[] = [
   'page:rename',
   'publish',
   'settings:editor',
+  // Reading through the command line is as harmless as reading in the editor.
+  'cli:read',
 ];
 
 /** The admin view, which every caller may start from: full access. */
@@ -351,6 +370,19 @@ export const ACCESS_GROUPS: readonly {
       { feature: 'settings:instructions', label: 'Hidden instructions', labelRef: messageRef('roles.feature.settingsInstructions') },
       { feature: 'settings:audits', label: 'Audit checks', labelRef: messageRef('roles.feature.settingsAudits') },
       { feature: 'settings:breakpoints', label: 'Breakpoints', labelRef: messageRef('roles.feature.settingsBreakpoints') },
+    ],
+  },
+  {
+    label: 'Command line',
+    labelRef: messageRef('roles.group.cli'),
+    features: [
+      { feature: 'cli:read', label: 'Read settings', labelRef: messageRef('roles.feature.cliRead') },
+      { feature: 'cli:config', label: 'Change settings files', labelRef: messageRef('roles.feature.cliConfig') },
+      { feature: 'cli:guides', label: 'Edit column guides', labelRef: messageRef('roles.feature.cliGuides') },
+      { feature: 'cli:breakpoints', label: 'Edit breakpoints', labelRef: messageRef('roles.feature.cliBreakpoints') },
+      { feature: 'cli:folders', label: 'Edit folders', labelRef: messageRef('roles.feature.cliFolders') },
+      { feature: 'cli:components', label: 'Manage components', labelRef: messageRef('roles.feature.cliComponents') },
+      { feature: 'cli:apps', label: 'Manage apps', labelRef: messageRef('roles.feature.cliApps') },
     ],
   },
 ];
@@ -498,6 +530,7 @@ export function roleView(role: ProjectRole): RoleView {
     componentRules: role.componentRules,
   };
   assert(!view.features.has('settings:roles'), 'No role but admin edits roles');
+  assert(!view.features.has('cli:roles'), 'No role but admin edits roles from the command line');
   assert(!view.isAdmin, 'Only the admin role is admin');
   return view;
 }
@@ -644,6 +677,7 @@ function parseRole(input: unknown): ProjectRole {
   }
   const access = value['access'] === undefined && id === CLIENT_ROLE_ID ? CLIENT_DEFAULT_ACCESS : parseAccess(value['access']);
   assert(!access.includes('settings:roles'), 'parseAccess refuses the roles tab');
+  assert(!access.includes('cli:roles'), 'parseAccess refuses the command line roles edit');
   // Client's name is the project's to choose, like a custom role's; only its
   // id (`client`) carries meaning to grants, the default role and the servers.
   return { id, name, members, access, appPermissions: parseAppPermissionGrants(value['appPermissions']), pinnedApps, componentRules };
@@ -773,7 +807,7 @@ function parseAccess(input: unknown): readonly AccessFeature[] {
 
 function parseFeature(input: unknown): AccessFeature {
   const feature = text(input);
-  if (feature === 'settings:roles') {
+  if (feature === 'settings:roles' || feature === 'cli:roles') {
     throw new Error('Only admin can edit roles');
   }
   const known = ACCESS_FEATURES.find((item) => item === feature);
