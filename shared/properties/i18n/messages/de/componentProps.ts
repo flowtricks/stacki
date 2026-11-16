@@ -128,12 +128,17 @@ export const messages = {
   'componentProps.type.noType': 'Kein Typ',
   'componentProps.type.search': 'Arten suchen …', // review
   'componentProps.type.typescript': 'TypeScript', // same
+  'componentProps.variants.addCondition': 'Bedingung hinzufügen', // review
+  'componentProps.variants.and': 'und', // review
   'componentProps.variants.badIndex': 'Diese Position liegt außerhalb der Optionen.', // review
   'componentProps.variants.badValue': 'Verwende einen kurzen Namen ohne Anführungszeichen oder Backslashes.', // review
+  'componentProps.variants.booleanOptions': '{name} ist true oder false: Seine zwei Optionen lassen sich nicht hinzufügen, umbenennen oder entfernen.', // review
   'componentProps.variants.cannotAttach':
     '{name} ist nicht in den Eigenschaften deklariert, die alle Optionen teilen, daher kann sie hier keine Variantenregeln bekommen.', // review
   'componentProps.variants.cannotGroup': 'Props ist nicht als Typ geschrieben, dem Stacki Variantenregeln hinzufügen kann.', // review
   'componentProps.variants.cell': '{prop}, wenn {controller} {value} ist', // review
+  'componentProps.variants.condition': '{controller}: {options}', // same
+  'componentProps.variants.conditional': 'Bedingt', // review
   'componentProps.variants.controlledBy': 'Gesteuert von', // review
   'componentProps.variants.duplicateOption': 'Es gibt bereits eine Option {value}.', // review
   'componentProps.variants.lastOptions': 'Behalte mindestens zwei Optionen.', // review
@@ -153,6 +158,7 @@ export const messages = {
   'componentProps.variants.reason.runtime': 'Laufzeit', // review
   'componentProps.variants.reason.shape': 'Komplex', // review
   'componentProps.variants.reason.shared': 'Geteilt', // review
+  'componentProps.variants.removeCondition': '{controller} entfernen', // review
   'componentProps.variants.removeFallback': '{value} ist der Standard. Mache zuerst eine andere Option zum Standard.', // review
   'componentProps.variants.rules': 'Regeln', // review
   'componentProps.variants.state.forbidden': 'Nicht erlaubt', // review

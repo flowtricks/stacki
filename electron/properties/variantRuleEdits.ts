@@ -21,8 +21,8 @@ import type { VariantRuleEdit, VariantRuleState } from '../../shared/properties/
 import { applySourceEdits, propertyKey, readPropertySyntax, replaceFrontmatter, syntaxError, syntaxNodes, validatePropertyCode } from './propertySyntax';
 import type { SourceEdit } from './propertySyntax';
 import { memberComment } from './propertyMemberEdits';
-import { readVariantSyntax, ruleOf, stringLiteralOf, variantGroupsOf } from './variantRuleModel';
-import type { VariantCandidateSyntax, VariantGroupSyntax, VariantSyntax } from './variantRuleModel';
+import { literalValueOf, readVariantSyntax, ruleOf, stringLiteralOf, variantGroupsOf } from './variantRuleModel';
+import type { ControllerLiteral, VariantCandidateSyntax, VariantGroupSyntax, VariantSyntax } from './variantRuleModel';
 import { indentUnitOf } from '../../shared/core/indent';
 
 /** Frontmatter edits are offsets into the frontmatter; template edits, into the whole source. */
@@ -35,6 +35,9 @@ const NO_EDITS: PlannedEdits = { frontmatter: [], template: [] };
 
 /** The source with `edit` applied, the same source when it changes nothing, or why it cannot be applied. */
 export function editVariantRules(source: string, edit: VariantRuleEdit): Result<string> {
+  if (edit.kind === 'switchController') {
+    return switchController(source, edit.controller, edit.to, edit.prop);
+  }
   const document = readPropertySyntax(source);
   const syntax = readVariantSyntax(document);
   const group = syntax.groups.find((candidate) => candidate.controller === edit.controller);
@@ -81,6 +84,25 @@ function planGroupEdit(syntax: VariantSyntax, group: VariantGroupSyntax | undefi
   return planEdit(syntax, group, edit);
 }
 
+// A prop's rules moved from one controller to another, as one write: let go
+// of the first, then join the second, allowed for every option there.
+function switchController(source: string, from: string, to: string, prop: string): Result<string> {
+  if (from === to) {
+    return ok(source);
+  }
+  const detached = editVariantRules(source, { kind: 'detachProp', controller: from, prop });
+  if (!detached.ok) {
+    return detached;
+  }
+  const target = variantGroupsOf(readVariantSyntax(readPropertySyntax(detached.value))).find((group) => group.controller === to);
+  if (target === undefined) {
+    return err(refusal('missing', 'componentProps.variants.missingGroup', { name: to }));
+  }
+  const attached = editVariantRules(detached.value, { kind: 'attachProp', controller: to, prop, options: target.options.map((option) => option.value) });
+  assert(!attached.ok || attached.value !== source, 'switchController: a switch changes the source');
+  return attached;
+}
+
 // The one place that branches on the edit: each helper below plans text and
 // returns it, or refuses.
 function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: VariantRuleEdit): Result<PlannedEdits> {
@@ -105,6 +127,8 @@ function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: Varian
       return planAttachProp(syntax, group, edit.prop, edit.options);
     case 'detachProp':
       return planDetachProp(syntax, group, edit.prop);
+    case 'switchController':
+      throw new Error('Assertion failed: a controller switch is two edits, applied before planning');
     default: {
       const exhaustive: never = edit;
       return exhaustive;
@@ -143,6 +167,9 @@ function planSetRule(syntax: VariantSyntax, group: VariantGroupSyntax, option: s
 }
 
 function planAddOption(syntax: VariantSyntax, group: VariantGroupSyntax, value: string): Result<PlannedEdits> {
+  if (booleanGroup(group)) {
+    return err(refusal('option', 'componentProps.variants.booleanOptions', { name: group.controller }));
+  }
   const valid = newOptionValue(group, value);
   if (!valid.ok) {
     return valid;
@@ -175,6 +202,9 @@ function planAddOption(syntax: VariantSyntax, group: VariantGroupSyntax, value: 
 }
 
 function planRenameOption(syntax: VariantSyntax, group: VariantGroupSyntax, from: string, to: string): Result<PlannedEdits> {
+  if (booleanGroup(group)) {
+    return err(refusal('option', 'componentProps.variants.booleanOptions', { name: group.controller }));
+  }
   const member = group.members.find((candidate) => candidate.value === from);
   if (member === undefined) {
     return err(refusal('missing', 'componentProps.variants.missingOption', { value: from }));
@@ -199,6 +229,9 @@ function planRenameOption(syntax: VariantSyntax, group: VariantGroupSyntax, from
 }
 
 function planRemoveOption(syntax: VariantSyntax, group: VariantGroupSyntax, value: string): Result<PlannedEdits> {
+  if (booleanGroup(group)) {
+    return err(refusal('option', 'componentProps.variants.booleanOptions', { name: group.controller }));
+  }
   const index = group.members.findIndex((candidate) => candidate.value === value);
   const member = group.members[index];
   if (member === undefined) {
@@ -267,10 +300,9 @@ function planSetFallback(syntax: VariantSyntax, group: VariantGroupSyntax, value
   // The destructure's default is the fallback at runtime: it follows.
   const binding = bindingOf(syntax, group.controller);
   const initial = binding?.initializer;
-  if (initial !== undefined && ts.isStringLiteral(initial) && group.members.some((candidate) => candidate.value === initial.text)) {
-    if (initial.text !== value) {
-      edits.push({ start: initial.getStart(), end: initial.end, text: literalText(initial, value) });
-    }
+  const current = initial === undefined ? undefined : literalValueOf(initial);
+  if (initial !== undefined && current !== undefined && current !== value && group.members.some((candidate) => candidate.value === current)) {
+    edits.push({ start: initial.getStart(), end: initial.end, text: ts.isStringLiteral(initial) ? literalText(initial, value) : value });
   }
   return ok({ frontmatter: edits, template: [] });
 }
@@ -312,25 +344,20 @@ function planAddProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: str
 // it again: as it was where it is allowed, `never` where it is not. The runtime
 // type and the destructure already have it.
 function planAttachProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: string, options: readonly string[]): Result<PlannedEdits> {
-  const field = syntax.common.get(prop);
-  if (field === undefined || group.props.includes(prop) || prop === group.controller) {
+  if (group.props.includes(prop) || prop === group.controller) {
     return err(refusal('missing', 'componentProps.variants.cannotAttach', { name: prop }));
+  }
+  const source = attachedSource(syntax, group.controller, prop);
+  if (!source.ok) {
+    return source;
   }
   const missing = options.find((value) => !group.members.some((member) => member.value === value));
   if (missing !== undefined) {
     return err(refusal('missing', 'componentProps.variants.missingOption', { value: missing }));
   }
-  const type = field.type;
-  assert(type !== undefined, 'planAttachProp: a shared prop has a type');
-  if (type.kind === ts.SyntaxKind.NeverKeyword) {
-    return err(refusal('type', 'componentProps.variants.noType', { name: prop }));
-  }
   const frontmatter = syntax.document.frontmatter;
-  const comment = memberComment(frontmatter, field);
-  const documentation = comment?.kind === 'jsdoc' ? frontmatter.slice(comment.start, comment.end) : '';
-  const state = field.questionToken === undefined ? 'required' : 'optional';
-  const allowed = declarationText(prop, state, type.getText());
-  const edits: SourceEdit[] = [{ start: field.getFullStart(), end: field.end, text: '' }];
+  const { declaration: allowed, documentation, shared } = source.value;
+  const edits: SourceEdit[] = shared === undefined ? [] : [{ start: shared.getFullStart(), end: shared.end, text: '' }];
   for (const member of group.members) {
     const declaration = options.includes(member.value) ? allowed : `${prop}?: never`;
     const documented =
@@ -338,6 +365,56 @@ function planAttachProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: 
     edits.push(insertField(frontmatter, member.literal, documented));
   }
   return ok({ frontmatter: edits, template: [] });
+}
+
+interface AttachedSource {
+  /** The prop's declaration where an option allows it. */
+  readonly declaration: string;
+  /** Its JSDoc, or ''. */
+  readonly documentation: string;
+  /** Its declaration in the shared object type, which leaves it; undefined when another group rules it and keeps doing so. */
+  readonly shared: ts.PropertySignature | undefined;
+}
+
+// What a prop brings to a group it joins: from the shared object type, its
+// declaration as written; from another group (both rules then hold, AND), the
+// type its first allowing option gives it. A controller never joins one: a
+// prop that picks another's options would make a cycle.
+function attachedSource(syntax: VariantSyntax, controller: string, prop: string): Result<AttachedSource> {
+  const frontmatter = syntax.document.frontmatter;
+  if (syntax.groups.some((group) => group.controller === prop)) {
+    return err(refusal('missing', 'componentProps.variants.cannotAttach', { name: prop }));
+  }
+  const field = syntax.common.get(prop);
+  if (field?.type !== undefined) {
+    if (field.type.kind === ts.SyntaxKind.NeverKeyword) {
+      return err(refusal('type', 'componentProps.variants.noType', { name: prop }));
+    }
+    const comment = memberComment(frontmatter, field);
+    return ok({
+      declaration: declarationText(prop, field.questionToken === undefined ? 'required' : 'optional', field.type.getText()),
+      documentation: comment?.kind === 'jsdoc' ? frontmatter.slice(comment.start, comment.end) : '',
+      shared: field,
+    });
+  }
+  const other = syntax.groups.find((group) => group.controller !== controller && group.reason === undefined && group.props.includes(prop));
+  if (other === undefined) {
+    return err(refusal('missing', 'componentProps.variants.cannotAttach', { name: prop }));
+  }
+  const type = propTypeOf(syntax, other, prop);
+  if (!type.ok) {
+    return type;
+  }
+  const allowedFields = other.members
+    .map((member) => member.fields.get(prop))
+    .filter((item) => item?.type !== undefined && item.type.kind !== ts.SyntaxKind.NeverKeyword);
+  const first = allowedFields[0];
+  const comment = first === undefined ? undefined : memberComment(frontmatter, first);
+  return ok({
+    declaration: declarationText(prop, 'optional', type.value),
+    documentation: comment?.kind === 'jsdoc' ? frontmatter.slice(comment.start, comment.end) : '',
+    shared: undefined,
+  });
 }
 
 // The comment goes above the declaration on its own line in a multi-line
@@ -355,39 +432,40 @@ function documentedDeclaration(frontmatter: string, literal: ts.TypeLiteralNode,
 // the shared object type, and `Props` is intersected with a union, one member
 // per option, keyed by the controller; the prop is allowed where picked.
 function planCreateGroup(syntax: VariantSyntax, candidate: VariantCandidateSyntax, prop: string, options: readonly string[]): Result<PlannedEdits> {
-  const field = syntax.common.get(prop);
   const props = syntax.props;
-  if (field === undefined || prop === candidate.controller) {
+  if (prop === candidate.controller) {
     return err(refusal('missing', 'componentProps.variants.cannotAttach', { name: prop }));
   }
-  const type = field.type;
-  assert(type !== undefined, 'planCreateGroup: a shared prop has a type');
+  const source = attachedSource(syntax, candidate.controller, prop);
+  if (!source.ok) {
+    return source;
+  }
   if (props === undefined || !(ts.isTypeLiteralNode(props.type) || ts.isIntersectionTypeNode(props.type) || ts.isTypeReferenceNode(props.type))) {
     return err(refusal('shape', 'componentProps.variants.cannotGroup'));
   }
-  const values = candidate.literals.map((literal) => literal.text);
-  const missing = options.find((value) => !values.includes(value));
+  const missing = options.find((value) => !candidate.values.includes(value));
   if (missing !== undefined) {
     return err(refusal('missing', 'componentProps.variants.missingOption', { value: missing }));
   }
   const frontmatter = syntax.document.frontmatter;
   const unit = indentUnitOf(frontmatter);
-  const quote = candidate.literals[0]?.getText().slice(0, 1) ?? '"';
-  const controllerDocumentation = inlineDocumentation(frontmatter, candidate.field);
-  const propDocumentation = inlineDocumentation(frontmatter, field);
-  const allowed = declarationText(prop, field.questionToken === undefined ? 'required' : 'optional', type.getText());
-  const members = values.map((value) => {
-    const key = `${controllerDocumentation}${candidate.controller}${value === candidate.fallback ? '?' : ''}: ${quote}${value}${quote}`;
-    const own = options.includes(value) ? `${propDocumentation}${allowed}` : `${prop}?: never`;
+  const spelling = candidate.spelling;
+  const controllerDocumentation = candidate.field === undefined ? '' : inlineDocumentation(frontmatter, candidate.field);
+  const propDocumentation = source.value.documentation === '' ? '' : `${source.value.documentation.replace(/\s*\n\s*\*?\s*/g, ' ')} `;
+  const members = candidate.values.map((value) => {
+    const literal = spelling.kind === 'string' ? `${spelling.quote}${value}${spelling.quote}` : value;
+    const key = `${controllerDocumentation}${candidate.controller}${value === candidate.fallback ? '?' : ''}: ${literal}`;
+    const own = options.includes(value) ? `${propDocumentation}${source.value.declaration}` : `${prop}?: never`;
     return `${unit}| { ${key}; ${own} }`;
   });
-  assert(members.length === values.length, 'planCreateGroup: one member per option');
+  assert(members.length === candidate.values.length, 'planCreateGroup: one member per option');
+  const removals = [candidate.field, source.value.shared].flatMap((field) =>
+    field === undefined ? [] : [{ start: field.getFullStart(), end: field.end, text: '' }],
+  );
   return ok({
-    frontmatter: [
-      { start: candidate.field.getFullStart(), end: candidate.field.end, text: '' },
-      { start: field.getFullStart(), end: field.end, text: '' },
-      { start: props.type.end, end: props.type.end, text: ` & (\n${members.join('\n')}\n)` },
-    ].sort((first, second) => first.start - second.start),
+    frontmatter: [...removals, { start: props.type.end, end: props.type.end, text: ` & (\n${members.join('\n')}\n)` }].sort(
+      (first, second) => first.start - second.start,
+    ),
     template: [],
   });
 }
@@ -424,8 +502,12 @@ function planDetachProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: 
     const field = member.fields.get(prop);
     return field === undefined ? [] : [{ start: field.getFullStart(), end: field.end, text: '' }];
   });
+  // Another group still rules it: only this one lets go.
+  const elsewhere = syntax.groups.some((other) => other !== group && other.props.includes(prop));
   const literal = syntax.commonLiterals[0];
-  if (literal !== undefined) {
+  if (elsewhere) {
+    assert(edits.length > 0, 'planDetachProp: a ruled prop has declarations to remove');
+  } else if (literal !== undefined) {
     edits.push(insertField(frontmatter, literal, documentation === '' ? declaration : documentedDeclaration(frontmatter, literal, documentation, declaration)));
   } else if (syntax.props !== undefined) {
     const start = syntax.props.type.getStart();
@@ -470,6 +552,11 @@ function planRemoveProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: 
 }
 
 // --- Text helpers: each takes values and returns text or an edit. ---
+
+// A true/false controller has exactly those two options: none is added, renamed or removed.
+function booleanGroup(group: VariantGroupSyntax): boolean {
+  return group.members.some((member) => !ts.isStringLiteral(member.literalNode));
+}
 
 function newOptionValue(group: VariantGroupSyntax, value: string): Result<string> {
   if (variantOptionValue(value) !== value) {
@@ -538,7 +625,10 @@ function lineIndent(text: string, position: number): string {
   return indent?.[0] ?? '';
 }
 
-function literalText(literal: ts.StringLiteral, value: string): string {
+function literalText(literal: ControllerLiteral, value: string): string {
+  if (!ts.isStringLiteral(literal)) {
+    return value;
+  }
   const quote = literal.getText().startsWith("'") ? "'" : '"';
   return `${quote}${value}${quote}`;
 }
@@ -755,6 +845,8 @@ function verifyEdit(output: string, edit: VariantRuleEdit): void {
       return;
     case 'removeProp':
       assert(!group.props.includes(edit.prop), 'verifyEdit: the removed prop is gone');
+      return;
+    case 'switchController':
       return;
     case 'detachProp':
       assert(!group.props.includes(edit.prop), 'verifyEdit: the detached prop is no longer ruled');

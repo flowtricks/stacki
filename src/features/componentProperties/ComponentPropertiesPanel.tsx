@@ -17,6 +17,7 @@ import { kindIcon } from './PropertyType';
 import { PropertyGrip, movePropertyItem } from './PropertyReorder';
 import { PropertiesIcon } from './PropertiesIcon';
 import { PropertyEditor, withListSettingType } from './PropertyEditor';
+import { VariantConditionMark, conditionLines } from './PropertyVariants';
 import './componentProperties.css';
 
 type Selection =
@@ -230,16 +231,22 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
           onOpen={() => onSelect(property)}
           onRemove={() => void onChange({ kind: 'remove', name: property.name })}
           trailing={
-            unused.has(property.name) ? (
-              <span
-                className="property-unused"
-                title={translate('componentProps.panel.unused')}
-                role="img"
-                aria-label={translate('componentProps.panel.unused')}
-              >
-                <WarningTriangleIcon size={14} />
-              </span>
-            ) : undefined
+            <>
+              {/* A prop only some options allow is marked; its tip names them. */}
+              {conditionLines(data.variantGroups, property.name, translate).length > 0 && (
+                <VariantConditionMark lines={conditionLines(data.variantGroups, property.name, translate)} />
+              )}
+              {unused.has(property.name) && (
+                <span
+                  className="property-unused"
+                  title={translate('componentProps.panel.unused')}
+                  role="img"
+                  aria-label={translate('componentProps.panel.unused')}
+                >
+                  <WarningTriangleIcon size={14} />
+                </span>
+              )}
+            </>
           }
         >
           {property.name}

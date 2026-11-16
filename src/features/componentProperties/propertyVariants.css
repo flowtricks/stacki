@@ -1,9 +1,13 @@
-/* "Controlled by" in a prop's settings (PropertyVariants.tsx). Fills, never
-   outlines: Required is the accent, Allowed its soft tint, Not allowed the
-   field fill with its option dimmed. The accent stays the accent on hover,
-   press and focus. Every row fits the panel's narrow widths: the state is a
-   fixed-width Dropdown, the option name takes what is left and ellipsizes. */
+/* "Controlled by" in a prop's settings, and the prop list's conditional mark
+   (PropertyVariants.tsx). Two columns throughout: what (a controller, an
+   option's name) on the left, taking the room; the control on the right at a
+   fixed width, so nothing is cut at the panel's 320–480px. Every row is the
+   height of a form field. Fills, never outlines: Required is the accent,
+   Allowed its soft tint, Not allowed the field fill with its row muted. The
+   accent stays the accent on hover, press and focus. */
 .variant-rules {
+  --variant-state-width: 128px;
+  --variant-row-height: 28px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -12,16 +16,30 @@
 .variant-label {
   color: var(--text-dim);
 }
-.variant-controller {
+.variant-block {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.variant-and {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.variant-block-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 6px;
   min-width: 0;
 }
-.variant-controller .variant-controller-choice {
-  width: auto;
-  min-width: 120px;
-  max-width: 100%;
+.variant-block-head .dd-trigger {
+  min-width: 0;
+  min-height: var(--variant-row-height);
 }
 .variant-reason {
   padding: 1px 6px;
@@ -29,6 +47,25 @@
   background: var(--bg-input);
   color: var(--text-dim);
   font-size: 11px;
+}
+.variant-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--variant-row-height);
+  height: var(--variant-row-height);
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.variant-remove:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.variant-add-condition {
+  color: var(--text-dim);
 }
 .variant-rule-rows {
   display: flex;
@@ -38,10 +75,12 @@
 }
 .variant-rule-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 116px;
+  grid-template-columns: minmax(0, 1fr) var(--variant-state-width);
   align-items: center;
   gap: 8px;
   min-width: 0;
+  min-height: var(--variant-row-height);
+  padding-left: 8px;
 }
 .variant-rule-option {
   min-width: 0;
@@ -56,6 +95,7 @@
 }
 .variant-rule-row .variant-state {
   min-width: 0;
+  min-height: var(--variant-row-height);
 }
 .variant-rule-row .variant-state.is-forbidden {
   color: var(--text-dim);
@@ -72,21 +112,12 @@
   background: var(--accent);
   color: #fff;
 }
-.variant-only-for {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+.variant-condition-mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-dim);
+  opacity: 0.7;
 }
-.variant-only-option {
-  height: 26px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text);
-  font-size: 12px;
-}
-.variant-only-option:hover:not(:disabled) {
-  background: var(--accent-soft);
-  color: var(--accent);
+.variant-condition-tip {
+  white-space: pre-line;
 }

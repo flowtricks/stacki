@@ -313,7 +313,9 @@ test('every successful edit leaves source the reader models as editable', () => 
   for (const edit of edits) {
     source = edited(source, edit);
     assert.deepEqual(
-      readVariantGroups(source).map((group) => [group.controller, group.editing.kind]),
+      readVariantGroups(source)
+        .filter((group) => group.editing.kind !== 'candidate')
+        .map((group) => [group.controller, group.editing.kind]),
       [
         ['element', 'editable'],
         ['variant', 'editable'],
@@ -337,8 +339,8 @@ test('attachProp: a shared prop moves into every option, allowed where picked, w
   );
   const element = readVariantGroups(output).find((group) => group.controller === 'element');
   assert.deepEqual(element?.props, ['type', 'disabled', 'href', 'render']);
-  assert.deepEqual(element?.attachable, []);
-  assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'label', options: ['link'] }), 'missing');
+  assert.deepEqual(element?.attachable, ['emphasis', 'label', 'pressed', 'direction']);
+  assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'nothing', options: ['link'] }), 'missing');
   assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'render', options: ['span'] }), 'missing');
 });
 
@@ -417,3 +419,93 @@ test('attachProp on a component with no group: a prop of string options becomes 
   const exported = component(['export type Props = { size?: "s" | "l"; icon?: string };'].join('\n'));
   assert.deepEqual(readVariantGroups(exported), []);
 });
+
+test('a prop two controllers rule: attach to a second, change its state there, detach that one alone', () => {
+  const attached = edited(BUTTON, { kind: 'attachProp', controller: 'variant', prop: 'disabled', options: ['main', 'play', 'close', 'arrow'] });
+  const kind = attached.slice(attached.indexOf('type Kind ='), attached.indexOf('type Props ='));
+  assert.equal(kind.split('/** Disable the button. */\n      disabled?: boolean;').length, 5);
+  assert.equal(kind.split('disabled?: never;').length, 2);
+  // The element group keeps its own rule: both hold.
+  assert.equal(attached.slice(0, attached.indexOf('type Kind =')), BUTTON.slice(0, BUTTON.indexOf('type Kind =')));
+  const groups = readVariantGroups(attached);
+  assert.ok(groupOf(groups, 'element').props.includes('disabled'));
+  assert.ok(groupOf(groups, 'variant').props.includes('disabled'));
+  const flipped = edited(attached, { kind: 'setRule', controller: 'variant', option: 'link', prop: 'disabled', state: 'optional' });
+  assert.equal(
+    groupOf(readVariantGroups(flipped), 'variant')
+      .options.map((option) => option.rules.find((rule) => rule.prop === 'disabled')?.state)
+      .join(),
+    'optional,optional,optional,optional,optional',
+  );
+  // Removing the variant condition leaves the element one exactly as it was.
+  assert.equal(edited(attached, { kind: 'detachProp', controller: 'variant', prop: 'disabled' }), BUTTON);
+});
+
+test('a controller never joins another group: no cycle', () => {
+  assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'variant', prop: 'element', options: ['main'] }), 'missing');
+  assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'variant', options: ['link'] }), 'missing');
+});
+
+test('promoting a Choice prop another group rules: a new union keyed by it, its rules kept', () => {
+  const output = edited(BUTTON, { kind: 'attachProp', controller: 'type', prop: 'href', options: ['button'] });
+  assert.equal(
+    output,
+    replaced(BUTTON, [
+      [
+        '} & Tag &\n  Kind;',
+        '} & Tag &\n  Kind & (\n  | { type?: "button"; /** Link destination. */ href?: string }\n  | { type: "submit"; href?: never }\n  | { type: "reset"; href?: never }\n);',
+      ],
+    ]),
+  );
+  const groups = readVariantGroups(output);
+  assert.deepEqual(groupOf(groups, 'type').props, ['href']);
+  assert.ok(groupOf(groups, 'element').props.includes('href'));
+});
+
+test('a boolean controller: true and false are its options, fixed', () => {
+  const source = component(['type Props = {', '  open?: boolean;', '  label?: string;', '};', 'const { open = false, label } = Astro.props;'].join('\n'));
+  const output = edited(source, { kind: 'attachProp', controller: 'open', prop: 'label', options: ['true'] });
+  assert.equal(
+    output,
+    replaced(source, [
+      [
+        'type Props = {\n  open?: boolean;\n  label?: string;\n};',
+        'type Props = {\n} & (\n  | { open: true; label?: string }\n  | { open?: false; label?: never }\n);',
+      ],
+    ]),
+  );
+  const open = groupOf(readVariantGroups(output), 'open');
+  assert.equal(open.editing.kind, 'editable');
+  assert.deepEqual(
+    open.options.map((option) => [option.value, option.fallback]),
+    [
+      ['true', false],
+      ['false', true],
+    ],
+  );
+  assert.equal(refused(output, { kind: 'addOption', controller: 'open', value: 'maybe' }), 'option');
+  assert.equal(refused(output, { kind: 'renameOption', controller: 'open', from: 'true', to: 'yes' }), 'option');
+  // The fallback moves, and the destructure's default with it, unquoted.
+  const moved = edited(output, { kind: 'setFallback', controller: 'open', value: 'true' });
+  assert.match(moved, /\| \{ open\?: true; label\?: string \}\n {2}\| \{ open: false; label\?: never \}/);
+  assert.match(moved, /const \{ open = true, label \}/);
+});
+
+test('switchController: a prop moves from one controller to another in one write', () => {
+  const output = edited(BUTTON, { kind: 'switchController', controller: 'element', to: 'variant', prop: 'href' });
+  const groups = readVariantGroups(output);
+  assert.ok(!groupOf(groups, 'element').props.includes('href'));
+  assert.deepEqual(
+    groupOf(groups, 'variant').options.map((option) => option.rules.find((rule) => rule.prop === 'href')?.state),
+    ['optional', 'optional', 'optional', 'optional', 'optional'],
+  );
+  const kind = output.slice(output.indexOf('type Kind ='), output.indexOf('type Props ='));
+  assert.equal(kind.split('/** Link destination. */\n      href?: string;').length, 6);
+  assert.doesNotMatch(output.slice(output.indexOf('type Tag ='), output.indexOf('type Kind =')), /href/);
+});
+
+function groupOf(groups: ReturnType<typeof readVariantGroups>, controller: string) {
+  const group = groups.find((candidate) => candidate.controller === controller);
+  assert.ok(group, `no group ${controller}`);
+  return group;
+}

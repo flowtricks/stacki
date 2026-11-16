@@ -126,12 +126,17 @@ export const messages = {
   'componentProps.type.noType': 'Aucun type',
   'componentProps.type.search': 'Rechercher des genres…', // review
   'componentProps.type.typescript': 'TypeScript', // same
+  'componentProps.variants.addCondition': 'Ajouter une condition', // review
+  'componentProps.variants.and': 'et', // review
   'componentProps.variants.badIndex': 'Cette position est en dehors des options.', // review
   'componentProps.variants.badValue': 'Utilisez un nom court sans guillemets ni barres obliques inverses.', // review
+  'componentProps.variants.booleanOptions': '{name} vaut true ou false : ses deux options ne peuvent pas être ajoutées, renommées ni supprimées.', // review
   'componentProps.variants.cannotAttach':
     '{name} n’est pas déclarée dans les propriétés partagées par toutes les options ; elle ne peut donc pas recevoir de règles de variante ici.', // review
   'componentProps.variants.cannotGroup': 'Props n’est pas écrit comme un type auquel Stacki peut ajouter des règles de variante.', // review
   'componentProps.variants.cell': '{prop} quand {controller} vaut {value}', // review
+  'componentProps.variants.condition': '{controller} : {options}', // review
+  'componentProps.variants.conditional': 'Conditionnelle', // review
   'componentProps.variants.controlledBy': 'Contrôlé par', // review
   'componentProps.variants.duplicateOption': 'Une option {value} existe déjà.', // review
   'componentProps.variants.lastOptions': 'Gardez au moins deux options.', // review
@@ -152,6 +157,7 @@ export const messages = {
   'componentProps.variants.reason.runtime': 'Exécution', // review
   'componentProps.variants.reason.shape': 'Complexe', // review
   'componentProps.variants.reason.shared': 'Partagé', // review
+  'componentProps.variants.removeCondition': 'Retirer {controller}', // review
   'componentProps.variants.removeFallback': '{value} est l’option par défaut. Choisissez d’abord une autre option par défaut.', // review
   'componentProps.variants.rules': 'Règles', // review
   'componentProps.variants.state.forbidden': 'Non autorisé', // review

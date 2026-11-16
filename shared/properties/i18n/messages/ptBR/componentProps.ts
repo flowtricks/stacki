@@ -126,12 +126,17 @@ export const messages = {
   'componentProps.type.noType': 'Sem tipo',
   'componentProps.type.search': 'Buscar tipos…', // review
   'componentProps.type.typescript': 'TypeScript', // same
+  'componentProps.variants.addCondition': 'Adicionar condição', // review
+  'componentProps.variants.and': 'e', // review
   'componentProps.variants.badIndex': 'Essa posição está fora das opções.', // review
   'componentProps.variants.badValue': 'Use um nome curto sem aspas nem barras invertidas.', // review
+  'componentProps.variants.booleanOptions': '{name} é true ou false: suas duas opções não podem ser adicionadas, renomeadas nem removidas.', // review
   'componentProps.variants.cannotAttach':
     '{name} não está declarada nas propriedades que todas as opções compartilham, então não pode receber regras de variante aqui.', // review
   'componentProps.variants.cannotGroup': 'Props não está escrito como um tipo ao qual o Stacki possa adicionar regras de variante.', // review
   'componentProps.variants.cell': '{prop} quando {controller} é {value}', // review
+  'componentProps.variants.condition': '{controller}: {options}', // same
+  'componentProps.variants.conditional': 'Condicional', // review
   'componentProps.variants.controlledBy': 'Controlado por', // review
   'componentProps.variants.duplicateOption': 'Já existe uma opção {value}.', // review
   'componentProps.variants.lastOptions': 'Mantenha pelo menos duas opções.', // review
@@ -151,6 +156,7 @@ export const messages = {
   'componentProps.variants.reason.runtime': 'Execução', // review
   'componentProps.variants.reason.shape': 'Complexo', // review
   'componentProps.variants.reason.shared': 'Compartilhado', // review
+  'componentProps.variants.removeCondition': 'Remover {controller}', // review
   'componentProps.variants.removeFallback': '{value} é o padrão. Torne outra opção o padrão primeiro.', // review
   'componentProps.variants.rules': 'Regras', // review
   'componentProps.variants.state.forbidden': 'Não permitido', // review

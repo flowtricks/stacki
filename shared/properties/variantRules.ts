@@ -16,8 +16,8 @@ import { toRecord } from '../core/record';
 export const VARIANT_LIMITS = {
   /** Options one controller may have: a union of more is a generated type, not a designer's list. */
   optionsMax: 64,
-  /** Discriminated unions one component's props may combine. */
-  groupsMax: 16,
+  /** Discriminated unions one component's props may combine, and the props that could key a new one. */
+  groupsMax: 32,
   /** An option's characters: a word or two, written as a string literal. */
   valueCharsMax: 128,
   /** Props one group may rule: the props a component may have (VARIANT_LIMITS.propsMax). */
@@ -89,15 +89,17 @@ export type VariantRuleEdit =
   | { readonly kind: 'addProp'; readonly controller: string; readonly prop: string; readonly type: string }
   | { readonly kind: 'removeProp'; readonly controller: string; readonly prop: string }
   | { readonly kind: 'attachProp'; readonly controller: string; readonly prop: string; readonly options: readonly string[] }
-  | { readonly kind: 'detachProp'; readonly controller: string; readonly prop: string };
+  | { readonly kind: 'detachProp'; readonly controller: string; readonly prop: string }
+  | { readonly kind: 'switchController'; readonly controller: string; readonly to: string; readonly prop: string };
 
-/** The group that controls or rules `name`, if any: the panel draws variant settings for both. */
+/** The group that controls or rules `name`, if any (a candidate does neither yet). */
 export function variantGroupOf(groups: readonly VariantGroup[] | undefined, name: string): VariantGroup | undefined {
   if (groups === undefined) {
     return undefined;
   }
   assert(groups.length <= VARIANT_LIMITS.groupsMax, 'variantGroupOf: groups are bounded');
-  return groups.find((group) => group.controller === name) ?? groups.find((group) => group.props.includes(name));
+  const real = groups.filter((group) => group.editing.kind !== 'candidate');
+  return real.find((group) => group.controller === name) ?? real.find((group) => group.props.includes(name));
 }
 
 /** Every group that controls or rules `name`. */
@@ -106,7 +108,7 @@ export function variantGroupsOf(groups: readonly VariantGroup[] | undefined, nam
     return [];
   }
   assert(groups.length <= VARIANT_LIMITS.groupsMax, 'variantGroupsOf: groups are bounded');
-  return groups.filter((group) => group.controller === name || group.props.includes(name));
+  return groups.filter((group) => group.editing.kind !== 'candidate').filter((group) => group.controller === name || group.props.includes(name));
 }
 
 /**
@@ -242,6 +244,13 @@ export function parseVariantRuleEdit(input: unknown): VariantRuleEdit {
     case 'removeProp':
     case 'detachProp':
       return { kind, ...object({ controller: propertyName, prop: propertyName })(input) };
+    case 'switchController': {
+      const change = object({ controller: propertyName, to: propertyName, prop: propertyName })(input);
+      if (change.controller === change.to || change.prop === change.to) {
+        throw new Error('A controller switch names another controller, never the prop');
+      }
+      return { kind, ...change };
+    }
     case 'attachProp': {
       const attach = object({
         controller: propertyName,

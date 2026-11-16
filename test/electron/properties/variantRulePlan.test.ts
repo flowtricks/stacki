@@ -70,7 +70,7 @@ test('the panel read carries the groups, and they survive the wire', () => {
     assert.ok(read.ok);
     const groups = read.value.variantGroups ?? [];
     assert.deepEqual(
-      groups.map((group) => group.controller),
+      groups.filter((group) => group.editing.kind !== 'candidate').map((group) => group.controller),
       ['element', 'variant'],
     );
     assert.deepEqual(parseComponentProperties(JSON.parse(JSON.stringify(read.value))).variantGroups, groups);

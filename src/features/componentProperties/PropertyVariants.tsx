@@ -19,10 +19,13 @@ import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
-import { VARIANT_LIMITS, variantGroupsOf } from '../../../shared/properties/variantRules';
+import { VARIANT_LIMITS } from '../../../shared/properties/variantRules';
 import type { VariantGroup, VariantGroupReason, VariantRuleEdit, VariantRuleState } from '../../../shared/properties/variantRules';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { createPortal } from 'react-dom';
 import Dropdown from '../../ui/Dropdown';
+import { BranchIcon, CloseIcon } from '../../ui/Icons';
+import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import type { ListFieldChange } from '../props/ListField';
 import type { PropertySaveHost, PropertySaveOutcome } from './propertyAutosave';
 import './propertyVariants.css';
@@ -36,8 +39,9 @@ export interface VariantHost {
 /** What a prop is to the variant rules: the prop that picks the option, one an option rules, one that could be ruled, or none. */
 export type VariantRole =
   | { readonly kind: 'controller'; readonly group: VariantGroup }
-  | { readonly kind: 'ruled'; readonly groups: readonly VariantGroup[] }
-  | { readonly kind: 'attachable'; readonly groups: readonly VariantGroup[] }
+  /** `groups` rule it (every one must allow it: AND); `available` could rule it too. */
+  | { readonly kind: 'ruled'; readonly groups: readonly VariantGroup[]; readonly available: readonly VariantGroup[] }
+  | { readonly kind: 'attachable'; readonly available: readonly VariantGroup[] }
   | { readonly kind: 'none' };
 
 type Translate = ReturnType<typeof useTranslate>;
@@ -65,12 +69,14 @@ export function variantRoleOf(groups: readonly VariantGroup[] | undefined, name:
   if (controller !== undefined) {
     return { kind: 'controller', group: controller };
   }
-  const ruled = variantGroupsOf(groups, name);
+  const all = groups ?? [];
+  assert(all.length <= VARIANT_LIMITS.groupsMax, 'variantRoleOf: groups are bounded');
+  const ruled = all.filter((group) => group.props.includes(name));
+  const available = all.filter((group) => group.attachable.includes(name) && group.controller !== name);
   if (ruled.length > 0) {
-    return { kind: 'ruled', groups: ruled };
+    return { kind: 'ruled', groups: ruled, available };
   }
-  const attachable = (groups ?? []).filter((group) => group.attachable.includes(name));
-  return attachable.length > 0 ? { kind: 'attachable', groups: attachable } : { kind: 'none' };
+  return available.length > 0 ? { kind: 'attachable', available } : { kind: 'none' };
 }
 
 /**
@@ -205,11 +211,12 @@ const NO_CONTROLLER = '';
 
 /**
  * "Controlled by" in any existing prop's settings, in place of Required for a
- * ruled prop. Ruled: the controller, then one row per option with its state
- * (Allowed, Required, Not allowed); None gives the prop back to every option.
- * Not ruled yet: pick a controller (an existing one, or with none yet a
- * prop of string options), then an option: the prop is allowed there and not
- * elsewhere, and the rows take over.
+ * ruled prop. One block per controller that rules it, joined by "and" (every
+ * one must allow it): the controller, which can be switched to any other that
+ * could rule it, a remove, and one row per option with its state. "Add
+ * condition" joins another. A prop with no rules picks its first controller
+ * from None. Joining a controller allows the prop for every option there;
+ * the rows then say where it is not.
  */
 export function VariantControlledBy(props: {
   readonly name: string;
@@ -218,59 +225,121 @@ export function VariantControlledBy(props: {
   readonly onProblem: (message: string) => void;
 }) {
   const translate = useTranslate();
-  const [chosen, setChosen] = useState<string | undefined>(undefined);
   const { run, pending } = useVariantRun(props.host, props.onProblem);
   const { role, name } = props;
   const label = translate('componentProps.variants.controlledBy');
-  const ruled = role.kind === 'ruled';
-  const group = ruled
-    ? (role.groups.find((candidate) => candidate.controller === chosen) ?? role.groups[0])
-    : role.groups.find((candidate) => candidate.controller === chosen);
-  const readonly = group?.editing.kind === 'readonly';
-  const choices = [
-    { value: NO_CONTROLLER, label: translate('componentProps.variants.none') },
-    ...role.groups.map((candidate) => ({ value: candidate.controller, label: candidate.controller })),
-  ];
-  const choose = (value: string): void => {
-    if (ruled && value === NO_CONTROLLER && group !== undefined) {
-      void run({ kind: 'detachProp', controller: group.controller, prop: name });
-    } else {
-      setChosen(value === NO_CONTROLLER ? undefined : value);
+  const ruling = role.kind === 'ruled' ? role.groups : [];
+  const attach = (controller: string): void => {
+    const group = role.available.find((candidate) => candidate.controller === controller);
+    if (group !== undefined) {
+      void run({ kind: 'attachProp', controller, prop: name, options: group.options.map((option) => option.value) });
     }
   };
+  const choices = (current: VariantGroup | undefined) => [
+    ...(current === undefined
+      ? [{ value: NO_CONTROLLER, label: translate('componentProps.variants.none') }]
+      : [{ value: current.controller, label: current.controller }]),
+    ...role.available.map((candidate) => ({ value: candidate.controller, label: candidate.controller })),
+  ];
   return (
     <div className="variant-rules" role="group" aria-label={label} aria-busy={pending}>
       <span className="variant-label">{label}</span>
-      <div className="variant-controller">
-        <Dropdown
-          className="variant-controller-choice"
-          ariaLabel={label}
-          value={group?.controller ?? NO_CONTROLLER}
-          options={choices}
-          disabled={pending || readonly}
-          onChange={choose}
-        />
-        {group?.editing.kind === 'readonly' && <span className="variant-reason">{translate(REASON_KEYS[group.editing.reason])}</span>}
-      </div>
-      {group !== undefined && ruled && <VariantRuleRows name={name} group={group} disabled={pending || readonly} translate={translate} run={run} />}
-      {group !== undefined && !ruled && (
-        <div className="variant-only-for">
-          {group.options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className="variant-only-option"
-              aria-label={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
-              title={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
-              disabled={pending}
-              onClick={() => void run({ kind: 'attachProp', controller: group.controller, prop: name, options: [option.value] })}
-            >
-              {option.value}
-            </button>
-          ))}
+      {ruling.length === 0 && (
+        <div className="variant-block-head">
+          <Dropdown
+            className="variant-controller-choice"
+            ariaLabel={label}
+            value={NO_CONTROLLER}
+            options={choices(undefined)}
+            disabled={pending}
+            onChange={attach}
+          />
+        </div>
+      )}
+      {ruling.map((group, index) => {
+        const readonly = group.editing.kind === 'readonly';
+        const remove = translate('componentProps.variants.removeCondition', { controller: group.controller });
+        return (
+          <div key={group.controller} className="variant-block">
+            {index > 0 && <span className="variant-and">{translate('componentProps.variants.and')}</span>}
+            <div className="variant-block-head">
+              <Dropdown
+                className="variant-controller-choice"
+                ariaLabel={index === 0 ? label : `${label} ${index + 1}`}
+                value={group.controller}
+                options={choices(group)}
+                disabled={pending || readonly}
+                onChange={(to) => {
+                  if (to !== group.controller) {
+                    void run({ kind: 'switchController', controller: group.controller, to, prop: name });
+                  }
+                }}
+              />
+              {group.editing.kind === 'readonly' && <span className="variant-reason">{translate(REASON_KEYS[group.editing.reason])}</span>}
+              <button
+                type="button"
+                className="variant-remove"
+                aria-label={remove}
+                title={remove}
+                disabled={pending || readonly}
+                onClick={() => void run({ kind: 'detachProp', controller: group.controller, prop: name })}
+              >
+                <CloseIcon size={12} />
+              </button>
+            </div>
+            <VariantRuleRows name={name} group={group} disabled={pending || readonly} translate={translate} run={run} />
+          </div>
+        );
+      })}
+      {ruling.length > 0 && role.available.length > 0 && (
+        <div className="variant-block-head">
+          <Dropdown
+            className="variant-add-condition"
+            ariaLabel={translate('componentProps.variants.addCondition')}
+            value={NO_CONTROLLER}
+            options={[
+              { value: NO_CONTROLLER, label: translate('componentProps.variants.addCondition') },
+              ...role.available.map((candidate) => ({ value: candidate.controller, label: candidate.controller })),
+            ]}
+            disabled={pending}
+            onChange={attach}
+          />
         </div>
       )}
     </div>
+  );
+}
+
+/** Where a conditional prop is allowed, one line per controller (`variant: play, close, arrow`), for its row's tip. */
+export function conditionLines(groups: readonly VariantGroup[] | undefined, name: string, translate: Translate): readonly string[] {
+  return (groups ?? [])
+    .filter((group) => group.props.includes(name))
+    .map((group) => {
+      const index = group.props.indexOf(name);
+      const options = group.options.filter((option) => option.rules[index]?.state !== 'forbidden').map((option) => option.value);
+      return translate('componentProps.variants.condition', { controller: group.controller, options: options.join(', ') });
+    });
+}
+
+/** The prop list's mark on a conditional prop: a dimmed branch, its tip naming where the prop is allowed. */
+export function VariantConditionMark({ lines }: { readonly lines: readonly string[] }) {
+  const translate = useTranslate();
+  const tip = useDelayedTooltip();
+  const text = lines.join('\n');
+  const label = `${translate('componentProps.variants.conditional')}: ${lines.join('; ')}`;
+  return (
+    <>
+      <span className="variant-condition-mark" role="img" aria-label={label} onMouseEnter={tip.show} onMouseLeave={tip.hide}>
+        <BranchIcon size={14} />
+      </span>
+      {tip.value !== undefined &&
+        createPortal(
+          <div className="rail-tooltip below variant-condition-tip" style={tip.value} role="tooltip" aria-hidden="true">
+            {text}
+          </div>,
+          tooltipHost(undefined),
+        )}
+    </>
   );
 }
 

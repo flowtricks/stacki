@@ -39,15 +39,40 @@ function states(group: VariantGroup): Record<string, Record<string, string>> {
   );
 }
 
-test('the Button fixture reads as two editable groups, element then variant', () => {
+test('the Button fixture reads as two editable groups, element then variant, and its candidate controllers', () => {
   const groups = readVariantGroups(BUTTON);
   assert.deepEqual(
     groups.map((group) => [group.controller, group.editing.kind]),
     [
       ['element', 'editable'],
       ['variant', 'editable'],
+      // Any prop of string options or a boolean could key a new group; no controller can.
+      ['render', 'candidate'],
+      ['type', 'candidate'],
+      ['disabled', 'candidate'],
+      ['emphasis', 'candidate'],
+      ['pressed', 'candidate'],
+      ['direction', 'candidate'],
     ],
   );
+  const options = (controller: string) => groupOf(groups, controller).options.map((option) => [option.value, option.fallback]);
+  assert.deepEqual(options('render'), [
+    ['true', true],
+    ['false', false],
+  ]);
+  assert.deepEqual(options('emphasis'), [
+    ['primary', true],
+    ['secondary', false],
+  ]);
+  assert.deepEqual(options('pressed'), [
+    ['true', false],
+    ['false', true],
+  ]);
+  assert.deepEqual(options('type'), [
+    ['button', true],
+    ['submit', false],
+    ['reset', false],
+  ]);
 });
 
 test('the element group: button is the fallback, link forbids the button-only props', () => {
@@ -122,13 +147,14 @@ test('a required prop, an unlisted prop and a union written as Props itself', ()
   );
 });
 
-test('the props every option shares can be attached to each editable group', () => {
+test('the props every option shares, or another group rules, can be attached to each editable group', () => {
   const groups = readVariantGroups(BUTTON);
   assert.deepEqual(
-    groups.map((group) => [group.controller, group.attachable]),
+    groups.filter((group) => group.editing.kind !== 'candidate').map((group) => [group.controller, group.attachable]),
     [
-      ['element', ['render']],
-      ['variant', ['render']],
+      // Shared props, and props another group rules (both rules then hold); never a controller.
+      ['element', ['render', 'emphasis', 'label', 'pressed', 'direction']],
+      ['variant', ['render', 'type', 'disabled', 'href']],
     ],
   );
   const exported = readVariantGroups(component(['export type Props = { size?: string } & (', '  | { variant?: "a" }', '  | { variant: "b" });'].join('\n')));
@@ -214,7 +240,7 @@ test('the boundary parser accepts the Button model and refuses each broken shape
     ['an attachable prop the group rules', [{ ...variant, attachable: ['label'] }]],
     ['an unknown reason', [{ ...variant, editing: { kind: 'readonly', reason: 'other' } }]],
     ['a quoted option', [{ ...variant, options: [{ ...variant.options[0], value: 'ma"in' }] }]],
-    ['too many groups', Array.from({ length: 17 }, () => variant)],
+    ['too many groups', Array.from({ length: 33 }, () => variant)],
   ];
   for (const [title, input] of broken) {
     assert.throws(() => parseVariantGroups(JSON.parse(JSON.stringify(input))), Error, title);

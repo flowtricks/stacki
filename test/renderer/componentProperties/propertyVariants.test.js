@@ -217,10 +217,10 @@ test('a state pick writes its rule, and a Not allowed row is dimmed', async () =
   await panel.unmount();
 });
 
-test('None gives a ruled prop back to every option, as one shared declaration', async () => {
+test('removing the only condition gives a ruled prop back to every option, as one shared declaration', async () => {
   const panel = await mountPanel(BUTTON);
   await panel.open('direction');
-  await panel.pick('Controlled by', 'None');
+  await panel.click(panel.labelled('Remove variant'));
   assert.match(panel.source(), /render\?: boolean;\n {2}\/\*\* Arrow direction\. \*\/\n {2}direction\?: "forward" \| "back";\n\} & Tag &/);
   assert.doesNotMatch(panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props')), /direction/);
   await panel.unmount();
@@ -283,7 +283,7 @@ test('the Default value pick moves the fallback and the destructure default', as
   await panel.unmount();
 });
 
-test('any prop with no rules yet picks a controller, then the option it is allowed for', async () => {
+test('any prop with no rules yet picks a controller from every prop that could be one', async () => {
   // `badge` stands for a prop just created in the prop list: declared in the shared object type.
   const fresh = BUTTON.replace('  render?: boolean;\n} & Tag &', '  render?: boolean;\n  badge?: string;\n} & Tag &').replace(
     '  render = true,\n',
@@ -297,20 +297,20 @@ test('any prop with no rules yet picks a controller, then the option it is allow
     [...editor.querySelectorAll('label')].some((label) => label.textContent.trim() === 'Required'),
     'an unruled prop keeps Required',
   );
-  await panel.pick('Controlled by', 'variant');
+  await panel.click(editor.querySelector('.variant-controller-choice'));
   assert.deepEqual(
-    [...editor.querySelectorAll('.variant-only-option')].map((button) => button.textContent),
-    ['main', 'link', 'play', 'close', 'arrow'],
+    [...document.querySelectorAll('.dd-option')].map((item) => item.textContent.trim()),
+    ['None', 'element', 'variant', 'render', 'type', 'disabled', 'emphasis', 'pressed', 'direction'],
   );
-  await panel.click(panel.labelled('badge when variant is link'));
+  await panel.click([...document.querySelectorAll('.dd-option')].find((item) => item.textContent.trim() === 'variant'));
   const kind = panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props'));
-  assert.equal(kind.split('badge?: never;').length, 5);
-  assert.equal(kind.split('badge?: string;').length, 2);
-  assert.ok(panel.labelled('badge when variant is link'), 'the rows take over');
+  assert.equal(kind.split('badge?: string;').length, 6);
+  await panel.pick('badge when variant is link', 'Not allowed');
+  assert.match(panel.source(), /variant: "link";[^}]*badge\?: never;/s);
   await panel.unmount();
 });
 
-test('with no controller yet, a prop of string options becomes one', async () => {
+test('with no controller yet, a prop of string options or a boolean becomes one', async () => {
   const plain = [
     '---',
     'type Props = {',
@@ -326,14 +326,58 @@ test('with no controller yet, a prop of string options becomes one', async () =>
   const panel = await mountPanel(plain);
   await panel.open('icon');
   await panel.pick('Controlled by', 'size');
-  await panel.click(panel.labelled('icon when size is l'));
+  await panel.pick('icon when size is s', 'Not allowed');
   assert.equal(
     panel.source(),
     plain.replace(
       'type Props = {\n  size?: "s" | "l";\n  /** Icon name. */\n  icon?: string;\n};',
-      'type Props = {\n} & (\n  | { size?: "s"; icon?: never }\n  | { size: "l"; /** Icon name. */ icon?: string }\n);',
+      'type Props = {\n} & (\n  | { size?: "s"; /** Icon name. */ icon?: never }\n  | { size: "l"; /** Icon name. */ icon?: string }\n);',
     ),
   );
+  await panel.unmount();
+});
+
+test('two controllers: Add condition, a state under the second, and its own remove', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('disabled');
+  await panel.pick('Add condition', 'variant');
+  const editor = panel.section();
+  assert.equal(editor.querySelectorAll('.variant-block').length, 2);
+  assert.equal(editor.querySelector('.variant-and').textContent, 'and');
+  await panel.pick('disabled when variant is link', 'Not allowed');
+  const kind = panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props'));
+  assert.equal(kind.split('disabled?: never;').length, 2);
+  assert.equal(panel.source().slice(0, panel.source().indexOf('type Kind')), BUTTON.slice(0, BUTTON.indexOf('type Kind')));
+  await panel.click(panel.labelled('Remove variant'));
+  assert.equal(panel.source(), BUTTON);
+  await panel.unmount();
+});
+
+test('switching the controller moves the rules in one edit', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('href');
+  await panel.pick('Controlled by', 'variant');
+  const source = panel.source();
+  assert.doesNotMatch(source.slice(source.indexOf('type Tag'), source.indexOf('type Kind')), /href/);
+  assert.equal(source.slice(source.indexOf('type Kind'), source.indexOf('type Props')).split('href?: string;').length, 6);
+  assert.equal(panel.section().querySelector('.variant-controller-choice').textContent.trim(), 'variant');
+  await panel.unmount();
+});
+
+test('the prop list marks conditional props with the options that allow them', async () => {
+  const panel = await mountPanel(BUTTON);
+  const mark = (name) =>
+    [...document.querySelectorAll('.property-row')]
+      .find((row) => row.querySelector('.property-row-main')?.textContent.startsWith(name))
+      ?.querySelector('.variant-condition-mark');
+  assert.equal(mark('href').getAttribute('aria-label'), 'Conditional: element: link');
+  assert.equal(mark('label').getAttribute('aria-label'), 'Conditional: variant: play, close, arrow');
+  for (const name of ['type', 'disabled', 'emphasis', 'pressed', 'direction']) {
+    assert.ok(mark(name), `${name} is marked`);
+  }
+  for (const name of ['render', 'element', 'variant']) {
+    assert.equal(mark(name) ?? undefined, undefined, `${name} is not marked`);
+  }
   await panel.unmount();
 });
 

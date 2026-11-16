@@ -17,25 +17,33 @@ back as the smallest edit to the TypeScript that says it.
 ## In the panel
 
 Every control lives in a prop's own Property settings; nothing is text.
+Two columns throughout: the controller or the option's name on the left, the
+control on the right at a fixed width, every row a form field's height, so
+nothing is cut at the panel's 320–480px widths.
 
-- **Controlled by**, on every existing prop that is not a controller, under
-  its own label: a Dropdown of None and the component's controllers.
-  - A ruled prop (`label`, `href`, `disabled`) shows it in place of
-    Required, then one full-width row per option: the option's name, and a
-    fixed-width Allowed / Required / Not allowed Dropdown (`setRule`).
-    Allowed is the soft accent, Required the solid accent, Not allowed dims
-    the row. None gives the prop back to every option (`detachProp`).
-  - A prop with no rules yet (a fresh one too) keeps Required; picking a
-    controller shows its options, and picking one is `attachProp` for it:
-    allowed there, Not allowed elsewhere, and the rows take over.
-  - With no group in the component yet, the controllers offered are its
-    shared props of two or more string options (`size?: "s" | "l"`), and
-    `attachProp` creates the group from that prop.
+- **Controlled by**, on every existing prop that is not a controller:
+  - A ruled prop (`label`, `href`, `disabled`) shows it in place of Required:
+    one block per controller that rules it, joined by "and" (every one must
+    allow the prop). Each block has the controller as a Dropdown (switching
+    it is `switchController`), a remove (`detachProp`), and one row per option
+    with an Allowed / Required / Not allowed Dropdown (`setRule`): Allowed is
+    the soft accent, Required the solid accent, Not allowed mutes the row.
+    "Add condition" joins another controller (`attachProp`).
+  - A prop with no rules yet (a fresh one too) keeps Required and picks its
+    first controller from None.
+  - The controllers offered are the component's controllers and every prop
+    that could become one: two or more string options (written, or a local
+    alias such as `Emphasis`) or a boolean, never the prop itself and never a
+    controller (so no cycle). Joining one allows the prop for every option;
+    the rows then say where it is not.
 - **The controller** (`variant`, `element`): the panel's own Options list and
   Default value dropdown, with no Required checkbox and no `{}` code switch.
   Adding, renaming (on commit), removing or dragging an option in the list is
   `addOption`, `renameOption`, `removeOption` or `moveOption`; picking another
   default is `setFallback`. A refusal shows on the form's error line.
+- **The prop list** marks a conditional prop with a dimmed branch icon
+  (Central `branch`, Figma variant 14759:28219); its delayed tip names where
+  the prop is allowed, a line per controller (`variant: play, close, arrow`).
 
 `addProp` and `removeProp` stay in the writer, but no control sends them:
 a new prop is created in the prop list and given rules with Controlled by.
@@ -51,16 +59,22 @@ type Kind =
 
 - **Group**: one union `Props` intersects, directly or through local,
   non-exported, non-generic aliases (`Tag`, `Kind`).
-- **Controller**: the first prop every member declares as a single string
-  literal, a different one in each (`variant`, `element`). A union with no such
+- **Controller**: the first prop every member declares as a single literal
+  of one kind, a different one in each: strings (`variant`, `element`) or
+  `true` / `false`. A boolean controller's two options are fixed: they are
+  never added, renamed or removed. A union with no such
   prop is not a group; its props keep the read-only conditions
   (`propertyContracts.ts`).
 - **Option**: one member, named by its controller literal. The member whose
   controller is optional (`variant?: "main"`) is the **fallback**, shown as
   Default: it applies when the controller is not passed.
-- **Candidate**: with no group yet, a shared prop whose type is two or more
-  string literals is offered as a controller (`editing: { kind: 'candidate' }`,
-  no rules); `attachProp` to it creates the group.
+- **Candidate**: a prop that could become a controller (string options or a
+  boolean, shared or ruled by another group, not a controller) is offered as
+  one (`editing: { kind: 'candidate' }`, no rules); `attachProp` to it creates
+  the group.
+- **AND**: one prop may be ruled by several groups (`disabled` by `element`
+  and `variant`). `Props` intersects the unions, so each must allow it. They
+  stay separate unions; nothing is flattened.
 - **Props**: every prop a member names, the controller excluded, in the order
   first written.
 - **Rule**: a prop under an option is `optional` (Allowed), `required`
@@ -99,7 +113,8 @@ parses, and asserts that the result reads back as asked.
 | `setFallback` | The `?` moves to the option; the destructure default follows |
 | `addProp` | `prop?: type` in every member, in the runtime type, and a local before `...rest` |
 | `removeProp` | The prop's declaration in every member (comments with it), in the runtime type, and its local |
-| `attachProp` | A prop the shared object type declares (`{ render?: boolean } & Tag & Kind`) leaves it, comment included, and every member declares it: as it was where picked, `never` elsewhere. For a candidate controller (no group yet), the controller and the prop both leave the shared object type and `Props` is intersected with `(\| { size?: "s"; icon?: never } \| { size: "l"; icon?: string })`; the destructure's default (else the first option) is the fallback when the controller was optional |
+| `attachProp` | A prop the shared object type declares (`{ render?: boolean } & Tag & Kind`) leaves it, comment included, and every member declares it: as it was where picked, `never` elsewhere. A prop another group rules keeps those declarations, and this group's members declare it too (both hold). For a candidate controller (no group yet), the controller and the prop both leave the shared object type and `Props` is intersected with `(\| { size?: "s"; icon?: never } \| { size: "l"; icon?: string })`; the destructure's default (else the first option) is the fallback when the controller was optional |
+| `switchController` | `detachProp` from one controller, then `attachProp` to the other for every option, as one write and one undo |
 | `detachProp` | The prop leaves every member and is declared once in the first shared object type (one is intersected onto `Props` when there is none): the first allowing option's type and comment, Required only if every option required it |
 
 The runtime type (`Astro.props as AllProps`) is kept in step only where it
@@ -119,8 +134,7 @@ lists exactly the options, as string literals; one written another way
 
 ## Limitations
 
-- Option values are string literals only; numeric or boolean controllers are
-  not groups.
+- Numeric controllers are not groups; boolean ones keep their two options.
 - A prop's type is one per prop: an option that allows it again takes the
   first allowing option's type. Per-variant types that differ are kept as
   written, but not edited apart.

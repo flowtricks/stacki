@@ -43,6 +43,7 @@ export function planVariantRuleChanges(request: VariantPlanRequest, component: V
     case 'addProp':
     case 'attachProp':
     case 'detachProp':
+    case 'switchController':
       return ok([component]);
     default: {
       const exhaustive: never = edit;

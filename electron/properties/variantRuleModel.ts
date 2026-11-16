@@ -27,8 +27,8 @@ export interface VariantMemberSyntax {
   /** The member's own object type: where its props are declared and new ones go. */
   readonly literal: ts.TypeLiteralNode;
   readonly discriminant: ts.PropertySignature;
-  /** The controller's string literal in this member (`"main"`). */
-  readonly literalNode: ts.StringLiteral;
+  /** The controller's literal in this member: a string (`"main"`), or `true` / `false` for a boolean controller. */
+  readonly literalNode: ControllerLiteral;
   readonly value: string;
   /** Each prop the member declares, by name, the controller included. */
   readonly fields: ReadonlyMap<string, ts.PropertySignature>;
@@ -74,11 +74,22 @@ export interface VariantSyntax {
   readonly candidates: readonly VariantCandidateSyntax[];
 }
 
-/** A shared prop that could control a new group, and its options as written. */
+/** A controller's literal: a string option, or a boolean one. */
+export type ControllerLiteral = ts.StringLiteral | ts.TrueLiteral | ts.FalseLiteral;
+
+/**
+ * A prop that could control a new group: one of string options
+ * (`size?: "s" | "l"`, or a local alias of them) or a boolean. `field` is its
+ * declaration in the shared object type, which leaves it when the group is
+ * made; a prop another group rules has none, and keeps its declarations.
+ */
 export interface VariantCandidateSyntax {
   readonly controller: string;
-  readonly field: ts.PropertySignature;
-  readonly literals: readonly ts.StringLiteral[];
+  readonly field: ts.PropertySignature | undefined;
+  readonly values: readonly string[];
+  /** How an option is written: quoted with this quote, or bare (`true`). */
+  readonly spelling: { readonly kind: 'string'; readonly quote: string } | { readonly kind: 'boolean' };
+  readonly optional: boolean;
   /** The option that applies when the controller is not passed: the destructure's default, else the first; none when it is required. */
   readonly fallback: string | undefined;
 }
@@ -131,7 +142,7 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
     'Editable groups have distinct controllers',
   );
   const exported = isExported(props);
-  const candidates = groups.length === 0 && !exported ? controllerCandidates(parts.common, pattern) : [];
+  const candidates = exported ? [] : controllerCandidates(parts.common, groups, declarations, pattern);
   return {
     document,
     groups: distinctControllers(groups),
@@ -144,30 +155,89 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
   };
 }
 
-// The shared props whose type is a union of distinct string literals: each
-// could pick the option of a group made from it.
+// The props that could pick the option of a new group: string options or a
+// boolean, shared or ruled by another group, and not a controller already
+// (a controller another prop could control would make a cycle).
 function controllerCandidates(
   common: ReadonlyMap<string, ts.PropertySignature>,
+  groups: readonly VariantGroupSyntax[],
+  declarations: ReadonlyMap<string, Declaration>,
   pattern: ts.ObjectBindingPattern | undefined,
 ): readonly VariantCandidateSyntax[] {
+  const controllers = new Set(groups.map((group) => group.controller));
+  const declared = new Map<string, { readonly field: ts.PropertySignature; readonly shared: boolean }>();
+  for (const [name, field] of common) {
+    declared.set(name, { field, shared: true });
+  }
+  for (const group of groups) {
+    for (const prop of group.props) {
+      const field = group.members
+        .map((member) => member.fields.get(prop))
+        .find((item) => item?.type !== undefined && item.type.kind !== ts.SyntaxKind.NeverKeyword);
+      if (field !== undefined && !declared.has(prop)) {
+        declared.set(prop, { field, shared: false });
+      }
+    }
+  }
   const candidates: VariantCandidateSyntax[] = [];
-  for (const [controller, field] of common) {
-    const type = field.type;
-    const parts = type !== undefined && ts.isUnionTypeNode(type) ? type.types : [];
-    const literals = parts.map((part) => stringLiteralOf(part)).filter((literal): literal is ts.StringLiteral => literal !== undefined);
-    const values = new Set(literals.map((literal) => literal.text));
-    if (literals.length >= 2 && literals.length === parts.length && values.size === literals.length && literals.length <= VARIANT_LIMITS.optionsMax) {
+  for (const [controller, { field, shared }] of declared) {
+    const options = controllers.has(controller) ? undefined : optionsOfType(field.type, declarations);
+    if (options !== undefined) {
       const binding = pattern?.elements.find(
         (element) => element.dotDotDotToken === undefined && propertyKey(element.propertyName ?? element.name) === controller,
       );
       const initial = binding?.initializer;
-      const defaulted = initial !== undefined && ts.isStringLiteral(initial) && values.has(initial.text) ? initial.text : undefined;
-      const fallback = field.questionToken === undefined ? undefined : (defaulted ?? literals[0]?.text);
-      candidates.push({ controller, field, literals, fallback });
+      const defaulted = initial === undefined ? undefined : literalValueOf(initial);
+      const optional = field.questionToken !== undefined;
+      const fallback = optional ? (defaulted !== undefined && options.values.includes(defaulted) ? defaulted : options.values[0]) : undefined;
+      candidates.push({ controller, field: shared ? field : undefined, values: options.values, spelling: options.spelling, optional, fallback });
     }
   }
   assert(candidates.length <= PROPERTY_LIMITS.fieldsMax, 'controllerCandidates: candidates are bounded');
   return candidates;
+}
+
+// A type's options when it can key a group: two or more distinct string
+// literals (written, or in a local alias), or a boolean.
+function optionsOfType(
+  type: ts.TypeNode | undefined,
+  declarations: ReadonlyMap<string, Declaration>,
+): Pick<VariantCandidateSyntax, 'values' | 'spelling'> | undefined {
+  if (type === undefined) {
+    return undefined;
+  }
+  if (type.kind === ts.SyntaxKind.BooleanKeyword) {
+    return { values: ['true', 'false'], spelling: { kind: 'boolean' } };
+  }
+  let resolved: ts.TypeNode = type;
+  if (ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName) && type.typeArguments === undefined) {
+    const alias = declarations.get(type.typeName.text);
+    if (alias === undefined || !ts.isTypeAliasDeclaration(alias) || alias.typeParameters !== undefined || isExported(alias)) {
+      return undefined;
+    }
+    resolved = alias.type;
+  }
+  const parts = ts.isUnionTypeNode(resolved) ? resolved.types : [];
+  const literals = parts.map((part) => stringLiteralOf(part)).filter((literal): literal is ts.StringLiteral => literal !== undefined);
+  const values = literals.map((literal) => literal.text);
+  if (literals.length < 2 || literals.length !== parts.length || new Set(values).size !== values.length || values.length > VARIANT_LIMITS.optionsMax) {
+    return undefined;
+  }
+  return { values, spelling: { kind: 'string', quote: literals[0]?.getText().slice(0, 1) ?? '"' } };
+}
+
+/** An option's text for a literal expression or type literal: a string's value, or `true` / `false`. */
+export function literalValueOf(node: ts.Node): string | undefined {
+  if (ts.isStringLiteral(node)) {
+    return node.text;
+  }
+  if (node.kind === ts.SyntaxKind.TrueKeyword) {
+    return 'true';
+  }
+  if (node.kind === ts.SyntaxKind.FalseKeyword) {
+    return 'false';
+  }
+  return undefined;
 }
 
 /** The panel's model of the groups: names, options and each prop's rule, no syntax. */
@@ -179,8 +249,9 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
       rules: group.props.map((prop) => ruleOf(member, prop)),
     }));
     assert(options.length === group.members.length, 'variantGroupsOf: one option per member');
-    // A shared prop no group rules yet can be given this group's rules; one this group rules cannot.
-    const attachable = group.reason === undefined ? [...syntax.common.keys()].filter((name) => name !== group.controller && !group.props.includes(name)) : [];
+    // A prop this group does not rule yet can be given its rules: shared, or
+    // ruled by another group (both rules then hold). No controller is.
+    const attachable = group.reason === undefined ? attachableProps(syntax).filter((name) => !group.props.includes(name)) : [];
     return {
       controller: group.controller,
       props: group.props,
@@ -190,16 +261,22 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
     };
   });
   // A candidate is drawn as a group with no rules yet: choosing it for a prop creates the group.
-  const candidates = syntax.candidates.slice(0, VARIANT_LIMITS.groupsMax).map((candidate): VariantGroup => ({
+  const candidates = syntax.candidates.slice(0, Math.max(0, VARIANT_LIMITS.groupsMax - groups.length)).map((candidate): VariantGroup => ({
     controller: candidate.controller,
     props: [],
-    attachable: [...syntax.common.keys()].filter((name) => name !== candidate.controller),
-    options: candidate.literals.map((literal) => ({ value: literal.text, fallback: literal.text === candidate.fallback, rules: [] })),
+    attachable: attachableProps(syntax).filter((name) => name !== candidate.controller),
+    options: candidate.values.map((value) => ({ value, fallback: value === candidate.fallback, rules: [] })),
     editing: { kind: 'candidate' },
   }));
-  assert(groups.length === 0 || candidates.length === 0, 'variantGroupsOf: candidates are offered only with no group');
   assert(groups.length <= VARIANT_LIMITS.groupsMax, 'variantGroupsOf: groups are bounded');
   return [...groups, ...candidates];
+}
+
+/** The props a group could rule: shared or ruled by an editable group, never a controller. */
+export function attachableProps(syntax: VariantSyntax): readonly string[] {
+  const controllers = new Set(syntax.groups.map((group) => group.controller));
+  const names = new Set([...syntax.common.keys(), ...syntax.groups.filter((group) => group.reason === undefined).flatMap((group) => group.props)]);
+  return [...names].filter((name) => !controllers.has(name));
 }
 
 /** A prop's rule in one option: its state there, as the member's declaration says. */
@@ -303,12 +380,14 @@ function readGroup(
     assert(fields !== undefined, 'readGroup: each member has fields');
     const discriminant = fields.get(controller);
     assert(discriminant !== undefined, 'readGroup: the controller is in every member');
-    const literalNode = stringLiteralOf(discriminant.type);
-    assert(literalNode !== undefined, 'readGroup: the controller is a string literal in every member');
+    const literalNode = controllerLiteralOf(discriminant.type);
+    assert(literalNode !== undefined, 'readGroup: the controller is a literal in every member');
     const literal = reading.literals.find((candidate) => candidate.members.includes(discriminant));
     assert(literal !== undefined, 'readGroup: the controller is declared in one of the member object types');
     reason ??= reading.reason ?? (reading.literals.length === 1 ? undefined : 'shape');
-    members.push({ node, literal, discriminant, literalNode, value: literalNode.text, fields });
+    const value = literalValueOf(literalNode);
+    assert(value !== undefined, 'readGroup: a controller literal has a value');
+    members.push({ node, literal, discriminant, literalNode, value, fields });
   }
   const props = groupProps(members, controller);
   reason ??= members.some((member) => [...member.fields.values()].some((field) => field.type === undefined)) ? 'shape' : undefined;
@@ -393,22 +472,40 @@ function plainName(member: ts.PropertySignature): string | undefined {
   return propertyKey(member.name);
 }
 
-// The controller: the first prop every member declares as one string literal,
-// a different one in each. `element?: "button"` counts, so a member that is
-// the fallback still names its option.
+// The controller: the first prop every member declares as one literal of
+// the same kind (all strings, or `true` / `false`), a different one in each.
+// `element?: "button"` counts, so a member that is the fallback still names its option.
 function controllerOf(members: readonly ReadonlyMap<string, ts.PropertySignature>[]): string | undefined {
   const first = members[0];
   if (first === undefined || members.length < 2) {
     return undefined;
   }
   for (const name of first.keys()) {
-    const values = members.map((fields) => stringLiteralOf(fields.get(name)?.type)?.text);
-    const known = values.filter((value): value is string => value !== undefined);
-    if (known.length === members.length && new Set(known).size === known.length) {
+    const literals = members.map((fields) => controllerLiteralOf(fields.get(name)?.type));
+    const known = literals.filter((literal): literal is ControllerLiteral => literal !== undefined);
+    const kinds = new Set(known.map((literal) => (ts.isStringLiteral(literal) ? 'string' : 'boolean')));
+    const values = known.map((literal) => literalValueOf(literal));
+    if (known.length === members.length && kinds.size === 1 && new Set(values).size === known.length) {
       return name;
     }
   }
   return undefined;
+}
+
+/** The literal a controller member declares, string or boolean. */
+export function controllerLiteralOf(type: ts.TypeNode | undefined): ControllerLiteral | undefined {
+  if (type === undefined || !ts.isLiteralTypeNode(type)) {
+    return undefined;
+  }
+  const literal = type.literal;
+  if (ts.isStringLiteral(literal)) {
+    return literal;
+  }
+  return isBooleanLiteral(literal) ? literal : undefined;
+}
+
+function isBooleanLiteral(node: ts.Node): node is ts.TrueLiteral | ts.FalseLiteral {
+  return node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword;
 }
 
 export function stringLiteralOf(type: ts.TypeNode | undefined): ts.StringLiteral | undefined {
