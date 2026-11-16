@@ -37,6 +37,7 @@ import { createHotContext } from '/@vite/client';
 import { createOutlines, type OutlineTarget } from './previewOutlines';
 import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from '../../../vendor/stacki/electron/preload/frameMove';
 import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from '../../../vendor/stacki/electron/preload/framePendingInsert';
+import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from '../../../vendor/stacki/electron/preload/framePendingDelete';
 import { parseCanvasInsert } from '../../../vendor/stacki/shared/page/canvasInsert';
 import { parseCanvasMove, renumberedCanvasPath, type CanvasMove } from '../../../vendor/stacki/shared/page/canvasMove';
 const studioOrigin = document.querySelector<HTMLMetaElement>('meta[name=studio-parent-origin]')?.content || location.origin;
@@ -324,8 +325,12 @@ window.addEventListener('message', (event) => {
       showCanvasInsert(insert);
     }
   }
+  if (data.type === 'avb:hide-pending' && 'path' in data && typeof data.path === 'string') {
+    hidePendingDelete(data.path);
+  }
   if (data.type === 'avb:insert-revert') {
     revertCanvasInserts();
+    clearPendingDeletes();
   }
   if (data.type === 'studio:labels' && 'labels' in data && Array.isArray(data.labels)) {
     setLabels(data.labels);
@@ -366,6 +371,7 @@ window.addEventListener('message', (event) => {
 // renumbers, so the outline stays on the moved node until the server's answer names it.
 listenForCanvasMoves();
 listenForCanvasInserts();
+listenForPendingDeletes();
 function showMove(input: unknown): void {
   const parsed = parseCanvasMove(input);
   if (parsed === undefined) {

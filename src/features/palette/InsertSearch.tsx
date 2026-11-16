@@ -89,6 +89,8 @@ interface InsertSearchProps {
   /** The installed apps, for the Apps tab; without it (or for a role without the Apps panel) there is no Apps tab. */
   readonly apps?: PaletteAppsSource | undefined;
   readonly onInsert: (item: InsertItem) => void;
+  /** The highlighted item changed: the host may start reading what inserting it needs. */
+  readonly onWarm?: ((item: InsertItem) => void) | undefined;
   readonly onClose: () => void;
 }
 export default function InsertSearch(props: InsertSearchProps) {
@@ -100,6 +102,12 @@ export default function InsertSearch(props: InsertSearchProps) {
   const choose = (entry: PaletteEntry): void => {
     if (entry.type === 'app') {
   const highlighted = view.shown[highlight];
+  const onWarm = props.onWarm;
+  useEffect(() => {
+    if (highlighted !== undefined && highlighted.type !== 'app' && highlighted.type !== 'marketplace') {
+      onWarm?.(highlighted);
+    }
+  }, [highlighted, onWarm]);
       onClose();
       entry.app.open();
     } else if (entry.type === 'marketplace') {

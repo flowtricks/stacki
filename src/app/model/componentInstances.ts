@@ -1,4 +1,4 @@
-import { readMetadata } from '../../ipc/projectMetadataBridge';
+import { metadataVersionNow, readMetadata } from '../../ipc/projectMetadataBridge';
 import { parseDefaultsSource } from '../../../shared/properties/componentDefaults';
 import { LIMITS } from '../../../shared/core/limits';
 // Insertion presets belong to page instances. Component schemas and source
@@ -10,6 +10,7 @@ import { namesInScope } from '../../editor/dataSuggest';
 import type { EditorModel, EditorNode } from '../../editor/pageView';
 import type { ImportPaths } from '../../ipc/appBridge';
 import { newId } from './nodeFactory';
+import { WarmReads } from './componentWarm';
 import { chooseImportPath } from './pageGestures';
 
 export { INSTANCE_HEADING, INSTANCE_PARAGRAPH } from '../../../shared/properties/componentStarterDefaults';
@@ -33,8 +34,11 @@ export interface InstanceImport {
   readonly paths: ImportPaths;
 }
 
+/** The project's component defaults, read once for a moment so a pick finds them ready (componentWarm.ts). */
+export const warmDefaults = new WarmReads<Awaited<ReturnType<typeof readMetadata>>>();
+
 export async function loadComponentInstance(component: ScanComponent, available: readonly ScanComponent[], projectPath: string): Promise<ComponentInstance> {
-  const stored = await readMetadata(projectPath, 'components');
+  const stored = await warmDefaults.read(`${projectPath}|${metadataVersionNow()}`, Date.now(), () => readMetadata(projectPath, 'components'));
   const parsed = stored.source === undefined ? undefined : parseDefaultsSource(stored.source);
   if (parsed && !parsed.ok) {
     throw new Error(parsed.error.message);

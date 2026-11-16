@@ -11,6 +11,7 @@ import { loadCatalog } from '../../features/props/loopCatalog';
 import { loadSanitySample } from '../../features/props/loopSettingsData';
 import { insertTargetFor as placeInsert } from '../../editor/insertTarget';
 import { showInsertOnCanvas } from '../../editor/canvasInsertShow';
+import { editTrace } from '../../lib/editTrace';
 import { frontmatterGesture, insertGesture } from '../../editor/editGestures';
 import {
   collectionsInScope,
@@ -91,7 +92,7 @@ export function useInsertItem(
 ) {
   const { cmsRel, contentName, insertables, leftTab, pageStateRef, selectedIdRef } = coreState;
   const { canvasPathForRef, setSelectedId } = coreState;
-  const { addComponent, setInsertOpen } = nodeEdits;
+  const { addComponent, setInsertOpen, warmComponent } = nodeEdits;
   const { reportFailure } = lifecycle;
   const { commitEdit } = history;
 
@@ -105,6 +106,7 @@ export function useInsertItem(
 
   const insertItem = useCallback(
     (item: InsertItem) => {
+      editTrace.begin(`insert ${item.type}`);
       setInsertOpen(false);
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
@@ -133,10 +135,14 @@ export function useInsertItem(
         return;
       }
       // Step 6, insert: a new node needs no import, so it is one request.
+      editTrace.mark('placed');
       if (commitEdit(insertGesture(state.model, node, target, { urgency: true }))) {
+        editTrace.mark('committed');
         // Drawn on the canvas at once, planned against the tree as it stood; the rebuilt page replaces it.
         showInsertOnCanvas(state.model, target, node, (nodeId) => canvasPathForRef.current(nodeId));
+        editTrace.mark('canvas told');
       }
+      editTrace.finish();
       setSelectedId(id);
     },
     [insertTargetFor, addComponent, commitEdit, canvasPathForRef, reportFailure, pageStateRef, selectedIdRef, setInsertOpen, setSelectedId],
@@ -146,7 +152,16 @@ export function useInsertItem(
   // would act on a selection the user can't see.
   const cmsOpenRef = useRef(false);
   cmsOpenRef.current = leftTab === 'cms' && (!!cmsRel || !!contentName);
-  return { cmsOpenRef, insertItem };
+  // The palette is on this item: a component's reads start now, so choosing it finds them done.
+  const warmInsertItem = useCallback(
+    (item: InsertItem): void => {
+      if (item.type === 'component') {
+        warmComponent(item.path ?? item.name);
+      }
+    },
+    [warmComponent],
+  );
+  return { cmsOpenRef, insertItem, warmInsertItem };
 }
 
 // The app’s keyboard shortcuts.

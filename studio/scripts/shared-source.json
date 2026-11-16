@@ -120,6 +120,7 @@
     "electron/preload/frameOutlineMode.ts",
     "electron/preload/framePageMetadata.ts",
     "electron/preload/framePageText.ts",
+    "electron/preload/framePendingDelete.ts",
     "electron/preload/framePendingInsert.ts",
     "electron/preload/framePaths.ts",
     "electron/preload/framePointQuery.ts",

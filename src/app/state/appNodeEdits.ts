@@ -7,7 +7,8 @@ import { assertCanAddComponent } from '../../features/palette/componentVisibilit
 import { currentRole } from '../../lib/currentRole';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tellCanvas } from '../../editor/canvasQuery';
-import { showInsertOnCanvas } from '../../editor/canvasInsertShow';
+import { WarmReads } from '../model/componentWarm';
+import { showCloneOnCanvas, showInsertOnCanvas } from '../../editor/canvasInsertShow';
 import { planCanvasMove } from '../../../shared/page/canvasMove';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { findWithParent, selectionAfterDelete } from '../../editor/treeSelection';
@@ -91,6 +92,9 @@ export function useHistory(
   };
 }
 
+/** The import specifiers of the components being placed, read once for a moment (componentWarm.ts). */
+const importPaths = new WarmReads<Awaited<ReturnType<typeof findImportPath>>>();
+
 // Placing a project component.
 export function useAddComponent(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { canvasPathForRef, insertables, pageStateRef, projectRef, setSelectedId } = coreState;
@@ -103,9 +107,24 @@ export function useAddComponent(coreState: ReturnType<typeof useCoreState>, hist
       if (!page?.path || !projectPath) {
         throw new Error('An open project page is required to resolve an import');
       }
-      return findImportPath(projectPath, page.path, targetPath);
+      return importPaths.read(`${projectPath}|${page.path}|${targetPath}`, Date.now(), () => findImportPath(projectPath, page.path, targetPath));
     },
     [pageStateRef, projectRef],
+  );
+
+  // Choosing a component finds what it reads already read: the palette says which one is highlighted.
+  const warmComponent = useCallback(
+    (componentName: string): void => {
+      const comp = insertables.find((component) => component.path === componentName) ?? insertables.find((component) => component.name === componentName);
+      const projectPath = projectRef.current?.path;
+      if (comp === undefined || projectPath === undefined) {
+        return;
+      }
+      void loadComponentInstance(comp, insertables, projectPath)
+        .then((instance) => Promise.all(instance.components.map((component) => resolveImportPath(component.path))))
+        .catch(() => undefined);
+    },
+    [insertables, projectRef, resolveImportPath],
   );
 
   // target: {parentId: string | undefined, index: number} | undefined (append at end)
@@ -163,7 +182,7 @@ export function useAddComponent(coreState: ReturnType<typeof useCoreState>, hist
     },
     [insertables, commitEdit, resolveImportPath, canvasPathForRef, pageStateRef, projectRef, setSelectedId],
   );
-  return { addComponent, resolveImportPath };
+  return { addComponent, resolveImportPath, warmComponent };
 }
 
 // What a component would take as props, and where components are used.
@@ -503,7 +522,7 @@ export function useCopyNode(
   history: ReturnType<typeof useHistory>,
 ) {
   const translate = useTranslate();
-  const { pageStateRef, setSelectedId } = coreState;
+  const { canvasPathForRef, pageStateRef, setSelectedId } = coreState;
   const { nodeClipboardRef } = removeNodeScope;
   const { showToast } = lifecycle;
   const { commitEdit } = history;
@@ -556,10 +575,13 @@ export function useCopyNode(
       const clone = withNewIds(sourceNode);
       // Step 6, insert: the copy is the node's own bytes, its note's with them,
       // spliced after it (electron/documents/editRequests.ts, labelledSpan).
-      commitEdit(duplicateGesture(nodeId, clone, { urgency: true }));
+      if (commitEdit(duplicateGesture(nodeId, clone, { urgency: true }))) {
+        // The copy is on the canvas at once, cloned from what the original rendered (framePendingInsert.ts).
+        showCloneOnCanvas(state.model, nodeId, (id) => canvasPathForRef.current(id));
+      }
       setSelectedId(clone.id);
     },
-    [commitEdit, showToast, pageStateRef, setSelectedId, translate],
+    [commitEdit, showToast, canvasPathForRef, pageStateRef, setSelectedId, translate],
   );
   return { copyNode, duplicateNode };
 }
