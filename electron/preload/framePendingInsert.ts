@@ -22,9 +22,9 @@
 // bound. The stand-in is never written anywhere: it lives in this frame's DOM and nowhere else.
 
 import { assert } from '../../shared/core/assert';
-import { insertedNodeToken, renumberedInsertPath, type CanvasInsert } from '../../shared/page/canvasInsert';
+import { insertedNodeToken, renumberedInsertPath, renumberedWrapPath, type CanvasInsert } from '../../shared/page/canvasInsert';
 import { canvasMovesPending, putBackPaths, renumberPaths, runOf, sourceStamps, type Undo } from './frameMove';
-import { isComment, isElement } from './frameBasics';
+import { isChildNode, isComment, isElement } from './frameBasics';
 
 export const FRAME_INSERT_LIMITS = {
   /** Inserts shown at once before the page confirms any: choices faster than a render. */
@@ -41,6 +41,8 @@ interface Shown {
   readonly insert: CanvasInsert;
   readonly nodes: readonly ChildNode[];
   readonly paths: Pick<Undo, 'attributes' | 'comments'>;
+  /** Puts back what the insert moved (a wrap: the wrapped nodes), before the stand-in is removed. */
+  readonly release?: () => void;
 }
 
 let shown: Shown[] = [];
@@ -143,6 +145,7 @@ function takeBack(): void {
   for (let index = shown.length - 1; index >= 0; index -= 1) {
     const entry = shown[index];
     assert(entry !== undefined, 'takeBack: the index lies inside the shown inserts');
+    entry.release?.();
     for (const node of entry.nodes) {
       node.parentNode?.removeChild(node);
     }
@@ -158,16 +161,21 @@ function announceInserted(): void {
 }
 
 function applyInsert(insert: CanvasInsert): Shown | undefined {
+  if (insert.node.kind === 'wrap') {
+    return applyWrap(insert, insert.node);
+  }
   const place = placeOf(insert);
   if (place === undefined) {
     return undefined;
   }
   // The anchor is numbered as before the insert, so it is found before anything renumbers.
-  const marked = place.marked;
   const paths = renumberPaths((token) => renumberedInsertPath(token, insert));
   const token = insertedNodeToken(insert);
-  const made = standIn(insert, token);
-  const nodes: ChildNode[] = marked ? [document.createComment(`avb-s:${token}`), made, document.createComment(`avb-e:${token}`)] : [made];
+  const nodes = standInNodes(insert, token, place);
+  if (nodes === undefined) {
+    putBackPaths(paths);
+    return undefined;
+  }
   for (const node of nodes) {
     if (place.reference === undefined) {
       place.parent.append(node);
@@ -175,6 +183,8 @@ function applyInsert(insert: CanvasInsert): Shown | undefined {
       place.reference.before(node);
     }
   }
+  const made = nodes.find(isElement);
+  assert(made !== undefined, 'applyInsert: a stand-in has an element');
   assert(made.parentNode === place.parent, 'applyInsert: the stand-in sits where the page will put the node');
   return { insert, nodes, paths };
 }
@@ -204,6 +214,56 @@ function placeOf(insert: CanvasInsert): { readonly parent: ParentNode; readonly 
   return { parent, reference: insert.anchor.placement === 'before' ? first : (last.nextSibling ?? undefined), marked };
 }
 
+// The stand-in's nodes: the marker pair around one element, or a copy of what another node rendered.
+function standInNodes(insert: CanvasInsert, token: string, place: { readonly marked: boolean }): ChildNode[] | undefined {
+  if (insert.node.kind === 'clone') {
+    return cloneOf(insert.scope + insert.node.from.join('.'), token);
+  }
+  const made = standIn(insert, token);
+  return place.marked ? [document.createComment(`avb-s:${token}`), made, document.createComment(`avb-e:${token}`)] : [made];
+}
+
+// A deep copy of the source's run (markers included), every path under the source renamed to the new one.
+function cloneOf(sourceToken: string, token: string): ChildNode[] | undefined {
+  const run = runOf(sourceToken);
+  if (run === undefined) {
+    return undefined;
+  }
+  const rename = (value: string): string =>
+    value === sourceToken ? token : value.startsWith(sourceToken + '.') ? token + value.slice(sourceToken.length) : value;
+  const copies = run.map((node) => node.cloneNode(true)).filter(isChildNode);
+  for (const copy of copies) {
+    if (isElement(copy)) {
+      retag(copy, rename);
+      copy.setAttribute(PENDING_INSERT_ATTRIBUTE, 'clone');
+    } else if (isComment(copy)) {
+      copy.data = renamedMarker(copy.data, rename);
+    }
+  }
+  return copies.length > 0 ? copies : undefined;
+}
+
+function retag(root: Element, rename: (value: string) => string): void {
+  const tagged = [root, ...Array.from(root.querySelectorAll(`[${PATH_ATTRIBUTE}]`))];
+  for (const element of tagged) {
+    const value = element.getAttribute(PATH_ATTRIBUTE);
+    if (value !== null) {
+      element.setAttribute(PATH_ATTRIBUTE, value.split(' ').map(rename).join(' '));
+    }
+  }
+  const walker = document.createTreeWalker(root, 128); // NodeFilter.SHOW_COMMENT
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (isComment(node)) {
+      node.data = renamedMarker(node.data, rename);
+    }
+  }
+}
+
+function renamedMarker(data: string, rename: (value: string) => string): string {
+  const match = /^avb-([se]):(.*)$/.exec(data);
+  return match?.[1] !== undefined && match[2] !== undefined ? `avb-${match[1]}:${rename(match[2])}` : data;
+}
+
 function standIn(insert: CanvasInsert, token: string): Element {
   const node = insert.node;
   switch (node.kind) {
@@ -217,6 +277,9 @@ function standIn(insert: CanvasInsert, token: string): Element {
       }
       return tagged(element, token, 'element');
     }
+    case 'clone':
+    case 'wrap':
+      throw new Error('standIn: a clone is made by cloneOf and a wrap by applyWrap');
     case 'component': {
       const block = document.createElement('div');
       block.setAttribute(PENDING_NAME_ATTRIBUTE, node.name);
@@ -248,4 +311,36 @@ function installPendingStyle(): void {
       'font: 12px/1.4 system-ui, sans-serif; color: rgba(127, 127, 127, 0.9); }',
   );
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, stylesheet];
+}
+
+// A wrap: the wrapper takes the wrapped node's place and path, the node's run moves inside it, and
+// every path under the node gains a step. Taking it back puts the run where it stood.
+function applyWrap(insert: CanvasInsert, wrap: Extract<CanvasInsert['node'], { kind: 'wrap' }>): Shown | undefined {
+  const sourceToken = insert.scope + wrap.from.join('.');
+  const run = runOf(sourceToken);
+  const first = run?.[0];
+  const parent = first?.parentNode;
+  if (run === undefined || first === undefined || parent === null || parent === undefined) {
+    return undefined;
+  }
+  const marked = isComment(first) && first.data.startsWith('avb-s:');
+  const next = run.at(-1)?.nextSibling ?? undefined;
+  const paths = renumberPaths((token) => renumberedWrapPath(token, insert));
+  const wrapper = tagged(document.createElement(wrap.tag), sourceToken, 'element');
+  const before = marked ? document.createComment(`avb-s:${sourceToken}`) : undefined;
+  const after = marked ? document.createComment(`avb-e:${sourceToken}`) : undefined;
+  const nodes: ChildNode[] = [...(before === undefined ? [] : [before]), wrapper, ...(after === undefined ? [] : [after])];
+  first.before(...nodes);
+  wrapper.append(...run);
+  assert(wrapper.parentNode === parent, 'applyWrap: the wrapper stands where the wrapped node stood');
+  const release = (): void => {
+    for (const node of run) {
+      if (next !== undefined && next.parentNode === parent) {
+        next.before(node);
+      } else {
+        parent.append(node);
+      }
+    }
+  };
+  return { insert, nodes, paths, release };
 }

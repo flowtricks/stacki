@@ -26,6 +26,7 @@ const path = require('node:path');
 const { ROOT, repoPath } = require('../helpers/sources.js');
 
 const RUNS = 20;
+// The deleted and reordered kinds read the same page, so they run on the base page again each time.
 const WATCH_MS_MAX = 8000;
 const REST_MS = 400;
 const BLOCKS = 12;
@@ -33,18 +34,50 @@ const SITE_SOURCE = repoPath('studio/test/fixtures/site');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const now = () => performance.timeOrigin + performance.now();
 
+// Each kind: how the page's source changes (`apply`), how it changes back (`revert`), and the
+// expression that is true in the canvas once the change shows (`shown`).
+const insertKind = (name, node) => ({
+  name,
+  apply: (source, serial) => source.replace('<p data-a>Paragraph 0a</p>', `<p data-a>Paragraph 0a</p>${node(serial)}`),
+  revert: (source, serial) => source.replace(node(serial), ''),
+  shown: (serial) => `!!document.querySelector('[data-probe="${serial}"]')`,
+});
 const KINDS = [
-  { name: 'p', node: (serial) => `<p data-probe="${serial}">Paragraph</p>`, probe: (serial) => `[data-probe="${serial}"]` },
-  { name: 'div', node: (serial) => `<div data-probe="${serial}"></div>`, probe: (serial) => `[data-probe="${serial}"]` },
-  { name: 'Section', node: (serial) => `<Section data-probe="${serial}"></Section>`, probe: (serial) => `[data-probe="${serial}"]` },
-  { name: 'Image', node: (serial) => `<Image data-probe="${serial}" alt="probe" />`, probe: (serial) => `[data-probe="${serial}"]` },
+  insertKind('p', (serial) => `<p data-probe="${serial}">Paragraph</p>`),
+  insertKind('div', (serial) => `<div data-probe="${serial}"></div>`),
+  insertKind('Section', (serial) => `<Section data-probe="${serial}"></Section>`),
+  insertKind('Image', (serial) => `<Image data-probe="${serial}" alt="probe" />`),
+  {
+    name: 'delete',
+    apply: (source) => source.replace('<p data-b>Paragraph 0b</p>', ''),
+    revert: (source) => source.replace('<p data-a>Paragraph 0a</p>', '<p data-a>Paragraph 0a</p><p data-b>Paragraph 0b</p>'),
+    shown: () => "!document.querySelector('[data-b]')",
+  },
+  {
+    name: 'reorder',
+    apply: (source) => source.replace('<p data-a>Paragraph 0a</p><p data-b>Paragraph 0b</p>', '<p data-b>Paragraph 0b</p><p data-a>Paragraph 0a</p>'),
+    revert: (source) => source.replace('<p data-b>Paragraph 0b</p><p data-a>Paragraph 0a</p>', '<p data-a>Paragraph 0a</p><p data-b>Paragraph 0b</p>'),
+    shown: () => "!!document.querySelector('.row > [data-b]:first-child')",
+  },
+  {
+    name: 'attribute',
+    apply: (source, serial) => source.replace('<h2>Block 0</h2>', `<h2 data-flag="${serial}">Block 0</h2>`),
+    revert: (source, serial) => source.replace(`<h2 data-flag="${serial}">Block 0</h2>`, '<h2>Block 0</h2>'),
+    shown: (serial) => `!!document.querySelector('[data-flag="${serial}"]')`,
+  },
+  {
+    name: 'text',
+    apply: (source, serial) => source.replace('<h2>Block 0</h2>', `<h2>Block 0 ${serial}</h2>`),
+    revert: (source, serial) => source.replace(`<h2>Block 0 ${serial}</h2>`, '<h2>Block 0</h2>'),
+    shown: (serial) => `document.querySelector('.block h2').textContent === 'Block 0 ${serial}'`,
+  },
 ];
 
 function pageSource() {
   const blocks = [];
   for (let index = 0; index < BLOCKS; index += 1) {
     blocks.push(
-      `    <section class="block"><h2>Block ${index}</h2><div class="row"><p>Paragraph ${index}a</p><p>Paragraph ${index}b</p>` +
+      `    <section class="block"><h2>Block ${index}</h2><div class="row"><p${index === 0 ? ' data-a' : ''}>Paragraph ${index}a</p><p${index === 0 ? ' data-b' : ''}>Paragraph ${index}b</p>` +
         '<ul><li>One</li><li>Two</li><li>Three</li></ul></div></section>',
     );
   }
@@ -134,10 +167,10 @@ async function loadMain(electron) {
 // In the page: when each probe appears, and when the page fetches itself (the morph's pull).
 const INSTRUMENT = `(() => {
   const clock = () => performance.timeOrigin + performance.now();
-  window.__probe = { selector: '', seenAt: undefined };
+  window.__probe = { test: undefined, seenAt: undefined };
   window.__fetches = [];
   const look = () => {
-    if (window.__probe.selector && window.__probe.seenAt === undefined && document.querySelector(window.__probe.selector)) {
+    if (window.__probe.test && window.__probe.seenAt === undefined && window.__probe.test()) {
       window.__probe.seenAt = clock();
     }
   };
@@ -150,7 +183,7 @@ const INSTRUMENT = `(() => {
     window.__fetches.push(entry);
     return fetchPage(input, init).then((response) => { entry.end = clock(); return response; });
   };
-  window.__arm = (selector) => { window.__probe = { selector, seenAt: undefined }; window.__fetches = []; };
+  window.__arm = (expression) => { window.__probe = { test: new Function('return (' + expression + ')'), seenAt: undefined }; window.__fetches = []; };
   return true;
 })()`;
 
@@ -189,10 +222,10 @@ async function pageClockOffset(canvas) {
 }
 
 async function oneInsert(invoke, codePatch, canvas, pagePath, kind, serial) {
-  await canvas.webContents.executeJavaScript(`window.__arm(${JSON.stringify(kind.probe(serial))})`);
+  await canvas.webContents.executeJavaScript(`window.__arm(${JSON.stringify(kind.shown(serial))})`);
   const offset = await pageClockOffset(canvas);
   const started = now();
-  await writeNode(invoke, codePatch, pagePath, (source) => source.replace('<p>Paragraph 0a</p>', `<p>Paragraph 0a</p>${kind.node(serial)}`));
+  await writeNode(invoke, codePatch, pagePath, (source) => kind.apply(source, serial));
   const replied = now();
   // What the app does once a write is confirmed (appLifecycle.ts onAppliedUrgentEdit).
   await canvas.webContents.executeJavaScript("window.postMessage({ type: 'avb:patch-now' }, '*')");
@@ -215,7 +248,7 @@ async function oneInsert(invoke, codePatch, canvas, pagePath, kind, serial) {
     fetches: fetches.length,
   };
   await sleep(REST_MS);
-  await writeNode(invoke, codePatch, pagePath, (source) => source.replace(kind.node(serial), ''));
+  await writeNode(invoke, codePatch, pagePath, (source) => kind.revert(source, serial));
   await sleep(REST_MS);
   return row;
 }

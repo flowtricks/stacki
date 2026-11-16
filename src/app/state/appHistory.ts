@@ -28,6 +28,7 @@ import { findEditorNodeById as findNodeById, toEditorPageState, carriedParse, ty
 import { type EditorModel } from '../../editor/pageView';
 import { onFilesChanged } from '../../ipc/appBridge';
 import { tellCanvas } from '../../editor/canvasQuery';
+import { showModelChangeOnCanvas } from '../../editor/canvasEditShow';
 import { VARIANT_MESSAGE_TYPES } from '../../../shared/page/variantOverride';
 import { onWindowReturn } from '../../lib/windowReturn';
 import { reviewedSource, nextSave } from '../model/nodeFactory';
@@ -240,7 +241,7 @@ export function useTypedParse(coreState: ReturnType<typeof useCoreState>, lifecy
 // Undoing or redoing one step of page edits.
 export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
   const { autosave, editDrafts, historyRef, showToast } = lifecycle;
-  const { pageStateRef, setPageState, setSelectedId } = coreState;
+  const { canvasPathForRef, pageStateRef, setPageState, setSelectedId } = coreState;
   const translate = useTranslate();
 
   // Undo or redo one gesture sent as edit requests (step 6): its inverses go
@@ -305,6 +306,10 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
         // Installed only over the state the undo started from: a newer edit
         // made meanwhile keeps its model, and main rebases it past the revert.
         setPageState((current) => (current === state ? shown : current));
+        if (shown.editable && state.editable) {
+          // The step's result is on the canvas in this frame, not after the render.
+          showModelChangeOnCanvas(state.model, shown.model, { structure: 'show' }, (id) => canvasPathForRef.current(id));
+        }
         if (shown.editable) {
           const model = shown.model;
           const named = (id: string) => id === 'layout' || id === 'frontmatter';
@@ -330,7 +335,7 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
         }
       }
     },
-    [autosave, editDrafts, showToast, historyRef, pageStateRef, setPageState, setSelectedId, translate],
+    [autosave, editDrafts, showToast, historyRef, canvasPathForRef, pageStateRef, setPageState, setSelectedId, translate],
   );
   return { stepEdits };
 }
@@ -542,7 +547,7 @@ export function useCommitEdit(
 ) {
   const { editDrafts, setConflictReason, showToast } = lifecycle;
   const translate = useTranslate();
-  const { pageStateRef, propertySave, setPageState, typedCodeUnparsed } = coreState;
+  const { canvasPathForRef, pageStateRef, propertySave, setPageState, typedCodeUnparsed } = coreState;
   const { scheduleSave } = scheduleSaveScope;
   const { pushEditHistory } = historyPush;
 
@@ -602,9 +607,12 @@ export function useCommitEdit(
       assert(queued === 'queued', 'A gesture inside the bound is queued');
       setPageState((current) => (current?.editable ? { ...current, model: gesture.apply(current.model), save: saveStateEdited(current.save) } : current));
       scheduleSave(gesture.urgency);
+      // The canvas shows what the edit does to nodes it already has (attributes, words, a tag, an element
+      // that is updating) in this frame; an added or removed node is shown by the action that made it.
+      showModelChangeOnCanvas(state.model, gesture.apply(state.model), { structure: 'leave' }, (id) => canvasPathForRef.current(id));
       return true;
     },
-    [scheduleSave, pushEditHistory, propertySave.saving, editDrafts, typedCodeUnparsed, showToast, pageStateRef, setPageState, translate],
+    [scheduleSave, pushEditHistory, propertySave.saving, editDrafts, typedCodeUnparsed, showToast, canvasPathForRef, pageStateRef, setPageState, translate],
   );
   // The held gesture goes in with the next edit; a field that made none
   // (the pick was refused) leaves it to go in alone once the click is done,

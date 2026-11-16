@@ -205,3 +205,47 @@ test('the stand-in is in the DOM within one frame of the call, and nothing is fe
     dom.window.close();
   }
 });
+
+test('a duplicate is a deep copy of what the original rendered, its paths renamed, right after it', () => {
+  const dom = page();
+  try {
+    document.querySelector('main').insertAdjacentHTML('beforeend', '');
+    const original = document.querySelector('[data-avb-p="0.0"]');
+    original.innerHTML = '<span data-avb-p="0.0.0">inner</span>';
+    const plan = { scope: '', parent: [0], index: 1, anchor: { path: [0, 0], placement: 'after' }, node: { kind: 'clone', from: [0, 0] } };
+    assert.equal(pending.showCanvasInsert(plan), true);
+    const copy = document.querySelector('[data-avb-p="0.1"]');
+    assert.equal(copy.textContent, 'inner');
+    assert.equal(copy.querySelector('span').getAttribute('data-avb-p'), '0.1.0', 'descendant paths follow the copy');
+    assert.equal(original.nextElementSibling, copy);
+    assert.deepEqual(paths(), ['0', '0.0', '0.0.0', '0.1', '0.1.0', '0.2', '1'], 'the old second child is now the third');
+    pending.revertCanvasInserts();
+    assert.deepEqual(paths(), ['0', '0.0', '0.0.0', '0.1', '1']);
+  } finally {
+    pending.revertCanvasInserts();
+    dom.window.close();
+  }
+});
+
+test('a wrap puts an element where the node stood, the node inside it, and every path under it gains a step', () => {
+  const dom = page();
+  try {
+    const original = document.querySelector('[data-avb-p="0.0"]');
+    const plan = { scope: '', parent: [0], index: 0, anchor: { path: [0, 0], placement: 'before' }, node: { kind: 'wrap', tag: 'div', from: [0, 0] } };
+    assert.equal(pending.showCanvasInsert(plan), true);
+    const wrapper = document.querySelector('[data-avb-p="0.0"]');
+    assert.equal(wrapper.tagName, 'DIV');
+    assert.equal(wrapper.firstElementChild, original);
+    assert.equal(original.getAttribute('data-avb-p'), '0.0.0');
+    assert.equal(document.querySelector('[data-avb-p="0.1"]').textContent, 'two', 'siblings keep their numbers');
+    const before = document.body.innerHTML;
+    pending.revertCanvasInserts();
+    assert.notEqual(document.body.innerHTML, before);
+    assert.equal(original.getAttribute('data-avb-p'), '0.0');
+    assert.equal(original.parentElement.tagName, 'MAIN', 'the node is back where it stood');
+    assert.equal(original.nextElementSibling.textContent, 'two');
+  } finally {
+    pending.revertCanvasInserts();
+    dom.window.close();
+  }
+});

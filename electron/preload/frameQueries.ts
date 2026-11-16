@@ -7,6 +7,7 @@ import { receiveAppScroll, receiveAppWheel } from './frameAppScroll';
 import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
 import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from './framePendingDelete';
 import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
+import { listenForCanvasEdits, revertCanvasEdits, showCanvasEdits } from './framePendingEdit';
 import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from './framePendingInsert';
 import { parseCanvasInsert } from '../../shared/page/canvasInsert';
 import { parseCanvasMove } from '../../shared/page/canvasMove';
@@ -127,6 +128,7 @@ export function listenForQueries(): void {
   listenForCanvasMoves();
   // A palette pick drawn at once, and reconciled the same way (framePendingInsert.ts).
   listenForCanvasInserts();
+  listenForCanvasEdits();
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window.parent) {
       return;
@@ -208,7 +210,14 @@ export function listenForQueries(): void {
       }
       return;
     }
+    if (data['type'] === 'avb:optimistic-edit') {
+      if (showCanvasEdits(data['edits']) > 0) {
+        sendRects();
+      }
+      return;
+    }
     if (data['type'] === 'avb:insert-revert') {
+      revertCanvasEdits();
       revertCanvasInserts();
       clearPendingDeletes();
       sendRects();

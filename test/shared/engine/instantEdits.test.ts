@@ -27,7 +27,8 @@ test('shipped strategies name a module that exists, and gaps say why', () => {
     if (entry.status === 'shipped') {
       assert.ok(existsSync(new URL(entry.module, ROOT)), `${tag}: ${entry.module} exists`);
     } else {
-      assert.ok(entry.reason.length > 10, `${tag} says why it is not shipped`);
+      assert.equal(entry.status, 'unpredictable', `${tag}: no operation is left planned; it ships or says why it cannot`);
+      assert.ok(entry.reason.length > 20, `${tag} says why it cannot be shown before the write`);
     }
   }
 });

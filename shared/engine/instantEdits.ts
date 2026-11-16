@@ -2,42 +2,58 @@
 //
 // Why a table typed over the planner's own operation tags: a new operation added to
 // `Operation` (shared/engine/intent.ts) is a compile error here until someone says how its
-// result reaches the canvas at once, or why it cannot be predicted. The product rule is in
+// result reaches the canvas at once, or why it cannot. The product rule is in
 // docs/instant-edits.md: an action shows its result in the frame it is made in.
 //
-// `shipped` names the module that does it; `planned` is an honest gap, listed so it cannot be
-// forgotten and so a test can count it. A `closest` strategy is the fallback for an operation
-// whose result needs the server (a rename that changes what a component renders): the old DOM
-// stays, and an updating cue shows after a short wait, never a blank.
+// `shipped` names the module that does it. `unpredictable` is an operation whose result only the
+// server knows (typed code, data the page reads); it says why, and the closest honest feedback is
+// the model diff's "updating" cue (shared/page/canvasEdit.ts) where a node is named, never a blank.
+// There is no `planned`: a gap is either closed or explained.
 
 import type { OperationTag } from './intent';
 
-export type InstantStrategy = 'stand-in' | 'hide' | 'move' | 'class-patch' | 'live-rule' | 'text-session' | 'attribute' | 'closest' | 'not-canvas';
+export type InstantStrategy = 'stand-in' | 'hide' | 'move' | 'class-patch' | 'live-rule' | 'text' | 'attribute' | 'tag' | 'closest' | 'not-canvas';
 
 export type InstantEntry =
   | { readonly status: 'shipped'; readonly strategy: InstantStrategy; readonly module: string }
-  | { readonly status: 'planned'; readonly strategy: InstantStrategy; readonly reason: string };
+  | { readonly status: 'unpredictable'; readonly strategy: 'closest' | 'not-canvas'; readonly reason: string };
+
+const EDIT = 'electron/preload/framePendingEdit.ts';
+const INSERT = 'electron/preload/framePendingInsert.ts';
 
 export const INSTANT_EDITS: Readonly<Record<OperationTag, InstantEntry>> = {
-  'insert-node': { status: 'shipped', strategy: 'stand-in', module: 'electron/preload/framePendingInsert.ts' },
+  'insert-node': { status: 'shipped', strategy: 'stand-in', module: INSERT },
   'remove-node': { status: 'shipped', strategy: 'hide', module: 'electron/preload/framePendingDelete.ts' },
   'move-node': { status: 'shipped', strategy: 'move', module: 'electron/preload/frameMove.ts' },
-  'set-attribute': {
-    status: 'planned',
-    strategy: 'attribute',
-    reason: 'class edits are shipped (frameQueries.ts applyClassPatch); other attributes still wait for the render',
-  },
-  'remove-attribute': { status: 'planned', strategy: 'attribute', reason: 'same as set-attribute' },
+  'set-attribute': { status: 'shipped', strategy: 'attribute', module: EDIT },
+  'remove-attribute': { status: 'shipped', strategy: 'attribute', module: EDIT },
+  'rename-attribute': { status: 'shipped', strategy: 'attribute', module: EDIT },
   'set-inline-style': { status: 'shipped', strategy: 'live-rule', module: 'electron/preload/frameLiveRules.ts' },
-  'apply-code-patch': { status: 'shipped', strategy: 'not-canvas', module: 'electron/preload/frameText.ts' },
-  'edit-frontmatter-slot': { status: 'planned', strategy: 'closest', reason: 'frontmatter changes data the page renders; the cue shows until the render' },
-  'revert-splices': { status: 'planned', strategy: 'closest', reason: 'undo applies the inverse of what was shown; inverse patches are the next slice' },
-  'rename-tag': { status: 'planned', strategy: 'closest', reason: 'a tag rename can change what a component renders' },
-  'rename-attribute': { status: 'planned', strategy: 'attribute', reason: 'follows set-attribute' },
-  'rename-binding': { status: 'planned', strategy: 'closest', reason: 'a binding rename changes data the page reads' },
-  'rewrite-node': { status: 'planned', strategy: 'text-session', reason: 'text edits show in the canvas text session; the rest waits for the render' },
-  'append-body': { status: 'planned', strategy: 'stand-in', reason: 'first node of an empty page: nothing to stand beside' },
-  'insert-frontmatter': { status: 'planned', strategy: 'not-canvas', reason: 'writes no markup' },
-  'wrap-nodes': { status: 'planned', strategy: 'stand-in', reason: 'wrapping moves a run into a new element' },
-  'rewrite-text': { status: 'planned', strategy: 'closest', reason: 'a program rewrite of a file: stylesheet rules show live, others wait' },
+  'rename-tag': { status: 'shipped', strategy: 'tag', module: EDIT },
+  'rewrite-node': { status: 'shipped', strategy: 'text', module: EDIT },
+  'revert-splices': { status: 'shipped', strategy: 'closest', module: 'src/editor/canvasEditShow.ts' },
+  'wrap-nodes': { status: 'shipped', strategy: 'stand-in', module: INSERT },
+  'apply-code-patch': {
+    status: 'unpredictable',
+    strategy: 'closest',
+    reason: 'Typed code is arbitrary text: what it renders is known only once the server compiles it.',
+  },
+  'edit-frontmatter-slot': {
+    status: 'unpredictable',
+    strategy: 'closest',
+    reason: 'Frontmatter is code that feeds the page; its effect on the markup is known only to the server.',
+  },
+  'rewrite-text': {
+    status: 'unpredictable',
+    strategy: 'closest',
+    reason:
+      'A program rewrite of a file (a stylesheet rule, a CMS entry): stylesheet rules already show live (frameLiveRules.ts), the rest is data the server renders.',
+  },
+  'append-body': { status: 'unpredictable', strategy: 'closest', reason: 'The first node of an empty page has no rendered sibling or parent to stand beside.' },
+  'rename-binding': {
+    status: 'unpredictable',
+    strategy: 'not-canvas',
+    reason: 'A renamed variable renders the same page; there is nothing to show before the write.',
+  },
+  'insert-frontmatter': { status: 'unpredictable', strategy: 'not-canvas', reason: 'Writes no markup: the canvas has nothing to show.' },
 };

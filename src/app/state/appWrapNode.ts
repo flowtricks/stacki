@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
 import { canConvertText, canWrapNode, textWrapGesture, wrapNodeGesture, type TextTag, type WrapperTag } from '../../editor/wrapNode';
+import { showWrapOnCanvas } from '../../editor/canvasInsertShow';
 import { newId } from '../model/nodeFactory';
 import type { useCoreState } from './appLifecycle';
 import type { useHistory } from './appNodeEdits';
 
 export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
-  const { pageStateRef, setSelectedId } = coreState;
+  const { canvasPathForRef, pageStateRef, setSelectedId } = coreState;
   const { commitEdit } = history;
   const wrapNode = useCallback(
     (nodeId: string, name: WrapperTag): void => {
@@ -17,10 +18,13 @@ export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history:
         return;
       }
       const wrapper = { id: newId(), name };
-      commitEdit(wrapNodeGesture(state.model, nodeId, wrapper));
+      if (commitEdit(wrapNodeGesture(state.model, nodeId, wrapper))) {
+        // The wrapper stands around the node on the canvas at once (framePendingInsert.ts).
+        showWrapOnCanvas(state.model, nodeId, name, (id) => canvasPathForRef.current(id));
+      }
       setSelectedId(wrapper.id);
     },
-    [commitEdit, pageStateRef, setSelectedId],
+    [canvasPathForRef, commitEdit, pageStateRef, setSelectedId],
   );
   const convertText = useCallback(
     (nodeId: string, name: TextTag): void => {

@@ -29,7 +29,11 @@ export type CanvasInsertNode =
       /** The words the template puts inside; undefined for a void tag and an empty element. */
       readonly text: string | undefined;
     }
-  | { readonly kind: 'component'; readonly name: string };
+  | { readonly kind: 'component'; readonly name: string }
+  /** A copy of the elements the node at `from` renders (a duplicate): the frame clones them, subtree and all. */
+  | { readonly kind: 'clone'; readonly from: readonly number[] }
+  /** A plain element put around the node at `from`, which becomes its only child (a wrap). */
+  | { readonly kind: 'wrap'; readonly tag: string; readonly from: readonly number[] };
 
 /** Where the stand-in's elements go: beside a sibling that renders elements, or inside an empty parent. */
 export type CanvasInsertPlacement = 'before' | 'after' | 'inside';
@@ -159,6 +163,79 @@ export function planCanvasInsert(
     return undefined;
   }
   return { scope: parent.scope, parent: parent.trail, index: gap, anchor: { path: parent.trail, placement: 'inside' }, node };
+}
+
+/**
+ * The insert a duplicate makes: a copy of the node's rendered elements right after the original's.
+ * Undefined when the node is not an element or component the canvas can find, or has no path.
+ */
+export function planCanvasClone(roots: readonly CanvasInsertTreeNode[], nodeId: string, pathOf: (id: string) => string | undefined): CanvasInsert | undefined {
+  const pending: { readonly list: readonly CanvasInsertTreeNode[]; readonly parent: CanvasInsertTreeNode | undefined }[] = [{ list: roots, parent: undefined }];
+  for (let visited = 0; visited < pending.length; visited += 1) {
+    assert(visited < LIMITS.treeNodesMax, 'planCanvasClone: a tree stays inside its node bound');
+    const entry = pending[visited];
+    assert(entry !== undefined, 'planCanvasClone: the visit index lies inside the queue');
+    for (const [index, node] of entry.list.entries()) {
+      if (node.id === nodeId) {
+        if (!PLACED_KINDS.has(node.kind)) {
+          return undefined;
+        }
+        const own = splitCanvasPath(pathOf(nodeId));
+        if (own === undefined || own.trail.at(-1) !== index) {
+          return undefined;
+        }
+        const parent = own.trail.slice(0, -1);
+        return { scope: own.scope, parent, index: index + 1, anchor: { path: own.trail, placement: 'after' }, node: { kind: 'clone', from: own.trail } };
+      }
+      if (node.children !== undefined) {
+        pending.push({ list: node.children, parent: node });
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The insert a wrap makes: a plain element where the node stood, the node inside it as the only child.
+ * Undefined for a tag a stand-in is never made of, or a node the canvas cannot find.
+ */
+export function planCanvasWrap(
+  roots: readonly CanvasInsertTreeNode[],
+  nodeId: string,
+  tag: string,
+  pathOf: (id: string) => string | undefined,
+): CanvasInsert | undefined {
+  if (!TAG_NAME.test(tag) || UNSAFE_TAGS.has(tag) || HTML_VOID_TAGS.has(tag) || tag.length > CANVAS_INSERT_LIMITS.tagCharsMax) {
+    return undefined;
+  }
+  const clone = planCanvasClone(roots, nodeId, pathOf);
+  if (clone === undefined || clone.node.kind !== 'clone') {
+    return undefined;
+  }
+  const from = clone.node.from;
+  return { scope: clone.scope, parent: clone.parent, index: clone.index - 1, anchor: { path: from, placement: 'before' }, node: { kind: 'wrap', tag, from } };
+}
+
+/** Where `token`, numbered as before a wrap of the node at `insert.parent + index`, is numbered after it: everything under the node gains one step. */
+export function renumberedWrapPath(token: string, insert: Pick<CanvasInsert, 'scope' | 'parent' | 'index'>): string {
+  if (!token.startsWith(insert.scope)) {
+    return token;
+  }
+  const local = token.slice(insert.scope.length);
+  if (!NODE_PATH.test(local)) {
+    return token;
+  }
+  const trail = local.split('.').map(Number);
+  const at = insert.parent.length;
+  for (let step = 0; step < at; step += 1) {
+    if (trail[step] !== insert.parent[step]) {
+      return token;
+    }
+  }
+  if (trail.length <= at || trail[at] !== insert.index) {
+    return token;
+  }
+  return insert.scope + [...trail.slice(0, at + 1), 0, ...trail.slice(at + 1)].join('.');
 }
 
 /** Where `token` (a `data-avb-p` token or marker path), numbered as before the insert, is numbered after it. */
@@ -396,6 +473,18 @@ function nodeOf(input: unknown): CanvasInsertNode | undefined {
   const record = recordOf(input);
   if (record === undefined) {
     return undefined;
+  }
+  if (record['kind'] === 'wrap') {
+    const from = trailOf(record['from']);
+    const tag = record['tag'];
+    if (from === undefined || from.length === 0 || typeof tag !== 'string' || !TAG_NAME.test(tag) || UNSAFE_TAGS.has(tag) || HTML_VOID_TAGS.has(tag)) {
+      return undefined;
+    }
+    return { kind: 'wrap', tag, from };
+  }
+  if (record['kind'] === 'clone') {
+    const from = trailOf(record['from']);
+    return from === undefined || from.length === 0 ? undefined : { kind: 'clone', from };
   }
   if (record['kind'] === 'component') {
     const name = record['name'];

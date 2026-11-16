@@ -9,6 +9,9 @@ import { test } from 'node:test';
 import {
   CANVAS_INSERT_LIMITS,
   insertedNodeToken,
+  planCanvasClone,
+  planCanvasWrap,
+  renumberedWrapPath,
   parseCanvasInsert,
   planCanvasInsert,
   renumberedInsertPath,
@@ -148,4 +151,28 @@ test('the boundary parser takes a plan and refuses every known-bad shape', () =>
   for (const input of bad) {
     assert.equal(parseCanvasInsert(input), undefined, JSON.stringify(input));
   }
+});
+
+test('a duplicate plans a copy right after the original, from the original’s own path', () => {
+  const plan = planCanvasClone(tree, 'b', pathOf);
+  assert.deepEqual(plan, { scope: '', parent: [0], index: 3, anchor: { path: [0, 2], placement: 'after' }, node: { kind: 'clone', from: [0, 2] } });
+  assert.equal(planCanvasClone(tree, 'words', pathOf), undefined, 'text renders no element to copy');
+  assert.equal(planCanvasClone(tree, 'missing', pathOf), undefined);
+  assert.deepEqual(parseCanvasInsert(JSON.parse(JSON.stringify(plan))), plan);
+  assert.equal(parseCanvasInsert({ ...plan, node: { kind: 'clone', from: [] } }), undefined);
+});
+
+test('a wrap plans a plain wrapper at the node’s place and renumbers everything under the node', () => {
+  const plan = planCanvasWrap(tree, 'b', 'div', pathOf);
+  assert.ok(plan);
+  assert.deepEqual(plan.node, { kind: 'wrap', tag: 'div', from: [0, 2] });
+  assert.deepEqual(plan.anchor, { path: [0, 2], placement: 'before' });
+  assert.equal(planCanvasWrap(tree, 'b', 'script', pathOf), undefined);
+  assert.equal(planCanvasWrap(tree, 'b', 'img', pathOf), undefined, 'a void tag holds nothing');
+  assert.equal(planCanvasWrap(tree, 'words', 'div', pathOf), undefined);
+  assert.equal(renumberedWrapPath('0.2', plan), '0.2.0');
+  assert.equal(renumberedWrapPath('0.2.1.4', plan), '0.2.0.1.4');
+  assert.equal(renumberedWrapPath('0.3', plan), '0.3', 'siblings keep their numbers');
+  assert.equal(renumberedWrapPath('0', plan), '0');
+  assert.deepEqual(parseCanvasInsert(JSON.parse(JSON.stringify(plan))), plan);
 });
