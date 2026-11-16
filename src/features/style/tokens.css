@@ -105,9 +105,15 @@
   --color-component-tag-bg: rgba(37, 157, 77, 0.4);
   --color-component-tag-bg-hover: rgba(37, 157, 77, 0.55);
   --color-component-tag-bg-active: #16783c;
+  /* The fill of a chip styled only in another query. The chip keeps its full-strength text and says
+     "not here" through a darker fill; it used to be the whole chip at half opacity, which washed the text
+     out to about 4:1 in blue and 2:1 in grey. Each is the family's resting fill, one step darker. */
+  --color-class-tag-bg-dimmed: #001e39;
+  --color-component-tag-bg-dimmed: rgba(37, 157, 77, 0.2);
   --color-selector-context-bg: var(--color-bg-surface);
   --color-selector-context-bg-hover: var(--color-bg-surface-raised);
   --color-selector-context-bg-active: #636363; /* Clearly brighter than hover (#3b3b3b), so the selected grey chip stands out. */
+  --color-selector-context-bg-dimmed: var(--color-bg-page);
   /* The "Inline styles" chip (InlineStyleChip.tsx): a muted amber, apart from every
      selector family, because the style attribute is not a selector and outranks them. */
   --color-inline-tag: #f6d38a;

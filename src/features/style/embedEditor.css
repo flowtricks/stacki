@@ -4169,6 +4169,23 @@
 .embed-editor_selector-chip.is-dimmed.is-active {
   opacity: 1;
 }
+/* The three selector-chip families (blue class, grey plain, green component) show "styled
+   only in another query" in the fill, never in the text: whole-chip opacity washed the text out
+   (white at 50% is #808080, about 4:1 on blue and 2:1 on grey), while the green chip beside them,
+   not dimmed, kept full-strength text. Text keeps each family's own colour from the rules above;
+   amber (inline) and dashed (pending) chips keep the opacity. */
+.embed-editor_selector-chip.is-dimmed:not(.is-inline):not(.is-pending) {
+  opacity: 1;
+}
+.embed-editor_selector-chip.is-dimmed:not(.is-inline):not(.is-pending):not(.is-active):not(.is-plain):not(.is-component):not(:hover) {
+  background: var(--color-class-tag-bg-dimmed);
+}
+.embed-editor_selector-chip.is-dimmed.is-plain:not(.is-inline):not(.is-pending):not(.is-active):not(:hover) {
+  background: var(--color-selector-context-bg-dimmed);
+}
+.embed-editor_selector-chip.is-dimmed.is-component:not(.is-inline):not(.is-pending):not(.is-active):not(:hover) {
+  background: var(--color-component-tag-bg-dimmed);
+}
 .embed-editor_selector-chip:disabled {
   cursor: not-allowed;
   opacity: 0.6;
