@@ -11,6 +11,10 @@ export interface ResetMenuProps {
   readonly resetLabel?: string;
   readonly onUnbind?: (() => void) | undefined;
   readonly unbindLabel: string;
+  /** Why the unbind item cannot run: it is shown dimmed with this as its tooltip, and does nothing. */
+  readonly unbindDisabledReason?: string | undefined;
+  /** Why the reset item cannot run, shown the same way. */
+  readonly resetDisabledReason?: string | undefined;
   readonly onClose: () => void;
 }
 export function ResetLabel(props: { readonly label: React.ReactNode; readonly active: boolean; readonly onReset: () => void }) {
@@ -68,7 +72,7 @@ function resetMenuLayer(label: HTMLElement): HTMLElement {
   return label.closest<HTMLElement>('.popup-surface') ?? popupLayer();
 }
 
-export function ResetMenu({ position, onReset, resetLabel, onUnbind, unbindLabel, onClose }: ResetMenuProps) {
+export function ResetMenu({ position, onReset, resetLabel, onUnbind, unbindLabel, unbindDisabledReason, resetDisabledReason, onClose }: ResetMenuProps) {
   const translate = useTranslate();
   const resetText = resetLabel ?? translate('ui.resetLabel.toDefault');
   const ref = useRef<HTMLDivElement>(null);
@@ -105,12 +109,22 @@ export function ResetMenu({ position, onReset, resetLabel, onUnbind, unbindLabel
   return (
     <div ref={ref} className="prop-menu" style={{ left: position.left, top: position.top }}>
       {onUnbind && (
-        <div className="prop-menu-item" onClick={onUnbind}>
+        <div
+          className={`prop-menu-item${unbindDisabledReason === undefined ? '' : ' disabled'}`}
+          aria-disabled={unbindDisabledReason !== undefined}
+          title={unbindDisabledReason}
+          onClick={unbindDisabledReason === undefined ? onUnbind : undefined}
+        >
           <CornerIcon size={12} />
           {unbindLabel}
         </div>
       )}
-      <div className="prop-menu-item" onClick={onReset}>
+      <div
+        className={`prop-menu-item${resetDisabledReason === undefined ? '' : ' disabled'}`}
+        aria-disabled={resetDisabledReason !== undefined}
+        title={resetDisabledReason}
+        onClick={resetDisabledReason === undefined ? onReset : undefined}
+      >
         <ResetIcon size={12} />
         {resetText}
       </div>

@@ -54,3 +54,12 @@
   background: var(--accent);
   color: white;
 }
+/* A refused item stays visible so the reason in its tooltip can be read; it does nothing, so it does not light up. */
+.prop-menu-item.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.prop-menu-item.disabled:hover {
+  background: transparent;
+  color: #ddd;
+}

@@ -21,9 +21,10 @@ import { findImportOf } from '../../editor/dataSuggest';
 import { isHrefName, isMediaName } from '../../editor/fieldNames';
 import { arrayItems, objectFields } from './arrayValue';
 import { optionAttr } from './propKinds';
-import { reportCodeCleared } from './codeCleared';
+import { decideNormalField, type NormalFieldRefusal } from './normalFieldDecision';
 import { deprecationOf, readPropDocumentation } from '../../editor/propDocumentation';
 import LinkField from './LinkField';
+import { plainTextOf, textValue } from './propLiteral';
 
 export interface AssetContext {
   readonly layoutText?: PageText | undefined;
@@ -140,13 +141,9 @@ export function isBoundValue(field: FieldDefinition, value: Attr | undefined) {
 
 export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undefined {
   const source = String(raw ?? '').trim();
-  const quoted = source.match(/^(['"])((?:[^\\]|\\.)*)\1$/);
-  if (quoted) {
-    if (field.type === 'boolean' || field.type === 'number') {
-      return undefined;
-    }
-    const text = (quoted[2] ?? '').replace(/\\n/g, '\n').replace(/\\(['"\\])/g, '$1');
-    return field.type === 'enum' && !(field.options || []).includes(text) ? undefined : { type: 'string', value: text };
+  const text = plainTextOf(source);
+  if (text !== undefined) {
+    return textValue(field, text);
   }
   if (field.type === 'boolean') {
     return /^(true|false)$/.test(source) ? { type: 'expr', value: source } : undefined;
@@ -220,6 +217,35 @@ export function controlLabel(field: FieldDefinition, translate: Translator = ENG
   }
 }
 
+/** Why an expression cannot move to the field's normal control, or undefined when it can (or there is no expression). */
+export function normalFieldRefusal(input: {
+  readonly field: FieldDefinition;
+  readonly value: Attr | undefined;
+  readonly required: boolean;
+}): NormalFieldRefusal | undefined {
+  const { field, value, required } = input;
+  if (value?.type !== 'expr') {
+    return undefined;
+  }
+  const decision = decideNormalField({ field, source: value.value, required });
+  return decision.kind === 'blocked' ? decision.reason : undefined;
+}
+/** The short reason a refusal gives in the menu's tooltip, in the language `translate` speaks. */
+export function normalRefusalText(translate: Translator, refusal: NormalFieldRefusal): string {
+  switch (refusal) {
+    case 'code':
+      return translate('props.control.normalFromCode');
+    case 'invalid-literal':
+      return translate('props.control.normalInvalid');
+    case 'required-empty':
+      return translate('props.control.normalRequired');
+    default: {
+      const exhaustive: never = refusal;
+      return exhaustive;
+    }
+  }
+}
+
 export function usePropField(props: PropFieldProps) {
   const state = usePropFieldModel(props);
   return { ...state, ...propFieldActions(state) };
@@ -279,6 +305,10 @@ export function usePropFieldModel(props: PropFieldProps) {
   const required = policy === 'instance' && isRequiredField(props.field, branchDefault);
   const missingRequired = required && !isSet && !spreadsProps(assetContext?.siblingProps);
   const deprecated = fieldDeprecation(props.field);
+  const refusal = normalFieldRefusal({ field, value, required });
+  const normalBlockedText = refusal === undefined ? undefined : normalRefusalText(translate, refusal);
+  // Reset removes the attribute; for a required prop that leaves the component without what it needs.
+  const resetRefusal = required && !spreadsProps(assetContext?.siblingProps) ? translate('props.control.resetRequired') : undefined;
   const isColor = isColorField(props.field);
   return {
     ...props,
@@ -306,6 +336,8 @@ export function usePropFieldModel(props: PropFieldProps) {
     required,
     missingRequired,
     deprecated,
+    normalBlockedText,
+    resetRefusal,
     isColor,
   };
 }
@@ -380,9 +412,13 @@ export function isColorField(field: FieldDefinition): boolean {
   return typeof field.default === 'string' && isColorText(field.default);
 }
 export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
-  const { translate, setMenuPosition, onChange, setCustom, value, field, isSet, showExpr } = state;
+  const { setMenuPosition, onChange, setCustom, value, field, isSet, showExpr, required, resetRefusal } = state;
   const reset = () => {
     setMenuPosition(undefined);
+    // A required prop has no default to return to: removing it would leave the component invalid.
+    if (resetRefusal !== undefined) {
+      return;
+    }
     onChange(undefined, true);
   };
   const fromCustom = () => {
@@ -391,22 +427,14 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
       setCustom(false);
       return;
     }
-    const back = valueFromExpr(field, value.value);
-    if (back === undefined && value.value.trim() !== '') {
-      // The control cannot hold this code, and asking for the control means
-      // wanting it: the field is cleared, as one undo step, and a notice says
-      // so with a way to bring the code back where there is no undo (a form).
-      const code = value;
-      setCustom(false);
-      onChange(undefined, true);
-      reportCodeCleared(translate, () => {
-        setCustom(true);
-        onChange(code, true);
-      });
+    // The switch never deletes what the user wrote: code the control cannot
+    // hold stays exactly as it is, and the menu says why it did not move.
+    const decision = decideNormalField({ field, source: value.value, required });
+    if (decision.kind === 'blocked') {
       return;
     }
     setCustom(false);
-    onChange(back, true);
+    onChange(decision.value, true);
   };
   const onLabelClick = (event: React.MouseEvent<HTMLSpanElement>) => {
     // A field switched to a value has something to offer even before anything

@@ -142,7 +142,11 @@ export const messages = {
   'props.control.linkSettings': 'Link-Einstellungen verwenden',
   'props.control.list': 'Liste verwenden',
   'props.control.normal': 'Normales Feld verwenden',
+  'props.control.normalFromCode': 'Der Wert kommt aus Code',
+  'props.control.normalInvalid': 'Dieser Wert ist für das normale Feld nicht gültig',
+  'props.control.normalRequired': 'Erforderlich — zuerst einen Wert eingeben',
   'props.control.optionsList': 'Optionsliste verwenden',
+  'props.control.resetRequired': 'Erforderlich — es gibt keinen Standardwert, zu dem man zurückkehren könnte',
   'props.control.toggle': 'Schalter verwenden',
   'props.dataPicker.contentCollection': 'Content Collection', // same
   'props.dataPicker.edit': 'Bearbeiten',

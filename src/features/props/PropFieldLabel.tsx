@@ -62,7 +62,7 @@ export function PropFieldNote({ state }: { readonly state: PropState }) {
 }
 export function PropFieldMenu({ state }: { readonly state: PropState }) {
   const translate = useTranslate();
-  const { field, menuPosition, setMenuPosition, showExpr, reset, fromCustom } = state;
+  const { field, menuPosition, setMenuPosition, showExpr, reset, fromCustom, normalBlockedText, resetRefusal } = state;
 
   return (
     menuPosition && (
@@ -73,6 +73,8 @@ export function PropFieldMenu({ state }: { readonly state: PropState }) {
         // it is the way back, and there is nothing to go back FROM otherwise.
         {...(showExpr ? { onUnbind: fromCustom } : {})}
         unbindLabel={controlLabel(field, translate)}
+        unbindDisabledReason={normalBlockedText}
+        resetDisabledReason={resetRefusal}
         onClose={() => setMenuPosition(undefined)}
       />
     )
@@ -90,6 +92,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
     showExpr,
     reason,
     fromCustom,
+    normalBlockedText,
   } = state;
   const pill = <PropFieldPill state={state} />;
   const menu = <PropFieldMenu state={state} />;
@@ -121,7 +124,8 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
         <button
           type="button"
           className={`prop-expr-toggle${showExpr ? ' on' : ''}`}
-          title={showExpr ? controlLabel(field, translate) : translate('props.field.writeExpression')}
+          title={showExpr ? (normalBlockedText ?? controlLabel(field, translate)) : translate('props.field.writeExpression')}
+          aria-disabled={showExpr && normalBlockedText !== undefined}
           aria-pressed={showExpr}
           aria-label={translate('props.field.writeExpression')}
           onClick={() => (showExpr ? fromCustom() : setCustom(true))}
