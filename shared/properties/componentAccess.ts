@@ -32,6 +32,11 @@ export const COMPONENT_ACCESS_LIMITS = {
   pathDepthMax: 32,
 } as const satisfies Record<string, number>;
 
+/** Thrown when an edit would leave a role with more rules than the bound: an expected refusal, not a bug. */
+export class ComponentRulesBoundError extends Error {
+  override readonly name = 'ComponentRulesBoundError';
+}
+
 /** What a rule does to what it names. */
 export type ComponentRuleEffect = 'hide' | 'show';
 
@@ -264,7 +269,7 @@ export function setComponentState(rules: readonly ComponentRule[], target: Compo
   const next =
     inherited === state ? kept : [...kept, { kind: target.kind, path: target.path, effect: state === 'hidden' ? ('hide' as const) : ('show' as const) }];
   if (next.length > COMPONENT_ACCESS_LIMITS.rulesMax) {
-    throw new Error(`A role has at most ${COMPONENT_ACCESS_LIMITS.rulesMax} component rules`);
+    throw new ComponentRulesBoundError(`A role has at most ${COMPONENT_ACCESS_LIMITS.rulesMax} component rules`);
   }
   assert(resolveTarget(next, target) === state, 'The target now has the state asked for');
   return next;

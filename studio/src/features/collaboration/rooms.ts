@@ -28,7 +28,7 @@ import { DraftStorage } from '../storage/draftStorage';
 import { SerialQueue } from '../../shared/serialQueue';
 import { readSource, preparePath } from '../project/projectServer';
 import { ADMIN_VIEW, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
-import { assertDocumentActionAllowed, assertDocumentChangeAllowed } from '../roles/documentAccess';
+import { assertComponentInsertAllowed, assertDocumentActionAllowed, assertDocumentChangeAllowed } from '../roles/documentAccess';
 
 /** Resolves the role a connection edits as; the server derives it from the signed-in GitHub user. */
 export type ConnectionRole = () => Promise<RoleView>;
@@ -274,6 +274,8 @@ export class Room {
     if (message['checksum'] !== checksum(this.text.toString())) {
       throw new Error('The page changed while loading defaults. Repeat the insertion.');
     }
+    // A configured import path only resolves with the project's settings, so the insert is checked again here, before any edit.
+    assertComponentInsertAllowed(role, this.file, action, settings?.imports ?? []);
     const edits =
       action.kind === 'paste' ? pasteEdits(this.text.toString(), this.file, action) : structuralEdits(this.text.toString(), action, this.file, settings);
     const source = this.text.toString();

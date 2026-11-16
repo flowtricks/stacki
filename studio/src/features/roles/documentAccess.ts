@@ -20,6 +20,8 @@ import { METADATA_FILES, type MetadataKind } from '../../../vendor/stacki/shared
 import { can, type AccessFeature, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
 import type { TreeAction } from '../source/source';
 import { assertClientAction, assertClientSourceChange } from './clientPolicy';
+import { checkComponentImports, checkComponentInsert, type ComponentHiddenError } from './componentAccess';
+import type { ComponentImport } from '../source/imports';
 
 /** What each project settings file needs to be written (Desktop's electron/handlers/channelAccess.ts holds the same). */
 export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeature[] | undefined>> = {
@@ -91,11 +93,25 @@ export function documentFeatures(file: string): readonly AccessFeature[] | undef
 export function assertDocumentChangeAllowed(role: RoleView, file: string, before: string, after: string): void {
   assert(before !== after, 'Only a real change is checked');
   assertDocumentWritable(role, file);
+  // Adding a hidden component is refused whatever the role's other powers; its existing instances are not touched.
+  assertComponentsAllowed(checkComponentImports(role, file, before, after, []));
   if (can(role, 'page:layout')) {
     return;
   }
   // Client mode, exactly as the browser enforces it before sending.
   assertClientSourceChange(file, before, after);
+}
+
+/** Throws when `role` may not insert the component `action` names, with the project's configured import paths to resolve it. */
+export function assertComponentInsertAllowed(role: RoleView, file: string, action: TreeAction, configured: readonly ComponentImport[]): void {
+  assertComponentsAllowed(checkComponentInsert(role, file, action, configured));
+}
+
+// The typed refusal becomes the room's thrown one at this edge, before any edit is applied.
+function assertComponentsAllowed(checked: { readonly ok: true } | { readonly ok: false; readonly error: ComponentHiddenError }): void {
+  if (!checked.ok) {
+    throw new RoleRefusal(checked.error.message);
+  }
 }
 
 /** Throws when `role` may not apply the structural `action` to `file` holding `source`. */
