@@ -881,10 +881,14 @@ export function useContextChange(
         changeContext(next, { canvas: 'keep', selector: 'keep' });
         return;
       }
+      // Held (Follow canvas size off): the pick is only the style target, and the canvas stays at the
+      // width the person set. Following: a pick pins the target and moves the canvas to show it, as it
+      // always has (Base lands where Base is the layer in effect), so Phone, Tablet and Base agree.
+      const held = followMode === 'pinned' && canvasWidthPx !== undefined;
       if (followMode === 'follow' && canvasWidthPx !== undefined) {
         setFollowMode('pinned');
       }
-      changeContext(next, { canvas: 'move', selector: 'repick' });
+      changeContext(next, { canvas: held ? 'keep' : 'move', selector: 'repick' });
     },
     [followMode, context, matchedKey, canvasWidthPx, changeContext, setFollowMode],
   );

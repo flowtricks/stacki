@@ -9,7 +9,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mountStylePanel } = require('../../helpers/stylePanelHarness.js');
+const { mountStylePanel, press } = require('../../helpers/stylePanelHarness.js');
 
 const GRID = '.grid { display: grid; gap: 1rem; }';
 const node = { id: 'n1', kind: 'element', name: 'div', props: { class: { type: 'string', value: 'grid' } }, children: [] };
@@ -98,4 +98,39 @@ test('the first style written at that breakpoint creates the media block after t
   const second = panel.writes.at(-1).css;
   assert.equal((second.match(/@media/g) ?? []).length, 1, 'the next style goes into the existing block, not a second one');
   assert.match(second, /3rem/);
+});
+
+test('held, choosing Base changes only the target and never the canvas; following again retargets', async (context) => {
+  const panel = await mount(GRID, 479);
+  const canvasRequests = [];
+  panel.rerender({ onCanvasWidth: (width) => canvasRequests.push(width), onDesktopCanvas: () => canvasRequests.push('desktop') });
+  await panel.settle();
+  context.after(() => panel.unmount());
+  assert.match(shown(panel), /< 30rem/, 'following at Phone');
+  pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
+  await panel.settle();
+  assert.equal(pin(panel).getAttribute('aria-pressed'), 'false', 'toggled off');
+  assert.deepEqual(canvasRequests, [], 'toggling follow never moves the canvas');
+  await panel.user('open the list', () => press(panel, trigger(panel)));
+  const base = [...document.querySelectorAll('.embed-editor_context-select [role="option"]')].find((option) => text(option).startsWith('Base'));
+  await panel.user('choose Base', () => press(panel, base));
+  assert.equal(shown(panel), 'Base', 'the target is Base');
+  assert.deepEqual(canvasRequests, [], 'choosing Base while held leaves the canvas where it is');
+  pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
+  await panel.settle();
+  assert.match(shown(panel), /< 30rem/, 'following again retargets to the canvas width');
+  assert.deepEqual(canvasRequests, [], 'and still never moves the canvas');
+});
+
+test('while following, choosing Base moves the canvas to where Base is the layer in effect, as Phone and Tablet picks move it', async (context) => {
+  const panel = await mount(GRID, 479);
+  const canvasRequests = [];
+  panel.rerender({ onCanvasWidth: (width) => canvasRequests.push(width), onDesktopCanvas: () => canvasRequests.push('desktop') });
+  await panel.settle();
+  context.after(() => panel.unmount());
+  await panel.user('open the list', () => press(panel, trigger(panel)));
+  const base = [...document.querySelectorAll('.embed-editor_context-select [role="option"]')].find((option) => text(option).startsWith('Base'));
+  await panel.user('choose Base', () => press(panel, base));
+  assert.equal(shown(panel), 'Base');
+  assert.ok(canvasRequests.length >= 1, 'a pick while following moves the canvas, then holds');
 });
