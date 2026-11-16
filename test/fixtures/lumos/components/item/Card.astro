@@ -1,0 +1,257 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import Eyebrow from "@/components/typography/Eyebrow.astro";
+import Heading from "@/components/typography/Heading.astro";
+import Paragraph from "@/components/typography/Paragraph.astro";
+import Button from "@/components/Button.astro";
+import ButtonWrapper from "@/components/wrapper/ButtonWrapper.astro";
+import Img from "@/components/media/Img.astro";
+import Overlay from "@/components/media/Overlay.astro";
+
+type ImageSource = ImageMetadata | string;
+
+type Base = HTMLAttributes<"div"> & {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Eyebrow text. Supports inline markup. */
+  eyebrow?: string;
+  /** Card title. Supports inline markup. */
+  heading?: string;
+  /** Heading level. */
+  headingTag?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+  /** Body text. Supports inline markup. */
+  text?: string;
+  /** Button label. Omit to hide the button. */
+  buttonLabel?: string;
+  /** Button destination. Omit for a `<button>`. */
+  buttonHref?: string;
+  /** Card layout. */
+  variant?: "default" | "cover" | "stacked";
+  /** Color theme of element and its children. */
+  theme?: "inherit" | "light" | "dark" | "brand" | "invert";
+};
+
+type Props = Base &
+  (
+    | {
+        variant?: "default";
+        image?: never;
+        imageAlt?: never;
+      }
+    | {
+        variant: "cover";
+        /** Image source. */
+        image?: ImageSource;
+        /** Image alt text. Omit for decorative images. */
+        imageAlt?: string;
+      }
+    | {
+        variant: "stacked";
+        /** Color theme of element and its children. */
+        theme?: never;
+        /** Image source. */
+        image?: ImageSource;
+        /** Image alt text. Omit for decorative images. */
+        imageAlt?: string;
+      }
+  );
+
+type AllProps = Base & {
+  image?: ImageSource;
+  imageAlt?: string;
+};
+
+const {
+  render = true,
+  eyebrow,
+  heading,
+  headingTag = "h3",
+  text,
+  buttonLabel,
+  buttonHref,
+  variant = "default",
+  theme = "inherit",
+  image,
+  imageAlt,
+  class: className,
+  ...rest
+} = Astro.props as AllProps;
+
+const hasImage = variant !== "default" && !!image;
+const hasContent = !!(eyebrow || heading || text || buttonLabel);
+const hasTheme = variant !== "stacked" && theme !== "inherit";
+
+/* The button each variant closes with, so a set of cards reads as one system.
+   A link carries no emphasis of its own, so the two are picked together. */
+const buttonKind =
+  variant === "stacked"
+    ? ({ variant: "link" } as const)
+    : ({ emphasis: variant === "cover" ? "primary" : "secondary" } as const);
+
+if (import.meta.env.DEV && render) {
+  if (variant === "stacked" && theme !== "inherit") {
+    console.warn(
+      '[lumos] <Card variant="stacked"> has no surface to color, so `theme` was dropped. It keeps the theme around it.',
+    );
+  }
+  if (variant === "default" && image) {
+    console.warn(
+      '[lumos] <Card variant="default"> holds no image, so `image` was dropped. Use the cover or stacked variant to show it.',
+    );
+  }
+  if (variant !== "default" && !image) {
+    console.warn(
+      `[lumos] <Card variant="${variant}"> has no \`image\`, so it renders as a plain card.`,
+    );
+  }
+}
+---
+
+{render && (hasContent || hasImage) && (
+  <div
+    class:list={[
+      "card_wrap",
+      variant !== "default" && variant,
+      hasTheme && `theme-${theme}`,
+      className,
+    ]}
+    {...rest}
+  >
+    {hasImage && (
+      <div class="card_visual">
+        <Img src={image!} alt={imageAlt} />
+        {variant === "cover" && <Overlay variant="gradient" />}
+      </div>
+    )}
+    {hasContent && (
+      <div class="card_content margin-trim">
+        <Eyebrow>
+          <Fragment set:html={eyebrow} />
+        </Eyebrow>
+        <Heading tag={headingTag} variant="h5">
+          <Fragment set:html={heading} />
+        </Heading>
+        <Paragraph>
+          <Fragment set:html={text} />
+        </Paragraph>
+        <ButtonWrapper>
+          {buttonHref ? (
+            <Button element="link" href={buttonHref} {...buttonKind}>
+              {buttonLabel}
+            </Button>
+          ) : (
+            <Button {...buttonKind}>{buttonLabel}</Button>
+          )}
+        </ButtonWrapper>
+      </div>
+    )}
+  </div>
+)}
+
+<style is:global>
+  @layer components {
+    .card_wrap {
+      --_padding: var(--space-6);
+      --_min-height: 20rem;
+      --_visual-ratio: 3 / 2;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: var(--_padding);
+      position: relative;
+      background-color: var(--background-2);
+      border-radius: var(--radius-main);
+      overflow: clip;
+
+      &.cover {
+        min-height: var(--_min-height);
+      }
+      &.stacked {
+        background-color: transparent;
+        overflow: visible;
+      }
+    }
+
+    .card_visual {
+      position: relative;
+      width: 100%;
+      flex: none;
+      border-radius: inherit;
+      overflow: clip;
+
+      .stacked > & {
+        aspect-ratio: var(--_visual-ratio);
+      }
+
+      .cover > & {
+        position: absolute;
+        inset: 0;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      > :is(.image, .video) {
+        width: 100%;
+        height: 100%;
+      }
+    }
+
+    /* Media fills its box, be that the whole card or the band across its top.
+       The component layer puts this above the `height: auto` every image and
+       video starts from. */
+    .card_visual > :is(.image, .video) {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Buttons closing a card sit on its floor, however tall the row around it
+       grows. This outranks the margin `.button-wrapper` sets for itself. */
+    .card_content > .button-wrapper:last-child {
+      margin-top: auto;
+      padding-top: var(--space-6);
+    }
+
+    .card_content {
+      display: flex;
+      flex-direction: column;
+      align-items: var(--_alignment, start);
+      text-align: var(--_alignment, start);
+      flex-grow: 1;
+      width: 100%;
+      max-width: 100%;
+      padding: var(--_padding);
+
+      .cover > & {
+        z-index: 1;
+      }
+
+      .stacked > & {
+        padding-inline: 0;
+        padding-top: 0;
+      }
+    }
+
+    .card_wrap:has(.button_wrap) {
+      .button_wrap::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+      }
+
+      .card_content a:not(.button_wrap) {
+        position: relative;
+        z-index: 1;
+      }
+
+      .image {
+        transition: scale calc(var(--hover-duration) * 2) var(--hover-ease);
+      }
+
+      @media (hover: hover) {
+        &:hover .image {
+          scale: 1.04;
+        }
+      }
+    }
+  }
+</style>

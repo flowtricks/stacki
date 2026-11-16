@@ -12,10 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { CloseIcon } from '../../ui/Icons';
 import { ok } from '../../../shared/core/result';
-import { PropertyConditions } from './PropertyDeclarationInfo';
 import { PropertyShareNotice } from './PropertyShareNotice';
 import { PropertySettingsFields } from './PropertyEditor';
-import PropertyReadOnlyFields from './PropertyReadOnlyFields';
 import type { PropertySaveHost } from './propertyAutosave';
 import { loadProperty, saveProperty, type LoadedProperty, type PropertySaver } from './propertySave';
 import './componentProperties.css';
@@ -74,7 +72,7 @@ function DialogBody({ state, saverRef }: { readonly state: DialogState; readonly
       // Nothing else is in the form, so the reason is said here rather than in a toast.
       return <p className="property-error">{state.message}</p>;
     case 'ready':
-      return state.loaded.editable ? <EditableBody loaded={state.loaded} saverRef={saverRef} /> : <PropertyReadOnlyFields property={state.loaded.property} />;
+      return <EditableBody loaded={state.loaded} saverRef={saverRef} />;
     default: {
       const exhaustive: never = state;
       return exhaustive;
@@ -109,12 +107,21 @@ function EditableBody({ loaded, saverRef }: { readonly loaded: LoadedProperty; r
   };
   return (
     <>
-      <PropertyConditions property={loaded.property} />
       <PropertyShareNotice property={loaded.property} onOpenFile={saverRef.current.openFile} />
       {loaded.property.editing?.kind === 'override' && (
         <p className="property-help">{translateDescribed({ message: loaded.property.editing.reason, messageRef: loaded.property.editing.reasonRef })}</p>
       )}
-      <PropertySettingsFields property={loaded.property} frontmatter={loaded.frontmatter} projectPath={saverRef.current.projectPath} saveHost={saveHost} />
+      <PropertySettingsFields
+        property={loaded.property}
+        frontmatter={loaded.frontmatter}
+        projectPath={saverRef.current.projectPath}
+        saveHost={saveHost}
+        variantGroups={loaded.variantGroups}
+        refreshVariantGroups={async () => {
+          const fresh = await loadProperty(saverRef.current, loaded.property.name, translate);
+          return fresh.ok ? fresh.value.variantGroups : undefined;
+        }}
+      />
     </>
   );
 }

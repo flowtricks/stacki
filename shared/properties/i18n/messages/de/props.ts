@@ -151,8 +151,6 @@ export const messages = {
   'props.contract.aliasExported':
     '{name} wird exportiert, daher können andere Dateien es verwenden. Wenn du seine Optionen änderst, ändern sie sich dort auch.',
   'props.contract.aliasUsed': '{name} wird in dieser Datei {uses}-mal verwendet. Wenn du seine Optionen änderst, ändern sie sich überall.',
-  'props.contract.complexDestructuring': 'Diese Eigenschaft verwendet eine komplexe Destrukturierung. Bearbeite sie im Quellcode.',
-  'props.contract.computedType': 'Diese Eigenschaft hängt von einem geteilten oder berechneten Typ ab, der im Quellcode bearbeitet werden muss.',
   'props.contract.condition.namedNever': '{branch}: nicht erlaubt',
   'props.contract.condition.namedOptional': '{branch}: optional', // same
   'props.contract.condition.namedRequired': '{branch}: erforderlich',
@@ -161,14 +159,7 @@ export const messages = {
   'props.contract.condition.numberedOptional': 'Variante {number}: optional',
   'props.contract.condition.numberedRequired': 'Variante {number}: erforderlich',
   'props.contract.condition.numberedUndeclared': 'Variante {number}: nicht deklariert',
-  'props.contract.duplicateTypes': 'Doppelte Typdeklarationen müssen im Quellcode bearbeitet werden.',
-  'props.contract.inherited': 'Diese Eigenschaft ist geerbt oder importiert. Bearbeite ihre Deklaration im Quellcode.',
-  'props.contract.noLocalDeclaration': 'Diese geerbte Eigenschaft hat keine eindeutige lokale Deklaration, die sich aktualisieren ließe.',
   'props.contract.override': 'Dieses HTML-Attribut wird lokal deklariert, wenn du es speicherst.',
-  'props.contract.quotedName': 'Diese Eigenschaft verwendet einen Namen in Anführungszeichen. Bearbeite sie im Quellcode.',
-  'props.contract.runtimeType': 'Diese Eigenschaft hat einen separaten Laufzeittyp. Bearbeite beide Deklarationen gemeinsam im Quellcode.',
-  'props.contract.separateDeclarations': 'Diese Eigenschaft kombiniert mehrere Deklarationen. Bearbeite diese Deklarationen im Quellcode.',
-  'props.contract.variantRules': 'Diese Eigenschaft hat Variantenregeln. Bearbeite ihre Deklaration im Quellcode, damit diese Regeln erhalten bleiben.',
   'props.control.assetPicker': 'Asset-Auswahl verwenden',
   'props.control.cssEditor': 'CSS-Editor verwenden',
   'props.control.fields': 'Felder verwenden',
@@ -214,7 +205,6 @@ export const messages = {
   'props.edit.changedDuringRename': '{file} hat sich während der Umbenennung geändert. Versuche es erneut.',
   'props.edit.changedRefresh': '{file} hat sich geändert. Aktualisiere, bevor du die Eigenschaften speicherst.',
   'props.edit.changedWhileRenaming': '{file} hat sich während der Umbenennung geändert.',
-  'props.edit.combinedAdd': 'Füge die Deklarationen dieses kombinierten Typs im Quellcode hinzu oder ordne sie dort neu.',
   'props.edit.conflict': 'Diese Komponente hat sich auf dem Datenträger geändert. Lade sie neu, bevor du speicherst.',
   'props.edit.couldNotSave': '{file} konnte nicht gespeichert werden',
   'props.edit.detail': '{detail}', // same
@@ -222,8 +212,6 @@ export const messages = {
   'props.edit.expired': 'Diese Änderung der Eigenschaft kann nicht mehr rückgängig gemacht werden.',
   'props.edit.inFile': '{file}:', // same
   'props.edit.inUse': 'Diese Eigenschaft wird noch verwendet. Entferne ihre Verwendungen in den Komponenten, bevor du sie löschst.',
-  'props.edit.inheritedDelete': 'Geerbte HTML-Attribute können nicht gelöscht werden.',
-  'props.edit.inheritedRename': 'Geerbte HTML-Attribute können nicht umbenannt werden.',
   'props.edit.limit': 'Das Limit für Komponenteneigenschaften ist erreicht.',
   'props.edit.missing': 'Diese Eigenschaft gibt es nicht mehr. Lade das Panel neu.',
   'props.edit.nameInScope': 'Der Name {name} ist in diesem Gültigkeitsbereich schon vergeben. Füge im TypeScript-Quellcode einen Standardwert mit Alias hinzu.',
@@ -242,9 +230,6 @@ export const messages = {
   'props.edit.studioRecoveryFailed': 'Das Speichern der Eigenschaften ist fehlgeschlagen, und die Wiederherstellung von {files} ebenfalls. {detail}',
   'props.edit.uncertain': '{file} wurde möglicherweise nicht gespeichert. {detail}',
   'props.edit.uncertainBare': '{file} wurde möglicherweise nicht gespeichert.',
-  'props.edit.untypedAnnotated': 'Diese Komponente typisiert ihre Eigenschaften als {type}. Ändere den Typ der Eigenschaft dort.',
-  'props.edit.untypedRest':
-    'Diese Komponente gibt weitere Attribute mit ...rest weiter und hat keinen Props-Typ; ein Props-Typ müsste jedes weitergegebene Attribut auflisten. Lege diese Eigenschaft im Quellcode fest.',
   'props.element.content': 'Inhalt',
   'props.element.fallback': 'Fallback', // same
   'props.element.fallbackNote': 'Wird nur angezeigt, wenn das, was diese Komponente verwendet, nichts an den Slot übergibt.',

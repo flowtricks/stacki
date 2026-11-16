@@ -1,0 +1,107 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slotContent } from "@/utils/slots.ts";
+
+type RichTextStyle =
+  | "inherit"
+  | "display"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
+  | "large"
+  | "main"
+  | "small";
+
+interface Props extends HTMLAttributes<"div"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Type style. */
+  variant?: RichTextStyle;
+  /**
+   * Maximum line length in characters.
+   *
+   * @min 1
+   * @int
+   */
+  maxWidth?: number;
+}
+
+const {
+  render = true,
+  variant = "inherit",
+  maxWidth,
+  class: className,
+  ...rest
+} = Astro.props;
+
+const content = await slotContent(Astro.slots);
+---
+
+{render && content && (
+  <div
+    class:list={[
+      "text",
+      "rich-text",
+      variant !== "inherit" && `text-style-${variant}`,
+      className,
+    ]}
+    style={maxWidth ? `--_mw: ${maxWidth}ch;` : undefined}
+    {...rest}
+  >
+    <Fragment set:html={content} />
+  </div>
+)}
+
+<style is:global>
+  @layer components {
+    .rich-text {
+      & :is(h1, h2, h3, h4, h5, h6, p, ul, ol, blockquote, figure, pre, table) {
+        margin-top: var(--_margin-top);
+        margin-bottom: var(--_margin-bottom);
+      }
+
+      & > :first-child,
+      & :is(blockquote, li) > :first-child:not(:is(ul, ol)) {
+        margin-top: 0;
+      }
+      & > :last-child,
+      & :is(blockquote, li) > :last-child {
+        margin-bottom: 0;
+      }
+
+      & :is(ul, ol) {
+        padding-left: 1.5em;
+      }
+      & ul {
+        list-style-type: disc;
+      }
+      & ul ul {
+        list-style-type: circle;
+      }
+      & ul ul ul {
+        list-style-type: square;
+      }
+      & ol {
+        list-style-type: decimal;
+      }
+      & li::marker {
+        color: color-mix(in lab, currentcolor 60%, transparent);
+      }
+      & li + li {
+        margin-top: var(--space-2);
+      }
+
+      & li > :is(ul, ol) {
+        margin-block: var(--space-2);
+      }
+
+      & blockquote {
+        padding-left: var(--space-4);
+        border-left: var(--border-width) solid var(--border);
+      }
+    }
+  }
+</style>

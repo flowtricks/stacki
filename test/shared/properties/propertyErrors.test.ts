@@ -64,13 +64,13 @@ test('an editing permission and the variant conditions keep their references', (
   const base = { name: 'size', type: 'string', required: false, readonly: false, defaultValue: '', description: '' };
   const restricted = parseComponentProperty({
     ...base,
-    editing: { kind: 'restricted', reason: 'Edit it in source.', reasonRef: { key: 'props.contract.quotedName' } },
+    editing: { kind: 'restricted', reason: 'Declared locally on save.', reasonRef: { key: 'props.contract.override' } },
     conditions: ['Variant branch 1: required', 'kind = "a": optional'],
     // A JSON array writes an absent reference as null; the parser reads it back as undefined.
     // eslint-disable-next-line stacki/no-null -- the wire shape under test
     conditionRefs: [{ key: 'props.contract.condition.numberedRequired', params: { number: 1 } }, null],
   });
-  assert.deepEqual(restricted.editing, { kind: 'restricted', reason: 'Edit it in source.', reasonRef: { key: 'props.contract.quotedName' } });
+  assert.deepEqual(restricted.editing, { kind: 'restricted', reason: 'Declared locally on save.', reasonRef: { key: 'props.contract.override' } });
   assert.deepEqual(restricted.conditionRefs, [{ key: 'props.contract.condition.numberedRequired', params: { number: 1 } }, undefined]);
   const warned = parseComponentProperty({ ...base, editing: { kind: 'editable', warning: 'Shared.', warningRef: { key: 'bad key' } } });
   assert.deepEqual(warned.editing, { kind: 'editable', warning: 'Shared.' });

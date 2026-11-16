@@ -79,7 +79,6 @@ export const messages = {
   'componentProps.kindSection.structure': 'Struktur',
   'componentProps.options.title': 'Optionen',
   'componentProps.panel.add': 'Eigenschaft hinzufügen',
-  'componentProps.panel.addAdvanced': 'Füge Deklarationen zu diesem kombinierten Typ im Quellcode hinzu',
   'componentProps.panel.deletedIn': '{name} wird in {path} gelöscht',
   'componentProps.panel.empty': 'Noch keine Eigenschaften. Füge eine hinzu, um festzulegen, was jede Instanz anpassen kann.',
   'componentProps.panel.from': 'Aus {typeName}',
@@ -96,13 +95,6 @@ export const messages = {
   'componentProps.problem.minAboveMax': 'Das Minimum liegt über dem Maximum.',
   'componentProps.problem.nameShape': 'Verwende einen Namen wie title, imageUrl oder isVisible.',
   'componentProps.problem.typeMissing': 'Gib der Eigenschaft einen Typ.',
-  'componentProps.readOnly.codeType': 'Codetyp',
-  'componentProps.readOnly.defaultValue': 'Standardwert',
-  'componentProps.readOnly.editInSource': 'Bearbeite die Deklaration dieser Eigenschaft im Quellcode.',
-  'componentProps.readOnly.name': 'Name', // same
-  'componentProps.readOnly.notSpecified': 'Nicht angegeben',
-  'componentProps.readOnly.required': 'Erforderlich',
-  'componentProps.readOnly.tooltip': 'Tooltip', // same
   'componentProps.reorder.hint': 'Zum Neuordnen ziehen (oder Pfeiltasten verwenden)',
   'componentProps.reorder.label': '{name} neu anordnen',
   'componentProps.settings.auto': 'Auto', // same

@@ -1,5 +1,5 @@
 import { readPropertyOrigins } from './propertyOrigins';
-import { readPropertyContracts, withReason } from './propertyContracts';
+import { readPropertyContracts } from './propertyContracts';
 import type { PropertyContracts } from './propertyContracts';
 import type { PropertyOrigins } from './propertyOrigins';
 import type { ModelSchemaField } from '../../shared/properties/propModelSchema';
@@ -14,7 +14,6 @@ import { assert } from '../../shared/core/assert';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyEditing } from '../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
-import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { refusal } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import {
@@ -22,6 +21,7 @@ import {
   defaultExpression,
   isAstroProps,
   propertyKey,
+  propertyNameText,
   readPropertySyntax,
   replaceFrontmatter,
   syntaxError,
@@ -32,6 +32,8 @@ import type { PropertySyntax, SourceEdit } from './propertySyntax';
 import { editVariantRules } from './variantRuleEdits';
 import { readVariantSyntax, variantGroupsOf } from './variantRuleModel';
 import { bindingEdits, memberComment, memberEdits, sameDeclaration, sameProperty } from './propertyMemberEdits';
+import type { DeclaredFields } from './propertyMemberEdits';
+import { declareInHost } from './propertyHosts';
 
 interface Definitions {
   readonly document: PropertySyntax;
@@ -41,8 +43,8 @@ interface Definitions {
   readonly patterns: readonly ts.ObjectBindingPattern[];
   readonly container: ts.InterfaceDeclaration | ts.TypeLiteralNode | undefined;
   readonly advanced: boolean;
-  /** The runtime type's own declarations of the edited prop, written with its public one. */
-  readonly mirrors: readonly ts.PropertySignature[];
+  /** The edited prop's other declarations (variants, intersected types, the runtime type), written with the first. */
+  readonly others: readonly ts.PropertySignature[];
 }
 
 export function readComponentProperties(source: string): ComponentProperties {
@@ -115,6 +117,16 @@ function readDefinitionFields(definitions: Definitions): ReadonlyMap<string, Com
       defaultValue: binding.initializer?.getText() ?? '',
     });
   }
+  const merged = propsObjectDeclaration(definitions.document.syntax)?.initializer;
+  if (merged !== undefined && ts.isObjectLiteralExpression(merged)) {
+    for (const item of merged.properties) {
+      const key = ts.isPropertyAssignment(item) ? propertyKey(item.name) : undefined;
+      const field = key === undefined ? undefined : fields.get(key);
+      if (key !== undefined && field !== undefined && ts.isPropertyAssignment(item) && field.defaultValue === '') {
+        fields.set(key, { ...field, defaultValue: item.initializer.getText() });
+      }
+    }
+  }
   assert(fields.size <= PROPERTY_LIMITS.fieldsMax, 'Component field count is bounded');
   assert(new Set(fields.keys()).size === fields.size, 'Component property names are unique');
   return fields;
@@ -130,10 +142,12 @@ function schemaPropertyType(field: ModelSchemaField): string {
 function sourcedProperty(property: ComponentProperty, definitions: Definitions, origins: PropertyOrigins, contracts: PropertyContracts): ComponentProperty {
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === property.name);
   const conditions = contracts.conditions(property.name);
-  const types = (origins.members.get(property.name) ?? [])
+  // The declarations that trace the prop; one only the contracts reach (a cast to an imported type) speaks when the trace finds none.
+  const traced = origins.members.get(property.name) ?? [];
+  const types = (traced.length > 0 ? traced : (contracts.declared.get(property.name) ?? []))
     .flatMap((member) => (member.type ? [definitions.readType(member.type)] : []))
     .filter((type) => type !== 'never');
-  const member = contracts.editable.get(property.name);
+  const member = contracts.primary.get(property.name);
   return {
     ...property,
     ...(member
@@ -146,7 +160,7 @@ function sourcedProperty(property: ComponentProperty, definitions: Definitions, 
     type: definitions.advanced && types.length ? [...new Set(types)].join(' | ') : property.type,
     origin: origins.origin(property.name, binding),
     editing: withAliasWarning(
-      definitions.advanced ? contractEditing(definitions, contracts, property.name) : { kind: 'editable' },
+      definitions.advanced ? contracts.editing(property.name) : { kind: 'editable' },
       member ?? definitions.members.find((item) => propertyKey(item.name) === property.name),
       definitions.document.syntax,
     ),
@@ -163,20 +177,6 @@ function withAliasWarning(editing: PropertyEditing, member: ts.PropertySignature
   const alias = optionAliasOf(syntax, member);
   const warning = alias === undefined ? undefined : optionAliasWarning(alias);
   return warning === undefined ? editing : { kind: 'editable', warning: warning.message, warningRef: warning.messageRef };
-}
-
-function contractEditing(definitions: Definitions, contracts: PropertyContracts, name: string): PropertyEditing {
-  if (definitions.patterns.length > 1 || definitions.bindings.some((binding) => !ts.isIdentifier(binding.name))) {
-    return withReason('restricted', described('props.contract.complexDestructuring'));
-  }
-  if (!/^[A-Za-z_$][\w$]*$/.test(name)) {
-    return withReason('restricted', described('props.contract.quotedName'));
-  }
-  const editing = contracts.editing(name);
-  if (editing.kind === 'override' && !definitions.container) {
-    return withReason('restricted', described('props.contract.noLocalDeclaration'));
-  }
-  return editing;
 }
 
 export function editPropertyDefinition(source: string, change: PropertyChange): Result<string> {
@@ -241,30 +241,19 @@ function editDefinition(source: string, change: PropertyChange): Result<string> 
   return saveDefinition(definitions, change.originalName, change.property);
 }
 
+// A component with combined or typed props: every prop is editable. The prop's
+// declarations are all written together (the public type's variants, separate
+// intersected types, the runtime type), the destructure entry beside them; a
+// prop no local type declares is declared in the type the file has.
 function editCommonDefinition(definitions: Definitions, change: Exclude<PropertyChange, { readonly kind: 'source' | 'variantRules' }>): Result<string> {
-  if (change.kind === 'order' || (change.kind === 'save' && !change.originalName)) {
-    return err(refusal('advanced', 'props.edit.combinedAdd'));
+  if (change.kind === 'order') {
+    return reorderDefinitions(definitions, change.names);
   }
   const name = change.kind === 'save' ? change.originalName : change.name;
-  // Renderer permissions are descriptive only; every write rechecks the current source.
   const contracts = readPropertyContracts(definitions.document);
-  const access = contractEditing(definitions, contracts, name);
-  if (access.kind === 'restricted') {
-    return err({ code: 'restricted', message: access.reason, ...(access.reasonRef === undefined ? {} : { messageRef: access.reasonRef }) });
-  }
-  if (access.kind === 'override') {
-    if (change.kind === 'remove') {
-      return err(refusal('inherited', 'props.edit.inheritedDelete'));
-    }
-    if (change.kind === 'save' && change.property.name !== name) {
-      return err(refusal('inherited', 'props.edit.inheritedRename'));
-    }
-    return change.kind === 'options' ? saveDefinitionOptions(definitions, name, change.type) : saveDefinition(definitions, name, change.property);
-  }
-  const member = contracts.editable.get(name);
-  assert(member !== undefined, 'An editable common property has a declaration');
-  assert(propertyKey(member.name) === name, 'The edit targets the requested declaration');
-  const common = { ...definitions, members: [member], mirrors: contracts.mirrors.get(name) ?? [] };
+  const declared = contracts.declared.get(name) ?? [];
+  const [primary, ...others] = declared;
+  const common = { ...definitions, members: primary === undefined ? [] : [primary], others };
   if (change.kind === 'remove') {
     return removeDefinition(common, name);
   }
@@ -285,16 +274,24 @@ function readDefinitions(source: string): Definitions {
   // (`const { title }: { title: string } = Astro.props`) is the props' type.
   const container = definitionContainer(declaration) ?? (declarations.length === 0 ? annotationContainer(document.syntax) : undefined);
   const members = container?.members.filter(ts.isPropertySignature) ?? [];
+  // `const props = Astro.props; const { title } = props;` destructures the props through a name.
+  const aliases = plainAliases(document.syntax);
   const patterns = syntaxNodes(document.syntax)
     .filter(ts.isVariableDeclaration)
-    .filter((node) => isAstroProps(node.initializer))
+    .filter(
+      (node) => isAstroProps(node.initializer) || (node.initializer !== undefined && ts.isIdentifier(node.initializer) && aliases.has(node.initializer.text)),
+    )
     .map((node) => node.name)
     .filter(ts.isObjectBindingPattern);
   const bindings = patterns.flatMap((pattern) => pattern.elements).filter((binding) => !binding.dotDotDotToken);
   const typedProps = syntaxNodes(document.syntax).some((node) => ts.isAsExpression(node) && isAstroProps(node.expression) && node.type.getText() !== 'Props');
   const imported = document.syntax.statements.some((statement) => ts.isImportDeclaration(statement) && statement.importClause?.getText().match(/\bProps\b/));
+  const annotatedType = syntaxNodes(document.syntax)
+    .filter(ts.isVariableDeclaration)
+    .find((node) => isAstroProps(node.initializer) && ts.isObjectBindingPattern(node.name) && node.type !== undefined)?.type;
   const advanced =
     declarations.length > 1 ||
+    (annotatedType !== undefined && declarations.length === 0 && !ts.isTypeLiteralNode(annotatedType)) ||
     imported ||
     typedProps ||
     (declaration !== undefined && ts.isTypeAliasDeclaration(declaration) && declaration.typeParameters !== undefined) ||
@@ -312,8 +309,56 @@ function readDefinitions(source: string): Definitions {
     bindings,
     container,
     advanced,
-    mirrors: [],
+    others: [],
   };
+}
+
+// Names that hold the whole props object: `const props = Astro.props;`.
+function plainAliases(syntax: ts.SourceFile): ReadonlySet<string> {
+  return new Set(
+    syntaxNodes(syntax)
+      .filter(ts.isVariableDeclaration)
+      .filter((node) => ts.isIdentifier(node.name) && isAstroProps(node.initializer))
+      .map((node) => node.name.getText()),
+  );
+}
+
+// `const props = Astro.props` (or the same with defaults merged in: `{ title: "Hi", ...Astro.props }`), where a prop read as `props.title` has its default.
+function propsObjectDeclaration(syntax: ts.SourceFile): ts.VariableDeclaration | undefined {
+  return syntaxNodes(syntax)
+    .filter(ts.isVariableDeclaration)
+    .find((node) => {
+      if (!ts.isIdentifier(node.name) || node.initializer === undefined) {
+        return false;
+      }
+      if (isAstroProps(node.initializer)) {
+        return true;
+      }
+      return (
+        ts.isObjectLiteralExpression(node.initializer) &&
+        node.initializer.properties.some((item) => ts.isSpreadAssignment(item) && isAstroProps(item.expression))
+      );
+    });
+}
+
+// The edit that gives a prop read through the props object its default: a
+// `{ name: value, ...Astro.props }` merge, which the object's reads see.
+function mergedDefaultEdit(declaration: ts.VariableDeclaration, name: string, expression: string): SourceEdit | undefined {
+  const initializer = declaration.initializer;
+  assert(initializer !== undefined, 'A props object has an initializer');
+  const key = propertyNameText(name);
+  const value = defaultExpression(expression);
+  if (!ts.isObjectLiteralExpression(initializer)) {
+    const whole = initializer.getText();
+    const spread = ts.isPropertyAccessExpression(initializer) ? whole : `(${whole})`;
+    return { start: initializer.getStart(), end: initializer.end, text: `{ ${key}: ${value}, ...${spread} }` };
+  }
+  const existing = initializer.properties.find((item) => ts.isPropertyAssignment(item) && propertyKey(item.name) === name);
+  if (existing !== undefined && ts.isPropertyAssignment(existing)) {
+    return { start: existing.initializer.getStart(), end: existing.initializer.end, text: value };
+  }
+  const spread = initializer.properties.find((item) => ts.isSpreadAssignment(item) && isAstroProps(item.expression));
+  return spread === undefined ? undefined : { start: spread.getStart(), end: spread.getStart(), text: `${key}: ${value}, ` };
 }
 
 function annotationContainer(syntax: ts.SourceFile): ts.TypeLiteralNode | undefined {
@@ -347,7 +392,17 @@ function readDescription(member: ts.PropertySignature, source: string): string {
 function renderDefinition(property: ComponentProperty): string {
   const documentation = property.description.trim();
   const description = documentation ? `\t/** ${documentation.replace(/\*\//g, '* /').replace(/\n/g, '\n\t * ')} */\n` : '';
-  return `\n${description}\t${property.readonly ? 'readonly ' : ''}${property.name}` + `${property.required ? '' : '?'}: ${property.type};`;
+  return `\n${description}\t${property.readonly ? 'readonly ' : ''}${propertyNameText(property.name)}` + `${property.required ? '' : '?'}: ${property.type};`;
+}
+
+// One member on one line, for the `& { … }` a type that is not a literal gets.
+function inlineDefinition(property: ComponentProperty): string {
+  const documentation = property.description
+    .trim()
+    .replace(/\*\//g, '* /')
+    .replace(/\s*\n\s*/g, ' ');
+  const comment = documentation ? `/** ${documentation} */ ` : '';
+  return `${comment}${property.readonly ? 'readonly ' : ''}${propertyNameText(property.name)}${property.required ? '' : '?'}: ${property.type}`;
 }
 function saveDefinition(definitions: Definitions, originalName: string, property: ComponentProperty): Result<string> {
   const valid = validatePropertyCode(property.type, property.defaultValue);
@@ -373,7 +428,8 @@ function saveDefinition(definitions: Definitions, originalName: string, property
   if (!declaration.ok) {
     return declaration;
   }
-  const binding = saveDefinitionBinding(definitions, originalName, previous, property);
+  const merged = mergedDefault(definitions, originalName, previous, property);
+  const binding = merged === undefined ? saveDefinitionBinding(definitions, originalName, previous, property) : ok(merged);
   if (!binding.ok) {
     return binding;
   }
@@ -385,18 +441,44 @@ function saveDefinition(definitions: Definitions, originalName: string, property
   const output = replaceFrontmatter(definitions.document, frontmatter);
   assert(output !== definitions.document.source || previous === undefined || !sameProperty(previous, property), 'A changed save writes its change');
   const defaultChanged = property.defaultValue.trim() !== (previous?.defaultValue.trim() ?? '');
-  if (property.defaultValue.trim() && defaultChanged) {
-    const local = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === originalName)?.name.getText() ?? property.name;
-    return bindComponentDefault(output, originalName || property.name, local);
+  // A new prop is read nowhere yet, and a default merged into the props object needs no rewrite of its reads.
+  const bound = definitions.bindings.some((item) => propertyKey(item.propertyName ?? item.name) === originalName);
+  if (property.defaultValue.trim() && defaultChanged && originalName !== '' && merged === undefined) {
+    const existing = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === originalName);
+    // A destructure that unpacks the prop further (`author: { name }`) has no single local to alias.
+    if (existing !== undefined && !ts.isIdentifier(existing.name)) {
+      return ok(output);
+    }
+    const local = existing?.name.getText() ?? bindingFor(definitions, property.name);
+    const aliased = bindComponentDefault(output, originalName, local);
+    // The alias only shields template reads from shadowing. A prop already destructured has its default
+    // in the destructure either way, so a component that cannot take the alias keeps the written default.
+    return aliased.ok || !bound ? aliased : ok(output);
   }
   return ok(output);
 }
 
-// The type side of a save: the member's own text edited in place, a member
-// appended to the type the file already has, or (for a component with no
-// types at all) a new `interface Props`. A component that types its props
-// another way, or forwards attributes through an untyped `...rest`, is never
-// given an interface: one would contradict its types or reject the attributes.
+// The default of a prop with no destructure entry, in a component that reads its props through one object.
+function mergedDefault(
+  definitions: Definitions,
+  originalName: string,
+  previous: ComponentProperty | undefined,
+  property: ComponentProperty,
+): readonly SourceEdit[] | undefined {
+  const fallback = property.defaultValue.trim();
+  const declaration = propsObjectDeclaration(definitions.document.syntax);
+  const bound = definitions.bindings.some((item) => propertyKey(item.propertyName ?? item.name) === originalName);
+  if (declaration === undefined || bound || fallback === '' || fallback === (previous?.defaultValue.trim() ?? '')) {
+    return undefined;
+  }
+  const edit = mergedDefaultEdit(declaration, originalName || property.name, fallback);
+  return edit === undefined ? undefined : [edit];
+}
+
+// The type side of a save: the member's own text edited in place (and every
+// other declaration of the prop beside it), a member appended to the type the
+// file already has, or (for a component with no types at all) a new
+// `interface Props`.
 function declarationEdits(
   definitions: Definitions,
   originalName: string,
@@ -409,12 +491,9 @@ function declarationEdits(
     // Options kept in a same-file alias are written there, so the alias stays the one place they live.
     const alias = optionAliasOf(definitions.document.syntax, member);
     const target = alias !== undefined && literalOptions(property.type) !== undefined ? alias.declaration.type : member.type;
-    // The runtime type states the prop again: it takes the same name, type and
-    // required mark, but keeps its own tooltip, which this save did not write.
-    const mirrored = definitions.mirrors.flatMap((mirror) =>
-      memberEdits(definitions.document.frontmatter, mirror, { ...previous, description: property.description }, property),
-    );
-    return ok([...memberEdits(definitions.document.frontmatter, member, previous, property, target), ...mirrored]);
+    const frontmatter = definitions.document.frontmatter;
+    const others = definitions.others.flatMap((other) => memberEdits(frontmatter, other, ...otherDeclaration(definitions, other, previous, property)));
+    return ok([...memberEdits(frontmatter, member, previous, property, target), ...others]);
   }
   if (previous !== undefined && sameDeclaration(previous, property)) {
     return ok([]);
@@ -432,38 +511,63 @@ function declarationEdits(
     // A new prop that states nothing a type would carry needs only its destructure entry.
     return ok([]);
   }
-  const reason = untypedReason(definitions);
-  if (reason !== undefined) {
-    return err({ code: 'untyped', ...reason });
+  const hosted = declareInHost(definitions.document.syntax, {
+    block: withIndentUnit(renderDefinition(property), indentUnitOf(definitions.document.frontmatter)) + '\n',
+    inline: inlineDefinition(property),
+  });
+  if (hosted !== undefined) {
+    return hosted;
   }
   const snapshot = readComponentProperties(definitions.document.source);
   // The new interface lists the props in the order the panel shows them, the saved one in its place.
   const fields =
     previous === undefined ? [...snapshot.properties, property] : snapshot.properties.map((field) => (field.name === originalName ? property : field));
-  return ok([
+  return ok([{ start: 0, end: 0, text: newPropsInterface(definitions, fields.map(renderDefinition).join('')) }]);
+}
+
+// What a save changes in a prop's other declarations: its own name, type and
+// required mark with only the parts the save changed. A `never` declaration
+// (the prop is not allowed in that variant) keeps its type and mark, and the
+// tooltip stays on the declaration that carries it.
+function otherDeclaration(
+  definitions: Definitions,
+  member: ts.PropertySignature,
+  previous: ComponentProperty,
+  property: ComponentProperty,
+): [DeclaredFields, DeclaredFields] {
+  const own: DeclaredFields = {
+    name: previous.name,
+    type: member.type ? definitions.readType(member.type) : 'unknown',
+    required: member.questionToken === undefined,
+    readonly: member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) ?? false,
+    description: readDescription(member, definitions.document.frontmatter),
+  };
+  if (own.type === 'never') {
+    return [own, { ...own, name: property.name }];
+  }
+  return [
+    own,
     {
-      start: 0,
-      end: 0,
-      text: withIndentUnit(`interface Props {${fields.map(renderDefinition).join('')}\n}\n`, indentUnitOf(definitions.document.frontmatter)),
+      name: property.name,
+      type: property.type === previous.type ? own.type : property.type,
+      required: property.required === previous.required ? own.required : property.required,
+      readonly: property.readonly === previous.readonly ? own.readonly : property.readonly,
+      description: own.description,
     },
-  ]);
+  ];
+}
+
+// `interface Props { … }` for a component that has no type for its props. One
+// that forwards other attributes (`...rest`) also accepts them, so adding the
+// type does not make the attributes it passes on a type error.
+function newPropsInterface(definitions: Definitions, members: string): string {
+  const forwards = definitions.patterns.some((pattern) => pattern.elements.some((element) => element.dotDotDotToken !== undefined));
+  const indent = indentUnitOf(definitions.document.frontmatter);
+  const attributes = forwards ? withIndentUnit('\n\t[attribute: string]: unknown;', indent) : '';
+  return withIndentUnit(`interface Props {${members}`, indent) + `${attributes}\n}\n`;
 }
 
 const LOOSE_TYPES = new Set(['', 'unknown']);
-
-// Why a component without a Props declaration cannot be given one, if it cannot.
-function untypedReason(definitions: Definitions): Described | undefined {
-  const annotated = syntaxNodes(definitions.document.syntax)
-    .filter(ts.isVariableDeclaration)
-    .find((node) => isAstroProps(node.initializer) && node.type !== undefined);
-  if (annotated?.type !== undefined) {
-    return described('props.edit.untypedAnnotated', { type: annotated.type.getText() });
-  }
-  if (definitions.patterns.some((pattern) => pattern.elements.some((element) => element.dotDotDotToken !== undefined))) {
-    return described('props.edit.untypedRest');
-  }
-  return undefined;
-}
 
 function saveDefinitionOptions(definitions: Definitions, name: string, type: string): Result<string> {
   const property = readComponentProperties(definitions.document.source).properties.find((field) => field.name === name);
@@ -492,24 +596,71 @@ function saveDefinitionBinding(
   if (!fallback && originalName) {
     return ok([]);
   }
-  const locals = syntaxNodes(definitions.document.syntax).filter(ts.isIdentifier);
-  if (locals.some((node) => node.text === property.name && !ts.isPropertySignature(node.parent))) {
-    return err(refusal('binding', 'props.edit.nameInScope', { name: property.name }));
-  }
+  // A name that is not an identifier (`aria-label`) is read through a camel-case local.
+  const local = bindingFor(definitions, property.name);
+  const entry = local === property.name && propertyNameText(property.name) === property.name ? property.name : `${propertyNameText(property.name)}: ${local}`;
   const pattern = definitions.patterns[0];
   if (pattern) {
     const first = pattern.elements[0];
     const position = first?.getStart() ?? pattern.end - 1;
-    return ok([{ start: position, end: position, text: `${property.name}${fallback}${first ? ', ' : ''}` }]);
+    return ok([{ start: position, end: position, text: `${entry}${fallback}${first ? ', ' : ''}` }]);
   }
-  const position = definitions.document.frontmatter.length;
+  // Before the first statement of code, so every read of the prop comes after its default.
+  const position = firstCodeStart(definitions.document.syntax);
   return ok([
     {
       start: position,
       end: position,
-      text: `\nconst { ${property.name}${fallback} } = Astro.props;\n`,
+      text:
+        position === definitions.document.frontmatter.length
+          ? `\nconst { ${entry}${fallback} } = Astro.props;\n`
+          : `const { ${entry}${fallback} } = Astro.props;\n`,
     },
   ]);
+}
+
+// Words a local variable cannot be named, so a prop of that name is read through `propClass`.
+const RESERVED_WORDS: ReadonlySet<string> = new Set(
+  'break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with'.split(
+    ' ',
+  ),
+);
+
+// The local a new destructure entry reads a prop through: its name, or `propTitle` (then `propTitle2`) when the file already uses that name for something else.
+// A member moved to another position keeps its terminator, and gains one when it was the last member of a line (`{ a?: string; b?: string }`).
+// Where the first statement that is not an import or a type begins, or the end of the frontmatter.
+function firstCodeStart(syntax: ts.SourceFile): number {
+  const code = syntax.statements.find(
+    (statement) => !ts.isImportDeclaration(statement) && !ts.isTypeAliasDeclaration(statement) && !ts.isInterfaceDeclaration(statement),
+  );
+  return code === undefined ? syntax.end : code.getStart();
+}
+
+function terminated(chunk: string): string {
+  return /[;,]\s*$/.test(chunk) ? chunk : `${chunk.trimEnd()};`;
+}
+
+function bindingFor(definitions: Definitions, name: string): string {
+  const taken = new Set(
+    syntaxNodes(definitions.document.syntax)
+      .filter(ts.isIdentifier)
+      .filter((node) => !ts.isPropertySignature(node.parent))
+      .map((node) => node.text),
+  );
+  const base = bindingLocal(name);
+  for (let attempt = 1; attempt <= PROPERTY_LIMITS.fieldsMax; attempt++) {
+    const candidate = attempt === 1 ? base : `prop${base.charAt(0).toUpperCase()}${base.slice(1)}${attempt === 2 ? '' : String(attempt)}`;
+    if (!taken.has(candidate)) {
+      return candidate;
+    }
+  }
+  assert(false, 'A free local name is found within the field bound');
+  return base;
+}
+
+function bindingLocal(name: string): string {
+  const camel = name.replace(/[^A-Za-z0-9_$]+(.)?/g, (_match: string, next: string | undefined) => (next === undefined ? '' : next.toUpperCase()));
+  return /^[A-Za-z_$]/.test(camel) && !RESERVED_WORDS.has(camel) ? camel : `prop${camel.charAt(0).toUpperCase()}${camel.slice(1)}`;
 }
 
 function reorderDefinitions(definitions: Definitions, names: readonly string[]): Result<string> {
@@ -517,26 +668,31 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
   if (new Set(names).size !== names.length || names.length !== fields.length || names.some((name) => !fields.some((field) => field.name === name))) {
     return err(refusal('order', 'props.edit.reorder'));
   }
-  const chunks = new Map(fields.map((field) => [field.name, withIndentUnit(renderDefinition(field), indentUnitOf(definitions.document.frontmatter))]));
+  const indent = indentUnitOf(definitions.document.frontmatter);
+  const chunks = new Map(fields.map((field) => [field.name, withIndentUnit(renderDefinition(field), indent)]));
+  const listed = new Set<string>();
   for (const member of definitions.members) {
     const name = propertyKey(member.name);
     assert(name !== undefined, 'Editable property has a name');
-    chunks.set(name, definitions.document.frontmatter.slice(member.getFullStart(), member.end));
+    chunks.set(name, terminated(definitions.document.frontmatter.slice(member.getFullStart(), member.end)));
+    listed.add(name);
   }
-  const text = names
+  const container = definitions.container;
+  // A component with combined types moves only the members its own props type lists: the rest live in other types.
+  const order = definitions.advanced ? names.filter((name) => listed.has(name)) : names;
+  const foreign = container?.members.some((member) => !ts.isPropertySignature(member)) ?? false;
+  if (definitions.advanced && (container === undefined || order.length < 2 || foreign)) {
+    return ok(definitions.document.source);
+  }
+  const text = order
     .map((name) => {
       const chunk = chunks.get(name);
       assert(chunk !== undefined, 'Every reordered property has source');
       return chunk;
     })
     .join('');
-  const container = definitions.container;
   if (!container) {
-    const reason = untypedReason(definitions);
-    if (reason !== undefined) {
-      return err({ code: 'untyped', ...reason });
-    }
-    return ok(replaceFrontmatter(definitions.document, `interface Props {${text}\n}\n${definitions.document.frontmatter}`));
+    return ok(replaceFrontmatter(definitions.document, `${newPropsInterface(definitions, text)}${definitions.document.frontmatter}`));
   }
   const first = definitions.members[0];
   const last = definitions.members.at(-1);
@@ -554,13 +710,23 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
   );
 }
 
+// Whether the file reads the prop as `Astro.props.name` or through a name that holds the props object.
+function readThroughProps(definitions: Definitions, name: string): boolean {
+  const holders = ['Astro.props', ...plainAliases(definitions.document.syntax)];
+  return syntaxNodes(definitions.document.syntax).some(
+    (node) => ts.isPropertyAccessExpression(node) && node.name.text === name && holders.includes(node.expression.getText().replace(/\s/g, '')),
+  );
+}
+
 function removeDefinition(definitions: Definitions, name: string): Result<string> {
   const member = definitions.members.find((item) => propertyKey(item.name) === name);
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === name);
   if (!member && !binding) {
-    return err(refusal('missing', 'props.edit.notFound'));
+    // A prop the file only reads (`Astro.props.name`) has no declaration to take out: it can go once nothing reads it.
+    const reads = readThroughProps(definitions, name);
+    return reads ? err(refusal('in-use', 'props.edit.inUse')) : ok(definitions.document.source);
   }
-  const edits: SourceEdit[] = [member, ...definitions.mirrors].flatMap((declared) =>
+  const edits: SourceEdit[] = [member, ...definitions.others].flatMap((declared) =>
     declared ? [{ start: declared.getFullStart(), end: declared.end, text: '' }] : [],
   );
   if (binding) {

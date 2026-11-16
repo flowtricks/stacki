@@ -1,0 +1,225 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import Icon from "@/components/media/Icon.astro";
+import check from "@/assets/icons/check.svg";
+import { slug } from "@/utils/slug.ts";
+
+type Base = {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Control label. */
+  label?: string;
+  /** Submitted value. Defaults to `on`. */
+  value?: string;
+};
+
+type Kind =
+  | {
+      /** Input type. */
+      type?: "checkbox";
+      /** Submitted name. Defaults to the label slug. */
+      name?: string;
+    }
+  | {
+      /** Input type. */
+      type: "radio";
+      /** Shared name for the radio group. */
+      name: string;
+    };
+
+type Settings = {
+  /** Control style. */
+  variant?: "default" | "toggle" | "chip";
+  /** Start selected. */
+  checked?: boolean;
+  /** Require a selection. */
+  required?: boolean;
+};
+
+type Props = Omit<HTMLAttributes<"input">, "type" | "value"> &
+  Base &
+  Kind &
+  Settings;
+
+type AllProps = Omit<HTMLAttributes<"input">, "type" | "value"> &
+  Base & { type?: "checkbox" | "radio"; name?: string } & Settings;
+
+const {
+  render = true,
+  label,
+  value,
+  type = "checkbox",
+  name,
+  variant = "default",
+  checked = false,
+  required = false,
+  class: className,
+  ...rest
+} = Astro.props as AllProps;
+---
+
+{render && label && (
+  <label
+    class:list={["form-choice", variant !== "default" && variant, className]}
+  >
+    <input
+      class="form-choice_input"
+      type={type}
+      name={name ?? slug(label)}
+      value={value}
+      checked={checked || undefined}
+      required={required || undefined}
+      {...rest}
+    />
+    <span class="form-choice_mark" aria-hidden="true">
+      {type === "radio" ? (
+        <span class="form-choice_dot" />
+      ) : (
+        <Icon class="form-choice_tick" src={check} variant="small" />
+      )}
+    </span>
+    <span class="form-choice_text text-style-main">{label}</span>
+  </label>
+)}
+
+<style is:global>
+  @layer components {
+    .form-choice {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75em;
+      cursor: pointer;
+    }
+
+    .form-choice_input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .form-choice_mark {
+      --_mark: var(--background-2);
+      --_mark-hover: var(--background-3);
+      --_mark-chosen: var(--text);
+      --_ink: var(--background);
+
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 1.5em;
+      height: 1.5em;
+      background-color: var(--_mark);
+      border: var(--border-width) solid transparent;
+      border-radius: var(--radius-small);
+      transition:
+        background-color var(--hover-duration) var(--hover-ease),
+        border-color var(--hover-duration) var(--hover-ease);
+    }
+
+    .form-choice_mark:has(.form-choice_dot) {
+      border-radius: var(--radius-round);
+    }
+
+    .form-choice_tick {
+      color: var(--_ink);
+      opacity: 0;
+      transition: opacity var(--hover-duration) var(--hover-ease);
+    }
+
+    .form-choice_dot {
+      width: 1.1em;
+      height: 1.1em;
+      background-color: var(--_ink);
+      border-radius: var(--radius-round);
+      scale: 0;
+      transition: scale var(--hover-duration) var(--hover-ease);
+    }
+
+    .form-choice:has(:checked) {
+      & .form-choice_mark {
+        background-color: var(--_mark-chosen);
+      }
+      & .form-choice_tick {
+        opacity: 1;
+      }
+      & .form-choice_dot {
+        scale: 1;
+      }
+    }
+
+    @media (hover: hover) {
+      .form-choice:hover .form-choice_input:not(:checked) ~ .form-choice_mark {
+        background-color: var(--_mark-hover);
+      }
+    }
+
+    .form-choice_input:focus-visible ~ .form-choice_mark {
+      outline: var(--focus-width) solid var(--text);
+      outline-offset: var(--focus-offset);
+    }
+
+    /* Toggle */
+    .form-choice.toggle {
+      & .form-choice_mark {
+        width: 2.75em;
+        height: 1.5em;
+        border-radius: var(--radius-round);
+        place-items: center start;
+        padding: 0.15em;
+      }
+      & :is(.form-choice_tick, .form-choice_dot) {
+        display: none;
+      }
+      & .form-choice_mark::after {
+        content: "";
+        width: 1.1em;
+        height: 1.1em;
+        border-radius: var(--radius-round);
+        background-color: var(--text);
+        transition:
+          translate var(--hover-duration) var(--hover-ease),
+          background-color var(--hover-duration) var(--hover-ease);
+      }
+      &:has(:checked) .form-choice_mark::after {
+        translate: 1.2em 0;
+        background-color: var(--_ink);
+      }
+    }
+
+    /* Chip */
+    .form-choice.chip {
+      padding: 0.75em 1.5em;
+      background-color: var(--background-2);
+      border: var(--border-width) solid transparent;
+      border-radius: var(--radius-round);
+      transition:
+        background-color var(--hover-duration) var(--hover-ease),
+        color var(--hover-duration) var(--hover-ease),
+        border-color var(--hover-duration) var(--hover-ease);
+      & .form-choice_mark {
+        --_mark: var(--background);
+        --_mark-hover: var(--background);
+        --_mark-chosen: var(--background);
+        --_ink: var(--text);
+      }
+      @media (hover: hover) {
+        &:hover:not(:has(:checked)) {
+          background-color: var(--background-3);
+        }
+      }
+      &:has(:checked) {
+        background-color: var(--text);
+        color: var(--background);
+      }
+      & .form-choice_input:focus-visible ~ .form-choice_mark {
+        outline: 0;
+      }
+      &:has(.form-choice_input:focus-visible) {
+        outline: var(--focus-width) solid var(--text);
+        outline-offset: var(--focus-offset);
+      }
+    }
+  }
+</style>

@@ -16,7 +16,7 @@ import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
 import type { ComponentProperty } from '../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
-import { defaultExpression } from './propertySyntax';
+import { defaultExpression, propertyNameText } from './propertySyntax';
 import type { SourceEdit } from './propertySyntax';
 
 /** The comment a member's tooltip lives in, as a range of the frontmatter. */
@@ -156,10 +156,10 @@ export function bindingEdits(
       edits.push(
         property.name === local
           ? { start: binding.propertyName.getStart(), end: binding.name.getStart(), text: '' }
-          : { start: binding.propertyName.getStart(), end: binding.propertyName.end, text: property.name },
+          : { start: binding.propertyName.getStart(), end: binding.propertyName.end, text: propertyNameText(property.name) },
       );
     } else {
-      edits.push({ start: binding.name.getStart(), end: binding.name.getStart(), text: `${property.name}: ` });
+      edits.push({ start: binding.name.getStart(), end: binding.name.getStart(), text: `${propertyNameText(property.name)}: ` });
     }
   }
   const fallback = property.defaultValue.trim();
@@ -192,7 +192,7 @@ function headEdit(frontmatter: string, member: ts.PropertySignature, previous: D
   const nameText =
     property.name === previous.name && property.required === previous.required
       ? frontmatter.slice(nameStart, headEnd)
-      : `${property.name}${property.required ? '' : '?'}`;
+      : `${propertyNameText(property.name)}${property.required ? '' : '?'}`;
   // A member written without a type (`title;`) gets one only when the save gives it one.
   const typeText = member.type === undefined && property.type !== previous.type ? `: ${property.type}` : '';
   const text = `${commentPart}${modifierText}${nameText}${typeText}`;

@@ -113,6 +113,11 @@ export function propertyKey(node: ts.PropertyName | ts.BindingName | undefined):
   return undefined;
 }
 
+/** A prop name as a member or key is written: bare when it is an identifier, quoted when not (`"aria-label"`). */
+export function propertyNameText(name: string): string {
+  return /^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name);
+}
+
 export function defaultExpression(source: string): string {
   const syntax = ts.createSourceFile('default.ts', `const value = (${source});`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const comma = syntaxNodes(syntax).some((node) => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.CommaToken);

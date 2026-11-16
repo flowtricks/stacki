@@ -179,7 +179,7 @@ test('reorders fields and literal options while preserving their docs and defaul
   assert.equal(editPropertyDefinition(source, { kind: 'order', names: ['title', 'title'] }).ok, false);
 });
 
-test('invalid syntax, duplicate fields and complex contracts refuse destructive edits', () => {
+test('invalid syntax and duplicate fields are refused; complex contracts take an added prop', () => {
   for (const change of [save({ name: 'variant' }), save({ type: 'string; const x = 1' }), save({ type: '{broken' }), save({ defaultValue: '{broken' })]) {
     assert.equal(editPropertyDefinition(source, change).ok, false);
   }
@@ -190,7 +190,18 @@ test('invalid syntax, duplicate fields and complex contracts refuse destructive 
   ]) {
     const complex = `---\n${type}\n---\n<slot/>`;
     assert.equal(readComponentProperties(complex).advanced, true);
-    assert.equal(editPropertyDefinition(complex, save()).ok, false);
+    // A combined or imported props type is still editable: the declaration goes into the type the file has.
+    const added = editPropertyDefinition(complex, {
+      kind: 'save',
+      originalName: '',
+      property: { ...property, name: 'extra', type: 'string', required: false, defaultValue: '' },
+    });
+    assert.equal(added.ok, true, type);
+    assert.equal(
+      readComponentProperties(added.value).properties.some((field) => field.name === 'extra'),
+      true,
+      type,
+    );
   }
   assert.equal(editPropertyDefinition(source, { kind: 'source', frontmatter: 'const = ' }).ok, false);
   const output = value(
@@ -519,7 +530,7 @@ const { eyebrow, theme = "inherit", variant = "default", image, ...rest } = Astr
 ---
 <div>{eyebrow} {Astro.props.eyebrow}</div>`;
 
-test('common props remain editable while variant restrictions stay specific to each prop', () => {
+test('common props stay editable and variant rules are described, not locked', () => {
   const data = readComponentProperties(compositeCard);
   assert.equal(data.advanced, true);
   const eyebrow = data.properties.find((field) => field.name === 'eyebrow');
@@ -527,18 +538,18 @@ test('common props remain editable while variant restrictions stay specific to e
   assert.equal(eyebrow.description, 'Small text above the heading.');
   assert.deepEqual(eyebrow.conditions, []);
   const image = data.properties.find((field) => field.name === 'image');
-  assert.equal(image.editing.kind, 'restricted');
+  assert.equal(image.editing.kind, 'editable');
   assert.deepEqual(image.conditions, ['variant = "default": not allowed', 'variant = "cover": optional', 'variant = "stacked": optional']);
   const theme = data.properties.find((field) => field.name === 'theme');
-  assert.equal(theme.editing.kind, 'restricted');
+  assert.equal(theme.editing.kind, 'editable');
   assert.equal(theme.conditions.at(-1), 'variant = "stacked": not allowed');
   assert.equal(
     editPropertyDefinition(compositeCard, {
       kind: 'save',
       originalName: 'image',
-      property: { ...image, editing: { kind: 'editable' } },
+      property: { ...image, description: 'Cover image' },
     }).ok,
-    false,
+    true,
   );
   assert.deepEqual(parseComponentProperties(data), data);
 });
@@ -609,7 +620,7 @@ test('renaming a common prop updates its instances, ' + 'runtime binding and rel
   });
 });
 
-test('ambiguous common declarations remain restricted without flattening their contracts', () => {
+test('ambiguous common declarations stay editable without flattening their contracts', () => {
   for (const declaration of [
     'type Props = { eyebrow?: string } & { eyebrow?: "narrow" };',
     'type Props = Base; type Base = Props & { eyebrow?: string };',
@@ -621,15 +632,16 @@ test('ambiguous common declarations remain restricted without flattening their c
     const assertion = '';
     const source = `---\n${declaration}\nconst { eyebrow } = Astro.props${assertion};\n---\n`;
     const eyebrow = readComponentProperties(source).properties.find((property) => property.name === 'eyebrow');
-    assert.equal(eyebrow.editing.kind, 'restricted', declaration);
-    assert.equal(
+    assert.equal(eyebrow.editing.kind, 'editable', declaration);
+    const saved = value(
       editPropertyDefinition(source, {
         kind: 'save',
         originalName: 'eyebrow',
         property: { ...eyebrow, description: 'Changed' },
-      }).ok,
-      false,
+      }),
     );
+    assert.match(saved, /Changed/, declaration);
+    assert.equal(readComponentProperties(saved).properties.find((property) => property.name === 'eyebrow').description, 'Changed', declaration);
   }
 });
 
@@ -681,14 +693,15 @@ const { render = true, class: className, ...rest } = Astro.props;
   const reread = readComponentProperties(output).properties.find((field) => field.name === 'class');
   assert.equal(reread.editing.kind, 'editable');
   assert.equal(reread.defaultValue, '"eyebrow"');
-  assert.equal(
+  const renamed = value(
     editPropertyDefinition(source, {
       kind: 'save',
       originalName: 'class',
       property: { ...inherited, name: 'className' },
-    }).ok,
-    false,
+    }),
   );
+  assert.match(renamed, /className\?: /, 'the renamed prop is declared locally');
+  // Deleting is refused only while the component still reads the value.
   assert.equal(editPropertyDefinition(source, { kind: 'remove', name: 'class' }).ok, false);
 });
 
@@ -844,7 +857,9 @@ test('defaults apply to direct reads without being shadowed by template locals',
   assert.equal(evaluate({ props: { title: 'Instance' } }), 'Instance');
   assert.equal(evaluate({ props: { title: jsonNull } }), jsonNull);
   const before = '---\ninterface Props { title?: string }\n' + 'const value = Astro.props.title;\n---\n<p>{value}</p>';
-  assert.equal(editPropertyDefinition(before, save()).ok, false);
+  // A read that precedes the default no longer blocks it: the binding goes before the first statement of code.
+  const early = value(editPropertyDefinition(before, save()));
+  assert.ok(early.indexOf('const { title = "New title" }') < early.indexOf('const value'), early);
 });
 
 test('adding a prop creates its binding, and unused bindings can be removed', () => {
@@ -1181,10 +1196,12 @@ test('a prop declared in both the public and the runtime type is editable and wr
   assert.doesNotMatch(removed, /render/, 'both declarations and the default go');
 });
 
-test('a runtime type that omits the prop or states it per variant keeps it read-only', () => {
+test('a runtime type that omits the prop or states it per variant stays editable', () => {
   for (const runtime of ['type AllProps = { variant?: string };', 'type AllProps = { render?: boolean; variant: "a" } | { render: boolean; variant: "b" };']) {
     const source = `---\ntype Props = { render?: boolean; variant?: string };\n${runtime}\nconst { render = true } = Astro.props as AllProps;\n---\n`;
     const render = readComponentProperties(source).properties.find((property) => property.name === 'render');
-    assert.equal(render.editing.kind, 'restricted', runtime);
+    assert.equal(render.editing.kind, 'editable', runtime);
+    const saved = value(editPropertyDefinition(source, { kind: 'save', originalName: 'render', property: { ...render, type: 'string' } }));
+    assert.equal(readComponentProperties(saved).properties.find((property) => property.name === 'render').type, 'string', runtime);
   }
 });

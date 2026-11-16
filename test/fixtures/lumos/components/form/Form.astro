@@ -1,0 +1,132 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slotContent } from "@/utils/slots.ts";
+
+interface Props extends HTMLAttributes<"form"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Form name. */
+  name?: string;
+  /** Form endpoint. Omit to skip submission. */
+  action?: string;
+  /** Message shown after submission. */
+  successMessage?: string;
+  /** Message shown after an error. */
+  errorMessage?: string;
+}
+
+const {
+  render = true,
+  name,
+  action,
+  successMessage = "Thanks — we will be in touch.",
+  errorMessage = "That did not send. Please try again.",
+  method = "post",
+  class: className,
+  ...rest
+} = Astro.props;
+
+const content = await slotContent(Astro.slots);
+---
+
+{render && name && content && (
+  <div
+    class:list={["form_wrap", className]}
+    data-state="idle"
+    data-endpoint={action}
+  >
+    <form
+      class="form_fields"
+      name={name}
+      action={action}
+      method={method}
+      {...rest}
+    >
+      <Fragment set:html={content} />
+    </form>
+
+    <p class="form_note form_note-sent text-style-main" role="status">
+      {successMessage}
+    </p>
+    <p class="form_note form_note-failed text-style-main" role="alert">
+      {errorMessage}
+    </p>
+  </div>
+)}
+
+<script>
+  for (const form of document.querySelectorAll<HTMLElement>(".form_wrap")) {
+    const fields = form.querySelector<HTMLFormElement>(".form_fields");
+    if (!fields) continue;
+
+    const submit = fields.querySelector<HTMLButtonElement | HTMLInputElement>(
+      'button:not([type]), button[type="submit"], input[type="submit"]',
+    );
+
+    fields.addEventListener("submit", async (event) => {
+      const endpoint = form.dataset.endpoint;
+
+      if (!fields.checkValidity()) return;
+
+      event.preventDefault();
+      form.dataset.state = "sending";
+      if (submit) submit.disabled = true;
+
+      try {
+        if (endpoint) {
+          const answer = await fetch(endpoint, {
+            method: fields.method || "post",
+            body: new FormData(fields),
+            headers: { Accept: "application/json" },
+          });
+          if (!answer.ok) throw new Error(String(answer.status));
+        }
+        form.dataset.state = "sent";
+        fields.reset();
+      } catch {
+        form.dataset.state = "failed";
+        if (submit) submit.disabled = false;
+      }
+    });
+  }
+</script>
+
+<style is:global>
+  @layer components {
+    .form_wrap {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      width: 100%;
+    }
+
+    .form_fields {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5);
+      row-gap: var(--space-8);
+      column-gap: var(--space-8);
+    }
+
+    .form_note {
+      display: none;
+      padding: var(--space-4) var(--space-5);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-small);
+    }
+
+    .form_wrap[data-state="sent"] {
+      & .form_fields {
+        display: none;
+      }
+      & .form_note-sent {
+        display: block;
+      }
+    }
+
+    .form_wrap[data-state="failed"] .form_note-failed {
+      display: block;
+      color: var(--text);
+    }
+  }
+</style>

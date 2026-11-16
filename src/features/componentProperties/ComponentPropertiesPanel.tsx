@@ -16,7 +16,7 @@ import { readAttributesProperty } from './attributesProperty';
 import { kindIcon } from './PropertyType';
 import { PropertyGrip, movePropertyItem } from './PropertyReorder';
 import { PropertiesIcon } from './PropertiesIcon';
-import { PropertyEditor, propertyIsEditable, withListSettingType } from './PropertyEditor';
+import { PropertyEditor, withListSettingType } from './PropertyEditor';
 import './componentProperties.css';
 
 type Selection =
@@ -89,8 +89,8 @@ function PropertyPanelContent({ data, busy, save, saveHost, host }: PropertyCont
         <button
           className="property-add"
           aria-label={translate('componentProps.panel.add')}
-          title={data.advanced ? translate('componentProps.panel.addAdvanced') : translate('componentProps.panel.add')}
-          disabled={data.advanced || busy}
+          title={translate('componentProps.panel.add')}
+          disabled={busy}
           onClick={() =>
             setSelection({
               kind: 'property',
@@ -162,7 +162,7 @@ function PropertySelectionEditor({
           originalName={selection.originalName}
           frontmatter={data.frontmatter}
           // An existing prop saves as it is typed in, so a save must not disable the field being typed in.
-          access={busy && selection.originalName === '' ? 'saving' : propertyIsEditable(selection.value, data) ? 'editable' : 'readonly'}
+          access={busy && selection.originalName === '' ? 'saving' : 'editable'}
           onClose={onClose}
           onSave={async (change, after) => {
             if (!(await save(change))) {
@@ -176,6 +176,7 @@ function PropertySelectionEditor({
           }}
           saveHost={saveHost}
           onOpenFile={onOpenFile}
+          variantGroups={data.variantGroups}
         />
       )}
     </>
@@ -191,7 +192,7 @@ interface PropertyListProps {
 // The component's own props, in their order. A shared type's are listed under it (SharedPropertyGroups).
 function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
   const translate = useTranslate();
-  const disabled = busy || data.advanced;
+  const disabled = busy;
   const properties = useMemo(() => data.properties.filter((property) => property.shared === undefined), [data.properties]);
   const move = (source: number, gap: number): void => {
     const next = movePropertyItem(properties, source, gap);
@@ -224,7 +225,7 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
           icon={kindIcon(withListSettingType(property, listProps))}
           grip={<PropertyGrip label={property.name} index={index} count={properties.length} disabled={disabled} onMove={move} />}
           disabled={busy}
-          removeDisabled={busy || !propertyIsRemovable(property, data)}
+          removeDisabled={busy}
           removeLabel={translate('componentProps.editor.deleteNamed', { name: property.name })}
           onOpen={() => onSelect(property)}
           onRemove={() => void onChange({ kind: 'remove', name: property.name })}
@@ -339,8 +340,4 @@ function sharedGroups(properties: readonly ComponentProperty[]): readonly Shared
     groups.set(key, group);
   }
   return [...groups.values()];
-}
-
-function propertyIsRemovable(property: ComponentProperty, data: ComponentProperties): boolean {
-  return property.editing ? property.editing.kind === 'editable' : !data.advanced;
 }

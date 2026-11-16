@@ -1,0 +1,95 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slotContent } from "@/utils/slots.ts";
+
+interface Props extends HTMLAttributes<"fieldset"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Field group label. */
+  legend?: string;
+  /** Field layout. */
+  variant?: "stack" | "columns" | "thirds" | "inline";
+  /** Legend style. */
+  legendStyle?: "heading" | "label" | "hidden";
+}
+
+const {
+  render = true,
+  legend,
+  variant = "stack",
+  legendStyle = "heading",
+  class: className,
+  ...rest
+} = Astro.props;
+
+const LEGEND_STYLES: Record<NonNullable<Props["legendStyle"]>, string> = {
+  heading: "text-style-h5",
+  label: "field-label text-style-main",
+  hidden: "sr-only",
+};
+
+const content = await slotContent(Astro.slots);
+---
+
+{render && legend && content && (
+  <fieldset
+    class:list={["form-fieldset", variant !== "stack" && variant, className]}
+    {...rest}
+  >
+    <legend
+      class:list={[
+        "form-fieldset_legend",
+        `form-fieldset_legend-${legendStyle}`,
+        LEGEND_STYLES[legendStyle],
+      ]}
+    >
+      {legend}
+    </legend>
+    <div class="form-fieldset_fields">
+      <Fragment set:html={content} />
+    </div>
+  </fieldset>
+)}
+
+<style is:global>
+  @layer components {
+    .form-fieldset {
+      width: 100%;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .form-fieldset_legend {
+      padding: 0;
+      margin-bottom: var(--space-2);
+    }
+
+    .form-fieldset_legend-heading {
+      margin-bottom: var(--space-3);
+    }
+
+    .form-fieldset_fields {
+      display: grid;
+      gap: var(--space-5);
+
+      .form-fieldset.inline & {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3) var(--space-5);
+        > * {
+          width: auto;
+        }
+      }
+
+      @media (width >= 48rem) {
+        .form-fieldset.columns & {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .form-fieldset.thirds & {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+    }
+  }
+</style>

@@ -77,7 +77,6 @@ export const messages = {
   'componentProps.kindSection.structure': 'Structure', // same
   'componentProps.options.title': 'Options', // same
   'componentProps.panel.add': 'Ajouter une propriété',
-  'componentProps.panel.addAdvanced': 'Ajoutez des déclarations à ce type combiné dans le code source',
   'componentProps.panel.deletedIn': '{name} se supprime dans {path}',
   'componentProps.panel.empty': 'Aucune propriété pour le moment. Ajoutez-en une pour définir ce que chaque instance peut personnaliser.',
   'componentProps.panel.from': 'De {typeName}',
@@ -94,13 +93,6 @@ export const messages = {
   'componentProps.problem.minAboveMax': 'Le minimum dépasse le maximum.',
   'componentProps.problem.nameShape': 'Utilisez un nom comme title, imageUrl ou isVisible.',
   'componentProps.problem.typeMissing': 'Donnez un type à la propriété.',
-  'componentProps.readOnly.codeType': 'Type de code',
-  'componentProps.readOnly.defaultValue': 'Valeur par défaut',
-  'componentProps.readOnly.editInSource': 'Modifiez la déclaration de cette propriété dans le code source.',
-  'componentProps.readOnly.name': 'Nom',
-  'componentProps.readOnly.notSpecified': 'Non spécifié',
-  'componentProps.readOnly.required': 'Obligatoire',
-  'componentProps.readOnly.tooltip': 'Info-bulle',
   'componentProps.reorder.hint': 'Faites glisser pour réordonner (ou utilisez les flèches)',
   'componentProps.reorder.label': 'Réordonner {name}',
   'componentProps.settings.auto': 'Auto', // same

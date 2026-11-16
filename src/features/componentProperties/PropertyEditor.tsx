@@ -1,7 +1,8 @@
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
-import PropertyReadOnlyFields from './PropertyReadOnlyFields';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
+import { PropertyVariants, useVariantHost } from './PropertyVariants';
+import type { VariantGroup } from '../../../shared/properties/variantRules';
 import { TrashIcon } from '../../ui/Icons';
 import { PropertyOptions } from './PropertyOptions';
 import { PropertyShareNotice, shareRenameFiles } from './PropertyShareNotice';
@@ -14,7 +15,7 @@ export { literalOptions };
 import { useRef, useState, type ReactNode } from 'react';
 import Popup from '../../ui/Popup';
 import { assert } from '../../../shared/core/assert';
-import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyOptionRename } from '../../../shared/properties/propertyEditing';
+import type { ComponentProperty, PropertyChange, PropertyOptionRename } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { listPropsOf, type ListProp } from '../../editor/listProps';
 import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
@@ -28,7 +29,7 @@ interface PropertyEditorProps {
   readonly property: ComponentProperty;
   readonly originalName: string;
   readonly frontmatter: string;
-  readonly access: 'editable' | 'readonly' | 'saving';
+  readonly access: 'editable' | 'saving';
   readonly onClose: () => void;
   /**
    * Creates a new prop, or deletes this one, and says whether it was done. A
@@ -40,6 +41,8 @@ interface PropertyEditorProps {
   readonly saveHost: PropertySaveHost;
   /** Opens a project file, named project-relative: a shared prop's declaration and users. */
   readonly onOpenFile?: ((path: string) => void) | undefined;
+  /** The component's variant rules (PropertyVariants.tsx), as the panel last read them. */
+  readonly variantGroups?: readonly VariantGroup[] | undefined;
 }
 // Types loose enough that a list setting's own type only says more.
 const LOOSE_TYPES = new Set(['', 'unknown', 'any', 'object', 'Record<string, unknown>']);
@@ -57,16 +60,12 @@ export function withListSettingType(property: ComponentProperty, listProps: Read
   return listProp === undefined ? property : { ...property, type: SETTING_PROP_TYPES[listProp.setting] };
 }
 
-/** Whether a property can be edited here, or only read: its declaration may be one only source can change. */
-export function propertyIsEditable(property: ComponentProperty, data: Pick<ComponentProperties, 'advanced'>): boolean {
-  return property.editing ? property.editing.kind !== 'restricted' : !data.advanced;
-}
-
 export function PropertyEditor(props: PropertyEditorProps) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
   const editorRef = useRef<HTMLDivElement>(null);
   const draft = usePropertyEditorDraft(props);
+  const variants = useVariantHost(props.variantGroups, { saveHost: props.saveHost, name: draft.savedName, rebase: draft.rebase });
   return (
     <Popup
       mode="popover"
@@ -94,33 +93,30 @@ export function PropertyEditor(props: PropertyEditorProps) {
               ×
             </button>
           </header>
-          <PropertyConditions property={props.property} />
+          {/* An existing prop's variant rules are controls; a new one has none yet. */}
+          <PropertyVariants name={draft.exists ? draft.savedName : ''} host={variants} fallback={<PropertyConditions property={props.property} />} />
           <PropertyShareNotice property={props.property} onOpenFile={props.onOpenFile} />
           {props.property.editing?.kind === 'override' && (
             <p className="property-help">{translateDescribed({ message: props.property.editing.reason, messageRef: props.property.editing.reasonRef })}</p>
           )}
-          {props.access === 'readonly' ? (
-            <PropertyReadOnlyFields property={draft.property} />
-          ) : (
-            <PropertyEditorFields
-              form={draft}
-              creating={!draft.exists}
-              frontmatter={props.frontmatter}
-              access={props.access}
-              projectPath={undefined}
-              actions={
-                <PropertyActions
-                  name={draft.exists ? draft.savedName : ''}
-                  // A shared prop is deleted from its type's file, in source.
-                  removable={props.property.editing?.kind !== 'override' && props.property.shared === undefined}
-                  onRemove={(name) => {
-                    draft.discard();
-                    void props.onSave({ kind: 'remove', name }, 'close');
-                  }}
-                />
-              }
-            />
-          )}
+          <PropertyEditorFields
+            form={draft}
+            creating={!draft.exists}
+            frontmatter={props.frontmatter}
+            access={props.access}
+            projectPath={undefined}
+            actions={
+              <PropertyActions
+                name={draft.exists ? draft.savedName : ''}
+                // A shared prop is deleted from its type's file, in source.
+                removable={props.property.editing?.kind !== 'override' && props.property.shared === undefined}
+                onRemove={(name) => {
+                  draft.discard();
+                  void props.onSave({ kind: 'remove', name }, 'close');
+                }}
+              />
+            }
+          />
         </>
       )}
     </Popup>
@@ -136,12 +132,21 @@ export function PropertySettingsFields(props: {
   readonly frontmatter: string;
   readonly projectPath: string | undefined;
   readonly saveHost: PropertySaveHost;
+  /** The component's variant rules, and how to read them again after an edit (this host hands down no fresh copy). */
+  readonly variantGroups?: readonly VariantGroup[] | undefined;
+  readonly refreshVariantGroups?: () => Promise<readonly VariantGroup[] | undefined>;
 }) {
   const { property, frontmatter, projectPath, saveHost } = props;
   const draft = usePropertyEditorDraft({ property, originalName: property.name, frontmatter, onSave: async () => false, saveHost });
+  const variants = useVariantHost(props.variantGroups, { saveHost, name: draft.savedName, rebase: draft.rebase }, props.refreshVariantGroups);
   // An existing prop has nothing to create.
   assert(property.name !== '', 'PropertySettingsFields: the prop exists');
-  return <PropertyEditorFields form={draft} creating={false} frontmatter={frontmatter} access="editable" projectPath={projectPath} actions={undefined} />;
+  return (
+    <>
+      <PropertyVariants name={draft.savedName} host={variants} fallback={<PropertyConditions property={property} />} />
+      <PropertyEditorFields form={draft} creating={false} frontmatter={frontmatter} access="editable" projectPath={projectPath} actions={undefined} />
+    </>
+  );
 }
 
 function usePropertyEditorDraft(props: Pick<PropertyEditorProps, 'property' | 'originalName' | 'frontmatter' | 'onSave' | 'saveHost'>) {

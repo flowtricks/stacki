@@ -597,7 +597,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
   );
   assert.equal(document.querySelector('.property-editor') === null, true);
   assert.equal(edits.length, editsAfterDismiss, 'with nothing pending, it writes nothing');
-  // Unsupported contracts still open property settings rather than raw source.
+  // Combined contracts open editable property settings, never raw source.
   data = {
     ...data,
     source: 'unsupported contract',
@@ -618,7 +618,8 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('.property-row-main').click());
   assert.match(document.body.textContent, /Property settings/);
   assert.ok(document.querySelector('[aria-label="Component TypeScript source"]') === null);
-  assert.equal(document.querySelector('.property-readonly-fields textarea').readOnly, true);
+  assert.ok(document.querySelector('.property-readonly-fields') === null, 'a combined contract is edited, not read');
+  assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   assert.ok(document.querySelector('.property-source-tag') === null);
   assert.match(document.querySelector('.property-declaration-info').title, /Tag\./);
   assert.match(document.querySelector('.property-declaration-info').title, /line 3/);
@@ -631,7 +632,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await pressDown(document.querySelector('.property-component'));
   assert.ok(document.querySelector('.property-editor') === null);
   assert.equal(edits.length, editsAfterDismiss);
-  // Common fields in a combined contract use normal editing; only affected props are restricted.
+  // Every field in a combined contract uses normal editing; variant rules are shown beside it.
   data = {
     ...data,
     source: 'combined contract',
@@ -645,17 +646,14 @@ const { tag = 'h2', variant = tag } = Astro.props;
       {
         ...property,
         name: 'image',
-        editing: {
-          kind: 'restricted',
-          reason: 'This prop has variant rules. Edit its declaration in source.',
-        },
+        editing: { kind: 'editable' },
         conditions: ['variant = "default": not allowed', 'variant = "cover": optional'],
       },
     ],
   };
   await notify();
   assert.equal(document.querySelector('[aria-label="Delete eyebrow"]').disabled, false);
-  assert.equal(document.querySelector('[aria-label="Delete image"]').disabled, true);
+  assert.equal(document.querySelector('[aria-label="Delete image"]').disabled, false);
   await act(async () => document.querySelector('.property-row-main').click());
   assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   assert.ok(document.querySelector('.property-readonly-fields') === null);
@@ -664,8 +662,8 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
   await act(async () => document.querySelectorAll('.property-row-main')[1].click());
   assert.match(document.querySelector('.property-conditions').textContent, /default.*not allowed/);
-  assert.match(document.querySelector('.property-readonly-fields').textContent, /variant rules/);
-  assert.ok(document.querySelector('.property-editor fieldset') === null);
+  assert.ok(document.querySelector('.property-readonly-fields') === null);
+  assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   // Inherited Astro attributes can be overridden locally without exposing a
   // rename or delete that would leave the inherited contract in place.
   data = {
