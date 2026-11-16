@@ -51,7 +51,6 @@ import {
   number as centralNumber,
   numberList as centralNumberList,
   panelRight as centralPanelRight,
-  paragraph as centralParagraph,
   pointerHand as centralPointerHand,
   quote as centralQuote,
   rewrite as centralRewrite,
@@ -124,8 +123,6 @@ export const ElementHeading6Icon = (props: IconProps) => (
     <path fillRule="evenodd" clipRule="evenodd" d={elementHeading6IconPath1} />
   </I>
 );
-
-export const ElementParagraphIcon = centralIcon(centralParagraph);
 
 export const ElementVideoIcon = centralIcon(centralVideo);
 
@@ -275,7 +272,7 @@ const HTML_ICONS = {
   optgroup: ElementListDefaultIcon,
   option: CheckIcon,
   output: OutputIcon,
-  p: ElementParagraphIcon,
+  p: TextIcon,
   picture: PictureIcon,
   pre: TextBlockIcon,
   progress: MeterIcon,

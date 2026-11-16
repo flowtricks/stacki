@@ -107,7 +107,6 @@ export {
   ElementHeading4Icon,
   ElementHeading5Icon,
   ElementHeading6Icon,
-  ElementParagraphIcon,
   ElementVideoIcon,
   ElementFormBlockIcon,
   ElementInputIcon,
