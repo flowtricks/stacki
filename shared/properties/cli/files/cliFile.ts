@@ -5,6 +5,7 @@
 // are off until an admin enables the app (`stacki apps enable <app>`), and the record names the lock digest the admin trusted. An update changes
 // the lock digest, so the record no longer matches and the app's commands stay off until the admin enables it again. Only admin edits this file
 // (it requires `settings:roles`, and `config` on it needs `cli:roles`), so an agent without that access cannot trust an app.
+import { assert } from '../../../core/assert';
 import { toRecord } from '../../../core/record';
 import { APP_LIMITS } from '../../apps';
 import { bool, field, literal, mapOf, objectOf, text, type FileSchema } from '../stackiSchema';
@@ -29,6 +30,7 @@ export type CliSettingsReading =
 
 /** The file's text read into app records; throws the reason when the file is not a valid `cli.json`. */
 export function parseCliSettingsSource(source: string): ReadonlyMap<string, CliAppRecord> {
+  assert(source.length >= 0, 'A source has a length');
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
@@ -66,6 +68,7 @@ export function parseCliSettingsSource(source: string): ReadonlyMap<string, CliA
 }
 
 function parseRecord(id: string, value: unknown): CliAppRecord {
+  assert(id.length > 0, 'An app has an id');
   const entry = toRecord(value);
   if (entry === undefined) {
     throw new Error(`${CLI_SETTINGS_FILE}: ${id} must be an object`);
@@ -96,6 +99,7 @@ function parseRecord(id: string, value: unknown): CliAppRecord {
 
 /** `parseCliSettingsSource` for a caller that wants a value, not a throw; an absent file reads as no records. */
 export function readCliSettings(source: string | undefined): CliSettingsReading {
+  assert(source === undefined || source.length >= 0, 'A source is text or absent');
   if (source === undefined) {
     return { kind: 'ready', apps: new Map() };
   }

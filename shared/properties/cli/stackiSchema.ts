@@ -8,6 +8,7 @@
 // refuses a key that is not listed here, then asks the real parser to accept the finished file. A coverage test
 // (test/shared/properties/cli/stackiSchemaCoverage.test.ts) reads each parser's source and fails when the parser
 // reads a key that this registry does not list, so adding a setting to the app without CLI coverage breaks the build.
+import { assert } from '../../core/assert';
 import { toArray, toRecord } from '../../core/record';
 
 export const SCHEMA_LIMITS = {
@@ -121,6 +122,7 @@ export function field(
   description: string,
   options: { readonly required?: boolean; readonly default?: string | number | boolean; readonly commands?: readonly string[]; readonly legacy?: boolean } = {},
 ): FieldSchema {
+  assert(description.length > 0, 'A key says what it is');
   return {
     type,
     description,
@@ -133,6 +135,8 @@ export function field(
 
 /** Why `value` does not fit `schema`, or undefined when it does. `where` is the path shown in the reason. */
 export function checkValue(schema: ValueSchema, value: unknown, where: string, depth: number = 0): string | undefined {
+  assert(where.length > 0, 'A check says where it looks');
+  assert(depth >= 0, 'Depth counts from zero');
   if (depth > SCHEMA_LIMITS.depthMax) {
     return `${where}: nested deeper than ${SCHEMA_LIMITS.depthMax} levels`;
   }
@@ -171,6 +175,7 @@ function checkNumber(
   range: { readonly min: number; readonly max: number; readonly whole: 'integer' | 'number' },
   where: string,
 ): string | undefined {
+  assert(range.min <= range.max, 'A numeric range is ordered');
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return `${where}: expected a number`;
   }
@@ -181,6 +186,7 @@ function checkNumber(
 }
 
 function checkString(schema: Extract<ValueSchema, { readonly kind: 'string' }>, value: unknown, where: string): string | undefined {
+  assert(schema.charsMax >= 0, 'A text bound is not negative');
   if (typeof value !== 'string') {
     return `${where}: expected text`;
   }
@@ -195,6 +201,7 @@ function checkString(schema: Extract<ValueSchema, { readonly kind: 'string' }>, 
 }
 
 function checkArray(schema: Extract<ValueSchema, { readonly kind: 'array' }>, value: unknown, where: string, depth: number): string | undefined {
+  assert(schema.itemsMax >= 0, 'A list bound is not negative');
   const items = toArray(value);
   if (items === undefined) {
     return `${where}: expected a list`;
@@ -215,6 +222,7 @@ function checkArray(schema: Extract<ValueSchema, { readonly kind: 'array' }>, va
 }
 
 function checkObject(fields: Readonly<Record<string, FieldSchema>>, value: unknown, where: string, depth: number): string | undefined {
+  assert(where.length > 0, 'A check says where it looks');
   const source = toRecord(value);
   if (source === undefined) {
     return `${where}: expected an object`;
@@ -238,6 +246,7 @@ function checkObject(fields: Readonly<Record<string, FieldSchema>>, value: unkno
 }
 
 function checkMap(schema: Extract<ValueSchema, { readonly kind: 'map' }>, value: unknown, where: string, depth: number): string | undefined {
+  assert(schema.entriesMax >= 0, 'A map bound is not negative');
   const source = toRecord(value);
   if (source === undefined) {
     return `${where}: expected an object keyed by ${schema.keyDescription}`;
@@ -261,6 +270,7 @@ function checkMap(schema: Extract<ValueSchema, { readonly kind: 'map' }>, value:
 
 /** Why `key` cannot name an entry of the map, or undefined. Also refuses names that would reach an object's prototype. */
 export function checkMapKey(schema: Extract<ValueSchema, { readonly kind: 'map' }>, key: string, where: string): string | undefined {
+  assert(where.length > 0, 'A check says where it looks');
   if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
     return `${where}: ${JSON.stringify(key)} is not a usable key`;
   }
@@ -274,6 +284,7 @@ export function checkMapKey(schema: Extract<ValueSchema, { readonly kind: 'map' 
 }
 
 function checkVariant(schema: Extract<ValueSchema, { readonly kind: 'variant' }>, value: unknown, where: string, depth: number): string | undefined {
+  assert(Object.keys(schema.variants).length > 0, 'A variant lists its cases');
   const source = toRecord(value);
   if (source === undefined) {
     return `${where}: expected an object`;
@@ -293,6 +304,7 @@ function checkVariant(schema: Extract<ValueSchema, { readonly kind: 'variant' }>
 
 /** The keys of `fields` a person can set, in declaration order. */
 export function settableKeys(fields: Readonly<Record<string, FieldSchema>>): readonly string[] {
+  assert(typeof fields === 'object', 'Fields are an object');
   return Object.entries(fields)
     .filter(([, entry]) => entry.legacy !== true)
     .map(([key]) => key);
@@ -300,6 +312,7 @@ export function settableKeys(fields: Readonly<Record<string, FieldSchema>>): rea
 
 /** A short type name for a human reference line: `integer 2..32`, `enum a|b`, `list of text`. */
 export function describeType(schema: ValueSchema, depth: number = 0): string {
+  assert(depth >= 0, 'Depth counts from zero');
   if (depth > SCHEMA_LIMITS.depthMax) {
     return 'nested';
   }
@@ -339,6 +352,7 @@ export function schemaAt(
   segments: readonly (string | number)[],
   document: unknown,
 ): { readonly type: ValueSchema; readonly field?: FieldSchema } | undefined {
+  assert(root.file.startsWith('.stacki/'), 'A file schema is for a .stacki file');
   let current: ValueSchema = { kind: 'object', fields: root.fields };
   let currentField: FieldSchema | undefined;
   let currentValue: unknown = document;
@@ -355,6 +369,7 @@ export function schemaAt(
 }
 
 function stepInto(schema: ValueSchema, segment: string | number, value: unknown): { readonly type: ValueSchema; readonly field?: FieldSchema } | undefined {
+  assert(String(segment).length > 0, 'A step names a key or a position');
   if (schema.kind === 'object' && typeof segment === 'string') {
     const known = Object.hasOwn(schema.fields, segment) ? schema.fields[segment] : undefined;
     return known === undefined || known.legacy === true ? undefined : { type: known.type, field: known };

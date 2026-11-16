@@ -4,6 +4,7 @@
 // Why one table: a command that exists in the shell but not in the MCP server (or the reverse) is a hole an agent falls into, and a command
 // without a role feature would run for everyone. Rows are the only place a command is declared, so the MCP tools are the same commands by
 // construction, and a test (test/shared/properties/cli/stackiCommands.test.ts) fails for a row without a feature key or a handler without a row.
+import { assert } from '../../core/assert';
 import type { CliAccessFeature } from './stackiFeatures';
 
 export type ArgKind = 'string' | 'integer' | 'number' | 'boolean' | 'json' | 'enum';
@@ -67,6 +68,8 @@ function command(
   feature: CliAccessFeature,
   options: { readonly write?: boolean; readonly destructive?: boolean; readonly args?: readonly ArgSpec[] } = {},
 ): CommandSpec {
+  assert(words.length > 0, 'A command has words');
+  assert(summary.length > 0, 'A command says what it does');
   return {
     words,
     summary,
@@ -308,9 +311,11 @@ export const COMMANDS: readonly CommandSpec[] = [
 ];
 
 export function commandByWords(words: readonly string[]): CommandSpec | undefined {
+  assert(words.length > 0, 'A lookup names a command');
   return COMMANDS.find((entry) => entry.words.length === words.length && entry.words.every((word, index) => word === words[index]));
 }
 
 export function toolNameOf(spec: Pick<CommandSpec, 'words'>): string {
+  assert(spec.words.length > 0, 'A tool name has words');
   return `stacki_${spec.words.join('_')}`;
 }

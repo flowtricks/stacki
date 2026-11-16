@@ -13,6 +13,7 @@ import { test } from 'node:test';
 import { METADATA_FILES } from '#dist/shared/properties/projectMetadata.js';
 import { STACKI_FILES, STACKI_UNSETTABLE, refusalOfSource, serializeDocument } from '#dist/shared/properties/cli/stackiFiles.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
+import { COMMANDS } from '#dist/shared/properties/cli/stackiCommands.js';
 
 const TEST_LIMITS = { depthMax: 12 } as const;
 
@@ -93,6 +94,10 @@ test('each file registry describes a document the app accepts, and its own check
     keysOf({ kind: 'object', fields: file.fields }, keys, commands, 0);
     for (const [key, entry] of Object.entries(file.fields)) {
       assert.ok(entry.description.length > 0, `${file.id}.${key} says what it is`);
+    }
+    const known = new Set(COMMANDS.map((spec) => spec.words.join(' ')));
+    for (const command of [...commands, ...file.commands]) {
+      assert.ok(known.has(command) || file.appId !== undefined, `${file.id} names the command "${command}", which is not in the command table`);
     }
   }
 });

@@ -5,6 +5,7 @@
 // Why pure and registry-judged: every settable key of every file is reachable through here, so the rules that stop a bad edit
 // (unknown key, wrong type, out of bounds, a required key removed) live in one function, not in each command. The caller then
 // hands the finished text to the app's own parser (`validateMetadata`), which stays the last word on what the app will accept.
+import { assert } from '../../core/assert';
 import { toArray, toRecord } from '../../core/record';
 import { err, ok, type Result } from '../../core/result';
 import type { CliError } from './stackiOutput';
@@ -33,6 +34,7 @@ type Container = Record<string, unknown> | unknown[];
 
 /** The document after `operation`, or why it is refused. The input document is never changed. */
 export function applyConfigOperation(file: FileSchema, document: unknown, operation: ConfigOperation): Result<Record<string, unknown>, CliError> {
+  assert(file.file.startsWith('.stacki/'), 'An edit targets a .stacki file');
   const root = toRecord(document);
   if (root === undefined) {
     return refusal('invalid-file', `${file.file}: the file is not a JSON object`);
@@ -68,6 +70,7 @@ export function applyConfigOperation(file: FileSchema, document: unknown, operat
 
 /** What the file holds at `path`, with the key's type and description from the registry. */
 export function readConfigValue(file: FileSchema, document: unknown, path: readonly PathSegment[]): Result<ConfigRead, CliError> {
+  assert(file.file.startsWith('.stacki/'), 'A read targets a .stacki file');
   const root = toRecord(document) ?? {};
   if (path.length === 0) {
     return ok({ path: '', value: root, type: 'object', description: file.description, present: true });
@@ -90,6 +93,7 @@ export function readConfigValue(file: FileSchema, document: unknown, path: reado
 }
 
 function mapEntryAllowed(file: FileSchema, path: readonly PathSegment[], document: unknown): boolean {
+  assert(path.length > 0, 'A map entry has a path');
   // A map's entries are listed by their parent's schema: `components["New.astro"]` names no entry yet but is a valid place.
   const parent = path.length === 1 ? { type: { kind: 'object', fields: file.fields } satisfies ValueSchema } : schemaAt(file, path.slice(0, -1), document);
   const last = path[path.length - 1];
@@ -97,6 +101,7 @@ function mapEntryAllowed(file: FileSchema, path: readonly PathSegment[], documen
 }
 
 function run(file: FileSchema, next: Record<string, unknown>, operation: ConfigOperation): Result<void, CliError> {
+  assert(operation.path.length > 0, 'An operation names a path');
   const path = operation.path;
   const last = path[path.length - 1];
   if (last === undefined) {
@@ -129,6 +134,7 @@ function run(file: FileSchema, next: Record<string, unknown>, operation: ConfigO
 }
 
 function addToList(list: unknown[], operation: Extract<ConfigOperation, { readonly kind: 'add' }>): Result<void, CliError> {
+  assert(Array.isArray(list), 'Adding needs a list');
   const position = operation.position ?? list.length;
   if (!Number.isSafeInteger(position) || position < 0 || position > list.length) {
     return refusal('invalid-value', `The position must be 0 to ${list.length}`);
@@ -138,6 +144,7 @@ function addToList(list: unknown[], operation: Extract<ConfigOperation, { readon
 }
 
 function removeFromList(list: unknown[], operation: Extract<ConfigOperation, { readonly kind: 'remove' }>): Result<void, CliError> {
+  assert(Array.isArray(list), 'Removing needs a list');
   if (operation.value === undefined) {
     return refusal('usage', `Name the entry to remove from ${formatConfigPath(operation.path)}: a value, or a path with a position such as [0]`);
   }
@@ -151,6 +158,7 @@ function removeFromList(list: unknown[], operation: Extract<ConfigOperation, { r
 }
 
 function assign(container: Container, key: PathSegment, value: unknown, mode: 'replace' | 'create'): Result<void, CliError> {
+  assert(String(key).length > 0, 'An assignment names a key');
   if (Array.isArray(container)) {
     if (typeof key !== 'number' || key > container.length) {
       return refusal('bad-path', `A list position must be 0 to ${container.length}`);
@@ -171,6 +179,7 @@ function assign(container: Container, key: PathSegment, value: unknown, mode: 'r
 }
 
 function removeEntry(container: Container, key: PathSegment, shown: string): Result<void, CliError> {
+  assert(shown.length > 0, 'A removal says what it removes');
   if (Array.isArray(container)) {
     if (typeof key !== 'number' || key >= container.length) {
       return refusal('missing', `${shown} does not exist`);
@@ -187,6 +196,7 @@ function removeEntry(container: Container, key: PathSegment, shown: string): Res
 }
 
 function ensureParent(document: Record<string, unknown>, path: readonly PathSegment[]): unknown {
+  assert(path.length > 0, 'A parent is made for a path');
   let current: unknown = document;
   for (const [index, segment] of path.slice(0, -1).entries()) {
     const container = toContainer(current);
@@ -213,6 +223,7 @@ function ensureParent(document: Record<string, unknown>, path: readonly PathSegm
 }
 
 function valueAt(document: unknown, path: readonly PathSegment[]): unknown {
+  assert(path.length >= 0, 'A path has a length');
   let current: unknown = document;
   for (const segment of path) {
     const list = toArray(current);
@@ -229,10 +240,12 @@ function valueAt(document: unknown, path: readonly PathSegment[]): unknown {
 }
 
 function toContainer(value: unknown): Container | undefined {
+  assert(typeof value !== 'function', 'A value read is data, never a function');
   return toArray(value) ?? toRecord(value);
 }
 
 function unknownKey(file: FileSchema, path: readonly PathSegment[], document: unknown): Result<never, CliError> {
+  assert(path.length > 0, 'An unknown key has a path');
   const parentPath = path.slice(0, -1);
   const parent = parentPath.length === 0 ? { type: { kind: 'object', fields: file.fields } satisfies ValueSchema } : schemaAt(file, parentPath, document);
   const siblings = parent === undefined ? undefined : knownKeysOf(parent.type, document, parentPath);
@@ -241,6 +254,7 @@ function unknownKey(file: FileSchema, path: readonly PathSegment[], document: un
 }
 
 function knownKeysOf(type: ValueSchema, document: unknown, parentPath: readonly PathSegment[]): readonly string[] | undefined {
+  assert(parentPath.length >= 0, 'A parent path has a length');
   if (type.kind === 'object') {
     return settableKeys(type.fields);
   }
@@ -254,5 +268,6 @@ function knownKeysOf(type: ValueSchema, document: unknown, parentPath: readonly 
 }
 
 function refusal(code: CliError['code'], message: string): Result<never, CliError> {
+  assert(message.length > 0, 'A refusal says why');
   return err({ code, message });
 }

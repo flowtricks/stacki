@@ -73,7 +73,7 @@ export const APPS_FILE: FileSchema = {
     version: field(literal(1), 'The file format version.', { required: true }),
     apps: field(arrayOf(entry, APP_LIMITS.appsMax), `The installed apps, at most ${APP_LIMITS.appsMax}; the app writes them sorted by id.`, {
       required: true,
-      commands: ['apps add', 'apps remove'],
+      commands: ['apps remove'],
     }),
   },
   empty: { version: 1, apps: [] },
@@ -81,7 +81,7 @@ export const APPS_FILE: FileSchema = {
     parseAppsLockSource(source);
   },
   serialize: (document): string => serializeAppsLock(parseAppsLock(document)),
-  commands: ['apps add', 'apps remove'],
+  commands: ['apps remove'],
   parserSources: ['shared/properties/apps.ts', 'electron/project/appStore.ts'],
   parserKeyExceptions: {
     repo: 'Alias of repository, read in a GitHub source but never written.',

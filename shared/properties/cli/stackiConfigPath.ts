@@ -3,6 +3,7 @@
 //
 // Why not JSON Pointer: agents and people type these on a command line, and a key such as `src/Card.astro` or `a.b`
 // must be writable without escaping rules; a bracketed, quoted key is unambiguous and reads like the JSON it names.
+import { assert } from '../../core/assert';
 import { err, ok, type Result } from '../../core/result';
 
 export const CONFIG_PATH_LIMITS = {
@@ -20,6 +21,8 @@ const PLAIN_KEY = /^[A-Za-z0-9_$:*@-]+$/u;
 
 /** A path text read into segments: names for keys, numbers for list positions. */
 export function parseConfigPath(source: string): Result<readonly PathSegment[]> {
+  assert(CONFIG_PATH_LIMITS.segmentsMax > 0, 'A path may have at least one step');
+  assert(source.length >= 0, 'A path text has a length');
   if (source.length > CONFIG_PATH_LIMITS.pathCharsMax) {
     return failure(`The path is longer than ${CONFIG_PATH_LIMITS.pathCharsMax} characters.`);
   }
@@ -42,6 +45,7 @@ export function parseConfigPath(source: string): Result<readonly PathSegment[]> 
 
 /** The path as text, the inverse of `parseConfigPath`. */
 export function formatConfigPath(segments: readonly PathSegment[]): string {
+  assert(segments.length <= CONFIG_PATH_LIMITS.segmentsMax, 'A formatted path is bounded like a parsed one');
   let text = '';
   for (const [index, segment] of segments.entries()) {
     if (typeof segment === 'number') {
@@ -61,6 +65,8 @@ interface Read {
 }
 
 function readName(source: string, start: number, place: 'first' | 'later'): Result<Read> {
+  assert(start >= 0, 'A name starts inside the text');
+  assert(start <= source.length, 'A name starts inside the text');
   let position = start;
   if (place === 'later') {
     if (source.charAt(position) !== '.') {
@@ -84,6 +90,7 @@ function readName(source: string, start: number, place: 'first' | 'later'): Resu
 }
 
 function readBracket(source: string, start: number): Result<Read> {
+  assert(source.charAt(start) === '[', 'A bracket read starts at a bracket');
   const quote = source.charAt(start + 1);
   if (quote === '"') {
     return readQuoted(source, start);
@@ -97,6 +104,7 @@ function readBracket(source: string, start: number): Result<Read> {
 }
 
 function readQuoted(source: string, start: number): Result<Read> {
+  assert(source.startsWith('["', start), 'A quoted key starts with a bracket and a quote');
   // The quoted key is a JSON string, so every escape a JSON string has works here too.
   let end = start + 2;
   for (let step = 0; step <= CONFIG_PATH_LIMITS.pathCharsMax && end < source.length; step += 1) {
@@ -125,5 +133,6 @@ function readQuoted(source: string, start: number): Result<Read> {
 }
 
 function failure(message: string): Result<never> {
+  assert(message.length > 0, 'A refusal says why');
   return err({ code: 'bad-path', message });
 }

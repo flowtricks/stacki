@@ -2,6 +2,7 @@
 // The output contract of the Stacki CLI and of the MCP tools over it: one JSON envelope, versioned, with the repository's
 // `{ code, message }` error shape. Scripts and agents depend on it, so a golden test pins every field
 // (test/shared/properties/cli/stackiOutput.test.ts) and a change to it bumps `CLI_SCHEMA_VERSION`.
+import { assert } from '../../core/assert';
 import { toArray, toRecord } from '../../core/record';
 
 export const CLI_SCHEMA_VERSION = 1;
@@ -95,6 +96,7 @@ export interface CliFailure {
 export type CliEnvelope = CliSuccess | CliFailure;
 
 export function exitCodeOf(envelope: CliEnvelope): number {
+  assert(envelope.schemaVersion >= 1, 'An envelope has a schema version');
   return envelope.ok ? 0 : CLI_EXIT_CODES[envelope.error.code];
 }
 
@@ -107,6 +109,7 @@ export const DIFF_LIMITS = {
 
 /** The differences between two JSON values as paths, bounded. `truncated` is true when more existed than are listed. */
 export function diffJson(before: unknown, after: unknown): { readonly changes: readonly JsonChange[]; readonly truncated: boolean } {
+  assert(DIFF_LIMITS.changesMax > 0, 'A diff lists at least one change');
   const changes: JsonChange[] = [];
   let truncated = false;
   const walk = (left: unknown, right: unknown, path: string, depth: number): void => {

@@ -4,6 +4,7 @@
 // Why one reader for both: `stacki guides set --opacity 0.1` and the tool call `{ "opacity": 0.1 }` must mean the same, and refuse the same
 // mistakes (an unknown flag, a missing argument, a value of the wrong kind) with the same sentence. Unknown names are refused, never ignored: a
 // misspelt option that is silently dropped would apply a plan the person did not ask for.
+import { assert } from '../../core/assert';
 import { toRecord } from '../../core/record';
 import { err, ok, type Result } from '../../core/result';
 import { COMMANDS, commandByWords, type ArgSpec, type CommandSpec } from './stackiCommands';
@@ -38,11 +39,13 @@ const usage = (message: string): Result<never, CliError> => err({ code: 'usage',
 
 /** The flag spelling of an argument name: `widthMax` is `--width-max`. */
 export function flagOf(name: string): string {
+  assert(name.length > 0, 'An argument has a name');
   return `--${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 }
 
 /** A value read as the argument's kind, or why it is not. */
 export function readArgValue(spec: ArgSpec, raw: unknown): Result<unknown, CliError> {
+  assert(spec.name.length > 0, 'An argument spec has a name');
   switch (spec.kind) {
     case 'string':
       return typeof raw === 'string' && raw.length <= ARGS_LIMITS.valueCharsMax ? ok(raw) : usage(`${spec.name}: expected text`);
@@ -70,6 +73,7 @@ export function readArgValue(spec: ArgSpec, raw: unknown): Result<unknown, CliEr
 }
 
 function readJson(spec: ArgSpec, raw: unknown): Result<unknown, CliError> {
+  assert(spec.kind === 'json', 'Only a JSON argument reads JSON');
   if (typeof raw !== 'string') {
     // A tool call already carries a JSON value.
     return raw === undefined ? usage(`${spec.name}: a value is required`) : ok(raw);
@@ -87,6 +91,7 @@ function readJson(spec: ArgSpec, raw: unknown): Result<unknown, CliError> {
 
 /** Arguments from a tool call or a parsed line, checked against the row: unknown names, missing required ones, wrong kinds. */
 export function checkArgs(spec: CommandSpec, input: Readonly<Record<string, unknown>>): Result<Readonly<Record<string, unknown>>, CliError> {
+  assert(spec.words.length > 0, 'A command has words');
   const known = new Set(spec.args.map((argument) => argument.name));
   for (const name of Object.keys(input)) {
     if (!known.has(name)) {
@@ -113,6 +118,7 @@ export function checkArgs(spec: CommandSpec, input: Readonly<Record<string, unkn
 
 /** Splits a shell line (after the program name) into the command, its arguments and the global options. */
 export function parseLine(tokens: readonly string[], extra: readonly CommandSpec[] = []): Result<ParsedLine | 'top-help', CliError> {
+  assert(extra.length >= 0, 'Extra commands are a list');
   const table = [...COMMANDS, ...extra];
   if (tokens.length > ARGS_LIMITS.tokensMax) {
     return usage('Too many arguments.');
@@ -146,6 +152,7 @@ export function parseLine(tokens: readonly string[], extra: readonly CommandSpec
 const GLOBAL_WITH_VALUE = ['--project', '--role', '--as-role', '--login', '--wait'];
 
 function readRest(spec: CommandSpec, rest: readonly string[]): Result<ParsedLine, CliError> {
+  assert(spec.words.length > 0, 'A command has words');
   const raw: Record<string, unknown> = {};
   const global: Record<string, string> = {};
   const positional = spec.args.filter((argument) => argument.positional === true);
@@ -214,5 +221,6 @@ function readRest(spec: CommandSpec, rest: readonly string[]): Result<ParsedLine
 }
 
 export function recordOf(value: unknown): Record<string, unknown> {
+  assert(typeof value !== 'function', 'A value read is data, never a function');
   return toRecord(value) ?? {};
 }

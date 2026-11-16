@@ -27,7 +27,7 @@ const kindField = (kind: ProjectFolderKind, what: string): FieldSchema =>
   field(
     arrayOf(text(PROJECT_FOLDER_LIMITS.pathCharsMax, { charsMin: 1, pattern: folderPattern(kind) }), PROJECT_FOLDER_LIMITS.foldersPerKindMax, { unique: true }),
     `${what} Top-level folder: ${PROJECT_FOLDER_ROOTS[kind].join(', ')}; no folder inside or around another listed one. Absent reads ${DEFAULT_PROJECT_FOLDERS[kind].join(', ')}.`,
-    { commands: ['folders add', 'folders remove', 'folders set'] },
+    { commands: ['folders add', 'folders remove', 'folders reset'] },
   );
 
 const COLLECTION_NAME = '^[A-Za-z0-9_$-]+$';
@@ -64,7 +64,7 @@ export const FOLDERS_FILE: FileSchema = {
         ),
       ),
       'The folders each panel reads, only for the panels someone changed.',
-      { commands: ['folders add', 'folders remove', 'folders set'] },
+      { commands: ['folders add', 'folders remove', 'folders reset'] },
     ),
     cms: field(
       objectOf({
@@ -97,7 +97,7 @@ export const FOLDERS_FILE: FileSchema = {
   },
   empty: { version: 1, folders: {} },
   serialize: serializeFoldersDocument,
-  commands: ['folders add', 'folders remove', 'folders set'],
+  commands: ['folders add', 'folders remove', 'folders reset'],
   parserSources: ['shared/properties/projectFolders.ts'],
   parserKeyExceptions: {
     src: "A folder root in the default and allowed-root tables (components: ['src']), not a key of the file.",

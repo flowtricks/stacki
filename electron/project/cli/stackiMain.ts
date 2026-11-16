@@ -1,4 +1,4 @@
-// The `stacki` executable: `node dist/electron/project/cli/main.js <command>`, or the bundled bin.
+// The `stacki` executable: `node dist/electron/project/cli/stackiMain.js <command>`, or the bundled bin.
 import { main } from './cliMain';
 
 main(process.argv.slice(2), process.cwd(), (text) => process.stdout.write(text)).then(

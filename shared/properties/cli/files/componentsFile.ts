@@ -9,7 +9,7 @@ const COMPONENT_PATH = '^(?:src/|node_modules/(?:@[\\w.-]+/)?[\\w.-]+/)[\\w./ -]
 const COMPONENT_PATH_CHARS_MAX = 500;
 const PROP_NAME = '^[A-Za-z_][\\w:-]{0,99}$';
 const ELEMENT_NAME = '^[a-z][a-z0-9-]{0,99}$';
-const COMMANDS = ['components defaults set', 'components defaults unset'] as const;
+const COMMANDS = ['components rename', 'components move', 'components duplicate', 'components delete'] as const;
 
 const propValue = jsonValue('a string, a finite number or a boolean; componentDefaults.ts defaultValue refuses any other value and text over its size bound');
 
@@ -91,7 +91,7 @@ export const COMPONENTS_FILE: FileSchema = {
     ),
   },
   empty: { version: 1, components: {} },
-  commands: ['components defaults set', 'components defaults unset', 'components rename', 'components move', 'components duplicate', 'components delete'],
+  commands: ['components rename', 'components move', 'components duplicate', 'components delete'],
   parserSources: ['shared/properties/componentDefaults.ts'],
   parserKeyExceptions: {
     slot: 'A prop name inside a recipe (it places a child in a named slot), not a key of the file.',

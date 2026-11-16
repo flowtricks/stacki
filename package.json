@@ -5,6 +5,9 @@
   "description": "Stacki — a visual Astro builder with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
+  "bin": {
+    "stacki": "dist/cli/stacki.cjs"
+  },
   "imports": {
     "#dist/*": "./dist/*"
   },
@@ -26,6 +29,8 @@
     "roundtrip:report": "npm run build:runtime && node dist/scripts/reports/roundtripReport.js",
     "fixtures:large": "npm run build:runtime && node dist/scripts/reports/largeFixtures.js --write",
     "spike:editor-core": "npm run build:runtime && node test/simulator/spike.bench.ts",
+    "build:cli": "npm run build:scripts && node dist/scripts/build/bundleStackiCli.js",
+    "stacki": "node dist/electron/project/cli/stackiMain.js",
     "release": "npm run build:scripts && node dist/scripts/release/release.js",
     "build:contracts": "tsc -p shared/tsconfig.json",
     "build:electron": "tsc -p electron/tsconfig.json && npm run build:renderer",

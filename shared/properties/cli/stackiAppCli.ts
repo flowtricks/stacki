@@ -11,6 +11,7 @@
 // Why parsed apart from `parseAppManifest` (shared/properties/apps.ts): a malformed `cli` section must disable the app's COMMANDS, never the app,
 // so the manifest parser, which refuses a whole manifest, does not read it; this module reads the same file's `cli` value and answers with a
 // value (`none`, `ready`, `refused` with the reason) that `stacki apps commands` shows. Every list and string here is bounded (AGENTS.md section 10).
+import { assert } from '../../core/assert';
 import { toArray, toRecord } from '../../core/record';
 import { parseBundlePath } from '../apps';
 import { parseConfigPath, type PathSegment } from './stackiConfigPath';
@@ -128,6 +129,7 @@ const refuse = (message: string): never => {
  * the answer is `refused` with the reason, so the app still loads and only its commands are off.
  */
 export function parseAppCliSection(options: { readonly appId: string; readonly section: unknown; readonly permissionIds: readonly string[] }): AppCliParse {
+  assert(options.appId.length > 0, 'An app has an id');
   if (options.section === undefined) {
     return { kind: 'none' };
   }
@@ -142,6 +144,7 @@ export function parseAppCliSection(options: { readonly appId: string; readonly s
 }
 
 function readSection(appId: string, input: unknown, permissionIds: readonly string[]): AppCliSection {
+  assert(appId.length > 0, 'An app has an id');
   const section = toRecord(input);
   if (section === undefined) {
     return refuse('cli must be an object');
@@ -173,6 +176,7 @@ function readSection(appId: string, input: unknown, permissionIds: readonly stri
 // ----- Files -----
 
 function readFile(appId: string, input: unknown, where: string): AppCliFile {
+  assert(where.length > 0, 'A read says where it looks');
   const entry = recordOf(input, where);
   onlyKeys(entry, ['id', 'path', 'description', 'keys'], where);
   const id = stringOf(entry['id'], 1, 96, `${where}.id`);
@@ -196,6 +200,7 @@ function readFile(appId: string, input: unknown, where: string): AppCliFile {
 }
 
 function readFields(source: Readonly<Record<string, unknown>>, where: string, budget: unknown[], depth: number): Readonly<Record<string, FieldSchema>> {
+  assert(where.length > 0, 'A read says where it looks');
   const names = Object.keys(source);
   if (names.length === 0 || names.length > SCHEMA_LIMITS.fieldsMax) {
     return refuse(`${where}: list 1 to ${SCHEMA_LIMITS.fieldsMax} keys`);
@@ -230,6 +235,7 @@ function readFields(source: Readonly<Record<string, unknown>>, where: string, bu
 }
 
 function readType(input: unknown, where: string, budget: unknown[], depth: number): ValueSchema {
+  assert(where.length > 0, 'A read says where it looks');
   budget.push(where);
   if (budget.length > APP_CLI_LIMITS.schemaNodesMax) {
     return refuse(`${where}: the declared schema has more than ${APP_CLI_LIMITS.schemaNodesMax} nodes`);
@@ -310,6 +316,7 @@ function readType(input: unknown, where: string, budget: unknown[], depth: numbe
 }
 
 function readStringType(type: Readonly<Record<string, unknown>>, where: string): ValueSchema {
+  assert(where.length > 0, 'A read says where it looks');
   onlyKeys(type, ['kind', 'charsMax', 'charsMin', 'pattern'], where);
   const charsMax = boundedInteger(type['charsMax'], 1, APP_CLI_LIMITS.stringCharsMax, `${where}.charsMax`);
   const charsMin = type['charsMin'] === undefined ? undefined : boundedInteger(type['charsMin'], 0, charsMax, `${where}.charsMin`);
@@ -327,6 +334,7 @@ function readStringType(type: Readonly<Record<string, unknown>>, where: string):
 
 /** A pattern that compiles, is short, and has no repeated group that itself repeats (the shape that makes a regular expression run for minutes). */
 function checkPattern(pattern: unknown, where: string): void {
+  assert(where.length > 0, 'A check says where it looks');
   if (typeof pattern !== 'string' || pattern.length === 0 || pattern.length > APP_CLI_LIMITS.patternCharsMax) {
     return refuse(`${where} must be a pattern of 1 to ${APP_CLI_LIMITS.patternCharsMax} characters`);
   }
@@ -341,6 +349,7 @@ function checkPattern(pattern: unknown, where: string): void {
 }
 
 function fallbackOf(input: unknown, where: string): string | number | boolean | undefined {
+  assert(where.length > 0, 'A read says where it looks');
   if (input === undefined || typeof input === 'string' || typeof input === 'number' || typeof input === 'boolean') {
     return input;
   }
@@ -355,6 +364,7 @@ interface CommandContext {
 }
 
 function readCommand(appId: string, input: unknown, where: string, context: CommandContext): AppCliCommand {
+  assert(appId.length > 0, 'An app has an id');
   const entry = recordOf(input, where);
   onlyKeys(entry, ['name', 'description', 'input', 'writes', 'destructive', 'permission', 'owns', 'handler'], where);
   const name = stringOf(entry['name'], 1, APP_CLI_LIMITS.commandNameCharsMax, `${where}.name`);
@@ -392,6 +402,7 @@ function readCommand(appId: string, input: unknown, where: string, context: Comm
 }
 
 function readInputs(input: unknown, where: string): readonly AppCliInput[] {
+  assert(where.length > 0, 'A read says where it looks');
   if (input === undefined) {
     return [];
   }
@@ -417,6 +428,7 @@ function readInputs(input: unknown, where: string): readonly AppCliInput[] {
 }
 
 function readInput(name: string, input: unknown, where: string, options: { readonly required: boolean }): AppCliInput {
+  assert(name.length > 0, 'An input has a name');
   const required = options.required;
   if (!INPUT_NAME.test(name) || name.length > APP_CLI_LIMITS.inputNameCharsMax || RESERVED_INPUTS.includes(name)) {
     return refuse(
@@ -469,6 +481,7 @@ function readInput(name: string, input: unknown, where: string, options: { reado
 }
 
 function readOwn(input: unknown, where: string, context: CommandContext): AppCliOwn {
+  assert(where.length > 0, 'A read says where it looks');
   const entry = recordOf(input, where);
   onlyKeys(entry, ['file', 'keys'], where);
   const file = stringOf(entry['file'], 1, 96, `${where}.file`);
@@ -576,6 +589,7 @@ function readOperation(
 }
 
 function readValue(input: unknown, where: string, inputs: readonly AppCliInput[]): AppCliValue {
+  assert(where.length > 0, 'A read says where it looks');
   const reference = toRecord(input);
   if (reference !== undefined && Object.hasOwn(reference, '$input')) {
     const name = reference['$input'];
@@ -594,6 +608,7 @@ function readValue(input: unknown, where: string, inputs: readonly AppCliInput[]
 
 /** Whether `segments` of `file` are an owned key or inside one: the one rule every operation of a command passes, declarative or from a module. */
 export function ownsPath(owns: readonly AppCliOwn[], file: string, segments: readonly PathSegment[]): boolean {
+  assert(file.length > 0, 'A file has a name');
   return owns.some(
     (own) =>
       own.file === file &&
@@ -605,6 +620,7 @@ export function ownsPath(owns: readonly AppCliOwn[], file: string, segments: rea
 
 /** The registry entry of a declared file: validated by the declared keys, so a file with no app parser still cannot hold a key the app did not declare. */
 export function appFileSchema(appId: string, file: AppCliFile, commandNames: readonly string[]): FileSchema {
+  assert(appId.length > 0, 'An app has an id');
   const empty = Object.fromEntries(
     Object.entries(file.fields).flatMap(([key, entry]) => (entry.required && entry.default !== undefined ? [[key, entry.default]] : [])),
   );
@@ -635,6 +651,7 @@ export function appFileSchema(appId: string, file: AppCliFile, commandNames: rea
 
 /** The command table row of an app's command: its words are `[appId, name]`, so it can never be a core command. */
 export function appCommandSpec(appId: string, command: AppCliCommand): CommandSpec {
+  assert(appId.length > 0, 'An app has an id');
   const args: ArgSpec[] = command.inputs.map((input) => ({
     name: input.name,
     kind: input.kind,
@@ -658,10 +675,12 @@ export function appCommandSpec(appId: string, command: AppCliCommand): CommandSp
 // ----- Small readers -----
 
 function recordOf(input: unknown, where: string): Readonly<Record<string, unknown>> {
+  assert(where.length > 0, 'A read says where it looks');
   return toRecord(input) ?? refuse(`${where} must be an object`);
 }
 
 function listOf(input: unknown, max: number, where: string): readonly unknown[] {
+  assert(max >= 0, 'A list bound is not negative');
   if (input === undefined) {
     return [];
   }
@@ -673,6 +692,7 @@ function listOf(input: unknown, max: number, where: string): readonly unknown[] 
 }
 
 function stringOf(input: unknown, min: number, max: number, where: string): string {
+  assert(min <= max, 'A text range is ordered');
   if (typeof input !== 'string' || input.length < min || input.length > max) {
     return refuse(`${where} must be text of ${min} to ${max} characters`);
   }
@@ -683,12 +703,14 @@ function stringOf(input: unknown, min: number, max: number, where: string): stri
 }
 
 function boundedInteger(input: unknown, min: number, max: number, where: string): number {
+  assert(min <= max, 'A numeric range is ordered');
   return typeof input === 'number' && Number.isSafeInteger(input) && input >= min && input <= max
     ? input
     : refuse(`${where} must be a whole number from ${min} to ${max}`);
 }
 
 function onlyKeys(entry: Readonly<Record<string, unknown>>, allowed: readonly string[], where: string): void {
+  assert(allowed.length >= 0, 'Allowed keys are a list');
   for (const key of Object.keys(entry)) {
     if (!allowed.includes(key)) {
       refuse(`${where}.${key} is not a key (known: ${allowed.join(', ')})`);

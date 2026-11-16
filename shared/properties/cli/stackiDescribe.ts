@@ -1,8 +1,10 @@
 // i18n-ignore-file: the CLI and its MCP tools speak to agents and scripts in English; none of this is interface text.
 // A file's key reference as plain data: the one text `stacki schema`, the `stacki_schema` MCP tool and the MCP schema resources all print.
+import { assert } from '../../core/assert';
 import { describeType, SCHEMA_LIMITS, type FieldSchema, type FileSchema } from './stackiSchema';
 
 export function describeFileSchema(schema: FileSchema): unknown {
+  assert(schema.id.length > 0, 'A file has an id');
   return {
     id: schema.id,
     file: schema.file,
@@ -15,6 +17,7 @@ export function describeFileSchema(schema: FileSchema): unknown {
 }
 
 function describeFields(fields: Readonly<Record<string, FieldSchema>>, depth: number): unknown {
+  assert(depth >= 0, 'Depth counts from zero');
   if (depth > SCHEMA_LIMITS.depthMax) {
     return {};
   }

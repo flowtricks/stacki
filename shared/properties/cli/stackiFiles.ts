@@ -1,6 +1,7 @@
 // i18n-ignore-file: the CLI and its MCP tools speak to agents and scripts in English; none of this is interface text.
 // Every `.stacki` file the CLI can edit, by name, and every one it will never touch. This is the list the coverage test walks:
 // a file the app writes that is in neither list fails it (test/shared/properties/cli/stackiSchemaCoverage.test.ts).
+import { assert } from '../../core/assert';
 import { toRecord } from '../../core/record';
 import { err, ok, type Result } from '../../core/result';
 import { validateMetadata, type MetadataKind } from '../projectMetadata';
@@ -91,6 +92,7 @@ let appFiles: readonly FileSchema[] = [];
 
 /** Why `file` cannot be the path of a settings file `appId` declares, or undefined: its own folder or `.stacki/<appId>.json`, never a core path. */
 export function appFilePathProblem(appId: string, file: string): string | undefined {
+  assert(appId.length > 0, 'An app has an id');
   const own = `.stacki/${appId}.json`;
   const folder = `.stacki/apps/${appId}/`;
   if (file !== own && !file.startsWith(folder)) {
@@ -117,6 +119,7 @@ export function appFilePathProblem(appId: string, file: string): string | undefi
 
 /** Why `file` cannot be registered as an app's, or undefined: the checks every app file passes at load, the same for any app. */
 export function appFileProblem(file: FileSchema): string | undefined {
+  assert(file.id.length > 0, 'A file has an id');
   const appId = file.appId;
   if (appId === undefined) {
     return `${file.id} names no app`;
@@ -139,6 +142,7 @@ export function appFileProblem(file: FileSchema): string | undefined {
  * first and refused the app, so a failure here is a bug in the loader, not a bad app.
  */
 export function registerAppFiles(files: readonly FileSchema[]): void {
+  assert(files.length >= 0, 'Registered files are a list');
   if (files.length > APP_FILE_LIMITS.totalMax) {
     throw new Error(`Assertion failed: at most ${APP_FILE_LIMITS.totalMax} app files`);
   }
@@ -159,28 +163,34 @@ export function registerAppFiles(files: readonly FileSchema[]): void {
 }
 
 export function clearAppFiles(): void {
+  assert(allFiles().length >= 0, 'The registry is a list');
   appFiles = [];
 }
 
 /** The core files, then the files of the apps enabled in this run's project. */
 export function allFiles(): readonly FileSchema[] {
+  assert(STACKI_FILES.length > 0, 'The registry holds the core files');
   return appFiles.length === 0 ? STACKI_FILES : [...STACKI_FILES, ...appFiles];
 }
 
 export function fileSchemaById(id: string): FileSchema | undefined {
+  assert(id.length >= 0, 'An id has a length');
   return allFiles().find((file) => file.id === id);
 }
 
 export function fileSchemaByPath(file: string): FileSchema | undefined {
+  assert(file.length >= 0, 'A path has a length');
   return allFiles().find((entry) => entry.file === file);
 }
 
 export function isMetadataKind(kind: string | undefined): kind is MetadataKind {
+  assert(allFiles().length > 0, 'The registry is not empty');
   return kind !== undefined && STACKI_FILES.some((file) => file.metadataKind === kind);
 }
 
 /** The app's own parser applied to finished text: the reason it refuses, or undefined. Throws nothing. */
 export function refusalOfSource(file: FileSchema, source: string): string | undefined {
+  assert(file.file.startsWith('.stacki/'), 'A file is under .stacki');
   try {
     if (isMetadataKind(file.metadataKind)) {
       validateMetadata(file.metadataKind, source);
@@ -197,11 +207,13 @@ export function refusalOfSource(file: FileSchema, source: string): string | unde
 
 /** The text the app would write for `document`: its canonical writer when it has one, otherwise two-space JSON. */
 export function serializeDocument(file: FileSchema, document: Record<string, unknown>): string {
+  assert(file.file.startsWith('.stacki/'), 'A file is under .stacki');
   return file.serialize === undefined ? `${JSON.stringify(document, undefined, 2)}\n` : file.serialize(document);
 }
 
 /** A document read from text: the object, or why the file is not one. */
 export function parseDocumentText(file: FileSchema, source: string): Result<Record<string, unknown>, CliError> {
+  assert(file.file.startsWith('.stacki/'), 'A file is under .stacki');
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
