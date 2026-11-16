@@ -5,6 +5,7 @@
 
 import { assert } from '../../../shared/core/assert';
 import type { ImportDecl } from '../../../shared/page/pageNode';
+import { NAMED_ONLY_MODULES } from '../../../shared/engine/preflight';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { NEW_STYLE_TAG_RULES_TOKEN, templateFrame, type NewStyleTagSettings } from '../../../shared/properties/newStyleTag';
 import type { Translator } from '../../lib/i18n/localeContext';
@@ -130,8 +131,13 @@ function withoutSlot(entry: ImportDecl): ImportDecl {
 
 /** The target's frontmatter with the bundle's imports and statements added. */
 export function withBundleFrontmatter(imports: readonly ImportDecl[], statements: readonly string[]): (model: EditorModel) => EditorModel {
+  // Pre-flight's auto-fix, applied before the write: a default import of a named-only module
+  // (`import getCollection from 'astro:content'`, copied from a file that had it wrong) lands named.
+  const fixed = imports.map((entry) =>
+    entry.named !== true && entry.typeOnly !== true && NAMED_ONLY_MODULES.has(entry.path) ? { ...entry, named: true, imported: entry.name } : entry,
+  );
   return (model) => {
-    const added = imports.filter((entry) => !model.imports.some((existing) => existing.name === entry.name));
+    const added = fixed.filter((entry) => !model.imports.some((existing) => existing.name === entry.name));
     const extraFrontmatter =
       statements.length === 0
         ? model.extraFrontmatter

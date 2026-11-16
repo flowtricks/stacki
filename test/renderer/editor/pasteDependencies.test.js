@@ -268,6 +268,14 @@ test('imports are re-aimed for the target: components from the scan, relative pa
   );
 });
 
+test('a default import of a named-only module is repaired before the write (pre-flight auto-fix)', () => {
+  const apply = modules.withBundleFrontmatter([{ name: 'getCollection', path: 'astro:content', quote: "'" }], []);
+  const after = apply(model('<main />\n'));
+  const entry = after.imports.find((candidate) => candidate.name === 'getCollection');
+  assert.equal(entry.named, true);
+  assert.equal(entry.imported, 'getCollection');
+});
+
 test('a paste inside the file it was copied from is the ordinary paste', () => {
   const { node, source } = sourceOf(STAT_WRAP, component);
   const plan = modules.planPaste(node, source, modules.pasteTargetOf(model(STAT_WRAP), { path: component.path, role: 'component' }));

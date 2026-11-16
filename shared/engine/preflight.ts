@@ -368,7 +368,7 @@ function freeNames(code: string): readonly string[] {
 // --- Frontmatter ----------------------------------------------------------------------------
 
 // Modules whose exports are all named: a default import of them is undefined at run time.
-const NAMED_ONLY_MODULES: ReadonlySet<string> = new Set([
+export const NAMED_ONLY_MODULES: ReadonlySet<string> = new Set([
   'astro:content',
   'astro:assets',
   'astro:transitions',
