@@ -11,6 +11,7 @@
 // loopQueryRead.ts; placing it in the file is loopQueryPlan.ts.
 
 import { assert } from '../../shared/core/assert';
+import { parseExpression } from './loopSyntax';
 
 export const LOOP_QUERY_LIMITS = {
   conditionsMax: 12,
@@ -251,6 +252,57 @@ function ordersOffered(orders: readonly LoopSortOrder[], source: LoopSourceKind)
 // names the item: there is no `data` to destructure.
 const LIST_ITEM_PARAMETER: AstroItemParameter = { kind: 'entry', name: 'item' };
 
+/**
+ * Why `text` cannot be the list a loop reads, or undefined when it can: one
+ * bounded expression that parses. A list is whatever the loop's code names
+ * (`cards`, `page.data.cards`, `Object.entries(plans)`, `["a", "b"]`), so
+ * filter, sort and limit work on every loop and never only on known names.
+ */
+export function listExpressionProblem(text: string): string | undefined {
+  if (text.trim() === '') {
+    return 'empty';
+  }
+  if (text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
+    return 'tooLong';
+  }
+  return parseExpression(text) === undefined ? 'unparseable' : undefined;
+}
+
+/**
+ * A list expression as code a method can be chained on: wrapped in brackets
+ * unless it already binds tighter than a dot (`a ?? []`, `await load()` and a
+ * conditional would otherwise take the method for their last operand).
+ */
+export function chainableListCode(expression: string): string {
+  const parsed = parseExpression(expression);
+  assert(parsed !== undefined, 'A list expression parses');
+  switch (parsed.expression.kind) {
+    case 'name':
+    case 'member':
+    case 'index':
+    case 'call':
+    case 'new':
+    case 'array':
+      return expression;
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'object':
+    case 'function':
+    case 'await':
+    case 'null':
+    case 'unary':
+    case 'binary':
+    case 'conditional':
+    case 'other':
+      return `(${expression})`;
+    default: {
+      const exhaustive: never = parsed.expression;
+      return exhaustive;
+    }
+  }
+}
+
 /** A query with nothing narrowed: every item, in the source's own order. */
 export function emptyQuery(source: LoopSource): LoopQuery {
   const query: LoopQuery = {
@@ -276,8 +328,13 @@ export function emptyQuery(source: LoopSource): LoopQuery {
  */
 export function assertLoopQuery(query: LoopQuery): void {
   assertSelection(query);
-  assert(COLLECTION_NAME.test(query.source.collection), 'A loop source names a collection');
-  assert(query.source.collection.length <= LOOP_QUERY_LIMITS.collectionCharsMax, 'A collection name is short');
+  if (query.source.kind === 'list') {
+    // A list is any expression the loop reads: a name, a path, a call, a literal.
+    assert(listExpressionProblem(query.source.collection) === undefined, 'A list source is an expression that parses');
+  } else {
+    assert(COLLECTION_NAME.test(query.source.collection), 'A loop source names a collection');
+    assert(query.source.collection.length <= LOOP_QUERY_LIMITS.collectionCharsMax, 'A collection name is short');
+  }
   assert(query.conditions.length <= LOOP_QUERY_LIMITS.conditionsMax, 'A loop has a bounded number of conditions');
   assert(query.sorts.length <= LOOP_QUERY_LIMITS.sortsMax, 'A loop has a bounded number of sort keys');
   assert(Number.isSafeInteger(query.offset), 'An offset is a whole number');
@@ -508,8 +565,9 @@ export function listQueryCode(query: LoopQuery): string {
   const joiner = query.match === 'all' ? ' && ' : ' || ';
   const clauses = query.conditions.map((condition) => astroConditionCode(condition, parameter));
   const filter = clauses.length === 0 ? '' : `.filter((${parameter}) => ${clauses.join(joiner)})`;
-  const code = `${query.source.collection}${filter}${sortStepCode(query, [], 'toSorted')}${sliceCode(query.offset, query.limit)}`;
-  assert(code.startsWith(query.source.collection), 'A list query starts from its prop');
+  const base = chainableListCode(query.source.collection);
+  const code = `${base}${filter}${sortStepCode(query, [], 'toSorted')}${sliceCode(query.offset, query.limit)}`;
+  assert(code.startsWith(base), 'A list query starts from its list');
   return code;
 }
 

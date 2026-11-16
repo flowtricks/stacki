@@ -73,13 +73,28 @@ export function projectDataNames(tree: readonly TreeNode[], modules: Readonly<Re
   return names;
 }
 
+// The node whose path is `name`, at the top or inside another (`page.cards`): bounded by the tree's own caps.
+function nodeAt(tree: readonly TreeNode[] | undefined, name: string): TreeNode | undefined {
+  const pending: TreeNode[] = [...(tree ?? [])];
+  for (let visited = 0; pending.length > 0 && visited < LIMITS.treeNodesMax; visited++) {
+    const node = pending.shift();
+    if (node?.path === name) {
+      return node;
+    }
+    if (node?.children !== undefined && name.startsWith(`${node.path}.`)) {
+      pending.push(...node.children);
+    }
+  }
+  return undefined;
+}
+
 /**
  * The fields the first item of the list at root `name` has, read from the tree
  * (the project's list is sampled there), or undefined when the tree does not
  * hold that list's items. Items that are words or numbers are one field, the item itself.
  */
 export function treeListFields(tree: readonly TreeNode[] | undefined, name: string): readonly ProjectListField[] | undefined {
-  const root = tree?.find((node) => node.path === name);
+  const root = nodeAt(tree, name);
   const first = root?.children?.[0];
   if (first === undefined) {
     return undefined;

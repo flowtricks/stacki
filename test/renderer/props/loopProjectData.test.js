@@ -230,9 +230,11 @@ test('a loop over an imported list reads as that list, with list settings, not a
     assert.deepEqual(reading.query.source, { kind: 'list', collection: 'NAV_LINKS' }, data);
   }
   const package_ = [{ name: 'items', imported: 'items', path: 'some-package', quote: "'", named: true }];
-  assert.equal(readLoop({ frontmatter: '', imports: package_, data: 'items' }).kind, 'value', 'a package’s export is not the project’s data');
+  const packaged = readLoop({ frontmatter: '', imports: package_, data: 'items' });
+  assert.equal(packaged.kind, 'query', 'a package’s export is a list the loop reads too');
+  assert.equal(packaged.query.source.collection, 'items');
   const called = readLoop({ frontmatter: '', imports: IMPORTS, data: 'NAV_LINKS()' });
-  assert.notEqual(called.kind, 'query', 'a call is not a list');
+  assert.equal(called.query.source.collection, 'NAV_LINKS()', 'a call is the list it returns, not the project’s data list');
 });
 
 test('an imported list is in the group, checked by its own name, wherever it was picked', () => {

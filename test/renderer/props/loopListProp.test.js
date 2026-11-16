@@ -139,15 +139,17 @@ test('a local read by another name, and a prop with no type, are lists too', () 
   assert.equal(listPropOf(words, 'features').fields, undefined, 'a list of words has no item fields');
 });
 
-test('what is not a list prop reads as it always did', () => {
+test('what is not a list prop is still a list the loop reads, with its own fields unknown', () => {
   const text = 'interface Props {\n  features?: string;\n}\nconst { features = "" } = Astro.props;\n';
-  assert.equal(read('features', text).kind, 'value', 'a prop that holds words');
-  assert.equal(read('features', 'const { features = "" } = Astro.props;\n').kind, 'value', 'an untyped prop with a default of words');
-  assert.equal(read('features', 'const { features } = Astro.props;\n').kind, 'value', 'an untyped prop with nothing to say it is a list');
-  assert.equal(read('other').kind, 'value', 'a name no prop gives');
-  assert.equal(read('features.items').kind, 'value', 'a path into the prop is not the prop');
+  const listOf = (data, frontmatter) => read(data, frontmatter).query?.source;
+  assert.deepEqual(listOf('features', text), { kind: 'list', collection: 'features' }, 'a prop that holds words');
+  assert.deepEqual(listOf('features', 'const { features } = Astro.props;\n'), { kind: 'list', collection: 'features' });
+  assert.deepEqual(listOf('other'), { kind: 'list', collection: 'other' }, 'a name no prop gives');
+  assert.deepEqual(listOf('features.items'), { kind: 'list', collection: 'features.items' }, 'a path into the prop is its own list');
   const held = `${FRONTMATTER}const visible = features.filter((item) => item.on);\n`;
-  assert.equal(read('visible', held).kind, 'value', 'a list held in a constant stays a value');
+  const visible = read('visible', held);
+  assert.deepEqual(visible.query.source, { kind: 'list', collection: 'visible' }, 'a list held in a constant: the head’s steps are the settings');
+  assert.deepEqual(visible.chain, ['visible'], 'and the constant is still where the list is held');
 });
 
 test('each control writes its expression and reads back as the same query', () => {

@@ -24,7 +24,7 @@ import { listCollectionOf, readOptionsQuery, type OptionsHome } from './optionsQ
 import { chainOf, conditionOf } from './loopConditionRead';
 import { curatedSelection, entriesSelection, pickedIds } from './loopSelectionRead';
 import { readComparator } from './loopSortRead';
-import { LOOP_QUERY_LIMITS, assertLoopQuery, emptyQuery } from './loopQuery';
+import { LOOP_QUERY_LIMITS, assertLoopQuery, chainableListCode, emptyQuery, listExpressionProblem } from './loopQuery';
 import type { AstroItemParameter, LoopCondition, LoopFieldKind, LoopQuery, LoopSort, LoopSortOrder, LoopSource } from './loopQuery';
 import { namePath, parseExpression, parseFrontmatter, textOf, type Js, type ParsedFrontmatter } from './loopSyntax';
 import { issue, type Issue } from './issue';
@@ -42,6 +42,20 @@ export interface LoopReadInput {
   readonly imports: readonly LoopImport[];
   /** The loop's data expression: `posts`, `posts.slice(0, 3)`. */
   readonly data: string;
+  /**
+   * What a list another file's function returns reads as. `traced` (the default)
+   * leaves it a value, whose settings live where the function's query does;
+   * `list` reads the steps in the loop's own head as its settings, for a call
+   * whose query cannot be edited from here.
+   */
+  readonly calls?: 'traced' | 'list' | undefined;
+  /**
+   * What a list's steps read as when the settings cannot say them all. `partial`
+   * (the default) reads the list and keeps the code, as a notice. `kept` reads
+   * the whole expression as the list, so settings are added after the code the
+   * person wrote, which is neither shown as controls nor rewritten.
+   */
+  readonly unreadSteps?: 'partial' | 'kept' | undefined;
   /** What a field holds, when the collection's schema is known. */
   readonly fieldKind?: ((source: LoopSource, path: string) => LoopFieldKind | undefined) | undefined;
 }
@@ -83,6 +97,26 @@ const CHAIN_STEPS_MAX = 8;
 const STEPS_MAX = 16;
 
 export function readLoop(input: LoopReadInput): LoopReading {
+  const reading = readLoopAsWritten(input);
+  if (reading.kind !== 'partial' || input.unreadSteps !== 'kept') {
+    return reading;
+  }
+  return keptReading(input, reading.chain) ?? reading;
+}
+
+// Every step the list takes is code the settings leave alone: the list is the
+// whole expression, with nothing narrowed yet, so what is set is added after it.
+function keptReading(input: LoopReadInput, chain: readonly string[]): LoopReading | undefined {
+  const data = input.data.trim();
+  const parsed = parseExpression(data);
+  if (parsed === undefined || listExpressionProblem(data) !== undefined) {
+    return undefined;
+  }
+  const context: Context = { input, frontmatter: parseFrontmatter(input.frontmatter) };
+  return stepsReading({ source: { kind: 'list', collection: data }, steps: [], chain, filter: undefined, itemPath: [] }, context);
+}
+
+function readLoopAsWritten(input: LoopReadInput): LoopReading {
   const data = input.data.trim();
   if (data === '' || data === '[]') {
     return { kind: 'empty' };
@@ -95,10 +129,22 @@ export function readLoop(input: LoopReadInput): LoopReading {
   const context: Context = { input, frontmatter };
   const pipeline = pipelineOf({ source: parsed.source, node: parsed.expression }, context, []);
   if (pipeline.kind === 'value') {
-    return listPropReading(pipeline, context) ?? { kind: 'value', root: pipeline.root, origin: originOf(pipeline.root, context), chain: pipeline.chain };
+    const origin = originOf(pipeline.root, context);
+    const held = listPropReading(pipeline, context);
+    if (held !== undefined) {
+      return held;
+    }
+    // Every other list is read where the loop reads it: the steps in its head are
+    // its filter, sort and limit, whatever the list is (a path, a props array).
+    // A list another file's function returns keeps its own settings, unless asked.
+    const headed =
+      origin.kind === 'call' && input.calls !== 'list'
+        ? undefined
+        : headListReading({ source: parsed.source, node: parsed.expression }, context, pipeline.chain);
+    return headed ?? { kind: 'value', root: pipeline.root, origin, chain: pipeline.chain };
   }
   if (pipeline.kind === 'unknown') {
-    return { kind: 'code' };
+    return headListReading({ source: parsed.source, node: parsed.expression }, context, []) ?? { kind: 'code' };
   }
   if (pipeline.kind === 'options') {
     return { kind: 'query', query: pipeline.query, chain: pipeline.chain, client: undefined, home: pipeline.home };
@@ -156,15 +202,34 @@ export function readPipeline(input: LoopReadInput): LoopPipeline | undefined {
   const pipeline = pipelineOf({ source: parsed.source, node: parsed.expression }, context, []);
   const headOffset = parsed.source.indexOf(data);
   assert(headOffset >= 0, 'A parsed expression holds its own text');
+  if (input.unreadSteps === 'kept') {
+    const written = readLoopAsWritten(input);
+    if (written.kind === 'partial') {
+      // The steps are kept as part of the list, so none of them is a step to rewrite.
+      return {
+        source: { kind: 'list', collection: data },
+        base: chainableListCode(data),
+        steps: [],
+        filterArgument: undefined,
+        itemPath: [],
+        chain: written.chain,
+        headOffset,
+      };
+    }
+  }
   const placed = (step: Step): PipelineStep => ({
     place: step.call.source === parsed.source ? 'head' : 'frontmatter',
     source: step.call.source,
     call: step.call.node,
   });
+  if (pipeline.kind === 'unknown') {
+    return headListPipeline({ source: parsed.source, node: parsed.expression }, context, { chain: [], headOffset });
+  }
   if (pipeline.kind === 'value') {
     const reading = listPropReading(pipeline, context);
     if (reading === undefined) {
-      return undefined;
+      const called = originOf(pipeline.root, context).kind === 'call' && input.calls !== 'list';
+      return called ? undefined : headListPipeline({ source: parsed.source, node: parsed.expression }, context, { chain: pipeline.chain, headOffset });
     }
     const source: LoopSource = { kind: 'list', collection: pipeline.root };
     return {
@@ -199,6 +264,76 @@ export function readPipeline(input: LoopReadInput): LoopPipeline | undefined {
     itemPath: base.list?.itemPath ?? ['data'],
     chain: pipeline.chain,
     headOffset,
+  };
+}
+
+// A list read where the loop reads it: the head's trailing method calls are the
+// steps, and what they are called on is the list, whatever it is. It is the one
+// reading every loop has, so Filters, Sort and Limit show whatever the source.
+interface HeadList {
+  readonly base: Located;
+  /** Nearest the list first, as the code runs them. */
+  readonly steps: readonly Step[];
+}
+
+function headListOf(start: Located): HeadList | undefined {
+  const peeled: Step[] = [];
+  let current = start;
+  for (let pass = 0; pass <= STEPS_MAX; pass++) {
+    const step = stepOf(current);
+    if (step === undefined || !isSettingStep(step.step) || isOptionalCall(current.node)) {
+      const text = textOf(current, current.node);
+      return listExpressionProblem(text) === undefined ? { base: current, steps: peeled.reverse() } : undefined;
+    }
+    peeled.push(step.step);
+    current = step.from;
+  }
+  // A longer chain is not a list's settings.
+  return undefined;
+}
+
+// A step that is not a setting's method (`.map`, `.flatMap`, `.concat`) reshapes
+// the list: what it is called on and it together are the list, kept as written.
+function isSettingStep(step: Step): boolean {
+  return step.kind !== 'other' || METHOD_STEPS.has(step.name);
+}
+
+// `list?.filter(…)` does not throw for a missing list, which a rewritten
+// `list.filter(…)` would: the whole call is part of the list, kept as written.
+function isOptionalCall(node: Js): boolean {
+  return node.kind === 'call' && node.callee.kind === 'member' && node.callee.optional;
+}
+
+function headListReading(start: Located, context: Context, chain: readonly string[]): LoopReading | undefined {
+  const head = headListOf(start);
+  if (head === undefined) {
+    return undefined;
+  }
+  const source: LoopSource = { kind: 'list', collection: textOf(head.base, head.base.node) };
+  const reading = stepsReading({ source, steps: head.steps, chain, filter: undefined, itemPath: [] }, context);
+  assert(reading.kind === 'query' || reading.kind === 'partial', 'A head list’s steps read as a query or partly');
+  return reading;
+}
+
+function headListPipeline(
+  start: Located,
+  context: Context,
+  held: { readonly chain: readonly string[]; readonly headOffset: number },
+): LoopPipeline | undefined {
+  const head = headListOf(start);
+  if (head === undefined) {
+    return undefined;
+  }
+  void context;
+  const text = textOf(head.base, head.base.node);
+  return {
+    source: { kind: 'list', collection: text },
+    base: chainableListCode(text),
+    steps: head.steps.map((step) => ({ place: 'head' as const, source: step.call.source, call: step.call.node })),
+    filterArgument: undefined,
+    itemPath: [],
+    chain: held.chain,
+    headOffset: held.headOffset,
   };
 }
 

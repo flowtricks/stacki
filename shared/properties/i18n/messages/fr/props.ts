@@ -420,6 +420,17 @@ export const messages = {
   'props.loop.source.title': 'Source', // same
   'props.loop.source.typeItems': 'saisissez les éléments',
   'props.loop.source.via': 'via {name}', // same
+  'props.loop.note.kept':
+  'props.loop.note.unknownShape':
+  'props.loop.typed.boolean': 'Oui ou non',
+  'props.loop.typed.date': 'Date',
+  'props.loop.typed.invalid': 'Utilisez un nom de champ comme title ou author.name.',
+  'props.loop.typed.number': 'Nombre',
+  'props.loop.typed.path': 'Nom du champ',
+  'props.loop.typed.placeholder': 'title ou author.name',
+  'props.loop.typed.text': 'Texte',
+  'props.loop.typed.type': 'Type',
+  'props.loop.typed.use': 'Utiliser ce champ',
   'props.loop.value': 'Valeur',
   'props.loop.when': 'Quand',
   'props.map.code': 'Code', // same

@@ -424,6 +424,17 @@ export const messages = {
   'props.loop.source.title': 'Quelle',
   'props.loop.source.typeItems': 'Einträge eintippen',
   'props.loop.source.via': 'über {name}',
+  'props.loop.note.kept':
+  'props.loop.note.unknownShape':
+  'props.loop.typed.boolean': 'An oder aus',
+  'props.loop.typed.date': 'Datum',
+  'props.loop.typed.invalid': 'Verwenden Sie einen Feldnamen wie title oder author.name.',
+  'props.loop.typed.number': 'Zahl',
+  'props.loop.typed.path': 'Feldname',
+  'props.loop.typed.placeholder': 'title oder author.name',
+  'props.loop.typed.text': 'Text',
+  'props.loop.typed.type': 'Typ',
+  'props.loop.typed.use': 'Dieses Feld verwenden',
   'props.loop.value': 'Wert',
   'props.loop.when': 'Wenn',
   'props.map.code': 'Code', // same

@@ -421,6 +421,7 @@ function MapListSettings({ props, children }: { readonly props: MapEditorProps; 
   return (
     <LoopSettings
       input={input}
+      item={parseMapHead(node.head)?.item}
       projectPath={projectPath}
       filePath={dataContext?.filePath}
       lists={lists}

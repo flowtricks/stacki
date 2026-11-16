@@ -18,6 +18,7 @@ import {
 } from '../../editor/loopQuery';
 import { type CatalogField, type LoopCatalog } from './loopCatalog';
 import { FieldPicker, type FieldExtra } from './LoopFieldPicker';
+import { TypedFieldForm, type TypedFieldSupport } from './LoopTypedFieldForm';
 import { useCollectionSample } from './loopSettingsData';
 import { customSortProblem, fieldNamed, limitReset, orderLabels, sortParts, sortReset, wholeNumberOf } from './loopSettingsModel';
 import { AppliedLabel, CodeBox, EditorRow, ListRow, SectionHeader } from './LoopRows';
@@ -73,13 +74,19 @@ function SortEditor(props: SortSectionProps) {
   const translate = useTranslate();
   const { query, fields } = props;
   const [open, setOpen] = useState<number | undefined>(undefined);
+  // A sort being started on a field typed by name, for a list whose items are unseen.
+  const [naming, setNaming] = useState(false);
   const source = query.source.kind;
   const sortable = (fields ?? []).filter((field) => sortOrderFor(field.kind, source) !== undefined);
   const first = sortable[0];
   const custom = query.customSort;
   // With no field to sort by, a list that is code can still be sorted by code.
   const codeAllowed = props.randomOrder === 'available';
-  const addable = !query.random && custom === undefined && query.sorts.length < LOOP_QUERY_LIMITS.sortsMax && (first !== undefined || codeAllowed);
+  const addable =
+    !query.random &&
+    custom === undefined &&
+    query.sorts.length < LOOP_QUERY_LIMITS.sortsMax &&
+    (first !== undefined || codeAllowed || props.typed !== undefined);
   // The sorts as code that orders the same way; a custom sort starts from it.
   const toCustom = (): void => {
     const itemPath = source === 'sanity' ? [] : (props.itemPath ?? ['data']);
@@ -88,6 +95,10 @@ function SortEditor(props: SortSectionProps) {
     props.onChange({ ...query, sorts: [], random: false, customSort: seed });
   };
   const add = (): void => {
+    if (first === undefined && props.typed !== undefined) {
+      setNaming(true);
+      return;
+    }
     if (first === undefined) {
       toCustom();
       setOpen(0);
@@ -136,8 +147,29 @@ function SortEditor(props: SortSectionProps) {
         addable={addable}
         onAdd={add}
       />
-      {(query.random || query.sorts.length > 0 || custom !== undefined) && (
+      {(query.random || query.sorts.length > 0 || custom !== undefined || naming) && (
         <div className="loop-settings-list">
+          {naming && props.typed !== undefined && (
+            <ListRow
+              parts={{ lead: translate('props.loop.field'), rest: translate('props.loop.sort.title') }}
+              open={true}
+              removeLabel={translate('props.loop.sort.remove')}
+              editor={
+                <TypedFieldForm
+                  item={props.typed.item}
+                  onUse={(field) => {
+                    const order = sortOrderFor(field.kind, source);
+                    setNaming(false);
+                    if (order !== undefined) {
+                      props.onChange({ ...query, sorts: [...query.sorts, { field: field.path, direction: 'ascending', order }] });
+                    }
+                  }}
+                />
+              }
+              onToggle={() => setNaming(false)}
+              onRemove={() => setNaming(false)}
+            />
+          )}
           {query.random && <RandomRow onRemove={() => props.onChange({ ...query, random: false })} />}
           {custom !== undefined && (
             <CustomSortRow
@@ -158,6 +190,7 @@ function SortEditor(props: SortSectionProps) {
                   source={source}
                   fields={fields}
                   extras={extras}
+                  typed={props.typed}
                   sample={sample}
                   open={open === index}
                   onToggle={() => setOpen(open === index ? undefined : index)}
@@ -226,6 +259,7 @@ function SortChip(props: {
   readonly source: LoopSourceKind;
   readonly fields: readonly CatalogField[] | undefined;
   readonly extras: readonly FieldExtra[];
+  readonly typed: TypedFieldSupport | undefined;
   readonly sample: unknown;
   readonly open: boolean;
   readonly onToggle: () => void;
@@ -235,7 +269,7 @@ function SortChip(props: {
 }) {
   const translate = useTranslate();
   const { sort } = props;
-  const changeField = (path: string): void => {
+  const changeField = (path: string, typed?: CatalogField): void => {
     if (path === RANDOM_FIELD) {
       props.onRandom();
       return;
@@ -244,7 +278,7 @@ function SortChip(props: {
       props.onCustom();
       return;
     }
-    const field = fieldNamed(props.fields, path);
+    const field = typed ?? fieldNamed(props.fields, path);
     const orders = field === undefined ? [] : sortOrdersFor(field.kind, props.source);
     // A field that sorts the same way keeps the order; another takes its own default.
     const order = orders.includes(sort.order) ? sort.order : orders[0];
@@ -278,6 +312,7 @@ function SortChip(props: {
                 fields={props.fields ?? []}
                 sample={props.sample}
                 extras={props.extras}
+                typed={props.typed}
                 usable={(field) => sortOrdersFor(field.kind, props.source).length > 0}
                 onChange={changeField}
               />

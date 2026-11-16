@@ -24,7 +24,7 @@ import { assert } from '../../../shared/core/assert';
 import { emptyQuery, type LoopFieldKind, type LoopQuery, type LoopSource } from '../../editor/loopQuery';
 import { readLoop, readingChain, type LoopReadInput, type LoopReading, type QueryHome } from '../../editor/loopQueryRead';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
-import { isArrayLiteral, literalCode, literalItems, STARTER_ITEMS, writtenListFields } from '../../editor/loopLiteral';
+import { isArrayLiteral, literalCode, literalItems, literalListFields, STARTER_ITEMS, writtenListFields } from '../../editor/loopLiteral';
 import { LiteralItemsSection } from './LoopLiteralItems';
 import { fieldListOf, type FieldList } from '../../editor/loopFieldList';
 import { fieldListPath, SourcePicker, sourcePath, type NewListOffer, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
@@ -50,6 +50,8 @@ import type { BindingContext } from './LoopBinding';
 import { LOOP_SETTINGS, type LoopSetting, type SettingHome } from '../../editor/optionsQuery';
 import { LoopLineage, tracedCollection, useLoopTrace, type TracedCollection } from './LoopLineage';
 import { FilterSection } from './LoopFilters';
+import { withTypedFields } from './loopTypedField';
+import type { TypedFieldSupport } from './LoopTypedFieldForm';
 import { LimitSection, SortSection } from './LoopOrder';
 import { editableTrace, loadSanitySample, useCatalogFields, useLoopCatalog, writeTracedQuery } from './loopSettingsData';
 import { ItemsSection } from './LoopItems';
@@ -84,6 +86,8 @@ export interface LoopSettingsProps {
   readonly onEditProperty?: ((key: string, edit: { readonly name: string; readonly description: string }) => Promise<string | undefined>) | undefined;
   /** A button opening the code that declares `name`, the list's holder, at the Source row (`anchorRef`). */
   readonly sourceButton?: ((name: string, anchorRef: RefObject<HTMLElement>) => ReactNode) | undefined;
+  /** The loop's item name (`card` in `.map((card) => …)`), which a typed field may lead with. */
+  readonly item?: string | undefined;
   /** The page's data, for the Source picker's tree of what a loop can go over. */
   readonly pickerData?: SourcePickerData | undefined;
   /** The open component, when the loop is in one: the Source menu can make a List property for it. */
@@ -135,6 +139,12 @@ function readingLabel(reading: LoopReading, data: string, catalog: LoopCatalog |
   return reading.kind === 'value' ? data.trim() : undefined;
 }
 
+// Whether the loop is read as a list the loop's own code names: any source without a collection behind it.
+function isListReading(reading: LoopReading): boolean {
+  const source = reading.kind === 'query' ? reading.query.source : reading.kind === 'partial' ? reading.source : undefined;
+  return source?.kind === 'list';
+}
+
 const NOTICE_MS = 6_000;
 
 export default function LoopSettings(props: LoopSettingsProps) {
@@ -142,9 +152,17 @@ export default function LoopSettings(props: LoopSettingsProps) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
   const [notice, setNotice] = useNotice();
-  const { reading, fields, sections } = useLoopReading(props.input, props.projectPath, catalog, props.pickerData?.tree);
+  const tree = props.pickerData?.tree;
+  // A list another file's function returns is edited where its query lives; when that cannot be
+  // edited from here, the loop's own head takes the settings, as for every other list.
+  const asCalled = useLoopReading(props.input, props.projectPath, catalog, tree, 'traced');
+  const traced = useTracedEditing(asCalled.reading, { projectPath: props.projectPath, filePath: props.filePath, catalog }, setNotice);
+  const calledList = asCalled.reading.kind === 'value' && asCalled.reading.origin.kind === 'call' && traced.editable === undefined;
+  const asList = useLoopReading(props.input, props.projectPath, catalog, tree, 'list');
+  const { reading, fields, kept } = calledList ? asList : asCalled;
+  // Section code boxes rewrite steps where they are written, which needs the list read as written.
+  const sections = kept || calledList ? undefined : asCalled.sections;
   const holder = readingChain(reading)[0];
-  const traced = useTracedEditing(reading, { projectPath: props.projectPath, filePath: props.filePath, catalog }, setNotice);
   const apply = (target: LoopTarget): void => {
     const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
     const before = readingLabel(reading, props.input.data, catalog);
@@ -163,13 +181,13 @@ export default function LoopSettings(props: LoopSettingsProps) {
     return result.ok ? undefined : translateDescribed(result);
   };
   const code = sections === undefined ? undefined : sectionCodeContext(sections, { input: props.input, fields, applySection, applyQuery: apply }, translate);
-  const literal = reading.kind === 'code' ? literalItems(props.input.data) : undefined;
+  const literal = reading.kind === 'empty' ? undefined : literalItems(props.input.data);
   // Any array literal gets the Items section: rows for strings, the `{}` code box for the rest.
-  const arrayLiteral = reading.kind === 'code' && isArrayLiteral(props.input.data);
+  const arrayLiteral = reading.kind !== 'empty' && isArrayLiteral(props.input.data);
   const readerOf = (path: string, exported: string): string | undefined =>
     props.input.imports.find((entry) => entry.path === path && (entry.imported ?? entry.name) === exported)?.name;
   const readers = { astro: readerOf('astro:content', 'getCollection'), sanity: readerOf('sanity:client', 'sanityClient') };
-  const fieldList = reading.kind === 'code' ? fieldListOf(props.input.frontmatter, props.input.data, readers) : undefined;
+  const fieldList = reading.kind === 'code' || isListReading(reading) ? fieldListOf(props.input.frontmatter, props.input.data, readers) : undefined;
   const binding = bindingFor(
     reading,
     { frontmatter: props.input.frontmatter, filePath: props.filePath },
@@ -205,6 +223,8 @@ export default function LoopSettings(props: LoopSettingsProps) {
         data={props.input.data}
         onItemsCode={applyItemsCode}
         code={code}
+        item={props.item}
+        kept={kept}
         onApply={apply}
       />
       {props.children}
@@ -337,9 +357,14 @@ function ReadingSettings(props: {
   readonly projectPath: string | undefined;
   /** The list's sections as code, when it splits into them. */
   readonly code: SectionCodeContext | undefined;
+  /** The loop's item name, for typing a field. */
+  readonly item: string | undefined;
+  /** Whether the list's own steps are kept as written, with what is set here applied after them. */
+  readonly kept: boolean;
   readonly onApply: (target: LoopTarget) => void;
 }) {
   const { reading, fields, literal, onApply, code } = props;
+  const translate = useTranslate();
   const shared = { catalog: props.catalog, projectPath: props.projectPath };
   return (
     <>
@@ -353,6 +378,7 @@ function ReadingSettings(props: {
         <QuerySections
           {...shared}
           query={code.sections.query}
+          item={props.item}
           fields={fields}
           stored="code"
           itemPath={code.sections.itemPath}
@@ -360,10 +386,12 @@ function ReadingSettings(props: {
           onChange={(query) => onApply({ kind: 'query', query, fields: fields ?? [] })}
         />
       )}
+      {props.kept && <div className="loop-lineage-note">{translate('props.loop.note.kept')}</div>}
       {reading.kind === 'query' && reading.query.source.kind === 'list' && (
         <QuerySections
           {...shared}
           query={reading.query}
+          item={props.item}
           fields={fields}
           stored="code"
           itemPath={[]}
@@ -521,11 +549,14 @@ function QuerySections(props: {
   /** Where a kept list's items hold their fields: what custom code starts from. */
   readonly itemPath?: readonly string[] | undefined;
   readonly binding?: BindingContext | undefined;
+  /** The loop's item name, for typing a field of a list whose items are not known. */
+  readonly item?: string | undefined;
   /** Each section as code. Absent where settings are not code: data, another file's query. */
   readonly code?: SectionCodeContext | undefined;
   readonly onChange: (query: LoopQuery) => void;
 }) {
   const { code } = props;
+  const translate = useTranslate();
   const filterCode = useSectionCode('filter', code);
   const sortCode = useSectionCode('sort', code);
   const limitCode = useSectionCode('limit', code);
@@ -546,12 +577,20 @@ function QuerySections(props: {
   // nor another file's query string can hold one.
   const operatorSet = props.stored === 'data' ? 'data' : 'code';
   const randomOrder = props.stored === 'code' ? 'available' : 'unavailable';
+  // A list's items are whatever its code makes them, so a field can always be typed
+  // by name, and a field the code already uses is shown as one.
+  const typed: TypedFieldSupport | undefined = props.query.source.kind === 'list' ? { item: props.item } : undefined;
+  const fields = withTypedFields(props.fields, props.query);
   return (
     <>
+      {typed !== undefined && (props.fields === undefined || props.fields.length === 0) && (
+        <div className="loop-lineage-note">{translate('props.loop.note.unknownShape')}</div>
+      )}
       {filterCode.editor ?? (
         <FilterSection
+          typed={typed}
           query={props.query}
-          fields={props.fields}
+          fields={fields}
           catalog={props.catalog}
           projectPath={props.projectPath}
           operatorSet={operatorSet}
@@ -563,8 +602,9 @@ function QuerySections(props: {
       )}
       {sortCode.editor ?? (
         <SortSection
+          typed={typed}
           query={props.query}
-          fields={props.fields}
+          fields={fields}
           catalog={props.catalog}
           projectPath={props.projectPath}
           itemPath={props.itemPath}
@@ -627,11 +667,20 @@ function useNotice(): readonly [Notice | undefined, (notice: Notice | undefined)
 // Read once for the source, then again with its fields' kinds, which settle
 // what `data.featured` alone means (a switch is on; anything else is code).
 function useLoopReading(
-  input: Omit<LoopReadInput, 'fieldKind'>,
+  given: Omit<LoopReadInput, 'fieldKind'>,
   projectPath: string | undefined,
   catalog: LoopCatalog | undefined,
   tree: readonly TreeNode[] | undefined,
+  calls: 'traced' | 'list',
 ) {
+  // A list whose steps the controls cannot split (a filter after a slice) is read
+  // whole, so the controls still show and apply after the code, which stays as written.
+  const { input, kept } = useMemo(() => {
+    const plain = { ...given, calls, unreadSteps: 'partial' as const };
+    const reading = readLoop(plain);
+    const split = reading.kind === 'partial' && readSections(plain) === undefined;
+    return { input: split ? { ...plain, unreadSteps: 'kept' as const } : plain, kept: split };
+  }, [given, calls]);
   const first = useMemo(() => readLoop(input), [input]);
   const firstSource = first.kind === 'query' ? first.query.source : first.kind === 'partial' ? first.source : undefined;
   const catalogFields = useCatalogFields(projectPath, catalog, firstSource);
@@ -651,7 +700,7 @@ function useLoopReading(
     const fieldKind = (_source: LoopSource, path: string): LoopFieldKind | undefined => fieldNamed(fields, path)?.kind;
     return readSections({ ...input, fieldKind });
   }, [fields, input]);
-  return { reading, fields, sections };
+  return { reading, fields, sections, kept };
 }
 
 // The fields a List prop's item type declares, or those a list written out in
@@ -662,7 +711,7 @@ function listSourceFields(frontmatter: string, name: string, tree: readonly Tree
     return prop.fields === undefined ? undefined : listItemFields(prop.fields);
   }
   // A list imported from a project module has no declaration here: its first item, as the tree samples it, says.
-  const written = writtenListFields(frontmatter, name) ?? treeListFields(tree, name);
+  const written = writtenListFields(frontmatter, name) ?? literalListFields(name) ?? treeListFields(tree, name);
   return written?.map((field) => ({ path: field.path, title: titled(field.path), kind: field.kind, options: [], references: [] }));
 }
 

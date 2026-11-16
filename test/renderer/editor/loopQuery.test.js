@@ -111,12 +111,13 @@ assert.deepEqual(read('const pastors = await getCampusPastors();', 'pastors', [{
   exportName: 'getCampusPastors',
   spec: '@/sanity/queries',
 });
-assert.equal(read('', 'Astro.props.items').kind, 'value');
-assert.equal(read('', 'post.data.tags').kind, 'value');
+// Any other list is read where the loop reads it, as a list of the loop's own code.
+assert.deepEqual(read('', 'Astro.props.items').query.source, { kind: 'list', collection: 'Astro.props.items' });
+assert.deepEqual(read('', 'post.data.tags').query.source, { kind: 'list', collection: 'post.data.tags' });
 assert.equal(read('', '[]').kind, 'empty');
 assert.equal(read('', 'items.map((').kind, 'code');
 // A cycle of declarations ends rather than looping.
-assert.equal(read('const a = b;\nconst b = a;', 'a').kind, 'value');
+assert.equal(read('const a = b;\nconst b = a;', 'a').kind, 'query');
 
 // --- Reading GROQ ---------------------------------------------------------------
 
@@ -386,7 +387,8 @@ assert.equal(declarations.get('a').alone, false);
 assert.equal(declarations.get('c').statement.to, 'const a = 1, b = 2;\nexport const c = 3; // note\n'.length);
 assert.equal(declarations.has('d'), false);
 assert.equal(parseExpression('a; b'), undefined);
-assert.equal(parseExpression('x'.repeat(300_000)), undefined);
+// Size is not limited: a long name is still one expression.
+assert.equal(parseExpression('x'.repeat(300_000)).expression.kind, 'name');
 
 console.log('loopQuery: ok');
 

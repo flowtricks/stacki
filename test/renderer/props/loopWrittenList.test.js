@@ -136,11 +136,20 @@ test('a list of plain values is its own field; a list of objects has the fields 
 
 test('what is not a written-out list named by the loop reads as it always did', () => {
   const read = (frontmatter, data) => readLoop({ frontmatter, imports: [], data });
-  assert.equal(read('const plans = getPlans();\n', 'plans').kind, 'value', 'a computed list');
+  assert.deepEqual(read('const plans = getPlans();\n', 'plans').query.source, { kind: 'list', collection: 'plans' }, 'a computed list');
   const held = `${PLANS}const shown = plans.slice(0, 2);\n`;
   const reading = read(held, 'shown');
-  assert.equal(reading.kind, 'value', 'a list held in a second constant stays a value: its steps live in the frontmatter');
-  assert.equal(read('', '["a", "b"]').kind, 'code', 'an inline list is the typed rows, not a query');
+  assert.deepEqual(
+    reading.query.source,
+    { kind: 'list', collection: 'shown' },
+    'a list held in a second constant: its own steps stay in the frontmatter, untouched',
+  );
+  assert.equal(reading.query.limit, undefined, 'the frontmatter step is not a setting of this loop');
+  assert.deepEqual(
+    read('', '["a", "b"]').query.source,
+    { kind: 'list', collection: '["a", "b"]' },
+    'an inline list is a list too; its rows are the Items section',
+  );
 });
 
 test('each control writes the head and reads back as the same query', () => {

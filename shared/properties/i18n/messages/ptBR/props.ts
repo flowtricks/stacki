@@ -418,6 +418,17 @@ export const messages = {
   'props.loop.source.title': 'Origem',
   'props.loop.source.typeItems': 'digite os itens',
   'props.loop.source.via': 'via {name}', // same
+  'props.loop.note.kept': 'Esta lista já tem código que os controles não conseguem mostrar. Ele fica como está; o que você definir aqui vale depois dele.',
+  'props.loop.note.unknownShape':
+  'props.loop.typed.boolean': 'Ligado ou desligado',
+  'props.loop.typed.date': 'Data',
+  'props.loop.typed.invalid': 'Use um nome de campo como title ou author.name.',
+  'props.loop.typed.number': 'Número',
+  'props.loop.typed.path': 'Nome do campo',
+  'props.loop.typed.placeholder': 'title ou author.name',
+  'props.loop.typed.text': 'Texto',
+  'props.loop.typed.type': 'Tipo',
+  'props.loop.typed.use': 'Usar este campo',
   'props.loop.value': 'Valor',
   'props.loop.when': 'Quando',
   'props.map.code': 'Código',

@@ -17,6 +17,7 @@ import { LIMITS } from '../../../shared/core/limits';
 import { sampleAt, samplePreview } from '../../editor/dataSample';
 import type { CatalogField } from './loopCatalog';
 import { fieldIcon, RowPopup } from './LoopRows';
+import { TypedFieldForm, type TypedFieldSupport } from './LoopTypedFieldForm';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 
 const PICKER_HEIGHT_PX_MAX = 420;
@@ -37,15 +38,17 @@ export function FieldPicker(props: {
   /** One item, as its fields: each row's value is read from it. */
   readonly sample: unknown;
   readonly extras: readonly FieldExtra[];
-  readonly onChange: (value: string) => void;
+  /** Where a field of an unseen list can be typed; the field typed comes with its path. */
+  readonly typed?: TypedFieldSupport | undefined;
+  readonly onChange: (value: string, typed?: CatalogField) => void;
 }) {
   const translate = useTranslate();
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
   const attach = useCallback<RefCallback<HTMLButtonElement>>((element) => setAnchor(element ?? undefined), []);
-  const choose = (value: string): void => {
+  const choose = (value: string, typed?: CatalogField): void => {
     setOpen(false);
-    props.onChange(value);
+    props.onChange(value, typed);
   };
   const field = props.fields.find((candidate) => candidate.path === props.value);
   const extra = props.extras.find((candidate) => candidate.value === props.value);
@@ -79,6 +82,7 @@ export function FieldPicker(props: {
                 ))}
               </div>
             )}
+            {props.typed !== undefined && <TypedFieldForm item={props.typed.item} onUse={(field) => choose(field.path, field)} />}
             <DataPicker
               tree={fieldTree(props.fields, props.sample, props.usable)}
               current={field?.path}

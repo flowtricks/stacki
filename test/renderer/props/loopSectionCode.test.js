@@ -120,17 +120,14 @@ test('a step out of the order the controls imply is custom, and says why', () =>
 });
 
 test('a list that cannot be split keeps the whole-list notice', () => {
-  const unsplit = [
-    'features.filter(isLive).flatMap((item) => item.parts)',
-    'features.filter(a).slice(1).filter(b)',
-    'features.toSorted(a).filter(b).toSorted(c)',
-  ];
+  const unsplit = ['features.filter(a).slice(1).filter(b)', 'features.toSorted(a).filter(b).toSorted(c)'];
   for (const data of unsplit) {
     assert.equal(readSections(listInput(data)), undefined, data);
   }
   const held = `${LIST}const visible = features.filter((item) => item.on);\n`;
-  assert.equal(readSections({ frontmatter: held, imports: [], data: 'visible' }), undefined, 'a helper variable');
-  assert.equal(readSections({ frontmatter: '', imports: [], data: '[1, 2]' }), undefined, 'a list typed in place');
+  // A helper variable and a list typed in place are lists of their own: their sections are empty.
+  assert.equal(readSections({ frontmatter: held, imports: [], data: 'visible' })?.query.limit, undefined, 'a helper variable');
+  assert.equal(readSections({ frontmatter: '', imports: [], data: '[1, 2]' })?.filter.code, '', 'a list typed in place');
 });
 
 test('a section edit leaves the other sections byte for byte', () => {
@@ -571,9 +568,11 @@ test('a collection’s code view edits its declaration and leaves the rest', asy
   assert.equal(toggle(host, 'limit').getAttribute('aria-pressed'), 'true');
 });
 
-test('a list that cannot be split keeps the notice and has no toggles', async (context) => {
-  const { host } = await panel(context, listModel('features.filter(isLive).flatMap((item) => item.parts)'));
-  assert.ok(host.textContent.includes('Custom code shapes this list'));
+test('a list that cannot be split keeps its code and has no toggles, but still has the controls', async (context) => {
+  const { host } = await panel(context, listModel('features.filter(a).slice(1).filter(b)'));
+  assert.ok(host.textContent.includes('applies after it'));
+  assert.ok(host.textContent.includes('Filters'));
+  assert.ok(host.textContent.includes('Sort'));
   assert.ok(toggle(host, 'filter') === null);
 });
 

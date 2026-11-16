@@ -35,7 +35,15 @@ export interface WrittenField {
  */
 export function writtenListFields(frontmatter: string, name: string): readonly WrittenField[] | undefined {
   const init = parseFrontmatter(frontmatter).declarations.get(name)?.init;
-  const list = init?.kind === 'await' ? init.value : init;
+  return fieldsOfList(init?.kind === 'await' ? init.value : init);
+}
+
+/** The fields of a list typed in place in the loop (`[{ title: "Pro" }]`): written-out fields, as for a constant. */
+export function literalListFields(code: string): readonly WrittenField[] | undefined {
+  return fieldsOfList(parseExpression(code.trim())?.expression);
+}
+
+function fieldsOfList(list: Js | undefined): readonly WrittenField[] | undefined {
   if (list?.kind !== 'array') {
     return undefined;
   }
