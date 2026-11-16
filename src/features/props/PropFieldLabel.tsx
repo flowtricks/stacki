@@ -61,19 +61,15 @@ export function PropFieldNote({ state }: { readonly state: PropState }) {
   );
 }
 export function PropFieldMenu({ state }: { readonly state: PropState }) {
-  const translate = useTranslate();
-  const { field, menuPosition, setMenuPosition, showExpr, reset, fromCustom, normalBlockedText, resetRefusal } = state;
+  const { menuPosition, setMenuPosition, reset, resetRefusal } = state;
 
   return (
     menuPosition && (
       <ResetMenu
         position={menuPosition}
         onReset={reset}
-        // Only while the field is showing a value instead of its own control —
-        // it is the way back, and there is nothing to go back FROM otherwise.
-        {...(showExpr ? { onUnbind: fromCustom } : {})}
-        unbindLabel={controlLabel(field, translate)}
-        unbindDisabledReason={normalBlockedText}
+        // The way back to the control is the {} button, one click; this menu only resets.
+        unbindLabel=""
         resetDisabledReason={resetRefusal}
         onClose={() => setMenuPosition(undefined)}
       />

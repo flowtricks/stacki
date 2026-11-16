@@ -11,8 +11,6 @@ export interface ResetMenuProps {
   readonly resetLabel?: string;
   readonly onUnbind?: (() => void) | undefined;
   readonly unbindLabel: string;
-  /** Why the unbind item cannot run: it is shown dimmed with this as its tooltip, and does nothing. */
-  readonly unbindDisabledReason?: string | undefined;
   /** Why the reset item cannot run, shown the same way. */
   readonly resetDisabledReason?: string | undefined;
   readonly onClose: () => void;
@@ -72,7 +70,7 @@ function resetMenuLayer(label: HTMLElement): HTMLElement {
   return label.closest<HTMLElement>('.popup-surface') ?? popupLayer();
 }
 
-export function ResetMenu({ position, onReset, resetLabel, onUnbind, unbindLabel, unbindDisabledReason, resetDisabledReason, onClose }: ResetMenuProps) {
+export function ResetMenu({ position, onReset, resetLabel, onUnbind, unbindLabel, resetDisabledReason, onClose }: ResetMenuProps) {
   const translate = useTranslate();
   const resetText = resetLabel ?? translate('ui.resetLabel.toDefault');
   const ref = useRef<HTMLDivElement>(null);
@@ -109,12 +107,7 @@ export function ResetMenu({ position, onReset, resetLabel, onUnbind, unbindLabel
   return (
     <div ref={ref} className="prop-menu" style={{ left: position.left, top: position.top }}>
       {onUnbind && (
-        <div
-          className={`prop-menu-item${unbindDisabledReason === undefined ? '' : ' disabled'}`}
-          aria-disabled={unbindDisabledReason !== undefined}
-          title={unbindDisabledReason}
-          onClick={unbindDisabledReason === undefined ? onUnbind : undefined}
-        >
+        <div className="prop-menu-item" onClick={onUnbind}>
           <CornerIcon size={12} />
           {unbindLabel}
         </div>

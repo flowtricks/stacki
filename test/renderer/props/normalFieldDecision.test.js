@@ -1,13 +1,13 @@
-// Goal: "Use the normal field" never deletes what the user wrote. The pure
-// decision behind it (normalFieldDecision.ts) either rewrites an expression as
-// the equal plain value or refuses with a reason, and leaves the rest alone.
-// Method: the real module bundled with esbuild and driven over a table of
-// expressions per field type: literal-equivalent conversions, real code
-// (identifier, member access, call, concatenation), enum options a literal
-// is or is not among, a required prop, an empty expression, and the negative
-// space where a literal does not fit the type. The old behaviour, clearing the
-// attribute, is pinned as gone: no input yields a bare removal except an
-// empty, optional expression.
+// Goal: the {} toggle's decision never loses a value silently and never leaves
+// a required prop without one. The pure decision (normalFieldDecision.ts) keeps
+// a literal-equivalent expression as the plain value ("literal"), replaces code
+// with the control's empty value ("replace": undefined for an optional prop, a
+// valid empty value for a required one), and blocks only a required prop that
+// has no valid empty value.
+// Method: the real module bundled with esbuild and driven over tables of
+// expressions per field type: literals, real code (identifier, member access,
+// call, concatenation), enum options a literal is or is not among, required
+// and optional props, empty expressions, and the types with no empty value.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -18,7 +18,7 @@ const { repoPath } = require('../../helpers/sources.js');
 const directory = repoPath('node_modules/.stacki-test/normal-field-decision');
 fs.mkdirSync(directory, { recursive: true });
 const entry = path.join(directory, 'entry.js');
-fs.writeFileSync(entry, `export { decideNormalField } from ${JSON.stringify(repoPath('src/features/props/normalFieldDecision.ts'))};`);
+fs.writeFileSync(entry, `export { decideNormalField, planReset } from ${JSON.stringify(repoPath('src/features/props/normalFieldDecision.ts'))};`);
 const output = path.join(directory, 'bundle.cjs');
 buildSync({
   entryPoints: [entry],
@@ -31,66 +31,79 @@ buildSync({
   loader: { '.css': 'empty' },
   logLevel: 'silent',
 });
-const { decideNormalField } = require(output);
+const { decideNormalField, planReset } = require(output);
 
 const text = { name: 'content', type: 'string', optional: false };
 const enumField = { name: 'tone', type: 'enum', optional: true, options: ['soft', 'bold'] };
 const decide = (field, source, required = false) => decideNormalField({ field, source, required });
-const convertedText = (value) => ({ kind: 'convert', value: { type: 'string', value } });
+const literal = (value) => ({ kind: 'literal', value });
+const replace = (value) => ({ kind: 'replace', value });
+const plain = (value) => ({ type: 'string', value });
 
-test('literal-equivalent expressions convert to the plain attribute value', () => {
-  assert.deepEqual(decide(text, '"text"'), convertedText('text'));
-  assert.deepEqual(decide(text, "'text'"), convertedText('text'));
-  assert.deepEqual(decide(text, '`text`'), convertedText('text'));
-  assert.deepEqual(decide(text, ' "padded" '), convertedText('padded'));
-  assert.deepEqual(decide(text, '42'), convertedText('42'));
-  assert.deepEqual(decide(text, 'true'), convertedText('true'));
-  assert.deepEqual(decide(text, '""', true), convertedText(''), 'an empty string is a value, even for a required prop');
-  assert.deepEqual(decide({ name: 'n', type: 'number', optional: true }, '42'), { kind: 'convert', value: { type: 'expr', value: '42' } });
-  assert.deepEqual(decide({ name: 'b', type: 'boolean', optional: true }, 'true'), { kind: 'convert', value: { type: 'expr', value: 'true' } });
+test('literal-equivalent expressions are kept as the plain attribute value', () => {
+  assert.deepEqual(decide(text, '"text"'), literal(plain('text')));
+  assert.deepEqual(decide(text, "'text'"), literal(plain('text')));
+  assert.deepEqual(decide(text, '`text`'), literal(plain('text')));
+  assert.deepEqual(decide(text, ' "padded" '), literal(plain('padded')));
+  assert.deepEqual(decide(text, '42'), literal(plain('42')));
+  assert.deepEqual(decide(text, 'true'), literal(plain('true')));
+  assert.deepEqual(decide(text, '""', true), literal(plain('')), 'an empty string is a value');
+  assert.deepEqual(decide({ name: 'n', type: 'number', optional: true }, '42'), literal({ type: 'expr', value: '42' }));
+  assert.deepEqual(decide({ name: 'b', type: 'boolean', optional: true }, 'true'), literal({ type: 'expr', value: 'true' }));
 });
 
-test('real expressions are refused as code and never converted', () => {
-  for (const source of [
-    'customerStoriesMachineMode',
-    'page.title',
-    'getTitle()',
-    '"a" + b',
-    '"a" + "b"',
-    '`hi ${name}`',
-    'cond ? "a" : "b"',
-    '[1, 2]',
-    '{ a: 1 }',
-  ]) {
-    assert.deepEqual(decide(text, source), { kind: 'blocked', reason: 'code' }, source);
-    assert.deepEqual(decide(text, source, true), { kind: 'blocked', reason: 'code' }, `${source} (required)`);
+test('code is replaced by the empty value: nothing for optional, a valid empty value for required', () => {
+  for (const source of ['card.image', 'getTitle()', '"a" + b', '"a" + "b"', '`hi ${name}`', 'cond ? "a" : "b"', '[1, 2]', '{ a: 1 }', '']) {
+    assert.deepEqual(decide(text, source), replace(undefined), source);
+    assert.deepEqual(decide(text, source, true), replace(plain('')), `${source} (required)`);
   }
 });
 
-test('an enum takes only a literal that is one of its options', () => {
-  assert.deepEqual(decide(enumField, '"soft"'), convertedText('soft'));
-  assert.deepEqual(decide(enumField, '`bold`'), convertedText('bold'));
-  assert.deepEqual(decide(enumField, '"loud"'), { kind: 'blocked', reason: 'invalid-literal' });
-  assert.deepEqual(decide(enumField, 'tone'), { kind: 'blocked', reason: 'code' });
+test('required empty values by type', () => {
+  const required = (field, source = 'code') => decide({ optional: false, name: 'p', ...field }, source, true);
+  assert.deepEqual(required({ type: 'boolean' }), replace({ type: 'expr', value: 'false' }));
+  assert.deepEqual(required({ type: 'number' }), replace({ type: 'expr', value: '0' }));
+  assert.deepEqual(required({ type: 'number', min: 3 }), replace({ type: 'expr', value: '3' }));
+  assert.deepEqual(required({ type: 'enum', options: ['a', 'b'] }), replace(plain('a')));
+  assert.deepEqual(required({ type: 'code' }), replace({ type: 'expr', value: '[]' }));
+  assert.deepEqual(required({ type: 'number', min: 0, minExclusive: true }), { kind: 'blocked' }, 'no valid empty value');
+  assert.deepEqual(required({ type: 'enum', options: [] }), { kind: 'blocked' });
+  assert.deepEqual(required({ type: 'code', codeKind: 'function' }), { kind: 'blocked' });
 });
 
-test('a literal the type refuses is refused, not rewritten', () => {
+test('an enum keeps a literal that is an option and replaces one that is not', () => {
+  assert.deepEqual(decide(enumField, '"soft"'), literal(plain('soft')));
+  assert.deepEqual(decide(enumField, '`bold`'), literal(plain('bold')));
+  assert.deepEqual(decide(enumField, '"loud"'), replace(undefined));
+  assert.deepEqual(decide({ ...enumField, optional: false }, '"loud"', true), replace(plain('soft')));
+});
+
+test('a literal the type refuses is replaced, not rewritten', () => {
   const number = { name: 'n', type: 'number', optional: true };
   const flag = { name: 'b', type: 'boolean', optional: true };
-  assert.deepEqual(decide(number, '"5"'), { kind: 'blocked', reason: 'invalid-literal' });
-  assert.deepEqual(decide(flag, '"true"'), { kind: 'blocked', reason: 'invalid-literal' });
-  assert.deepEqual(decide(number, 'true'), { kind: 'blocked', reason: 'invalid-literal' });
-  assert.deepEqual(decide(flag, '1'), { kind: 'blocked', reason: 'invalid-literal' });
-  assert.deepEqual(decide(number, 'count'), { kind: 'blocked', reason: 'code' });
+  for (const [field, source] of [
+    [number, '"5"'],
+    [flag, '"true"'],
+    [number, 'true'],
+    [flag, '1'],
+  ]) {
+    assert.deepEqual(decide(field, source), replace(undefined), source);
+  }
 });
 
-test('an empty expression clears only when the prop is optional', () => {
-  assert.deepEqual(decide(text, '  ', false), { kind: 'convert', value: undefined });
-  assert.deepEqual(decide(text, '', true), { kind: 'blocked', reason: 'required-empty' });
-});
-
-test('a very long expression is decided like any other, never refused for its size', () => {
-  // No size limit (owner requirement): the decision reads the whole source and still refuses code it cannot hold.
-  const decision = decide(text, 'x'.repeat(100_000));
-  assert.equal(decision.kind, 'blocked');
+test('planReset: overridden resets, unset or already-empty is disabled, required resets to its empty value', () => {
+  const plan = (field, value, required = false) => planReset({ field, value, required });
+  const withDefault = { name: 'heading', type: 'string', optional: true, default: 'Welcome' };
+  assert.deepEqual(plan(withDefault, plain('Hi')), { kind: 'remove' });
+  assert.deepEqual(plan(withDefault, plain('Welcome')), { kind: 'remove' }, 'written is overridden even when equal to the default');
+  assert.deepEqual(plan(withDefault, undefined), { kind: 'disabled', reason: 'already-default' });
+  assert.deepEqual(plan({ name: 'p', type: 'string', optional: true }, plain('x')), { kind: 'remove' }, 'no default: removal is the reset');
+  const alt = { name: 'alt', type: 'string', optional: false };
+  assert.deepEqual(plan(alt, plain('A cat'), true), { kind: 'write', value: plain('') });
+  assert.deepEqual(plan(alt, { type: 'expr', value: 'card.alt' }, true), { kind: 'write', value: plain('') });
+  assert.deepEqual(plan(alt, plain(''), true), { kind: 'disabled', reason: 'already-default' });
+  assert.deepEqual(plan({ name: 'n', type: 'number', optional: false, min: 0, minExclusive: true }, { type: 'expr', value: '3' }, true), {
+    kind: 'disabled',
+    reason: 'no-empty-value',
+  });
 });

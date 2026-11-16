@@ -11,3 +11,8 @@ import { reportActionToast } from '../../ui/errorNotices';
 export function reportCodeCleared(translate: Translator, restore: () => void): void {
   reportActionToast(translate('props.codeCleared.notice'), 'info', [{ label: translate('props.codeCleared.restore'), run: restore }]);
 }
+
+/** Says a binding was replaced by the field's plain control, offering `restore` to write the expression back (⌘Z does too). */
+export function reportBindingRemoved(translate: Translator, restore: () => void): void {
+  reportActionToast(translate('props.bindingRemoved.notice'), 'info', [{ label: translate('props.bindingRemoved.undo'), run: restore }]);
+}

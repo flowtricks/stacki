@@ -58,3 +58,35 @@ test('Use the normal field rewrites a literal expression, and one undo restores 
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE, 'one undo restores it byte for byte');
   assert.equal(fs.readFileSync(card, 'utf8'), CARD, 'the component is never touched');
 });
+
+test('Replacing code with the empty value is one undo step too', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-normal-field-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'src', 'pages'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'src', 'components'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"astro":"*"}}');
+  const page = path.join(root, 'src', 'pages', 'index.astro');
+  const card = path.join(root, 'src', 'components', 'Card.astro');
+  fs.writeFileSync(page, PAGE.replace('heading={"Hi"}', 'heading={card.title}'));
+  fs.writeFileSync(card, CARD);
+  const scan = {
+    pages: [{ name: 'index.astro', path: page, route: '/' }],
+    components: [{ name: 'Card', path: card, folder: '' }],
+    layouts: [],
+    pageFolders: [],
+  };
+  const bridge = { resolveImport: async () => ({ path: card }), watchProject: async () => ({ ok: true }) };
+  const app = await mountApp(root, { scan }, 'normal-field-undo', { bridge });
+  context.after(app.unmount);
+  await select(app, [0, 0]);
+  assert.equal(__panels.PropsPanel.node.name, 'Card', 'the instance is selected');
+  const CODE_PAGE = PAGE.replace('heading={"Hi"}', 'heading={card.title}');
+  assert.deepEqual(__panels.PropsPanel.node.props.heading, { type: 'expr', value: 'card.title' });
+  await gesture(app, async () => {
+    __panels.PropsPanel.onSetProp('heading', undefined, true);
+  });
+  assert.equal(fs.readFileSync(page, 'utf8'), CODE_PAGE.replace(' heading={card.title}', ''), 'only the binding is removed');
+  await undo(app);
+  assert.equal(fs.readFileSync(page, 'utf8'), CODE_PAGE, 'one undo restores the expression byte for byte');
+  assert.equal(fs.readFileSync(card, 'utf8'), CARD, 'the component is never touched');
+});

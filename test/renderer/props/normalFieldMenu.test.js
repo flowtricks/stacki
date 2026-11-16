@@ -1,15 +1,17 @@
-// Goal: the Properties panel's {} toggle and its label menu never destroy a
-// prop's value. "Use the normal field" turns a literal-equivalent expression
-// into the plain attribute in one immediate write; for code (an identifier, a
-// call) the item is disabled with the reason "Value comes from code" as its
-// tooltip and a click writes nothing; "Reset to default property value" is
-// disabled on a required prop, which has no default to return to, and stays
-// available on an optional one. The app's undo of the conversion is in
+// Goal: the {} icon on a field that holds an expression switches it to the
+// field's plain control in ONE click, with no menu, and never loses the user's
+// code silently. A literal-equivalent expression (`{"text"}`, `{42}`) becomes
+// the plain value; code (`{card.image}`) is replaced by the control's empty
+// value (the one Reset gives; a valid empty value on a required prop, so the
+// attribute is never left missing) and a "Binding removed · Undo" toast brings
+// the code back with one click. The label menu no longer has a "Use the ..."
+// item: it holds only "Reset to default property value". A plain value's {}
+// still switches to expression mode. The app's undo is in
 // test/renderer/app/normalFieldUndo.test.js.
 // Method: the real PropsPanel, bundled with esbuild and mounted in jsdom over
-// a hand-made schema (the shape of `<MachineMode content={...} position=...>`),
-// onSetProp recording every write. Each case opens the label's menu and reads
-// the items a designer sees, then clicks them, including the refused ones.
+// a hand-made schema, onSetProp recording every write; toasts are collected
+// from the app's own toast channel. Each control kind (text, media src,
+// number, enum, switch) is driven by one click on its {} button.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -21,7 +23,13 @@ const { repoPath } = require('../../helpers/sources.js');
 const directory = repoPath('node_modules/.stacki-test/normal-field-menu');
 fs.mkdirSync(directory, { recursive: true });
 const entry = path.join(directory, 'entry.js');
-fs.writeFileSync(entry, [`export { default as PropsPanel } from ${JSON.stringify(repoPath('src/features/props/PropsPanel.tsx'))};`].join('\n'));
+fs.writeFileSync(
+  entry,
+  [
+    `export { default as PropsPanel } from ${JSON.stringify(repoPath('src/features/props/PropsPanel.tsx'))};`,
+    `export { subscribeErrorToasts } from ${JSON.stringify(repoPath('src/ui/errorNotices.ts'))};`,
+  ].join('\n'),
+);
 const output = path.join(directory, 'bundle.cjs');
 buildSync({
   entryPoints: [entry],
@@ -117,82 +125,135 @@ const one = (element, selector) => element.querySelector(selector) ?? undefined;
 const SCHEMA = [
   { name: 'content', type: 'string', optional: false },
   { name: 'position', type: 'string', optional: true },
+  { name: 'src', type: 'string', optional: true },
+  { name: 'count', type: 'number', optional: true },
+  { name: 'total', type: 'number', optional: false },
   { name: 'tone', type: 'enum', optional: true, options: ['soft', 'bold'] },
+  { name: 'kind', type: 'enum', optional: false, options: ['soft', 'bold'] },
+  { name: 'open', type: 'boolean', optional: true },
+  { name: 'shut', type: 'boolean', optional: false },
 ];
 const expr = (value) => ({ type: 'expr', value });
-const menuItem = (words) => [...document.querySelectorAll('.prop-menu-item')].find((item) => item.textContent.startsWith(words));
-function openMenu(name) {
-  act(() => label(name).click());
-}
+const menuItems = () => [...document.querySelectorAll('.prop-menu-item')].map((item) => item.textContent);
+const toggle = (name) => label(name).closest('label').querySelector('.prop-expr-toggle');
 const finish = () => act(() => root.render(React.createElement(React.Fragment)));
+const toasts = [];
+ux.subscribeErrorToasts(
+  (notice) => toasts.push(notice),
+  () => {},
+);
 
-test('code is not converted: the item is disabled with its reason, and a click writes nothing', () => {
-  const values = { content: expr('customerStoriesMachineMode'), position: { type: 'string', value: 'customers' } };
-  const panel = mount(SCHEMA, values);
-  openMenu('content');
-  const item = menuItem('Use the normal field');
-  assert.ok(item, 'the menu still offers the item');
-  assert.equal(item.getAttribute('aria-disabled'), 'true');
-  assert.ok(item.classList.contains('disabled'));
-  assert.equal(item.getAttribute('title'), 'Value comes from code');
-  act(() => item.click());
-  assert.deepEqual(panel.writes, [], 'nothing is written');
-  assert.deepEqual(panel.values.content, expr('customerStoriesMachineMode'), 'the expression is still there');
-  const toggle = label('content').closest('label').querySelector('.prop-expr-toggle');
-  assert.equal(toggle.getAttribute('title'), 'Value comes from code', 'the {} button says why too');
-  act(() => toggle.click());
-  assert.deepEqual(panel.writes, [], 'the {} button writes nothing either');
-  assert.equal(document.querySelector('.props-field .prop-field-note.required') ?? undefined, undefined, 'the prop is still set, so no Required error');
-  finish();
-});
-
-test('a literal-equivalent expression becomes the plain attribute in one immediate write', () => {
-  for (const [source, expected] of [
-    ['"text"', 'text'],
-    ['`text`', 'text'],
-    ['42', '42'],
-  ]) {
-    const panel = mount(SCHEMA, { content: expr(source) });
-    openMenu('content');
-    const item = menuItem('Use the normal field');
-    assert.equal(item.getAttribute('aria-disabled'), 'false', source);
-    act(() => item.click());
-    assert.deepEqual(panel.writes, [{ name: 'content', value: { type: 'string', value: expected }, immediate: true }], source);
-    assert.deepEqual(panel.values.content, { type: 'string', value: expected });
+test('one click on {} replaces code with the control empty value, and the toast Undo brings the code back', () => {
+  const cases = [
+    ['content', expr('customerStoriesMachineMode'), { type: 'string', value: '' }],
+    ['position', expr('page.title'), undefined],
+    ['src', expr('card.image'), undefined],
+    ['count', expr('items.length'), undefined],
+    ['total', expr('items.length'), expr('0')],
+    ['tone', expr('theme'), undefined],
+    ['kind', expr('theme'), { type: 'string', value: 'soft' }],
+    ['open', expr('isOpen'), undefined],
+    ['shut', expr('isShut'), expr('false')],
+  ];
+  for (const [name, code, empty] of cases) {
+    toasts.length = 0;
+    const panel = mount(SCHEMA, { [name]: code });
+    assert.equal(menuItems().length, 0);
+    act(() => toggle(name).click());
+    assert.deepEqual(panel.writes, [{ name, value: empty, immediate: true }], `${name}: one immediate write, no menu`);
+    assert.equal(menuItems().length, 0, `${name}: no menu opened`);
+    assert.equal(toasts.length, 1, `${name}: one toast`);
+    assert.equal(toasts[0].message, 'Binding removed');
+    assert.equal(toasts[0].recovery[0].label, 'Undo');
+    act(() => toasts[0].recovery[0].run());
+    assert.deepEqual(panel.writes[1], { name, value: code, immediate: true }, `${name}: Undo writes the exact expression back`);
+    assert.deepEqual(panel.values[name], code);
     finish();
   }
 });
 
-test('an enum takes a literal that is an option, and refuses one that is not', () => {
-  const good = mount(SCHEMA, { tone: expr('"bold"') });
-  openMenu('tone');
-  act(() => menuItem('Use the').click());
-  assert.deepEqual(good.writes, [{ name: 'tone', value: { type: 'string', value: 'bold' }, immediate: true }]);
-  finish();
-  const bad = mount(SCHEMA, { tone: expr('"loud"') });
-  openMenu('tone');
-  const item = menuItem('Use the');
-  assert.equal(item.getAttribute('title'), 'This value is not valid for the normal field');
-  act(() => item.click());
-  assert.deepEqual(bad.writes, []);
+test('a literal-equivalent expression becomes the plain value, with no toast', () => {
+  for (const [name, source, expected] of [
+    ['content', '"text"', { type: 'string', value: 'text' }],
+    ['content', '`text`', { type: 'string', value: 'text' }],
+    ['content', '42', { type: 'string', value: '42' }],
+    ['tone', '"bold"', { type: 'string', value: 'bold' }],
+  ]) {
+    toasts.length = 0;
+    const panel = mount(SCHEMA, { [name]: expr(source) });
+    act(() => toggle(name).click());
+    assert.deepEqual(panel.writes, [{ name, value: expected, immediate: true }], `${name} ${source}`);
+    assert.equal(toasts.length, 0, 'nothing was lost, so nothing to undo');
+    finish();
+  }
+});
+
+test('a literal the type refuses is replaced like code, and a required prop stays set', () => {
+  toasts.length = 0;
+  const panel = mount(SCHEMA, { tone: expr('"loud"'), kind: expr('"loud"') });
+  act(() => toggle('tone').click());
+  act(() => toggle('kind').click());
+  assert.deepEqual(panel.writes, [
+    { name: 'tone', value: undefined, immediate: true },
+    { name: 'kind', value: { type: 'string', value: 'soft' }, immediate: true },
+  ]);
+  assert.ok(panel.values.kind, 'a required prop is never left without its attribute');
   finish();
 });
 
-test('Reset to default is disabled on a required prop and works on an optional one', () => {
-  const panel = mount(SCHEMA, { content: { type: 'string', value: 'Hi' }, position: { type: 'string', value: 'customers' } });
-  openMenu('content');
-  const refused = menuItem('Reset to default');
-  assert.equal(refused.getAttribute('aria-disabled'), 'true');
-  assert.equal(refused.getAttribute('title'), 'Required — there is no default to go back to');
-  act(() => refused.click());
-  assert.deepEqual(panel.writes, [], 'a required prop is not removed');
-  assert.deepEqual(panel.values.content, { type: 'string', value: 'Hi' });
+test('the label menu has no "Use the ..." item, only Reset, and Reset works on an overridden prop', () => {
+  const panel = mount(SCHEMA, { content: expr('someCode'), position: expr('otherCode') });
+  act(() => label('position').click());
+  assert.deepEqual(menuItems(), ['Reset to default property value']);
+  const item = document.querySelector('.prop-menu-item');
+  assert.equal(item.getAttribute('aria-disabled'), 'false', 'overridden: enabled');
+  act(() => item.click());
+  assert.deepEqual(panel.writes, [{ name: 'position', value: undefined, immediate: true }]);
   finish();
-  const optional = mount(SCHEMA, { content: { type: 'string', value: 'Hi' }, position: { type: 'string', value: 'customers' } });
-  openMenu('position');
-  const allowed = menuItem('Reset to default');
-  assert.equal(allowed.getAttribute('aria-disabled'), 'false');
-  act(() => allowed.click());
-  assert.deepEqual(optional.writes, [{ name: 'position', value: undefined, immediate: true }]);
+});
+
+test('Reset on a required prop without a default writes the control empty value, never removes it', () => {
+  const panel = mount(SCHEMA, { content: { type: 'string', value: 'Hi' }, kind: { type: 'string', value: 'bold' } });
+  act(() => label('content').click());
+  const item = document.querySelector('.prop-menu-item');
+  assert.equal(item.getAttribute('aria-disabled'), 'false');
+  act(() => item.click());
+  assert.deepEqual(panel.writes, [{ name: 'content', value: { type: 'string', value: '' }, immediate: true }]);
+  assert.ok(panel.values.content, 'the attribute is still there');
+  finish();
+});
+
+test('Reset is disabled, with its reason as tooltip, when a required prop already holds its empty value', () => {
+  const schema = [
+    { name: 'heading', type: 'string', optional: true, default: 'Welcome' },
+    { name: 'alt', type: 'string', optional: false },
+  ];
+  const panel = mount(schema, { heading: { type: 'string', value: 'Welcome' }, alt: { type: 'string', value: '' } });
+  act(() => label('heading').click());
+  assert.equal(document.querySelector('.prop-menu-item').getAttribute('aria-disabled'), 'false', 'an overridden prop resets even when equal to its default');
+  act(() => document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' })));
+  for (const name of ['alt']) {
+    act(() => label(name).click());
+    const item = document.querySelector('.prop-menu-item');
+    assert.equal(item.getAttribute('aria-disabled'), 'true', name);
+    assert.equal(item.getAttribute('title'), 'Already at its default value', name);
+    act(() => item.click());
+    act(() => document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' })));
+  }
+  assert.deepEqual(panel.writes, []);
+  finish();
+  const noEmpty = mount([{ name: 'count', type: 'number', optional: false, min: 0, minExclusive: true }], { count: expr('3') });
+  act(() => label('count').click());
+  assert.equal(document.querySelector('.prop-menu-item').getAttribute('title'), 'Required — there is no empty value to reset to');
+  assert.deepEqual(noEmpty.writes, []);
+  finish();
+});
+
+test('{} on a plain value still switches to expression mode', () => {
+  const panel = mount(SCHEMA, { position: { type: 'string', value: 'customers' } });
+  act(() => toggle('position').click());
+  assert.deepEqual(panel.writes, [], 'switching mode writes nothing');
+  assert.ok(label('position').closest('.props-field') !== undefined);
+  assert.equal(toggle('position').getAttribute('aria-pressed'), 'true');
   finish();
 });
