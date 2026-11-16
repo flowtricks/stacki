@@ -51,7 +51,7 @@ test('a failed write puts every file already written back, byte for byte', async
         : DEFAULT_WRITER.write(projectRoot, schema, source, base);
     },
   };
-  const result = await applyStaged(root, 'test', staged.value, { waitSeconds: 0, writer: failing });
+  const result = await applyStaged(root, 'test', staged.value, [], { waitSeconds: 0, writer: failing });
   assert.ok(!result.ok);
   assert.equal(result.error.code, 'write-failed');
   assert.match(result.error.message, /put back/);
@@ -67,7 +67,7 @@ test('a file changed after the plan is a conflict and nothing is written', async
   assert.ok(staged.ok);
   fs.mkdirSync(path.join(root, '.stacki'), { recursive: true });
   fs.writeFileSync(path.join(root, '.stacki/guide.json'), '{ "version": 1, "settings": {} }\n');
-  const result = await applyStaged(root, 'test', staged.value, { waitSeconds: 0, writer: DEFAULT_WRITER });
+  const result = await applyStaged(root, 'test', staged.value, [], { waitSeconds: 0, writer: DEFAULT_WRITER });
   assert.ok(!result.ok);
   assert.equal(result.error.code, 'conflict');
   assert.equal(readText(root, '.stacki/guide.json'), '{ "version": 1, "settings": {} }\n');

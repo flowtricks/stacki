@@ -15,7 +15,7 @@ function build(): void {
   const root = repositoryRoot();
   const outfile = path.join(root, 'dist/cli/stacki.cjs');
   esbuild.buildSync({
-    entryPoints: [path.join(root, 'electron/project/cli/stackiMain.ts')],
+    entryPoints: [path.join(root, 'electron/handlers/stackiCli.ts')],
     outfile,
     bundle: true,
     platform: 'node',

@@ -30,7 +30,7 @@
     "fixtures:large": "npm run build:runtime && node dist/scripts/reports/largeFixtures.js --write",
     "spike:editor-core": "npm run build:runtime && node test/simulator/spike.bench.ts",
     "build:cli": "npm run build:scripts && node dist/scripts/build/bundleStackiCli.js",
-    "stacki": "node dist/electron/project/cli/stackiMain.js",
+    "stacki": "node dist/electron/handlers/stackiCli.js",
     "release": "npm run build:scripts && node dist/scripts/release/release.js",
     "build:contracts": "tsc -p shared/tsconfig.json",
     "build:electron": "tsc -p electron/tsconfig.json && npm run build:renderer",

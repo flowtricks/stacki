@@ -15,6 +15,7 @@ import type { FileSchema } from '../../../shared/properties/cli/stackiSchema';
 import { readFileState, removeFile, writeFileText } from './cliFiles';
 import { acquireProjectLock } from './cliLock';
 import type { StagedFile } from './cliPlan';
+import { DEFAULT_EFFECTS, EFFECT_LIMITS, parseEffectRecord, reverseEffect, type EffectApplier, type EffectRecord } from './cliEffects';
 
 export const JOURNAL_LIMITS = {
   /** Applies whose undo is kept; the oldest is forgotten past this. */
@@ -32,14 +33,18 @@ export const DEFAULT_WRITER: FileWriter = { write: writeFileText, remove: remove
 export interface ApplyOptions {
   readonly waitSeconds: number;
   readonly writer: FileWriter;
+  /** Runs effects; tests replace it to inject a failure. */
+  readonly effects?: EffectApplier;
 }
 
 export async function applyStaged(
   root: string,
   command: string,
   files: readonly StagedFile[],
+  effects: readonly EffectRecord[],
   options: ApplyOptions,
 ): Promise<Result<{ readonly undoId: string }, CliError>> {
+  const applier = options.effects ?? DEFAULT_EFFECTS;
   const lock = await acquireProjectLock(root, { waitSeconds: options.waitSeconds });
   if (!lock.ok) {
     return lock;
@@ -49,24 +54,52 @@ export async function applyStaged(
     if (stale !== undefined) {
       return err({ code: 'conflict', message: `${stale} changed since the plan was made; nothing was written. Plan again.` });
     }
+    // Effects first: each is all-or-nothing by itself, and the settings files that name what they made or removed are written after them.
+    const done: EffectRecord[] = [];
+    for (const record of effects) {
+      const result = applier.apply(root, record);
+      if (!result.ok) {
+        const failed = undoEffects(root, done, applier);
+        return err({
+          code: result.error.code === 'locked' || result.error.code === 'conflict' ? result.error.code : 'write-failed',
+          message: `${result.error.message} ${putBackText(failed)}`,
+        });
+      }
+      done.push(record);
+    }
     const written: StagedFile[] = [];
     for (const file of files) {
       const result = file.after === undefined ? options.writer.remove(root, file.schema) : options.writer.write(root, file.schema, file.after, file.before);
       if (!result.ok) {
-        const failed = rollback(root, written, options.writer);
-        const suffix =
-          failed.length === 0 ? 'Every file already written was put back.' : `These files could not be put back and need attention: ${failed.join(', ')}.`;
+        const failed = [...rollback(root, written, options.writer), ...undoEffects(root, done, applier)];
         return err({
           code: result.error.code === 'locked' || result.error.code === 'conflict' ? result.error.code : 'write-failed',
-          message: `${result.error.message} ${suffix}`,
+          message: `${result.error.message} ${putBackText(failed)}`,
         });
       }
       written.push(file);
     }
-    return ok({ undoId: remember(root, command, files) });
+    return ok({ undoId: remember(root, command, files, effects) });
   } finally {
     lock.value.release();
   }
+}
+
+function putBackText(failed: readonly string[]): string {
+  return failed.length === 0 ? 'Every file already written was put back.' : `These could not be put back and need attention: ${failed.join(', ')}.`;
+}
+
+/** Runs the opposite of each applied effect, newest first; returns what could not be put back. */
+function undoEffects(root: string, done: readonly EffectRecord[], applier: EffectApplier): readonly string[] {
+  const failed: string[] = [];
+  for (const record of [...done].reverse()) {
+    const opposite = reverseEffect(record);
+    const result = opposite.ok ? applier.apply(root, opposite.value) : opposite;
+    if (!result.ok) {
+      failed.push(`${record.kind} (${result.error.message})`);
+    }
+  }
+  return failed;
 }
 
 function firstChanged(root: string, files: readonly StagedFile[]): string | undefined {
@@ -95,7 +128,7 @@ function journalDirectory(root: string): string {
   return path.join(root, '.stacki', 'io', 'cli-journal');
 }
 
-function remember(root: string, command: string, files: readonly StagedFile[]): string {
+function remember(root: string, command: string, files: readonly StagedFile[], effects: readonly EffectRecord[]): string {
   const id = `${Date.now().toString(36)}${randomBytes(4).toString('hex')}`;
   const directory = journalDirectory(root);
   fs.mkdirSync(directory, { recursive: true });
@@ -104,7 +137,12 @@ function remember(root: string, command: string, files: readonly StagedFile[]): 
     id,
     command,
     at: new Date().toISOString(),
-    files: files.map((file) => ({ file: file.schema.file, ...(file.before === undefined ? {} : { before: file.before }), after: file.after })),
+    effects,
+    files: files.map((file) => ({
+      file: file.schema.file,
+      ...(file.before === undefined ? {} : { before: file.before }),
+      ...(file.after === undefined ? {} : { after: file.after }),
+    })),
   };
   const temporary = path.join(directory, `${id}.tmp`);
   fs.writeFileSync(temporary, `${JSON.stringify(entry, undefined, 2)}\n`);
@@ -122,10 +160,13 @@ function remember(root: string, command: string, files: readonly StagedFile[]): 
 interface JournalFile {
   readonly schema: FileSchema;
   readonly before: string | undefined;
-  readonly after: string;
+  readonly after: string | undefined;
 }
 
-function readJournal(root: string, id: string): Result<{ readonly command: string; readonly files: readonly JournalFile[] }, CliError> {
+function readJournal(
+  root: string,
+  id: string,
+): Result<{ readonly command: string; readonly files: readonly JournalFile[]; readonly effects: readonly EffectRecord[] }, CliError> {
   if (!/^[a-z0-9]{8,40}$/.test(id)) {
     return err({ code: 'usage', message: 'An undo id is the letters and digits "stacki" printed after an apply.' });
   }
@@ -143,21 +184,37 @@ function readJournal(root: string, id: string): Result<{ readonly command: strin
       if (
         record === undefined ||
         schema === undefined ||
-        typeof record['after'] !== 'string' ||
+        (record['after'] !== undefined && typeof record['after'] !== 'string') ||
         (record['before'] !== undefined && typeof record['before'] !== 'string')
       ) {
         return err({ code: 'refused', message: 'That undo entry names a file the CLI does not manage.' });
       }
-      files.push({ schema, before: typeof record['before'] === 'string' ? record['before'] : undefined, after: record['after'] });
+      files.push({
+        schema,
+        before: typeof record['before'] === 'string' ? record['before'] : undefined,
+        after: typeof record['after'] === 'string' ? record['after'] : undefined,
+      });
     }
-    return ok({ command: entry['command'], files });
+    const recorded = toArray(entry['effects']) ?? [];
+    if (recorded.length > EFFECT_LIMITS.effectsMax) {
+      return err({ code: 'refused', message: 'That undo entry lists too many effects.' });
+    }
+    const effects: EffectRecord[] = [];
+    for (const item of recorded) {
+      const parsed = parseEffectRecord(item);
+      if (!parsed.ok) {
+        return parsed;
+      }
+      effects.push(parsed.value);
+    }
+    return ok({ command: entry['command'], files, effects });
   } catch {
     return err({ code: 'missing', message: `There is no undo entry ${id}; only the last ${JOURNAL_LIMITS.entriesMax} applies are kept.` });
   }
 }
 
 /** The files `stacki undo` would put back, or why it cannot: a file changed since the apply is never overwritten. */
-export function planUndo(root: string, id: string): Result<readonly StagedFile[], CliError> {
+export function planUndo(root: string, id: string): Result<{ readonly files: readonly StagedFile[]; readonly effects: readonly EffectRecord[] }, CliError> {
   const entry = readJournal(root, id);
   if (!entry.ok) {
     return entry;
@@ -173,5 +230,14 @@ export function planUndo(root: string, id: string): Result<readonly StagedFile[]
     }
     staged.push({ schema: file.schema, before: file.after, after: file.before });
   }
-  return ok(staged);
+  // The opposite of each effect, in the opposite order.
+  const effects: EffectRecord[] = [];
+  for (const record of [...entry.value.effects].reverse()) {
+    const opposite = reverseEffect(record);
+    if (!opposite.ok) {
+      return opposite;
+    }
+    effects.push(opposite.value);
+  }
+  return ok({ files: staged, effects });
 }

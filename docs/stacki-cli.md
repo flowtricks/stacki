@@ -10,8 +10,8 @@ Context Protocol. This page is the design, the safety rules, the command referen
 |---|---|
 | Key reference of every `.stacki` file (what is settable) | `shared/properties/cli/files/*File.ts`, assembled in `shared/properties/cli/stackiFiles.ts` |
 | Pure rules: schema DSL, config path, key-level edit, command table, arguments, output envelope, role features | `shared/properties/cli/*.ts` |
-| Headless runner: project IO, plan, atomic apply, lock, undo, handlers, MCP, app extensions | `electron/project/cli/*.ts` |
-| Executable | `node dist/electron/project/cli/stackiMain.js` (`npm run stacki -- <command>`), or the bundle `npm run build:cli` -> `dist/cli/stacki.cjs` (the `stacki` bin in `package.json`) |
+| Headless runner: project IO, plan, atomic apply, lock, undo, handlers, MCP, app extensions | `electron/project/cli/*.ts`; the component commands and the executable entry in `electron/handlers/` (`cliComponentCommands.ts`, `stackiCli.ts`), because they use the component planner and the layers let `handlers` reach `project`, not the reverse |
+| Executable | `node dist/electron/handlers/stackiCli.js` (`npm run stacki -- <command>`), or the bundle `npm run build:cli` -> `dist/cli/stacki.cjs` (the `stacki` bin in `package.json`) |
 
 **Placement decision: a new `stacki` bin, not a command of `astro-studio`.** The CLI writes through the main process's
 document actors (`electron/documents`, `electron/project/projectMetadata.ts`), which Studio's vendored source does not ship, so
@@ -62,7 +62,7 @@ There is no project-open lock or port file in Stacki, so none is invented. What 
 { "schemaVersion": 1, "ok": false, "command": "config set", "error": { "code": "unknown-key", "message": "…" } }
 ```
 
-`mode` is `read`, `plan` or `apply`; `applied` is true only when files were written; an apply adds `undoId`; a read adds `result`. Golden tests pin the
+`files[].action` is `create`, `modify`, `delete` or `move` (a move also names `from`). `mode` is `read`, `plan` or `apply`; `applied` is true only when files were written; an apply adds `undoId`; a read adds `result`. Golden tests pin the
 shape and the codes (`test/shared/properties/cli/stackiCommands.test.ts`); a change bumps `schemaVersion`.
 
 | Exit | Codes |
@@ -105,21 +105,41 @@ files other people rely on and a newly installed command should never be runnabl
 | `stacki apps commands` | read | `cli:read` | `cli.apps.commands` | `stacki_apps_commands` |
 | `stacki apps settings set <app> <setting> <value>` | write | `cli:apps` | `cli.apps.settings.set` | `stacki_apps_settings_set` |
 | `stacki apps enable\|disable <app>` | write | `cli:roles` | `cli.apps.enable` | `stacki_apps_enable` |
-| `stacki apps remove <app>` | write, deletes | `cli:apps` | `cli.apps.remove` | not available yet (see below) |
-| `stacki components rename\|move\|duplicate\|delete` | write | `cli:components` | `cli.components.*` | not available yet (see below) |
+| `stacki apps add <folder\|.zip>` | write | `cli:apps` | `cli.apps.add` | `stacki_apps_add` |
+| `stacki apps remove <app>` | write, deletes | `cli:apps` | `cli.apps.remove` | `stacki_apps_remove` |
+| `stacki components rename <path> <Name>`, `components move <path> <folder>` | write | `cli:components` | `cli.components.rename`, `.move` | `stacki_components_rename`, `_move` |
+| `stacki components duplicate <path>` | write | `cli:components` | `cli.components.duplicate` | `stacki_components_duplicate` |
+| `stacki components delete <path>` | write, deletes | `cli:components` | `cli.components.delete` | `stacki_components_delete` |
 | `stacki undo <id>` | write | `cli:config` | `cli.undo` | `stacki_undo` |
 
 Config on `roles` needs `cli:roles`, on the apps files `cli:apps`, on `cli.json` `cli:roles`, whatever the command's own feature: no route around the
 high-privilege features. A file also needs the app feature its UI asks (`stacki schema` shows `requires`), so a role with `cli:config` still cannot change
 a file its role cannot change in the app.
 
-**Not available yet** (they answer `planner-unavailable`, exit 1, and change nothing):
+### Components and apps: the plan model's effects
 
-- `components rename|move|duplicate|delete`: the component-operations planner is still being committed and lives in `electron/handlers` behind sliced work, not in
-  `shared/`. When it lands in `shared/`, add a handler in `cliCommands.ts` returning `Edit`s for `components.json`, `roles.json` and the `.astro` files;
-  the table rows, role features and tests are already in place.
-- `apps add` (install) and `apps remove`: install and uninstall write a folder under `.stacki/apps/<id>/` besides the lock; the plan model stages
-  file text only. The headless functions exist (`readAppBundle`, `installAppBundle`, `uninstallApp`); the plan needs a folder effect first.
+A plan can hold two kinds of change: settings text (`Edit`s, written with the app's serializers) and **effects** (`electron/project/cli/cliEffects.ts`): a component rename or
+move, creating or deleting component files, creating or deleting an installed app's folder. An effect is data (a kind and a JSON record), so the undo journal can hold it and
+`stacki undo` can run its opposite after the process is gone. Effects run first, each all or nothing, then the settings files; a failure anywhere runs the opposite of
+every effect already applied and puts back every file already written.
+
+- **`components rename|move`** reuse the Components panel's planner and writer unchanged: `planComponentRenameWork` finds every reference (relative imports recalculated, aliases and quote
+  styles kept, local bindings and tags renamed, `components.json` recipe keys and nested references, `roles.json` rules), `applyComponentRename` writes it all as witnessed leased
+  writes through the document actors with the file moved last (a case-only rename goes through a temporary name) and every text put back on failure. The plan output carries the
+  file list, "N files will be updated", and the references that are **reported, not changed** (a text file that still names the old path, a namespace tag, a file that would not parse).
+- **`components duplicate`** uses `planDuplicateTarget` and `writeCopy`: the first free name (`FooCopy`, `FooCopy2`, ... or `foo-copy`, `foo-copy-2` for dashed names).
+- **`components delete`** uses `planRemoveTarget`: refused with "Used in N places" while any other file uses the component, otherwise the files and the `.stacki` text that names
+  them go (`components.json` recipe and nested references, `roles.json` rules). Needs `--apply --yes`. **Where deleted files go:** the operating system's Trash is reachable only from the
+  Electron app (`shell.trashItem`), so a CLI delete is kept in the CLI undo journal, text for text; `stacki undo <id> --apply` writes every file back and the settings are restored only
+  while they still read as the deletion left them. The shared planners were split out of the app's `componentOps.ts` (`planDuplicateTarget`, `planRemoveTarget`, `planMetadataChanges`) so the
+  panel and the CLI run the same code.
+- **`apps add <folder|.zip>`** reads the source with the app's own bundle readers (the same file-type, size and remote-code checks as an upload) and plans the files under
+  `.stacki/apps/<id>/` plus a lock entry (source `local`, the folder digest) in `.stacki/apps/apps.json`. **No network:** a URL, `github:` or `npm:` source is refused with the way to install it
+  (the Apps panel: marketplace, GitHub or a file), because a download needs the signed-in account, marketplace approvals and the update policy the panel holds. An app that declares CLI commands stays
+  off until `stacki apps enable <id>` is applied by an admin.
+- **`apps remove <app>`** removes the folder (journalled byte for byte, so undo restores binary files too), the lock entry, the app's record in `.stacki/cli.json` and its non-secret values in
+  `.stacki/apps/settings.json`. The app platform has no dependency between apps (no manifest key names another app), so there is nothing for a removal to refuse on that ground. An app's sealed
+  secrets live in its vault outside the project and are not touched.
 
 ## Reference: every `.stacki` file
 
@@ -132,7 +152,7 @@ a file its role cannot change in the app.
 | `.stacki/breakpoints.json` | version, desktop, breakpoints | breakpoints set/add/remove | `settings:breakpoints` |
 | `.stacki/breakpoint-sync.json` | version, per-breakpoint records | breakpoints remove/sync | `settings:breakpoints` |
 | `.stacki/roles.json` | version, defaultRole, roles (id, name, members, access, appPermissions, pinnedApps, componentRules) | roles ... | `settings:roles` |
-| `.stacki/components.json` | version, components (props, text, children, nested component refs) | config (components commands pending) | `component:edit` |
+| `.stacki/components.json` | version, components (props, text, children, nested component refs) | components rename/move/duplicate/delete | `component:edit` |
 | `.stacki/component-sources.json` | version, sources | config | `settings:folders` |
 | `.stacki/folders.json` | version, folders, cms | folders add/remove/reset | `settings:folders` |
 | `.stacki/pages.json` | version, entries | config | `panel:pages` |
@@ -141,7 +161,7 @@ a file its role cannot change in the app.
 | `.stacki/variables.json` | version, hiddenFromSuggestions | config | `panel:style` |
 | `.stacki/audits.json` | version, ignored, ignoredPages, checks, tokens, placeholders | config | `panel:audits` |
 | `.stacki/instructions.json` | version, hidden | config | `instructions:edit` |
-| `.stacki/apps/apps.json` | version, apps (the install lock) | apps remove (pending) | `settings:roles` |
+| `.stacki/apps/apps.json` | version, apps (the install lock) | apps add/remove | `settings:roles` |
 | `.stacki/apps/settings.json` | version, apps (non-secret values) | apps settings set | `panel:apps` |
 | `.stacki/cli.json` | version, apps (enabled, trusted, sha256, network) | apps enable/disable | `settings:roles` |
 | App-declared files | declared in the app's manifest `cli.files` | the app's commands | `cli:apps` |
@@ -167,7 +187,8 @@ module, is not seen; list that module in `parserSources`.
 | Rule | Mechanism |
 |---|---|
 | Every `.stacki` setting is reachable through the CLI: a key a parser reads, and a `.stacki` path the app writes, is in the key registry (`shared/properties/cli/files/`) or is listed as not settable with a reason | test: `test/shared/properties/cli/stackiSchemaCoverage.test.ts` (source scan of the parsers and of the app's `.stacki` path literals) |
-| Every CLI command has a role feature and a unique feature key, and every command is in the table the MCP tools come from | test: `test/shared/properties/cli/stackiCommands.test.ts`, `test/electron/project/cli/mcpServer.test.ts` |
+| Every CLI command has a role feature, a unique feature key and a handler, and every command is in the table the MCP tools come from | test: `test/shared/properties/cli/stackiCommands.test.ts`, `test/electron/handlers/cliCommandTable.test.ts`, `test/electron/project/cli/mcpServer.test.ts` |
+| Components and apps with rules across files are changed by domain commands that reuse the app's planners | test: `stackiSchemaCoverage.test.ts` (commands named), `test/electron/handlers/cliComponentCommands.test.ts`, `test/electron/project/cli/cliAppsInstall.test.ts` |
 | CLI output contract and exit codes do not drift | test: golden values in `stackiCommands.test.ts` |
 | Code that writes `.stacki` from the CLI goes through `writeProjectMetadata` / the document actors | review (`electron/project/cli/cliFiles.ts` is the only writer) |
 

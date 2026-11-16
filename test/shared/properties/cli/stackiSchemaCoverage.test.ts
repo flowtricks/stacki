@@ -157,3 +157,19 @@ test('every .stacki path the app names is a registry file or listed as not setta
     assert.ok(entry.reason.length > 20, `${entry.path} says why it is not settable`);
   }
 });
+
+test('the files with rules across files are edited by domain commands, not only by config', () => {
+  const byId = (id: string) => STACKI_FILES.find((file) => file.id === id);
+  assert.deepEqual(
+    ['components rename', 'components move', 'components duplicate', 'components delete'].filter(
+      (command) => !(byId('components')?.commands ?? []).includes(command),
+    ),
+    [],
+    'components.json keeps its recipe keys and references in step through the components commands',
+  );
+  assert.deepEqual(
+    ['apps add', 'apps remove'].filter((command) => !(byId('apps')?.commands ?? []).includes(command)),
+    [],
+    'apps/apps.json is changed through apps add and apps remove',
+  );
+});
