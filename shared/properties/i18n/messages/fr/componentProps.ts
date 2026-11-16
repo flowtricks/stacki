@@ -130,6 +130,7 @@ export const messages = {
   'componentProps.variants.badValue': 'Utilisez un nom court sans guillemets ni barres obliques inverses.', // review
   'componentProps.variants.cannotAttach':
     '{name} n’est pas déclarée dans les propriétés partagées par toutes les options ; elle ne peut donc pas recevoir de règles de variante ici.', // review
+  'componentProps.variants.cannotGroup': 'Props n’est pas écrit comme un type auquel Stacki peut ajouter des règles de variante.', // review
   'componentProps.variants.cell': '{prop} quand {controller} vaut {value}', // review
   'componentProps.variants.controlledBy': 'Contrôlé par', // review
   'componentProps.variants.duplicateOption': 'Une option {value} existe déjà.', // review
@@ -141,7 +142,7 @@ export const messages = {
     'Le composant ne lit pas ses propriétés par une seule déstructuration ; la propriété ne peut donc pas être ajoutée ici.', // review
   'componentProps.variants.noRuntimeType': 'Le type d’exécution du composant ne peut pas recevoir de nouvelle propriété ici.', // review
   'componentProps.variants.noType': '{name} n’a pas de type à autoriser. Donnez-lui d’abord un type.', // review
-  'componentProps.variants.onlyFor': 'Seulement pour', // review
+  'componentProps.variants.none': 'Aucun', // review
   'componentProps.variants.optionInCode':
     'Le code du composant utilise {value} d’une façon que Stacki ne peut pas mettre à jour. Modifiez-le dans le code source.', // review
   'componentProps.variants.optionPassed': '{file} transmet {value} comme {name}. Modifiez d’abord cette instance.', // review

@@ -1,7 +1,7 @@
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
-import { VariantOnlyFor, VariantPropRules, fallbackEdit, optionListEdit, useVariantHost, useVariantRun, variantRoleOf } from './PropertyVariants';
+import { VariantControlledBy, fallbackEdit, optionListEdit, useVariantHost, useVariantRun, variantRoleOf } from './PropertyVariants';
 import type { VariantHost } from './PropertyVariants';
 import type { VariantGroup } from '../../../shared/properties/variantRules';
 import { TrashIcon } from '../../ui/Icons';
@@ -294,7 +294,7 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
       {listFields !== undefined && <PropertyItemFields form={form} frontmatter={frontmatter} fields={listFields} />}
       {/* A prop with variant rules is required per option, and a controller by its Default: neither has the one checkbox. */}
       {role.kind === 'ruled' && variants !== undefined ? (
-        <VariantPropRules name={form.savedName} groups={role.groups} host={variants} onProblem={report} />
+        <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} />
       ) : (
         role.kind !== 'controller' && (
           // The same Required the Settings panel's Property settings has (PropertySections.tsx); readonly is kept as read.
@@ -305,7 +305,7 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
           />
         )
       )}
-      {role.kind === 'attachable' && variants !== undefined && <VariantOnlyFor name={form.savedName} groups={role.groups} host={variants} onProblem={report} />}
+      {role.kind === 'attachable' && variants !== undefined && <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} />}
       {listFields === undefined ? (
         <PropertyDefault
           key={property.type}

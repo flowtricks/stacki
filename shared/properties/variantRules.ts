@@ -57,7 +57,12 @@ export interface VariantOption {
   readonly rules: readonly VariantRule[];
 }
 
-export type VariantGroupEditing = { readonly kind: 'editable' } | { readonly kind: 'readonly'; readonly reason: VariantGroupReason };
+/**
+ * `candidate`: no group exists yet; the controller is a shared prop of
+ * string options, and attaching a prop to it creates the group (rules empty).
+ */
+export type VariantGroupEditing =
+  { readonly kind: 'editable' } | { readonly kind: 'readonly'; readonly reason: VariantGroupReason } | { readonly kind: 'candidate' };
 
 export interface VariantGroup {
   /** The prop whose value picks the option. */
@@ -83,7 +88,8 @@ export type VariantRuleEdit =
   | { readonly kind: 'setFallback'; readonly controller: string; readonly value: string }
   | { readonly kind: 'addProp'; readonly controller: string; readonly prop: string; readonly type: string }
   | { readonly kind: 'removeProp'; readonly controller: string; readonly prop: string }
-  | { readonly kind: 'attachProp'; readonly controller: string; readonly prop: string; readonly options: readonly string[] };
+  | { readonly kind: 'attachProp'; readonly controller: string; readonly prop: string; readonly options: readonly string[] }
+  | { readonly kind: 'detachProp'; readonly controller: string; readonly prop: string };
 
 /** The group that controls or rules `name`, if any: the panel draws variant settings for both. */
 export function variantGroupOf(groups: readonly VariantGroup[] | undefined, name: string): VariantGroup | undefined {
@@ -194,6 +200,9 @@ function parseVariantGroupEditing(input: unknown): VariantGroupEditing {
   if (value?.['kind'] === 'editable') {
     return { kind: 'editable' };
   }
+  if (value?.['kind'] === 'candidate') {
+    return { kind: 'candidate' };
+  }
   if (value?.['kind'] === 'readonly') {
     return { kind: 'readonly', reason: parseVariantGroupReason(value['reason']) };
   }
@@ -231,6 +240,7 @@ export function parseVariantRuleEdit(input: unknown): VariantRuleEdit {
     case 'addProp':
       return { kind, ...object({ controller: propertyName, prop: propertyName, type: parseTypeText })(input) };
     case 'removeProp':
+    case 'detachProp':
       return { kind, ...object({ controller: propertyName, prop: propertyName })(input) };
     case 'attachProp': {
       const attach = object({

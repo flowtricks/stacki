@@ -1,11 +1,14 @@
 // Goal: variant rules are configured with controls in each prop's own
-// settings, never text. A ruled prop (`type`, `disabled`, `href`, `emphasis`,
-// `label`, `pressed`, `direction`) shows "Controlled by" with one Allowed /
-// Required / Not allowed switch per option in place of Required. The
-// controller (`variant`, `element`) keeps the panel's one Options list and
-// Default value dropdown, which write the union's option edits. A prop every
-// option shares offers "Only for". A read-only group is drawn disabled with
-// its one-word reason. Each control writes exactly the edit it stands for.
+// settings, never text. Every existing prop shows "Controlled by": a ruled
+// prop (`type`, `disabled`, `href`, `emphasis`, `label`, `pressed`,
+// `direction`) in place of Required, with one Allowed / Required / Not allowed
+// state per option and None to give it back to every option; a prop with no
+// rules (a fresh one too) picks a controller, or with none yet a prop of
+// string options, and the option to allow it for. The controller keeps the
+// panel's one Options list and Default value dropdown, which write the
+// union's option edits. A read-only group is disabled with its one-word reason.
+// Row overflow is held by the stylesheet's fixed state column and ellipsized
+// names; jsdom lays nothing out, so widths are not measured here.
 // Method: the real Properties panel is mounted in jsdom over the Lumos Button
 // fixture, with main's real reader and writer (`readComponentProperties`,
 // `editPropertyDefinition`) behind a stub bridge. Each test drives the controls
@@ -113,6 +116,13 @@ async function mountPanel(source) {
       await click(row);
     },
     labelled: (label) => container.querySelector(`[aria-label="${label}"]`),
+    // A Dropdown, by its label, opened and set to the option that reads `text`.
+    pick: async (label, text) => {
+      await click(container.querySelector(`.dd-trigger[aria-label="${label}"]`));
+      const option = [...document.querySelectorAll('.dd-option')].find((item) => item.textContent.trim() === text);
+      assert.ok(option, `${label} offers ${text}`);
+      await click(option);
+    },
     type: async (input, value) =>
       act(async () => {
         Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, value);
@@ -172,15 +182,15 @@ test('helpers: each Options list change is one option edit, and a Default pick m
   assert.equal(fallbackEdit(group, 'someExpression'), undefined);
 });
 
-test('every ruled prop shows Controlled by and one switch per option, in place of Required', async () => {
+test('every ruled prop shows Controlled by and one state per option, in place of Required', async () => {
   for (const [controller, props] of Object.entries(RULED)) {
     for (const prop of props) {
       const panel = await mountPanel(BUTTON);
       await panel.open(prop);
       const editor = panel.section();
-      assert.equal(editor.querySelector('.variant-chip')?.textContent, controller, prop);
+      assert.equal(editor.querySelector('.variant-controller-choice')?.textContent.trim(), controller, prop);
       assert.deepEqual(
-        [...editor.querySelectorAll('[role="radiogroup"]')].map((group) => group.getAttribute('aria-label')),
+        [...editor.querySelectorAll('.variant-rule-row .variant-state')].map((trigger) => trigger.getAttribute('aria-label')),
         OPTIONS[controller].map((value) => `${prop} when ${controller} is ${value}`),
         prop,
       );
@@ -191,17 +201,28 @@ test('every ruled prop shows Controlled by and one switch per option, in place o
   }
 });
 
-test('a switch pick writes its rule', async () => {
+test('a state pick writes its rule, and a Not allowed row is dimmed', async () => {
   const panel = await mountPanel(BUTTON);
   await panel.open('label');
-  const play = panel.labelled('label when variant is play');
-  await panel.click([...play.querySelectorAll('button')].find((button) => button.textContent === 'Required'));
+  assert.ok(panel.labelled('label when variant is main').closest('.variant-rule-row').classList.contains('is-forbidden'));
+  assert.ok(panel.labelled('label when variant is play').classList.contains('is-optional'));
+  await panel.pick('label when variant is play', 'Required');
   assert.equal(
     panel.source(),
     replaced(BUTTON, 'Defaults to `Play` or `Pause`. */\n      label?: string;', 'Defaults to `Play` or `Pause`. */\n      label: string;'),
   );
-  await panel.click([...panel.labelled('label when variant is main').querySelectorAll('button')].find((button) => button.textContent === 'Allowed'));
+  assert.ok(panel.labelled('label when variant is play').classList.contains('is-required'));
+  await panel.pick('label when variant is main', 'Allowed');
   assert.match(panel.source(), /variant\?: "main";\n {6}\/\*\* Visual emphasis\. \*\/\n {6}emphasis\?: Emphasis;\n {6}label\?: string;/);
+  await panel.unmount();
+});
+
+test('None gives a ruled prop back to every option, as one shared declaration', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('direction');
+  await panel.pick('Controlled by', 'None');
+  assert.match(panel.source(), /render\?: boolean;\n {2}\/\*\* Arrow direction\. \*\/\n {2}direction\?: "forward" \| "back";\n\} & Tag &/);
+  assert.doesNotMatch(panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props')), /direction/);
   await panel.unmount();
 });
 
@@ -262,20 +283,57 @@ test('the Default value pick moves the fallback and the destructure default', as
   await panel.unmount();
 });
 
-test('a shared prop offers Only for; a pick gives it rules there', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('render');
-  const editor = panel.section();
-  const only = editor.querySelector('[aria-label="Only for"]');
-  assert.ok(only, 'render offers Only for');
-  assert.deepEqual(
-    [...only.querySelectorAll('.variant-only-option')].map((button) => button.textContent),
-    ['button', 'link'],
+test('any prop with no rules yet picks a controller, then the option it is allowed for', async () => {
+  // `badge` stands for a prop just created in the prop list: declared in the shared object type.
+  const fresh = BUTTON.replace('  render?: boolean;\n} & Tag &', '  render?: boolean;\n  badge?: string;\n} & Tag &').replace(
+    '  render = true,\n',
+    '  render = true,\n  badge,\n',
   );
-  await panel.click(panel.labelled('render when element is link'));
-  assert.match(panel.source(), /type Props = \{\n\} & Tag &/);
-  assert.match(panel.source(), /href\?: never;\n {6}render\?: never;\n {4}\}\)/);
-  assert.match(panel.source(), /disabled\?: never;\n {6}\/\*\* Set to `false` to omit the component\. \*\/\n {6}render\?: boolean;\n {4}\}\);/);
+  const panel = await mountPanel(fresh);
+  await panel.open('badge');
+  const editor = panel.section();
+  assert.equal(editor.querySelector('.variant-controller-choice').textContent.trim(), 'None');
+  assert.ok(
+    [...editor.querySelectorAll('label')].some((label) => label.textContent.trim() === 'Required'),
+    'an unruled prop keeps Required',
+  );
+  await panel.pick('Controlled by', 'variant');
+  assert.deepEqual(
+    [...editor.querySelectorAll('.variant-only-option')].map((button) => button.textContent),
+    ['main', 'link', 'play', 'close', 'arrow'],
+  );
+  await panel.click(panel.labelled('badge when variant is link'));
+  const kind = panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props'));
+  assert.equal(kind.split('badge?: never;').length, 5);
+  assert.equal(kind.split('badge?: string;').length, 2);
+  assert.ok(panel.labelled('badge when variant is link'), 'the rows take over');
+  await panel.unmount();
+});
+
+test('with no controller yet, a prop of string options becomes one', async () => {
+  const plain = [
+    '---',
+    'type Props = {',
+    '  size?: "s" | "l";',
+    '  /** Icon name. */',
+    '  icon?: string;',
+    '};',
+    'const { size = "s", icon } = Astro.props;',
+    '---',
+    '<i>{size}{icon}</i>',
+    '',
+  ].join('\n');
+  const panel = await mountPanel(plain);
+  await panel.open('icon');
+  await panel.pick('Controlled by', 'size');
+  await panel.click(panel.labelled('icon when size is l'));
+  assert.equal(
+    panel.source(),
+    plain.replace(
+      'type Props = {\n  size?: "s" | "l";\n  /** Icon name. */\n  icon?: string;\n};',
+      'type Props = {\n} & (\n  | { size?: "s"; icon?: never }\n  | { size: "l"; /** Icon name. */ icon?: string }\n);',
+    ),
+  );
   await panel.unmount();
 });
 
@@ -295,7 +353,7 @@ test('a read-only group is drawn disabled with its reason; a plain prop has no r
   await panel.open('label');
   const rules = panel.section().querySelector('.variant-rules');
   assert.equal(rules.querySelector('.variant-reason').textContent, 'Shared');
-  assert.ok([...rules.querySelectorAll('[role="radio"]')].every((button) => button.disabled));
+  assert.ok([...rules.querySelectorAll('.dd-trigger')].every((button) => button.disabled));
   await panel.unmount();
   const plain = await mountPanel(['---', 'interface Props { title?: string }', 'const { title } = Astro.props;', '---', '<h1>{title}</h1>', ''].join('\n'));
   await plain.open('title');

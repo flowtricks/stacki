@@ -22,7 +22,8 @@ import { applySourceEdits, propertyKey, readPropertySyntax, replaceFrontmatter, 
 import type { SourceEdit } from './propertySyntax';
 import { memberComment } from './propertyMemberEdits';
 import { readVariantSyntax, ruleOf, stringLiteralOf, variantGroupsOf } from './variantRuleModel';
-import type { VariantGroupSyntax, VariantSyntax } from './variantRuleModel';
+import type { VariantCandidateSyntax, VariantGroupSyntax, VariantSyntax } from './variantRuleModel';
+import { indentUnitOf } from '../../shared/core/indent';
 
 /** Frontmatter edits are offsets into the frontmatter; template edits, into the whole source. */
 interface PlannedEdits {
@@ -37,13 +38,17 @@ export function editVariantRules(source: string, edit: VariantRuleEdit): Result<
   const document = readPropertySyntax(source);
   const syntax = readVariantSyntax(document);
   const group = syntax.groups.find((candidate) => candidate.controller === edit.controller);
-  if (group === undefined) {
+  const candidate = syntax.candidates.find((item) => item.controller === edit.controller);
+  if (group === undefined && (candidate === undefined || edit.kind !== 'attachProp')) {
     return err(refusal('missing', 'componentProps.variants.missingGroup', { name: edit.controller }));
   }
-  if (group.reason !== undefined) {
+  if (group?.reason !== undefined) {
     return err(refusal('restricted', 'componentProps.variants.readOnly', { name: edit.controller }));
   }
-  const planned = planEdit(syntax, group, edit);
+  const planned =
+    group === undefined && candidate !== undefined && edit.kind === 'attachProp'
+      ? planCreateGroup(syntax, candidate, edit.prop, edit.options)
+      : planGroupEdit(syntax, group, edit);
   if (!planned.ok) {
     return planned;
   }
@@ -71,6 +76,11 @@ export function editVariantRules(source: string, edit: VariantRuleEdit): Result<
   return ok(output);
 }
 
+function planGroupEdit(syntax: VariantSyntax, group: VariantGroupSyntax | undefined, edit: VariantRuleEdit): Result<PlannedEdits> {
+  assert(group !== undefined, 'planGroupEdit: an edit to an existing group has the group');
+  return planEdit(syntax, group, edit);
+}
+
 // The one place that branches on the edit: each helper below plans text and
 // returns it, or refuses.
 function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: VariantRuleEdit): Result<PlannedEdits> {
@@ -93,6 +103,8 @@ function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: Varian
       return planRemoveProp(syntax, group, edit.prop);
     case 'attachProp':
       return planAttachProp(syntax, group, edit.prop, edit.options);
+    case 'detachProp':
+      return planDetachProp(syntax, group, edit.prop);
     default: {
       const exhaustive: never = edit;
       return exhaustive;
@@ -337,6 +349,91 @@ function documentedDeclaration(frontmatter: string, literal: ts.TypeLiteralNode,
     return `${documentation}\n${lineIndent(frontmatter, last.getStart())}${declaration}`;
   }
   return `${documentation} ${declaration}`;
+}
+
+// A shared prop and a shared string-options prop become a group: both leave
+// the shared object type, and `Props` is intersected with a union, one member
+// per option, keyed by the controller; the prop is allowed where picked.
+function planCreateGroup(syntax: VariantSyntax, candidate: VariantCandidateSyntax, prop: string, options: readonly string[]): Result<PlannedEdits> {
+  const field = syntax.common.get(prop);
+  const props = syntax.props;
+  if (field === undefined || prop === candidate.controller) {
+    return err(refusal('missing', 'componentProps.variants.cannotAttach', { name: prop }));
+  }
+  const type = field.type;
+  assert(type !== undefined, 'planCreateGroup: a shared prop has a type');
+  if (props === undefined || !(ts.isTypeLiteralNode(props.type) || ts.isIntersectionTypeNode(props.type) || ts.isTypeReferenceNode(props.type))) {
+    return err(refusal('shape', 'componentProps.variants.cannotGroup'));
+  }
+  const values = candidate.literals.map((literal) => literal.text);
+  const missing = options.find((value) => !values.includes(value));
+  if (missing !== undefined) {
+    return err(refusal('missing', 'componentProps.variants.missingOption', { value: missing }));
+  }
+  const frontmatter = syntax.document.frontmatter;
+  const unit = indentUnitOf(frontmatter);
+  const quote = candidate.literals[0]?.getText().slice(0, 1) ?? '"';
+  const controllerDocumentation = inlineDocumentation(frontmatter, candidate.field);
+  const propDocumentation = inlineDocumentation(frontmatter, field);
+  const allowed = declarationText(prop, field.questionToken === undefined ? 'required' : 'optional', type.getText());
+  const members = values.map((value) => {
+    const key = `${controllerDocumentation}${candidate.controller}${value === candidate.fallback ? '?' : ''}: ${quote}${value}${quote}`;
+    const own = options.includes(value) ? `${propDocumentation}${allowed}` : `${prop}?: never`;
+    return `${unit}| { ${key}; ${own} }`;
+  });
+  assert(members.length === values.length, 'planCreateGroup: one member per option');
+  return ok({
+    frontmatter: [
+      { start: candidate.field.getFullStart(), end: candidate.field.end, text: '' },
+      { start: field.getFullStart(), end: field.end, text: '' },
+      { start: props.type.end, end: props.type.end, text: ` & (\n${members.join('\n')}\n)` },
+    ].sort((first, second) => first.start - second.start),
+    template: [],
+  });
+}
+
+// A member's JSDoc as one line before a declaration, or nothing.
+function inlineDocumentation(frontmatter: string, field: ts.PropertySignature): string {
+  const comment = memberComment(frontmatter, field);
+  if (comment?.kind !== 'jsdoc') {
+    return '';
+  }
+  return `${frontmatter.slice(comment.start, comment.end).replace(/\s*\n\s*\*?\s*/g, ' ')} `;
+}
+
+// A ruled prop given back to every option: its declarations leave the
+// members, and it is declared once in the shared object type (one is added
+// to `Props` when there is none), Required only if every option required it,
+// with the first allowing option's type and comment.
+function planDetachProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: string): Result<PlannedEdits> {
+  if (!group.props.includes(prop)) {
+    return err(refusal('missing', 'componentProps.variants.missingProp', { name: prop }));
+  }
+  const type = propTypeOf(syntax, group, prop);
+  if (!type.ok) {
+    return type;
+  }
+  const rules = group.members.map((member) => ruleOf(member, prop));
+  const state = rules.every((rule) => rule.state === 'required') ? 'required' : 'optional';
+  const frontmatter = syntax.document.frontmatter;
+  const source = group.members.map((member) => member.fields.get(prop)).find((field) => field !== undefined && field.type?.kind !== ts.SyntaxKind.NeverKeyword);
+  const comment = source === undefined ? undefined : memberComment(frontmatter, source);
+  const documentation = comment?.kind === 'jsdoc' ? frontmatter.slice(comment.start, comment.end) : '';
+  const declaration = declarationText(prop, state, type.value);
+  const edits: SourceEdit[] = group.members.flatMap((member) => {
+    const field = member.fields.get(prop);
+    return field === undefined ? [] : [{ start: field.getFullStart(), end: field.end, text: '' }];
+  });
+  const literal = syntax.commonLiterals[0];
+  if (literal !== undefined) {
+    edits.push(insertField(frontmatter, literal, documentation === '' ? declaration : documentedDeclaration(frontmatter, literal, documentation, declaration)));
+  } else if (syntax.props !== undefined) {
+    const start = syntax.props.type.getStart();
+    edits.push({ start, end: start, text: `{ ${documentation === '' ? '' : `${documentation} `}${declaration} } & ` });
+  } else {
+    return err(refusal('shape', 'componentProps.variants.cannotGroup'));
+  }
+  return ok({ frontmatter: edits, template: [] });
 }
 
 function planRemoveProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: string): Result<PlannedEdits> {
@@ -658,6 +755,10 @@ function verifyEdit(output: string, edit: VariantRuleEdit): void {
       return;
     case 'removeProp':
       assert(!group.props.includes(edit.prop), 'verifyEdit: the removed prop is gone');
+      return;
+    case 'detachProp':
+      assert(!group.props.includes(edit.prop), 'verifyEdit: the detached prop is no longer ruled');
+      assert(group.attachable.includes(edit.prop), 'verifyEdit: the detached prop is shared again');
       return;
     case 'attachProp': {
       const index = group.props.indexOf(edit.prop);

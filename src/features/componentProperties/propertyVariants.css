@@ -1,89 +1,74 @@
-/* Variant rules in a prop's settings (PropertyVariants.tsx). Fills, never
+/* "Controlled by" in a prop's settings (PropertyVariants.tsx). Fills, never
    outlines: Required is the accent, Allowed its soft tint, Not allowed the
-   field fill. The accent stays the accent on hover, press and focus. */
+   field fill with its option dimmed. The accent stays the accent on hover,
+   press and focus. Every row fits the panel's narrow widths: the state is a
+   fixed-width Dropdown, the option name takes what is left and ellipsizes. */
 .variant-rules {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
-.variant-controlled {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.variant-label {
   color: var(--text-dim);
 }
 .variant-controller {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
-.variant-controller .dd-trigger {
-  min-width: 96px;
+.variant-controller .variant-controller-choice {
+  width: auto;
+  min-width: 120px;
+  max-width: 100%;
 }
-.variant-reason,
-.variant-chip {
+.variant-reason {
   padding: 1px 6px;
   border-radius: 4px;
   background: var(--bg-input);
   color: var(--text-dim);
   font-size: 11px;
 }
-.variant-chip {
-  color: var(--text);
+.variant-rule-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .variant-rule-row {
   display: grid;
-  grid-template-columns: minmax(48px, 1fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 1fr) 116px;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .variant-rule-option {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
   font-size: 12px;
 }
-.variant-seg {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
-  background: var(--bg-input);
-}
-.variant-seg button {
-  min-width: 0;
-  height: 24px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: transparent;
+.variant-rule-row.is-forbidden .variant-rule-option {
   color: var(--text-dim);
-  font-size: 11px;
 }
-.variant-seg button:hover:not(:disabled):not(.on) {
-  color: var(--text);
+.variant-rule-row .variant-state {
+  min-width: 0;
 }
-.variant-seg button.on,
-.variant-seg button.on:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
+.variant-rule-row .variant-state.is-forbidden {
+  color: var(--text-dim);
 }
-.variant-seg button.on[data-state='optional'],
-.variant-seg button.on[data-state='optional']:hover:not(:disabled) {
+.variant-rule-row .variant-state.is-optional,
+.variant-rule-row .variant-state.is-optional:hover:not(:disabled) {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.variant-seg button.on[data-state='required'],
-.variant-seg button.on[data-state='required']:hover:not(:disabled),
-.variant-seg button.on[data-state='required']:active,
-.variant-seg button.on[data-state='required']:focus-visible {
+.variant-rule-row .variant-state.is-required,
+.variant-rule-row .variant-state.is-required:hover:not(:disabled),
+.variant-rule-row .variant-state.is-required:active,
+.variant-rule-row .variant-state.is-required:focus-visible {
   background: var(--accent);
   color: #fff;
 }
@@ -93,13 +78,13 @@
   gap: 4px;
 }
 .variant-only-option {
-  height: 24px;
-  padding: 0 8px;
+  height: 26px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--bg-input);
-  color: var(--text-dim);
-  font-size: 11px;
+  color: var(--text);
+  font-size: 12px;
 }
 .variant-only-option:hover:not(:disabled) {
   background: var(--accent-soft);

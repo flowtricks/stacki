@@ -131,6 +131,7 @@ export const messages = {
   'componentProps.variants.badValue': 'Usa un nombre corto sin comillas ni barras invertidas.', // review
   'componentProps.variants.cannotAttach':
     '{name} no está declarada en las propiedades que comparten todas las opciones, así que aquí no puede tener reglas de variante.', // review
+  'componentProps.variants.cannotGroup': 'Props no está escrito como un tipo al que Stacki pueda añadir reglas de variante.', // review
   'componentProps.variants.cell': '{prop} cuando {controller} es {value}', // review
   'componentProps.variants.controlledBy': 'Controlado por', // review
   'componentProps.variants.duplicateOption': 'Ya existe una opción {value}.', // review
@@ -141,7 +142,7 @@ export const messages = {
   'componentProps.variants.noDestructure': 'El componente no lee sus propiedades con una sola desestructuración, así que la propiedad no se puede añadir aquí.', // review
   'componentProps.variants.noRuntimeType': 'El tipo de ejecución del componente no admite aquí una propiedad nueva.', // review
   'componentProps.variants.noType': '{name} no tiene un tipo que permitir. Dale primero un tipo.', // review
-  'componentProps.variants.onlyFor': 'Solo para', // review
+  'componentProps.variants.none': 'Ninguno', // review
   'componentProps.variants.optionInCode': 'El código del componente usa {value} de una forma que Stacki no puede actualizar. Cámbialo en el código fuente.', // review
   'componentProps.variants.optionPassed': '{file} pasa {value} como {name}. Cambia antes esa instancia.', // review
   'componentProps.variants.optionsLimit': 'Una propiedad puede tener como máximo {max} opciones.', // review

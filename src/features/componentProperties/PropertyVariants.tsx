@@ -8,15 +8,14 @@
 //   dropdown (PropertyOptions, PropertyDefault). For it they write the union:
 //   adding, renaming, removing or moving an option is an option edit, and
 //   picking the default moves the fallback, instead of a save of the type text.
-// - A prop the controller rules shows, in place of Required, "Controlled by"
-//   with one Allowed / Required / Not allowed switch per option.
-// - A prop every option shares shows "Only for", which gives it rules: the
-//   options picked allow it, the rest do not.
+// - Every other existing prop shows "Controlled by": for a ruled prop, in
+//   place of Required, the controller and one state per option; for one
+//   not ruled yet, a controller to pick (one of string options, when the
+//   component has no group yet) and the option to allow it for.
 // - A group main cannot edit faithfully is drawn the same, disabled, with one
 //   word for why.
 
 import { useState } from 'react';
-import type { KeyboardEvent } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
@@ -62,7 +61,7 @@ export function variantRoleOf(groups: readonly VariantGroup[] | undefined, name:
   if (name === '') {
     return { kind: 'none' };
   }
-  const controller = groups?.find((group) => group.controller === name);
+  const controller = groups?.find((group) => group.controller === name && group.editing.kind !== 'candidate');
   if (controller !== undefined) {
     return { kind: 'controller', group: controller };
   }
@@ -201,148 +200,117 @@ export function fallbackEdit(group: VariantGroup, defaultValue: string): Variant
   return { kind: 'setFallback', controller: group.controller, value };
 }
 
-/** "Controlled by" and one switch per option: a ruled prop's place for Required. */
-export function VariantPropRules(props: {
+// The Dropdown's value for no controller: a controller is a prop name, never empty.
+const NO_CONTROLLER = '';
+
+/**
+ * "Controlled by" in any existing prop's settings, in place of Required for a
+ * ruled prop. Ruled: the controller, then one row per option with its state
+ * (Allowed, Required, Not allowed); None gives the prop back to every option.
+ * Not ruled yet: pick a controller (an existing one, or with none yet a
+ * prop of string options), then an option: the prop is allowed there and not
+ * elsewhere, and the rows take over.
+ */
+export function VariantControlledBy(props: {
   readonly name: string;
-  readonly groups: readonly VariantGroup[];
+  readonly role: Extract<VariantRole, { readonly kind: 'ruled' | 'attachable' }>;
   readonly host: VariantHost;
   readonly onProblem: (message: string) => void;
 }) {
   const translate = useTranslate();
   const [chosen, setChosen] = useState<string | undefined>(undefined);
   const { run, pending } = useVariantRun(props.host, props.onProblem);
-  const group = props.groups.find((candidate) => candidate.controller === chosen) ?? props.groups[0];
-  assert(group !== undefined, 'VariantPropRules: a ruled prop has a group');
-  const index = group.props.indexOf(props.name);
-  assert(index >= 0, 'VariantPropRules: the prop is one the group rules');
-  const disabled = pending || group.editing.kind !== 'editable';
+  const { role, name } = props;
+  const label = translate('componentProps.variants.controlledBy');
+  const ruled = role.kind === 'ruled';
+  const group = ruled
+    ? (role.groups.find((candidate) => candidate.controller === chosen) ?? role.groups[0])
+    : role.groups.find((candidate) => candidate.controller === chosen);
+  const readonly = group?.editing.kind === 'readonly';
+  const choices = [
+    { value: NO_CONTROLLER, label: translate('componentProps.variants.none') },
+    ...role.groups.map((candidate) => ({ value: candidate.controller, label: candidate.controller })),
+  ];
+  const choose = (value: string): void => {
+    if (ruled && value === NO_CONTROLLER && group !== undefined) {
+      void run({ kind: 'detachProp', controller: group.controller, prop: name });
+    } else {
+      setChosen(value === NO_CONTROLLER ? undefined : value);
+    }
+  };
   return (
-    <div className="variant-rules" role="group" aria-label={translate('componentProps.variants.rules')} aria-busy={pending}>
-      <ControllerRow label={translate('componentProps.variants.controlledBy')} groups={props.groups} group={group} onChoose={setChosen} translate={translate} />
+    <div className="variant-rules" role="group" aria-label={label} aria-busy={pending}>
+      <span className="variant-label">{label}</span>
+      <div className="variant-controller">
+        <Dropdown
+          className="variant-controller-choice"
+          ariaLabel={label}
+          value={group?.controller ?? NO_CONTROLLER}
+          options={choices}
+          disabled={pending || readonly}
+          onChange={choose}
+        />
+        {group?.editing.kind === 'readonly' && <span className="variant-reason">{translate(REASON_KEYS[group.editing.reason])}</span>}
+      </div>
+      {group !== undefined && ruled && <VariantRuleRows name={name} group={group} disabled={pending || readonly} translate={translate} run={run} />}
+      {group !== undefined && !ruled && (
+        <div className="variant-only-for">
+          {group.options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className="variant-only-option"
+              aria-label={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
+              title={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
+              disabled={pending}
+              onClick={() => void run({ kind: 'attachProp', controller: group.controller, prop: name, options: [option.value] })}
+            >
+              {option.value}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One full-width row per option: its name, and its state as a compact Dropdown.
+function VariantRuleRows(props: {
+  readonly name: string;
+  readonly group: VariantGroup;
+  readonly disabled: boolean;
+  readonly translate: Translate;
+  readonly run: (edit: VariantRuleEdit) => Promise<boolean>;
+}) {
+  const { name, group, translate } = props;
+  const index = group.props.indexOf(name);
+  assert(index >= 0, 'VariantRuleRows: the prop is one the group rules');
+  const states = STATE_ORDER.map((state) => ({ value: state, label: translate(STATE_KEYS[state]) }));
+  return (
+    <div className="variant-rule-rows">
       {group.options.map((option) => {
         const rule = option.rules[index];
-        assert(rule !== undefined, 'VariantPropRules: every option has a rule for every prop');
+        assert(rule !== undefined, 'VariantRuleRows: every option has a rule for every prop');
         return (
-          <div key={option.value} className="variant-rule-row">
+          <div key={option.value} className={`variant-rule-row is-${rule.state}`}>
             <span className="variant-rule-option" title={option.value}>
               {option.value}
             </span>
-            <VariantStateSwitch
-              label={translate('componentProps.variants.cell', { prop: props.name, controller: group.controller, value: option.value })}
-              state={rule.state}
-              disabled={disabled}
-              translate={translate}
-              onPick={(state) => void run({ kind: 'setRule', controller: group.controller, option: option.value, prop: props.name, state })}
+            <Dropdown<VariantRuleState>
+              className={`variant-state is-${rule.state}`}
+              ariaLabel={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
+              value={rule.state}
+              options={states}
+              disabled={props.disabled}
+              onChange={(state) => {
+                if (state !== rule.state) {
+                  void props.run({ kind: 'setRule', controller: group.controller, option: option.value, prop: name, state });
+                }
+              }}
             />
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/** "Only for": a shared prop's options to allow it for; the first pick gives it rules. */
-export function VariantOnlyFor(props: {
-  readonly name: string;
-  readonly groups: readonly VariantGroup[];
-  readonly host: VariantHost;
-  readonly onProblem: (message: string) => void;
-}) {
-  const translate = useTranslate();
-  const [chosen, setChosen] = useState<string | undefined>(undefined);
-  const { run, pending } = useVariantRun(props.host, props.onProblem);
-  const group = props.groups.find((candidate) => candidate.controller === chosen) ?? props.groups[0];
-  assert(group !== undefined, 'VariantOnlyFor: an attachable prop has a group');
-  return (
-    <div className="variant-rules" role="group" aria-label={translate('componentProps.variants.onlyFor')} aria-busy={pending}>
-      <ControllerRow label={translate('componentProps.variants.onlyFor')} groups={props.groups} group={group} onChoose={setChosen} translate={translate} />
-      <div className="variant-only-for">
-        {group.options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className="variant-only-option"
-            aria-label={translate('componentProps.variants.cell', { prop: props.name, controller: group.controller, value: option.value })}
-            disabled={pending}
-            onClick={() => void run({ kind: 'attachProp', controller: group.controller, prop: props.name, options: [option.value] })}
-          >
-            {option.value}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// The controller's name, or a choice when two groups rule the prop; and a
-// read-only group's one word.
-function ControllerRow(props: {
-  readonly label: string;
-  readonly groups: readonly VariantGroup[];
-  readonly group: VariantGroup;
-  readonly translate: Translate;
-  readonly onChoose: (controller: string) => void;
-}) {
-  const { groups, group, translate } = props;
-  return (
-    <div className="variant-controlled">
-      <span>{props.label}</span>
-      <span className="variant-controller">
-        {group.editing.kind === 'readonly' && <span className="variant-reason">{translate(REASON_KEYS[group.editing.reason])}</span>}
-        {groups.length > 1 ? (
-          <Dropdown
-            ariaLabel={props.label}
-            value={group.controller}
-            options={groups.map((candidate) => ({ value: candidate.controller, label: candidate.controller }))}
-            onChange={props.onChoose}
-          />
-        ) : (
-          <span className="variant-chip">{group.controller}</span>
-        )}
-      </span>
-    </div>
-  );
-}
-
-// Allowed, Required, Not allowed: three choices side by side, one of them on.
-// Left and right arrows pick the one beside.
-function VariantStateSwitch(props: {
-  readonly label: string;
-  readonly state: VariantRuleState;
-  readonly disabled: boolean;
-  readonly translate: Translate;
-  readonly onPick: (state: VariantRuleState) => void;
-}) {
-  const move = (event: KeyboardEvent<HTMLDivElement>): void => {
-    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-    if (step !== 0 && !props.disabled) {
-      event.preventDefault();
-      const next = STATE_ORDER[(STATE_ORDER.indexOf(props.state) + step + STATE_ORDER.length) % STATE_ORDER.length];
-      assert(next !== undefined, 'VariantStateSwitch: the next state exists');
-      props.onPick(next);
-    }
-  };
-  return (
-    <div className="variant-seg" role="radiogroup" aria-label={props.label} onKeyDown={move}>
-      {STATE_ORDER.map((state) => (
-        <button
-          key={state}
-          type="button"
-          role="radio"
-          aria-checked={state === props.state}
-          tabIndex={state === props.state ? 0 : -1}
-          className={state === props.state ? 'on' : ''}
-          data-state={state}
-          disabled={props.disabled}
-          onClick={() => {
-            if (state !== props.state) {
-              props.onPick(state);
-            }
-          }}
-        >
-          {props.translate(STATE_KEYS[state])}
-        </button>
-      ))}
     </div>
   );
 }

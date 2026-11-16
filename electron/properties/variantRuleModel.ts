@@ -63,6 +63,24 @@ export interface VariantSyntax {
    * file and not exported. Each can be given variant rules (`attachProp`).
    */
   readonly common: ReadonlyMap<string, ts.PropertySignature>;
+  /** The shared object types themselves, in written order: where a prop detached from a group goes. */
+  readonly commonLiterals: readonly ts.TypeLiteralNode[];
+  /** The `type Props` alias, when it is one this reader follows: a new group is intersected onto it. */
+  readonly props: ts.TypeAliasDeclaration | undefined;
+  /**
+   * With no group yet, the shared props that could become one's controller:
+   * a string-literal union of two or more options (`size?: "s" | "m"`).
+   */
+  readonly candidates: readonly VariantCandidateSyntax[];
+}
+
+/** A shared prop that could control a new group, and its options as written. */
+export interface VariantCandidateSyntax {
+  readonly controller: string;
+  readonly field: ts.PropertySignature;
+  readonly literals: readonly ts.StringLiteral[];
+  /** The option that applies when the controller is not passed: the destructure's default, else the first; none when it is required. */
+  readonly fallback: string | undefined;
 }
 
 type Declaration = ts.TypeAliasDeclaration | ts.InterfaceDeclaration;
@@ -75,6 +93,7 @@ interface Candidate {
 interface PropsParts {
   readonly candidates: readonly Candidate[];
   readonly common: ReadonlyMap<string, ts.PropertySignature>;
+  readonly commonLiterals: readonly ts.TypeLiteralNode[];
 }
 
 const NO_COMMON: ReadonlyMap<string, ts.PropertySignature> = new Map();
@@ -95,7 +114,7 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
   const pattern = patterns.length === 1 ? patterns[0] : undefined;
   const props = declarations?.get('Props');
   if (declarations === undefined || props === undefined || !ts.isTypeAliasDeclaration(props) || props.typeParameters !== undefined) {
-    return { document, groups: [], runtime: runtime.syntax, pattern, common: NO_COMMON };
+    return { document, groups: [], runtime: runtime.syntax, pattern, common: NO_COMMON, commonLiterals: [], props: undefined, candidates: [] };
   }
   const groups: VariantGroupSyntax[] = [];
   const parts = propsParts(props, declarations);
@@ -111,7 +130,44 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
     new Set(groups.map((group) => group.controller)).size === groups.length || groups.every((group) => group.reason !== undefined),
     'Editable groups have distinct controllers',
   );
-  return { document, groups: distinctControllers(groups), runtime: runtime.syntax, pattern, common: parts.common };
+  const exported = isExported(props);
+  const candidates = groups.length === 0 && !exported ? controllerCandidates(parts.common, pattern) : [];
+  return {
+    document,
+    groups: distinctControllers(groups),
+    runtime: runtime.syntax,
+    pattern,
+    common: parts.common,
+    commonLiterals: parts.commonLiterals,
+    props: exported ? undefined : props,
+    candidates,
+  };
+}
+
+// The shared props whose type is a union of distinct string literals: each
+// could pick the option of a group made from it.
+function controllerCandidates(
+  common: ReadonlyMap<string, ts.PropertySignature>,
+  pattern: ts.ObjectBindingPattern | undefined,
+): readonly VariantCandidateSyntax[] {
+  const candidates: VariantCandidateSyntax[] = [];
+  for (const [controller, field] of common) {
+    const type = field.type;
+    const parts = type !== undefined && ts.isUnionTypeNode(type) ? type.types : [];
+    const literals = parts.map((part) => stringLiteralOf(part)).filter((literal): literal is ts.StringLiteral => literal !== undefined);
+    const values = new Set(literals.map((literal) => literal.text));
+    if (literals.length >= 2 && literals.length === parts.length && values.size === literals.length && literals.length <= VARIANT_LIMITS.optionsMax) {
+      const binding = pattern?.elements.find(
+        (element) => element.dotDotDotToken === undefined && propertyKey(element.propertyName ?? element.name) === controller,
+      );
+      const initial = binding?.initializer;
+      const defaulted = initial !== undefined && ts.isStringLiteral(initial) && values.has(initial.text) ? initial.text : undefined;
+      const fallback = field.questionToken === undefined ? undefined : (defaulted ?? literals[0]?.text);
+      candidates.push({ controller, field, literals, fallback });
+    }
+  }
+  assert(candidates.length <= PROPERTY_LIMITS.fieldsMax, 'controllerCandidates: candidates are bounded');
+  return candidates;
 }
 
 /** The panel's model of the groups: names, options and each prop's rule, no syntax. */
@@ -133,8 +189,17 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
       editing: group.reason === undefined ? { kind: 'editable' } : { kind: 'readonly', reason: group.reason },
     };
   });
+  // A candidate is drawn as a group with no rules yet: choosing it for a prop creates the group.
+  const candidates = syntax.candidates.slice(0, VARIANT_LIMITS.groupsMax).map((candidate): VariantGroup => ({
+    controller: candidate.controller,
+    props: [],
+    attachable: [...syntax.common.keys()].filter((name) => name !== candidate.controller),
+    options: candidate.literals.map((literal) => ({ value: literal.text, fallback: literal.text === candidate.fallback, rules: [] })),
+    editing: { kind: 'candidate' },
+  }));
+  assert(groups.length === 0 || candidates.length === 0, 'variantGroupsOf: candidates are offered only with no group');
   assert(groups.length <= VARIANT_LIMITS.groupsMax, 'variantGroupsOf: groups are bounded');
-  return groups;
+  return [...groups, ...candidates];
 }
 
 /** A prop's rule in one option: its state there, as the member's declaration says. */
@@ -171,6 +236,7 @@ function localDeclarations(syntax: ts.SourceFile): ReadonlyMap<string, Declarati
 function propsParts(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<string, Declaration>): PropsParts {
   const candidates: Candidate[] = [];
   const common = new Map<string, ts.PropertySignature>();
+  const commonLiterals: ts.TypeLiteralNode[] = [];
   const work: { readonly node: ts.TypeNode; readonly exported: boolean; readonly path: readonly string[] }[] = [
     { node: props.type, exported: isExported(props), path: ['Props'] },
   ];
@@ -186,6 +252,7 @@ function propsParts(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<st
     } else if (ts.isUnionTypeNode(node)) {
       candidates.push({ union: node, exported: item.exported });
     } else if (ts.isTypeLiteralNode(node) && !item.exported) {
+      commonLiterals.push(node);
       for (const field of node.members) {
         const name = ts.isPropertySignature(field) ? plainName(field) : undefined;
         if (name !== undefined && ts.isPropertySignature(field) && field.type !== undefined && !common.has(name)) {
@@ -205,7 +272,7 @@ function propsParts(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<st
   }
   assert(work.length === 0, 'propsParts: the walk finishes within its budget');
   assert(common.size <= PROPERTY_LIMITS.fieldsMax, 'propsParts: shared props are bounded');
-  return { candidates, common };
+  return { candidates, common, commonLiterals };
 }
 
 interface MemberReading {

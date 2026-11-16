@@ -341,3 +341,79 @@ test('attachProp: a shared prop moves into every option, allowed where picked, w
   assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'label', options: ['link'] }), 'missing');
   assert.equal(refused(BUTTON, { kind: 'attachProp', controller: 'element', prop: 'render', options: ['span'] }), 'missing');
 });
+
+test('detachProp: every option lets go, and the prop is declared once where all options share it', () => {
+  const output = edited(BUTTON, { kind: 'detachProp', controller: 'variant', prop: 'label' });
+  const kind = output.slice(output.indexOf('type Kind ='), output.indexOf('type Props ='));
+  assert.doesNotMatch(kind, /label/);
+  assert.match(output, /render\?: boolean;\n {2}\/\*\* Accessible label\. Defaults to `Play` or `Pause`\. \*\/\n {2}label\?: string;\n\} & Tag &/);
+  const variant = readVariantGroups(output).find((group) => group.controller === 'variant');
+  assert.deepEqual(variant?.props, ['emphasis', 'pressed', 'direction']);
+  assert.ok(variant?.attachable.includes('label'));
+  // Detaching and attaching again gives the prop the same allowed options.
+  const back = edited(output, { kind: 'attachProp', controller: 'variant', prop: 'label', options: ['play', 'close', 'arrow'] });
+  assert.deepEqual(
+    readVariantGroups(back)
+      .find((group) => group.controller === 'variant')
+      ?.options.map((option) => option.rules.find((rule) => rule.prop === 'label')?.state),
+    ['forbidden', 'forbidden', 'optional', 'optional', 'optional'],
+  );
+});
+
+test('detachProp: with no shared object type, Props gains one', () => {
+  const source = component(
+    [
+      'type Props = Kind;',
+      'type Kind =',
+      '  | { variant?: "a"; label: string }',
+      '  | { variant: "b"; label: string };',
+      'const { variant, label } = Astro.props;',
+    ].join('\n'),
+  );
+  assert.equal(
+    edited(source, { kind: 'detachProp', controller: 'variant', prop: 'label' }),
+    replaced(source, [
+      ['type Props = Kind;', 'type Props = { label: string } & Kind;'],
+      ['  | { variant?: "a"; label: string }', '  | { variant?: "a"; }'],
+      ['  | { variant: "b"; label: string };', '  | { variant: "b"; };'],
+    ]),
+  );
+});
+
+test('attachProp on a component with no group: a prop of string options becomes the controller', () => {
+  const source = component(
+    ['type Props = {', '  size?: "s" | "l";', '  /** Icon name. */', '  icon?: string;', '};', 'const { size = "l", icon } = Astro.props;'].join('\n'),
+  );
+  const groups = readVariantGroups(source);
+  assert.deepEqual(
+    groups.map((group) => [group.controller, group.editing.kind, group.options.map((option) => [option.value, option.fallback]), group.attachable]),
+    [
+      [
+        'size',
+        'candidate',
+        [
+          ['s', false],
+          ['l', true],
+        ],
+        ['icon'],
+      ],
+    ],
+  );
+  const output = edited(source, { kind: 'attachProp', controller: 'size', prop: 'icon', options: ['s'] });
+  assert.equal(
+    output,
+    replaced(source, [
+      [
+        'type Props = {\n  size?: "s" | "l";\n  /** Icon name. */\n  icon?: string;\n};',
+        'type Props = {\n} & (\n  | { size: "s"; /** Icon name. */ icon?: string }\n  | { size?: "l"; icon?: never }\n);',
+      ],
+    ]),
+  );
+  assert.deepEqual(
+    readVariantGroups(output).map((group) => [group.controller, group.editing.kind, group.props]),
+    [['size', 'editable', ['icon']]],
+  );
+  assert.equal(refused(source, { kind: 'setRule', controller: 'size', option: 's', prop: 'icon', state: 'optional' }), 'missing');
+  const exported = component(['export type Props = { size?: "s" | "l"; icon?: string };'].join('\n'));
+  assert.deepEqual(readVariantGroups(exported), []);
+});
