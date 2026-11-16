@@ -25,7 +25,8 @@ import {
   type DynamicEntry,
   type GitInfo,
   type InjectedRoute,
-  type ItemIndexes,
+  type CanvasCopy,
+  type ItemPaging,
   type LeftTab,
   type NodeStates,
   type PseudoPick,
@@ -230,9 +231,14 @@ export function useDataState() {
   const [collections, setCollections] = useState<readonly AppCollection[]>([]);
   const sampleAskedRef = useRef(new Set<string>());
   const [dynamicIndex, setDynamicIndex] = useState(0);
-  // Which item of each loop's list the data picker reads as `service`, `post`,
-  // … — keyed by the item's own name. See bindContext below.
-  const [itemIndex, setItemIndex] = useState<ItemIndexes>({});
+  // Which item of each loop's list the person stepped the data picker to, as
+  // `service`, `post`, … — keyed by the item's own name, and only for the
+  // selection it was done under: a new selection starts from the item the
+  // canvas copy is in again. See bindContext (ProjectWindow.tsx).
+  const [itemPaging, setItemPaging] = useState<ItemPaging>({ key: '', pages: {} });
+  // The copy of the selected node the last canvas click landed on, so the picker
+  // reads the loop item that copy was made from (editor/loopSelection.ts).
+  const [canvasCopy, setCanvasCopy] = useState<CanvasCopy | undefined>(undefined);
   const [dynamicError, setDynamicError] = useState<string | undefined>(undefined);
   return {
     collectionSamples,
@@ -241,7 +247,8 @@ export function useDataState() {
     dynamicIndex,
     dynamicPaths,
     injectedRoutes,
-    itemIndex,
+    itemPaging,
+    canvasCopy,
     sampleAskedRef,
     setCollectionSamples,
     setCollections,
@@ -253,7 +260,8 @@ export function useDataState() {
     setDynamicIndex,
     setDynamicPaths,
     setInjectedRoutes,
-    setItemIndex,
+    setItemPaging,
+    setCanvasCopy,
   };
 }
 

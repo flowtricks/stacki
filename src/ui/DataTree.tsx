@@ -131,7 +131,8 @@ export function ItemNavigation({
 }: {
   readonly path: string;
   readonly nav: ItemPosition;
-  readonly onStepItem: (path: string, step: -1 | 1, count: number) => void;
+  /** `index` is the item shown now, which the step starts from. */
+  readonly onStepItem: (path: string, step: -1 | 1, count: number, index: number) => void;
 }) {
   const translate = useTranslate();
   assert(nav.count > 0, 'ItemNavigation: there is an item to show');
@@ -143,7 +144,7 @@ export function ItemNavigation({
         className="dp-step"
         title={translate('ui.dataTree.previousItem')}
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => onStepItem(path, -1, nav.count)}
+        onClick={() => onStepItem(path, -1, nav.count, nav.index)}
       >
         <ChevronLeftIcon size={11} />
       </button>
@@ -155,7 +156,7 @@ export function ItemNavigation({
         className="dp-step"
         title={translate('ui.dataTree.nextItem')}
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => onStepItem(path, 1, nav.count)}
+        onClick={() => onStepItem(path, 1, nav.count, nav.index)}
       >
         <ChevronRightIcon size={11} />
       </button>

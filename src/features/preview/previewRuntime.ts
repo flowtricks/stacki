@@ -77,6 +77,10 @@ export interface PreviewRuntimeProps {
 export interface CanvasSelectInfo {
   readonly outside: boolean;
   readonly pseudo: PseudoLayer | undefined;
+  /** Which copy of the node the click landed in: a node in a loop is drawn once per item. */
+  readonly occurrence: number;
+  /** How many copies the frame drew, when it measured them with the click. */
+  readonly copies: number | undefined;
 }
 
 // Why bounded: a pending selection is a picture drawn while main judges a click, and a judgement
@@ -507,12 +511,12 @@ function gateEvent(token: Digest | undefined, refs: RuntimeRefs, request: Canvas
     (verdict) => {
       if (verdict.tag === 'current') {
         if (judgeEventToken(token, refs.render.current).tag !== 'current') {
-          refs.clicks.current?.refused({ kind: 'stale', reason: 'superseded', file: undefined });
+          refs.clicks.current?.refused({ kind: 'stale', reason: 'superseded', file: undefined, stamped: undefined });
           return;
         }
         apply('path' in verdict ? verdict.path : undefined);
       } else {
-        refs.clicks.current?.refused(staleProblem(verdict));
+        refs.clicks.current?.refused(staleProblem(verdict, render));
       }
     },
     (error: unknown) => {
@@ -553,13 +557,13 @@ function receiveClick(message: Extract<PreviewMessage, { readonly kind: 'click-n
       }
       if (verdict.tag !== 'current') {
         setters.setPendingSelection(undefined);
-        ladder.failed(id, staleProblem(verdict));
+        ladder.failed(id, staleProblem(verdict, refs.render.current));
         return;
       }
       // The frame may have rendered again while main read the disk.
       if (judgeEventToken(message.token, refs.render.current).tag !== 'current') {
         setters.setPendingSelection(undefined);
-        ladder.failed(id, { kind: 'stale', reason: 'superseded', file: undefined });
+        ladder.failed(id, { kind: 'stale', reason: 'superseded', file: undefined, stamped: undefined });
         return;
       }
       const path = 'path' in verdict ? verdict.path : undefined;
@@ -624,8 +628,8 @@ function useExpirePendingSelection(pending: PendingSelection | undefined, setPen
   }, [pending, setPendingSelection]);
 }
 
-function staleProblem(verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>): CanvasClickProblem {
-  return { kind: 'stale', reason: verdict.reason, file: verdict.file };
+function staleProblem(verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>, render: PreviewRender | undefined): CanvasClickProblem {
+  return { kind: 'stale', reason: verdict.reason, file: verdict.file, stamped: render?.stamps.length };
 }
 
 // Whether a hover may be drawn: its rendering is the latest, or the frame has
@@ -684,7 +688,9 @@ function publishSelectedClasses(classes: Readonly<Record<string, readonly (reado
 }
 
 function applyClick(
-  message: Pick<Extract<PreviewMessage, { readonly kind: 'click-node' }>, 'path' | 'occurrence' | 'outside' | 'pseudo'>,
+  message: Pick<Extract<PreviewMessage, { readonly kind: 'click-node' }>, 'path' | 'occurrence' | 'outside' | 'pseudo'> & {
+    readonly boxes?: readonly unknown[] | undefined;
+  },
   refs: RuntimeRefs,
   setters: RuntimeSetters,
 ): void {
@@ -693,7 +699,7 @@ function applyClick(
   clickPendingRef.current = true;
   lastClickRef.current = { path };
   setters.setSelectedOccurrence(message.occurrence);
-  refs.props.current.onSelectPath?.(path, { outside: message.outside, pseudo: message.pseudo });
+  refs.props.current.onSelectPath?.(path, { outside: message.outside, pseudo: message.pseudo, occurrence: message.occurrence, copies: message.boxes?.length });
 }
 
 function useFrameRegistration(props: PreviewRuntimeProps, url: string | undefined, registerFrame: () => void, sendTrack: () => void): void {

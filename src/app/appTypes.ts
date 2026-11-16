@@ -108,6 +108,17 @@ export type CollectionSamples = Readonly<Record<string, CollectionSample>>;
 /** What a file's import calls returned, keyed `<file>|<value name>`; absent: never asked. */
 export type ValueSamples = Readonly<Record<string, Data>>;
 export type ItemIndexes = Readonly<Record<string, number>>;
+/** The loop items the data picker's arrows chose, for the one selection (`key`) they were chosen under. */
+export interface ItemPaging {
+  readonly key: string;
+  readonly pages: ItemIndexes;
+}
+/** The copy of a node in a loop the canvas click named: which of the node's copies on the page it was. */
+export interface CanvasCopy {
+  readonly nodeId: string;
+  readonly occurrence: number;
+  readonly copies: number | undefined;
+}
 export type GitInfo = IpcResults['git:info'];
 export type RepositoryInfo = WireGitInfo;
 export type InjectedRoute = WireInjectedRoute;

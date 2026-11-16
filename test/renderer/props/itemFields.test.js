@@ -273,12 +273,11 @@ const { posts = [] } = Astro.props;`;
     );
     // The app shell and the modules it was split into (src/app).
     const app = readAppSource();
-    check('the app keeps a place per item name', /itemIndex,\n\s*onStepItem:/.test(app), 'the picker has nothing to step');
-    // Compact form, so wrapping and spacing don't matter. The parentheses around
-    // `… % count` are optional: they are redundant, and Prettier adds them.
+    check('the app keeps a place per item name', /itemIndex: selection\.pages,[\s\S]*?onStepItem:/.test(app), 'the picker has nothing to step');
+    // Stepping is steppedLoopIndex's (editor/loopSelection.ts, pinned in loopSelection.test.js): it wraps at both ends.
     check(
       'and stepping wraps rather than running off either end',
-      /\(\(?\(\(current\[name\]\?\?0\)\+step\)%count\)?\+count\)%count/.test(compactSource(app)),
+      /steppedLoopIndex\(index, step, count\)/.test(app),
       'a step past the last entry would leave the list',
     );
   }

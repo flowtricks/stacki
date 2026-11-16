@@ -203,7 +203,7 @@ export interface DataPickerProps {
   readonly tree?: readonly PickerNode[] | undefined;
   readonly current?: string | undefined;
   readonly entries?: Entries | undefined;
-  readonly onStepItem?: (path: string, step: -1 | 1, count: number) => void;
+  readonly onStepItem?: (path: string, step: -1 | 1, count: number, index: number) => void;
   /** `need` is what the file has to read first: a collection's query, or a data file's import. */
   readonly onPick: (path: string, need: PickNeed | undefined) => void;
   /**

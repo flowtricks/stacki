@@ -4,6 +4,7 @@
 import { parseDeclarations, type ImportLike, parseDestructures, looksCallable, collectionCallIn } from './dataSource';
 import type { ImportedValue } from './importedValues';
 import type { TreeNode } from './dataSample';
+import type { LoopCopy } from './loopSelection';
 
 // Numbered names tried for a collection's entries before settling on `…X`: a
 // page reads a handful of collections, never dozens under one name.
@@ -109,6 +110,11 @@ export interface DataContext {
   readonly collectionSamples?: Record<string, unknown>;
   readonly collections?: readonly { readonly name: string; readonly count?: number }[];
   readonly itemIndex?: Record<string, number>;
+  /**
+   * The copy of the selected node the canvas named. The loop items the picker
+   * reads follow it, except where `itemIndex` (the pager) says otherwise.
+   */
+  readonly selectedCopy?: LoopCopy | undefined;
   /**
    * What a value the file computes by calling an import returned, sampled by
    * the dev server — `campusPastors` for `await getCampusPastors()`. Keyed by

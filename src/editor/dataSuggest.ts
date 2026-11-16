@@ -23,6 +23,8 @@ import { entrySampleKey, sampleAt, sampleKey, type TreeNode, sampleNode, literal
 import { englishText, messageRef, type TypedMessageRef } from '../../shared/properties/i18n/messageRef';
 import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, type ShapeMember, autoQueryName } from './dataScope';
 import { loopSourcePath, parseLoopHead } from './loopSource';
+import { loopIndexesOfCopy } from './loopSelection';
+import type { LoopCopy } from './loopSelection';
 import type { ImportedValue } from './importedValues';
 export {
   QUERY_MARK,
@@ -706,41 +708,16 @@ function buildLoopNodes(
   props: readonly TreeNode[],
   values: readonly TreeNode[],
   itemIndex: Record<string, number> | undefined,
+  selection: LoopCopy | undefined,
   seen: Set<string>,
 ): TreeNode[] {
-  const byPath = new Map<string, TreeNode>();
-  const index = (list: readonly TreeNode[], depth: number): void => {
-    assert(depth <= LIMITS.treeDepthMax, 'Data tree exceeds depth limit');
-    for (const node of list) {
-      byPath.set(node.path, node);
-      if (node.children) {
-        index(node.children, depth + 1);
-      }
-    }
-  };
-  index(props, 0);
-  index(values, 0);
-
-  const resolved: TreeNode[][] = [];
-  for (const head of ancestorHeads) {
-    const loop = parseLoopHead(String(head));
-    if (loop === undefined) {
-      continue;
-    }
-    const item = loopItemNode(loop.item, loop.source, byPath, itemIndex);
-    // The item shadows any outer name it repeats, fields and all.
-    for (const path of [...byPath.keys()]) {
-      if (path === loop.item || path.startsWith(`${loop.item}.`) || path.startsWith(`${loop.item}[`)) {
-        byPath.delete(path);
-      }
-    }
-    index([item], 0);
-    const nodes = [item];
-    if (loop.index !== undefined) {
-      nodes.push({ path: loop.index, key: loop.index, kind: 'number', preview: '0', children: undefined });
-    }
-    resolved.push(nodes);
-  }
+  // The pager's own choices win; what the canvas selection is in fills the rest.
+  // Counts come from a first read with only the pager's choices, since an inner
+  // list is a field of the outer item and is sized by it.
+  const first = resolveLoops(ancestorHeads, props, values, itemIndex);
+  const indexes = selection === undefined ? undefined : loopIndexesOfCopy(selection, first.counts);
+  const settled = indexes === undefined ? first : resolveLoops(ancestorHeads, props, values, withSelectionIndexes(first.items, indexes, itemIndex));
+  const resolved = settled.nodes;
   assert(resolved.length <= ancestorHeads.length, 'One loop item per loop head at most');
   // Innermost first: the loop you are standing in is the one whose item you
   // are most likely reaching for, and an outer loop is further away in every
@@ -754,10 +731,92 @@ function buildLoopNodes(
   return loops;
 }
 
+// The pager's choices, with each loop the selection is in filled in beside them.
+function withSelectionIndexes(
+  items: readonly (string | undefined)[],
+  indexes: readonly number[],
+  manual: Record<string, number> | undefined,
+): Record<string, number> {
+  assert(items.length === indexes.length, 'withSelectionIndexes: one index per loop');
+  const merged: Record<string, number> = {};
+  for (let position = 0; position < items.length; position++) {
+    const name = items[position];
+    const index = indexes[position];
+    if (name !== undefined && index !== undefined) {
+      merged[name] = index;
+    }
+  }
+  return { ...merged, ...manual };
+}
+
+interface ResolvedLoops {
+  readonly nodes: TreeNode[][];
+  /** The item name of each head, or undefined for a head the picker cannot read. */
+  readonly items: (string | undefined)[];
+  /** How many elements each head's list holds, or undefined when it is not known. */
+  readonly counts: (number | undefined)[];
+}
+
+function resolveLoops(
+  ancestorHeads: readonly string[],
+  props: readonly TreeNode[],
+  values: readonly TreeNode[],
+  itemIndex: Record<string, number> | undefined,
+): ResolvedLoops {
+  const byPath = new Map<string, TreeNode>();
+  const index = (list: readonly TreeNode[], depth: number): void => {
+    assert(depth <= LIMITS.treeDepthMax, 'Data tree exceeds depth limit');
+    for (const node of list) {
+      byPath.set(node.path, node);
+      if (node.children) {
+        index(node.children, depth + 1);
+      }
+    }
+  };
+  index(props, 0);
+  index(values, 0);
+
+  const nodes: TreeNode[][] = [];
+  const items: (string | undefined)[] = [];
+  const counts: (number | undefined)[] = [];
+  for (const head of ancestorHeads) {
+    const loop = parseLoopHead(String(head));
+    if (loop === undefined) {
+      // A loop the picker cannot read still repeats its markup: its size is unknown.
+      items.push(undefined);
+      counts.push(undefined);
+      continue;
+    }
+    const { node: item, count } = loopItemNode(loop.item, loop.source, byPath, itemIndex);
+    // The item shadows any outer name it repeats, fields and all.
+    for (const path of [...byPath.keys()]) {
+      if (path === loop.item || path.startsWith(`${loop.item}.`) || path.startsWith(`${loop.item}[`)) {
+        byPath.delete(path);
+      }
+    }
+    index([item], 0);
+    const loopNodes = [item];
+    if (loop.index !== undefined) {
+      loopNodes.push({ path: loop.index, key: loop.index, kind: 'number', preview: '0', children: undefined });
+    }
+    nodes.push(loopNodes);
+    items.push(loop.item);
+    counts.push(count);
+  }
+  assert(items.length === ancestorHeads.length, 'resolveLoops: one item name per head');
+  assert(counts.length === ancestorHeads.length, 'resolveLoops: one count per head');
+  return { nodes, items, counts };
+}
+
 // What a loop hands `item`: one element of the list `source` names, with
 // every field any element has. "no sample" when the list is not one the app
 // has values for — the item is still offered, with whatever fields are known.
-function loopItemNode(item: string, source: string, byPath: ReadonlyMap<string, TreeNode>, itemIndex: Record<string, number> | undefined): TreeNode {
+function loopItemNode(
+  item: string,
+  source: string,
+  byPath: ReadonlyMap<string, TreeNode>,
+  itemIndex: Record<string, number> | undefined,
+): { readonly node: TreeNode; readonly count: number | undefined } {
   const named = loopSourcePath(source);
   const list = named === undefined ? undefined : byPath.get(named.path);
   // A list's elements are its children; so are an object's values, for
@@ -791,7 +850,7 @@ function loopItemNode(item: string, source: string, byPath: ReadonlyMap<string, 
     children: shown ? rebase(everyField(entries, at), shown.path, item) : undefined,
   };
   assert(node.path === item, 'A loop item is named as its loop names it');
-  return node;
+  return { node, count: shown === undefined ? undefined : entries.length };
 }
 
 /**
@@ -839,7 +898,7 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
     assert(node.importNeed !== undefined, 'A project source carries the import it needs');
     addUnique(values, node, seen);
   }
-  const loops = buildLoopNodes(context?.ancestorHeads ?? [], props, values, context?.itemIndex, seen);
+  const loops = buildLoopNodes(context?.ancestorHeads ?? [], props, values, context?.itemIndex, context?.selectedCopy, seen);
 
   // The loop item leads: inside a loop, it is what the markup is FOR — every
   // field in there is a field of that item. Then this file's props, then
