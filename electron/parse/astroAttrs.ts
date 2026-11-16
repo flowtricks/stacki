@@ -62,6 +62,8 @@ interface ScannedAttr {
   readonly to: number;
   readonly nameAt: readonly [number, number] | undefined;
   readonly valueAt: readonly [number, number] | undefined;
+  /** Written `{name}`: the name and the value are one identifier between braces. */
+  readonly shorthand?: true;
 }
 
 const ATTR_NAME = /[\w@:.-]+/y;
@@ -140,7 +142,7 @@ function scanSpreadAttr(source: string, from: number): ScannedAttr | undefined {
   }
   const bodyAt = scanAttrSpace(source, from + 1);
   if (!source.startsWith('...', bodyAt)) {
-    return undefined;
+    return scanShorthandAttr(source, from, close);
   }
   const valueAt = scanAttrTrim(source, bodyAt + 3, close);
   const value = source.slice(...valueAt);
@@ -153,6 +155,39 @@ function scanSpreadAttr(source: string, from: number): ScannedAttr | undefined {
     nameAt: undefined,
     valueAt,
   };
+}
+
+// `{title}` passes the variable `title` as the prop `title`, exactly like
+// `title={title}`. Reading it as the bare attribute `title` (the braces skipped as
+// noise) turned it into a boolean `true` the moment the tag was written back, so
+// a component given `{alternates}` received `true` and threw while rendering.
+const SHORTHAND_NAME = /^[A-Za-z_$][\w$]*$/;
+
+function scanShorthandAttr(source: string, from: number, close: number): ScannedAttr | undefined {
+  const bodyAt = scanAttrTrim(source, from + 1, close);
+  const name = source.slice(...bodyAt);
+  if (!SHORTHAND_NAME.test(name)) {
+    return undefined;
+  }
+  return { name, attr: { type: 'expr', value: name }, from, to: close + 1, nameAt: bodyAt, valueAt: bodyAt, shorthand: true };
+}
+
+/** True when a tag's attribute string writes any `{name}` shorthand. */
+export function hasShorthandAttr(attrs: string): boolean {
+  return scanAttrs(attrs).some((found) => found.shorthand === true);
+}
+
+/** The attribute string with every `{name}` shorthand spelled `name={name}`. */
+function expandShorthand(attrs: string): string {
+  let out = '';
+  let cursor = 0;
+  for (const found of scanAttrs(attrs)) {
+    if (found.shorthand === true) {
+      out += `${attrs.slice(cursor, found.from)}${found.name}={${found.name}}`;
+      cursor = found.to;
+    }
+  }
+  return out + attrs.slice(cursor);
 }
 
 function scanAttrSpace(source: string, from: number): number {
@@ -209,7 +244,7 @@ export function attrsAsWritten(node: ParserNode): string | undefined {
     return undefined;
   }
   const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
-  return flat(node.attrSource) === flat(serializeAttrs(node.props, node.attrOrder)) ? node.attrSource : undefined;
+  return flat(expandShorthand(node.attrSource)) === flat(serializeAttrs(node.props, node.attrOrder)) ? node.attrSource : undefined;
 }
 
 // A tag's attributes and the order the file wrote them in. An object remembers

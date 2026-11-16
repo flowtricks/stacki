@@ -455,7 +455,16 @@ function classifyAttribute(attribute: AttrSpan, node: Capability): Capability {
   if (node !== 'editable') {
     return node;
   }
-  return attribute.type === 'spread' ? 'read-only-opaque' : 'editable';
+  if (attribute.type === 'spread') {
+    return 'read-only-opaque';
+  }
+  // A `{name}` shorthand names its prop and its value with one identifier, so
+  // renaming the prop or setting its value by splicing a span would change both.
+  if (attribute.type === 'expr') {
+    const shorthand = attribute.nameSpan.start === attribute.valueSpan.start && attribute.nameSpan.end === attribute.valueSpan.end;
+    return shorthand ? 'read-only-opaque' : 'editable';
+  }
+  return 'editable';
 }
 
 function clip(message: string): string {

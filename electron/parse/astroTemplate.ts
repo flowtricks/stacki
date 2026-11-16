@@ -6,7 +6,7 @@ import { textValue } from '../../shared/page/htmlText';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, MapNode, CondNode, ParsedTemplate } from './astroParserTypes';
-import { VOID_ELEMENTS, RAW_ELEMENTS, makeId, assignPathIds, tagProps, required } from './astroAttrs';
+import { VOID_ELEMENTS, RAW_ELEMENTS, makeId, assignPathIds, tagProps, hasShorthandAttr, required } from './astroAttrs';
 import {
   findMatchingBrace,
   findMatchingParen,
@@ -616,7 +616,7 @@ function parseTemplateTag(template: string, lt: number, base: number | undefined
           kind,
           name,
           ...tagProps(attrs, base === undefined ? undefined : base + lt + 1 + name.length),
-          ...(attrs && attrs.includes('\n') ? { attrSource: attrs } : {}),
+          ...(attrs && (attrs.includes('\n') || hasShorthandAttr(attrs)) ? { attrSource: attrs } : {}),
           // `<x/>` and `<x />` mean the same thing and are not the same text.
           ...(selfClose === '/' && !/\s\/>$/.test(full) ? { tightClose: true } : {}),
           children: undefined,
@@ -647,7 +647,7 @@ function parseTemplateTag(template: string, lt: number, base: number | undefined
           kind: 'raw',
           name,
           ...tagProps(attrs, base === undefined ? undefined : base + lt + 1 + name.length),
-          ...(attrs && attrs.includes('\n') ? { attrSource: attrs } : {}),
+          ...(attrs && (attrs.includes('\n') || hasShorthandAttr(attrs)) ? { attrSource: attrs } : {}),
           inner: template.slice(afterOpen, close),
         },
         base,
@@ -771,7 +771,7 @@ function parseTemplateTagPaired(open: TemplateTagOpen): TemplateTagResult {
         ...(source === undefined ? {} : { source }),
         ...(blankAfter ? { blankAfter } : {}),
         ...tagProps(attrs, base === undefined || shorthand ? undefined : base + lt + 1 + name.length),
-        ...(attrs && attrs.includes('\n') ? { attrSource: attrs } : {}),
+        ...(attrs && (attrs.includes('\n') || hasShorthandAttr(attrs)) ? { attrSource: attrs } : {}),
         ...(closeText.includes('\n') ? { closeSource: closeText } : {}),
         children: innerResult.nodes,
       },

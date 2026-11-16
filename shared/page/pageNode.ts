@@ -481,7 +481,9 @@ function parseAttrSpan(input: unknown, where: string): AttrSpan {
     case 'expr': {
       const nameSpan = inner('nameSpan');
       const valueSpan = inner('valueSpan');
-      if (valueSpan.start < nameSpan.end) {
+      // A `{name}` shorthand has one identifier for both: the spans coincide.
+      const shorthand = valueSpan.start === nameSpan.start && valueSpan.end === nameSpan.end;
+      if (valueSpan.start < nameSpan.end && !shorthand) {
         fail(where, 'valueSpan must follow nameSpan');
       }
       return { type, name, span, nameSpan, valueSpan };
