@@ -2304,3 +2304,18 @@ The cross-process cache that lets a window's first frame show the last session's
 the typed invoke contract and answer only the main window's top frame (`electron/boot/bootChannels.ts`). Versioned
 (`version: 1`), bounded (`BOOT_LIMITS`), parsed to a `Result`, ignored whole when invalid, never written to a project.
 See docs/startup.md.
+
+## Component duplicate and delete
+
+The Components panel's "…" menu (`src/features/palette/PalettePanel.tsx`) adds Edit settings, Duplicate and
+Delete through `PaletteManagement` (`paletteManagement.ts`). The channels are `component:duplicate`,
+`component:remove` and `component:restoreRemoved`; each takes a `ComponentOpTarget` (`shared/properties/componentOps.ts`:
+`component` or `folder`, a project-relative path) and answers a `Result` whose refusals are typed
+(`ComponentOpError`: outside the component folders, missing, in use, foreign files, too large, write failed).
+Main resolves the path itself: it must sit under a folder from `.stacki/folders.json` `components`, may not climb
+or be a link, and a folder may hold only `.astro` files within `COMPONENT_OP_LIMITS`.
+
+- Duplicate copies the bytes to `FooCopy`, `FooCopy2`, ... (dashed names keep their style), case-insensitively free, through the document actors. Nothing is rewritten and no recipe is added.
+- Delete refuses anything a file other than itself uses, removes the component's `.stacki/components.json` recipe and every nested `component` reference, and drops its `.stacki/roles.json` `componentRules`, then moves it to the operating system's Trash. Main keeps the removed texts and the settings as they were and as the deletion left them under a token: Undo restores the files and restores each setting only while it still reads as the deletion left it.
+- Folder rows in the panel are real folders, so a folder row offers Duplicate (confirmed from 6 components) and Delete (only while no component under it is used anywhere).
+- Studio's panel passes no `management`, so the rows are left out: its server has neither a copy/trash operation nor an undo store for them yet.

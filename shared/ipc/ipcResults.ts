@@ -32,6 +32,7 @@ import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
+import type { ComponentOpError } from '../properties/componentOps';
 import type { MetadataFile } from '../properties/projectMetadata';
 import type { InstructionListing, InstructionWriteResult } from '../properties/instructions';
 import type { LengthUnit } from '../properties/lengthUnit';
@@ -252,6 +253,12 @@ export interface IpcResults extends AiResults {
     readonly name: string;
     readonly checksum: Digest;
   };
+  readonly 'component:duplicate': Result<
+    { readonly kind: 'component' | 'folder'; readonly path: string; readonly name: string; readonly files: number },
+    ComponentOpError
+  >;
+  readonly 'component:remove': Result<{ readonly name: string; readonly files: number; readonly undo: string }, ComponentOpError>;
+  readonly 'component:restoreRemoved': Result<{ readonly files: number; readonly metadata: 'restored' | 'kept' | 'untouched' }, ComponentOpError>;
   readonly 'component:discard': {
     readonly outcome: 'deleted' | 'edited' | 'missing';
   };

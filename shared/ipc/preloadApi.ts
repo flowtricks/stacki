@@ -109,6 +109,9 @@ interface InvokeChannels {
   readonly rebaseImport: 'page:rebaseImport';
   readonly createComponent: 'component:create';
   readonly discardComponent: 'component:discard';
+  readonly duplicateComponent: 'component:duplicate';
+  readonly removeComponent: 'component:remove';
+  readonly restoreRemovedComponent: 'component:restoreRemoved';
   readonly componentProperties: 'component:properties';
   readonly editComponentProperties: 'component:editProperties';
   readonly revertComponentProperties: 'component:revertProperties';

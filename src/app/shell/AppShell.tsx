@@ -9,6 +9,7 @@ import { ToastStack } from '../../features/notifications/ToastStack';
 // bar with its URL group and actions, and the left panel with each of its
 // tabs (App.tsx).
 
+import { useComponentManagement } from './useComponentManagement';
 import ComponentPropertiesPanel from '../../features/componentProperties/ComponentPropertiesPanel';
 import PagesPanel from '../../features/pages/PagesPanel';
 import { ConnectSanity } from '../../features/cmsConnections/ConnectSanity';
@@ -593,15 +594,17 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
 }
 
 export function PaletteTab({ app }: { readonly app: ShellView }) {
+  const roleRules = useComponentRoleRules(app.project.path, app.reportFailure);
+  const management = useComponentManagement(app);
   return (
     <PalettePanel
       components={app.insertables}
+      roleRules={roleRules}
+      management={management}
       devUrl={app.devUrl}
-  const roleRules = useComponentRoleRules(app.project.path, app.reportFailure);
       trailingSlash={app.trailingSlash}
       onInsert={(name) => {
         void app.addComponent(name, undefined).catch(app.reportFailure);
-      roleRules={roleRules}
       }}
       onDragBegin={() => app.setLeftTab('navigator')}
       createFrom={app.createFrom}

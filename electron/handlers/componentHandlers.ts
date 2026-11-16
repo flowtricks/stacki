@@ -22,19 +22,27 @@ import { componentUsage } from '../properties/componentUsage';
 import { toPosix } from '../lib/mainHelpers';
 import { selectionTrail } from '../documents/pageRequests';
 import type { MainHost } from './mainHost';
+import { ComponentRemovalStore, duplicateComponentTarget, removeComponentTarget, restoreRemovedComponent } from './componentOps';
 import { projectFoldersFor } from '../lib/projectFolders';
 import { componentSpecifier } from '../properties/componentImports';
 
 // Step 6: every applied property batch leaves its inverse here, and the reply
 // carries the token Undo sends back (componentProperties.ts).
 const propertyUndo = new PropertyUndoStore();
+// What each deletion from the Components panel removed, so Undo can put it back (componentOps.ts).
+const removalUndo = new ComponentRemovalStore();
 
-export function registerComponentHandlers(host: Pick<MainHost, 'clipboard' | 'documents' | 'ipcMain' | 'noteAppWrite'>): void {
+export function registerComponentHandlers(host: Pick<MainHost, 'clipboard' | 'documents' | 'ipcMain' | 'noteAppWrite' | 'shell'>): void {
   registerComponentCreateHandlers(host);
   registerSelectionCopyHandler(host);
 }
 
-function registerComponentCreateHandlers({ ipcMain, documents, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
+function registerComponentCreateHandlers({
+  ipcMain,
+  documents,
+  noteAppWrite,
+  shell,
+}: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite' | 'shell'>): void {
   // Turn a piece of a page into a component of its own. The file is worked out
   // in componentFile.js; writing it belongs here, with every other write.
   // The checksum is what Undo hands back to `component:discard`: the file goes
@@ -44,6 +52,18 @@ function registerComponentCreateHandlers({ ipcMain, documents, noteAppWrite }: P
     fs.mkdirSync(path.dirname(target), { recursive: true });
     const checksum = createProjectText(target, text);
     return { path: target, rel, name: options.name, checksum };
+  });
+
+  // The Components panel's "…" menu. Expected refusals (used, outside the component folders, a name that cannot be found)
+  // come back as typed errors with nothing changed; see componentOps.ts for what each writes.
+  ipcMain.handle('component:duplicate', async (_event, { projectPath, target }) => duplicateComponentTarget(projectPath, target));
+  ipcMain.handle('component:remove', async (_event, { projectPath, target }) => {
+    noteAppWrite();
+    return removeComponentTarget(projectPath, target, removalUndo, { trash: (file) => shell.trashItem(file) });
+  });
+  ipcMain.handle('component:restoreRemoved', async (_event, { token }) => {
+    noteAppWrite();
+    return restoreRemovedComponent(token, removalUndo);
   });
 
   // Undo of creating a component: one step with the page edit that placed it.

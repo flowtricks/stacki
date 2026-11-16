@@ -51,6 +51,7 @@ import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
 import { parseInstructionFilePath, parseInstructionPath } from '../properties/instructions';
+import { parseComponentOpTarget } from '../properties/componentOps';
 import { parseGitHubLoginQuery } from '../properties/projectRoles';
 import { parseSelectorFileChanges, parseSelectorFileDigests, parseSelectorIds } from '../properties/selectorUsage';
 import { parseCreatePackageManager } from '../properties/packageManager';
@@ -336,6 +337,10 @@ export const IPC_PAYLOADS = {
     props: optional(list(data)),
     frontmatter: optional(object({ imports: list(componentImport), code: text })),
   }),
+  // The Components panel's "…" menu: a copy of a component or folder, its deletion, and the undo of a deletion (componentOps.ts).
+  'component:duplicate': object({ ...project, target: parseComponentOpTarget }),
+  'component:remove': object({ ...project, target: parseComponentOpTarget }),
+  'component:restoreRemoved': object({ token: text }),
   'component:discard': object({ ...project, path: pathText, checksum: digest, force: maybeFlag }),
   'component:properties': object({ ...project, file: pathText }),
   // Undo of a property batch (step 6): the token its edit returned. Main

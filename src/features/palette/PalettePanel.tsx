@@ -9,6 +9,8 @@ import { rankInsertItems } from '../../lib/insertRank';
 import { ComponentPreviewPopup } from './ComponentPreviewPopup';
 import { useAddableComponents } from './componentVisibility';
 import type { PaletteRoleRules } from './componentRolesMenu';
+import type { ManagedItem, PaletteManagement } from './paletteManagement';
+import { usedPlaces } from '../../../shared/properties/componentOps';
 import { PaletteRowMenu } from './PaletteRowMenu';
 import type { MenuEntry } from '../../ui/Menu';
 import { rolesSubmenu } from './componentRolesMenu';
@@ -27,6 +29,8 @@ interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
   /** The project's roles and how to change one's hidden components; the rows' "…" menu offers a Roles submenu with it. Absent: no menu. */
   readonly roleRules?: PaletteRoleRules | undefined;
+  /** Open settings, duplicate and delete for the "…" menu. Absent (Studio): those rows are left out. */
+  readonly management?: PaletteManagement | undefined;
   readonly devUrl: string | undefined;
   readonly resolvePreviewURL?: (url: string) => Promise<string>;
   readonly trailingSlash: TrailingSlash;
@@ -67,6 +71,7 @@ export default function PalettePanel(props: PalettePanelProps) {
         query={query}
         componentCount={addable.length}
         roleRules={props.roleRules}
+        management={props.management}
         allComponents={props.components}
         onInsert={props.onInsert}
         {...(props.onDragBegin === undefined ? {} : { onDragBegin: props.onDragBegin })}
@@ -216,6 +221,7 @@ interface PaletteListProps {
   readonly query: string;
   readonly componentCount: number;
   readonly roleRules: PaletteRoleRules | undefined;
+  readonly management: PaletteManagement | undefined;
   /** Every component of the project, hidden ones too, for a folder's counts in the Roles submenu. */
   readonly allComponents: readonly ScanComponent[];
   readonly onInsert: (name: string) => void;
@@ -287,13 +293,20 @@ function PaletteItem({ component, props }: { readonly component: ScanComponent; 
   );
 }
 
-// The "…" for one component: Show instances (what the instances count opens) and, when the project has roles, Roles.
+// The "…" for one component: Edit settings, Show instances, Roles (when the project has roles), then Duplicate and Delete. Rows the
+// viewer's role may not use, or the host cannot do, are left out; Delete is shown disabled, with why, while the component is used.
 function ItemRoles({ component, props }: { readonly component: ScanComponent; readonly props: PaletteListProps }) {
   const translate = useTranslate();
+  const role = useCurrentRole();
   const file = componentRuleFile(component);
   const rules = props.roleRules;
-  const entries = (anchor: HTMLElement | undefined): readonly MenuEntry[] => [
-    {
+  const management = props.management;
+  const entries = (anchor: HTMLElement | undefined): readonly MenuEntry[] => {
+    const settings: readonly MenuEntry[] =
+      management !== undefined && file !== undefined && can(role, 'panel:properties')
+        ? [{ kind: 'item', id: 'settings', label: translate('palette.menu.editSettings'), onSelect: () => management.editSettings(component) }]
+        : [];
+    const instances: MenuEntry = {
       kind: 'item',
       id: 'instances',
       label: translate('palette.roles.showInstances'),
@@ -303,15 +316,52 @@ function ItemRoles({ component, props }: { readonly component: ScanComponent; re
           void props.openUsage(component, anchor);
         }
       },
-    },
-    ...(rules === undefined || file === undefined ? [] : [rolesSubmenu(rules, { kind: 'component', path: file }, [file], translate)]),
-  ];
+    };
+    const roles: readonly MenuEntry[] =
+      rules === undefined || file === undefined ? [] : [rolesSubmenu(rules, { kind: 'component', path: file }, [file], translate)];
+    return [...settings, instances, ...roles, ...componentChanges(component, file, props, role, translate)];
+  };
   return <PaletteRowMenu entries={entries} name={prettyComponentName(component.name)} onOpenChange={props.preview.block} />;
 }
 
-// The same for a folder header: Roles over the folder, counting every component the folder holds (nothing else applies to a folder here).
+function componentChanges(
+  component: ScanComponent,
+  file: string | undefined,
+  props: PaletteListProps,
+  role: ReturnType<typeof useCurrentRole>,
+  translate: ReturnType<typeof useTranslate>,
+): readonly MenuEntry[] {
+  const management = props.management;
+  if (management === undefined || file === undefined) {
+    return [];
+  }
+  const item: ManagedItem = { kind: 'component', path: file, name: component.name, files: 1 };
+  const duplicate: readonly MenuEntry[] = can(role, 'component:create')
+    ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), onSelect: () => management.duplicate(item) }]
+    : [];
+  const remove: readonly MenuEntry[] = can(role, 'component:edit')
+    ? [deleteRow({ instances: component.instances, translate }, () => management.remove(item))]
+    : [];
+  return duplicate.length + remove.length === 0 ? [] : [{ kind: 'divider', id: 'changes' }, ...duplicate, ...remove];
+}
+
+// Delete, disabled while anything uses what it would remove: the reason is the row's own info mark.
+function deleteRow(
+  { instances, translate }: { readonly instances: number | undefined; readonly translate: ReturnType<typeof useTranslate> },
+  onSelect: () => void,
+): MenuEntry {
+  const used = usedPlaces(instances);
+  const base = { kind: 'item', id: 'delete', label: translate('palette.menu.delete'), danger: true, onSelect } as const;
+  if (instances === undefined) {
+    return { ...base, disabled: true, info: translate('palette.panel.checking') };
+  }
+  return used === undefined ? base : { ...base, disabled: true, info: translate('palette.menu.usedIn', { count: used }) };
+}
+
+// The same for a folder header: Roles over the folder, then Duplicate and Delete of the folder and every component under it.
 function FolderRoles({ folder, props }: { readonly folder: string; readonly props: PaletteListProps }) {
   const translate = useTranslate();
+  const role = useCurrentRole();
   const files = props.allComponents
     .filter((component) => component.folder === folder)
     .flatMap((component) => {
@@ -321,11 +371,37 @@ function FolderRoles({ folder, props }: { readonly folder: string; readonly prop
   const first = files[0];
   const rules = props.roleRules;
   const path = first === undefined ? '' : first.slice(0, first.lastIndexOf('/'));
-  if (rules === undefined || path === '') {
+  if (path === '') {
     return undefined;
   }
-  const entries = (): readonly MenuEntry[] => [rolesSubmenu(rules, { kind: 'folder', path }, files, translate)];
+  const under = props.allComponents.filter((component) => componentRuleFile(component)?.startsWith(`${path}/`) === true);
+  const entries = (): readonly MenuEntry[] => [
+    ...(rules === undefined ? [] : [rolesSubmenu(rules, { kind: 'folder', path }, files, translate)]),
+    ...folderChanges({ folder, path, under }, props, role, translate),
+  ];
   return <PaletteRowMenu entries={entries} name={folder} onOpenChange={props.preview.block} />;
+}
+
+function folderChanges(
+  folder: { readonly folder: string; readonly path: string; readonly under: readonly ScanComponent[] },
+  props: PaletteListProps,
+  role: ReturnType<typeof useCurrentRole>,
+  translate: ReturnType<typeof useTranslate>,
+): readonly MenuEntry[] {
+  const management = props.management;
+  if (management === undefined) {
+    return [];
+  }
+  const item: ManagedItem = { kind: 'folder', path: folder.path, name: folder.folder, files: folder.under.length };
+  const unknown = folder.under.some((component) => component.instances === undefined);
+  const total = folder.under.reduce((sum, component) => sum + (component.instances ?? 0), 0);
+  const duplicate: readonly MenuEntry[] = can(role, 'component:create')
+    ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), onSelect: () => management.duplicate(item) }]
+    : [];
+  const remove: readonly MenuEntry[] = can(role, 'component:edit')
+    ? [deleteRow({ instances: unknown ? undefined : total, translate }, () => management.remove(item))]
+    : [];
+  return duplicate.length + remove.length === 0 ? [] : [{ kind: 'divider', id: 'changes' }, ...duplicate, ...remove];
 }
 
 function startComponentDrag(event: React.DragEvent<HTMLDivElement>, component: ScanComponent, props: PaletteListProps): void {

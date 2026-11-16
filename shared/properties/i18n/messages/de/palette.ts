@@ -38,6 +38,31 @@ export const messages = {
   'palette.instances.title': 'Instanzen von {name}',
   'palette.instances.unused': 'Noch nirgends verwendet.',
   'palette.instances.usedIn': 'Verwendet in',
+  'palette.manage.deleteBodyComponent':
+    '{name} wird auf keiner Seite verwendet. Die Komponente wird in den Papierkorb verschoben und ihre Einträge in den Projekteinstellungen werden entfernt. Mit „Rückgängig“ kommt sie zurück.',
+  'palette.manage.deleteBodyFolder': {
+    one: 'Dieser Ordner und seine {count} Komponente werden in den Papierkorb verschoben, ihre Einträge in den Projekteinstellungen werden entfernt. Mit „Rückgängig“ kommen sie zurück.',
+    other:
+      'Dieser Ordner und seine {count} Komponenten werden in den Papierkorb verschoben, ihre Einträge in den Projekteinstellungen werden entfernt. Mit „Rückgängig“ kommen sie zurück.',
+  },
+  'palette.manage.deleteConfirm': 'Löschen',
+  'palette.manage.deleteDone': '{name} gelöscht',
+  'palette.manage.deleteTitle': '{name} löschen?',
+  'palette.manage.duplicateBody': {
+    one: 'Dabei wird {count} Komponente in einen neuen Ordner kopiert.',
+    other: 'Dabei werden {count} Komponenten in einen neuen Ordner kopiert.',
+  },
+  'palette.manage.duplicateConfirm': 'Duplizieren',
+  'palette.manage.duplicateDone': '{name} erstellt',
+  'palette.manage.duplicateTitle': '{name} duplizieren?',
+  'palette.manage.labelDelete': '{name} löschen',
+  'palette.manage.labelDuplicate': '{name} duplizieren',
+  'palette.manage.undoMetadataKept':
+    'Die Dateien sind zurück. Die Projekteinstellungen haben sich inzwischen geändert, daher blieben ihre Einträge unverändert.',
+  'palette.menu.delete': 'Löschen',
+  'palette.menu.duplicate': 'Duplizieren',
+  'palette.menu.editSettings': 'Einstellungen bearbeiten',
+  'palette.menu.usedIn': { one: 'An {count} Stelle verwendet', other: 'An {count} Stellen verwendet' },
   'palette.name.empty': 'Gib der Komponente einen Namen.',
   'palette.name.lettersOnly': 'Verwende nur Buchstaben und Zahlen.',
   'palette.name.noLetters': 'Verwende Buchstaben oder Zahlen für den Namen.',
