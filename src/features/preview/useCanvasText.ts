@@ -587,7 +587,7 @@ const BLOCKED_KEYS: Readonly<Record<BoundTextBlockReason, MessageKey>> = {
   duplicate: 'preview.text.source.blocked.duplicate',
   missing: 'preview.text.source.blocked.missing',
   mutable: 'preview.text.source.blocked.mutable',
-  'not-text': 'preview.text.source.blocked.not-text',
+  'not-text': 'preview.text.source.blocked.notText',
   prop: 'preview.text.source.blocked.prop',
   runtime: 'preview.text.source.blocked.computed',
   template: 'preview.text.source.blocked.template',

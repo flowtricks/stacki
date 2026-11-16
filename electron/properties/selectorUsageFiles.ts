@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import { isStudioDirectory } from '../lib/studioDirectory';
+import { createSliceClock } from '../lib/slicedWork';
 import { DEFAULT_PROJECT_FOLDERS, folderHolding } from '../../shared/properties/projectFolders';
 import { described, type Described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import type { SelectorNote } from '../../shared/properties/selectorUsage';
@@ -19,17 +20,10 @@ import { emptyHits, scanMentions, type MentionHits, type MentionInterest } from 
 import { readAstroSheet, type AstroSheet } from './selectorSheets';
 import { analyzeSelectorUsage, type PackageScan, type ProjectText, type UsageAnalysis, type UsageInput } from './selectorUsage';
 
+// The walks read every file they meet, of any size: a project or a monorepo's node_modules is
+// bounded by what is on disk, never by a count or a byte budget, and a walk is never reported
+// incomplete for being big.
 export const SELECTOR_FILE_LIMITS = {
-  /** Files one project walk reads. */
-  projectFilesMax: 50_000,
-  /** Bytes one project walk reads. */
-  projectBytesMax: 256 * 1024 * 1024,
-  /** Files one package walk reads: a large monorepo's node_modules fits. */
-  packageFilesMax: 600_000,
-  /** Bytes one package walk reads. */
-  packageBytesMax: 3 * 1024 * 1024 * 1024,
-  /** One file read by either walk; a larger one makes the walk incomplete. */
-  fileBytesMax: 64 * 1024 * 1024,
   /** Ancestor folders searched for node_modules (monorepos hoist packages up). */
   ancestorsMax: 32,
   /** Cached package answers per project before the cache starts over. */
@@ -119,7 +113,7 @@ export async function readSelectorUsageInput(
   const astro: AstroSheet[] = [];
   const others: ProjectText[] = [];
   const unreadable: SelectorNote[] = [];
-  const budget = new ReadBudget(SELECTOR_FILE_LIMITS.projectFilesMax, SELECTOR_FILE_LIMITS.projectBytesMax);
+  const clock = createSliceClock();
   const queue: Array<{ readonly directory: string; readonly rel: string; readonly depth: number; readonly site: boolean }> = [
     { directory: root, rel: '', depth: 0, site: false },
   ];
@@ -161,17 +155,15 @@ export async function readSelectorUsageInput(
       if (SKIPPED_EXTENSIONS.has(extension) || OTHER_STYLE_EXTENSIONS.has(extension) || LOCKFILES.has(entry.name)) {
         continue;
       }
-      if (budget.full()) {
-        unreadable.push({ rel, ...described('selectors.problem.fileCount', { count: SELECTOR_FILE_LIMITS.projectFilesMax }) });
-        return { stylesheets, astro, others, keepList, unreadable };
-      }
-      const text = await budget.read(full);
+      const text = await readText(full);
       if (typeof text !== 'string') {
         if (text.kind === 'failed') {
           unreadable.push({ rel, message: text.message, ...(text.messageRef === undefined ? {} : { messageRef: text.messageRef }) });
         }
         continue;
       }
+      // Analysing a file is synchronous work: a project of any size is many short slices.
+      await clock.yieldIfDue();
       if (extension === '.css') {
         // A stylesheet outside the site's style folders is neither checked nor a mention.
         if (folderHolding(styleFolders, rel) !== undefined) {
@@ -184,7 +176,6 @@ export async function readSelectorUsageInput(
       }
     }
   }
-  assert(!budget.over(), 'readSelectorUsageInput: the walk stops at its file bound');
   return { stylesheets, astro, others, keepList, unreadable };
 }
 
@@ -250,22 +241,22 @@ export async function scanInstalledPackages(root: string, interest: MentionInter
 }
 
 // Files are read in parallel batches: the search is bound by waiting on the
-// disk, not by scanning, so overlapping reads cut its time several-fold. A
-// batch can pass the byte budget by at most its own size.
+// disk, not by scanning, so overlapping reads cut its time several-fold.
 const PACKAGE_READS_PARALLEL = 32;
 
 async function walkPackages(directories: readonly string[], interest: MentionInterest, hits: MentionHits): Promise<Described | undefined> {
-  const budget = new ReadBudget(SELECTOR_FILE_LIMITS.packageFilesMax, SELECTOR_FILE_LIMITS.packageBytesMax);
+  const clock = createSliceClock();
   const seen = new Set<string>();
   const queue = directories.map((directory) => ({ directory, depth: 0 }));
   let files: string[] = [];
   const drain = async (): Promise<Described | undefined> => {
     const batch = files;
     files = [];
-    const texts = await Promise.all(batch.map((file) => budget.read(file)));
+    const texts = await Promise.all(batch.map((file) => readText(file)));
     for (const text of texts) {
       if (typeof text === 'string') {
         scanMentions(text, interest, hits);
+        await clock.yieldIfDue();
       } else if (text.kind === 'failed') {
         return described('selectors.reason.packageFile', { detail: text.message });
       }
@@ -304,9 +295,6 @@ async function walkPackages(directories: readonly string[], interest: MentionInt
       if (!entry.isFile() || !isPackageCode(entry.name)) {
         continue;
       }
-      if (budget.full(files.length)) {
-        return described('selectors.reason.packagesMany', { count: SELECTOR_FILE_LIMITS.packageFilesMax });
-      }
       files.push(full);
       if (files.length >= PACKAGE_READS_PARALLEL) {
         const failure = await drain();
@@ -337,55 +325,18 @@ function isDirectory(full: string): boolean {
 
 type ReadFailure = { readonly kind: 'binary' } | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef };
 
-// One walk's reading allowance. The counters are private so only read() can
-// spend them, and every read is checked against both bounds before it happens.
-class ReadBudget {
-  private files = 0;
-  private bytes = 0;
-
-  constructor(
-    private readonly filesMax: number,
-    private readonly bytesMax: number,
-  ) {
-    assert(filesMax > 0, 'ReadBudget: a walk may read at least one file');
-    assert(bytesMax > 0, 'ReadBudget: a walk may read at least one byte');
+// Reads one file whole. A NUL byte early on marks a binary file whatever its name says.
+async function readText(full: string): Promise<string | ReadFailure> {
+  let bytes: Buffer;
+  try {
+    bytes = await fs.promises.readFile(full);
+  } catch (error: unknown) {
+    return { kind: 'failed', message: errorText(error) };
   }
-
-  /** Whether one more read would pass the file bound, counting `queued` reads not yet started. */
-  full(queued = 0): boolean {
-    return this.files + queued >= this.filesMax;
+  if (bytes.subarray(0, 8192).includes(0)) {
+    return { kind: 'binary' };
   }
-
-  over(): boolean {
-    return this.files > this.filesMax || this.bytes > this.bytesMax;
-  }
-
-  async read(full: string): Promise<string | ReadFailure> {
-    assert(!this.full(), 'ReadBudget.read: callers check full() first');
-    this.files += 1;
-    let bytes: Buffer;
-    try {
-      const stat = await fs.promises.stat(full);
-      if (stat.size > SELECTOR_FILE_LIMITS.fileBytesMax) {
-        return {
-          kind: 'failed',
-          ...described('selectors.problem.fileLarge', { name: path.basename(full), size: Math.floor(SELECTOR_FILE_LIMITS.fileBytesMax / 1024 / 1024) }),
-        };
-      }
-      if (this.bytes + stat.size > this.bytesMax) {
-        return { kind: 'failed', ...described('selectors.problem.bytesBudget', { size: Math.floor(this.bytesMax / 1024 / 1024) }) };
-      }
-      bytes = await fs.promises.readFile(full);
-    } catch (error: unknown) {
-      return { kind: 'failed', message: errorText(error) };
-    }
-    this.bytes += bytes.length;
-    // A NUL byte early on marks a binary file whatever its name says.
-    if (bytes.subarray(0, 8192).includes(0)) {
-      return { kind: 'binary' };
-    }
-    return bytes.toString('utf8');
-  }
+  return bytes.toString('utf8');
 }
 
 function packageDirectories(root: string): readonly string[] {

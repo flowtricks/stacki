@@ -13,13 +13,12 @@ import { LIMITS } from '../../shared/core/limits';
 
 const typescript = parser.configure({ dialect: 'ts' });
 
-// Frontmatter is a page's setup code: far smaller than this in practice, and
-// past it the reader reports the loop as custom rather than parsing for long.
+// Structural bounds only: how many arguments, parameters and entries one loop
+// expression reads. Frontmatter of any length is parsed, and a loop over its
+// statements is bounded by the source's own length.
 export const LOOP_SYNTAX_LIMITS = {
-  sourceCharsMax: 200_000,
   argumentsMax: 16,
   parametersMax: 8,
-  declarationsMax: 2_000,
   entriesMax: 500,
 } as const;
 
@@ -95,9 +94,6 @@ export interface ParsedFrontmatter {
 
 /** One expression, or undefined when the text is not exactly one. */
 export function parseExpression(text: string): ParsedExpression | undefined {
-  if (text.length > LOOP_SYNTAX_LIMITS.sourceCharsMax) {
-    return undefined;
-  }
   const source = `(${text}\n);`;
   const tree = typescript.parse(source);
   const statement = tree.topNode.firstChild;
@@ -118,12 +114,13 @@ export function parseExpression(text: string): ParsedExpression | undefined {
 
 /** The frontmatter's top-level declarations and the names it reads. */
 export function parseFrontmatter(text: string): ParsedFrontmatter {
-  const source = text.length > LOOP_SYNTAX_LIMITS.sourceCharsMax ? '' : text;
+  const source = text;
   const tree = typescript.parse(source);
   const declarations = new Map<string, Declaration>();
   const bound = new Set<string>();
   let statement = tree.topNode.firstChild;
-  for (let count = 0; statement && count < LOOP_SYNTAX_LIMITS.declarationsMax; count++) {
+  // A statement is at least one character, so the source's length bounds the walk.
+  for (let count = 0; statement && count <= source.length; count++) {
     const declaration = statement.name === 'ExportDeclaration' ? statement.getChild('VariableDeclaration') : statement;
     if (declaration?.name === 'VariableDeclaration') {
       readDeclaration(declaration, statement, source, declarations, bound);
@@ -140,7 +137,7 @@ export function parseFrontmatter(text: string): ParsedFrontmatter {
     }
     return uses.length < LIMITS.treeNodesMax;
   });
-  assert(declarations.size <= LOOP_SYNTAX_LIMITS.declarationsMax, 'Declarations are bounded');
+  assert(declarations.size <= source.length, 'Every declaration is a statement of the source');
   return { source, declarations, uses, bound };
 }
 
@@ -594,14 +591,15 @@ const MODULE_CALLS_MAX = 200;
 
 /** A module's imports, top-level constants and functions (declared, or arrows held by a const). */
 export function parseModule(text: string): ParsedModule {
-  const source = text.length > LOOP_SYNTAX_LIMITS.sourceCharsMax ? '' : text;
+  const source = text;
   const tree = typescript.parse(source);
   const declarations = new Map<string, Declaration>();
   const functions = new Map<string, ModuleFunction>();
   const imports: ModuleImport[] = [];
   const bound = new Set<string>();
   let statement = tree.topNode.firstChild;
-  for (let count = 0; statement && count < LOOP_SYNTAX_LIMITS.declarationsMax; count++) {
+  // A statement is at least one character, so the source's length bounds the walk.
+  for (let count = 0; statement && count <= source.length; count++) {
     const inner = statement.name === 'ExportDeclaration' ? (statement.getChild('FunctionDeclaration') ?? statement.getChild('VariableDeclaration')) : statement;
     if (inner?.name === 'ImportDeclaration') {
       imports.push(...importsOf(inner, source));
@@ -620,7 +618,7 @@ export function parseModule(text: string): ParsedModule {
     }
     statement = statement.nextSibling;
   }
-  assert(functions.size <= LOOP_SYNTAX_LIMITS.declarationsMax, 'Module functions are bounded');
+  assert(functions.size <= source.length, 'Every function is a statement of the source');
   return { source, declarations, imports, functions };
 }
 
@@ -672,7 +670,7 @@ function callsIn(node: SyntaxNode, source: string): readonly Js[] {
  * from `Astro.props`, as a tree whose spans index the frontmatter.
  */
 export function destructuredDefault(frontmatter: string, local: string): Js | undefined {
-  const source = frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax ? '' : frontmatter;
+  const source = frontmatter;
   const tree = typescript.parse(source);
   let found: Js | undefined;
   tree.topNode.cursor().iterate((node) => {

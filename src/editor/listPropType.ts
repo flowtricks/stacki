@@ -32,7 +32,6 @@ import { assert } from '../../shared/core/assert';
 import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
 import type { Translator } from '../../shared/properties/i18n/messageRef';
 import { PROP_TAG_LIMITS, readPropTags } from '../../shared/properties/propTags';
-import { LOOP_SYNTAX_LIMITS } from './loopSyntax';
 import {
   fieldsProblem,
   fieldNameProblem,
@@ -237,15 +236,11 @@ function fieldLiteral(field: ItemFieldDeclaration, value: string, depth: number)
  * `Props` itself never is, and a generic or extending type is not read.
  */
 export function namedItemType(frontmatter: string, fields: readonly ItemFieldDeclaration[]): string | undefined {
-  if (frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax || fields.length === 0) {
+  if (fields.length === 0) {
     return undefined;
   }
   const tree = typescript.parse(frontmatter);
-  for (
-    let statement = tree.topNode.firstChild, count = 0;
-    statement !== null && count < LOOP_SYNTAX_LIMITS.declarationsMax;
-    statement = statement.nextSibling, count++
-  ) {
+  for (let statement = tree.topNode.firstChild, count = 0; statement !== null && count <= frontmatter.length; statement = statement.nextSibling, count++) {
     const declaration = statement.name === 'ExportDeclaration' ? (statement.firstChild?.nextSibling ?? undefined) : statement;
     const named = declaration === undefined ? undefined : objectTypeOf(declaration, frontmatter);
     if (named === undefined || named.name === 'Props') {
@@ -290,9 +285,6 @@ function objectTypeOf(declaration: SyntaxNode, source: string): { readonly name:
  * code only.
  */
 export function listFieldsOfType(type: string, frontmatter: string): readonly ItemFieldDeclaration[] | undefined {
-  if (type.length > LOOP_SYNTAX_LIMITS.sourceCharsMax || frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax) {
-    return undefined;
-  }
   const parsed = parsedType(type.trim());
   const item = parsed === undefined ? undefined : arrayItemNode(parsed.node, parsed.source);
   if (parsed === undefined || item === undefined) {
@@ -312,9 +304,6 @@ export function listFieldsOfType(type: string, frontmatter: string): readonly It
 
 /** Whether a type is a list of something, whatever its items hold: what a loop can go over. */
 export function isListType(type: string): boolean {
-  if (type.length > LOOP_SYNTAX_LIMITS.sourceCharsMax) {
-    return false;
-  }
   const parsed = parsedType(type.trim());
   const item = parsed === undefined ? undefined : arrayItemNode(parsed.node, parsed.source);
   // `(A | B)[]` and `X[][]` hold more than plain items.
@@ -366,11 +355,7 @@ function namedBody(name: string, frontmatter: string): SyntaxNode | undefined {
     return undefined;
   }
   const tree = typescript.parse(frontmatter);
-  for (
-    let statement = tree.topNode.firstChild, count = 0;
-    statement !== null && count < LOOP_SYNTAX_LIMITS.declarationsMax;
-    statement = statement.nextSibling, count++
-  ) {
+  for (let statement = tree.topNode.firstChild, count = 0; statement !== null && count <= frontmatter.length; statement = statement.nextSibling, count++) {
     const declaration = statement.name === 'ExportDeclaration' ? (statement.firstChild?.nextSibling ?? undefined) : statement;
     const named = declaration === undefined ? undefined : objectTypeOf(declaration, frontmatter);
     if (named !== undefined && named.name === name) {

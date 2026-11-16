@@ -19,8 +19,6 @@ import { NON_DATA_EXT, TOOL_MODULE, scanValue, skipString, type ImportLike } fro
 export const IMPORTED_VALUE_LIMITS = {
   // Distinct modules read for one file. A page imports a handful of data modules.
   modulesMax: 16,
-  // A module longer than this is not read for its values: it is not a constants file.
-  moduleCharsMax: 200_000,
   // Names exported in one `export { … }` list that are looked at.
   exportListNamesMax: 256,
 } as const;
@@ -84,9 +82,6 @@ export function importedModuleRequests(imports: readonly ImportLike[]): Imported
  */
 export function importedValuesFrom(request: ImportedModuleRequest, source: ImportedModuleSource): Record<string, ImportedValue> {
   const out: Record<string, ImportedValue> = {};
-  if (source.text.length > IMPORTED_VALUE_LIMITS.moduleCharsMax) {
-    return out;
-  }
   const json = /\.json$/i.test(source.file);
   const parsed = json ? parseJSON(source.text) : undefined;
   for (const binding of request.bindings) {

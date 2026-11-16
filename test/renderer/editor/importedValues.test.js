@@ -137,11 +137,21 @@ test('a module is read without running it: literals, export lists, defaults and 
   const json = importedValuesFrom(team, { file: 'src/data/team.json', text: '{ "lead": "Ada", "members": [] }' });
   assert.deepEqual(json, { team: { kind: 'data', value: { lead: 'Ada', members: [] } }, lead: { kind: 'data', value: 'Ada' } });
   assert.deepEqual(importedValuesFrom(team, { file: 'src/data/team.json', text: '{ broken' }), {}, 'malformed JSON resolves nothing');
-  const huge = 'export const A = 1;' + ' '.repeat(IMPORTED_VALUE_LIMITS.moduleCharsMax);
+  // A module of any size is read: past the old 200,000-character cap its values still resolve.
+  const huge = 'export const A = 1;' + ' '.repeat(2_000_000) + '\nexport const B = 2;';
   assert.deepEqual(
-    importedValuesFrom({ spec: 'x', bindings: [{ local: 'A', exported: 'A' }] }, { file: 'src/x.ts', text: huge }),
-    {},
-    'an oversized module is not read',
+    importedValuesFrom(
+      {
+        spec: 'x',
+        bindings: [
+          { local: 'A', exported: 'A' },
+          { local: 'B', exported: 'B' },
+        ],
+      },
+      { file: 'src/x.ts', text: huge },
+    ),
+    { A: { kind: 'literal', text: '1' }, B: { kind: 'literal', text: '2' } },
+    'a large module is read whole',
   );
 });
 

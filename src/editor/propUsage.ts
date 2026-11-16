@@ -59,8 +59,6 @@ function withoutDeclarations(frontmatter: string): string {
   return out.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 }
 
-const EXPRESSIONS_MAX = 100_000;
-
 // Every `{…}` of the markup, outermost, with comments, styles and scripts
 // that cannot read frontmatter values taken out first.
 function markupExpressions(body: string): readonly string[] {
@@ -70,7 +68,8 @@ function markupExpressions(body: string): readonly string[] {
   const out: string[] = [];
   let depth = 0;
   let start = 0;
-  for (let index = 0; index < markup.length && out.length < EXPRESSIONS_MAX; index++) {
+  // The markup's own length bounds the walk, so a page of any size is read to its end.
+  for (let index = 0; index < markup.length; index++) {
     const character = markup.charAt(index);
     if (character === '{') {
       if (depth === 0) {

@@ -7,10 +7,9 @@
 // app answers the same question over IPC (src:readSymbol).
 
 import path from 'node:path';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import type { ViteDevServer } from 'vite';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
-import { IMPORTED_VALUE_LIMITS } from '../../../vendor/stacki/src/editor/importedValues';
 
 const SCRIPT_MODULE = /\.(?:[cm]?[jt]s|json)$/i;
 
@@ -35,10 +34,6 @@ export function importSource(server: ViteDevServer, root: string) {
     }
     if (!SCRIPT_MODULE.test(id)) {
       throw new Error('Only a script or JSON module holds values to read');
-    }
-    const size = (await stat(id)).size;
-    if (size > IMPORTED_VALUE_LIMITS.moduleCharsMax) {
-      throw new Error('The module is too large to read for values');
     }
     const text = await readFile(id, 'utf8');
     const file = path.relative(root, id).split(path.sep).join('/');

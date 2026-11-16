@@ -98,7 +98,7 @@ export const messages = {
   'preview.text.source.blocked.duplicate': 'Plusieurs endroits affichent les mêmes mots, impossible de distinguer le bon : modifiez-le dans {file}.',
   'preview.text.source.blocked.missing': 'La valeur {path} n’est pas écrite dans {file}.',
   'preview.text.source.blocked.mutable': 'Ce texte provient d’une variable qui peut changer (let ou var) dans {file} : modifiez-le là-bas.',
-  'preview.text.source.blocked.not-text': '{path} n’est pas une chaîne de texte.',
+  'preview.text.source.blocked.notText': '{path} n’est pas une chaîne de texte.',
   'preview.text.source.blocked.prop': 'Ce texte provient d’une prop ; modifiez-le là où le composant est utilisé.',
   'preview.text.source.blocked.template': 'Ce texte est construit avec un modèle contenant des expressions dans {file} : modifiez-le là-bas.',
   'preview.text.source.blocked.unreadable': 'Le fichier de données {file} n’a pas pu être lu.',

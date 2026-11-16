@@ -99,7 +99,7 @@ export const messages = {
     'Mehrere Stellen zeigen dieselben Wörter, daher lässt sich die richtige nicht unterscheiden: Bearbeite ihn in {file}.',
   'preview.text.source.blocked.missing': 'Der Wert {path} steht nicht in {file}.',
   'preview.text.source.blocked.mutable': 'Dieser Text stammt aus einer veränderbaren Variable (let oder var) in {file}: Bearbeite ihn dort.',
-  'preview.text.source.blocked.not-text': '{path} ist kein String.',
+  'preview.text.source.blocked.notText': '{path} ist kein String.',
   'preview.text.source.blocked.prop': 'Dieser Text stammt aus einer Prop; bearbeite ihn dort, wo die Komponente verwendet wird.',
   'preview.text.source.blocked.template': 'Dieser Text wird in {file} aus einem Template mit Ausdrücken erzeugt: Bearbeite ihn dort.',
   'preview.text.source.blocked.unreadable': 'Die Datendatei {file} konnte nicht gelesen werden.',

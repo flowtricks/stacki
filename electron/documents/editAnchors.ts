@@ -10,10 +10,10 @@
 import { assert } from '../../shared/core/assert';
 import { toUtf16Offset } from '../../shared/core/brand';
 import { diffCodePatch } from '../../shared/engine/codePatch';
-import { DIFF_BUDGET, diffBytes, type ByteDiff } from '../../shared/engine/diff';
+import { DIFF_BUDGET, diffBytes, type DiffOutcome } from '../../shared/engine/diff';
 import type { NodeRef } from '../../shared/engine/editRequest';
 import type { RejectionReason, SourceEdit } from '../../shared/engine/intent';
-import { mapSpanThroughDiff } from '../../shared/engine/mapSpan';
+import { mapSpanThroughOutcome } from '../../shared/engine/mapSpan';
 import { nodeAtPath, type ValidProjection } from '../../shared/engine/planSupport';
 import { toAnchorRef, toChildIndex, type AnchorRef } from '../../shared/page/ref';
 import { err, ok, type Result } from '../../shared/core/result';
@@ -109,12 +109,9 @@ export function placedHunks(before: string, after: string, own: string): Result<
     return ok(change.value.map((hunk) => ({ span: hunk.span, text: hunk.text })));
   }
   const diff = diffBytes(encodeUtf8(before), encodeUtf8(own), DIFF_BUDGET);
-  if (diff.tag === 'too-costly') {
-    return err('resource-limit');
-  }
   const placed: SourceEdit[] = [];
   for (const hunk of change.value) {
-    const span = placedSpan(diff.diff, hunk.span);
+    const span = placedSpan(diff, hunk.span);
     if (span === undefined) {
       return err('unsupported-operation');
     }
@@ -128,19 +125,19 @@ export function placedHunks(before: string, after: string, own: string): Result<
 
 // A range of the rendering on the node's bytes: its own bytes kept whole, or,
 // for an insertion, a neighbouring byte kept whole beside it.
-function placedSpan(diff: ByteDiff, span: ByteSpan): ByteSpan | undefined {
+function placedSpan(diff: DiffOutcome, span: ByteSpan): ByteSpan | undefined {
   if (span.start < span.end) {
-    const mapped = mapSpanThroughDiff(diff, span);
+    const mapped = mapSpanThroughOutcome(diff, span);
     return mapped.tag === 'resolved' ? mapped.span : undefined;
   }
   if (span.start > 0) {
-    const before = mapSpanThroughDiff(diff, toByteSpan(span.start - 1, span.start));
+    const before = mapSpanThroughOutcome(diff, toByteSpan(span.start - 1, span.start));
     if (before.tag === 'resolved') {
       return toByteSpan(before.span.end, before.span.end);
     }
   }
-  if (span.start < diff.source.length) {
-    const after = mapSpanThroughDiff(diff, toByteSpan(span.start, span.start + 1));
+  if (span.start < diff.diff.source.length) {
+    const after = mapSpanThroughOutcome(diff, toByteSpan(span.start, span.start + 1));
     if (after.tag === 'resolved') {
       return toByteSpan(after.span.start, after.span.start);
     }

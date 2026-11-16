@@ -17,7 +17,6 @@ import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { LIMITS } from '../../shared/core/limits';
-import { LOOP_SYNTAX_LIMITS } from './loopSyntax';
 
 const typescript = parser.configure({ dialect: 'ts' });
 
@@ -191,13 +190,9 @@ export function propsInterfaceEnd(frontmatter: string): number | undefined {
 
 // The `{ … }` of `interface Props`, if the frontmatter declares one.
 export function propsInterfaceBody(frontmatter: string): SyntaxNode | undefined {
-  const source = frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax ? '' : frontmatter;
+  const source = frontmatter;
   const tree = typescript.parse(source);
-  for (
-    let statement = tree.topNode.firstChild, count = 0;
-    statement !== null && count < LOOP_SYNTAX_LIMITS.declarationsMax;
-    statement = statement.nextSibling, count++
-  ) {
+  for (let statement = tree.topNode.firstChild, count = 0; statement !== null && count <= source.length; statement = statement.nextSibling, count++) {
     const declaration = statement.name === 'ExportDeclaration' ? statement.getChild('InterfaceDeclaration') : statement;
     if (declaration?.name === 'InterfaceDeclaration' && textOf(source, declaration.getChild('TypeDefinition') ?? undefined) === 'Props') {
       return declaration.getChild('ObjectType') ?? undefined;
@@ -207,13 +202,9 @@ export function propsInterfaceBody(frontmatter: string): SyntaxNode | undefined 
 }
 
 export function propsPattern(frontmatter: string): SyntaxNode | undefined {
-  const source = frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax ? '' : frontmatter;
+  const source = frontmatter;
   const tree = typescript.parse(source);
-  for (
-    let statement = tree.topNode.firstChild, count = 0;
-    statement !== null && count < LOOP_SYNTAX_LIMITS.declarationsMax;
-    statement = statement.nextSibling, count++
-  ) {
+  for (let statement = tree.topNode.firstChild, count = 0; statement !== null && count <= source.length; statement = statement.nextSibling, count++) {
     if (statement.name === 'VariableDeclaration') {
       const pattern = statement.getChild('ObjectPattern');
       const value = statement.getChild('MemberExpression');

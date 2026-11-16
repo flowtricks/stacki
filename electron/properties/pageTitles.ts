@@ -1,9 +1,10 @@
-// Reuse the scan's bounded source reads so titles require no additional disk access.
+// Reuse the scan's source reads so titles require no additional disk access.
 import { parsePage } from '../parse/astroParser';
 import { layoutPageTitle } from '../../shared/page/pageTitle';
 import type { ScanPage } from '../../shared/properties/projectScan';
 import { assert } from '../../shared/core/assert';
-import { LIMITS } from '../../shared/core/limits';
+import { PLATFORM_LIMITS } from '../../shared/core/limits';
+import { runSync, type SlicedWork } from '../lib/slicedWork';
 import { resolveSpec, type Alias } from '../content/cmsRefs';
 import path from 'node:path';
 
@@ -11,16 +12,25 @@ export type PageTitleSource = { readonly specifier: string | undefined } & (
   { readonly kind: 'inherit' } | { readonly kind: 'override'; readonly title: string | undefined }
 );
 
-// Cyclic or unusually deep wrapper chains fall back to filenames without running site code.
-const WRAPPERS_MAX = 32;
-
 export function scanPageTitles(
   pages: readonly ScanPage[],
   sources: readonly { readonly file: string; readonly text: string }[],
   aliases: readonly Alias[] = [],
 ): readonly ScanPage[] {
-  assert(pages.length <= LIMITS.scanEntriesMax, 'Page titles: page count is bounded');
-  assert(sources.length <= LIMITS.scanEntriesMax, 'Page titles: source count is bounded');
+  return runSync(pageTitlesSliced(pages, sources, aliases));
+}
+
+/**
+ * The same scan, written once for both drivers (lib/slicedWork.ts). Parsing a
+ * page is the cost, so each page is read once up front with a yield after it:
+ * a project of thousands of pages is a longer run, never a stall. The wrapper
+ * chains resolved afterwards hit the cache for every page already read.
+ */
+export function* pageTitlesSliced(
+  pages: readonly ScanPage[],
+  sources: readonly { readonly file: string; readonly text: string }[],
+  aliases: readonly Alias[] = [],
+): SlicedWork<readonly ScanPage[]> {
   // Import resolution produces native absolute paths. Normalize both sides so
   // Windows separators and equivalent source spellings use the same cache key.
   const sourceByPath = new Map(sources.map(({ file, text }) => [path.resolve(file), text]));
@@ -34,6 +44,13 @@ export function scanPageTitles(
     }
     return cache.get(key);
   };
+  for (const page of pages) {
+    if (page.path.toLowerCase().endsWith('.astro')) {
+      read(page.path);
+      yield;
+    }
+  }
+  assert(sourceByPath.size <= sources.length, 'Page titles: sources are indexed once each');
   return resolvePageTitles(pages, aliases, read);
 }
 
@@ -42,7 +59,6 @@ export function resolvePageTitles(
   aliases: readonly Alias[],
   read: (file: string) => PageTitleSource | undefined,
 ): readonly ScanPage[] {
-  assert(pages.length <= LIMITS.scanEntriesMax, 'Page titles: page count is bounded');
   const wrapperOf = (file: string, source: PageTitleSource): string | undefined => {
     const candidates = source.specifier === undefined ? [] : resolveSpec(source.specifier, file, aliases);
     return candidates.find((candidate) => read(candidate) !== undefined);
@@ -81,13 +97,13 @@ function scanInheritedTitle(
   wrapperOf: (file: string, source: PageTitleSource) => string | undefined,
   read: (file: string) => PageTitleSource | undefined,
 ): string | undefined {
+  // Each step adds a file not yet visited, so a chain ends after the project's own file count: a
+  // wrapper chain of any depth resolves, and a cycle stops where it closes.
   const visited = new Set<string>();
   let current = wrapper;
-  for (let depth = 0; depth < WRAPPERS_MAX; depth++) {
-    if (current === undefined || visited.has(current)) {
-      return undefined;
-    }
+  while (current !== undefined && !visited.has(current)) {
     visited.add(current);
+    assert(visited.size <= PLATFORM_LIMITS.arrayLengthMax, 'scanInheritedTitle: the chain stays inside an array');
     const source = read(current);
     if (source?.kind === 'override') {
       return source.title;

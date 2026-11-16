@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { segmentIndicatorStyle, useSegmentIndicator } from '../../ui/segmentIndicator';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import type { PlacementMessage } from '../../../shared/page/placement';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { HTML_TAGS } from '../../editor/elementSchemas';
 import type { TrailingSlash } from '../../editor/pageState';
@@ -11,8 +12,8 @@ import { useAddableComponents } from './componentVisibility';
 import { insertFolderOf, type InsertFolderKey } from './insertFolders';
 import { insertResultsMax, insertView, moveHighlight, type GridMove, type InsertTab } from './insertGrid';
 import type { InsertItem } from './insertItem';
-import { InsertCard, InsertHints, InsertPills, InsertRow, type InsertPreviewHost } from './InsertCards';
 import { previewStoreFor, tileId, tileRequests } from './previewTiles';
+import { InsertCard, InsertHints, InsertPills, InsertRow, type InsertPreviewHost } from './InsertCards';
 import { INSERT_TAB_DEFAULT, loadInsertFolder, loadInsertTab, saveInsertFolder, saveInsertTab } from './insertPreferences';
 import type { AppsEmpty } from './InsertAppRows';
 import { usePaletteResize } from './paletteResize';
@@ -89,6 +90,8 @@ interface InsertSearchProps {
   /** The installed apps, for the Apps tab; without it (or for a role without the Apps panel) there is no Apps tab. */
   readonly apps?: PaletteAppsSource | undefined;
   readonly onInsert: (item: InsertItem) => void;
+  /** Why an item cannot be placed where the page's selection points (the placement rule), or undefined when it can; without it every item is offered. */
+  readonly placementOf?: ((item: InsertItem) => PlacementMessage | undefined) | undefined;
   /** The highlighted item changed: the host may start reading what inserting it needs. */
   readonly onWarm?: ((item: InsertItem) => void) | undefined;
   readonly onClose: () => void;
@@ -98,9 +101,6 @@ export default function InsertSearch(props: InsertSearchProps) {
   const state = useInsertSearch(props);
   const translate = useTranslate();
   const { query, setQuery, tab, setTab, pickFolder, highlight, setHighlight, listRef, view } = state;
-  // An app opens rather than inserts; either way the palette's work is done.
-  const choose = (entry: PaletteEntry): void => {
-    if (entry.type === 'app') {
   const highlighted = view.shown[highlight];
   const onWarm = props.onWarm;
   useEffect(() => {
@@ -108,12 +108,15 @@ export default function InsertSearch(props: InsertSearchProps) {
       onWarm?.(highlighted);
     }
   }, [highlighted, onWarm]);
+  // An app opens rather than inserts; either way the palette's work is done.
+  const choose = (entry: PaletteEntry): void => {
+    if (entry.type === 'app') {
       onClose();
       entry.app.open();
     } else if (entry.type === 'marketplace') {
       onClose();
       entry.app.open();
-    } else {
+    } else if (props.placementOf?.(entry) === undefined) {
       props.onInsert(entry);
     }
   };
@@ -156,29 +159,53 @@ export default function InsertSearch(props: InsertSearchProps) {
               const first = view.shown[i - 1]?.type !== 'marketplace';
               return <InsertMarketplaceRow key={key} app={item.app} first={first} highlighted={i === highlight} onHover={hover} onOpen={select} />;
             }
-            return !grid || item.card === undefined ? (
-              <InsertRow key={key} item={item} highlighted={i === highlight} onHover={hover} onInsert={select} />
+            const refusal = props.placementOf?.(item);
+            const shownItem =
+              !grid || item.card === undefined ? (
+                <InsertRow key={key} item={item} highlighted={i === highlight} onHover={hover} onInsert={select} />
+              ) : (
+                <InsertCard
+                  key={key}
+                  item={item}
+                  itemKey={key}
+                  highlighted={i === highlight}
+                  host={host}
+                  scrollRoot={listRef}
+                  onVisible={state.reportVisible}
+                  showFolder={view.folders?.selected === undefined}
+                  onHover={hover}
+                  onInsert={select}
+                />
+              );
+            // An item with no valid place here stays listed but dimmed, and says why below (never a native tooltip).
+            return refusal === undefined ? (
+              shownItem
             ) : (
-              <InsertCard
-                key={key}
-                item={item}
-                itemKey={key}
-                highlighted={i === highlight}
-                mounted={state.mountedKeys.has(key)}
-                host={host}
-                scrollRoot={listRef}
-                onVisible={state.reportVisible}
-                onSettled={state.reportSettled}
-                showFolder={view.folders?.selected === undefined}
-                onHover={hover}
-                onInsert={select}
-              />
+              <div key={key} className="insert-placement" data-refused="" aria-disabled="true">
+                {shownItem}
+              </div>
             );
           })}
           {view.shown.length === 0 && <InsertEmpty state={state} onClose={onClose} />}
         </div>
+        <InsertPlacementNote
+          refusal={highlighted === undefined || highlighted.type === 'app' || highlighted.type === 'marketplace' ? undefined : props.placementOf?.(highlighted)}
+        />
         {grid && <InsertHints />}
       </div>
+    </div>
+  );
+}
+
+/** The reason the highlighted item cannot go where the page's selection points; nothing when it can. */
+function InsertPlacementNote({ refusal }: { readonly refusal: PlacementMessage | undefined }) {
+  const translate = useTranslate();
+  if (refusal === undefined) {
+    return undefined;
+  }
+  return (
+    <div className="insert-placement-note" role="status">
+      {translate(refusal.messageKey, refusal.params)}
     </div>
   );
 }
@@ -188,7 +215,6 @@ export default function InsertSearch(props: InsertSearchProps) {
 function InsertEmpty({ state, onClose }: { readonly state: InsertState; readonly onClose: () => void }) {
   const translate = useTranslate();
   const empty = state.appsEmpty;
-        />
   if (empty === undefined) {
     return <div className="props-empty">{translate('palette.search.noMatches')}</div>;
   }
@@ -197,17 +223,6 @@ function InsertEmpty({ state, onClose }: { readonly state: InsertState; readonly
       empty={empty}
       actions={state.emptyActions}
       highlight={state.highlight}
-/** The reason the highlighted item cannot go where the page's selection points; nothing when it can. */
-  const translate = useTranslate();
-  if (refusal === undefined) {
-    return undefined;
-  }
-  return (
-      {translate(refusal.messageKey, refusal.params)}
-    </div>
-  );
-}
-
       onHover={(index) => {
         state.noteMove('pointer');
         state.setHighlight(index);

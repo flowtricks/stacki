@@ -12,8 +12,6 @@ import { readSelectorReport, removeSelectors, restoreSelectors } from './selecto
 import type { SelectorEntry } from '../../../shared/properties/selectorUsage';
 
 export const DELETE_CLEANUP_LIMITS = {
-  /** Nodes walked in one deleted subtree; past this the offer is skipped. */
-  nodesMax: 20_000,
   /** Save-state polls before giving up: 40 × 250 ms is ten seconds. */
   savePollsMax: 40,
   savePollMs: 250,
@@ -30,12 +28,8 @@ interface NamedNode {
 export function namesInSubtree(root: NamedNode): readonly string[] {
   const names = new Set<string>();
   const stack: NamedNode[] = [root];
-  let visited = 0;
+  // Every pass takes one node off the stack and a node is pushed once, so the subtree's size bounds the walk.
   while (stack.length > 0) {
-    visited += 1;
-    if (visited > DELETE_CLEANUP_LIMITS.nodesMax) {
-      return [];
-    }
     const node = stack.pop();
     assert(node !== undefined, 'namesInSubtree: the stack was not empty');
     for (const key of ['class', 'className', 'id']) {

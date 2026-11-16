@@ -61,7 +61,7 @@ test('imported wrappers supply inherited titles without overriding explicit page
   }
 });
 
-test('missing, cyclic, dynamic and excessively deep wrappers fall back safely', () => {
+test('missing, cyclic and dynamic wrappers fall back safely, and deep chains still resolve', () => {
   const pageSource = { file: page.path, text: wrap('') };
   const wrapper = { file: '/site/src/layouts/Base.astro', text: wrap('') };
   assert.equal(scanPageTitles([page], [pageSource, wrapper])[0]?.title, undefined);
@@ -71,7 +71,9 @@ test('missing, cyclic, dynamic and excessively deep wrappers fall back safely', 
     text: wrap(index === 33 ? 'title="Too deep"' : '').replace('../layouts/Base.astro', `./Layer${index + 1}.astro`),
   }));
   const first = { ...pageSource, text: wrap('').replace('Base.astro', 'Layer0.astro') };
-  assert.equal(scanPageTitles([page], [first, ...sources])[0]?.title, undefined);
+  // No size limits: a wrapper chain longer than the old cap of 32 is followed to its end, because each wrapper
+  // is visited once and the number of sources bounds the walk.
+  assert.equal(scanPageTitles([page], [first, ...sources])[0]?.title, 'Too deep');
   const dynamic = { ...wrapper, text: wrap('title={dynamicTitle}') };
   assert.equal(scanPageTitles([page], [pageSource, dynamic])[0]?.title, undefined);
 });

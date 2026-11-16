@@ -30,7 +30,7 @@ import { toNodeId, toUtf16Offset, type Digest } from '../../shared/core/brand';
 import { DIFF_BUDGET, diffBytes } from '../../shared/engine/diff';
 import type { SourceEdit } from '../../shared/engine/intent';
 import { LIMITS } from '../../shared/core/limits';
-import { mapSpanThroughDiff } from '../../shared/engine/mapSpan';
+import { mapSpanThroughOutcome } from '../../shared/engine/mapSpan';
 import type { PageModel, PageNode } from '../../shared/page/pageNode';
 import type { Splice } from '../../shared/engine/planner';
 import { rebaseSpan } from '../../shared/engine/rebase';
@@ -207,14 +207,11 @@ function spanMapper(before: ByteString, after: ByteString, splices: readonly Spl
     return (span) => rebaseSpan(span, splices);
   }
   const diff = diffBytes(before, after, DIFF_BUDGET);
-  if (diff.tag === 'too-costly') {
-    return () => undefined; // Nothing carried: every node gets a fresh handle.
-  }
   return (span) => {
     if (span.start === span.end) {
       return undefined;
     }
-    const mapped = mapSpanThroughDiff(diff.diff, span);
+    const mapped = mapSpanThroughOutcome(diff, span);
     return mapped.tag === 'resolved' ? mapped.span : undefined;
   };
 }

@@ -13,7 +13,7 @@ const loadRenderer = require('../../helpers/rendererModule.js');
 
 const { firstRows, selectorCounts, selectorGroups, selectorSegments, unusedEntries, exactPatterns, unknownReasons, initialFilter, folderGroups, folderOf } =
   loadRenderer('src/features/selectors/selectorList.ts');
-const { namesInSubtree, DELETE_CLEANUP_LIMITS } = loadRenderer('src/features/selectors/deleteCleanup.ts');
+const { namesInSubtree } = loadRenderer('src/features/selectors/deleteCleanup.ts');
 
 const entry = (id, rel, selector, verdict) => ({ id, rel, line: 1, selector, scope: 'global', verdict });
 const report = {
@@ -155,12 +155,14 @@ test('the delete prompt reads written class and id names, never expressions', ()
   assert.deepEqual([...namesInSubtree(tree)].sort(), ['badge', 'card', 'card--wide', 'main']);
 });
 
-test('an oversized subtree offers nothing rather than a partial list', () => {
+test('a subtree of any size is walked whole, however many nodes it holds', () => {
   let node = { props: { class: { type: 'string', value: 'leaf' } } };
-  for (let depth = 0; depth < DELETE_CLEANUP_LIMITS.nodesMax + 1; depth += 1) {
-    node = { children: [node] };
+  for (let depth = 0; depth < 200_000; depth += 1) {
+    node = { children: [node, { props: { id: { type: 'string', value: `n${depth}` } } }] };
   }
-  assert.deepEqual(namesInSubtree(node), []);
+  const names = namesInSubtree(node);
+  assert.equal(names.length, 200_001, 'every node past the old 20,000 cap is read');
+  assert.ok(names.includes('leaf') && names.includes('n0') && names.includes('n199999'));
 });
 
 test('locked rows are listed only under Locked and All, and sheets are headed by folder only when there are several', () => {

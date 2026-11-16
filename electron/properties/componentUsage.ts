@@ -126,7 +126,6 @@ interface InstanceArgs {
 }
 
 type InstanceCounts = (target: Pick<InstanceArgs, 'targetPath' | 'name'>) => number;
-const USAGE_NAMES_MAX = 10_000;
 
 /** Scan markup and imports once; all component queries then use bounded maps. */
 export function instanceCounts(source: unknown, file: string, aliases: readonly Alias[]): InstanceCounts {
@@ -146,11 +145,10 @@ export function instanceCounts(source: unknown, file: string, aliases: readonly 
     for (const key of candidates) {
       targets.set(key, (targets.get(key) ?? 0) + count);
     }
-    if (bound.size > USAGE_NAMES_MAX || targets.size > USAGE_NAMES_MAX) {
-      throw new Error('Component usage exceeds 10,000 import bindings');
-    }
   }
-  assert(targets.size <= USAGE_NAMES_MAX, 'Usage target index stays bounded');
+  // Every binding and target comes from one import statement of this file, so the file's own text
+  // bounds both: a file importing any number of components counts them all.
+  assert(bound.size <= text.length, 'Usage bindings come from the source text');
   return ({ targetPath, name }) => {
     if (targetPath) {
       const count = targets.get(comparablePath(targetPath));
@@ -169,17 +167,14 @@ function instanceTagCounts(template: string): ReadonlyMap<string, number> {
   assert(template.length <= LIMITS.sourceBytesMax, 'Usage template stays within the reader limit');
   const counts = new Map<string, number>();
   // This is the same tag grammar as countIn, including its frontmatter exclusion.
-  // Iteration is bounded by the source length; distinct names have a separate cap.
+  // Iteration is bounded by the source length, and so is the number of distinct names.
   for (const match of template.matchAll(/<([A-Za-z][A-Za-z0-9]*)(?=[\s/>])/g)) {
     const name = match[1];
     if (name !== undefined) {
       counts.set(name, (counts.get(name) ?? 0) + 1);
-      if (counts.size > USAGE_NAMES_MAX) {
-        throw new Error('Component usage exceeds 10,000 tag names');
-      }
     }
   }
-  assert(counts.size <= USAGE_NAMES_MAX, 'Usage tag index stays bounded');
+  assert(counts.size <= template.length, 'Usage tag names come from the template text');
   return counts;
 }
 

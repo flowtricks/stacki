@@ -98,7 +98,7 @@ export const messages = {
   'preview.text.source.blocked.duplicate': 'Several places print the same words here, so the right one cannot be told apart: edit it in {file}.',
   'preview.text.source.blocked.missing': 'The value {path} is not written in {file}.',
   'preview.text.source.blocked.mutable': 'This text comes from a variable that can change (let or var) in {file}: edit it there.',
-  'preview.text.source.blocked.not-text': '{path} is not a string.',
+  'preview.text.source.blocked.notText': '{path} is not a string.',
   'preview.text.source.blocked.prop': 'This text comes from a prop; edit it where the component is used.',
   'preview.text.source.blocked.template': 'This text is built from a template with expressions in {file}: edit it there.',
   'preview.text.source.blocked.unreadable': 'The data file {file} could not be read.',
