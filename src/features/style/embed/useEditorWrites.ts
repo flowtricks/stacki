@@ -2,6 +2,7 @@
 // their fallback — and the cards the panel draws: source options, the embed
 // navigation, and the selection, context and source cards (EmbedEditor.tsx).
 
+import { CREATE_STYLE_TAG_KEY } from '../model/newStyleTarget';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useEffect, useMemo } from 'react';
 import { saveEmbedSource } from '../model/toolPreferences';
@@ -325,7 +326,7 @@ export function useSourceOptions(
   const { nativeModel } = nativeState;
   const { model } = elementTokens;
   const { currentContext } = styleContextsHook;
-  const { creatableClass, embedList } = nativeTarget;
+  const { createOffered, creatableClass, embedList } = nativeTarget;
   const { effectiveSource, selectedNativeIndex } = resolvedHook;
 
   // The name to badge when editing a native class style.
@@ -366,6 +367,10 @@ export function useSourceOptions(
       indent,
     });
     const optionList: SourceOption[] = [];
+    // First in the list: where a new selector goes when the page has no `<style>` tag of its own.
+    if (createOffered) {
+      optionList.push({ value: CREATE_STYLE_TAG_KEY, label: translate('styleModel.embed.source.createStyleTag'), create: true });
+    }
     for (const embedDocument of embedList) {
       if (!embedDocument.source.fromComponent) {
         optionList.push(embedOption(embedDocument));
@@ -391,7 +396,7 @@ export function useSourceOptions(
       });
     }
     return optionList;
-  }, [embedList, embedsWithRules, translate]);
+  }, [createOffered, embedList, embedsWithRules, translate]);
   return { nativeStyleName, sourceNote, sourceOptions };
 }
 
@@ -526,7 +531,7 @@ export function useSourceCard(
 ) {
   const { busy } = busyState;
   const { phase, scanningMore } = scanState;
-  const { pendingKeys, setSourceSelection } = nativeState;
+  const { manualSourcePickRef, pendingKeys, selectionKeyRef, setSourceSelection } = nativeState;
   const { resolving } = refreshHook;
   const { onRemoveRule, onSaveCssRule } = ruleActions;
   const { effectiveSourceSelection } = nativeTarget;
@@ -540,6 +545,7 @@ export function useSourceCard(
     sourceValue: effectiveSourceSelection,
     sourceOptions,
     onSourceChange: (value: string) => {
+      manualSourcePickRef.current = { selectionKey: selectionKeyRef.current, sourceKey: value };
       setSourceSelection(value);
       saveEmbedSource(value);
     },

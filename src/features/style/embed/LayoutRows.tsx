@@ -300,6 +300,8 @@ export type SourceOption = {
   /** Full name shown on the closed trigger (e.g. "Global Styles #1"), while the
    *  list row stays the group-scoped "Embed #1". */
   triggerLabel?: string;
+  /** The virtual "Create <style>" entry: nothing is written until the first style is. */
+  create?: boolean;
 };
 
 // A selector the element can be targeted by, offered as an autocomplete suggestion:

@@ -289,10 +289,16 @@ export async function pasteNeeds(
     // A relative path means something different from another page's folder.
     const rebased =
       clip.pagePath && String(imp.path || '').startsWith('.') ? await rebaseProjectImport(clip.pagePath, context.currentPath(), imp.path) : { path: imp.path };
+    // Which way it binds comes across with it: `import { getCollection } from 'astro:content'`
+    // is a named import, and written without that it is a default import, which has no
+    // such export. Where it sat in the other page's frontmatter (`at`) means nothing here.
     carriedImports.push({
       name: imp.name,
       path: rebased.path || imp.path,
       quote: "'",
+      ...(imp.imported === undefined ? {} : { imported: imp.imported }),
+      ...(imp.named === undefined ? {} : { named: imp.named }),
+      ...(imp.typeOnly === undefined ? {} : { typeOnly: imp.typeOnly }),
     });
   }
 
@@ -395,6 +401,11 @@ export function astroAssetGesture(
 // insert palette (empty) and for the Style panel's first styles (a first rule).
 export function globalStyleNode(id: NodeId, inner: string): EditorNode {
   return { id, kind: 'raw', name: 'style', props: { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' } }, inner };
+}
+
+// A new `<style>` tag the Style panel creates, global or not as the project's `newStyleTag` setting says.
+export function styleTagNode(id: NodeId, inner: string, scope: 'global' | 'scoped'): EditorNode {
+  return scope === 'global' ? globalStyleNode(id, inner) : { id, kind: 'raw', name: 'style', props: {}, inner };
 }
 
 // A new node for an insert-palette item that needs no import, or undefined for one

@@ -47,7 +47,7 @@ import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath } from '../../ipc/appBridge';
 import { newId, inlineWithIds, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
-import { withPrunedImports, chooseImportPath, globalStyleNode } from '../model/pageGestures';
+import { withPrunedImports, chooseImportPath, styleTagNode } from '../model/pageGestures';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useHistory } from './appNodeEdits';
@@ -242,8 +242,8 @@ function planClassEdit(nodeId: string, node: EditorNode, clean: string, placemen
   return { tag: 'edit', gesture: edit.remove ? { ...gesture, request: () => undefined } : gesture };
 }
 
-// The first styles of a page that has no style source (firstStyleBlock.ts): a `<style is:global>`
-// block at the end of the open file and, when the rule needs one, a class on the selected
+// The first styles of a page that has no style source (firstStyleBlock.ts), or the tag of its own that
+// "Create <style>" stands for (newStyleTarget.ts): a `<style>` block (`is:global` per the project's setting) at the end of the open file and, when the rule needs one, a class on the selected
 // element. Both are ONE gesture, so one edit on disk and one undo step: undoing the block
 // leaves no class behind that styles nothing, and undoing the class leaves no orphan rule.
 function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
@@ -271,7 +271,7 @@ function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle:
       if (plan.tag === 'refused') {
         return { tag: 'refused', message: plan.message };
       }
-      const block = globalStyleNode(newId(), styleBlockInner(request.css, fileLayoutOf(state.source)));
+      const block = styleTagNode(newId(), styleBlockInner(request.css, fileLayoutOf(state.source)), request.scope);
       const insert = insertGesture(state.model, block, undefined, { urgency: true });
       if (!commitEdit(plan.tag === 'edit' ? sequence(insert, plan.gesture) : insert)) {
         return { tag: 'refused', message: translate('shell.refusal.notQueued') };

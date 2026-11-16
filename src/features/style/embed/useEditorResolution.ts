@@ -23,6 +23,8 @@ import {
 } from '../model/webflow';
 import { getHost, walkNodes } from '../model/host';
 import { authoredClassTokens } from '../model/webflowElement';
+import { isCreateStyleTagKey } from '../model/newStyleTarget';
+import { getNewStyleTagSettings, newStyleTagFrame } from '../model/newStyleTagSettings';
 import { isAutoClassSelector, planFirstStyles, type FirstStylesPlan } from '../model/firstStyleBlock';
 import { type PropWrite } from './EditorBasics';
 import {
@@ -197,6 +199,7 @@ export function useWriteNewRule(
   selectorPick: ReturnType<typeof useSelectorPick>,
   resolvedHook: ReturnType<typeof useResolved>,
   editorRefs: ReturnType<typeof useEditorRefs>,
+  nativeState: ReturnType<typeof useNativeState>,
 ) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
@@ -206,6 +209,7 @@ export function useWriteNewRule(
   const { refreshDerived } = refreshDerivedHook;
   const { selectActiveSelector, typedPathsRef } = selectorPick;
   const { primedRef } = editorRefs;
+  const { manualSourcePickRef } = nativeState;
   const { resolved } = resolvedHook;
 
   // Writes target the picked selector's rule in the current context/state, and
@@ -251,7 +255,10 @@ export function useWriteNewRule(
         }
       }
       const nested = takeTypedPath(typedPathsRef.current, fullSelector, embedContext ?? '');
+      // The project's template applies to a `<style>` tag, never to a stylesheet file.
+      const templateWrappers = embedDocument.source.origin.kind === 'node' ? newStyleTagFrame().wrappers : [];
       const ok = createRuleForWrite(region, {
+        templateWrappers,
         nested,
         bpMedia,
         embedContext,
@@ -265,12 +272,18 @@ export function useWriteNewRule(
       }
       const result =
         firstStyles !== undefined && firstStyles.kind !== 'class'
-          ? await writeFirstStyleBlock(embedDocument, firstStyles.kind === 'block-and-class' ? firstStyles.className : undefined)
+          ? await writeFirstStyleBlock(embedDocument, {
+              className: firstStyles.kind === 'block-and-class' ? firstStyles.className : undefined,
+              scope: getNewStyleTagSettings().scope,
+            })
           : await writeEmbedDocument(embedDocument);
       if (firstStyles !== undefined && result.ok) {
         // The element changed, so what the canvas matched for these selectors no longer
         // holds (as for a class typed into the selector box), and the new class is the pick.
         primedRef.current = undefined;
+        // The tag now exists, so a pick of the virtual "Create <style>" entry has nothing to point
+        // at: the selector has a home again and "Add custom styles in" follows it (selectorHome.ts).
+        manualSourcePickRef.current = undefined;
         selectActiveSelector(fullSelector);
       }
       await refreshDerived();
@@ -344,7 +357,7 @@ export function useCreateRule(
     void writeNewRule({ ...target, embedContext, wrapper: currentContext.wrapper, bpMedia, selector, firstStyles }, write);
   };
   const blankTarget = () => {
-    const embedDocument = blankStyleDocument();
+    const embedDocument = blankStyleDocument(getNewStyleTagSettings());
     const region = embedDocument.regions[0];
     return region === undefined ? undefined : { embedDocument, region };
   };
@@ -378,6 +391,7 @@ export function useCreateRule(
       ruleSelectors,
       takenClasses: taken,
       filePath: host.openFilePath,
+      createStyleTag: isCreateStyleTagKey(selectedEmbedKey) ? 'chosen' : 'not-chosen',
     });
   };
   // The stylesheet a new rule in the current context lands in. A query row names

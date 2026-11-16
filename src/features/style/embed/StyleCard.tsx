@@ -33,7 +33,7 @@ import { type ResolvedProp, type ResolvedStyle } from '../model/resolved';
 import { SkeletonRows, Skeleton } from '../../../ui/Skeleton';
 import { assert } from '../../../../shared/core/assert';
 import { queryKey } from '../model/css';
-import { PencilIcon, EmbedIcon, ComponentIcon, breakpointIcon } from './EditorBasics';
+import { PencilIcon, EmbedIcon, CreateStyleTagIcon, ComponentIcon, breakpointIcon } from './EditorBasics';
 import { AddPropertyRow, useSectionVisibility } from './AddProperty';
 import {
   SectionBlock,
@@ -493,8 +493,8 @@ export function sourceSelectOption(option: SourceOption) {
     ...(option.heading === undefined ? {} : { heading: option.heading }),
     ...(option.indent === undefined ? {} : { indent: option.indent }),
     ...(option.triggerLabel === undefined ? {} : { triggerLabel: option.triggerLabel }),
-    icon: option.heading ? <ComponentIcon /> : <EmbedIcon />,
-    triggerIcon: option.fromComponent ? <ComponentIcon /> : <EmbedIcon />,
+    icon: option.heading ? <ComponentIcon /> : option.create ? <CreateStyleTagIcon /> : <EmbedIcon />,
+    triggerIcon: option.fromComponent ? <ComponentIcon /> : option.create ? <CreateStyleTagIcon /> : <EmbedIcon />,
     tone: option.fromComponent ? ('component' as const) : ('embed' as const),
   };
 }

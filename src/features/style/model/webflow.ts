@@ -34,6 +34,7 @@ import { type AnyElement, serializeElementId, nodeById, buildSnapshot } from './
 import { type CanvasAsk, canvasIdentityOf } from './canvasAsk';
 import { isGlobalRegion } from './projectResources';
 import { PLACEMENT_END } from '../../../editor/classAttr';
+import { newStyleTagOpening, templateFrame, type NewStyleTagSettings, type StyleTagScope } from '../../../../shared/properties/newStyleTag';
 export { type ProjectVariable, streamProjectVariables, getProjectFontFamilies, type ImageAsset, getImageAssets } from './projectResources';
 
 export {
@@ -62,6 +63,8 @@ export type EmbedSource = {
   order: number;
   element: AnyElement;
   instance?: AnyElement;
+  /** A `<style>` tag of the open file: its scope and whether it is a `define:vars` tag (newStyleTarget.ts). */
+  styleTag?: { readonly scope: StyleTagScope; readonly variables: 'defined' | 'none' };
   /** Where the CSS lives — the panel writes back through this. `astro` is a
    *  component file whose `<style is:global>` blocks are edited in place. */
   origin:
@@ -259,6 +262,7 @@ function styleSources(): EmbedSource[] {
       order: order++,
       element: node.id,
       origin: { kind: 'node', nodeId: node.id, filePath: host.openFilePath },
+      styleTag: { scope: isGlobal ? 'global' : 'scoped', variables: node.props?.['define:vars'] === undefined ? 'none' : 'defined' },
     });
   });
 
@@ -555,15 +559,20 @@ export async function writeEmbedDocument(
 }
 
 /**
- * A `<style is:global>` block that is not in the file yet: an empty document the panel builds the
- * first rule in (editorModel.ts createRuleForWrite), so a first rule is shaped by the same code as
- * every other. Nothing reads it back; the real block is scanned once the host has added it.
+ * A `<style>` block that is not in the file yet: a document holding the project's template
+ * (newStyleTag.ts; empty by default) that the panel builds the first rule in (editorModel.ts
+ * createRuleForWrite, which puts the rule inside the template's wrapper), so a first rule is shaped
+ * by the same code as every other. Nothing reads it back; the real block is scanned once the host
+ * has added it.
  */
-export function blankStyleDocument(): EmbedDocument {
+export function blankStyleDocument(settings: NewStyleTagSettings): EmbedDocument {
   const host = getHost();
+  const frame = templateFrame(settings.content);
+  assert(frame.ok, 'blankStyleDocument: the stored template parses');
+  const skeleton = frame.frame.skeleton;
   const source: EmbedSource = {
     key: `node:${host.openFilePath ?? ''}:new`,
-    label: '<style is:global>',
+    label: newStyleTagOpening(settings.scope),
     classNames: [],
     fromComponent: host.openFileKind === 'component',
     componentName: undefined,
@@ -571,7 +580,7 @@ export function blankStyleDocument(): EmbedDocument {
     element: 'new',
     origin: { kind: 'node', nodeId: 'new', filePath: host.openFilePath },
   };
-  const region = parseRegion({ start: 0, end: 0, css: '', root: undefined });
+  const region = parseRegion({ start: 0, end: skeleton.length, css: skeleton, root: undefined });
   return new EmbedDocument(source, '', ['', ''], [region]);
 }
 
@@ -580,7 +589,10 @@ export function blankStyleDocument(): EmbedDocument {
  * (firstStyleBlock.ts). One host edit, so one undo step; the result has the shape of every
  * other write, so the panel settles it the same way.
  */
-export async function writeFirstStyleBlock(embedDocument: EmbedDocument, className: string | undefined): Promise<EmbedWriteResult> {
+export async function writeFirstStyleBlock(
+  embedDocument: EmbedDocument,
+  block: { readonly className: string | undefined; readonly scope: StyleTagScope },
+): Promise<EmbedWriteResult> {
   embedWriteCount += 1;
   const add = getHost().addStyleBlock;
   if (!add) {
@@ -591,7 +603,7 @@ export async function writeFirstStyleBlock(embedDocument: EmbedDocument, classNa
     return failureOf('styleModel.write.nothingToAdd');
   }
   try {
-    const outcome = await add({ css: code, className, placement: PLACEMENT_END });
+    const outcome = await add({ css: code, scope: block.scope, className: block.className, placement: PLACEMENT_END });
     if (outcome.tag === 'refused') {
       return { ok: false, error: outcome.message };
     }

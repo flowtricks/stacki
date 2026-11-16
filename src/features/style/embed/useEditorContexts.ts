@@ -4,8 +4,9 @@
 
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { chipStyleOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
+  contextKeyOf,
   resolveStyle,
   selectorKey,
   selectorsMatch,
@@ -45,6 +46,10 @@ import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
 import { getHost, onHostChange } from '../model/host';
 import { instanceSourceKey, type InstanceStyleDocument } from '../model/instanceClasses';
+import { followSource, selectorHomeKey } from '../model/selectorHome';
+import { CREATE_STYLE_TAG_KEY, defaultStyleTarget, defaultTargetKey, type StyleTagFact } from '../model/newStyleTarget';
+import { getNewStyleTagSettings, onNewStyleTagSettings } from '../model/newStyleTagSettings';
+import { styleBlockFileSupported } from '../model/firstStyleBlock';
 import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
 import { chipsFor, pseudoLayerChips, readPanelLayer, styledSelectorsFor, usePanelLayer, usePseudoTarget } from './editorModel';
@@ -330,11 +335,32 @@ export function useNativeTarget(
   // lands in the selected embed. The user's pick (sourceSel) overrides the default
   // (first embed in page order) and persists across element switches.
   const sourceKeys = useMemo(() => embedList.map((embedDocument) => embedDocument.source.key), [embedList]);
+  // The open file's own `<style>` tags decide where a selector with no rules goes (newStyleTarget.ts):
+  // the first usable tag, or, with none in the file, the virtual "Create <style>" entry.
+  const newStyleTag = useSyncExternalStore(onNewStyleTagSettings, getNewStyleTagSettings);
+  const openFile = getHost().openFilePath;
+  const canAddTag = styleBlockFileSupported(openFile) && getHost().addStyleBlock !== undefined;
+  const styleTags = useMemo(
+    () =>
+      embedList.flatMap((embedDocument): StyleTagFact[] => {
+        const { origin, styleTag } = embedDocument.source;
+        const own = origin.kind === 'node' && origin.filePath === openFile && styleTag !== undefined;
+        return own ? [{ key: embedDocument.source.key, scope: styleTag.scope, variables: styleTag.variables, order: embedDocument.source.order }] : [];
+      }),
+    [embedList, openFile],
+  );
+  const fileCanHoldTag = canAddTag ? 'yes' : 'no';
+  const defaultTarget = defaultStyleTarget({ tags: styleTags, preferredScope: newStyleTag.scope, fileCanHoldTag });
+  const createOffered = defaultTarget.kind === 'create';
+  const defaultKey = defaultTargetKey(defaultTarget);
   // The source dropdown only picks where NEW styles are created — it does not scope
   // which existing rule is editable. So it just tracks the user's pick, defaulting to
   // the first embed in page order.
-  const effectiveSourceSelection = sourceSelection && sourceKeys.includes(sourceSelection) ? sourceSelection : (sourceKeys[0] ?? '');
-  return { canNative, creatableClass, effectiveSourceSelection, embedList, nativeIndex };
+  // The virtual entry is a choice only while the file has no tag; the fallback is the first real source.
+  const picked = sourceSelection === CREATE_STYLE_TAG_KEY ? (createOffered ? sourceSelection : undefined) : sourceSelection;
+  const effectiveSourceSelection =
+    picked && (picked === CREATE_STYLE_TAG_KEY || sourceKeys.includes(picked)) ? picked : (sourceKeys[0] ?? (createOffered ? CREATE_STYLE_TAG_KEY : ''));
+  return { canNative, creatableClass, createOffered, defaultKey, effectiveSourceSelection, embedList, nativeIndex };
 }
 
 // Point the style source at an open component's own embed.
@@ -398,7 +424,7 @@ export function useResolved(
   const { elementIdentity } = tokenDefault;
   const { activeSelector } = activeSelectorHook;
   const { currentContext } = styleContextsHook;
-  const { canNative, effectiveSourceSelection, embedList, nativeIndex } = nativeTarget;
+  const { canNative, defaultKey, effectiveSourceSelection, embedList, nativeIndex } = nativeTarget;
   const { inComponentContext } = componentSource;
 
   // Webflow's native style system only supports its own breakpoints (Base/Tablet/…)
@@ -462,23 +488,47 @@ export function useResolved(
   const cascadeTruth = useCascadeTruth(checkedProps);
   const resolved = useMemo(() => (checkable ? applyCascadeTruth(ranked, cascadeTruth) : ranked), [ranked, checkable, cascadeTruth]);
 
-  // The stylesheet the active selector's rule already lives in. resolveStyle
-  // picks selectedRule by selector identity and explicitly does NOT scope it to
-  // the source dropdown, so reading it here can't feed back into itself.
-  const homeEmbedKey = resolved.selectedRule?.embedKey;
+  // The stylesheet the active selector's rules already live in: its selected rule's file
+  // (resolveStyle picks that by selector identity and does NOT scope it to the source
+  // dropdown, so reading it here can't feed back into itself), else the file of a rule
+  // for part of it, such as `.home-hero_height` for `div.home-hero_height[data-x]`.
+  const homeEmbedKey = useMemo(
+    () =>
+      resolved.selectedRule?.embedKey ??
+      selectorHomeKey(
+        [...(model?.base ?? []), ...(model?.conditional ?? [])].map((matched) => ({
+          embedKey: matched.rule.embedKey,
+          order: matched.rule.order,
+          context: contextKeyOf(matched.rule),
+          selectorTexts: [matched.rule.selectorText, ...matched.matchedSelectors.map((selector) => selector.text)],
+        })),
+        currentContext.embedAtContext ?? '',
+        activeSelector,
+      ),
+    [resolved.selectedRule, model, currentContext, activeSelector],
+  );
 
-  // Selecting an element points "Add custom styles in" at the file that already
-  // defines its selector, so a new declaration joins the rule that's there
-  // instead of landing in whichever stylesheet happens to be first in page
-  // order. An explicit pick still wins: the effect only re-runs when the element
-  // or the selector's home changes, not on every render. Left alone inside a
-  // component, where the source is pinned to that component's own embed.
+  // Selecting an element or a selector points "Add custom styles in" at the file that
+  // already defines it, so a new declaration joins the rule that's there instead of
+  // landing in whichever stylesheet happens to be first in page order (followSource,
+  // model/selectorHome.ts). The person's own pick wins until the element or selector
+  // changes. Selecting only reads; nothing is written. Left alone inside a component,
+  // where the source is pinned to that component's own embed.
+  const { manualSourcePickRef, selectionKeyRef } = nativeState;
+  const selectionKey = `${elementIdentity}\u0000${activeSelector}`;
+  selectionKeyRef.current = selectionKey;
   useEffect(() => {
-    if (!homeEmbedKey || inComponentContext) {
+    if (inComponentContext) {
       return;
     }
-    setSourceSelection((previous) => (previous === homeEmbedKey ? previous : homeEmbedKey));
-  }, [elementIdentity, activeSelector, homeEmbedKey, inComponentContext, setSourceSelection]);
+    // A selector with no rules anywhere has no home: it goes to the page's own tag, or to the
+    // virtual "Create <style>" entry (newStyleTarget.ts). Selecting only moves the dropdown.
+    const follow = followSource({ selectionKey, homeKey: homeEmbedKey ?? defaultKey, manualPick: manualSourcePickRef.current });
+    manualSourcePickRef.current = follow.manualPick;
+    if (follow.kind === 'move') {
+      setSourceSelection((previous) => (previous === follow.sourceKey ? previous : follow.sourceKey));
+    }
+  }, [selectionKey, homeEmbedKey, defaultKey, inComponentContext, manualSourcePickRef, setSourceSelection]);
 
   useInstanceSource({
     activeSelector,

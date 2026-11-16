@@ -3,6 +3,7 @@
 // scan's state and signature, and the session caches that keep a scan and a
 // view across remounts (EmbedEditor.tsx).
 
+import type { TemplateWrapper } from '../../../../shared/properties/newStyleTag';
 import { defaultSelectorPick, isUtilityClassName } from '../model/defaultSelector';
 import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
@@ -563,6 +564,8 @@ export function createRuleForWrite(
     wrapper: string | undefined;
     selector: string;
     write: PropWrite;
+    /** The blocks the project's new-style-tag template puts rules in, for a `<style>` tag target; absent for a stylesheet. */
+    templateWrappers?: readonly TemplateWrapper[];
   },
 ): boolean {
   const { nested, bpMedia, embedContext, selector, wrapper } = where;
@@ -579,7 +582,7 @@ export function createRuleForWrite(
     return createRuleInMedia(region, bpMedia, selector, prop, { value, important });
   }
   if (!embedContext) {
-    return createRuleAtRoot(region, selector, prop, { value, important });
+    return createRuleAtRoot(region, selector, prop, { value, important }, where.templateWrappers ?? []);
   }
   const block = listAtRuleBlocks(region).find((entry) => entry.atContext.join(' › ') === embedContext && entry.placement.kind === 'top-level');
   return block

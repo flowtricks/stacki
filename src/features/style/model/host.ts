@@ -11,6 +11,7 @@ import { LIMITS } from '../../../../shared/core/limits';
 import { PX_LENGTHS, type LengthUnit } from '../../../../shared/properties/lengthUnit';
 import type { ClassPlacement } from '../../../editor/classAttr';
 import type { TypedMessageRef } from '../../../../shared/properties/i18n/messageRef';
+import type { StyleTagScope } from '../../../../shared/properties/newStyleTag';
 
 type HostAttr = { readonly type: string; readonly value?: string };
 
@@ -57,6 +58,8 @@ export type StyleBlockRequest = {
   /** The block's CSS as the panel builds it: tab-indented rule lines ended by `\n`. The host
    *  sets it between the tags in the file's own indent and line ending (styleBlockInner). */
   readonly css: string;
+  /** Whether the new tag carries `is:global`: the project's `newStyleTag` setting at the time of the write. */
+  readonly scope: StyleTagScope;
   /** The class to put on the selected element, or undefined when it already carries the selector. */
   readonly className: string | undefined;
   readonly placement: ClassPlacement;
@@ -136,8 +139,8 @@ export type HostState = {
    *  page edit reached disk or was refused: the stylesheet rule for that class
    *  is written only after it applied (step 6, plan §3.3 — outcome-gated). */
   addClass: ((className: string, placement: ClassPlacement) => Promise<ClassOutcome>) | undefined;
-  /** First styles of a page with no style source (model/firstStyleBlock.ts): add a
-   *  `<style is:global>` block holding `css` at the end of the open file and, when
+  /** Create the page's first `<style>` tag (model/firstStyleBlock.ts, newStyleTarget.ts), global or not as
+   *  `request.scope` says: add a block holding `css` at the end of the open file and, when
    *  `className` is given, put that class on the selected element, as ONE page edit and so
    *  one undo step. The CSS is the block's whole text, rule included. Resolves once the edit
    *  reached disk or was refused; a refusal says why. Absent where the host cannot add a node. */

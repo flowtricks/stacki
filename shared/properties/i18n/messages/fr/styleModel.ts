@@ -271,6 +271,7 @@ export const messages = {
   'styleModel.embed.save.saved': 'Toutes les modifications sont enregistrées',
   'styleModel.embed.save.saving': 'Enregistrement…',
   'styleModel.embed.save.unsaved': 'Modifications non enregistrées',
+  'styleModel.embed.source.createStyleTag': 'Créer <style>',
   'styleModel.embed.source.component': 'Composant',
   'styleModel.filter.group.colorAdjustments': 'Réglages des couleurs',
   'styleModel.filter.group.colorEffects': 'Effets de couleur',

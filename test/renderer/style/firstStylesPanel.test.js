@@ -211,11 +211,12 @@ async function panelEnvironment() {
 }
 
 const styleNode = (inner, extra = {}) => ({ id: 'n9', kind: 'raw', name: 'style', props: { 'is:global': { type: 'bare' } }, inner, ...extra });
+const scopedNode = (inner) => ({ id: 'n9', kind: 'raw', name: 'style', props: {}, inner });
 const classAttr = (value) => ({ type: 'string', value });
 
 // Mount the panel over `nodes` with the element `n1` selected and the given sources. The host
 // answers addClass and addStyleBlock the way Desktop does: by changing the nodes it shows.
-async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, refuse }) {
+async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, refuse, styles }) {
   const { dom, React, createRoot, EmbedEditor, setHost, subscribeErrorToasts } = await panelEnvironment();
   const calls = [];
   // The panel reports a failure as an error toast; the app's toast owner is stood in for here.
@@ -254,7 +255,7 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
       if (request.className) {
         withClass(request.className);
       }
-      state.nodes = [...state.nodes, styleNode(`\n${request.css}`)];
+      state.nodes = [...state.nodes, request.scope === 'global' ? styleNode(`\n${request.css}`) : scopedNode(`\n${request.css}`)];
       setHost({ ...host, ...shown(), renderedClasses: state.nodes[0].props?.class?.value.split(' ') ?? [] });
       return { tag: 'applied' };
     },
@@ -265,6 +266,7 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
     },
   };
   dom.window.avb = {
+    projectMetadata: async () => (styles === undefined ? { ok: true, value: { source: undefined } } : { ok: true, value: { source: JSON.stringify(styles) } }),
     onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files }),
     listAstroStyleFiles: async () => ({ files: [] }),
@@ -407,11 +409,45 @@ test('a project with a style of its own is written as it always was', async (con
   assert.match(empty.calls[0][2], /div \{\s*opacity: 0\.5;\s*\}/);
   empty.unmount();
 
-  // A stylesheet, and no block at all.
+  // A stylesheet and no tag: the new selector goes to the virtual Create <style> entry (a tag rule in a new block),
+  // and a selector the stylesheet already defines is still written there.
   const sheet = { rel: 'src/styles/site.css', name: 'site.css', path: '/p/src/styles/site.css', size: 20 };
-  const stylesheet = await mountPanel({ nodes: [div('n1')], files: [sheet], disk: '.hero { color: red; }' });
+  const stylesheet = await mountPanel({ nodes: [div('n1', 'hero')], files: [sheet], disk: '.hero { color: red; }' });
   context.after(stylesheet.unmount);
   await stylesheet.typeOpacity('0.5');
   assert.deepEqual(kinds(stylesheet.calls), ['writeStyleFile']);
-  assert.match(stylesheet.calls[0][1], /\.hero \{ color: red; \}[\s\S]*div \{\s*opacity: 0\.5;\s*\}/);
+  assert.match(stylesheet.calls[0][1], /\.hero \{ color: red;[\s\S]*opacity: 0\.5;/);
+});
+
+test('a new selector with a stylesheet and no <style> goes to Create <style>: nothing is written until the first style, then one block', async (context) => {
+  const sheet = { rel: 'src/styles/site.css', name: 'site.css', path: '/p/src/styles/site.css', size: 20 };
+  const panel = await mountPanel({ nodes: [div('n1', 'fresh')], files: [sheet], disk: '.other { color: red; }' });
+  context.after(panel.unmount);
+  assert.deepEqual(panel.calls, [], 'selecting writes nothing');
+  assert.match(panel.container.querySelector('.embed-editor_source-picker').textContent, /Create <style>/);
+  await panel.typeOpacity('0.5');
+  assert.deepEqual(kinds(panel.calls), ['addStyleBlock']);
+  const [, request] = panel.calls[0];
+  assert.equal(request.scope, 'scoped', 'a project that never wrote the section keeps plain tags');
+  assert.equal(request.css, '\n.fresh {\n\topacity: 0.5;\n}');
+  assert.equal(request.className, undefined);
+});
+
+test('with the setting on, the block is global and the template wraps the rule; a page with a tag shows <style>', async (context) => {
+  const styles = { version: 1, keep: [], newStyleTag: { version: 1, isGlobal: true, content: '@layer components {}' } };
+  const sheet = { rel: 'src/styles/site.css', name: 'site.css', path: '/p/src/styles/site.css', size: 20 };
+  const panel = await mountPanel({ nodes: [div('n1', 'fresh')], files: [sheet], disk: '', styles });
+  context.after(panel.unmount);
+  await panel.typeOpacity('0.5');
+  const request = panel.calls[0][1];
+  assert.equal(request.scope, 'global');
+  assert.match(request.css, /@layer components \{[\s\S]*\.fresh \{[\s\S]*opacity: 0\.5;[\s\S]*\}\s*\}/);
+  panel.unmount();
+  const tagged = await mountPanel({ nodes: [div('n1', 'fresh'), scopedNode('')], files: [sheet], disk: '' });
+  context.after(tagged.unmount);
+  const label = tagged.container.querySelector('.embed-editor_source-picker').textContent;
+  assert.match(label, /<style>/);
+  assert.doesNotMatch(label, /Create/);
+  await tagged.typeOpacity('0.5');
+  assert.deepEqual(kinds(tagged.calls), ['writeStyleNode'], 'the page tag, not the stylesheet, takes the first style');
 });

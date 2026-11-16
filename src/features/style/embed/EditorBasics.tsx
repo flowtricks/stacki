@@ -1,6 +1,7 @@
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import {
+  add as centralAdd,
   check as centralCheck,
   circle as centralCircle,
   code as centralCode,
@@ -150,6 +151,8 @@ export const EMBED_ICON_FOURTH_PATH =
   'M13 2C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13' + 'V3C2 2.44772 2.44772 2 3 2H13ZM3 13H13V3H3V13Z';
 
 export const EmbedIcon = centralIcon(centralCode);
+// The `<style>` tag the page does not have yet ("Create <style>", newStyleTarget.ts): the plus says choosing it makes one.
+export const CreateStyleTagIcon = centralIcon(centralAdd);
 
 export const COMPONENT_ICON_PATH =
   'M8.47885 1.69144C8.18037 1.52863 7.81963 1.52863 7.52115 1.69144L2.52115 4.41871' +

@@ -84,6 +84,8 @@ import {
   useSourceCard,
 } from './embed/useEditorWrites';
 
+import { useNewStyleTagSettings } from './embed/useNewStyleTagSettings';
+
 export { SelectorPicker } from './embed/SelectorPicker';
 
 export { useRemovedClasses, withoutClasses } from './embed/editorModel';
@@ -91,6 +93,7 @@ export { useRemovedClasses, withoutClasses } from './embed/editorModel';
 const STYLE_TAG = '<style>'; // i18n-ignore: an HTML tag name shown as code.
 
 export default function EmbedEditor() {
+  useNewStyleTagSettings();
   const editorFoundation = useEditorFoundation();
   const editorScanning = useEditorScanning(editorFoundation);
   const editorSelection = useEditorSelection(editorFoundation, editorScanning);
@@ -298,7 +301,7 @@ function useEditorRuleWrites(
   const nativeRefresh = useNativeRefresh(editorRefs, nativeState);
   useFocusResync(editorRefs, refreshHook, nativeRefresh);
   const nativeOps = useNativeOps(editorRefs, busyState, scanState, nativeState, nativeRefresh);
-  const writeNewRuleHook = useWriteNewRule(busyState, scanState, pendingWrites, refreshDerivedHook, selectorPick, resolvedHook, editorRefs);
+  const writeNewRuleHook = useWriteNewRule(busyState, scanState, pendingWrites, refreshDerivedHook, selectorPick, resolvedHook, editorRefs, nativeState);
   const createRule = useCreateRule(busyState, scanState, pendingWrites, elementTokens, activeSelectorHook, styleContextsHook, resolvedHook, writeNewRuleHook);
   const emptyContext = useEmptyContext(busyState, scanState, pendingWrites, refreshDerivedHook, elementTokens, resolvedHook);
   return { createRule, emptyContext, nativeOps, nativeRefresh, writeNewRuleHook };

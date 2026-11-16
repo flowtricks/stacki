@@ -270,6 +270,7 @@ export const messages = {
   'styleModel.embed.save.saved': 'Todos los cambios guardados',
   'styleModel.embed.save.saving': 'Guardando…',
   'styleModel.embed.save.unsaved': 'Cambios sin guardar',
+  'styleModel.embed.source.createStyleTag': 'Crear <style>',
   'styleModel.embed.source.component': 'Componente',
   'styleModel.filter.group.colorAdjustments': 'Ajustes de color',
   'styleModel.filter.group.colorEffects': 'Efectos de color',
