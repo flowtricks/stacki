@@ -97,17 +97,21 @@ test('serializer validates optional source metadata and every attribute variant'
   }
 });
 
-test('source, collection, and recursive bounds fail before exhausting the process', () => {
-  assert.equal(parsePage('x'.repeat(LIMITS.ipcFieldCharsMax + 1)).editable, false);
+test('large input is accepted; only structural bounds (depth, cycles) fail before exhausting the process', () => {
+  // No size limit (owner requirement): a page, a node list and a text run past every old cap are parsed, written and read whole.
+  // Generated at test time, never committed.
+  const big = parsePage('<p>' + 'x'.repeat(12_000_000) + '</p>');
+  assert.equal(big.editable, true);
   const deepSource = '<div>'.repeat(LIMITS.treeDepthMax + 2) + 'x' + '</div>'.repeat(LIMITS.treeDepthMax + 2);
   assert.equal(parseTemplate(deepSource).clean, false);
   assert.equal(parseTemplate('<p>next parse still works</p>').clean, true);
-  const wide = Array.from({ length: LIMITS.treeNodesMax + 1 }, () => ({
+  const wide = Array.from({ length: 50_000 }, () => ({
     kind: 'text',
     value: 'x',
   }));
-  assert.throws(() => serializeNodes(wide), /node limit/);
-  assert.throws(() => serializeNodes([{ kind: 'text', value: 'x'.repeat(LIMITS.nodeValueCharsMax + 1) }]), /exceeds limit/);
+  assert.doesNotThrow(() => serializeNodes(wide), 'more nodes than the old cap are written');
+  const longText = 'x'.repeat(5_000_000);
+  assert.ok(serializeNodes([{ kind: 'text', value: longText }]).includes(longText), 'a text node longer than the old cap is written whole');
   const cycle: { kind: string; name: string; children: unknown[] } = {
     kind: 'element',
     name: 'div',
@@ -152,17 +156,18 @@ test('loop statement wire data rejects the old string shape and malformed arrays
   for (const body of ['const x = 1;', [1], [jsonNull]]) {
     assert.throws(() => parsePageNode({ ...loop, body }), /body/);
   }
-  const body = Array.from({ length: LIMITS.treeNodesMax + 1 }, () => 'const x = 1;');
-  assert.throws(() => parsePageNode({ ...loop, body }), /body: exceeds statement limit/);
+  // No size limit: a body of more statements than the old cap is accepted.
+  const body = Array.from({ length: 50_000 }, () => 'const x = 1;');
+  assert.doesNotThrow(() => parsePageNode({ ...loop, body }));
 });
 
-test('producer tree invariants reject missing ids and bounded traversal overflow', () => {
+test('producer tree invariants reject missing ids and over-deep trees, and accept any width', () => {
   assert.throws(() => assertTreeInvariants([{ kind: 'text' }]), /Tree invariant violated: missing id/);
-  const wide = Array.from({ length: LIMITS.treeNodesMax + 1 }, (_, index) => ({
+  const wide = Array.from({ length: 50_000 }, (_, index) => ({
     kind: 'text',
     id: `n${index}`,
   }));
-  assert.throws(() => assertTreeInvariants(wide), /Tree invariant violated: exceeds 20000 nodes/);
+  assert.doesNotThrow(() => assertTreeInvariants(wide), 'a list wider than the old 20000-node cap is valid');
   let tree: ParserNode = { kind: 'text', id: 'n0', value: 'leaf' };
   for (let index = 1; index <= LIMITS.treeDepthMax + 1; index++) {
     tree = { kind: 'element', id: `n${index}`, name: 'div', children: [tree] };

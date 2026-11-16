@@ -340,7 +340,7 @@ test('an existing List reads every option back in the Properties panel', async (
   await clear();
 });
 
-test('the default’s {} toggle: both views edit one value, and code the list cannot show is cleared on the way back', async () => {
+test('the default’s {} toggle: both views edit one value, and code the list cannot show stays code', async () => {
   for (const host of ['popup', 'editor']) {
     let saved = '';
     let declaration;
@@ -362,23 +362,25 @@ test('the default’s {} toggle: both views edit one value, and code the list ca
     assert.equal(codeView(), undefined, `${host}: back to the list`);
     assert.deepEqual(rows(), ['Basic', 'Pro'], `${host}: the list shows what the code said`);
 
-    // Code the list cannot hold: asking for the list clears it (a notice offers it back).
+    // Code the list cannot hold: the switch never deletes what was written (dab8f4aa), so the code view stays,
+    // untouched, and the toggle says it cannot move. Compared as booleans and strings: a failed assert.equal
+    // on an EditorView would format the whole view object.
     await click(toggle());
     await typeCode('[...extraPlans]');
     await click(toggle());
-    assert.equal(codeView(), undefined, `${host}: the list, as asked for`);
-    assert.deepEqual(rows(), [], `${host}: empty, since it could not show the code`);
-    assert.equal(document.querySelector('[aria-label="Default items"] .prop-field-note.problem') ?? undefined, undefined, `${host}: no blocking error`);
+    assert.ok(codeView() !== undefined, `${host}: the code view stays open for code the list cannot show`);
+    assert.equal(codeView()?.state.doc.toString(), '[...extraPlans]', `${host}: the code is kept exactly as written`);
+    assert.equal(toggle()?.getAttribute('aria-disabled'), 'true', `${host}: the toggle says it cannot move`);
 
     if (host === 'popup') {
       await type(document.querySelector('.new-prop-form input[aria-label="Name"]'), 'features');
       await click(byText('Create'));
       const made = modules.declaredProp('', declaration, new Set());
       assert.ok(made.ok, JSON.stringify(made));
-      assert.doesNotMatch(made.value.frontmatter, /extraPlans/, 'the pop-up writes what the list holds, not the cleared code');
+      assert.match(made.value.frontmatter, /extraPlans/, 'the pop-up writes the code as it was left');
     } else {
       await click(document.querySelector('[aria-label="Close property settings"]'));
-      assert.doesNotMatch(saved, /extraPlans/, 'the editor saves what the list holds, not the cleared code');
+      assert.match(saved, /extraPlans/, 'the editor saves the code as it was left');
     }
     await clear();
   }

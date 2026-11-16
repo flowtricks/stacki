@@ -84,8 +84,9 @@ const check = (what, condition, detail) => {
       check(what, String(error).includes(message), String(error));
     }
   };
-  throws('too many routes', () => detectLinkType('/', { routes: new Array(10_001).fill('/'), sectionIds: [] }), 'detectLinkType: route limit exceeded');
-  throws('too many ids', () => detectLinkType('#a', { routes: [], sectionIds: new Array(20_001).fill('a') }), 'detectLinkType: section limit exceeded');
+  // No size limit: more routes and section ids than the old caps are all read.
+  check('many routes', detectLinkType('/', { routes: new Array(10_001).fill('/'), sectionIds: [] }) !== undefined, 'refused');
+  check('many ids', detectLinkType('#a', { routes: [], sectionIds: new Array(20_001).fill('a') }) !== undefined, 'refused');
 
   if (failures.length) {
     console.error(`\nlink-type: ${failures.length} failed, ${checked - failures.length} passed\n`);

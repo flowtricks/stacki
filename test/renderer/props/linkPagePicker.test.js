@@ -42,9 +42,10 @@ test('a dynamic route reads as its template and keeps the literal route', () => 
   assert.deepEqual(rest, { value: '/docs/[...path]', label: 'Docs Template', description: '/docs/[...path]' });
 });
 
-test('the option list is empty for no pages and refuses more pages than a scan can hold', () => {
+test('the option list is empty for no pages and holds as many as a project has', () => {
   assert.deepEqual(linkPageOptions([]), []);
-  assert.throws(() => linkPageOptions(Array(10001).fill(PAGES[0])), /linkPageOptions: page limit exceeded/);
+  // No size limit: a scan of more pages than the old cap lists them all.
+  assert.equal(linkPageOptions(Array(20_000).fill(PAGES[0])).length, 20_000);
 });
 
 test('the picker and the Pages panel draw the same rows, and a pick writes the route', async () => {

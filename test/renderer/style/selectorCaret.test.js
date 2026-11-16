@@ -304,10 +304,9 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   const ties = rankFuzzy('a', ['abc', 'ab', 'abd'], { limit: 10 }, (name) => name).map(({ item }) => item);
   check('ties go to the shorter, then alphabetical', same(ties, ['ab', 'abc', 'abd']), ties.join(', '));
   check('the limit holds', rankFuzzy('a', ['a1', 'a2', 'a3'], { limit: 2 }, (name) => name).length === 2);
-  check(
-    'an unbounded candidate list is a bug',
-    throws(() => rankFuzzy('a', { length: 200_000, [Symbol.iterator]: [][Symbol.iterator] }, { limit: 1 }, String), /bounded/),
-  );
+  // No size limit: ranking is one linear pass, so a candidate list past the old cap (generated here) ranks whole.
+  const crowd = Array.from({ length: 200_000 }, (_, index) => `name-${index}`);
+  check('a candidate list past the old cap is ranked', rankFuzzy('name-199999', crowd, { limit: 1 }, String)[0]?.item === 'name-199999');
   const segments = fuzzySegments('hero_title', fuzzyMatch('hrtit', 'hero_title').indexes);
   check('segments spell the name', segments.map((segment) => segment.text).join('') === 'hero_title');
   check(

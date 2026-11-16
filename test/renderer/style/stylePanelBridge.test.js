@@ -14,15 +14,11 @@ const file = { rel: 'src/styles/site.css', name: 'site.css', path: '/project/sit
 
 test('style file parser accepts complete records and rejects invalid bounds', () => {
   assert.deepEqual(bridge.parseStyleFiles({ files: [file] }), [file]);
-  for (const value of [
-    PLATFORM_NULL,
-    { files: PLATFORM_NULL },
-    { files: [{ ...file, size: -1 }] },
-    { files: [{ ...file, path: 'bad\0path' }] },
-    { files: Array(100_001).fill(file) },
-  ]) {
+  for (const value of [PLATFORM_NULL, { files: PLATFORM_NULL }, { files: [{ ...file, size: -1 }] }, { files: [{ ...file, path: 'bad\0path' }] }]) {
     assert.throws(() => bridge.parseStyleFiles(value));
   }
+  // No size limit: a project with more stylesheets than the old cap lists them all.
+  assert.equal(bridge.parseStyleFiles({ files: Array(100_001).fill(file) }).length, 100_001);
 });
 
 test('style file reads validate payloads and preserve operating failures', async () => {

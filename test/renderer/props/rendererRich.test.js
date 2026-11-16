@@ -31,15 +31,17 @@ assert.equal(
   false,
 );
 const text = { kind: 'text', value: '' };
-assert.throws(() => nodesToHtml(Array(20001).fill(text)), /node limit exceeded/);
+// No size limit: more nodes than the old cap are written, not refused.
+assert.equal(nodesToHtml(Array(20001).fill(text)), '');
 const cyclic = { kind: 'element', name: 'span', children: [] };
 cyclic.children.push(cyclic);
 assert.throws(() => isInlineOnly([cyclic]), /depth limit exceeded/);
 assert.throws(() => nodesToHtml([cyclic]), /depth limit exceeded/);
 host.textContent = '{a}'.repeat(20001);
-assert.throws(() => domToNodes(host), /expression limit exceeded/);
+// No size limit: text with more expressions than the old cap, and a text run longer than it, read whole.
+assert.ok(domToNodes(host).length >= 20001, 'every expression of a long text is read');
 host.textContent = 'x'.repeat(1000001);
-assert.throws(() => domToNodes(host), /text limit exceeded/);
+assert.deepEqual(domToNodes(host), [{ kind: 'text', value: 'x'.repeat(1000001) }]);
 host.textContent = '';
 let parent = host;
 for (let depth = 0; depth < 66; depth++) {

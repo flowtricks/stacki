@@ -44,8 +44,9 @@ assert.match(renderData({ tree: [leaf], current: 'post.title' }), /fields not kn
 assert.doesNotMatch(renderData({ tree: [leaf], current: 'post.title' }), /not in this entry/);
 assert.match(renderData({ tree: [leaf], current: 'APP_VERSION' }), /not in scope/);
 assert.match(renderData({ tree: [leaf], current: 'post' }), /dp-row selected/);
-assert.throws(() => renderData({ tree: Array(20001).fill(leaf) }), /node limit exceeded/);
-assert.throws(() => renderData({ current: 'x'.repeat(8193) }), /binding path limit exceeded/);
+// No size limit: a tree of more nodes than the old cap, and a path longer than it, are drawn, not refused.
+assert.match(renderData({ tree: Array(20001).fill(leaf) }), /dp-row/);
+assert.doesNotThrow(() => renderData({ current: 'x'.repeat(8193) }));
 const cyclic = { ...leaf, children: [] };
 cyclic.children.push(cyclic);
 assert.throws(() => renderData({ tree: [cyclic] }), /depth limit exceeded/);
@@ -65,15 +66,14 @@ const repeatedRoute = renderLink({
 assert.match(repeatedRoute, />plan-a-visit</);
 assert.doesNotMatch(repeatedRoute, /care\/plan-a-visit/);
 assert.match(renderLink({ name: 'index.astro', route: '/' }), />Home</);
-assert.throws(
-  () =>
-    renderToStaticMarkup(
-      React.createElement(InsertSearch, {
-        components: Array(10001).fill({ name: 'Card' }),
-        onInsert() {},
-        onClose() {},
-      }),
-    ),
-  /component limit exceeded/,
+// No size limit: a project with more components than the old cap lists them all.
+assert.doesNotThrow(() =>
+  renderToStaticMarkup(
+    React.createElement(InsertSearch, {
+      components: Array(10001).fill({ name: 'Card' }),
+      onInsert() {},
+      onClose() {},
+    }),
+  ),
 );
-console.log('renderer-pickers: labels, selected/missing rows, and traversal bounds passed');
+console.log('renderer-pickers: labels, selected/missing rows, structural bounds and large inputs passed');

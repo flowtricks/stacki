@@ -100,7 +100,8 @@ test('a paste keeps structure and safe links, and nothing that styles or acts', 
     rich.cleanPastedHTML(pasted, document),
     '<h1>Title</h1><p><strong>Bold</strong> and <em>it</em></p><ul><li>One</li></ul>' + '<a href="https://example.com">site</a>bad<h6>Small</h6>',
   );
-  assert.throws(() => rich.cleanPastedHTML('x'.repeat(10_000_001), document), /paste limit exceeded/);
+  // No size limit: a paste longer than the old cap is cleaned like any other.
+  assert.equal(typeof rich.cleanPastedHTML('x'.repeat(10_000_001), document), 'string');
 });
 
 test('a typed link is a safe address, an email, or a bare domain', () => {

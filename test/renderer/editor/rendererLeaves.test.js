@@ -53,40 +53,40 @@ try {
   assert.deepEqual(renamed.attrOrder, ['new']);
   assert.deepEqual(node, { props: { old: value }, attrOrder: ['old'] }, 'the node is not edited');
   const tooLong = 'x'.repeat(8193);
-  assert.throws(() => renamedAttr(renamed, 'new', tooLong), /Attribute name exceeds limit/);
+  // No size limit (owner requirement): a long name is renamed to, not refused.
+  assert.equal(renamedAttr(renamed, 'new', tooLong).props[tooLong], value);
 
   const { checkStatement } = load('src/features/props/jsCheck.ts');
   assert.equal(checkStatement(' '.repeat(1_000_000)).ok, true);
-  assert.deepEqual(checkStatement(' '.repeat(1_000_001)), {
-    ok: false,
-    message: 'This statement exceeds the editor size limit.',
-  });
+  assert.equal(checkStatement(' '.repeat(1_000_001)).ok, true, 'a statement past the old size limit is checked like any other');
   const { componentNameError } = load('src/features/palette/componentName.ts');
   assert.equal(componentNameError('Card', Array(10_000).fill('Other')), undefined);
-  assert.throws(() => componentNameError('Card', Array(10_001).fill('Other')), /scan limit/);
+  assert.equal(componentNameError('Card', Array(10_001).fill('Other')), undefined, 'more components than the old cap are all compared');
 
   const { onePerPlace } = load('src/features/preview/outlineBoxes.ts');
   const box = { x: 0, y: 0, w: 10, h: 10 };
   assert.deepEqual(onePerPlace([box, { ...box }, { x: 1, y: 1, w: 2, h: 2 }]), [box]);
   assert.deepEqual(onePerPlace(Array.from({ length: 20_000 }, () => ({ ...box }))), [box]);
-  assert.throws(() => onePerPlace(Array(20_001).fill(box)), /Outline box count exceeds limit/);
+  // The same box repeated is one place each time it is reported, so every report is kept: compared by length, never by a 20 001-element diff.
+  assert.equal(onePerPlace(Array(20_001).fill(box)).length, 20_001, 'more boxes than the old cap are all considered');
 
   const { rankInsertItems } = load('src/lib/insertRank.ts');
   assert.equal(rankInsertItems(Array(10_000).fill({ name: 'Card' }), '').length, 10_000);
-  assert.throws(() => rankInsertItems(Array(10_001).fill({ name: 'Card' }), ''), /item count/);
+  assert.equal(rankInsertItems(Array(10_001).fill({ name: 'Card' }), '').length, 10_001, 'more items than the old cap are all ranked');
   const { elementClasses } = load('src/editor/classNames.ts');
-  assert.throws(
-    () =>
-      elementClasses({
-        props: { class: { type: 'expr', value: 'x'.repeat(1_000_001) } },
-      }),
-    /Class expression exceeds size limit/,
+  assert.doesNotThrow(
+    () => elementClasses({ props: { class: { type: 'expr', value: 'x'.repeat(1_000_001) } } }),
+    'a class expression past the old cap is read',
   );
 
   const { decideTerminalPaste } = load('src/features/terminal/terminalPaste.ts');
   const item = { type: 'text/plain', kind: 'string', getAsFile: () => PLATFORM_NULL };
   assert.deepEqual(decideTerminalPaste([item], 'hello', undefined, 'posix'), { kind: 'text' });
-  assert.throws(() => decideTerminalPaste(Array(10_001).fill(item), '', undefined, 'posix'), /item count/);
+  assert.deepEqual(
+    decideTerminalPaste(Array(10_001).fill(item), 'hello', undefined, 'posix'),
+    { kind: 'text' },
+    'more clipboard items than the old cap are all read',
+  );
   const { findWithParent, isInlineRun } = load('src/editor/treeSelection.ts');
   const cycle = { id: 'cycle', kind: 'element', name: 'span', children: [] };
   cycle.children.push(cycle);
@@ -94,7 +94,7 @@ try {
   assert.throws(() => isInlineRun([cycle]), /Tree traversal exceeds depth limit/);
   const leaf = { id: 'text', kind: 'text', value: 'hello' };
   assert.equal(isInlineRun(Array(20_000).fill(leaf)), true);
-  assert.throws(() => isInlineRun(Array(20_001).fill(leaf)), /Tree traversal exceeds node limit/);
+  assert.equal(isInlineRun(Array(20_001).fill(leaf)), true, 'more nodes than the old cap are all walked');
   const { liveClassesById } = load('src/editor/liveClasses.ts');
   assert.throws(() => liveClassesById({}, [cycle]), /Tree traversal exceeds depth limit/);
   const { propsForExtraction } = load('src/editor/extractProps.ts');
@@ -102,9 +102,10 @@ try {
   const { evaluate } = load('src/features/variables/fluid.ts');
   assert.equal(evaluate('(2rem + 16px) * 2', 0), 6);
   assert.equal(evaluate('('.repeat(66) + '1' + ')'.repeat(66), 0), undefined);
-  assert.equal(evaluate('1'.repeat(1_000_001), 0), undefined);
+  // No size limit: an expression past the old cap is evaluated, not refused (a number that long overflows to Infinity).
+  assert.doesNotThrow(() => evaluate('1'.repeat(1_000_001), 0));
 
-  console.log('renderer-leaves: state replacement, cancellation, metadata and limits passed');
+  console.log('renderer-leaves: state replacement, cancellation, metadata, large inputs and structural bounds passed');
 } finally {
   fs.rmSync(directory, { recursive: true, force: true });
 }

@@ -89,6 +89,8 @@ test('an empty expression clears only when the prop is optional', () => {
   assert.deepEqual(decide(text, '', true), { kind: 'blocked', reason: 'required-empty' });
 });
 
-test('the source limit is an assertion, not a refusal', () => {
-  assert.throws(() => decide(text, 'x'.repeat(9000)), /source limit exceeded/);
+test('a very long expression is decided like any other, never refused for its size', () => {
+  // No size limit (owner requirement): the decision reads the whole source and still refuses code it cannot hold.
+  const decision = decide(text, 'x'.repeat(100_000));
+  assert.equal(decision.kind, 'blocked');
 });

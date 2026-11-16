@@ -67,7 +67,8 @@ test('a bound path opens each list on the entry it names', () => {
   assert.deepEqual(pagesOfPath('post.data.tags[1].items[3]'), { 'post.data.tags': 1, 'post.data.tags[1].items': 3 });
   assert.deepEqual(pagesOfPath('post.data["campus-name"]'), {});
   assert.deepEqual(pagesOfPath(undefined), {});
-  assert.throws(() => pagesOfPath('x'.repeat(8193)), /binding path limit exceeded/);
+  // No size limit: a very long path is read, and names no list entry.
+  assert.deepEqual(pagesOfPath('x'.repeat(100_000)), {});
 });
 
 test('a project collection offers every entry it has read, each at its own position', () => {

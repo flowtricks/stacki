@@ -203,7 +203,14 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/project/thumbs.ts': {
     writeFileSync: { count: 2, reason: 'project thumbnails in userData' },
   },
-  // App state in userData, never in a project: the window's bounds and the boot snapshot of recent projects.
+  // App state in userData, never in a project: the crash log ring, the window's bounds and the boot snapshot of recent projects.
+  'electron/app/crashLog.ts': {
+    writeFileSync: {
+      count: 1,
+      reason: 'the temporary copy of the bounded crash log in the directory main passes (userData), written for recovery diagnostics',
+    },
+    renameSync: { count: 1, reason: 'puts that crash log in place whole (atomic save)' },
+  },
   'electron/app/windowStateStore.ts': {
     writeFileSync: { count: 1, reason: "the temporary copy of the window's saved bounds in userData" },
     renameSync: { count: 1, reason: 'puts that bounds file in place whole (atomic save)' },

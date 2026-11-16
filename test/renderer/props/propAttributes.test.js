@@ -56,13 +56,14 @@ assert.deepEqual(parseObjectLiteral('{ id: "hero", tabindex: 2, disabled: true }
 assert.equal(parseObjectLiteral('{ nested: { key: 1 } }'), undefined);
 assert.equal(parseObjectLiteral('{ ...defaults }'), undefined);
 assert.equal(parseObjectLiteral('named'), undefined);
-assert.equal(parseObjectLiteral('x'.repeat(8193)), undefined);
-assert.equal(parseObjectLiteral(`{ ${Array(257).fill('a: 1').join(', ')} }`), undefined);
-assert.deepEqual(parseAttrPaste('x'.repeat(8193)), []);
-assert.deepEqual(parseAttrPaste(Array(257).fill('x="y"').join(' ')), []);
+// No size limit: a long name is still not an object literal, and more entries than the old cap are all read.
+assert.equal(parseObjectLiteral('x'.repeat(100_000)), undefined);
+assert.equal(parseObjectLiteral(`{ ${Array(5000).fill('a: 1').join(', ')} }`)?.length, 5000);
+assert.equal(parseAttrPaste('x'.repeat(100_000)).length, 1);
+assert.equal(parseAttrPaste(Array(5000).fill('x="y"').join(' ')).length, 5000);
 assert.equal(serializeObjectLiteral([{ key: 'data-id', raw: '"hero"' }]), '{ "data-id": "hero" }');
-assert.throws(() => serializeObjectLiteral(Array(257).fill({ key: 'a', raw: '1' })), /Object attributes: entry limit exceeded/);
-assert.throws(() => serializeObjectLiteral([{ key: 'a', raw: 'x'.repeat(8192) }]), /Object attributes: output limit exceeded/);
+assert.ok(serializeObjectLiteral(Array(5000).fill({ key: 'a', raw: '1' })).length > 5000, 'more entries than the old cap are written');
+assert.ok(serializeObjectLiteral([{ key: 'a', raw: 'x'.repeat(100_000) }]).length > 100_000, 'a value longer than the old cap is written whole');
 const root = createRoot(document.getElementById('root'));
 let entries = Object.freeze([
   { key: 'id', raw: '"old"' },
@@ -182,8 +183,10 @@ const internalAttributeKept = async () => {
   await paste('role="button"');
   assert.deepEqual(entries.at(-1), { key: 'role', raw: '"button"' });
   const before = writes;
+  // No size limit: a value longer than the old cap is pasted whole, as one more write.
   await paste(`id="${'x'.repeat(8193)}"`);
-  assert.equal(writes, before);
+  assert.equal(writes, before + 1);
+  assert.equal(entries.find((entry) => entry.key === 'id')?.raw.length, 8193 + 2);
   await act(async () =>
     root.render(
       React.createElement(AttributesSection, {

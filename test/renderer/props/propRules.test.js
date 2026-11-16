@@ -62,10 +62,12 @@ const independent = rules.cascade({
 assert.deepEqual(independent.patch, { title: text('Hello') });
 assert.deepEqual(independent.stash, { pressed: { type: 'bare' } });
 assert.throws(() => createPropRules(Array(513).fill(schema[0]), {}), /schema limit exceeded/);
-assert.throws(() => createPropRules([], Object.fromEntries(Array.from({ length: 257 }, (_, index) => [index, text('x')]))), /prop limit exceeded/);
+// No size limit on a tag's props (owner requirement): a tag with thousands of attributes is accepted, not refused.
+const crowded = Object.fromEntries(Array.from({ length: 5_000 }, (_, index) => [`prop${index}`, text('x')]));
+assert.doesNotThrow(() => createPropRules([], crowded));
 assert.throws(() => createPropRules([{ ...schema[0], unions: Array(257).fill(union) }], {}), /union limit exceeded/);
 assert.throws(() => createPropRules([{ ...schema[0], unions: [{ ...union, branches: Array(257).fill(union.branches[0]) }] }], {}), /branch limit exceeded/);
-assert.throws(() => rules.cascade({ fieldName: 'x'.repeat(8193), value: undefined, stash: {} }), /field name limit exceeded/);
+assert.doesNotThrow(() => rules.cascade({ fieldName: 'x'.repeat(100_000), value: undefined, stash: {} }), 'a long field name is handled, not refused');
 assert.throws(
   () =>
     rules.cascade({

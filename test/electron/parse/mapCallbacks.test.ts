@@ -161,8 +161,8 @@ test('callback code parts are validated at the page and serialization boundaries
     {},
     ['only one'],
     [0, 'tail'],
-    ['', 'x'.repeat(LIMITS.nodeValueCharsMax + 1)],
-    Array.from({ length: LIMITS.treeNodesMax + 2 }, () => ''),
+    // A count that is not one more than the markup roots: refused whatever its size.
+    Array.from({ length: 50_000 }, () => ''),
   ]) {
     assert.throws(() => parsePageNode({ ...node, bodyParts }), /Map.bodyParts/);
     assert.throws(
@@ -174,4 +174,12 @@ test('callback code parts are validated at the page and serialization boundaries
       /Map.bodyParts/,
     );
   }
+});
+
+test('a callback code part of any length is accepted, not refused for its size', () => {
+  // No size limit (owner requirement): the part is generated at test time, longer than the old nodeValueCharsMax.
+  const node = parsed('{items.map(async item => <div/>)}').nodes[0];
+  assert.ok(node?.kind === 'map');
+  const bodyParts = ['', 'x'.repeat(1_000_001)];
+  assert.doesNotThrow(() => parsePageNode({ ...node, bodyParts }));
 });

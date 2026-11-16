@@ -24,7 +24,9 @@ assert.deepEqual(parseMapHead('posts.map((post, index) => ('), { data: 'posts', 
 assert.deepEqual(parseMapHead('posts.filter(p => p.live).map(post => ('), { data: 'posts.filter(p => p.live)', item: 'post', index: '' });
 assert.equal(parseMapHead('posts.map(({title}) => ('), undefined, 'a destructured item is code');
 assert.equal(parseMapHead(''), undefined);
-assert.throws(() => parseMapHead('x'.repeat(1_000_001)), /head limit exceeded/);
+// No size limit: a head longer than the old cap is read like any other, its list expression whole.
+const longList = 'x'.repeat(1_000_001);
+assert.deepEqual(parseMapHead(`${longList}.map(post => (`), { data: longList, item: 'post', index: '' });
 
 // Renames a new head carries into the loop.
 assert.deepEqual(headRenames('campusPastors.map((pastor) => (', 'campusPastors.map((leader) => ('), [{ from: 'pastor', to: 'leader' }]);
@@ -36,7 +38,8 @@ assert.deepEqual(headRenames('posts.map((post) => (', 'posts.slice(0, 3).map((po
 assert.deepEqual(headRenames('posts.map((post) => (', 'posts.map((post, index) => ('), [], 'adding an index renames nothing');
 assert.deepEqual(headRenames('posts.map((post, index) => (', 'posts.map((post) => ('), [], 'removing one renames nothing');
 assert.deepEqual(headRenames('posts.map(({ a }) => (', 'posts.map((post) => ('), [], 'from code the editor does not split, nothing');
-assert.throws(() => headRenames('x'.repeat(1_000_001), 'posts.map((post) => ('), /head limit exceeded/);
+// No size limit: a head longer than the old cap is read, and is code the editor does not split, so nothing is renamed.
+assert.deepEqual(headRenames('x'.repeat(1_000_001), 'posts.map((post) => ('), []);
 
 // The panel: one Code field, with no binding handle and no field restating the head.
 const source = readSourceGroup(['src/features/props/propNodeEditors.tsx']);
