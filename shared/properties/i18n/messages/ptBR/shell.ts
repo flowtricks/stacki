@@ -135,6 +135,7 @@ export const messages = {
   'shell.rejection.anchorAmbiguous': 'O arquivo mudou e vários elementos agora correspondem ao que você editou.',
   'shell.rejection.anchorMoved': 'O elemento que você editou não está mais onde estava.',
   'shell.rejection.couldntApply': 'O Stacki não conseguiu aplicar esta edição. {reason}',
+  'shell.rejection.invalidPlacement': 'Essa alteração colocaria algo onde não pode ficar e quebraria a página, então nada foi gravado.',
   'shell.rejection.mergeConflict': 'Sua edição de código se sobrepõe a outra alteração no arquivo, então não foi mesclada.',
   'shell.rejection.regionExternallyModified': 'Essa parte do arquivo foi alterada fora do Stacki.',
   'shell.rejection.resourceLimit': 'A alteração excede um limite de tamanho.',

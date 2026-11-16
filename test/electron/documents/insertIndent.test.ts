@@ -451,8 +451,9 @@ test('at the end of the body and the document the closing tags keep their lines'
     document,
     [0],
     'last-child',
-    PARAGRAPH,
-    lines('<html>', '  <body>', '    <main>', '      <p>x</p>', '    </main>', '  </body>', '  <p>New</p>', '</html>', ''),
+    // A script: a paragraph directly in `<html>` is refused (the browser would move it into the body).
+    '<script src="/a.js"></script>',
+    lines('<html>', '  <body>', '    <main>', '      <p>x</p>', '    </main>', '  </body>', '  <script src="/a.js"></script>', '</html>', ''),
   );
   await expectInsert(
     lines('<html>', '  <body></body>', '</html>', ''),

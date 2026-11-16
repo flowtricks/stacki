@@ -139,6 +139,7 @@ export const messages = {
   'shell.rejection.anchorAmbiguous': 'Die Datei hat sich geändert und mehrere Elemente passen jetzt zu dem bearbeiteten.',
   'shell.rejection.anchorMoved': 'Das bearbeitete Element befindet sich nicht mehr an seiner Stelle.',
   'shell.rejection.couldntApply': 'Stacki konnte diese Änderung nicht anwenden. {reason}',
+  'shell.rejection.invalidPlacement': 'Diese Änderung würde etwas an eine unmögliche Stelle setzen und die Seite beschädigen, daher wurde nichts geschrieben.',
   'shell.rejection.mergeConflict': 'Deine Code-Änderung überschneidet sich mit einer anderen Änderung an der Datei und wurde daher nicht zusammengeführt.',
   'shell.rejection.regionExternallyModified': 'Dieser Teil der Datei wurde außerhalb von Stacki geändert.',
   'shell.rejection.resourceLimit': 'Die Änderung überschreitet ein Größenlimit.',

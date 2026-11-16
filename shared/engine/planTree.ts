@@ -51,6 +51,7 @@ import {
 import { toChildIndex, type AnchorRef } from '../page/ref';
 import { err, ok, type Result } from '../core/result';
 import { markdownPrefix } from './markdownLayout';
+import { checkInsertion, checkRelocation, checkWrap } from './planPlacement';
 import { itemMarker, markdownBeside, markdownInsertion, markdownRemoval, markdownRemoved, reprefixed } from './planMarkdown';
 import type { NodeList, ProjectedNode } from '../page/sourceProjection';
 import { encodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '../core/span';
@@ -135,6 +136,10 @@ export function planInsertNode(context: PlanContext, anchor: AnchorRef, operatio
     return err('unsupported-operation');
   }
   const current = currentProjection(context);
+  const placed = checkInsertion(context.current.bytes, current, target.current, operation.placement, operation.source);
+  if (!placed.ok) {
+    return placed;
+  }
   const insertion = insertionAt(context.current.bytes, current, target.current, operation.placement, { text: operation.source, origin: 'new' });
   if (!insertion.ok) {
     return insertion;
@@ -177,6 +182,10 @@ export function planWrapNodes(context: PlanContext, anchor: AnchorRef, operation
     return err('unsupported-operation');
   }
   const bytes = context.current.bytes;
+  const placed = checkWrap(bytes, currentProjection(context), start, end, operation.open);
+  if (!placed.ok) {
+    return placed;
+  }
   const splices = [
     spliceAt(bytes, toByteSpan(start.span.start, start.span.start), operation.open),
     spliceAt(bytes, toByteSpan(end.span.end, end.span.end), operation.close),
@@ -248,6 +257,10 @@ export function planMoveNode(context: PlanContext, anchor: AnchorRef, operation:
     return err('region-externally-modified');
   }
   const current = currentProjection(context);
+  const placed = checkRelocation(context.current.bytes, current, moved, destination.value.current, operation.placement);
+  if (!placed.ok) {
+    return placed;
+  }
   const list = listAt(current, destination.value.current, operation.placement);
   if (list !== moved.list) {
     return err('unsupported-operation'); // A block among items, markup among blocks: not a move.

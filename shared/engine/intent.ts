@@ -113,6 +113,7 @@ export const REJECTION_REASONS = [
   'write-failed',
   'write-race',
   'merge-conflict',
+  'invalid-placement',
 ] as const;
 
 export type RejectionReason = (typeof REJECTION_REASONS)[number];
@@ -163,6 +164,8 @@ export function describeRejection(reason: RejectionReason): string {
       return 'Another program wrote the file at the same moment.';
     case 'merge-conflict':
       return 'Your code edit overlaps another change to the file, so it was not merged.';
+    case 'invalid-placement':
+      return 'That change would put something where it cannot go and break the page, so nothing was written.';
     default: {
       const exhaustive: never = reason;
       return exhaustive;

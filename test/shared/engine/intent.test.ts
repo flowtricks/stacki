@@ -286,6 +286,6 @@ test('every rejection reason parses and has its own notice text', () => {
     notices.add(describeRejection(reason));
   }
   assert.equal(notices.size, REJECTION_REASONS.length);
-  assert.equal(REJECTION_REASONS.length, 9, 'plan §3.5 names nine reasons');
+  assert.equal(REJECTION_REASONS.length, 10, 'plan §3.5 names nine reasons, and a tenth refuses a placement that would break the page');
   assert.throws(() => parseRejectionReason('backpressured', 'reason'), /unknown rejection reason/);
 });
