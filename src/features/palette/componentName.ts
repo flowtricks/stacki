@@ -1,6 +1,6 @@
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { RESERVED_COMPONENT_NAMES } from '../../../shared/properties/componentRename';
+import { RESERVED_COMPONENT_NAMES, normalizeComponentName } from '../../../shared/properties/componentNaming';
 import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 
 // What a component may be called.
@@ -20,17 +20,7 @@ import { described, type Described } from '../../../shared/properties/i18n/messa
  * typed, so `buttonArrow` becomes `ButtonArrow` rather than `Buttonarrow`.
  */
 export function toComponentName(input: unknown): string {
-  return (
-    String(input ?? '')
-      // é → e, ü → u. Without this an accented word doesn't just lose its marks,
-      // it shatters: "héro" splits into "h" and "ro" and comes out as HRo.
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .split(/[^A-Za-z0-9]+/)
-      .filter(Boolean)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('')
-  );
+  return normalizeComponentName(String(input ?? ''), 'pascal').identifier;
 }
 
 /**

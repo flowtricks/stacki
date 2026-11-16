@@ -51,3 +51,8 @@
 .rename-component .rename-notices-title {
   color: var(--text-dim, #b8b8b8);
 }
+
+.rename-component .rename-note {
+  font-size: 12px;
+  color: var(--text-faint, #989898);
+}

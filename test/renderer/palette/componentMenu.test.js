@@ -259,8 +259,8 @@ test('Rename and Move to folder… sit between Roles and Duplicate, and the dial
   assert.equal(primary().disabled, true);
   await type('TAKEN');
   assert.match(status(), /^Already taken by src\/components\/Taken\.astro/, 'case-insensitively');
-  await type('my card');
-  assert.match(status(), /letters and numbers/i);
+  await type('card 🙂');
+  assert.equal(status(), '“🙂” can’t be used in a name.');
   await type('Card.astro');
   assert.match(status(), /Leave out/);
   await type('a/b');
@@ -274,7 +274,12 @@ test('Rename and Move to folder… sit between Roles and Duplicate, and the dial
     /Another component is also called Button \(src\/components\/forms\/Button\.astro\)/,
     'the same name in another folder is warned about',
   );
-  await type('ContactCard');
+  await type('Contact Card');
+  assert.equal(status(), 'Available');
+  assert.match(dialog().querySelector('.rename-note').textContent, /Spaces removed: ContactCard/, 'the muted line shows what the spaces became');
+  await type('tak en');
+  assert.match(status(), /^Already taken by src\/components\/Taken\.astro/, 'taken is checked on the normalized name');
+  await type('Contact Card');
   assert.equal(status(), 'Available');
   assert.match(dialog().textContent, /src\/components\/ContactCard\.astro/, 'the resulting path is previewed');
   await view.act(() => new Promise((resolve) => setTimeout(resolve, 250)));

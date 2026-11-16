@@ -8,18 +8,17 @@
 import { assert } from '../core/assert';
 import { list, object, record, text } from '../core/boundary';
 import { parseComponentPath } from './componentAccess';
+import { RESERVED_COMPONENT_NAMES, isComponentFileName } from './componentNaming';
+
+/** Kept for callers that import it from here: PascalCase letters and digits, not reserved. */
+export { RESERVED_COMPONENT_NAMES };
+export function isComponentName(name: string): boolean {
+  return /^[A-Z][A-Za-z0-9]*$/.test(name) && !RESERVED_COMPONENT_NAMES.has(name);
+}
 
 export interface ComponentRenameRequest {
   readonly from: string;
   readonly to: string;
-}
-
-/** Names Astro or Stacki already gives a meaning to; a component file cannot take one. */
-export const RESERVED_COMPONENT_NAMES: ReadonlySet<string> = new Set(['Fragment', 'Astro', 'Component', 'Props', 'Slot']);
-
-/** Whether `name` can be a component file's name, tag and import binding at once: PascalCase letters and digits, not reserved. */
-export function isComponentName(name: string): boolean {
-  return /^[A-Z][A-Za-z0-9]*$/.test(name) && !RESERVED_COMPONENT_NAMES.has(name);
 }
 
 /** What a request names, read at the boundary: two `.astro` project paths, the second with a valid component name. */
@@ -33,7 +32,7 @@ export function parseComponentRenameRequest(input: unknown): ComponentRenameRequ
     }
   }
   const name = to.slice(to.lastIndexOf('/') + 1, -'.astro'.length);
-  if (!isComponentName(name)) {
+  if (!isComponentFileName(name)) {
     throw new Error(`"${name}" is not a component name`);
   }
   return { from, to };

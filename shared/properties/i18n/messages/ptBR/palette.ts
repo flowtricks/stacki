@@ -141,4 +141,7 @@ export const messages = {
   'palette.rename.taken': 'Já usado por {file}',
   'palette.rename.title': 'Renomear ou mover {name}',
   'palette.rename.unchanged': 'Este é o nome e a pasta atuais.',
+  'palette.rename.badCharacter': '“{character}” não pode ser usado em um nome.',
+  'palette.rename.spacesRemoved': 'Espaços removidos: {name}',
+  'palette.rename.normalized': 'Salvo como {name}',
 } as const satisfies CatalogOf<MessageKey>;

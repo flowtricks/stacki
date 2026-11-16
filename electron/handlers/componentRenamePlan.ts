@@ -25,16 +25,11 @@ import path from 'node:path';
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
 import { err, ok, type Result } from '../../shared/core/result';
+import { detectNamingStyle, identifierOfFileName, isComponentFileName, type NamingStyle } from '../../shared/properties/componentNaming';
 import { aliasMap, type Alias } from '../content/cmsRefs';
 import { parseComponentDefaults, parseDefaultsSource, relinkDefaults } from '../../shared/properties/componentDefaults';
 import { moveComponentRules } from '../../shared/properties/componentAccess';
-import {
-  isComponentName,
-  type ComponentRenameRequest,
-  type ComponentRenameSummary,
-  type RenameFileKind,
-  type RenameNotice,
-} from '../../shared/properties/componentRename';
+import { type ComponentRenameRequest, type ComponentRenameSummary, type RenameFileKind, type RenameNotice } from '../../shared/properties/componentRename';
 import { parseProjectRolesSource, serializeProjectRoles } from '../../shared/properties/projectRoles';
 import { isRenameTextCandidate, pageRenameInventoryWork, readRenameText } from '../project/pageRenameInventory';
 import { renameDigest, type RenameText, type RenameWitness } from '../project/pageRenamePlan';
@@ -95,8 +90,8 @@ export function* planComponentRenameWork(root: string, change: ComponentRenameRe
   const context: Context = {
     root,
     change,
-    oldName: baseName(change.from),
-    newName: baseName(change.to),
+    oldName: identifierOfFileName(baseName(change.from)),
+    newName: identifierOfFileName(baseName(change.to)),
     aliases: aliasMap(root),
   };
   const texts: RenameText[] = [];
@@ -141,7 +136,7 @@ function validate(root: string, change: ComponentRenameRequest): Result<true, Co
   if (change.from === change.to) {
     return failure('invalid', translateMain('error.componentRename.same'));
   }
-  if (!isComponentName(baseName(change.to))) {
+  if (!isComponentFileName(baseName(change.to))) {
     return failure('invalid', translateMain('error.componentRename.name', { name: baseName(change.to) }));
   }
   const sourceFile = path.join(root, ...change.from.split('/'));
@@ -243,7 +238,9 @@ function rewriteFile(file: string, source: string, context: Context): Result<Fil
 
 // The text a leftover mention is looked for with: the new file name replaced the old one, or the path's last two segments.
 function mentionNeedle(context: Context): string {
-  return context.oldName === context.newName ? context.change.from.split('/').slice(-2).join('/') : `${context.oldName}.astro`;
+  return baseName(context.change.from) === baseName(context.change.to)
+    ? context.change.from.split('/').slice(-2).join('/')
+    : `${baseName(context.change.from)}.astro`;
 }
 
 function stillNames(text: string, context: Context): boolean {
@@ -251,7 +248,7 @@ function stillNames(text: string, context: Context): boolean {
 }
 
 function mentionsComponent(source: string, context: Context): boolean {
-  return source.includes(`${context.oldName}.astro`);
+  return source.includes(`${baseName(context.change.from)}.astro`);
 }
 
 function rewriteDefaults(source: string, context: Context): Result<FileResult, ComponentRenameFailure> {
@@ -682,4 +679,28 @@ function toPosix(file: string): string {
 
 function failure(code: ComponentRenameFailure['code'], message: string): Result<never, ComponentRenameFailure> {
   return err({ code, message });
+}
+
+/** The naming style most of the project's component files use (dashed or PascalCase), for typed names that become file names. */
+export function projectNamingStyle(root: string): NamingStyle {
+  const names: string[] = [];
+  const pending = projectFoldersFor(root, 'components').map((folder) => path.join(root, ...folder.split('/')));
+  for (let visited = 0; pending.length > 0 && visited < 10_000; visited += 1) {
+    const directory = pending.pop();
+    assert(directory !== undefined, 'A non-empty list has a last entry');
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        pending.push(path.join(directory, entry.name));
+      } else if (entry.isFile() && entry.name.endsWith('.astro')) {
+        names.push(entry.name.slice(0, -'.astro'.length));
+      }
+    }
+  }
+  return detectNamingStyle(names);
 }

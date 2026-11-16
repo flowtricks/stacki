@@ -245,7 +245,7 @@ test('refuses outside the component folders, climbing paths, a taken name (any c
   const cases: ReadonlyArray<readonly [string, string, string]> = [
     ['src/components/Card.astro', 'src/pages/Card.astro', 'invalid'],
     ['src/pages/Other.astro', 'src/components/Other.astro', 'invalid'],
-    ['src/components/Card.astro', 'src/components/taken.astro', 'invalid'],
+    ['src/components/Card.astro', 'src/components/taken.astro', 'exists'],
     ['src/components/Card.astro', 'src/components/Taken.astro', 'exists'],
     ['src/components/Card.astro', 'src/components/Card.astro', 'invalid'],
     ['src/components/Card.astro', 'src/components/Fragment.astro', 'invalid'],

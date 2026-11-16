@@ -140,6 +140,9 @@ export const messages = {
   'palette.rename.taken': 'Already taken by {file}',
   'palette.rename.title': 'Rename or move {name}',
   'palette.rename.unchanged': 'This is the current name and folder.',
+  'palette.rename.badCharacter': '“{character}” can’t be used in a name.',
+  'palette.rename.spacesRemoved': 'Spaces removed: {name}',
+  'palette.rename.normalized': 'Saved as {name}',
 } as const satisfies CatalogOf<`palette.${string}`>;
 
 export type MessageKey = keyof typeof messages;

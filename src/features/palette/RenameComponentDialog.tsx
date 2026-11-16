@@ -9,7 +9,8 @@ import type { ComponentRenameRequest, ComponentRenameSummary, RenameNoticeKind }
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
 import Popup from '../../ui/Popup';
-import { folderNameProblem, renameAvailability, type RenameCandidate } from './renameAvailability';
+import { detectFolderStyle, detectNamingStyle } from '../../../shared/properties/componentNaming';
+import { folderInput, renameAvailability, type RenameCandidate } from './renameAvailability';
 import './renameComponent.css';
 
 /** How long typing pauses before main is asked for the file list. */
@@ -57,9 +58,12 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
   const [newFolder, setNewFolder] = useState('');
   const folders = useMemo(() => folderChoices(props.roots, props.components, currentFolder), [props.roots, props.components, currentFolder]);
   const creatingFolder = folder === NEW_FOLDER;
-  const folderProblem = creatingFolder ? folderNameProblem(newFolder) : undefined;
-  const chosenFolder = creatingFolder ? `${root}/${newFolder.trim()}` : folder;
-  const availability = renameAvailability({ current: props.file, name, folder: chosenFolder, components: props.components });
+  const style = useMemo(() => detectNamingStyle(props.components.map((component) => baseOf(component.file))), [props.components]);
+  const folderStyle = useMemo(() => detectFolderStyle(folderLevels(folders, props.roots)), [folders, props.roots]);
+  const typedFolder = folderInput(newFolder, folderStyle);
+  const folderProblem = creatingFolder ? typedFolder.problem : undefined;
+  const chosenFolder = creatingFolder ? `${root}/${typedFolder.path}` : folder;
+  const availability = renameAvailability({ current: props.file, name, folder: chosenFolder, style, components: props.components });
   const request: ComponentRenameRequest | undefined =
     availability.kind === 'available' && folderProblem === undefined ? { from: props.file, to: availability.path } : undefined;
   const preview = usePreview(request, props.plan);
@@ -71,7 +75,8 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
     }
   }, [props.focus]);
   const ready = request !== undefined && preview.kind === 'ready';
-  const change = name.trim() !== props.name ? (folder === currentFolder ? 'rename' : 'both') : 'move';
+  const nameChanged = availability.kind === 'available' && availability.fileName !== baseOf(props.file);
+  const change = nameChanged ? (chosenFolder === currentFolder ? 'rename' : 'both') : 'move';
   const submit = (): void => {
     if (ready) {
       props.onApply(request, change);
@@ -105,8 +110,15 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
               {availability.kind === 'same' && translate('palette.rename.unchanged')}
               {availability.kind === 'invalid' && translateDescribed(availability.problem)}
             </div>
+            {availability.kind === 'available' && availability.change !== undefined && (
+              <div className="rename-note">
+                {translate(availability.change === 'spaces' ? 'palette.rename.spacesRemoved' : 'palette.rename.normalized', { name: availability.fileName })}
+              </div>
+            )}
             {availability.kind === 'available' && availability.sameNameIn !== undefined && (
-              <div className="rename-warning">{translate('palette.rename.sameNameElsewhere', { name: name.trim(), file: availability.sameNameIn })}</div>
+              <div className="rename-warning">
+                {translate('palette.rename.sameNameElsewhere', { name: availability.fileName, file: availability.sameNameIn })}
+              </div>
             )}
             <label>{translate('palette.rename.folder')}</label>
             <Dropdown
@@ -128,7 +140,7 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
             )}
             <div className="rename-path">
               <span>{translate('palette.rename.path')}</span>
-              <code>{availability.kind === 'available' ? availability.path : `${chosenFolder}/${name.trim()}.astro`}</code>
+              <code>{previewPath(availability, chosenFolder, props.file)}</code>
             </div>
             <PreviewSummary preview={preview} active={request !== undefined} />
           </div>
@@ -142,6 +154,22 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
       )}
     </Popup>
   );
+}
+
+function baseOf(file: string): string {
+  return file.slice(file.lastIndexOf('/') + 1).replace(/\.astro$/, '');
+}
+
+// The last level of every folder below a root, for telling whether the project writes its folders in PascalCase or lowercase.
+function folderLevels(folders: readonly string[], roots: readonly string[]): readonly string[] {
+  return folders.filter((folder) => !roots.includes(folder)).map((folder) => folder.slice(folder.lastIndexOf('/') + 1));
+}
+
+function previewPath(availability: ReturnType<typeof renameAvailability>, folder: string, current: string): string {
+  if (availability.kind === 'same') {
+    return current;
+  }
+  return availability.path ?? `${folder}/…`;
 }
 
 // Every folder a component can go in: the roots, each folder holding a component, and the ancestors between, never above a root.

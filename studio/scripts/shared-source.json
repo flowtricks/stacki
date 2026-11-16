@@ -369,6 +369,7 @@
     "shared/properties/cmsRemoteSchema.ts",
     "shared/properties/collectionSettings.ts",
     "shared/properties/componentDefaults.ts",
+    "shared/properties/componentNaming.ts",
     "shared/properties/componentOps.ts",
     "shared/properties/componentRename.ts",
     "shared/properties/componentSources.ts",

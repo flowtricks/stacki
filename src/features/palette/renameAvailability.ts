@@ -2,13 +2,21 @@
 // Pure and instant, worked out from the project's component list, so nothing waits on the disk while someone types. Main checks
 // the same rules again before it writes (electron/handlers/componentRenamePlan.ts): this only spares a round trip and says why.
 //
+// What is typed is human: "Accordion Cards", "accordion-cards" and "accordionCards" are one name. The shared normalizer
+// (shared/properties/componentNaming.ts) turns it into the real file name in the project's own style (AccordionCards.astro, or
+// accordion-cards.astro in a dashed project) and every check below runs on THAT name, so a taken name is found however it was typed.
+//
 // Taken is a clash of the file path, compared without case (two files differing only in case cannot both exist on a Mac). A
 // component with the same NAME in another folder is allowed but warned about: Astro tags are written by name, so a page that
 // imports both must give one an alias.
-import { toComponentName } from './componentName';
-import { componentNameProblem } from './componentName';
-import type { Described } from '../../../shared/properties/i18n/messageRef';
-import { described } from '../../../shared/properties/i18n/messageRef';
+import {
+  RESERVED_COMPONENT_NAMES,
+  identifierOfFileName,
+  normalizeComponentName,
+  normalizeFolderPath,
+  type NamingStyle,
+} from '../../../shared/properties/componentNaming';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 
 export interface RenameCandidate {
   /** Project-relative file, `/` separators. */
@@ -16,11 +24,14 @@ export interface RenameCandidate {
   readonly name: string;
 }
 
+/** How what was typed differs from what will be saved, for the muted line under the field. */
+export type NameChange = 'spaces' | 'other' | undefined;
+
 export type RenameAvailability =
   | { readonly kind: 'same' }
-  | { readonly kind: 'invalid'; readonly problem: Described }
-  | { readonly kind: 'taken'; readonly by: string }
-  | { readonly kind: 'available'; readonly path: string; readonly sameNameIn: string | undefined };
+  | { readonly kind: 'invalid'; readonly problem: Described; readonly path: string | undefined }
+  | { readonly kind: 'taken'; readonly by: string; readonly path: string }
+  | { readonly kind: 'available'; readonly path: string; readonly fileName: string; readonly change: NameChange; readonly sameNameIn: string | undefined };
 
 export interface RenameInput {
   /** The component being renamed, as it is on disk. */
@@ -29,43 +40,60 @@ export interface RenameInput {
   readonly name: string;
   /** The folder chosen, project-relative with no trailing slash. */
   readonly folder: string;
+  readonly style: NamingStyle;
   readonly components: readonly RenameCandidate[];
 }
 
 export function renameAvailability(input: RenameInput): RenameAvailability {
   const typed = input.name.trim();
+  const invalid = (problem: Described, fileName?: string): RenameAvailability => ({
+    kind: 'invalid',
+    problem,
+    path: fileName === undefined || fileName === '' ? undefined : `${input.folder}/${fileName}.astro`,
+  });
+  if (typed === '') {
+    return invalid(described('palette.name.empty'));
+  }
   if (typed.includes('/') || typed.includes('\\')) {
-    return { kind: 'invalid', problem: described('palette.rename.separator') };
+    return invalid(described('palette.rename.separator'));
   }
   if (/\.astro$/i.test(typed)) {
-    return { kind: 'invalid', problem: described('palette.rename.extension') };
+    return invalid(described('palette.rename.extension'));
   }
-  const problem = componentNameProblem(typed);
-  if (problem !== undefined) {
-    return { kind: 'invalid', problem };
+  const normalized = normalizeComponentName(typed, input.style);
+  const stray = normalized.rejected[0];
+  if (stray !== undefined) {
+    return invalid(described('palette.rename.badCharacter', { character: stray }), normalized.fileName);
   }
-  // Letters and numbers exactly as typed: the field never silently turns "my card" into "MyCard" the way a new component's name does.
-  if (toComponentName(typed) !== typed) {
-    return { kind: 'invalid', problem: described('palette.name.lettersOnly') };
+  if (normalized.fileName === '') {
+    return invalid(described('palette.name.noLetters'));
   }
-  const path = `${input.folder}/${typed}.astro`;
+  if (/^[0-9]/.test(normalized.identifier)) {
+    return invalid(described('palette.name.startsWithNumber'), normalized.fileName);
+  }
+  if (RESERVED_COMPONENT_NAMES.has(normalized.identifier)) {
+    return invalid(described('palette.name.reserved', { name: normalized.identifier }), normalized.fileName);
+  }
+  const path = `${input.folder}/${normalized.fileName}.astro`;
   if (path === input.current) {
     return { kind: 'same' };
   }
   const clash = input.components.find((other) => other.file !== input.current && other.file.toLowerCase() === path.toLowerCase());
   if (clash !== undefined) {
-    return { kind: 'taken', by: clash.file };
+    return { kind: 'taken', by: clash.file, path };
   }
-  const twin = input.components.find((other) => other.file !== input.current && other.name.toLowerCase() === typed.toLowerCase());
-  return { kind: 'available', path, sameNameIn: twin?.file };
+  const identifier = normalized.identifier.toLowerCase();
+  const twin = input.components.find((other) => other.file !== input.current && identifierOfFileName(other.name).toLowerCase() === identifier);
+  const change: NameChange = normalized.fileName === typed ? undefined : /\s/.test(typed) ? 'spaces' : 'other';
+  return { kind: 'available', path, fileName: normalized.fileName, change, sameNameIn: twin?.file };
 }
 
-/** Why a new folder's name cannot be used, or undefined: letters, numbers, dashes and underscores, `/` between levels, no climbing. */
-export function folderNameProblem(input: string): Described | undefined {
-  const typed = input.trim();
-  if (typed === '') {
-    return described('palette.rename.folderInvalid');
+/** A typed new folder: normalized level by level in the folders' own style, or why it cannot be used. */
+export function folderInput(input: string, style: NamingStyle): { readonly path: string; readonly problem: Described | undefined } {
+  const normalized = normalizeFolderPath(input, style);
+  const stray = normalized.rejected[0];
+  if (stray !== undefined) {
+    return { path: normalized.path, problem: described('palette.rename.badCharacter', { character: stray }) };
   }
-  const ok = typed.split('/').every((segment) => /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(segment));
-  return ok ? undefined : described('palette.rename.folderInvalid');
+  return { path: normalized.path, problem: normalized.path === '' ? described('palette.rename.folderInvalid') : undefined };
 }
