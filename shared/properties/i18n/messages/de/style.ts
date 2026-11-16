@@ -391,6 +391,7 @@ export const messages = {
   'style.gridControls.gridColumns': 'Grid-Spalten', // review
   'style.gridControls.gridRows': 'Grid-Zeilen', // review
   'style.gridControls.rows': 'Zeilen',
+  'style.gridControls.subgrid': 'Subgrid', // same
   'style.gridFlowControls.autoFlow': 'Grid-Auto-Flow', // review
   'style.gridFlowControls.autoFlowPlaceholder': 'z. B. row dense',
   'style.gridFlowControls.custom': 'Benutzerdefiniert',
@@ -439,6 +440,12 @@ export const messages = {
   'style.gridSettings.repeatColumns': 'repeat() für Spalten verwenden',
   'style.gridSettings.repeatRows': 'repeat() für Zeilen verwenden',
   'style.gridSettings.rows': 'Zeilen',
+  'style.gridSettings.subgridColumns': 'subgrid für Spalten verwenden', // review
+  'style.gridSettings.subgridOff':
+    'Diese Tracks vom übergeordneten Grid übernehmen. Dafür braucht es ein übergeordnetes Grid, dessen Tracks dieses Element überspannt.', // review
+  'style.gridSettings.subgridOn':
+    'Diese Tracks kommen vom übergeordneten Grid. Dafür braucht es ein übergeordnetes Grid, dessen Tracks dieses Element überspannt.', // review
+  'style.gridSettings.subgridRows': 'subgrid für Zeilen verwenden', // review
   'style.gridSettings.writeAsRepeat': 'Diese Tracks als repeat() schreiben',
   'style.gridSettings.writtenAsRepeat': 'Geschrieben als repeat({tracks}, …)',
   'style.layerList.dragToReorder': 'Zum Sortieren ziehen',

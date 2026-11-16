@@ -390,6 +390,7 @@ export const messages = {
   'style.gridControls.gridColumns': 'Columnas del grid', // review
   'style.gridControls.gridRows': 'Filas del grid', // review
   'style.gridControls.rows': 'Filas',
+  'style.gridControls.subgrid': 'Subgrid', // same
   'style.gridFlowControls.autoFlow': 'Flujo automático del grid', // review
   'style.gridFlowControls.autoFlowPlaceholder': 'p. ej. row dense',
   'style.gridFlowControls.custom': 'Personalizado',
@@ -438,6 +439,10 @@ export const messages = {
   'style.gridSettings.repeatColumns': 'Usar repeat() para las columnas',
   'style.gridSettings.repeatRows': 'Usar repeat() para las filas',
   'style.gridSettings.rows': 'Filas',
+  'style.gridSettings.subgridColumns': 'Usar subgrid para las columnas', // review
+  'style.gridSettings.subgridOff': 'Tomar estos tracks del grid padre. Necesita un grid padre, con este elemento abarcando sus tracks.', // review
+  'style.gridSettings.subgridOn': 'Estos tracks vienen del grid padre. Necesita un grid padre, con este elemento abarcando sus tracks.', // review
+  'style.gridSettings.subgridRows': 'Usar subgrid para las filas', // review
   'style.gridSettings.writeAsRepeat': 'Escribir estos tracks como repeat()',
   'style.gridSettings.writtenAsRepeat': 'Escrito como repeat({tracks}, …)',
   'style.layerList.dragToReorder': 'Arrastra para reordenar',

@@ -146,7 +146,28 @@ export function canEditAsTracks(value: string): boolean {
   if (tracks.length === 1 && /^var\(/i.test(tracks[0] ?? '')) {
     return false;
   }
+  // A repeat() that parsing left whole has no number for its count. auto-fill and
+  // auto-fit are counts the editors keep; a variable (`repeat(var(--columns), 1fr)`,
+  // Lumos's Grid) is one they cannot show, so it reads as a single strange track.
+  if (tracks.some((track) => /^repeat\(/i.test(track) && !/^repeat\(\s*auto-(fill|fit)\s*,/i.test(track))) {
+    return false;
+  }
   return true;
+}
+
+/** Why a Columns or Rows count is held: the axis is a subgrid, or a value no count can say. */
+export type HeldTrackCount = 'subgrid' | 'custom';
+
+/**
+ * Why the Columns and Rows counts cannot show a value, or undefined when they can.
+ * Writing a count would replace the value with N plain tracks, so the count holds
+ * a label for this kind instead and the grid settings edit the value.
+ */
+export function heldTrackCount(value: string): HeldTrackCount | undefined {
+  if (canEditAsTracks(value)) {
+    return undefined;
+  }
+  return /\bsubgrid\b/i.test(value) ? 'subgrid' : 'custom';
 }
 
 /** The same tracks as a `repeat()`, or '' when they differ and it cannot say them. */
