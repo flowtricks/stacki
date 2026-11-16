@@ -15,6 +15,7 @@
 // so, and never write over it. Writes are canonical (sorted, deduplicated, two-space indent, trailing newline), so equal records
 // are equal bytes, and an unchanged record is not written.
 import { assert } from '../core/assert';
+import { PLATFORM_LIMITS } from '../core/limits';
 import { err, ok, type AppError, type Result } from '../core/result';
 import { BREAKPOINT_LIMITS } from './projectBreakpoints';
 
@@ -22,11 +23,11 @@ export const BREAKPOINT_SYNC_FILE = '.stacki/breakpoint-sync.json';
 
 export const SYNC_RECORD_LIMITS = {
   /**
-   * CSS text read per section, and so the largest position a place can name. It lives here, in the leaf both the scanner
+   * CSS text read per section, and so the largest position a place can name: bounded only by the string (no product size limit). It lives here, in the leaf both the scanner
    * (mediaBreakpointSync.ts) and the apply request's parser read, so the parser does not import the whole scanner and drag it
    * into the renderer's startup contract graph (test/renderer/app/viteModules.test.ts).
    */
-  textCharsMax: 4 * 1024 * 1024,
+  textCharsMax: PLATFORM_LIMITS.stringUnitsMax,
   fileBytesMax: 512 * 1024,
   /** Excluded or linked places kept for one breakpoint. */
   refsMax: 2_000,
