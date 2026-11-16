@@ -384,13 +384,18 @@ export const messages = {
   'style.gridControls.alignAxis': 'Alinear {axis}',
   'style.gridControls.columns': 'Columnas',
   'style.gridControls.configureGrid': 'Configurar grid', // review
+  'style.gridControls.connectTracks': 'Conectar {name} a una variable', // review
   'style.gridControls.custom': 'Personalizado',
   'style.gridControls.direction': 'Dirección',
   'style.gridControls.grid': 'Grid', // same
   'style.gridControls.gridColumns': 'Columnas del grid', // review
   'style.gridControls.gridRows': 'Filas del grid', // review
   'style.gridControls.rows': 'Filas',
-  'style.gridControls.subgrid': 'Subgrid', // same
+  'style.gridControls.switchToCount': 'Cambiar a cantidad', // review
+  'style.gridControls.switchToCountBody': '¿Reemplazar este valor por {count} tracks iguales? Puedes deshacerlo.', // review
+  'style.gridControls.switchToCountTitle': '¿Cambiar a una cantidad?', // review
+  'style.gridControls.trackExpressionEmpty': 'Escribe una lista de tracks, como repeat(3, 1fr).', // review
+  'style.gridControls.trackExpressionMalformed': 'Esta no es una lista de tracks válida. Revisa los paréntesis y corchetes.', // review
   'style.gridFlowControls.autoFlow': 'Flujo automático del grid', // review
   'style.gridFlowControls.autoFlowPlaceholder': 'p. ej. row dense',
   'style.gridFlowControls.custom': 'Personalizado',

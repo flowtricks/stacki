@@ -386,13 +386,18 @@ export const messages = {
   'style.gridControls.alignAxis': 'Aligner {axis}',
   'style.gridControls.columns': 'Colonnes',
   'style.gridControls.configureGrid': 'Configurer la grille', // review
+  'style.gridControls.connectTracks': 'Connecter {name} à une variable', // review
   'style.gridControls.custom': 'Personnalisé',
   'style.gridControls.direction': 'Direction', // same
   'style.gridControls.grid': 'Grid', // same
   'style.gridControls.gridColumns': 'Colonnes de la grille', // review
   'style.gridControls.gridRows': 'Lignes de la grille', // review
   'style.gridControls.rows': 'Lignes',
-  'style.gridControls.subgrid': 'Subgrid', // same
+  'style.gridControls.switchToCount': 'Passer à un nombre', // review
+  'style.gridControls.switchToCountBody': 'Remplacer cette valeur par {count} pistes égales ? Vous pouvez annuler.', // review
+  'style.gridControls.switchToCountTitle': 'Passer à un nombre ?', // review
+  'style.gridControls.trackExpressionEmpty': 'Saisissez une liste de pistes, par exemple repeat(3, 1fr).', // review
+  'style.gridControls.trackExpressionMalformed': 'Ce n’est pas une liste de pistes valide. Vérifiez les parenthèses et les crochets.', // review
   'style.gridFlowControls.autoFlow': 'Flux automatique de la grille', // review
   'style.gridFlowControls.autoFlowPlaceholder': 'p. ex. row dense',
   'style.gridFlowControls.custom': 'Personnalisé',

@@ -11,6 +11,11 @@
 // there was no way back. The grid settings now offer the switch, and this is
 // what it does: the same grid, said the other way, and nothing offered when
 // there is no choice to make.
+//
+// It also holds the Columns and Rows count to what it can say: N equal tracks keep
+// the stepper, and every other value (auto-fit, subgrid, named lines, mixed sizes,
+// a variable count) shows itself as editable text, validated, written exactly as
+// typed, and turned into a count only by the explicit "Switch to count".
 
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +45,7 @@ const check = (what, condition, detail) => {
     logLevel: 'silent',
   });
   const { trackForm, asRepeat, asTrackList, parseTrackList } = require(bundlePath);
+  const AUTOFIT = 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))';
 
   // --- which form is this written in ------------------------------------------
   check('a repeat is a repeat', trackForm('repeat(2, minmax(0, 1fr))') === 'repeat');
@@ -386,10 +392,15 @@ const check = (what, condition, detail) => {
     });
 
     // --- the Columns and Rows counts in the Layout section ----------------------
-    // Mounted with each value on the selected selector: a value the count cannot
-    // say holds the field, its arrows and typing write nothing, and the gear is lit.
+    // Mounted with each value on the selected selector. N equal tracks keep the
+    // stepper; every other value shows ITSELF as editable text with no stepper, and
+    // only the "Switch to count" button turns it into a count, after a question.
     const controlsEntry = path.join(buildDirectory, 'grid-controls.entry.jsx');
-    fs.writeFileSync(controlsEntry, `export { default as GridControls } from ${JSON.stringify(repoPath('src/features/style/GridControls.tsx'))};\n`);
+    fs.writeFileSync(
+      controlsEntry,
+      `export { default as GridControls } from ${JSON.stringify(repoPath('src/features/style/GridControls.tsx'))};\n` +
+        `export { ConfirmHost } from ${JSON.stringify(repoPath('src/ui/ConfirmDialog.tsx'))};\n`,
+    );
     const controlsPath = path.join(buildDirectory, 'grid-controls.bundle.js');
     await esbuild.build({
       entryPoints: [controlsEntry],
@@ -402,7 +413,7 @@ const check = (what, condition, detail) => {
       loader: { '.tsx': 'tsx', '.ts': 'ts' },
       logLevel: 'silent',
     });
-    const { GridControls } = require(controlsPath);
+    const { GridControls, ConfirmHost } = require(controlsPath);
     // The Direction control measures itself; jsdom lays nothing out, so there is nothing to observe.
     global.ResizeObserver = dom.window.ResizeObserver = class {
       observe() {}
@@ -410,28 +421,35 @@ const check = (what, condition, detail) => {
       disconnect() {}
     };
     const countWrites = [];
-    const mountCounts = async (values) => {
+    let source = 'selected';
+    const mountCounts = async (values, from = 'selected') => {
       countWrites.length = 0;
+      source = from;
       root = createRoot(container);
       await act(async () => {
         root.render(
-          React.createElement(GridControls, {
-            read: (prop) =>
-              values[prop] === undefined
-                ? undefined
-                : {
-                    source: 'selected',
-                    selectedValue: { value: values[prop], important: false },
-                    winner: { value: values[prop], important: false },
-                    contributors: [],
-                  },
-            busy: false,
-            setProp: (prop, value, imp) => countWrites.push([prop, value, !!imp]),
-            clearProp: () => {},
-            liveSetProp: () => {},
-            onProvenance: () => {},
-            onSelectSelector: () => {},
-          }),
+          React.createElement(
+            React.Fragment,
+            {},
+            React.createElement(GridControls, {
+              read: (prop) =>
+                values[prop] === undefined
+                  ? undefined
+                  : {
+                      source,
+                      selectedValue: source === 'selected' ? { value: values[prop], important: false } : undefined,
+                      winner: { value: values[prop], important: false },
+                      contributors: [],
+                    },
+              busy: false,
+              setProp: (prop, value, imp) => countWrites.push([prop, value, !!imp]),
+              clearProp: () => {},
+              liveSetProp: () => {},
+              onProvenance: () => {},
+              onSelectSelector: () => {},
+            }),
+            React.createElement(ConfirmHost),
+          ),
         );
         await new Promise((resolve) => setTimeout(resolve, 20));
       });
@@ -442,31 +460,149 @@ const check = (what, condition, detail) => {
         await new Promise((resolve) => setTimeout(resolve, 5));
       });
     const count = (label) => container.querySelector(`input[aria-label="${label}"]`);
-    const arrows = (label) => [...(count(label)?.parentElement?.querySelectorAll('button') ?? [])];
+    const arrows = (label) => [...(count(label)?.closest('.embed-editor_grid-count')?.querySelectorAll('.embed-editor_grid-count-steppers button') ?? [])];
+    const switchButton = (label) => count(label)?.closest('.embed-editor_grid-count')?.querySelector('.embed-editor_grid-count-switch');
     const gearLit = () => container.querySelector('button[aria-label="Configure grid"]')?.classList.contains('is-active') === true;
+    const typeInto = async (element, text, keys) => {
+      await act(async () => {
+        element.focus();
+        const setValue = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
+        setValue.call(element, text);
+        element.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+        for (const key of keys) {
+          element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true }));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    };
 
-    await mountCounts({ 'grid-template-columns': 'repeat(3, minmax(0, 1fr))', 'grid-template-rows': 'subgrid' });
-    check('a subgrid row count reads Subgrid', count('Grid rows')?.value === 'Subgrid', count('Grid rows')?.value);
-    check('it cannot be typed in', count('Grid rows')?.disabled === true);
-    check('it carries the value as its tooltip', count('Grid rows')?.title === 'subgrid', count('Grid rows')?.title);
-    check('its arrows are off', arrows('Grid rows').length === 2 && arrows('Grid rows').every((arrow) => arrow.disabled));
+    // The owner's report: auto-fit used to read "1".
+    await mountCounts({ 'grid-template-columns': AUTOFIT });
+    check('an auto-fit list shows its own value, not a count', count('Grid columns')?.value === AUTOFIT, count('Grid columns')?.value);
+    check('with no stepper arrows', arrows('Grid columns').length === 0, String(arrows('Grid columns').length));
+    check('it can be typed in', count('Grid columns')?.disabled === false && !count('Grid columns')?.readOnly);
+    check('and the gear is lit', gearLit());
+    check('the other axis (unset) still counts', arrows('Grid rows').length === 2);
+    await unmountCounts();
+
+    // Editing writes exactly what was typed, on Enter.
+    await mountCounts({ 'grid-template-columns': AUTOFIT });
+    await typeInto(count('Grid columns'), 'repeat(auto-fill, minmax(10rem, 1fr))', ['Enter']);
+    check(
+      'Enter writes exactly the typed value',
+      JSON.stringify(countWrites[0]) === '["grid-template-columns","repeat(auto-fill, minmax(10rem, 1fr))",false]',
+      JSON.stringify(countWrites),
+    );
+    await unmountCounts();
+
+    // !important typed in the field is the flag, not part of the value.
+    await mountCounts({ 'grid-template-columns': AUTOFIT });
+    await typeInto(count('Grid columns'), '100px 1fr !important', ['Enter']);
+    check('a typed !important is the flag', JSON.stringify(countWrites[0]) === '["grid-template-columns","100px 1fr",true]', JSON.stringify(countWrites));
+    await unmountCounts();
+
+    // Invalid text writes nothing and shows the error.
+    for (const [text, why] of [
+      ['repeat(auto-fit, minmax(10rem, 1fr)', 'an unbalanced paren'],
+      ['1fr ] 1fr', 'a stray bracket'],
+      ['   ', 'nothing at all'],
+      ['1fr; color: red', 'text that ends the declaration'],
+    ]) {
+      await mountCounts({ 'grid-template-columns': AUTOFIT });
+      await typeInto(count('Grid columns'), text, ['Enter']);
+      check(`${why} writes nothing`, countWrites.length === 0, JSON.stringify(countWrites));
+      check(`and ${why} shows the error state`, count('Grid columns')?.getAttribute('aria-invalid') === 'true');
+      check(`with the text kept to fix`, count('Grid columns')?.value === text, count('Grid columns')?.value);
+      await unmountCounts();
+    }
+
+    // Escape puts the value back and writes nothing.
+    await mountCounts({ 'grid-template-columns': AUTOFIT });
+    await typeInto(count('Grid columns'), 'repeat(2, 1fr)', ['Escape']);
+    check('Escape reverts the field', count('Grid columns')?.value === AUTOFIT, count('Grid columns')?.value);
     await act(async () => {
-      arrows('Grid rows').forEach((arrow) => arrow.click());
+      count('Grid columns')?.blur();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('and pressing them writes nothing over subgrid', countWrites.length === 0, JSON.stringify(countWrites));
-    check('the gear is lit', gearLit());
-    check('the other axis still counts', count('Grid columns')?.value === '3', count('Grid columns')?.value);
-    check('and steps', count('Grid columns')?.disabled === false);
+    check('and leaving it afterwards writes nothing', countWrites.length === 0, JSON.stringify(countWrites));
     await unmountCounts();
 
+    // A variable in the value is a chip, like every other style field.
     await mountCounts({ 'grid-template-columns': 'repeat(var(--_cols), minmax(0, 1fr))' });
-    check('a repeat counted by a variable reads Custom', count('Grid columns')?.value === 'Custom', count('Grid columns')?.value);
-    check('and lights the gear', gearLit());
+    check(
+      'a repeat counted by a variable shows its value',
+      count('Grid columns')?.value === 'repeat(var(--_cols), minmax(0, 1fr))' || !!container.querySelector('.embed-editor_varconnect-editor'),
+    );
+    check('inside the variable-aware field', !!container.querySelector('.embed-editor_grid-count.is-expression .embed-editor_varconnect'));
     await unmountCounts();
 
+    // Subgrid shows the word as the value.
+    await mountCounts({ 'grid-template-columns': 'repeat(3, minmax(0, 1fr))', 'grid-template-rows': 'subgrid' });
+    check('a subgrid row axis shows the word subgrid as its value', count('Grid rows')?.value === 'subgrid', count('Grid rows')?.value);
+    check('with no stepper arrows', arrows('Grid rows').length === 0);
+    check('the other axis still counts', count('Grid columns')?.value === '3', count('Grid columns')?.value);
+    check('and steps', arrows('Grid columns').length === 2);
+    await unmountCounts();
+
+    // A value that comes from another selector shows the RESOLVED value for the active one.
+    await mountCounts({ 'grid-template-columns': AUTOFIT }, 'other');
+    check('a value from another selector is shown as it resolves', count('Grid columns')?.value === AUTOFIT, count('Grid columns')?.value);
+    await unmountCounts();
+
+    // "Switch to count": a question first, never automatic.
+    const confirmButton = () => [...dom.window.document.querySelectorAll('.confirm-dialog button')].find((element) => element.classList.contains('primary'));
+    const cancelButton = () => [...dom.window.document.querySelectorAll('.confirm-dialog button')].find((element) => !element.classList.contains('primary'));
+    await mountCounts({ 'grid-template-columns': AUTOFIT });
+    check('nothing is switched on mount', countWrites.length === 0);
+    check('the quiet button is there', !!switchButton('Grid columns'));
+    await act(async () => {
+      switchButton('Grid columns')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    check('pressing it asks first', !!confirmButton() && countWrites.length === 0, JSON.stringify(countWrites));
+    check('and shows the value being replaced as code', !!dom.window.document.querySelector('.confirm-dialog code, .confirm-dialog .code-inline'));
+    await act(async () => {
+      cancelButton()?.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    check('cancelling writes nothing', countWrites.length === 0, JSON.stringify(countWrites));
+    check('and leaves the value as it was', count('Grid columns')?.value === AUTOFIT);
+    await act(async () => {
+      switchButton('Grid columns')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await act(async () => {
+      confirmButton()?.click();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+    check(
+      'confirming writes a count of equal tracks',
+      JSON.stringify(countWrites[0]) === '["grid-template-columns","repeat(1, minmax(0, 1fr))",false]',
+      JSON.stringify(countWrites),
+    );
+    await unmountCounts();
+
+    await mountCounts({ 'grid-template-columns': '100px 1fr 2fr' });
+    await act(async () => {
+      switchButton('Grid columns')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await act(async () => {
+      confirmButton()?.click();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+    check(
+      'the count it switches to is the tracks the value has',
+      JSON.stringify(countWrites[0]) === '["grid-template-columns","repeat(3, minmax(0, 1fr))",false]',
+      JSON.stringify(countWrites),
+    );
+    await unmountCounts();
+
+    // Simple values keep the stepper exactly as it was.
     await mountCounts({ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' });
     check('equal tracks leave the gear off', !gearLit());
+    check('they show their count', count('Grid columns')?.value === '2', count('Grid columns')?.value);
+    check('with no switch button', !switchButton('Grid columns'));
     await act(async () => {
       arrows('Grid columns')[0]?.click();
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -497,19 +633,85 @@ const check = (what, condition, detail) => {
     check('but auto-fill is a count the tracks keep', canEditAsTracks('repeat(auto-fill, minmax(12rem, 1fr))'));
   }
 
-  // --- what the Columns and Rows counts show for a value they cannot count -----
-  // Stepping a count writes N plain tracks over the value, so a value with no
-  // count holds its counter: subgrid by name, anything else as Custom.
+  // --- which values the Columns and Rows count can say -----------------------
+  // A count is faithful only for N equal tracks (1fr, minmax(0, 1fr) or auto — the sizes
+  // the stepper writes). Everything else is an expression: shown as text, never as a
+  // number, because stepping would write N plain tracks over it.
   {
-    const { heldTrackCount } = require(bundlePath);
-    check('subgrid holds the count as a subgrid', heldTrackCount('subgrid') === 'subgrid', heldTrackCount('subgrid'));
-    check('whatever its case or line names', heldTrackCount('SubGrid [a] [b]') === 'subgrid', heldTrackCount('SubGrid [a] [b]'));
-    check('a variable for the list holds it as custom', heldTrackCount('var(--columns)') === 'custom', heldTrackCount('var(--columns)'));
-    check('so does a variable for the count', heldTrackCount('repeat(var(--_cols), minmax(0, 1fr))') === 'custom');
-    check('and a keyword', heldTrackCount('inherit') === 'custom');
-    check('a numbered repeat is counted', heldTrackCount('repeat(3, 1fr)') === undefined);
-    check('so are tracks written out', heldTrackCount('1fr 2fr') === undefined);
-    check('and nothing at all', heldTrackCount('') === undefined);
+    const { classifyTrackCount, checkTrackExpression } = require(bundlePath);
+    const countOf = (value) => {
+      const result = classifyTrackCount(value);
+      return result.kind === 'count' ? result.count : result.kind;
+    };
+    const simple = [
+      ['', 0, 'nothing'],
+      ['none', 0, 'none'],
+      ['repeat(3, 1fr)', 3, 'a numbered repeat of 1fr'],
+      ['repeat(3, minmax(0, 1fr))', 3, 'a numbered repeat of minmax(0, 1fr)'],
+      ['repeat(2, minmax(0px,1fr))', 2, 'minmax(0px,1fr) without spaces'],
+      ['repeat(4, auto)', 4, 'the auto rows the stepper writes'],
+      ['1fr 1fr', 2, 'equal tracks written out'],
+      ['minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', 3, 'minmax(0, 1fr) written out'],
+      ['1fr', 1, 'a single track'],
+      ['REPEAT(2, 1FR)', 2, 'any case'],
+    ];
+    for (const [value, expected, what] of simple) {
+      check(`${what} is a count`, countOf(value) === expected, `${JSON.stringify(value)} → ${countOf(value)}`);
+    }
+    const complex = [
+      ['repeat(auto-fit, minmax(min(100%, 20rem), 1fr))', 'auto-fit with minmax(min(), 1fr)'],
+      ['repeat(auto-fit, minmax(10rem,1fr))', 'auto-fit'],
+      ['repeat(auto-fill, minmax(12rem, 1fr))', 'auto-fill'],
+      ['repeat(var(--cols), 1fr)', 'a variable count'],
+      ['var(--columns)', 'a variable for the whole list'],
+      ['subgrid', 'subgrid'],
+      ['subgrid [a] [b]', 'subgrid with line names'],
+      ['masonry', 'masonry'],
+      ['[a] 1fr [b] 2fr', 'named lines'],
+      ['[full-start] minmax(1rem, 1fr) [content-start] 3fr', 'named lines with sizes'],
+      ['100px 1fr', 'a fixed track and a flexible one'],
+      ['1fr 2fr', 'unequal flexible tracks'],
+      ['repeat(3, 200px)', 'a fixed length repeat'],
+      ['repeat(3, minmax(100px, 1fr))', 'minmax with a fixed minimum'],
+      ['repeat(3, minmax(0, 300px))', 'minmax with a fixed maximum'],
+      ['repeat(3, calc(100% / 3))', 'calc()'],
+      ['repeat(2, clamp(10rem, 20vw, 30rem))', 'clamp()'],
+      ['repeat(2, min(100%, 20rem))', 'min()'],
+      ['repeat(2, max(10rem, 20%))', 'max()'],
+      ['fit-content(20rem) 1fr', 'fit-content()'],
+      ['auto 1fr', 'auto mixed with fr'],
+      ['min-content max-content', 'content keywords'],
+      ['repeat(2, min-content)', 'a content keyword repeat'],
+      ['repeat(2, 1fr 2fr)', 'a repeat of several tracks'],
+      ['repeat(0, 1fr)', 'a repeat of zero'],
+      ['repeat(501, 1fr)', 'a repeat beyond the limit'],
+      ['repeat(3, 1fr) repeat(2, 1fr)', 'two repeats'],
+      ['repeat(3, 1fr) !important', '!important'],
+      ['inherit', 'a CSS-wide keyword'],
+    ];
+    for (const [value, what] of complex) {
+      check(
+        `${what} is an expression`,
+        classifyTrackCount(value).kind === 'expression',
+        `${JSON.stringify(value)} → ${JSON.stringify(classifyTrackCount(value))}`,
+      );
+    }
+    check('subgrid says so', classifyTrackCount('subgrid').subgrid === true);
+    check('whatever its case or line names', classifyTrackCount('SubGrid [a] [b]').subgrid === true);
+    check('an auto-fit list is not a subgrid', classifyTrackCount('repeat(auto-fit, minmax(min(100%, 20rem), 1fr))').subgrid === false);
+
+    // What may be written from the field.
+    const ok = (text) => checkTrackExpression(text);
+    check('a track list is accepted as typed', ok('repeat(auto-fit, minmax(10rem, 1fr))').value === 'repeat(auto-fit, minmax(10rem, 1fr))');
+    check('with its !important taken off', ok('1fr 2fr !important').value === '1fr 2fr' && ok('1fr 2fr !important').important === true);
+    check('named lines are accepted', ok('[a] 1fr [b]').kind === 'ok');
+    check('a variable is accepted', ok('var(--layout-columns)').kind === 'ok');
+    check('nothing is refused as empty', ok('').problem === 'empty' && ok('  !important').problem === 'empty');
+    check('an open paren is malformed', ok('repeat(2, 1fr').problem === 'malformed');
+    check('a stray close paren is malformed', ok('1fr)').problem === 'malformed');
+    check('crossed brackets are malformed', ok('(1fr]').problem === 'malformed');
+    check('a semicolon is malformed', ok('1fr; width: 1px').problem === 'malformed');
+    check('so are braces', ok('1fr }').problem === 'malformed');
   }
 
   // --- a field that is already big doesn't open a box over itself -------------

@@ -1210,6 +1210,7 @@
     "src/features/style/GridAutoSection.tsx",
     "src/features/style/GridControls.tsx",
     "src/features/style/GridFlowControls.tsx",
+    "src/features/style/GridTrackExpression.tsx",
     "src/features/style/GridIcons.tsx",
     "src/features/style/GridSettings.tsx",
     "src/features/style/GridSettingsKit.tsx",

@@ -155,19 +155,93 @@ export function canEditAsTracks(value: string): boolean {
   return true;
 }
 
-/** Why a Columns or Rows count is held: the axis is a subgrid, or a value no count can say. */
-export type HeldTrackCount = 'subgrid' | 'custom';
+/**
+ * What the Columns and Rows count control can say about a value.
+ *
+ * A count is faithful only when the value IS "N equal tracks": a number of tracks
+ * that are all `1fr`, `minmax(0, 1fr)` or `auto` (the sizes the stepper itself writes),
+ * said as `repeat(N, track)` or written out. Writing a count replaces the value with
+ * `repeat(N, track)`, so for anything else the number would be a lie and the write
+ * would destroy what was there. Those values are an `expression`: the control shows
+ * the value itself as text (`subgrid` says whether it is a subgrid, which has its own
+ * switch). Never decided by typing a count: only the explicit "Switch to count" turns
+ * an expression into a count.
+ *
+ * Expressions: auto-fit / auto-fill repeats, a variable count, a variable for the
+ * list, `subgrid`, `masonry`, named lines, mixed sizes (`100px 1fr`, `1fr 2fr`),
+ * fixed lengths, `minmax()` with any non-fr bound, `calc()` / `clamp()` / `min()` /
+ * `max()` / `fit-content()` sizes, `min-content` / `max-content`, a repeat of several
+ * tracks, a count outside 1..500, `!important` and CSS-wide keywords.
+ */
+export type TrackCount = { readonly kind: 'count'; readonly count: number } | { readonly kind: 'expression'; readonly subgrid: boolean };
+
+// The sizes that make equal tracks countable: what the count stepper writes.
+const EQUAL_TRACK = /^(1fr|auto|minmax\(\s*0(px)?\s*,\s*1fr\s*\))$/i;
+
+/** The largest count the stepper writes (GridFlowControls clampCount). */
+const TRACK_COUNT_MAX = 500;
+
+/** Classify a `grid-template-columns` / `-rows` value (with its `!important`, if any) for the count control. */
+export function classifyTrackCount(value: string): TrackCount {
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  if (!trimmed || lower === 'none') {
+    return { kind: 'count', count: 0 };
+  }
+  const expression: TrackCount = { kind: 'expression', subgrid: /\bsubgrid\b/.test(lower) };
+  if (/!\s*important/.test(lower)) {
+    return expression;
+  }
+  const tokens = splitTracks(trimmed);
+  const first = tokens[0] ?? '';
+  const repeated = tokens.length === 1 ? first.match(/^repeat\(\s*(\d+)\s*,(.*)\)$/is) : undefined;
+  if (repeated) {
+    const count = parseInt(repeated[1] ?? '0', 10);
+    const sizes = splitTracks(repeated[2] ?? '');
+    const size = sizes[0] ?? '';
+    const countable = sizes.length === 1 && EQUAL_TRACK.test(size) && count >= 1 && count <= TRACK_COUNT_MAX;
+    return countable ? { kind: 'count', count } : expression;
+  }
+  const equal = tokens.length <= TRACK_COUNT_MAX && tokens.every((token) => EQUAL_TRACK.test(token) && token.replace(/\s+/g, '') === first.replace(/\s+/g, ''));
+  return equal ? { kind: 'count', count: tokens.length } : expression;
+}
+
+/** Why a typed track list cannot be written: nothing in it, or text that is not one value. */
+export type TrackExpressionProblem = 'empty' | 'malformed';
+
+export type TrackExpressionCheck =
+  { readonly kind: 'ok'; readonly value: string; readonly important: boolean } | { readonly kind: 'invalid'; readonly problem: TrackExpressionProblem };
 
 /**
- * Why the Columns and Rows counts cannot show a value, or undefined when they can.
- * Writing a count would replace the value with N plain tracks, so the count holds
- * a label for this kind instead and the grid settings edit the value.
+ * Check a typed track list before it is written: not empty, parentheses and
+ * brackets balanced and in order, and nothing that would end the declaration
+ * (`;`, braces). A trailing `!important` is the flag, not part of the value.
  */
-export function heldTrackCount(value: string): HeldTrackCount | undefined {
-  if (canEditAsTracks(value)) {
-    return undefined;
+export function checkTrackExpression(text: string): TrackExpressionCheck {
+  let value = text.trim();
+  const flag = value.match(/!\s*important\s*$/i);
+  if (flag) {
+    value = value.slice(0, flag.index).trim();
   }
-  return /\bsubgrid\b/i.test(value) ? 'subgrid' : 'custom';
+  if (!value) {
+    return { kind: 'invalid', problem: 'empty' };
+  }
+  if (/[;{}]/.test(value)) {
+    return { kind: 'invalid', problem: 'malformed' };
+  }
+  const closers: string[] = [];
+  for (const ch of value) {
+    if (ch === '(') {
+      closers.push(')');
+    } else if (ch === '[') {
+      closers.push(']');
+    } else if (ch === ')' || ch === ']') {
+      if (closers.pop() !== ch) {
+        return { kind: 'invalid', problem: 'malformed' };
+      }
+    }
+  }
+  return closers.length === 0 ? { kind: 'ok', value, important: flag !== null } : { kind: 'invalid', problem: 'malformed' };
 }
 
 /** The same tracks as a `repeat()`, or '' when they differ and it cannot say them. */

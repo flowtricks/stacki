@@ -11,11 +11,12 @@ import GridSettings from './GridSettings';
 import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
-import { countTracks, NEW_COLUMN, NEW_ROW, repeatTracks, isUniformTracks } from './gridTracks';
-import { heldTrackCount, type HeldTrackCount } from './model/gridTemplate';
+import { NEW_COLUMN, NEW_ROW, repeatTracks } from './gridTracks';
+import { classifyTrackCount } from './model/gridTemplate';
+import GridTrackExpression from './GridTrackExpression';
 import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICONS, xAlignLabels, yAlignLabels, cap, CustomizeIcon } from './GridIcons';
 import { GridDirectionControl, GridContentControl, CountField } from './GridFlowControls';
-import { displayOf, displayText, parseImportant } from './model/styleDisplay';
+import { displayOf, displayText, parseImportant, withImportant } from './model/styleDisplay';
 import { useHoverPreview } from './connectFieldHelpers';
 
 // The grid controls in the Layout section (shown when Display is grid). Mirrors
@@ -267,29 +268,16 @@ function writeText(setProp: SetProp, prop: string, text: string): void {
   setProp(prop, parsed.value, parsed.important);
 }
 
-// The text a held Columns or Rows count shows in place of a number.
-function heldCountLabel(held: HeldTrackCount | undefined, translate: Translator): string | undefined {
-  switch (held) {
-    case undefined:
-      return undefined;
-    case 'subgrid':
-      return translate('style.gridControls.subgrid');
-    case 'custom':
-      return translate('style.gridControls.custom');
-    default: {
-      const exhaustive: never = held;
-      return exhaustive;
-    }
-  }
-}
-
+// The value the Columns and Rows controls act on, with its `!important` in the text
+// (a flagged value is never "N equal tracks"): the selected selector's own value,
+// else the winner of the cascade for the active selector.
 function resolvedValue(read: Read, prop: string): string {
   const resolved = read(prop);
   if (!resolved) {
     return '';
   }
   const source = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
-  return source.value.trim();
+  return withImportant({ value: source.value.trim(), important: source.important });
 }
 
 export default function GridControls(props: GridControlsProps) {
@@ -342,16 +330,11 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
     onProvenance: props.onProvenance,
     onSelectSelector: props.onSelectSelector,
   };
-  const columnsRaw = resolvedValue(read, 'grid-template-columns');
-  const rowsRaw = resolvedValue(read, 'grid-template-rows');
-  // A value with no count (subgrid, a variable for the list or its count, a keyword)
-  // holds its counter, and the grid settings edit it as an expression.
-  const columnsHeld = heldCountLabel(heldTrackCount(columnsRaw), translate);
-  const rowsHeld = heldCountLabel(heldTrackCount(rowsRaw), translate);
+  const columns = classifyTrackCount(resolvedValue(read, 'grid-template-columns'));
+  const rows = classifyTrackCount(resolvedValue(read, 'grid-template-rows'));
   // The gear lights up when a track list isn't just N equal tracks — those can't be
   // represented as a count, so per-track sizing / reordering lives in the modal.
-  const customTracks =
-    columnsHeld !== undefined || rowsHeld !== undefined || (!!columnsRaw && !isUniformTracks(columnsRaw)) || (!!rowsRaw && !isUniformTracks(rowsRaw));
+  const customTracks = columns.kind === 'expression' || rows.kind === 'expression';
   return (
     <div className="embed-editor_size-row embed-editor_bg-row-top">
       <GroupLabel
@@ -362,15 +345,16 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
       />
       <div className="embed-editor_grid-tracks">
         <div className="embed-editor_gap-cell">
-          {/* Always the track COUNT — changing it adds/removes tracks while keeping the
-              earlier tracks' sizes. Per-track values live behind the configure gear. */}
-          <CountField
-            value={countTracks(columnsRaw)}
-            held={columnsHeld}
-            title={columnsRaw}
-            busy={busy}
+          {/* The track COUNT when the value is N equal tracks — changing it adds/removes
+              tracks. Any other value shows itself as text (GridTrackExpression), and only
+              its "Switch to count" ever turns it into a count. */}
+          <TrackCountCell
+            prop="grid-template-columns"
+            value={resolvedValue(read, 'grid-template-columns')}
             ariaLabel={translate('style.gridControls.gridColumns')}
-            onCommit={(count) => setProp('grid-template-columns', repeatTracks(count, NEW_COLUMN), false)}
+            cell={NEW_COLUMN}
+            busy={busy}
+            setProp={setProp}
           />
           <GroupLabel
             label={translate('style.gridControls.columns')}
@@ -380,13 +364,13 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
           />
         </div>
         <div className="embed-editor_gap-cell">
-          <CountField
-            value={countTracks(rowsRaw)}
-            held={rowsHeld}
-            title={rowsRaw}
-            busy={busy}
+          <TrackCountCell
+            prop="grid-template-rows"
+            value={resolvedValue(read, 'grid-template-rows')}
             ariaLabel={translate('style.gridControls.gridRows')}
-            onCommit={(count) => setProp('grid-template-rows', repeatTracks(count, NEW_ROW), false)}
+            cell={NEW_ROW}
+            busy={busy}
+            setProp={setProp}
           />
           <GroupLabel
             label={translate('style.gridControls.rows')}
@@ -399,6 +383,44 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
       </div>
     </div>
   );
+}
+
+// One axis's count: the stepper for N equal tracks, the value as text for anything else.
+function TrackCountCell({
+  prop,
+  value,
+  ariaLabel,
+  cell,
+  busy,
+  setProp,
+}: {
+  prop: string;
+  value: string;
+  ariaLabel: string;
+  cell: string;
+  busy: boolean;
+  setProp: SetProp;
+}) {
+  const classified = classifyTrackCount(value);
+  switch (classified.kind) {
+    case 'count':
+      return <CountField value={classified.count} busy={busy} ariaLabel={ariaLabel} onCommit={(count) => setProp(prop, repeatTracks(count, cell), false)} />;
+    case 'expression':
+      return (
+        <GridTrackExpression
+          value={value}
+          prop={prop}
+          ariaLabel={ariaLabel}
+          cell={cell}
+          busy={busy}
+          onCommit={(next, important) => setProp(prop, next, important)}
+        />
+      );
+    default: {
+      const exhaustive: never = classified;
+      return exhaustive;
+    }
+  }
 }
 
 // The gear, with a rich "Configure grid" tooltip shown after a short hover (matches the

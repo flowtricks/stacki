@@ -385,13 +385,18 @@ export const messages = {
   'style.gridControls.alignAxis': '{axis} ausrichten',
   'style.gridControls.columns': 'Spalten',
   'style.gridControls.configureGrid': 'Grid konfigurieren', // review
+  'style.gridControls.connectTracks': '{name} mit einer Variablen verbinden', // review
   'style.gridControls.custom': 'Benutzerdefiniert',
   'style.gridControls.direction': 'Richtung',
   'style.gridControls.grid': 'Grid', // same
   'style.gridControls.gridColumns': 'Grid-Spalten', // review
   'style.gridControls.gridRows': 'Grid-Zeilen', // review
   'style.gridControls.rows': 'Zeilen',
-  'style.gridControls.subgrid': 'Subgrid', // same
+  'style.gridControls.switchToCount': 'Zur Anzahl wechseln', // review
+  'style.gridControls.switchToCountBody': 'Diesen Wert durch {count} gleich große Tracks ersetzen? Das lässt sich rückgängig machen.', // review
+  'style.gridControls.switchToCountTitle': 'Zur Anzahl wechseln?', // review
+  'style.gridControls.trackExpressionEmpty': 'Gib eine Track-Liste ein, zum Beispiel repeat(3, 1fr).', // review
+  'style.gridControls.trackExpressionMalformed': 'Das ist keine gültige Track-Liste. Prüfe die Klammern.', // review
   'style.gridFlowControls.autoFlow': 'Grid-Auto-Flow', // review
   'style.gridFlowControls.autoFlowPlaceholder': 'z. B. row dense',
   'style.gridFlowControls.custom': 'Benutzerdefiniert',

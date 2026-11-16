@@ -1843,6 +1843,31 @@
 .embed-editor_grid-count-steppers button:disabled {
   cursor: not-allowed;
 }
+/* A track list that is not N equal tracks: the value as text in the stepper's own cell,
+   with a quiet "Switch to count" where the arrows would be. Refused text turns the field
+   danger-coloured by background, not border. */
+.embed-editor_grid-count-switch {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+.embed-editor_grid-count-switch:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+.embed-editor_grid-count.is-invalid .u-input,
+.embed-editor_grid-count.is-invalid .embed-editor_varconnect-editor {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
 
 /* ── Grid settings modal (Configure grid popup) ── */
 /* ── Clip path: the Effects trigger button + its editor modal ── */
