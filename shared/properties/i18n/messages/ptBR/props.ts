@@ -429,9 +429,9 @@ export const messages = {
   'props.loop.settings.dynamic': 'Dinâmico',
   'props.loop.settings.items': 'Itens',
   'props.loop.settings.selected': 'Selecionados',
-  'props.loop.settings.selectedUnknown': 'Os itens desta lista não são conhecidos aqui, então não há nada para escolher.',
-  'props.loop.settings.selectedTraced': 'Esta lista é editada onde fica a sua consulta.',
   'props.loop.settings.selectedCustom': 'Código personalizado define esta lista, então seus itens não podem ser escolhidos à mão.',
+  'props.loop.settings.selectedTraced': 'Esta lista é editada onde fica a sua consulta.',
+  'props.loop.settings.selectedUnknown': 'Os itens desta lista não são conhecidos aqui, então não há nada para escolher.',
   'props.loop.sort.code': 'Código da ordenação',
   'props.loop.sort.order': 'Ordem',
   'props.loop.sort.random': 'Ordem aleatória',
@@ -455,6 +455,7 @@ export const messages = {
   'props.loop.source.via': 'via {name}', // same
   'props.loop.note.kept': 'Esta lista já tem código que os controles não conseguem mostrar. Ele fica como está; o que você definir aqui vale depois dele.',
   'props.loop.note.unknownShape':
+    'O Stacki não consegue ver o que esta lista contém. Digite os nomes dos campos para filtrar e ordenar; a lista fica como foi escrita.',
   'props.loop.typed.boolean': 'Ligado ou desligado',
   'props.loop.typed.date': 'Data',
   'props.loop.typed.invalid': 'Use um nome de campo como title ou author.name.',
@@ -581,6 +582,7 @@ export const messages = {
   'props.sources.doctypeNote': 'Escrito exatamente como está no topo da página. Não é um elemento: não tem tag nem atributos.',
   'props.sources.editCode': 'Editar código',
   'props.sources.expression': 'Expressão',
+  'props.sources.binding': 'Dados',
   'props.sources.frontmatter': 'Frontmatter', // same
   'props.sources.frontmatterNote':
     'Importações, constantes e dados desta página. Abre em um editor flutuante que você pode mover e redimensionar enquanto trabalha no canvas.',

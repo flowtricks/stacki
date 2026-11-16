@@ -435,9 +435,9 @@ export const messages = {
   'props.loop.settings.dynamic': 'Dynamisch',
   'props.loop.settings.items': 'Einträge',
   'props.loop.settings.selected': 'Ausgewählt',
-  'props.loop.settings.selectedUnknown': 'Die Elemente dieser Liste sind hier nicht bekannt, es gibt also nichts zum Auswählen.',
-  'props.loop.settings.selectedTraced': 'Diese Liste wird dort bearbeitet, wo ihre Abfrage liegt.',
   'props.loop.settings.selectedCustom': 'Eigener Code bestimmt diese Liste, ihre Elemente lassen sich daher nicht von Hand auswählen.',
+  'props.loop.settings.selectedTraced': 'Diese Liste wird dort bearbeitet, wo ihre Abfrage liegt.',
+  'props.loop.settings.selectedUnknown': 'Die Elemente dieser Liste sind hier nicht bekannt, es gibt also nichts zum Auswählen.',
   'props.loop.sort.code': 'Sortiercode',
   'props.loop.sort.order': 'Reihenfolge',
   'props.loop.sort.random': 'Zufällige Reihenfolge',
@@ -460,7 +460,9 @@ export const messages = {
   'props.loop.source.typeItems': 'Einträge eintippen',
   'props.loop.source.via': 'über {name}',
   'props.loop.note.kept':
+    'Diese Liste enthält bereits Code, den die Steuerelemente nicht anzeigen können. Er bleibt unverändert; Ihre Einstellungen gelten danach.',
   'props.loop.note.unknownShape':
+    'Stacki sieht nicht, was diese Liste enthält. Geben Sie die Feldnamen zum Filtern und Sortieren ein; die Liste bleibt wie geschrieben.',
   'props.loop.typed.boolean': 'An oder aus',
   'props.loop.typed.date': 'Datum',
   'props.loop.typed.invalid': 'Verwenden Sie einen Feldnamen wie title oder author.name.',
@@ -593,6 +595,7 @@ export const messages = {
   'props.sources.doctypeNote': 'Wird unverändert am Anfang der Seite ausgegeben. Kein Element – es hat weder Tag noch Attribute.',
   'props.sources.editCode': 'Code bearbeiten',
   'props.sources.expression': 'Ausdruck',
+  'props.sources.binding': 'Daten',
   'props.sources.frontmatter': 'Frontmatter', // same
   'props.sources.frontmatterNote':
     'Importe, Konstanten und Daten dieser Seite. Öffnet sich in einem schwebenden Editor, den du beim Arbeiten auf der Arbeitsfläche verschieben und in der Größe ändern kannst.',

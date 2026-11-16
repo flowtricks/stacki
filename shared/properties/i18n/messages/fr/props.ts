@@ -431,9 +431,9 @@ export const messages = {
   'props.loop.settings.dynamic': 'Dynamique',
   'props.loop.settings.items': 'Éléments',
   'props.loop.settings.selected': 'Sélectionnés',
-  'props.loop.settings.selectedUnknown': "Les éléments de cette liste ne sont pas connus ici, il n'y a donc rien à choisir.",
-  'props.loop.settings.selectedTraced': 'Cette liste est modifiée là où se trouve sa requête.',
   'props.loop.settings.selectedCustom': 'Du code personnalisé façonne cette liste, ses éléments ne peuvent donc pas être choisis à la main.',
+  'props.loop.settings.selectedTraced': 'Cette liste est modifiée là où se trouve sa requête.',
+  'props.loop.settings.selectedUnknown': "Les éléments de cette liste ne sont pas connus ici, il n'y a donc rien à choisir.",
   'props.loop.sort.code': 'Code du tri',
   'props.loop.sort.order': 'Ordre',
   'props.loop.sort.random': 'Ordre aléatoire',
@@ -456,7 +456,9 @@ export const messages = {
   'props.loop.source.typeItems': 'saisissez les éléments',
   'props.loop.source.via': 'via {name}', // same
   'props.loop.note.kept':
+    "Cette liste contient déjà du code que les contrôles ne peuvent pas afficher. Il reste tel quel ; vos réglages s'appliquent après lui.",
   'props.loop.note.unknownShape':
+    "Stacki ne voit pas ce que contient cette liste. Saisissez les noms de champs pour filtrer et trier ; la liste reste telle qu'écrite.",
   'props.loop.typed.boolean': 'Oui ou non',
   'props.loop.typed.date': 'Date',
   'props.loop.typed.invalid': 'Utilisez un nom de champ comme title ou author.name.',
@@ -589,6 +591,7 @@ export const messages = {
   'props.sources.doctypeNote': 'Écrit tel quel en haut de la page. Ce n’est pas un élément : il n’a ni balise ni attributs.',
   'props.sources.editCode': 'Modifier le code',
   'props.sources.expression': 'Expression', // same
+  'props.sources.binding': 'Données',
   'props.sources.frontmatter': 'Frontmatter', // same
   'props.sources.frontmatterNote':
     'Imports, constantes et données de cette page. S’ouvre dans un éditeur flottant que vous pouvez déplacer et redimensionner pendant que vous travaillez sur le canevas.',
