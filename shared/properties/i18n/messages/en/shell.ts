@@ -72,6 +72,7 @@ export const messages = {
   'shell.instructions.body': 'Body',
   'shell.instructions.yamlHelp': 'YAML that is not a flat list of fields, edited as written.',
   'shell.loop.gone': 'That loop is no longer on the page.',
+  'shell.loop.removeUnreadable': 'This loop’s body has code that reads each item, so the loop cannot be removed here.',
   'shell.loop.notEditable': 'This page can’t be edited right now.',
   'shell.loop.openComponent': 'Open the component first.',
   'shell.loop.propertyGone': 'This component no longer has a {name} property.',

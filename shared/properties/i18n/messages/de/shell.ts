@@ -74,6 +74,7 @@ export const messages = {
   'shell.instructions.body': 'Inhalt',
   'shell.instructions.yamlHelp': 'YAML, das keine flache Feldliste ist, wird so bearbeitet, wie es geschrieben ist.',
   'shell.loop.gone': 'Diese Schleife ist nicht mehr auf der Seite.',
+  'shell.loop.removeUnreadable': 'Der Inhalt dieser Schleife enthält Code, der jedes Element liest; die Schleife kann hier nicht entfernt werden.',
   'shell.loop.notEditable': 'Diese Seite kann gerade nicht bearbeitet werden.',
   'shell.loop.openComponent': 'Öffne zuerst die Komponente.',
   'shell.loop.propertyGone': 'Diese Komponente hat keine Eigenschaft {name} mehr.',

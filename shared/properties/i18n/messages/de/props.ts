@@ -423,6 +423,9 @@ export const messages = {
   'props.loop.problem.sortEmpty': 'Gib einen Vergleich ein, etwa (a, b) => a.data.order - b.data.order.',
   'props.loop.problem.sortNotComparator': 'Eine Sortierung vergleicht zwei Einträge: schreibe (a, b) => …',
   'props.loop.problem.sortTooLong': 'Diese Sortierung ist zu lang.',
+  'props.loop.removed.emptied': { one: '{count} hatte keinen Wert zum Behalten', other: '{count} hatten keinen Wert zum Behalten' },
+  'props.loop.removed.replaced': { one: '{count} Bindung durch ihren aktuellen Wert ersetzt', other: '{count} Bindungen durch ihre aktuellen Werte ersetzt' },
+  'props.loop.removed.title': 'Schleife entfernt',
   'props.loop.rows.add': '{title} hinzufügen',
   'props.loop.rows.details': 'Details', // same
   'props.loop.rows.edit': 'Bearbeiten',

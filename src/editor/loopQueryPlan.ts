@@ -30,6 +30,7 @@ import { dataFormProblem, optionsLiteral, rewrittenOptions } from './optionsQuer
 import { LIST_ITEMS_HELPER, LIST_ITEMS_NAME, listItemsNeed } from './listItemsHelper';
 import type { ImportNeed } from './dataSample';
 import { withDataImport } from './frontmatterAdditions';
+import type { ItemSamples } from './loopRemove';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { reboundOptions, type BindingChange } from './optionsBinding';
 import { fieldListCode, type FieldList } from './loopFieldList';
@@ -59,6 +60,11 @@ export type LoopTarget =
       readonly import?: ImportNeed | undefined;
     }
   | { readonly kind: 'empty' }
+  /**
+   * The loop taken away, its body kept once: what the first item shows (`samples`, by path from the item)
+   * replaces what is bound to the item. Applied by the page (appLoopEdits.ts), not planned here.
+   */
+  | { readonly kind: 'remove'; readonly samples: ItemSamples }
   /** One of the list's settings linked to a component prop, or unlinked. */
   | { readonly kind: 'binding'; readonly change: BindingChange }
   /** A list field inside a content collection's items, across all of them. */
@@ -440,6 +446,10 @@ function writtenTarget(input: LoopPlanInput, holder: Holder | undefined, before:
       // A section is rewritten in place too (sectionEdit).
       assert(false, 'A section is planned in place');
       return { ok: false, ...issue('editor.loopPlan.sectionInPlace') };
+    case 'remove':
+      // A removed loop is unwrapped by the page (appLoopEdits.ts); it has no source to write.
+      assert(false, 'A removed loop is applied by the page');
+      return { ok: false, ...issue('editor.loopPlan.sectionInPlace') };
     default: {
       const exhaustive: never = target;
       return exhaustive;
@@ -737,6 +747,9 @@ export function targetKey(target: LoopTarget): string {
       return `value:${target.data.trim()}`;
     case 'empty':
       return 'empty';
+    case 'remove':
+      // i18n-ignore: an internal key for what a loop reads, never shown.
+      return 'remove';
     case 'binding':
       // Not a source: no children are kept or restored under it.
       return `binding:${target.change.setting}`;

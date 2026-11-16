@@ -73,6 +73,7 @@ export const messages = {
   'shell.instructions.body': 'Corps',
   'shell.instructions.yamlHelp': 'YAML qui n’est pas une liste plate de champs, modifié tel qu’il est écrit.',
   'shell.loop.gone': 'Cette boucle n’est plus sur la page.',
+  'shell.loop.removeUnreadable': 'Le corps de cette boucle contient du code qui lit chaque élément ; la boucle ne peut pas être supprimée ici.',
   'shell.loop.notEditable': 'Cette page ne peut pas être modifiée pour le moment.',
   'shell.loop.openComponent': 'Ouvrez d’abord le composant.',
   'shell.loop.propertyGone': 'Ce composant n’a plus de propriété {name}.',

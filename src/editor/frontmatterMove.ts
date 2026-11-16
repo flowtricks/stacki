@@ -12,6 +12,10 @@ interface Statement {
 interface NeededImport {
   readonly name: string;
   readonly path: string;
+  /** How it binds, kept with it: a named import written as a default one reads another export. */
+  readonly imported?: string | undefined;
+  readonly named?: boolean | undefined;
+  readonly typeOnly?: boolean | undefined;
 }
 interface FrontmatterRequest {
   readonly names?: Iterable<string> | undefined;
@@ -368,7 +372,13 @@ export function neededFrontmatter({ names, frontmatter, imports, has }: Frontmat
     const imported = (imports || []).find((i) => i.name === name) || findImportOf(code, name);
     if (imported) {
       const path = 'path' in imported ? imported.path : imported.spec;
-      wantedImports.push({ name, path });
+      wantedImports.push({
+        name,
+        path,
+        ...(imported.imported === undefined ? {} : { imported: imported.imported }),
+        ...(imported.named === undefined ? {} : { named: imported.named }),
+        ...('typeOnly' in imported && imported.typeOnly !== undefined ? { typeOnly: imported.typeOnly } : {}),
+      });
       continue;
     }
     if (!declared.has(name)) {

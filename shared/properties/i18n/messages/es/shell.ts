@@ -72,6 +72,7 @@ export const messages = {
   'shell.instructions.body': 'Cuerpo',
   'shell.instructions.yamlHelp': 'YAML que no es una lista plana de campos, editado tal cual está escrito.',
   'shell.loop.gone': 'Ese bucle ya no está en la página.',
+  'shell.loop.removeUnreadable': 'El cuerpo de este bucle tiene código que lee cada elemento, así que el bucle no se puede quitar aquí.',
   'shell.loop.notEditable': 'Esta página no se puede editar ahora mismo.',
   'shell.loop.openComponent': 'Abre primero el componente.',
   'shell.loop.propertyGone': 'Este componente ya no tiene una propiedad {name}.',

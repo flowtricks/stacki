@@ -71,6 +71,7 @@ export const messages = {
   'shell.instructions.body': 'Corpo',
   'shell.instructions.yamlHelp': 'YAML que não é uma lista simples de campos, editado como está escrito.',
   'shell.loop.gone': 'Esse laço não está mais na página.',
+  'shell.loop.removeUnreadable': 'O corpo deste loop tem código que lê cada item, então o loop não pode ser removido aqui.',
   'shell.loop.notEditable': 'Esta página não pode ser editada agora.',
   'shell.loop.openComponent': 'Abra o componente primeiro.',
   'shell.loop.propertyGone': 'Este componente não tem mais uma propriedade {name}.',

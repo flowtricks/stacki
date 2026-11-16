@@ -323,6 +323,10 @@ async function panel(context, data, frontmatter = FRONTMATTER) {
   };
   const onApply = (target) => {
     state.applied.push(target);
+    if (target.kind === 'remove') {
+      // The page unwraps the loop itself (appLoopEdits.ts); the host only records the request.
+      return { ok: true, unbound: 2, lost: [], restored: false, removed: { replaced: 2, emptied: 1 } };
+    }
     const loop = { id: 'loop', kind: 'map', head: state.head, children: [] };
     const model = { extraFrontmatter: state.frontmatter, imports: IMPORTS, nodes: [loop] };
     const result = planLoop({ model, loop, target, sanityClient: 'unavailable' });
@@ -632,4 +636,27 @@ test('the field picker leads with the search, then the fields, then a quiet row 
     ['Field name', 'Type'],
   );
   assert.ok(form.querySelector('button.primary'), 'one primary action');
+});
+
+test('None takes the loop away, with a notice that says what became of the bindings', async (context) => {
+  const { host, state } = await panel(context, 'cards', CARDS_FRONTMATTER);
+  await press(host.querySelector('.loop-source-trigger'));
+  const none = [...document.querySelectorAll('.loop-source-extras .dp-row')].find((row) => row.textContent.startsWith('None'));
+  assert.ok(none, 'None is in the Source menu');
+  await press(none);
+  assert.equal(state.applied.length, 1);
+  assert.equal(state.applied[0].kind, 'remove', 'None removes the loop, it does not leave an empty one');
+  assert.deepEqual(state.applied[0].samples, {}, 'with nothing sampled, nothing is claimed');
+  assert.match(
+    host.querySelector('.loop-settings-notice').textContent,
+    /Loop removed · 2 bindings replaced with their current values · 1 had no value to keep/,
+  );
+});
+
+test('None on a loop that already has no list writes nothing', async (context) => {
+  const { host, state } = await panel(context, '[]');
+  await press(host.querySelector('.loop-source-trigger'));
+  const none = [...document.querySelectorAll('.loop-source-extras .dp-row')].find((row) => row.textContent.startsWith('None'));
+  await press(none);
+  assert.ok(state.applied.length === 0 || state.applied[0].kind === 'empty', 'an empty loop has nothing to remove');
 });

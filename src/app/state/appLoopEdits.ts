@@ -9,7 +9,9 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { childrenFingerprint, planLoop, targetKey, type LoopTarget } from '../../editor/loopQueryPlan';
-import { frontmatterGesture, nodeGesture, sequence } from '../../editor/editGestures';
+import { frontmatterGesture, nodeGesture, sequence, unwrapGesture } from '../../editor/editGestures';
+import { splitMapHead } from '../../editor/loopBindings';
+import { removedLoopBody, type ItemSamples } from '../../editor/loopRemove';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import type { EditorModel, EditorNode } from '../../editor/pageView';
 import type { LoopApplyResult } from '../../features/props/LoopSettings';
@@ -51,6 +53,15 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
         return { ok: false, message: translate('shell.loop.gone') };
       }
       const children = loop.children ?? [];
+      if (target.kind === 'remove') {
+        // "None": the loop goes, its body stays once, and what was bound to the item shows what it showed.
+        const removal = removalGesture(loop, target.samples);
+        if (!removal.ok) {
+          return { ok: false, message: translate('shell.loop.removeUnreadable') };
+        }
+        commitEdit(removal.gesture);
+        return { ok: true, unbound: removal.replaced, lost: [], restored: false, removed: { replaced: removal.replaced, emptied: removal.emptied } };
+      }
       const memory = loopMemoryRef.current.get(nodeId);
       const fresh = memory !== undefined && memory.produced === childrenFingerprint(children);
       const restore = fresh ? memory.snapshots.get(targetKey(target)) : undefined;
@@ -87,6 +98,37 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
     [commitEdit, pageStateRef, translate],
   );
   return { setLoopSource };
+}
+
+/**
+ * A loop taken away as one gesture: its body, with the bindings to its item turned
+ * into the values the first item shows, in the loop's place. The frontmatter is left
+ * exactly as it is: the list the loop read may be wanted again, and nothing the person
+ * wrote is deleted for them. The edit has no node form of its own, so the page writes
+ * it as the smallest changed nodes (replacementRequests).
+ */
+export function removalGesture(
+  loop: EditorNode,
+  samples: ItemSamples,
+): { readonly ok: true; readonly gesture: EditGesture; readonly replaced: number; readonly emptied: number } | { readonly ok: false } {
+  const head = loop.kind === 'map' ? splitMapHead(loop.head) : undefined;
+  if (loop.kind !== 'map' || head === undefined) {
+    return { ok: false };
+  }
+  const removal = removedLoopBody(loop.children ?? [], { item: head.item, index: head.index }, samples);
+  if (!removal.ok) {
+    return { ok: false };
+  }
+  const options = { coalesceKey: undefined, urgency: true };
+  const flattened: EditorNode = { ...loop, children: removal.nodes };
+  const gesture: EditGesture = {
+    coalesceKey: undefined,
+    urgency: true,
+    stream: undefined,
+    request: () => undefined,
+    apply: (model) => unwrapGesture(loop.id).apply(nodeGesture(loop.id, flattened, options).apply(model)),
+  };
+  return { ok: true, gesture, replaced: removal.replaced, emptied: removal.emptied };
 }
 
 // A page holds a few dozen loops at most, and a loop switches between a few

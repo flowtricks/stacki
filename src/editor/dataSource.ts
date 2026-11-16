@@ -147,7 +147,7 @@ export function findDeclaration(code: unknown, name: unknown): DeclarationSpan |
  * Covers `import x from`, `import { a, b as c } from`, `import * as ns from`
  * and type-only imports — everything a page's frontmatter can carry.
  */
-export function findImportOf(code: unknown, name: unknown): { name: string; spec: string } | undefined {
+export function findImportOf(code: unknown, name: unknown): { name: string; spec: string; named?: boolean; imported?: string } | undefined {
   const ident = String(name || '');
   if (!/^[A-Za-z_$][\w$]*$/.test(ident)) {
     return undefined;
@@ -164,6 +164,8 @@ export function findImportOf(code: unknown, name: unknown): { name: string; spec
     // its entries split, honouring `a as b` (the local name is what's used).
     const braced = clause.match(/\{([\s\S]*)\}/);
     const names: string[] = [];
+    // What a braced entry is called in the module it comes from (`a as b` is `a`), by the local name.
+    const exported = new Map<string, string>();
     const outside = clause.replace(/\{[\s\S]*\}/, '').replace(/\*\s+as\s+/, '');
     for (const part of outside.split(',')) {
       const entry = part.trim();
@@ -179,11 +181,15 @@ export function findImportOf(code: unknown, name: unknown): { name: string; spec
           continue;
         }
         const as = entry.split(/\s+as\s+/);
-        names.push((as[1] || as[0] || '').trim());
+        const local = (as[1] || as[0] || '').trim();
+        names.push(local);
+        exported.set(local, (as[0] || '').trim());
       }
     }
     if (names.includes(ident)) {
-      return { name: ident, spec };
+      // A braced entry is a named import: written as a default import it would read another export.
+      const imported = exported.get(ident);
+      return imported === undefined ? { name: ident, spec } : { name: ident, spec, named: true, imported };
     }
   }
   return undefined;

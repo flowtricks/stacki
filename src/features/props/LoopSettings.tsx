@@ -50,6 +50,7 @@ import type { BindingContext } from './LoopBinding';
 import { LOOP_SETTINGS, type LoopSetting, type SettingHome } from '../../editor/optionsQuery';
 import { LoopLineage, tracedCollection, useLoopTrace, type TracedCollection } from './LoopLineage';
 import { FilterSection } from './LoopFilters';
+import { itemSamples, type ItemSamples } from '../../editor/loopRemove';
 import { listItemsModeQuery, listPicks, type ListPicks, type PickRefusal } from './loopPickModel';
 import { withTypedFields } from './loopTypedField';
 import type { TypedFieldSupport } from './LoopTypedFieldForm';
@@ -65,7 +66,15 @@ import './loopSettings.css';
 
 /** What applying a change did: nothing to say, or why it could not be done. */
 export type LoopApplyResult =
-  { readonly ok: true; readonly unbound: number; readonly lost: readonly string[]; readonly restored: boolean } | ({ readonly ok: false } & Described);
+  | {
+      readonly ok: true;
+      readonly unbound: number;
+      readonly lost: readonly string[];
+      readonly restored: boolean;
+      /** The loop was taken away: bindings now holding the values they showed, and bindings that had none to hold. */
+      readonly removed?: { readonly replaced: number; readonly emptied: number } | undefined;
+    }
+  | ({ readonly ok: false } & Described);
 
 export interface LoopListOption {
   readonly path: string;
@@ -116,6 +125,8 @@ interface SourceRowProps {
   readonly onNotice: (text: string) => void;
   /** Making a List property from the Source menu, in a component. */
   readonly newList: NewListOffer | undefined;
+  /** What the first item shows, by path from the loop's item: kept as values when None takes the loop away. */
+  readonly samples: ItemSamples;
 }
 
 interface Notice {
@@ -146,6 +157,15 @@ function isListReading(reading: LoopReading): boolean {
   return source?.kind === 'list';
 }
 
+// "Loop removed · 3 bindings replaced with their current values · 1 had no value to keep".
+function removedNotice(removed: { readonly replaced: number; readonly emptied: number }, translate: Translator): string {
+  const parts = [translate('props.loop.removed.title'), translate('props.loop.removed.replaced', { count: removed.replaced })];
+  if (removed.emptied > 0) {
+    parts.push(translate('props.loop.removed.emptied', { count: removed.emptied }));
+  }
+  return parts.join(' · ');
+}
+
 const NOTICE_MS = 6_000;
 
 export default function LoopSettings(props: LoopSettingsProps) {
@@ -164,6 +184,19 @@ export default function LoopSettings(props: LoopSettingsProps) {
   // Section code boxes rewrite steps where they are written, which needs the list read as written.
   const sections = kept || calledList ? undefined : asCalled.sections;
   const holder = readingChain(reading)[0];
+  const samples = useMemo(
+    () =>
+      itemSamples(
+        tree,
+        [
+          ...(reading.kind === 'query' && reading.query.source.kind === 'list' ? [reading.query.source.collection] : []),
+          ...readingChain(reading),
+          props.input.data.trim(),
+        ],
+        props.item ?? 'item',
+      ),
+    [tree, reading, props.input.data, props.item],
+  );
   const listSource = reading.kind === 'query' ? reading.query.source : undefined;
   const picks = useMemo(
     () => (listSource?.kind === 'list' ? listPicks({ frontmatter: props.input.frontmatter, expression: listSource.collection, tree }) : undefined),
@@ -216,6 +249,7 @@ export default function LoopSettings(props: LoopSettingsProps) {
         onChoose={apply}
         onNotice={(text) => setNotice({ tone: 'error', text })}
         newList={newListOffer(props, catalog, translate, translateDescribed, setNotice)}
+        samples={samples}
       />
       {notice !== undefined && <NoticeBanner notice={notice} onDismiss={() => setNotice(undefined)} />}
       <ReadingSettings
@@ -722,6 +756,9 @@ function noticeFor(result: LoopApplyResult, before: string | undefined, translat
   if (!result.ok) {
     return { tone: 'error', text: translateDescribed(result) };
   }
+  if (result.removed !== undefined) {
+    return { tone: result.removed.emptied > 0 ? 'warning' : 'info', text: removedNotice(result.removed, translate) };
+  }
   if (result.unbound > 0) {
     return { tone: 'warning', text: unlinkWarning(result.unbound, result.lost, before, translate) };
   }
@@ -852,6 +889,11 @@ function SourceRow(props: SourceRowProps) {
   const choose = (pick: SourcePick): void => {
     // Picking the list it already reads keeps the settings refining it.
     if (pick.kind === 'value' && `value:${pick.data}` === current) {
+      return;
+    }
+    if (pick.kind === 'empty' && reading.kind !== 'empty') {
+      // None takes the loop away and keeps its body once, so what was bound to its items holds their values.
+      props.onChoose({ kind: 'remove', samples: props.samples });
       return;
     }
     if (pick.kind === 'empty' || pick.kind === 'value') {
