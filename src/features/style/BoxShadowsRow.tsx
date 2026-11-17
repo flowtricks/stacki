@@ -2,7 +2,7 @@
 // (EffectsSection.tsx).
 
 import { parseHideable, serializeHideable, type Hideable } from './model/hideable';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import LayerList from './LayerList';
 import LayerPopover from './LayerPopover';
 import { ShadowLength, ShadowColorRow } from './ShadowFields';

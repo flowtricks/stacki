@@ -1,7 +1,8 @@
 // The Default value of a prop: a control for its kind, the `{}` code switch,
-// and, for a prop of words or options, the branch that sets it by conditions
-// on other props in the Value conditions editor the attribute fields use
-// (ConditionalDefaultField.tsx). A default the component computes per option
+// and, for a prop of words or options, the purple + its field shows on hover,
+// whose Create conditional sets it by conditions on other props in the Value
+// conditions editor the attribute fields use (ConditionalDefaultField.tsx).
+// Set by conditions, its title is the blue reset label (PropertyFieldHead.tsx). A default the component computes per option
 // from a lookup table (`label ?? named[variant]`) is shown and edited the same
 // way and written back into that table; one computed by other code shows its
 // code, read-only (docs/props-conditional-values.md).
@@ -14,7 +15,7 @@ import type { ConditionalValue } from '../../editor/conditionalValue';
 import { quoteOf } from '../../editor/conditionalValue';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
-import { BracesIcon, BranchIcon } from '../../ui/Icons';
+import { BracesIcon } from '../../ui/Icons';
 import {
   ComputedDefault,
   ConditionalDefaultField,
@@ -28,6 +29,7 @@ import {
   type EditPace,
   type TableDefault,
 } from '../props/propBindings';
+import { PropertyCodeToggle, PropertyCodeView, PropertyFieldHead } from './PropertyFieldHead';
 
 /** What the Default value needs to set a default by conditions: the component's props, its computed defaults, and where a table edit goes. */
 export interface DefaultConditions {
@@ -47,7 +49,11 @@ interface DefaultProps {
 export function PropertyDefault({ property, frontmatter, onChange, conditions }: DefaultProps) {
   const translate = useTranslate();
   const simple = ['string', 'number', 'boolean'].includes(property.type) || literalOptions(property.type) !== undefined;
-  const [mode, setMode] = useState<'value' | 'expression'>(simple && isLiteralDefault(property) ? 'value' : 'expression');
+  // A default set by conditions opens on its pill, as a literal one opens on its control; `{}` switches either to its code.
+  const [mode, setMode] = useState<'value' | 'expression'>(
+    simple && (isLiteralDefault(property) || conditionalOfDefault(property.defaultValue) !== undefined) ? 'value' : 'expression',
+  );
+  const [tableCodeOpen, setTableCodeOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const context = useDefaultConditionContext(frontmatter, conditions?.properties ?? NO_PROPERTIES);
   const quote = quoteOf(frontmatter) ?? '"';
@@ -71,11 +77,20 @@ export function PropertyDefault({ property, frontmatter, onChange, conditions }:
   };
   if (conditions !== undefined && table !== undefined) {
     return (
-      <div className="property-default" role="group" aria-label={translate('componentProps.default.value')}>
-        <div className="property-default-title">
-          <span>{translate('componentProps.default.value')}</span>
-        </div>
-        {tableModel === undefined ? (
+      <div className="property-default property-field" role="group" aria-label={translate('componentProps.default.value')}>
+        {/* Set per option, the default is set, so its title is the blue label; the table is the component's own code, so
+            its Reset says where the default is changed instead of deleting that code. Its {} shows the table. */}
+        <PropertyFieldHead
+          title={translate('componentProps.default.value')}
+          onReset={undefined}
+          resetRefusal={translate('componentProps.defaults.tableReset')}
+          onConditional={undefined}
+        >
+          <PropertyCodeToggle open={tableCodeOpen} onToggle={() => setTableCodeOpen((current) => !current)} />
+        </PropertyFieldHead>
+        {tableCodeOpen ? (
+          <PropertyCodeView code={`${property.name} ?? ${table.table}[${table.key}]\n\n${tableCode(table)}`} />
+        ) : tableModel === undefined ? (
           <ComputedDefault code={tableCode(table)} />
         ) : (
           <ConditionalDefaultField model={tableModel} context={context} quote={quote} onApply={writeTable} />
@@ -85,24 +100,15 @@ export function PropertyDefault({ property, frontmatter, onChange, conditions }:
   }
   const expression = mode === 'expression';
   const action = expression ? translate('componentProps.default.useControl') : translate('componentProps.default.writeExpression');
-  const branchLabel = translate('componentProps.defaults.conditional');
   return (
-    <div className="property-default" role="group" aria-label={translate('componentProps.default.value')}>
-      <div className="property-default-title">
-        <span>{translate('componentProps.default.value')}</span>
-        {conditions !== undefined && wordy && chain === undefined && (
-          <button
-            type="button"
-            className={`prop-expr-toggle${starting ? ' on' : ''}`}
-            title={branchLabel}
-            aria-label={branchLabel}
-            aria-pressed={starting}
-            onClick={() => setStarting(true)}
-          >
-            <BranchIcon size={12} />
-          </button>
-        )}
-        {simple && chain === undefined && (
+    <div className="property-default property-field" role="group" aria-label={translate('componentProps.default.value')}>
+      <PropertyFieldHead
+        title={translate('componentProps.default.value')}
+        // Any default given here, a value or conditions, is set: Reset clears it, so the prop has no default again.
+        onReset={property.defaultValue.trim() === '' ? undefined : () => onChange('', 'at-once')}
+        onConditional={conditions !== undefined && wordy && chain === undefined ? () => setStarting(true) : undefined}
+      >
+        {(simple || chain !== undefined) && (
           <button
             type="button"
             className={`prop-expr-toggle${expression ? ' on' : ''}`}
@@ -114,7 +120,7 @@ export function PropertyDefault({ property, frontmatter, onChange, conditions }:
             <BracesIcon size={12} />
           </button>
         )}
-      </div>
+      </PropertyFieldHead>
       {starting && chain === undefined && conditions !== undefined && (
         <ConditionalDefaultStart
           defaultResult={defaultAttrOf(property.defaultValue)}
@@ -123,7 +129,7 @@ export function PropertyDefault({ property, frontmatter, onChange, conditions }:
           onClose={() => setStarting(false)}
         />
       )}
-      {chain !== undefined && conditions !== undefined ? (
+      {chain !== undefined && conditions !== undefined && !expression ? (
         <ConditionalDefaultField model={chain} context={context} quote={quote} onApply={writeDefault} />
       ) : mode === 'value' && simple ? (
         <DefaultControl property={property} frontmatter={frontmatter} onChange={onChange} />

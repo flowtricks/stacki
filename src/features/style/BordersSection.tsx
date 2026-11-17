@@ -1,6 +1,6 @@
 import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
-import type { SegmentedOption } from './components/SegmentedControl';
+import type { SegmentedOption } from '../../ui/SegmentedControl';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import VariableConnect from './VariableConnect';

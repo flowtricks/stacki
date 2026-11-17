@@ -9,6 +9,8 @@ import { assert } from '../../../shared/core/assert';
 import { tooltipArrowStyle } from './components/MenuParts';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+// Its bar is drawn with the segmented control's classes (u-segmented).
+import '../../ui/segmentedControl.css';
 
 export const RADIAL_SIZES = [
   { value: 'closest-side', labelKey: 'style.gradientControls.closestSide', tipKey: 'style.gradientControls.tipClosestSide' },

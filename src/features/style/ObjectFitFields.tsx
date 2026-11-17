@@ -9,7 +9,7 @@ import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
-import { HoverTooltip } from './components/SegmentedControl';
+import { HoverTooltip } from '../../ui/SegmentedControl';
 import Select, { type SelectOption } from './components/Select';
 import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';

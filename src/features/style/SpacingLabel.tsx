@@ -3,7 +3,7 @@
 // selector (SpacingBox.tsx).
 
 import { useEffect, useRef, useState } from 'react';
-import { HoverTooltip } from './components/SegmentedControl';
+import { HoverTooltip } from '../../ui/SegmentedControl';
 import type { ProjectVariable } from './model/webflow';
 import { type ResolvedProp } from './model/resolved';
 import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Side, displayOf, isWrappedValue } from './spacingTypes';

@@ -6,7 +6,7 @@ import { chevronDown as centralChevronDown, chevronUp as centralChevronUp, prope
 
 import type { ReactNode } from 'react';
 import type { Translator } from '../../lib/i18n/localeContext';
-import { type SegmentedOption } from './components/SegmentedControl';
+import { type SegmentedOption } from '../../ui/SegmentedControl';
 
 export const FLEX_FLOW_WRAP_ICON_FIRST_PATH =
   'M14.207 11.5L10.8535 14.8535L10.1465 14.1465L12.293 12H3V11H12.293L10.1465 8.85352' + 'L10.8535 8.14648L14.207 11.5ZM11 4H3V3H11V4Z';

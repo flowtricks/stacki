@@ -2,7 +2,7 @@
 // truncation with text-overflow (TypographySection.tsx).
 
 import Select, { type SelectOption } from './components/Select';
-import SegmentedControl from './components/SegmentedControl';
+import SegmentedControl from '../../ui/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
 import { displayOf, withImportant } from './model/styleDisplay';
 import ImportantMark from './components/ImportantMark';

@@ -6,6 +6,8 @@ import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts';
 import { parseImportant, withImportant } from './model/styleDisplay';
+// Its bar is drawn with the segmented control's classes (u-segmented).
+import '../../ui/segmentedControl.css';
 
 // The value editor for `display`. For values we can represent it shows a
 // segmented bar (Block / Flex / Grid + a 4th slot for the inline set, None and

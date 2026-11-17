@@ -14,6 +14,8 @@ import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, tooltipArrowStyle } from './components/MenuParts';
 import { parseImportant, withImportant } from './model/styleDisplay';
+// Its bar is drawn with the segmented control's classes (u-segmented).
+import '../../ui/segmentedControl.css';
 
 // The flex Direction / flow control — shown only when `display` is flex. Two fixed
 // segments (→ single row, ↓ single column) plus a third slot that shows whichever

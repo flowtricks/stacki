@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CSSProperties, ReactNode } from 'react';
-import { segmentIndicatorStyle, useSegmentIndicator } from '../../../ui/segmentIndicator';
+import { segmentIndicatorStyle, useSegmentIndicator } from './segmentIndicator';
+import { tooltipHost } from './delayedTooltip';
+import './segmentedControl.css';
 
 function tooltipStyle(style: CSSProperties, arrowLeft: number): CSSProperties & { readonly '--tip-arrow-left': string } {
   return { ...style, '--tip-arrow-left': `${arrowLeft}px` };
@@ -194,6 +196,7 @@ export function HoverTooltip({ anchor, children }: { anchor: HTMLElement; childr
       {children}
       <span className="u-segmented-popup-arrow" aria-hidden="true" />
     </div>,
-    document.body,
+    // Inside a modal dialog (Property settings), so the tip is not painted under its top layer.
+    tooltipHost(anchor),
   );
 }

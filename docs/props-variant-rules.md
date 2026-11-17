@@ -58,8 +58,8 @@ type Kind =
   stay separate unions; nothing is flattened.
 - **Props**: every prop a member names, the controller excluded, in the order
   first written.
-- **Rule**: a prop under an option is `optional` (Allowed), `required`
-  (Required) or `forbidden` (Not allowed). `forbidden` is either `prop?: never`
+- **Rule**: a prop under an option is `optional` (Show), `required`
+  (Required) or `forbidden` (Hide). `forbidden` is either `prop?: never`
   or not named at all (`listed: false`); TypeScript refuses both.
 
 Members may intersect attribute types the file does not declare
@@ -86,7 +86,7 @@ parses, and asserts that the result reads back as asked.
 
 | Edit | Writes |
 |---|---|
-| `setRule` | Allowed / Required: adds or removes the member's `?`; from Not allowed, the type comes back from the first option that allows the prop (else the runtime type). Not allowed: `prop?: never`. An unnamed prop is appended in the member's own style (line, indent, `;` or `,`) |
+| `setRule` | Show / Required: adds or removes the member's `?`; from Hide, the type comes back from the first option that allows the prop (else the runtime type). Hide: `prop?: never`. An unnamed prop is appended in the member's own style (line, indent, `;` or `,`) |
 | `addOption` | A copy of the last member after it, with the new literal and no `?`; the runtime controller union gains the option |
 | `renameOption` | The member's literal, the runtime union, the destructure default, `local === "x"` / `case "x":` comparisons in the frontmatter and template, and every instance that passes it (`<Button variant="x">`) |
 | `removeOption` | The member and one separator; the runtime union |
@@ -112,7 +112,7 @@ lists exactly the options, as string literals; one written another way
   `{ play, close }`). Removing also refuses comparisons, which would test an
   option that no longer exists.
 - Removing an option or a prop an instance still passes, naming the file.
-- Forbidding a prop (Not allowed, attaching for some options, switching) that
+- Forbidding a prop (Hide, attaching for some options, switching) that
   an instance passes with an option that now forbids it, naming the file.
 - Removing a prop the code still reads.
 - Adding a prop whose name is declared or in scope; a type that does not parse.

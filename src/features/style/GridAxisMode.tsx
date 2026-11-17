@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import SegmentedControl from './components/SegmentedControl';
+import SegmentedControl from '../../ui/SegmentedControl';
 import { GroupLabel } from './TypographySection';
 import { CountField } from './GridFlowControls';
 import GridTrackExpression from './GridTrackExpression';

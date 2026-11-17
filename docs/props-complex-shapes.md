@@ -34,7 +34,7 @@ Tests that hold the corpus: `test/electron/properties/variantDefaults.test.ts`,
 | Button | `type`, `disabled`, `href` | ruled by `element`, `never` in the other member | Visibility pill on element | Y |
 | Button | `variant` | controller of `Kind`, 5 options, default `"main"` | Options list, Default dropdown moves the fallback | Y |
 | Button | `emphasis` | alias union `Emphasis`, `never` for `link`, doc in one member | Visibility pill on variant | Y |
-| Button | `label` | `string` for play/close/arrow, `never` for main/link, a different doc per member, default `label ?? named[variant]` with `named = { play: pressed ? "Pause" : "Play", close: "Close", arrow: direction === "back" ? "Previous" : "Next" }` | Visibility pill (Not allowed when Variant is any of Main, Link); Default value pill ("If Variant = Play and Pressed is true ↳ Pause" …); Tooltip pill, one per option | Y: entries of `named` are edited in place |
+| Button | `label` | `string` for play/close/arrow, `never` for main/link, a different doc per member, default `label ?? named[variant]` with `named = { play: pressed ? "Pause" : "Play", close: "Close", arrow: direction === "back" ? "Previous" : "Next" }` | Visibility pill (Hide when Variant is any of Main, Link); Default value pill ("If Variant = Play and Pressed is true ↳ Pause" …); Tooltip pill, one per option | Y: entries of `named` are edited in place |
 | Button | `pressed` | `boolean` only for play | Visibility pill on variant | Y |
 | Button | `direction` | `"forward" \| "back"` only for arrow | Visibility pill on variant | Y |
 | form/Choice | `type`, `name` | controller `type` (checkbox/radio); `name` required only for radio, a different doc per member | Visibility pill: Required when Type = Radio; Tooltip pill | Y |

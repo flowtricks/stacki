@@ -229,6 +229,12 @@ export interface DataPickerProps {
    * where those groups are all there is to choose from (the loop's Source).
    */
   readonly sources?: 'folded' | 'open';
+  /**
+   * `lead`: only the rows above the search, for a field with nothing to pick
+   * but what it can do (a prop's Visibility in its settings: Create
+   * conditional). `data`, the default: the search and the tree under them.
+   */
+  readonly rows?: 'data' | 'lead';
 }
 
 export default function DataPicker(props: DataPickerProps) {
@@ -253,8 +259,12 @@ export default function DataPicker(props: DataPickerProps) {
           stepping through them previews the page against other content and
           re-reads this list against it at the same time. */}
         {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
-        <DataSearch value={query} label={translate('props.dataPicker.search')} inputRef={searchRef} onChange={setQuery} />
-        <DataPickerResults state={state} origin={origin} folding={props.sources ?? 'folded'} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
+        {props.rows !== 'lead' && (
+          <>
+            <DataSearch value={query} label={translate('props.dataPicker.search')} inputRef={searchRef} onChange={setQuery} />
+            <DataPickerResults state={state} origin={origin} folding={props.sources ?? 'folded'} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
+          </>
+        )}
         {/* Above "Write an expression…", because it is about the thing already
           bound rather than about replacing it. Only ever rendered for a picker
           opened on a specific chip — the field's own handle opens this on

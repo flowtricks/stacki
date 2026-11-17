@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { HoverTooltip } from './SegmentedControl';
+import { HoverTooltip } from '../../../ui/SegmentedControl';
 
 // The style panel's labels are friendly names ("Align", "Gap", "Y") for CSS
 // properties. Hovering one for a beat shows which property (or properties) it

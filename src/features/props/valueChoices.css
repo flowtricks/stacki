@@ -1,0 +1,38 @@
+/* Icon choices (ValueChoices.tsx): a compact group of square buttons packed to the start of
+   its row, as tall as the Dropdown beside it and on the same input fill, so three icons read
+   as one small control rather than a full-width bar. The chosen one is the neutral selected
+   look every segmented control has: a lighter fill and the icon at full strength. Never the
+   accent: blue is for primary buttons. */
+.u-segmented.value-choices {
+  --seg-pad: 2px;
+  --seg-gap: 2px;
+  flex: 0 0 auto;
+  width: fit-content;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.value-choices .u-segmented-button {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--text-dim);
+}
+.value-choices .u-segmented-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.value-choices .u-segmented-indicator {
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.value-choices .u-segmented-button.is-selected,
+.value-choices .u-segmented-button.is-selected:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+/* In the Value conditions editor's Value and Else rows the group keeps its own width. */
+.conditional-value-row > .value-choices.conditional-value-choice {
+  flex: 0 0 auto;
+}

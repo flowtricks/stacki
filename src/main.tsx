@@ -9,6 +9,8 @@ import { runAfterFirstPaint } from './app/startupMarks';
 import { bootSeed } from './lib/bootSeed';
 import { loadShell } from './app/shell/lazyShell';
 import './app/styles.css';
+// The design tokens are app-wide (:root): shared controls drawn outside the Style panel read them too.
+import './features/style/tokens.css';
 
 const rootElement = document.getElementById('root');
 assert(rootElement !== null, 'Renderer root element exists.');

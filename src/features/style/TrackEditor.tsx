@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import type { ReactNode } from 'react';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
 import { handleArrowStep } from './model/numberStep';

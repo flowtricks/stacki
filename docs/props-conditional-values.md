@@ -7,8 +7,8 @@ shows and edits all of that with controls a designer already knows, and
 writes it as the TypeScript a developer would have written.
 
 This page is the design: the model, the write rules, the UI and the limits.
-`docs/props-variant-rules.md` covers the per-option states (Allowed,
-Required, Not allowed) these build on, and `docs/props-complex-shapes.md` the
+`docs/props-variant-rules.md` covers the per-option states (Show,
+Required, Hide; written `optional`, `required`, `forbidden`) these build on, and `docs/props-complex-shapes.md` the
 real components the design is held to.
 
 ## One concept: a field set by conditions
@@ -18,21 +18,59 @@ work the same way, as Default value always has:
 
 | Field | Plain | Set by conditions | Code it writes |
 |---|---|---|---|
-| Visibility | Allowed or Required (a Dropdown) | states per condition: Allowed, Required, Not allowed | one discriminated union per controller: `label?: string`, `label: string`, `label?: never` in each member |
+| Visibility | Show or Required (icon choices) | states per condition: Show, Hide, Required | one discriminated union per controller: `label?: string`, `label: string`, `label?: never` in each member |
 | Tooltip | its words | words per option of the prop's controller | each member's doc comment |
 | Default value | its control for the kind | words per condition on any choice or switch | the destructure default, or the lookup table the component already reads |
 
-A branch beside the field's title makes it conditional; set, the field is
-the purple Conditional pill with its values on one line, opening the Value
-conditions editor the Style panel's attribute fields use
+Each field's title row works as a prop field's label row does
+(`src/features/componentProperties/PropertyFieldHead.tsx`):
+
+- **The +.** Hovering the field shows the purple dot on its top-left
+  corner; hovered, it grows into the +. A click opens the shared data picker
+  (`FieldDataPicker`, `rows: 'lead'`), whose one row here is **Create
+  conditional**: a setting reads no data, so there is no search or tree. It
+  is offered only where a condition can be said (Visibility with a choice or
+  switch to decide it; a Default value of words or options; a Tooltip on a
+  prop a controller rules).
+- **The blue label.** Once the field is set, its title is the blue reset
+  label (`ResetLabel`), whose menu's Reset clears it: Visibility's
+  conditions (no union rules the prop), a Tooltip's per-option words (every
+  option none), any Default value given (none). A table default is the
+  component's own code, so its title never clears it.
+- **The `{}`.** Every state of each field has it beside the title. Default
+  value's switches between its control (or pill) and its code, editable.
+  Visibility's and Tooltip's show the TypeScript they write, highlighted and
+  read-only (`visibilityCode`, `tooltipCode` in
+  `src/features/props/visibility.ts`): the prop's declaration, or each ruling
+  union's members with the prop as that member declares it and its doc
+  comment. A table default's shows the table read-only.
+
+Set, the field is the purple Conditional pill with its values on one line,
+opening the Value conditions editor the Style panel's attribute fields use
 (`src/features/props/ConditionalValue.tsx`): groups of conditions on other
 props, tried in order, `or` between groups, an Else. For Visibility each
-group's value is a state picker instead of words.
+group's value and the Else are the same icon choices as the plain field.
+
+### Visibility's icon choices
+
+Show (Central `eye`), Hide (`eyeOff`) and Required (`asterisk`, Figma
+variants 7289:63203 and 7289:63225, the mark the prop list already gives a
+required prop) sit side by side in the segmented control the Style panel
+uses (`src/ui/SegmentedControl.tsx`, drawn compact by
+`src/features/props/valueChoices.css`): square 26px buttons packed to the
+start of the row on the input fill, as tall as a Dropdown, each naming
+itself in the delayed tooltip. The chosen one has the neutral selected look
+(a lighter fill, the icon at full strength), never the accent. Hide on a
+plain prop opens the editor on a Hide group: hiding a prop everywhere says
+nothing, so Hide is always said under a condition; with no prop to hide by,
+one line says so and nothing is written.
 
 ## The UI
 
 - **Visibility** replaces "Controlled by". Its summary says it in words:
-  "Not allowed when Variant is any of Main, Link; Allowed otherwise".
+  "Show when Variant is none of Main, Link; Hide otherwise". A new
+  conditional Visibility starts the same way round: its first group Show,
+  its Else Hide.
   Choosing a prop in a condition is what makes it a controller; nothing is
   promoted by hand. A union the writer cannot keep in step is the pill,
   disabled, with its one word (Runtime, Complex, Nested, Shared).
@@ -53,10 +91,20 @@ group's value is a state picker instead of words.
 
 TypeScript says a prop's Visibility with discriminated unions: each union a
 controller rules it by gives every option a state, and the prop's state is
-the strictest any union gives (Not allowed over Required over Allowed). So:
+the strictest any union gives (Hide over Required over Show). So:
 
-- Reading: one group per controller and state, Not allowed first, then
-  Required, each testing the options that give it; Allowed is the Else.
+- Reading: one controller that only shows or hides the prop over its own
+  closed set of options reads **Show first**, Hide the Else, its Show group
+  naming the shorter list (`is any of` the shown options, or `is none of`
+  the hidden ones; a switch is `is true` or `is false`). That model means
+  the same as the rule for every option and writes back as the same rule, so
+  opening and closing it writes nothing, byte for byte; an edit writes the
+  rule the edited model says. Anything else (Required, several controllers,
+  a rule naming options the controller does not list) reads as written: one
+  group per controller and state, Hide first, then Required, each testing
+  the options that give it; Show is the Else.
+- A test kept as code (`index >= PAGE_SIZE`) names no prop: refused, like
+  any condition TypeScript cannot say.
 - Writing (`setVisibility`, one write and one undo): each group must be one
   condition on one choice or switch, its value a state. Each controller's
   rule for an option is the first group on it that holds there, else the

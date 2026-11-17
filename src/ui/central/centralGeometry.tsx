@@ -294,6 +294,26 @@ export const arrowUp = {
   ),
 };
 
+export const asterisk = {
+  name: 'asterisk',
+  // Figma variant 7289:63203.
+  compact: (
+    <>
+      <path d="M12.0039 2.75V21.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3.99219 7.375L20.0137 16.625" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3.99219 16.625L20.0137 7.375" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </>
+  ),
+  // Figma variant 7289:63225.
+  standard: (
+    <>
+      <path d="M12 2.5V21.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.77344 7.25L20.2279 16.75" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.77344 16.75L20.2279 7.25" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
 export const audio = {
   name: 'audio',
   // Figma variant 5703:57050.

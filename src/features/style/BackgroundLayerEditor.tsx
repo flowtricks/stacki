@@ -2,7 +2,7 @@
 // kind, its raw value and tiling (BackgroundSection.tsx).
 
 import { assert } from '../../../shared/core/assert';
-import SegmentedControl from './components/SegmentedControl';
+import SegmentedControl from '../../ui/SegmentedControl';
 import { blankLayer, layerKind, serializeLayers, type BgLayer, type LayerKind } from './model/background';
 import { gradientFitsEditor, parseGradient, serializeGradient, type GradientType } from './model/gradient';
 import { GradientCode } from './GradientCode';

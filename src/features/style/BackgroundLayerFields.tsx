@@ -5,7 +5,7 @@ import { close as centralClose } from '../../ui/central/centralGeometry';
 // (BackgroundSection.tsx).
 
 import { useEffect, useId, useState } from 'react';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import useScrub from './components/useScrub';
 import { colorOverlayImage, colorOverlayOf, serializeLayers, splitTopLevelSpaces, type BgLayer, type LayerKind } from './model/background';
 import VariableConnect from './VariableConnect';

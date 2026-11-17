@@ -16,7 +16,7 @@ import type { Attr } from '../../../shared/page/pageNode';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { CodeInline } from '../../ui/CodeBlock';
 import { BranchIcon } from '../../ui/Icons';
-import type { DropdownOption } from '../../ui/Dropdown';
+import type { ValueChoice } from './ValueChoices';
 import { emitConditionalExpression, readConditionalExpression, type ConditionalValue } from '../../editor/conditionalValue';
 import { ConditionalEditor } from './ConditionalValue';
 import { draftOf, newGroup, resultOfAttr, resultWords, conditionProps } from './conditionalModel';
@@ -44,7 +44,7 @@ export function ConditionalDefaultField(props: {
   readonly onStarted?: (() => void) | undefined;
   readonly onApply: (model: ConditionalValue) => void;
   /** Values picked from a list (a Visibility's states), and the line that says them; the default is the values' words. */
-  readonly valueChoices?: readonly DropdownOption[] | undefined;
+  readonly valueChoices?: readonly ValueChoice[] | undefined;
   readonly summary?: string | undefined;
   readonly title?: string | undefined;
   /** Shown, never edited: the one word for why (a union the writer cannot keep in step). */
@@ -102,9 +102,9 @@ export function ConditionalDefaultStart(props: {
   readonly start?: ConditionalValue | undefined;
   readonly onApply: (model: ConditionalValue) => void;
   readonly onClose: () => void;
-  readonly valueChoices?: readonly DropdownOption[] | undefined;
+  readonly valueChoices?: readonly ValueChoice[] | undefined;
   readonly title?: string | undefined;
-  /** The value a new first group gives, when the start is not seeded (a Visibility's Not allowed). */
+  /** The value a new first group gives, when the start is not seeded (a Visibility's Hide). */
   readonly firstValue?: ConditionalValue['otherwise'] | undefined;
 }) {
   const anchorRef = useRef<HTMLSpanElement>(null);

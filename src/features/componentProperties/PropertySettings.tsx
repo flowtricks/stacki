@@ -44,29 +44,25 @@ export function PropertyKindSettings({ property, onChange }: SettingsProps) {
 /** The tooltip: the description's words, without the setting tags the fields above own. */
 // Legacy `@onLabel`/`@offLabel` tags stay as written until the person edits
 // these docs; then the field offers to take them out.
-export function PropertyTooltip({ property, onChange, branch }: SettingsProps & { readonly branch?: ReactNode }) {
+export function PropertyTooltip({ property, onChange, head, code }: SettingsProps & { readonly head?: ReactNode; readonly code?: ReactNode | undefined }) {
   const translate = useTranslate();
   const [editing, setEditing] = useState(false);
   const legacy = legacyTagsOf(property.description);
   return (
     <>
-      <label>
-        {/* The branch beside the title makes the tooltip one per option of the prop's controller (PropertyVisibility.tsx). */}
-        {branch === undefined ? (
-          translate('componentProps.settings.tooltip')
-        ) : (
-          <span className="property-default-title">
-            {translate('componentProps.settings.tooltip')}
-            {branch}
-          </span>
+      <label className={head === undefined ? undefined : 'property-field'}>
+        {/* The head holds the {} and, for a prop a controller rules, the + that makes its tooltip one per option (PropertyVisibility.tsx). */}
+        {head ?? translate('componentProps.settings.tooltip')}
+        {/* Its `{}` view, read-only, in place of the words. */}
+        {code ?? (
+          <AutoTextarea
+            value={tooltipOf(property.description)}
+            maxLength={PROPERTY_LIMITS.textCharsMax}
+            placeholder={translate('componentProps.settings.tooltipPlaceholder')}
+            onFocus={() => setEditing(true)}
+            onChange={(event) => onChange(withTooltip(property.description, event.target.value))}
+          />
         )}
-        <AutoTextarea
-          value={tooltipOf(property.description)}
-          maxLength={PROPERTY_LIMITS.textCharsMax}
-          placeholder={translate('componentProps.settings.tooltipPlaceholder')}
-          onFocus={() => setEditing(true)}
-          onChange={(event) => onChange(withTooltip(property.description, event.target.value))}
-        />
       </label>
       {editing && legacy.length > 0 && (
         <p className="property-help property-legacy-tags">

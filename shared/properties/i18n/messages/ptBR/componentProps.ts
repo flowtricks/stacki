@@ -42,6 +42,8 @@ export const messages = {
   'componentProps.defaults.return': 'Voltar aos padrões',
   'componentProps.defaults.saveFailed': 'Não foi possível salvar os padrões do componente.',
   'componentProps.defaults.saved': 'Padrões salvos neste projeto.',
+  'componentProps.defaults.tableReset':
+    'O componente calcula este padrão com a própria tabela: altere o padrão de cada opção nas condições, ou a tabela no código.', // review
   'componentProps.dialog.close': 'Fechar configurações da propriedade',
   'componentProps.dialog.loading': 'Carregando propriedade…',
   'componentProps.dialog.title': 'Configurações da propriedade',
@@ -117,6 +119,8 @@ export const messages = {
   'componentProps.settings.numberMalformed': 'Digite um número ou deixe vazio para nenhum.',
   'componentProps.settings.tooltip': 'Dica',
   'componentProps.settings.tooltipPlaceholder': 'Descreva como usar esta propriedade…',
+  'componentProps.settings.useControls': 'Usar os controles', // review
+  'componentProps.settings.viewCode': 'Ver o TypeScript', // review
   'componentProps.share.components': 'Componentes',
   'componentProps.share.declaredIn': 'Declarada em',
   'componentProps.share.defaults': 'Padrões',
@@ -162,11 +166,12 @@ export const messages = {
   'componentProps.variants.reason.shape': 'Complexo', // review
   'componentProps.variants.reason.shared': 'Compartilhado', // review
   'componentProps.variants.removeFallback': '{value} é o padrão. Torne outra opção o padrão primeiro.', // review
-  'componentProps.variants.state.forbidden': 'Não permitido', // review
-  'componentProps.variants.state.optional': 'Permitido', // review
+  'componentProps.variants.state.forbidden': 'Ocultar', // review
+  'componentProps.variants.state.optional': 'Mostrar', // review
   'componentProps.variants.state.required': 'Obrigatório', // review
   'componentProps.variants.switchForbidsAll': 'Nenhuma opção de {name} permitiria esta propriedade.', // review
   'componentProps.visibility.combination': 'O TypeScript não consegue expressar essa combinação. Dê a cada escolha seus próprios grupos.', // review
+  'componentProps.visibility.hideNeedsCondition': 'Ocultar precisa de uma condição: adicione uma propriedade de opções ou um interruptor pelo qual ocultar.', // review
   'componentProps.visibility.otherwise': '{state} caso contrário', // review
   'componentProps.visibility.shape': 'Cada grupo precisa de uma condição sobre uma escolha ou um interruptor.', // review
   'componentProps.visibility.subject': '{name} não é uma escolha nem um interruptor.', // review

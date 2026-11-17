@@ -210,6 +210,30 @@
 .property-default:hover .prop-expr-toggle:not(.on) {
   color: var(--text-dim);
 }
+/* A setting that can be set by conditions has a prop field's + (PropertyFieldHead.tsx):
+   hidden until its field is hovered, then centred on the control's top-left corner,
+   6px under the title row as the fields' gap is, so the dot sits where a prop
+   field's does. Hovering the dot grows it into the +, which is the click. */
+.property-field-head {
+  position: relative;
+}
+.property-field-head > .bind-handle {
+  left: -6px;
+  bottom: -12px;
+}
+.property-field-head > .bind-handle:hover:not(:disabled),
+.property-field-head > .bind-handle.on {
+  left: -9px;
+  bottom: -15px;
+}
+.property-field:hover > .property-field-head > .bind-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Unset, the title sits as Kind's does, its {} 4px after the words; set, the blue fill keeps its padding. */
+.property-field-head > .prop-label:not(.set) {
+  padding-right: 0;
+}
 .property-type .dd-trigger,
 .property-default .dd-trigger {
   width: 100%;

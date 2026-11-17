@@ -15,7 +15,13 @@ export interface ResetMenuProps {
   readonly resetDisabledReason?: string | undefined;
   readonly onClose: () => void;
 }
-export function ResetLabel(props: { readonly label: React.ReactNode; readonly active: boolean; readonly onReset: () => void }) {
+export function ResetLabel(props: {
+  readonly label: React.ReactNode;
+  readonly active: boolean;
+  readonly onReset: () => void;
+  /** Why this value cannot be reset from its label (a default the component's own code computes): the menu shows Reset, disabled, with this reason. */
+  readonly resetDisabledReason?: string | undefined;
+}) {
   const translate = useTranslate();
   const [position, setPosition] = useState<ResetMenuProps['position']>();
   const layer = useRef<HTMLElement>(popupLayer());
@@ -55,7 +61,14 @@ export function ResetLabel(props: { readonly label: React.ReactNode; readonly ac
       {props.active &&
         position &&
         createPortal(
-          <ResetMenu position={position} onReset={reset} resetLabel={translate('ui.reset')} unbindLabel="" onClose={() => setPosition(undefined)} />,
+          <ResetMenu
+            position={position}
+            onReset={reset}
+            resetLabel={translate('ui.reset')}
+            unbindLabel=""
+            resetDisabledReason={props.resetDisabledReason}
+            onClose={() => setPosition(undefined)}
+          />,
           layer.current,
         )}
     </>

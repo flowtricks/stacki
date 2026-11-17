@@ -2,7 +2,7 @@ import { centralIcon } from '../../ui/central/CentralIcon';
 import { help as centralHelp } from '../../ui/central/centralGeometry';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import DragSlider from './components/DragSlider';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import FieldLabel from './components/FieldLabel';

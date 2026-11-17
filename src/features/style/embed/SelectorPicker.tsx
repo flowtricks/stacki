@@ -15,7 +15,7 @@ import { assert } from '../../../../shared/core/assert';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { useHoverTip } from '../components/CssPropertyTip';
-import { type SegmentedOption } from '../components/SegmentedControl';
+import { type SegmentedOption } from '../../../ui/SegmentedControl';
 import { CodeInline } from '../../../ui/CodeBlock';
 import { selectorKey, selectorsMatch } from '../model/resolved';
 import { SpinnerIcon } from './EditorBasics';

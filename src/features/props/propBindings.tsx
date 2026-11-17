@@ -33,8 +33,11 @@ export {
   tableEntries,
   type TableDefault,
 } from './conditionalDefault';
-export { stateOf, visibilityConditional, visibilityRules, type VisibilityController, type VisibilityProblem } from './visibility';
+export { stateOf, tooltipCode, visibilityCode, visibilityConditional, visibilityRules, type VisibilityController, type VisibilityProblem } from './visibility';
 export { conditionWords, conditionProps } from './conditionalModel';
+// A prop's Visibility in its settings is the icon choices the Value conditions editor's states are (ValueChoices.tsx).
+export { ValueChoiceSwitch, type ValueChoice } from './ValueChoices';
+export { dataPickerPosition } from './dataPickerPosition';
 export {
   referencedName,
   SourceEditButton,

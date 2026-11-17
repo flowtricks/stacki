@@ -3,6 +3,7 @@ import {
   add as centralAdd,
   arrowDown as centralArrowDown,
   arrowRotateClockwise as centralArrowRotateClockwise,
+  asterisk as centralAsterisk,
   audio as centralAudio,
   braces as centralBraces,
   branch as centralBranch,
@@ -304,6 +305,9 @@ export const DragIcon = centralIcon(centralDrag);
 
 // An eye with a slash distinguishes hidden nodes in the Navigator.
 export const HideIcon = centralIcon(centralEyeOff);
+
+// The asterisk a required prop is marked with: a Visibility of Required.
+export const RequiredIcon = centralIcon(centralAsterisk);
 
 // The slash crosses the cursor with gaps so both shapes read at Navigator size.
 export const PointerEventsNoneIcon = (props: IconProps) => (

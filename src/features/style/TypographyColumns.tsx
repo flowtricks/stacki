@@ -9,7 +9,7 @@ import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
-import SegmentedControl from './components/SegmentedControl';
+import SegmentedControl from '../../ui/SegmentedControl';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import ProvenanceList from './ProvenanceList';

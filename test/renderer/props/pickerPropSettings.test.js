@@ -157,8 +157,7 @@ const pause = () => act(async () => new Promise((resolve) => setTimeout(resolve,
 const click = (element) => act(async () => element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
 // Visibility: Required, picked from its Dropdown as a person picks it.
 const pickRequired = async () => {
-  await click(document.querySelector('.property-visibility .dd-trigger'));
-  await click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Required'));
+  await click(document.querySelector('.property-visibility [role="radio"][aria-label="Required"]'));
 };
 const type = (input, value) =>
   act(async () => {
@@ -289,8 +288,12 @@ test('the form loads every option a list prop has', async () => {
   await openFeatures();
   assert.equal(labelled('Name').querySelector('input').value, 'features');
   assert.match(form().querySelector('.property-type .dd-trigger').textContent, /List/);
-  // Required is the Visibility field's plain state (PropertyVisibility.tsx): Allowed until picked.
-  assert.equal(form().querySelector('.property-visibility .dd-trigger').textContent.trim(), 'Allowed');
+  // Required is the Visibility field's plain state (PropertyVisibility.tsx): Show until picked.
+  const shown = [...form().querySelectorAll('.property-visibility [role="radio"]')].filter((radio) => radio.getAttribute('aria-checked') === 'true');
+  assert.deepEqual(
+    shown.map((radio) => radio.getAttribute('aria-label')),
+    ['Show'],
+  );
   assert.ok(form().querySelector('input[aria-label="Readonly"]') === null, 'Readonly is not offered');
   assert.equal(labelled('Tooltip').querySelector('textarea').value, 'The plan’s features.'.replace('’', "'"));
   assert.deepEqual(

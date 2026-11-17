@@ -88,6 +88,8 @@ export interface FieldDataPickerProps extends BindingContextProps {
   readonly onWrite?: (() => void) | undefined;
   /** Offers "Create conditional" in a component, which opens the field's Value conditions editor. Absent, the row is not drawn. */
   readonly onConditional?: (() => void) | undefined;
+  /** `lead`: the picker is only its rows above the search (Create conditional), for a field with no data to pick (DataPicker.tsx). */
+  readonly rows?: 'data' | 'lead' | undefined;
   readonly onClose: () => void;
 }
 export interface BindFieldProps extends BindingContextProps {

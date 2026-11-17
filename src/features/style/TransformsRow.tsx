@@ -8,7 +8,7 @@ import { parseHideable, serializeHideable, type Hideable } from './model/hideabl
 import TransformSettings from './TransformSettings';
 import { takeSelfPerspective, withSelfPerspective } from './model/transformSettings';
 import DragSlider from './components/DragSlider';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import useScrub from './components/useScrub';
 import LayerList from './LayerList';
 import LayerPopover from './LayerPopover';

@@ -42,6 +42,8 @@ export const messages = {
   'componentProps.defaults.return': 'Volver a los valores predeterminados',
   'componentProps.defaults.saveFailed': 'No se pudieron guardar los valores predeterminados del componente.',
   'componentProps.defaults.saved': 'Valores predeterminados guardados en este proyecto.',
+  'componentProps.defaults.tableReset':
+    'El componente calcula este valor por defecto con su propia tabla: cambia el de cada opción en las condiciones, o la tabla en el código.', // review
   'componentProps.dialog.close': 'Cerrar ajustes de la propiedad',
   'componentProps.dialog.loading': 'Cargando propiedad…',
   'componentProps.dialog.title': 'Ajustes de la propiedad',
@@ -118,6 +120,8 @@ export const messages = {
   'componentProps.settings.numberMalformed': 'Escribe un número o déjalo vacío para ninguno.',
   'componentProps.settings.tooltip': 'Información emergente',
   'componentProps.settings.tooltipPlaceholder': 'Describe cómo usar esta propiedad…',
+  'componentProps.settings.useControls': 'Usar los controles', // review
+  'componentProps.settings.viewCode': 'Ver el TypeScript', // review
   'componentProps.share.components': 'Componentes',
   'componentProps.share.declaredIn': 'Declarada en',
   'componentProps.share.defaults': 'Valores predeterminados',
@@ -162,11 +166,12 @@ export const messages = {
   'componentProps.variants.reason.shape': 'Complejo', // review
   'componentProps.variants.reason.shared': 'Compartido', // review
   'componentProps.variants.removeFallback': '{value} es la predeterminada. Haz antes predeterminada otra opción.', // review
-  'componentProps.variants.state.forbidden': 'No permitido', // review
-  'componentProps.variants.state.optional': 'Permitido', // review
+  'componentProps.variants.state.forbidden': 'Ocultar', // review
+  'componentProps.variants.state.optional': 'Mostrar', // review
   'componentProps.variants.state.required': 'Obligatorio', // review
   'componentProps.variants.switchForbidsAll': 'Ninguna opción de {name} permitiría esta propiedad.', // review
   'componentProps.visibility.combination': 'TypeScript no puede expresar esta combinación. Da a cada opción sus propios grupos.', // review
+  'componentProps.visibility.hideNeedsCondition': 'Ocultar necesita una condición: añade una propiedad de opciones o un interruptor por la que ocultarla.', // review
   'componentProps.visibility.otherwise': '{state} en otro caso', // review
   'componentProps.visibility.shape': 'Cada grupo necesita una condición sobre una opción o un interruptor.', // review
   'componentProps.visibility.subject': '{name} no es una opción ni un interruptor.', // review

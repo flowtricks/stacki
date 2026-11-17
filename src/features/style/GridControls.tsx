@@ -6,7 +6,7 @@ import { GroupLabel } from './TypographySection';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
 import Select, { type SelectOption } from './components/Select';
-import { HoverTooltip } from './components/SegmentedControl';
+import { HoverTooltip } from '../../ui/SegmentedControl';
 import GridSettings from './GridSettings';
 import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';

@@ -34,7 +34,7 @@ import { CodeTokens } from '../../ui/CodeBlock';
 import type { CodeLine, CodeToken } from '../../ui/codeHighlight';
 import { declarationTokens, styleDeclarations } from './StyleEditor';
 import Dropdown from '../../ui/Dropdown';
-import type { DropdownOption } from '../../ui/Dropdown';
+import { ValueChoiceSwitch, type ValueChoice } from './ValueChoices';
 import MultiSelect from '../../ui/MultiSelect';
 import { BranchIcon, CloseIcon, CornerIcon, DragIcon, PlusIcon, TrashIcon, UnlinkIcon } from '../../ui/Icons';
 import { BindHandle, FieldDataPicker } from './BindingEditors';
@@ -279,11 +279,11 @@ export interface ConditionalEditorProps {
   readonly onApply: (value: Attr | undefined) => void;
   readonly onClose: () => void;
   /**
-   * A value picked from a list rather than typed (a prop's Visibility:
-   * Allowed, Required, Not allowed): each group's value and the Else are
-   * that Dropdown, its option's value the words the branch gives.
+   * A value picked from a few icon choices rather than typed (a prop's
+   * Visibility: Show, Hide, Required): each group's value and the Else are
+   * those choices side by side, a choice's value the words the branch gives.
    */
-  readonly valueChoices?: readonly DropdownOption[] | undefined;
+  readonly valueChoices?: readonly ValueChoice[] | undefined;
   /** The editor's title, when it edits something other than an attribute's value. */
   readonly title?: string | undefined;
 }
@@ -458,7 +458,7 @@ function GroupList(props: {
   readonly catalog: readonly ConditionProp[];
   readonly bindContext: RichContext | undefined;
   readonly language: ValueLanguage;
-  readonly valueChoices: readonly DropdownOption[] | undefined;
+  readonly valueChoices: readonly ValueChoice[] | undefined;
   readonly setDraft: (change: (draft: ConditionalDraft) => ConditionalDraft) => void;
 }) {
   const { draft, setDraft } = props;
@@ -518,7 +518,7 @@ function GroupEditor(props: {
   readonly catalog: readonly ConditionProp[];
   readonly bindContext: RichContext | undefined;
   readonly language: ValueLanguage;
-  readonly valueChoices: readonly DropdownOption[] | undefined;
+  readonly valueChoices: readonly ValueChoice[] | undefined;
   readonly row: HTMLAttributes<HTMLElement> & { readonly ref: RefCallback<HTMLElement> };
   readonly dragging: boolean;
   readonly gap: 'before' | 'after' | undefined;
@@ -914,11 +914,11 @@ export function ResultField(props: {
   );
 }
 
-// "↳ Value [Dropdown]": a branch value picked from a list, laid out as the typed value's row is.
+// "↳ Value [Show | Hide | Required]": a branch value picked from icon choices, laid out as the typed value's row is.
 function ChoiceResult(props: {
   readonly label: string;
   readonly result: ConditionalResult;
-  readonly choices: readonly DropdownOption[];
+  readonly choices: readonly ValueChoice[];
   readonly onChange: (result: ConditionalResult) => void;
 }) {
   const translate = useTranslate();
@@ -927,11 +927,11 @@ function ChoiceResult(props: {
     <div className="conditional-value-row">
       <CornerIcon size={12} />
       <span className="conditional-value-label">{translate('props.conditional.valueLabel')}</span>
-      <Dropdown
-        ariaLabel={props.label}
+      <ValueChoiceSwitch
+        label={props.label}
         className="conditional-value-choice"
         value={value}
-        options={props.choices}
+        choices={props.choices}
         onChange={(text) => props.onChange({ kind: 'text', text })}
       />
     </div>

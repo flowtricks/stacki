@@ -12,7 +12,7 @@ import { PropertyShareNotice, shareRenameFiles } from './PropertyShareNotice';
 import type { PropertyOptionChange } from './PropertyOptions';
 import { PropertyType, opensOnCode, type CodeMode } from './PropertyType';
 import { PropertyDefault, propertyDefaultText } from './PropertyDefault';
-import { PropertyDefaultNote, PropertyKindSettings, PropertyTooltip } from './PropertySettings';
+import { PropertyDefaultNote, PropertyKindSettings } from './PropertySettings';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 export { literalOptions };
 import { useRef, useState, type ReactNode } from 'react';
@@ -50,6 +50,7 @@ interface PropertyEditorProps {
   readonly variantDefaults?: readonly VariantDefault[] | undefined;
   readonly properties?: readonly ComponentProperty[] | undefined;
 }
+const NO_PROPERTIES: readonly ComponentProperty[] = [];
 // Types loose enough that a list setting's own type only says more.
 const LOOSE_TYPES = new Set(['', 'unknown', 'any', 'object', 'Record<string, unknown>']);
 
@@ -361,19 +362,16 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
         />
       )}
       <PropertyDefaultNote property={property} />
-      {variants !== undefined && defaults !== undefined ? (
-        <PropertyTooltipField
-          name={form.savedName}
-          property={property}
-          properties={defaults.properties}
-          groups={variants.groups}
-          onChange={(description) => update('description', description)}
-          run={variantRun.run}
-          onProblem={report}
-        />
-      ) : (
-        <PropertyTooltip property={property} onChange={(description) => update('description', description)} />
-      )}
+      {/* Every prop's Tooltip has its {} view; one a controller rules can also be set per option. */}
+      <PropertyTooltipField
+        name={form.savedName}
+        property={property}
+        properties={defaults?.properties ?? NO_PROPERTIES}
+        groups={variants !== undefined && defaults !== undefined ? variants.groups : undefined}
+        onChange={(description) => update('description', description)}
+        run={variantRun.run}
+        onProblem={report}
+      />
       {creating
         ? error && <ErrorToast message={error} />
         : error && (

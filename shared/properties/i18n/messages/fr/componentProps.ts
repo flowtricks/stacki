@@ -42,6 +42,8 @@ export const messages = {
   'componentProps.defaults.return': 'Revenir aux valeurs par défaut',
   'componentProps.defaults.saveFailed': 'Impossible d’enregistrer les valeurs par défaut du composant.',
   'componentProps.defaults.saved': 'Valeurs par défaut enregistrées dans ce projet.',
+  'componentProps.defaults.tableReset':
+    'Le composant calcule cette valeur par défaut avec sa propre table : modifiez celle de chaque option dans les conditions, ou la table dans le source.', // review
   'componentProps.dialog.close': 'Fermer les réglages de la propriété',
   'componentProps.dialog.loading': 'Chargement de la propriété…',
   'componentProps.dialog.title': 'Réglages de la propriété',
@@ -117,6 +119,8 @@ export const messages = {
   'componentProps.settings.numberMalformed': 'Saisissez un nombre, ou laissez vide pour aucun.',
   'componentProps.settings.tooltip': 'Info-bulle',
   'componentProps.settings.tooltipPlaceholder': 'Décrivez comment utiliser cette propriété…',
+  'componentProps.settings.useControls': 'Utiliser les contrôles', // review
+  'componentProps.settings.viewCode': 'Voir le TypeScript', // review
   'componentProps.share.components': 'Composants',
   'componentProps.share.declaredIn': 'Déclarée dans',
   'componentProps.share.defaults': 'Valeurs par défaut',
@@ -163,11 +167,12 @@ export const messages = {
   'componentProps.variants.reason.shape': 'Complexe', // review
   'componentProps.variants.reason.shared': 'Partagé', // review
   'componentProps.variants.removeFallback': '{value} est l’option par défaut. Choisissez d’abord une autre option par défaut.', // review
-  'componentProps.variants.state.forbidden': 'Non autorisé', // review
-  'componentProps.variants.state.optional': 'Autorisé', // review
+  'componentProps.variants.state.forbidden': 'Masquer', // review
+  'componentProps.variants.state.optional': 'Afficher', // review
   'componentProps.variants.state.required': 'Obligatoire', // review
   'componentProps.variants.switchForbidsAll': 'Aucune option de {name} n’autoriserait cette propriété.', // review
   'componentProps.visibility.combination': 'TypeScript ne peut pas exprimer cette combinaison. Donnez à chaque choix ses propres groupes.', // review
+  'componentProps.visibility.hideNeedsCondition': 'Masquer demande une condition : ajoutez une propriété à choix ou un interrupteur selon lequel masquer.', // review
   'componentProps.visibility.otherwise': '{state} sinon', // review
   'componentProps.visibility.shape': 'Chaque groupe a besoin d’une condition sur un choix ou un interrupteur.', // review
   'componentProps.visibility.subject': '{name} n’est ni un choix ni un interrupteur.', // review

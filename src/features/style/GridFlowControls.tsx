@@ -5,7 +5,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 // (GridControls.tsx).
 
 import { useEffect, useRef, useState } from 'react';
-import SegmentedControl from './components/SegmentedControl';
+import SegmentedControl from '../../ui/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
 import { parseFlow, buildFlow, isPresetFlow } from './gridTracks';

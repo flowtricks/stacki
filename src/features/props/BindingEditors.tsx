@@ -296,7 +296,19 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
   );
 }
 
-export function FieldDataPicker({ pos: position, bindContext, current, tree, seed, onPick, onBindNew, onWrite, onConditional, onClose }: FieldDataPickerProps) {
+export function FieldDataPicker({
+  pos: position,
+  bindContext,
+  current,
+  tree,
+  seed,
+  onPick,
+  onBindNew,
+  onWrite,
+  onConditional,
+  rows,
+  onClose,
+}: FieldDataPickerProps) {
   // In a component, the field's own props come first and a new one can be
   // made for it; on a page there is no component to give a prop to, and the
   // picker is as it always was.
@@ -356,13 +368,14 @@ export function FieldDataPicker({ pos: position, bindContext, current, tree, see
           {...definedFields({ onWrite })}
           footer={!!onWrite}
           lead={
-            offer === undefined ? undefined : (
+            offer === undefined && onConditional === undefined ? undefined : (
               <>
-                <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />
+                {offer !== undefined && <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />}
                 {onConditional !== undefined && <ConditionalRow onOpen={onConditional} />}
               </>
             )
           }
+          rows={rows ?? 'data'}
           propSettings={host?.propSettings}
         />
       )}
@@ -389,6 +402,7 @@ function NewPropRow({ host, seed, onOpen }: { readonly host: NewPropHost; readon
 
 // "Create conditional": under the new property, in a component only, for a
 // field whose value can be one of several depending on the component's props.
+// A prop's own settings (Visibility, Default value, Tooltip) offer it alone.
 function ConditionalRow({ onOpen }: { readonly onOpen: () => void }) {
   const translate = useTranslate();
   return (

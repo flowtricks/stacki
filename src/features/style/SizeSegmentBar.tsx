@@ -11,6 +11,8 @@ import { useCustomFocus, useDebouncedLive } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
 import { useFollowingDraft } from './SizeKit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+// Its bar is drawn with the segmented control's classes (u-segmented).
+import '../../ui/segmentedControl.css';
 
 // Editable free-value field (unset, var(), …) shown in a segment bar's custom mode.
 export function SegmentCustomInput({

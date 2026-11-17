@@ -473,7 +473,8 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
     .find((label) => label.textContent.trim().startsWith('Tooltip'))
     .querySelector('textarea');
   await setValue(tooltip, 'Choose space between items.');
-  await act(async () => document.querySelector('.property-flags input').click());
+  // An existing prop's Required is its Visibility's Required choice (PropertyVisibility.tsx).
+  await act(async () => document.querySelector('.property-visibility [role="radio"][aria-label="Required"]').click());
   await closeEditor();
   const editedGap = data.properties.find((field) => field.name === 'spacing');
   assert.equal(editedGap.required, true);

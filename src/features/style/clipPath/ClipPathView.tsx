@@ -17,7 +17,7 @@ const ResetGlyph = centralIcon(centralArrowRotateCounterClockwise, 12);
 import { createPortal } from 'react-dom';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { CodeEditor } from '../components/CssCodeEditor';
-import SegmentedControl from '../components/SegmentedControl';
+import SegmentedControl from '../../../ui/SegmentedControl';
 import ClassPicker from '../components/ClassPicker';
 import { type ShapeFitMode, type ShapeScaleOptionOverrides } from './clipPathTypes';
 import {

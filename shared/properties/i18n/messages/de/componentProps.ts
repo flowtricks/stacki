@@ -43,6 +43,8 @@ export const messages = {
   'componentProps.defaults.return': 'Zurück zu den Standardwerten',
   'componentProps.defaults.saveFailed': 'Die Standardwerte der Komponente konnten nicht gespeichert werden.',
   'componentProps.defaults.saved': 'Standardwerte in diesem Projekt gespeichert.',
+  'componentProps.defaults.tableReset':
+    'Die Komponente berechnet diesen Standard aus ihrer eigenen Tabelle: Ändere den Standard jeder Option in den Bedingungen oder die Tabelle im Quelltext.', // review
   'componentProps.dialog.close': 'Eigenschaftseinstellungen schließen',
   'componentProps.dialog.loading': 'Eigenschaft wird geladen …',
   'componentProps.dialog.title': 'Eigenschaftseinstellungen',
@@ -119,6 +121,8 @@ export const messages = {
   'componentProps.settings.numberMalformed': 'Gib eine Zahl ein oder lass das Feld leer für keine.',
   'componentProps.settings.tooltip': 'Tooltip', // same
   'componentProps.settings.tooltipPlaceholder': 'Beschreibe, wie diese Eigenschaft verwendet wird …',
+  'componentProps.settings.useControls': 'Steuerelemente verwenden', // review
+  'componentProps.settings.viewCode': 'TypeScript anzeigen', // review
   'componentProps.share.components': 'Komponenten',
   'componentProps.share.declaredIn': 'Deklariert in',
   'componentProps.share.defaults': 'Standardwerte',
@@ -164,11 +168,13 @@ export const messages = {
   'componentProps.variants.reason.shape': 'Komplex', // review
   'componentProps.variants.reason.shared': 'Geteilt', // review
   'componentProps.variants.removeFallback': '{value} ist der Standard. Mache zuerst eine andere Option zum Standard.', // review
-  'componentProps.variants.state.forbidden': 'Nicht erlaubt', // review
-  'componentProps.variants.state.optional': 'Erlaubt', // review
+  'componentProps.variants.state.forbidden': 'Ausblenden', // review
+  'componentProps.variants.state.optional': 'Anzeigen', // review
   'componentProps.variants.state.required': 'Erforderlich', // review
   'componentProps.variants.switchForbidsAll': 'Keine Option von {name} würde diese Eigenschaft erlauben.', // review
   'componentProps.visibility.combination': 'TypeScript kann diese Kombination nicht ausdrücken. Gib jeder Auswahl eigene Gruppen.', // review
+  'componentProps.visibility.hideNeedsCondition':
+    'Ausblenden braucht eine Bedingung: Füge eine Auswahl- oder Schalter-Eigenschaft hinzu, nach der ausgeblendet wird.', // review
   'componentProps.visibility.otherwise': 'Sonst {state}', // review
   'componentProps.visibility.shape': 'Jede Gruppe braucht eine Bedingung auf einer Auswahl oder einem Schalter.', // review
   'componentProps.visibility.subject': '{name} ist keine Auswahl und kein Schalter.', // review

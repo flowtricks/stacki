@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { CodeEditor } from '../components/CssCodeEditor';
 import { ruleChainText, ruleTextFromChain } from '../model/cssRuleText';
-import SegmentedControl, { type SegmentedOption } from '../components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../../ui/SegmentedControl';
 import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { getHost } from '../model/host';
 import { breakpointLabel } from '../../../lib/breakpointLabel';
