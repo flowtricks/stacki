@@ -550,9 +550,8 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       onDesktopCanvas={app.showDesktopCanvas}
       onRecordUndo={app.pushCommand}
       onOpenStyleTagSettings={openStyleTagSettings}
-      // Each write names the element the panel is SHOWING, which is not the app's selection
-      // while the panel holds the previous element across a switch (StylePanel
-      // useSwitchHold): the edit lands on the element the person sees.
+      // Each write names the element the panel showed when it was made (StylePanel
+      // useShownElementWrites), so a write in flight does not follow a new selection.
       onAddClass={(name, placement, nodeId) => app.addClassToNode(nodeId, name, placement, app.pathFor(nodeId))}
       onAddStyleBlock={(request, nodeId) => app.addStyleBlock(nodeId, request, app.pathFor(nodeId))}
       onRemoveClass={(name, nodeId) => app.removeClassFromNode(nodeId, name, app.pathFor(nodeId))}

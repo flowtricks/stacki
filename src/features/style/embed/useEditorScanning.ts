@@ -10,24 +10,22 @@ import { computeRuleModel } from '../model/cascade';
 import { type MatchTarget } from '../model/selectors';
 import { getHost, onHostChange, type HostState } from '../model/host';
 import {
-  askCanvasAbout,
   buildSnapshot,
   onDocsReloaded,
   rebuildRules,
   primeDomMatches,
-  resolveTarget,
   scanHasElement,
   serializeElementId,
   scanPage,
   syncNodeDocuments,
   webflowApi,
 } from '../model/webflow';
-import { nodeById } from '../model/webflowElement';
+import { elementSelectionKey } from '../model/webflowElement';
 import { assert } from '../../../../shared/core/assert';
 import { onCanvasRendered } from '../../../editor/canvasQuery';
 import type { ElementSnapshot } from '../model/styleTypes';
 import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
-import { readScanSnapshot, registerSnapshotPreparer, rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
+import { readScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
 import {
   placeholdersFor,
   readDesignerState,
@@ -43,7 +41,6 @@ import {
   nativeSignature,
   authoredClasses,
   contentForCurrentTree,
-  scanStateFor,
 } from './editorModel';
 import { useEditorRefs, useScanState, useSelectionState, useNativeState, useContentRebuild, useApplyResolve } from './useEditorFoundation';
 
@@ -269,7 +266,7 @@ export function useElementReset(
   // can collide across elements), then the tokens effect re-defaults it.
   const resetForElement = useCallback(
     (element: unknown) => {
-      const elementKey = element ? serializeElementId(element) : '';
+      const elementKey = elementSelectionKey(element);
       if (elementKey === selectedElementKeyRef.current) {
         return;
       }
@@ -330,69 +327,6 @@ export function useElementReset(
   );
   return { resetForElement };
 }
-
-// Resolve an element the panel is about to show, without selecting it, and remember the
-// settled answer (scanSnapshotCache.ts). StylePanel holds the current element on screen
-// while this runs, then switches: the new element's header, chips and fields then come
-// from that one answer in one render, instead of a blank model filled in steps. It is the
-// settled half of applyResolve (the canvas's answer, never a source-only step), against
-// the content the panel already holds; it touches no state, so the element on screen is
-// undisturbed. With no content yet, or a node the scan does not know (just inserted),
-// there is nothing to resolve against and the switch paints the way it always has.
-export function useSnapshotPreparer(editorRefs: ReturnType<typeof useEditorRefs>): void {
-  const { contentRef, docsRef, pageDocsRef } = editorRefs;
-  // One resolve of `nodeId`: remembered, nothing to resolve against, or stale (the CSS
-  // changed while the page answered, so the answer was dropped).
-  const prepareOnce = async (nodeId: string): Promise<'remembered' | 'unavailable' | 'stale'> => {
-    const content = contentRef.current;
-    const element = nodeById(nodeId);
-    if (content === undefined || element === undefined) {
-      return 'unavailable';
-    }
-    if (content.partial === true || !scanHasElement(content.scan, element)) {
-      return 'unavailable';
-    }
-    const elementKey = serializeElementId(element);
-    assert(elementKey === nodeId, 'useSnapshotPreparer: a node is keyed by its id');
-    // Resolved afresh even when an answer is remembered: the entry is keyed by the CSS, not by
-    // the classes the page gives the element at runtime, so one remembered before a script
-    // added a class drew rows the fresh answer then took away (a `--_mw` row on the heading for
-    // a frame). The hold waits for the computed values anyway, and this round trip runs beside
-    // them.
-    const key = scanSnapshotKey(elementKey, docsRef.current);
-    const asked = await askCanvasAbout(elementKey, content.rules);
-    const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
-    await primeDomMatches(target, content.rules, asked);
-    const model = await computeRuleModel(content.rules, target);
-    if (scanSnapshotKey(elementKey, docsRef.current) !== key) {
-      return 'stale';
-    }
-    const scan = scanStateFor(content, { rootSnapshot, model, settled: true }, pageDocsRef.current.length);
-    assert(scan.settled, 'useSnapshotPreparer: only a settled answer is remembered');
-    rememberScanSnapshot(key, { scan, target, classList: rootSnapshot.classList, primed: { target, key: selectorKeyOf(content.rules) } });
-    return 'remembered';
-  };
-  useEffect(
-    () =>
-      registerSnapshotPreparer(async (nodeId) => {
-        // A background rescan can replace the content while the page answers. The answer
-        // is still good when the stylesheets' text did not change (the cache key says so);
-        // when it did, the element is resolved again against the new CSS, a bounded few times.
-        for (let attempt = 0; attempt < PREPARE_ATTEMPTS_MAX; attempt += 1) {
-          const outcome = await prepareOnce(nodeId);
-          if (outcome !== 'stale') {
-            return;
-          }
-        }
-      }),
-    // prepareOnce reads only these refs, so a new closure each render changes nothing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- registered once per editor
-    [contentRef, docsRef, pageDocsRef],
-  );
-}
-
-// How many times a switch's read-ahead resolves again because the CSS changed under it.
-const PREPARE_ATTEMPTS_MAX = 3;
 
 // Keep the embeds scanned while no element is selected.
 export function useScanWithoutSelection(

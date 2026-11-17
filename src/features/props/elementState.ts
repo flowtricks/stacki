@@ -13,7 +13,7 @@ import { createPropRules } from './propRules';
 import { visibleAttributeNames } from '../../../shared/core/internalAttributes';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { VOID_TAGS } from '../../editor/elementSchemas';
 import { isInlineOnly } from './RichContent';
 import { type ElementPropsPanelProps } from './propsPanelTypes';
@@ -179,8 +179,14 @@ export function useElementAssets(props: ElementPropsPanelProps) {
   // fills those in when the component has them. One edit, one undo.
   // The size of the image currently in `src`. width/height fall back to it
   // when unset, so it is what those fields should show as their placeholder.
-  const [sourceDimensions, setSourceDimensions] = useState<AssetDimensions | undefined>(undefined);
-  useEffect(() => setSourceDimensions(undefined), [node?.id]);
+  // Keyed by the node in its file, and read while rendering: reset in an effect, the next
+  // image drew the previous one's size as its placeholders for a frame, and a node at the
+  // same path in another file (entering a component) kept it. A late read for a node no
+  // longer shown carries its old key and is ignored.
+  const dimensionsKey = `${filePath ?? ''}\u0000${node.id}`;
+  const [dimensions, setDimensions] = useState<{ readonly key: string; readonly value: AssetDimensions | undefined }>({ key: dimensionsKey, value: undefined });
+  const sourceDimensions = dimensions.key === dimensionsKey ? dimensions.value : undefined;
+  const setSourceDimensions = useCallback((value: AssetDimensions) => setDimensions({ key: dimensionsKey, value }), [dimensionsKey]);
 
   // …and read them from the file as well. The card above reports what its
   // thumbnail decoded, which only happens if a thumbnail rendered — so a

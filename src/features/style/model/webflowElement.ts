@@ -35,6 +35,20 @@ export function serializeElementId(id: unknown): string {
   }
 }
 
+// What the panel keys an element by: its node id in the document open now. Node ids are tree
+// paths, so the page's `0/1` and the component's `0/1` are two elements under one id; keyed by
+// the id alone, entering or leaving a component at a shared path kept the previous document's
+// chips, and a remembered answer for one was drawn for the other. Empty for no element.
+export function elementSelectionKey(element: unknown): string {
+  const id = serializeElementId(element);
+  if (id === '') {
+    return '';
+  }
+  const key = `${getHost().openFilePath ?? ''}\u0000${id}`;
+  assert(key.endsWith(id), 'elementSelectionKey: the key ends with the node id');
+  return key;
+}
+
 // Kept from the Webflow build so a name typed in the class field compiles the
 // same way it would there — lowercased, spaces to hyphens, digits prefixed.
 export function webflowClassToCss(name: string): string {
@@ -57,14 +71,17 @@ export function webflowApi() {
     getSelectedElement: async (): Promise<AnyElement> => nodeById(getHost().selectedId),
     subscribe: (event: string, callback: (value: unknown) => void): Unsub => {
       if (event === 'selectedelement') {
-        let last = getHost().selectedId;
+        // The document is part of the selection: entering a component can select the node at
+        // the same path as the page's selection, and that is another element.
+        const selectionOf = () => `${getHost().openFilePath ?? ''}\u0000${getHost().selectedId ?? ''}`;
+        let last = selectionOf();
         return onHostChange(() => {
-          const now = getHost().selectedId;
+          const now = selectionOf();
           if (now === last) {
             return;
           }
           last = now;
-          callback(nodeById(now));
+          callback(nodeById(getHost().selectedId));
         });
       }
       if (event === 'mediaquery') {

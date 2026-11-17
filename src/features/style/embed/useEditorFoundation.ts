@@ -28,6 +28,7 @@ import type { ElementSnapshot, NativeModel } from '../model/styleTypes';
 import type { ManualSourcePick } from '../model/selectorHome';
 import { type ScanState, type Phase } from './EditorBasics';
 import { rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
+import { elementSelectionKey } from '../model/webflowElement';
 import {
   streamDocs,
   loadComponentDocs,
@@ -613,7 +614,8 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
       // flipped a chip to that dropdown and back on every switch. Only the canvas's
       // answer (or its deadline passing, which answers `undefined`) settles.
       const settled = !content.partial && options.sourceOnly !== true;
-      const elementKey = serializeElementId(element);
+      // Keyed with its document (elementSelectionKey): the same path in another file is another element.
+      const elementKey = elementSelectionKey(element);
       // This element's settled answer is already drawn (a remembered one, or an earlier
       // pass): a step on the way to the next one must not replace it with less.
       if (!settled && settledElementKeyRef.current === elementKey) {

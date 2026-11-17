@@ -113,8 +113,8 @@ export function computedStylesSettled(nodeId: string): boolean {
   return [...learnedKeys].every((key) => reading.read(elementKey, key).kind === 'settled');
 }
 
-// The element a switch showed before its computed values arrived (StylePanel's hold ran out
-// of time), and until when its sections may wait for them. One element at a time: the panel
+// The element a switch showed before its computed values arrived (StylePanel useSelectionShown),
+// and until when its sections may wait for them. One element at a time: the panel
 // shows one.
 const COMPUTED_AWAIT_MS_MAX = 1500;
 let awaited: { readonly nodeId: string; readonly untilMs: number } | undefined;
@@ -141,7 +141,7 @@ export function awaitComputedStyles(nodeId: string): void {
 
 /**
  * Whether the selected element's sections should wait in their placeholders for its computed
- * values. Only after a switch whose hold ran out of time (awaitComputedStyles): a field drawn
+ * values. Only after a switch to an element whose values were not in hand (awaitComputedStyles): a field drawn
  * then is the "Default" or the empty input that the answer replaces. Bounded by
  * COMPUTED_AWAIT_MS_MAX, after which the fields show what there is; once the values have
  * settled, later waits hold what was shown instead (useStableStyleValue).

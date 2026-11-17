@@ -274,9 +274,12 @@ for (const timing of ['at once', 'late', 'after its deadline', 'never']) {
             frames.every((frame) => Object.values(frame).every((kind) => kind === 'chip' || kind === 'placeholder')),
             `switch ${step} to ${id}: every frame is chips or a placeholder\n${log.join('\n')}`,
           );
+          // A canvas that never answers leaves the element waiting in its placeholders: the
+          // harness fires no deadline, and the previous element is never shown in its place.
+          const ending = timing === 'never' ? ['chip', 'placeholder'] : ['chip'];
           assert.ok(
-            Object.values(frames[frames.length - 1]).every((kind) => kind === 'chip'),
-            `and it ends on the chips\n${log.join('\n')}`,
+            Object.values(frames[frames.length - 1]).every((kind) => ending.includes(kind)),
+            `and it ends on the chips${timing === 'never' ? ' or the wait for them' : ''}\n${log.join('\n')}`,
           );
         } else {
           assert.equal(

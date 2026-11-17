@@ -528,13 +528,14 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
   const groups = groupProps([...resolved.props.keys()], SECTION_ORDER);
   const sectionIds = groups.map((group) => group.def.id);
   const [closedSectionIds, toggleSection] = useSectionVisibility();
-  // Past a switch's deadline the page may still owe the element's computed values: the
+  // Just after a switch the page may still owe the element's computed values: the
   // sections wait in their placeholders rather than draw the fields the answer replaces.
   const computedAwaiting = useComputedStylesAwaiting();
   // One place for every section: a cleared property reads as unset until its save settles.
   const { read, clearProp } = useOptimisticClear(resolved.props, card.clearProp);
   // Read during render: a switch re-renders the card (the scan resets), and the host holds it.
-  const elementKey = getHost().selectedId ?? '';
+  // With its document: the same node path in another file is another element.
+  const elementKey = `${getHost().openFilePath ?? ''}\u0000${getHost().selectedId ?? ''}`;
   const section: SectionCard = {
     read,
     busy: card.busy,

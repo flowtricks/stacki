@@ -53,7 +53,7 @@ const KNOWN_FAILURES = Object.freeze([
     invariant: 'blank-panel',
     pattern: /no controls between/,
     cause:
-      'a switch shown past its 1.5 s hold (StylePanel useSwitchHold) with the answer still owed draws section placeholders: a slow canvas, or one that re-renders when a class-expression element is selected (two canvas-ready per selection). Seen at 6x only on the current tree: 2 frames, switching to an expression element with a press 300 ms after it',
+      'an element not seen before is shown at once (StylePanel useSelectionShown) and draws its placeholders until the canvas answers, rather than keep the previous element on screen (selectionStaleFrames.test.js says why): about one frame at 1x, more on a slow canvas or one that re-renders when a class-expression element is selected',
   },
   {
     id: 'SP-12',

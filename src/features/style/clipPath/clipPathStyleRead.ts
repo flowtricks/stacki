@@ -13,6 +13,7 @@ import {
   CLIP_PATH_DEBUG,
 } from './clipPathConstants';
 import { formatClipPath } from './clipPathFormat';
+import { elementSelectionKey } from '../model/webflowElement';
 import { isNoneClipPathValue } from './svgContours';
 
 export async function writePastedShapeMetadata(style: StyleHandle, cache: PastedShapeSvgCache | undefined, options?: StyleTargetOptions) {
@@ -147,6 +148,8 @@ export async function readOptionalWithTimeout<T>(reader: (() => Promise<T> | und
   }
 }
 
+// Keyed with the open document (elementSelectionKey): node ids are tree paths, so entering a
+// component can select another element at the page selection's own id.
 export function selectedElementKey(element: unknown) {
   if (!isElementStyleSource(element)) {
     return undefined;
@@ -156,13 +159,13 @@ export function selectedElementKey(element: unknown) {
     return undefined;
   }
   if (typeof id === 'string') {
-    return id;
+    return elementSelectionKey(id);
   }
 
   try {
-    return JSON.stringify(id);
+    return elementSelectionKey(JSON.stringify(id));
   } catch {
-    return String(id);
+    return elementSelectionKey(String(id));
   }
 }
 

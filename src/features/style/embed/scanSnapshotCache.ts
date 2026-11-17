@@ -57,35 +57,6 @@ export function rememberScanSnapshot(key: string, snapshot: ScanSnapshot): void 
   assert(entries.size <= SCAN_SNAPSHOT_ENTRIES_MAX, 'rememberScanSnapshot: the cache is bounded');
 }
 
-/** Settles the element's answer into this cache without selecting it: the panel's
- *  own resolve, run ahead of a switch. Resolves when the answer is remembered, or at
- *  once when there is nothing to resolve against yet. */
-export type SnapshotPreparer = (nodeId: string) => Promise<void>;
-
-// The one mounted editor's preparer: there is one Style panel, so one slot is enough.
-// A second editor registering replaces the first, and unregistering clears only its own.
-let preparer: SnapshotPreparer | undefined;
-
-export function registerSnapshotPreparer(next: SnapshotPreparer): () => void {
-  preparer = next;
-  return () => {
-    if (preparer === next) {
-      preparer = undefined;
-    }
-  };
-}
-
-/** Resolve `nodeId` ahead of selecting it (StylePanel's switch hold). Nothing to do
- *  without a mounted editor: the switch then paints the way it always has. */
-export async function prepareScanSnapshot(nodeId: string): Promise<void> {
-  assert(nodeId.length > 0, 'prepareScanSnapshot: a node id is never empty');
-  const prepare = preparer;
-  if (prepare === undefined) {
-    return;
-  }
-  await prepare(nodeId);
-}
-
 /** Forget every element: used when what the answers were read against is gone (another project, a test). */
 export function forgetScanSnapshots(): void {
   entries.clear();
