@@ -139,13 +139,17 @@ function useVariableCell({ cell, onSave, fluidOf, onDraft }: PopulatedCellProps)
   // references (which is most long values) never saw the press at all when this
   // was bound to the input. It is bound to the cell instead.
   //
-  // Two things keep their own press wherever they are: the colour box and the
-  // connect dot, which do not edit the value at all. A chip keeps its own only
+  // Three things keep their own press wherever they are: the colour box, the
+  // curve button and the connect dot, which do not edit the value as text. The
+  // curve button was missing here, so on a curve too long for its column (any
+  // `cubic-bezier()` past LONG_VALUE characters, which is most real ones) the
+  // press opened the custom-value box on top of the curve editor instead of
+  // the editor alone. A chip keeps its own only
   // while the value FITS — in a cell showing half an expression the chip is
   // most of what there is to click, and swapping a variable you cannot see the
   // rest of is not what that press means. It opens the value instead, where the
   // chip is there to click at full size.
-  const alwaysOwn = (target: EventTarget) => target instanceof Element && !!target.closest('.embed-editor_varconnect-dot, .u-color-swatch');
+  const alwaysOwn = (target: EventTarget) => target instanceof Element && !!target.closest('.embed-editor_varconnect-dot, .u-color-swatch, .var-ease');
 
   const openCustom = (node: Element) => setCustom(node.getBoundingClientRect());
 
