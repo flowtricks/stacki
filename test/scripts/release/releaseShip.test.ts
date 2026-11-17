@@ -79,9 +79,14 @@ test('an unreleased version: wait while either run works, tag only when both are
   assert.equal(decideShip({ ...BASE, candidate: skipped }).kind, 'stop', 'a candidate that built nothing is not green');
 });
 
-test('a released version on main: bump to the next patch after the newest tag', () => {
+test('a released version on main: bump to the next patch, only on a green Check of that exact SHA', () => {
   const released: ShipFacts = { ...BASE, version: '1.4.7', tags: [{ name: 'v1.4.7', sha: OLD }], published: true };
   assert.deepEqual(decideShip(released), { kind: 'bump', previous: '1.4.7', version: '1.4.8', baseSha: HEAD, note: undefined });
+  assert.equal(decideShip({ ...released, check: undefined }).kind, 'wait', 'no Check yet: no bump');
+  assert.equal(decideShip({ ...released, check: check('in_progress', undefined) }).kind, 'wait', 'Check running: no bump');
+  const red = decideShip({ ...released, check: check('completed', 'failure'), checkFailure: { kind: 'stop', reason: 'a test failed.', nextStep: 'fix' } });
+  assert.ok(red.kind === 'stop' && red.reason.includes('nothing is bumped'));
+  assert.deepEqual(decideShip({ ...released, check: check('completed', 'failure'), checkFailure: { kind: 'rerun', matches: [] } }), { kind: 'rerun', workflow: 'check.yml', runId: 11 });
   const burned = decideShip({ ...BASE, version: '1.4.6', tags: [{ name: 'v1.4.6', sha: OLD }, { name: 'v1.4.7', sha: OLD }], published: false });
   assert.equal(burned.kind, 'bump');
   assert.ok(burned.kind === 'bump' && burned.version === '1.4.8' && (burned.note ?? '').includes('never published'));

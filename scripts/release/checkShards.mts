@@ -14,15 +14,15 @@ import { assert } from '../policy/assert.mts';
 import { systemReporter } from './actionsReport.mts';
 import { systemCommandRunner, type CommandRunner } from './releaseCommands.mts';
 import { fail, ok, type Result } from './releaseResult.mts';
-import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, parseCheckJobs, shardJobName, SOURCE_REPOSITORY, staticJobName, studioJobName, type CheckJob } from './releaseStatus.mts';
+import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, parseCheckJobs, shardJobName, SOURCE_REPOSITORY, staticJobsFor, studioJobName, type CheckJob } from './releaseStatus.mts';
 
 export type ShardVerdict = { readonly kind: 'green' } | { readonly kind: 'red'; readonly problems: readonly string[] };
 
-/** The platform's static-checks job and every shard present once and successful; anything else is red. */
+/** The platform's static-checks job (Linux only), Studio job and every shard present once and successful; anything else is red. */
 export function assessShards(os: string, jobs: readonly CheckJob[]): ShardVerdict {
   assert(CHECK_SHARD_COUNT >= 1, 'assessShards: at least one shard');
   const problems: string[] = [];
-  const names = [staticJobName(os), studioJobName(os), ...Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => shardJobName(os, index + 1))];
+  const names = [...staticJobsFor(os), studioJobName(os), ...Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => shardJobName(os, index + 1))];
   for (const name of names) {
     const matches = jobs.filter((job) => job.name === name);
     if (matches.length === 0) {

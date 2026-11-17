@@ -61,6 +61,7 @@ export interface ShipFacts {
   readonly originSha: string;
   readonly version: string;
   readonly tags: readonly Tag[];
+  // Check on origin's SHA: the bump commit's own run, or, before a bump, the base it would build on.
   readonly check: RunEvidence | undefined;
   readonly checkFailure: RerunDecision | undefined;
   readonly candidate: CandidateEvidence | undefined;
@@ -144,6 +145,25 @@ function decidePost(facts: ShipFacts): ShipStep {
 }
 
 function bumpStep(facts: ShipFacts, note: string | undefined): ShipStep {
+  // The bump commit skips the local pre-push gate only because the code under it is proven: Check
+  // green on the exact base SHA now, and Check and Candidate green on the bump SHA before any tag.
+  const base = facts.check;
+  if (base === undefined) {
+    return { kind: 'wait', reason: `Check has not started on ${facts.originSha.slice(0, 8)}; the bump waits for a green Check on the code it releases` };
+  }
+  if (base.run.status !== 'completed') {
+    return { kind: 'wait', reason: `the bump waits for Check on ${facts.originSha.slice(0, 8)}: ${progressText(base.jobs)}` };
+  }
+  if (base.run.conclusion !== 'success') {
+    if (facts.checkFailure?.kind === 'rerun') {
+      return { kind: 'rerun', workflow: 'check.yml', runId: base.run.id };
+    }
+    return { kind: 'stop', reason: `Check is red on ${facts.originSha.slice(0, 8)}, so nothing is bumped: ${base.run.url}`, nextStep: REAL_FAILURE };
+  }
+  const baseProblem = exactCheckProblem(base);
+  if (baseProblem !== undefined) {
+    return { kind: 'stop', reason: `Check on ${facts.originSha.slice(0, 8)}: ${baseProblem}`, nextStep: REAL_FAILURE };
+  }
   const latest = latestReleasedVersion(facts.tags.map((tag) => tag.name));
   if (!latest.ok) {
     return { kind: 'stop', reason: latest.error.message, nextStep: 'Check the tags on origin.' };
@@ -390,6 +410,21 @@ function gatherTaggedFacts(
   }
   const releaseRun = runs.value.find((run) => run.headSha === known.tag.sha);
   const published = readPublished(runner, known.version);
+  // Main moved past the tag: the next bump needs Check green on main's exact SHA first.
+  let check: RunEvidence | undefined;
+  let checkFailure: RerunDecision | undefined;
+  if (known.originSha !== known.tag.sha) {
+    const base = readExactCheckRun(known.originSha, runner);
+    if (!base.ok) {
+      return base;
+    }
+    check = base.value;
+    const failure = check === undefined ? ok(undefined) : withAttempt(runner, check.run);
+    if (!failure.ok) {
+      return failure;
+    }
+    checkFailure = failure.value;
+  }
   let postRun: WorkflowRun | undefined;
   if (published && releaseRun !== undefined) {
     const posts = listRuns(runner, { repository: SOURCE_REPOSITORY, workflow: 'release-post.yml', event: undefined, commit: undefined });
@@ -402,8 +437,8 @@ function gatherTaggedFacts(
     originSha: known.originSha,
     version: known.version,
     tags: known.tags,
-    check: undefined,
-    checkFailure: undefined,
+    check,
+    checkFailure,
     candidate: undefined,
     candidateFailure: undefined,
     releaseRun,

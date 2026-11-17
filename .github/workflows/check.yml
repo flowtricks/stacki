@@ -37,19 +37,23 @@ jobs:
       - run: npm run typecheck
 
   # The full gate on every platform the app ships on, split so no job carries
-  # more than about a quarter of it. Per platform: one job runs the builds and
-  # the desktop static checks (`--checks=desktop`: tsc, ESLint, Prettier, the
-  # policy scan, the adapter ratchet), one runs Studio's verify alone
-  # (`--checks=studio`, the long one), and four shards run the builds and their
-  # share of the suites (a stable hash of each suite's path,
-  # scripts/gate/testShard.ts). Together they run exactly `npm test`.
+  # more than about a quarter of it. One Linux job runs the builds and the
+  # desktop static checks (`--checks=desktop`: tsc, ESLint, Prettier, the
+  # policy scan, the adapter ratchet; platform-independent verdicts). Per
+  # platform, one job runs Studio's verify alone (`--checks=studio`, the long
+  # one), and four shards run the builds and their share of the suites (a
+  # stable hash of each suite's path, scripts/gate/testShard.ts). Together they
+  # run exactly `npm test` on Linux and every build and suite everywhere.
   # Linux has no display, so the Electron probes run under a virtual one.
   static:
     name: test static (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Linux only: tsc, ESLint, Prettier and the policy scan give the same verdict on every
+        # platform, and the shards below still build and test on all three
+        # (scripts/release/releaseStatus.mts, STATIC_CHECK_OPERATING_SYSTEMS).
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6

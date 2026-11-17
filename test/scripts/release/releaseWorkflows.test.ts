@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { parse } from 'yaml';
-import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, REQUIRED_CHECK_JOBS, shardJobName, staticJobName, studioJobName } from '../../../scripts/release/releaseStatus.mts';
+import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, REQUIRED_CHECK_JOBS, shardJobName, STATIC_CHECK_OPERATING_SYSTEMS, staticJobName, studioJobName } from '../../../scripts/release/releaseStatus.mts';
 
 type Node = Readonly<Record<string, unknown>>;
 
@@ -166,8 +166,8 @@ test('check.yml: the shard matrix is the count the release scripts expect, under
   assert.deepEqual(matrix['os'], [...CHECK_OPERATING_SYSTEMS]);
   assert.equal(String(shard['name']).replace('${{ matrix.os }}', 'ubuntu-latest').replace('${{ matrix.shard }}', '2'), shardJobName('ubuntu-latest', 2));
   const checks = asNode(check['static'], 'static');
-  assert.equal(String(checks['name']).replace('${{ matrix.os }}', 'macos-latest'), staticJobName('macos-latest'));
-  assert.deepEqual(asNode(asNode(checks['strategy'], 'strategy')['matrix'], 'matrix')['os'], [...CHECK_OPERATING_SYSTEMS]);
+  assert.equal(String(checks['name']).replace('${{ matrix.os }}', 'ubuntu-latest'), staticJobName('ubuntu-latest'));
+  assert.deepEqual(asNode(asNode(checks['strategy'], 'strategy')['matrix'], 'matrix')['os'], [...STATIC_CHECK_OPERATING_SYSTEMS], 'static checks on Linux only');
   assert.ok(steps(checks).some((step) => String(step['run'] ?? '').endsWith('npm test -- --checks=desktop')));
   const studio = asNode(check['studio'], 'studio');
   assert.equal(String(studio['name']).replace('${{ matrix.os }}', 'windows-latest'), studioJobName('windows-latest'));

@@ -6,10 +6,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { assessShards, parseShardArguments } from '../../../scripts/release/checkShards.mts';
-import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, checkJobProblems, REQUIRED_CHECK_JOBS, shardJobName, staticJobName, studioJobName, type CheckJob } from '../../../scripts/release/releaseStatus.mts';
+import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, checkJobProblems, REQUIRED_CHECK_JOBS, shardJobName, staticJobName, staticJobsFor, studioJobName, type CheckJob } from '../../../scripts/release/releaseStatus.mts';
 
 const job = (name: string, conclusion = 'success'): CheckJob => ({ name, status: 'completed', conclusion });
-const shardsFor = (os: string): readonly CheckJob[] => [job(staticJobName(os)), job(studioJobName(os)), ...Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => job(shardJobName(os, index + 1)))];
+const shardsFor = (os: string): readonly CheckJob[] => [...staticJobsFor(os).map((name) => job(name)), job(studioJobName(os)), ...Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => job(shardJobName(os, index + 1)))];
 const allShards = CHECK_OPERATING_SYSTEMS.flatMap(shardsFor);
 
 test('a platform is green only with every shard present once and green', () => {
@@ -22,14 +22,16 @@ test('a platform is green only with every shard present once and green', () => {
   const verdict = assessShards('windows-latest', missing);
   assert.ok(verdict.kind === 'red' && verdict.problems[0] === 'test shard (windows-latest, 4/4): missing from the run');
   assert.equal(assessShards('ubuntu-latest', [...allShards, job(shardJobName('ubuntu-latest', 1))]).kind, 'red');
-  const noChecks = allShards.filter((candidate) => candidate.name !== staticJobName('macos-latest'));
-  const checksVerdict = assessShards('macos-latest', noChecks);
-  assert.ok(checksVerdict.kind === 'red' && checksVerdict.problems[0] === 'test static (macos-latest): missing from the run');
+  const noChecks = allShards.filter((candidate) => candidate.name !== staticJobName('ubuntu-latest'));
+  const checksVerdict = assessShards('ubuntu-latest', noChecks);
+  assert.ok(checksVerdict.kind === 'red' && checksVerdict.problems[0] === 'test static (ubuntu-latest): missing from the run');
+  assert.deepEqual(staticJobsFor('macos-latest'), [], 'the static checks run on Linux only');
+  assert.deepEqual(assessShards('macos-latest', allShards), { kind: 'green' }, 'macOS needs no static job');
   const noStudio = allShards.filter((candidate) => candidate.name !== studioJobName('ubuntu-latest'));
   const studioVerdict = assessShards('ubuntu-latest', noStudio);
   assert.ok(studioVerdict.kind === 'red' && studioVerdict.problems[0] === 'test studio (ubuntu-latest): missing from the run');
-  const redChecks = allShards.map((candidate) => (candidate.name === staticJobName('windows-latest') ? job(candidate.name, 'failure') : candidate));
-  assert.equal(assessShards('windows-latest', redChecks).kind, 'red');
+  const redChecks = allShards.map((candidate) => (candidate.name === staticJobName('ubuntu-latest') ? job(candidate.name, 'failure') : candidate));
+  assert.equal(assessShards('ubuntu-latest', redChecks).kind, 'red');
 });
 
 test('releaseStatus requires every shard too, and still accepts a run from before sharding', () => {

@@ -52,9 +52,19 @@ export function shardJobName(os: string, shard: number): string {
   return `test shard (${os}, ${shard}/${CHECK_SHARD_COUNT})`;
 }
 
-// The desktop static checks run beside the shards, one job per platform (`npm test -- --checks=desktop`).
+// The desktop static checks (tsc, ESLint, Prettier, the policy scan, the adapter ratchet) run
+// beside the shards (`npm test -- --checks=desktop`), on Linux only: their verdict does not depend on
+// the platform, and on macOS they cost about 10 minutes of the scarcest runner (ESLint was killed at
+// 600 s there once). Builds and every suite still run on all three platforms, in the shards.
+export const STATIC_CHECK_OPERATING_SYSTEMS = ['ubuntu-latest'] as const;
+
 export function staticJobName(os: string): string {
   return `test static (${os})`;
+}
+
+/** The static-checks job a platform must have: one on Linux, none elsewhere. */
+export function staticJobsFor(os: string): readonly string[] {
+  return STATIC_CHECK_OPERATING_SYSTEMS.some((candidate) => candidate === os) ? [staticJobName(os)] : [];
 }
 
 // Studio's verify runs as its own job per platform (`npm test -- --checks=studio`).
@@ -237,7 +247,7 @@ function shardProblems(jobs: readonly CheckJob[]): readonly string[] {
         problems.push(`${job.name}: ${job.conclusion ?? job.status}`);
       }
     }
-    for (const name of [staticJobName(os), studioJobName(os)]) {
+    for (const name of [...staticJobsFor(os), studioJobName(os)]) {
       const checks = jobs.find((job) => job.name === name);
       if (checks === undefined) {
         problems.push(`${name}: missing from the run`);

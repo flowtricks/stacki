@@ -120,22 +120,33 @@ npm run release:ship -- --confirm
 - The local `main` checkout must be rebased onto origin before these commits are pushed (origin
   has the 1.4.7 bump; local main does not).
 
-## Needs the owner (one line each)
+## Owner decisions (approved Nov 17)
 
-1. Approve the remote bump commit (no local pre-push gate on the bump; Check on the SHA instead).
-2. Approve quarantine of a suite after two flaky reds, or moving wall-clock suites to nightly.
-3. Optional: `macos-latest-xlarge` runners for the mac build and shards (paid; cuts the 14 min queue).
-4. Optional: de-duplicate ESLint, Prettier, tsc and the policy scan to Linux only in `static`
-   (platform-independent; saves about 8 macOS minutes and the 600 s ESLint kill). Needs a
-   `scripts/gate` change: `--checks=desktop-builds` for macOS and Windows.
+1. **Remote bump: yes**, only because the code is proven: `release:ship` bumps only on a green
+   Check of the exact base SHA, and tags only when Check and Candidate are green on the bump SHA.
+2. **Timing bounds: relative.** `lagMsBound()` is 250 ms times the speed factor of a fixed
+   calibration workload measured in the same process (clamped to 1x to 4x; `test/helpers/scaleFixtures.ts`).
+   **Quarantine: only after two flaky reds**, in `scripts/gate/quarantine.json` with an owner, a reason, the
+   red run URLs and an expiry of at most 7 days; an expired entry fails Check. Never for
+   correctness, safety or data-write suites (`scripts/gate/quarantine.ts`, `PROTECTED_SUITE_PATTERN`).
+   `appUiKitElements` (Linux) is fixed, not quarantined (see below).
+3. **Static checks on Linux only** (`static` job matrix); builds and every suite still run on all
+   three platforms in the shards and in Studio's verify.
+4. Larger macOS runners: **not approved**. Mitigation: bump early so Candidate overlaps the queue;
+   one automatic rerun for "not acquired".
+
+`appUiKitElements` on Linux (1.4.7 bump): the Escape that clears the search was never delivered
+(events stopped at `change:pin`). Not reproduced on macOS, even with a second window taking focus.
+The fix re-focuses the page and the field right before each press and repeats an unheard press, at
+most 5 times; a repeat on a cleared field adds no events. Unproven on Linux until the rehearsal.
 
 ## Ranked plan (beyond what is implemented)
 
 | # | Change | Saves | Risk | Effort | Approval |
 |---|---|---|---|---|---|
-| 1 | Relative timing bounds / nightly timing suites | most reds this week | low | days | yes (test policy) |
-| 2 | Static checks on Linux only; builds on all OS | 8 macOS min per Check, the ESLint kill | low | hours | yes (gate) |
+| 1 | Relative timing bounds (done for lagMsBound) and the expiring quarantine (done); fix the remaining flaky suites | most reds this week | low | days | approved |
+| 2 | Static checks on Linux only; builds on all OS | 8 macOS min per Check, the ESLint kill | low | done | approved |
 | 3 | Bump at the start of a release day | the whole 30 min at release time | none | 0 | no |
-| 4 | Larger macOS runners | queue p95 14 min | cost | minutes | yes (billing) |
+| 4 | Larger macOS runners | queue p95 14 min | cost | minutes | declined |
 | 5 | Pre-push gate on `git archive HEAD` for everyday pushes | the working-tree class for non-release pushes | low | hours | yes (`scripts/policy`) |
 | 6 | Windows portability lint (path separators in assertions, quoted Windows paths in generated scripts) | 3 respins today | low | hours | yes (`scripts/eslintPlugin`) |
