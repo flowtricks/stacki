@@ -994,9 +994,12 @@ export const toRect = (box: Box): Rect => ({
 // counted tagged elements and the click counted marker runs, of which a
 // tagged node has none — so clicking the second link in a list reported
 // occurrence 0 and the first one lit up.
-export const taggedPlaces = (nodePath: string): TaggedPlace[] => {
+export const taggedPlaces = (nodePath: string): TaggedPlace[] => placesOf(elementsWithPath(nodePath));
+
+/** The places of elements already found for a path (elementsWithPath), for a caller that needs the elements too. */
+export const placesOf = (elements: readonly Element[]): TaggedPlace[] => {
   const out: TaggedPlace[] = [];
-  for (const element of elementsWithPath(nodePath)) {
+  for (const element of elements) {
     const acc = addNode(undefined, element);
     if (acc) {
       out.push({ el: element, rect: toRect(acc) });

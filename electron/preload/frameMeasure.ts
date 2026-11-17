@@ -5,7 +5,7 @@
 import { assert } from '../../shared/core/assert';
 import type { Box, GapBand, GapRow, Rect, Spacing, ThinTarget } from './frameBasics';
 import { PROBE_ATTR, isElement } from './frameBasics';
-import { PATH_ATTR, addNode, elementsWithPath, inFocus, inScope, pathsOf, regions, runsOf, taggedPlaces, toRect } from './frameRegions';
+import { PATH_ATTR, addNode, elementsWithPath, inFocus, inScope, pathsOf, placesOf, regions, runsOf, toRect } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
 import { rectsForPseudo } from './framePseudo';
 import { splitPseudoPath } from '../../shared/page/pseudoPath';
@@ -101,7 +101,9 @@ export const boxOfRun = (nodePath: string, run: readonly Node[], runCount: numbe
 // `display: contents`, which has no box of its own and no children with one;
 // that one sits where the next thing in its parent would, so it is anchored on
 // the end of the sibling before it, or the start of its parent's content.
-const collapsedRects = (nodePath: string): Rect[] | undefined => {
+// `tagged` is elementsWithPath(nodePath) when the caller already asked the document for it: a scroll
+// re-measures every tracked node, and asking twice is a page walk the scroll does not need.
+const collapsedRects = (nodePath: string, tagged?: readonly Element[]): Rect[] | undefined => {
   const elements: Element[] = [];
   for (const run of runsOf(nodePath) || []) {
     for (const node of run) {
@@ -111,7 +113,7 @@ const collapsedRects = (nodePath: string): Rect[] | undefined => {
     }
   }
   if (!elements.length) {
-    elements.push(...elementsWithPath(nodePath));
+    elements.push(...(tagged ?? elementsWithPath(nodePath)));
   }
   const out: Rect[] = [];
   for (const element of elements) {
@@ -159,13 +161,14 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   }
   const runs = runsOf(nodePath);
   if (!runs) {
-    const places = taggedPlaces(nodePath);
+    const tagged = elementsWithPath(nodePath);
+    const places = placesOf(tagged);
     if (places.length) {
       return places.map((place) => place.rect);
     }
     // A text run in an inline run has neither markers nor a tag (inlineText.ts).
     const inline = rectsForInlineText(nodePath);
-    return inline.length ? inline : (rectsFromDescendants(nodePath) ?? collapsedRects(nodePath));
+    return inline.length ? inline : (rectsFromDescendants(nodePath) ?? collapsedRects(nodePath, tagged));
   }
   const out: Rect[] = [];
   for (const run of runs) {
@@ -215,7 +218,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // A region that exists but contains nothing with a box — the layout case:
   // its start marker is orphaned in <head>, so the walk collected the head's
   // scripts and links rather than the page. Its children still measure.
-  return rectsFromDescendants(nodePath) ?? collapsedRects(nodePath);
+  return rectsFromDescendants(nodePath) ?? collapsedRects(nodePath, tagged);
 };
 
 // The classes actually on the page for a node, one entry per occurrence (a
