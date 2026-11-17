@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import Dropdown from '../../ui/Dropdown';
+import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { CmsIcon, FileIcon } from '../../ui/Icons';
-import { linkChoices, LINK_ROWS_DRAWN_MAX, templatesToLoad, type LinkChoiceSource, type LinkEntryLoader, type LinkTemplateState } from './linkEntries';
+import { linkChoices, LINK_ROWS_DRAWN_MAX, templatesToLoad, type LinkChoice, type LinkEntryLoader, type LinkTemplateState } from './linkEntries';
 import type { LinkPage } from './linkType';
 
 // The link field's Page tab: a searchable menu of the project's pages, with each template page
@@ -28,7 +28,7 @@ export default function LinkPageChooser({ text, pages, loadEntries, onPick }: Li
       value={options.some((option) => option.value === text) ? text : ''}
       placeholder={translate('props.link.choosePage')}
       optionLayout="stacked"
-      options={options.map(({ source, ...option }) => ({ ...option, icon: linkChoiceIcon(source) }))}
+      options={options.map(linkChoiceOption)}
       searchable
       searchPlaceholder={translate('props.link.searchPages')}
       rowsMax={LINK_ROWS_DRAWN_MAX}
@@ -39,13 +39,14 @@ export default function LinkPageChooser({ text, pages, loadEntries, onPick }: Li
   );
 }
 
-// A page file reads as a page; a row a CMS template renders reads as CMS, with the icon the CMS panel uses.
-function linkChoiceIcon(source: LinkChoiceSource) {
+// A page file reads as a page; a row a CMS template renders reads as CMS, with the icon and the purple the
+// Pages panel gives a template (Dropdown's `collection` tone).
+function linkChoiceOption({ source, ...option }: LinkChoice): DropdownOption<string> {
   switch (source) {
     case 'page':
-      return <FileIcon size={12} />;
+      return { ...option, icon: <FileIcon size={12} /> };
     case 'cms':
-      return <CmsIcon size={12} />;
+      return { ...option, icon: <CmsIcon size={12} />, tone: 'collection' };
     default: {
       const exhaustive: never = source;
       return exhaustive;

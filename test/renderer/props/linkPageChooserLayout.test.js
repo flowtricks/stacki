@@ -1,8 +1,8 @@
 // Goal: every row of the link field's "Choose a page…" menu is one row: the icon at the left, centred beside a two-line text
 // block (title above, route below), the check at the end, and all rows one height. The bug this holds shut: the stacked menu's
 // grid had no column for an icon, so the page icon fell onto a third line under the route. It also pins that a row a CMS
-// template renders draws the CMS icon and a page file draws the page icon, that the template's group heading stays a muted,
-// unclickable heading, and that a stacked menu with no icons (the commit type picker) still starts its labels at the left.
+// template renders draws the CMS icon and a page file draws the page icon, that the template's group heading stays a
+// heading (not clickable, spaced above), that CMS rows and their heading take the Pages panel's CMS purple while page rows keep the default colour, and that a stacked menu with no icons (the commit type picker) still starts its labels at the left.
 // Method: jsdom has no layout, so this bundles the real LinkPageChooser and Dropdown for the browser, mounts them under the
 // app's real stylesheets in a hidden Electron window (as titleBarButtonHeights.test.js does), opens each menu, and compares
 // getBoundingClientRect boxes. Each read waits, bounded, for the menu to be drawn and settled, never a fixed pause.
@@ -82,6 +82,9 @@ const MEASURE = \`((popupSelector) => {
       iconSymbol: row.querySelector('.dd-icon svg') ? row.querySelector('.dd-icon svg').innerHTML : '',
       label: box(label),
       labelText: label.textContent,
+      labelColor: getComputedStyle(label).color,
+      iconColor: row.querySelector('.dd-icon') ? getComputedStyle(row.querySelector('.dd-icon')).color : '',
+      highlighted: row.classList.contains('highlight'),
       labelClips: label.scrollWidth > label.clientWidth && getComputedStyle(label).textOverflow === 'ellipsis',
       description: box(row.querySelector('.dd-description')),
       hint: box(row.querySelector('.dd-hint')),
@@ -95,6 +98,14 @@ const MEASURE = \`((popupSelector) => {
   return {
     rows,
     heading: heading ? { text: heading.textContent, cursor: getComputedStyle(heading).cursor, color: getComputedStyle(heading).color, marginTop: getComputedStyle(heading).marginTop } : undefined,
+    purple: (() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--collection-purple)';
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    })(),
     rowColor: rows.length > 0 ? getComputedStyle(popup.querySelector('.dd-option')).color : '',
     gutter: getComputedStyle(list).scrollbarGutter,
   };
@@ -207,6 +218,16 @@ const checkRow = (menu, row) => {
     check('page menu: every page row draws one icon', pageSymbols.size === 1, detail);
     check('page menu: every CMS row draws one icon', cmsSymbols.size === 1, detail);
     check('page menu: the CMS icon is not the page icon', [...cmsSymbols][0] !== [...pageSymbols][0], detail);
+    check('page menu: the purple token resolves', chooser.purple.startsWith('rgb'), detail);
+    for (const row of cmsRows.filter((cmsRow) => !cmsRow.highlighted)) {
+      check(`page menu CMS "${row.labelText}": the title is the CMS purple`, row.labelColor === chooser.purple, detail);
+      check(`page menu CMS "${row.labelText}": the icon is the CMS purple`, row.iconColor === chooser.purple, detail);
+    }
+    for (const row of pageRows.filter((pageRow) => !pageRow.highlighted)) {
+      check(`page menu page "${row.labelText}": the title is not purple`, row.labelColor !== chooser.purple, detail);
+      check(`page menu page "${row.labelText}": the icon is not purple`, row.iconColor !== chooser.purple, detail);
+    }
+    check('page menu: the CMS group heading is the CMS purple', chooser.heading?.color === chooser.purple, detail);
     check('page menu: the chosen page carries the check', chooser.rows.find((row) => row.labelText === 'Page not found')?.checked === true, detail);
     check('page menu: only one row carries the check', chooser.rows.filter((row) => row.checked).length === 1, detail);
     check(
@@ -217,7 +238,7 @@ const checkRow = (menu, row) => {
     check('page menu: the list keeps a stable scrollbar gutter', chooser.gutter === 'stable', detail);
     check('page menu: the template heading is shown', chooser.heading?.text === 'Posts Template', detail);
     check('page menu: the heading is not a pointer target', chooser.heading?.cursor !== 'pointer', detail);
-    check('page menu: the heading is muted against the rows', chooser.heading?.color !== chooser.rowColor, detail);
+    check('page menu: the heading is set apart from the rows', chooser.heading?.color !== chooser.rowColor, detail);
     const plainDetail = JSON.stringify(plain);
     for (const row of plain.rows) {
       checkRow('plain menu', row);

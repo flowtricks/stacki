@@ -4154,11 +4154,16 @@ body > .embed-editor_provenance {
 .dd-trigger.collection .dd-label,
 .dd-trigger.collection .dd-icon,
 .dd-popup.collection .dd-option-label,
-.dd-popup.collection .dd-icon {
+.dd-popup.collection .dd-icon,
+.dd-option.collection .dd-option-label,
+.dd-option.collection .dd-icon,
+.dd-group-label.collection {
   color: var(--collection-purple);
 }
 .dd-popup.collection .dd-option.highlight .dd-option-label,
-.dd-popup.collection .dd-option.highlight .dd-icon {
+.dd-popup.collection .dd-option.highlight .dd-icon,
+.dd-option.collection.highlight .dd-option-label,
+.dd-option.collection.highlight .dd-icon {
   color: white;
 }
 /* A leading glyph in an option row (the tag switcher's element/component

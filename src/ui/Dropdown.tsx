@@ -34,6 +34,8 @@ export function popupBox(rectangle: Pick<DOMRect, 'top' | 'bottom'>, wanted: num
     maxHeight: wanted > room ? room : undefined,
   };
 }
+/** A row's colour family; absent is the default text colour. */
+export type DropdownOptionTone = 'collection';
 export interface DropdownOption<T = string> {
   readonly value: T;
   readonly label: string;
@@ -45,6 +47,11 @@ export interface DropdownOption<T = string> {
   /** The row's tooltip: more than its label says (what a computed value is computed from). */
   readonly title?: string;
   readonly icon?: ReactNode;
+  /**
+   * `collection`: a page a CMS collection generates, purple as it is in the Pages panel (label, icon,
+   * and the group heading over it). The highlighted row keeps the highlight's white for contrast.
+   */
+  readonly tone?: DropdownOptionTone;
   readonly dim?: boolean;
   /** Listed but not choosable; its `description` says why. */
   readonly disabled?: boolean;
@@ -560,7 +567,7 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
         {control.visible.map((option, index) => (
           <Fragment key={`${String(option.value)}-${index}`}>
             {option.group && option.group !== control.visible[index - 1]?.group && (
-              <div className="dd-group-label">
+              <div className={`dd-group-label ${option.tone === 'collection' ? 'collection' : ''}`}>
                 {option.groupIcon && <span className="dd-group-icon">{option.groupIcon}</span>}
                 {option.group}
               </div>
@@ -587,7 +594,7 @@ function DropdownRow<T>({ option, index, control }: { readonly option: DropdownO
   const selected = option.value === control.committed.current && control.open ? 'selected' : '';
   return (
     <div
-      className={`dd-option ${highlight} ${selected} ${option.dim ? 'dim' : ''} ${option.disabled === true ? 'disabled' : ''}`}
+      className={`dd-option ${highlight} ${selected} ${option.dim ? 'dim' : ''} ${option.disabled === true ? 'disabled' : ''} ${option.tone === 'collection' ? 'collection' : ''}`}
       aria-disabled={option.disabled === true ? true : undefined}
       title={option.title}
       onMouseEnter={() => control.hover(index)}
