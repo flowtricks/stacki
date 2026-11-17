@@ -670,3 +670,16 @@ test('Button label: opening and closing the editor without a change writes nothi
   assert.equal(panel.source(), BUTTON);
   await panel.unmount();
 });
+
+test('the prop list marks no controller with a fallback as required, and marks every ruled prop as conditional', async () => {
+  const panel = await mountPanel(BUTTON);
+  const rows = [...document.querySelectorAll('.property-row')];
+  const row = (name) => rows.find((item) => item.querySelector('.property-row-main').textContent.trim().startsWith(name));
+  for (const name of ['element', 'variant']) {
+    assert.equal(row(name).querySelector('.property-required') ?? undefined, undefined, `${name} may be left out`);
+  }
+  for (const name of [...RULED.element, ...RULED.variant]) {
+    assert.ok(row(name).querySelector('.variant-condition-mark'), `${name} is marked conditional`);
+  }
+  await panel.unmount();
+});

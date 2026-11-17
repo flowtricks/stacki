@@ -80,6 +80,12 @@ type ContentHost = AttributesHost & {
   readonly nodes: readonly EditorNode[] | undefined;
   readonly onOpenFile: ((path: string) => void) | undefined;
 };
+// Whether `name` controls a group one of whose options applies when it is not passed.
+function hasFallback(groups: ComponentProperties['variantGroups'], name: string): boolean {
+  const group = groups?.find((candidate) => candidate.controller === name && candidate.editing.kind !== 'candidate');
+  return group?.options.some((option) => option.fallback) ?? false;
+}
+
 function PropertyPanelContent({ data, busy, save, saveHost, host }: PropertyContentProps & { readonly host: ContentHost }) {
   const translate = useTranslate();
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
@@ -252,7 +258,8 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
           }
         >
           {property.name}
-          {property.required && (
+          {/* A controller with a fallback option may be left out: it reads as that option, so it is not required. */}
+          {property.required && !hasFallback(data.variantGroups, property.name) && (
             <span title={translate('componentProps.panel.required')} className="property-required">
               {' '}
               *

@@ -45,6 +45,7 @@ nothing is cut at the panel's 320–480px widths.
     the rows then say where it is not.
 - **The controller** (`variant`, `element`): the panel's own Options list and
   Default value dropdown, with no Required checkbox and no `{}` code switch.
+  Its Kind is locked: its options are the union's members.
   Adding, renaming (on commit), removing or dragging an option in the list is
   `addOption`, `renameOption`, `removeOption` or `moveOption`; picking another
   default is `setFallback`. A refusal shows on the form's error line.
@@ -65,10 +66,14 @@ type Kind =
 ```
 
 - **Group**: one union `Props` intersects, directly or through local,
-  non-exported, non-generic aliases (`Tag`, `Kind`).
-- **Controller**: the first prop every member declares as a single literal
-  of one kind, a different one in each: strings (`variant`, `element`) or
-  `true` / `false`. A boolean controller's two options are fixed: they are
+  non-exported, non-generic aliases (`Tag`, `Kind`). An `interface Props`
+  has no group, but its props of options are candidates: the first
+  `attachProp` writes it as `type Props =` (body unchanged).
+- **Controller**: the first prop every member declares as literals of one
+  kind, different ones in each: strings (`variant`, `element`) or
+  `true` / `false`. A member may name several string options
+  (`variant: "month" | "day"`): it is read once per option, and split into
+  one member per option before an edit to its group. A boolean controller's two options are fixed: they are
   never added, renamed or removed. A union with no such
   prop is not a group; its props keep the read-only conditions
   (`propertyContracts.ts`).
@@ -121,7 +126,9 @@ parses, and asserts that the result reads back as asked.
 | `addProp` | `prop?: type` in every member, in the runtime type, and a local before `...rest` |
 | `removeProp` | The prop's declaration in every member (comments with it), in the runtime type, and its local |
 | `attachProp` | A prop the shared object type declares (`{ render?: boolean } & Tag & Kind`) leaves it, comment included, and every member declares it: as it was where picked, `never` elsewhere. A prop another group rules keeps those declarations, and this group's members declare it too (both hold). For a candidate controller (no group yet), the controller and the prop both leave the shared object type and `Props` is intersected with `(\| { size?: "s"; icon?: never } \| { size: "l"; icon?: string })`; the destructure's default (else the first option) is the fallback when the controller was optional |
-| `switchController` | `detachProp` from one controller, then `attachProp` to the other for every option, as one write and one undo |
+| `switchController` | `detachProp` from one controller, then `attachProp` to the other, as one write and one undo: an option both controllers name keeps its state (Required stays Required); with none in common the prop is allowed for every option |
+| `setRuleType` / `setRuleDescription` | The prop's declaration type, or its doc comment, in the named options only |
+| `setDefaultTable` | The lookup table a default is read from (docs/props-conditional-values.md) |
 | `detachProp` | The prop leaves every member and is declared once in the first shared object type (one is intersected onto `Props` when there is none): the first allowing option's type and comment, Required only if every option required it |
 
 The runtime type (`Astro.props as AllProps`) is kept in step only where it
@@ -136,19 +143,20 @@ lists exactly the options, as string literals; one written another way
   `{ play, close }`). Removing also refuses comparisons, which would test an
   option that no longer exists.
 - Removing an option or a prop an instance still passes, naming the file.
+- Forbidding a prop (Not allowed, attaching for some options, switching) that
+  an instance passes with an option that now forbids it, naming the file.
 - Removing a prop the code still reads.
 - Adding a prop whose name is declared or in scope; a type that does not parse.
 
 ## Limitations
 
 - Numeric controllers are not groups; boolean ones keep their two options.
-- A prop's type is one per prop: an option that allows it again takes the
-  first allowing option's type. Per-variant types that differ are kept as
-  written, but not edited apart.
+- A member keyed by an alias of several options (`variant?: VideoRatio`) is
+  not read as a group; its props keep the read-only conditions.
 - Template mentions are found textually (`<style>` and `<script>` blanked);
   an option built at runtime (`variant + "-x"`) cannot be seen.
-- Moving a prop straight from one group to another is two edits: None, then
-  the other controller. `attachProp` does not check
-  instances that pass the prop under an option that now forbids it.
-- The controller's Kind dropdown still saves a type change through the
-  ordinary save, which would rewrite the union's members; leave its Kind alone.
+- Forbidding a prop judges instances that pass the controller as a literal
+  (or not at all); one that passes it as code is not judged.
+
+Per-option types, tooltips and defaults, and a member of several options,
+are in docs/props-conditional-values.md.
