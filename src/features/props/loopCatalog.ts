@@ -5,7 +5,6 @@
 // it shows there, with the same field names and choices.
 
 import { assert } from '../../../shared/core/assert';
-import { toRecord } from '../../../shared/core/record';
 import { ASTRO_CONTENT_ID } from '../../../shared/properties/astroContent';
 import type { RemoteSchemaField, RemoteType } from '../../../shared/properties/cmsRemoteSchema';
 import { ITEM_FIELD_LIMITS, type ItemFieldDeclaration, type ItemFieldKind } from '../../editor/itemFields';
@@ -13,6 +12,7 @@ import type { LoopField, LoopFieldKind, LoopSource, LoopSourceKind } from '../..
 import { isFieldPath, ITEM_FIELD } from '../../editor/loopQuery';
 import { listCmsConnections, remoteReferenceOptions } from '../../ipc/cmsConnectionsBridge';
 import { readText } from '../../ipc/bridge';
+import { hasDependency } from '../../lib/packageManifest';
 import { remoteCollections, remoteTemplate } from '../../ipc/remoteSource';
 
 export const LOOP_CATALOG_LIMITS = {
@@ -22,7 +22,6 @@ export const LOOP_CATALOG_LIMITS = {
   projectsCachedMax: 8,
   /** How deep an object's fields are listed: `location.lat`, `hero.cta.label`. */
   nestingDepthMax: 4,
-  packageCharsMax: 1_000_000,
 } as const;
 
 export interface CatalogCollection {
@@ -138,23 +137,6 @@ async function sanityCatalog(projectPath: string): Promise<{ readonly collection
 async function sanityClientIn(projectPath: string): Promise<'available' | 'unavailable'> {
   const text = await readText(projectPath, 'package.json').catch(() => '');
   return hasDependency(text, '@sanity/astro') ? 'available' : 'unavailable';
-}
-
-/** Whether a package.json's text lists `name` as a dependency of either kind. */
-export function hasDependency(text: string, name: string): boolean {
-  if (text.length === 0 || text.length > LOOP_CATALOG_LIMITS.packageCharsMax) {
-    return false;
-  }
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(text);
-  } catch {
-    return false;
-  }
-  const record = toRecord(manifest);
-  const dependencies = toRecord(record?.['dependencies']);
-  const development = toRecord(record?.['devDependencies']);
-  return typeof dependencies?.[name] === 'string' || typeof development?.[name] === 'string';
 }
 
 /** A collection's fields, as the filter and sort menus offer them. */

@@ -15,6 +15,8 @@ import { CmsKeyForm, type CmsKeyKind } from './CmsKeyForm';
 import { PayloadStatus } from './PayloadStatus';
 import { EmDashButton } from './EmDashButton';
 import { SkeletonRows } from '../../ui/Skeleton';
+import { readText } from '../../ipc/bridge';
+import { hasDependency } from '../../lib/packageManifest';
 
 type Dialog = { readonly kind: 'sanity-login' } | { readonly kind: 'key'; readonly cms: CmsKeyKind };
 
@@ -23,6 +25,7 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
   const [list, setList] = useState<CmsConnectionList | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [dialog, setDialog] = useState<Dialog | undefined>(undefined);
+  const sanitySite = useSanitySite(projectPath);
   const refresh = useCallback(() => {
     listCmsConnections(projectPath).then(setList, (reason: unknown) => setError(String(reason)));
   }, [projectPath]);
@@ -39,11 +42,31 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
       {error && <ErrorToast message={error} />}
       {list?.encryption === 'unavailable' && <p className="cms-connections-alert">{translate('cmsConnections.list.noEncryption')}</p>}
       {list === undefined ? <SkeletonRows count={2} /> : <ConnectionRows projectPath={projectPath} connections={list.connections} onRemove={remove} />}
+      {list !== undefined && sanitySite && !list.connections.some((connection) => connection.kind === 'sanity') && (
+        <p>{translate('cmsConnections.sanityDetected')}</p>
+      )}
       <ConnectionActions projectPath={projectPath} onOpen={setDialog} />
       {dialog?.kind === 'sanity-login' && <SanitySignIn projectPath={projectPath} close={closed} />}
       {dialog?.kind === 'key' && <CmsKeyForm projectPath={projectPath} cms={dialog.cms} close={closed} />}
     </section>
   );
+}
+
+// Whether the site's package.json lists Sanity (the Astro integration, or an embedded Studio), so the
+// panel can say so while no Sanity connection exists. An unreadable package.json reads as no.
+function useSanitySite(projectPath: string): boolean {
+  const [sanitySite, setSanitySite] = useState(false);
+  useEffect(() => {
+    let current = true;
+    readText(projectPath, 'package.json').then(
+      (text) => current && setSanitySite(hasDependency(text, '@sanity/astro') || hasDependency(text, 'sanity')),
+      () => current && setSanitySite(false),
+    );
+    return () => {
+      current = false;
+    };
+  }, [projectPath]);
+  return sanitySite;
 }
 
 function ConnectionRows(props: {

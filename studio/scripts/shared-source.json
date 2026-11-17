@@ -1537,6 +1537,7 @@
     "src/lib/i18n/translateRich.ts",
     "src/lib/i18n/useTranslate.ts",
     "src/lib/insertRank.ts",
+    "src/lib/packageManifest.ts",
     "src/lib/pageName.ts",
     "src/lib/projectPath.ts",
     "src/lib/roleAccess.ts",

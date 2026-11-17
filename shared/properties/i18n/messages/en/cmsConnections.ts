@@ -44,6 +44,7 @@ export const messages = {
   'cmsConnections.input.secret.printable': 'An API key is printable characters on one line.',
   'cmsConnections.kind.custom': 'Custom CMS',
   'cmsConnections.list.noEncryption': 'This computer can’t encrypt keys, so Stacki won’t save any.',
+  'cmsConnections.sanityDetected': 'This site uses Sanity. Connect it to edit its content in Stacki.',
   'cmsConnections.signIn.browser':
     'Sign in on Sanity’s page in your browser, then come back here. Stacki creates an Editor key for this site’s project and keeps only that key.',
   'cmsConnections.signIn.cancelled': 'Sign-in cancelled.',

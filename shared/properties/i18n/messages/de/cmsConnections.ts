@@ -46,6 +46,7 @@ export const messages = {
   'cmsConnections.input.secret.printable': 'Ein API-Schlüssel besteht aus druckbaren Zeichen in einer Zeile.',
   'cmsConnections.kind.custom': 'Eigenes CMS',
   'cmsConnections.list.noEncryption': 'Dieser Computer kann keine Schlüssel verschlüsseln, deshalb speichert Stacki keine.',
+  'cmsConnections.sanityDetected': 'Diese Website nutzt Sanity. Verbinde sie, um ihre Inhalte in Stacki zu bearbeiten.', // review
   'cmsConnections.signIn.browser':
     'Melde dich auf der Sanity-Seite in deinem Browser an und komm dann hierher zurück. Stacki erstellt einen Editor-Schlüssel für das Projekt dieser Website und behält nur diesen Schlüssel.',
   'cmsConnections.signIn.cancelled': 'Anmeldung abgebrochen.',
