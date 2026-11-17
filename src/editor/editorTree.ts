@@ -83,7 +83,12 @@ export function findParentList(model: { readonly nodes: readonly PageNode[] }, i
 }
 
 export function isDescendantOf(candidateParent: PageNode, id: string): boolean {
-  const children = 'children' in candidateParent ? candidateParent.children : undefined;
+  // Widened on purpose: narrowing a PageNode by `children` gives a union of
+  // list types (a cond's BranchNode[] or a PageNode[]), and the inferred tree
+  // node then depends on the compiler's union order. BranchNode alone fails
+  // TreeNodeLike<BranchNode> (its children are PageNodes), so an incremental
+  // build that picked it reported a false error. Every branch is a PageNode.
+  const children: readonly PageNode[] | undefined = 'children' in candidateParent ? candidateParent.children : undefined;
   return candidateParent.id === id || !!findNodeById(children, id);
 }
 
