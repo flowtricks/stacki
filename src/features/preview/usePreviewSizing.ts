@@ -2,7 +2,7 @@
 import { assert } from '../../../shared/core/assert';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
-import { deviceForShortcut, deviceForWidth, deviceWidth, type PreviewDevice } from './breakpointDevices';
+import { activeDeviceFor, deviceForShortcut, deviceWidth, type PreviewDevice } from './breakpointDevices';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
 import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
 import { panelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
@@ -44,7 +44,7 @@ export function usePreviewSizing(
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
   const viewport = previewViewport(width, available, customHeight);
-  const activeDevice = device === 'canvas' || device === 'desktop' ? device : (deviceForWidth(viewport.width, breakpoints) ?? device);
+  const activeDevice = activeDeviceFor(device, viewport.width, breakpoints);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
     onDevice('custom');

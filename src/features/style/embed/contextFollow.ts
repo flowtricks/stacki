@@ -92,6 +92,17 @@ export function useCanvasWidthPx(): number | undefined {
   return useSyncExternalStore(subscribeHost, readCanvasWidth);
 }
 
+const readCanvasDevice = (): string => {
+  const device = getHost().device;
+  assert(device.length > 0, 'the canvas device is named');
+  return device;
+};
+
+/** The device picked in the canvas toolbar (`desktop`, `custom`, a breakpoint id), as the toolbar's pressed button is computed from it. */
+export function useCanvasDevice(): string {
+  return useSyncExternalStore(subscribeHost, readCanvasDevice);
+}
+
 /**
  * Flips the hold for the open project: following becomes held and held becomes following. Only
  * where a canvas width is known (without one there is nothing to follow). True when it flipped.

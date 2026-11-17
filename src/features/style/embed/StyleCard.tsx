@@ -15,7 +15,8 @@ import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { breakpointLabel } from '../../../lib/breakpointLabel';
 import { iconFor } from '../../../../shared/properties/breakpointIcon';
 import { WidthIcon, deviceIcon } from './breakpointIcons';
-import { describeCondition } from './contextRows';
+import { canvasTriggerIcon, describeCondition } from './contextRows';
+import { useCanvasDevice, useCanvasWidthPx } from './contextFollow';
 import { groupContexts } from './contextGroups';
 import { getHost } from '../model/host';
 import { SelectorScopeContext } from '../model/selectorScope';
@@ -225,6 +226,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     };
   };
   const { resolved } = useProjectBreakpoints(getHost().projectPath);
+  const canvas = { device: useCanvasDevice(), widthPx: useCanvasWidthPx() };
   const optionFor = (styleContext: StyleContext, placement: 'base' | 'section' | 'other'): SelectOption<string> => {
     // Editable when this stylesheet is where the query is written. A row can be here
     // for a query held in some other file (or for a native breakpoint, which is no
@@ -252,6 +254,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       ) : (
         deviceIcon(iconFor(width.breakpoint, resolved))
       );
+    // The closed trigger wears the canvas's device while this query holds on the canvas, so it agrees with the toolbar (contextRows.ts).
+    const canvasKind = placement === 'base' ? undefined : canvasTriggerIcon(styleContext.embedAtContext ?? '', canvas, resolved);
     const prefix = placement === 'base' ? undefined : (info?.wrapper ?? (placement === 'other' ? tag?.label : undefined));
     return {
       value: styleContext.key,
@@ -264,6 +268,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       // The selectors written inside a query that is not about width go under it, as they sit in the code.
       ...(placement === 'other' && info?.querySelectors !== undefined ? { subline: info.querySelectors } : {}),
       ...(icon === undefined ? {} : { icon }),
+      ...(canvasKind === undefined ? {} : { triggerIcon: deviceIcon(canvasKind) }),
       // The closed trigger always carries the Follow canvas size toggle, so it turns on and off without opening the list.
       ...(card.contextFollow === undefined ? {} : { triggerMark: <FollowPin follow={card.contextFollow} /> }),
       marked: info?.hasStyles ?? false,

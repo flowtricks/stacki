@@ -8,9 +8,10 @@
 // a television; the built-in Laptop, Tablet and Phone keep theirs; any other `down` breakpoint narrower than the Phone one is the
 // smartwatch, and one between wears the nearest of the three by width.
 import type { Breakpoint, ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
-import { iconFor, type DeviceIconKind } from '../../../shared/properties/breakpointIcon';
+import { activeDeviceFor, deviceForWidth, iconFor, type DeviceIconKind } from '../../../shared/properties/breakpointIcon';
 
-export { iconFor, type DeviceIconKind };
+// The device a width belongs to, and the one the bar shows pressed, live beside the icons so the style panel reads the same answer.
+export { activeDeviceFor, deviceForWidth, iconFor, type DeviceIconKind };
 
 /** `desktop`, `canvas`, `custom`, or a breakpoint's id. */
 export type PreviewDevice = string;
@@ -39,28 +40,6 @@ export function barDevices(resolved: readonly ResolvedBreakpoint[]): readonly Ba
 /** The viewport width a device simulates; undefined for the full available width (Desktop, the all-breakpoints canvas, a custom drag). */
 export function deviceWidth(device: PreviewDevice, resolved: readonly ResolvedBreakpoint[]): number | undefined {
   return resolved.find((breakpoint) => breakpoint.id === device)?.widthPx;
-}
-
-/**
- * The device a canvas width belongs to. An `up` breakpoint holds every width from its own (the widest one that fits); between the
- * widest `down` canvas and the smallest `up` one is Desktop; each `down` one holds up to its canvas, the narrowest that fits.
- */
-export function deviceForWidth(px: number, resolved: readonly ResolvedBreakpoint[]): PreviewDevice | undefined {
-  if (!Number.isFinite(px) || px <= 0) {
-    return undefined;
-  }
-  for (const breakpoint of resolved) {
-    if (breakpoint.direction === 'up' && px >= breakpoint.widthPx) {
-      return breakpoint.id;
-    }
-  }
-  const downs = resolved.filter((breakpoint) => breakpoint.direction === 'down');
-  for (const breakpoint of [...downs].reverse()) {
-    if (px <= breakpoint.widthPx) {
-      return breakpoint.id;
-    }
-  }
-  return 'desktop';
 }
 
 /** The device a digit key selects: the bar's position of that digit, or undefined past the bar. */

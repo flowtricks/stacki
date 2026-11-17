@@ -15,8 +15,9 @@
 
 import { assert } from '../../../../shared/core/assert';
 import { classifyBound, findWidthBounds, type WidthBound } from '../../../../shared/properties/mediaBreakpointSync';
+import { activeDeviceFor, deviceIconOf, type DeviceIconKind } from '../../../../shared/properties/breakpointIcon';
 import { boundaryPx, formatBreakpoint, type ResolvedBreakpoint } from '../../../../shared/properties/projectBreakpoints';
-import { queryWidthSides } from '../model/queryWidth';
+import { queryWidthMatch, queryWidthSides } from '../model/queryWidth';
 
 /** The most queries described at once: a dropdown lists a handful; the bound keeps the walk honest. */
 export const CONTEXT_ROWS_MAX = 512;
@@ -58,6 +59,39 @@ export function describeCondition(atContext: string, resolved: readonly Resolved
   const reference = ordering.map(pixelsOf).reduce((smallest, next) => Math.min(smallest, next), Number.POSITIVE_INFINITY);
   assert(Number.isFinite(reference), 'describeCondition: a width query has a boundary');
   return { kind: 'width', condition, direction, boundaryPx: reference, breakpoint };
+}
+
+/** The canvas as the toolbar shows it: the device picked and the width it draws at (undefined while not measured). */
+export interface CanvasDevice {
+  readonly device: string;
+  readonly widthPx: number | undefined;
+}
+
+/**
+ * The icon the closed trigger wears for a query: the canvas's own device, the preview bar's pressed button
+ * (activeDeviceFor, the very function the bar reads), whenever the query holds at the canvas width; undefined
+ * otherwise, and the row keeps its own icon.
+ *
+ * Why: a row is named by its boundary, so in a mobile-first project `width >= 48rem` reads Tablet (the 48rem
+ * breakpoint). Following the canvas at Desktop (1033px) that row is the right target, yet the trigger wore the
+ * Tablet icon while the bar showed Desktop pressed, and read as "not on Desktop". The trigger shows where the
+ * edit lands on the canvas now, so it takes the canvas's device; the list rows keep naming their boundaries.
+ * Base, a query that is not about width, and the all-breakpoints canvas (no one device) keep their own icon.
+ */
+export function canvasTriggerIcon(atContext: string, canvas: CanvasDevice, resolved: readonly ResolvedBreakpoint[]): DeviceIconKind | undefined {
+  assert(canvas.device.length > 0, 'canvasTriggerIcon: the canvas device is named');
+  assert(resolved.length <= CONTEXT_ROWS_MAX, 'canvasTriggerIcon: the breakpoint list is bounded');
+  if (canvas.widthPx === undefined) {
+    return undefined;
+  }
+  if (canvas.device === 'canvas') {
+    return undefined;
+  }
+  // Base (no query) and a query that is not about width never match, so they keep their own icon too.
+  if (queryWidthMatch(atContext, canvas.widthPx, ROOT_FONT_SIZE_PX).kind === 'match') {
+    return deviceIconOf(activeDeviceFor(canvas.device, canvas.widthPx, resolved), resolved);
+  }
+  return undefined;
 }
 
 // The project breakpoint whose boundary this single bound is, by value alone: `>= 64rem`, `< 64rem`,
