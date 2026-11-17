@@ -90,6 +90,66 @@ export const boxOfRun = (nodePath: string, run: readonly Node[], runCount: numbe
   return acc;
 };
 
+// Where a node that generates no box sits, so a selection still has a place to draw.
+//
+// An empty block with no width or height (a new `div` in a centred flex column,
+// say) measures nothing, and so did its node: no rectangle came back, no outline
+// was drawn, and the navigator showed a selection the canvas could not. A
+// collapsed element still HAS a position (its rect is 0x0 but sits at a point),
+// and the app draws a minimum-size marker there (outlineBoxes.ts, markerBox).
+// An element with no rect at all is `display: none` (nothing to show) or
+// `display: contents`, which has no box of its own and no children with one;
+// that one sits where the next thing in its parent would, so it is anchored on
+// the end of the sibling before it, or the start of its parent's content.
+const collapsedRects = (nodePath: string): Rect[] | undefined => {
+  const elements: Element[] = [];
+  for (const run of runsOf(nodePath) || []) {
+    for (const node of run) {
+      if (isElement(node) && node.tagName !== 'TEMPLATE') {
+        elements.push(node);
+      }
+    }
+  }
+  if (!elements.length) {
+    elements.push(...elementsWithPath(nodePath));
+  }
+  const out: Rect[] = [];
+  for (const element of elements) {
+    if (!element.isConnected) {
+      continue;
+    }
+    const own = element.getClientRects()[0];
+    if (own) {
+      out.push({ x: own.left, y: own.top, w: own.width, h: own.height });
+      continue;
+    }
+    if (window.getComputedStyle(element).display === 'contents') {
+      out.push(contentsAnchor(element));
+    }
+  }
+  return out.length ? out : undefined;
+};
+
+const contentsAnchor = (element: Element): Rect => {
+  const before = element.previousElementSibling;
+  const beforeRect = before?.getBoundingClientRect();
+  if (beforeRect && (beforeRect.width > 0 || beforeRect.height > 0)) {
+    return { x: beforeRect.left, y: beforeRect.bottom, w: 0, h: 0 };
+  }
+  const parent = element.parentElement;
+  if (!parent) {
+    return { x: 0, y: 0, w: 0, h: 0 };
+  }
+  const parentRect = parent.getBoundingClientRect();
+  const style = window.getComputedStyle(parent);
+  return {
+    x: parentRect.left + (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.paddingLeft) || 0),
+    y: parentRect.top + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.paddingTop) || 0),
+    w: 0,
+    h: 0,
+  };
+};
+
 export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // A ::before or ::after layer (shared/page/pseudoPath.ts) is measured on its element.
   const pseudo = splitPseudoPath(nodePath);
@@ -105,7 +165,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
     }
     // A text run in an inline run has neither markers nor a tag (inlineText.ts).
     const inline = rectsForInlineText(nodePath);
-    return inline.length ? inline : rectsFromDescendants(nodePath);
+    return inline.length ? inline : (rectsFromDescendants(nodePath) ?? collapsedRects(nodePath));
   }
   const out: Rect[] = [];
   for (const run of runs) {
@@ -155,7 +215,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // A region that exists but contains nothing with a box — the layout case:
   // its start marker is orphaned in <head>, so the walk collected the head's
   // scripts and links rather than the page. Its children still measure.
-  return rectsFromDescendants(nodePath);
+  return rectsFromDescendants(nodePath) ?? collapsedRects(nodePath);
 };
 
 // The classes actually on the page for a node, one entry per occurrence (a

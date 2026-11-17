@@ -40,7 +40,11 @@ const covers = (outer: Box, inner: Box): boolean =>
  */
 export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): readonly T[] {
   assert((boxes?.length ?? 0) <= LIMITS.treeNodesMax, 'Outline box count exceeds limit');
-  const list = (boxes || []).filter((box) => box && box.w > 0 && box.h > 0);
+  const present = (boxes || []).filter((box) => box);
+  // A collapsed node reports a point (markerBox draws it); it is kept only
+  // when nothing beside it has a size, so a hollow copy never draws.
+  const sized = present.filter((box) => box.w > 0 && box.h > 0);
+  const list = sized.length > 0 ? sized : present;
   // Largest first, so a box is measured against the ones that could contain
   // it rather than the other way round.
   const order = [...list].sort((left, right) => right.w * right.h - left.w * left.h);
@@ -51,6 +55,26 @@ export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): rea
     }
   }
   return list.filter((box) => kept.includes(box));
+}
+
+/** The smallest an outline is drawn, in on-screen px: a collapsed node still shows where it is. */
+export const MARKER_MIN_PX = 10;
+
+/**
+ * The box an outline is drawn on: the node's own, grown from its top-left to
+ * at least MARKER_MIN_PX on screen along each side. A zero-size element (an
+ * empty div) has a position but no area, and a 0px outline is invisible; the
+ * name tag hangs off this box, so it shows too.
+ */
+export function markerBox<T extends Box>(box: T, scale: number): T {
+  assert(scale > 0, 'markerBox: scale must be positive');
+  assert(Number.isFinite(box.w), 'markerBox: a box has a finite width');
+  assert(Number.isFinite(box.h), 'markerBox: a box has a finite height');
+  const minimum = MARKER_MIN_PX / scale;
+  if (box.w >= minimum && box.h >= minimum) {
+    return box;
+  }
+  return { ...box, w: Math.max(box.w, minimum), h: Math.max(box.h, minimum) };
 }
 
 /**

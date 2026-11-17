@@ -8,7 +8,7 @@ import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
-import { copiesToDraw, hoverIsSelection, loopChildPaths, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
+import { copiesToDraw, hoverIsSelection, loopChildPaths, markerBox, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
 import { clipBand, spacingBands, withLiveSpacing, type CollapsePartner } from './spacingBands';
 import {
   BranchIcon,
@@ -188,27 +188,32 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     // A loop is every copy; anything else is the copy it names (copiesToDraw).
     const loop = info.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
     const boxes = loop !== undefined ? [loop] : copiesToDraw(all, outline.occ);
-    return boxes.map((box, index) => (
-      <div
-        key={`${outline.slot}-${index}`}
-        className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${
-          outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path }) : ''
-        }`}
-        style={boxStyle(box, props.scale)}
-      >
-        <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
-          {outlineIcon(info)}
-          {info.label}
-          {outline.slot === 'sel' && <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(box)} onOpen={props.onOpenComponent} />}
-          {/* A highlight shows the selected chip's component icon, but opens nothing: it is display only. */}
-          {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (
-            <span className="node-outline-edit" aria-hidden="true">
-              <ComponentEditIcon size={12} />
-            </span>
-          )}
-        </span>
-      </div>
-    ));
+    return boxes.map((measured, index) => {
+      const box = markerBox(measured, props.scale);
+      return (
+        <div
+          key={`${outline.slot}-${index}`}
+          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${
+            outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path }) : ''
+          }`}
+          style={boxStyle(box, props.scale)}
+        >
+          <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
+            {outlineIcon(info)}
+            {info.label}
+            {outline.slot === 'sel' && (
+              <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(measured)} onOpen={props.onOpenComponent} />
+            )}
+            {/* A highlight shows the selected chip's component icon, but opens nothing: it is display only. */}
+            {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (
+              <span className="node-outline-edit" aria-hidden="true">
+                <ComponentEditIcon size={12} />
+              </span>
+            )}
+          </span>
+        </div>
+      );
+    });
   });
 }
 
