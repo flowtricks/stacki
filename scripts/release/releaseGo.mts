@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Superseded by releaseShip.mts (`npm run release:ship`), which builds once and promotes; the
+// workflow half (.github/workflows/release-go.yml) was removed because it needed an environment
+// and a secret that never existed. The local half below still works as a manual fallback.
+//
 // The release button. One script, two ways to press it, the same logic in both:
 //
 //   GitHub: Actions > Release button > Run workflow (.github/workflows/release-go.yml) runs the stages

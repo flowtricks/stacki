@@ -1,5 +1,6 @@
 // The only commands the release scripts may run that change anything: the bump commit, the
-// release tag, one push, and the dispatches and reruns of named workflows. Every write goes through
+// release tag, one push, the GitHub API writes of the remote bump and tag (releaseBump.mts), and
+// the dispatches and reruns of named workflows. Every write goes through
 // writeViolation, an allowlist, so a script bug cannot force-push, move or delete a tag, skip a hook
 // or dispatch a workflow nobody listed. A refusal is a programmer error and crashes (AGENTS.md §3).
 //
@@ -142,7 +143,41 @@ function ghViolation(argumentsList: readonly string[]): string | undefined {
     const shape = third !== undefined && /^\d{1,20}$/.test(third) && rest.length === 3 && rest[0] === '--failed' && rest[1] === '--repo' && rest[2] === 'flowtricks/stacki';
     return shape ? undefined : 'gh run rerun takes exactly <id> --failed --repo flowtricks/stacki';
   }
+  if (first === 'api') {
+    return apiViolation(argumentsList.slice(1));
+  }
   return `gh ${String(first)} ${String(second)} is not a release write`;
+}
+
+// The GitHub API writes of the remote bump (releaseBump.mts), each in one exact shape: the three
+// git-data creations read their body from a file the bump wrote into its own temporary folder; main
+// moves only with force=false (GitHub then accepts a fast-forward only); a tag is only created.
+const BUMP_INPUT = /^.*[\\/]stacki-release-bump-[A-Za-z0-9]{1,12}[\\/](blobs|trees|commits)\.json$/;
+
+function apiViolation(rest: readonly string[]): string | undefined {
+  const [methodFlag, method, endpoint, ...tail] = rest;
+  if (methodFlag !== '--method') {
+    return 'gh api writes name --method first';
+  }
+  const git = `repos/flowtricks/stacki/git/`;
+  if (method === 'POST' && endpoint !== undefined && /^repos\/flowtricks\/stacki\/git\/(blobs|trees|commits)$/.test(endpoint)) {
+    const kind = endpoint.slice(git.length);
+    const [inputFlag, input, ...extra] = tail;
+    const match = BUMP_INPUT.exec(input ?? '');
+    const shape = inputFlag === '--input' && extra.length === 0 && match !== null && match[1] === kind;
+    return shape ? undefined : `gh api POST ${endpoint} takes exactly --input <bump folder>/${kind}.json`;
+  }
+  if (method === 'PATCH' && endpoint === `${git}refs/heads/main`) {
+    const shape = tail.length === 4 && tail[0] === '-f' && FULL_SHA.test((tail[1] ?? '').replace(/^sha=/, '')) && (tail[1] ?? '').startsWith('sha=') && tail[2] === '-F' && tail[3] === 'force=false';
+    return shape ? undefined : 'gh api PATCH main takes exactly -f sha=<full SHA> -F force=false';
+  }
+  if (method === 'POST' && endpoint === `${git}refs`) {
+    const ref = /^ref=refs\/tags\/(v\d{1,6}\.\d{1,6}\.\d{1,6})$/.exec(tail[1] ?? '');
+    const sha = (tail[3] ?? '').replace(/^sha=/, '');
+    const shape = tail.length === 4 && tail[0] === '-f' && ref !== null && tail[2] === '-f' && (tail[3] ?? '').startsWith('sha=') && FULL_SHA.test(sha);
+    return shape ? undefined : 'gh api POST refs creates only refs/tags/vX.Y.Z at a full SHA';
+  }
+  return `gh api --method ${String(method)} ${String(endpoint)} is not a release write`;
 }
 
 function startsWith(list: readonly string[], prefix: readonly string[]): boolean {

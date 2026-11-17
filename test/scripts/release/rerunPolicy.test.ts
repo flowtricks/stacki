@@ -47,6 +47,18 @@ const REGRESSIONS: readonly { readonly id: string; readonly job: string; readonl
     hit: 'The hosted runner: GitHub Actions 12 lost communication with the server. Anything in your workflow that terminates the runner process...\n',
     miss: 'The operation was canceled.\n',
   },
+  {
+    id: 'runner-not-acquired',
+    job: 'test shard (macos-latest, 4/4)',
+    hit: 'The job was not acquired by Runner of type hosted even after multiple attempts\nDue to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.\n',
+    miss: 'Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.\nProcess completed with exit code 1.\n',
+  },
+  {
+    id: 'wall-clock-bound',
+    job: 'test shard (macos-latest, 3/4)',
+    hit: '[301/310] FAIL integration/astroEditorScale (88.1s)\n  colouring after opening blocked the event loop 278 ms (bound 250 ms)\n',
+    miss: '[301/310] FAIL integration/astroEditorScale (88.1s)\n  colouring after opening left 3 tokens unstyled\n',
+  },
 ];
 
 test('every known flake has a regression row, and each row matches its own entry only on the hit', () => {

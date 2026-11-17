@@ -210,7 +210,7 @@ function chooseVersion(options: PrepareOptions, previous: string, tagNames: read
   return ok(target);
 }
 
-function planVersionFiles(files: RepositoryFiles, version: string): Result<readonly FileChange[]> {
+export function planVersionFiles(files: RepositoryFiles, version: string): Result<readonly FileChange[]> {
   const changes: FileChange[] = [];
   for (const file of VERSION_FILES) {
     const change = planVersionFile(files, file, version);
@@ -284,7 +284,7 @@ function readSubjects(runner: CommandRunner, previous: string): Result<readonly 
   return ok(subjects);
 }
 
-function planNotes(
+export function planNotes(
   files: RepositoryFiles,
   version: string,
   subjects: readonly CommitSubject[],

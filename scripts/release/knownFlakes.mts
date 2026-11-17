@@ -53,4 +53,21 @@ export const KNOWN_FLAKES: readonly FlakeSignature[] = [
     logPattern: /lost communication with the server|The runner has received a shutdown signal|The hosted runner encountered an error/,
     why: 'GitHub lost the hosted runner mid-job.',
   },
+  {
+    id: 'runner-not-acquired',
+    jobPattern: /./,
+    // The job never started: GitHub found no hosted runner (macOS arm64 capacity, 11 Check runs in
+    // the week to 1.4.7). Its only trace is this annotation, on a job GitHub marks cancelled.
+    logPattern: /The job was not acquired by Runner of type hosted even after multiple attempts/,
+    why: 'GitHub had no hosted runner for the job (macOS capacity); nothing of ours ran.',
+  },
+  {
+    id: 'wall-clock-bound',
+    jobPattern: /./,
+    // A fixed millisecond bound missed by a loaded shared runner (1.4.7: astroEditorScale on macOS
+    // 3/4, 278 ms against 250). One rerun; a second miss is a real regression and stops. The
+    // durable fix is a bound relative to a baseline measured in the same run (docs/release-speed.md).
+    logPattern: /blocked the event loop \d+(?:\.\d+)? ?ms/,
+    why: 'A wall-clock bound in a test missed on a loaded shared runner.',
+  },
 ];

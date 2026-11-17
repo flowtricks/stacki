@@ -68,3 +68,35 @@ test('the system runner crashes on a refused write instead of running it', () =>
   const runner = systemWriteRunner({});
   assert.throws(() => runner(git('push', '--atomic', '--force', 'origin', `${SHA}:refs/heads/main`)), /^Error: Assertion failed: release writes are allowlisted: git: --force is never allowed$/);
 });
+
+test('the remote bump writes: git-data creations from its own folder, main fast-forward only, a tag only created', () => {
+  const folder = ['', 'tmp', 'stacki-release-bump-Ab12Cd'].join('/');
+  const windowsFolder = 'C:\\Users\\runner\\AppData\\Local\\Temp\\stacki-release-bump-Zz9yX8';
+  const allowed = [
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/blobs', '--input', `${folder}/blobs.json`),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/trees', '--input', `${folder}/trees.json`),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/commits', '--input', `${windowsFolder}\\commits.json`),
+    gh('api', '--method', 'PATCH', 'repos/flowtricks/stacki/git/refs/heads/main', '-f', `sha=${SHA}`, '-F', 'force=false'),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/refs', '-f', 'ref=refs/tags/v1.4.8', '-f', `sha=${SHA}`),
+  ];
+  for (const request of allowed) {
+    assert.equal(writeViolation(request), undefined, request.argumentsList.join(' '));
+  }
+  const refused = [
+    gh('api', '--method', 'PATCH', 'repos/flowtricks/stacki/git/refs/heads/main', '-f', `sha=${SHA}`, '-F', 'force=true'),
+    gh('api', '--method', 'PATCH', 'repos/flowtricks/stacki/git/refs/heads/main', '-f', `sha=${SHA}`),
+    gh('api', '--method', 'PATCH', 'repos/flowtricks/stacki/git/refs/tags/v1.4.8', '-f', `sha=${SHA}`, '-F', 'force=false'),
+    gh('api', '--method', 'DELETE', 'repos/flowtricks/stacki/git/refs/tags/v1.4.8'),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/refs', '-f', 'ref=refs/heads/other', '-f', `sha=${SHA}`),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/refs', '-f', 'ref=refs/tags/v1.4.8', '-f', 'sha=abc'),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/blobs', '--input', `${folder}/trees.json`),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/git/blobs', '--input', '/home/someone/blobs.json'),
+    gh('api', '--method', 'POST', 'repos/flowtricks/other/git/blobs', '--input', `${folder}/blobs.json`),
+    gh('api', '--method', 'POST', 'repos/flowtricks/stacki/releases', '--input', `${folder}/blobs.json`),
+    gh('api', 'repos/flowtricks/stacki/git/refs/heads/main', '-X', 'PATCH'),
+    gh('workflow', 'run', 'release.yml', '--repo', 'flowtricks/stacki', '--ref', 'main', '-f', 'tag=v1.4.8'),
+  ];
+  for (const request of refused) {
+    assert.notEqual(writeViolation(request), undefined, request.argumentsList.join(' '));
+  }
+});
