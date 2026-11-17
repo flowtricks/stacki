@@ -243,6 +243,7 @@ test('a new prop starts from the field’s label, deduplicated and validated', (
   assert.deepEqual(model.FIT_KINDS.text, ['string', 'option']);
   assert.equal(model.fitOfFieldType('enum', { numeric: true }), 'number');
   assert.equal(model.fitOfFieldType('code'), undefined);
+  assert.equal(model.fitOfFieldType('style'), 'text', 'a style attribute offers the same rows a class field does');
   assert.equal(model.literalOf({ type: 'expr', value: '3' }), '3');
   assert.equal(model.literalOf({ type: 'expr', value: 'post.title' }), '', 'an expression is not a default');
 });

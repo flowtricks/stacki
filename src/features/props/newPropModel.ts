@@ -337,6 +337,9 @@ export function fitOfFieldType(
     case 'url':
     case 'image':
     case 'media':
+    // A style attribute holds declarations as words, so it takes the same
+    // "New ... property" and "Create conditional" rows a class field does.
+    case 'style':
       return 'text';
     default:
       return undefined;

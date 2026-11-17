@@ -291,6 +291,22 @@ test('the style that is set only when a prop is: read, summarised and written ba
   assert.equal(await prettier.format(`(${code});\n`, { parser: 'babel', singleQuote: true, printWidth: 160 }), `${code};\n`);
 });
 
+test('a style attribute starts a conditional from its declarations and writes it back as style={...} code', () => {
+  const catalog = model.conditionProps('const { maxWidth } = Astro.props;', [{ name: 'maxWidth', type: 'number' }]);
+  const before = { type: 'string', value: 'color: red;' };
+  const start = model.startingConditional(before, catalog);
+  assert.notEqual(start, undefined, 'declarations start a conditional');
+  assert.equal(model.valueLanguageOf('style'), 'css');
+  const draft = { groups: [{ match: 'all', conditions: [truthy('maxWidth')], value: text('width: 10ch;') }], otherwise: start.otherwise };
+  const applied = model.appliedAttr(draft, before);
+  assert.equal(applied.kind, 'write');
+  assert.equal(applied.value.type, 'expr', 'a conditional is an expression attribute');
+  assert.equal(applied.value.value, "maxWidth ? 'width: 10ch;' : 'color: red;'");
+  const reread = model.conditionalOfAttr(applied.value);
+  assert.notEqual(reread, undefined, 'the written code reads back as a conditional');
+  assert.equal(model.appliedAttr(model.draftOf(reread), applied.value).kind, 'unchanged', 'writing it again changes nothing');
+});
+
 test('templates: holes with member paths read, `null` is kept, and anything escaped or nested stays code', () => {
   assert.equal(
     conditional.emitConditionalExpression(conditional.readConditionalExpression('a ? `x ${post.data.title} y` : null')),
