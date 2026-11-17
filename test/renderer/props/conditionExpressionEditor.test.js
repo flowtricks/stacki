@@ -1,11 +1,14 @@
-// Goal: the Condition section of a template if / else if shows its test as
-// the visual conditions editor when it can say exactly what the code says,
-// writes plain JavaScript into the test text only (one write per edit, never
-// on opening or hovering), opens code it cannot draw as code with a note and
-// never rewrites it, and has a `{}` that goes to the code and back only when
-// the code is drawable (otherwise disabled, with the reason). The same `{}`
-// sits on the Value conditions dialog and the class list pop-up. An undo (the
-// node's test returning to an earlier text) is followed by the controls.
+// Goal: the Condition section of a template if / else if shows every test as
+// the visual conditions editor the Value conditions dialog uses: props by their
+// labels with their type icons, values the frontmatter computes under Computed
+// in code (with the plainer prop condition offered), and each part the rows
+// cannot draw as a locked Computed row with its code. It writes plain
+// JavaScript into the test text only (one write per edit, never on opening or
+// hovering), keeps locked parts byte for byte, and shows code it cannot
+// delimit as highlighted code with no sentence about it. The `{}` goes to the
+// code and back while the code is drawable (otherwise it is disabled). The same
+// `{}` sits on the Value conditions dialog and the class list pop-up. Otherwise
+// is one switch, Nothing or Else branch. An undo is followed by the controls.
 //
 // Method: the real components, bundled as the app bundles them and rendered
 // in jsdom with React over a generated component frontmatter and schema;
@@ -31,6 +34,7 @@ buildSync({
       "export { ConditionalEditor } from './src/features/props/ConditionalValue';",
       "export { ClassListEditor } from './src/features/props/ClassListValue';",
       "export { CondPanel } from './src/features/props/SourcePanels';",
+      "export { EditorView } from '@codemirror/view';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'ts',
@@ -179,20 +183,26 @@ test('the operators adapt to the name, a number is typed as one and a switch nee
   await act(async () => third.root.unmount());
 });
 
-test('code the controls cannot draw opens as code with a note, is never rewritten, and the switch back is disabled with its reason', async () => {
-  for (const code of ['items.map(x => x.on).includes(true)', 'a ? b : c', 'title?.length > 2', '/^a/.test(title)']) {
+test('a part the rows cannot draw is a locked Computed row; only code that cannot be delimited opens as code, with no sentence', async () => {
+  for (const code of ['items.map(x => x.on).includes(true)', 'a ? b : c', 'format(title)']) {
     const { root, writes } = await mount(code);
-    assert.equal(rows().length, 0, `${code} shows no controls`);
-    assert.equal(document.querySelector('.condition-code-note').textContent, 'Too complex for the visual editor');
-    assert.ok(document.querySelector('.props-cond-field .cm-editor'), 'in the code editor');
-    assert.equal(toggle().getAttribute('aria-pressed'), 'true');
-    assert.equal(toggle().getAttribute('aria-disabled'), 'true', 'the way back is disabled');
-    assert.match(toggle().title, /cannot show/);
-    await click(toggle());
-    assert.equal(rows().length, 0, 'pressing the disabled toggle does nothing');
-    assert.deepEqual(writes, [], 'nothing is rewritten');
+    assert.equal(rows().length, 1, `${code} is one row`);
+    assert.equal(rows()[0].querySelector('.conditional-chip-computed').textContent, 'Computed', `${code} is locked as Computed`);
+    assert.equal(rows()[0].querySelector('.conditional-code-condition').title, code, 'its code is the tooltip');
+    assert.equal(toggle().getAttribute('aria-disabled'), 'false', 'the {} goes to the code and back');
+    assert.deepEqual(writes, [], 'opening writes nothing');
     await act(async () => root.unmount());
   }
+  const { root, writes } = await mount('/^a/.test(title)');
+  assert.equal(rows().length, 0, 'a regular expression shows no controls');
+  assert.ok(document.querySelector('.props-cond-field .cm-editor'), 'it is in the code editor');
+  assert.equal(document.querySelector('.condition-code-note') ?? undefined, undefined, 'no sentence explains it');
+  assert.ok(!document.body.textContent.includes('Too complex'), 'no "too complex" message');
+  assert.equal(toggle().getAttribute('aria-disabled'), 'true', 'the way back is disabled');
+  await click(toggle());
+  assert.equal(rows().length, 0, 'pressing the disabled toggle does nothing');
+  assert.deepEqual(writes, [], 'nothing is rewritten');
+  await act(async () => root.unmount());
 });
 
 test('{} goes to the generated code and back while the code is drawable', async () => {
@@ -206,8 +216,8 @@ test('{} goes to the generated code and back while the code is drawable', async 
   assert.deepEqual(writes, [], 'switching writes nothing');
   await click(toggle());
   assert.equal(rows().length, 2, 'back to the controls');
-  // Code that is no longer drawable cannot go back to controls.
-  await draw('open && count.toFixed(1)');
+  // Code that cannot be delimited cannot go back to controls.
+  await draw('open && /a/.test(title)');
   assert.equal(rows().length, 0);
   assert.equal(toggle().getAttribute('aria-disabled'), 'true');
   await act(async () => root.unmount());
@@ -296,17 +306,140 @@ test("the Condition section has labels only, and each row keeps its remove on th
   for (const paragraph of ['Renders when none', 'True renders', 'Drop elements', 'Add a condition']) {
     assert.ok(!panel.includes(paragraph), `no helper paragraph: ${paragraph}`);
   }
-  assert.equal(document.querySelectorAll('.condition-otherwise-note, .conditional-else > p, .conditional-else > div:not(.conditional-group-head)').length, 0);
-  assert.equal(document.querySelector('.conditional-else .conditional-group-head').textContent, 'Otherwise');
+  assert.equal(document.querySelectorAll('.condition-otherwise-note, .condition-otherwise > p').length, 0);
+  assert.equal(document.querySelector('.condition-otherwise .prop-label').textContent, 'Otherwise');
   const row = rows()[0];
   assert.ok(row.querySelector('[aria-label="Operator"]'), 'the operator is in the row');
   const remove = row.querySelector('[aria-label="Remove condition"]');
   assert.ok(remove, 'and so is the remove');
   assert.equal(remove.closest('.conditional-condition'), row, "the remove shares the operator's row");
   assert.ok(row.querySelector('.dd-chevron'), 'the name is drawn as the dialog draws its names');
-  const quiet = document.querySelector('.conditional-else .conditional-add');
-  assert.equal(quiet.textContent.trim(), 'Remove else branch');
-  await click(quiet);
+  // Otherwise is one switch: Nothing, or an Else branch; the node has one, so Else branch is on.
+  const choices = [...document.querySelectorAll('.condition-otherwise .u-segmented-button')];
+  assert.deepEqual(
+    choices.map((choice) => choice.textContent),
+    ['Nothing', 'Else branch'],
+  );
+  assert.equal(choices[1].getAttribute('aria-checked'), 'true');
+  await click(choices[1]);
+  assert.deepEqual(toggles, [], 'the state it is in changes nothing');
+  await click(choices[0]);
   assert.deepEqual(toggles, [false]);
+  await act(async () => root.unmount());
+});
+
+// A component shaped like Lumos Button: a choice prop, a switch, and the values its frontmatter computes from them.
+const BUTTON_FRONTMATTER = [
+  'interface Props { variant?: "main" | "link" | "play" | "close"; render?: boolean; count?: number }',
+  'const { variant = "main", render = true, count } = Astro.props;',
+  'const isWritten = variant === "main" || variant === "link";',
+  'const content = isWritten ? await slotContent(Astro.slots) : "";',
+].join('\n');
+const BUTTON_CONTEXT = {
+  frontmatter: BUTTON_FRONTMATTER,
+  propsSchema: [
+    { name: 'variant', type: 'enum', options: ['main', 'link', 'play', 'close'] },
+    { name: 'render', type: 'boolean' },
+    { name: 'count', type: 'number' },
+  ],
+  origin: { file: 'src/components/Button.astro', page: undefined },
+};
+const subjectOf = (row) => row.querySelector('[aria-label="Property"]').textContent.trim();
+
+test('Button: render && (isWritten ? content : true) is Render is true and a locked Computed part; an edit keeps the part byte for byte', async () => {
+  const source = 'render && (isWritten ? content : true)';
+  const { root, writes } = await mount(source, { bindContext: BUTTON_CONTEXT });
+  assert.equal(rows().length, 2);
+  assert.equal(subjectOf(rows()[0]), 'Render', 'the prop by its label');
+  assert.equal(operatorOf(rows()[0]), 'is true');
+  assert.equal(rows()[1].querySelector('.conditional-chip-computed').textContent, 'Computed');
+  assert.equal(rows()[1].querySelector('.conditional-code-condition-code').textContent, 'isWritten ? content : true', 'its code, highlighted');
+  assert.equal(rows()[1].querySelector('[aria-label="Operator"]') ?? undefined, undefined, 'a locked part has no operator');
+  assert.ok(!document.body.textContent.includes('Too complex'), 'never the too-complex message');
+  assert.deepEqual(writes, [], 'opening writes nothing');
+  await choose(rows()[0].querySelector('[aria-label="Operator"]'), 'is false');
+  assert.deepEqual(writes, ['!render && (isWritten ? content : true)'], 'only the edited condition changes');
+  await act(async () => root.unmount());
+});
+
+test('a computed value is listed under Computed in code with its definition, and its row offers the plainer prop condition', async () => {
+  const { root, writes } = await mount('isWritten && count > 1', { bindContext: BUTTON_CONTEXT });
+  assert.equal(subjectOf(rows()[0]), 'Is Written');
+  await click(rows()[0].querySelector('[aria-label="Property"]'));
+  const groups = [...document.querySelectorAll('.dd-group-label')].map((label) => label.textContent);
+  assert.ok(groups.includes('Computed in code'), `the computed values have their heading: ${groups.join(', ')}`);
+  const option = [...document.querySelectorAll('.dd-option')].find((entry) => entry.querySelector('.dd-option-label')?.textContent === 'Is Written');
+  assert.match(option.title, /Is Written is computed in code: Variant is any of Main, Link/);
+  assert.match(option.title, /variant === "main" \|\| variant === "link"/, 'and its code');
+  await click(rows()[0].querySelector('[aria-label="Property"]'));
+  const offer = document.querySelector('.conditional-plainer');
+  assert.equal(offer.querySelector('.conditional-plainer-words').textContent, 'Same as: Variant is any of Main, Link');
+  assert.deepEqual(writes, [], 'the offer writes nothing until Switch');
+  await click(offer.querySelector('.conditional-plainer-switch'));
+  assert.deepEqual(writes, ['["main", "link"].includes(variant) && count > 1']);
+  assert.equal(operatorOf(rows()[0]), 'is any', 'the row is now the prop with its values');
+  assert.deepEqual(
+    [...rows()[0].querySelectorAll('.multi-select-chip')].map((chip) => chip.firstChild.textContent),
+    ['Main', 'Link'],
+    'its values are chips, worded as the choices are',
+  );
+  await act(async () => root.unmount());
+});
+
+test('|| and ! read as one any group: Render is false, or Count is greater than 3', async () => {
+  const { root, writes } = await mount('!render || count > 3', { bindContext: BUTTON_CONTEXT });
+  assert.equal(document.querySelectorAll('.conditional-group').length, 1);
+  assert.equal(document.querySelector('.conditional-match').textContent.trim(), 'any');
+  assert.deepEqual(rows().map(subjectOf), ['Render', 'Count']);
+  assert.deepEqual(rows().map(operatorOf), ['is false', 'is greater than']);
+  assert.equal(rows()[1].querySelector('.conditional-value-input').value, '3');
+  assert.deepEqual(writes, []);
+  await act(async () => root.unmount());
+});
+
+test('a name the props do not list (a loop item, optional chaining) is kept as written in the menu', async () => {
+  const { root, writes } = await mount('image?.url && variant !== "play"', { bindContext: BUTTON_CONTEXT });
+  assert.deepEqual(rows().map(subjectOf), ['image?.url', 'Variant']);
+  assert.deepEqual(rows().map(operatorOf), ['is true', 'does not equal']);
+  await click(rows()[0].querySelector('[aria-label="Property"]'));
+  const labels = [...document.querySelectorAll('.dd-option .dd-option-label')].map((label) => label.textContent);
+  assert.ok(labels.includes('Choose data'), 'any other data is a pick away');
+  await click(rows()[0].querySelector('[aria-label="Property"]'));
+  assert.deepEqual(writes, []);
+  await act(async () => root.unmount());
+});
+
+test('a Computed part is edited as code: Enter writes only that part, a part the rows can draw becomes rows, invalid code is never written, Escape cancels', async () => {
+  const source = 'render && (isWritten ? content : true)';
+  const { root, writes } = await mount(source, { bindContext: BUTTON_CONTEXT });
+  const part = () => rows()[1].querySelector('.conditional-code-condition');
+  const editor = () => part().querySelector('.cm-content');
+  const typeCode = async (text) => {
+    const view = modules.EditorView.findFromDOM(part().querySelector('.cm-editor')) ?? undefined;
+    assert.ok(view !== undefined, 'the code editor is open');
+    await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
+  };
+  const press = (key) => act(async () => editor().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
+
+  await click(part());
+  assert.ok(part().classList.contains('is-editing'), 'a click opens the part in the code editor');
+  await typeCode('isWritten ? content :');
+  await press('Enter');
+  assert.ok(part().classList.contains('is-editing'), 'code that does not parse stays open');
+  assert.ok(part().querySelector('.expr-input.invalid'), 'and is marked');
+  assert.deepEqual(writes, [], 'and is never written');
+  await press('Escape');
+  assert.ok(!part().classList.contains('is-editing'), 'Escape puts the part back');
+  assert.deepEqual(writes, []);
+
+  await click(part());
+  await typeCode('isWritten ? content : label');
+  await press('Enter');
+  assert.deepEqual(writes, ['render && (isWritten ? content : label)'], 'only that part changes');
+  await click(part());
+  await typeCode('variant === "main"');
+  await press('Enter');
+  assert.equal(writes[writes.length - 1], 'render && variant === "main"');
+  assert.deepEqual(rows().map(subjectOf), ['Render', 'Variant'], 'a part the rows can draw becomes a row');
   await act(async () => root.unmount());
 });

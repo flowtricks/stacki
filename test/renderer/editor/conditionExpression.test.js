@@ -161,7 +161,11 @@ test('every operator writes its idiomatic form and reads back as itself', () => 
     const code = expression.emitConditionExpression(model, DOUBLE);
     assert.deepEqual(expression.readConditionExpression(code), model, code);
   }
-  assert.equal(expression.EXPRESSION_OPERATORS.length, expression.VALUELESS_OPERATORS.length + expression.VALUED_OPERATORS.length);
+  // The list operators are read only by the rich reading (conditionExpressionRich.test.js), which also writes them.
+  assert.equal(
+    expression.EXPRESSION_OPERATORS.length,
+    expression.VALUELESS_OPERATORS.length + expression.VALUED_OPERATORS.length + expression.LIST_OPERATORS.length,
+  );
   assert.equal(expression.takesValue('equals'), true);
   assert.equal(expression.takesValue('isSet'), false);
 });

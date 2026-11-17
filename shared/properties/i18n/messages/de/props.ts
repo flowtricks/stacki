@@ -96,7 +96,6 @@ export const messages = {
   'props.condition.operator.notEquals': 'ist ungleich',
   'props.condition.operator.startsWith': 'beginnt mit',
   'props.condition.otherwise': 'Andernfalls',
-  'props.condition.tooComplex': 'Zu komplex für den visuellen Editor',
   'props.condition.tooComplexBlocked': 'Diese Bedingung nutzt Code, den der visuelle Editor nicht darstellen kann, daher bleibt sie Code.',
   'props.condition.typeNumber': 'Zahl eingeben',
   'props.condition.typeValue': 'Wert eingeben',
@@ -105,7 +104,6 @@ export const messages = {
   'props.condition.writeCode': 'Bedingung als Code schreiben',
   'props.conditional.always': 'Immer',
   'props.conditional.computed': 'Berechnet',
-  'props.conditional.computedCondition': 'Eine Bedingung, die die Zeilen nicht zeigen können, bleibt wie geschrieben',
   'props.conditional.computedDefinition': '{name} wird im Code berechnet: {definition}\n{code}',
   'props.conditional.computedGroup': 'Im Code berechnet',
   'props.conditional.computedTitle': 'Durch Code berechnet, den die Bedingungen nicht zeigen können',
@@ -600,7 +598,6 @@ export const messages = {
   'props.shared.noDefaultElsewhere':
     'Diese Komponente gibt {name} an die anderen Nutzer von {type} weiter, ohne sie zu destrukturieren, und hat daher keinen eigenen Standardwert. Einen gibt es in {where}.',
   'props.shared.sourceLimit': 'Das Projekt überschreitet das Quellcode-Limit für gemeinsame Eigenschaften.',
-  'props.sources.addElse': 'else-Zweig hinzufügen',
   'props.sources.code': 'Code', // same
   'props.sources.comment': 'Kommentar',
   'props.sources.commentPlaceholder': 'Notiz über diesem Element …',
@@ -611,6 +608,10 @@ export const messages = {
   'props.sources.doctype': 'Doctype', // same
   'props.sources.doctypeNote': 'Wird unverändert am Anfang der Seite ausgegeben. Kein Element – es hat weder Tag noch Attribute.',
   'props.sources.editCode': 'Code bearbeiten',
+  'props.sources.elseBranch': 'else-Zweig',
+  'props.sources.elseBranchTip': 'Einen anderen Zweig anzeigen, wenn die Bedingung falsch ist',
+  'props.sources.elseNone': 'Nichts',
+  'props.sources.elseNoneTip': 'Nichts wird angezeigt, wenn die Bedingung falsch ist',
   'props.sources.expression': 'Ausdruck',
   'props.sources.binding': 'Daten',
   'props.sources.frontmatter': 'Frontmatter', // same
@@ -621,9 +622,8 @@ export const messages = {
   'props.sources.loop': 'Schleife',
   'props.sources.rawNote':
     'Öffnet das {language} in einem schwebenden Editor, den du beim Arbeiten auf der Arbeitsfläche verschieben und in der Größe ändern kannst.',
-  'props.sources.removeElse': 'else-Zweig entfernen',
-  'props.sources.renderedFalse': 'Wird angezeigt, wenn die Bedingung falsch ist.',
-  'props.sources.renderedTrue': 'Wird angezeigt, wenn die Bedingung wahr ist.',
+  'props.sources.renderedFalse': 'Wenn falsch',
+  'props.sources.renderedTrue': 'Wenn wahr',
   'props.sources.selectComponent': 'Wähle eine Komponente, um ihre Eigenschaften zu bearbeiten.',
   'props.sources.settings': 'Einstellungen',
   'props.sources.showWhen': 'Anzeigen, wenn',

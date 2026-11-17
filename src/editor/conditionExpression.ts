@@ -26,6 +26,7 @@
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { CONDITIONAL_LIMITS, isReferencePath, quoteOf, type GroupMatch, type Quote } from './conditionalValue';
+import { needsParentheses } from './conditionCodeScan';
 
 /** The bounds are the Value conditions editor's: the same groups and conditions, drawn the same way. */
 export const CONDITION_EXPRESSION_LIMITS = {
@@ -35,6 +36,8 @@ export const CONDITION_EXPRESSION_LIMITS = {
   parenthesesDepthMax: CONDITIONAL_LIMITS.parenthesesDepthMax,
   subjectCharsMax: CONDITIONAL_LIMITS.referenceCharsMax,
   stringCharsMax: 200,
+  // The longest test the rich reading cuts into parts: far past any if a person writes; longer is shown as code.
+  richCodeCharsMax: 16_384,
 } as const satisfies Record<string, number>;
 
 /** What a condition compares a name with. */
@@ -64,14 +67,42 @@ export const VALUED_OPERATORS = [
 ] as const;
 export type ValuedOperator = (typeof VALUED_OPERATORS)[number];
 
-export type ExpressionOperator = ValuelessOperator | ValuedOperator;
+export type ExpressionOperator = ValuelessOperator | ValuedOperator | 'isAnyOf' | 'isNoneOf';
 
 /** The operators in menu order: what a name that is on or set is tested with, then comparisons, then lists. */
-export const EXPRESSION_OPERATORS: readonly ExpressionOperator[] = [...VALUELESS_OPERATORS, ...VALUED_OPERATORS];
+export const EXPRESSION_OPERATORS: readonly ExpressionOperator[] = [...VALUELESS_OPERATORS, ...VALUED_OPERATORS, 'isAnyOf', 'isNoneOf'];
 
-export type ExpressionCondition =
+/** Whether `operator` compares with a list of values (and so needs at least one). */
+export function takesValues(operator: ExpressionOperator): operator is ListOperator {
+  return operator === 'isAnyOf' || operator === 'isNoneOf';
+}
+
+/** Operators that compare the name with a list of values: `["a", "b"].includes(x)` and its negation. */
+export const LIST_OPERATORS = ['isAnyOf', 'isNoneOf'] as const;
+export type ListOperator = (typeof LIST_OPERATORS)[number];
+
+/** A condition on one name in scope: the rows draw it with a name, an operator and a value (or values). */
+export type SubjectCondition =
   | { readonly subject: string; readonly operator: ValuelessOperator }
-  | { readonly subject: string; readonly operator: ValuedOperator; readonly value: ExpressionLiteral };
+  | { readonly subject: string; readonly operator: ValuedOperator; readonly value: ExpressionLiteral }
+  | { readonly subject: string; readonly operator: ListOperator; readonly values: readonly ExpressionLiteral[] };
+
+/**
+ * A part of the condition the rows cannot draw (`isWritten ? content : true`,
+ * `format(x)`), kept as written and shown locked as Computed: the rich reading
+ * (conditionExpressionRich.ts) makes these; the strict reading never does.
+ */
+export interface CodeCondition {
+  readonly kind: 'code';
+  readonly code: string;
+}
+
+export type ExpressionCondition = SubjectCondition | CodeCondition;
+
+/** Whether `condition` is locked code rather than a row on a name. */
+export function isCodeCondition(condition: ExpressionCondition): condition is CodeCondition {
+  return 'kind' in condition;
+}
 
 export interface ExpressionGroup {
   readonly match: GroupMatch;
@@ -81,6 +112,8 @@ export interface ExpressionGroup {
 /** An empty model is an empty expression: a node with no condition yet. */
 export interface ConditionExpression {
   readonly groups: readonly ExpressionGroup[];
+  /** Comments before the test (`/* Live hides it. *\/ x`), kept as written and written back first: the rich reading's. */
+  readonly leading?: string;
 }
 
 /** Whether `operator` compares with a value (and so needs one). */
@@ -113,6 +146,19 @@ export function isConditionSubject(text: string): boolean {
   const reader = new TokenReader(text, tokens);
   const path = reader.readPath();
   return path !== undefined && reader.done() && path.start === 0 && path.end === text.length;
+}
+
+/**
+ * Whether `text` is a name with optional chaining in it (`image?.url`,
+ * `crumbs[1]?.href`): one the rich reading draws as a row and the writer spells
+ * back as written. It is a plain subject once each `?.` is read as a step.
+ */
+export function isOptionalChainSubject(text: string): boolean {
+  if (!text.includes('?.') || text.length > CONDITION_EXPRESSION_LIMITS.subjectCharsMax) {
+    return false;
+  }
+  const plain = text.replace(/\?\.\[/g, '[').replace(/\?\./g, '.');
+  return !plain.includes('?') && isConditionSubject(plain);
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +206,8 @@ export function readConditionExpression(code: string): ConditionExpression | und
   // Every subject the reader sliced out is a name the writer can spell again: the pair of the check isConditionSubject makes.
   for (const group of model.groups) {
     for (const condition of group.conditions) {
-      assert(isConditionSubject(condition.subject), 'readConditionExpression: a subject read is a subject');
+      assert(!isCodeCondition(condition), 'readConditionExpression: the strict reading keeps no code');
+      assert(isCodeCondition(condition) || isConditionSubject(condition.subject), 'readConditionExpression: a subject read is a subject');
     }
   }
   return model;
@@ -595,14 +642,26 @@ export function emitConditionExpression(model: ConditionExpression, options: Exp
     const joined = group.conditions.map((condition) => conditionCode(condition, options)).join(group.match === 'all' ? ' && ' : ' || ');
     return alone || group.conditions.length === 1 ? joined : `(${joined})`;
   });
-  return parts.join(' || ');
+  const joined = parts.join(' || ');
+  return model.leading === undefined ? joined : `${model.leading} ${joined}`;
 }
 
 /** One condition's code, as the writer spells it. */
 export function conditionCode(condition: ExpressionCondition, options: ExpressionWriteOptions): string {
+  if (isCodeCondition(condition)) {
+    // Locked code goes back exactly as it was read, in parentheses only where it would otherwise mix with the chain.
+    assert(condition.code.trim().length > 0, 'conditionCode: locked code is not blank');
+    return needsParentheses(condition.code) ? `(${condition.code})` : condition.code;
+  }
   assert(condition.subject.length > 0, 'conditionCode: a condition names something');
   const { subject } = condition;
   switch (condition.operator) {
+    case 'isAnyOf':
+    case 'isNoneOf': {
+      assert(condition.values.length > 0, 'conditionCode: a list holds a value');
+      const list = `[${condition.values.map((value) => literalCode(value, options)).join(', ')}].includes(${subject})`;
+      return condition.operator === 'isAnyOf' ? list : `!${list}`;
+    }
     case 'isTrue':
       return subject;
     case 'isFalse':

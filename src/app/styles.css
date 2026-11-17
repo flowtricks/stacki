@@ -3828,6 +3828,20 @@ body > .embed-editor_provenance {
   min-width: 100%;
   white-space: nowrap;
 }
+/* The navigator's rows sit in one box as wide as the widest of them (and at
+   least the panel): each row and each tinted subtree block stretches to it, so
+   a selected row and the block under it share both edges even when one label
+   runs past the panel. flow-root keeps the drop gaps' negative margins inside,
+   as the scrolling panel body did before. */
+.structure-tree {
+  display: flow-root;
+  width: max-content;
+  min-width: 100%;
+}
+.structure-tree .structure-node {
+  width: auto;
+  min-width: 0;
+}
 .structure-node:hover {
   background: var(--bg-hover);
   color: var(--text);

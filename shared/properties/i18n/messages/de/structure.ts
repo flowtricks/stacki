@@ -4,6 +4,10 @@ import type { MessageKey } from '../en/structure';
 
 export const messages = {
   'structure.collapseAll': 'Alle einklappen',
+  'structure.cond.and': 'und',
+  'structure.cond.if': 'wenn {condition}',
+  'structure.cond.not': 'nicht {subject}',
+  'structure.cond.or': 'oder',
   'structure.dragHere': 'Komponenten hierher ziehen',
   'structure.error.needsDeveloper': 'Diese Seite muss von einem Entwickler im Quelltext korrigiert werden, bevor sie bearbeitet werden kann.',
   'structure.error.openCode': 'Code-Bereich öffnen',

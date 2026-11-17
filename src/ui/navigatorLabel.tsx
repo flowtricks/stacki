@@ -5,6 +5,9 @@ import React from 'react';
 import type { PageNode, PairedNode } from '../../shared/page/pageNode';
 import { classLabel, elementLabel } from '../editor/classNames';
 import { isFragmentNode } from '../editor/liveClasses';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import { conditionLabel } from './conditionLabel';
 import {
   BranchIcon,
   CodeIcon,
@@ -22,10 +25,12 @@ import {
 export interface NodeDescription {
   readonly icon: React.ReactNode;
   readonly label: string;
+  /** The row's tooltip, where the label is shorter than what it stands for (an `if`'s whole test). */
+  readonly title?: string;
 }
 
 /** A node's Navigator icon and label; `live` is the class list the page rendered it with, when known. */
-export function describeNode(node: PageNode, live: readonly string[] | undefined): NodeDescription {
+export function describeNode(node: PageNode, live: readonly string[] | undefined, translate: Translator = ENGLISH_TRANSLATE): NodeDescription {
   if (isFragmentNode(node)) {
     return { icon: <CustomElementIcon size={12} />, label: 'Fragment' }; // i18n-ignore: the name of Astro's <Fragment> element, a code word.
   }
@@ -51,8 +56,11 @@ export function describeNode(node: PageNode, live: readonly string[] | undefined
         label: at > 0 ? node.head.slice(0, at + 4) : truncate(node.head, 24),
       };
     }
-    case 'cond':
-      return { icon: <BranchIcon size={12} />, label: truncate(`if ${node.test}`, 40) };
+    case 'cond': {
+      // In words a designer reads ("if Variant = Play"), cut short; the test as written is the tooltip.
+      const described = conditionLabel(node.test, translate);
+      return { icon: <BranchIcon size={12} />, label: described.label, title: described.title };
+    }
     case 'branch':
       return { icon: <CornerIcon size={12} />, label: node.name === 'else' ? 'else' : 'then' };
     case 'component':

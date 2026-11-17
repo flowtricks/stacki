@@ -2,7 +2,8 @@
 // (PropFieldLabel.tsx), for every conditions editor. On, it shows the
 // condition as code; pressed again it goes back to the controls, unless the
 // code says more than the controls can draw, in which case it is disabled and
-// its title says why (the pattern of "Use the normal field").
+// its title says why (the pattern of "Use the normal field"). Code the controls
+// cannot draw is shown as highlighted code alone: no sentence explains it.
 
 import { BracesIcon } from '../../ui/Icons';
 import { useCodeAccess } from '../../ui/CodeAccess';
@@ -42,19 +43,6 @@ export function ConditionCodeToggle(props: { readonly decision: ConditionViewDec
     >
       <BracesIcon size={12} />
     </button>
-  );
-}
-
-/** "Too complex for the visual editor", above code that opened as code on its own. */
-export function ConditionCodeNote(props: { readonly decision: ConditionViewDecision }) {
-  const translate = useTranslate();
-  if (props.decision.note === undefined) {
-    return undefined;
-  }
-  return (
-    <div className="prop-field-note condition-code-note" role="note">
-      {translate('props.condition.tooComplex')}
-    </div>
   );
 }
 

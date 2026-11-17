@@ -319,3 +319,81 @@ Variant is none of Main, Link (same result, editable with dropdowns)").
 Nothing changes until Switch is pressed; the editor writes once, as it
 closes, so it is one undo step. The subject's own trigger has the
 definition as its tooltip too.
+
+## Template if conditions
+
+An `if` in the Navigator (`{cond && (…)}`, `{cond ? (…) : (…)}`, an else-if
+chain; the parser keeps everything before the last top-level `&&`, or before
+the `?`, as the node's `test`) opens in the Settings tab as the same groups,
+rows, `+ New condition` and `+ New group` as Value conditions
+(`src/features/props/ConditionExpressionEditor.tsx`). The model is
+`src/editor/conditionExpression.ts`; the reading every test opens with is the
+rich one, `src/editor/conditionExpressionRich.ts`:
+
+- The strict reading is tried first, so a test it reads opens as before.
+- Otherwise the test is cut at its top-level `||`, then `&&`
+  (`src/editor/conditionCodeScan.ts`, which skips brackets, strings,
+  templates and comments), and each part is read alone: a row, a list
+  (`["main", "link"].includes(variant)` is **Variant is any of Main, Link**,
+  `!` of it is none of), a name with optional chaining (`image?.url`,
+  `note?.kind === "callout"`), or a **Computed** row holding the part's code
+  as written (`isWritten ? content : true`, `format(x)`, `x == "a"`).
+- A test with a ternary or `??` at its top is one Computed row. Comments
+  before a test are kept and written back first.
+- Only code that cannot be delimited (a regular expression, an unclosed
+  bracket) opens as code: highlighted, with no sentence about it. The `{}`
+  then cannot go back to the rows.
+
+Subjects: the component's props by label with their type icons, then the
+values its frontmatter computes under **Computed in code** (code icon, the
+definition as the tooltip), then **Choose data** for any other name in scope
+(a loop item's field). A computed value whose definition is one prop condition
+offers **Same as: Variant is any of Main, Link** with Switch.
+
+A Computed row is editable: a click (or its `{}`) opens that part alone in the
+code editor. Enter or leaving the field writes it when it parses as an
+expression (`isExpression`, `src/features/props/jsCheck.ts`); code that does
+not parse is marked and never written; Escape puts it back. A part the rows
+can draw after the edit (`variant === "main"`) becomes rows in its place.
+
+Writing: opening or hovering writes nothing, so an untouched test keeps its
+bytes. Each edit writes the node's test once (one undo step) with
+`emitConditionExpression`: Computed parts go back exactly as read, in
+parentheses only where they would mix with the chain, so editing Render in
+`render && (isWritten ? content : true)` writes
+`!render && (isWritten ? content : true)`. The rest of the test is written in
+the editor's style (spacing and quotes follow the file), so a test written in
+another style is normalized when, and only when, it is edited.
+
+Otherwise is one switch, **Nothing | Else branch** (the shared
+`SegmentedControl`: equal fixed segments, a tooltip under the hovered one),
+which turns `&&` into a ternary with an else branch and back.
+
+The Navigator names an if in words (`src/ui/conditionLabel.ts`):
+**if Variant = Play**, **if Render and Is Written…** (a Computed part is named
+by its first name and an ellipsis), cut at 40 characters, with the test as
+written as the row's tooltip. The tinted block under a selected row spans the
+row's full width (`.structure-tree`), also when a label runs past the panel.
+
+### Coverage
+
+Every if test in the corpus, read with the app's parser:
+
+| Project | ifs | Rows only, before | Opens as rows, after | of which with a Computed part |
+|---|---|---|---|---|
+| Lumos (`test/fixtures/lumos`) | 55 | 51 (92.7%) | 55 (100%) | 4 |
+| webflow-shop | 84 | 80 (95.2%) | 84 (100%) | 4 |
+| Webflow.com build | 241 | 203 (84.2%) | 241 (100%) | 12 |
+
+Before, the 4 + 4 + 38 others opened as code under "Too complex for the
+visual editor"; that sentence is gone everywhere (the Value conditions dialog
+and the class list included). The Lumos four are all `render && (… || …)` or
+the Button ternary: Render is a row, the inner part a Computed row.
+
+Tests: `test/renderer/editor/conditionExpressionRich.test.js` (each shape,
+meaning kept over a grid of values, the Lumos corpus as a fixed point),
+`test/renderer/props/conditionExpressionEditor.test.js` (the panel per shape,
+Computed editing), `test/renderer/ui/conditionLabel.test.js` (Navigator
+labels), `test/electron/props/conditionPanels.test.js` (Chromium layout: the
+selected row and its block share both edges; the Otherwise segments keep their
+width on hover; set `CONDITION_SHOTS` for screenshots).

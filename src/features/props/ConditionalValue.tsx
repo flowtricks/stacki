@@ -12,7 +12,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
-import type { HTMLAttributes, ReactNode, RefCallback, RefObject } from 'react';
+import type { HTMLAttributes, KeyboardEvent, ReactNode, RefCallback, RefObject } from 'react';
 import useListReorder from '../../ui/useListReorder';
 import { DropLine } from '../../ui/DropLine';
 import { assert } from '../../../shared/core/assert';
@@ -35,6 +35,7 @@ import {
 import { templateHoles, type TemplateHole } from '../../editor/bindings';
 import { FIELD_UNFOCUSED } from './fieldFocus';
 import ExprInput, { type ExprInputAPI } from '../../ui/ExprInput';
+import { isExpression } from './jsCheck';
 import { CodeInline, CodeTokens } from '../../ui/CodeBlock';
 import type { CodeLine, CodeToken } from '../../ui/codeHighlight';
 import { declarationTokens, styleDeclarations } from './StyleEditor';
@@ -45,7 +46,7 @@ import { BracesIcon, BranchIcon, CloseIcon, CodeIcon, SyncIcon, CornerIcon, Drag
 import { BindHandle, FieldDataPicker } from './BindingEditors';
 import type { FieldPickerAt, InsertAPI } from './bindingTypes';
 import { BindField } from './propBindings';
-import { ConditionCodeBox, ConditionCodeNote, ConditionCodeToggle } from './ConditionCodeToggle';
+import { ConditionCodeBox, ConditionCodeToggle } from './ConditionCodeToggle';
 import { appliedCode, CONTROLS_DECISION, decideConditionView, type ConditionView } from './conditionViewDecision';
 import {
   appliedAttr,
@@ -485,7 +486,6 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
         </div>
         {view === 'code' ? (
           <>
-            <ConditionCodeNote decision={decision} />
             <ConditionCodeBox code={code} seed={codeSeed} context={props.bindContext} onChange={setCode} />
           </>
         ) : (
@@ -734,19 +734,7 @@ export function ConditionRow(props: {
   const translate = useTranslate();
   const { condition, catalog } = props;
   if (condition.code !== undefined) {
-    // A test the rows cannot show: its code, highlighted and locked; it can only be removed.
-    return (
-      <ConditionLine
-        onRemove={props.onRemove}
-        subject={
-          <span className="conditional-code-condition" title={translate('props.conditional.computedCondition')}>
-            <CodeInline text={condition.code} language="typescript" />
-          </span>
-        }
-        operator={undefined}
-        values={undefined}
-      />
-    );
+    return <LockedConditionLine code={condition.code} onRemove={props.onRemove} />;
   }
   const prop = condition.subject === undefined ? undefined : propOf(catalog, condition.subject);
   // A name the code tests that the component does not declare is still listed, so the menu shows it.
@@ -799,6 +787,114 @@ export function ConditionRow(props: {
         />
       }
       values={takesValues(condition.operator) && prop !== undefined ? <ValuesInput condition={condition} prop={prop} onChange={props.onChange} /> : undefined}
+    />
+  );
+}
+
+/**
+ * A test the rows cannot show (`isWritten ? content : true`): the grey Computed
+ * chip, then its code highlighted on one line (cut with an ellipsis, the whole
+ * code as the tooltip). With `onCommit` (the template if) it is editable: a
+ * click on it, or its `{}`, opens that part alone in the code editor; Enter or
+ * leaving the field writes it when it is an expression, Escape puts it back,
+ * and code that does not parse is marked and never written. Without `onCommit`
+ * (the Value conditions dialog) it is locked and can only be removed.
+ */
+export function LockedConditionLine(props: { readonly code: string; readonly onRemove: () => void; readonly onCommit?: ((code: string) => void) | undefined }) {
+  const translate = useTranslate();
+  const [draft, setDraft] = useState<string | undefined>(undefined);
+  const { onCommit } = props;
+  const chip = (
+    <span className="conditional-chip conditional-chip-computed">
+      <BranchIcon size={11} />
+      {translate('props.conditional.computed')}
+    </span>
+  );
+  if (draft !== undefined && onCommit !== undefined) {
+    const valid = isExpression(draft);
+    const commit = (text: string): void => {
+      if (!isExpression(text)) {
+        return; // Code that does not parse stays in the field, marked, and is never written.
+      }
+      setDraft(undefined);
+      if (text.trim() !== props.code.trim()) {
+        onCommit(text.trim());
+      }
+    };
+    return (
+      <ConditionLine
+        onRemove={props.onRemove}
+        subject={
+          <span
+            className="conditional-code-condition is-editing"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                setDraft(undefined);
+              }
+            }}
+            onBlur={(event) => {
+              if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+                return;
+              }
+              // Leaving the field writes what parses; what does not is dropped, so a half-typed part never sticks.
+              if (isExpression(draft)) {
+                commit(draft);
+              } else {
+                setDraft(undefined);
+              }
+            }}
+          >
+            {chip}
+            <ExprInput
+              value={draft}
+              autoFocus
+              singleLine
+              invalid={!valid}
+              language="typescript"
+              ariaLabel={translate('props.conditional.computed')}
+              onChange={setDraft}
+              onCommit={commit}
+            />
+          </span>
+        }
+        operator={undefined}
+        values={undefined}
+      />
+    );
+  }
+  const open = onCommit === undefined ? undefined : () => setDraft(props.code);
+  return (
+    <ConditionLine
+      onRemove={props.onRemove}
+      subject={
+        <span
+          className={`conditional-code-condition${open === undefined ? '' : ' is-editable'}`}
+          title={props.code}
+          {...(open === undefined
+            ? {}
+            : {
+                role: 'button',
+                tabIndex: 0,
+                onClick: open,
+                onKeyDown: (event: KeyboardEvent<HTMLSpanElement>) => {
+                  if (event.key === 'Enter') {
+                    open();
+                  }
+                },
+              })}
+        >
+          {chip}
+          <CodeInline text={props.code.replace(/\s+/g, ' ')} language="typescript" className="conditional-code-condition-code" />
+          {open !== undefined && (
+            <span className="prop-expr-toggle conditional-code-condition-edit" aria-hidden="true">
+              <BracesIcon size={12} />
+            </span>
+          )}
+        </span>
+      }
+      operator={undefined}
+      values={undefined}
     />
   );
 }
@@ -886,7 +982,7 @@ export function ConditionLine(props: {
  * replaces the row with it. Nothing changes until Switch is pressed; the
  * editor writes once, as it closes, so it is one undo step.
  */
-function PlainerSuggestion(props: { readonly why: string; readonly words: string; readonly onSwitch: () => void }) {
+export function PlainerSuggestion(props: { readonly why: string; readonly words: string; readonly onSwitch: () => void }) {
   const translate = useTranslate();
   const rowTip = useDelayedTooltip();
   const switchTip = useDelayedTooltip();

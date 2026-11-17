@@ -14,7 +14,8 @@ import { navigatorHostsDrop } from './navigatorDrop';
 import type { DropPlacement } from './dropPlacement';
 import { isFragmentNode } from '../../editor/liveClasses';
 import { labelsNode } from '../../../shared/page/leadingNote';
-import { describeNode, truncate } from '../../ui/navigatorLabel';
+import { describeNode, truncate, type NodeDescription } from '../../ui/navigatorLabel';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 export interface StructureTreeContext {
   readonly clientMode?: boolean;
@@ -166,6 +167,7 @@ export function scrollRowIntoScroller(row: HTMLElement | undefined): void {
 }
 
 function TreeNode(props: TreeNodeProps) {
+  const translate = useTranslate();
   const { node, depth } = props;
   const context = treeContextFromRow(props);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -182,7 +184,7 @@ function TreeNode(props: TreeNodeProps) {
   // the browser draws them: rows of their own, so an element with one opens.
   const pseudos = pseudoKindsOf(node.id, props.pseudoNodeIds);
   const showChildren = listsChildren || pseudos.length > 0;
-  const view = nodeView(props, { children, host, showChildren, selected });
+  const view = nodeView(props, { children, host, showChildren, selected }, translate);
   const pseudoRow = (pseudo: PseudoKind): React.ReactNode =>
     pseudos.includes(pseudo) ? (
       <PseudoRow
@@ -305,17 +307,17 @@ interface NodeView {
   readonly layout: boolean;
   readonly selected: boolean;
   readonly dropInto: boolean;
-  readonly description: { readonly icon: React.ReactNode; readonly label: string };
+  readonly description: NodeDescription;
   readonly hint: string | undefined;
 }
 
-function nodeView(props: TreeNodeProps, shape: Pick<NodeView, 'children' | 'host' | 'showChildren' | 'selected'>): NodeView {
+function nodeView(props: TreeNodeProps, shape: Pick<NodeView, 'children' | 'host' | 'showChildren' | 'selected'>, translate: Translator): NodeView {
   const { children, host, showChildren, selected } = shape;
   const { node } = props;
   const fragment = isFragmentNode(node);
   const layout = node.id === 'layout';
   const component = node.kind === 'component' && !node.dynamicTag && !fragment;
-  let description = describeNode(node, props.liveClassesById?.get(node.id));
+  let description = describeNode(node, props.liveClassesById?.get(node.id), translate);
   let hint: string | undefined;
   if (layout) {
     const label = node.kind === 'component' || node.kind === 'element' ? node.name : '';
@@ -369,7 +371,13 @@ function TreeRow(props: TreeRowProps) {
     >
       <TreeDragHandle {...(props.showChildren ? { expansion: { collapsed: props.collapsed, toggle: () => props.toggleCollapse(node) } } : {})} />
       <span className="icon">{bindingPath === undefined ? description.icon : <VariableTextSizeIcon size={12} />}</span>
-      <RowLabel node={node} label={description.label} note={props.note} {...(bindingPath === undefined ? {} : { bindingPath })} />
+      <RowLabel
+        node={node}
+        label={description.label}
+        note={props.note}
+        {...(description.title === undefined ? {} : { title: description.title })}
+        {...(bindingPath === undefined ? {} : { bindingPath })}
+      />
       {props.hint && (
         <span className="prop-preview" title={translate('structure.row.imported', { file: `${props.hint}.astro` })}>
           {props.hint}
@@ -477,15 +485,17 @@ function RowLabel({
   label,
   note,
   bindingPath,
+  title,
 }: {
   readonly node: NavigatorNode;
   readonly label: string;
+  readonly title?: string;
   readonly note: NavigatorNode | undefined;
   readonly bindingPath?: string;
 }) {
   const noteValue = note?.kind === 'comment' ? note.value : undefined;
   return (
-    <span className="label" style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
+    <span className="label" title={title} style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
       {bindingPath === undefined ? label : <DataChip path={bindingPath} />}
       {noteValue !== undefined && (
         <span className="node-note" title={noteValue.trim()}>

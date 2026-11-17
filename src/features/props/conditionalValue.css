@@ -395,8 +395,38 @@
 .condition-expression .conditional-condition > .loop-settings-remove {
   flex: 0 0 auto;
 }
-.conditional-else > .conditional-add {
-  align-self: flex-start;
+/* The if's name menu sits in a box the data picker opens from: the box takes the name's place in the row. */
+.condition-expression .conditional-condition > .conditional-subject-anchor {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.conditional-subject-anchor > .dd-trigger.conditional-subject {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.condition-expression .conditional-condition > .multi-select {
+  flex: 1 1 60px;
+  min-width: 0;
+}
+/* Otherwise: its label, then the Nothing / Else branch switch, on one line. */
+.condition-otherwise {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+/* Two equal segments of a fixed width: hovering or pressing one never moves the other (SegmentedControl). */
+.condition-otherwise > .u-segmented.condition-otherwise-switch {
+  flex: 0 0 auto;
+  width: 184px;
+}
+.condition-otherwise-switch > .u-segmented-button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* A default computed by code the conditions cannot show (ConditionalDefaultField.tsx ComputedDefault):
@@ -492,15 +522,32 @@
   padding: 1px 4px;
 }
 
-/* A test the rows cannot show: its code, locked, as wide as the row allows. */
+/* A test the rows cannot show: the Computed chip, then its code on one line,
+   locked, as wide as the row allows; the code clips with an ellipsis and the
+   whole of it is the tooltip. */
 .conditional-condition > .conditional-code-condition {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 1 1 160px;
   min-width: 0;
-  padding: 5px 8px;
+  padding: 3px 8px 3px 3px;
   border-radius: 6px;
   background: var(--bg-input);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+}
+.conditional-code-condition > .conditional-chip-computed {
+  flex: none;
+  width: auto;
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+  background: var(--bg-hover);
+}
+.conditional-code-condition-code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .conditional-condition > .conditional-code-condition + .conditional-values-none {
   display: none;
@@ -540,4 +587,26 @@
 .conditional-plainer-switch:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+/* A Computed part being edited: the code editor takes the rest of the row. */
+.conditional-code-condition.is-editing > .expr-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conditional-code-condition.is-editable {
+  cursor: text;
+}
+.conditional-code-condition.is-editable:hover {
+  background: var(--bg-hover);
+}
+.conditional-code-condition > .conditional-code-condition-edit {
+  flex: none;
+  margin-left: auto;
+}
+/* In the narrow Settings column the name and the operator keep their words; the value gives way first. */
+.condition-expression .conditional-condition > .dd-trigger.conditional-value-pick,
+.condition-expression .conditional-condition > .conditional-value-input {
+  flex: 1 1 0;
+  min-width: 48px;
 }

@@ -95,7 +95,6 @@ export const messages = {
   'props.condition.operator.notEquals': "n'est pas égal à",
   'props.condition.operator.startsWith': 'commence par',
   'props.condition.otherwise': 'Sinon',
-  'props.condition.tooComplex': "Trop complexe pour l'éditeur visuel",
   'props.condition.tooComplexBlocked': "Cette condition utilise du code que l'éditeur visuel ne peut pas afficher ; elle reste donc du code.",
   'props.condition.typeNumber': 'Saisir un nombre',
   'props.condition.typeValue': 'Saisir une valeur',
@@ -104,7 +103,6 @@ export const messages = {
   'props.condition.writeCode': 'Écrire la condition en code',
   'props.conditional.always': 'Toujours',
   'props.conditional.computed': 'Calculé',
-  'props.conditional.computedCondition': 'Un test que les lignes ne peuvent pas afficher, conservé tel quel',
   'props.conditional.computedDefinition': '{name} est calculé dans le code : {definition}\n{code}',
   'props.conditional.computedGroup': 'Calculé dans le code',
   'props.conditional.computedTitle': 'Calculé par du code que les conditions ne peuvent pas afficher',
@@ -594,7 +592,6 @@ export const messages = {
   'props.shared.noDefaultElsewhere':
     'Ce composant transmet {name} aux autres utilisateurs de {type} sans la déstructurer ; il n’a donc pas de valeur par défaut propre. Il y en a une dans {where}.',
   'props.shared.sourceLimit': 'Le projet dépasse la limite de code des propriétés partagées.',
-  'props.sources.addElse': 'Ajouter une branche else',
   'props.sources.code': 'Code', // same
   'props.sources.comment': 'Commentaire',
   'props.sources.commentPlaceholder': 'Note au-dessus de cet élément…',
@@ -606,6 +603,10 @@ export const messages = {
   'props.sources.doctype': 'Doctype', // same
   'props.sources.doctypeNote': 'Écrit tel quel en haut de la page. Ce n’est pas un élément : il n’a ni balise ni attributs.',
   'props.sources.editCode': 'Modifier le code',
+  'props.sources.elseBranch': 'Branche else',
+  'props.sources.elseBranchTip': 'Afficher une autre branche si la condition est fausse',
+  'props.sources.elseNone': 'Rien',
+  'props.sources.elseNoneTip': "Rien ne s'affiche si la condition est fausse",
   'props.sources.expression': 'Expression', // same
   'props.sources.binding': 'Données',
   'props.sources.frontmatter': 'Frontmatter', // same
@@ -616,9 +617,8 @@ export const messages = {
   'props.sources.loop': 'Boucle',
   'props.sources.rawNote':
     'Ouvre le {language} dans un éditeur flottant que vous pouvez déplacer et redimensionner pendant que vous travaillez sur le canevas.',
-  'props.sources.removeElse': 'Retirer la branche else',
-  'props.sources.renderedFalse': 'Affiché quand la condition est fausse.',
-  'props.sources.renderedTrue': 'Affiché quand la condition est vraie.',
+  'props.sources.renderedFalse': 'Si fausse',
+  'props.sources.renderedTrue': 'Si vraie',
   'props.sources.selectComponent': 'Sélectionnez un composant pour modifier ses propriétés.',
   'props.sources.settings': 'Réglages',
   'props.sources.showWhen': 'Afficher quand',

@@ -32,7 +32,7 @@ import {
   type ConditionProp,
 } from './conditionalModel';
 import { RowPopup } from './LoopRows';
-import { ConditionCodeBox, ConditionCodeNote, ConditionCodeToggle } from './ConditionCodeToggle';
+import { ConditionCodeBox, ConditionCodeToggle } from './ConditionCodeToggle';
 import { appliedCode, CONTROLS_DECISION, decideConditionView, type ConditionView } from './conditionViewDecision';
 import type { RichContext } from './RichContent';
 import './conditionalValue.css';
@@ -166,7 +166,6 @@ export function ClassListEditor(props: ClassListEditorProps) {
         </div>
         {view === 'code' ? (
           <>
-            <ConditionCodeNote decision={decision} />
             <ConditionCodeBox code={code} seed={codeSeed} context={props.bindContext} onChange={setCode} />
           </>
         ) : (

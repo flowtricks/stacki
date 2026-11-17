@@ -4,6 +4,10 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 
 export const messages = {
   'structure.collapseAll': 'Collapse all',
+  'structure.cond.and': 'and',
+  'structure.cond.if': 'if {condition}',
+  'structure.cond.not': 'not {subject}',
+  'structure.cond.or': 'or',
   'structure.dragHere': 'Drag components here',
   'structure.error.needsDeveloper': 'This page needs a Developer to fix its source before editing.',
   'structure.error.openCode': 'Open code panel',

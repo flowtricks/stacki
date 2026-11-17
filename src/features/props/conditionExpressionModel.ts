@@ -8,14 +8,18 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
-import type { GroupMatch } from '../../editor/conditionalValue';
+import type { Condition, GroupMatch } from '../../editor/conditionalValue';
+import { negatedCondition, type ConditionProp } from './conditionalModel';
 import {
   CONDITION_EXPRESSION_LIMITS,
   EXPRESSION_OPERATORS,
   isConditionSubject,
+  isOptionalChainSubject,
+  isCodeCondition,
   isWritableLiteral,
   ordersValues,
   takesValue,
+  takesValues,
   type ConditionExpression,
   type ExpressionCondition,
   type ExpressionGroup,
@@ -23,6 +27,7 @@ import {
   type ExpressionOperator,
 } from '../../editor/conditionExpression';
 import { dataTree } from '../../editor/dataSuggest';
+import { readRichConditionExpression } from '../../editor/conditionExpressionRich';
 import type { DataContext } from '../../editor/dataScope';
 import type { TreeNode } from '../../editor/dataSample';
 
@@ -118,6 +123,8 @@ const OPERATOR_KEYS = {
   endsWith: 'props.condition.operator.endsWith',
   lengthEquals: 'props.condition.operator.lengthEquals',
   lengthGreaterThan: 'props.condition.operator.lengthGreaterThan',
+  isAnyOf: 'props.conditional.operator.isAny',
+  isNoneOf: 'props.conditional.operator.isNotAny',
 } as const satisfies Record<ExpressionOperator, string>;
 
 // What each kind of value can sensibly be asked, in menu order. A plain test of the name itself (`x`, `!x`) is
@@ -125,9 +132,9 @@ const OPERATOR_KEYS = {
 // type is not known offers everything and says nothing.
 const OPERATORS_BY_KIND: Readonly<Record<ConditionValueKind, readonly ExpressionOperator[]>> = {
   boolean: ['isTrue', 'isFalse'],
-  string: ['isTrue', 'isFalse', 'isEmpty', 'isNotEmpty', 'equals', 'notEquals', 'contains', 'notContains', 'startsWith', 'endsWith'],
-  enum: ['isTrue', 'isFalse', 'equals', 'notEquals'],
-  number: ['equals', 'notEquals', 'greaterThan', 'atLeast', 'lessThan', 'atMost', 'isSet', 'isNotSet'],
+  string: ['isTrue', 'isFalse', 'isEmpty', 'isNotEmpty', 'equals', 'notEquals', 'isAnyOf', 'isNoneOf', 'contains', 'notContains', 'startsWith', 'endsWith'],
+  enum: ['isTrue', 'isFalse', 'equals', 'notEquals', 'isAnyOf', 'isNoneOf'],
+  number: ['equals', 'notEquals', 'isAnyOf', 'isNoneOf', 'greaterThan', 'atLeast', 'lessThan', 'atMost', 'isSet', 'isNotSet'],
   array: ['isTrue', 'isFalse', 'isEmpty', 'isNotEmpty', 'contains', 'notContains', 'lengthEquals', 'lengthGreaterThan'],
   object: ['isTrue', 'isFalse'],
   date: ['isTrue', 'isFalse'],
@@ -252,12 +259,16 @@ export function textOfLiteral(kind: ConditionValueKind, literal: ExpressionLiter
 // The draft.
 // ---------------------------------------------------------------------------
 
-/** A condition as it is being chosen: no name yet, or a comparison with no value yet. */
+/** A condition as it is being chosen: no name yet, or a comparison with no value yet; or a locked part of the code. */
 export interface ConditionRowDraft {
   readonly subject: string | undefined;
   readonly operator: ExpressionOperator;
   /** The value as typed. */
   readonly text: string;
+  /** The values an Is any of / Is none of row holds, as chips. */
+  readonly values?: readonly ExpressionLiteral[];
+  /** Set on a part of the test the rows cannot draw: its code, kept as written and shown as a Computed chip. */
+  readonly code?: string;
 }
 
 export interface ConditionGroupDraft {
@@ -267,6 +278,8 @@ export interface ConditionGroupDraft {
 
 export interface ConditionExpressionDraft {
   readonly groups: readonly ConditionGroupDraft[];
+  /** The comments the test opens with, written back first. */
+  readonly leading?: string;
 }
 
 /** Finds the type of a name; the editor passes the data context's. */
@@ -277,16 +290,25 @@ export function draftOfExpression(model: ConditionExpression, typeOf: TypeOfSubj
   if (model.groups.length === 0) {
     return { groups: [{ match: 'all', conditions: [blankRow()] }] };
   }
-  return {
-    groups: model.groups.map((group) => ({
-      match: group.match,
-      conditions: group.conditions.map((condition) => ({
-        subject: condition.subject,
-        operator: condition.operator,
-        text: takesValue(condition.operator) && 'value' in condition ? textOfLiteral(typeOf(condition.subject).kind, condition.value) : '',
-      })),
-    })),
-  };
+  const groups = model.groups.map((group) => ({
+    match: group.match,
+    conditions: group.conditions.map((condition) => rowOfCondition(condition, typeOf)),
+  }));
+  return model.leading === undefined ? { groups } : { groups, leading: model.leading };
+}
+
+/** The row a condition opens as: locked code keeps its text; a list keeps its values as chips. */
+export function rowOfCondition(condition: ExpressionCondition, typeOf: TypeOfSubject): ConditionRowDraft {
+  if (isCodeCondition(condition)) {
+    assert(condition.code.length > 0, 'rowOfCondition: locked code is not blank');
+    return { subject: undefined, operator: 'isTrue', text: '', code: condition.code };
+  }
+  if ('values' in condition) {
+    assert(condition.values.length > 0, 'rowOfCondition: a list holds a value');
+    return { subject: condition.subject, operator: condition.operator, text: '', values: condition.values };
+  }
+  const text = 'value' in condition ? textOfLiteral(typeOf(condition.subject).kind, condition.value) : '';
+  return { subject: condition.subject, operator: condition.operator, text };
 }
 
 export function blankRow(): ConditionRowDraft {
@@ -295,8 +317,18 @@ export function blankRow(): ConditionRowDraft {
 
 /** The condition a row says, or undefined while the row is not finished. */
 export function conditionOfRow(row: ConditionRowDraft, typeOf: TypeOfSubject): ExpressionCondition | undefined {
-  if (row.subject === undefined || !isConditionSubject(row.subject)) {
+  if (row.code !== undefined) {
+    return { kind: 'code', code: row.code }; // Locked: written back exactly as it was read.
+  }
+  if (row.subject === undefined) {
     return undefined;
+  }
+  if (!isConditionSubject(row.subject) && !isOptionalChainSubject(row.subject)) {
+    return undefined;
+  }
+  if (takesValues(row.operator)) {
+    const values = (row.values ?? []).filter(isWritableLiteral);
+    return values.length === 0 ? undefined : { subject: row.subject, operator: row.operator, values };
   }
   if (!takesValue(row.operator)) {
     return { subject: row.subject, operator: row.operator };
@@ -318,14 +350,14 @@ export function expressionOfDraft(draft: ConditionExpressionDraft, typeOf: TypeO
       groups.push({ match: group.match, conditions });
     }
   }
-  return { groups };
+  return draft.leading === undefined ? { groups } : { groups, leading: draft.leading };
 }
 
 export function withGroupAdded(draft: ConditionExpressionDraft): ConditionExpressionDraft {
   if (draft.groups.length >= CONDITION_EXPRESSION_LIMITS.groupsMax) {
     return draft;
   }
-  return { groups: [...draft.groups, { match: 'all', conditions: [blankRow()] }] };
+  return { ...draft, groups: [...draft.groups, { match: 'all', conditions: [blankRow()] }] };
 }
 
 export function withGroupRemoved(draft: ConditionExpressionDraft, index: number): ConditionExpressionDraft {
@@ -333,7 +365,7 @@ export function withGroupRemoved(draft: ConditionExpressionDraft, index: number)
   assert(index < draft.groups.length, 'withGroupRemoved: the group exists');
   const groups = draft.groups.filter((_, at) => at !== index);
   // The editor always keeps a row to start from.
-  return groups.length === 0 ? { groups: [{ match: 'all', conditions: [blankRow()] }] } : { groups };
+  return { ...draft, groups: groups.length === 0 ? [{ match: 'all', conditions: [blankRow()] }] : groups };
 }
 
 export function withGroup(
@@ -343,7 +375,7 @@ export function withGroup(
 ): ConditionExpressionDraft {
   assert(index >= 0, 'withGroup: the index is not negative');
   assert(index < draft.groups.length, 'withGroup: the group exists');
-  return { groups: draft.groups.map((group, at) => (at === index ? change(group) : group)) };
+  return { ...draft, groups: draft.groups.map((group, at) => (at === index ? change(group) : group)) };
 }
 
 export function withRowAdded(group: ConditionGroupDraft): ConditionGroupDraft {
@@ -359,6 +391,33 @@ export function withRow(group: ConditionGroupDraft, index: number, row: Conditio
   return { ...group, conditions: group.conditions.map((existing, at) => (at === index ? row : existing)) };
 }
 
+/**
+ * A locked part after its code was edited: the rows the new code reads as, in its place, when it is one run of
+ * `&&` the rows can draw (`variant === "main"` becomes Variant equals main); otherwise one locked part holding it.
+ */
+export function rowsOfEditedCode(code: string, typeOf: TypeOfSubject): readonly ConditionRowDraft[] {
+  assert(code.trim().length > 0, 'rowsOfEditedCode: the code is not blank');
+  const model = readRichConditionExpression(code);
+  const [only] = model?.groups ?? [];
+  if (model === undefined || model.groups.length !== 1 || only === undefined || model.leading !== undefined) {
+    return [{ subject: undefined, operator: 'isTrue', text: '', code }];
+  }
+  if (only.match === 'any' && only.conditions.length > 1) {
+    return [{ subject: undefined, operator: 'isTrue', text: '', code }]; // An `||` inside an `&&` group stays one part.
+  }
+  const rows = only.conditions.map((condition) => rowOfCondition(condition, typeOf));
+  assert(rows.length > 0, 'rowsOfEditedCode: a read group holds a condition');
+  return rows;
+}
+
+/** The group with the row at `index` replaced by `rows`, bounded by the group's limit. */
+export function withRowReplaced(group: ConditionGroupDraft, index: number, rows: readonly ConditionRowDraft[]): ConditionGroupDraft {
+  assert(index >= 0, 'withRowReplaced: the index is not negative');
+  assert(index < group.conditions.length, 'withRowReplaced: the row exists');
+  const conditions = [...group.conditions.slice(0, index), ...rows, ...group.conditions.slice(index + 1)];
+  return conditions.length > CONDITION_EXPRESSION_LIMITS.conditionsPerGroupMax ? group : { ...group, conditions };
+}
+
 export function withRowRemoved(group: ConditionGroupDraft, index: number): ConditionGroupDraft {
   assert(index >= 0, 'withRowRemoved: the index is not negative');
   assert(index < group.conditions.length, 'withRowRemoved: the row exists');
@@ -369,4 +428,89 @@ export function withRowRemoved(group: ConditionGroupDraft, index: number): Condi
 export function rowWithSubject(row: ConditionRowDraft, subject: string, type: ConditionValueType): ConditionRowDraft {
   const offered = operatorsFor(type.kind, undefined).some((option) => option.value === row.operator);
   return offered ? { ...row, subject } : { subject, operator: defaultOperator(type.kind), text: '' };
+}
+
+// ---------------------------------------------------------------------------
+// The catalog: props, and the values the frontmatter computes from them.
+// ---------------------------------------------------------------------------
+
+/** The type a catalog entry tests as: an option prop is an enum of its options, a computed value a switch. */
+export function typeOfCatalogEntry(entry: ConditionProp): ConditionValueType {
+  if (entry.computed !== undefined) {
+    return { kind: 'boolean', options: [] };
+  }
+  switch (entry.kind) {
+    case 'option':
+      return entry.options.length > 0 ? { kind: 'enum', options: entry.options } : { kind: 'string', options: [] };
+    case 'switch':
+      return { kind: 'boolean', options: [] };
+    case 'text':
+      return { kind: 'string', options: [] };
+    case 'number':
+      return { kind: 'number', options: [] };
+    default: {
+      const exhaustive: never = entry.kind;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * The type of `subject`: the catalog's when it lists the name (so a computed
+ * value is a switch and an option prop offers its options), else the data
+ * tree's (a loop item's field, a collection entry).
+ */
+export function typeOfSubjectIn(catalog: readonly ConditionProp[], fallback: TypeOfSubject): TypeOfSubject {
+  return (subject) => {
+    const entry = catalog.find((candidate) => candidate.name === subject);
+    return entry === undefined ? fallback(subject) : typeOfCatalogEntry(entry);
+  };
+}
+
+/**
+ * The row a computed value's row can be replaced by, when its definition is
+ * one condition on a prop (`isWritten` is true is Variant is any of Main,
+ * Link; is false, none of them), or undefined.
+ */
+export function plainerRow(row: ConditionRowDraft, catalog: readonly ConditionProp[]): ConditionRowDraft | undefined {
+  if (row.code !== undefined || row.subject === undefined) {
+    return undefined;
+  }
+  const entry = catalog.find((candidate) => candidate.name === row.subject);
+  const equivalent = entry?.computed?.equivalent;
+  if (equivalent === undefined) {
+    return undefined;
+  }
+  let meant: Condition | undefined;
+  if (row.operator === 'isTrue') {
+    meant = equivalent;
+  } else if (row.operator === 'isFalse') {
+    meant = negatedCondition(equivalent);
+  } else {
+    return undefined;
+  }
+  return meant === undefined ? undefined : rowOfValueCondition(meant);
+}
+
+/** A Value conditions condition as a row: `in` one value is equals, more is Is any of; `notIn` the same, negated. */
+export function rowOfValueCondition(condition: Condition): ConditionRowDraft | undefined {
+  switch (condition.kind) {
+    case 'code':
+      return undefined;
+    case 'test':
+      return { subject: condition.subject, operator: condition.operator === 'truthy' ? 'isTrue' : 'isFalse', text: '' };
+    case 'compare': {
+      assert(condition.values.length > 0, 'rowOfValueCondition: a comparison has a value');
+      const [only] = condition.values;
+      if (condition.values.length === 1 && only !== undefined) {
+        const text = only.kind === 'number' ? String(only.value) : only.value;
+        return { subject: condition.subject, operator: condition.operator === 'in' ? 'equals' : 'notEquals', text };
+      }
+      return { subject: condition.subject, operator: condition.operator === 'in' ? 'isAnyOf' : 'isNoneOf', text: '', values: condition.values };
+    }
+    default: {
+      const exhaustive: never = condition;
+      return exhaustive;
+    }
+  }
 }

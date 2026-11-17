@@ -599,8 +599,12 @@ function NavigatorBody({
       onDropCapture={() => setBodyDrag('idle')}
       onDragEnd={() => setBodyDrag('idle')}
     >
-      {!props.clientMode && !props.editRootId && <FrontmatterRow props={props} />}
-      <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
+      {/* One box as wide as the widest row: every row, and the tinted block under a selected one, fill it, so a
+          selected row and its subtree share both edges however long a label runs (styles.css, .structure-tree). */}
+      <div className="structure-tree">
+        {!props.clientMode && !props.editRootId && <FrontmatterRow props={props} />}
+        <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
+      </div>
       {!props.clientMode && nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
       <DropNoteChip note={state.dropNote} />
     </div>

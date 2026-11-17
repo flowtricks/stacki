@@ -139,12 +139,12 @@ test('each kind offers only the operators that make sense for it, and a plain te
   const table = {
     boolean: { yes: ['isTrue', 'isFalse'], no: ['equals', 'contains', 'isEmpty', 'isNotEmpty', 'greaterThan', 'startsWith', 'isSet'] },
     string: {
-      yes: ['isTrue', 'isFalse', 'isEmpty', 'isNotEmpty', 'equals', 'notEquals', 'contains', 'notContains', 'startsWith', 'endsWith'],
+      yes: ['isTrue', 'isFalse', 'isEmpty', 'isNotEmpty', 'equals', 'notEquals', 'isAnyOf', 'isNoneOf', 'contains', 'notContains', 'startsWith', 'endsWith'],
       no: ['greaterThan', 'lessThan', 'atLeast', 'atMost', 'lengthEquals', 'isSet'],
     },
-    enum: { yes: ['isTrue', 'isFalse', 'equals', 'notEquals'], no: ['contains', 'isEmpty', 'greaterThan', 'startsWith'] },
+    enum: { yes: ['isTrue', 'isFalse', 'equals', 'notEquals', 'isAnyOf', 'isNoneOf'], no: ['contains', 'isEmpty', 'greaterThan', 'startsWith'] },
     number: {
-      yes: ['equals', 'notEquals', 'greaterThan', 'atLeast', 'lessThan', 'atMost', 'isSet', 'isNotSet'],
+      yes: ['equals', 'notEquals', 'isAnyOf', 'isNoneOf', 'greaterThan', 'atLeast', 'lessThan', 'atMost', 'isSet', 'isNotSet'],
       no: ['contains', 'isEmpty', 'isNotEmpty', 'startsWith', 'notContains', 'isTrue'],
     },
     array: {
@@ -170,7 +170,18 @@ test('each kind offers only the operators that make sense for it, and a plain te
     assert.equal(label(kind, 'isFalse'), 'is not set', kind);
   }
   // A number tested for truthiness (`count`) reads "is set" in place of the null test's, and writes back unchanged.
-  assert.deepEqual(values('number', 'isTrue'), ['equals', 'notEquals', 'greaterThan', 'atLeast', 'lessThan', 'atMost', 'isTrue', 'isFalse']);
+  assert.deepEqual(values('number', 'isTrue'), [
+    'equals',
+    'notEquals',
+    'isAnyOf',
+    'isNoneOf',
+    'greaterThan',
+    'atLeast',
+    'lessThan',
+    'atMost',
+    'isTrue',
+    'isFalse',
+  ]);
   assert.equal(label('number', 'isTrue'), 'is set');
   // Code that tests `!= null` on a text keeps its operator, told apart from the plain test.
   assert.equal(label('string', 'isSet'), 'is not null');

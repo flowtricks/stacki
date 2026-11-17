@@ -9,6 +9,7 @@ import { MapEditor } from './propNodeEditors';
 import { assetImportOf } from './PropField';
 import { AttributesSection } from './propAttributes';
 import { ConditionExpressionField } from './ConditionExpressionEditor';
+import SegmentedControl from '../../ui/SegmentedControl';
 import React, { useEffect, useRef, useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import ExprInput from '../../ui/ExprInput';
@@ -224,15 +225,29 @@ export function CondPanel(props: NodePanelProps<'cond'>) {
         <h2>{translate('props.sources.condition')}</h2>
       </div>
       <ConditionExpressionField key={node.id} test={node.test} bindContext={bindContext || loopContext} onSetText={onSetText} />
-      <div className="props-field">
-        <div className="conditional-group conditional-else">
-          <div className="conditional-group-head">{translate('props.condition.otherwise')}</div>
-          {onToggleElse && (
-            <button type="button" className="conditional-add" onClick={() => onToggleElse(!hasElse)}>
-              {hasElse ? translate('props.sources.removeElse') : translate('props.sources.addElse')}
-            </button>
-          )}
-        </div>
+      {/* Otherwise: one switch, Nothing or an Else branch, so what the page shows when the test fails is a state, not a button to find. */}
+      <div className="props-field condition-otherwise">
+        <span className="prop-label">
+          <CornerIcon size={12} className="prop-label-icon" />
+          {translate('props.condition.otherwise')}
+        </span>
+        {onToggleElse && (
+          // The shared segmented control: equal fixed segments, a fill on hover, and its tooltip under the hovered one.
+          <SegmentedControl
+            className="condition-otherwise-switch"
+            ariaLabel={translate('props.condition.otherwise')}
+            value={hasElse ? 'branch' : 'none'}
+            options={[
+              { value: 'none', label: translate('props.sources.elseNone'), tooltip: translate('props.sources.elseNoneTip') },
+              { value: 'branch', label: translate('props.sources.elseBranch'), tooltip: translate('props.sources.elseBranchTip') },
+            ]}
+            onChange={(choice) => {
+              if ((choice === 'branch') !== hasElse) {
+                onToggleElse(choice === 'branch');
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );
