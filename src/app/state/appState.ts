@@ -8,6 +8,7 @@ import type { RemoteCmsSelection } from '../../features/cms/remoteCmsShared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
+import { parsePseudoLayerTarget } from '../../../shared/page/pseudoElements';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
 import type { DevDiagnosis } from '../../features/preview/DevOffline';
@@ -563,7 +564,13 @@ export function usePseudoPickFollowsSelection(
       if (findNodeById(nodes, held.nodeId)) {
         return undefined; // The element is still there: the user moved on.
       }
-      const moved = { ...held, nodeId: selectedId };
+      // The new node is asked again: an edit can hand the id to a loop or an
+      // instance, which owns no pseudo-element (shared/page/pseudoElements.ts).
+      const target = parsePseudoLayerTarget(findNodeById(nodes, selectedId), held.pseudo);
+      if (!target.ok) {
+        return undefined;
+      }
+      const moved = { ...held, nodeId: target.value.nodeId };
       assert(moved.nodeId !== held.nodeId, 'usePseudoPickFollowsSelection: a remap changes the id');
       return moved;
     });

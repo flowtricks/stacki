@@ -133,3 +133,34 @@ a click on the canvas never does, since the person is already looking there. `fr
 - **View only.** Nothing here writes a file.
 - Tests: `test/electron/preload/revealGlide.test.js` (arithmetic, stepped frame clock, cancellation, forced
   `scroll-behavior: auto`), `revealScrollsDown.test.js` and `revealSmoothScroll.test.js` (real Chromium).
+
+## Pseudo-element layers
+
+The frame reports which paths draw a `::before` or `::after` (`frameReports.ts` `sendStates`). It reads the
+first element between a path's markers, so a loop's path answers with its first `<li>`, an instance's with its
+root, and Chromium computes `content` for an `img` that draws nothing. A pseudo-element is one element's box,
+so it belongs only to a node that is that element: `shared/page/pseudoElements.ts` holds the table, and every
+place that offers one reads it.
+
+| Node | `::before` / `::after` | `::marker` | `::placeholder` | `::first-line` / `::first-letter` |
+|---|---|---|---|---|
+| Loop, if/else, Fragment, `slot`, text, expression, comment, `<style>`/`<script>` | never | never | never | never |
+| Component instance (its root is the component file's) | never | never | never | never |
+| `<Tag>` (dynamic tag), SVG element (`svg`, `path`, `g`, ...) | never | never | never | never |
+| Void, replaced or unrendered (`img`, `input`, `br`, `hr`, `video`, `iframe`, `canvas`, `select`, `textarea`, `head`, `template`) | never | never | `input` and `textarea` only | never |
+| `li`, `summary` | yes | yes | never | yes |
+| Block container (`div`, `p`, `h1`-`h6`, `section`, `ul`, `td`, ...) | yes | by display | never | yes |
+| Other HTML or custom element (`span`, `a`, `my-card`) | yes | by display | never | by display |
+
+"By display" means only the page's computed style can tell (`div { display: list-item }` has a `::marker`).
+
+- **Navigator.** `src/app/model/canvasNodeStates.ts` keeps a reported `::before`/`::after` only for a node the
+  table says `yes`; `StructureTree.tsx` asserts the same for every row it draws.
+- **Picks.** A pick is a `PseudoLayerTarget`, built only by `parsePseudoLayerTarget` (a `Result`): Navigator
+  rows, canvas clicks and the remap after an edit all parse it, and a refused pick selects the node itself.
+- **Style panel.** `readPseudoTarget` refuses a pick on a node the table rejects; `chipsFor` drops a chip only
+  when every member names a pseudo-element the rendered tag never draws (`never`), so "by display" rules and
+  instances' rules keep their chips.
+- Tests: `test/shared/page/pseudoElements.test.ts` (the table, the constructor, the assertion),
+  `test/renderer/structure/pseudoHostRows.test.js` (a loop page through the parser, tree builder and Navigator),
+  `test/renderer/style/pseudoHostChips.test.js` (chips and picks).

@@ -662,6 +662,7 @@ export function useSelectorChips(
         classList: snapshot?.classList ?? [],
         removedClasses,
         pseudo,
+        elementTag: snapshot?.tag,
         instanceClasses,
         componentMarkup,
         rememberedGreen,

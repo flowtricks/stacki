@@ -331,6 +331,7 @@
     "shared/page/previewIteration.ts",
     "shared/page/previewScope.ts",
     "shared/page/previewToken.ts",
+    "shared/page/pseudoElements.ts",
     "shared/page/pseudoPath.ts",
     "shared/page/ref.ts",
     "shared/page/snapshot.ts",

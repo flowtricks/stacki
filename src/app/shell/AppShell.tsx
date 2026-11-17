@@ -42,7 +42,8 @@ import type { CodeReveal, SourceRange } from '../../features/code/codePanelModel
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, InstructionsPanel, ProjectSettingsPanel, preloadPanels } from '../appPanels';
-import { canvasPageOf } from '../../editor/pageState';
+import { canvasPageOf, findEditorNodeById } from '../../editor/pageState';
+import { parsePseudoLayerTarget } from '../../../shared/page/pseudoElements';
 import { projectRelative, type VariablePlace } from '../../editor/variablePlace';
 import { prewarmKeepList, prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
 import { prewarmInstructionsListing } from '../../features/instructions/instructionsListingCache';
@@ -553,7 +554,14 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
   const selectPseudo = (id: string, pseudo: 'before' | 'after'): void => {
     app.setNavigatorSelectionTick((tick) => tick + 1);
     app.setSelectedId(id);
-    pickPseudo(app, id, pseudo);
+    // The row exists only for an HTML element (StructureTree asserts it); a node
+    // gone from the model since the row drew selects as itself.
+    const target = parsePseudoLayerTarget(findEditorNodeById(app.model?.nodes, id), pseudo);
+    if (target.ok) {
+      pickPseudo(app, target.value);
+    } else {
+      app.setPseudoPick(undefined);
+    }
   };
   return (
     <PanelBoundary name="The Navigator" label={translate('shell.navigator.panelName')} resetKey={page?.path}>

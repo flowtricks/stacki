@@ -14,6 +14,7 @@ import { navigatorHostsDrop } from './navigatorDrop';
 import type { DropPlacement } from './dropPlacement';
 import { isFragmentNode } from '../../editor/liveClasses';
 import { labelsNode } from '../../../shared/page/leadingNote';
+import { assertPseudoLayerHost } from '../../../shared/page/pseudoElements';
 import { describeNode, truncate, type NodeDescription } from '../../ui/navigatorLabel';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
@@ -182,7 +183,7 @@ function TreeNode(props: TreeNodeProps) {
   const listsChildren = children.length > 0 && !hidesChildRows(node, children);
   // A ::before sits above an element's children and an ::after below them, as
   // the browser draws them: rows of their own, so an element with one opens.
-  const pseudos = pseudoKindsOf(node.id, props.pseudoNodeIds);
+  const pseudos = pseudoKindsOf(node, props.pseudoNodeIds);
   const showChildren = listsChildren || pseudos.length > 0;
   const view = nodeView(props, { children, host, showChildren, selected }, translate);
   const pseudoRow = (pseudo: PseudoKind): React.ReactNode =>
@@ -216,16 +217,23 @@ function TreeNode(props: TreeNodeProps) {
   );
 }
 
-function pseudoKindsOf(id: string, pseudoNodeIds: PseudoNodeIds | undefined): readonly PseudoKind[] {
+// The ::before and ::after rows of `node`. Only an HTML element owns them: the
+// canvas filters its report (src/app/model/canvasNodeStates.ts) and this row
+// asserts it, so a loop, component or `img` that ever reached here would crash
+// loudly instead of drawing a row the page has no box for.
+function pseudoKindsOf(node: NavigatorNode, pseudoNodeIds: PseudoNodeIds | undefined): readonly PseudoKind[] {
   if (pseudoNodeIds === undefined) {
     return [];
   }
   const kinds: PseudoKind[] = [];
-  if (pseudoNodeIds.before.has(id)) {
+  if (pseudoNodeIds.before.has(node.id)) {
     kinds.push('before');
   }
-  if (pseudoNodeIds.after.has(id)) {
+  if (pseudoNodeIds.after.has(node.id)) {
     kinds.push('after');
+  }
+  for (const kind of kinds) {
+    assertPseudoLayerHost(node, kind, 'Navigator');
   }
   return kinds;
 }

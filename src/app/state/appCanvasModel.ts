@@ -30,6 +30,7 @@ import { dismissErrorToast, reportActionToast } from '../../ui/errorNotices';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { trailOf } from '../model/pageGestures';
 import { emptyNodeIdsOf } from '../model/pageQueries';
+import { nodeStateIds } from '../model/canvasNodeStates';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useShortcuts } from './appPageOps';
@@ -342,19 +343,8 @@ export function useCanvasMarks(
     if (!nodeStates || !model) {
       return empty;
     }
-    const prefix = editedRel ? `${editedRel}|` : '';
-    const local = (path: string): string => (prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path);
-    const ids = (paths: readonly string[]): ReadonlySet<string> => {
-      const set = new Set<string>();
-      for (const path of paths || []) {
-        const id = tree.byPath.get(local(path))?.id;
-        if (id) {
-          set.add(id);
-        }
-      }
-      return set;
-    };
-    return { hidden: ids(nodeStates.hidden), inert: ids(nodeStates.inert), before: ids(nodeStates.before), after: ids(nodeStates.after) };
+    // A ::before or ::after is kept only for a node that is one HTML element (canvasNodeStates.ts).
+    return nodeStateIds(nodeStates, tree.byPath, editedRel ? `${editedRel}|` : '');
   }, [nodeStates, model, editedRel, tree]);
   return { crumbs, emptyNodeIds, stateIds };
 }

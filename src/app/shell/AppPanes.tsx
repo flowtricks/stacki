@@ -20,6 +20,7 @@ import { desktopElementActions } from './desktopElementActions';
 // busy overlay and toast (App.tsx).
 
 import type { Attr } from '../../../shared/page/pageNode';
+import { parsePseudoLayerTarget, type PseudoLayerTarget } from '../../../shared/page/pseudoElements';
 import { noteText } from '../../editor/treeSelection';
 import { canvasClickAction } from '../../editor/canvasClick';
 import { leftTabAfterCanvasSelection } from '../model/canvasSelectionTab';
@@ -210,10 +211,13 @@ export function selectCanvasPath(
     );
     // A click on a ::before or ::after picks it as its navigator row does; a
     // click on the element itself puts down whatever pseudo-element was held.
-    if (info?.pseudo === undefined) {
-      app.setPseudoPick(undefined);
+    // Only an HTML element owns one (shared/page/pseudoElements.ts): a click the
+    // canvas read as a loop's or an instance's ::before selects the node itself.
+    const target = info?.pseudo === undefined ? undefined : parsePseudoLayerTarget(node, info.pseudo);
+    if (target?.ok === true) {
+      pickPseudo(app, target.value);
     } else {
-      pickPseudo(app, node.id, info.pseudo);
+      app.setPseudoPick(undefined);
     }
     // Code and Apps stay open (see leftTabAfterCanvasSelection); every
     // other panel gives way to the navigator so the selected row is visible.
@@ -254,12 +258,12 @@ export function selectCanvasPath(
  * The right panel stays on its tab, as selecting any element does: the Style
  * panel reads the pick when it is next shown (usePseudoRequest).
  */
-export function pickPseudo(app: Pick<ShellView, 'setPseudoPick'>, id: string, pseudo: PseudoLayer): void {
-  assert(id.length > 0, 'pickPseudo: a pseudo-element belongs to a node');
+export function pickPseudo(app: Pick<ShellView, 'setPseudoPick'>, target: PseudoLayerTarget): void {
+  assert(target.nodeId.length > 0, 'pickPseudo: a pseudo-element belongs to a node');
   app.setPseudoPick((held) => {
     const serial = (held?.serial ?? 0) + 1;
     assert(Number.isSafeInteger(serial), 'pickPseudo: the pick count stays an integer');
-    return { nodeId: id, pseudo, serial };
+    return { nodeId: target.nodeId, pseudo: target.pseudo, serial };
   });
 }
 

@@ -33,6 +33,8 @@ import {
   selectorSpecificity,
 } from '../model/selectors';
 import { findNode, getHost, onHostChange, propText, type HostNode } from '../model/host';
+import { compileSelectorList } from '../model/selectorParse';
+import { PSEUDO_ELEMENTS, pseudoLayerAllowed, pseudoValidityForTag } from '../../../../shared/page/pseudoElements';
 import {
   dedupeByKey,
   loadEmbedDocs,
@@ -192,6 +194,9 @@ export interface ChipInputs {
   removedClasses: ReadonlySet<string>;
   /** Which box the list is for: the element unless a layer is named (usePanelLayer). */
   pseudo?: PanelLayer | undefined;
+  /** The selected element's rendered tag (ElementSnapshot.tag), lowercase, or undefined
+   *  while unknown: a pseudo-element chip the tag can never draw is left out. */
+  elementTag?: string | undefined;
   /** Classes the instance passed to the component open on the canvas, offered as
    *  chips of their own (model/instanceClasses.ts). Empty outside a component. */
   instanceClasses?: readonly string[] | undefined;
@@ -216,6 +221,31 @@ export function pseudoLayerChips(list: readonly MatchedSelector[], layer: PanelL
   const shown = layer === 'every' ? [...list] : list.filter((entry) => chipLayer(entry) === layer);
   assert(shown.length <= list.length, 'pseudoLayerChips: a filter never adds');
   return shown;
+}
+
+/**
+ * Whether a chip's selector styles a box `tag` can draw: false only when every
+ * member names a pseudo-element the tag never has (`img` with `.x::before`,
+ * `div` with `.x::placeholder`, shared/page/pseudoElements.ts). A rule the
+ * element's display could still reach (`div::marker`) and a tag not yet known
+ * keep their chip, so no rule the page applies is hidden.
+ */
+export function pseudoChipApplies(selectorText: string, tag: string | undefined): boolean {
+  if (tag === undefined || tag.length === 0) {
+    return true;
+  }
+  const members = compileSelectorList(selectorText).map((selector) => normalizePseudoElement(selector.pseudoElement).replace(/^::/, ''));
+  assert(members.length <= selectorText.length + 1, 'pseudoChipApplies: one member per selector in the list');
+  if (members.length === 0) {
+    return true;
+  }
+  return members.some((member) => {
+    const known = PSEUDO_ELEMENTS.find((name) => name === member);
+    if (known === undefined) {
+      return true; // The element itself (''), or a pseudo-element the table does not judge (`::selection`).
+    }
+    return pseudoValidityForTag(tag.toLowerCase(), known) !== 'invalid';
+  });
 }
 
 // Every selector (with styles) that targets the element in the current context, for
@@ -251,8 +281,10 @@ export function chipsFor(inputs: ChipInputs): MatchedSelector[] {
   // own (`.stat_wrap`) and the other pseudo-element's are left out. The element's
   // list likewise leaves out its pseudo-elements'. A pseudo-element selector typed
   // on the element's row is the exception: it is the target, so its chip stays.
-  const layered = pseudoLayerChips(list, inputs.pseudo ?? '');
-  const typed = list.filter((entry) => chipLayer(entry) !== '' && !layered.includes(entry) && selectorsMatch(entry.text, inputs.activeSelector));
+  const drawable = list.filter((entry) => pseudoChipApplies(entry.text, inputs.elementTag) || selectorsMatch(entry.text, inputs.activeSelector));
+  assert(drawable.length <= list.length, 'chipsFor: the pseudo-element filter never adds');
+  const layered = pseudoLayerChips(drawable, inputs.pseudo ?? '');
+  const typed = drawable.filter((entry) => chipLayer(entry) !== '' && !layered.includes(entry) && selectorsMatch(entry.text, inputs.activeSelector));
   // A chip is the component's (green) when the markup writes what it needs; an
   // instance's class is never written there, so its chip is not.
   const shown = [...layered, ...typed].map((entry) =>
@@ -979,10 +1011,18 @@ export function readPseudoTarget(): PseudoTarget | undefined {
   if (request === undefined) {
     return undefined;
   }
-  if (request.nodeId === host.selectedId) {
-    return request.pseudo === 'before' ? '::before' : '::after';
+  if (request.nodeId !== host.selectedId) {
+    return undefined;
   }
-  return undefined;
+  // A pick reaches the panel only for an HTML element (the app parses it,
+  // shared/page/pseudoElements.ts); one on a node the open file shows as a loop
+  // or an instance is refused here as well, so the panel never styles a box the
+  // node has not got.
+  const node = findNode(host.nodes, request.nodeId);
+  if (node !== undefined && !pseudoLayerAllowed(node, request.pseudo)) {
+    return undefined;
+  }
+  return request.pseudo === 'before' ? '::before' : '::after';
 }
 
 /**
