@@ -45,6 +45,7 @@ export const messages = {
   'cmsConnections.input.secret.printable': 'Una clave de API son caracteres imprimibles en una sola línea.',
   'cmsConnections.kind.custom': 'CMS personalizado',
   'cmsConnections.list.noEncryption': 'Este equipo no puede cifrar claves, así que Stacki no guardará ninguna.',
+  'cmsConnections.sanityDetected': 'Este sitio usa Sanity. Conéctalo para editar su contenido en Stacki.', // review
   'cmsConnections.signIn.browser':
     'Inicia sesión en la página de Sanity en tu navegador y vuelve aquí. Stacki crea una clave de Editor para el proyecto de este sitio y guarda solo esa clave.',
   'cmsConnections.signIn.cancelled': 'Inicio de sesión cancelado.',
