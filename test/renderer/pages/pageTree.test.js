@@ -38,5 +38,25 @@ test('page tree rejects invalid and excessively deep source paths', () => {
   assert.throws(() => model.buildPageTree([], ['a/'.repeat(128) + 'deep']));
   const cyclic = { directories: new Map(), pages: [] };
   cyclic.directories.set('again', cyclic);
-  assert.throws(() => model.countTreePages(cyclic), /directory count exceeds limit/);
+  assert.throws(() => model.countTreePages(cyclic), /a directory appears twice \(cycle\)/);
+});
+
+test('a cyclic tree fails at once, not after visiting up to the item limit', () => {
+  // Regression: with the item limit raised to the platform maximum, the cycle above ran for
+  // minutes (570 s on a Windows runner) before its limit assertion fired.
+  const cyclic = { directories: new Map(), pages: [] };
+  const inner = { directories: new Map([['back', cyclic]]), pages: [] };
+  cyclic.directories.set('inner', inner);
+  const started = Date.now();
+  assert.throws(() => model.countTreePages(cyclic), /a directory appears twice \(cycle\)/);
+  assert.ok(Date.now() - started < 1_000, 'the cycle is found within a second');
+  const shared = { directories: new Map(), pages: [page('a.astro')] };
+  const diamond = {
+    directories: new Map([
+      ['left', shared],
+      ['right', shared],
+    ]),
+    pages: [],
+  };
+  assert.throws(() => model.countTreePages(diamond), /a directory appears twice/);
 });

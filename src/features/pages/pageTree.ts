@@ -39,13 +39,16 @@ export function buildPageTree(pages: readonly ScanPage[], folders: readonly stri
 
 export function countTreePages(node: PageTreeNode): number {
   const pending: PageTreeNode[] = [node];
-  let visited = 0;
+  // A tree reaches each directory once. A node seen twice is a cycle, which would otherwise
+  // run to the item limit (now the platform's array maximum, billions of visits) before failing.
+  const seen = new Set<PageTreeNode>();
   let count = 0;
   while (pending.length > 0) {
-    visited += 1;
-    assert(visited <= BOUNDARY_LIMITS.itemsMax, 'Page tree: directory count exceeds limit');
+    assert(seen.size < BOUNDARY_LIMITS.itemsMax, 'Page tree: directory count exceeds limit');
     const current = pending.pop();
     assert(current !== undefined, 'Page tree: pending directory exists');
+    assert(!seen.has(current), 'Page tree: a directory appears twice (cycle)');
+    seen.add(current);
     count += current.pages.length;
     assert(Number.isSafeInteger(count), 'Page tree: page count is a safe integer');
     pending.push(...current.directories.values());
