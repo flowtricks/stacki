@@ -10,6 +10,7 @@
 // nothing cached it paints placeholder rows, never a word. Choosing another file remounts the file's view,
 // so nothing revealed or typed for one file is ever shown beside another's names.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ENV_LIMITS } from '../../../shared/properties/envFile';
 import {
   SECRETS_FILE_DEFAULT,
@@ -26,6 +27,7 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
+import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import { HideIcon, LockIcon, PencilIcon, PlusIcon, PreviewIcon, TrashIcon } from '../../ui/Icons';
 import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 import InfoHint from '../../ui/InfoHint';
@@ -290,14 +292,7 @@ function SecretsFileView({
       {warnsAboutGit && listing.ignore === 'not-ignored' && (
         // The button alone, so no sentence wraps beside it; the risk it removes is its tooltip and its description.
         <div className="secrets-warning secrets-warning-action" role="status">
-          <button
-            type="button"
-            title={translate('settings.secrets.ignore.warning', named)}
-            aria-description={translate('settings.secrets.ignore.warning', named)}
-            onClick={() => void ignore()}
-          >
-            {translate('settings.secrets.ignore.action')}
-          </button>
+          <GitignoreButton why={translate('settings.secrets.ignore.warning', named)} onClick={() => void ignore()} />
         </div>
       )}
       {warnsAboutGit && listing.ignore === 'tracked' && (
@@ -376,6 +371,38 @@ function SecretsHeading({ file, onFileChange }: { readonly file: SecretsFileName
       </h3>
       <SecretsFilePicker file={file} onChange={onFileChange} />
     </div>
+  );
+}
+
+// "Add to .gitignore", whose reason is only its tip: Stacki's own tip (the app's dark one, after the shared
+// wait, on every hover), not the system's, which waits longer and may not show again on a second hover.
+function GitignoreButton({ why, onClick }: { readonly why: string; readonly onClick: () => void }) {
+  const translate = useTranslate();
+  const tooltip = useDelayedTooltip();
+  const button = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        aria-description={why}
+        onMouseEnter={tooltip.show}
+        onMouseLeave={tooltip.hide}
+        onClick={() => {
+          tooltip.hide();
+          onClick();
+        }}
+      >
+        {translate('settings.secrets.ignore.action')}
+      </button>
+      {tooltip.value !== undefined &&
+        createPortal(
+          <div className="rail-tooltip below" role="tooltip" style={tooltip.value}>
+            {why}
+          </div>,
+          tooltipHost(button.current ?? undefined),
+        )}
+    </>
   );
 }
 
