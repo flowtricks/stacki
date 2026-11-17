@@ -18,6 +18,14 @@ import { linkPageOptions, routeMatchesTemplate, type LinkPage } from './linkType
 // it reads or writes the project; choosing a row only changes the href the caller commits.
 
 /**
+ * Where a Page-tab row comes from: a page file of its own (`page`), or a CMS template that renders it
+ * per entry (`cms`). The menu draws the page icon or the CMS icon from it, so the two read apart.
+ */
+export type LinkChoiceSource = 'page' | 'cms';
+/** One Page-tab row: a menu option that also says where its page comes from. */
+export type LinkChoice = DropdownOption<string> & { readonly source: LinkChoiceSource };
+
+/**
  * The most entry rows one template lists. Past it the group says how many more exist: a menu of
  * thousands is not a menu, and the host's list is capped for the same reason. Local to this feature:
  * shared/core/limits.ts changes only with a human's approval.
@@ -166,14 +174,14 @@ export function linkChoices(
   states: ReadonlyMap<string, LinkTemplateState>,
   current: string,
   translate: Translator = ENGLISH_TRANSLATE,
-): readonly DropdownOption<string>[] {
+): readonly LinkChoice[] {
   assert(pages.length <= LIMITS.scanEntriesMax, 'linkChoices: page limit exceeded');
   const templates = pages.filter((page) => isTemplatePage(page));
   assert(templates.length <= pages.length, 'linkChoices: templates are a subset of pages');
-  const rows: DropdownOption<string>[] = linkPageOptions(
+  const rows: LinkChoice[] = linkPageOptions(
     pages.filter((page) => !isTemplatePage(page)),
     translate,
-  ).map((option) => ({ value: option.value, label: option.label, description: option.description, keywords: option.value }));
+  ).map((option) => ({ value: option.value, label: option.label, description: option.description, keywords: option.value, source: 'page' }));
   let entryRows = 0;
   for (const page of templates) {
     const group = pageDisplayLabel(page, translate);
@@ -190,35 +198,31 @@ export function linkChoices(
   return rows;
 }
 
-function appendEntries(
-  rows: DropdownOption<string>[],
-  group: string,
-  state: Extract<LinkTemplateState, { readonly kind: 'ready' }>,
-  alreadyListed: number,
-): number {
+function appendEntries(rows: LinkChoice[], group: string, state: Extract<LinkTemplateState, { readonly kind: 'ready' }>, alreadyListed: number): number {
   const room = Math.max(0, LINK_ENTRIES_TOTAL_MAX - alreadyListed);
   const shown = state.entries.slice(0, room);
   for (const entry of shown) {
-    rows.push({ value: entry.route, label: entry.title, description: entry.route, group, keywords: entry.route });
+    rows.push({ value: entry.route, label: entry.title, description: entry.route, group, keywords: entry.route, source: 'cms' });
   }
   assert(shown.length <= room, 'appendEntries: the total cap holds');
   return shown.length;
 }
 
 // While a template's entries load, the href already written to one of them still shows as the chosen row.
-function appendCurrent(rows: DropdownOption<string>[], group: string, pattern: string, current: string): void {
+function appendCurrent(rows: LinkChoice[], group: string, pattern: string, current: string): void {
   if (routeMatchesTemplate(current, pattern)) {
-    rows.push({ value: current, label: current, description: current, group, keywords: current });
+    rows.push({ value: current, label: current, description: current, group, keywords: current, source: 'cms' });
   }
 }
 
-function templateRow(page: LinkPage, group: string, translate: Translator): DropdownOption<string> {
+function templateRow(page: LinkPage, group: string, translate: Translator): LinkChoice {
   return {
     value: page.route,
     label: group,
     description: page.route,
     hint: translate('props.link.templateUnresolved'),
     keywords: page.route,
+    source: 'cms',
   };
 }
 

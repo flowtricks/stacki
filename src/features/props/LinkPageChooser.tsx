@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
-import { FileIcon } from '../../ui/Icons';
-import { linkChoices, LINK_ROWS_DRAWN_MAX, templatesToLoad, type LinkEntryLoader, type LinkTemplateState } from './linkEntries';
+import { CmsIcon, FileIcon } from '../../ui/Icons';
+import { linkChoices, LINK_ROWS_DRAWN_MAX, templatesToLoad, type LinkChoiceSource, type LinkEntryLoader, type LinkTemplateState } from './linkEntries';
 import type { LinkPage } from './linkType';
 
 // The link field's Page tab: a searchable menu of the project's pages, with each template page
@@ -28,7 +28,7 @@ export default function LinkPageChooser({ text, pages, loadEntries, onPick }: Li
       value={options.some((option) => option.value === text) ? text : ''}
       placeholder={translate('props.link.choosePage')}
       optionLayout="stacked"
-      options={options.map((option) => ({ ...option, icon: <FileIcon size={12} /> }))}
+      options={options.map(({ source, ...option }) => ({ ...option, icon: linkChoiceIcon(source) }))}
       searchable
       searchPlaceholder={translate('props.link.searchPages')}
       rowsMax={LINK_ROWS_DRAWN_MAX}
@@ -37,6 +37,20 @@ export default function LinkPageChooser({ text, pages, loadEntries, onPick }: Li
       onChange={onPick}
     />
   );
+}
+
+// A page file reads as a page; a row a CMS template renders reads as CMS, with the icon the CMS panel uses.
+function linkChoiceIcon(source: LinkChoiceSource) {
+  switch (source) {
+    case 'page':
+      return <FileIcon size={12} />;
+    case 'cms':
+      return <CmsIcon size={12} />;
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
+  }
 }
 
 // One read per template when the tab opens (or the pages or the host change). A host without a loader
