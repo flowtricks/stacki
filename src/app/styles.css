@@ -6152,11 +6152,6 @@ body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel /* A n
 .node-outline.is-point.bound::after {
   background: #8b5cf6;
 }
-.node-outline-size {
-  opacity: 0.75;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
 .node-outline-tag {
   display: none;
 }

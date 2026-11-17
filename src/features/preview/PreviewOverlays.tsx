@@ -8,7 +8,7 @@ import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
-import { copiesToDraw, hoverIsSelection, loopChildPaths, collapseKind, onePerPlace, outlineBoxPath, sizeText, unionBox } from './outlineBoxes';
+import { copiesToDraw, hoverIsSelection, loopChildPaths, collapseKind, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
 import { clipBand, spacingBands, withLiveSpacing, type CollapsePartner } from './spacingBands';
 import {
   BranchIcon,
@@ -201,7 +201,6 @@ function NodeOutlines(props: PreviewOverlaysProps) {
           <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
             {outlineIcon(info)}
             {info.label}
-            {collapse !== 'none' && <span className="node-outline-size">{sizeText(box)}</span>}
             {outline.slot === 'sel' && <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(box)} onOpen={props.onOpenComponent} />}
             {/* A highlight shows the selected chip's component icon, but opens nothing: it is display only. */}
             {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (

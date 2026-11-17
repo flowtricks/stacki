@@ -63,7 +63,7 @@ Frame-side shapes that used to make clicks or hovers disappear without any messa
 | Page script stopping `mousemove` (carousels, modal libraries) | No hover outlines | Hover listens on the window in the capture phase, before any page script |
 | Astro `<ClientRouter />` swap | Frame kept the old page's token: every click refused | `astro:after-swap` re-reads markers and stamps |
 | Script overlay over the page (click catchers, lightboxes) | Every click selected the layout | The first element a file wrote beneath the overlay answers |
-| Selected element with no size (an empty `div` at 0x0, an empty `display: contents` element) | Navigator showed the selection; the canvas drew no outline and no name tag | The frame reports where it sits (`collapsedRects`); the overlay draws a hairline crosshair at that point, with the usual tag plus its real size, `div 0 × 0` (`collapseKind`, `sizeText`) |
+| Selected element with no size (an empty `div` at 0x0, an empty `display: contents` element) | Navigator showed the selection; the canvas drew no outline and no name tag | The frame reports where it sits (`collapsedRects`); the overlay draws a hairline crosshair at that point, with the usual `div` tag (`collapseKind`) |
 | Embedded document (`iframe`, `embed`, `object`) | Pointer went to the embed: no hover, no click | Select mode lets the pointer through; the embed itself is selected |
 | Forged or malformed stamp in page content | Whole rendering dropped: every click "still loading" | Stamp skipped with the shared parser |
 | Page changes under a resting pointer | Outline stuck on the old box | Hover re-hit-tested with the new token |

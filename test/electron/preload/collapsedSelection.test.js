@@ -162,7 +162,7 @@ app.whenReady().then(async () => {
         check(`${name}: the outline is inside the frame`, seen.outline.x >= 0 && seen.outline.y >= 0, JSON.stringify(seen));
       }
       check(`${name}: its name tag is drawn`, seen.tag !== undefined && seen.tag.w > 0 && seen.tag.h > 0, JSON.stringify(seen));
-      check(`${name}: its name tag says 0 × 0`, seen.tag !== undefined && seen.tag.text.includes('0 × 0'), JSON.stringify(seen));
+      check(`${name}: its name tag says just div`, seen.tag !== undefined && seen.tag.text === 'div', JSON.stringify(seen));
     }
   }
   if (failures.length) {

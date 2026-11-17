@@ -25,15 +25,13 @@ const check = (what, condition, detail) => {
   }
 };
 
-const { collapseKind, sizeText, onePerPlace, copiesToDraw } = loadRenderer('src/features/preview/outlineBoxes.ts');
+const { collapseKind, onePerPlace, copiesToDraw } = loadRenderer('src/features/preview/outlineBoxes.ts');
 const point = { x: 40, y: 60, w: 0, h: 0 };
 check('a box with no width and no height is a point', collapseKind(point) === 'point');
 check('a box with width and no height is flat', collapseKind({ x: 0, y: 0, w: 300, h: 0 }) === 'flat');
 check('a box with height and no width is flat', collapseKind({ x: 0, y: 0, w: 0, h: 20 }) === 'flat');
 check('a sized box is not collapsed', collapseKind({ x: 0, y: 0, w: 300, h: 200 }) === 'none');
 check('a fraction of a pixel counts as no size', collapseKind({ x: 0, y: 0, w: 0.4, h: 0.4 }) === 'point');
-check('a point says 0 × 0', sizeText(point) === '0 × 0', sizeText(point));
-check('a flat box says its real width', sizeText({ x: 0, y: 0, w: 300.4, h: 0 }) === '300 × 0');
 let badWidth = '';
 try {
   collapseKind({ x: 0, y: 0, w: Number.NaN, h: 0 });
@@ -43,7 +41,7 @@ try {
 check('a width that is not a number is a bug', badWidth.includes('a box has a finite width'), badWidth);
 let badHeight = '';
 try {
-  sizeText({ x: 0, y: 0, w: 0, h: Number.POSITIVE_INFINITY });
+  collapseKind({ x: 0, y: 0, w: 0, h: Number.POSITIVE_INFINITY });
 } catch (error) {
   badHeight = String(error);
 }
@@ -100,7 +98,7 @@ window.__measure = () => {
       const outline = document.createElement('div');
       outline.className = 'node-outline sel element collapsed is-' + kind;
       outline.style.cssText = 'left:' + box.x + 'px;top:' + box.y + 'px;width:' + box.w + 'px;height:' + box.h + 'px';
-      outline.innerHTML = '<span class="node-outline-tag ' + (box.y < 20 ? 'inside' : '') + '">div <span class="node-outline-size">' + window.__boxes.sizeText(box) + '</span></span>';
+      outline.innerHTML = '<span class="node-outline-tag ' + (box.y < 20 ? 'inside' : '') + '">div</span>';
       document.body.append(outline);
       const outer = outline.getBoundingClientRect();
       const tag = outline.firstChild.getBoundingClientRect();
@@ -192,7 +190,6 @@ import * as boxes from '${path.join(ROOT, 'src/features/preview/outlineBoxes.ts'
         check(`${name}: the crosshair arm across is findable`, first.across.w >= 10, detail);
         check(`${name}: the crosshair arm down is a hairline`, first.down.w <= 1, detail);
         check(`${name}: the crosshair arm down is findable`, first.down.h >= 10, detail);
-        check(`${name}: the tag says it is 0 × 0`, first.text.includes('0 × 0'), detail);
       }
       check(`${name}: its name tag is drawn`, first.tag.w > 0, JSON.stringify(first));
       check(`${name}: its name tag has a height`, first.tag.h > 0, JSON.stringify(first));

@@ -80,13 +80,6 @@ export function collapseKind(box: Box): CollapseKind {
   return flatTall ? 'flat' : 'none';
 }
 
-/** The size as a tag says it: `0 × 0`, whole pixels, as the frame's own size readout writes it. */
-export function sizeText(box: Box): string {
-  assert(Number.isFinite(box.w), 'sizeText: a box has a finite width');
-  assert(Number.isFinite(box.h), 'sizeText: a box has a finite height');
-  return `${Math.round(box.w)} × ${Math.round(box.h)}`;
-}
-
 /**
  * The boxes to draw for a node's reported copies.
  *
