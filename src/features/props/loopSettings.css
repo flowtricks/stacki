@@ -1038,6 +1038,7 @@
   min-height: 48px;
   max-height: 200px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .loop-settings-code .expr-input.invalid {
   background: rgba(255, 80, 80, 0.12);
