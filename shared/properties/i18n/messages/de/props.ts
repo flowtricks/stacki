@@ -58,6 +58,12 @@ export const messages = {
   'props.classList.entry': 'Klasse {number}',
   'props.classList.remove': 'Klasse entfernen',
   'props.classList.title': 'Klassenliste',
+  'props.classListProp.refusal.component':
+    'Nur ein HTML-Element kann eine Klassenlisten-Eigenschaft erhalten: Eine Komponente liest ihre Klasse auf ihre eigene Weise.',
+  'props.classListProp.refusal.shape': 'Der class-Wert ist kein einzelner Ausdruck, daher lässt er sich nicht sicher in eine Klassenliste verschieben.',
+  'props.classListProp.refusal.spread':
+    'Ein Spread hier könnte eine eigene Klasse übergeben, daher lassen sich die Klassen nicht sicher in eine Klassenliste verschieben.',
+  'props.classListProp.refusal.taken': 'Diese Komponente hat bereits eine class-Eigenschaft. Verbinde sie aus der Liste unten.',
   'props.cleanup.changedSince': '{file} hat sich seit der Prüfung geändert. Prüfe erneut, bevor du aufräumst.',
   'props.cleanup.keptCleanup': 'Diese Dateien haben die Bereinigung behalten und müssen geprüft werden: {files}.',
   'props.cleanup.noLongerUnused': 'Ein Selektor ist nicht mehr ungenutzt. Prüfe erneut, bevor du aufräumst.',
@@ -512,6 +518,7 @@ export const messages = {
   'props.newProp.name.tooLong': 'Dieser Name ist zu lang.',
   'props.newProp.title.attributes': 'Attribute',
   'props.newProp.title.boolean': 'Schalter',
+  'props.newProp.title.classList': 'Klassenliste',
   'props.newProp.title.content': 'Text', // same
   'props.newProp.title.image': 'Bild',
   'props.newProp.title.list': 'Liste',

@@ -59,6 +59,7 @@ import {
   type NewPropSeed,
 } from './newPropModel';
 import SegSwitch from './SegSwitch';
+import { classListLocal } from './classListProp';
 import './loopSettings.css';
 
 export interface NewPropFormProps {
@@ -189,6 +190,8 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     image,
     typing: { required: flags.required, readonly: flags.readonly, codeType },
     defaultExpression: listExpression,
+    // A class list prop named `class` is read as `className`, as Lumos components read it.
+    local: classListLocal(seed, key),
   };
   // Without the component's frontmatter here, a list's item type is shown inline.
   const kindTyped = typeText(declaration, '', translate);

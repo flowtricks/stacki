@@ -18,6 +18,11 @@
 // source) takes a List prop: a prop whose type says it is a list of items.
 // The picker's tree says a prop is a list from its declared shape; it cannot
 // say a prop is an image, so the host names those (NewPropHost.imageProps).
+//
+// A class list field (an element's classes, offered as "New Class list
+// property") takes the classes an instance passes: a text prop, since an
+// instance writes `class="featured"`, and the element's own classes move into
+// `class:list` beside it (classListProp.ts).
 
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
@@ -33,7 +38,7 @@ import { isImageType } from '../../editor/imagePropDefault';
 import type { ItemFieldDeclaration } from '../../editor/itemFields';
 
 /** The kind of field a picker was opened on. */
-export type FieldFit = 'content' | 'text' | 'number' | 'boolean' | 'attributes' | 'image' | 'list';
+export type FieldFit = 'content' | 'text' | 'number' | 'boolean' | 'attributes' | 'image' | 'list' | 'classList';
 
 /** How an image prop is typed: an imported file's ImageMetadata, or a URL string. */
 export type ImagePropKind = 'asset' | 'url';
@@ -103,6 +108,7 @@ export const FIT_KINDS: Readonly<Record<FieldFit, readonly NewPropKind[]>> = {
   attributes: ['attributes'],
   image: ['image'],
   list: ['list'],
+  classList: ['string'],
 };
 
 /** What each kind is called in the menu and the form (`New Text property`): the message key of its name. */
@@ -133,6 +139,8 @@ export function newPropTitle(fit: FieldFit, translate: Translator = ENGLISH_TRAN
       return translate('props.newProp.title.image');
     case 'list':
       return translate('props.newProp.title.list');
+    case 'classList':
+      return translate('props.newProp.title.classList');
     default: {
       const exhaustive: never = fit;
       return exhaustive;
@@ -184,6 +192,7 @@ export function propFits(kind: string, fit: FieldFit): boolean {
   switch (fit) {
     case 'content':
     case 'text':
+    case 'classList':
       return shape === 'words' || shape === 'number' || shape === 'imageUrl' || shape === 'unknown';
     case 'number':
       return shape === 'number' || shape === 'unknown';

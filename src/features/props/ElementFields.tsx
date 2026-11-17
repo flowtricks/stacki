@@ -21,6 +21,7 @@ import { noLabelActivation, CommentField } from './SourcePanels';
 import { type ElementState } from './elementState';
 import { canvasDraftProp, canvasDraftValue, useCanvasTextDraft } from '../../ui/canvasTextDraft';
 import { canvasDraftInline } from './canvasDraftInline';
+import { classListOfferOf } from './classListProp';
 import { assert } from '../../../shared/core/assert';
 import type { FieldFocus } from './fieldFocus';
 
@@ -290,7 +291,8 @@ export function ElementTag({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementClass({ state }: { readonly state: ElementState }) {
-  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, dataContext, setPropCascading, classField, assetContext } = state;
+  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, dataContext, setPropCascading, classField, assetContext, onReplaceProps } =
+    state;
   return (
     <>
       {classField && (
@@ -305,6 +307,11 @@ export function ElementClass({ state }: { readonly state: ElementState }) {
           assetContext={assetContext}
           linkContext={linkContext}
           dataContext={dataContext}
+          classList={classListOfferOf(
+            { kind: node.kind, name: String(node.name), props: node.props },
+            bindContext?.newProp,
+            onReplaceProps === undefined ? undefined : (props) => onReplaceProps(node.id, props),
+          )}
           onChange={(next, immediate) => setPropCascading('class', next, immediate)}
         />
       )}

@@ -12,6 +12,7 @@ import type { Attr } from '../../../shared/page/pageNode';
 import type { PageText } from '../../../shared/properties/pageText';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { RichContext } from './RichContent';
+import type { ClassListOffer } from './classListProp';
 import type { SourceContext, ValueChange, FieldPosition, FieldPickerAt, InsertAPI } from './propBindings';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { AltPick, PickedAsset } from '../../ui/AssetField';
@@ -69,6 +70,8 @@ export interface PropFieldProps {
   readonly assetContext?: AssetContext | undefined;
   readonly linkContext?: ComponentProps<typeof LinkField>['context'] | undefined;
   readonly dataContext?: SourceContext | undefined;
+  /** The element's class field offers "New Class list property" in its picker (classListProp.ts). */
+  readonly classList?: ClassListOffer | undefined;
   readonly onChange: ValueChange;
 }
 export function attrText(value: Attr | undefined): string | undefined {

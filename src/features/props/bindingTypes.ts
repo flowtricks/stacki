@@ -11,6 +11,7 @@ import type { RichContext } from './RichContent';
 import type { ChipsOf } from '../../ui/ExprInput';
 import type { PickerNode } from './DataPicker';
 import type { NewPropSeed } from './newPropModel';
+import type { ClassListOffer } from './classListProp';
 import type { PropDeclaration } from '../../editor/propDeclaration';
 import type { VariableRename } from '../../../shared/engine/variableRename';
 import type { FieldFocus } from './fieldFocus';
@@ -90,6 +91,8 @@ export interface FieldDataPickerProps extends BindingContextProps {
   readonly onConditional?: (() => void) | undefined;
   /** `lead`: the picker is only its rows above the search (Create conditional), for a field with no data to pick (DataPicker.tsx). */
   readonly rows?: 'data' | 'lead' | undefined;
+  /** Offers "New Class list property" in a component, for an element's classes (classListProp.ts). Absent, the row is not drawn. */
+  readonly classList?: ClassListOffer | undefined;
   readonly onClose: () => void;
 }
 export interface BindFieldProps extends BindingContextProps {

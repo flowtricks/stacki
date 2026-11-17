@@ -20,6 +20,7 @@ import { ComputedField, ConditionalBadge, ConditionalEditor, ConditionalField, u
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { classListOfAttr, computedOfAttr, conditionalOfAttr, startingConditional, valueLanguageOf } from './conditionalModel';
 import { ClassListField } from './ClassListValue';
+import { CLASS_LIST_ATTRIBUTE, classListAppended, classListOfferOf, type ClassListOffer } from './classListProp';
 import { isReferencePath } from '../../editor/conditionalValue';
 import { readAttributesBinding } from '../../editor/attributesBinding';
 import { attributeNameNote, type AttributeNameContext } from '../../editor/htmlAttributes';
@@ -97,6 +98,8 @@ interface AttrEditorProps extends ContextProps {
   readonly onChangeValue: (value: string) => void;
   /** Writes a value made whole elsewhere (the Value conditions editor) at once, undefined leaving the attribute out: one undo step. */
   readonly onApplyValue: (value: Attr | undefined) => void;
+  /** A `class:list`'s picker offers "New Class list property" (classListProp.ts). */
+  readonly classList?: ClassListOffer | undefined;
   readonly onClose: () => void;
 }
 interface ObjectAttrsFieldProps extends ContextProps {
@@ -341,6 +344,22 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       name={spreadPath === undefined ? (editor.attr ?? '') : `{...${spreadPath}}`}
       value={spreadPath === undefined ? decodeAttr(value) : ''}
       spreadPath={spreadPath}
+      classList={
+        editor.attr === CLASS_LIST_ATTRIBUTE
+          ? classListOfferOf(
+              // An HTML element is the only kind of node the section is given a tag for.
+              { kind: state.tag === undefined ? 'component' : 'element', name: state.tag ?? '', props: node.props },
+              bindContext?.newProp,
+              onReplaceAttributes === undefined
+                ? undefined
+                : (props) => {
+                    // The editor's draft is the list as it was; the row shows the list as written.
+                    setEditor(undefined);
+                    onReplaceAttributes(props);
+                  },
+            )
+          : undefined
+      }
       onRenameSpread={
         onReplaceAttributes === undefined || editor.attr === undefined
           ? undefined
@@ -768,7 +787,11 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
       />
     </div>
   ) : classList !== undefined ? (
-    <ClassListField model={classList} value={encodeAttr(draftValue)} bindContext={state.bindContext} onApply={(next) => applyValue(state, next)} />
+    // In a component the list has the purple dot too: data picked from it joins the list, and "New Class list property" is there.
+    <div className="attr-value-field">
+      <ClassListField model={classList} value={encodeAttr(draftValue)} bindContext={state.bindContext} onApply={(next) => applyValue(state, next)} />
+      {state.classList !== undefined && <ClassListHandle state={state} />}
+    </div>
   ) : conditional !== undefined ? (
     <ConditionalField
       model={conditional}
@@ -900,6 +923,7 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
           pos={insertAt}
           bindContext={bindContext}
           seed={{ fit: 'text', label: draftName || 'value', value: draftValue.startsWith('{') ? '' : draftValue }}
+          classList={draftName === CLASS_LIST_ATTRIBUTE ? state.classList : undefined}
           onBindNew={(path) => {
             setInsertAt(undefined);
             setDraftValue(`{${path}}`);
@@ -912,6 +936,12 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
             // connects the whole value (fieldFocus.ts).
             if (insertAt.focus.kind === 'focused' && bindApiRef.current?.insert) {
               bindApiRef.current.insert(path);
+              return;
+            }
+            // A class list takes the data as one more class, rather than as the whole list.
+            const appended = draftName === CLASS_LIST_ATTRIBUTE && draftValue !== '' ? classListAppended(encodeAttr(draftValue), path) : undefined;
+            if (appended !== undefined) {
+              applyValue(state, appended);
               return;
             }
             const text = `{${path}}`;
@@ -930,6 +960,26 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
         />
       ) : undefined}
     </>
+  );
+}
+
+// The purple dot beside a class list the Class list editor draws, opening the same picker as a value's dot.
+function ClassListHandle({ state }: { readonly state: AttributeState }) {
+  const { insertAt, setInsertAt, ref } = state;
+  return (
+    <BindHandle
+      active={insertAt !== undefined}
+      onOpen={(host, focus) => {
+        if (insertAt !== undefined) {
+          setInsertAt(undefined);
+          return;
+        }
+        const rectangle = (host ?? ref.current)?.getBoundingClientRect();
+        if (rectangle !== undefined) {
+          setInsertAt({ ...dataPickerPosition(rectangle), focus });
+        }
+      }}
+    />
   );
 }
 

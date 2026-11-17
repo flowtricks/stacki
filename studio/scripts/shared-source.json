@@ -1129,6 +1129,7 @@
     "src/features/props/bindingTypes.ts",
     "src/features/props/canvasDraftInline.ts",
     "src/features/props/chipKeys.ts",
+    "src/features/props/classListProp.ts",
     "src/features/props/codeCleared.ts",
     "src/features/props/conditionExpressionModel.ts",
     "src/features/props/conditionViewDecision.ts",

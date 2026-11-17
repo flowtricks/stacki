@@ -90,6 +90,35 @@ batch, and restore written files if an operating error occurs. The renderer flus
 and code saves before making a request, then refreshes the model and schemas.
 File, byte, field, and AST limits cap project traversal and refactoring work.
 
+## A class list prop
+
+In a component, the purple dot on an element's Class field, and on a `class:list`
+attribute, offers **New Class list property** under New Plain Text property. It makes
+the prop an instance passes its own classes through (`<Card class="featured">`), as
+Lumos components do: `class?: string` in `interface Props`, read as `class: className`
+(`class` is a reserved word, so the destructure binds it by an alias; `propClass` when
+`className` is taken). The element's classes move into `class:list` with the prop
+last, so an instance's classes come after the element's:
+
+| Before | After |
+|---|---|
+| `class="card hero"` | `class:list={["card", "hero", className]}` |
+| no class | `class:list={[className]}` |
+| `class={tone}` | `class:list={[tone, className]}` |
+| `class:list={["card", on && "is-on"]}` | `class:list={["card", on && "is-on", className]}` (one entry per line stays so) |
+
+`class:list` takes the place of `class`; every other attribute keeps its place and
+bytes. A `class` beside an existing `class:list` stays as it was. The declaration and
+the rewrite are one undo step, and the write goes through main's pre-flight like any
+edit. Data picked from a `class:list`'s dot joins the list rather than replacing it.
+
+The row is drawn disabled, with the reason, where the rewrite would have to guess
+(`src/features/props/classListProp.ts`): a component tag (it reads `class` its own
+way), a spread other than the component's own rest props (it could pass a class of
+its own; the rest props are safe, since declaring `class` takes it out of them), a
+component that already declares `class`, or a value that does not read as one
+expression. Instances then edit the prop with the class field's token editor.
+
 ## Deleting a prop
 
 The trash button (in the prop's settings, or on its row) never deletes at once.

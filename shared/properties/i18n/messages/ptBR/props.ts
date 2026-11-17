@@ -58,6 +58,12 @@ export const messages = {
   'props.classList.entry': 'Classe {number}',
   'props.classList.remove': 'Remover classe',
   'props.classList.title': 'Lista de classes',
+  'props.classListProp.refusal.component':
+    'Só um elemento HTML pode ter uma propriedade de lista de classes: um componente lê sua classe do seu próprio jeito.',
+  'props.classListProp.refusal.shape': 'O valor de class não é uma única expressão, então não pode ir para uma lista de classes com segurança.',
+  'props.classListProp.refusal.spread':
+    'Um spread aqui poderia passar uma classe própria, então as classes não podem ir para uma lista de classes com segurança.',
+  'props.classListProp.refusal.taken': 'Este componente já tem uma propriedade class. Conecte-a pela lista abaixo.',
   'props.cleanup.changedSince': '{file} mudou desde a verificação. Verifique novamente antes de limpar.',
   'props.cleanup.keptCleanup': 'Estes arquivos mantiveram a limpeza e precisam ser verificados: {files}.',
   'props.cleanup.noLongerUnused': 'Um seletor não está mais sem uso. Verifique novamente antes de limpar.',
@@ -505,6 +511,7 @@ export const messages = {
   'props.newProp.name.tooLong': 'Esse nome é muito longo.',
   'props.newProp.title.attributes': 'Atributos',
   'props.newProp.title.boolean': 'Interruptor',
+  'props.newProp.title.classList': 'Lista de classes',
   'props.newProp.title.content': 'Texto',
   'props.newProp.title.image': 'Imagem',
   'props.newProp.title.list': 'Lista',

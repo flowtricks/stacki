@@ -79,6 +79,12 @@ export interface PropDeclaration {
   readonly typing?: PropTyping | undefined;
   /** A default written as code in the default's code view. Absent or empty: the default the kind's own fields give. */
   readonly defaultExpression?: string | undefined;
+  /**
+   * The name the markup should read the prop by (`className` for `class`), used
+   * when it is free. Absent, or taken: the prop's own name, or an alias when
+   * that is reserved or taken (`propLabel`).
+   */
+  readonly local?: string | undefined;
 }
 
 /**
@@ -442,7 +448,7 @@ export function declaredProp(
   if (!type.ok) {
     return type;
   }
-  const local = taken.has(declaration.key) || RESERVED.has(declaration.key) ? freeLocal(declaration.key, taken) : declaration.key;
+  const local = localOf(declaration, taken);
   const needed = neededImports(declaration, new Set([...taken, local]), existing);
   const fallback = needed.defaultCode === undefined ? defaultCode(declaration, translate) : ok(needed.defaultCode);
   if (!fallback.ok) {
@@ -464,6 +470,17 @@ export function declaredProp(
   }
   assertDeclared(out, declaration, local);
   return ok({ frontmatter: out, local, imports: needed.imports });
+}
+
+// The name the prop is read by: the one asked for when it is free, else its own, else an alias.
+function localOf(declaration: Pick<PropDeclaration, 'key' | 'local'>, taken: ReadonlySet<string>): string {
+  const wanted = declaration.local;
+  if (wanted !== undefined && IDENTIFIER.test(wanted) && !taken.has(wanted) && !RESERVED.has(wanted)) {
+    return wanted;
+  }
+  const out = taken.has(declaration.key) || RESERVED.has(declaration.key) ? freeLocal(declaration.key, taken) : declaration.key;
+  assert(!RESERVED.has(out), 'localOf: a prop is never read by a reserved word');
+  return out;
 }
 
 const IMPORT_SUFFIX_MAX = 100;

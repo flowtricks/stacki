@@ -28,6 +28,7 @@ import NewPropForm from './NewPropForm';
 // The "New … property" row is drawn here, so its styles load with it.
 import './loopSettings.css';
 import { boundPath, fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
+import { CLASS_LIST_REFUSAL_KEYS, CLASS_LIST_SEED, type ClassListOffer } from './classListProp';
 import ExprInput from '../../ui/ExprInput';
 import { BranchIcon, CodeIcon, CloseIcon, ElementComponentIcon, FileIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
 import {
@@ -307,6 +308,7 @@ export function FieldDataPicker({
   onWrite,
   onConditional,
   rows,
+  classList,
   onClose,
 }: FieldDataPickerProps) {
   // In a component, the field's own props come first and a new one can be
@@ -321,6 +323,9 @@ export function FieldDataPicker({
     onPick(resolvePick(bound, need, bindContext ?? undefined));
   };
   const [creating, setCreating] = useState(false);
+  // The class list row opens the same form, for a prop the element's classes are rewritten to read.
+  const classOffer = host !== undefined && classList !== undefined ? { host, classList } : undefined;
+  const [creatingClassList, setCreatingClassList] = useState(false);
   const fullTree: readonly PickerNode[] = tree || dataTree(bindContext || {});
   // A running app that answers `cms.bind` is asked first; its path is picked as a row click would be.
   const override = useBindOverride({
@@ -349,7 +354,14 @@ export function FieldDataPicker({
       className="dd-popup bind-menu"
       style={{ left: position.left, top: position.top, width: position.width }}
     >
-      {offer !== undefined && creating ? (
+      {classOffer !== undefined && creatingClassList ? (
+        <NewPropForm
+          host={classOffer.host}
+          seed={CLASS_LIST_SEED}
+          onCancel={() => setCreatingClassList(false)}
+          onCreated={(path) => classOffer.classList.onCreated(path)}
+        />
+      ) : offer !== undefined && creating ? (
         <NewPropForm
           host={offer.host}
           seed={offer.seed}
@@ -368,9 +380,10 @@ export function FieldDataPicker({
           {...definedFields({ onWrite })}
           footer={!!onWrite}
           lead={
-            offer === undefined && onConditional === undefined ? undefined : (
+            offer === undefined && onConditional === undefined && classOffer === undefined ? undefined : (
               <>
                 {offer !== undefined && <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />}
+                {classOffer !== undefined && <ClassListRow offer={classOffer.classList} onOpen={() => setCreatingClassList(true)} />}
                 {onConditional !== undefined && <ConditionalRow onOpen={onConditional} />}
               </>
             )
@@ -396,6 +409,22 @@ function NewPropRow({ host, seed, onOpen }: { readonly host: NewPropHost; readon
         {translate('props.binding.newProperty', { kind: newPropTitle(seed.fit, translate) })}
       </button>
       {blocked && <div className="dp-new-prop-reason">{translate('props.attributesBinding.passesOnce', { local: host.restLocal ?? '' })}</div>}
+    </>
+  );
+}
+
+// "New Class list property": under the new property, for an element's
+// classes. A shape the rewrite cannot read safely says why and makes nothing.
+function ClassListRow({ offer, onOpen }: { readonly offer: ClassListOffer; readonly onOpen: () => void }) {
+  const translate = useTranslate();
+  const refusal = offer.refusal;
+  return (
+    <>
+      <button type="button" className="dp-new-prop" disabled={refusal !== undefined} onMouseDown={(event) => event.preventDefault()} onClick={onOpen}>
+        <PlusIcon size={11} />
+        {translate('props.binding.newProperty', { kind: translate('props.newProp.title.classList') })}
+      </button>
+      {refusal !== undefined && <div className="dp-new-prop-reason">{translate(CLASS_LIST_REFUSAL_KEYS[refusal])}</div>}
     </>
   );
 }

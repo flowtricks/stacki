@@ -183,6 +183,7 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
           pos={insertAt}
           bindContext={bindContext}
           seed={seed}
+          classList={state.classList}
           // A prop made for this field is the whole of its value, as a builder binds one.
           onBindNew={(path) => {
             setInsertAt(undefined);
