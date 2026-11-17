@@ -37,7 +37,32 @@ const EVALUATE_MS_MAX = 20000;
 const HIT_GRID_COLUMNS = 7;
 const HIT_GRID_ROWS = 5;
 
+// How long a canvas press waits for its element (and the canvas frame) to be there.
+const CANVAS_POINT_WAIT_MS_MAX = 20000;
+// The canvas iframe the person sees: PreviewFrame loads `<route>#avb-design` and marks the
+// frames it keeps from the previous page aria-hidden.
+const CANVAS_IFRAME_SELECTOR = 'iframe[src$="#avb-design"]:not([aria-hidden="true"])';
+const CURRENT_CANVAS_SOURCE = `(() => { const f = document.querySelector(${JSON.stringify(CANVAS_IFRAME_SELECTOR)}); return f ? f.src : undefined; })()`;
+const CANVAS_URL_SUFFIX = '#avb-design';
+
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+// The canvas among the app page's child frames: the one whose URL is the shown canvas iframe's
+// src, else the only `#avb-design` frame. Never a palette snapshot frame from the same server
+// (`/__avb/preview?...&layout=snapshot`), which also holds rendered markup: picking one made a
+// canvas press look for its element in a component picture (release 1.4.6's tests, Windows
+// and macOS). Undefined when no frame is the canvas, so the caller waits instead of guessing.
+function pickCanvasFrame(frames, currentSource) {
+  assert.ok(Array.isArray(frames), 'pickCanvasFrame: frames is a list');
+  const canvases = frames.filter((frame) => typeof frame.url === 'string' && frame.url.endsWith(CANVAS_URL_SUFFIX));
+  if (currentSource !== undefined) {
+    const shown = canvases.find((frame) => frame.url === currentSource);
+    if (shown !== undefined) {
+      return shown;
+    }
+  }
+  return canvases.length === 1 ? canvases[0] : undefined;
+}
 
 function createDriver(window, project) {
   const contents = window.webContents;
@@ -60,15 +85,16 @@ function createDriver(window, project) {
   const evaluate = (source) => bounded(contents.executeJavaScript(source), 'the app page');
   const note = (detail) => evaluate(`window.__soak && window.__soak.note(${JSON.stringify(detail)}); 0`);
 
-  function canvasFrame() {
-    const frames = contents.mainFrame.frames;
-    return (
-      frames.find((frame) => /^https?:\/\/(127\.0\.0\.1|localhost):\d+\//.test(frame.url) && !frame.url.includes(new URL(contents.getURL()).host)) ?? frames[0]
-    );
+  // The canvas is the shown `#avb-design` iframe. Matching any dev-server frame is not enough:
+  // the palette renders component pictures in off-screen frames from the same server
+  // (`/__avb/preview?...&layout=snapshot`), and on a slow machine one of those can come first.
+  async function canvasFrame() {
+    const currentSource = await evaluate(CURRENT_CANVAS_SOURCE);
+    return pickCanvasFrame(contents.mainFrame.frames, typeof currentSource === 'string' ? currentSource : undefined);
   }
 
   async function canvasEvaluate(source) {
-    const frame = canvasFrame();
+    const frame = await canvasFrame();
     if (frame === undefined) {
       throw new Error('soakDriver: the canvas frame is not there');
     }
@@ -92,17 +118,26 @@ function createDriver(window, project) {
   }
 
   // The window point at the centre of a canvas element, by CSS selector inside the page.
+  // Polled with a bound: on a slow machine the canvas can still be swapping frames when the
+  // first press is due. A page answers "not there" as null (executeJavaScript's undefined), so
+  // both are absence.
   async function canvasPoint(selector) {
-    const frameBox = await evaluate(
-      `(() => { const f = [...document.querySelectorAll('iframe')].find((e) => e.getClientRects().length > 0); if (!f) return undefined; const r = f.getBoundingClientRect(); return { x: r.left + f.clientLeft, y: r.top + f.clientTop, scale: r.width / (f.clientWidth || r.width) }; })()`,
-    );
-    const inner = await canvasEvaluate(
-      `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return undefined; e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); const r = e.getBoundingClientRect(); for (let row = 1; row < ${HIT_GRID_ROWS}; row += 1) { for (let column = 1; column < ${HIT_GRID_COLUMNS}; column += 1) { const x = r.left + (r.width * column) / ${HIT_GRID_COLUMNS}; const y = r.top + (r.height * row) / ${HIT_GRID_ROWS}; if (e.contains(document.elementFromPoint(x, y))) return { x, y }; } } return { x: r.left + Math.min(r.width / 2, 40), y: r.top + Math.min(r.height / 2, 20) }; })()`,
-    );
-    if (frameBox === undefined || inner === undefined) {
-      throw new Error(`soakDriver: no canvas element ${selector}`);
+    for (let waitedMs = 0; waitedMs < CANVAS_POINT_WAIT_MS_MAX; waitedMs += CANVAS_POLL_MS) {
+      const frameBox =
+        (await evaluate(
+          `(() => { const f = document.querySelector(${JSON.stringify(CANVAS_IFRAME_SELECTOR)}); if (!f || f.getClientRects().length === 0) return undefined; const r = f.getBoundingClientRect(); return { x: r.left + f.clientLeft, y: r.top + f.clientTop, scale: r.width / (f.clientWidth || r.width) }; })()`,
+        )) ?? undefined;
+      // A frame swapped out under the call, or no canvas frame yet, is the same "not yet".
+      const inner =
+        (await canvasEvaluate(
+          `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return undefined; e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); const r = e.getBoundingClientRect(); for (let row = 1; row < ${HIT_GRID_ROWS}; row += 1) { for (let column = 1; column < ${HIT_GRID_COLUMNS}; column += 1) { const x = r.left + (r.width * column) / ${HIT_GRID_COLUMNS}; const y = r.top + (r.height * row) / ${HIT_GRID_ROWS}; if (e.contains(document.elementFromPoint(x, y))) return { x, y }; } } return { x: r.left + Math.min(r.width / 2, 40), y: r.top + Math.min(r.height / 2, 20) }; })()`,
+        ).catch(() => undefined)) ?? undefined;
+      if (frameBox !== undefined && inner !== undefined) {
+        return { x: Math.round(frameBox.x + inner.x * frameBox.scale), y: Math.round(frameBox.y + inner.y * frameBox.scale) };
+      }
+      await sleep(CANVAS_POLL_MS);
     }
-    return { x: Math.round(frameBox.x + inner.x * frameBox.scale), y: Math.round(frameBox.y + inner.y * frameBox.scale) };
+    throw new Error(`soakDriver: no canvas element ${selector} within ${CANVAS_POINT_WAIT_MS_MAX} ms`);
   }
 
   // A panel element's centre, brought into the panel's view with real wheel events first.
@@ -381,4 +416,4 @@ function createDriver(window, project) {
   };
 }
 
-module.exports = { createDriver, sleep };
+module.exports = { createDriver, pickCanvasFrame, sleep };
