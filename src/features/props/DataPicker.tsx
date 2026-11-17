@@ -246,7 +246,8 @@ export default function DataPicker(props: DataPickerProps) {
       {/* Hidden rather than unmounted while a prop's settings are open, so what
           was opened, stepped to and searched for is still there afterwards. */}
       <div className={editing === undefined ? 'data-picker' : 'data-picker is-covered'}>
-        {lead}
+        {/* Inset like the list's rows (.dp-list), so the rows above the search line up with the ones below it. */}
+        {lead !== undefined && <div className="dp-lead">{lead}</div>}
         {/* Which entry the values below are FROM. A dynamic route stands for
           many, and the one on the canvas is the one being read here — so
           stepping through them previews the page against other content and
