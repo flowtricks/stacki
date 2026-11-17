@@ -479,3 +479,194 @@ test('every controller choice shows the icon its prop kind has in the prop list'
   assert.ok(panel.section().querySelector('.variant-controller-choice .dd-icon svg'));
   await panel.unmount();
 });
+
+test('Button label: its per-variant default reads as the Conditional chip with its conditions, no plain control', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  const editor = panel.section();
+  const field = editor.querySelector('.property-default');
+  assert.ok(field.querySelector('.conditional-chip'), 'the default is conditional');
+  const lines = [...field.querySelectorAll('.conditional-line')].map((line) => line.textContent.replace(/\s+/g, ' ').trim());
+  assert.deepEqual(lines, [
+    'If all are trueVariant = PlayPressed is truePause',
+    'If Variant = PlayPlay',
+    'If Variant = CloseClose',
+    'If all are trueVariant = ArrowDirection = BackPrevious',
+    'If Variant = ArrowNext',
+    'Else(left out)',
+  ]);
+  assert.equal(field.querySelector('input') ?? undefined, undefined, 'no plain default input beside the conditions');
+  // Every option documents label differently: the one Tooltip reads Varies.
+  assert.ok([...editor.querySelectorAll('input')].some((input) => input.placeholder === 'Varies'));
+  await panel.unmount();
+});
+
+test('an allowing option opens to its own Kind and Tooltip; a typed tooltip is written to that option only', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  assert.equal(panel.labelled('main settings') ?? undefined, undefined, 'a Not allowed option has no settings');
+  await panel.click(panel.labelled('close settings'));
+  const tip = panel.labelled('Tooltip for close');
+  assert.equal(tip.value, 'Accessible label. Defaults to `Close`.');
+  await panel.type(tip, 'Closes the dialog.');
+  await panel.key(tip, 'Enter');
+  assert.equal(
+    panel.source(),
+    replaced(BUTTON, '/** Accessible label. Defaults to `Close`. */\n      label?: string;', '/** Closes the dialog. */\n      label?: string;'),
+  );
+  await panel.unmount();
+});
+
+test('the controller’s Kind cannot be changed: its options are the union', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('variant');
+  const kind = panel.section().querySelector('.property-type .dd-trigger');
+  assert.equal(kind.disabled, true);
+  assert.equal(panel.section().querySelector('.property-type .prop-expr-toggle') ?? undefined, undefined);
+  await panel.unmount();
+});
+
+test('a text prop with a plain default offers Set by conditions; a number and a switch do not', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('href');
+  assert.ok(panel.labelled('Set by conditions'), 'href (text) can be set by conditions');
+  await panel.unmount();
+  const second = await mountPanel(BUTTON);
+  await second.open('pressed');
+  assert.equal(second.labelled('Set by conditions') ?? undefined, undefined, 'a switch cannot');
+  await second.unmount();
+});
+
+test('Set by conditions from scratch: a condition and a value, closed, write one destructure default', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('href');
+  await panel.click(panel.labelled('Set by conditions'));
+  const editor = () => document.querySelector('.conditional-editor');
+  assert.ok(editor(), 'the Value conditions editor opens');
+  // It starts on the first prop of options, Variant, comparing with any of its values.
+  assert.equal(editor().querySelector('.dd-trigger[aria-label="Property"]').textContent.trim(), 'Variant');
+  assert.equal(editor().querySelector('.dd-trigger[aria-label="Operator"]').textContent.trim(), 'is any');
+  const values = editor().querySelector('[aria-label="Values"]');
+  await panel.click(values.querySelector('.multi-select-chevron'));
+  const menu = document.getElementById(values.getAttribute('aria-controls'));
+  await panel.click([...menu.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Play'));
+  const box = editor().querySelector('[aria-label="Value"] .bind-input');
+  const React = require('react');
+  await React.act(async () => {
+    box.textContent = '/play';
+    box.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  for (let round = 0; round < 3 && editor() !== null; round += 1) {
+    await React.act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  }
+  assert.equal(editor() ?? undefined, undefined, 'the editor closed');
+  assert.equal(panel.source(), replaced(BUTTON, '  href,\n', '  href = variant === "play" ? "/play" : undefined,\n'));
+  // The field is now the Conditional chip with its summary.
+  assert.ok(panel.section().querySelector('.property-default .conditional-chip'));
+  await panel.unmount();
+});
+
+// The from-scratch flow a designer walks, on a component whose three props
+// were just made in the panel (Kinds Choice, Switch and Text): label is given
+// to variant, taken away from main, and its default set by conditions. Every
+// step is a click, a pick or typed words; the counts are pinned so a step
+// added later is a decision, not an accident.
+const SCRATCH = [
+  '---',
+  'interface Props {',
+  '  variant?: "main" | "play";',
+  '  pressed?: boolean;',
+  '  label?: string;',
+  '}',
+  'const { variant = "main", pressed = false, label } = Astro.props;',
+  '---',
+  '<button aria-label={label}>Go</button>',
+  '',
+].join('\n');
+
+test('from scratch: Controlled by variant, Not allowed for main, default Pause / Play by conditions', async () => {
+  const React = require('react');
+  const panel = await mountPanel(SCRATCH);
+  let actions = 0;
+  const act = async (step) => {
+    actions += 1;
+    await step();
+  };
+  await panel.open('label');
+  await act(() => panel.pick('Controlled by', 'variant')); // 2 clicks: open, pick
+  await act(() => panel.state('label when variant is main', 'Not allowed'));
+  assert.equal(panel.checked('label when variant is main'), 'forbidden');
+  assert.equal(panel.checked('label when variant is play'), 'optional');
+  await act(() => panel.click(panel.labelled('Set by conditions')));
+  const editor = () => document.querySelector('.conditional-editor');
+  const pickValue = async (field, name) => {
+    await panel.click(field.querySelector('.multi-select-chevron'));
+    const menu = document.getElementById(field.getAttribute('aria-controls'));
+    await panel.click([...menu.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === name));
+  };
+  const typeValue = (box, text) =>
+    React.act(async () => {
+      box.textContent = text;
+      box.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+  // Group 1: Variant is Play and Pressed is true ↳ Pause.
+  await act(() => pickValue(editor().querySelectorAll('[aria-label="Values"]')[0], 'Play'));
+  await act(() => panel.click([...editor().querySelectorAll('.conditional-add')][0]));
+  const second = editor().querySelectorAll('.dd-trigger[aria-label="Property"]')[1];
+  await act(async () => {
+    await panel.click(second);
+    await panel.click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Pressed'));
+  });
+  await act(() => typeValue(editor().querySelectorAll('[aria-label="Value"] .bind-input')[0], 'Pause'));
+  // Group 2: Variant is Play ↳ Play.
+  await act(() => panel.click(editor().querySelector('.conditional-add-group')));
+  await act(() => pickValue(editor().querySelectorAll('.conditional-group[role="group"]')[1].querySelector('[aria-label="Values"]'), 'Play'));
+  await act(() => typeValue(editor().querySelectorAll('.conditional-group[role="group"]')[1].querySelector('[aria-label="Value"] .bind-input'), 'Play'));
+  for (let round = 0; round < 3 && editor() !== null; round += 1) {
+    await React.act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  }
+  actions += 1; // Escape (or a click away) closes and writes.
+  const source = panel.source();
+  assert.match(source, /^---\ntype Props = \{\n/, 'the interface became a type for its first group');
+  assert.match(source, /\| \{ variant\?: "main"; label\?: never \}/);
+  assert.match(source, /\| \{ variant: "play"; label\?: string \}/);
+  assert.ok(
+    source.includes('label = variant === "play" && pressed ? "Pause" : variant === "play" ? "Play" : undefined'),
+    source.slice(0, source.indexOf('---', 4)),
+  );
+  assert.equal(actions, 11, 'the flow takes eleven actions');
+  await panel.unmount();
+});
+
+test('Button label: a value changed in the editor is written into its table entry alone', async () => {
+  const React = require('react');
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  await panel.click(panel.section().querySelector('.property-default .conditional-chip'));
+  const editor = () => document.querySelector('.conditional-editor');
+  const groups = editor().querySelectorAll('.conditional-group[role="group"]');
+  assert.equal(groups.length, 5, 'one group per option and condition');
+  const box = groups[2].querySelector('[aria-label="Value"] .bind-input');
+  assert.equal(box.textContent, 'Close');
+  await React.act(async () => {
+    box.textContent = 'Dismiss';
+    box.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  for (let round = 0; round < 3 && editor() !== null; round += 1) {
+    await React.act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  }
+  assert.equal(panel.source(), replaced(BUTTON, '  close: "Close",', '  close: "Dismiss",'));
+  await panel.unmount();
+});
+
+test('Button label: opening and closing the editor without a change writes nothing', async () => {
+  const React = require('react');
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  await panel.click(panel.section().querySelector('.property-default .conditional-chip'));
+  for (let round = 0; round < 3 && document.querySelector('.conditional-editor') !== null; round += 1) {
+    await React.act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  }
+  assert.equal(panel.source(), BUTTON);
+  await panel.unmount();
+});

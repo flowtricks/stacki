@@ -14,9 +14,12 @@
 //   component has no group yet) and the option to allow it for.
 // - A group main cannot edit faithfully is drawn the same, disabled, with one
 //   word for why.
+// - An option that allows the prop opens, from its name, to the prop's own
+//   Kind and Tooltip in that option: `string` in one variant and
+//   `"forward" | "back"` in another, each with its own words.
 
 import { useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { FocusEvent, KeyboardEvent } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
@@ -28,8 +31,10 @@ import { centralIcon } from '../../ui/central/CentralIcon';
 import { block as centralBlock, checkCircle as centralCheckCircle, star as centralStar } from '../../ui/central/centralGeometry';
 import Dropdown from '../../ui/Dropdown';
 import type { DropdownOption } from '../../ui/Dropdown';
-import { kindIcon } from './PropertyType';
-import { BranchIcon, CloseIcon } from '../../ui/Icons';
+import { PropertyType, kindIcon } from './PropertyType';
+import { PropertyOptions } from './PropertyOptions';
+import { propertyKind } from './propertyKinds';
+import { BranchIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon } from '../../ui/Icons';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import type { ListFieldChange } from '../props/ListField';
 import type { PropertySaveHost, PropertySaveOutcome } from './propertyAutosave';
@@ -228,6 +233,9 @@ export function VariantControlledBy(props: {
   readonly role: Extract<VariantRole, { readonly kind: 'ruled' | 'attachable' }>;
   readonly host: VariantHost;
   readonly onProblem: (message: string) => void;
+  /** The prop as the form holds it and the component's frontmatter, for an option's own Kind. */
+  readonly property: ComponentProperty;
+  readonly frontmatter: string;
 }) {
   const translate = useTranslate();
   const { run, pending } = useVariantRun(props.host, props.onProblem);
@@ -290,7 +298,15 @@ export function VariantControlledBy(props: {
                 <CloseIcon size={12} />
               </button>
             </div>
-            <VariantRuleRows name={name} group={group} disabled={pending || readonly} translate={translate} run={run} />
+            <VariantRuleRows
+              name={name}
+              group={group}
+              property={props.property}
+              frontmatter={props.frontmatter}
+              disabled={pending || readonly}
+              translate={translate}
+              run={run}
+            />
           </div>
         );
       })}
@@ -318,6 +334,62 @@ export function VariantControlledBy(props: {
 export function controllerChoice(group: VariantGroup): DropdownOption {
   const type = group.optionKind === 'boolean' ? 'boolean' : group.options.map((option) => JSON.stringify(option.value)).join(' | ');
   return { value: group.controller, label: group.controller, icon: kindIcon({ type, description: '' }) };
+}
+
+/** The options of `group` that allow `name`: where the prop has a declaration of its own to document. */
+export function allowingOptions(group: VariantGroup, name: string): readonly string[] {
+  const index = group.props.indexOf(name);
+  assert(index >= 0, 'allowingOptions: the group rules the prop');
+  return group.options.filter((option) => option.rules[index]?.state !== 'forbidden').map((option) => option.value);
+}
+
+/** The distinct tooltips the options that allow a ruled prop give it, in the first ruling group. */
+export function rulingTips(role: Extract<VariantRole, { readonly kind: 'ruled' }>, name: string): readonly string[] {
+  const [group] = role.groups;
+  if (group === undefined) {
+    return [];
+  }
+  const index = group.props.indexOf(name);
+  assert(index >= 0, 'rulingTips: the first ruling group rules the prop');
+  const tips = group.options.flatMap((option) => {
+    const rule = option.rules[index];
+    return rule === undefined || rule.state === 'forbidden' ? [] : [rule.description];
+  });
+  return [...new Set(tips)];
+}
+
+/**
+ * The prop's Tooltip when its options document it differently: it reads
+ * Varies, each option's own words are in that option's row, and words typed
+ * here are written to every option when the field is left or Enter pressed.
+ */
+export function VariantTooltip({ onChange }: { readonly onChange: (description: string) => void }) {
+  const translate = useTranslate();
+  const [text, setText] = useState('');
+  const commit = (): void => {
+    if (text.trim() !== '') {
+      onChange(text.trim());
+      setText('');
+    }
+  };
+  return (
+    <label>
+      {translate('componentProps.settings.tooltip')}
+      <input
+        value={text}
+        placeholder={translate('componentProps.variants.varies')}
+        maxLength={VARIANT_LIMITS.codeCharsMax}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commit();
+          }
+        }}
+      />
+    </label>
+  );
 }
 
 /** Where a conditional prop is allowed, one line per controller (`variant: play, close, arrow`), for its row's tip. */
@@ -363,36 +435,166 @@ const STATE_ICONS = {
 } as const satisfies Record<VariantRuleState, ReturnType<typeof centralIcon>>;
 
 // One full-width row per option: its name, and its state as three icon buttons.
+// An option that allows the prop opens from its name to that option's Kind
+// and Tooltip; a kind that differs from the prop's shows its icon in the row.
 function VariantRuleRows(props: {
   readonly name: string;
   readonly group: VariantGroup;
+  readonly property: ComponentProperty;
+  readonly frontmatter: string;
   readonly disabled: boolean;
   readonly translate: Translate;
   readonly run: (edit: VariantRuleEdit) => Promise<boolean>;
 }) {
   const { name, group, translate } = props;
+  const [open, setOpen] = useState<string | undefined>(undefined);
   const index = group.props.indexOf(name);
   assert(index >= 0, 'VariantRuleRows: the prop is one the group rules');
+  const baseKind = propertyKind(props.property);
   return (
     <div className="variant-rule-rows">
       {group.options.map((option) => {
         const rule = option.rules[index];
         assert(rule !== undefined, 'VariantRuleRows: every option has a rule for every prop');
+        const allowed = rule.state !== 'forbidden';
+        const expanded = allowed && open === option.value;
+        const own = allowed && propertyKind({ type: rule.type, description: '' }) !== baseKind ? kindIcon({ type: rule.type, description: '' }) : undefined;
+        const details = translate('componentProps.variants.optionDetails', { value: option.value });
         return (
-          <div key={option.value} className={`variant-rule-row is-${rule.state}`}>
-            <span className="variant-rule-option" title={option.value}>
-              {option.value}
-            </span>
-            <VariantStateButtons
-              label={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
-              state={rule.state}
-              disabled={props.disabled}
-              translate={translate}
-              onPick={(state) => void props.run({ kind: 'setRule', controller: group.controller, option: option.value, prop: name, state })}
-            />
+          <div key={option.value} className="variant-rule-option-block">
+            <div className={`variant-rule-row is-${rule.state}${expanded ? ' is-open' : ''}`}>
+              {allowed ? (
+                <button
+                  type="button"
+                  className="variant-rule-option"
+                  aria-expanded={expanded}
+                  aria-label={details}
+                  title={option.value}
+                  disabled={props.disabled}
+                  onClick={() => setOpen(expanded ? undefined : option.value)}
+                >
+                  {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+                  <span className="variant-rule-option-name">{option.value}</span>
+                  {own !== undefined && <span className="variant-rule-own-kind">{own}</span>}
+                </button>
+              ) : (
+                <span className="variant-rule-option" title={option.value}>
+                  <span className="variant-rule-option-gap" />
+                  <span className="variant-rule-option-name">{option.value}</span>
+                </span>
+              )}
+              <VariantStateButtons
+                label={translate('componentProps.variants.cell', { prop: name, controller: group.controller, value: option.value })}
+                state={rule.state}
+                disabled={props.disabled}
+                translate={translate}
+                onPick={(state) => void props.run({ kind: 'setRule', controller: group.controller, option: option.value, prop: name, state })}
+              />
+            </div>
+            {expanded && (
+              <VariantOptionDetails
+                key={`${rule.type}\u0000${rule.description}`}
+                name={name}
+                controller={group.controller}
+                option={option.value}
+                type={rule.type}
+                description={rule.description}
+                property={props.property}
+                frontmatter={props.frontmatter}
+                disabled={props.disabled}
+                translate={translate}
+                run={props.run}
+              />
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// An option's own Kind (and Options, for a choice) and Tooltip for the prop:
+// the Kind picker and Options list every prop has, and the Tooltip field,
+// written to this option's declaration only. A pick is written at once; typed
+// words (a type in code, an option name, the tooltip) when the field is left
+// or Enter is pressed, so each is one undo step.
+function VariantOptionDetails(props: {
+  readonly name: string;
+  readonly controller: string;
+  readonly option: string;
+  readonly type: string;
+  readonly description: string;
+  readonly property: ComponentProperty;
+  readonly frontmatter: string;
+  readonly disabled: boolean;
+  readonly translate: Translate;
+  readonly run: (edit: VariantRuleEdit) => Promise<boolean>;
+}) {
+  const { translate } = props;
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [type, setType] = useState(props.type);
+  const [tip, setTip] = useState(props.description);
+  const sendType = (next: string): void => {
+    setType(next);
+    if (next.trim() !== '' && next.trim() !== props.type.trim()) {
+      void props.run({ kind: 'setRuleType', controller: props.controller, prop: props.name, options: [props.option], type: next.trim() });
+    }
+  };
+  const sendTip = (): void => {
+    if (tip.trim() !== props.description.trim()) {
+      void props.run({ kind: 'setRuleDescription', controller: props.controller, prop: props.name, options: [props.option], description: tip.trim() });
+    }
+  };
+  const leave = (event: FocusEvent<HTMLDivElement>): void => {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+    sendType(type);
+    sendTip();
+  };
+  const property: ComponentProperty = { ...props.property, type, description: '', defaultValue: '' };
+  const code = { open: codeOpen, setOpen: setCodeOpen };
+  const options = literalOptions(type) !== undefined;
+  return (
+    <div
+      className="variant-option-details"
+      role="group"
+      aria-label={translate('componentProps.variants.optionDetails', { value: props.option })}
+      onBlur={leave}
+    >
+      <PropertyType
+        property={property}
+        frontmatter={props.frontmatter}
+        code={code}
+        optionsHoldCode={options}
+        onChange={(change, pace) => (pace === 'at-once' ? sendType(change.type) : setType(change.type))}
+      />
+      {options && (
+        <PropertyOptions
+          type={type}
+          disabled={props.disabled}
+          code={code}
+          onChange={(change) => (change.kind === 'reorder' || change.rename === undefined ? sendType(change.type) : setType(change.type))}
+          onTypeChange={setType}
+        />
+      )}
+      <label>
+        {translate('componentProps.settings.tooltip')}
+        <input
+          aria-label={translate('componentProps.variants.optionTooltip', { value: props.option })}
+          value={tip}
+          maxLength={VARIANT_LIMITS.codeCharsMax}
+          disabled={props.disabled}
+          placeholder={translate('componentProps.settings.tooltipPlaceholder')}
+          onChange={(event) => setTip(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              sendTip();
+            }
+          }}
+        />
+      </label>
     </div>
   );
 }

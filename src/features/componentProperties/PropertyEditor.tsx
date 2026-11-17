@@ -1,9 +1,20 @@
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
-import { VariantControlledBy, fallbackEdit, optionListEdit, useVariantHost, useVariantRun, variantRoleOf } from './PropertyVariants';
+import {
+  VariantControlledBy,
+  VariantTooltip,
+  allowingOptions,
+  fallbackEdit,
+  optionListEdit,
+  rulingTips,
+  useVariantHost,
+  useVariantRun,
+  variantRoleOf,
+} from './PropertyVariants';
 import type { VariantHost } from './PropertyVariants';
-import type { VariantGroup } from '../../../shared/properties/variantRules';
+import type { VariantDefault, VariantGroup } from '../../../shared/properties/variantRules';
+import { variantDefaultOf } from '../../../shared/properties/variantRules';
 import { CloseIcon, TrashIcon } from '../../ui/Icons';
 import { PropertyOptions } from './PropertyOptions';
 import { PropertyShareNotice, shareRenameFiles } from './PropertyShareNotice';
@@ -44,6 +55,9 @@ interface PropertyEditorProps {
   readonly onOpenFile?: ((path: string) => void) | undefined;
   /** The component's variant rules (PropertyVariants.tsx), as the panel last read them. */
   readonly variantGroups?: readonly VariantGroup[] | undefined;
+  /** The component's computed defaults and its props, for a default set by conditions (PropertyDefault.tsx). */
+  readonly variantDefaults?: readonly VariantDefault[] | undefined;
+  readonly properties?: readonly ComponentProperty[] | undefined;
 }
 // Types loose enough that a list setting's own type only says more.
 const LOOSE_TYPES = new Set(['', 'unknown', 'any', 'object', 'Record<string, unknown>']);
@@ -107,6 +121,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
             access={props.access}
             projectPath={undefined}
             variants={draft.exists ? variants : undefined}
+            defaults={draft.exists ? { computed: props.variantDefaults, properties: props.properties ?? [] } : undefined}
             actions={
               <PropertyActions
                 name={draft.exists ? draft.savedName : ''}
@@ -137,6 +152,8 @@ export function PropertySettingsFields(props: {
   /** The component's variant rules, and how to read them again after an edit (this host hands down no fresh copy). */
   readonly variantGroups?: readonly VariantGroup[] | undefined;
   readonly refreshVariantGroups?: () => Promise<readonly VariantGroup[] | undefined>;
+  readonly variantDefaults?: readonly VariantDefault[] | undefined;
+  readonly properties?: readonly ComponentProperty[] | undefined;
 }) {
   const { property, frontmatter, projectPath, saveHost } = props;
   const draft = usePropertyEditorDraft({ property, originalName: property.name, frontmatter, onSave: async () => false, saveHost });
@@ -153,6 +170,7 @@ export function PropertySettingsFields(props: {
         access="editable"
         projectPath={projectPath}
         variants={variants}
+        defaults={{ computed: props.variantDefaults, properties: props.properties ?? [] }}
         actions={undefined}
       />
     </>
@@ -235,8 +253,10 @@ interface PropertyEditorFieldsProps {
   readonly actions: ReactNode;
   /** The component's variant rules, for an existing prop (PropertyVariants.tsx). */
   readonly variants: VariantHost | undefined;
+  /** The component's computed defaults and props, for an existing prop's conditional default. */
+  readonly defaults: { readonly computed: readonly VariantDefault[] | undefined; readonly properties: readonly ComponentProperty[] } | undefined;
 }
-function PropertyEditorFields({ form, creating, frontmatter, access, projectPath, actions, variants }: PropertyEditorFieldsProps) {
+function PropertyEditorFields({ form, creating, frontmatter, access, projectPath, actions, variants, defaults }: PropertyEditorFieldsProps) {
   const { property, update, error, notice } = form;
   const role = variantRoleOf(variants?.groups, creating ? '' : form.savedName);
   const report = (message: string): void => form.report({ error: message, notice: '' });
@@ -254,6 +274,8 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
         frontmatter={frontmatter}
         code={code.mode}
         optionsHoldCode={code.optionsHoldCode}
+        // A controller's kind is its options: a kind change would rewrite every member of the union.
+        locked={role.kind === 'controller'}
         onChange={(change, pace) => {
           // Picking the kind it already is changes nothing, and keeps pending option renames.
           if (change.type === property.type) {
@@ -294,7 +316,7 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
       {listFields !== undefined && <PropertyItemFields form={form} frontmatter={frontmatter} fields={listFields} />}
       {/* A prop with variant rules is required per option, and a controller by its Default: neither has the one checkbox. */}
       {role.kind === 'ruled' && variants !== undefined ? (
-        <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} />
+        <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} property={property} frontmatter={frontmatter} />
       ) : (
         role.kind !== 'controller' && (
           // The same Required the Settings panel's Property settings has (PropertySections.tsx); readonly is kept as read.
@@ -305,12 +327,24 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
           />
         )
       )}
-      {role.kind === 'attachable' && variants !== undefined && <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} />}
+      {role.kind === 'attachable' && variants !== undefined && (
+        <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} property={property} frontmatter={frontmatter} />
+      )}
       {listFields === undefined ? (
         <PropertyDefault
           key={property.type}
           property={property}
           frontmatter={frontmatter}
+          conditions={
+            defaults === undefined || role.kind === 'controller'
+              ? undefined
+              : {
+                  properties: defaults.properties,
+                  computed: variantDefaultOf(defaults.computed, form.savedName),
+                  onProblem: report,
+                  onTable: (table, entries) => void variantRun.run({ kind: 'setDefaultTable', controller: table.controller, prop: table.prop, entries }),
+                }
+          }
           onChange={(value, pace) => {
             // A controller's default is its fallback option: picking another moves it, with the destructure's default.
             const fallback = role.kind === 'controller' ? fallbackEdit(role.group, value) : undefined;
@@ -331,7 +365,25 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
         />
       )}
       <PropertyDefaultNote property={property} />
-      <PropertyTooltip property={property} onChange={(description) => update('description', description)} />
+      {role.kind === 'ruled' && variants !== undefined && rulingTips(role, form.savedName).length > 1 ? (
+        // Each option documents the prop in its own words: the one field writes the same words to every one.
+        <VariantTooltip
+          onChange={(description) => {
+            const [group] = role.groups;
+            if (group !== undefined) {
+              void variantRun.run({
+                kind: 'setRuleDescription',
+                controller: group.controller,
+                prop: form.savedName,
+                options: allowingOptions(group, form.savedName),
+                description,
+              });
+            }
+          }}
+        />
+      ) : (
+        <PropertyTooltip property={property} onChange={(description) => update('description', description)} />
+      )}
       {creating
         ? error && <ErrorToast message={error} />
         : error && (

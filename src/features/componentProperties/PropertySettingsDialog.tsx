@@ -117,6 +117,8 @@ function EditableBody({ loaded, saverRef }: { readonly loaded: LoadedProperty; r
         projectPath={saverRef.current.projectPath}
         saveHost={saveHost}
         variantGroups={loaded.variantGroups}
+        variantDefaults={loaded.variantDefaults}
+        properties={loaded.properties}
         refreshVariantGroups={async () => {
           const fresh = await loadProperty(saverRef.current, loaded.property.name, translate);
           return fresh.ok ? fresh.value.variantGroups : undefined;

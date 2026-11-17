@@ -8,7 +8,7 @@ import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import type { ComponentProperty, PropertyChange } from '../../../shared/properties/propertyEditing';
-import type { VariantGroup } from '../../../shared/properties/variantRules';
+import type { VariantDefault, VariantGroup } from '../../../shared/properties/variantRules';
 import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
 import { editComponentProperties, readComponentProperties } from './propertiesBridge';
 import { refusalOf, savePhaseOf, type PropertySaveOutcome } from './propertyAutosave';
@@ -32,6 +32,9 @@ export interface LoadedProperty {
   readonly frontmatter: string;
   /** The component's variant rules (PropertyVariants.tsx). */
   readonly variantGroups?: readonly VariantGroup[] | undefined;
+  /** Its computed defaults and every prop, for a default set by conditions (PropertyDefault.tsx). */
+  readonly variantDefaults?: readonly VariantDefault[] | undefined;
+  readonly properties?: readonly ComponentProperty[] | undefined;
 }
 
 /** Reads the property from the saved file, or says why it cannot be. */
@@ -47,8 +50,8 @@ export async function loadProperty(saver: PropertySaver, key: string, translate:
     return err(translate('componentProps.panel.propertyGone', { name: key }));
   }
   assert(property.name === key, 'loadProperty: the property found is the one named');
-  const { source, frontmatter, variantGroups } = read.value;
-  return ok({ property, source, frontmatter, variantGroups });
+  const { source, frontmatter, variantGroups, variantDefaults, properties } = read.value;
+  return ok({ property, source, frontmatter, variantGroups, variantDefaults, properties });
 }
 
 /** Applies the change against `source`, and says what became of it. */

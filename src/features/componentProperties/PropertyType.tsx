@@ -45,6 +45,8 @@ interface PropertyTypeProps {
   /** The Options section holds the `{}` toggle and the code field, so Kind does not. */
   readonly optionsHoldCode: boolean;
   readonly onChange: (change: KindChange, pace: EditPace) => void;
+  /** A kind that is not this field's to change (a variant controller's: its options are the union's members). */
+  readonly locked?: boolean | undefined;
 }
 
 /** The code type switch the Kind and the Options share. */
@@ -61,7 +63,7 @@ export function opensOnCode(property: Pick<ComponentProperty, 'type' | 'descript
 
 const CODE_PREFIX = 'code:';
 
-export function PropertyType({ property, frontmatter, code, optionsHoldCode, onChange }: PropertyTypeProps) {
+export function PropertyType({ property, frontmatter, code, optionsHoldCode, onChange, locked }: PropertyTypeProps) {
   const translate = useTranslate();
   const kind = propertyKind(property);
   const codeChoice = CODE_TYPE_CHOICES.some((choice) => choice.type === property.type);
@@ -97,10 +99,11 @@ export function PropertyType({ property, frontmatter, code, optionsHoldCode, onC
     <div className="property-type" role="group" aria-label={translate('componentProps.type.kind')}>
       <div className="property-type-heading">
         <span>{translate('componentProps.type.kind')}</span>
-        {!optionsOwnToggle && <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />}
+        {!optionsOwnToggle && locked !== true && <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />}
       </div>
       <Dropdown
         ariaLabel={translate('componentProps.type.kind')}
+        disabled={locked === true}
         value={kindValue(kind, property.type, { codeChoice })}
         options={kindOptions(property.type, kind, { codeChoice }, translate)}
         onChange={pick}
@@ -108,6 +111,7 @@ export function PropertyType({ property, frontmatter, code, optionsHoldCode, onC
         searchable
         searchPlaceholder={translate('componentProps.type.search')}
       />
+      {locked === true && <p className="property-help">{translate('componentProps.type.controllerKind')}</p>}
       {note && <p className="property-help">{note}</p>}
       {/* The same code field the Settings panel's Property settings has (PropertySections.tsx). */}
       {!optionsOwnToggle && code.open && (

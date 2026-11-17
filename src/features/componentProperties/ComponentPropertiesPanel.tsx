@@ -178,6 +178,8 @@ function PropertySelectionEditor({
           saveHost={saveHost}
           onOpenFile={onOpenFile}
           variantGroups={data.variantGroups}
+          variantDefaults={data.variantDefaults}
+          properties={data.properties}
         />
       )}
     </>

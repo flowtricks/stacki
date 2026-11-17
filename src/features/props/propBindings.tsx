@@ -19,6 +19,9 @@ import ExprInput from '../../ui/ExprInput';
 import { type FieldPosition, type Chip, type BindFieldProps } from './bindingTypes';
 import { referencedName, symbolTarget, VarSourceEditor } from './BindingEditors';
 export { default as CodeTextField } from './CodeTextField';
+// A prop's Default value set by conditions, in the attribute fields' own editor (ConditionalDefaultField.tsx).
+export { ComputedDefault, ConditionalDefaultField, ConditionalDefaultStart, useDefaultConditionContext } from './ConditionalDefaultField';
+export { conditionalOfDefault, defaultOfConditional, tableConditional, tableEntries, type TableDefault } from './conditionalDefault';
 export {
   referencedName,
   SourceEditButton,

@@ -389,3 +389,22 @@
 .conditional-else > .conditional-add {
   align-self: flex-start;
 }
+
+/* A default computed by code the conditions cannot show (ConditionalDefaultField.tsx ComputedDefault):
+   its one word, then the code on the field's own fill, wrapping rather than clipping at the panel's widths. */
+.conditional-computed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-computed-code {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
