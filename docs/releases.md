@@ -44,6 +44,30 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.6
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.6.
+- TypeScript prop manager: create and edit any prop shape, including discriminated unions, with per-option types, tooltips and defaults. Visibility, Default value and Tooltip can be set by conditions (Show, Hide and Required icon buttons, blue set-labels, a `{}` code view), and any prop can control any other.
+- Delete a prop across the whole site from a confirm dialog. Component code that still reads it keeps working through a constant, and one Undo restores everything.
+- Attributes such as `aria-label`, and class lists, open in the visual conditions UI: If first, Computed in code, a Same-as shortcut and editable Computed parts.
+- Every `if` in the Navigator opens as visual condition rows with readable labels.
+- New Class list property in the class menu.
+- Style panel: a Follow canvas toggle, smarter desktop-first and mobile-first breakpoints, and one mode control per grid axis.
+- New selectors default to the page's `<style>` tag. A new Style tags settings tab keeps one locked `<style is:global>` block, with `is:global` as the default.
+- Choose the folder when creating a component.
+- Paste into another file brings what the markup needs, and every gesture is pre-flighted.
+- The canvas recovers from an error page by itself. Zero-size elements get a crosshair and a tag.
+- Stylesheet locks are shown explicitly when selector usage is uncertain.
+- Page chooser rows keep their icon; CMS rows use the CMS icon and the Pages panel purple.
+- The Secrets tab edits each dev env file, and Stacki suggests the Sanity project a site's config files name and says when a site uses Sanity without a Sanity connection (PRs #86 and #87 by Sylvain Druaux).
+- The easing editor works for long curves.
+- A Label placeholder follows the variant's default, and a Card's `theme` and other inherited props show in the props panel.
+- Hover previews on variant dropdowns work in projects that use the Cloudflare adapter.
+- While editing text, the source tag shows only during the edit, below the element, and the element's top tag hides.
+- The breakpoint dropdown shows the canvas device icon.
+- CLI and MCP: `stacki breakpoints sync --value` works, `doctor` exits non-zero on errors, every command has its own `--help`, MCP sends tool-list notifications, and there is no default admin when roles exist.
+- Fixes: one drag no longer writes duplicate `<style>` tags, stale selector chips no longer flicker, every scroll container keeps a stable scrollbar gutter, tests use less memory, and the canvas outline is faster in big loops.
+
 ## 1.4.5
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.5.
