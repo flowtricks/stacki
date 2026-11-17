@@ -11,49 +11,60 @@ This page is the design: the model, the write rules, the UI and the limits.
 Required, Not allowed) these build on, and `docs/props-complex-shapes.md` the
 real components the design is held to.
 
-## One concept, three questions
+## One concept: a field set by conditions
 
-For any prop, per option of a controller (`variant`, `element`, a switch):
+Three fields of a prop's settings can depend on other props, and all three
+work the same way, as Default value always has:
 
-| Question | Where it is answered | Code it writes |
-|---|---|---|
-| May it be passed? | Controlled by: Allowed / Required / Not allowed per option | `label?: string`, `label: string`, `label?: never` in that member |
-| What is it there? | The option's own Kind and Tooltip (open the option's row) | That member's declaration type and doc comment |
-| What is it when not passed? | Default value, set by conditions | The destructure default, or the lookup table the component already reads |
+| Field | Plain | Set by conditions | Code it writes |
+|---|---|---|---|
+| Visibility | Allowed or Required (a Dropdown) | states per condition: Allowed, Required, Not allowed | one discriminated union per controller: `label?: string`, `label: string`, `label?: never` in each member |
+| Tooltip | its words | words per option of the prop's controller | each member's doc comment |
+| Default value | its control for the kind | words per condition on any choice or switch | the destructure default, or the lookup table the component already reads |
 
-The common case stays the simple one: a prop with no rules has Required and
-a plain Default value; Controlled by appears only once a controller is
-picked; an option's Kind and Tooltip only when its row is opened; conditions
-only when the Default value's branch is pressed.
+A branch beside the field's title makes it conditional; set, the field is
+the purple Conditional pill with its values on one line, opening the Value
+conditions editor the Style panel's attribute fields use
+(`src/features/props/ConditionalValue.tsx`): groups of conditions on other
+props, tried in order, `or` between groups, an Else. For Visibility each
+group's value is a state picker instead of words.
 
 ## The UI
 
-Everything is a control; nothing asks for TypeScript.
+- **Visibility** replaces "Controlled by". Its summary says it in words:
+  "Not allowed when Variant is any of Main, Link; Allowed otherwise".
+  Choosing a prop in a condition is what makes it a controller; nothing is
+  promoted by hand. A union the writer cannot keep in step is the pill,
+  disabled, with its one word (Runtime, Complex, Nested, Shared).
+- **Tooltip** reads as the pill when the options document the prop
+  differently (Button's `label`); typing in the plain field writes every
+  option's comment.
+- **Default value**: Button's `label ?? named[variant]` reads as "If Variant
+  = Play and Pressed is true ↳ Pause …", edited in place in the table.
+  A default made by code the editor cannot show (`label ?? KINDS[variant].label`)
+  is its code, highlighted and read-only, under the one word Computed.
+- **The controller** keeps its Options list and Default dropdown; its Kind
+  is locked (its options are the union's members).
+- **The pop-up** never runs past the window: it is placed with a max-height,
+  its head (title, `{}`, unlink) fixed and its groups the scroll region, with
+  a stable gutter; a new group is scrolled into view.
 
-- **Controlled by** (unchanged): one row per option, its name on the left and
-  three icon buttons on the right. An option that allows the prop shows a
-  chevron before its name; pressing the name opens the option's own **Kind**
-  (the same Kind picker, Options list and `{}` switch every prop has) and
-  **Tooltip**, on a well one step darker than the panel. An option whose kind
-  differs from the prop's shows that kind's icon in its row, so a
-  per-option type is visible without opening anything.
-- **Tooltip**: when the options document the prop differently, the prop's
-  Tooltip reads **Varies**. Typing there writes the same words to every
-  option that allows it; each option's own words are in its row.
-- **Default value**: the same purple **Conditional** chip, summary and
-  **Value conditions** editor the Style panel's attribute fields use
-  (`src/features/props/ConditionalValue.tsx`): groups of conditions on other
-  props ("If all are true: Variant = Play, Pressed is true ↳ Pause"), tried in
-  order, an Else. A designer who made a Heading's class conditional already
-  knows it. A text or options prop with a plain default has a branch button
-  beside the `{}`: **Set by conditions** opens the editor with the current
-  default as the Else.
-- **Computed**: a default made by code the editor cannot show
-  (`label ?? KINDS[variant].label`) is its code, highlighted and read-only,
-  under the one word Computed.
-- **The controller** keeps its Options list and Default dropdown. Its Kind is
-  locked: its options are the union's members, so a kind change would
-  rewrite all of them.
+## Visibility as TypeScript
+
+TypeScript says a prop's Visibility with discriminated unions: each union a
+controller rules it by gives every option a state, and the prop's state is
+the strictest any union gives (Not allowed over Required over Allowed). So:
+
+- Reading: one group per controller and state, Not allowed first, then
+  Required, each testing the options that give it; Allowed is the Else.
+- Writing (`setVisibility`, one write and one undo): each group must be one
+  condition on one choice or switch, its value a state. Each controller's
+  rule for an option is the first group on it that holds there, else the
+  Else; and for every combination of options the conditions must mean what
+  the strictest of those rules means. Otherwise the edit is refused with
+  one line ("TypeScript cannot say this combination…"), never written
+  another way. Controllers no group names stop ruling the prop; new ones
+  join; every option's state is then set.
 
 ## The model
 
@@ -64,8 +75,10 @@ Everything is a control; nothing asks for TypeScript.
   for `prop ?? table[key]` where `key` is the local of the prop `controller`
   and `table` a `const` object literal of the frontmatter with plain keys and
   values; `{ kind: 'computed', prop, code }` for any other `prop ?? code`.
-- Edits: `setRuleType` and `setRuleDescription` (a prop's declaration in the
-  named options), `setDefaultTable` (the whole table as it should be).
+- Edits: `setVisibility` (a prop's whole Visibility), `setRuleDescriptions`
+  (each option's tooltip), `setRuleType` and `setRuleDescription` (a prop's
+  declaration in the named options), `setDefaultTable` (the whole table as it
+  should be).
 
 The conditions themselves are the Value conditions model
 (`src/editor/conditionalValue.ts`), read and written in the renderer by

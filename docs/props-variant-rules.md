@@ -16,45 +16,14 @@ back as the smallest edit to the TypeScript that says it.
 
 ## In the panel
 
-Every control lives in a prop's own Property settings; nothing is text.
-Two columns throughout: the controller or the option's name on the left, the
-control on the right at a fixed width (three 28px icon buttons), every row a form field's height, so
-nothing is cut at the panel's 320–480px widths.
-
-- **Controlled by**, on every existing prop that is not a controller:
-  - A ruled prop (`label`, `href`, `disabled`) shows it in place of Required:
-    one block per controller that rules it, joined by "and" (every one must
-    allow the prop). Each block has the controller as a Dropdown (switching
-    it is `switchController`), a remove (`detachProp`), and one row per option
-    with three icon buttons, Allowed (Central `checkCircle`, 5441:1558),
-    Required (`star`, 5440:1500) and Not allowed (`block`, 7511:66225), a
-    radio group whose arrow keys move the choice, each named and with the
-    app's delayed tip (`setRule`). The one on is filled: Allowed the soft
-    accent, Required the solid accent, Not allowed the neutral fill, and the
-    row's name mutes.
-    "Add condition" joins another controller (`attachProp`).
-  - A prop with no rules yet (a fresh one too) keeps Required and picks its
-    first controller from None.
-  - Every controller in these Dropdowns, open or closed, carries the icon the
-    prop list gives its kind (`kindIcon`): Choice for string options, Switch
-    for a boolean.
-  - The controllers offered are the component's controllers and every prop
-    that could become one: two or more string options (written, or a local
-    alias such as `Emphasis`) or a boolean, never the prop itself and never a
-    controller (so no cycle). Joining one allows the prop for every option;
-    the rows then say where it is not.
-- **The controller** (`variant`, `element`): the panel's own Options list and
-  Default value dropdown, with no Required checkbox and no `{}` code switch.
-  Its Kind is locked: its options are the union's members.
-  Adding, renaming (on commit), removing or dragging an option in the list is
-  `addOption`, `renameOption`, `removeOption` or `moveOption`; picking another
-  default is `setFallback`. A refusal shows on the form's error line.
-- **The prop list** marks a conditional prop with a dimmed branch icon
-  (Central `branch`, Figma variant 14759:28219); its delayed tip names where
-  the prop is allowed, a line per controller (`variant: play, close, arrow`).
-
-`addProp` and `removeProp` stay in the writer, but no control sends them:
-a new prop is created in the prop list and given rules with Controlled by.
+Every control lives in a prop's own Property settings; nothing is text. A
+prop's rules are its **Visibility**, set by conditions like Default value
+(docs/props-conditional-values.md): the purple Conditional pill, opening the
+Value conditions editor with states as values. The controller (`variant`,
+`element`) keeps the panel's Options list and Default dropdown, which write
+the union's option edits (`addOption`, `renameOption`, `removeOption`,
+`moveOption`, `setFallback`); its Kind is locked. The prop list marks a
+conditional prop with a dimmed branch (Central `branch`, 14759:28219).
 
 ## The model
 
