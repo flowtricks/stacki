@@ -45,6 +45,7 @@
   /* Height comes from the content; the component caps it inline, and only
      when the window has less room than the list needs. */
   overflow-y: auto;
+  scrollbar-gutter: stable;
   background: #232323;
   border: 1px solid var(--border-strong);
   border-radius: 8px;

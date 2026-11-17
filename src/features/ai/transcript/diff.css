@@ -36,6 +36,7 @@
 .ai-diffview-scroll {
   max-height: 360px;
   overflow: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   user-select: text;
 }

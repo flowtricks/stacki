@@ -5,6 +5,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 4px 2px;
   font-size: 12.5px;
   line-height: 1.5;
@@ -70,6 +71,7 @@
   border-radius: 6px;
   padding: 8px;
   overflow-x: auto;
+  scrollbar-gutter: stable;
   font: 11.5px / 1.5 var(--mono, ui-monospace, monospace);
 }
 .ai-thought {
@@ -94,6 +96,7 @@
   padding: 6px 8px;
   max-height: 260px;
   overflow: auto;
+  scrollbar-gutter: stable;
   border-radius: 6px;
   background: var(--bg-input);
   font-size: 12px;
@@ -258,6 +261,7 @@
   margin: 0;
   max-height: 120px;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 6px 8px;
   background: var(--bg);
   border-radius: 4px;
@@ -291,6 +295,7 @@
   max-height: 220px;
   max-width: 100%;
   overflow: auto;
+  scrollbar-gutter: stable;
   margin: 0;
   padding: 6px 8px;
   background: var(--bg);

@@ -43,6 +43,7 @@
   gap: 8px;
   padding: 8px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   border-radius: 12px;
   background: var(--bg-panel);

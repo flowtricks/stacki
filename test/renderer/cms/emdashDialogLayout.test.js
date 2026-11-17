@@ -109,6 +109,8 @@ const check = (what, condition, detail) => {
        const left = (element) => (element ? Math.round(element.getBoundingClientRect().left * 10) / 10 : undefined);
        const right = (element) => (element ? Math.round(element.getBoundingClientRect().right * 10) / 10 : undefined);
        const padding = parseFloat(getComputedStyle(body).paddingLeft);
+       // Not the same as the left padding: the body's stable scrollbar gutter holds 8px, which the right padding gives back.
+       const paddingRight = parseFloat(getComputedStyle(body).paddingRight);
        const rows = [...dialog.querySelectorAll('button')].filter((button) => !button.classList.contains('emdash-dialog-close') && !button.classList.contains('emdash-code-copy'));
        const status = dialog.querySelector('.emdash-install-status');
        const statusText = status && status.querySelector(':scope > span:not(.progress-ring)');
@@ -116,7 +118,7 @@ const check = (what, condition, detail) => {
        return {
          edges: {
            contentLeft: left(body) + padding,
-           contentRight: left(body) + body.clientWidth - padding,
+           contentRight: left(body) + body.clientWidth - paddingRight,
            mark: left(dialog.querySelector('.emdash-dialog-header svg')),
            heading: left(dialog.querySelector('.emdash-install-heading, .emdash-status-line')),
            status: left(status),

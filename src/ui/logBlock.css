@@ -4,6 +4,7 @@
   padding: 10px 12px;
   max-height: 14rem;
   overflow: auto;
+  scrollbar-gutter: stable;
   border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-dim);

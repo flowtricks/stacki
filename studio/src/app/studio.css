@@ -256,6 +256,7 @@
   border-radius: 6px;
   max-height: 220px;
   overflow: auto;
+  scrollbar-gutter: stable;
   box-shadow: 0 8px 20px #0008;
 }
 .class-suggestions button {
@@ -270,6 +271,7 @@
 }
 .collection-editor {
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 36px;
   flex: 1;
   user-select: text;
@@ -492,6 +494,7 @@
   font-size: 12px;
   max-height: 200px;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .sync-notice p {
   margin: 0 0 4px;
@@ -505,6 +508,7 @@
   font-size: 11px;
   max-height: 220px;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 8px;
 }
 .diff-before {

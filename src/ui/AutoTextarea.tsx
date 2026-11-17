@@ -31,10 +31,11 @@ export default function AutoTextarea({ value, minRows: rowsMin = 1, heightPxMax 
     return () => ro.disconnect();
   }, [heightPxMax]);
 
-  return <textarea ref={ref} rows={rowsMin} value={value} style={{ overflowX: 'hidden', resize: 'none', ...style }} {...props} />;
+  return <textarea ref={ref} rows={rowsMin} value={value} style={{ overflowX: 'hidden', resize: 'none', scrollbarGutter: 'stable', ...style }} {...props} />;
 }
 
-// The height its text needs, up to the bound; past it, a scrollbar.
+// The height its text needs, up to the bound; past it, a scrollbar. The field keeps a stable scrollbar gutter (style above), so
+// the bar appearing when the text crosses the bound never narrows the text and re-wraps it.
 function fitTextarea(element: HTMLTextAreaElement | undefined, heightPxMax: number): void {
   if (element === undefined) {
     return;

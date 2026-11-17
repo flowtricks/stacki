@@ -662,6 +662,7 @@
   gap: var(--space-1);
   max-height: 268px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding: var(--space-3);
   border-radius: var(--radius-xl);
@@ -783,6 +784,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 0 var(--space-5) var(--space-5);
 }
 

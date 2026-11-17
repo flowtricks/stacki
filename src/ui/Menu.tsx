@@ -122,7 +122,7 @@ function MenuLayer(props: LayerProps) {
     left: shown?.left ?? 0,
     top: shown?.top ?? 0,
     minWidth: widthPx,
-    ...(shown?.heightMax === undefined ? {} : { maxHeight: shown.heightMax, overflowY: 'auto' }),
+    ...(shown?.heightMax === undefined ? {} : { maxHeight: shown.heightMax, overflowY: 'auto', scrollbarGutter: 'stable' }),
   };
   return (
     <Popup

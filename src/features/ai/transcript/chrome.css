@@ -114,6 +114,7 @@
 .ai-ask-code {
   max-height: 96px;
   overflow: auto;
+  scrollbar-gutter: stable;
   margin: 0;
   padding: 6px 8px;
   background: var(--bg);

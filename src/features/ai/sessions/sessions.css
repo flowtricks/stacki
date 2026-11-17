@@ -17,6 +17,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding-bottom: 6px;
 }
 /* A drag in progress: nothing under the pointer selects, and the cursor says something is held. */

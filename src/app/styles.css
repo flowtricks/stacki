@@ -275,6 +275,7 @@ html[data-platform='win32'] .titlebar {
 .page-menu-list {
   max-height: 320px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -514,6 +515,7 @@ html[data-platform='win32'] .titlebar {
 .conflict-files {
   border-right: 1px solid var(--border);
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 12px 8px;
 }
 .merge-files-heading {
@@ -612,6 +614,7 @@ html[data-platform='win32'] .titlebar {
 }
 .merge-result-editor .cm-scroller {
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .merge-result-editor .cm-line {
   white-space: pre;
@@ -639,6 +642,7 @@ html[data-platform='win32'] .titlebar {
   padding: 12px 20px 16px;
   max-height: 35%;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .merge-change-toolbar {
   display: flex;
@@ -795,6 +799,7 @@ html[data-platform='win32'] .titlebar {
 /* One side of a merge conflict: a short, wrapped excerpt. */
 .merge-source-code {
   overflow: auto;
+  scrollbar-gutter: stable;
   max-height: 84px;
   padding: 6px 8px;
   white-space: pre-wrap;
@@ -1401,6 +1406,7 @@ html[data-platform='win32'] .titlebar {
   border-radius: 6px;
   max-height: 220px;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .style-editor:focus-within {
   border-color: var(--accent);
@@ -1430,6 +1436,7 @@ html[data-platform='win32'] .titlebar {
   border-radius: 6px;
   max-height: 200px;
   overflow: auto;
+  scrollbar-gutter: stable;
   transition:
     border-color 0.1s,
     background 0.1s;
@@ -1527,6 +1534,7 @@ html[data-platform='win32'] .titlebar {
    the indentation) or growing the box off the window. */
 .var-src .var-src-code .cm-scroller {
   overflow: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 .var-src .var-src-code .cm-content {
@@ -1675,6 +1683,7 @@ html[data-platform='win32'] .titlebar {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 6px;
 }
 .insert-results.insert-results-grid {
@@ -1696,6 +1705,7 @@ html[data-platform='win32'] .titlebar {
   gap: 8px;
   max-height: 72px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   /* The bottom pad matches the visible gap above the pills (the tab row's 6px pad plus this 10px top pad),
      so the grid scrolls under a clean edge instead of flush against the pills. */
   padding: 10px 12px var(--space-6, 16px); /* The token lives in the style panel's sheet: hold the gap without it. */
@@ -2629,6 +2639,7 @@ html[data-platform='win32'] .titlebar {
 }
 .code-panel-editor .cm-scroller {
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .code-panel-editor .cm-code-muted {
   opacity: 0.5;
@@ -3045,6 +3056,7 @@ body > .embed-editor_provenance {
 .expr-menu {
   max-height: 260px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 /* This menu drives selection on click, not on hover like Dropdown does, so
    the hover feedback is plain CSS — matching .highlight so the two read the
@@ -3127,6 +3139,7 @@ body > .embed-editor_provenance {
 .bind-menu.is-form {
   padding: 10px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .data-picker {
   display: flex;
@@ -3361,6 +3374,7 @@ body > .embed-editor_provenance {
 .dp-property-settings {
   max-height: 340px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 /* What the value IS, down the right — the column you actually read to find
    the field you mean. Dim, and the first thing to give up space. */
@@ -3666,6 +3680,7 @@ body > .embed-editor_provenance {
   width: 260px;
   max-height: 320px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   background: #1d1d1d;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
@@ -4431,6 +4446,7 @@ body > .embed-editor_provenance {
   padding: 5px;
   max-height: calc(100dvh - 16px);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 /* The menu owns initial focus; arrow navigation highlights individual actions. */
 .ctx-menu:focus {
@@ -4822,6 +4838,7 @@ body > .embed-editor_provenance {
   max-width: min(720px, 90%);
   max-height: 34vh;
   overflow: auto;
+  scrollbar-gutter: stable;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -5155,6 +5172,7 @@ body > .embed-editor_provenance {
 .modal.create-component .modal-body {
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .extract-values {
   --extract-list-fill: #252525;
@@ -5177,6 +5195,7 @@ body > .embed-editor_provenance {
   max-height: 212px;
   padding: 4px 4px 12px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   scroll-snap-type: y proximity;
   scroll-padding: 4px 0 12px;
   border-radius: 8px;
@@ -5248,6 +5267,7 @@ body > .embed-editor_provenance {
   list-style: none;
   max-height: 132px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   border-radius: 6px;
   background: var(--bg-input);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -5445,6 +5465,7 @@ body > .embed-editor_provenance {
 .create-log {
   max-height: 260px;
   overflow: auto;
+  scrollbar-gutter: stable;
   background: #0d0d0d;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -6035,6 +6056,7 @@ body > .embed-editor_provenance {
   min-width: 120px;
   max-height: 300px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 /* Component edit mode: a cutout that dims the whole canvas except the
@@ -6474,6 +6496,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 0 8px 12px;
 }
 
@@ -6581,6 +6604,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: var(--cms-body-inset) 24px 60px;
 }
 
@@ -6937,6 +6961,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .cms-modal-body {
   max-height: 60vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   gap: 0;
   padding-top: 12px;
 }
@@ -7646,6 +7671,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   flex: 1;
   min-width: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .content-body-editor .cm-editor {
   height: 100%;
@@ -9072,6 +9098,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   border-top: 1px solid var(--border);
   user-select: text;
@@ -9230,6 +9257,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-height: 92px;
   max-height: 40vh;
   line-height: 1.6;
@@ -10039,6 +10067,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   gap: 4px;
   max-height: 192px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .git-create-branch-label {
   display: block;
@@ -10159,6 +10188,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .git-commit-files-content .fb-list {
   max-height: min(440px, calc(100dvh - 240px));
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .git-commit-files-dialog .modal-footer {
   flex-shrink: 0;

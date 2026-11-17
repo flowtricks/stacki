@@ -116,7 +116,7 @@ function besideBox(rect: DOMRect, wantedPx: number): CSSProperties {
   const roomPx = window.innerHeight - 2 * MENU_EDGE_PX;
   const heightPx = Math.min(wantedPx, roomPx);
   const top = Math.max(MENU_EDGE_PX, Math.min(rect.bottom - heightPx, window.innerHeight - heightPx - MENU_EDGE_PX));
-  return { left: rect.right + MENU_EDGE_PX, top, ...(wantedPx > roomPx ? { maxHeight: roomPx, overflowY: 'auto' } : {}) };
+  return { left: rect.right + MENU_EDGE_PX, top, ...(wantedPx > roomPx ? { maxHeight: roomPx, overflowY: 'auto', scrollbarGutter: 'stable' } : {}) };
 }
 
 export interface MenuSurfaceProps {

@@ -141,6 +141,7 @@
 .app-role-people-list.is-scrolling {
   max-height: 216px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   -webkit-mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
   mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
 }
@@ -610,6 +611,7 @@ button.app-role-name-button:hover:not(:disabled) {
 }
 .app-role-components-tree {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   border-radius: 6px;
   background: var(--bg-hover);
 }

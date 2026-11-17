@@ -324,6 +324,7 @@
 .remote-cms-table {
   flex: 1;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 /* Holding only the empty card, the table is a column the card centres in. */
 .remote-cms-table:has(> .remote-cms-empty) {
@@ -675,6 +676,7 @@
   gap: 2px;
   max-height: 60vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .remote-cms-revision {
   display: grid;
@@ -1004,6 +1006,7 @@
 }
 .remote-cms-table.has-grid {
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 /* A column's name sorts by it; the arrow shows which way while it does. */
 .remote-cms-sort {
@@ -1053,6 +1056,7 @@
 .remote-cms-column-menu {
   max-height: min(420px, 70vh);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .remote-cms-column-check {
   width: 14px;

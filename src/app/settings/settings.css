@@ -37,6 +37,7 @@
   padding: 20px 12px;
   background: #161616;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .app-settings-sidebar h2 {
   margin: 0;
@@ -126,6 +127,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   /* The first section sits one step below the header, so every tab's eyebrow has room above it. */
   padding: 20px var(--settings-gutter) var(--settings-gutter);

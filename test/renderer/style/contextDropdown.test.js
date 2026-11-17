@@ -212,7 +212,9 @@ test('every row ends in the same column, a dot says what it means, a cut label t
     /\.u-select-list\.has-footer > \.u-select-scroll \{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/,
     'the rows scroll in a contained region',
   );
-  assert.doesNotMatch(css, /scrollbar-gutter/, 'no reserved gutter: it left an empty strip on the right of a list that does not scroll');
+  // The list reserves the scrollbar's room (docs/scroll-gutter.md): the empty strip on a list that does not scroll costs less than every row
+  // moving 8px sideways when the list grows past its cap.
+  assert.match(css, /\.u-select-list\.has-footer > \.u-select-scroll \{[^}]*scrollbar-gutter: stable;/, 'the scrolling rows keep a stable scrollbar gutter');
   assert.match(css, /\.u-select-list\.has-footer \{[^}]*overflow: hidden;/, 'and the pinned strip and footer sit outside it');
   assert.doesNotMatch(css, /\.u-select-group/, 'no group cards remain in the stylesheet');
   assert.match(css, /\.embed-editor_context-select \.u-select-option \{[^}]*min-height: 2rem;/, 'rows are 32px');

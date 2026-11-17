@@ -1589,6 +1589,7 @@
   max-width: none;
   max-height: 100vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -1606,6 +1607,7 @@
 }
 .embed-editor_layer-popover-box.is-scrolling {
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_layer-popover-box {
   --embed-editor_size-label-w: 42px;
@@ -1964,6 +1966,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: var(--space-4);
 }
 .embed-editor_clip-loading {
@@ -1981,6 +1984,7 @@
   max-width: none;
   max-height: 100vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--color-border-default);
@@ -3214,6 +3218,7 @@
   padding: var(--space-1);
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   border: var(--border-width-thin) solid var(--color-border-default);
   border-radius: var(--radius-md);
@@ -3629,6 +3634,7 @@
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow-x: auto;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
 .embed-editor_element-id.is-empty {
@@ -3842,6 +3848,7 @@
   min-width: 0;
   max-height: 14rem;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 .embed-editor_aq-list:focus {
@@ -4243,6 +4250,7 @@
   flex-direction: column;
   max-height: 220px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: var(--space-1);
   border: var(--border-width-thin) solid var(--color-border-default);
   border-radius: var(--radius-md);
@@ -5031,6 +5039,7 @@
   gap: var(--space-2);
   max-height: 180px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_bg-picker-item {
   aspect-ratio: 1;
@@ -5350,6 +5359,7 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_ease-main {
   padding: var(--space-4);
@@ -5884,6 +5894,7 @@
 .embed-editor_varpicker-list {
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
 }

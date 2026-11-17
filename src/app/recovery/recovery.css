@@ -9,6 +9,7 @@
   background: var(--bg-panel);
   color: var(--text);
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .recovery-card {
   display: flex;

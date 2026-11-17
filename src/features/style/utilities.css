@@ -1107,6 +1107,7 @@ body.is-scrubbing * {
   gap: var(--space-1);
   max-height: 268px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding: var(--space-3);
   border-radius: var(--radius-xl);
@@ -1127,6 +1128,7 @@ body.is-scrubbing * {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding: 0.5rem var(--space-3) 0;
 }

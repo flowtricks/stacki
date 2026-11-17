@@ -52,6 +52,7 @@
   max-height: min(340px, calc(100vh - 16px));
   padding: 6px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   border: 0;
   border-radius: 12px;
   background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));

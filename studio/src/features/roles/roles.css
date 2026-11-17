@@ -58,6 +58,7 @@
   width: min(21.25rem, calc(100vw - 1.5rem));
   max-height: calc(100dvh - 64px);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .account-popover .role-menu-option {
   margin-top: 0;

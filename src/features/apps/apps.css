@@ -587,6 +587,7 @@
   gap: 8px;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 .apps-connect .apps-connect-footer {
@@ -658,6 +659,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   -webkit-mask-image: linear-gradient(
     to bottom,

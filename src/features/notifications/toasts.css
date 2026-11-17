@@ -29,6 +29,7 @@
   transition: none;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 .toast-slot {
@@ -121,6 +122,7 @@
   white-space: pre-wrap;
   max-height: min(160px, 30vh);
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 /* The icon says the kind: white for information, green for success,
    orange for a warning, red for an error. */
@@ -192,4 +194,5 @@
   overflow-wrap: anywhere;
   max-height: 50vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }

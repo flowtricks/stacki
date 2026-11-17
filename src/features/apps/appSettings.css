@@ -43,6 +43,7 @@
   box-sizing: border-box;
   padding: 16px;
   overflow: auto;
+  scrollbar-gutter: stable;
   font-size: 11.5px;
   color: var(--text-dim);
 }

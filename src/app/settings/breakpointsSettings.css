@@ -296,6 +296,7 @@
   max-height: 14rem;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .breakpoints-usage-list .breakpoint-sync-row {
   min-height: 28px;

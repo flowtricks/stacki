@@ -12,6 +12,7 @@
   height: auto;
   max-height: 460px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .page-template-triggers {
   display: flex;
@@ -39,6 +40,7 @@
   gap: 10px;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 12px;
   border-radius: 10px;
   background: var(--panel-raised, #2a2a2a);
@@ -122,6 +124,7 @@
 }
 .page-template-code {
   overflow: auto;
+  scrollbar-gutter: stable;
   max-height: 300px;
   margin: 0;
   padding: 8px 10px;

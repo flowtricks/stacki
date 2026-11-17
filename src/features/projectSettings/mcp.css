@@ -278,6 +278,7 @@
   min-height: 9rem;
   max-height: 21rem;
   overflow: auto;
+  scrollbar-gutter: stable;
   border-radius: var(--radius);
   background: var(--bg-input);
 }

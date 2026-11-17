@@ -105,6 +105,7 @@
      sits below the one before it: the top padding is the sections' gap. */
   padding: var(--apps-details-section-gap) 16px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   -webkit-mask-image: linear-gradient(
     to bottom,

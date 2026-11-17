@@ -242,6 +242,7 @@
   padding: 6px 8px;
   max-height: 120px;
   overflow: auto;
+  scrollbar-gutter: stable;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;

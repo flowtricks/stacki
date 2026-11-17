@@ -17,6 +17,7 @@
   padding: 0 20px 16px;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 .breakpoint-sync-bar {
   display: flex;

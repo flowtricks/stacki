@@ -117,6 +117,7 @@
   max-height: 520px;
   padding: 14px 16px;
   overflow: auto;
+  scrollbar-gutter: stable;
   outline: none;
   line-height: 1.65;
   font-size: 14px;
@@ -272,6 +273,7 @@
   min-height: 180px;
   max-height: 520px;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 6px 4px;
   font-size: 12px;
 }

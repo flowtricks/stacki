@@ -13,6 +13,7 @@
   margin: 0;
   translate: 0 -50%;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 /* An editor given its own frame (left and width inline) keeps it; the sheet
    centres it vertically, so its own centring transform would move it twice. */

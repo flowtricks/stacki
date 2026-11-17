@@ -291,9 +291,12 @@
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   gap: var(--emdash-gap);
-  padding: var(--emdash-gap) var(--emdash-pad) var(--emdash-pad);
+  /* The stable gutter holds the scrollbar's 8px, so the right padding gives that much back: the content keeps the edges
+     the header and the cards were laid out on, with or without a bar. */
+  padding: var(--emdash-gap) calc(var(--emdash-pad) - 8px) var(--emdash-pad) var(--emdash-pad);
   font-size: 12px;
 }
 .emdash-dialog-body * {
@@ -450,6 +453,7 @@
 .emdash-install-log pre {
   max-height: 200px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 .emdash-install-log .emdash-code-copy {

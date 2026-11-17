@@ -55,6 +55,7 @@
 .chat-welcome {
   flex: 1;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: clamp(1.5rem, 8vh, 5rem) 1.5rem 1rem;
   text-align: center;
   h2 {
@@ -135,6 +136,7 @@
     border-radius: 0.625rem;
     padding: 0.75rem;
     overflow: auto;
+    scrollbar-gutter: stable;
     white-space: pre;
   }
   pre code {

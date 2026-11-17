@@ -74,6 +74,7 @@
   min-width: 0;
   max-height: 200px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .ai-composer .ai-editor .cm-editor {
   background: transparent;
