@@ -20,17 +20,26 @@ export type CodeRowKind = 'action' | 'code' | undefined;
  * (a function) always does: a designer never authors one, and the text box it
  * fell back to wrote a string the component then called. A value no field can
  * fill in (`any`, `unknown`, `object`, a promise) does while it is unset; once
- * set, it is shown as the expression it is.
+ * set, it is shown as the expression it is. `class` never does: it is always
+ * the class field.
  */
-export function codeRowKind(field: Pick<FieldDefinition, 'codeKind'>, value: Attr | undefined): CodeRowKind {
+export function codeRowKind(field: Pick<FieldDefinition, 'codeKind' | 'name'>, value: Attr | undefined): CodeRowKind {
   if (field.codeKind === 'function') {
     return 'action';
   }
   if (field.codeKind === 'opaque') {
+    // An element's classes are words whatever the component types them as
+    // (Lumos's Button: `class?: unknown`, forwarded into class:list): an
+    // instance can always pass class, so it keeps the class field.
+    if (field.name === CLASS_NAME) {
+      return undefined;
+    }
     return value === undefined ? 'code' : undefined;
   }
   return undefined;
 }
+
+const CLASS_NAME = 'class';
 
 /** What the row shows as the prop's value: the value set, else the default, as code. */
 export function codeRowValue(field: Pick<FieldDefinition, 'default'>, value: Attr | undefined): string | undefined {
