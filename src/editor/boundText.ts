@@ -18,6 +18,7 @@ import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { parseLoopHead, loopSourcePath } from '../../shared/page/loopSource';
+import { encodeYamlScalar, findYamlValue, isYamlQuote, lineAt, type YamlQuote } from './boundTextYaml';
 
 export const BOUND_TEXT_LIMITS = {
   /** Names followed on the way to a literal (a const that names a const, a re-export). */
@@ -32,8 +33,11 @@ export const BOUND_TEXT_LIMITS = {
   expressionCharsMax: 400,
 } as const;
 
-/** How a string literal is spelled, so a rewrite keeps the file's own style. `json` is a data file: always double quotes and JSON escapes. */
-export type StringQuote = '"' | "'" | '`' | 'json';
+/**
+ * How a string literal is spelled, so a rewrite keeps the file's own style. `json` is a data file: always double
+ * quotes and JSON escapes. The `yaml-` styles are scalars of a YAML file (boundTextYaml.ts).
+ */
+export type StringQuote = '"' | "'" | '`' | 'json' | YamlQuote;
 
 /** One string literal in one file, quotes included. `file` is project relative, and `''` stands for the page being edited. */
 export interface BoundTextSite {
@@ -53,6 +57,7 @@ export const BOUND_TEXT_BLOCKS = [
   'duplicate',
   'ambiguous',
   'missing',
+  'multiline',
   'mutable',
   'not-text',
   'prop',
@@ -69,6 +74,10 @@ export interface BoundTextBlock {
   /** Project-relative file where the value stops being a plain string; `''` is the page itself. */
   readonly file: string;
   readonly detail: string;
+  /** The 1-based line in `file` where the value stops being a plain string, when it is known. */
+  readonly line?: number;
+  /** For `call`: the function (or template tag) whose result the text is, as the source spells it: `section`, `YAML.parse`. */
+  readonly name?: string;
 }
 
 export type BoundTextOutcome = { readonly ok: true; readonly site: BoundTextSite } | { readonly ok: false; readonly block: BoundTextBlock };
@@ -111,6 +120,26 @@ interface Context {
   readonly environment: BoundTextEnvironment;
   readonly units: Map<string, Unit | undefined>;
   hops: number;
+  /** The call whose function body is being read, so its parameters read the arguments; undefined at module level. */
+  frame: Frame | undefined;
+}
+
+// What one parameter of a called function stands for: the argument written at the call, read further by `steps`
+// (a destructured parameter `{ heading }` reads `heading` of its argument). `node` is undefined for a parameter the call
+// does not pass.
+interface Binding {
+  readonly node: SyntaxNode | undefined;
+  readonly steps: readonly Step[];
+}
+
+// A call being followed into its function: names in `unit` that are the function's parameters read the arguments,
+// which belong to `callerUnit` and are read in the caller's own frame.
+interface Frame {
+  readonly unit: Unit;
+  readonly bindings: ReadonlyMap<string, Binding>;
+  readonly callerUnit: Unit;
+  readonly caller: Frame | undefined;
+  readonly depth: number;
 }
 
 type Step = { readonly kind: 'key'; readonly name: string } | { readonly kind: 'index'; readonly at: number };
@@ -211,7 +240,7 @@ async function resolveBound(environment: BoundTextEnvironment, expression: strin
   if (path === undefined) {
     return { kind: 'block', block: classifyCode(expression, pageFile) };
   }
-  const context: Context = { environment, units: new Map(), hops: 0 };
+  const context: Context = { environment, units: new Map(), hops: 0, frame: undefined };
   const page = pageUnit(environment.page);
   if (page === undefined) {
     return blocked('unreadable', pageFile, 'The page has no frontmatter to read.');
@@ -227,6 +256,19 @@ function blocked(reason: BoundTextBlockReason, file: string, detail: string): Fo
   return { kind: 'block', block: { reason, file, detail } };
 }
 
+// A refusal at `node`, with the line of the file it is on and, for a call, the function's name.
+function blockedAt(reason: BoundTextBlockReason, unit: Unit, node: SyntaxNode, detail: string, name?: string): Found {
+  const line = lineOf(unit, node);
+  assert(line >= 1, 'A refusal names a line of its file');
+  return { kind: 'block', block: { reason, file: unit.file, detail, line, ...(name === undefined ? {} : { name }) } };
+}
+
+// The 1-based line of the file `node` starts on. A page's script starts after its `---` line.
+function lineOf(unit: Unit, node: SyntaxNode): number {
+  const line = lineAt(unit.code, node.from);
+  return unit.offset > 0 ? line + 1 : line;
+}
+
 // What an expression that is not a path is: said by its shape, never evaluated.
 function classifyCode(expression: string, file: string): BoundTextBlock {
   const text = expression.trim();
@@ -236,8 +278,9 @@ function classifyCode(expression: string, file: string): BoundTextBlock {
   if (/[+]/.test(text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, ''))) {
     return { reason: 'concatenation', file, detail: 'Pieces are joined to build this text.' };
   }
-  if (text.includes('(')) {
-    return { reason: 'call', file, detail: 'A function call produces this text.' };
+  const called = /([A-Za-z_$][\w$.]*)\s*\(/.exec(text)?.[1];
+  if (called !== undefined) {
+    return { reason: 'call', file, detail: `${called}() produces this text.`, name: called };
   }
   return { reason: 'computed', file, detail: 'An expression computes this text.' };
 }
@@ -291,6 +334,19 @@ function unwrap(node: SyntaxNode): SyntaxNode {
     } else {
       return current;
     }
+  }
+  return current;
+}
+
+// `await value` reads as `value`: an awaited literal or call is the value it settles to. Iterated, and bounded.
+function unwrapAwait(node: SyntaxNode): SyntaxNode {
+  let current = node;
+  for (let depth = 0; depth < BOUND_TEXT_LIMITS.hopsMax; depth++) {
+    const awaited = current.name === 'AwaitExpression' ? children(current)[1] : undefined;
+    if (awaited === undefined) {
+      return current;
+    }
+    current = unwrap(awaited);
   }
   return current;
 }
@@ -386,6 +442,36 @@ async function lookup(context: Context, unit: Unit, name: string, steps: readonl
   if (context.hops > BOUND_TEXT_LIMITS.hopsMax) {
     return blocked('computed', unit.file, 'Too many names stand between the text and its value.');
   }
+  const frame = context.frame;
+  const binding = frame !== undefined && frame.unit === unit ? frame.bindings.get(name) : undefined;
+  if (frame !== undefined && binding !== undefined) {
+    return argumentValue(context, frame, name, binding, steps, want);
+  }
+  // A name the function body does not bind is the module's own: its value is read outside any call.
+  context.frame = undefined;
+  try {
+    return await lookupInModule(context, unit, name, steps, want);
+  } finally {
+    context.frame = frame;
+  }
+}
+
+// A parameter of the function being read: the argument the call wrote, read in the caller's own frame.
+async function argumentValue(context: Context, frame: Frame, name: string, binding: Binding, steps: readonly Step[], want: Want): Promise<Found> {
+  assert(frame.bindings.get(name) === binding, 'A parameter reads its own binding');
+  if (binding.node === undefined) {
+    return blocked('computed', frame.unit.file, `${name} is a parameter the call does not pass.`);
+  }
+  context.frame = frame.caller;
+  try {
+    return await evaluate(context, frame.callerUnit, binding.node, [...binding.steps, ...steps], want);
+  } finally {
+    context.frame = frame;
+  }
+}
+
+async function lookupInModule(context: Context, unit: Unit, name: string, steps: readonly Step[], want: Want): Promise<Found> {
+  assert(context.frame === undefined, 'A module-level name is read outside any call');
   const declared = declaredValue(unit, name);
   if (declared?.kind === 'block') {
     return declared.found;
@@ -407,7 +493,7 @@ async function lookup(context: Context, unit: Unit, name: string, steps: readonl
     return destructured.found;
   }
   if (destructured?.kind === 'value') {
-    return evaluateFrom(context, unit, destructured.init, [{ kind: 'key', name: destructured.key }, ...steps], want);
+    return evaluate(context, unit, destructured.init, [{ kind: 'key', name: destructured.key }, ...steps], want);
   }
   if (new RegExp(`\\{[^}]*\\b${name}\\b[^}]*\\}\\s*=\\s*Astro\\.props`).test(unit.code) || name === 'Astro') {
     return blocked('prop', unit.file, `${name} is a prop this file receives.`);
@@ -431,6 +517,10 @@ async function loadUnit(context: Context, from: Unit, spec: string): Promise<Uni
 const isFound = (value: Unit | Found): value is Found => 'kind' in value && typeof value.kind === 'string' && !('root' in value);
 
 async function exported(context: Context, from: Unit, entry: ImportEntry, steps: readonly Step[], want: Want): Promise<Found> {
+  if (YAML_FILE.test(entry.spec)) {
+    // `import home from "./home.yaml"`: a bundler plugin hands the parsed data to the page.
+    return yamlData(context, from, entry.spec, entry.imported === 'default' ? steps : [{ kind: 'key', name: entry.imported }, ...steps], want);
+  }
   const unit = await loadUnit(context, from, entry.spec);
   return isFound(unit) ? unit : exportedFrom(context, unit, entry.imported, steps, want);
 }
@@ -519,7 +609,7 @@ async function jsonExport(context: Context, unit: Unit, name: string, steps: rea
 }
 
 async function evaluate(context: Context, unit: Unit, node: SyntaxNode, steps: readonly Step[], want: Want): Promise<Found> {
-  const inner = unwrap(node);
+  const inner = unwrapAwait(unwrap(node));
   const step = steps[0];
   switch (inner.name) {
     case 'String':
@@ -538,12 +628,18 @@ async function evaluate(context: Context, unit: Unit, node: SyntaxNode, steps: r
     case 'MemberExpression':
       return evaluateMemberChain(context, unit, inner, steps, want);
     case 'BinaryExpression':
-      return blocked('concatenation', unit.file, 'Pieces are joined to build this text.');
+      return blockedAt('concatenation', unit, inner, 'Pieces are joined to build this text.');
     case 'CallExpression':
+      return evaluateCall(context, unit, inner, steps, want);
     case 'AwaitExpression':
-      return blocked('call', unit.file, 'A function call produces this value.');
+      return blockedAt('computed', unit, inner, 'Nothing is awaited.');
+    case 'TaggedTemplateExpression': {
+      const tag = children(inner)[0];
+      const name = tag === undefined ? 'tag' : text(unit, tag);
+      return blockedAt('call', unit, inner, `The template tag ${name} builds this text from the template.`, name);
+    }
     default:
-      return blocked('computed', unit.file, 'An expression computes this value.');
+      return blockedAt('computed', unit, inner, 'An expression computes this value.');
   }
 }
 
@@ -551,7 +647,7 @@ async function evaluate(context: Context, unit: Unit, node: SyntaxNode, steps: r
 async function evaluateMemberChain(context: Context, unit: Unit, node: SyntaxNode, steps: readonly Step[], want: Want): Promise<Found> {
   const path = parseBoundPath(text(unit, node));
   if (path === undefined) {
-    return blocked('computed', unit.file, 'An expression computes this value.');
+    return blockedAt('computed', unit, node, 'An expression computes this value.');
   }
   return lookup(context, unit, path.root, [...path.steps, ...steps], want);
 }
@@ -596,7 +692,7 @@ async function evaluateMember(context: Context, unit: Unit, node: SyntaxNode, st
     if (spread === undefined) {
       continue;
     }
-    const found = await evaluateFrom(context, unit, spread, [{ kind: 'key', name: wanted }, ...rest], want);
+    const found = await evaluate(context, unit, spread, [{ kind: 'key', name: wanted }, ...rest], want);
     if (found.kind !== 'block' || found.block.reason !== 'missing') {
       return found.kind === 'block' && found.block.reason === 'runtime' ? blocked('computed', unit.file, `A spread may supply ${wanted}.`) : found;
     }
@@ -617,7 +713,7 @@ async function evaluateProperty(context: Context, unit: Unit, parts: readonly Sy
 function literalSite(unit: Unit, node: SyntaxNode): Found {
   const raw = text(unit, node);
   if (node.name === 'TemplateString' && children(node).some((part) => part.name === 'Interpolation')) {
-    return blocked('template', unit.file, 'A template with expressions builds this text.');
+    return blockedAt('template', unit, node, 'A template with expressions builds this text.');
   }
   const value = decodeStringLiteral(raw);
   if (value === undefined) {
@@ -674,28 +770,112 @@ function destructuredFrom(unit: Unit, name: string): Destructured | undefined {
   return undefined;
 }
 
-// A value in the place `node` stands: a call is followed into the function it names, anything else is read as the value it is.
-async function evaluateFrom(context: Context, unit: Unit, node: SyntaxNode, steps: readonly Step[], want: Want): Promise<Found> {
-  let inner = unwrap(node);
-  if (inner.name === 'AwaitExpression') {
-    const awaited = children(inner)[1];
-    inner = awaited === undefined ? inner : unwrap(awaited);
+// Calls whose result is their one argument, as the language defines them: the walk reads straight through.
+const PASS_THROUGH_CALLS: readonly string[] = ['Object.freeze', 'Object.seal', 'Object.preventExtensions', 'structuredClone'];
+
+/** A `.yaml` or `.yml` file by its import specifier, with no query. */
+const YAML_FILE = /\.ya?ml$/i;
+/** A YAML file imported as its text (`import raw from "./home.yaml?raw"`): the file, without the query. */
+const YAML_RAW_IMPORT = /^(.*\.ya?ml)\?raw$/i;
+/** The YAML packages a project reads its text with, and the function of each that parses one document. */
+const YAML_PARSERS: Readonly<Record<string, string>> = { yaml: 'parse', 'js-yaml': 'load' };
+
+// `f(a, b)`: the call is read the way the function reads it. A YAML parser over a YAML file imported as text reads that
+// file; a pass-through built-in reads its argument; a function the project writes is followed into its returns with its
+// parameters bound to the arguments; anything else (a package, a method, a global) is a result the walk cannot know.
+async function evaluateCall(context: Context, unit: Unit, call: SyntaxNode, steps: readonly Step[], want: Want): Promise<Found> {
+  const [callee, argumentList] = children(call);
+  assert(call.name === 'CallExpression', 'A call is read from a call expression');
+  const name = callee === undefined ? 'a function' : text(unit, callee);
+  const argumentNodes = argumentList?.name === 'ArgList' ? listedNodes(argumentList) : undefined;
+  if (callee === undefined || argumentNodes === undefined) {
+    return blockedAt('call', unit, call, `${name}() produces this value.`, name);
   }
-  if (inner.name !== 'CallExpression') {
-    return evaluate(context, unit, inner, steps, want);
+  if (argumentNodes.some((part) => part.name === 'Spread')) {
+    return blockedAt('call', unit, call, `${name}() is called with a spread, so its arguments are not written out.`, name);
   }
-  const [callee, args] = children(inner);
-  if (callee?.name !== 'VariableName' || args?.name !== 'ArgList') {
-    return blocked('call', unit.file, 'A function call produces this value.');
+  const yamlSpec = yamlParsedFile(unit, callee, argumentNodes);
+  if (yamlSpec !== undefined) {
+    return yamlData(context, unit, yamlSpec, steps, want);
   }
-  const found = await functionNamed(context, unit, text(unit, callee), 0);
+  const [only] = argumentNodes;
+  if (PASS_THROUGH_CALLS.includes(name) && argumentNodes.length === 1 && only !== undefined) {
+    return evaluate(context, unit, only, steps, want);
+  }
+  if (callee.name !== 'VariableName') {
+    return blockedAt('call', unit, call, `${name}() is a method the editor does not read.`, name);
+  }
+  const found = await functionNamed(context, unit, name, 0);
   if (!('node' in found)) {
-    return found;
+    const unknown = found.kind === 'block' && (found.block.reason === 'runtime' || found.block.reason === 'unsupported');
+    return unknown ? blockedAt('call', unit, call, `${name}() is not a function this project writes out.`, name) : found;
   }
-  const literals = children(args)
-    .filter((part) => part.name !== '(' && part.name !== ')' && part.name !== ',')
-    .map((part) => (part.name === 'String' ? decodeStringLiteral(text(unit, part)) : undefined));
-  return returnedValue(context, found, literals, steps, want);
+  return returnedValue(context, found, unit, argumentNodes, steps, want);
+}
+
+// The entries of an argument or parameter list, without its brackets and commas.
+function listedNodes(list: SyntaxNode): SyntaxNode[] {
+  return children(list).filter((part) => part.name !== '(' && part.name !== ')' && part.name !== ',');
+}
+
+// `parse(raw)`, `YAML.parse(raw)` or `yaml.load(raw)` where `raw` is a YAML file imported as text: that file's specifier.
+function yamlParsedFile(unit: Unit, callee: SyntaxNode, argumentNodes: readonly SyntaxNode[]): string | undefined {
+  const [source] = argumentNodes;
+  // A second argument (options, a reviver) may change what the parser reads, so only the one-argument form is followed.
+  if (argumentNodes.length !== 1 || source?.name !== 'VariableName') {
+    return undefined;
+  }
+  const rawImport = importOf(unit, text(unit, source));
+  const file = rawImport?.imported === 'default' ? YAML_RAW_IMPORT.exec(rawImport.spec)?.[1] : undefined;
+  if (file === undefined) {
+    return undefined;
+  }
+  return yamlParser(unit, callee) ? file : undefined;
+}
+
+// Whether `callee` is a YAML package's document parser: imported by name (`parse`, aliased too), or read off the
+// package's default or namespace import (`YAML.parse`).
+function yamlParser(unit: Unit, callee: SyntaxNode): boolean {
+  if (callee.name === 'VariableName') {
+    const entry = importOf(unit, text(unit, callee));
+    return entry !== undefined && YAML_PARSERS[entry.spec] === entry.imported;
+  }
+  const match = callee.name === 'MemberExpression' ? (/^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/.exec(text(unit, callee)) ?? undefined) : undefined;
+  const owner = match?.[1];
+  const method = match?.[2];
+  if (owner === undefined || method === undefined) {
+    return false;
+  }
+  const entry = importOf(unit, owner);
+  const spec = entry?.imported === 'default' ? entry.spec : namespaceOf(unit, owner);
+  return spec !== undefined && YAML_PARSERS[spec] === method;
+}
+
+// A YAML file the unit reads, walked by `steps` to one scalar (boundTextYaml.ts).
+async function yamlData(context: Context, from: Unit, spec: string, steps: readonly Step[], want: Want): Promise<Found> {
+  context.hops++;
+  if (context.hops > BOUND_TEXT_LIMITS.hopsMax) {
+    return blocked('computed', from.file, 'Too many names stand between the text and its value.');
+  }
+  const read = await context.environment.readModule(from.file, spec).catch(() => undefined);
+  if (read === undefined || !YAML_FILE.test(read.file)) {
+    return blocked('unsupported', from.file, `${spec} is not a YAML file of this project.`);
+  }
+  const found = findYamlValue(read.text, steps, want);
+  switch (found.kind) {
+    case 'site': {
+      assert(read.text.slice(found.start, found.end) === found.raw, 'A YAML site spans exactly its scalar');
+      return { kind: 'site', site: { file: read.file, start: found.start, end: found.end, quote: found.quote, value: found.value, raw: found.raw } };
+    }
+    case 'list':
+      return { kind: 'list', count: found.count };
+    case 'block':
+      return { kind: 'block', block: { reason: found.reason, file: read.file, detail: found.detail, line: found.line } };
+    default: {
+      const exhaustive: never = found;
+      return exhaustive;
+    }
+  }
 }
 
 interface FunctionAt {
@@ -723,7 +903,7 @@ async function functionNamed(context: Context, unit: Unit, name: string, depth: 
       }
     }
     if (inner?.name === 'VariableDeclaration' && parts.find((part) => part.name === 'VariableDefinition') !== undefined) {
-      const arrow = parts.find((part) => part.name === 'ArrowFunction');
+      const arrow = parts.find((part) => part.name === 'ArrowFunction' || part.name === 'FunctionExpression');
       if (arrow !== undefined && text(unit, parts.find((part) => part.name === 'VariableDefinition') ?? inner) === name) {
         return { unit, node: arrow };
       }
@@ -760,38 +940,107 @@ function reexportOf(unit: Unit, name: string): ImportEntry | undefined {
   return undefined;
 }
 
-// What the function returns for these literal arguments: the returns its own guards leave possible, each read for the property, and one answer or none.
+// What the function returns for these arguments: the returns its own guards leave possible, each read for the property
+// with the parameters standing for the arguments, and one answer or none.
 async function returnedValue(
   context: Context,
   called: FunctionAt,
-  literals: readonly (string | undefined)[],
+  callerUnit: Unit,
+  argumentNodes: readonly SyntaxNode[],
   steps: readonly Step[],
   want: Want,
 ): Promise<Found> {
-  const body = children(called.node).find((part) => part.name === 'Block');
-  const params = children(children(called.node).find((part) => part.name === 'ParamList') ?? called.node)
-    .filter((part) => part.name === 'VariableDefinition')
-    .map((part) => text(called.unit, part));
-  if (body === undefined) {
+  const parts = children(called.node);
+  const body = parts.find((part) => part.name === 'Block');
+  // `(o) => ({ ...o })`: an arrow whose body is one expression returns it.
+  const expressionBody = body === undefined && called.node.name === 'ArrowFunction' ? parts[parts.length - 1] : undefined;
+  if (body === undefined && (expressionBody === undefined || expressionBody.name === 'Arrow')) {
     return blocked('computed', called.unit.file, 'This function has no body to read.');
   }
-  const scope = new Map<string, string>();
-  params.forEach((param, index) => {
-    const literal = literals[index];
-    if (literal !== undefined) {
-      scope.set(param, literal);
-    }
-  });
+  const depth = (context.frame?.depth ?? 0) + 1;
+  if (depth > BOUND_TEXT_LIMITS.hopsMax) {
+    return blocked('computed', called.unit.file, 'Too many calls stand between the text and its value.');
+  }
+  const parameters = parametersOf(
+    called.unit,
+    parts.find((part) => part.name === 'ParamList'),
+    callerUnit,
+    argumentNodes,
+  );
   const returns: SyntaxNode[] = [];
-  collectReturns(called.unit, body, scope, returns, 0);
+  if (body !== undefined) {
+    collectReturns(called.unit, body, parameters.literals, returns, 0);
+  } else if (expressionBody !== undefined) {
+    returns.push(expressionBody);
+  }
   if (returns.length === 0) {
     return blocked('computed', called.unit.file, 'No return of this function can be read.');
   }
+  const frame: Frame = { unit: called.unit, bindings: parameters.bindings, callerUnit, caller: context.frame, depth };
   const answers: Found[] = [];
-  for (const value of returns.slice(0, BOUND_TEXT_LIMITS.hopsMax)) {
-    answers.push(await evaluateFrom(context, called.unit, value, steps, want));
+  const outer = context.frame;
+  context.frame = frame;
+  try {
+    for (const value of returns.slice(0, BOUND_TEXT_LIMITS.hopsMax)) {
+      answers.push(await evaluate(context, called.unit, value, steps, want));
+    }
+  } finally {
+    context.frame = outer;
   }
   return oneAnswer(answers, called.unit.file);
+}
+
+interface Parameters {
+  readonly bindings: ReadonlyMap<string, Binding>;
+  /** Parameters the call passes a string literal, for the guards of `if` statements (`id === "home"`). */
+  readonly literals: ReadonlyMap<string, string>;
+}
+
+// Each parameter by position against the call's arguments: `o` reads its argument, `{ heading, body: text }` reads
+// those keys of it. A rest parameter or one with another shape binds nothing, so its names read as module names would.
+function parametersOf(unit: Unit, list: SyntaxNode | undefined, callerUnit: Unit, argumentNodes: readonly SyntaxNode[]): Parameters {
+  const bindings = new Map<string, Binding>();
+  const literals = new Map<string, string>();
+  const groups = parameterGroups(list);
+  assert(list === undefined || list.name === 'ParamList', 'Parameters are read from a parameter list');
+  groups.forEach((group, position) => {
+    const head = group[0];
+    const argument = argumentNodes[position];
+    if (head?.name === 'VariableDefinition') {
+      const name = text(unit, head);
+      bindings.set(name, { node: argument, steps: [] });
+      const literal = argument?.name === 'String' ? decodeStringLiteral(text(callerUnit, argument)) : undefined;
+      if (literal !== undefined) {
+        literals.set(name, literal);
+      }
+    } else if (head?.name === 'ObjectPattern') {
+      for (const entry of children(head).filter((part) => part.name === 'PatternProperty')) {
+        const bits = children(entry);
+        const key = bits[0]?.name === 'PropertyName' ? text(unit, bits[0]) : undefined;
+        const local = bits[1]?.name === ':' && bits[2]?.name === 'VariableDefinition' ? text(unit, bits[2]) : key;
+        if (key !== undefined && local !== undefined) {
+          bindings.set(local, { node: argument, steps: [{ kind: 'key', name: key }] });
+        }
+      }
+    }
+  });
+  return { bindings, literals };
+}
+
+// A parameter list split at its commas: each group is one parameter with its type annotation and default.
+function parameterGroups(list: SyntaxNode | undefined): SyntaxNode[][] {
+  if (list === undefined) {
+    return [];
+  }
+  const groups: SyntaxNode[][] = [[]];
+  for (const part of children(list)) {
+    if (part.name === ',') {
+      groups.push([]);
+    } else if (part.name !== '(' && part.name !== ')') {
+      groups[groups.length - 1]?.push(part);
+    }
+  }
+  return groups.filter((group) => group.length > 0);
 }
 
 // Answers that agree are one answer; a missing key in one return is no answer; the rest cannot be told apart, so none is chosen.
@@ -959,6 +1208,9 @@ function decodeUnicodeEscape(body: string, at: number): { readonly text: string;
 export function encodeStringLiteral(value: string, quote: StringQuote): string {
   if (quote === 'json') {
     return JSON.stringify(value);
+  }
+  if (isYamlQuote(quote)) {
+    return encodeYamlScalar(value, quote);
   }
   let out = '';
   for (const character of value) {

@@ -691,6 +691,7 @@
     "src/editor/bindingPath.ts",
     "src/editor/bindings.ts",
     "src/editor/boundText.ts",
+    "src/editor/boundTextYaml.ts",
     "src/editor/branches.ts",
     "src/editor/canvasQuery.ts",
     "src/editor/canvasReply.ts",

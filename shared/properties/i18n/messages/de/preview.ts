@@ -95,12 +95,14 @@ export const messages = {
   'preview.text.pageChanged': 'Die Seite hat sich während der Bearbeitung geändert. Der Text wurde nicht gespeichert; wähle ihn erneut aus.',
   'preview.text.selectionReaches': 'Diese Auswahl reicht in Text, der nicht mitgeändert werden kann.',
   'preview.text.source.blocked.ambiguous': '{path} ist in {file} mehrfach geschrieben.',
-  'preview.text.source.blocked.call': 'Dieser Text stammt aus einem Funktionsaufruf in {file}: Bearbeite ihn dort.',
+  'preview.text.source.blocked.call':
+    'Dieser Text wird von {name}() in {file} zurückgegeben, und der Editor kann ihn nicht bis zu einem String verfolgen: Bearbeite ihn dort.',
   'preview.text.source.blocked.computed': 'Dieser Text wird in {file} berechnet: Bearbeite ihn dort.',
   'preview.text.source.blocked.concatenation': 'Dieser Text wird in {file} aus mehreren Teilen zusammengesetzt: Bearbeite ihn dort.',
   'preview.text.source.blocked.duplicate':
     'Mehrere Stellen zeigen dieselben Wörter, daher lässt sich die richtige nicht unterscheiden: Bearbeite ihn in {file}.',
   'preview.text.source.blocked.missing': 'Der Wert {path} steht nicht in {file}.',
+  'preview.text.source.blocked.multiline': 'Dieser Text ist ein YAML-Wert über mehrere Zeilen in {file}: Bearbeite ihn dort.',
   'preview.text.source.blocked.mutable': 'Dieser Text stammt aus einer veränderbaren Variable (let oder var) in {file}: Bearbeite ihn dort.',
   'preview.text.source.blocked.notText': '{path} ist kein String.',
   'preview.text.source.blocked.prop': 'Dieser Text stammt aus einer Prop; bearbeite ihn dort, wo die Komponente verwendet wird.',

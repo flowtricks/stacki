@@ -377,7 +377,10 @@ function blockedRefusal(
   if (bound?.kind !== 'blocked') {
     return undefined;
   }
-  return translate(BLOCKED_KEYS[bound.reason], { file: bound.file === '' ? pageFile : bound.file, path: bound.expression });
+  const file = bound.file === '' ? pageFile : bound.file;
+  // The line goes with the file (`src/data/home.ts:104`), so every refusal says where to go without a sentence of its own.
+  const place = bound.line === undefined ? file : `${file}:${bound.line}`;
+  return translate(BLOCKED_KEYS[bound.reason], { file: place, path: bound.expression, name: bound.name ?? bound.expression });
 }
 
 interface Takeover {
@@ -537,6 +540,7 @@ const BLOCKED_KEYS: Readonly<Record<BoundTextBlockReason, MessageKey>> = {
   concatenation: 'preview.text.source.blocked.concatenation',
   duplicate: 'preview.text.source.blocked.duplicate',
   missing: 'preview.text.source.blocked.missing',
+  multiline: 'preview.text.source.blocked.multiline',
   mutable: 'preview.text.source.blocked.mutable',
   'not-text': 'preview.text.source.blocked.notText',
   prop: 'preview.text.source.blocked.prop',

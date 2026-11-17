@@ -176,7 +176,16 @@ export interface CanvasTextEdit {
 /** What the canvas says about a text printed from data, beside the edit itself. */
 export type CanvasBoundText =
   | { readonly kind: 'source'; readonly expression: string; readonly file: string; readonly uses: number }
-  | { readonly kind: 'blocked'; readonly expression: string; readonly file: string; readonly reason: BoundTextBlockReason };
+  | {
+      readonly kind: 'blocked';
+      readonly expression: string;
+      readonly file: string;
+      readonly reason: BoundTextBlockReason;
+      /** The 1-based line of `file` the refusal names, when it is known. */
+      readonly line?: number;
+      /** For a `call`: the function the text is returned by. */
+      readonly name?: string;
+    };
 
 /** The canvas format bar for one text: which buttons are lit, and one press. */
 export interface CanvasEditFormat {

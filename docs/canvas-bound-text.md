@@ -11,6 +11,7 @@ canvas says so while it happens. This page is the contract; losing any line of i
 | 0.1.93 (`fc7b3e10`) | Only a bare name bound to a top-level `const x = "text"` in the page's frontmatter, or a string literal inside the braces. |
 | later 0.1.x | Text a component prop sets to a **literal** (`heading="Words"`); CMS entries read by `getEntry` with literal collection and id. |
 | this feature | Member paths (`aiCallout1.body`), imported project modules, JSON files, props bound to a path, loop items. |
+| 1.4.8 | Data a call hands back: a YAML file a module parses (`export const home = parse(raw) as HomeData` over `import raw from "./home.yaml?raw"`), `Object.freeze(...)`, and project functions followed into their returns with their parameters bound to the arguments (`section({ heading: "…" })`). Before, every one of these was refused as "comes from a function call". |
 
 A path with a dot in it was never edited on the canvas before. It was not a regression of a working feature,
 it was the case the first release never covered (`canvasTextBinding.ts` reads a bare identifier only).
@@ -25,6 +26,44 @@ it was the case the first release never covered (`canvasTextBinding.ts` reads a 
 | A prop the page binds (`<Card body={aiCallout1.body} />`) printed by the component as `{body}` | The source the binding leads to |
 | `{card.title}` over `cards.map(...)` where `cards` is a literal list (nested loops too) | The item's own literal; one canvas target per item |
 | A content-collection entry read by `getEntry` | The entry (unchanged, `canvasTextContent.ts`) |
+| A YAML file a module parses: `parse(raw)` / `YAML.parse(raw)` / `Y.parse(raw)` (package `yaml`) or `load(raw)` (`js-yaml`), one argument, where `raw` is `import raw from "./x.yaml?raw"`; or `import data from "./x.yaml"` | That YAML file, one scalar (`boundTextYaml.ts`) |
+| `Object.freeze(x)`, `Object.seal(x)`, `Object.preventExtensions(x)`, `structuredClone(x)` | Whatever `x` leads to |
+| A call to a function the project writes (declaration, `const f = (…) => …`, `function` expression; imported or re-exported too) | The literal its return leads to, each parameter standing for the call's argument (`o`, or `{ heading, body: text }` destructured) |
+
+### Shapes, before and after 1.4.8
+
+| Shape | Before | Now |
+|---|---|---|
+| `const x = { heading: "…" }` (`as const`, `satisfies`, parentheses) | edited | edited |
+| `{ ...base, heading: "…" }` (key written after the spread) | edited | edited |
+| `export const home = parse(raw) as HomeData` over a `.yaml?raw` import (the reported case) | refused: call | edited in the YAML file |
+| `import data from "./x.yaml"` | refused: unsupported | edited in the YAML file |
+| `section({ heading: "…" })`, `section` returns its argument or `{ ...o }` | refused: call | edited |
+| `copy("…")`, `copy = (text) => text` | refused: call | edited |
+| `section(group({ ...base, title: "…" }))`, `Object.freeze({…})` | refused: call | edited |
+| `const { a } = await getPage("home")` (guards decided by literal arguments) | edited | edited |
+| A function from a package (`defineContent({…})`), a global (`make()`) | refused: call | refused: call, naming the function and line |
+| A method (`words.join(" ")`), a tagged template (`` html`…` ``), `await fetch(…)` | refused: call | refused: call, naming it and the line |
+| `parse(raw, options)` (a second argument may change the reading) | refused: call | refused: call |
+| `t("key")` where `t` reads `messages[key]` | refused: call | refused: computed, at the line of `messages[key]` |
+| A function that joins its argument (`text + "!"`) | refused: call | refused: concatenation, in the function's file and line |
+| An argument that is a `let` | refused: call | refused: mutable |
+| A YAML block scalar (`|`, `>`) or a scalar folded over lines | — | refused: multiline |
+| A YAML alias (`*base`), a tag (`!!str`), a merge key (`<<`) | — | refused: computed |
+
+### Writing a YAML scalar
+
+Only the scalar's bytes change; comments on the line, indentation and every other key stay. The scalar keeps
+its style when that style can spell the words: plain stays plain, `'…'` stays single quoted (a `'` doubled),
+`"…"` stays double quoted (JSON escapes, which are YAML's). A plain scalar that cannot spell the words (a
+`: `, a ` #`, a leading indicator such as `-` or `#`, a word YAML reads as another type such as `true` or
+`12`, a newline) and a single-quoted one that cannot (a newline, a control character) become double quoted,
+the one YAML style with escapes: the same rule the CMS YAML writer follows (`electron/content/formats/yaml.ts`).
+A typed newline is therefore written as `\n` inside double quotes, never as a second line. Every encoding is
+read back with the `yaml` package before it is written (an assertion).
+
+In JavaScript a newline is written `\n` in `'…'` and `"…"` (both styles have the escape) and as a real line
+break in a backtick template, where `${` is written `\${`.
 
 The literal keeps the quote style it was written in (`"`, `'`, a backtick template without holes, or JSON's
 double quote), escaped as that style needs. Every byte but the literal is unchanged, and Undo writes the old
@@ -39,7 +78,8 @@ double click names why and where (`preview.text.source.blocked.<reason>`), nothi
 | Reason | Shape |
 |---|---|
 | `concatenation` | `"a" + b` |
-| `call` | `make("x")`, `await load()` |
+| `call` | a function the project does not write (`make("x")`, a package's), a method, a tagged template; the toast names it and its line |
+| `multiline` | a YAML block scalar or a scalar folded over several lines |
 | `template` | a template literal with `${}` holes |
 | `mutable` | `let` / `var` |
 | `computed` | a spread may supply it, any other expression |
@@ -59,7 +99,7 @@ its words and could not tell which of the two was meant.
 | Pointer on the element, or the element selected | Nothing: not even for one frame | — |
 | Typing in it (from the double click that opens the editor) | "Editing source" + `src/lib/homepage/content.ts › aiCallout1.body` (path highlighted, start-truncated), plus "Used in N places" when N is more than 1 | `CanvasTextSourceCue`, under the element's bottom edge and left-aligned with it (`canvasSourceCue`, from `avb:text-active`'s `rect`; `sourceCuePlace`) |
 | Saved | toast "Updated {path} in {file}" with **Undo** | `reportActionToast` |
-| Not editable | the refusal sentence above | toast, from `avb:text-refused` with `reason: 'source-blocked'` and the blocked text's `key` |
+| Not editable | the refusal sentence above, its file followed by the line (`src/lib/content.ts:3`) when the trace knows it | toast, from `avb:text-refused` with `reason: 'source-blocked'` and the blocked text's `key` |
 
 While typing, the selection keeps its outline but its name tag above goes: an element's tag, a component
 instance's parent tag, and a text mark's tag alike (`styles.css`, keyed on the `#stacki-canvas-text-editor`
@@ -82,6 +122,7 @@ the same module are not counted; their dev-server renders update when the write 
 | Piece | File |
 |---|---|
 | Tracing a path to its literal, escaping, rewriting (pure) | `src/editor/boundText.ts` |
+| Walking a YAML file to one scalar, and its encoding | `src/editor/boundTextYaml.ts` |
 | Targets per text and loop item, blocked list, write and toast | `src/app/model/canvasBoundText.ts` |
 | Props bound to a path | `src/app/model/canvasPropText.ts` (`bound`) |
 | Host: read modules, write them as one history step | `src/app/shell/desktopCanvasText.ts` (Studio: page frontmatter only) |
@@ -94,6 +135,9 @@ the same module are not counted; their dev-server renders update when the write 
 `test/renderer/preview/boundText.test.js` (tracing for each source kind, escaping and round trips, byte-exact
 rewrites and undo, refusals, multiple use, loops, contracts, a JSDOM double click that opens the editor and a
 save that writes the source and not the markup, the refusal of blocked text) and
+`test/renderer/preview/boundTextCalls.test.js` (the reported YAML shape end to end through the planner, the
+accepted-shape table byte for byte, every awkward typed text through every YAML and JavaScript quote, the
+refused-shape table with pinned reasons, lines and sentences, undo) and
 `test/renderer/preview/canvasSourceCue.test.js` (the chip; its place below the element and the flip above
 the element; the Settings panel draws nothing) and `test/renderer/preview/canvasSourceCueFrames.test.js` (a
 per-frame recording of the real canvas text hook: no frame draws the chip while the pointer moves over bound

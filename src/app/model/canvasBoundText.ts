@@ -264,7 +264,14 @@ function blockedEdit(document: CanvasTextDocument, entry: Resolved, block: Bound
   }
   return {
     target: { ...target, value: '' },
-    bound: { kind: 'blocked', expression: entry.path, file: block.file, reason: block.reason },
+    bound: {
+      kind: 'blocked',
+      expression: entry.path,
+      file: block.file,
+      reason: block.reason,
+      ...(block.line === undefined ? {} : { line: block.line }),
+      ...(block.name === undefined ? {} : { name: block.name }),
+    },
     apply: () => Promise.reject(new Error(block.detail)),
   };
 }
