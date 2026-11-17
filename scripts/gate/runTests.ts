@@ -40,6 +40,7 @@ import {
 } from './testPool';
 import { repositoryRoot } from '../lib/repoRoot';
 import { discoverTestFiles, selectSuites, startsElectron, suitesFor, type Suite } from './testDiscovery';
+import { flushAndExit } from './flushExit';
 import { gateVersion, markerFolder, workingTreeHash, writeMarker } from './gateMarker';
 import { parseShard, suitesInShard, type Shard } from './testShard';
 
@@ -304,7 +305,7 @@ async function runStaticChecks(): Promise<void> {
   const failures = outcomes.filter((outcome) => !outcome.passed);
   if (failures.length > 0) {
     console.error(`\nStatic gate failed: ${failures.map((outcome) => outcome.name).join(', ')}`);
-    process.exit(1);
+    await flushAndExit(1);
   }
 }
 
@@ -342,7 +343,7 @@ async function runBuilds(): Promise<void> {
     reportBuild(clean);
     if (!clean.passed) {
       console.error('\nStatic gate failed: build:clean');
-      process.exit(1);
+      await flushAndExit(1);
     }
   } else {
     console.log(targetedNotice(plan));
@@ -353,7 +354,7 @@ async function runBuilds(): Promise<void> {
   const failures = [...chain, ...beside].filter((outcome) => !outcome.passed);
   if (failures.length > 0) {
     console.error(`\nStatic gate failed: ${failures.map((outcome) => outcome.name).join(', ')}`);
-    process.exit(1);
+    await flushAndExit(1);
   }
 }
 
@@ -427,7 +428,7 @@ function recordPass(): void {
   console.log(`\n[gate] Marker written for tree ${treeHashAtStart.slice(0, 12)}: pushing this exact tree skips the pre-push gate.`);
 }
 
-runPhases().then(summarize, (error: unknown) => {
+runPhases().then(summarize, async (error: unknown) => {
   console.error(error);
-  process.exit(1);
+  await flushAndExit(1);
 });
