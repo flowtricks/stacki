@@ -25,34 +25,29 @@ const check = (what, condition, detail) => {
   }
 };
 
-const MINIMUM_PX = 10;
-
-const { markerBox, onePerPlace, copiesToDraw, MARKER_MIN_PX } = loadRenderer('src/features/preview/outlineBoxes.ts');
-check('the marker minimum is the one this test expects', MARKER_MIN_PX === MINIMUM_PX, String(MARKER_MIN_PX));
+const { collapseKind, sizeText, onePerPlace, copiesToDraw } = loadRenderer('src/features/preview/outlineBoxes.ts');
 const point = { x: 40, y: 60, w: 0, h: 0 };
-check('a zero-size box grows to the minimum at scale 1', JSON.stringify(markerBox(point, 1)) === JSON.stringify({ x: 40, y: 60, w: 10, h: 10 }));
-check('it keeps its position', markerBox(point, 0.5).x === 40 && markerBox(point, 0.5).y === 60);
-check('at half scale it is twice as big in frame px, so it is the same on screen', markerBox(point, 0.5).w === 20);
-check(
-  'a flat box keeps its width and grows its height',
-  JSON.stringify(markerBox({ x: 0, y: 0, w: 300, h: 0 }, 1)) === JSON.stringify({ x: 0, y: 0, w: 300, h: 10 }),
-);
-const big = { x: 1, y: 2, w: 300, h: 200 };
-check('a box already big enough is returned as it is', markerBox(big, 1) === big);
-let badScale = '';
+check('a box with no width and no height is a point', collapseKind(point) === 'point');
+check('a box with width and no height is flat', collapseKind({ x: 0, y: 0, w: 300, h: 0 }) === 'flat');
+check('a box with height and no width is flat', collapseKind({ x: 0, y: 0, w: 0, h: 20 }) === 'flat');
+check('a sized box is not collapsed', collapseKind({ x: 0, y: 0, w: 300, h: 200 }) === 'none');
+check('a fraction of a pixel counts as no size', collapseKind({ x: 0, y: 0, w: 0.4, h: 0.4 }) === 'point');
+check('a point says 0 × 0', sizeText(point) === '0 × 0', sizeText(point));
+check('a flat box says its real width', sizeText({ x: 0, y: 0, w: 300.4, h: 0 }) === '300 × 0');
+let badWidth = '';
 try {
-  markerBox(point, 0);
+  collapseKind({ x: 0, y: 0, w: Number.NaN, h: 0 });
 } catch (error) {
-  badScale = String(error);
+  badWidth = String(error);
 }
-check('a zero scale is a bug', badScale.includes('markerBox: scale must be positive'), badScale);
-let badSize = '';
+check('a width that is not a number is a bug', badWidth.includes('a box has a finite width'), badWidth);
+let badHeight = '';
 try {
-  markerBox({ x: 0, y: 0, w: Number.NaN, h: 0 }, 1);
+  sizeText({ x: 0, y: 0, w: 0, h: Number.POSITIVE_INFINITY });
 } catch (error) {
-  badSize = String(error);
+  badHeight = String(error);
 }
-check('a size that is not a number is a bug', badSize.includes('a box has a finite width'), badSize);
+check('a height that is not finite is a bug', badHeight.includes('a box has a finite height'), badHeight);
 check('a lone collapsed box is drawn', onePerPlace([point]).length === 1);
 check(
   'a hollow copy beside a sized one is not',
@@ -100,15 +95,28 @@ window.__measure = () => {
     const rects = window.__frame.rectsForPath('0.' + index) || [];
     const drawn = [];
     for (const rect of rects) {
-      const box = window.__boxes.markerBox(rect, 1);
+      const box = rect;
+      const kind = window.__boxes.collapseKind(box);
       const outline = document.createElement('div');
-      outline.className = 'node-outline sel element';
+      outline.className = 'node-outline sel element collapsed is-' + kind;
       outline.style.cssText = 'left:' + box.x + 'px;top:' + box.y + 'px;width:' + box.w + 'px;height:' + box.h + 'px';
-      outline.innerHTML = '<span class="node-outline-tag ' + (box.y < 20 ? 'inside' : '') + '">div</span>';
+      outline.innerHTML = '<span class="node-outline-tag ' + (box.y < 20 ? 'inside' : '') + '">div <span class="node-outline-size">' + window.__boxes.sizeText(box) + '</span></span>';
       document.body.append(outline);
       const outer = outline.getBoundingClientRect();
       const tag = outline.firstChild.getBoundingClientRect();
-      drawn.push({ rect, outline: { w: outer.width, h: outer.height }, tag: { w: tag.width, h: tag.height } });
+      const arm = (pseudo) => {
+        const style = getComputedStyle(outline, pseudo);
+        return { w: parseFloat(style.width) || 0, h: parseFloat(style.height) || 0 };
+      };
+      drawn.push({
+        rect,
+        kind,
+        outline: { w: outer.width, h: outer.height },
+        tag: { w: tag.width, h: tag.height },
+        text: outline.firstChild.textContent,
+        across: arm('::before'),
+        down: arm('::after'),
+      });
     }
     out.push({ rects: rects.length, drawn });
   }
@@ -177,8 +185,15 @@ import * as boxes from '${path.join(ROOT, 'src/features/preview/outlineBoxes.ts'
       if (!first) {
         continue;
       }
-      check(`${name}: the outline is at least the minimum wide`, first.outline.w >= MINIMUM_PX, JSON.stringify(first));
-      check(`${name}: the outline is at least the minimum tall`, first.outline.h >= MINIMUM_PX, JSON.stringify(first));
+      const detail = JSON.stringify(first);
+      check(`${name}: the real size is kept, not grown to a box`, first.kind === 'point' ? first.outline.w < 1 && first.outline.h < 1 : true, detail);
+      if (first.kind === 'point') {
+        check(`${name}: the crosshair arm across is a hairline`, first.across.h <= 1, detail);
+        check(`${name}: the crosshair arm across is findable`, first.across.w >= 10, detail);
+        check(`${name}: the crosshair arm down is a hairline`, first.down.w <= 1, detail);
+        check(`${name}: the crosshair arm down is findable`, first.down.h >= 10, detail);
+        check(`${name}: the tag says it is 0 × 0`, first.text.includes('0 × 0'), detail);
+      }
       check(`${name}: its name tag is drawn`, first.tag.w > 0, JSON.stringify(first));
       check(`${name}: its name tag has a height`, first.tag.h > 0, JSON.stringify(first));
     }

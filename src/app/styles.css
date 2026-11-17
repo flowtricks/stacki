@@ -6119,7 +6119,45 @@ body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel {
   outline-offset: -2px;
   opacity: 0.2;
 }
-body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel .node-outline-tag {
+body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel /* A node with no width or height is not a box: it is a crosshair at its position, so it never reads as sized.
+   The arms only make it findable; its tag says 0 x 0. A node with one empty side keeps its real (flat) box. */
+.node-outline.is-point {
+  outline: none;
+}
+.node-outline.is-point::before,
+.node-outline.is-point::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+}
+.node-outline.is-point::before {
+  left: -7px;
+  top: -0.5px;
+  width: 14px;
+  height: 1px;
+}
+.node-outline.is-point::after {
+  left: -0.5px;
+  top: -7px;
+  width: 1px;
+  height: 14px;
+}
+.node-outline.is-point.component::before,
+.node-outline.is-point.component::after {
+  background: var(--green);
+}
+.node-outline.is-point.map::before,
+.node-outline.is-point.map::after,
+.node-outline.is-point.bound::before,
+.node-outline.is-point.bound::after {
+  background: #8b5cf6;
+}
+.node-outline-size {
+  opacity: 0.75;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.node-outline-tag {
   display: none;
 }
 /* Typing in text a component instance shows: the text takes the band above,

@@ -41,7 +41,7 @@ const covers = (outer: Box, inner: Box): boolean =>
 export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): readonly T[] {
   assert((boxes?.length ?? 0) <= LIMITS.treeNodesMax, 'Outline box count exceeds limit');
   const present = (boxes || []).filter((box) => box);
-  // A collapsed node reports a point (markerBox draws it); it is kept only
+  // A collapsed node reports a point (collapseKind says how it is drawn); it is kept only
   // when nothing beside it has a size, so a hollow copy never draws.
   const sized = present.filter((box) => box.w > 0 && box.h > 0);
   const list = sized.length > 0 ? sized : present;
@@ -57,24 +57,34 @@ export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): rea
   return list.filter((box) => kept.includes(box));
 }
 
-/** The smallest an outline is drawn, in on-screen px: a collapsed node still shows where it is. */
-export const MARKER_MIN_PX = 10;
+/** A side under this many frame px has no size worth drawing: it is 0px as far as the page is concerned. */
+const COLLAPSED_PX = 1;
+
+export type CollapseKind = 'none' | 'flat' | 'point';
 
 /**
- * The box an outline is drawn on: the node's own, grown from its top-left to
- * at least MARKER_MIN_PX on screen along each side. A zero-size element (an
- * empty div) has a position but no area, and a 0px outline is invisible; the
- * name tag hangs off this box, so it shows too.
+ * How a node's real box is empty, so the overlay can say so rather than invent
+ * a size. `point` has no width and no height (an empty block in a flex column):
+ * there is nothing to outline, so it is drawn as a crosshair at its position,
+ * wide enough to find and plainly not a box. `flat` has one side only (an empty
+ * block of full width, an empty inline element): its real box is drawn, a line.
  */
-export function markerBox<T extends Box>(box: T, scale: number): T {
-  assert(scale > 0, 'markerBox: scale must be positive');
-  assert(Number.isFinite(box.w), 'markerBox: a box has a finite width');
-  assert(Number.isFinite(box.h), 'markerBox: a box has a finite height');
-  const minimum = MARKER_MIN_PX / scale;
-  if (box.w >= minimum && box.h >= minimum) {
-    return box;
+export function collapseKind(box: Box): CollapseKind {
+  assert(Number.isFinite(box.w), 'collapseKind: a box has a finite width');
+  assert(Number.isFinite(box.h), 'collapseKind: a box has a finite height');
+  const flatWide = box.w < COLLAPSED_PX;
+  const flatTall = box.h < COLLAPSED_PX;
+  if (flatWide) {
+    return flatTall ? 'point' : 'flat';
   }
-  return { ...box, w: Math.max(box.w, minimum), h: Math.max(box.h, minimum) };
+  return flatTall ? 'flat' : 'none';
+}
+
+/** The size as a tag says it: `0 × 0`, whole pixels, as the frame's own size readout writes it. */
+export function sizeText(box: Box): string {
+  assert(Number.isFinite(box.w), 'sizeText: a box has a finite width');
+  assert(Number.isFinite(box.h), 'sizeText: a box has a finite height');
+  return `${Math.round(box.w)} × ${Math.round(box.h)}`;
 }
 
 /**

@@ -83,7 +83,7 @@ app.whenReady().then(async () => {
     await win.loadURL(origin + '/host/' + name + '?path=0.5');
     let answer;
     for (let attempt = 0; attempt < 100; attempt++) {
-      answer = await win.webContents.executeJavaScript('(() => { const o = document.querySelector(".node-outline"); const t = o && o.querySelector(".node-outline-tag"); const b = o && o.getBoundingClientRect(); const g = t && t.getBoundingClientRect(); return { host: window.collapsedHost, outline: b ? { x: b.x, y: b.y, w: b.width, h: b.height } : undefined, tag: g ? { w: g.width, h: g.height } : undefined }; })()');
+      answer = await win.webContents.executeJavaScript('(() => { const o = document.querySelector(".node-outline"); const t = o && o.querySelector(".node-outline-tag"); const b = o && o.getBoundingClientRect(); const g = t && t.getBoundingClientRect(); return { host: window.collapsedHost, outline: b ? { x: b.x, y: b.y, w: b.width, h: b.height } : undefined, tag: g ? { w: g.width, h: g.height, text: t.textContent } : undefined, across: o ? { w: parseFloat(getComputedStyle(o, "::before").width) || 0, h: parseFloat(getComputedStyle(o, "::before").height) || 0 } : undefined, down: o ? { w: parseFloat(getComputedStyle(o, "::after").width) || 0, h: parseFloat(getComputedStyle(o, "::after").height) || 0 } : undefined, className: o ? o.className : undefined }; })()');
       if (answer.outline) { break; }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -154,11 +154,15 @@ app.whenReady().then(async () => {
       check(`${name}: the frame reported a box for the selected path`, seen.host.box !== undefined, JSON.stringify(seen));
       check(`${name}: an outline is drawn`, seen.outline !== undefined, JSON.stringify(seen));
       if (seen.outline) {
-        check(`${name}: the outline is at least 10px wide`, seen.outline.w >= 10, JSON.stringify(seen));
-        check(`${name}: the outline is at least 10px tall`, seen.outline.h >= 10, JSON.stringify(seen));
+        check(`${name}: the outline keeps the real 0px width`, seen.outline.w < 1, JSON.stringify(seen));
+        check(`${name}: the outline keeps the real 0px height`, seen.outline.h < 1, JSON.stringify(seen));
+        check(`${name}: it is drawn as a crosshair, not a box`, seen.className.includes('is-point'), JSON.stringify(seen));
+        check(`${name}: the arm across is a findable hairline`, seen.across.w >= 10 && seen.across.h <= 1, JSON.stringify(seen));
+        check(`${name}: the arm down is a findable hairline`, seen.down.h >= 10 && seen.down.w <= 1, JSON.stringify(seen));
         check(`${name}: the outline is inside the frame`, seen.outline.x >= 0 && seen.outline.y >= 0, JSON.stringify(seen));
       }
       check(`${name}: its name tag is drawn`, seen.tag !== undefined && seen.tag.w > 0 && seen.tag.h > 0, JSON.stringify(seen));
+      check(`${name}: its name tag says 0 × 0`, seen.tag !== undefined && seen.tag.text.includes('0 × 0'), JSON.stringify(seen));
     }
   }
   if (failures.length) {
