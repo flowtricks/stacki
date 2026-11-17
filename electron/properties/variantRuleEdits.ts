@@ -21,9 +21,12 @@ import type { VariantRuleEdit, VariantRuleState } from '../../shared/properties/
 import { applySourceEdits, propertyKey, readPropertySyntax, replaceFrontmatter, syntaxError, syntaxNodes, validatePropertyCode } from './propertySyntax';
 import type { SourceEdit } from './propertySyntax';
 import { memberComment } from './propertyMemberEdits';
-import { literalValueOf, readVariantSyntax, ruleOf, stringLiteralOf, variantGroupsOf } from './variantRuleModel';
+import { literalValueOf, propsInterfaceAsAlias, readVariantSyntax, ruleOf, stringLiteralOf, variantGroupsOf } from './variantRuleModel';
 import type { ControllerLiteral, VariantCandidateSyntax, VariantGroupSyntax, VariantSyntax } from './variantRuleModel';
 import { indentUnitOf } from '../../shared/core/indent';
+import { editVariantDefaultTable } from './variantDefaults';
+import { memberEdits } from './propertyMemberEdits';
+import type { DeclaredFields } from './propertyMemberEdits';
 
 /** Frontmatter edits are offsets into the frontmatter; template edits, into the whole source. */
 interface PlannedEdits {
@@ -35,18 +38,49 @@ const NO_EDITS: PlannedEdits = { frontmatter: [], template: [] };
 
 /** The source with `edit` applied, the same source when it changes nothing, or why it cannot be applied. */
 export function editVariantRules(source: string, edit: VariantRuleEdit): Result<string> {
+  return editVariantRulesAt(source, edit, 0);
+}
+
+// An edit may first rewrite the shape it works on (an interface to a type, a
+// shared member split) or be made of others (a controller switch), and applies
+// itself again to the result: `depth` counts those steps, which never nest past a few.
+function editVariantRulesAt(source: string, edit: VariantRuleEdit, depth: number): Result<string> {
+  assert(depth <= VARIANT_LIMITS.editDepthMax, 'editVariantRules: an edit applies itself again a bounded number of times');
   if (edit.kind === 'switchController') {
-    return switchController(source, edit.controller, edit.to, edit.prop);
+    return switchController(source, { from: edit.controller, to: edit.to, prop: edit.prop }, depth);
+  }
+  if (edit.kind === 'setDefaultTable') {
+    // A default table is keyed by any prop, a controller or not: it is the table's edit, not a group's.
+    return editVariantDefaultTable(source, edit.controller, edit.prop, edit.entries);
   }
   const document = readPropertySyntax(source);
   const syntax = readVariantSyntax(document);
   const group = syntax.groups.find((candidate) => candidate.controller === edit.controller);
   const candidate = syntax.candidates.find((item) => item.controller === edit.controller);
+  if (group === undefined && candidate !== undefined && edit.kind === 'attachProp' && syntax.propsInterface !== undefined) {
+    // The first group of a component whose props are an interface: the interface becomes a type, in the same write.
+    const aliased = replaceFrontmatter(document, applySourceEdits(document.frontmatter, propsInterfaceAsAlias(document.frontmatter, syntax.propsInterface)));
+    assert(readVariantSyntax(readPropertySyntax(aliased)).props !== undefined, 'editVariantRules: the interface reads back as a type');
+    return editVariantRulesAt(aliased, edit, depth + 1);
+  }
   if (group === undefined && (candidate === undefined || edit.kind !== 'attachProp')) {
     return err(refusal('missing', 'componentProps.variants.missingGroup', { name: edit.controller }));
   }
   if (group?.reason !== undefined) {
     return err(refusal('restricted', 'componentProps.variants.readOnly', { name: edit.controller }));
+  }
+  if (group?.members.some((member) => member.shared) === true) {
+    // A member of several options cannot take a rule for one of them: each gets its own member first, in the same write.
+    const split = splitSharedMembers(syntax, group);
+    if (!split.ok) {
+      return split;
+    }
+    const regrouped = readVariantSyntax(readPropertySyntax(split.value)).groups.find((candidate) => candidate.controller === edit.controller);
+    assert(regrouped !== undefined, 'editVariantRules: the group survives its split');
+    assert(!regrouped.members.some((member) => member.shared), 'editVariantRules: a split leaves one option per member');
+    const after = editVariantRulesAt(split.value, edit, depth + 1);
+    // An edit that changes nothing leaves the source as it was, unsplit.
+    return after.ok && after.value === split.value ? ok(source) : after;
   }
   const planned =
     group === undefined && candidate !== undefined && edit.kind === 'attachProp'
@@ -79,18 +113,69 @@ export function editVariantRules(source: string, edit: VariantRuleEdit): Result<
   return ok(output);
 }
 
+// Each member that names several options (`variant: "month" | "day"`) becomes
+// one member per option: the first keeps the member (and its `?`), the rest
+// are copies after it, joined by the union's own separator, without the `?`.
+// The types it accepts are the same; only the shape is spelled out.
+function splitSharedMembers(syntax: VariantSyntax, group: VariantGroupSyntax): Result<string> {
+  const frontmatter = syntax.document.frontmatter;
+  const edits: SourceEdit[] = [];
+  const nodes = group.members.filter((member) => member.shared).filter((member) => member.firstOfMember);
+  assert(nodes.length <= VARIANT_LIMITS.optionsMax, 'splitSharedMembers: the members are bounded');
+  for (const member of nodes) {
+    const type = member.discriminant.type;
+    assert(type !== undefined, 'splitSharedMembers: a shared member has a controller type');
+    assert(ts.isUnionTypeNode(type), 'splitSharedMembers: a shared member names a union of options');
+    const index = group.union.types.indexOf(member.node);
+    assert(index >= 0, 'splitSharedMembers: the member is in its union');
+    const next = group.union.types[index + 1];
+    const previous = group.union.types[index - 1];
+    const separator =
+      next !== undefined
+        ? frontmatter.slice(member.node.end, next.getStart())
+        : previous !== undefined
+          ? frontmatter.slice(previous.end, member.node.getStart())
+          : ' | ';
+    const start = member.node.getStart();
+    const text = frontmatter.slice(start, member.node.end);
+    const question = member.discriminant.questionToken;
+    const literals = type.types.map((literal) => literal.getText());
+    const [first, ...rest] = literals;
+    assert(first !== undefined, 'splitSharedMembers: a union has a first option');
+    const copy = (literal: string): string => {
+      const typeEdit = { start: type.getStart() - start, end: type.end - start, text: literal };
+      const questionEdit = question === undefined ? [] : [{ start: question.getStart() - start, end: question.end - start, text: '' }];
+      return applySourceEdits(text, [typeEdit, ...questionEdit]);
+    };
+    edits.push({ start: type.getStart(), end: type.end, text: first });
+    edits.push({ start: member.node.end, end: member.node.end, text: rest.map((literal) => `${separator}${copy(literal)}`).join('') });
+  }
+  const written = applySourceEdits(frontmatter, edits);
+  const error = syntaxError(written);
+  if (error !== undefined) {
+    return err({ code: 'syntax', message: error });
+  }
+  return ok(replaceFrontmatter(syntax.document, written));
+}
+
 function planGroupEdit(syntax: VariantSyntax, group: VariantGroupSyntax | undefined, edit: VariantRuleEdit): Result<PlannedEdits> {
   assert(group !== undefined, 'planGroupEdit: an edit to an existing group has the group');
   return planEdit(syntax, group, edit);
 }
 
 // A prop's rules moved from one controller to another, as one write: let go
-// of the first, then join the second, allowed for every option there.
-function switchController(source: string, from: string, to: string, prop: string): Result<string> {
+// of the first, then join the second. Where the two controllers share option
+// names (a `size` and a `density` both with `small`), each shared option keeps
+// the state it had; with none in common the prop is allowed for every option.
+function switchController(source: string, change: { readonly from: string; readonly to: string; readonly prop: string }, depth: number): Result<string> {
+  const { from, to, prop } = change;
   if (from === to) {
     return ok(source);
   }
-  const detached = editVariantRules(source, { kind: 'detachProp', controller: from, prop });
+  const before = variantGroupsOf(readVariantSyntax(readPropertySyntax(source))).find((group) => group.controller === from);
+  const index = before?.props.indexOf(prop) ?? -1;
+  const states = new Map(before?.options.map((option) => [option.value, option.rules[index]?.state ?? 'optional'] as const) ?? []);
+  const detached = editVariantRulesAt(source, { kind: 'detachProp', controller: from, prop }, depth + 1);
   if (!detached.ok) {
     return detached;
   }
@@ -98,9 +183,29 @@ function switchController(source: string, from: string, to: string, prop: string
   if (target === undefined) {
     return err(refusal('missing', 'componentProps.variants.missingGroup', { name: to }));
   }
-  const attached = editVariantRules(detached.value, { kind: 'attachProp', controller: to, prop, options: target.options.map((option) => option.value) });
-  assert(!attached.ok || attached.value !== source, 'switchController: a switch changes the source');
-  return attached;
+  const values = target.options.map((option) => option.value);
+  const shared = values.filter((value) => states.has(value));
+  const allowed = shared.length === 0 ? values : values.filter((value) => !states.has(value) || states.get(value) !== 'forbidden');
+  if (allowed.length === 0) {
+    return err(refusal('restricted', 'componentProps.variants.switchForbidsAll', { name: to }));
+  }
+  const attached = editVariantRulesAt(detached.value, { kind: 'attachProp', controller: to, prop, options: allowed }, depth + 1);
+  if (!attached.ok) {
+    return attached;
+  }
+  // Required where it was required: one more pass over the same text, still one write and one undo.
+  let output = attached.value;
+  const required = shared.filter((value) => states.get(value) === 'required');
+  assert(required.length <= VARIANT_LIMITS.optionsMax, 'switchController: the options are bounded');
+  for (const option of required) {
+    const set = editVariantRulesAt(output, { kind: 'setRule', controller: to, option, prop, state: 'required' }, depth + 1);
+    if (!set.ok) {
+      return set;
+    }
+    output = set.value;
+  }
+  assert(output !== source, 'switchController: a switch changes the source');
+  return ok(output);
 }
 
 // The one place that branches on the edit: each helper below plans text and
@@ -127,8 +232,14 @@ function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: Varian
       return planAttachProp(syntax, group, edit.prop, edit.options);
     case 'detachProp':
       return planDetachProp(syntax, group, edit.prop);
+    case 'setRuleType':
+      return planRuleDeclarations(syntax, group, edit.prop, edit.options, { type: edit.type });
+    case 'setRuleDescription':
+      return planRuleDeclarations(syntax, group, edit.prop, edit.options, { description: edit.description });
     case 'switchController':
       throw new Error('Assertion failed: a controller switch is two edits, applied before planning');
+    case 'setDefaultTable':
+      throw new Error('Assertion failed: a default table is written before planning');
     default: {
       const exhaustive: never = edit;
       return exhaustive;
@@ -164,6 +275,44 @@ function planSetRule(syntax: VariantSyntax, group: VariantGroupSyntax, option: s
   // A prop already allowed keeps its own type; one that was `never` takes the prop's.
   const retyped = current.state === 'forbidden' ? [typeEdit(field, type.value)] : [];
   return ok({ frontmatter: [...optionalEdits(field, state), ...retyped], template: [] });
+}
+
+// The prop's declaration in each of `options` given another type or tooltip,
+// by the same member edit a save makes (propertyMemberEdits.ts): only the type,
+// or only the doc comment, changes; nothing else in the member moves.
+function planRuleDeclarations(
+  syntax: VariantSyntax,
+  group: VariantGroupSyntax,
+  prop: string,
+  options: readonly string[],
+  change: Pick<DeclaredFields, 'type'> | Pick<DeclaredFields, 'description'>,
+): Result<PlannedEdits> {
+  if (!group.props.includes(prop)) {
+    return err(refusal('missing', 'componentProps.variants.missingProp', { name: prop }));
+  }
+  if ('type' in change) {
+    const valid = validatePropertyCode(change.type, '');
+    if (!valid.ok) {
+      return valid;
+    }
+  }
+  const frontmatter = syntax.document.frontmatter;
+  const edits: SourceEdit[] = [];
+  for (const option of options) {
+    const member = group.members.find((candidate) => candidate.value === option);
+    if (member === undefined) {
+      return err(refusal('missing', 'componentProps.variants.missingOption', { value: option }));
+    }
+    const field = member.fields.get(prop);
+    const rule = ruleOf(member, prop);
+    if (field === undefined || rule.state === 'forbidden') {
+      return err(refusal('restricted', 'componentProps.variants.notAllowedThere', { name: prop, value: option }));
+    }
+    const previous: DeclaredFields = { name: prop, type: rule.type, required: rule.state === 'required', readonly: false, description: rule.description };
+    edits.push(...memberEdits(frontmatter, field, previous, { ...previous, ...change }));
+  }
+  assert(edits.length <= options.length * 2, 'planRuleDeclarations: at most a head and a type per option');
+  return ok({ frontmatter: edits, template: [] });
 }
 
 function planAddOption(syntax: VariantSyntax, group: VariantGroupSyntax, value: string): Result<PlannedEdits> {
@@ -847,7 +996,22 @@ function verifyEdit(output: string, edit: VariantRuleEdit): void {
       assert(!group.props.includes(edit.prop), 'verifyEdit: the removed prop is gone');
       return;
     case 'switchController':
+    case 'setDefaultTable':
       return;
+    case 'setRuleType':
+    case 'setRuleDescription': {
+      const index = group.props.indexOf(edit.prop);
+      for (const value of edit.options) {
+        const rule = group.options.find((option) => option.value === value)?.rules[index];
+        assert(rule !== undefined, 'verifyEdit: the option still rules the prop');
+        if (edit.kind === 'setRuleType') {
+          assert(rule.type === edit.type.trim(), 'verifyEdit: the type reads back as set');
+        } else {
+          assert(rule.description === edit.description.trim(), 'verifyEdit: the tooltip reads back as set');
+        }
+      }
+      return;
+    }
     case 'detachProp':
       assert(!group.props.includes(edit.prop), 'verifyEdit: the detached prop is no longer ruled');
       assert(group.attachable.includes(edit.prop), 'verifyEdit: the detached prop is shared again');

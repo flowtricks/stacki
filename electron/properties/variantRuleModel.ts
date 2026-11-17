@@ -18,6 +18,7 @@ import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { VARIANT_LIMITS } from '../../shared/properties/variantRules';
 import type { VariantGroup, VariantGroupReason, VariantOption, VariantRule } from '../../shared/properties/variantRules';
 import { isAstroProps, propertyKey, readPropertySyntax, syntaxNodes } from './propertySyntax';
+import { memberComment } from './propertyMemberEdits';
 import type { PropertySyntax } from './propertySyntax';
 
 /** One option: a member of the union. */
@@ -32,6 +33,14 @@ export interface VariantMemberSyntax {
   readonly value: string;
   /** Each prop the member declares, by name, the controller included. */
   readonly fields: ReadonlyMap<string, ts.PropertySignature>;
+  /**
+   * The member names several options (`variant: "month" | "day" | "state"`):
+   * it is read once per option, each sharing the node, and is split into one
+   * member per option before any edit to its group (variantRuleEdits.ts).
+   */
+  readonly shared: boolean;
+  /** Whether this option is the first its member names: only it is the fallback of an optional controller. */
+  readonly firstOfMember: boolean;
 }
 
 /** One discriminated union of the props. */
@@ -67,6 +76,8 @@ export interface VariantSyntax {
   readonly commonLiterals: readonly ts.TypeLiteralNode[];
   /** The `type Props` alias, when it is one this reader follows: a new group is intersected onto it. */
   readonly props: ts.TypeAliasDeclaration | undefined;
+  /** An `interface Props` instead, local and not generic: written as a `type Props` before a first group is made. */
+  readonly propsInterface?: ts.InterfaceDeclaration | undefined;
   /**
    * With no group yet, the shared props that could become one's controller:
    * a string-literal union of two or more options (`size?: "s" | "m"`).
@@ -124,6 +135,19 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
     .filter(ts.isObjectBindingPattern);
   const pattern = patterns.length === 1 ? patterns[0] : undefined;
   const props = declarations?.get('Props');
+  if (declarations !== undefined && props !== undefined && ts.isInterfaceDeclaration(props) && props.typeParameters === undefined && !isExported(props)) {
+    // An `interface Props` holds no union yet: its props can still key the
+    // first group, which turns it into `type Props =` (propsInterfaceAsAlias).
+    const common = new Map<string, ts.PropertySignature>();
+    for (const field of props.members) {
+      const name = ts.isPropertySignature(field) ? plainName(field) : undefined;
+      if (name !== undefined && ts.isPropertySignature(field) && field.type !== undefined && !common.has(name)) {
+        common.set(name, field);
+      }
+    }
+    const candidates = controllerCandidates(common, [], declarations, pattern);
+    return { document, groups: [], runtime: runtime.syntax, pattern, common, commonLiterals: [], props: undefined, candidates, propsInterface: props };
+  }
   if (declarations === undefined || props === undefined || !ts.isTypeAliasDeclaration(props) || props.typeParameters !== undefined) {
     return { document, groups: [], runtime: runtime.syntax, pattern, common: NO_COMMON, commonLiterals: [], props: undefined, candidates: [] };
   }
@@ -245,7 +269,8 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
   const groups = syntax.groups.map((group): VariantGroup => {
     const options = group.members.map((member): VariantOption => ({
       value: member.value,
-      fallback: member.discriminant.questionToken !== undefined,
+      // An optional controller in a member of several options (`variant?: "default" | "notice"`): the first is the fallback.
+      fallback: member.discriminant.questionToken !== undefined && member.firstOfMember,
       rules: group.props.map((prop) => ruleOf(member, prop)),
     }));
     assert(options.length === group.members.length, 'variantGroupsOf: one option per member');
@@ -285,14 +310,36 @@ export function attachableProps(syntax: VariantSyntax): readonly string[] {
 export function ruleOf(member: VariantMemberSyntax, prop: string): VariantRule {
   const field = member.fields.get(prop);
   if (field === undefined) {
-    return { prop, state: 'forbidden', listed: false, type: '' };
+    return { prop, state: 'forbidden', listed: false, type: '', description: '' };
   }
   const type = field.type;
   assert(type !== undefined, 'ruleOf: a modelled declaration has a type');
   if (type.kind === ts.SyntaxKind.NeverKeyword) {
-    return { prop, state: 'forbidden', listed: true, type: '' };
+    return { prop, state: 'forbidden', listed: true, type: '', description: '' };
   }
-  return { prop, state: field.questionToken === undefined ? 'required' : 'optional', listed: true, type: type.getText() };
+  // The member's own doc comment: an option documents the prop in its own words (`Defaults to \`Close\`.`).
+  const description = memberComment(field.getSourceFile().text, field)?.description ?? '';
+  return { prop, state: field.questionToken === undefined ? 'required' : 'optional', listed: true, type: type.getText(), description };
+}
+
+/**
+ * `interface Props extends A, B { … }` as `type Props = A & B & { … };`: the
+ * same props, in a form a union can be intersected onto. The body keeps its
+ * bytes; only the head and the closing `;` change.
+ */
+export function propsInterfaceAsAlias(
+  frontmatter: string,
+  declaration: ts.InterfaceDeclaration,
+): readonly { readonly start: number; readonly end: number; readonly text: string }[] {
+  const open = declaration.getChildren().find((child) => child.kind === ts.SyntaxKind.OpenBraceToken);
+  assert(open !== undefined, 'propsInterfaceAsAlias: an interface has a body');
+  const heritage = (declaration.heritageClauses ?? []).flatMap((clause) => clause.types.map((type) => type.getText()));
+  const head = `type ${declaration.name.text} = ${heritage.map((type) => `${type} & `).join('')}`;
+  const after = frontmatter.slice(declaration.end, declaration.end + 1);
+  return [
+    { start: declaration.getStart(), end: open.getStart(), text: head },
+    ...(after === ';' ? [] : [{ start: declaration.end, end: declaration.end, text: ';' }]),
+  ];
 }
 
 /** The declarations a type name can mean, or undefined when one is declared twice (merged: not this reader's to follow). */
@@ -382,14 +429,16 @@ function readGroup(
     assert(fields !== undefined, 'readGroup: each member has fields');
     const discriminant = fields.get(controller);
     assert(discriminant !== undefined, 'readGroup: the controller is in every member');
-    const literalNode = controllerLiteralOf(discriminant.type);
-    assert(literalNode !== undefined, 'readGroup: the controller is a literal in every member');
+    const literalNodes = controllerLiteralsOf(discriminant.type);
+    assert(literalNodes !== undefined, 'readGroup: the controller is a literal in every member');
     const literal = reading.literals.find((candidate) => candidate.members.includes(discriminant));
     assert(literal !== undefined, 'readGroup: the controller is declared in one of the member object types');
     reason ??= reading.reason ?? (reading.literals.length === 1 ? undefined : 'shape');
-    const value = literalValueOf(literalNode);
-    assert(value !== undefined, 'readGroup: a controller literal has a value');
-    members.push({ node, literal, discriminant, literalNode, value, fields });
+    for (const [at, literalNode] of literalNodes.entries()) {
+      const value = literalValueOf(literalNode);
+      assert(value !== undefined, 'readGroup: a controller literal has a value');
+      members.push({ node, literal, discriminant, literalNode, value, fields, shared: literalNodes.length > 1, firstOfMember: at === 0 });
+    }
   }
   const props = groupProps(members, controller);
   reason ??= members.some((member) => [...member.fields.values()].some((field) => field.type === undefined)) ? 'shape' : undefined;
@@ -483,15 +532,33 @@ function controllerOf(members: readonly ReadonlyMap<string, ts.PropertySignature
     return undefined;
   }
   for (const name of first.keys()) {
-    const literals = members.map((fields) => controllerLiteralOf(fields.get(name)?.type));
-    const known = literals.filter((literal): literal is ControllerLiteral => literal !== undefined);
-    const kinds = new Set(known.map((literal) => (ts.isStringLiteral(literal) ? 'string' : 'boolean')));
-    const values = known.map((literal) => literalValueOf(literal));
-    if (known.length === members.length && kinds.size === 1 && new Set(values).size === known.length) {
+    const literals = members.map((fields) => controllerLiteralsOf(fields.get(name)?.type));
+    const known = literals.filter((list): list is readonly ControllerLiteral[] => list !== undefined);
+    const flat = known.flat();
+    const kinds = new Set(flat.map((literal) => (ts.isStringLiteral(literal) ? 'string' : 'boolean')));
+    const values = flat.map((literal) => literalValueOf(literal));
+    if (known.length === members.length && kinds.size === 1 && new Set(values).size === flat.length && flat.length <= VARIANT_LIMITS.optionsMax) {
       return name;
     }
   }
   return undefined;
+}
+
+/**
+ * The options a member's controller names: one literal, or a union of string
+ * literals (`variant: "month" | "day" | "state"`); undefined for anything else.
+ */
+export function controllerLiteralsOf(type: ts.TypeNode | undefined): readonly ControllerLiteral[] | undefined {
+  const single = controllerLiteralOf(type);
+  if (single !== undefined) {
+    return [single];
+  }
+  if (type === undefined || !ts.isUnionTypeNode(type)) {
+    return undefined;
+  }
+  const literals = type.types.map((member) => stringLiteralOf(member));
+  const strings = literals.filter((literal): literal is ts.StringLiteral => literal !== undefined);
+  return strings.length === type.types.length && strings.length >= 2 ? strings : undefined;
 }
 
 /** The literal a controller member declares, string or boolean. */

@@ -25,6 +25,8 @@ export const VARIANT_LIMITS = {
   /** A prop's name, and a type or default as code (PROPERTY_LIMITS.nameCharsMax, textCharsMax). */
   nameCharsMax: 128,
   codeCharsMax: 32768,
+  /** Times one edit applies itself again: a shape rewritten first (an interface to a type, a shared member split), then a switch's own steps. */
+  editDepthMax: 4,
 } as const;
 
 /** What an option says about a prop: it may be passed, must be passed, or may not be passed. */
@@ -47,6 +49,8 @@ export interface VariantRule {
   readonly listed: boolean;
   /** The prop's type as written in this option, or '' when the option forbids it. */
   readonly type: string;
+  /** The prop's tooltip in this option (its declaration's doc comment), or '' when it has none. */
+  readonly description: string;
 }
 
 /** One option of the controller. `fallback`: the option that applies when the controller is not passed (`variant?: "main"`). */
@@ -95,7 +99,60 @@ export type VariantRuleEdit =
   | { readonly kind: 'removeProp'; readonly controller: string; readonly prop: string }
   | { readonly kind: 'attachProp'; readonly controller: string; readonly prop: string; readonly options: readonly string[] }
   | { readonly kind: 'detachProp'; readonly controller: string; readonly prop: string }
-  | { readonly kind: 'switchController'; readonly controller: string; readonly to: string; readonly prop: string };
+  | { readonly kind: 'switchController'; readonly controller: string; readonly to: string; readonly prop: string }
+  /** The prop's type in `options` (each must allow it): the member declarations' type text. */
+  | { readonly kind: 'setRuleType'; readonly controller: string; readonly prop: string; readonly options: readonly string[]; readonly type: string }
+  /** The prop's tooltip in `options` (each must allow it): the member declarations' doc comments; '' removes them. */
+  | {
+      readonly kind: 'setRuleDescription';
+      readonly controller: string;
+      readonly prop: string;
+      readonly options: readonly string[];
+      readonly description: string;
+    }
+  /**
+   * A default set per option, written into the lookup table the component
+   * already reads it from (`label ?? named[variant]`): `controller` names the
+   * prop whose local keys the table, `entries` the whole table as it should be.
+   * An entry whose code is unchanged keeps its bytes.
+   */
+  | { readonly kind: 'setDefaultTable'; readonly controller: string; readonly prop: string; readonly entries: readonly VariantDefaultEntry[] };
+
+/** One row of a default table: the option it is keyed by, and its value as code (`"Close"`, `pressed ? "Pause" : "Play"`). */
+export interface VariantDefaultEntry {
+  readonly option: string;
+  readonly code: string;
+}
+
+/**
+ * A default the component computes from another prop instead of declaring in
+ * its destructure (main reads it, electron/properties/variantDefaults.ts):
+ *
+ * - `table`: `label ?? named[variant]` with `const named = { play: …, close: … }`
+ *   in the frontmatter. `key` is the local the table is indexed by, read from
+ *   the prop `controller`. The panel shows and edits it as conditions on that
+ *   prop (src/features/componentProperties/conditionalDefault.ts).
+ * - `computed`: any other `label ?? <code>`, shown read-only as its code.
+ */
+export type VariantDefault =
+  | {
+      readonly kind: 'table';
+      readonly prop: string;
+      readonly controller: string;
+      readonly key: string;
+      readonly table: string;
+      readonly entries: readonly VariantDefaultEntry[];
+    }
+  | { readonly kind: 'computed'; readonly prop: string; readonly code: string };
+
+/** The default `prop` is computed with, if the component computes one. */
+export function variantDefaultOf(defaults: readonly VariantDefault[] | undefined, prop: string): VariantDefault | undefined {
+  if (defaults === undefined) {
+    return undefined;
+  }
+  assert(defaults.length <= VARIANT_LIMITS.propsMax, 'variantDefaultOf: defaults are bounded');
+  return defaults.find((item) => item.prop === prop && item.kind === 'table') ?? defaults.find((item) => item.prop === prop);
+}
 
 /** The group that controls or rules `name`, if any (a candidate does neither yet). */
 export function variantGroupOf(groups: readonly VariantGroup[] | undefined, name: string): VariantGroup | undefined {
@@ -187,10 +244,13 @@ function parseVariantOption(input: unknown): VariantOption {
 }
 
 function parseVariantRule(input: unknown): VariantRule {
-  const rule = object({ prop: propertyName, state: parseVariantRuleState, listed: boolean, type: propertyText })(input);
+  const rule = object({ prop: propertyName, state: parseVariantRuleState, listed: boolean, type: propertyText, description: propertyText })(input);
   if (rule.state === 'forbidden') {
     if (rule.type !== '') {
       throw new Error('A forbidden prop has no type');
+    }
+    if (rule.description !== '') {
+      throw new Error('A forbidden prop has no tooltip');
     }
   } else if (rule.type.trim() === '') {
     throw new Error('An allowed prop has a type');
@@ -257,6 +317,34 @@ export function parseVariantRuleEdit(input: unknown): VariantRuleEdit {
       }
       return { kind, ...change };
     }
+    case 'setRuleType': {
+      const change = object({ controller: propertyName, prop: propertyName, options: parseOptionList, type: parseTypeText })(input);
+      if (change.prop === change.controller) {
+        throw new Error('A controller does not rule itself');
+      }
+      return { kind, ...change };
+    }
+    case 'setRuleDescription': {
+      const change = object({ controller: propertyName, prop: propertyName, options: parseOptionList, description: propertyText })(input);
+      if (change.prop === change.controller) {
+        throw new Error('A controller does not rule itself');
+      }
+      return { kind, ...change };
+    }
+    case 'setDefaultTable': {
+      const change = object({
+        controller: propertyName,
+        prop: propertyName,
+        entries: (item) => boundedList(item, VARIANT_LIMITS.optionsMax, parseDefaultEntry),
+      })(input);
+      if (new Set(change.entries.map((entry) => entry.option)).size !== change.entries.length) {
+        throw new Error('A default table has one entry per option');
+      }
+      if (change.prop === change.controller) {
+        throw new Error('A default table is keyed by another prop');
+      }
+      return { kind, ...change };
+    }
     case 'attachProp': {
       const attach = object({
         controller: propertyName,
@@ -271,6 +359,51 @@ export function parseVariantRuleEdit(input: unknown): VariantRuleEdit {
     default:
       throw new Error('Unknown variant rule edit');
   }
+}
+
+/** Parses the defaults main sends with a component's properties. */
+export function parseVariantDefaults(input: unknown): readonly VariantDefault[] {
+  const defaults = boundedList(input, VARIANT_LIMITS.propsMax, parseVariantDefault);
+  if (new Set(defaults.map((item) => `${item.kind}:${item.prop}`)).size !== defaults.length) {
+    throw new Error('One default of each kind per prop');
+  }
+  return defaults;
+}
+
+function parseVariantDefault(input: unknown): VariantDefault {
+  const value = toRecord(input);
+  if (value?.['kind'] === 'table') {
+    const table = object({
+      prop: propertyName,
+      controller: propertyName,
+      key: propertyName,
+      table: propertyName,
+      entries: (item) => boundedList(item, VARIANT_LIMITS.optionsMax, parseDefaultEntry),
+    })(input);
+    if (table.prop === table.controller) {
+      throw new Error('A default table is keyed by another prop');
+    }
+    return { kind: 'table', ...table };
+  }
+  if (value?.['kind'] === 'computed') {
+    return { kind: 'computed', ...object({ prop: propertyName, code: parseTypeText })(input) };
+  }
+  throw new Error('Unknown variant default');
+}
+
+function parseDefaultEntry(input: unknown): VariantDefaultEntry {
+  return object({ option: parseOptionValue, code: parseTypeText })(input);
+}
+
+function parseOptionList(input: unknown): readonly string[] {
+  const options = boundedList(input, VARIANT_LIMITS.optionsMax, parseOptionValue);
+  if (options.length === 0) {
+    throw new Error('An edit names one or more options');
+  }
+  if (new Set(options).size !== options.length) {
+    throw new Error('Options repeat');
+  }
+  return options;
 }
 
 function parseOptionValue(input: unknown): string {

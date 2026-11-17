@@ -6,7 +6,7 @@ import { toRecord } from '../core/record';
 import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import type { Result } from '../core/result';
 import { parseRefusal, type PropertyError } from './propertyErrors';
-import { parseVariantGroups, parseVariantRuleEdit, type VariantGroup, type VariantRuleEdit } from './variantRules';
+import { parseVariantDefaults, parseVariantGroups, parseVariantRuleEdit, type VariantDefault, type VariantGroup, type VariantRuleEdit } from './variantRules';
 
 export const PROPERTY_LIMITS = {
   fieldsMax: LIMITS.propSchemaFieldsMax,
@@ -75,6 +75,8 @@ export interface ComponentProperties {
   readonly advanced: boolean;
   /** The discriminated unions the props combine, which the panel edits as variant rules (variantRules.ts). */
   readonly variantGroups?: readonly VariantGroup[];
+  /** Defaults the component computes per option (`label ?? named[variant]`) or otherwise, by prop (variantRules.ts). */
+  readonly variantDefaults?: readonly VariantDefault[];
 }
 export interface PropertyOptionRename {
   readonly from: string;
@@ -259,6 +261,7 @@ export function parseComponentProperties(input: unknown): ComponentProperties {
     advanced: boolean,
     properties: (value) => propertyList(value, parseComponentProperty),
     variantGroups: optional(parseVariantGroups),
+    variantDefaults: optional(parseVariantDefaults),
   })(input);
 }
 export function parsePropertiesResult<T>(input: unknown, parse: (value: unknown) => T): Result<T, PropertyError> {

@@ -32,7 +32,13 @@ export const messages = {
   'componentProps.default.useControl': 'Usar el control de valor predeterminado',
   'componentProps.default.value': 'Valor predeterminado',
   'componentProps.default.writeExpression': 'Escribir una expresión predeterminada',
+  'componentProps.defaults.badCode': 'El valor predeterminado de {value} no es código válido.', // review
+  'componentProps.defaults.computed': 'Calculado', // review
+  'componentProps.defaults.conditional': 'Definir por condiciones', // review
   'componentProps.defaults.discard': 'Descartar cambios',
+  'componentProps.defaults.entryRead': 'El código lee {value} de {name} directamente. Cámbialo en el código fuente.', // review
+  'componentProps.defaults.missingTable': '{name} no tiene valores predeterminados por opción que editar.', // review
+  'componentProps.defaults.perOption': 'Empieza cada grupo con {controller} y una opción.', // review
   'componentProps.defaults.return': 'Volver a los valores predeterminados',
   'componentProps.defaults.saveFailed': 'No se pudieron guardar los valores predeterminados del componente.',
   'componentProps.defaults.saved': 'Valores predeterminados guardados en este proyecto.',
@@ -122,6 +128,7 @@ export const messages = {
   }, // review
   'componentProps.type.attributesNote': 'Una propiedad de atributos se crea desde un elemento: abre el punto de enlace de sus atributos.',
   'componentProps.type.codeType': 'Tipo de código',
+  'componentProps.type.controllerKind': 'Sus opciones deciden su tipo', // review
   'componentProps.type.defaultCleared': 'Se borró el valor predeterminado: no encaja con «{kind}».',
   'componentProps.type.kind': 'Tipo', // review
   'componentProps.type.noType': 'Sin tipo',
@@ -140,6 +147,7 @@ export const messages = {
   'componentProps.variants.conditional': 'Condicional', // review
   'componentProps.variants.controlledBy': 'Controlado por', // review
   'componentProps.variants.duplicateOption': 'Ya existe una opción {value}.', // review
+  'componentProps.variants.forbiddenPassed': '{file} pasa {name} con {controller} {value}. Cambia antes esa instancia.', // review
   'componentProps.variants.lastOptions': 'Conserva al menos dos opciones.', // review
   'componentProps.variants.missingGroup': 'Ninguna regla de variante está controlada por {name}.', // review
   'componentProps.variants.missingOption': 'No existe la opción {value}.', // review
@@ -148,8 +156,12 @@ export const messages = {
   'componentProps.variants.noRuntimeType': 'El tipo de ejecución del componente no admite aquí una propiedad nueva.', // review
   'componentProps.variants.noType': '{name} no tiene un tipo que permitir. Dale primero un tipo.', // review
   'componentProps.variants.none': 'Ninguno', // review
+  'componentProps.variants.notAllowedThere': '{name} no está permitido para {value}.', // review
+  'componentProps.variants.optionDetails': 'Ajustes de {value}', // review
   'componentProps.variants.optionInCode': 'El código del componente usa {value} de una forma que Stacki no puede actualizar. Cámbialo en el código fuente.', // review
+  'componentProps.variants.optionKind': 'Tipo para {value}', // review
   'componentProps.variants.optionPassed': '{file} pasa {value} como {name}. Cambia antes esa instancia.', // review
+  'componentProps.variants.optionTooltip': 'Información para {value}', // review
   'componentProps.variants.optionsLimit': 'Una propiedad puede tener como máximo {max} opciones.', // review
   'componentProps.variants.readOnly': 'Las reglas de variante controladas por {name} solo se pueden cambiar en el código fuente.', // review
   'componentProps.variants.reason.nested': 'Anidado', // review
@@ -162,4 +174,6 @@ export const messages = {
   'componentProps.variants.state.forbidden': 'No permitido', // review
   'componentProps.variants.state.optional': 'Permitido', // review
   'componentProps.variants.state.required': 'Obligatorio', // review
+  'componentProps.variants.switchForbidsAll': 'Ninguna opción de {name} permitiría esta propiedad.', // review
+  'componentProps.variants.varies': 'Varía', // review
 } as const satisfies CatalogOf<MessageKey>;

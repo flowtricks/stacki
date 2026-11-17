@@ -202,7 +202,6 @@ for (const [title, reason, lines] of READ_ONLY) {
 
 const NO_GROUP: readonly (readonly [string, readonly string[]])[] = [
   ['a plain object type', ['type Props = { variant?: "a"; label?: string };']],
-  ['an interface', ['interface Props { variant?: "a" | "b"; label?: string }']],
   ['a numeric controller', ['type Props = { size: 1; a?: string } | { size: 2; b?: string };']],
   ['a repeated option', ['type Props = { variant?: "a"; x?: string } | { variant: "a"; y?: string };']],
   ['a union of literals', ['type Props = "a" | "b";']],
@@ -217,6 +216,23 @@ for (const [title, lines] of NO_GROUP) {
     assert.deepEqual(readVariantGroups(component(lines.join('\n'))), []);
   });
 }
+
+test('an interface has no group yet, but its props of options are candidates for the first', () => {
+  const groups = readVariantGroups(component('interface Props { variant?: "a" | "b"; label?: string }\nconst { variant = "b", label } = Astro.props;'));
+  assert.deepEqual(
+    groups.map((group) => [group.controller, group.editing.kind, group.options.map((option) => [option.value, option.fallback])]),
+    [
+      [
+        'variant',
+        'candidate',
+        [
+          ['a', false],
+          ['b', true],
+        ],
+      ],
+    ],
+  );
+});
 
 test('the boundary parser accepts the Button model and refuses each broken shape', () => {
   const groups = readVariantGroups(BUTTON);

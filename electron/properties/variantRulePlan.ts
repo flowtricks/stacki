@@ -11,6 +11,8 @@ import type { VariantRuleEdit } from '../../shared/properties/variantRules';
 import { sameFilesystemPath } from '../lib/platform';
 import { readPropertyConsumers } from './propertyConsumers';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
+import { instancesPassing } from './variantInstances';
+import { readVariantGroups } from './variantRuleModel';
 
 interface VariantPlanRequest {
   readonly projectPath: string;
@@ -37,13 +39,18 @@ export function planVariantRuleChanges(request: VariantPlanRequest, component: V
     case 'removeProp':
       return passedProp(request, component, edit.prop);
     case 'setRule':
+      return edit.state === 'forbidden' ? forbiddenPassed(request, component, edit.prop) : ok([component]);
+    case 'attachProp':
+    case 'switchController':
+      return forbiddenPassed(request, component, edit.prop);
     case 'addOption':
     case 'moveOption':
     case 'setFallback':
     case 'addProp':
-    case 'attachProp':
     case 'detachProp':
-    case 'switchController':
+    case 'setRuleType':
+    case 'setRuleDescription':
+    case 'setDefaultTable':
       return ok([component]);
     default: {
       const exhaustive: never = edit;
@@ -118,6 +125,45 @@ function passedProp(request: VariantPlanRequest, component: VariantFileChange, p
       }
       if (probed.value !== consumer.source) {
         return err(refusal('in-use', 'props.edit.stillPasses', { file: path.relative(request.projectPath, consumer.file), name: prop }));
+      }
+    }
+  }
+  return ok([component]);
+}
+
+// An edit that forbids `prop` for some options is refused while an instance
+// passes it with one of them (or with none, where the fallback forbids it),
+// naming the file: TypeScript would reject that instance, and the designer
+// should change it first. An instance whose option is code is not judged.
+function forbiddenPassed(request: VariantPlanRequest, component: VariantFileChange, prop: string): Result<readonly VariantFileChange[]> {
+  const groups = readVariantGroups(component.after).filter((group) => group.editing.kind !== 'candidate' && group.props.includes(prop));
+  const forbidding = groups.flatMap((group) => {
+    const index = group.props.indexOf(prop);
+    const forbidden = group.options.filter((option) => option.rules[index]?.state === 'forbidden');
+    const fallback = group.options.find((option) => option.fallback);
+    return forbidden.length === 0 ? [] : [{ controller: group.controller, forbidden: forbidden.map((option) => option.value), fallback: fallback?.value }];
+  });
+  if (forbidding.length === 0) {
+    return ok([component]);
+  }
+  const consumers = readPropertyConsumers(request);
+  if (!consumers.ok) {
+    return consumers;
+  }
+  for (const consumer of consumers.value) {
+    const source = sameFilesystemPath(consumer.file, request.file) ? component.after : consumer.source;
+    const instances = instancesPassing(source, consumer.names, prop);
+    if (!instances.ok) {
+      return err(inFile(path.relative(request.projectPath, consumer.file), instances.error));
+    }
+    for (const instance of instances.value) {
+      for (const rule of forbidding) {
+        const passed = instance.attributes.get(rule.controller);
+        const value = passed === undefined ? rule.fallback : passed.kind === 'literal' ? passed.value : undefined;
+        if (value !== undefined && rule.forbidden.includes(value)) {
+          const file = path.relative(request.projectPath, consumer.file);
+          return err(refusal('in-use', 'componentProps.variants.forbiddenPassed', { file, name: prop, controller: rule.controller, value }));
+        }
       }
     }
   }

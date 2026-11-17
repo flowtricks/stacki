@@ -509,3 +509,145 @@ function groupOf(groups: ReturnType<typeof readVariantGroups>, controller: strin
   assert.ok(group, `no group ${controller}`);
   return group;
 }
+
+test('switchController: options both controllers name keep their state; the rest are allowed', () => {
+  // `disabled` is allowed for element=button and not for element=link; variant also has a `link`.
+  const output = edited(BUTTON, { kind: 'switchController', controller: 'element', to: 'variant', prop: 'disabled' });
+  assert.deepEqual(
+    groupOf(readVariantGroups(output), 'variant').options.map((option) => [option.value, option.rules.find((rule) => rule.prop === 'disabled')?.state]),
+    [
+      ['main', 'optional'],
+      ['link', 'forbidden'],
+      ['play', 'optional'],
+      ['close', 'optional'],
+      ['arrow', 'optional'],
+    ],
+  );
+  // A Required state carries over as Required.
+  const required = edited(BUTTON, { kind: 'setRule', controller: 'element', option: 'link', prop: 'href', state: 'required' });
+  const switched = edited(required, { kind: 'switchController', controller: 'element', to: 'variant', prop: 'href' });
+  assert.equal(
+    groupOf(readVariantGroups(switched), 'variant')
+      .options.find((option) => option.value === 'link')
+      ?.rules.find((rule) => rule.prop === 'href')?.state,
+    'required',
+  );
+});
+
+const PLAY_LABEL_LINE = '      /** Accessible label. Defaults to `Play` or `Pause`. */\n      label?: string;';
+const CLOSE_LABEL_LINE = '      /** Accessible label. Defaults to `Close`. */\n      label?: string;';
+
+test('setRuleType: one option takes its own type; the others and the comment keep theirs', () => {
+  const output = edited(BUTTON, { kind: 'setRuleType', controller: 'variant', prop: 'label', options: ['close'], type: '"Close" | "Dismiss"' });
+  assert.equal(output, replaced(BUTTON, [[CLOSE_LABEL_LINE, CLOSE_LABEL_LINE.replace('label?: string;', 'label?: "Close" | "Dismiss";')]]));
+  const group = groupOf(readVariantGroups(output), 'variant');
+  const index = group.props.indexOf('label');
+  assert.deepEqual(
+    group.options.map((option) => option.rules[index]?.type),
+    ['', '', 'string', '"Close" | "Dismiss"', 'string'],
+  );
+});
+
+test('setRuleDescription: each named option gets the words; empty words take the comment away', () => {
+  const output = edited(BUTTON, {
+    kind: 'setRuleDescription',
+    controller: 'variant',
+    prop: 'label',
+    options: ['play', 'close'],
+    description: 'Screen reader words.',
+  });
+  assert.equal(
+    output,
+    replaced(BUTTON, [
+      [PLAY_LABEL_LINE, '      /** Screen reader words. */\n      label?: string;'],
+      [CLOSE_LABEL_LINE, '      /** Screen reader words. */\n      label?: string;'],
+    ]),
+  );
+  const cleared = edited(BUTTON, { kind: 'setRuleDescription', controller: 'variant', prop: 'label', options: ['play'], description: '' });
+  assert.equal(cleared, replaced(BUTTON, [[PLAY_LABEL_LINE, '      label?: string;']]));
+});
+
+test('setRuleType and setRuleDescription refuse an option that forbids the prop, a bad type, and change nothing then', () => {
+  assert.equal(refused(BUTTON, { kind: 'setRuleType', controller: 'variant', prop: 'label', options: ['main'], type: 'string' }), 'restricted');
+  assert.equal(refused(BUTTON, { kind: 'setRuleDescription', controller: 'variant', prop: 'label', options: ['link'], description: 'x' }), 'restricted');
+  assert.equal(refused(BUTTON, { kind: 'setRuleType', controller: 'variant', prop: 'label', options: ['play'], type: 'string |' }), 'type');
+  assert.equal(refused(BUTTON, { kind: 'setRuleType', controller: 'variant', prop: 'label', options: ['huge'], type: 'string' }), 'missing');
+  // The same type again is no edit at all.
+  assert.equal(edited(BUTTON, { kind: 'setRuleType', controller: 'variant', prop: 'label', options: ['play'], type: 'string' }), BUTTON);
+});
+
+// A member written for several options (the Lumos Select's `variant: "month" | "day" | "state"`).
+const SELECT = fs.readFileSync('test/fixtures/lumos/components/form/Select.astro', 'utf8');
+const SHARED = '    | {\n        variant: "month" | "day" | "state";\n        options?: never;\n        from?: never;\n        to?: never;\n      }';
+
+test('a member of several options reads as one option each, with the same rules', () => {
+  assert.ok(SELECT.includes(SHARED), 'the fixture holds the shared member');
+  const group = groupOf(readVariantGroups(SELECT), 'variant');
+  assert.deepEqual(
+    group.options.map((option) => [option.value, option.fallback, option.rules.map((rule) => rule.state).join(' ')]),
+    [
+      ['list', true, 'required forbidden forbidden'],
+      ['month', false, 'forbidden forbidden forbidden'],
+      ['day', false, 'forbidden forbidden forbidden'],
+      ['state', false, 'forbidden forbidden forbidden'],
+      ['year', false, 'forbidden optional optional'],
+    ],
+  );
+});
+
+test('an edit to one option of a shared member splits it first, in the same write; the rest keep their member', () => {
+  const output = edited(SELECT, { kind: 'setRule', controller: 'variant', option: 'day', prop: 'from', state: 'optional' });
+  const member = (value: string, from: string) =>
+    `    | {\n        variant: "${value}";\n        options?: never;\n        from?: ${from};\n        to?: never;\n      }`;
+  assert.equal(output, replaced(SELECT, [[SHARED, [member('month', 'never'), member('day', 'number'), member('state', 'never')].join('\n')]]));
+  // An edit that changes nothing leaves the shared member as written.
+  assert.equal(edited(SELECT, { kind: 'setRule', controller: 'variant', option: 'day', prop: 'from', state: 'forbidden' }), SELECT);
+});
+
+test('an optional controller shared by several options: the first is the fallback, and only it keeps the question mark when split', () => {
+  const source = component(
+    [
+      'type Props =',
+      '  | { tone?: "calm" | "soft"; icon?: never }',
+      '  | { tone: "loud"; icon?: string };',
+      'const { tone = "calm", icon } = Astro.props;',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    groupOf(readVariantGroups(source), 'tone').options.map((option) => [option.value, option.fallback]),
+    [
+      ['calm', true],
+      ['soft', false],
+      ['loud', false],
+    ],
+  );
+  const output = edited(source, { kind: 'setRule', controller: 'tone', option: 'soft', prop: 'icon', state: 'optional' });
+  assert.equal(
+    output,
+    replaced(source, [['  | { tone?: "calm" | "soft"; icon?: never }', '  | { tone?: "calm"; icon?: never }\n  | { tone: "soft"; icon?: string }']]),
+  );
+});
+
+test('the first group of an interface writes it as a type, keeping its body, in the same write', () => {
+  const source = component(
+    [
+      'interface Props extends HTMLAttributes<"div"> {',
+      '  /** Look. */',
+      '  tone?: "calm" | "loud";',
+      '  icon?: string;',
+      '}',
+      'const { tone = "calm", icon } = Astro.props;',
+    ].join('\n'),
+  );
+  const output = edited(source, { kind: 'attachProp', controller: 'tone', prop: 'icon', options: ['loud'] });
+  assert.ok(output.startsWith('---\ntype Props = HTMLAttributes<"div"> & {\n'), output);
+  const group = groupOf(readVariantGroups(output), 'tone');
+  assert.equal(group.editing.kind, 'editable');
+  assert.deepEqual(
+    group.options.map((option) => [option.value, option.rules.find((rule) => rule.prop === 'icon')?.state]),
+    [
+      ['calm', 'forbidden'],
+      ['loud', 'optional'],
+    ],
+  );
+});

@@ -32,7 +32,13 @@ export const messages = {
   'componentProps.default.useControl': 'Utiliser le contrôle de valeur par défaut',
   'componentProps.default.value': 'Valeur par défaut',
   'componentProps.default.writeExpression': 'Écrire une expression par défaut',
+  'componentProps.defaults.badCode': 'La valeur par défaut de {value} n’est pas du code valide.', // review
+  'componentProps.defaults.computed': 'Calculé', // review
+  'componentProps.defaults.conditional': 'Définir par conditions', // review
   'componentProps.defaults.discard': 'Annuler les modifications',
+  'componentProps.defaults.entryRead': 'Le code lit {value} directement dans {name}. Modifiez-le dans le source.', // review
+  'componentProps.defaults.missingTable': '{name} n’a pas de valeurs par défaut par option à modifier.', // review
+  'componentProps.defaults.perOption': 'Commencez chaque groupe par {controller} et une option.', // review
   'componentProps.defaults.return': 'Revenir aux valeurs par défaut',
   'componentProps.defaults.saveFailed': 'Impossible d’enregistrer les valeurs par défaut du composant.',
   'componentProps.defaults.saved': 'Valeurs par défaut enregistrées dans ce projet.',
@@ -121,6 +127,7 @@ export const messages = {
   }, // review
   'componentProps.type.attributesNote': 'Une propriété d’attributs se crée depuis un élément : ouvrez le point de liaison de ses attributs.',
   'componentProps.type.codeType': 'Type de code',
+  'componentProps.type.controllerKind': 'Ses options décident de son genre', // review
   'componentProps.type.defaultCleared': 'La valeur par défaut a été effacée : elle ne correspond pas à « {kind} ».',
   'componentProps.type.kind': 'Genre', // review
   'componentProps.type.noType': 'Aucun type',
@@ -139,6 +146,7 @@ export const messages = {
   'componentProps.variants.conditional': 'Conditionnelle', // review
   'componentProps.variants.controlledBy': 'Contrôlé par', // review
   'componentProps.variants.duplicateOption': 'Une option {value} existe déjà.', // review
+  'componentProps.variants.forbiddenPassed': '{file} transmet {name} avec {controller} {value}. Modifiez d’abord cette instance.', // review
   'componentProps.variants.lastOptions': 'Gardez au moins deux options.', // review
   'componentProps.variants.missingGroup': 'Aucune règle de variante n’est contrôlée par {name}.', // review
   'componentProps.variants.missingOption': 'L’option {value} n’existe pas.', // review
@@ -148,9 +156,13 @@ export const messages = {
   'componentProps.variants.noRuntimeType': 'Le type d’exécution du composant ne peut pas recevoir de nouvelle propriété ici.', // review
   'componentProps.variants.noType': '{name} n’a pas de type à autoriser. Donnez-lui d’abord un type.', // review
   'componentProps.variants.none': 'Aucun', // review
+  'componentProps.variants.notAllowedThere': '{name} n’est pas autorisé pour {value}.', // review
+  'componentProps.variants.optionDetails': 'Réglages de {value}', // review
   'componentProps.variants.optionInCode':
     'Le code du composant utilise {value} d’une façon que Stacki ne peut pas mettre à jour. Modifiez-le dans le code source.', // review
+  'componentProps.variants.optionKind': 'Genre pour {value}', // review
   'componentProps.variants.optionPassed': '{file} transmet {value} comme {name}. Modifiez d’abord cette instance.', // review
+  'componentProps.variants.optionTooltip': 'Info-bulle pour {value}', // review
   'componentProps.variants.optionsLimit': 'Une propriété peut avoir au plus {max} options.', // review
   'componentProps.variants.readOnly': 'Les règles de variante contrôlées par {name} ne peuvent être modifiées que dans le code source.', // review
   'componentProps.variants.reason.nested': 'Imbriqué', // review
@@ -163,4 +175,6 @@ export const messages = {
   'componentProps.variants.state.forbidden': 'Non autorisé', // review
   'componentProps.variants.state.optional': 'Autorisé', // review
   'componentProps.variants.state.required': 'Obligatoire', // review
+  'componentProps.variants.switchForbidsAll': 'Aucune option de {name} n’autoriserait cette propriété.', // review
+  'componentProps.variants.varies': 'Variable', // review
 } as const satisfies CatalogOf<MessageKey>;

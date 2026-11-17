@@ -32,7 +32,13 @@ export const messages = {
   'componentProps.default.useControl': 'Usar o controle de valor padrão',
   'componentProps.default.value': 'Valor padrão',
   'componentProps.default.writeExpression': 'Escrever uma expressão padrão',
+  'componentProps.defaults.badCode': 'O padrão de {value} não é um código válido.', // review
+  'componentProps.defaults.computed': 'Calculado', // review
+  'componentProps.defaults.conditional': 'Definir por condições', // review
   'componentProps.defaults.discard': 'Descartar alterações',
+  'componentProps.defaults.entryRead': 'O código lê {value} de {name} diretamente. Altere no código-fonte.', // review
+  'componentProps.defaults.missingTable': '{name} não tem padrões por opção para editar.', // review
+  'componentProps.defaults.perOption': 'Comece cada grupo com {controller} e uma opção.', // review
   'componentProps.defaults.return': 'Voltar aos padrões',
   'componentProps.defaults.saveFailed': 'Não foi possível salvar os padrões do componente.',
   'componentProps.defaults.saved': 'Padrões salvos neste projeto.',
@@ -121,6 +127,7 @@ export const messages = {
   }, // review
   'componentProps.type.attributesNote': 'Uma propriedade de atributos nasce de um elemento: abra o ponto de vínculo dos atributos dele.',
   'componentProps.type.codeType': 'Tipo de código',
+  'componentProps.type.controllerKind': 'Suas opções definem o tipo', // review
   'componentProps.type.defaultCleared': 'O padrão foi limpo: ele não se encaixa em “{kind}”.',
   'componentProps.type.kind': 'Tipo', // review
   'componentProps.type.noType': 'Sem tipo',
@@ -139,6 +146,7 @@ export const messages = {
   'componentProps.variants.conditional': 'Condicional', // review
   'componentProps.variants.controlledBy': 'Controlado por', // review
   'componentProps.variants.duplicateOption': 'Já existe uma opção {value}.', // review
+  'componentProps.variants.forbiddenPassed': '{file} passa {name} com {controller} {value}. Altere essa instância primeiro.', // review
   'componentProps.variants.lastOptions': 'Mantenha pelo menos duas opções.', // review
   'componentProps.variants.missingGroup': 'Nenhuma regra de variante é controlada por {name}.', // review
   'componentProps.variants.missingOption': 'Não existe a opção {value}.', // review
@@ -148,8 +156,12 @@ export const messages = {
   'componentProps.variants.noRuntimeType': 'O tipo de execução do componente não aceita uma nova propriedade aqui.', // review
   'componentProps.variants.noType': '{name} não tem um tipo para permitir. Dê um tipo a ela primeiro.', // review
   'componentProps.variants.none': 'Nenhum', // review
+  'componentProps.variants.notAllowedThere': '{name} não é permitido para {value}.', // review
+  'componentProps.variants.optionDetails': 'Configurações de {value}', // review
   'componentProps.variants.optionInCode': 'O código do componente usa {value} de um jeito que o Stacki não consegue atualizar. Altere no código-fonte.', // review
+  'componentProps.variants.optionKind': 'Tipo para {value}', // review
   'componentProps.variants.optionPassed': '{file} passa {value} como {name}. Altere essa instância primeiro.', // review
+  'componentProps.variants.optionTooltip': 'Dica para {value}', // review
   'componentProps.variants.optionsLimit': 'Uma propriedade pode ter no máximo {max} opções.', // review
   'componentProps.variants.readOnly': 'As regras de variante controladas por {name} só podem ser alteradas no código-fonte.', // review
   'componentProps.variants.reason.nested': 'Aninhado', // review
@@ -162,4 +174,6 @@ export const messages = {
   'componentProps.variants.state.forbidden': 'Não permitido', // review
   'componentProps.variants.state.optional': 'Permitido', // review
   'componentProps.variants.state.required': 'Obrigatório', // review
+  'componentProps.variants.switchForbidsAll': 'Nenhuma opção de {name} permitiria esta propriedade.', // review
+  'componentProps.variants.varies': 'Varia', // review
 } as const satisfies CatalogOf<MessageKey>;

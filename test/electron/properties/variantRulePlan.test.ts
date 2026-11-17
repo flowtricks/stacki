@@ -150,3 +150,34 @@ test('removing an option or a prop an instance passes is refused, and nothing is
     assert.ok(quiet.ok, quiet.ok ? '' : quiet.error.message);
   });
 });
+
+test('forbidding a prop an instance passes with that option is refused, naming the file; other instances do not block it', () => {
+  project((files) => {
+    fs.writeFileSync(
+      files.page,
+      PAGE.replace('<Button variant="arrow" direction="back" />', '<Button variant="arrow" label="Back" />\n<Button variant="close" />'),
+    );
+    const before = fs.readFileSync(files.page, 'utf8');
+    const component = fs.readFileSync(files.component, 'utf8');
+    const forbid = edit(files, { kind: 'variantRules', edit: { kind: 'setRule', controller: 'variant', option: 'arrow', prop: 'label', state: 'forbidden' } });
+    assert.equal(forbid.ok, false);
+    assert.equal(forbid.ok ? '' : forbid.error.code, 'in-use');
+    assert.match(forbid.ok ? '' : forbid.error.message, /index\.astro/);
+    assert.equal(fs.readFileSync(files.page, 'utf8'), before);
+    assert.equal(fs.readFileSync(files.component, 'utf8'), component);
+    // `close` instances pass no label, so forbidding it there is fine.
+    const close = edit(files, { kind: 'variantRules', edit: { kind: 'setRule', controller: 'variant', option: 'close', prop: 'label', state: 'forbidden' } });
+    assert.ok(close.ok, close.ok ? '' : close.error.message);
+  });
+});
+
+test('an instance that passes no controller is judged by the fallback option', () => {
+  project((files) => {
+    fs.writeFileSync(files.page, PAGE.replace('<Button>Plain</Button>', '<Button emphasis="secondary">Plain</Button>'));
+    const forbid = edit(files, {
+      kind: 'variantRules',
+      edit: { kind: 'setRule', controller: 'variant', option: 'main', prop: 'emphasis', state: 'forbidden' },
+    });
+    assert.equal(forbid.ok ? '' : forbid.error.code, 'in-use');
+  });
+});

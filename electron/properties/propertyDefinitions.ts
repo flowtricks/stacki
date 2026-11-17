@@ -31,6 +31,8 @@ import {
 import type { PropertySyntax, SourceEdit } from './propertySyntax';
 import { editVariantRules } from './variantRuleEdits';
 import { readVariantSyntax, variantGroupsOf } from './variantRuleModel';
+import { readVariantDefaults } from './variantDefaults';
+import { orderDefaultReads } from './defaultOrder';
 import { bindingEdits, memberComment, memberEdits, sameDeclaration, sameProperty } from './propertyMemberEdits';
 import type { DeclaredFields } from './propertyMemberEdits';
 import { declareInHost } from './propertyHosts';
@@ -58,6 +60,7 @@ export function readComponentProperties(source: string): ComponentProperties {
     frontmatter: definitions.document.frontmatter,
     advanced: definitions.advanced,
     variantGroups: variantGroupsOf(readVariantSyntax(definitions.document)),
+    variantDefaults: readVariantDefaults(definitions.document),
   };
 }
 
@@ -215,6 +218,19 @@ function localRename(source: string, change: PropertyChange): PropertyRename | u
 }
 
 function editDefinition(source: string, change: PropertyChange): Result<string> {
+  const edited = editDefinitionText(source, change);
+  // A default that reads another prop (a conditional default) needs that prop destructured first.
+  if (edited.ok && change.kind === 'save' && edited.value !== source) {
+    return orderDefaultReads(
+      edited.value,
+      change.property.name,
+      readComponentProperties(edited.value).properties.map((property) => property.name),
+    );
+  }
+  return edited;
+}
+
+function editDefinitionText(source: string, change: PropertyChange): Result<string> {
   const definitions = readDefinitions(source);
   if (change.kind === 'source') {
     const error = syntaxError(change.frontmatter);

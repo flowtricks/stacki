@@ -33,7 +33,13 @@ export const messages = {
   'componentProps.default.useControl': 'Steuerelement für den Standardwert verwenden',
   'componentProps.default.value': 'Standardwert',
   'componentProps.default.writeExpression': 'Standardausdruck schreiben',
+  'componentProps.defaults.badCode': 'Der Standard für {value} ist kein gültiger Code.', // review
+  'componentProps.defaults.computed': 'Berechnet', // review
+  'componentProps.defaults.conditional': 'Nach Bedingungen festlegen', // review
   'componentProps.defaults.discard': 'Änderungen verwerfen',
+  'componentProps.defaults.entryRead': 'Der Code liest {value} direkt aus {name}. Ändere es im Quellcode.', // review
+  'componentProps.defaults.missingTable': '{name} hat keine Standards pro Option zum Bearbeiten.', // review
+  'componentProps.defaults.perOption': 'Beginne jede Gruppe mit {controller} und einer Option.', // review
   'componentProps.defaults.return': 'Zurück zu den Standardwerten',
   'componentProps.defaults.saveFailed': 'Die Standardwerte der Komponente konnten nicht gespeichert werden.',
   'componentProps.defaults.saved': 'Standardwerte in diesem Projekt gespeichert.',
@@ -123,6 +129,7 @@ export const messages = {
   }, // review
   'componentProps.type.attributesNote': 'Eine Attribut-Eigenschaft entsteht aus einem Element: Öffne den Bindepunkt seiner Attribute.',
   'componentProps.type.codeType': 'Codetyp',
+  'componentProps.type.controllerKind': 'Seine Optionen bestimmen die Art', // review
   'componentProps.type.defaultCleared': 'Der Standardwert wurde gelöscht: Er passt nicht zu „{kind}“.',
   'componentProps.type.kind': 'Art', // review
   'componentProps.type.noType': 'Kein Typ',
@@ -141,6 +148,7 @@ export const messages = {
   'componentProps.variants.conditional': 'Bedingt', // review
   'componentProps.variants.controlledBy': 'Gesteuert von', // review
   'componentProps.variants.duplicateOption': 'Es gibt bereits eine Option {value}.', // review
+  'componentProps.variants.forbiddenPassed': '{file} übergibt {name} mit {controller} {value}. Ändere zuerst diese Instanz.', // review
   'componentProps.variants.lastOptions': 'Behalte mindestens zwei Optionen.', // review
   'componentProps.variants.missingGroup': 'Keine Variantenregeln werden von {name} gesteuert.', // review
   'componentProps.variants.missingOption': 'Es gibt keine Option {value}.', // review
@@ -150,8 +158,12 @@ export const messages = {
   'componentProps.variants.noRuntimeType': 'Der Laufzeittyp der Komponente kann hier keine neue Eigenschaft aufnehmen.', // review
   'componentProps.variants.noType': '{name} hat keinen Typ, der erlaubt werden kann. Gib ihr zuerst einen Typ.', // review
   'componentProps.variants.none': 'Keine', // review
+  'componentProps.variants.notAllowedThere': '{name} ist für {value} nicht erlaubt.', // review
+  'componentProps.variants.optionDetails': 'Einstellungen für {value}', // review
   'componentProps.variants.optionInCode': 'Der Code der Komponente verwendet {value} auf eine Weise, die Stacki nicht anpassen kann. Ändere es im Quellcode.', // review
+  'componentProps.variants.optionKind': 'Art für {value}', // review
   'componentProps.variants.optionPassed': '{file} übergibt {value} als {name}. Ändere zuerst diese Instanz.', // review
+  'componentProps.variants.optionTooltip': 'Tooltip für {value}', // review
   'componentProps.variants.optionsLimit': 'Eine Eigenschaft kann höchstens {max} Optionen haben.', // review
   'componentProps.variants.readOnly': 'Die von {name} gesteuerten Variantenregeln lassen sich nur im Quellcode ändern.', // review
   'componentProps.variants.reason.nested': 'Verschachtelt', // review
@@ -164,4 +176,6 @@ export const messages = {
   'componentProps.variants.state.forbidden': 'Nicht erlaubt', // review
   'componentProps.variants.state.optional': 'Erlaubt', // review
   'componentProps.variants.state.required': 'Erforderlich', // review
+  'componentProps.variants.switchForbidsAll': 'Keine Option von {name} würde diese Eigenschaft erlauben.', // review
+  'componentProps.variants.varies': 'Variiert', // review
 } as const satisfies CatalogOf<MessageKey>;
