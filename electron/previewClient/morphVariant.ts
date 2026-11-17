@@ -8,7 +8,8 @@
 //
 // Renders are cached per override while one dropdown is open, so moving the
 // pointer back over an option shows it at once; the cache is bounded and is
-// dropped whenever the preview ends or the page changes underneath it.
+// dropped whenever the preview ends or the page changes underneath it. One
+// render is on its way at a time, with only the latest option waiting behind it.
 
 import { assert } from '../../shared/core/assert';
 import { parseVariantMessage, VARIANT_HEADER, variantHeaderValue, type VariantOverride } from '../../shared/page/variantOverride';
@@ -62,8 +63,66 @@ export function createVariantPreview(host: VariantPreviewHost) {
     endHold?.();
     endHold = undefined;
   };
+  // One render on its way at most, and the latest option waiting behind it. Why: a
+  // large page renders in about a second (more in workerd), and the pointer crossing
+  // a list of seven options asked for seven renders at once, which the dev server ran
+  // side by side while the option the pointer rested on waited behind all of them.
+  // An option passed over is never asked for; the one the pointer rests on is next.
+  // `asked` is the generation the render paints for: hovering back to the option on its
+  // way makes it the one on show again.
+  let flight: { readonly header: string; readonly abort: AbortController; asked: number } | undefined;
+  let waiting: string | undefined;
+  // `landed` runs once the render is done with, so the option waiting behind it can fly.
+  const fly = (header: string, landed: () => void): void => {
+    assert(flight === undefined, 'variant preview: one render on its way at most');
+    const abort = new AbortController();
+    const trip = { header, abort, asked: generation };
+    flight = trip;
+    void fetch(location.href, { cache: 'no-store', headers: { [VARIANT_HEADER]: header }, signal: abort.signal })
+      .then((response) => (response.ok ? response.text() : undefined))
+      .then((html) => {
+        if (html === undefined || html.length > VARIANT_PREVIEW_LIMITS.htmlCharsMax) {
+          return;
+        }
+        if (flight !== trip) {
+          return; // The preview ended while this was on its way: its cache is gone, and so is it.
+        }
+        if (renders.size < VARIANT_PREVIEW_LIMITS.rendersMax) {
+          renders.set(header, html);
+        }
+        if (trip.asked === generation) {
+          shown = true;
+          host.paint(html);
+        }
+      })
+      .catch(() => undefined) // A failed or aborted preview shows nothing new; the page stays as it is.
+      .finally(() => {
+        if (flight !== trip) {
+          return; // Ended while on its way (`land` dropped it); the next show flies on its own.
+        }
+        flight = undefined;
+        landed();
+      });
+  };
+  const flyWaiting = (): void => {
+    const next = waiting;
+    waiting = undefined;
+    if (next === undefined) {
+      return;
+    }
+    assert(next === current, 'variant preview: only the option on show waits');
+    fly(next, flyWaiting);
+  };
+  // Ends what is on its way: a preview that ended has nothing left to ask for.
+  const land = (): void => {
+    waiting = undefined;
+    flight?.abort.abort();
+    flight = undefined;
+  };
+
   const end = (): void => {
     dropHold();
+    land();
     generation++;
     current = undefined;
     renders.clear();
@@ -76,30 +135,28 @@ export function createVariantPreview(host: VariantPreviewHost) {
   const show = (override: VariantOverride): void => {
     dropHold();
     generation++;
-    const asked = generation;
     const header = variantHeaderValue(override);
     current = header;
     const cached = renders.get(header);
     if (cached !== undefined) {
+      waiting = undefined;
       shown = true;
       host.paint(cached);
       return;
     }
-    void fetch(location.href, { cache: 'no-store', headers: { [VARIANT_HEADER]: header } })
-      .then((response) => (response.ok ? response.text() : undefined))
-      .then((html) => {
-        if (html === undefined || html.length > VARIANT_PREVIEW_LIMITS.htmlCharsMax) {
-          return;
-        }
-        if (renders.size < VARIANT_PREVIEW_LIMITS.rendersMax) {
-          renders.set(header, html);
-        }
-        if (asked === generation) {
-          shown = true;
-          host.paint(html);
-        }
-      })
-      .catch(() => undefined); // A failed preview shows nothing new; the page stays as it is.
+    if (flight === undefined) {
+      fly(header, flyWaiting);
+      return;
+    }
+    // The render on its way is kept (its option may be hovered again, and it is cached
+    // when it lands) but is no longer painted: its generation has passed.
+    if (flight.header === header) {
+      flight.asked = generation;
+      waiting = undefined;
+    } else {
+      waiting = header;
+    }
+    assert(waiting === undefined || waiting === current, 'variant preview: only the option on show waits');
   };
 
   return {

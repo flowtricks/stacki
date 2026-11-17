@@ -15,7 +15,10 @@
 // fake `Astro.props`, called inside the middleware's `next` (which is where
 // Astro renders) and outside it. markCanvasSourceFile is smoke-tested on a
 // component on disk: the statement leads its frontmatter, a page never gets
-// one, and the file itself is untouched.
+// one, and the file itself is untouched. The Cloudflare adapter's case (the
+// component renders in workerd, whose global object never holds the scope) runs
+// the statement with the scope taken off the global and the header on a real
+// `Headers` as `Astro.request` carries it, good and each bad shape.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,6 +34,7 @@ const {
   withVariantOverride,
   VARIANT_HEADER,
   VARIANT_LIMITS,
+  VARIANT_SCOPE_GLOBAL,
 } = require('#dist/shared/page/variantOverride.js');
 const { markCanvasSourceFile, markSourceFile, variantScopeMiddleware } = require('#dist/electron/previewServer/previewMarkers.js');
 
@@ -100,6 +104,69 @@ test('the statement changes the target instance only, and only inside its reques
   const Astro = { props: { ...malformed } };
   variantScopeMiddleware({ headers: { [VARIANT_HEADER]: 'garbage' } }, {}, () => run(Astro));
   assert.deepEqual(Astro.props, malformed, 'a malformed header renders as written');
+});
+
+// Runs the statement as a component in another runtime would (workerd, for a project on
+// the Cloudflare adapter): no scope on the global, the header on the request alone.
+function renderElsewhere(props, header) {
+  const scope = Reflect.get(globalThis, VARIANT_SCOPE_GLOBAL);
+  assert.ok(scope, 'the dev server module installed its scope');
+  Reflect.deleteProperty(globalThis, VARIANT_SCOPE_GLOBAL);
+  try {
+    const run = new Function('Astro', variantOverrideStatement(HEADING));
+    const headers = new Headers(header === undefined ? {} : { [VARIANT_HEADER]: header });
+    const Astro = { props: { ...props }, request: { headers } };
+    run(Astro);
+    return Astro.props;
+  } finally {
+    Reflect.set(globalThis, VARIANT_SCOPE_GLOBAL, scope);
+  }
+}
+
+test('in a runtime without the scope (workerd), the statement takes the override from the request header', () => {
+  const instance = { 'data-avb-p': '3', variant: 'h2' };
+  assert.deepEqual(renderElsewhere(instance, variantHeaderValue(good)), { 'data-avb-p': '3', variant: 'h1' }, 'the hovered option renders');
+  assert.deepEqual(renderElsewhere({ 'data-avb-p': '3', size: 2 }, variantHeaderValue({ ...good, prop: 'size', value: 0 })), { 'data-avb-p': '3', size: 0 });
+  assert.deepEqual(renderElsewhere(instance, variantHeaderValue({ ...good, value: undefined })), { 'data-avb-p': '3' }, 'unset removes the prop');
+  assert.deepEqual(renderElsewhere(instance, undefined), instance, 'a request without the header renders as written');
+  assert.deepEqual(renderElsewhere(instance, variantHeaderValue({ ...good, target: '4' })), instance, 'another instance is untouched');
+  assert.deepEqual(
+    renderElsewhere(instance, variantHeaderValue({ ...good, component: 'src/components/Other.astro' })),
+    instance,
+    'another component is untouched',
+  );
+  const encoded = (value) => encodeURIComponent(JSON.stringify(value));
+  for (const [header, why] of [
+    ['garbage', 'not JSON'],
+    ['%E0%A4%A', 'a broken encoding'],
+    [encoded({ ...good, prop: '__proto__' }), 'a prototype key'],
+    [encoded({ ...good, prop: 'constructor' }), 'a prototype key'],
+    [encoded({ ...good, prop: 'not a name' }), 'not a prop name'],
+    [encoded({ ...good, prop: 'x'.repeat(VARIANT_LIMITS.propCharsMax + 1) }), 'a prop name past its bound'],
+    [encoded({ ...good, value: true }), 'a value of another type'],
+    [encoded({ ...good, value: 'x'.repeat(VARIANT_LIMITS.valueCharsMax + 1) }), 'a value past its bound'],
+    [encoded({ ...good, value: 'h1', pad: 'x'.repeat(VARIANT_LIMITS.headerCharsMax) }), 'a header past its bound'],
+    [encoded(['h1']), 'not an object'],
+  ]) {
+    assert.deepEqual(renderElsewhere(instance, header), instance, `${why} renders as written`);
+  }
+  assert.equal(Object.prototype.variant, undefined, 'nothing reached the prototype');
+});
+
+test('with the scope on the global, the statement never reads the request headers', () => {
+  // Astro warns on every read of a prerendered page's headers in Node, so the scope's runtime must not read them.
+  const run = new Function('Astro', variantOverrideStatement(HEADING));
+  const request = {
+    get headers() {
+      throw new Error('the headers were read');
+    },
+  };
+  const Astro = { props: { 'data-avb-p': '3', variant: 'h2' }, request };
+  variantScopeMiddleware({ headers: { [VARIANT_HEADER]: variantHeaderValue(good) } }, {}, () => run(Astro));
+  assert.deepEqual(Astro.props, { 'data-avb-p': '3', variant: 'h1' });
+  const plain = { props: { 'data-avb-p': '3', variant: 'h2' }, request };
+  variantScopeMiddleware({ headers: {} }, {}, () => run(plain));
+  assert.deepEqual(plain.props, { 'data-avb-p': '3', variant: 'h2' });
 });
 
 test('withVariantOverride leads the frontmatter, or adds one', () => {

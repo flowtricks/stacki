@@ -145,15 +145,46 @@ export const VARIANT_SCOPE_GLOBAL = '__avbVariantScope';
  * of this component's instance at the override's target, that instance's prop
  * becomes the override's value before the frontmatter reads `Astro.props`.
  * One line, so the component's own line numbers move by one at most.
+ *
+ * The override comes from the dev server's scope when the component renders in
+ * the dev server's own process. A project on the Cloudflare adapter (Astro 7,
+ * @astrojs/cloudflare 14) renders in workerd, a runtime of its own whose global
+ * object never holds that scope: there the hovered option was never applied and
+ * the canvas kept the written value. In that runtime the statement reads the
+ * same header from the request the worker was handed, and checks it as
+ * parseVariantOverride does, since it arrives over HTTP. The header is read only
+ * when the scope is absent: Astro warns on every read of a prerendered page's
+ * headers in Node, where the scope always answers.
  */
 export function variantOverrideStatement(component: string): string {
   assert(component.length > 0, 'variantOverrideStatement: names a component');
   assert(component.length <= VARIANT_LIMITS.pathCharsMax, 'variantOverrideStatement: the path is bounded');
   const scope = `globalThis[${JSON.stringify(VARIANT_SCOPE_GLOBAL)}]`;
-  return (
-    `{ const __avbVariant = ${scope} && ${scope}.getStore(); const __avbPath = Astro.props["data-avb-p"]; ` +
+  const statement =
+    `{ const __avbScope = ${scope}; let __avbVariant = __avbScope && __avbScope.getStore(); ` +
+    `if (!__avbScope) { ${variantHeaderReader()} } ` +
+    `const __avbPath = Astro.props["data-avb-p"]; ` +
     `if (__avbVariant && __avbVariant.component === ${JSON.stringify(component)} && typeof __avbPath === "string" && __avbPath.split(" ")[0] === __avbVariant.target) { ` +
-    `if (__avbVariant.value === undefined) { delete Astro.props[__avbVariant.prop]; } else { Astro.props[__avbVariant.prop] = __avbVariant.value; } } }`
+    `if (__avbVariant.value === undefined) { delete Astro.props[__avbVariant.prop]; } else { Astro.props[__avbVariant.prop] = __avbVariant.value; } } }`;
+  assert(!statement.includes('\n'), 'variantOverrideStatement: one line');
+  return statement;
+}
+
+// The override from the request's own header, for a runtime with no scope: the
+// checks parseVariantOverride makes, written out, because a component module in
+// another runtime cannot import this file. Component and target need no check
+// of their own: the statement compares both with strings it was compiled with.
+function variantHeaderReader(): string {
+  const forbidden = JSON.stringify([...FORBIDDEN_PROPS]);
+  const valid =
+    `__avbParsed && typeof __avbParsed === "object" && typeof __avbParsed.prop === "string" && __avbParsed.prop.length <= ${VARIANT_LIMITS.propCharsMax} && ` +
+    `${PROP_NAME.toString()}.test(__avbParsed.prop) && !${forbidden}.includes(__avbParsed.prop) && ` +
+    `(__avbParsed.value === undefined || (typeof __avbParsed.value === "string" && __avbParsed.value.length <= ${VARIANT_LIMITS.valueCharsMax}) || ` +
+    `(typeof __avbParsed.value === "number" && Number.isFinite(__avbParsed.value)))`;
+  return (
+    `try { const __avbHeader = Astro.request && Astro.request.headers ? Astro.request.headers.get(${JSON.stringify(VARIANT_HEADER)}) : null; ` +
+    `if (typeof __avbHeader === "string" && __avbHeader.length <= ${VARIANT_LIMITS.headerCharsMax}) { ` +
+    `const __avbParsed = JSON.parse(decodeURIComponent(__avbHeader)); if (${valid}) { __avbVariant = __avbParsed; } } } catch { __avbVariant = undefined; }`
   );
 }
 

@@ -9,7 +9,8 @@
 // Method: the canvas half (electron/previewClient/morphVariant.ts), bundled with esbuild
 // and run with a recorded fetch and host. Each case reads which header a show sends, the
 // headers a pull of the page would carry while the preview is on show, and that cancel,
-// commit and a malformed message leave pulls plain again.
+// commit and a malformed message leave pulls plain again. The single-flight cases swap in a
+// fetch the test answers by hand, so they can count the renders on their way at any moment.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -165,4 +166,74 @@ test('a malformed message is not a preview and changes nothing', () => {
   assert.equal(preview.receive({ type: 'avb:something-else' }), false);
   assert.deepEqual(fetched, []);
   assert.deepEqual(preview.headers(), {});
+});
+
+// A fetch the test answers by hand: each request waits until `answer` is called for it.
+function deferFetch() {
+  const requests = [];
+  global.fetch = (url, init) =>
+    new Promise((resolve, reject) => {
+      const request = { header: init.headers[VARIANT_HEADER], aborted: false, answered: false };
+      init.signal.addEventListener('abort', () => {
+        request.aborted = true;
+        reject(new Error('aborted'));
+      });
+      request.answer = () => {
+        request.answered = true;
+        resolve({ ok: true, text: () => Promise.resolve(`<h1 class="${request.header}"></h1>`) });
+      };
+      requests.push(request);
+    });
+  const open = () => requests.filter((request) => !request.answered && !request.aborted);
+  return { requests, open };
+}
+const showValue = (preview, value) => preview.receive({ type: 'avb:variant', override: { ...OVERRIDE, value } });
+
+test('the pointer crossing seven options keeps one render on its way, and the last option is the one painted', async () => {
+  const { preview, painted } = setup();
+  const { requests, open } = deferFetch();
+  const values = ['0', '1', '2', '3', '4', '5', '6'];
+  for (const value of values) {
+    showValue(preview, value);
+    assert.ok(open().length <= 1, `at most one render on its way after ${value}`);
+  }
+  assert.equal(requests.length, 1, 'the options passed over are never asked for');
+  requests[0].answer();
+  await settle();
+  assert.deepEqual(painted, [], 'the first option landed after the pointer moved on: not painted');
+  assert.equal(requests.length, 2, 'the option the pointer rests on is asked for next');
+  assert.equal(requests[1].header, variantHeaderValue({ ...OVERRIDE, value: '6' }), 'last wins');
+  requests[1].answer();
+  await settle();
+  assert.equal(painted.length, 1);
+  assert.match(painted[0], /%226%22/, 'the painted rendering is the last option');
+  assert.equal(open().length, 0, 'nothing left on its way');
+});
+
+test('hovering back to the option on its way paints it when it lands, and asks for nothing more', async () => {
+  const { preview, painted } = setup();
+  const { requests } = deferFetch();
+  showValue(preview, 'h1');
+  showValue(preview, 'h3');
+  showValue(preview, 'h1');
+  requests[0].answer();
+  await settle();
+  assert.equal(requests.length, 1, 'h3 stopped waiting when the pointer came back');
+  assert.equal(painted.length, 1, 'h1 is on show again, so its render is painted');
+});
+
+test('cancel stops the render on its way and the one waiting behind it', async () => {
+  const { preview, painted, restored } = setup();
+  const { requests, open } = deferFetch();
+  showValue(preview, 'h1');
+  showValue(preview, 'h3');
+  preview.receive({ type: 'avb:variant-cancel' });
+  assert.equal(requests[0].aborted, true, 'the render on its way is aborted');
+  await settle();
+  assert.equal(requests.length, 1, 'the waiting option is never asked for');
+  assert.equal(open().length, 0);
+  assert.deepEqual(painted, []);
+  assert.equal(restored(), 0, 'nothing was painted, so nothing is put back');
+  showValue(preview, 'h2');
+  assert.equal(requests.length, 2, 'a new show after a cancel flies at once');
 });

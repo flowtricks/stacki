@@ -398,3 +398,34 @@ test('a list that goes away while previewing puts the canvas back', async () => 
   assert.deepEqual(sent.at(-1), { type: 'avb:variant-cancel' });
   preview.dispose();
 });
+
+// The owner's case: a Heading whose `size` is a union of numbers (0 to 6), set to 2.
+const SIZE = { name: 'size', type: 'enum', optional: true, numeric: true, options: ['0', '1', '2', '3', '4', '5', '6'] };
+
+test('a numeric union previews the number it names; the current value and a run across every option ask once at most', async () => {
+  const { preview, sent, tick } = previewHarness();
+  const panel = mount([SIZE], { size: { type: 'expr', value: '2' } }, preview);
+  const trigger = field('size').querySelector('.dd-trigger');
+  await act(async () => trigger.dispatchEvent(pointerInto()));
+  await act(async () => trigger.click());
+  await hover('2');
+  tick();
+  assert.deepEqual(sent, [], 'hovering the value already written asks for nothing');
+  for (const label of ['0', '1', '3', '4', '5', '6']) {
+    await hover(label);
+  }
+  tick();
+  assert.equal(sent.length, 1, 'the run across the options asks for one rendering');
+  assert.deepEqual(sent[0].override, { component: 'src/components/typography/Heading.astro', target: '3', prop: 'size', value: 6 }, 'the last, as a number');
+  key(trigger, 'Escape');
+  assert.deepEqual(sent.at(-1), { type: 'avb:variant-cancel' }, 'Escape reverts the canvas');
+  assert.deepEqual(panel.writes, [], 'no write, so no undo entry');
+  await act(async () => trigger.click());
+  await hover('0');
+  tick();
+  await act(async () => option('0').click());
+  assert.deepEqual(panel.writes, [{ name: 'size', value: { type: 'expr', value: '0' }, immediate: true }], 'the pick is the one write');
+  assert.deepEqual(sent.at(-1), { type: 'avb:variant-commit' });
+  unmount();
+  preview.dispose();
+});
