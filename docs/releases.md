@@ -1,12 +1,15 @@
 # Releasing Desktop, Studio, and create-stacki
 
-> Releasing is the **Release button** (Actions > Release button); [release-runbook.md](./release-runbook.md)
-> has the one-time setup, the stages and what to do when one fails. This file is the history and rules reference.
+> Releasing is `npm run release:ship -- --confirm`; [release-runbook.md](./release-runbook.md) has the
+> stages and what to do when one stops, [release-speed.md](./release-speed.md) the design and its
+> measurements. This file is the history and rules reference.
 
 These are separate publication paths. A successful `Check` run publishes nothing:
 
-- A version tag starts `.github/workflows/release.yml`. Desktop installers, Linux install checks,
-  and the Studio browser test must finish before the draft release becomes public.
+- While the version on `main` is unreleased, every push starts `.github/workflows/candidate.yml`:
+  Desktop installers (signed, notarized), Linux install checks and the Studio browser test, kept as
+  that run's artifacts. A version tag starts `.github/workflows/release.yml`, which publishes exactly
+  those files, and only when Check and the candidate are green on the tag's commit.
 - `.github/workflows/publish-create-stacki.yml` is dispatched from the same tested tag by
   `.github/workflows/release-post.yml` once the desktop release is public.
   See [create-stacki publication](./create-stacki.md) for authentication and registry verification.
