@@ -14,6 +14,7 @@ import { resolveImportPath } from './importPaths';
 import ts from 'typescript';
 import { literalPartValue, typeScope } from '../parse/propModel/propTypes';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { withComputedDefaults } from './computedDefaults';
 
 // Declarations followed from one imported file, the imported ones and those they use.
 const IMPORTED_DECLARATIONS_MAX = 64;
@@ -121,7 +122,7 @@ export function safeSchema(filePath: string, projectPath: string) {
   try {
     const source = readSource(filePath);
     const fields = parsePropSchema(source, importedTypes(source, filePath, projectPath));
-    const schema = resolveIdentifierDefaults(fields, source, filePath, projectPath);
+    const schema = withComputedDefaults(resolveIdentifierDefaults(fields, source, filePath, projectPath), source);
     return {
       schema,
       extendsTag: parseExtendsTag(source) ?? undefined,

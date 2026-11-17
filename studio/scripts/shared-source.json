@@ -212,6 +212,7 @@
     "electron/project/variableWorkspace.ts",
     "electron/properties/componentImports.ts",
     "electron/properties/componentUsage.ts",
+    "electron/properties/computedDefaults.ts",
     "electron/properties/defaultOrder.ts",
     "electron/properties/importPaths.ts",
     "electron/properties/pageTitles.ts",

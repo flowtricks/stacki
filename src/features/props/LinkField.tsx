@@ -51,6 +51,8 @@ interface LinkContext {
 interface LinkFieldProps {
   readonly value?: Attr | undefined;
   readonly context: LinkContext;
+  /** What an unset link falls back to, shown muted in the URL box; "#" when the component says nothing. */
+  readonly placeholder?: string | undefined;
   readonly onChange: (value: Attr, immediate?: boolean) => void;
 }
 function linkTypeContext(context: LinkContext): LinkTypeContext {
@@ -61,7 +63,7 @@ function linkTypeContext(context: LinkContext): LinkTypeContext {
 const NO_PAGES: readonly LinkPage[] = [];
 
 type Commit = (value: string, options?: { readonly immediate: boolean }) => void;
-export default function LinkField({ value, context, onChange }: LinkFieldProps) {
+export default function LinkField({ value, context, placeholder, onChange }: LinkFieldProps) {
   const text = value?.type === 'string' ? value.value : '';
   assert((context.pages?.length ?? 0) <= LIMITS.scanEntriesMax, 'LinkField: page limit exceeded');
   assert((context.sectionIds?.length ?? 0) <= LIMITS.treeNodesMax, 'LinkField: section limit exceeded');
@@ -83,7 +85,13 @@ export default function LinkField({ value, context, onChange }: LinkFieldProps) 
   return (
     <>
       <LinkTypes type={type} setType={setType} />
-      <LinkControl type={type} text={text} context={context} commit={commit} />
+      <LinkControl
+        type={type}
+        text={text}
+        context={context}
+        placeholder={placeholder === undefined || placeholder === '' ? '#' : placeholder}
+        commit={commit}
+      />
     </>
   );
 }
@@ -92,17 +100,19 @@ function LinkControl({
   type,
   text,
   context,
+  placeholder,
   commit,
 }: {
   readonly type: LinkType;
   readonly text: string;
   readonly context: LinkContext;
+  readonly placeholder: string;
   readonly commit: Commit;
 }) {
   const translate = useTranslate();
   switch (type) {
     case 'url':
-      return <input value={text} placeholder="#" spellCheck={false} onChange={(event) => commit(event.target.value)} />;
+      return <input value={text} placeholder={placeholder} spellCheck={false} onChange={(event) => commit(event.target.value)} />;
     case 'page':
       return (
         <LinkPageChooser

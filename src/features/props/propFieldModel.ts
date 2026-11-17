@@ -472,6 +472,12 @@ export function propFieldPlaceholder(field: FieldDefinition, assetContext: Asset
     return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   };
 
+  // A default computed from other props is this instance's answer (branchDefault,
+  // propRules.ts), never its code: `variant === "play" ? "Play" : "Close"` is not
+  // a label. When only the site could tell, nothing is shown rather than a guess.
+  if (field.computedDefault !== undefined) {
+    return branchDefault === undefined ? '' : String(branchDefault);
+  }
   if (field.default !== undefined) {
     return String(field.default);
   }

@@ -50,6 +50,21 @@ export type CodeKind = (typeof CODE_KINDS)[number];
  */
 export const PROP_ITEM_KINDS = ['text', 'number', 'switch', 'choice'] as const;
 export type PropItemKind = (typeof PROP_ITEM_KINDS)[number];
+/**
+ * A default the component computes from its other props, as code an instance
+ * panel weighs for the values one instance sets (src/features/props/propRules.ts):
+ * the `named[variant]` of `label ?? named[variant]`, or a destructure default
+ * such as `variant === "play" ? "Play" : "Close"`. `locals` names the prop each
+ * destructured local holds (`{ variant: "variant", kind: "type" }`), and
+ * `tables` the frontmatter's `const` lookup tables the code indexes, each
+ * option's entry as code (`{ named: { play: 'pressed ? "Pause" : "Play"' } }`).
+ * Main reads it (electron/properties/variantDefaults.ts computedDefaultsOf).
+ */
+export interface ComputedDefault {
+  readonly code: string;
+  readonly locals: Readonly<Record<string, string>>;
+  readonly tables: Readonly<Record<string, Readonly<Record<string, string>>>>;
+}
 export interface PropField {
   readonly name: string;
   // Type text stays open: local schema readers may retain the authored type name.
@@ -64,6 +79,8 @@ export interface PropField {
   readonly typeText?: string;
   readonly default?: PropDefault | undefined;
   readonly defaultExpr?: boolean;
+  // The default computed from other props, which an instance weighs for its own values.
+  readonly computedDefault?: ComputedDefault;
   // The project file an expression default imports, for its thumbnail only:
   // the default itself is still the expression.
   readonly defaultAsset?: string;
@@ -106,6 +123,7 @@ export function parseField(input: unknown, where: string): PropField {
       codeKind: schemaOptional(value, 'codeKind', where, schemaCodeKind),
       itemKind: schemaOptional(value, 'itemKind', where, schemaItemKind),
       usage: schemaOptional(value, 'usage', where, schemaUsage),
+      computedDefault: schemaOptional(value, 'computedDefault', where, schemaComputedDefault),
       shape: schemaOptional(value, 'shape', where, (input, at) => schemaShape(input, at, 1, shapeBudget())),
       unions: schemaOptional(value, 'unions', where, (input, at) => schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at))),
     }),
@@ -255,6 +273,28 @@ function schemaUsage(input: unknown, where: string): PropFieldUsage {
     fail(where, `expected one of ${PROP_FIELD_USAGES.join(', ')}`);
   }
   return usage;
+}
+// A computed default's code is non-empty; its locals and tables are bounded like a schema's props and options.
+function schemaComputedDefault(input: unknown, where: string): ComputedDefault {
+  const value = schemaRecord(input, where);
+  const code = schemaText(value['code'], `${where}.code`).trim();
+  if (code.length === 0) {
+    fail(`${where}.code`, 'expected non-empty string');
+  }
+  const locals = schemaDictionary(value['locals'], `${where}.locals`, schemaText);
+  const tablesRecord = schemaRecord(value['tables'] ?? {}, `${where}.tables`);
+  if (Object.keys(tablesRecord).length > LIMITS.propOptionsMax) {
+    fail(`${where}.tables`, `exceeds ${LIMITS.propOptionsMax} tables`);
+  }
+  const tables = schemaDictionary(tablesRecord, `${where}.tables`, (entries, at) => {
+    const record = schemaRecord(entries, at);
+    if (Object.keys(record).length > LIMITS.propOptionsMax) {
+      fail(at, `exceeds ${LIMITS.propOptionsMax} entries`);
+    }
+    return schemaDictionary(record, at, schemaText);
+  });
+  assert(Object.keys(locals).length <= LIMITS.propSchemaFieldsMax, 'schemaComputedDefault: locals are bounded');
+  return { code, locals, tables };
 }
 interface ShapeBudget {
   readonly take: () => boolean;

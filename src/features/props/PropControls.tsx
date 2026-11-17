@@ -456,7 +456,12 @@ export function LinkControl({ state }: { readonly state: PropControlState }) {
   return (
     <div className="props-field">
       {label}
-      <LinkField {...(value === undefined ? {} : { value })} context={{ ...linkContext, projectPath: assetContext?.projectPath ?? '' }} onChange={onChange} />
+      <LinkField
+        {...(value === undefined ? {} : { value })}
+        context={{ ...linkContext, projectPath: assetContext?.projectPath ?? '' }}
+        placeholder={state.placeholderFor(state.field)}
+        onChange={onChange}
+      />
     </div>
   );
 }

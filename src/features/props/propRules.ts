@@ -1,9 +1,11 @@
 // Union rules are pure so switching variants can be checked without mounting a panel.
 // Branch consequences never restrict the discriminator that can remove them.
 import type { Attr } from '../../../shared/page/pageNode';
-import type { PropField, PropUnion, UnionBranch } from '../../../shared/properties/propSchema';
+import type { ComputedDefault, PropField, PropUnion, UnionBranch } from '../../../shared/properties/propSchema';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { evaluateConditionalValue, readValueExpression, type Evaluated, type EvaluatedEntry } from '../../editor/conditionalValue';
+import { plainTextOf } from './propLiteral';
 
 export type FieldDefinition = Omit<PropField, 'optional'> & { readonly optional?: boolean };
 export type PropValues = Readonly<Record<string, Attr | undefined>>;
@@ -85,7 +87,111 @@ function branchesFitting(context: RuleContext, ignore: string | undefined): read
   });
 }
 
-function branchDefault(context: RuleContext, fitting: readonly FittingUnion[], name: string) {
+// The default an unset prop has for this instance. A default the component
+// computes from other props (`label ?? named[variant]`) is the code that runs,
+// so it is weighed for this instance's values and wins over what the union's
+// doc comments promise; when only running the code could tell, there is no
+// answer rather than a wrong one. Otherwise each fitting branch's doc decides.
+function branchDefault(context: RuleContext, fitting: readonly FittingUnion[], name: string): string | number | undefined {
+  const computed = context.schema.find((field) => field.name === name)?.computedDefault;
+  if (computed !== undefined) {
+    const value = evaluateComputed(context, computed, 0);
+    if (value.kind !== 'value') {
+      return undefined;
+    }
+    return typeof value.value === 'boolean' ? String(value.value) : value.value;
+  }
+  return unionDefault(fitting, context, name);
+}
+
+// Props whose computed defaults read one another's: deeper than this is a cycle, and has no answer.
+const COMPUTED_DEPTH_MAX = 8;
+
+function evaluateComputed(context: RuleContext, computed: ComputedDefault, depth: number): Evaluated {
+  assert(depth >= 0, 'evaluateComputed: the depth counts defaults followed');
+  assert(Object.keys(computed.locals).length <= LIMITS.propSchemaFieldsMax, 'evaluateComputed: the locals are bounded');
+  if (depth > COMPUTED_DEPTH_MAX) {
+    return { kind: 'unknown' };
+  }
+  const model = readValueExpression(computed.code);
+  if (model === undefined) {
+    return { kind: 'unknown' };
+  }
+  return evaluateConditionalValue(model, {
+    name: (local) => {
+      const prop = computed.locals[local];
+      return prop === undefined ? { kind: 'unknown' } : heldValue(context, prop, depth);
+    },
+    entry: (table, option) => tableEntry(computed, table, option),
+  });
+}
+
+// What one prop holds on this instance: the value it sets, else its own default.
+function heldValue(context: RuleContext, prop: string, depth: number): Evaluated {
+  const value = context.props[prop];
+  if (value !== undefined) {
+    return valueOfAttr(value);
+  }
+  const field = context.schema.find((candidate) => candidate.name === prop);
+  if (field === undefined) {
+    return { kind: 'unknown' };
+  }
+  if (field.computedDefault !== undefined) {
+    return evaluateComputed(context, field.computedDefault, depth + 1);
+  }
+  if (field.default === undefined) {
+    return { kind: 'absent' };
+  }
+  // An expression default the main process could not follow is code only the site can run.
+  return field.defaultExpr === true ? { kind: 'unknown' } : { kind: 'value', value: field.default };
+}
+
+// An attribute as the component receives it: words, a switch that is on, or a literal in braces.
+function valueOfAttr(value: Attr): Evaluated {
+  switch (value.type) {
+    case 'string':
+      return { kind: 'value', value: value.value };
+    case 'bare':
+      return { kind: 'value', value: true };
+    case 'spread':
+      return { kind: 'unknown' };
+    case 'expr': {
+      const code = value.value.trim();
+      if (code === 'undefined') {
+        return { kind: 'absent' };
+      }
+      if (code === 'true' || code === 'false') {
+        return { kind: 'value', value: code === 'true' };
+      }
+      if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(code)) {
+        return { kind: 'value', value: Number(code) };
+      }
+      // `{"play"}` is the words; any other code in braces only the site can run.
+      const text = plainTextOf(code);
+      return text === undefined ? { kind: 'unknown' } : { kind: 'value', value: text };
+    }
+    default: {
+      const exhaustive: never = value;
+      return exhaustive;
+    }
+  }
+}
+
+function tableEntry(computed: ComputedDefault, table: string, option: string): EvaluatedEntry {
+  const entries = computed.tables[table];
+  if (entries === undefined) {
+    return { kind: 'unknown' };
+  }
+  // An own property only: `named["constructor"]` is not an entry the table declares.
+  const code = Object.prototype.hasOwnProperty.call(entries, option) ? entries[option] : undefined;
+  if (code === undefined) {
+    return { kind: 'absent' };
+  }
+  const model = readValueExpression(code);
+  return model === undefined ? { kind: 'unknown' } : { kind: 'model', model };
+}
+
+function unionDefault(fitting: readonly FittingUnion[], context: RuleContext, name: string): string | number | undefined {
   let found: string | number | undefined;
   for (const { union, branches } of fitting) {
     if (!union.names.includes(name)) {

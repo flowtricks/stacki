@@ -717,6 +717,11 @@ How the scan reads the disk:
   and the baked demo agree. `parseLengthUnit` checks the setting at the scan boundary.
 - `propSchema.ts` validates component field schemas and their nested options, including the
   optional `deprecated` notice and `usage` the prop model adds.
+  A field may carry a `computedDefault`: the code of a default the component computes from
+  other props (`label ?? named[variant]`, a destructure default reading another prop), the
+  prop each destructured local holds and the lookup tables the code reaches, each entry as
+  code (`electron/properties/computedDefaults.ts`). The instance panel weighs it for one
+  instance's values (`src/features/props/propRules.ts`); code it cannot read shows nothing.
 - `propModel.ts` is the one description of a component's props (docs/plans/prop-controls.md §2):
   `parsePropModel` checks every control kind, fallback and union table, and the nesting
   (`propNestingDepthMax`, twice `LIMITS.listFieldDepthMax`) and variant (`propVariantsMax`) bounds kept beside it.

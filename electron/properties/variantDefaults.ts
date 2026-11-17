@@ -27,7 +27,7 @@ import { applySourceEdits, isAstroProps, propertyKey, readPropertySyntax, replac
 import type { PropertySyntax, SourceEdit } from './propertySyntax';
 
 /** A table as the writer needs it: the object literal, and each entry's node. */
-interface TableSyntax {
+export interface TableSyntax {
   readonly object: ts.ObjectLiteralExpression;
   readonly entries: ReadonlyMap<string, ts.PropertyAssignment>;
 }
@@ -116,7 +116,7 @@ interface FallbackMention {
 }
 
 // `local` to the prop it holds, for every destructure of `Astro.props`.
-function destructuredLocals(syntax: ts.SourceFile): ReadonlyMap<string, string> {
+export function destructuredLocals(syntax: ts.SourceFile): ReadonlyMap<string, string> {
   const locals = new Map<string, string>();
   for (const node of syntaxNodes(syntax)) {
     if (!ts.isVariableDeclaration(node) || node.initializer === undefined || !ts.isObjectBindingPattern(node.name)) {
@@ -136,7 +136,7 @@ function destructuredLocals(syntax: ts.SourceFile): ReadonlyMap<string, string> 
 }
 
 // Top-level `const name = { … }` whose every entry is `key: value` with a plain key.
-function constTables(syntax: ts.SourceFile): ReadonlyMap<string, TableSyntax> {
+export function constTables(syntax: ts.SourceFile): ReadonlyMap<string, TableSyntax> {
   const tables = new Map<string, TableSyntax>();
   for (const statement of syntax.statements) {
     if (!ts.isVariableStatement(statement) || (statement.declarationList.flags & ts.NodeFlags.Const) === 0) {

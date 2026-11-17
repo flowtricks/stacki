@@ -1189,6 +1189,28 @@ export function readConditionalExpression(code: string, options: ReadOptions = P
   if (model.groups.length === 0 && model.otherwise.kind !== 'fallback') {
     return undefined;
   }
+  return checkedReading(model, context, options);
+}
+
+/**
+ * The model `code` says as the rich reading takes it, a plain value included
+ * (no groups, the value its Else): what an evaluator weighs, where a table
+ * entry is as often `"Close"` as `pressed ? "Pause" : "Play"`. Never throws on input.
+ */
+export function readValueExpression(code: string): ConditionalValue | undefined {
+  const source = codeSource(code);
+  if (source === undefined || source.tokens.length === 0) {
+    return undefined;
+  }
+  const context: ReadContext = { source, flattened: false };
+  const model = readChain(context, 0, source.tokens.length, 0);
+  if (model === undefined) {
+    return undefined;
+  }
+  return checkedReading(model, context, { shapes: 'rich' });
+}
+
+function checkedReading(model: ConditionalValue, context: ReadContext, options: ReadOptions): ConditionalValue | undefined {
   if (options.shapes === 'plain' && (context.flattened || !isPlainModel(model))) {
     return undefined;
   }
@@ -1551,6 +1573,199 @@ function readPath(reader: TokenReader): string | undefined {
     path += `.${segment.text}`;
   }
   return isReferencePath(path) ? path : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation: what a model gives for known values of the names it reads, the
+// way the site would run it, without running any code. A name, a test or a
+// value only the running site could tell (locked code, a call, a name the
+// scope does not hold) makes the whole answer `unknown`, never a guess: an
+// answer is shown as fact (an instance's placeholder), so a wrong one is
+// worse than none.
+// ---------------------------------------------------------------------------
+
+/** A plain value a name holds or a model gives. */
+export type EvaluatedPlain = string | number | boolean;
+
+/** What evaluating gives: a value, no value at all (`undefined`), or what only running the code could tell. */
+export type Evaluated = { readonly kind: 'value'; readonly value: EvaluatedPlain } | { readonly kind: 'absent' } | { readonly kind: 'unknown' };
+
+/** The entry a table holds for one option: its model, no entry (`absent`), or an entry no model can say (`unknown`). */
+export type EvaluatedEntry = { readonly kind: 'model'; readonly model: ConditionalValue } | { readonly kind: 'absent' } | { readonly kind: 'unknown' };
+
+/** What the names of a model hold: each name's value, and each lookup table's entry for an option. */
+export interface EvaluationScope {
+  readonly name: (name: string) => Evaluated;
+  readonly entry: (table: string, option: string) => EvaluatedEntry;
+}
+
+const UNKNOWN: Evaluated = { kind: 'unknown' };
+const ABSENT: Evaluated = { kind: 'absent' };
+
+/** What `model` gives for the values `scope` holds; `unknown` when only running the code could tell. */
+export function evaluateConditionalValue(model: ConditionalValue, scope: EvaluationScope): Evaluated {
+  return evaluateModel(model, scope, 0);
+}
+
+// One model, at `depth` lookups below the first: a table entry that indexes
+// another table (or itself) recurses, bounded by the nesting the reader allows.
+function evaluateModel(model: ConditionalValue, scope: EvaluationScope, depth: number): Evaluated {
+  assert(depth >= 0, 'evaluateModel: the depth counts lookups taken');
+  assert(model.groups.length <= CONDITIONAL_LIMITS.groupsMax, 'evaluateModel: the groups are bounded');
+  if (depth > CONDITIONAL_LIMITS.nestingDepthMax) {
+    return UNKNOWN;
+  }
+  for (const group of model.groups) {
+    const holds = evaluateGroup(group, scope);
+    if (holds === 'unknown') {
+      return UNKNOWN;
+    }
+    if (holds === 'true') {
+      return evaluateResult(group.value, scope, depth);
+    }
+  }
+  return evaluateResult(model.otherwise, scope, depth);
+}
+
+// Three-valued: a group of `all` is false when any condition is false, even if another is unknown.
+type Truth = 'true' | 'false' | 'unknown';
+
+function evaluateGroup(group: ConditionGroup, scope: EvaluationScope): Truth {
+  assert(group.conditions.length > 0, 'evaluateGroup: a group tests something');
+  assert(group.conditions.length <= CONDITIONAL_LIMITS.conditionsPerGroupMax, 'evaluateGroup: the conditions are bounded');
+  const truths = group.conditions.map((condition) => evaluateCondition(condition, scope));
+  const decisive: Truth = group.match === 'all' ? 'false' : 'true';
+  if (truths.includes(decisive)) {
+    return decisive;
+  }
+  if (truths.includes('unknown')) {
+    return 'unknown';
+  }
+  return group.match === 'all' ? 'true' : 'false';
+}
+
+function evaluateCondition(condition: Condition, scope: EvaluationScope): Truth {
+  if (condition.kind === 'code') {
+    return 'unknown';
+  }
+  const subject = scope.name(condition.subject);
+  if (subject.kind === 'unknown') {
+    return 'unknown';
+  }
+  switch (condition.kind) {
+    case 'test': {
+      const truthy = subject.kind === 'value' && Boolean(subject.value);
+      return truthy === (condition.operator === 'truthy') ? 'true' : 'false';
+    }
+    case 'compare': {
+      assert(condition.values.length > 0, 'evaluateCondition: a comparison names values');
+      const equal = subject.kind === 'value' && condition.values.some((literal) => literal.value === subject.value);
+      return equal === (condition.operator === 'in') ? 'true' : 'false';
+    }
+    default: {
+      const exhaustive: never = condition;
+      return exhaustive;
+    }
+  }
+}
+
+function evaluateResult(result: ConditionalResult, scope: EvaluationScope, depth: number): Evaluated {
+  if (result.kind !== 'fallback') {
+    return evaluateValue(result, scope, depth);
+  }
+  assert(result.operands.length <= CONDITIONAL_LIMITS.fallbackOperandsMax, 'evaluateResult: the operands are bounded');
+  // `a ?? b` gives the first operand that is set; `a || b` the first truthy one, else the last.
+  let last: Evaluated = ABSENT;
+  for (const operand of result.operands) {
+    const value = evaluateValue(operand, scope, depth);
+    if (value.kind === 'unknown') {
+      return UNKNOWN;
+    }
+    if (value.kind === 'value') {
+      if (result.operator === '??') {
+        return value;
+      }
+      if (value.value) {
+        return value;
+      }
+    }
+    last = value;
+  }
+  return result.operator === '??' ? ABSENT : last;
+}
+
+function evaluateValue(value: ValueResult, scope: EvaluationScope, depth: number): Evaluated {
+  switch (value.kind) {
+    case 'text':
+      return { kind: 'value', value: value.text };
+    case 'none':
+      return ABSENT;
+    case 'reference':
+      // `item.title` reads into data the scope does not hold; only a name on its own is a prop.
+      return value.path.includes('.') ? UNKNOWN : scope.name(value.path);
+    case 'template':
+      return evaluateTemplate(value.parts, scope);
+    case 'lookup':
+      return evaluateLookup(value, scope, depth);
+    case 'computed':
+      return literalOfCode(value.code);
+    default: {
+      const exhaustive: never = value;
+      return exhaustive;
+    }
+  }
+}
+
+function evaluateTemplate(parts: readonly TemplatePart[], scope: EvaluationScope): Evaluated {
+  assert(parts.length <= CONDITIONAL_LIMITS.templatePartsMax, 'evaluateTemplate: the parts are bounded');
+  let text = '';
+  for (const part of parts) {
+    if (part.kind === 'text') {
+      text += part.text;
+      continue;
+    }
+    const held = part.path.includes('.') ? UNKNOWN : scope.name(part.path);
+    // `${label}` with no label prints "undefined": not something to show as a value.
+    if (held.kind !== 'value') {
+      return UNKNOWN;
+    }
+    text += String(held.value);
+  }
+  return { kind: 'value', value: text };
+}
+
+function evaluateLookup(value: Extract<ValueResult, { readonly kind: 'lookup' }>, scope: EvaluationScope, depth: number): Evaluated {
+  const key = scope.name(value.key);
+  if (key.kind !== 'value') {
+    // `named[undefined]` is undefined; an unknown key is an unknown entry.
+    return key;
+  }
+  const entry = scope.entry(value.table, String(key.value));
+  switch (entry.kind) {
+    case 'model':
+      return evaluateModel(entry.model, scope, depth + 1);
+    case 'absent':
+      return ABSENT;
+    case 'unknown':
+      return UNKNOWN;
+    default: {
+      const exhaustive: never = entry;
+      return exhaustive;
+    }
+  }
+}
+
+// Locked code a value can still be read from: a number, `true` or `false`.
+function literalOfCode(code: string): Evaluated {
+  const text = code.trim();
+  assert(text.length <= LIMITS.attrCharsMax, 'literalOfCode: the code is bounded');
+  if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(text)) {
+    return { kind: 'value', value: Number(text) };
+  }
+  if (text === 'true' || text === 'false') {
+    return { kind: 'value', value: text === 'true' };
+  }
+  return UNKNOWN;
 }
 
 // ---------------------------------------------------------------------------

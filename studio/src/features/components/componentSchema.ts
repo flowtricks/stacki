@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import path from 'node:path';
 import { parsePropSchema } from '../../../vendor/stacki/electron/parse/astroPropSchema';
+import { withComputedDefaults } from '../../../vendor/stacki/electron/properties/computedDefaults';
 
 // Resolve imported declarations per component so an unrelated Props type cannot
 // shadow the component's own Props. TypeScript parses declarations; none execute.
@@ -57,7 +58,8 @@ export async function componentSchema(file: string, source: string, readSource: 
       prelude.push(declarationText.slice(0, nameStart) + name.local + declarationText.slice(nameStart + declaration.name.text.length));
     }
   }
-  return parsePropSchema(source, prelude.join('\n'));
+  // A default computed from other props travels with its field, as Desktop's scan sends it.
+  return withComputedDefaults(parsePropSchema(source, prelude.join('\n')), source);
 }
 
 function isDeclarationImport(specifier: string): boolean {

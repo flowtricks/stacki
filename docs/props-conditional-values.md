@@ -170,6 +170,21 @@ The conditions themselves are the Value conditions model
 
 Every edit is one `component:editProperties` batch: one write, one undo.
 
+## On an instance
+
+An unset prop's field shows its default for that instance, muted, as the
+placeholder: Button's label reads Play for `variant="play"`, Pause once
+`pressed` is set, Close for `variant="close"`, and nothing for `main`, whose
+table has no entry. The scan carries the default's code beside the field
+(`computedDefault`, electron/properties/computedDefaults.ts) and the panel
+weighs it for the instance's values with the reader above
+(`evaluateConditionalValue`, src/editor/conditionalValue.ts): the instance's
+own attributes, else each prop's own default. A test, a value or a name only
+the running site could tell (a call, `cols > 2`, a value in braces that is
+not a literal) gives no placeholder rather than a guess. The placeholder is
+never written to the file. Text, number and link fields show it; a choice's
+dropdown shows it as its placeholder; a switch keeps showing its own default.
+
 ## Limits
 
 - Conditions give words: a number or switch prop's default is not set by

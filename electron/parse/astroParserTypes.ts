@@ -3,7 +3,7 @@
 // Kind-specific payloads remain a union so serializers cannot invent a node.
 import type { Attr, AttrSpan } from '../../shared/page/pageNode';
 import type { FrontmatterModel } from '../../shared/page/frontmatterSource';
-import type { CodeKind, PropFieldUsage, PropItemKind, PropShapeField } from '../../shared/properties/propSchema';
+import type { CodeKind, ComputedDefault, PropFieldUsage, PropItemKind, PropShapeField } from '../../shared/properties/propSchema';
 import type { SchemaFieldType } from '../../shared/properties/propModelSchema';
 
 interface NodeMetadata {
@@ -116,6 +116,8 @@ export interface SchemaField extends NumberRules {
   defaultExpr?: boolean;
   // The project file an expression default imports ("src/assets/hero.webp").
   readonly defaultAsset?: string;
+  // A default computed from other props (`label ?? named[variant]`), weighed per instance.
+  readonly computedDefault?: ComputedDefault;
   hint?: string;
   readonly options?: readonly string[] | undefined;
   readonly numeric?: boolean | undefined;
