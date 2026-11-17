@@ -737,6 +737,7 @@
     "src/editor/loopRebind.ts",
     "src/editor/loopRemove.ts",
     "src/editor/loopSections.ts",
+    "src/editor/loopSelection.ts",
     "src/editor/loopSelectionRead.ts",
     "src/editor/loopSortRead.ts",
     "src/editor/loopSource.ts",
