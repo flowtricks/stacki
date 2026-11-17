@@ -394,6 +394,6 @@ Tests: `test/renderer/editor/conditionExpressionRich.test.js` (each shape,
 meaning kept over a grid of values, the Lumos corpus as a fixed point),
 `test/renderer/props/conditionExpressionEditor.test.js` (the panel per shape,
 Computed editing), `test/renderer/ui/conditionLabel.test.js` (Navigator
-labels), `test/electron/props/conditionPanels.test.js` (Chromium layout: the
+labels), `test/renderer/props/conditionPanels.test.js` (Chromium layout: the
 selected row and its block share both edges; the Otherwise segments keep their
 width on hover; set `CONDITION_SHOTS` for screenshots).

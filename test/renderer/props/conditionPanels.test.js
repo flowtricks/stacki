@@ -1,6 +1,6 @@
 // The if panel and the Navigator, drawn by Chromium with the app's own stylesheets.
 //
-//   node test/electron/props/conditionPanels.test.js
+//   node test/renderer/props/conditionPanels.test.js
 //
 // Goal: pin, in real layout, two things jsdom cannot measure. First, the tinted block under a selected
 // Navigator row spans exactly the row's width (the same left and right edge) for an if, an element and a

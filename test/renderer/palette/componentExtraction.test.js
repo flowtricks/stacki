@@ -157,8 +157,11 @@ async function createButton({ root, harness, pagePath }) {
   // As the queue leaves a step when it takes the gesture: one write owed.
   const record = { outcome: { tag: 'pending', waiting: 1, applied: [] } };
   const send = async (request) => parsePageEditResult(await harness.invoke('page:edit', request));
+  // The app writes a gesture's several requests as one batch (page:editBatch), as pageSender.ts does: the
+  // instance and its import land together, so the pre-flight check never sees a tag without its import.
+  const sendBatch = async (request) => parsePageEditResult(await harness.invoke('page:editBatch', request));
   const origin = { checksum: read.checksum, source: read.source, model };
-  const outcome = await modules.sendGesture({ path: pagePath, origin, gesture, record, send });
+  const outcome = await modules.sendGesture({ path: pagePath, origin, gesture, record, send, sendBatch });
   assert.equal(outcome.tag, 'applied', 'the page took the edit');
   assert.equal(record.outcome.tag, 'applied');
   assert.equal(record.outcome.applied.length, outcome.replies.length, 'every write left its inverse in the one step');

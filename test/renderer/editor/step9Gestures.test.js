@@ -178,7 +178,8 @@ test('paste and extract-to-component insert, remove and import as requests', asy
     const bytes = '<div>Two<p class="a">One</p></div>\n';
     fs.writeFileSync(created, bytes);
     // The checksum of what was written: undo deletes the file only while it still holds it.
-    return { path: created, rel: 'src/components/Two.astro', name: 'Two', checksum: digestOf(bytes) };
+    // The folders its creation made (none: src/components exists), so Undo knows what to take back.
+    return { path: created, rel: 'src/components/Two.astro', name: 'Two', checksum: digestOf(bytes), folders: [] };
   };
   await select(app, [0, 1]);
   const components = [...document.querySelectorAll('.rail-btn')].find((button) => String(button.getAttribute('aria-label')).startsWith('Components'));
@@ -188,7 +189,8 @@ test('paste and extract-to-component insert, remove and import as requests', asy
     await tick();
   });
   await gesture(app, async () => {
-    await __panels.PalettePanel.onCreateComponent('Two', { asProp: [] });
+    // The create dialog always names the folder the component goes in (c4cb38e9).
+    await __panels.PalettePanel.onCreateComponent('Two', { asProp: [], folder: 'src/components' });
   });
   assert.equal(
     disk(),

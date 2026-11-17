@@ -43,7 +43,7 @@ test('computed values are reported as computed, never as a literal', () => {
   assert.deepEqual(sourceDirectoryOf('export default { srcDir: `./${name}` };'), { kind: 'computed' });
   assert.deepEqual(sourceDirectoryOf("export default { srcDir: base + '/app' };"), { kind: 'computed' });
   assert.deepEqual(sourceDirectoryOf('const srcDir = "a"; export default { srcDir };'), { kind: 'computed' });
-  assert.deepEqual(sourceDirectoryOf("export default { sourceDirectoryOf() { return 'a'; } };"), { kind: 'computed' });
+  assert.deepEqual(sourceDirectoryOf("export default { srcDir() { return 'a'; } };"), { kind: 'computed' });
 });
 
 test('a spread may override earlier keys and cannot override later ones', () => {

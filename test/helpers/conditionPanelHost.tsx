@@ -1,6 +1,6 @@
 // The Navigator and the Settings tab's Condition section, small enough for a test page: the real tree
 // (StructureTree.tsx NodeList inside the panel's own .structure-tree box) and the real CondPanel, under the
-// app's own stylesheets. The test that bundles it (test/electron/props/conditionPanels.test.js) parses the
+// app's own stylesheets. The test that bundles it (test/renderer/props/conditionPanels.test.js) parses the
 // Lumos fixture in Node and hands the nodes in as `window.conditionHostInput`; this page validates them with
 // the shared page-node parser, draws them, and says, in `window.conditionHost`, the box of each selected row
 // and of the tinted block under it.

@@ -23,6 +23,7 @@ import { parseScanResult } from '#dist/shared/properties/projectScan.js';
 import { toRecord } from '#dist/shared/core/record.js';
 import { atomicDirectoryOf } from '#dist/electron/documents/atomicDirectory.js';
 import { pageEditError } from '#dist/electron/documents/pageRequests.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -139,12 +140,18 @@ test('edit refusals parse per code; unknown or malformed ones throw', () => {
     [{ ...refusal, reason: 'teapot' }, /unknown rejection reason/],
     [{ code: 'teapot', message: 'm' }, /PageWriteFailure\.code: unknown value/],
     [{ code: 'missing' }, /PageWriteFailure\.message: expected string/],
-    [{ code: 'missing', message: 'm'.repeat(9000) }, /PageWriteFailure\.message: exceeds limit/],
     [undefined, /PageEditError: expected object/],
   ] as const;
   for (const [error, message] of bad) {
     assert.throws(() => parsePageEditResult({ ok: false, error }), message);
   }
+  // A message is bounded only by the string (attrCharsMax): a longer one cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.attrCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const long = 'm'.repeat(1024 * 1024);
+  assert.deepEqual(parsePageEditResult({ ok: false, error: { code: 'missing', message: long } }), {
+    ok: false,
+    error: { code: 'missing', message: long },
+  });
 });
 
 test('a read reports the checksum of the exact bytes on disk', async (context) => {

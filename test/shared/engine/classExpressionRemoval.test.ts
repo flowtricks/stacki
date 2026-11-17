@@ -20,6 +20,7 @@ import {
   removeClassFromExpression,
   type ClassExpressionContext,
 } from '#dist/shared/engine/classExpressionRemoval.js';
+import { PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 interface EditCase {
   readonly title: string;
@@ -208,10 +209,12 @@ test('malformed code is unreadable and nothing is edited', () => {
   }
 });
 
-test('code past the bounds is refused, not walked', () => {
-  const long = `['a', '${'x'.repeat(CLASS_EXPRESSION_LIMITS.codeCharsMax)}']`;
-  assert.deepEqual(removeClassFromExpression(long, 'a', 'list'), { tag: 'unreadable', reason: 'limit' });
-  assert.equal(classExpressionOccurrences(long, 'a', 'list'), undefined);
+test('code past the depth bound is refused, not walked; long code is read', () => {
+  // Code length is bounded only by the string: a longer one cannot be built, and Stacki has no product size limit.
+  assert.equal(CLASS_EXPRESSION_LIMITS.codeCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const long = `['a', '${'x'.repeat(2 ** 20)}']`;
+  assert.equal(removeClassFromExpression(long, 'a', 'list').tag, 'edited');
+  assert.equal(classExpressionOccurrences(long, 'a', 'list'), 1);
   const deep = `${'['.repeat(CLASS_EXPRESSION_LIMITS.depthMax + 2)}'a'${']'.repeat(CLASS_EXPRESSION_LIMITS.depthMax + 2)}`;
   assert.deepEqual(removeClassFromExpression(deep, 'a', 'list'), { tag: 'unreadable', reason: 'limit' });
   const shallow = `${'['.repeat(4)}'a', 'b'${']'.repeat(4)}`;

@@ -3,14 +3,15 @@
 // everything malformed must die here with a useful message.
 //
 // Methodology: known-good per kind passes; each known-bad shape fails and the
-// failure message is pinned (AGENTS.md testing rules). Bounds from LIMITS are
-// exercised: depth, node count, attr count. assertTreeInvariants is tested on
+// failure message is pinned (AGENTS.md testing rules). The depth bound from
+// LIMITS is exercised; node, attr and import counts are bounded only by the
+// platform's array length, so their bounds are pinned and large inputs pass. assertTreeInvariants is tested on
 // the invariants the type cannot express (unique ids, branch names).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePageNode, parsePageTree, parsePageModel, parsePageResult, assertTreeInvariants } from '#dist/shared/page/pageNode.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -125,24 +126,29 @@ test('negative space: every wrong shape fails with a pinned message', () => {
   assert.throws(() => parsePageNode({ kind: 'text', id: 'n1', value: 'x', start: 4, end: 3 }), /source range: end must not precede start/);
 });
 
-test('bounds: depth and node count fail at LIMITS, not at stack depth', () => {
+test('bounds: depth fails at LIMITS, not at stack depth; counts are the platform ceiling', () => {
   let deep: unknown = { kind: 'text', id: `n${LIMITS.treeDepthMax + 2}`, value: 'leaf' };
   for (let i = LIMITS.treeDepthMax + 1; i >= 1; i--) {
     deep = { kind: 'element', id: `n${i}`, name: 'div', children: [deep] };
   }
   assert.throws(() => parsePageNode(deep), /exceeds depth/);
 
-  const wide = Array.from({ length: LIMITS.treeNodesMax + 1 }, (_, i) => text(`n${i}`, 'x'));
-  assert.throws(() => parsePageTree(wide), /exceeds \d+ nodes/);
+  // Node and attr counts are bounded only by an array's length: a longer array cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.treeNodesMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(LIMITS.attrsPerNodeMax, PLATFORM_LIMITS.arrayLengthMax);
+  const wide = Array.from({ length: 50_000 }, (_, i) => text(`n${i}`, 'x'));
+  assert.equal(parsePageTree(wide).length, wide.length);
 
-  const tooManyAttrs = {
+  const manyAttrs = {
     kind: 'element',
     id: 'n1',
     name: 'div',
     children: undefined,
-    props: Object.fromEntries(Array.from({ length: LIMITS.attrsPerNodeMax + 1 }, (_, i) => [`a${i}`, { type: 'bare' }])),
+    props: Object.fromEntries(Array.from({ length: 10_000 }, (_, i) => [`a${i}`, { type: 'bare' }])),
   };
-  assert.throws(() => parsePageNode(tooManyAttrs), /exceeds \d+ attrs/);
+  const parsed = parsePageNode(manyAttrs);
+  assert.ok(parsed.kind === 'element');
+  assert.equal(Object.keys(parsed.props ?? {}).length, 10_000);
 });
 
 test('assertTreeInvariants: duplicate ids are the one invariant a parser cannot see', () => {
@@ -174,14 +180,9 @@ test('parsePageModel and parsePageResult: the envelope is data, including not-ed
     assert.equal(notEditable.bail?.what, 'a stray <');
   }
   assert.throws(() => parsePageResult({ editable: 'yes' }), /editable: expected boolean/);
-  assert.throws(
-    () =>
-      parsePageModel({
-        ...model,
-        imports: Array.from({ length: LIMITS.importsMax + 1 }, () => model.imports[0]),
-      }),
-    /exceeds \d+/,
-  );
+  // Imports are bounded only by an array's length, so a page with many of them parses.
+  assert.equal(LIMITS.importsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(parsePageModel({ ...model, imports: Array.from({ length: 10_000 }, () => model.imports[0]) }).imports.length, 10_000);
 });
 
 test('parsePageModel preserves Markdown source metadata and rejects malformed metadata', () => {
@@ -313,7 +314,6 @@ test('attribute spans: every wrong shape fails with a pinned message', () => {
     [withSpans([title]), /names differ from props/],
     [withSpans([title, { ...hidden, name: 'shown' }]), /"hidden" differs from props/],
     [withSpans([{ ...title, type: 'expr' }, hidden]), /"title" differs from props/],
-    [withSpans(Array.from({ length: LIMITS.attrsPerNodeMax + 1 }, () => hidden)), /exceeds/],
     [{ kind: 'text', id: 'n2', value: 'x', start: 0, end: 1, attrSpans: [] }, /a text node has no attributes/],
   ];
   for (const [input, message] of cases) {

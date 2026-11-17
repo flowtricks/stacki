@@ -79,7 +79,6 @@ const PANEL_SOURCES = Object.freeze([
   'src/features/componentProperties/PropertyDefault.tsx',
   'src/features/componentProperties/PropertyEditor.tsx',
   'src/features/componentProperties/PropertyOptions.tsx',
-  'src/features/componentProperties/PropertyReadOnlyFields.tsx',
   'src/features/componentProperties/PropertyReorder.tsx',
   'src/features/componentProperties/PropertySettingsDialog.tsx',
   'src/features/componentProperties/PropertyType.tsx',

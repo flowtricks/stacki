@@ -1,8 +1,10 @@
 // Pure row planning preserves column holes and heading boundaries. A browser-like
-// clamping peer checks scroll echoes, cleanup, and registration/collection limits.
+// clamping peer checks scroll echoes and cleanup; row collections and scroll
+// registrations are bounded only by the platform.
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const rows = load('src/features/variables/variableRows.ts');
+const { LIMITS, PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { createScrollSync, createScrollLanes, SCROLL_PEERS_MAX } = load('src/features/variables/variableScroll.ts');
 const cell = (name) => ({
   name,
@@ -48,9 +50,12 @@ for (const invalid of [-1, 0.5, NaN, Infinity]) {
   assert.throws(() => rows.movesForDrop(slots, invalid, 0), /source index/);
   assert.throws(() => rows.dropPlan(slots, 0, invalid), /target index/);
 }
-assert.throws(() => rows.buildSheetSlots(Array(10001).fill(empty)), /block limit exceeded/);
-assert.throws(() => rows.buildSheetSlots([{ ...block, rows: Array(10000).fill(first) }]), /slot limit exceeded/);
-assert.throws(() => rows.rowRenames(block, first, 'x'.repeat(8193)), /name limit exceeded/);
+// Stacki has no product size limit: blocks, slots and names are bounded only by what the platform holds.
+assert.equal(LIMITS.scanEntriesMax, PLATFORM_LIMITS.arrayLengthMax);
+assert.equal(LIMITS.attrCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+assert.equal(rows.buildSheetSlots(Array(10001).fill(empty)).offsets.length, 10001);
+assert.doesNotThrow(() => rows.buildSheetSlots([{ ...block, rows: Array(10000).fill(first) }]));
+assert.equal(rows.rowRenames(block, first, 'x'.repeat(8193)).length, 1);
 assert.throws(() => rows.stemOf({ ...block, rows: [{ name: '--x', label: 'too long' }] }), /label exceeds name/);
 const sync = createScrollSync();
 const firstPeer = { scrollLeft: 0 };
@@ -99,10 +104,11 @@ sync.dispose();
 assert.throws(() => sync.fit(-1), /nonnegative/);
 assert.throws(() => sync.fit(Infinity), /finite/);
 assert.throws(() => sync.broadcast(firstPeer, NaN), /finite/);
-for (let index = 0; index < SCROLL_PEERS_MAX; index++) {
+// The peer bound derives from the platform's array ceiling, past what a Map holds, so it cannot be reached.
+assert.equal(SCROLL_PEERS_MAX, LIMITS.scanEntriesMax * 2 + 2);
+for (let index = 0; index < 10_000; index++) {
   sync.register({ scrollLeft: 0 });
 }
-assert.throws(() => sync.register({ scrollLeft: 0 }), /peer limit exceeded/);
 sync.dispose();
 // Lanes: tables with the same column count scroll together, others do not.
 const lanes = createScrollLanes();

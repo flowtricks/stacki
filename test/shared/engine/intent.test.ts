@@ -286,6 +286,8 @@ test('every rejection reason parses and has its own notice text', () => {
     notices.add(describeRejection(reason));
   }
   assert.equal(notices.size, REJECTION_REASONS.length);
-  assert.equal(REJECTION_REASONS.length, 10, 'plan §3.5 names nine reasons, and a tenth refuses a placement that would break the page');
+  // Plan §3.5 names nine reasons; a tenth refuses a placement the model does not allow (invalid-placement), and an
+  // eleventh an edit whose file the pre-flight check finds broken (would-break-page, 4cee711e).
+  assert.equal(REJECTION_REASONS.length, 11, 'nine reasons, invalid-placement and would-break-page');
   assert.throws(() => parseRejectionReason('backpressured', 'reason'), /unknown rejection reason/);
 });

@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { LIMITS, PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
@@ -58,7 +59,7 @@ test('all variable edit contracts accept valid replies and reject malformed repl
   }
 });
 
-test('edit payloads are parsed before IPC and bounded replies stay bounded', async () => {
+test('edit payloads are parsed before IPC and replies of any size are accepted', async () => {
   let invoked = 0;
   global.window = {
     avb: Object.fromEntries(
@@ -82,21 +83,21 @@ test('edit payloads are parsed before IPC and bounded replies stay bounded', asy
     /nonnegative/,
   );
   await assert.rejects(variableEdit('readStyleFile', 'x'.repeat(32769)), /Path exceeds limit/);
-  await assert.rejects(
-    variableEdit('renameCssVariables', {
-      projectPath: '/project',
-      renames: Array(100001).fill({ from: '--a', to: '--b' }),
-    }),
-    /Array exceeds limit/,
-  );
   assert.equal(invoked, 0);
+  // Stacki has no product size limit: a rename batch is bounded only by what an array holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  await variableEdit('renameCssVariables', {
+    projectPath: '/project',
+    renames: Array(100001).fill({ from: '--a', to: '--b' }),
+  });
+  assert.equal(invoked, 1);
   window.avb.writeStyleFile = async () => ({ ok: false, error: 'stale range' });
   assert.deepEqual(await variableEdit('writeStyleFile', calls.writeStyleFile), {
     ok: false,
     error: 'stale range',
   });
-  window.avb.readStyleFile = async () => ({ css: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) });
-  await assert.rejects(variableEdit('readStyleFile', calls.readStyleFile), /String exceeds limit/);
+  // A longer style file than the platform's string ceiling cannot be built.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
   assert.equal(friendlyError(new Error("Error invoking remote method 'css:edit': Error: disk full")), 'disk full');
   assert.equal(friendlyError({ message: 'No handler registered for css:edit' }), restart);
 });
@@ -186,15 +187,8 @@ test('snapshot failures prevent unrecorded writes and false success', async () =
   );
   assert.deepEqual(state.errors, ['cannot read', 'cannot reread']);
   assert.equal(state.records.length, 0);
-  await assert.rejects(
-    state.history(
-      Array.from({ length: 10001 }, (_, i) => `${i}.css`),
-      'edit',
-      undefined,
-      async () => {},
-    ),
-    /Variable undo: file limit exceeded/,
-  );
+  // An undo step may span any number of files: the bound is the platform's array ceiling.
+  assert.equal(LIMITS.scanEntriesMax, PLATFORM_LIMITS.arrayLengthMax);
 });
 
 test('unchanged and rejected edits do not add undo commands', async () => {

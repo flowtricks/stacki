@@ -169,7 +169,8 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
   );
   check(
     'and the app’s own writes are not',
-    /function noteAppWrite\(\)[^{]*\{[\s\S]*?notePageMayHaveChanged\(\);/.test(main),
+    // noteAppWrite may name the file it wrote (to touch the dev server); it still reports no outside change.
+    /function noteAppWrite\([^)]*\)[^{]*\{[\s\S]*?notePageMayHaveChanged\(\);/.test(main),
     'every keystroke would ask the canvas for a fetch of its own',
   );
   check(

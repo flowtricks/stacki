@@ -224,7 +224,8 @@ test('insert-node beside a node copies its separator; inside, it fills an empty 
   // A block in an empty block parent stands on its own line: left inline, every
   // later child copied that, and a section built on the canvas became one long line.
   assert.equal(into([1]), '<div>\n</div>\n<aside>\n\t<p>x</p>\n</aside>\n<hr />\n<Wrapper />\n');
-  assert.equal(into([2]), 'rejected: unsupported-operation', 'a self-closing tag has no inside');
+  // A void element has no inside: the placement rule refuses it (shared/engine/planPlacement.ts, 9e2b1563).
+  assert.equal(into([2]), 'rejected: invalid-placement', 'a self-closing tag has no inside');
   assert.equal(
     into([3]),
     '<div>\n</div>\n<aside></aside>\n<hr />\n<Wrapper>\n\t<p>x</p>\n</Wrapper>\n',
@@ -375,8 +376,9 @@ test('rename-attribute renames in place; a missing name or a clash is refused', 
   assert.equal(run(page, rename('data-a', 'hidden'), anchor), '<a href="/x" title={t} hidden data-b="1">x</a>\n');
   assert.equal(run(page, rename('alt', 'title'), anchor), 'rejected: anchor-moved');
   assert.equal(run(page, rename('href', 'title'), anchor), 'rejected: unsupported-operation');
+  // A tag that writes one attribute twice does not parse (0a1cb3e6), so there is no anchor to rename on.
   const twice = snapshotText('<a x="1" x="2">x</a>\n');
-  assert.equal(run(twice, rename('x', 'y'), anchorAt(twice, [0])), 'rejected: anchor-ambiguous');
+  assert.equal(twice.projection.tag, 'parse-error');
 });
 
 test('rewrite-node writes its hunks inside the node, and only while the node is unchanged', () => {
@@ -527,8 +529,10 @@ function tagNameOf(node: ProjectedNode, page: Snapshot): string {
   return /^[^\s/>]*/.exec(text)?.[0] ?? '';
 }
 
-// Every rejection a sweep may meet, per operation; anything else fails.
-const ALLOWED: ReadonlySet<string> = new Set(['unsupported-operation', 'anchor-ambiguous', 'source-invalid']);
+// Every rejection a sweep may meet, per operation; anything else fails. A sweep places the same node beside
+// every node of a page, so the placement rule (shared/page/placement.ts, 9e2b1563) refuses some: a node beside
+// the doctype, a block inside a paragraph.
+const ALLOWED: ReadonlySet<string> = new Set(['unsupported-operation', 'anchor-ambiguous', 'source-invalid', 'invalid-placement']);
 
 for (const [label, sweep] of Object.entries(SWEEPS)) {
   const title = `corpus sweep: ${label} plans a parsing candidate whose inverse restores the input`;

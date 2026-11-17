@@ -291,13 +291,14 @@ test('stale intent past the exact diff bound plans from what is proven; or into 
   const heroIntent = intentOn(siblings, anchorAt(siblings, [0]), setAttribute('title', 'New'));
   // 3 000 bytes appended exceed LIMITS.diffDistanceMax (2 048) by size alone.
   const appended = `${SIBLINGS}<p>${'x'.repeat(2_993)}</p>`;
-  assert.deepEqual(spliceStarts({ authored: siblings, current: snapshotText(appended) }, heroIntent), [14]);
+  // The splice starts at the value's first byte: `<Hero title="` is 13 bytes.
+  assert.deepEqual(spliceStarts({ authored: siblings, current: snapshotText(appended) }, heroIntent), [13]);
   assert.equal(againstCurrent(appended).result, 'rejected: anchor-ambiguous');
   // Same size, 1 100 bytes rewritten: distance 2 200, past the exact search.
   const authored = snapshotText(`${SIBLINGS}<p>${'a'.repeat(1_100)}</p>\n`);
   const rewritten = snapshotText(`${SIBLINGS}<p>${'b'.repeat(1_100)}</p>\n`);
   const authoredHero = intentOn(authored, anchorAt(authored, [0]), setAttribute('title', 'New'));
-  assert.deepEqual(spliceStarts({ authored, current: rewritten }, authoredHero), [14]);
+  assert.deepEqual(spliceStarts({ authored, current: rewritten }, authoredHero), [13]);
   const cardIntent = intentOn(authored, anchorAt(authored, [3]), setAttribute('title', 'New'));
   assert.deepEqual(planIntent({ authored, current: rewritten }, cardIntent), {
     ok: false,
@@ -346,6 +347,10 @@ test('rejections that need no diff: the anchor, the attribute, the value, the op
 });
 
 test('duplicate attributes are refused, loop bodies edit their one source node, and an expression ' + 'attribute is replaced whole', () => {
+  // A tag that writes one attribute twice does not parse (0a1cb3e6), so the file is source-invalid before any
+  // anchor could be ambiguous between the copies.
+  const duplicatedPage = snapshotText(`${readFixture('conditional-template.astro')}<p class="a" class="b">Duplicated class</p>\n`);
+  assert.equal(duplicatedPage.projection.tag, 'parse-error');
   const page = snapshotText(readFixture('conditional-template.astro'));
   const projection = page.projection;
   assert.equal(projection.tag, 'valid');
@@ -358,16 +363,11 @@ test('duplicate attributes are refused, loop bodies edit their one source node, 
     assert.ok(node !== undefined);
     return anchorAt(page, node.path);
   };
-  const classCount = (node: ProjectedNode) => node.attributes.filter((attribute) => attribute.name === 'class').length;
-  const duplicated = nodeWith((node) => {
-    if (node.capability === 'editable') {
-      return classCount(node) > 1;
-    }
-    return false;
-  });
-  assert.deepEqual(planIntent(base, intentOn(page, duplicated, setAttribute('class', 'c'))), {
+  const multi = nodeWith((node) => node.attributes.some((attribute) => attribute.name === 'data-x'));
+  const duplicatedBase = { authored: page, current: duplicatedPage };
+  assert.deepEqual(planIntent(duplicatedBase, intentOn(page, multi, setAttribute('class', 'c'))), {
     ok: false,
-    error: 'anchor-ambiguous',
+    error: 'source-invalid',
   });
   // An expression attribute is set as a whole: `data-x={ 1 + 2 }` → `data-x="3"`.
   const expression = nodeWith((node) => node.attributes.some((attribute) => attribute.name === 'data-x'));

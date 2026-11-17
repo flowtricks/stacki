@@ -14,7 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { LIMITS } = require('#dist/shared/core/limits.js');
+const { LIMITS, PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { repoPath } = require('../../helpers/sources.js');
 
 const failures = [];
@@ -43,12 +43,14 @@ const check = (what, condition, detail) => {
   });
   const { fuzzyScore, search, buildTree } = require(bundlePath);
 
-  // Invalid sizes fail before allocating trees or scanning oversized paths.
+  // Invalid paths and depths fail before allocating trees or scanning oversized paths.
   const assert = require('node:assert/strict');
   assert.throws(() => fuzzyScore('x'.repeat(8193), 'a'), /query limit exceeded/);
   assert.throws(() => fuzzyScore('a', 'x'.repeat(8193)), /path limit exceeded/);
   assert.throws(() => buildTree([{ path: 'a/'.repeat(64) + 'file' }]), /depth limit exceeded/);
-  assert.throws(() => buildTree(Array(100001).fill({ path: 'a' })), /file limit exceeded/);
+  // Stacki has no product size limit: a project's file list is bounded only by what an array holds.
+  assert.equal(LIMITS.scanEntriesMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.doesNotThrow(() => buildTree(Array(100001).fill({ path: 'a' })));
   assert.throws(() => search([], 'a', -1), /valid result limit/);
   assert.throws(() => search([], 'a', 1.5), /valid result limit/);
 

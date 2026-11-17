@@ -9,13 +9,14 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
 const { parseGitHubStatus, readGitHubStatus, repoSlug, webUrl } = require('../../helpers/rendererModule')('src/features/git/gitPublish.ts');
 
-test('GitHub preflight parses each state and rejects impossible or oversized data', async () => {
+test('GitHub preflight parses each state and rejects impossible data or oversized paths', async () => {
   for (const status of [
     { installed: false, authed: false },
     { installed: true, authed: false },
@@ -31,10 +32,11 @@ test('GitHub preflight parses each state and rejects impossible or oversized dat
     // Absence is `undefined` (AGENTS.md §6): an unknown user is never sent as null.
     { installed: true, authed: true, user: jsonNull },
     { installed: 1, authed: false },
-    { installed: true, authed: true, user: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) },
   ]) {
     assert.throws(() => parseGitHubStatus(status));
   }
+  // A longer user name than the platform's string ceiling cannot be built; Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
   let project;
   global.window = {
     avb: {
@@ -135,22 +137,25 @@ test('publish dialog passes its project to preflight and ignores old replies', a
     await act(async () => root.unmount());
     await act(async () => reads[3].resolve({ installed: true, authed: true, user: 'late-user' }));
     assert.equal(document.getElementById('root').textContent, '');
-    const { renderToStaticMarkup } = require('react-dom/server');
-    assert.throws(
-      () =>
-        renderToStaticMarkup(
-          React.createElement(SwitchBranchModal, {
-            from: 'main',
-            to: 'topic',
-            files: Array(100001).fill('a'),
-            busy: undefined,
-            onCancel() {},
-            onLeaveHere() {},
-            onCommitFirst() {},
-          }),
-        ),
-      /Branch switch: file limit exceeded/,
+    // A branch switch lists any number of changed files: the count is bounded only by the
+    // platform's array ceiling (no product size limit), and the modal names the first five.
+    assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+    const switchRoot = createRoot(document.getElementById('root'));
+    await act(async () =>
+      switchRoot.render(
+        React.createElement(SwitchBranchModal, {
+          from: 'main',
+          to: 'topic',
+          files: Array.from({ length: 100_001 }, (_, index) => `src/file${index}.astro`),
+          busy: undefined,
+          onCancel() {},
+          onLeaveHere() {},
+          onCommitFirst() {},
+        }),
+      ),
     );
+    assert.equal(document.querySelectorAll('.dirty-files li').length >= 5, true);
+    await act(async () => switchRoot.unmount());
   } finally {
     await act(async () => root.unmount());
     dom.window.close();

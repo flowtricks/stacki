@@ -421,7 +421,8 @@ test('Button’s aria-label shape is the Conditional pill: a group that leaves i
   });
   await click(document.querySelector('.attr-row'));
   await click(document.querySelector('.conditional-summary'));
-  assert.equal(editor().querySelector('.conditional-code-condition').textContent, 'title.length >= 3', 'the code, highlighted and locked');
+  // The test is a Computed part: its chip, then the code (7fc229e1).
+  assert.equal(editor().querySelector('.conditional-code-condition-code').textContent, 'title.length >= 3', 'the code, highlighted and locked');
   assert.equal(
     editor().querySelector('.conditional-code-condition').closest('.conditional-condition').querySelector('[aria-label="Property"]') ?? undefined,
     undefined,
@@ -935,7 +936,7 @@ const styles = ["color: red", "margin: 0"];
 <p style={styles.join("; ")}>Hi</p>
 `;
 
-test('back to a plain value: code it can hold converts, code it cannot stays code, never deleted', async (context) => {
+test('back to a plain value: code it can hold converts; other code gives way to the empty value, with Undo', async (context) => {
   const { harness, file, read } = await project(context, CODED);
   installDom();
   const paragraph = elementOf(read.model.nodes, 'p');
@@ -953,7 +954,7 @@ test('back to a plain value: code it can hold converts, code it cannot stays cod
         }),
       ),
     );
-  const notices = () => toastNotices().filter((notice) => notice.message === 'Code cleared. Undo to restore.').length;
+  const notices = () => toastNotices().filter((notice) => notice.message === 'Binding removed').length;
   const before = notices();
 
   await draw({ type: 'expr', value: '"color: red"' });
@@ -964,10 +965,10 @@ test('back to a plain value: code it can hold converts, code it cannot stays cod
   writes.length = 0;
   await draw(paragraph.props.style);
   await click(container.querySelector('.prop-expr-toggle'));
-  // Code the plain editor cannot hold is never deleted (dab8f4aa): nothing is written and no notice offers it back.
-  assert.deepEqual(writes, [], 'code it cannot hold stays: nothing is written');
-  assert.equal(notices(), before, 'so there is nothing to offer back');
-  assert.equal(container.querySelector('.prop-expr-toggle')?.getAttribute('aria-pressed'), 'true', 'the field stays on its code');
+  // Code the plain editor cannot hold gives way to the control's empty value in one click, and a notice offers it
+  // back (b60dd520, which replaced dab8f4aa's refusal); Undo restores it too.
+  assert.deepEqual(writes, [{ next: undefined, immediate: true }], 'the code gives way to the empty value');
+  assert.equal(notices(), before + 1, 'and the notice offers it back');
   await act(async () => root.unmount());
 });
 

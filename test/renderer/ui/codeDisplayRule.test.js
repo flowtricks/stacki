@@ -42,6 +42,7 @@ const CODE_LABELS_ALLOWED = {
   'src/features/cmsConnections/EmDashInstall.tsx': 'A file path in a list row.',
   'src/features/palette/PaletteDialogs.tsx': 'A component name and its path in a sentence.',
   'src/features/palette/PalettePanel.tsx': 'A folder name in a sentence.',
+  'src/features/palette/RenameComponentDialog.tsx': 'The new file path, and each file a rename edits, in a list row.',
   'src/features/props/ConditionalValue.tsx': 'Highlighted already: a style value is coloured with declarationTokens through CodeTokens, between value chips.',
   'src/features/props/LinkField.tsx': 'The attribute name `id` in a sentence.',
   'src/features/selectors/SelectorsPanel.tsx': 'A selector chip, with the names its verdict is about marked.',

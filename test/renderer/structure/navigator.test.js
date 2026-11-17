@@ -227,7 +227,8 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
 
   const labels = rows().map((row) => row.label);
   check('the condition is a row', !!at('if-and'), labels.join(' | '));
-  check('it says what it tests', at('if-and').label === 'if command', at('if-and').label);
+  // The Navigator names a test in words (7fc229e1): the prop `command` reads as Command.
+  check('it says what it tests', at('if-and').label === 'if Command', at('if-and').label);
   check('what is inside it is a row', !!at('hero-command'), labels.join(' | '));
   check('the branch it holds is not', !at('and-then'), labels.join(' | '));
   check(

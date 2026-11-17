@@ -80,10 +80,10 @@ test('variable cells keep hook order across sparse matrix updates', async () => 
     assert.ok(notes.length > sequence.length, 'draft lifecycle ran for populated cells');
     assert.deepEqual(notes.at(-1), { name: '--gap', value: undefined }, 'unmount clears the draft');
     const { renderToStaticMarkup } = require('react-dom/server');
-    assert.throws(
-      () => renderToStaticMarkup(React.createElement(Cell, { cell: { ...cell, value: 'x'.repeat(1048577) }, onSave() {} })),
-      /value limit exceeded/,
-    );
+    // Stacki has no product size limit: a value is bounded only by the platform's string ceiling.
+    const { LIMITS, PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
+    assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+    assert.doesNotThrow(() => renderToStaticMarkup(React.createElement(Cell, { cell: { ...cell, value: 'x'.repeat(1048577) }, onSave() {} })));
   } finally {
     dom.window.close();
   }

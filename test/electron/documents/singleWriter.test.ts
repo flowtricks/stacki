@@ -97,6 +97,19 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/project/pageRenameWrite.ts': {
     renameSync: { count: 1, reason: 'a page or folder move; text changes use the host writer' },
   },
+  'electron/handlers/componentRenameApply.ts': {
+    renameSync: { count: 3, reason: 'a component file or folder move (a case-only rename goes through a temporary name); text changes use the host writer' },
+  },
+  'electron/project/cli/cliApply.ts': {
+    writeFileSync: { count: 1, reason: 'the CLI undo journal entry in .stacki, written to a temporary file' },
+    renameSync: { count: 1, reason: 'the journal entry moved into place whole' },
+  },
+  'electron/project/cli/cliEffects.ts': {
+    writeFileSync: { count: 1, reason: 'binary app files under .stacki/apps/<id>/, created new (wx); never page text' },
+  },
+  'electron/project/newProjectDefaults.ts': {
+    writeFileSync: { count: 1, reason: '.stacki/styles.json metadata for a project Stacki just made' },
+  },
   'electron/main.ts': {
     writeFileSync: { count: 3, reason: 'app state in userData (reopen, settings, recents)' },
   },

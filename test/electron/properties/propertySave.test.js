@@ -157,15 +157,16 @@ test('an inline annotation is the props type: it is edited, never shadowed by an
   assert.doesNotMatch(output, /interface Props/);
 });
 
-test('an untyped component with `...rest` is never given an interface', () => {
+test('an untyped component with `...rest` is typed only with an open interface, so rest still takes any attribute', () => {
+  // Every prop is editable (991940ef): a type change on a component with no type writes an interface, and with
+  // `...rest` that interface keeps an index signature, so the attributes rest passes on stay allowed.
   const source = zoo('RestPropsPlain');
   const label = propertyOf(source, 'label');
   assert.equal(value(editPropertyDefinition(source, save(label, { defaultValue: "'Go'" }))), source.replace("label = 'Link'", "label = 'Go'"));
-  const typed = editPropertyDefinition(source, save(label, { type: 'number' }));
-  assert.equal(typed.ok, false);
-  assert.equal(typed.error.code, 'untyped');
-  assert.match(typed.error.message, /\.\.\.rest/);
-  assert.equal(editPropertyDefinition(source, { kind: 'order', names: ['label'] }).ok, false);
+  const typed = value(editPropertyDefinition(source, save(label, { type: 'number' })));
+  assert.match(typed, /interface Props \{\n\tlabel\?: number;\n\t\[attribute: string\]: unknown;\n\}/);
+  assert.match(typed, /const \{ label = 'Link', \.\.\.rest \} = Astro\.props;/);
+  assert.match(value(editPropertyDefinition(source, { kind: 'order', names: ['label'] })), /\[attribute: string\]: unknown;/);
   // A new prop with nothing to type is a destructure entry alone.
   const added = value(
     editPropertyDefinition(source, {

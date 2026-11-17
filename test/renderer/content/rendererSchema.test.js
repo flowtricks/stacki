@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule.js');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
@@ -71,9 +72,10 @@ for (const value of [
 ]) {
   assert.throws(() => parseContentSchema(value));
 }
-const typeOverLimit = 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1);
-assert.throws(() => parseContentSchema({ type: typeOverLimit }), /limit/);
-assert.throws(() => parseContentSchema({ required: Array(100001).fill('a') }), /limit/);
+// A longer string or array than the platform holds cannot be built; Stacki has no product size limit.
+assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+assert.doesNotThrow(() => parseContentSchema({ required: Array(100001).fill('a') }));
 let deep = { type: 'string' };
 for (let index = 0; index < 130; index++) {
   deep = { items: deep };

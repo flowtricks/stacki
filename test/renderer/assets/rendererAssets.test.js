@@ -1,7 +1,9 @@
-// Asset response contracts reject malformed paths, sizes, and collections before
-// rendering. Scripted preload calls distinguish disk failures from contract bugs.
+// Asset response contracts reject malformed paths, sizes, and entries before
+// rendering; an entry list of any length is accepted. Scripted preload calls distinguish disk failures from contract bugs.
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
@@ -46,7 +48,9 @@ for (const invalid of [
 ]) {
   assert.throws(() => parseAssetEntry(invalid));
 }
-assert.throws(() => parseAssetEntries({ entries: Array(100001).fill(file) }), /Array exceeds limit/);
+// Stacki has no product size limit: an asset list is bounded only by what an array holds.
+assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+assert.equal(parseAssetEntries({ entries: Array(100001).fill(file) }).entries.length, 100001);
 assert.throws(() => parseAssetEntries({ entries: PLATFORM_NULL }), /Expected array/);
 assert.deepEqual(parseAssetDimensions({ dims: { w: 640, h: 480 } }), { w: 640, h: 480 });
 // Absence is `undefined` (AGENTS.md §6): an image whose size is unknown sends

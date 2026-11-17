@@ -28,12 +28,16 @@ const { readComponentProperties } = require('#dist/electron/properties/propertyD
 const SNAPSHOT = JSON.parse(fs.readFileSync(repoPath('test/fixtures/propModelParity/regexReader.json'), 'utf8'));
 const ZOO = 'test/fixtures/propZoo/';
 
-// Keys the model adds to a schema field; the old reader had no such facts.
-const ADDED_KEYS = new Set(['deprecated', 'usage']);
+// Keys the model adds to a schema field; the old reader had no such facts. `itemKind` is the kind of a list's
+// items, read from the declared type or the literal items (a3adcbb6), which draws each row with its own control.
+const ADDED_KEYS = new Set(['deprecated', 'usage', 'itemKind']);
 
 // Deliberate differences, keyed `file#reader.prop.key` (`reader` is schema or
 // panel; `names` is the order of the list). Each states the old and new value.
 const INTENDED = {
+  // `const props = Astro.props; const { level = 2 } = props;`: the panel reads a default destructured from a
+  // props object as the default it is (991940ef), where the regex reader saw only `Astro.props` patterns.
+  [`${ZOO}src/components/DestructureLater.astro#panel.level.defaultValue`]: { old: '', new: '2' },
   // A blank line before the opening fence: the compiler (and a real `astro build`)
   // read the block as frontmatter, so its props are the component's. The old
   // reader took the block for page text and found none (astroFence.ts).

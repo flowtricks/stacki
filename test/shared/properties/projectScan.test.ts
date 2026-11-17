@@ -3,12 +3,13 @@
 // entry poisons selection, routing, and the palette.
 //
 // Methodology: a full scan passes; each known-bad entry shape fails with a
-// pinned message; array bounds from LIMITS are exercised.
+// pinned message. Entry counts and title lengths are bounded only by the
+// platform, so those bounds are pinned and large scans are accepted.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScanResult } from '#dist/shared/properties/projectScan.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -141,27 +142,18 @@ test('negative space: wrong entry shapes fail with pinned messages', () => {
   );
 });
 
-test('bounds: entry counts fail at LIMITS', () => {
+test('bounds: entry counts are the platform ceiling, so a large scan is accepted', () => {
+  // An array longer than these bounds cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.scanEntriesMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(LIMITS.scanFoldersMax, PLATFORM_LIMITS.arrayLengthMax);
   const page = goodScan.pages[0];
-  assert.throws(
-    () =>
-      parseScanResult({
-        ...goodScan,
-        pages: Array.from({ length: LIMITS.scanEntriesMax + 1 }, () => page),
-      }),
-    /exceeds \d+ entries/,
-  );
-  assert.throws(
-    () =>
-      parseScanResult({
-        ...goodScan,
-        pageFolders: Array.from({ length: LIMITS.scanFoldersMax + 1 }, () => 'f'),
-      }),
-    /exceeds \d+ entries/,
-  );
+  const pages = Array.from({ length: 10_000 }, () => page);
+  assert.equal(parseScanResult({ ...goodScan, pages }).pages.length, pages.length);
+  const pageFolders = Array.from({ length: 10_000 }, () => 'f');
+  assert.equal(parseScanResult({ ...goodScan, pageFolders }).pageFolders.length, pageFolders.length);
 });
 
-test('page titles are optional bounded strings, never unchecked display data', () => {
+test('page titles are optional strings, never unchecked display data', () => {
   const page = { path: '/site/src/pages/about.astro', name: 'about.astro', route: '/about' };
   const scan = (title: unknown) => parseScanResult({ ...goodScan, pages: [{ ...page, title }] });
   assert.equal(scan('About us').pages[0]?.title, 'About us');
@@ -169,7 +161,10 @@ test('page titles are optional bounded strings, never unchecked display data', (
   for (const value of [jsonNull, 42, {}, []]) {
     assert.throws(() => scan(value), /title: expected string/);
   }
-  assert.throws(() => scan('x'.repeat(LIMITS.ipcFieldCharsMax + 1)), /title: exceeds/);
+  // A title is bounded only by the string: a longer one cannot be built, so a long title is accepted.
+  assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const long = 'x'.repeat(1024 * 1024);
+  assert.equal(scan(long).pages[0]?.title, long);
 });
 
 test('inherited page titles use the same boundary validation as direct titles', () => {
@@ -181,9 +176,11 @@ test('inherited page titles use the same boundary validation as direct titles', 
   const scan = (inheritedTitle: unknown) => parseScanResult({ ...goodScan, pages: [{ ...page, inheritedTitle }] });
   assert.equal(scan('Resources').pages[0]?.inheritedTitle, 'Resources');
   assert.equal(scan(undefined).pages[0]?.inheritedTitle, undefined);
-  for (const value of [jsonNull, 42, {}, [], 'x'.repeat(LIMITS.ipcFieldCharsMax + 1)]) {
+  for (const value of [jsonNull, 42, {}, []]) {
     assert.throws(() => scan(value), /inheritedTitle:/);
   }
+  const long = 'x'.repeat(1024 * 1024);
+  assert.equal(scan(long).pages[0]?.inheritedTitle, long);
 });
 
 // The project's length unit rides on the scan (lengthUnit.ts): parsed when present,

@@ -45,13 +45,14 @@ test('leaving is the one message shape and nothing else', () => {
 test('site pages: the host list parses, and only bounded site paths pass', () => {
   assert.deepEqual(parseCanvasSitePages({ type: 'avb:site-pages', base: '', routes: ['/', '/about'] }), { base: '', routes: ['/', '/about'] });
   assert.deepEqual(parseCanvasSitePages({ type: 'avb:site-pages', base: '/demo/site', routes: [] }), { base: '/demo/site', routes: [] });
+  // A site of any size: the route list has no product limit (a805ae62), so 10 001 routes parse.
+  assert.equal(parseCanvasSitePages({ type: 'avb:site-pages', base: '', routes: Array.from({ length: 10_001 }, () => '/') })?.routes.length, 10_001);
   for (const value of [
     { type: 'avb:site-pages', base: 'demo', routes: [] },
     { type: 'avb:site-pages', base: '', routes: ['about'] },
     { type: 'avb:site-pages', base: '', routes: ['//evil.test'] },
     { type: 'avb:site-pages', base: '', routes: [3] },
     { type: 'avb:site-pages', base: '', routes: '/about' },
-    { type: 'avb:site-pages', base: '', routes: Array.from({ length: 10_001 }, () => '/') },
     { type: 'avb:site-pages', routes: [] },
     { type: 'other', base: '', routes: [] },
   ]) {

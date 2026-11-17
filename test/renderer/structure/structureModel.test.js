@@ -1,9 +1,11 @@
 // Goal: Navigator traversal follows the rows users see and cannot recurse
 // forever through malformed live trees. Methodology: exercise conditional
-// projection, raw-tree lookup, ancestor/collapse state, then cross both bounds.
+// projection, raw-tree lookup, ancestor/collapse state, then cross the depth
+// bound and show that width has none below the platform's array ceiling.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const model = require('../../helpers/rendererModule')('src/features/structure/structureModel.ts');
+const { LIMITS, PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 const element = (id, children = []) => ({
   id,
@@ -59,12 +61,14 @@ test('Navigator opens only the first expandable root and skips non-expandable ro
   assert.deepEqual([...model.initialCollapseMap([raw, paragraph])], []);
   assert.deepEqual([...model.initialCollapseMap([])], []);
   assert.equal(model.defaultCollapsed(section), true, 'nested components retain their default');
-  assert.throws(() => model.initialCollapseMap(Array.from({ length: 20_001 }, () => raw)), /root node limit/);
+  assert.deepEqual([...model.initialCollapseMap(Array.from({ length: 20_001 }, () => raw))], [], 'any number of roots is accepted');
 });
 
-test('Navigator traversals reject excessive width, depth, and cycles', () => {
+test('Navigator traversals accept any width and reject excessive depth and cycles', () => {
+  // Stacki has no product size limit: a tree's width is bounded only by what an array holds.
+  assert.equal(LIMITS.treeNodesMax, PLATFORM_LIMITS.arrayLengthMax);
   const wide = Array.from({ length: 20_001 }, (_, index) => element(`node-${index}`));
-  assert.throws(() => model.findNavigatorNode(wide, 'missing'), /node limit/);
+  assert.equal(model.findNavigatorNode(wide, 'missing'), undefined);
 
   let deep = element('leaf');
   for (let depth = 0; depth < 66; depth += 1) {

@@ -1,11 +1,12 @@
 // Goal: filters and status sorting retain every relevant commit file without mutation.
 // Method: frozen mixed-status fixtures cover copies, renames, unknown statuses, empty
-// results, deterministic path ordering, and the shared collection boundary.
+// results, deterministic path ordering, and the platform's collection ceiling.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { selectHistoryFiles } = load('src/features/history/historyFileList.ts');
 const { BOUNDARY_LIMITS } = load('shared/core/boundary.ts');
+const { PLATFORM_LIMITS } = load('shared/core/limits.ts');
 
 const files = Object.freeze([
   Object.freeze({ status: 'D', path: 'b-deleted' }),
@@ -49,12 +50,7 @@ test('status sorting groups Changed, New and Deleted with paths sorted within ea
     'z-new',
   ]);
   assert.deepEqual(paths(files), original);
-  assert.throws(
-    () =>
-      selectHistoryFiles(Array(BOUNDARY_LIMITS.itemsMax + 1).fill(files[0]), {
-        filter: 'all',
-        sort: 'path',
-      }),
-    /History files: file limit exceeded/,
-  );
+  // A longer array than the platform holds cannot be built; Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(selectHistoryFiles(Array(100_001).fill(files[0]), { filter: 'all', sort: 'path' }).length, 100_001);
 });

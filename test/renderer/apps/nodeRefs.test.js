@@ -41,6 +41,8 @@ const HERO = '<!--avb-s:0.0--><h1 id="hero">Hi</h1><!--avb-e:0.0-->';
 
 function collect(html) {
   const dom = new JSDOM(html);
+  // The frame reads computed styles through `window`, as it does in the canvas (frameMeasure.ts).
+  global.window = dom.window;
   global.document = dom.window.document;
   global.Node = dom.window.Node;
   global.Element = dom.window.Element;

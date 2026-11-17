@@ -193,12 +193,13 @@ const internalAttributeKept = async () => {
         node: {
           id: 'section',
           props: {
-            // An object in the list is code the class-list editor does not draw, so it stays code here.
-            'class:list': { type: 'expr', value: '["icon", { [variant]: true }]' },
+            // Code in an attribute is edited as code. (class:list is not used here: its own editor draws every
+            // part of a list, an object too, since c8092bee.)
+            'data-items': { type: 'expr', value: '["icon", { [variant]: true }]' },
             '...rest': { type: 'spread', value: 'rest' },
           },
         },
-        names: ['class:list', '...rest'],
+        names: ['data-items', '...rest'],
         bindContext: { frontmatter: 'const variant = "medium";' },
         onSetProp: () => {},
         onRenameProp: () => {},

@@ -444,7 +444,10 @@ test('a layout picked wraps the page; removed, its tags go and the page stays', 
   const harness = fixture();
   context.after(harness.dispose);
   const file = path.join(harness.root, 'src/pages/index.astro');
-  const body = '<main>\n  <p>m</p>\n</main>\n<footer>f</footer>\n';
+  // The page imports the layout first, as the wrap gesture sends it: the pre-flight check refuses a
+  // wrap that adds a tag nothing imports (shared/engine/preflight.ts).
+  const head = "---\nimport Base from '../layouts/Base.astro';\n---\n";
+  const body = head + '<main>\n  <p>m</p>\n</main>\n<footer>f</footer>\n';
   fs.writeFileSync(file, body);
   const page = await read(harness, file);
   const wrapped = await edit(harness, file, page.checksum, {
@@ -454,7 +457,7 @@ test('a layout picked wraps the page; removed, its tags go and the page stays', 
     name: 'Base',
   });
   assert.ok(wrapped.ok, 'the wrap applies');
-  const inside = '<Base>\n<main>\n  <p>m</p>\n</main>\n<footer>f</footer>\n</Base>\n';
+  const inside = head + '<Base>\n<main>\n  <p>m</p>\n</main>\n<footer>f</footer>\n</Base>\n';
   assert.equal(fs.readFileSync(file, 'utf8'), inside);
   const again = await read(harness, file);
   const unwrapped = await edit(harness, file, again.checksum, {
@@ -691,19 +694,22 @@ test('new nodes print where they land; the frontmatter changes its slot', async 
     props: {},
     children: undefined,
   });
-  const inserted = await edit(harness, file, page.checksum, {
-    tag: 'insert-node',
-    target: refAt(page, [0, 0]),
-    placement: 'after',
-    content: { tag: 'nodes', nodes: [card] },
-  });
-  assert.ok(inserted.ok, 'the node inserts');
+  // The import goes first, as the insert gesture sends it (pageGestures.ts sequences the frontmatter
+  // before the node): the pre-flight check refuses a tag nothing imports. Both are authored against the
+  // same read; the insert is rebased through the import.
   const imports = [...page.model.imports, { name: 'Card', path: '../components/Card.astro', quote: "'" }];
   const withImport = await edit(harness, file, page.checksum, {
     tag: 'set-frontmatter',
     model: { ...page.model, imports, nodes: [] },
   });
   assert.ok(withImport.ok, `the import lands (${withImport.ok ? '' : JSON.stringify(withImport.error)})`);
+  const inserted = await edit(harness, file, page.checksum, {
+    tag: 'insert-node',
+    target: refAt(page, [0, 0]),
+    placement: 'after',
+    content: { tag: 'nodes', nodes: [card] },
+  });
+  assert.ok(inserted.ok, `the node inserts (${inserted.ok ? '' : JSON.stringify(inserted.error)})`);
   assert.equal(
     fs.readFileSync(file, 'utf8'),
     [

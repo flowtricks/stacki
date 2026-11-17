@@ -18,7 +18,7 @@ import {
   describeCapability,
   parseCapability,
 } from '#dist/shared/page/capability.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 import { parsePageResult } from '#dist/shared/page/pageNode.js';
 import { createSnapshot } from '#dist/shared/page/snapshot.js';
 import { projectionAcceptsVisualIntents, projectOpaqueDocument, projectPage, type ProjectedNode } from '#dist/shared/page/sourceProjection.js';
@@ -173,19 +173,17 @@ test('an .astro page is markup throughout; a stylesheet is an opaque document', 
   assert.deepEqual(css, { ...opaque, nodes: [] });
 });
 
-// Inside the byte bound but past the UTF-16 bound: 10 MB of ASCII. The parser
-// refuses it, and the projection must too — as a parse error, not the offset
-// converter's assertion (a crash before step 4 found it). One unit less passes.
-test('a page past the UTF-16 bound projects as a parse error, not a crash', () => {
-  const over = 'x'.repeat(LIMITS.ipcFieldCharsMax + 1);
-  assert.ok(Buffer.byteLength(over) <= LIMITS.sourceBytesMax, 'The file fits the byte bound');
-  const page = projectPage(over, parsePageResult(parsePage(over, { locs: true })));
-  assert.equal(page.tag, 'parse-error');
-  assert.equal(page.byteLength, LIMITS.ipcFieldCharsMax + 1);
-  assert.match(page.tag === 'parse-error' ? (page.diagnostics[0]?.message ?? '') : '', /UTF-16/);
-  assert.equal(projectOpaqueDocument(over).tag, 'parse-error');
-  const at = over.slice(1);
-  assert.equal(projectOpaqueDocument(at).tag, 'valid', 'Exactly at the bound is valid');
+// The UTF-16 bound is the platform's string length, so a page past it cannot be
+// built: Stacki has no product size limit. The bound is pinned, and a large page
+// (a few MB) projects as valid instead of being refused.
+test('a large page projects as valid; the UTF-16 bound is the platform ceiling', () => {
+  assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(LIMITS.sourceBytesMax, PLATFORM_LIMITS.stringUnitsMax);
+  const large = 'x'.repeat(2 * 1024 * 1024);
+  const page = projectPage(large, parsePageResult(parsePage(large, { locs: true })));
+  assert.equal(page.tag, 'valid');
+  assert.equal(page.byteLength, large.length);
+  assert.equal(projectOpaqueDocument(large).tag, 'valid');
 });
 
 test('a snapshot computes its checksum from its bytes and matches its projection', () => {

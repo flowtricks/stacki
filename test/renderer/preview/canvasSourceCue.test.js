@@ -18,7 +18,7 @@ import { act } from 'react-dom/test-utils';
 import { CanvasTextSourceCue } from ${JSON.stringify(repoPath('src/app/shell/CanvasTextSourceCue.tsx'))};
 import { canvasSourceCue } from ${JSON.stringify(repoPath('src/ui/canvasTextSourceCue.ts'))};
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-globalThis.stacki = { React, createRoot, act, CanvasTextSourceCue, SourceHint, canvasSourceCue };
+globalThis.stacki = { React, createRoot, act, CanvasTextSourceCue, canvasSourceCue };
 `;
 
 function mount() {

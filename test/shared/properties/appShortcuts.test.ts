@@ -282,7 +282,8 @@ test('no Stacki, menu, browser or OS shortcut is in the reserved app range', () 
           .join('/'),
       )
       .sort(),
-    ['electron/preload/frameDesign.ts', 'src/ui/richTextCommands.ts'],
+    // appKeys.ts reads a plain 0 (no modifier) for Follow canvas size (aca5b5c5): outside Mod+Alt+Shift, so outside the range.
+    ['electron/preload/frameDesign.ts', 'src/app/model/appKeys.ts', 'src/ui/richTextCommands.ts'],
     'a new digit shortcut is checked against the range here first',
   );
   const forward = /\/\^Digit\(\[([\d-]+)\]\)\$\//.exec(readFileSync(join(ROOT, 'electron/preload/frameDesign.ts'), 'utf8'));

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { readVariables } = require('#dist/electron/project/cssVars.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
@@ -111,20 +112,14 @@ for (const mutate of [
   (snapshot) => {
     cell(snapshot).unknownColor = 'true';
   },
-  (snapshot) => {
-    cell(snapshot).value = 'x'.repeat(VARIABLES_LIMITS.fileCharsMax + 1);
-  },
-  (snapshot) => {
-    group(snapshot).columns = Array(VARIABLES_LIMITS.entriesMax + 1).fill(PLATFORM_NULL);
-  },
-  (snapshot) => {
-    snapshot.files = Array(VARIABLES_LIMITS.entriesMax + 1).fill(PLATFORM_NULL);
-  },
 ]) {
   const invalid = good();
   mutate(invalid);
   assert.throws(() => parseCSSVariables(invalid));
 }
+// A longer value or list than the platform holds cannot be built; Stacki has no product size limit.
+assert.equal(VARIABLES_LIMITS.fileCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+assert.equal(VARIABLES_LIMITS.entriesMax, PLATFORM_LIMITS.arrayLengthMax);
 const matrix = good();
 block(matrix).kind = 'matrix';
 assert.throws(() => parseCSSVariables(matrix), /matrix columns are required/);

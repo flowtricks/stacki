@@ -115,7 +115,6 @@ before(async () => {
     export { default as LocalStep } from './src/features/studioSetup/LocalStep';
     export { ConnectionHelp } from './src/features/publishing/PublishConnections';
     export { CodeControl } from './src/features/props/PropControls';
-    export { default as PropertyReadOnlyFields } from './src/features/componentProperties/PropertyReadOnlyFields';
     export { RawLinePanel } from './src/features/props/SourcePanels';
     export { default as HistoryFileDiff } from './src/features/history/HistoryFileDiff';
     export { MergeConflictDetail } from './src/features/git/MergeConflictDetail';
@@ -310,17 +309,6 @@ test('a prop set in code shows its type and value highlighted', async () => {
   assert.equal(host.querySelector('.props-code-row-value').textContent, '"x"');
   assert.ok(host.querySelector('.props-code-row-type .code-token'));
   assert.equal(host.querySelector('.props-code-row-value .code-token').style.color, 'rgb(195, 232, 141)');
-});
-
-test('a read-only prop shows its type and default as code, and says when one is absent', async () => {
-  const property = { name: 'size', type: "'small' | 'large'", required: false, readonly: false, defaultValue: '', description: '' };
-  const host = await mount(create(code.PropertyReadOnlyFields, { property }));
-  const type = host.querySelector('pre[aria-label="Code type"]');
-  assert.equal(type.textContent, "'small' | 'large'");
-  assert.ok(type.querySelector('.code-token'));
-  const empty = host.querySelector('pre[aria-label="Default value"]');
-  assert.equal(empty.textContent, 'Not specified');
-  assert.ok(!empty.querySelector('.code-token'), 'The placeholder is not code');
 });
 
 test('a source line edits as highlighted markup, and only an edit writes', async () => {

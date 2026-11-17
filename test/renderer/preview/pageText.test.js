@@ -1,5 +1,5 @@
 // Read real head markup and validate the metadata reply boundary. Exercise missing,
-// empty, malformed and oversized values so placeholders never trust iframe data.
+// empty, malformed and long values so placeholders never trust iframe data.
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const loadRenderer = require('../../helpers/rendererModule.js');
@@ -30,15 +30,18 @@ assert.deepEqual(renderedPageText(document), {
 document.querySelector('title').textContent = '';
 document.querySelector('[property="og:description"]').setAttribute('content', '');
 assert.deepEqual(renderedPageText(document), { title: '', description: '' });
-const atLimit = 'a'.repeat(BOUNDARY_LIMITS.textLengthMax);
-assert.equal(parsePageText({ title: atLimit }).title, atLimit);
-const oversized = atLimit + 'a';
-document.querySelector('title').textContent = oversized;
-document.querySelector('[property="og:description"]').setAttribute('content', oversized);
-assert.deepEqual(renderedPageText(document), {});
-for (const invalid of [42, [], JSON.parse('null'), { title: 42 }, { description: {} }, { title: oversized }, { description: oversized }]) {
+// A longer string than the platform holds cannot be built; Stacki has no product size limit.
+const { PLATFORM_LIMITS } = loadRenderer('shared/core/limits.ts');
+assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+// A few MB of metadata stands in for an unusually long value without straining the test process.
+const long = 'a'.repeat(4_000_000);
+assert.equal(parsePageText({ title: long }).title, long);
+document.querySelector('title').textContent = long;
+document.querySelector('[property="og:description"]').setAttribute('content', long);
+assert.deepEqual(renderedPageText(document), { title: long, description: long });
+for (const invalid of [42, [], JSON.parse('null'), { title: 42 }, { description: {} }]) {
   assert.throws(() => parsePageText(invalid));
   assert.equal(parseCanvasReply({ id: 1, found: true, pageText: invalid }).ok, false);
 }
 dom.window.close();
-console.log('page-text: rendered metadata and bounded reply validation passed');
+console.log('page-text: rendered metadata and reply validation passed');

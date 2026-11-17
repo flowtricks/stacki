@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule.js');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
@@ -49,10 +50,6 @@ for (const input of [
   { ...valid, computedProps: { color: false } },
   { ...valid, inheritedSources: { color: { label: 123 } } },
   { ...valid, inheritedSources: { color: { label: '.parent', path: 42 } } },
-  {
-    ...valid,
-    inheritedSources: { color: { label: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
-  },
   { ...valid, inheritedSources: PLATFORM_NULL },
   { ...valid, authoredProps: { 'font-size': 16 } },
   { ...valid, winning: { '--a': { expression: 1 } } },
@@ -61,12 +58,13 @@ for (const input of [
   { ...valid, scoped: [] },
   { ...valid, winning: { '--a': { ...valid.winning['--background'], depth: -1 } } },
   { ...valid, winning: Object.fromEntries(Array.from({ length: 513 }, (_, index) => [`--n${index}`, valid.winning['--background']])) },
-  { ...valid, authoredProps: { color: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
-  { ...valid, identity: { ...valid.identity, classes: Array(100001).fill('a') } },
-  { ...valid, identity: { ...valid.identity, tag: 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
 ]) {
   assert.equal(parseCanvasReply(input).ok, false);
 }
+// A longer string or array than the platform holds cannot be built; Stacki has no product size limit.
+assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+assert.equal(parseCanvasReply({ ...valid, identity: { ...valid.identity, classes: Array(100001).fill('a') } }).ok, true);
 
 async function main() {
   const sent = [];
@@ -84,6 +82,8 @@ async function main() {
     computed: valid.computed,
     computedProps: valid.computedProps,
     authoredProps: valid.authoredProps,
+    // A reply without the page's own origins reads as none (75baa419), never as absent.
+    authoredOrigins: {},
     inheritedSources: valid.inheritedSources,
     winning: valid.winning,
     scoped: valid.scoped,

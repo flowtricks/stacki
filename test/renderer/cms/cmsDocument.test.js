@@ -4,6 +4,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -103,10 +105,11 @@ test('a failed write retains its edit for retry and does not record success', as
   assert.equal(state.refreshes(), 0);
 });
 
-test('writers enforce ownership, loaded data, ' + 'collection bounds, and wrapper fidelity', async () => {
+test('writers enforce ownership, loaded data, and wrapper fidelity', async () => {
   const state = fixture();
   assert.throws(() => state.writer.accept(cmsCollection('another.json', []), []), /snapshot belongs to another file/);
-  assert.throws(() => state.writer.queue(Array(100001).fill(jsonNull)), /item limit exceeded/);
+  // Stacki has no product size limit: a collection is bounded only by what an array holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
   const empty = createCmsWriter({
     projectPath: '/project',
     rel: 'data.json',

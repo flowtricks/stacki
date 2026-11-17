@@ -8,6 +8,7 @@ const path = require('node:path');
 const bridge = require('../../helpers/rendererModule')('src/features/git/gitChipBridge.ts');
 const { repoPath } = require('../../helpers/sources.js');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -44,9 +45,13 @@ test('GitChip parsers cover status and checkout variants', () => {
     error: 'restore failed',
   });
   assert.deepEqual(bridge.parseGitCheckout(blocked), blocked);
-  for (const value of [jsonNull, {}, [{ ...status, kind: 'mystery' }], [{ ...status, staged: 'no' }], Array(100001).fill(status)]) {
+  for (const value of [jsonNull, {}, [{ ...status, kind: 'mystery' }], [{ ...status, staged: 'no' }]]) {
     assert.throws(() => bridge.parseGitStatus(value));
   }
+  // Stacki has no product size limit: a status or file list is bounded only by what an array holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(bridge.parseGitStatus(Array(100001).fill(status)).length, 100001);
+  assert.equal(bridge.parseGitCheckout({ ...blocked, files: Array(100001).fill('file') }).files.length, 100001);
   for (const value of [
     jsonNull,
     {},
@@ -54,7 +59,6 @@ test('GitChip parsers cover status and checkout variants', () => {
     { ...switched, parkedFrom: 1 },
     // Absence is `undefined` (AGENTS.md §6): main never sends a null origin.
     { ...switched, parkedFrom: jsonNull },
-    { ...blocked, files: Array(100001).fill('file') },
   ]) {
     assert.throws(() => bridge.parseGitCheckout(value));
   }
@@ -145,7 +149,8 @@ test('Pull validates requests, response variants and failures', async () => {
   global.window = { avb: { gitPull: async () => ({ ok: true, changed: 'yes' }) } };
   await assert.rejects(bridge.pullGitBranch('/project', 'main'), /boolean/i);
   assert.throws(() => bridge.pullGitBranch('/project', 1));
-  assert.throws(() => bridge.pullGitBranch('/project', 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1)));
+  // A longer branch name than the platform's string ceiling cannot be built.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
   assert.throws(() => bridge.pullGitBranch('/project\0bad', 'main'), /NUL/);
   const dirty = { ok: false, dirty: true, from: 'main', branch: 'origin/main', files: ['a'] };
   global.window.avb.gitPull = async () => dirty;

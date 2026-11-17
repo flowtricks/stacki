@@ -169,7 +169,8 @@ const texts = (parts) => parts.map((part) => part.text);
   );
   const css = fs.readFileSync(repoPath('src/features/style/embedEditor.css'), 'utf8');
   check('the class chips are the class blue', /\.embed-editor_element-tip-chip\.is-class \{[^}]*var\(--color-class-tag-bg\)/.test(css));
-  check('the attribute chips are the connected purple', /\.embed-editor_element-tip-chip\.is-attribute \{[^}]*#453b63/.test(css));
+  // The purple is the attribute chip token, the bright purple with white text (837d04b6), not a colour of its own.
+  check('the attribute chips are the connected purple', /\.embed-editor_element-tip-chip\.is-attribute \{[^}]*var\(--color-attribute-chip-bg\)/.test(css));
   check('the tip is not the black of the field it opens over', /\.embed-editor_element-tip \{[^}]*var\(--color-bg-surface-raised\)/.test(css));
   check(
     'the tip is under the line, from its left edge',

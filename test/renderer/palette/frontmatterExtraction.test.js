@@ -23,6 +23,8 @@ const esbuild = require('esbuild');
 const { parsePageDiskRead, parsePageEditResult } = require('#dist/shared/ipc/pageSave.js');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { parseIpcPayload } = require('#dist/shared/ipc/ipcPayloads.js');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 
 const buildDirectory = repoPath('node_modules/.stacki-test/frontmatter-extraction');
@@ -1005,7 +1007,10 @@ test('component:create keeps all of an import, and refuses moved code that is no
   assert.equal(parseIpcPayload('component:create', request).frontmatter, undefined, 'moved code is optional');
   assert.throws(() => parseIpcPayload('component:create', { ...request, frontmatter: { imports: [], code: 1 } }), /Expected string/);
   assert.throws(() => parseIpcPayload('component:create', { ...request, frontmatter: { code: '' } }));
-  assert.throws(() => parseIpcPayload('component:create', { ...request, frontmatter: { imports: [], code: 'x'.repeat(100_000_000) } }), /exceeds limit/);
+  // Stacki has no product size limit: moved code is bounded only by the platform's string ceiling.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  const longCode = 'x'.repeat(4_000_000);
+  assert.equal(parseIpcPayload('component:create', { ...request, frontmatter: { imports: [], code: longCode } }).frontmatter.code, longCode);
 });
 
 // ── 9. One undo step ────────────────────────────────────────────────────────

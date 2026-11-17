@@ -145,7 +145,6 @@ test('preview message parser ignores unknown and malformed project messages', ()
     { type: 'avb:rects', rects: {}, classes: {}, spacing: { 0: [{ units: [16] }] } },
     { type: 'avb:click-node', path: '0', occurrence: -1, outside: false },
     { type: 'avb:modifiers', shiftKey: 'yes', altKey: false },
-    { type: 'avb:rendered-nodes', paths: Array(100_001).fill('0') },
     { type: 'avb:click-node', path: '0', occurrence: 0, outside: false, token: 'not-a-digest' },
     { type: 'avb:render', token: 'x', stamps: [] },
     { type: 'avb:render', token: TOKEN, stamps: [{ file: '../escape.astro', checksum: TOKEN }] },
@@ -158,8 +157,12 @@ test('preview message parser ignores unknown and malformed project messages', ()
       ],
     },
   ]) {
-    assert.equal(parsePreviewMessage(value), undefined);
+    // Compared as a boolean: a failed assert.equal would print the whole parsed message.
+    assert.ok(parsePreviewMessage(value) === undefined, JSON.stringify(value).slice(0, 200));
   }
+  // A page of any size: the rendered paths have no product limit (a805ae62), so 100 001 of them parse.
+  const many = parsePreviewMessage({ type: 'avb:rendered-nodes', paths: Array(100_001).fill('0') });
+  assert.ok(many?.kind === 'rendered-nodes' && many.paths.length === 100_001, 'every rendered path is kept');
 });
 
 test('forwarded shortcuts parse each variant and ignore every other or malformed message', () => {

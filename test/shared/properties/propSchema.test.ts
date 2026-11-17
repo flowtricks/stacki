@@ -3,14 +3,15 @@
 // built from. A bad schema means wrong controls, silently.
 //
 // Methodology: a full known-good schema passes; each known-bad shape fails
-// with a pinned message; the Map-ness and size bounds are exercised.
+// with a pinned message; the Map-ness and collection bounds are exercised.
+// Text is bounded only by the platform's string length, so its bound is pinned.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseField, parsePropSchema } from '#dist/shared/properties/propSchema.js';
 import { parsePropSchema as parseAstroSchema } from '#dist/electron/parse/astroParser.js';
 import { parseScanResult } from '#dist/shared/properties/projectScan.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -142,7 +143,6 @@ test('nested schema metadata rejects invalid shapes and values', () => {
     { doc: 0 },
     { defaultExpr: 1 },
     { defaultAsset: 1 },
-    { defaultAsset: 'x'.repeat(LIMITS.attrCharsMax + 1) },
     { min: NaN },
     { max: Infinity },
     { step: -Infinity },
@@ -168,19 +168,12 @@ test('nested schema metadata rejects invalid shapes and values', () => {
   }
 });
 
-test('nested schema collections and text have explicit bounds', () => {
+test('nested schema collections have explicit bounds; text is the platform ceiling', () => {
   const base = { name: 'item', type: 'code', optional: true };
-  const longText = 'x'.repeat(LIMITS.attrCharsMax + 1);
   const tooManyFields = Array.from({ length: LIMITS.propSchemaFieldsMax + 1 }, () => 'x');
   const tooManyOptions = Array.from({ length: LIMITS.propOptionsMax + 1 }, () => 'x');
   const branch = { forbids: [], pins: {}, defaults: {}, rules: {}, docs: {} };
   const metadataCases = [
-    { name: longText },
-    { type: longText },
-    { doc: longText },
-    { hint: longText },
-    { default: longText },
-    { options: [longText] },
     { shape: tooManyFields.map((name) => ({ name, type: 'string' })) },
     { unions: tooManyOptions.map(() => ({ names: [], branches: [] })) },
     { unions: [{ names: tooManyFields, branches: [] }] },
@@ -191,7 +184,12 @@ test('nested schema collections and text have explicit bounds', () => {
   for (const metadata of metadataCases) {
     assert.throws(() => parseField({ ...base, ...metadata }, 'item'), /exceed/);
   }
-  assert.equal(parseField({ ...base, doc: 'x'.repeat(LIMITS.attrCharsMax) }, 'item').doc?.length, LIMITS.attrCharsMax);
+  // Text is bounded only by the string: a longer one cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.attrCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const longText = 'x'.repeat(1024 * 1024);
+  const long = parseField({ ...base, type: longText, doc: longText, hint: longText, default: longText, defaultAsset: longText, options: [longText] }, 'item');
+  assert.equal(long.doc?.length, longText.length);
+  assert.equal(long.type.length, longText.length);
 });
 
 // The code row and mixed choices travel with their own metadata: a function or

@@ -119,7 +119,11 @@ test('git:info carries the default branch as an optional bounded string, and not
   const base = { isRepo: true, branch: 'main', branches: ['main'], dirty: false, ahead: 0, parked: [] };
   assert.equal(bridge.parseGitInfo({ ...base, defaultBranch: 'develop' }).defaultBranch, 'develop');
   assert.equal(bridge.parseGitInfo(base).defaultBranch, undefined, 'older producers send none');
-  for (const bad of [5, true, ['main'], {}, 'x'.repeat(require('../../helpers/rendererModule')('shared/core/boundary.ts').BOUNDARY_LIMITS.textLengthMax + 1)]) {
+  for (const bad of [5, true, ['main'], {}]) {
     assert.throws(() => bridge.parseGitInfo({ ...base, defaultBranch: bad }), typeof bad);
   }
+  // A longer string than the platform holds cannot be built; Stacki has no product size limit.
+  const { BOUNDARY_LIMITS } = require('../../helpers/rendererModule')('shared/core/boundary.ts');
+  const { PLATFORM_LIMITS } = require('../../helpers/rendererModule')('shared/core/limits.ts');
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
 });

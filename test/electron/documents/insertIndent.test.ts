@@ -31,6 +31,7 @@ function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-insert-indent-'));
   fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
   fs.mkdirSync(path.join(root, 'src/components'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src/components/Card.astro'), '<article><slot /></article>');
   fs.mkdirSync(path.join(root, 'user'));
   fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"astro":"*"}}');
   const harness = mainHarness(path.join(root, 'user'));
@@ -147,6 +148,9 @@ const lines = (...rows: readonly string[]): string => rows.join('\n');
 const PARAGRAPH = '<p>New</p>';
 const CARD = '<div class="card">\n\t<h3>Title</h3>\n\t<p>Body</p>\n</div>';
 const COMPONENT = '---\nimport Card from "../components/Card.astro";\n---\n<Card title="Hi" size={2} />';
+// A page that receives a component imports it: the pre-flight check (shared/engine/preflight.ts) refuses an
+// edit that adds a tag nothing imports, so the insert gesture carries the import and these pages start with it.
+const CARD_IMPORT = lines('---', 'import Card from "../components/Card.astro";', '---', '');
 const LIST = lines('<main>', '  <h1>A</h1>', '  <p>B</p>', '</main>', '');
 
 // --- Placements ----------------------------------------------------------------
@@ -189,7 +193,13 @@ test('a node beside words stands on its own line at the words’ indentation', a
   const after = lines('<main>', '  <h1>A</h1>', '  Hello', '  <p>New</p>', '</main>', '');
   await expectInsert(words, [0, 1], 'after', PARAGRAPH, after);
   await expectInsert(words, [0], 'last-child', PARAGRAPH, after);
-  await expectInsert(words, [0], 'last-child', COMPONENT, lines('<main>', '  <h1>A</h1>', '  Hello', '  <Card title="Hi" size={2} />', '</main>', ''));
+  await expectInsert(
+    CARD_IMPORT + words,
+    [0],
+    'last-child',
+    COMPONENT,
+    CARD_IMPORT + lines('<main>', '  <h1>A</h1>', '  Hello', '  <Card title="Hi" size={2} />', '</main>', ''),
+  );
   // Was: `<main><p>New</p>\n  Hello`.
   const first = lines('<main>', '  Hello', '  <h1>A</h1>', '</main>', '');
   const before = lines('<main>', '  <p>New</p>', '  Hello', '  <h1>A</h1>', '</main>', '');
@@ -268,18 +278,18 @@ test('a multi-line node indents its children and closes at its opening tag’s d
 
 test('a component with props lands as one line beside its siblings and in an empty parent', async () => {
   await expectInsert(
-    lines('<main>', '  <h1>A</h1>', '</main>', ''),
+    CARD_IMPORT + lines('<main>', '  <h1>A</h1>', '</main>', ''),
     [0, 0],
     'after',
     COMPONENT,
-    lines('<main>', '  <h1>A</h1>', '  <Card title="Hi" size={2} />', '</main>', ''),
+    CARD_IMPORT + lines('<main>', '  <h1>A</h1>', '  <Card title="Hi" size={2} />', '</main>', ''),
   );
   await expectInsert(
-    lines('<main>', '  <div></div>', '</main>', ''),
+    CARD_IMPORT + lines('<main>', '  <div></div>', '</main>', ''),
     [0, 0],
     'last-child',
     COMPONENT,
-    lines('<main>', '  <div>', '    <Card title="Hi" size={2} />', '  </div>', '</main>', ''),
+    CARD_IMPORT + lines('<main>', '  <div>', '    <Card title="Hi" size={2} />', '  </div>', '</main>', ''),
   );
 });
 
@@ -507,27 +517,28 @@ test('a closing tag that shares its last child’s line gets its own line back',
 // --- Several nodes in a row -------------------------------------------------------
 
 test('nodes inserted one after another, as a paste or a recipe does, each line up', async () => {
-  const file = page(lines('<main>', '  <section class="hero"></section>', '</main>', ''));
+  const file = page(CARD_IMPORT + lines('<main>', '  <section class="hero"></section>', '</main>', ''));
   await insertInto(file, [0, 0], 'last-child', await nodeFrom('<h1>Title</h1>'));
   await insertInto(file, [0, 0, 0], 'after', await nodeFrom(CARD));
   await insertInto(file, [0, 0, 1], 'after', await nodeFrom(COMPONENT));
   const written = await insertInto(file, [0, 0], 'last-child', await nodeFrom('<p>Last</p>'));
   assert.equal(
     written,
-    lines(
-      '<main>',
-      '  <section class="hero">',
-      '    <h1>Title</h1>',
-      '    <div class="card">',
-      '      <h3>Title</h3>',
-      '      <p>Body</p>',
-      '    </div>',
-      '    <Card title="Hi" size={2} />',
-      '    <p>Last</p>',
-      '  </section>',
-      '</main>',
-      '',
-    ),
+    CARD_IMPORT +
+      lines(
+        '<main>',
+        '  <section class="hero">',
+        '    <h1>Title</h1>',
+        '    <div class="card">',
+        '      <h3>Title</h3>',
+        '      <p>Body</p>',
+        '    </div>',
+        '    <Card title="Hi" size={2} />',
+        '    <p>Last</p>',
+        '  </section>',
+        '</main>',
+        '',
+      ),
   );
   // After words and into a one-line parent, the same sequence stays aligned.
   const words = page(lines('<main>', '  <div>', '    Intro', '  </div>', '</main>', ''));

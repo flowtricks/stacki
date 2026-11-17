@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const output = repoPath('node_modules/.stacki-test/cms-field.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -144,7 +145,7 @@ test('reordering a repeater preserves the entry shown by its open dialog', async
   }
 });
 
-test('CMS editor bounds reject invalid depth, text, and list size', () => {
+test('CMS editor bounds reject invalid depth and pin the platform text and list ceilings', () => {
   const render = (props) =>
     renderToStaticMarkup(
       React.createElement(Field, {
@@ -157,17 +158,20 @@ test('CMS editor bounds reject invalid depth, text, and list size', () => {
   assert.throws(() => render({ depth: -1 }), /CMS field: depth must be nonnegative/);
   assert.throws(() => render({ depth: 0.5 }), /CMS field: depth must be an integer/);
   assert.throws(() => render({ depth: 129 }), /CMS field: nesting limit exceeded/);
-  assert.throws(() => render({ value: 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }), /CMS field: text limit exceeded/);
-  assert.throws(() => render({ type: 'list', value: Array(100001).fill('') }), /CMS list: item limit exceeded/);
+  // A longer string or array than the platform holds cannot be built; Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
   assert.match(render({ depth: 128, value: 'ok' }), /ok/);
 });
 
-test('CMS text longer than a prop attribute keeps a text box instead of failing', async () => {
+test('CMS text of any length renders in an editable box instead of failing', async () => {
   const { LIMITS } = require('#dist/shared/core/limits.js');
+  // A prop attribute holds any string the platform can build, so no CMS text is past it.
+  assert.equal(LIMITS.attrCharsMax, PLATFORM_LIMITS.stringUnitsMax);
   const root = createRoot(document.getElementById('root'));
   const changes = [];
-  const long = 'Sermon transcript. '.repeat(Math.ceil((LIMITS.attrCharsMax + 1) / 19));
-  assert.ok(long.length > LIMITS.attrCharsMax);
+  // A few MB stands in for a sermon transcript without straining the test process.
+  const long = 'Sermon transcript. '.repeat(100_000);
   const show = (type, value) =>
     act(async () =>
       root.render(
@@ -182,11 +186,10 @@ test('CMS text longer than a prop attribute keeps a text box instead of failing'
   try {
     for (const type of ['text', 'longtext']) {
       await show(type, long);
-      const box = document.querySelector('textarea');
+      const box = document.querySelector('textarea, input');
       assert.ok(box, type);
       assert.equal(box.value, long);
     }
-    // Switching to a short item returns to the ordinary prop field.
     await show('text', 'Short title');
     assert.equal(document.querySelector('input').value, 'Short title');
   } finally {

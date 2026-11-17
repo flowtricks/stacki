@@ -202,9 +202,13 @@ test('an attribute written as {name} keeps its attribute name', () => {
   assert.equal(renamed(source, 'items', 'rows'), page('const rows = [];', '<Card items={rows} />'));
 });
 
-test('a backtick attribute is code, and its text is not', () => {
+test('a page with a backtick attribute is never offered a rename', () => {
+  // The visual editor does not edit a backtick attribute (0a1cb3e6: it has no quote an edit can keep), so the
+  // page is not one it draws, and the Loop panel that renames is never shown on it.
   const source = page('const items = [];', '<div style=`items: ${items.length}` />');
-  assert.equal(renamed(source, 'items', 'rows'), page('const rows = [];', '<div style=`items: ${rows.length}` />'));
+  const parsed = parsePage(source, { locs: true });
+  assert.equal(parsed.editable, false);
+  assert.match(parsed.reason, /backtick template/);
 });
 
 test('a new name that already exists is refused, whatever provides it', () => {

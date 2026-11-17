@@ -38,7 +38,8 @@
 //   - <html> and <body> never scroll, whatever their boxes say: on a long page,
 //     on one where `height: 100%` leaves their boxes above the frame, and on
 //     pages whose scrolling happens in <body> or a wrapper,
-//   - a box with no area is judged whole, and a node with no box does nothing.
+//   - a box with no area is judged whole, an element with no size is revealed at its place,
+//     and a node with no box (display: none) does nothing.
 //
 // Reading the result must not depend on how long a reveal takes, because
 // on a slow Linux machine one can pause between frames for longer than any fixed
@@ -649,8 +650,10 @@ const HOST_HELPERS = `
     scrollsOnScreen('and is judged whole, so being cut by the frame still scrolls', cases.thinCutByTop);
     scrollsOnScreen('and scrolls from below the frame', cases.thinBelow);
 
-    stays('an element with no size does nothing from below the frame', cases.emptyBelow);
-    stays('nor from above it', cases.emptyAbove);
+    // An element with no size still has a place (37c1c505): the canvas draws its 0 x 0 crosshair there, so the
+    // Navigator's reveal brings that point into view like any box.
+    scrollsOnScreen('an element with no size is revealed at its place from below the frame', cases.emptyBelow);
+    scrollsOnScreen('and from above it', cases.emptyAbove);
     check('the display: none case starts down the page', gone.startY > 0, JSON.stringify(gone));
     stays('an element with display: none does nothing', gone);
 

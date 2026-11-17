@@ -12,6 +12,7 @@ import {
   parseTerminalInput,
 } from '#dist/shared/ipc/ipcPayloads.js';
 import { BOUNDARY_LIMITS, data, object, text, optional } from '#dist/shared/core/boundary.js';
+import { PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 import type { IpcContract } from '#dist/shared/ipc/ipcContract.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
@@ -549,23 +550,13 @@ test('CSS group and row moves preserve both supported payload variants', () => {
 test('IPC collection, string, integer, depth, and path bounds fail explicitly', () => {
   assert.throws(() => parseIpcPayload('project:scan', 'x'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1)), /Path exceeds limit/);
   assert.throws(() => parseIpcPayload('project:scan', '/site\0suffix'), /NUL/);
-  assert.throws(
-    () =>
-      parseIpcPayload('src:writeText', {
-        projectPath: '/site',
-        rel: 'file',
-        text: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1),
-      }),
-    /String exceeds limit/,
-  );
-  assert.throws(
-    () =>
-      parseIpcPayload('selection:copy', {
-        projectPath: '/site',
-        keys: Array.from({ length: BOUNDARY_LIMITS.itemsMax + 1 }, () => 'key'),
-      }),
-    /Array exceeds limit/,
-  );
+  // Text and item counts are bounded only by the platform: a longer string or array cannot be built, and Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  const large = 'x'.repeat(4 * 1024 * 1024);
+  assert.equal(parseIpcPayload('src:writeText', { projectPath: '/site', rel: 'file', text: large }).text.length, large.length);
+  const keys = Array.from({ length: 100_000 }, () => 'key');
+  assert.equal(parseIpcPayload('selection:copy', { projectPath: '/site', keys }).keys.length, keys.length);
   for (const value of [-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(() => parseIpcPayload('git:log', { projectPath: '/site', limit: value }));
   }
@@ -604,7 +595,8 @@ void write;
 void ready;
 
 test('clipboard payloads accept bytes without truncation and reject invalid byte values', () => {
-  const image = new Uint8Array(BOUNDARY_LIMITS.itemsMax + 1);
+  // An image larger than a typical item list, still under the clipboard's own byte bound.
+  const image = new Uint8Array(1024 * 1024);
   image[0] = 255;
   const parsed = parseIpcPayload('terminal:clipboardImage', { bytes: image, mime: 'image/png' });
   assert.equal(parsed.bytes.length, image.length);
@@ -632,7 +624,10 @@ test('terminal send channels accept keystrokes and acks and refuse every malform
   for (const input of malformedInputs) {
     assert.throws(() => parseTerminalInput(input));
   }
-  assert.throws(() => parseTerminalInput({ id: 't1', data: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }), /String exceeds limit/);
+  // Keystroke data is bounded only by the string, so a large paste is accepted whole.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  const paste = 'x'.repeat(4 * 1024 * 1024);
+  assert.equal(parseTerminalInput({ id: 't1', data: paste }).data.length, paste.length);
   // A NaN, negative, fractional or unsafe count would poison the flow-control
   // total and leave a paused pty paused (or never pause it again).
   for (const count of [Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY, 2 ** 53, '10', undefined]) {
@@ -730,7 +725,12 @@ test('component operation payloads refuse paths that climb, other kinds, and nam
     bad(channel, 'src/components/A.astro');
   }
   const rename = (request: unknown) => assert.throws(() => parseIpcPayload('component:rename', { projectPath: '/site', request }));
-  rename({ from: 'src/components/A.astro', to: 'src/components/a.astro' });
+  // A dashed lower-case file name is a component name since d546e37e; a name in neither style is not.
+  assert.equal(
+    parseIpcPayload('component:rename', { projectPath: '/site', request: { from: 'src/components/A.astro', to: 'src/components/a.astro' } }).request.to,
+    'src/components/a.astro',
+  );
+  rename({ from: 'src/components/A.astro', to: 'src/components/a_b.astro' });
   rename({ from: 'src/components/A.astro', to: 'src/components/A.tsx' });
   rename({ from: 'src/components/A.astro', to: '../A.astro' });
   rename({ from: 'src/components/A.astro', to: 'src/components/Fragment.astro' });

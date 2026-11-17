@@ -242,7 +242,13 @@ test('a user’s one-line inline parent keeps its style', () => {
 test('nothing adds a line break where whitespace is content', () => {
   for (const tag of ['pre', 'code', 'textarea']) {
     assert.equal(insert(`<${tag}></${tag}>\n`, '<span>x</span>', 'last-child', [0]), `<${tag}><span>x</span></${tag}>\n`);
-    assert.equal(insert(`<${tag}></${tag}>\n`, '<div>x</div>', 'last-child', [0]), `<${tag}><div>x</div></${tag}>\n`);
+  }
+  assert.equal(insert('<pre></pre>\n', '<div>x</div>', 'last-child', [0]), '<pre><div>x</div></pre>\n');
+  // `code` and `textarea` hold phrasing content only: the placement rule (9e2b1563) refuses a block in them.
+  for (const tag of ['code', 'textarea']) {
+    const authored = snapshotText(`<${tag}></${tag}>\n`);
+    const intent = intentOn(authored, anchorAt(authored, [0]), { tag: 'insert-node', placement: 'last-child', source: '<div>x</div>' });
+    assert.deepEqual(planIntent({ authored, current: authored }, intent), { ok: false, error: 'invalid-placement' }, `a block in ${tag}`);
   }
   assert.equal(
     insert('<pre>\n</pre>\n', '<div>x</div>', 'last-child', [0]),

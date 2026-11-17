@@ -1,6 +1,6 @@
 // Parse real Git conflict parts through the renderer boundary, then exercise
 // the merge dialog's default, per-hunk, whole-file, and busy choices. Invalid
-// wire shapes and cumulative bounds must fail before choices reach a write.
+// wire shapes must fail before choices reach a write; conflicts of any size parse.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,6 +9,7 @@ const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const load = require('../../helpers/rendererModule');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { parseMergeResult, parseConflictPart } = load('src/features/git/gitBridge.ts');
 const { initialConflictPicks, choicesForSend, conflictHunks } = load('src/features/git/gitConflictModel.ts');
 const { parseConflict } = require('#dist/electron/git/conflicts.js');
@@ -43,20 +44,18 @@ test('real conflict output survives the renderer parser and preserves each choic
   });
 });
 
-test('merge contracts reject unknown parts and bound total files plus parts', () => {
+test('merge contracts reject unknown parts and accept any number of files and parts', () => {
   for (const part of [jsonNull, {}, { kind: 'same', text: 1 }, { ...clash, changedBy: 'someone' }, { ...clash, ours: jsonNull }, { ...clash, merged: false }]) {
     assert.throws(() => parseConflictPart(part));
   }
   assert.throws(() => parseMergeResult(conflict([])), /at least one conflict/);
   assert.throws(() => parseMergeResult(conflict([file([{ kind: 'unknown' }])])));
-  assert.throws(() => parseMergeResult(conflict([file(Array(100001).fill(clash))])), /limit/);
-  assert.throws(
-    () => parseMergeResult(conflict([file(Array(50000).fill(clash)), { ...file(Array(50000).fill(clash)), path: 'b.astro' }])),
-    /item limit exceeded/,
-  );
-  assert.throws(() => parseConflictPart({ kind: 'same', text: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }), /String exceeds limit/);
+  // Stacki has no product size limit: files, parts and text are bounded only by what the platform holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.doesNotThrow(() => parseMergeResult(conflict([file(Array(50000).fill(clash)), { ...file(Array(50001).fill(clash)), path: 'b.astro' }])));
   assert.throws(() => initialConflictPicks(conflict([])), /at least one file/);
-  assert.throws(() => conflictHunks(Array(100001).fill(clash)), /part limit exceeded/);
+  assert.doesNotThrow(() => conflictHunks(Array(100001).fill(clash)));
 });
 
 test('merge dialog sends exact selected choices and locks binary choices while busy', async () => {

@@ -60,7 +60,11 @@ import { createServer, type ViteDevServer } from 'vite';
 // Breakpoint sync's request parsers (breakpointSyncPlan, breakpointSyncRecord, projectBreakpoints) and EmDash's (emdash, emdashInstall
 // and its message namespace) are in the graph; the sync parser takes its text bound from the record leaf, not the whole CSS scanner
 // (mediaBreakpointSync), which keeps the graph at the limit instead of over it.
-const MODULES_MAX = 150;
+// The component row menu, rename and access rules validate their requests (componentOps, componentNaming,
+// componentRename, componentAccess), the props' variant rules (variantRules), the new style tag setting
+// (newStyleTag), the recovery screen's messages (recovery) and the loop selection reader (loopSelection):
+// about ten more, 159 measured, with a little headroom.
+const MODULES_MAX = 170;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

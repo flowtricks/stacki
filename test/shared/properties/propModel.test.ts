@@ -5,7 +5,8 @@
 // Methodology: one known-good prop per control kind passes intact (with
 // nesting and a union table); then each known-bad shape fails, one change at a
 // time from a good model: wrong kinds, missing fields, out-of-range numbers,
-// duplicate names, and the bounds (nesting depth, variants, options, text).
+// duplicate names, and the bounds (nesting depth, variants, options); text is
+// bounded only by the platform's string length, so its bound is pinned.
 // The tag reader every panel shares (propTags.ts) is pinned beside it, and the
 // schema parser's new optional keys (`deprecated`, `usage`).
 
@@ -14,6 +15,7 @@ import assert from 'node:assert/strict';
 import { PROP_MODEL_LIMITS, parsePropModel } from '#dist/shared/properties/propModel.js';
 import { PROP_TAG_LIMITS, readPropTags, tagStep, withoutSettingTags } from '#dist/shared/properties/propTags.js';
 import { parseField } from '#dist/shared/properties/propSchema.js';
+import { PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 const NUMBER = { kind: 'number', min: 0, max: 10, minExclusive: false, maxExclusive: true, step: 0.5, decimals: 1 };
 
@@ -180,7 +182,7 @@ test('every known-bad shape is refused with its path', () => {
   refuses(/rules\.label\.is: expected string/, (model) => Object.assign(model.unions[0]?.branches[1] ?? {}, { rules: { label: { prop: 'open' } } }));
 });
 
-test('the bounds hold: nesting depth, variants, options, text and counts', () => {
+test('the bounds hold: nesting depth, variants, options and counts; text is the platform ceiling', () => {
   // A group one deeper than the bound is refused rather than walked.
   refuses(new RegExp(`nesting exceeds ${PROP_MODEL_LIMITS.propNestingDepthMax}`), (model) =>
     Object.assign(at(model.props, 6), { control: group(PROP_MODEL_LIMITS.propNestingDepthMax + 2) }),
@@ -213,12 +215,11 @@ test('the bounds hold: nesting depth, variants, options, text and counts', () =>
   const many = (count: number) => ({ ...goodModel(), props: Array.from({ length: count }, (_, index) => prop(`p${index}`, { kind: 'text' })) });
   assert.doesNotThrow(() => parsePropModel(many(PROP_MODEL_LIMITS.propsMax)));
   assert.throws(() => parsePropModel(many(PROP_MODEL_LIMITS.propsMax + 1)), /props: exceeds 512 entries/);
-  refuses(/typeText: exceeds 8192 characters/, (model) => Object.assign(at(model.props, 0), { typeText: 'x'.repeat(PROP_MODEL_LIMITS.typeTextCharsMax + 1) }));
-  refuses(/documentation: exceeds/, (model) => Object.assign(at(model.props, 0), { documentation: 'x'.repeat(PROP_MODEL_LIMITS.docCharsMax + 1) }));
-  // Valid data as it becomes invalid: the longest text passes, one more character fails.
-  assert.doesNotThrow(() =>
-    parsePropModel({ ...goodModel(), props: [prop('a', { kind: 'text' }, { typeText: 'x'.repeat(PROP_MODEL_LIMITS.typeTextCharsMax) })] }),
-  );
+  // Text is bounded only by the string: a longer one cannot be built, and Stacki has no product size limit.
+  assert.equal(PROP_MODEL_LIMITS.typeTextCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.ok(PROP_MODEL_LIMITS.docCharsMax >= PLATFORM_LIMITS.stringUnitsMax);
+  const long = 'x'.repeat(1024 * 1024);
+  assert.doesNotThrow(() => parsePropModel({ ...goodModel(), props: [prop('a', { kind: 'text' }, { typeText: long, documentation: long })] }));
 });
 
 test('the tag reader: every tag the panels write, read the same everywhere', () => {
@@ -243,7 +244,9 @@ test('the tag reader: every tag the panels write, read the same everywhere', () 
   assert.equal(readPropTags('@MIN 3').min, 3, 'number tags ignore case');
   assert.equal(readPropTags('the minimum, not a tag: @minimal 3').min, undefined);
   assert.equal(withoutSettingTags('Count. @min 0 @max 9 @group Layout @deprecated Gone.'), 'Count. @deprecated Gone.');
-  assert.throws(() => readPropTags('x'.repeat(PROP_TAG_LIMITS.docCharsMax + 1)), /readPropTags: doc text is bounded/);
+  // Doc text past its bound cannot be built (the bound is above the string ceiling), so a long doc is read.
+  assert.ok(PROP_TAG_LIMITS.docCharsMax >= PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(readPropTags(`${'x'.repeat(1024 * 1024)} @min 1`).min, 1);
 });
 
 test('schema fields carry the model’s deprecation and usage, and refuse bad ones', () => {

@@ -1,10 +1,12 @@
 // Exercise CMS wire parsers and request wrappers with real shared parsers. Keep
 // transport failures distinct from malformed replies, preserve expression/asset
-// metadata, and reject oversized or unknown field declarations at the boundary.
+// metadata, reject unknown or structurally too deep or too wide field declarations
+// at the boundary, and accept data of any size.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -46,12 +48,13 @@ test('CMS parsers reject malformed shapes, field types, and boundary overflow', 
   for (const value of [jsonNull, {}, { ok: 1 }, { ok: false }]) {
     assert.throws(() => bridge.parseCmsSuccess(value));
   }
-  const data = 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1);
-  assert.throws(() => bridge.parseCmsRead({ data }), /limit/);
-  assert.throws(() => bridge.parseCmsRead({ data: Array(100001).fill(0) }), /limit/);
+  // A longer string than the platform ceiling cannot be built; Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(bridge.parseCmsRead({ data: Array(100001).fill(0) }).data.length, 100001);
   assert.throws(() => types.parseDeclaredTypes({ ['x'.repeat(32769)]: 'text' }), /limit/);
   assert.throws(() => types.withDeclaredTypes([], {}, Array(129).fill('x')), /path limit/);
-  assert.throws(() => types.withDeclaredTypes(Array(100001).fill({}), {}, []), /count limit/);
+  assert.doesNotThrow(() => types.withDeclaredTypes(Array(100001).fill({}), {}, []));
 });
 
 test('CMS requests parse replies outside the operating failure catch', async () => {

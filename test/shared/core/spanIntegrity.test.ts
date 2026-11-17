@@ -14,7 +14,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { parseAttrs, parsePage } from '#dist/electron/parse/astroParser.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 import { parsePageResult, type PageNode } from '#dist/shared/page/pageNode.js';
 import type { ParserNode } from '#dist/electron/parse/astroParserTypes.js';
 import { projectPage } from '#dist/shared/page/sourceProjection.js';
@@ -37,6 +37,12 @@ function corpusFiles(): readonly { name: string; text: string }[] {
   );
 }
 
+// The fixture scale the committed manifest was generated at. Stacki has no
+// product size limit any more (sourceBytesMax and treeNodesMax are the platform
+// ceilings), and a fixture at a percentage of those ceilings cannot be built in
+// memory, so the large fixtures keep this fixed, buildable scale.
+const FIXTURE_LIMITS = { sourceBytesMax: 10 * 1024 * 1024, treeNodesMax: 20_000 } as const;
+
 function largeFixtures() {
   const corpus = new Map(
     fs
@@ -44,7 +50,7 @@ function largeFixtures() {
       .filter((name) => name.endsWith('.astro'))
       .map((name) => [name, fs.readFileSync(path.join('test/corpus', name), 'utf8')] as const),
   );
-  return generateLargeFixtures(LIMITS, corpus, counter);
+  return generateLargeFixtures(FIXTURE_LIMITS, corpus, counter);
 }
 
 /** Checks one located node against the text its span slices; returns the
@@ -192,7 +198,10 @@ test('every node and attribute span of every corpus file reproduces its text', (
 test('the large fixtures are deterministic, match the manifest, and keep span integrity', () => {
   const manifest: unknown = JSON.parse(fs.readFileSync('test/fixtures/large/manifest.json', 'utf8'));
   const fixtures = largeFixtures();
-  const entries = fixtures.map((fixture) => manifestEntry(fixture, LIMITS, counter));
+  const entries = fixtures.map((fixture) => manifestEntry(fixture, FIXTURE_LIMITS, counter));
+  // The real bounds are the platform ceilings, so every fixture fits them by construction.
+  assert.equal(LIMITS.sourceBytesMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(LIMITS.treeNodesMax, PLATFORM_LIMITS.arrayLengthMax);
   assert.deepEqual(entries, manifest, 'regenerate with `npm run fixtures:large` after a corpus change');
   for (const entry of entries) {
     assert.ok(entry.bytes <= LIMITS.sourceBytesMax, `${entry.name} fits the file bound`);

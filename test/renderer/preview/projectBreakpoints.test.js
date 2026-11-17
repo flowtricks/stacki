@@ -75,6 +75,7 @@ Object.assign(global, {
   HTMLDialogElement: window.HTMLDialogElement,
   Element: window.Element,
   Node: window.Node,
+  MutationObserver: window.MutationObserver,
   IS_REACT_ACT_ENVIRONMENT: true,
   requestAnimationFrame: window.requestAnimationFrame.bind(window),
   cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
