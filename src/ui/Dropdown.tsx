@@ -198,8 +198,12 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
             option.pinned === true || `${option.label} ${option.hint || ''} ${option.group || ''} ${option.keywords || ''}`.toLowerCase().includes(queryText),
         )
       : props.options;
+  // A caller's cap draws at least one row; without one every match is drawn, and a list with no
+  // options (or a search that matches none) draws none rather than failing.
+  if (props.rowsMax !== undefined) {
+    assert(props.rowsMax >= 1, 'Dropdown rowsMax draws at least one row');
+  }
   const rowsMax = props.rowsMax ?? matches.length;
-  assert(rowsMax >= 1, 'Dropdown rowsMax draws at least one row');
   const visible = matches.length > rowsMax ? matches.slice(0, rowsMax) : matches;
   return {
     open,

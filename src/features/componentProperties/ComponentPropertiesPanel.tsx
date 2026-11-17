@@ -234,7 +234,8 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
           icon={kindIcon(withListSettingType(property, listProps))}
           grip={<PropertyGrip label={property.name} index={index} count={properties.length} disabled={disabled} onMove={move} />}
           disabled={busy}
-          removeDisabled={busy}
+          // An inherited attribute (an override) has no local declaration to delete, as its settings form says.
+          removeDisabled={busy || property.editing?.kind === 'override'}
           removeLabel={translate('componentProps.editor.deleteNamed', { name: property.name })}
           onOpen={() => onSelect(property)}
           onRemove={() => void onChange({ kind: 'remove', name: property.name })}

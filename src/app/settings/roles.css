@@ -697,6 +697,13 @@ button.app-role-name-button:hover:not(:disabled) {
 .app-role-components-check[data-state='visible'] {
   background: var(--accent);
 }
+/* An on switch stays blue under the pointer: the app-wide button:hover grey wash would outweigh the rule above. */
+button.app-role-components-check[data-state='visible']:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+button.app-role-components-check[data-state='visible']:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
 .app-role-components-check[data-state='visible'] span {
   left: 14px;
   background: #fff;

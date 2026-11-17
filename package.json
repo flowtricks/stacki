@@ -153,6 +153,7 @@
     ],
     "asarUnpack": [
       "dist/electron/lib/componentSources.js",
+      "dist/electron/lib/slicedWork.js",
       "dist/electron/parse/**",
       "dist/electron/previewServer/**",
       "dist/shared/**",
