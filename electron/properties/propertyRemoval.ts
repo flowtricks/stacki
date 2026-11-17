@@ -5,9 +5,11 @@
 // form: `direction="back"`, `direction={value}`, `{direction}`, a bare
 // `direction`, and the key of an inline spread (`{...{ direction: 'back' }}`).
 //
-// Two things are never guessed at. A read in the component's own code
-// (`direction === 'back'`) would name a variable nothing declares, so the
-// deletion is refused and the lines are listed (propertyReads.ts). A spread
+// A read in the component's own code (`direction === 'back'`) keeps working:
+// a constant of the prop's name takes the destructure's place, holding its
+// default (propertyDefinitions.ts). Two things are never guessed at. A read
+// no constant can stand in for (`Astro.props.direction`, a default that reads
+// the prop itself) refuses the deletion, and the lines are listed. A spread
 // of an object Stacki cannot see into (`{...props}`) may still carry the prop:
 // the deletion goes ahead, leaves that object alone, and lists the line.
 //
@@ -24,7 +26,7 @@ import type { PropertyRemovalPreview, PropertyRemovalReview, PropertyRemovalUsag
 import { sameFilesystemPath } from '../lib/platform';
 import { readPropertyConsumers } from './propertyConsumers';
 import { removePropertyDeclarations } from './propertyDefinitions';
-import { astroOffset, lineAt, parseAstroTemplate, propertyReadLines } from './propertyReads';
+import { astroOffset, lineAt, parseAstroTemplate } from './propertyReads';
 import { literalSpreadObject } from './propertyRename';
 import { applySourceEdits, propertyKey, type SourceEdit } from './propertySyntax';
 
@@ -49,7 +51,11 @@ const SPREAD_PREFIX = 'const spread = (';
 
 /** What deleting `name` writes, file by file, and the summary the confirmation shows. A file that cannot be read safely refuses the whole plan. */
 export function planPropertyRemoval(request: RemovalRequest, name: string): Result<PropertyRemovalPlan> {
-  const removal = removePropertyDeclarations(request.source, name);
+  const removed = removePropertyDeclarations(request.source, name);
+  if (!removed.ok) {
+    return err(inFile(projectRelative(request.projectPath, request.file), removed.error));
+  }
+  const removal = removed.value;
   const consumers = readPropertyConsumers(request);
   if (!consumers.ok) {
     return consumers;
@@ -57,7 +63,7 @@ export function planPropertyRemoval(request: RemovalRequest, name: string): Resu
   const changes: RemovalFileChange[] = [];
   const usages: PropertyRemovalUsage[] = [];
   const reviews: PropertyRemovalReview[] = [];
-  let component: RemovalFileChange | undefined;
+  let written: RemovalFileChange | undefined;
   for (const consumer of consumers.value) {
     const own = sameFilesystemPath(consumer.file, request.file);
     const relative = projectRelative(request.projectPath, consumer.file);
@@ -71,21 +77,19 @@ export function planPropertyRemoval(request: RemovalRequest, name: string): Resu
     }
     reviews.push(...edited.value.spreads.map((line) => ({ kind: 'spread' as const, path: relative, line })));
     if (own) {
-      component = { file: consumer.file, before: request.source, after: edited.value.source };
-      // Read on the component as its declarations left it, so each line is the one on disk; a self-instance's value counts, conservatively.
-      const reads = propertyReadLines(removal.source, removal.target, removal.origin);
-      if (!reads.ok) {
-        return err(inFile(relative, reads.error));
-      }
-      reviews.push(...reads.value.map((line) => ({ kind: 'reads' as const, path: relative, line })));
-      changes.push(component);
+      written = { file: consumer.file, before: request.source, after: edited.value.source };
+      changes.push(written);
     } else if (edited.value.count > 0) {
       changes.push({ file: consumer.file, before: consumer.source, after: edited.value.source });
     }
   }
-  assert(component !== undefined, 'The removal plan includes the component');
+  assert(written !== undefined, 'The removal plan includes the component');
   assert(changes.length <= PROPERTY_LIMITS.filesMax, 'The removal plan is bounded by the project');
-  return ok({ changes, preview: { name, component: projectRelative(request.projectPath, request.file), usages, reviews } });
+  // Reads no constant can stand in for refuse the deletion; their lines are listed first.
+  const component = projectRelative(request.projectPath, request.file);
+  const blocked = removal.blocked.map((line) => ({ kind: 'reads' as const, path: component, line }));
+  const preview = { name, component, usages, reviews: [...blocked, ...reviews] };
+  return ok({ changes, preview: removal.kept === undefined ? preview : { ...preview, kept: removal.kept } });
 }
 
 /** The plan as a batch to write: refused while the component's own code still reads the prop, so a deletion never leaves code broken. */

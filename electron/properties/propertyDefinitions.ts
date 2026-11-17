@@ -36,7 +36,8 @@ import { orderDefaultReads } from './defaultOrder';
 import { bindingEdits, memberComment, memberEdits, sameDeclaration, sameProperty } from './propertyMemberEdits';
 import type { DeclaredFields } from './propertyMemberEdits';
 import { declareInHost } from './propertyHosts';
-import { propertyReadLines, type PropertyReadTarget, type ReadOrigin } from './propertyReads';
+import { propertyReadLines } from './propertyReads';
+import type { PropertyKeptConstant, PropertyKeptSource } from '../../shared/properties/propertyRemoval';
 
 interface Definitions {
   readonly document: PropertySyntax;
@@ -732,45 +733,49 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
   );
 }
 
-/** A prop's declarations and destructure taken out, and what its code would read it by. */
+/**
+ * A prop taken out of its component. `kept`: the component's own code reads
+ * the prop's local, so a constant of that name now holds what the prop would
+ * have been (its default) and the code keeps working. `blocked`: lines that
+ * read it in a way no constant can stand in for (`Astro.props.x`, `rest.x`, a
+ * default that reads the prop itself, a required prop with no default and no
+ * zero value), so the deletion is refused there. Lines are the file's on disk.
+ */
 export interface PropertyDeclarationRemoval {
   readonly source: string;
-  readonly target: PropertyReadTarget;
-  /** The text before, and the ranges taken out of it, so a read is listed at the line on disk. */
-  readonly origin: ReadOrigin;
+  readonly kept: PropertyKeptConstant | undefined;
+  readonly blocked: readonly number[];
 }
 
 /**
  * The source with a prop's declarations (every variant of a combined
- * contract) and its destructure taken out. Nothing here checks for reads left
- * behind: `removeDefinition` refuses them, and the deletion's preview lists
- * them (propertyRemoval.ts).
+ * contract) and its destructure taken out, with a constant in the
+ * destructure's place when the code reads it. `removeDefinition` refuses what
+ * is `blocked`; the deletion's preview lists both (propertyRemoval.ts).
  */
-export function removePropertyDeclarations(source: string, name: string): PropertyDeclarationRemoval {
+export function removePropertyDeclarations(source: string, name: string): Result<PropertyDeclarationRemoval> {
   const definitions = readDefinitions(source);
   return removedDeclarations(definitions.advanced ? commonDefinitions(definitions, name) : definitions, name);
 }
 
 function removeDefinition(definitions: Definitions, name: string): Result<string> {
   const removed = removedDeclarations(definitions, name);
-  // A read left behind would name a variable nothing declares: the deletion waits until the code no longer reads it.
-  const lines = propertyReadLines(removed.source, removed.target, removed.origin);
-  if (!lines.ok) {
-    return lines;
+  if (!removed.ok) {
+    return removed;
   }
-  if (lines.value.length > 0) {
-    return err(refusal('in-use', 'props.edit.readsInCode', { name, lines: lines.value.join(', ') }));
+  // A read no constant can stand in for would name a variable nothing declares: the deletion waits until the code no longer reads it.
+  if (removed.value.blocked.length > 0) {
+    return err(refusal('in-use', 'props.edit.readsInCode', { name, lines: removed.value.blocked.join(', ') }));
   }
-  return ok(removed.source);
+  return ok(removed.value.source);
 }
 
-function removedDeclarations(definitions: Definitions, name: string): PropertyDeclarationRemoval {
+function removedDeclarations(definitions: Definitions, name: string): Result<PropertyDeclarationRemoval> {
   const member = definitions.members.find((item) => propertyKey(item.name) === name);
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === name);
   // The names that hold the props object, a rest of it included: `props.name` and `rest.name` read the prop too.
   const rests = definitions.patterns.flatMap((pattern) => pattern.elements).filter((element) => element.dotDotDotToken !== undefined);
   const holders = new Set([...plainAliases(definitions.document.syntax), ...rests.map((element) => element.name.getText())]);
-  const target = { local: binding?.name.getText() ?? name, name, holders };
   const edits: SourceEdit[] = [member, ...definitions.others].flatMap((declared) =>
     declared ? [{ start: declared.getFullStart(), end: declared.end, text: '' }] : [],
   );
@@ -786,14 +791,114 @@ function removedDeclarations(definitions: Definitions, name: string): PropertyDe
       text: '',
     });
   }
-  if (edits.length === 0) {
-    // A prop the file only reads (`Astro.props.name`) has no declaration to take out: it can go once nothing reads it.
-    return { source: definitions.document.source, target, origin: { source: definitions.document.source, removed: [] } };
-  }
-  const frontmatter = applySourceEdits(definitions.document.frontmatter, edits);
-  const start = definitions.document.start;
+  const document = definitions.document;
   // A document with no frontmatter gains a fence, so its lines move: none of its declarations were there to take out.
-  assert(start > 0, 'Declarations to take out live in a frontmatter');
-  const removed = edits.map((edit) => ({ start: start + edit.start, end: start + edit.end, text: '' }));
-  return { source: replaceFrontmatter(definitions.document, frontmatter), target, origin: { source: definitions.document.source, removed } };
+  assert(edits.length === 0 || document.start > 0, 'Declarations to take out live in a frontmatter');
+  const removed = edits.map((edit) => ({ start: document.start + edit.start, end: document.start + edit.end, text: '' }));
+  const origin = { source: document.source, removed };
+  const taken = edits.length === 0 ? document.source : replaceFrontmatter(document, applySourceEdits(document.frontmatter, edits));
+  const through = propertyReadLines(taken, { local: undefined, name, holders }, origin);
+  if (!through.ok) {
+    return through;
+  }
+  // Without a destructure, a name spelled like the prop is some other variable: only reads through the props object are the prop's.
+  const local = binding === undefined ? ok([]) : propertyReadLines(taken, { local: binding.name.getText(), name: undefined, holders: new Set() }, origin);
+  if (!local.ok) {
+    return local;
+  }
+  if (binding === undefined || local.value.length === 0) {
+    return ok({ source: taken, kept: undefined, blocked: through.value });
+  }
+  const property = readComponentProperties(document.source).properties.find((candidate) => candidate.name === name);
+  // A prop only an inherited type declares (`class` from HTMLAttributes) is still passed after the deletion: a constant would hide that, so its reads refuse.
+  const declaredHere = member !== undefined || definitions.others.length > 0;
+  const kept = declaredHere ? keptConstant(binding, property, local.value) : undefined;
+  if (kept === undefined) {
+    return ok({ source: taken, kept: undefined, blocked: [...new Set([...through.value, ...local.value])].sort((first, second) => first - second) });
+  }
+  // The constant goes right after the destructure the prop left, where every other prop it may read is already bound.
+  const statement = binding.parent.parent;
+  assert(ts.isVariableDeclaration(statement), 'A prop binding belongs to a variable declaration');
+  const after = statement.parent.parent;
+  assert(ts.isVariableStatement(after), 'A props destructure is a variable statement');
+  const constant = { start: after.end, end: after.end, text: `\nconst ${binding.name.getText()} = ${kept.code};` };
+  const source = replaceFrontmatter(document, applySourceEdits(document.frontmatter, [...edits, constant]));
+  return ok({ source, kept: kept.shown, blocked: through.value });
+}
+
+interface KeptCode {
+  readonly code: string;
+  readonly shown: PropertyKeptConstant;
+}
+
+// The constant a read of the deleted prop now sees: its default, else undefined for an optional prop, else its kind's zero value; undefined when none can be said for certain.
+function keptConstant(binding: ts.BindingElement, property: ComponentProperty | undefined, lines: readonly number[]): KeptCode | undefined {
+  assert(lines.length > 0, 'A constant is kept only for code that reads the prop');
+  const type = property === undefined || ['', 'unknown', 'any'].includes(property.type.trim()) ? undefined : property.type;
+  const value = keptValue(binding, property, type);
+  if (value === undefined) {
+    return undefined;
+  }
+  const typed = value.source === 'undefined' && type !== undefined && !/\bundefined\b/.test(type) ? `${type} | undefined` : type;
+  // `as` keeps the prop's type: a bare literal would narrow it, and `direction === "back"` would stop type-checking.
+  const code = typed === undefined ? value.code : `${castable(value.code)} as ${typed}`;
+  return { code, shown: { value: value.code, source: value.source, lines } };
+}
+
+function keptValue(
+  binding: ts.BindingElement,
+  property: ComponentProperty | undefined,
+  type: string | undefined,
+): { readonly code: string; readonly source: PropertyKeptSource } | undefined {
+  const initializer = binding.initializer;
+  if (initializer !== undefined) {
+    const local = binding.name.getText();
+    // A default that reads the prop itself has nothing left to read.
+    const selfRead = syntaxNodes(initializer).some((node) => ts.isIdentifier(node) && node.text === local);
+    return selfRead ? undefined : { code: initializer.getText(), source: 'default' };
+  }
+  if (property === undefined || !property.required) {
+    return { code: 'undefined', source: 'undefined' };
+  }
+  const zero = type === undefined ? undefined : zeroValue(type);
+  return zero === undefined ? undefined : { code: zero, source: 'zero' };
+}
+
+// The value a required prop with no default starts from: its first option, or its kind's empty value.
+function zeroValue(type: string): string | undefined {
+  const first = literalOptions(type)?.[0];
+  if (first !== undefined) {
+    return first;
+  }
+  const trimmed = type.trim();
+  const zeros: Readonly<Record<string, string>> = { string: '""', number: '0', boolean: 'false' };
+  const zero = zeros[trimmed];
+  if (zero !== undefined) {
+    return zero;
+  }
+  return /\[\]$|^(readonly\s+)?(Readonly)?Array</.test(trimmed) ? '[]' : undefined;
+}
+
+// An expression `as` can follow without changing what it binds to.
+function castable(code: string): string {
+  const syntax = ts.createSourceFile('kept.ts', `(${code});`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const statement = syntax.statements[0];
+  const expression =
+    statement !== undefined && ts.isExpressionStatement(statement) && ts.isParenthesizedExpression(statement.expression)
+      ? statement.expression.expression
+      : undefined;
+  const simple =
+    expression !== undefined &&
+    (ts.isLiteralExpression(expression) ||
+      ts.isIdentifier(expression) ||
+      ts.isPropertyAccessExpression(expression) ||
+      ts.isElementAccessExpression(expression) ||
+      ts.isCallExpression(expression) ||
+      ts.isArrayLiteralExpression(expression) ||
+      ts.isObjectLiteralExpression(expression) ||
+      ts.isParenthesizedExpression(expression) ||
+      expression.kind === ts.SyntaxKind.TrueKeyword ||
+      expression.kind === ts.SyntaxKind.FalseKeyword ||
+      expression.kind === ts.SyntaxKind.NullKeyword);
+  return simple ? code : `(${code})`;
 }

@@ -535,6 +535,12 @@ export const messages = {
   'props.remove.checkFailed': 'Stacki konnte nicht prüfen, wo {name} verwendet wird:',
   'props.remove.component': 'Entfernt {name} aus {component}, in allen Varianten.',
   'props.remove.confirm': 'Eigenschaft löschen',
+  'props.remove.kept': {
+    one: 'Bleibt als Konstante: {constant} (gelesen in Zeile {lines}).',
+    other: 'Bleibt als Konstante: {constant} (gelesen in den Zeilen {lines}).',
+  },
+  'props.remove.keptUndefined': 'Sie hatte keinen Standardwert, daher ist die Konstante undefined, wie wenn nichts sie übergab.',
+  'props.remove.keptZero': 'Sie hatte keinen Standardwert, daher hält die Konstante ihren ersten Wert.',
   'props.remove.moreFiles': { one: 'und {count} weitere Datei', other: 'und {count} weitere Dateien' },
   'props.remove.noUsages': 'Keine Instanz übergibt sie.',
   'props.remove.reads': 'Der eigene Code liest sie noch. Entferne zuerst diese Stellen:',

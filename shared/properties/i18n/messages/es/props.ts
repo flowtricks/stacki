@@ -526,6 +526,12 @@ export const messages = {
   'props.remove.checkFailed': 'Stacki no pudo comprobar dónde se usa {name}:',
   'props.remove.component': 'Quita {name} de {component}, en todas sus variantes.',
   'props.remove.confirm': 'Eliminar propiedad',
+  'props.remove.kept': {
+    one: 'Se conserva como constante: {constant} (leída en la línea {lines}).',
+    other: 'Se conserva como constante: {constant} (leída en las líneas {lines}).',
+  },
+  'props.remove.keptUndefined': 'No tenía valor predeterminado, así que la constante es undefined, como cuando nada la pasaba.',
+  'props.remove.keptZero': 'No tenía valor predeterminado, así que la constante guarda su primer valor.',
   'props.remove.moreFiles': { one: 'y {count} archivo más', other: 'y {count} archivos más' },
   'props.remove.noUsages': 'Ninguna instancia la pasa.',
   'props.remove.reads': 'Su propio código todavía la lee. Quita primero estas lecturas:',

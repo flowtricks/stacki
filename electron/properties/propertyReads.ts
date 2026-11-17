@@ -18,10 +18,15 @@ import { err, ok, type Result } from '../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { isAstroProps, readPropertySyntax, syntaxNodes, type SourceEdit } from './propertySyntax';
 
-/** What counts as a read: the prop's local name, its name on `Astro.props`, and the names that hold the whole props object. */
+/**
+ * What counts as a read: the prop's local name, its name on `Astro.props`, and
+ * the names that hold the whole props object. Leaving `local` or `name` out
+ * scans for the other kind alone: a read of the local can be kept working by a
+ * constant, a read through the props object cannot (propertyDefinitions.ts).
+ */
 export interface PropertyReadTarget {
-  readonly local: string;
-  readonly name: string;
+  readonly local: string | undefined;
+  readonly name: string | undefined;
   readonly holders: ReadonlySet<string>;
 }
 
@@ -107,7 +112,7 @@ function readsInCode(syntax: ts.Node, target: PropertyReadTarget): readonly numb
       offsets.push(node.getStart());
     } else if (ts.isPropertyAccessExpression(node) && node.name.text === target.name && holdsProps(node.expression, target)) {
       offsets.push(node.getStart());
-    } else if (ts.isElementAccessExpression(node) && holdsProps(node.expression, target)) {
+    } else if (target.name !== undefined && ts.isElementAccessExpression(node) && holdsProps(node.expression, target)) {
       const key = node.argumentExpression;
       // A computed key may be any prop, this one included.
       if (!ts.isStringLiteralLike(key) || key.text === target.name) {
@@ -211,7 +216,9 @@ function attributeReads(source: string, attribute: AttributeNode, target: Proper
 
 // A template expression is often a fragment (`{open && (`); TypeScript still finds its identifiers.
 function fragmentReads(code: string, start: number, target: PropertyReadTarget): readonly number[] {
-  if (!code.includes(target.local) && !code.includes(target.name)) {
+  const local = target.local !== undefined && code.includes(target.local);
+  const named = target.name !== undefined && code.includes(target.name);
+  if (!local && !named) {
     return [];
   }
   const syntax = ts.createSourceFile('fragment.tsx', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

@@ -527,6 +527,12 @@ export const messages = {
   'props.remove.checkFailed': 'O Stacki não conseguiu verificar onde {name} é usada:',
   'props.remove.component': 'Remove {name} de {component}, em todas as variantes.',
   'props.remove.confirm': 'Excluir propriedade',
+  'props.remove.kept': {
+    one: 'Mantida como constante: {constant} (lida na linha {lines}).',
+    other: 'Mantida como constante: {constant} (lida nas linhas {lines}).',
+  },
+  'props.remove.keptUndefined': 'Ela não tinha valor padrão, então a constante é undefined, como quando nada a passava.',
+  'props.remove.keptZero': 'Ela não tinha valor padrão, então a constante guarda o primeiro valor.',
   'props.remove.moreFiles': { one: 'e mais {count} arquivo', other: 'e mais {count} arquivos' },
   'props.remove.noUsages': 'Nenhuma instância a passa.',
   'props.remove.reads': 'O próprio código ainda a lê. Remova estas leituras primeiro:',

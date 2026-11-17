@@ -127,6 +127,8 @@ nothing) and the window's own confirmation (`ConfirmDialog`, never a native one)
 says what will happen, one short line each:
 
 - the prop, and that it leaves the component, every variant included;
+- when the component's own code reads it, the constant that keeps that code
+  working ("Kept as a constant: `direction = "forward"` (read on lines 122, 132)");
 - how many instances pass it, and in which files (six listed, then "and N more");
 - spreads to check by hand, by file and line;
 - that one Undo restores everything.
@@ -145,13 +147,32 @@ afresh and an outside edit refuses the batch. It removes:
   the whole spread when that key is all it holds). The space before an attribute
   goes with it; every other byte is copied, not re-printed.
 
-Two cases are never guessed at:
+When the component's own code reads the prop's local (`direction === 'back'`,
+`data-direction={direction}`), the deletion keeps that code working: a constant
+of the same name goes right after the destructure, holding what the prop would
+now always be, and the reads are left as written:
 
-- **The component's own code still reads the prop** (`direction === 'back'`,
-  `data-direction={direction}`, `Astro.props.direction`, `rest.direction`).
-  Deleting it would leave a variable nothing declares, so nothing is deleted:
-  the dialog lists each line ("can't be deleted yet") and the batch refuses with
-  the same lines (`props.edit.readsInCode`). The scan is syntactic and
+```ts
+const direction = "forward" as "forward" | "back";
+```
+
+- **The value** is the prop's default expression, kept as written (a default
+  that reads other props works too: they are bound by then). With no default,
+  an optional prop's constant is `undefined` (typed `T | undefined`), as when
+  nothing passed it; a required one gets its first option, or `""`, `0`,
+  `false` or `[]` by kind. The dialog says which.
+- **The `as`** keeps the prop's declared type: a bare `"forward"` would narrow
+  it, and `direction === "back"` would stop type-checking.
+
+What no constant can stand in for is never guessed at:
+
+- **A read through the props object** (`Astro.props.direction`,
+  `props.direction`, `rest.direction`), **a default that reads the prop
+  itself**, **a required prop with no default and no zero value for its type**
+  (an object shape), and **a prop only an inherited type declares** (`class`
+  from `HTMLAttributes`, which instances still pass). Nothing is deleted: the
+  dialog lists each line ("can't be deleted yet") and the batch refuses with the
+  same lines (`props.edit.readsInCode`). The scan is syntactic and
   conservative: a shadowing loop variable counts too. Keys, CSS
   (`flex-direction`), markup text and client scripts do not.
 - **An instance spreads an object Stacki cannot see into** (`{...props}`). It may

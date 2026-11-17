@@ -2,16 +2,20 @@
 // "Deleting a prop"). Main reads the site and says what the deletion would
 // take out; the dialog says it back in short lines: the prop, the instances
 // that pass it and in which files, what is left for a person to check, and
-// that one Undo restores all of it. When the component's own code still reads
-// the prop, nothing can be deleted yet, and the dialog lists those lines.
+// that one Undo restores all of it. When the component's own code reads the
+// prop, a constant keeps it working, and the dialog says which value it holds.
+// A read no constant can stand in for means nothing can be deleted yet, and
+// the dialog lists those lines.
 //
 // It is the window's own confirmation (ConfirmDialog.tsx), never a native one.
 import type { ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
-import type { PropertyRemovalPreview, PropertyRemovalReview } from '../../../shared/properties/propertyRemoval';
+import type { PropertyKeptConstant, PropertyRemovalPreview, PropertyRemovalReview } from '../../../shared/properties/propertyRemoval';
 import { removalBlocked, removalUsageCount } from '../../../shared/properties/propertyRemoval';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
+import { useTranslateRich } from '../../lib/i18n/useTranslate';
+import { CodeInline } from '../../ui/CodeBlock';
 import { choiceDialog, confirmDialog } from '../../ui/ConfirmDialog';
 import { previewPropertyRemoval } from './propertiesBridge';
 import './propertyRemoval.css';
@@ -69,6 +73,7 @@ function RemovalBody({ preview, translate }: { readonly preview: PropertyRemoval
   return (
     <ul className="property-removal">
       <li>{translate('props.remove.component', { name: preview.name, component: preview.component })}</li>
+      {preview.kept !== undefined && <KeptLine name={preview.name} kept={preview.kept} translate={translate} />}
       {total === 0 ? (
         <li>{translate('props.remove.noUsages')}</li>
       ) : (
@@ -88,6 +93,23 @@ function RemovalBody({ preview, translate }: { readonly preview: PropertyRemoval
       )}
       <li>{translate('props.remove.undo')}</li>
     </ul>
+  );
+}
+
+// The constant that keeps the component's own reads working, written as code.
+function KeptLine({ name, kept, translate }: { readonly name: string; readonly kept: PropertyKeptConstant; readonly translate: Translator }) {
+  const translateRich = useTranslateRich();
+  assert(kept.lines.length > 0, 'A constant is kept for code that reads the prop');
+  return (
+    <li>
+      {translateRich('props.remove.kept', {
+        constant: <CodeInline text={`${name} = ${kept.value}`} language="typescript" />,
+        lines: kept.lines.join(', '),
+        count: kept.lines.length,
+      })}
+      {kept.source === 'undefined' && <> {translate('props.remove.keptUndefined')}</>}
+      {kept.source === 'zero' && <> {translate('props.remove.keptZero')}</>}
+    </li>
   );
 }
 

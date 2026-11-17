@@ -1,9 +1,11 @@
 // Goal: deleting a component prop removes it everywhere in one undoable batch:
 // its declarations (every variant of a discriminated union included) and its
 // destructure, and the value every instance on the site passes, in every
-// attribute form; code that still reads it is never left broken, so the
-// deletion is refused and the lines are listed; a spread Stacki cannot see
-// into is listed for review and left alone; untouched bytes stay as they were.
+// attribute form; a spread Stacki cannot see
+// into is listed for review and left alone; code that still reads it keeps
+// working through a constant holding its default, and a read no constant can
+// stand in for refuses the deletion with its lines; untouched bytes stay as
+// they were.
 // Method: a temporary project with a component and pages that place it,
 // planned through previewComponentPropertyRemoval and applied through
 // updateComponentProperties with the real document actors, then undone
@@ -216,7 +218,7 @@ test('an unreferenced prop goes from the component alone', () => {
   });
 });
 
-test('a read in the component’s own code refuses the deletion, lists its lines, and writes nothing', () => {
+test('a read in the component’s own code is kept working by a constant holding the default, and one undo restores it', () => {
   const reading = CARD.replace(
     '<div class="card">{title}</div>',
     '<div class="card" data-direction={direction}>\n  {direction === "back" && <span>{title}</span>}\n</div>',
@@ -224,22 +226,94 @@ test('a read in the component’s own code refuses the deletion, lists its lines
   project(reading, (files) => {
     const preview = previewComponentPropertyRemoval({ projectPath: files.root, file: files.component }, 'direction');
     assert.ok(preview.ok);
-    assert.equal(removalBlocked(preview.value), true);
-    assert.deepEqual(
-      preview.value.reviews.filter((review) => review.kind === 'reads'),
-      [
-        { kind: 'reads', path: 'src/components/Card.astro', line: 9 },
-        { kind: 'reads', path: 'src/components/Card.astro', line: 10 },
-      ],
-    );
-    const result = remove(files, 'direction');
-    assert.equal(result.ok, false);
-    assert.equal(result.ok ? '' : result.error.code, 'in-use');
-    assert.match(result.ok ? '' : result.error.message, /still reads direction \(line 9, 10\)/);
+    assert.equal(removalBlocked(preview.value), false);
+    assert.deepEqual(preview.value.kept, { value: "'forward'", source: 'default', lines: [9, 10] });
+    const committed: FileChange[] = [];
+    const result = remove(files, 'direction', committed);
+    assert.ok(result.ok, result.ok ? '' : result.error.message);
+    const after = read(files.component);
+    // The `as` keeps the prop's type, so `direction === "back"` still type-checks.
+    assert.match(after, /const \{ title \} = Astro\.props;\nconst direction = 'forward' as 'forward' \| 'back';\n---/);
+    assert.doesNotMatch(after, /direction\?:/);
+    assert.match(after, /data-direction=\{direction\}/, 'the reads are left as written');
+    assert.match(read(files.home), /<Card title="One" \/>/);
+    const store = new PropertyUndoStore();
+    const undone = revertComponentProperties(store.record(inverseBatch(committed)), store, { documents: documentHost().documents, noteWrite: () => undefined });
+    assert.ok(undone.ok);
     assert.equal(read(files.component), reading);
     assert.equal(read(files.home), HOME);
     assert.equal(read(files.about), ABOUT);
   });
+});
+
+test('a prop with no default keeps undefined when optional and its zero value when required', () => {
+  const optional = [
+    '---',
+    'interface Props { title: string; direction?: string }',
+    'const { title, direction } = Astro.props;',
+    '---',
+    '<p>{title}{direction}</p>',
+    '',
+  ].join('\n');
+  project(optional, (files) => {
+    const preview = previewComponentPropertyRemoval({ projectPath: files.root, file: files.component }, 'direction');
+    assert.ok(preview.ok);
+    assert.deepEqual(preview.value.kept, { value: 'undefined', source: 'undefined', lines: [5] });
+    assert.ok(remove(files, 'direction').ok);
+    assert.match(read(files.component), /const \{ title \} = Astro\.props;\nconst direction = undefined as string \| undefined;/);
+  });
+  const required = [
+    '---',
+    'interface Props { title: string; count: number }',
+    'const { title, count } = Astro.props;',
+    '---',
+    '<p>{title}{count + 1}</p>',
+    '',
+  ].join('\n');
+  project(required, (files) => {
+    assert.ok(remove(files, 'count').ok);
+    assert.match(read(files.component), /const count = 0 as number;/);
+  });
+});
+
+test('a read no constant can stand in for refuses the deletion, lists its lines, and writes nothing', () => {
+  const through = CARD.replace('<div class="card">{title}</div>', '<div class="card">{title}</div>\n<p>{Astro.props.direction}</p>');
+  const selfDefault = CARD.replace("direction = 'forward'", 'direction = direction').replace(
+    '<div class="card">{title}</div>',
+    '<div class="card">{direction}</div>',
+  );
+  const shapeless = [
+    '---',
+    'interface Props { title: string; theme: { dark: boolean } }',
+    'const { title, theme } = Astro.props;',
+    '---',
+    '<p>{title}{theme.dark}</p>',
+    '',
+  ].join('\n');
+  for (const [source, line] of [
+    [through, 10],
+    [selfDefault, 9],
+    [shapeless, 5],
+  ] as const) {
+    project(source, (files) => {
+      const name = source === shapeless ? 'theme' : 'direction';
+      const preview = previewComponentPropertyRemoval({ projectPath: files.root, file: files.component }, name);
+      assert.ok(preview.ok);
+      assert.equal(removalBlocked(preview.value), true);
+      assert.equal(preview.value.kept, undefined);
+      assert.deepEqual(
+        preview.value.reviews.filter((review) => review.kind === 'reads'),
+        [{ kind: 'reads', path: 'src/components/Card.astro', line }],
+      );
+      const result = remove(files, name);
+      assert.equal(result.ok, false);
+      assert.equal(result.ok ? '' : result.error.code, 'in-use');
+      assert.match(result.ok ? '' : result.error.message, new RegExp(`still reads ${name} \\(line ${String(line)}\\)`));
+      assert.equal(read(files.component), source);
+      assert.equal(read(files.home), HOME);
+      assert.equal(read(files.about), ABOUT);
+    });
+  }
 });
 
 test('a discriminated union loses the prop from every branch', () => {
@@ -300,6 +374,7 @@ test('the preview crosses the wire only in its own shape', () => {
     component: 'src/components/Card.astro',
     usages: [{ path: 'src/pages/index.astro', count: 2 }],
     reviews: [{ kind: 'spread', path: 'src/pages/about.astro', line: 4 }],
+    kept: { value: "'forward'", source: 'default', lines: [9, 10] },
   };
   assert.deepEqual(parsePropertyRemovalPreview(JSON.parse(JSON.stringify(good))), good);
   const bad: readonly unknown[] = [
@@ -311,6 +386,9 @@ test('the preview crosses the wire only in its own shape', () => {
     { ...good, reviews: [{ kind: 'guess', path: 'a.astro', line: 1 }] },
     { ...good, reviews: [{ kind: 'reads', path: 'a.astro', line: 0 }] },
     { ...good, reviews: 'none' },
+    { ...good, kept: { value: '', source: 'default', lines: [1] } },
+    { ...good, kept: { value: '1', source: 'guess', lines: [1] } },
+    { ...good, kept: { value: '1', source: 'zero', lines: [] } },
   ];
   for (const shape of bad) {
     assert.throws(() => parsePropertyRemovalPreview(shape));
