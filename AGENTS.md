@@ -595,6 +595,15 @@ the operating system's menu, which cannot be styled or themed, so it looks and b
 every other menu; one component keeps the look, the keyboard and the check at the end of the
 row the same everywhere. `stacki/no-native-select` rejects `<select>` and `createElement('select')`.
 
+## Scroll containers
+
+Every element with `overflow` `auto`, `scroll` or `overlay` declares `scrollbar-gutter: stable`
+in the same rule (`scrollbarGutter: 'stable'` in a style object). Never as a universal `*` rule:
+it also narrows `overflow: hidden` boxes. Exceptions go in `test/helpers/scrollGutterAllowlist.json`
+with a reason (`docs/scroll-gutter.md`). Why: content jumping sideways when a scrollbar enters or
+leaves reads as a bug; one declared rule per container keeps the layout stable everywhere.
+`test/renderer/ui/scrollGutter.test.ts` rejects a scroll container without it.
+
 ## Project editor metadata
 
 Project insertion defaults live in `.stacki/components.json`; column guide preferences

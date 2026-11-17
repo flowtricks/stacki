@@ -136,6 +136,7 @@ an allow (`withRootAsDot` in `scripts/agent/core.mts`; issue #78).
 | — | No `@ts-nocheck`; `@ts-expect-error` says why | scan: `no-ts-nocheck`; lint: `ban-ts-comment` |
 | — | Code display: code in the UI is syntax highlighted | test: `test/renderer/ui/codeDisplayRule.test.js` (source scan with named allowlists); `test/renderer/ui/codeBlock.test.js` for each site; review for code that looks like a label |
 | — | Dropdowns: the custom dropdown, never a native `<select>` | lint: `stacki/no-native-select` (JSX `<select>` and `createElement('select')`) in `src/` via `eslint.config.mjs`, and in `studio/src/` and `studio/demo/` via `studio/eslint.config.ts`, which loads the vendored rule file |
+| — | Scroll containers keep a stable scrollbar gutter | test: `test/renderer/ui/scrollGutter.test.ts` (scanner `test/helpers/scrollGutter.ts`, exceptions in `test/helpers/scrollGutterAllowlist.json`) |
 | — | Studio's AI chat shows Desktop's components, not copies: the shared menu, diff view, chip editor, sessions list classes and styles reach Studio only through `studio/scripts/shared-source.json`, assembled into `studio/vendor/stacki` | `npm --prefix studio run assemble` fails on a listed file that no longer exists, and `check` and `lint` fail on an adapter that imports one that moved or lost an export; test: `studio/test/chatState.test.ts` (stored history, pin and reorder, mentions), `studio/test/ai.browser.ts` (the panel in a real browser); review for look, since no check compares pixels |
 
 ## Changing a rule
