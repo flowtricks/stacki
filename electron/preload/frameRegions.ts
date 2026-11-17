@@ -643,12 +643,18 @@ export const collectRegions = () => {
 // to ask "is my slot empty?") takes those markers with it. The items the loop
 // rendered keep their `data-avb-p`, though, and each one's path is the loop's path
 // plus its own index. So a path that no element carries and no marker pair
-// encloses, but that is the parent of paths elements do carry, is a node with no
-// element: its runs are those elements, grouped by the element holding them, one
-// run per rendered copy, in document order. Markers stay the first answer: a path
-// with a marker pair is never derived. Derived runs tag nothing (a tag would make
-// the path look carried by an element on the next pass) and are recollected each
-// pass, so a page whose markers come back drops them.
+// encloses, but that is an ancestor of paths elements do carry, with only such
+// paths between, is a node with no element: its runs are those elements, grouped
+// by the element holding them, one run per rendered copy, in document order.
+// Markers stay the first answer: a path with a marker pair is never derived.
+// Derived runs tag nothing (a tag would make the path look carried by an element
+// on the next pass) and are recollected each pass, so a page whose markers come
+// back drops them.
+//
+// Every hollow ancestor, not only the parent: a `<Fragment slot>` holding a loop
+// and a button has the button as its child but the loop's items as grandchildren
+// (the loop is hollow too), and a fragment inside a fragment likewise. Taking only
+// the parent outlined such a fragment around the button and left the loop out.
 const hollowPaths = new Set<string>();
 
 const forgetHollowRegions = () => {
@@ -669,38 +675,92 @@ const collectHollowRegions = () => {
   // Path -> one copy (see hollowCopyKey) -> that copy's elements, all in document order.
   const found = new Map<string, Map<string, Node[]>>();
   const holders = new Map<Node, number>();
+  const callers = new Map<Node, ReadonlySet<string>>();
   for (const element of elements) {
     const holder = element.parentNode;
     if (holder === null) {
       continue;
     }
     for (const nodePath of pathsOf(element)) {
-      const parent = parentPath(nodePath);
-      if (parent === undefined || carried.has(parent) || regions.has(parent)) {
-        continue;
-      }
-      const copies = found.get(parent) ?? new Map<string, Node[]>();
-      found.set(parent, copies);
-      const holderIndex = holders.get(holder) ?? holders.size;
-      holders.set(holder, holderIndex);
-      const key = hollowCopyKey(holderIndex, nodePath, pathsOf(element));
-      const run = copies.get(key) ?? [];
-      copies.set(key, run);
-      // The last element pushed is the only one that can repeat: an element visits
-      // its paths one after another, so a second path of the same copy comes right
-      // behind the first. (`includes` over the whole run is quadratic in a loop's size.)
-      if (run.at(-1) !== element) {
-        run.push(element);
+      // Climbs one level per step, so the cap is the depth a path can have; nearly always
+      // the parent is carried and this stops at once.
+      let child = nodePath;
+      for (let level = 0; level < PRELOAD_LIMITS.domDepthMax; level++) {
+        const parent = parentPath(child);
+        if (parent === undefined || carried.has(parent) || regions.has(parent)) {
+          break;
+        }
+        assert(parent.length < child.length, 'collectHollowRegions: a parent path is shorter than its child');
+        const copies = found.get(parent) ?? new Map<string, Node[]>();
+        found.set(parent, copies);
+        const holderIndex = holders.get(holder) ?? holders.size;
+        holders.set(holder, holderIndex);
+        const key = hollowCopyKey(holderIndex, nodePath, pathsOf(element), callerNamespaces(holder, callers));
+        const run = copies.get(key) ?? [];
+        copies.set(key, run);
+        // The last element pushed is the only one that can repeat: an element visits
+        // its paths one after another, so a second path of the same copy comes right
+        // behind the first. (`includes` over the whole run is quadratic in a loop's size.)
+        if (run.at(-1) !== element) {
+          run.push(element);
+        }
+        child = parent;
       }
     }
   }
   for (const [nodePath, copies] of found) {
-    const runs = Array.from(copies.values());
+    const runs = Array.from(copies.values(), hollowRunSpan);
     assert(runs.length > 0, 'collectHollowRegions: a derived path has at least one run');
     regions.set(nodePath, runs);
     hollowPaths.add(nodePath);
   }
 };
+
+// A copy's run is everything from its first element to its last, the text and untagged
+// markup between them included: a fragment's children are siblings, and the bare text
+// among them (which carries no tag) is as much the fragment as the elements around it.
+// Elements of one copy share a holder (hollowCopyKey), so this walks siblings only.
+// Linear in the nodes it returns, and a copy's elements are found in document order.
+function hollowRunSpan(elements: readonly Node[]): Node[] {
+  const first = elements[0];
+  const last = elements.at(-1);
+  assert(first !== undefined, 'hollowRunSpan: a derived copy has an element');
+  assert(last !== undefined, 'hollowRunSpan: a derived copy has a last element');
+  const span: Node[] = [];
+  for (let node: Node | undefined = first; node !== undefined; node = node.nextSibling ?? undefined) {
+    span.push(node);
+    if (node === last) {
+      return span;
+    }
+  }
+  // The last element was not a later sibling of the first: the copy is not one run of
+  // siblings after all, so it stays the elements alone rather than a guessed range.
+  return [...elements];
+}
+
+// The files whose paths sit on the holder or above it: the files that CALL whatever
+// renders in the holder. Memoized per holder, so a loop of thousands of items in one
+// holder walks its ancestors once.
+function callerNamespaces(holder: Node, memo: Map<Node, ReadonlySet<string>>): ReadonlySet<string> {
+  const known = memo.get(holder);
+  if (known !== undefined) {
+    return known;
+  }
+  // The page is the outermost file: it calls everything and nothing calls it.
+  const namespaces = new Set<string>(['']);
+  let up: Element | undefined = isElement(holder) ? (holder.closest(`[${PATH_ATTR}]`) ?? undefined) : undefined;
+  for (let depth = 0; up !== undefined && depth < PRELOAD_LIMITS.domDepthMax; depth++) {
+    for (const nodePath of pathsOf(up)) {
+      namespaces.add(namespaceOf(nodePath));
+    }
+    up = taggedAncestor(up);
+  }
+  assert(namespaces.has(''), 'callerNamespaces: the page is always a caller');
+  memo.set(holder, namespaces);
+  return namespaces;
+}
+
+const namespaceOf = (nodePath: string): string => nodePath.slice(0, nodePath.lastIndexOf('|') + 1);
 
 // Which copy of a derived node an element belongs to. Elements in one holder are
 // one copy, unless they are the roots of separate component instances: five
@@ -708,9 +768,21 @@ const collectHollowRegions = () => {
 // its own, told apart by the paths the calling file gave them (`0.1`, `0.2`…).
 // A loop's items carry the same paths as each other, so they stay one copy.
 // Grouping the buttons as one would put the open instance's siblings inside it.
-function hollowCopyKey(holderIndex: number, nodePath: string, paths: readonly string[]): string {
-  const namespace = nodePath.slice(0, nodePath.lastIndexOf('|') + 1);
-  const others = paths.filter((other) => other.slice(0, other.lastIndexOf('|') + 1) !== namespace).sort();
+//
+// Only the CALLING files' paths tell instances apart. An element also carries the
+// path of its own component's root (`Paragraph.astro|0` on the paragraph a
+// `<Paragraph>` renders), and that names the file rendered inside it, not which copy
+// it is: a `<Fragment slot>` holding a Paragraph and a ButtonWrapper split in two by
+// those paths, and its outline wrapped the paragraph alone. A file is a caller when
+// its paths sit on the holder or above it (callerNamespaces); a file rendered inside
+// the element never does.
+function hollowCopyKey(holderIndex: number, nodePath: string, paths: readonly string[], callers: ReadonlySet<string>): string {
+  const namespace = namespaceOf(nodePath);
+  assert(callers.has(''), 'hollowCopyKey: the page is a caller');
+  const others = paths
+    .filter((other) => namespaceOf(other) !== namespace)
+    .filter((other) => callers.has(namespaceOf(other)))
+    .sort();
   return `${holderIndex} ${others.join(' ')}`;
 }
 
