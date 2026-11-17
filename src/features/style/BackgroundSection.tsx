@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { layerPreviewStyle, useResolvedCustomProperties } from './GradientCode';
-import Select from './components/Select';
+import { VariableSelect, variableIn } from './KeywordConnect';
+import { RatioOtherInput } from './AspectRatioField';
 import { blankLayer, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, type BgLayer } from './model/background';
 import LayerList from './LayerList';
 import { PlusIcon } from './components/MenuParts';
@@ -107,9 +108,11 @@ export default function BackgroundSection(props: Props) {
 function ClippingRow(props: Props) {
   // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
   const hoverPreview = useHoverPreview();
-  const { read, busy, setProp, clearProp } = props;
+  const { read, busy, setProp, clearProp, liveSetProp } = props;
   const translate = useTranslate();
   const clipDisplay = displayOf(read('background-clip'));
+  // A variable has no row in the list: the chip field stands in for the label.
+  const clipVariable = clipDisplay.present && variableIn(clipDisplay.value) !== undefined;
   const clip = clipDisplay.present ? clipDisplay.value.trim() : 'border-box';
   return (
     <div className="embed-editor_size-row">
@@ -125,7 +128,23 @@ function ClippingRow(props: Props) {
       />
       {/* No custom field: a flagged value is marked, and picks keep the flag. */}
       <ImportantMark important={clipDisplay.important}>
-        <Select
+        <VariableSelect
+          prop="background-clip"
+          rawValue={clipDisplay.present ? clipDisplay.value : ''}
+          onVariable={(binding) => setProp('background-clip', binding, clipDisplay.important)}
+          customInput={
+            clipVariable ? (
+              <RatioOtherInput
+                value={clipDisplay.value}
+                busy={busy}
+                prop="background-clip"
+                ariaLabel={translate('style.backgroundSection.backgroundClipping')}
+                onCommit={(value, important) => setProp('background-clip', value, important || clipDisplay.important)}
+                onLiveCommit={(value, important) => liveSetProp('background-clip', value, important || clipDisplay.important)}
+                onClear={() => clearProp('background-clip')}
+              />
+            ) : undefined
+          }
           value={clip}
           options={clipOptions(translate)}
           onChange={(next) => setProp('background-clip', next, clipDisplay.important)}

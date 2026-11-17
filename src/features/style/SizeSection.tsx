@@ -135,6 +135,7 @@ function OverflowRow({
         labelElement
       )}
       <SegmentBar
+        prop={prop}
         config={overflowBar(translateRich, translate)}
         value={value}
         busy={busy}
@@ -281,6 +282,7 @@ function BoxSizingField({ read, busy, setProp, clearProp, liveSetProp, onProvena
         onSelectSelector={onSelectSelector}
       />
       <SegmentBar
+        prop="box-sizing"
         config={boxSizingBar(translateRich, translate)}
         value={displayText(display)}
         busy={busy}

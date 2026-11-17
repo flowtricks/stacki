@@ -219,6 +219,7 @@ export type LayerFieldProps = {
 // longhand (Size's width/height, Position's left/top). The parent maps the part back
 // into the full comma list; this just owns the field's local text + arrow-stepping.
 export function BgPartInput({
+  prop,
   value,
   placeholder,
   label,
@@ -227,6 +228,8 @@ export function BgPartInput({
   onLive,
   onCommit,
 }: {
+  /** The longhand this is one part of: the variable picker offers what fits it. */
+  prop: string;
   value: string;
   placeholder: string;
   label: string;
@@ -247,34 +250,47 @@ export function BgPartInput({
     onInput: (text) => onLive(text.trim()),
     onCommit: commitScrub,
   });
+  const translate = useTranslate();
+  // One part of a value, so the picker's preview shows in the field alone (no canvasProperty).
   return (
-    <input
-      {...scrub.input}
-      className={`u-input embed-editor_size-input ${disabled ? 'is-inactive' : ''}`}
-      value={draft}
-      placeholder={placeholder}
-      aria-label={label}
-      disabled={busy || disabled}
-      spellCheck={false}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        onLive(event.target.value.trim());
+    <VariableConnect
+      className="is-fill"
+      prop={prop}
+      disabled={busy || disabled === true}
+      ariaLabel={translate('styleModel.shared.connectVariable', { label })}
+      onPick={(binding) => {
+        setDraft(binding);
+        onCommit(binding);
       }}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        onCommit(draft.trim());
-      }}
-      onKeyDown={(event) => {
-        const stepped = stepInPlace(event);
-        if (stepped !== undefined) {
-          setDraft(stepped);
-          onLive(stepped.trim());
-        }
-      }}
-    />
+    >
+      <input
+        {...scrub.input}
+        className={`u-input embed-editor_size-input ${disabled ? 'is-inactive' : ''}`}
+        value={draft}
+        placeholder={placeholder}
+        aria-label={label}
+        disabled={busy || disabled}
+        spellCheck={false}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          onLive(event.target.value.trim());
+        }}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          onCommit(draft.trim());
+        }}
+        onKeyDown={(event) => {
+          const stepped = stepInPlace(event);
+          if (stepped !== undefined) {
+            setDraft(stepped);
+            onLive(stepped.trim());
+          }
+        }}
+      />
+    </VariableConnect>
   );
 }
 
@@ -332,6 +348,7 @@ export function LayerSizeField({ layers, index, busy, setProp, clearProp, liveSe
       <div className="embed-editor_bg-pair">
         <label className="embed-editor_bg-pair-field">
           <BgPartInput
+            prop="background-size"
             value={parsed.width}
             placeholder={AUTO_KEYWORD}
             label={translate('style.backgroundLayerFields.width')}
@@ -344,6 +361,7 @@ export function LayerSizeField({ layers, index, busy, setProp, clearProp, liveSe
         </label>
         <label className="embed-editor_bg-pair-field">
           <BgPartInput
+            prop="background-size"
             value={parsed.height}
             placeholder={AUTO_KEYWORD}
             label={translate('style.backgroundLayerFields.height')}
@@ -391,6 +409,7 @@ export function LayerPositionField({ layers, index, busy, setProp, clearProp, li
         <label className="embed-editor_bg-posfield">
           <span className="embed-editor_bg-posfield-cap">{translate('style.backgroundLayerFields.left')}</span>
           <BgPartInput
+            prop="background-position"
             value={x}
             placeholder="0px"
             label={translate('style.backgroundLayerFields.left')}
@@ -402,6 +421,7 @@ export function LayerPositionField({ layers, index, busy, setProp, clearProp, li
         <label className="embed-editor_bg-posfield">
           <span className="embed-editor_bg-posfield-cap">{translate('style.backgroundLayerFields.top')}</span>
           <BgPartInput
+            prop="background-position"
             value={y}
             placeholder="0px"
             label={translate('style.backgroundLayerFields.top')}
@@ -705,30 +725,42 @@ export function OverlayColorInput({
   write: (color: string, options: WriteOptions) => void;
 }) {
   const translate = useTranslate();
+  // Wrapped like every other field: a colour variable reads as the purple chip.
   return (
-    <input
-      className="u-input embed-editor_size-input"
-      value={draft}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        write(draft, { live: true });
-      }}
-      onFocus={() => {
-        focusedRef.current = true;
-      }}
-      onBlur={() => {
-        focusedRef.current = false;
-        write(draft, { live: false });
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop="color"
       disabled={busy}
-      spellCheck={false}
-      placeholder={OVERLAY_PLACEHOLDER}
-      aria-label={translate('style.backgroundLayerFields.overlayColor')}
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: translate('style.backgroundLayerFields.overlayColor') })}
+      onPick={(binding) => {
+        setDraft(binding);
+        write(binding, { live: false });
+      }}
+    >
+      <input
+        className="u-input embed-editor_size-input"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          write(draft, { live: true });
+        }}
+        onFocus={() => {
+          focusedRef.current = true;
+        }}
+        onBlur={() => {
+          focusedRef.current = false;
+          write(draft, { live: false });
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        placeholder={OVERLAY_PLACEHOLDER}
+        aria-label={translate('style.backgroundLayerFields.overlayColor')}
+      />
+    </VariableConnect>
   );
 }

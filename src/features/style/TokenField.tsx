@@ -48,11 +48,12 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// One variable in the field, as it is drawn and as it is written back.
-export type Chip = { text: string; name: string; type: string };
+// One variable in the field, as it is drawn and as it is written back. `value` is
+// what the variable is declared as, when the catalog knows it: the chip's tooltip.
+export type Chip = { text: string; name: string; type: string; value?: string };
 
 // What the chips amount to, for the effects that redraw when they change.
-export const chipKey = (chips: Chip[]): string => chips.map((chip) => `${chip.text}|${chip.name}|${chip.type}`).join(',');
+export const chipKey = (chips: Chip[]): string => chips.map((chip) => `${chip.text}|${chip.name}|${chip.type}|${chip.value ?? ''}`).join(',');
 
 // The chip markup embedded in the contentEditable. `contenteditable="false"` makes it
 // atomic (a single backspace removes it); `data-chip` marks it for serialization, and
@@ -61,11 +62,20 @@ export const chipKey = (chips: Chip[]): string => chips.map((chip) => `${chip.te
 export function tokenChipHtml(chip: Chip): string {
   return (
     '<span class="embed-editor_varconnect-token" contenteditable="false" data-chip="1" ' +
-    `data-binding="${escapeHtml(chip.text)}">` +
+    `data-binding="${escapeHtml(chip.text)}"${chipTitle(chip)}>` +
     `<span class="embed-editor_varconnect-token-icon">${tokenGlyph(chip.type)}</span>` +
     `<span class="embed-editor_varconnect-token-name">${escapeHtml(chip.name)}</span>` +
     '</span>'
   );
+}
+
+// The chip's tooltip: the variable and what it resolves to, when that is known.
+function chipTitle(chip: Chip): string {
+  if (chip.value === undefined || chip.value === '') {
+    return '';
+  }
+  const quoted = (text: string): string => escapeHtml(text).replace(/"/g, '&quot;');
+  return ` data-value="${quoted(chip.value)}" title="${quoted(`${chip.name}: ${chip.value}`)}"`;
 }
 
 // Value → contentEditable HTML: literal text, the chip in place of the variable, more
@@ -163,11 +173,15 @@ export function fieldText(root: HTMLElement): string {
 /** The chips the field is showing, in the order they appear — read back before a
  *  repaint so each mark in the text is redrawn as the chip it actually was. */
 export function chipsOf(root: HTMLElement): Chip[] {
-  return [...root.querySelectorAll<HTMLElement>('[data-chip]')].map((element) => ({
-    text: element.dataset['binding'] ?? '',
-    name: element.querySelector('.embed-editor_varconnect-token-name')?.textContent ?? '',
-    type: element.dataset['type'] ?? 'Size', // i18n-ignore: a variable type id.
-  }));
+  return [...root.querySelectorAll<HTMLElement>('[data-chip]')].map((element) => {
+    const value = element.dataset['value'];
+    return {
+      text: element.dataset['binding'] ?? '',
+      name: element.querySelector('.embed-editor_varconnect-token-name')?.textContent ?? '',
+      type: element.dataset['type'] ?? 'Size', // i18n-ignore: a variable type id.
+      ...(value === undefined ? {} : { value }),
+    };
+  });
 }
 
 /** Re-draw the field from `text`, keeping its chips, and put the caret at `at`. */

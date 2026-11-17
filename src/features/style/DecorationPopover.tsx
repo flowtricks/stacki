@@ -3,6 +3,8 @@
 // (TypographySection.tsx).
 
 import Select, { type SelectOption } from './components/Select';
+import { VariableSelect, variableIn } from './KeywordConnect';
+import { RatioOtherInput } from './AspectRatioField';
 import ColorSwatch from './components/ColorSwatch';
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf } from './model/styleDisplay';
@@ -149,7 +151,23 @@ export function DecorationPopover(props: Props) {
         <PopLabel label={translate('style.decorationPopover.skipInk')} prop="text-decoration-skip-ink" {...props} />
         {/* No custom field: a flagged value is marked, and picks keep the flag. */}
         <ImportantMark important={skip.important}>
-          <Select
+          <VariableSelect
+            prop="text-decoration-skip-ink"
+            rawValue={skip.present ? skip.value : ''}
+            onVariable={(binding) => setProp('text-decoration-skip-ink', binding, skip.important)}
+            customInput={
+              skip.present && variableIn(skip.value) !== undefined ? (
+                <RatioOtherInput
+                  value={skip.value}
+                  busy={busy}
+                  prop="text-decoration-skip-ink"
+                  ariaLabel={translate('style.decorationPopover.skipInk')}
+                  onCommit={(value, important) => setProp('text-decoration-skip-ink', value, important || skip.important)}
+                  onLiveCommit={(value, important) => props.liveSetProp('text-decoration-skip-ink', value, important || skip.important)}
+                  onClear={() => props.clearProp('text-decoration-skip-ink')}
+                />
+              ) : undefined
+            }
             value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
             options={skipInkOptions(translate)}
             onChange={(value) => setProp('text-decoration-skip-ink', value, skip.important)}

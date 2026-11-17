@@ -4,6 +4,7 @@ import type { SegmentedOption } from '../../ui/SegmentedControl';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import VariableConnect from './VariableConnect';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import { useHighlight } from './model/computedStyle';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
@@ -194,28 +195,37 @@ function StyleControl({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label={translate('style.bordersSection.borderStyle')}
+    <KeywordConnect
+      prop="border-style"
+      value={value}
+      ariaLabel={translate('style.bordersSection.borderStyle')}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => write(binding, { live: false })}
     >
-      <SegmentPill />
-      {customMode ? (
-        <StyleCustomField value={withImportant({ value, important })} busy={busy} inputRef={inputRef} write={write} clear={clear} />
-      ) : (
-        <StyleSegments shown={shown} busy={busy} pick={pick} />
-      )}
-      <StyleMenu
-        open={open}
-        customMode={customMode}
-        shown={shown}
-        busy={busy}
-        onToggle={() => setOpen((wasOpen) => !wasOpen)}
-        pick={pick}
-        enterCustom={enterCustom}
-      />
-    </div>
+      <div
+        ref={rootRef}
+        className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`}
+        role="group"
+        aria-label={translate('style.bordersSection.borderStyle')}
+      >
+        <SegmentPill />
+        {customMode ? (
+          <StyleCustomField value={withImportant({ value, important })} busy={busy} inputRef={inputRef} write={write} clear={clear} />
+        ) : (
+          <StyleSegments shown={shown} busy={busy} pick={pick} />
+        )}
+        <StyleMenu
+          open={open}
+          customMode={customMode}
+          shown={shown}
+          busy={busy}
+          onToggle={() => setOpen((wasOpen) => !wasOpen)}
+          pick={pick}
+          enterCustom={enterCustom}
+        />
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -361,6 +371,7 @@ function StyleMenu({
       </button>
       {open ? (
         <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
+          <VariableMenuItem onClose={onToggle} />
           {customMode ? (
             styleOptions(translate).map((seg) => (
               <MenuItem key={seg.value} label={seg.ariaLabel ?? seg.value} selected={shown === seg.value} onClick={() => pick(seg.value)} />

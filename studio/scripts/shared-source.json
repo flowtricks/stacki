@@ -1248,6 +1248,7 @@
     "src/features/style/GridSwitchToCount.tsx",
     "src/features/style/GridTrackExpression.tsx",
     "src/features/style/GridSettingsKit.tsx",
+    "src/features/style/KeywordConnect.tsx",
     "src/features/style/LayerList.tsx",
     "src/features/style/LayerPopover.tsx",
     "src/features/style/LiveTextInput.tsx",

@@ -437,6 +437,7 @@ export const messages = {
   'style.gridSettings.modeSubgrid': 'Subgrid', // same
   'style.gridSettings.rows': 'Lignes',
   'style.gridSettings.subgridOn': 'Ces pistes viennent de la grille parente. Il faut une grille parente, que cet élément couvre sur ses pistes.', // review
+  'style.keywordConnect.variable': 'Variable…',
   'style.layerList.dragToReorder': 'Faites glisser pour réordonner',
   'style.layerList.editLayer': 'Modifier le calque',
   'style.layerList.hide': 'Masquer',

@@ -437,6 +437,7 @@ export const messages = {
   'style.gridSettings.rows': 'Zeilen',
   'style.gridSettings.subgridOn':
     'Diese Tracks kommen vom übergeordneten Grid. Dafür braucht es ein übergeordnetes Grid, dessen Tracks dieses Element überspannt.', // review
+  'style.keywordConnect.variable': 'Variable…',
   'style.layerList.dragToReorder': 'Zum Sortieren ziehen',
   'style.layerList.editLayer': 'Ebene bearbeiten',
   'style.layerList.hide': 'Ausblenden',

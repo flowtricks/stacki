@@ -12,6 +12,7 @@ import {
   type GradientStopPatch,
 } from './model/gradient';
 import { commitInPlace } from './model/commitInPlace';
+import VariableConnect from './VariableConnect';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import { RadialSizeControl, RepeatIcon, type WriteOptions, AngleControl } from './GradientControls';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -466,26 +467,35 @@ function StopFields({
             setStop(selectedIndex, { color }, { live });
           }}
         />
-        <input
-          className="u-input embed-editor_grad-color"
-          value={stop.color}
-          spellCheck={false}
+        {/* One stop of the gradient: a colour variable here is a chip like anywhere else. */}
+        <VariableConnect
+          className="is-fill"
+          prop="color"
           disabled={busy}
-          aria-label={translate('style.gradientEditor.stopColor')}
-          onFocus={() => {
-            editingRef.current = true;
-          }}
-          onChange={(event) => setStop(selectedIndex, { color: event.target.value }, { live: true })}
-          onBlur={() => {
-            editingRef.current = false;
-            setStop(selectedIndex, { color: stop.color });
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commitInPlace(event.currentTarget);
-            }
-          }}
-        />
+          ariaLabel={translate('styleModel.shared.connectVariable', { label: translate('style.gradientEditor.stopColor') })}
+          onPick={(binding) => setStop(selectedIndex, { color: binding })}
+        >
+          <input
+            className="u-input embed-editor_grad-color"
+            value={stop.color}
+            spellCheck={false}
+            disabled={busy}
+            aria-label={translate('style.gradientEditor.stopColor')}
+            onFocus={() => {
+              editingRef.current = true;
+            }}
+            onChange={(event) => setStop(selectedIndex, { color: event.target.value }, { live: true })}
+            onBlur={() => {
+              editingRef.current = false;
+              setStop(selectedIndex, { color: stop.color });
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitInPlace(event.currentTarget);
+              }
+            }}
+          />
+        </VariableConnect>
         <NumberField
           value={stop.pos || `${Math.round(stopPercent(stops, selectedIndex))}%`}
           unit="%"

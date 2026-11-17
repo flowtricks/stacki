@@ -13,7 +13,8 @@ import Popup from '../../../ui/Popup';
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import FieldLabel from '../components/FieldLabel';
 import { PropTip, ProvenanceLabel } from '../components/CssPropertyTip';
-import Select, { type SelectOption } from '../components/Select';
+import type { SelectOption } from '../components/Select';
+import { KeywordVariableField, VariableSelect, variableIn } from '../KeywordConnect';
 import DisplayControl, { DISPLAY_VALUES } from '../DisplayControl';
 import { useAnchoredPosition } from '../components/provenancePosition';
 export { useAnchoredPosition } from '../components/provenancePosition';
@@ -408,7 +409,9 @@ export function VerticalAlignRow({
     const key = VALIGN_LABEL_KEYS[option.value];
     return key === undefined ? option : { ...option, label: translate(key) };
   });
-  const options: SelectOption<string>[] = matched === undefined && raw ? [...shownOptions, { value: raw, label: raw }] : [...shownOptions];
+  // A variable is drawn as its chip in the trigger, never listed as raw text.
+  const variable = variableIn(raw) !== undefined;
+  const options: SelectOption<string>[] = matched === undefined && raw && !variable ? [...shownOptions, { value: raw, label: raw }] : [...shownOptions];
   // No custom field: a flagged value is marked, and a pick keeps the flag.
   const important = effective?.important ?? false;
   const pick = (value: string) => setProp(prop, value, important);
@@ -426,7 +429,28 @@ export function VerticalAlignRow({
         onSelectSelector={onSelectSelector}
       />
       <ImportantMark important={important}>
-        <Select value={matched ?? (raw || 'baseline')} options={options} onChange={pick} ariaLabel={translate('styleModel.embed.row.alignY')} disabled={busy} />
+        <VariableSelect
+          prop={prop}
+          rawValue={raw}
+          onVariable={pick}
+          customInput={
+            variable ? (
+              <KeywordVariableField
+                prop={prop}
+                value={raw}
+                busy={busy}
+                ariaLabel={translate('styleModel.embed.row.alignY')}
+                onCommit={pick}
+                onClear={() => clearProp(prop)}
+              />
+            ) : undefined
+          }
+          value={matched ?? (raw || 'baseline')}
+          options={options}
+          onChange={pick}
+          ariaLabel={translate('styleModel.embed.row.alignY')}
+          disabled={busy}
+        />
       </ImportantMark>
     </div>
   );

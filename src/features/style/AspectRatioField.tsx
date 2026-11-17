@@ -2,7 +2,8 @@
 // the caret only when it was picked (SizeSection.tsx).
 
 import { useEffect, useRef, useState } from 'react';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
 import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
 import { commitInPlace } from './model/commitInPlace';
@@ -239,7 +240,7 @@ export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, 
   // A flagged ratio opens the free field ("other"), whose text shows `!important`
   // — the convention of every preset control in the panel.
   const derivedKey = display.important ? 'other' : display.present ? ratioKeyOf(current) : 'auto';
-  const { key, askedForOther, onSelect, clear } = useRatioMode({
+  const { key, askedForOther, onSelect, onVariable, clear } = useRatioMode({
     current,
     derivedKey,
     setProp,
@@ -259,7 +260,10 @@ export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, 
           onProvenance={onProvenance}
           onSelectSelector={onSelectSelector}
         />
-        <Select
+        <VariableSelect
+          prop="aspect-ratio"
+          rawValue={current}
+          onVariable={onVariable}
           className="embed-editor_ratio-select"
           value={key}
           options={ratioOptions(translate)}
@@ -327,7 +331,13 @@ export function useRatioMode({ current, derivedKey, setProp, clearProp }: { curr
     setForced(undefined);
     clearProp('aspect-ratio');
   };
-  return { key: forced ?? derivedKey, askedForOther, onSelect, clear };
+  // A variable is a free value: the W:H pair has nothing to split, so the mode follows the value.
+  const onVariable = (binding: string) => {
+    askedForOther.current = false;
+    setForced(undefined);
+    setProp('aspect-ratio', binding, false);
+  };
+  return { key: forced ?? derivedKey, askedForOther, onSelect, onVariable, clear };
 }
 
 // The Custom W:H pair: two number fields that write `W / H` (a blank side as 0).

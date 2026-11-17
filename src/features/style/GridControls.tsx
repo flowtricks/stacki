@@ -5,7 +5,9 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import { GroupLabel } from './TypographySection';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
+import VariableConnect from './VariableConnect';
 import { HoverTooltip } from '../../ui/SegmentedControl';
 import GridSettings from './GridSettings';
 import type { ResolvedProp } from './model/resolved';
@@ -91,8 +93,10 @@ function GridAlignBox({
 const AXIS_CUSTOM = '__custom__';
 
 // The free-text field shown in Custom mode: commits on blur, clears the property when
-// emptied (mirrors the flex align axis; no live channel here).
+// emptied (mirrors the flex align axis; no live channel here). Wrapped like every
+// other field, so a `var(--x)` reads as the purple chip.
 function GridAxisCustomInput({
+  prop,
   value,
   busy,
   ariaLabel,
@@ -100,6 +104,7 @@ function GridAxisCustomInput({
   onCommit,
   onClear,
 }: {
+  prop: string;
   value: string;
   busy: boolean;
   ariaLabel: string;
@@ -107,6 +112,7 @@ function GridAxisCustomInput({
   onCommit: (value: string) => void;
   onClear: () => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -123,28 +129,40 @@ function GridAxisCustomInput({
     }
   };
   return (
-    <input
-      className="u-select-custom-input"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        commit();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop={prop}
+      canvasProperty={prop}
       disabled={busy}
-      spellCheck={false}
-      placeholder="unset"
-      aria-label={ariaLabel}
-      autoFocus={autoFocus}
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: ariaLabel })}
+      onPick={(binding) => {
+        setDraft(binding);
+        onCommit(binding);
+      }}
+    >
+      <input
+        className="u-select-custom-input"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        placeholder="unset"
+        aria-label={ariaLabel}
+        autoFocus={autoFocus}
+      />
+    </VariableConnect>
   );
 }
 
@@ -215,7 +233,13 @@ function GridAlignAxis(props: GridAlignAxisProps) {
       />
       {/* Grid's initial justify-items / align-items behave as stretch, so an unset axis
           shows Stretch (Webflow's default). Clear via this axis's X / Y label. */}
-      <Select
+      <VariableSelect
+        prop={prop}
+        rawValue={value}
+        onVariable={(binding) => {
+          setForceCustom(false);
+          onSet(binding);
+        }}
         value={customMode ? AXIS_CUSTOM : known ? shown : shownAlign}
         options={options}
         ariaLabel={translate('style.gridControls.alignAxis', { axis })}
@@ -226,6 +250,7 @@ function GridAlignAxis(props: GridAlignAxisProps) {
         customInput={
           customMode ? (
             <GridAxisCustomInput
+              prop={prop}
               value={value}
               busy={busy}
               ariaLabel={translate('style.gridControls.alignAxis', { axis })}

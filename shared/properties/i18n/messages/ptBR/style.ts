@@ -435,6 +435,7 @@ export const messages = {
   'style.gridSettings.modeSubgrid': 'Subgrid', // same
   'style.gridSettings.rows': 'Linhas',
   'style.gridSettings.subgridOn': 'Estes tracks vêm do grid pai. Precisa de um grid pai, com este elemento ocupando os tracks dele.', // review
+  'style.keywordConnect.variable': 'Variável…',
   'style.layerList.dragToReorder': 'Arraste para reordenar',
   'style.layerList.editLayer': 'Editar camada',
   'style.layerList.hide': 'Ocultar',

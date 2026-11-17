@@ -20,7 +20,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { repoPath } = require('../../helpers/sources.js');
+const { repoPath, stubSources } = require('../../helpers/sources.js');
 
 const failures = [];
 let checked = 0;
@@ -55,6 +55,16 @@ const SEG = (TRACK - PAD * 2) / 4;
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     loader: { '.tsx': 'tsx', '.ts': 'ts', '.jsx': 'jsx', '.css': 'empty' },
     logLevel: 'silent',
+    // A custom value is a variable-aware field (VariableConnect), which asks the project for
+    // its variables once it holds a var(). There is no project here: the list is empty.
+    plugins: [
+      stubSources('stub-variables', {
+        'src/features/style/model/webflow.ts': () => ({
+          contents: 'export async function streamProjectVariables() { return []; }\nexport const __stub = true;\n',
+          loader: 'js',
+        }),
+      }),
+    ],
   });
 
   const { JSDOM } = require('jsdom');

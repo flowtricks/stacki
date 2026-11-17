@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
+import VariableConnect from './VariableConnect';
 import { GroupLabel } from './TypographySection';
 import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
@@ -198,7 +200,10 @@ function axisLabel(value: string, axis: 'x' | 'y', translate: Translator): strin
 
 // The free-text field shown in Custom mode: live-updates while typing, commits on
 // blur, and clears the property when emptied (mirrors the panel's other inputs).
+// Wrapped like every other field: a `var(--x)` here is the purple chip, never the
+// raw text it was, and a plain value has the dot to connect one.
 function CustomInput({
+  prop,
   value,
   busy,
   ariaLabel,
@@ -207,6 +212,7 @@ function CustomInput({
   onLive,
   onClear,
 }: {
+  prop: string;
   value: string;
   busy: boolean;
   ariaLabel: string;
@@ -231,33 +237,48 @@ function CustomInput({
       onClear();
     }
   };
+  const translate = useTranslate();
   return (
-    <input
-      className="u-select-custom-input"
-      value={draft}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        scheduleLive(event.target.value);
-      }}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        cancelLive();
-        commit();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop={prop}
+      canvasProperty={prop}
       disabled={busy}
-      spellCheck={false}
-      placeholder="unset"
-      aria-label={ariaLabel}
-      autoFocus={autoFocus}
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: ariaLabel })}
+      onPick={(binding) => {
+        // The pick is the edit: a live preview still waiting must not land after it.
+        cancelLive();
+        setDraft(binding);
+        onCommit(binding);
+      }}
+    >
+      <input
+        className="u-select-custom-input"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          scheduleLive(event.target.value);
+        }}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          cancelLive();
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        placeholder="unset"
+        aria-label={ariaLabel}
+        autoFocus={autoFocus}
+      />
+    </VariableConnect>
   );
 }
 
@@ -354,7 +375,13 @@ function AxisSelect(props: AxisSelectProps) {
         onSelectSelector={props.onSelectSelector}
       />
       <ImportantMark important={displayOf(props.read(prop)).important}>
-        <Select
+        <VariableSelect
+          prop={prop}
+          rawValue={value}
+          onVariable={(binding) => {
+            setForceCustom(false);
+            onSet(prop, binding);
+          }}
           value={customMode ? CUSTOM : present ? normalized : shownComputed}
           options={options}
           ariaLabel={ariaLabel}
@@ -365,6 +392,7 @@ function AxisSelect(props: AxisSelectProps) {
           customInput={
             customMode ? (
               <CustomInput
+                prop={prop}
                 value={value}
                 busy={busy}
                 ariaLabel={ariaLabel}

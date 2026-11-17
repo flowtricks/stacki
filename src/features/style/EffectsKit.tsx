@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { type Hideable } from './model/hideable';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect, variableIn } from './KeywordConnect';
 import useScrub from './components/useScrub';
 import { type SegOption } from './SegmentedField';
 import { CURSOR_ICONS } from './cursorIcons';
@@ -528,7 +529,8 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
   // the convention the panel's segmented bars follow. A select with no custom
   // field marks the flag instead, and its picks keep it: there is no text to
   // delete the flag from, so a pick that dropped it would change more than asked.
-  const customMode = allowCustom && (forceCustom || (display.present && !isPreset) || display.important);
+  // A variable is shown as its chip even where Custom is off: the list has no row for it.
+  const customMode = (allowCustom && (forceCustom || (display.present && !isPreset) || display.important)) || variableIn(current) !== undefined;
   const keptImportant = !allowCustom && display.important;
   const pick = (choice: string) => {
     if (choice === CUSTOM) {
@@ -545,13 +547,19 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
     options,
     allowCustom,
     translate,
-    stray: display.present && !isPreset ? current : undefined,
+    stray: display.present && !isPreset && variableIn(current) === undefined ? current : undefined,
   });
   return (
     <div className="embed-editor_size-row">
       <EffLabel label={label} prop={prop} props={props} />
       <ImportantMark important={keptImportant}>
-        <Select
+        <VariableSelect
+          prop={prop}
+          rawValue={current}
+          onVariable={(binding) => {
+            setForceCustom(false);
+            setProp(prop, binding, display.important);
+          }}
           value={customMode ? CUSTOM : shown}
           options={selectOptions}
           onChange={pick}

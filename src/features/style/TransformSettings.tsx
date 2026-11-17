@@ -7,6 +7,7 @@ import DragSlider from './components/DragSlider';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import FieldLabel from './components/FieldLabel';
 import VariableConnect from './VariableConnect';
+import { KeywordSegments } from './KeywordConnect';
 import { PropTip, useHoverTip } from './components/CssPropertyTip';
 import { useHighlight } from './model/computedStyle';
 import { handleArrowStep } from './model/numberStep';
@@ -372,13 +373,23 @@ function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: Secti
       <div className="embed-editor_size-row">
         <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.transformSettings.backface')}</span>
         <ImportantMark important={backfaceImportant}>
-          <SegmentedControl
-            value={shownBackface}
-            options={backfaceOptions(translate)}
-            onChange={(value) => setProp('backface-visibility', value, backfaceImportant)}
+          <KeywordSegments
+            prop="backface-visibility"
+            value={effectiveValue(read, 'backface-visibility')}
+            important={backfaceImportant}
             ariaLabel={translate('style.transformSettings.backfaceVisibility')}
-            disabled={busy}
-          />
+            busy={busy}
+            onWrite={(value, important) => setProp('backface-visibility', value, important)}
+            onClear={() => clearProp('backface-visibility')}
+          >
+            <SegmentedControl
+              value={shownBackface}
+              options={backfaceOptions(translate)}
+              onChange={(value) => setProp('backface-visibility', value, backfaceImportant)}
+              ariaLabel={translate('style.transformSettings.backfaceVisibility')}
+              disabled={busy}
+            />
+          </KeywordSegments>
         </ImportantMark>
       </div>
     </section>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
-import Select from './components/Select';
+import { VariableSelect } from './KeywordConnect';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
 import { useHighlight } from './model/computedStyle';
@@ -303,7 +303,13 @@ function PositionControl({ read, busy, setProp }: { read: Read; busy: boolean; s
   }, [current]);
   const custom = forceCustom || (!!current && !isPreset) || displayOf(read('position')).important;
   return (
-    <Select
+    <VariableSelect
+      prop="position"
+      rawValue={current}
+      onVariable={(binding) => {
+        setForceCustom(false);
+        setProp('position', binding, false);
+      }}
       className="embed-editor_position-select"
       value={custom ? CUSTOM : shownPosition}
       options={[

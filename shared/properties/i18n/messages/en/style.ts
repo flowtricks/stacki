@@ -431,6 +431,7 @@ export const messages = {
   'style.gridSettings.modeSubgrid': 'Subgrid',
   'style.gridSettings.rows': 'Rows',
   'style.gridSettings.subgridOn': 'These tracks come from the parent grid. It needs a grid parent, with this element spanning its tracks.',
+  'style.keywordConnect.variable': 'Variable…',
   'style.layerList.dragToReorder': 'Drag to reorder',
   'style.layerList.editLayer': 'Edit layer',
   'style.layerList.hide': 'Hide',

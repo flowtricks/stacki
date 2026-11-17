@@ -18,6 +18,7 @@ import ProvenanceList from './ProvenanceList';
 import type { Contributor, ResolvedProp } from './model/resolved';
 import SegmentPill from './components/SegmentPill';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import { displayOf, type Display, withImportant } from './model/styleDisplay';
 import { LiveInput } from './LiveTextInput';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -308,34 +309,36 @@ export function SegBar(props: SegBarProps) {
   };
 
   return (
-    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
-      <SegmentPill />
-      {customMode ? (
-        <SegBarCustomInput bar={props} seed={seed} inputRef={inputRef} onSeedDone={() => setSeed(undefined)} onBackToBar={() => setForceCustom(false)} />
-      ) : (
-        <SegBarSegments
-          segs={segs}
-          current={current}
+    <KeywordConnect prop={props.prop} value={current} ariaLabel={ariaLabel} disabled={busy} dot={customMode ? 'field' : 'wrapper'} onPick={pick}>
+      <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
+        <SegmentPill />
+        {customMode ? (
+          <SegBarCustomInput bar={props} seed={seed} inputRef={inputRef} onSeedDone={() => setSeed(undefined)} onBackToBar={() => setForceCustom(false)} />
+        ) : (
+          <SegBarSegments
+            segs={segs}
+            current={current}
+            ariaLabel={ariaLabel}
+            busy={busy}
+            onPick={pick}
+            onMore={moreSegment ? () => enterCustom(moreValue) : undefined}
+          />
+        )}
+        <SegBarMenu
+          open={open}
+          dropUp={dropUp}
+          menuRef={menuRef}
           ariaLabel={ariaLabel}
           busy={busy}
+          customMode={customMode}
+          segs={segs}
+          current={current}
+          onToggle={() => setOpen((value) => !value)}
           onPick={pick}
-          onMore={moreSegment ? () => enterCustom(moreValue) : undefined}
+          onEnterCustom={() => enterCustom(moreValue)}
         />
-      )}
-      <SegBarMenu
-        open={open}
-        dropUp={dropUp}
-        menuRef={menuRef}
-        ariaLabel={ariaLabel}
-        busy={busy}
-        customMode={customMode}
-        segs={segs}
-        current={current}
-        onToggle={() => setOpen((value) => !value)}
-        onPick={pick}
-        onEnterCustom={() => enterCustom(moreValue)}
-      />
-    </div>
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -496,6 +499,7 @@ export function SegBarMenu({
       </button>
       {open ? (
         <Popup mode="popover" portal={false} onClose={onToggle} ref={menuRef} className={`embed-editor_display-menu ${dropUp ? 'is-up' : ''}`} role="menu">
+          <VariableMenuItem onClose={onToggle} />
           {customMode ? (
             segs.map((seg) => <MenuItem key={seg.value} label={seg.label} selected={current === seg.value} onClick={() => onPick(seg.value)} />)
           ) : (

@@ -6,6 +6,7 @@ import { SegBar, StackedField, LiveInput, PropLabel, GroupLabel, type Props, typ
 import { parseFlexShorthand } from './model/webflow';
 import { splitTopLevelSpaces } from './model/background';
 import SegmentPill from './components/SegmentPill';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import { displayOf, displayText } from './model/styleDisplay';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
@@ -294,37 +295,46 @@ function SizingControl(props: Props) {
           onProvenance={onProvenance}
           onSelectSelector={onSelectSelector}
         />
-        <div
-          ref={sizing.rootRef}
-          className={`embed-editor_display ${showSingle ? 'is-custom' : ''}`}
-          role="group"
-          aria-label={translate('style.flexChildSection.flexSizing')}
+        <KeywordConnect
+          prop="flex"
+          value={current}
+          ariaLabel={translate('style.flexChildSection.flexSizing')}
+          disabled={busy}
+          dot={showSingle ? 'field' : 'wrapper'}
+          onPick={pickPreset}
         >
-          <SegmentPill />
-          {showSingle ? (
-            <LiveInput
-              value={current}
+          <div
+            ref={sizing.rootRef}
+            className={`embed-editor_display ${showSingle ? 'is-custom' : ''}`}
+            role="group"
+            aria-label={translate('style.flexChildSection.flexSizing')}
+          >
+            <SegmentPill />
+            {showSingle ? (
+              <LiveInput
+                value={current}
+                busy={busy}
+                placeholder="unset, var(…)"
+                ariaLabel={translate('style.flexChildSection.flexSizing')}
+                className="embed-editor_value-input embed-editor_display-input"
+                prop="flex"
+                onCommit={(value, important) => setProp('flex', value, important)}
+                onLiveCommit={(value, important) => liveSetProp('flex', value, important)}
+                onClear={sizing.clearSingle}
+              />
+            ) : (
+              <FlexSegments current={current} busy={busy} customized={sizing.customized} pickPreset={pickPreset} togglePanel={sizing.togglePanel} />
+            )}
+            <FlexSizingMenu
+              open={sizing.menuOpen}
+              showSingle={showSingle}
               busy={busy}
-              placeholder="unset, var(…)"
-              ariaLabel={translate('style.flexChildSection.flexSizing')}
-              className="embed-editor_value-input embed-editor_display-input"
-              prop="flex"
-              onCommit={(value, important) => setProp('flex', value, important)}
-              onLiveCommit={(value, important) => liveSetProp('flex', value, important)}
-              onClear={sizing.clearSingle}
+              onToggle={sizing.toggleMenu}
+              pickPreset={pickPreset}
+              enterSingleCustom={sizing.enterSingleCustom}
             />
-          ) : (
-            <FlexSegments current={current} busy={busy} customized={sizing.customized} pickPreset={pickPreset} togglePanel={sizing.togglePanel} />
-          )}
-          <FlexSizingMenu
-            open={sizing.menuOpen}
-            showSingle={showSingle}
-            busy={busy}
-            onToggle={sizing.toggleMenu}
-            pickPreset={pickPreset}
-            enterSingleCustom={sizing.enterSingleCustom}
-          />
-        </div>
+          </div>
+        </KeywordConnect>
       </div>
       {showPanel ? (
         <div className="embed-editor_type-triple embed-editor_flex-custom">
@@ -472,6 +482,7 @@ function FlexSizingMenu({
       </button>
       {open ? (
         <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
+          <VariableMenuItem onClose={onToggle} />
           {showSingle ? (
             flexSegs(translate).map((seg) => <MenuItem key={seg.value} label={seg.label} onClick={() => pickPreset(seg.value)} />)
           ) : (

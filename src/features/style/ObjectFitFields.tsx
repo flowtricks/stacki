@@ -10,7 +10,8 @@ import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
 import { HoverTooltip } from '../../ui/SegmentedControl';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
 import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
 import { splitTopLevelSpaces } from './model/background';
@@ -298,7 +299,14 @@ export function ObjectFitSelect({
     setProp('object-fit', choice, false);
   };
   return (
-    <Select
+    <VariableSelect
+      prop="object-fit"
+      rawValue={fit.present ? fit.value : ''}
+      onVariable={(binding) => {
+        askedForCustom.current = false;
+        setForceCustom(false);
+        setProp('object-fit', binding, fit.important);
+      }}
       className="embed-editor_imgfit-select"
       value={fitCustom ? FIT_CUSTOM : fit.present ? fitValue : 'fill'}
       options={[...FIT_OPTIONS, { value: FIT_CUSTOM, label: translate('style.objectFitFields.custom') }]}

@@ -6,6 +6,8 @@ import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts';
 import { parseImportant, withImportant } from './model/styleDisplay';
+import VariableConnect from './VariableConnect';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 // Its bar is drawn with the segmented control's classes (u-segmented).
 import '../../ui/segmentedControl.css';
 
@@ -102,29 +104,42 @@ function CustomValueField({
     }
   };
 
+  // Wrapped like every other field: a `var(--x)` display reads as the purple chip.
   return (
-    <input
-      ref={inputRef}
-      className="embed-editor_value-input embed-editor_display-input"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        commit();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop="display"
+      canvasProperty="display"
       disabled={busy}
-      spellCheck={false}
-      aria-label={translate('style.displayControl.value')}
-      placeholder={translate('style.displayControl.customValuePlaceholder')}
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: translate('style.displayControl.display') })}
+      onPick={(binding) => {
+        setDraft(withImportant({ value: binding, important }));
+        onCommit(binding, important);
+      }}
+    >
+      <input
+        ref={inputRef}
+        className="embed-editor_value-input embed-editor_display-input"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        aria-label={translate('style.displayControl.value')}
+        placeholder={translate('style.displayControl.customValuePlaceholder')}
+      />
+    </VariableConnect>
   );
 }
 
@@ -179,17 +194,31 @@ export default function DisplayControl({
   const tooltip = useSegmentTooltip(rootRef);
 
   return (
-    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={translate('style.displayControl.display')}>
-      {customMode ? (
-        <CustomValueField value={value} important={important} busy={busy} inputRef={inputRef} onCommit={onCommit} />
-      ) : (
-        <DisplaySegments current={current} busy={busy} tooltip={tooltip} pick={pick} />
-      )}
+    <KeywordConnect
+      prop="display"
+      value={value}
+      ariaLabel={translate('style.displayControl.display')}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => onCommit(binding, important)}
+    >
+      <div
+        ref={rootRef}
+        className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
+        role="group"
+        aria-label={translate('style.displayControl.display')}
+      >
+        {customMode ? (
+          <CustomValueField value={value} important={important} busy={busy} inputRef={inputRef} onCommit={onCommit} />
+        ) : (
+          <DisplaySegments current={current} busy={busy} tooltip={tooltip} pick={pick} />
+        )}
 
-      <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
-      {open ? <DisplayMenu onClose={() => setOpen(false)} customMode={customMode} current={current} pick={pick} enterCustom={enterCustom} /> : undefined}
-      <SegmentTooltipBubble tooltip={tooltip} />
-    </div>
+        <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
+        {open ? <DisplayMenu onClose={() => setOpen(false)} customMode={customMode} current={current} pick={pick} enterCustom={enterCustom} /> : undefined}
+        <SegmentTooltipBubble tooltip={tooltip} />
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -330,6 +359,7 @@ function DisplayMenuContent({
   current,
   pick,
   enterCustom,
+  onClose,
 }: {
   customMode: boolean;
   current: string;
@@ -340,6 +370,7 @@ function DisplayMenuContent({
   const translate = useTranslate();
   return (
     <>
+      <VariableMenuItem onClose={onClose} />
       {customMode ? (
         // From a custom value: offer every built-in to switch back to the bar.
         <>

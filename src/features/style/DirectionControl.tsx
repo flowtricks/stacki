@@ -12,7 +12,9 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
-import { ChevronIcon, tooltipArrowStyle } from './components/MenuParts';
+import { ChevronIcon, PlusIcon, tooltipArrowStyle } from './components/MenuParts';
+import VariableConnect from './VariableConnect';
+import KeywordConnect, { useOpenVariablePicker } from './KeywordConnect';
 import { parseImportant, withImportant } from './model/styleDisplay';
 // Its bar is drawn with the segmented control's classes (u-segmented).
 import '../../ui/segmentedControl.css';
@@ -247,29 +249,42 @@ function CustomField({
       onCommit(parsed.value, parsed.important);
     }
   };
+  // Wrapped like every other field: a `var(--x)` direction reads as the purple chip.
   return (
-    <input
-      ref={inputRef}
-      className="embed-editor_value-input embed-editor_display-input"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        commit();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop="flex-direction"
+      canvasProperty="flex-direction"
       disabled={busy}
-      spellCheck={false}
-      aria-label={translate('style.directionControl.directionValue')}
-      placeholder={translate('style.directionControl.customValuePlaceholder')}
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: translate('style.directionControl.direction') })}
+      onPick={(binding) => {
+        setDraft(withImportant({ value: binding, important }));
+        onCommit(binding, important);
+      }}
+    >
+      <input
+        ref={inputRef}
+        className="embed-editor_value-input embed-editor_display-input"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        aria-label={translate('style.directionControl.directionValue')}
+        placeholder={translate('style.directionControl.customValuePlaceholder')}
+      />
+    </VariableConnect>
   );
 }
 
@@ -317,22 +332,31 @@ export default function DirectionControl({
   const tip = useSegmentTip(rootRef);
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label={translate('style.directionControl.direction')}
+    <KeywordConnect
+      prop="flex-direction"
+      value={rawDirection}
+      ariaLabel={translate('style.directionControl.direction')}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => onCommitCustom(binding, important)}
     >
-      {customMode ? (
-        <CustomField value={rawDirection} important={important} busy={busy} inputRef={inputRef} onCommit={onCommitCustom} />
-      ) : (
-        <FlowSegments current={current} busy={busy} tip={tip} pick={pick} />
-      )}
-      <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
+      <div
+        ref={rootRef}
+        className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
+        role="group"
+        aria-label={translate('style.directionControl.direction')}
+      >
+        {customMode ? (
+          <CustomField value={rawDirection} important={important} busy={busy} inputRef={inputRef} onCommit={onCommitCustom} />
+        ) : (
+          <FlowSegments current={current} busy={busy} tip={tip} pick={pick} />
+        )}
+        <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
 
-      {open ? <DirectionMenu onClose={() => setOpen(false)} customMode={customMode} current={current} pick={pick} enterCustom={enterCustom} /> : undefined}
-      <SegmentTipBubble tip={tip.shown} />
-    </div>
+        {open ? <DirectionMenu onClose={() => setOpen(false)} customMode={customMode} current={current} pick={pick} enterCustom={enterCustom} /> : undefined}
+        <SegmentTipBubble tip={tip.shown} />
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -470,6 +494,7 @@ function DirectionMenuContent({
   current,
   pick,
   enterCustom,
+  onClose,
 }: {
   customMode: boolean;
   current: string;
@@ -479,8 +504,28 @@ function DirectionMenuContent({
 }) {
   const translate = useTranslate();
   const [hovered, setHovered] = useState<Flow | undefined>(undefined);
+  const openPicker = useOpenVariablePicker();
   return (
     <>
+      {openPicker === undefined ? undefined : (
+        <div className="embed-editor_direction-group">
+          <button
+            type="button"
+            role="menuitem"
+            className="embed-editor_direction-item"
+            onClick={() => {
+              onClose();
+              openPicker();
+            }}
+            onMouseEnter={() => setHovered(undefined)}
+          >
+            <span className="embed-editor_direction-item-icon">
+              <PlusIcon />
+            </span>
+            <span>{translate('style.keywordConnect.variable')}</span>
+          </button>
+        </div>
+      )}
       {GROUPS.map((group) => {
         // Primaries (single row / single column) live on the segments; only surface
         // them in the menu while in custom mode, so there's a way back to them.

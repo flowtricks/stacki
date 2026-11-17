@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
 import SegmentedControl from '../../ui/SegmentedControl';
+import { KeywordSegments } from './KeywordConnect';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import ProvenanceList from './ProvenanceList';
@@ -286,16 +287,26 @@ export function SpanRow({
       />
       {/* No custom field: a flagged value is marked, and picks keep the flag. */}
       <ImportantMark important={display.important}>
-        <SegmentedControl
-          options={[
-            { value: 'none', label: translate('style.typographyColumns.spanNo') },
-            { value: 'all', label: translate('style.typographyColumns.spanYes') },
-          ]}
-          value={value}
-          onChange={(next) => setProp('column-span', next, display.important)}
+        <KeywordSegments
+          prop="column-span"
+          value={display.present ? display.value : ''}
+          important={display.important}
           ariaLabel={translate('style.typographyColumns.columnSpan')}
-          disabled={busy}
-        />
+          busy={busy}
+          onWrite={(next, important) => setProp('column-span', next, important)}
+          onClear={() => clearProp('column-span')}
+        >
+          <SegmentedControl
+            options={[
+              { value: 'none', label: translate('style.typographyColumns.spanNo') },
+              { value: 'all', label: translate('style.typographyColumns.spanYes') },
+            ]}
+            value={value}
+            onChange={(next) => setProp('column-span', next, display.important)}
+            ariaLabel={translate('style.typographyColumns.columnSpan')}
+            disabled={busy}
+          />
+        </KeywordSegments>
       </ImportantMark>
     </div>
   );

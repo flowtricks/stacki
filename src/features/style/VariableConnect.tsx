@@ -697,6 +697,7 @@ function valueChips({
       text: match[0],
       name: known?.name ?? bindingName(match[0]),
       type: known?.type ?? 'Size', // i18n-ignore: a variable type id.
+      ...(known === undefined ? {} : { value: known.value }),
     };
   });
   if (chips.length) {

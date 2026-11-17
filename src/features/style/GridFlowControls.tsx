@@ -7,6 +7,8 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useEffect, useRef, useState } from 'react';
 import SegmentedControl from '../../ui/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
+import VariableConnect from './VariableConnect';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import { commitInPlace } from './model/commitInPlace';
 import { parseFlow, buildFlow, isPresetFlow } from './gridTracks';
 import { gridFlowOptions, GRID_CONTENT, GRID_SYNONYMS, gridKeyword, contentLabels, cap, contentOptions, ChevUp, ChevDown, DenseIcon } from './GridIcons';
@@ -45,35 +47,48 @@ export function GridDirectionControl({ value, busy, onSet, onCommitCustom }: Gri
   };
 
   return (
-    <div ref={menu.rootRef} className="embed-editor_grid-direction">
-      {/* The segments (or custom field) + the dropdown arrow share one pill so the
+    <KeywordConnect
+      prop="grid-auto-flow"
+      value={value}
+      ariaLabel={translate('style.gridFlowControls.gridDirection')}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => {
+        setForceCustom(false);
+        onCommitCustom(binding, false);
+      }}
+    >
+      <div ref={menu.rootRef} className="embed-editor_grid-direction">
+        {/* The segments (or custom field) + the dropdown arrow share one pill so the
           arrow belongs to the direction control; the dense toggle sits outside it. */}
-      <div className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
-        {customMode ? (
-          <GridCustomInput
-            value={value}
-            busy={busy}
-            inputRef={menu.inputRef}
-            placeholder={translate('style.gridFlowControls.autoFlowPlaceholder')}
-            ariaLabel={translate('style.gridFlowControls.autoFlow')}
-            onCommitCustom={onCommitCustom}
-          />
-        ) : (
-          <SegmentedControl
-            value={direction}
-            options={gridFlowOptions(translate)}
-            ariaLabel={translate('style.gridFlowControls.gridDirection')}
-            disabled={busy}
-            onChange={(next) => onSet(buildFlow({ direction: next, dense }))}
-          />
-        )}
-        <MenuArrow open={menu.open} busy={busy} ariaLabel={translate('style.gridFlowControls.moreDirectionOptions')} onToggle={menu.toggle} />
-        {menu.open ? (
-          <DirectionMenu onClose={() => menu.setOpen(false)} customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} />
-        ) : undefined}
+        <div className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
+          {customMode ? (
+            <GridCustomInput
+              prop="grid-auto-flow"
+              value={value}
+              busy={busy}
+              inputRef={menu.inputRef}
+              placeholder={translate('style.gridFlowControls.autoFlowPlaceholder')}
+              ariaLabel={translate('style.gridFlowControls.autoFlow')}
+              onCommitCustom={onCommitCustom}
+            />
+          ) : (
+            <SegmentedControl
+              value={direction}
+              options={gridFlowOptions(translate)}
+              ariaLabel={translate('style.gridFlowControls.gridDirection')}
+              disabled={busy}
+              onChange={(next) => onSet(buildFlow({ direction: next, dense }))}
+            />
+          )}
+          <MenuArrow open={menu.open} busy={busy} ariaLabel={translate('style.gridFlowControls.moreDirectionOptions')} onToggle={menu.toggle} />
+          {menu.open ? (
+            <DirectionMenu onClose={() => menu.setOpen(false)} customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} />
+          ) : undefined}
+        </div>
+        {!customMode ? <DenseToggle dense={dense} busy={busy} onToggle={() => onSet(buildFlow({ direction, dense: !dense }))} /> : undefined}
       </div>
-      {!customMode ? <DenseToggle dense={dense} busy={busy} onToggle={() => onSet(buildFlow({ direction, dense: !dense }))} /> : undefined}
-    </div>
+    </KeywordConnect>
   );
 }
 
@@ -92,6 +107,7 @@ export function DirectionMenu({
   const translate = useTranslate();
   return (
     <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_display-menu" role="menu">
+      <VariableMenuItem onClose={onClose} />
       {customMode ? (
         <>
           <MenuButton label={translate('style.gridFlowControls.horizontal')} onClick={() => pickPreset('row')} />
@@ -152,6 +168,7 @@ export function useCustomMenu({ customMode, busy }: { customMode: boolean; busy:
 // It mounts only in custom mode, starting from the current value, and mirrors external
 // edits unless the user is typing.
 export function GridCustomInput({
+  prop,
   value,
   busy,
   inputRef,
@@ -159,6 +176,8 @@ export function GridCustomInput({
   ariaLabel,
   onCommitCustom,
 }: {
+  /** The property the field edits: the variable picker offers what fits it. */
+  prop: string;
   value: string;
   busy: boolean;
   inputRef: React.RefObject<HTMLInputElement>;
@@ -166,6 +185,7 @@ export function GridCustomInput({
   ariaLabel: string;
   onCommitCustom: (value: string, important: boolean) => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -179,29 +199,42 @@ export function GridCustomInput({
       onCommitCustom(parsed.value, parsed.important);
     }
   };
+  // Wrapped like every other field: a `var(--x)` reads as the purple chip.
   return (
-    <input
-      ref={inputRef}
-      className="embed-editor_value-input embed-editor_display-input"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        commitCustom();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop={prop}
+      canvasProperty={prop}
       disabled={busy}
-      spellCheck={false}
-      placeholder={placeholder}
-      aria-label={ariaLabel}
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: ariaLabel })}
+      onPick={(binding) => {
+        setDraft(binding);
+        onCommitCustom(binding, false);
+      }}
+    >
+      <input
+        ref={inputRef}
+        className="embed-editor_value-input embed-editor_display-input"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commitCustom();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+      />
+    </VariableConnect>
   );
 }
 
@@ -266,24 +299,37 @@ export function GridContentControl(props: GridContentControlProps) {
   const segValue = current ? (GRID_CONTENT.includes(current) ? current : '') : shownContent;
 
   return (
-    <div ref={menu.rootRef} className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
-      {customMode ? (
-        <GridCustomInput
-          value={value}
-          busy={busy}
-          inputRef={menu.inputRef}
-          placeholder={translate('style.gridFlowControls.customValuePlaceholder')}
-          ariaLabel={ariaLabel}
-          onCommitCustom={onCommitCustom}
-        />
-      ) : (
-        <SegmentedControl value={segValue} options={contentOptions({ vertical }, translate)} ariaLabel={ariaLabel} disabled={busy} onChange={onSet} />
-      )}
-      <MenuArrow open={menu.open} busy={busy} ariaLabel={translate('style.gridFlowControls.moreOptions', { name: ariaLabel })} onToggle={menu.toggle} />
-      {menu.open ? (
-        <GridContentMenu customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} onClose={() => menu.setOpen(false)} />
-      ) : undefined}
-    </div>
+    <KeywordConnect
+      prop={prop}
+      value={value}
+      ariaLabel={ariaLabel}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => {
+        setForceCustom(false);
+        onCommitCustom(binding, false);
+      }}
+    >
+      <div ref={menu.rootRef} className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
+        {customMode ? (
+          <GridCustomInput
+            prop={prop}
+            value={value}
+            busy={busy}
+            inputRef={menu.inputRef}
+            placeholder={translate('style.gridFlowControls.customValuePlaceholder')}
+            ariaLabel={ariaLabel}
+            onCommitCustom={onCommitCustom}
+          />
+        ) : (
+          <SegmentedControl value={segValue} options={contentOptions({ vertical }, translate)} ariaLabel={ariaLabel} disabled={busy} onChange={onSet} />
+        )}
+        <MenuArrow open={menu.open} busy={busy} ariaLabel={translate('style.gridFlowControls.moreOptions', { name: ariaLabel })} onToggle={menu.toggle} />
+        {menu.open ? (
+          <GridContentMenu customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} onClose={() => menu.setOpen(false)} />
+        ) : undefined}
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -389,6 +435,7 @@ function GridContentMenu({
   const translate = useTranslate();
   return (
     <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_display-menu" role="menu">
+      <VariableMenuItem onClose={onClose} />
       {customMode ? <ContentPresetItems pickPreset={pickPreset} /> : <MenuButton label={translate('style.gridFlowControls.custom')} onClick={enterCustom} />}
     </Popup>
   );

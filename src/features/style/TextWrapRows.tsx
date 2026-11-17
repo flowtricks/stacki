@@ -1,7 +1,8 @@
 // How text breaks and wraps: word-break and white-space, overflow-wrap, and
 // truncation with text-overflow (TypographySection.tsx).
 
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { KeywordSegments, VariableSelect } from './KeywordConnect';
 import SegmentedControl from '../../ui/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
 import { displayOf, withImportant } from './model/styleDisplay';
@@ -110,7 +111,13 @@ export function EnumSelect(props: EnumSelectProps) {
   };
 
   return (
-    <Select
+    <VariableSelect
+      prop={prop}
+      rawValue={display.present ? display.value : ''}
+      onVariable={(binding) => {
+        setForceCustom(false);
+        setProp(prop, binding, display.important);
+      }}
       value={customMode ? CUSTOM : (matched ?? shownComputed)}
       options={options}
       onChange={pick}
@@ -273,16 +280,26 @@ export function TruncateRow({ read, busy, setProp, clearProp, onProvenance, onSe
       {/* Two segments and no custom field: a flagged value is marked, and a
           pick keeps the flag, since there is no text to delete it from. */}
       <ImportantMark important={display.important}>
-        <SegmentedControl
-          options={[
-            { value: 'clip', label: 'Clip' }, // i18n-ignore: CSS keyword.
-            { value: 'ellipsis', label: 'Ellipsis' }, // i18n-ignore: CSS keyword.
-          ]}
-          value={current}
-          onChange={(value) => setProp('text-overflow', value, display.important)}
+        <KeywordSegments
+          prop="text-overflow"
+          value={display.present ? display.value : ''}
+          important={display.important}
           ariaLabel={translate('style.textWrapRows.truncate')}
-          disabled={busy}
-        />
+          busy={busy}
+          onWrite={(value, important) => setProp('text-overflow', value, important)}
+          onClear={() => clearProp('text-overflow')}
+        >
+          <SegmentedControl
+            options={[
+              { value: 'clip', label: 'Clip' }, // i18n-ignore: CSS keyword.
+              { value: 'ellipsis', label: 'Ellipsis' }, // i18n-ignore: CSS keyword.
+            ]}
+            value={current}
+            onChange={(value) => setProp('text-overflow', value, display.important)}
+            ariaLabel={translate('style.textWrapRows.truncate')}
+            disabled={busy}
+          />
+        </KeywordSegments>
       </ImportantMark>
     </div>
   );

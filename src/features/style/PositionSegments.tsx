@@ -6,6 +6,7 @@ import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import VariableConnect from './VariableConnect';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import type { ResolvedProp } from './model/resolved';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
@@ -65,34 +66,43 @@ export function SegmentedIconControl({ prop, ariaLabel, segments, current, busy,
   };
 
   return (
-    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
-      <SegmentPill />
-      {customMode ? (
-        <SegmentCustomInput
-          prop={prop}
+    <KeywordConnect
+      prop={prop}
+      value={current}
+      ariaLabel={ariaLabel}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => setProp(prop, binding, false)}
+    >
+      <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
+        <SegmentPill />
+        {customMode ? (
+          <SegmentCustomInput
+            prop={prop}
+            ariaLabel={ariaLabel}
+            current={current}
+            busy={busy}
+            inputRef={inputRef}
+            setProp={setProp}
+            liveSetProp={liveSetProp}
+            clearProp={clearProp}
+          />
+        ) : (
+          <SegmentButtons segments={segments} current={current} busy={busy} onPick={pick} />
+        )}
+        <SegmentMenu
+          open={open}
           ariaLabel={ariaLabel}
-          current={current}
           busy={busy}
-          inputRef={inputRef}
-          setProp={setProp}
-          liveSetProp={liveSetProp}
-          clearProp={clearProp}
+          customMode={customMode}
+          current={current}
+          segments={segments}
+          onToggle={() => setOpen((value) => !value)}
+          onPick={pick}
+          onEnterCustom={enterCustom}
         />
-      ) : (
-        <SegmentButtons segments={segments} current={current} busy={busy} onPick={pick} />
-      )}
-      <SegmentMenu
-        open={open}
-        ariaLabel={ariaLabel}
-        busy={busy}
-        customMode={customMode}
-        current={current}
-        segments={segments}
-        onToggle={() => setOpen((value) => !value)}
-        onPick={pick}
-        onEnterCustom={enterCustom}
-      />
-    </div>
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -241,6 +251,7 @@ export function SegmentMenu({
       </button>
       {open ? (
         <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
+          <VariableMenuItem onClose={onToggle} />
           {customMode ? (
             segments.map((segment) => (
               <MenuItem key={segment.value} label={segment.label} selected={current === segment.value} onClick={() => onPick(segment.value)} />

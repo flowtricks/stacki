@@ -2,7 +2,8 @@
 // picked from, and the weights a font names (TypographySection.tsx).
 
 import { useEffect, useState } from 'react';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
 import { getProjectFontFamilies } from './model/webflow';
 import { displayOf, displayText } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
@@ -107,7 +108,13 @@ export function FontFamilyField(props: Props) {
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <Select
+      <VariableSelect
+        prop="font-family"
+        rawValue={display.present ? display.value : ''}
+        onVariable={(binding) => {
+          setForceCustom(false);
+          setProp('font-family', binding, display.important);
+        }}
         value={customMode ? CUSTOM : (matched ?? '')}
         options={options}
         onChange={pick}
@@ -260,7 +267,13 @@ export function WeightField(props: Props) {
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <Select
+      <VariableSelect
+        prop="font-weight"
+        rawValue={display.present ? display.value : ''}
+        onVariable={(binding) => {
+          setForceCustom(false);
+          setProp('font-weight', binding, display.important);
+        }}
         value={customMode ? CUSTOM : (matched ?? '')}
         options={weightOptions(translate)}
         onChange={pick}
