@@ -106,7 +106,6 @@ export const messages = {
   'preview.text.source.blocked.template': 'This text is built from a template with expressions in {file}: edit it there.',
   'preview.text.source.blocked.unreadable': 'The data file {file} could not be read.',
   'preview.text.source.blocked.unsupported': '{file} is not a project script or JSON file this editor can write.',
-  'preview.text.source.hover': 'Double-click to edit · updates {path}',
   'preview.text.source.label': 'Editing source',
   'preview.text.source.pageFile': 'this page',
   'preview.text.source.saved': 'Updated {path} in {file}',

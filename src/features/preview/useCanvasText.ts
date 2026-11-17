@@ -6,7 +6,6 @@ import { cmsTransport } from '../../ipc/editorEnvironment';
 import { noteCanvasTextEditing } from '../../editor/canvasTextFocus';
 import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
 import type { BoundTextBlockReason } from '../../editor/boundText';
-import { parsePreviewMessage } from './previewMessages';
 import { useEffect, useRef, type RefObject } from 'react';
 import {
   CANVAS_BLOCKED_LIMIT,
@@ -18,7 +17,7 @@ import {
 import { applyCanvasText, applyCanvasTexts, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
 import { onCanvasTextRefresh } from './canvasTextRefresh';
-import { canvasSourceCue, canvasSourceHover, clearCanvasSourceCue } from '../../ui/canvasTextSourceCue';
+import { canvasSourceCue, clearCanvasSourceCue } from '../../ui/canvasTextSourceCue';
 import {
   CANVAS_FOCUS_PATHS_MAX,
   canvasTextFocus,
@@ -129,11 +128,7 @@ function startCanvasText(current: RefObject<Options>) {
     plans: () => plans,
   });
   window.addEventListener('message', receive);
-  const hover = createSourceHover({ current, session, plans: () => plans });
-  window.addEventListener('message', hover);
   return () => {
-    window.removeEventListener('message', hover);
-    canvasSourceHover.set(undefined);
     disposed = true;
     overlay.close();
     clearCanvasTextDraft(session);
@@ -339,50 +334,6 @@ async function publishCanvasTextSession(
         ...(blocked.length === 0 ? {} : { blocked: blocked.map((plan) => ({ key: plan.target.key, path: plan.target.path })) }),
       },
     });
-  }
-}
-
-// The pointer on the element that prints bound text, while nothing is being typed: a hint that a double
-// click edits it, and where. The frame already reports what the pointer is over (avb:hover-node); this
-// reads that report and draws nothing of its own on the page.
-function createSourceHover(options: { readonly current: RefObject<Options>; readonly session: string; readonly plans: () => readonly CanvasTextEdit[] }) {
-  return (event: MessageEvent<unknown>) => {
-    const host = options.current.current;
-    if (!host?.url || event.source !== host.frame.current?.contentWindow || event.origin !== new URL(host.url).origin) {
-      return;
-    }
-    const message = parseHoverMessage(event.data);
-    const frame = host.frame.current;
-    if (message === undefined || !frame || canvasSourceCue.get() !== undefined) {
-      canvasSourceHover.set(undefined);
-      return;
-    }
-    const bound = options.plans().find((plan) => plan.target.parent === message.path && plan.bound?.kind === 'source')?.bound;
-    if (bound?.kind !== 'source' || message.box === undefined) {
-      canvasSourceHover.set(undefined);
-      return;
-    }
-    const origin = frame.getBoundingClientRect();
-    const scale = frame.clientWidth > 0 ? origin.width / frame.clientWidth : 1;
-    canvasSourceHover.set({
-      session: options.session,
-      expression: bound.expression,
-      file: bound.file,
-      uses: bound.uses,
-      box: { x: origin.left + message.box.x * scale, y: origin.top + message.box.y * scale, w: message.box.w * scale, h: message.box.h * scale },
-    });
-  };
-}
-
-function parseHoverMessage(input: unknown): { readonly path: string; readonly box: CanvasTextBox | undefined } | undefined {
-  try {
-    const message = parsePreviewMessage(input);
-    if (message?.kind !== 'hover-node' || message.path === undefined) {
-      return undefined;
-    }
-    return { path: message.path, box: message.boxes?.[0] };
-  } catch {
-    return undefined;
   }
 }
 

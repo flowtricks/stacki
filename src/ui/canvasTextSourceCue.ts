@@ -1,8 +1,8 @@
 // What the canvas tells a person about text printed from data: while they type in
-// it, which source their words are written to, and while they only point at it,
-// that a double click would. Held outside React, as the format bar's state is
-// (canvasTextSelection.ts): it changes with the editor's focus and only the cue
-// and the Settings hint read it.
+// it, which source their words are written to. Only while they type: a pointer on
+// the text, or a selection of it, shows nothing (docs/canvas-bound-text.md). Held
+// outside React, as the format bar's state is (canvasTextSelection.ts): it changes
+// with the editor's focus and only the cue reads it.
 //
 // Nothing here writes. The words go to the source only when the editor commits
 // (canvasBoundText.ts); this is the sentence beside that, so a data edit is never
@@ -35,9 +35,6 @@ export function clearCanvasSourceCue(session: string): void {
     canvasSourceCue.set(undefined);
   }
 }
-
-/** The hint over a bound text the pointer is on, before any double click: the same box and source as the cue. */
-export const canvasSourceHover = createLiveValue<CanvasSourceCueState | undefined>(undefined);
 
 /** Where the words typed in a text that is not a plain literal stop: the file the person edits instead. */
 export interface CanvasSourceBlocked {

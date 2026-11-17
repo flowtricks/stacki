@@ -107,7 +107,6 @@ export const messages = {
   'preview.text.source.blocked.template': 'Dieser Text wird in {file} aus einem Template mit Ausdrücken erzeugt: Bearbeite ihn dort.',
   'preview.text.source.blocked.unreadable': 'Die Datendatei {file} konnte nicht gelesen werden.',
   'preview.text.source.blocked.unsupported': '{file} ist kein Projektskript und keine JSON-Datei, die dieser Editor schreiben kann.',
-  'preview.text.source.hover': 'Doppelklick zum Bearbeiten · aktualisiert {path}',
   'preview.text.source.label': 'Quelle wird bearbeitet',
   'preview.text.source.pageFile': 'diese Seite',
   'preview.text.source.saved': '{path} in {file} aktualisiert',

@@ -106,7 +106,6 @@ export const messages = {
   'preview.text.source.blocked.template': 'Ce texte est construit avec un modèle contenant des expressions dans {file} : modifiez-le là-bas.',
   'preview.text.source.blocked.unreadable': 'Le fichier de données {file} n’a pas pu être lu.',
   'preview.text.source.blocked.unsupported': '{file} n’est pas un script du projet ni un fichier JSON que cet éditeur peut écrire.',
-  'preview.text.source.hover': 'Double-cliquez pour modifier · met à jour {path}',
   'preview.text.source.label': 'Modification de la source',
   'preview.text.source.pageFile': 'cette page',
   'preview.text.source.saved': '{path} mis à jour dans {file}',

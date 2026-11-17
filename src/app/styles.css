@@ -10337,8 +10337,8 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   pointer-events: auto;
 }
 
-/* The source cue over a bound text being edited, and the Settings line that says
-   the same: purple like the data chips, a background and no border. */
+/* The source cue under a bound text being edited: purple like the data chips, a
+   background and no border, and no transition, so it never fades in or flashes. */
 .canvas-source-cue {
   position: fixed;
   z-index: 2147483000;

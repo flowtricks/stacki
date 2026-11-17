@@ -1,5 +1,5 @@
-// Goal: a bound text says where editing it writes: the canvas cue over the text being typed in. The Settings panel shows no hint. The cue names the file and binding, says 'Used in N places' only when N is more than one, and gives up the START
-// of a long path first.
+// Goal: a bound text says where editing it writes: the canvas cue under the text being typed in. The Settings panel shows no hint. The cue names the file and binding, says 'Used in N places' only when N is more than one, and gives up the START
+// of a long path first. It sits under the element, left-aligned; above it, clear of the selection label, only when there is no room below.
 // Method: bundle the real components for the browser, mount them in jsdom with react-dom's act, set the live values the editor
 // sets, and read the text drawn. The pure path helper is tested directly.
 const test = require('node:test');
@@ -9,7 +9,8 @@ const { buildSync } = require('esbuild');
 const { repoPath } = require('../../helpers/sources.js');
 const loadRenderer = require('../../helpers/rendererModule');
 
-const { truncateStart, sourceCuePath, SOURCE_CUE_CHARS_MAX } = loadRenderer('src/app/shell/sourceCueText.ts');
+const { truncateStart, sourceCuePath, sourceCuePlace, SOURCE_CUE_CHARS_MAX, SOURCE_CUE_GAP_PX, SOURCE_CUE_LABEL_BAND_PX, SOURCE_CUE_MARGIN_PX } =
+  loadRenderer('src/app/shell/sourceCueText.ts');
 
 const ENTRY = `
 import React from 'react';
@@ -98,4 +99,39 @@ test('the Settings panel draws no source hint: the files that render its Content
     assert.doesNotMatch(fs.readFileSync(repoPath(file), 'utf8'), /SourceHint|source-hint|canvasTextSourceCue/, file);
   }
   assert.equal(fs.existsSync(repoPath('src/features/props/SourceHint.tsx')), false);
+});
+
+const CUE_SIZE = { width: 280, height: 22 };
+const VIEW = { width: 1200, height: 800 };
+
+test('the cue sits under the element, left-aligned with it', () => {
+  const box = { x: 40, y: 120, w: 320, h: 48 };
+  const place = sourceCuePlace(box, CUE_SIZE, VIEW);
+  assert.equal(place.left, box.x);
+  assert.equal(place.top, box.y + box.h + SOURCE_CUE_GAP_PX);
+  assert.ok(place.top >= box.y + box.h, 'tag.top is at or under element.bottom');
+});
+
+test('with no room below, the cue goes above the element and above the selection label band', () => {
+  const box = { x: 40, y: 740, w: 320, h: 48 };
+  const place = sourceCuePlace(box, CUE_SIZE, VIEW);
+  assert.ok(place.top + CUE_SIZE.height <= box.y - SOURCE_CUE_LABEL_BAND_PX, 'the cue ends above the label band');
+  assert.equal(place.top, box.y - SOURCE_CUE_LABEL_BAND_PX - SOURCE_CUE_GAP_PX - CUE_SIZE.height);
+});
+
+test('the last pixel of room below still places the cue below; one less flips it', () => {
+  const fits = { x: 40, y: 100, w: 320, h: VIEW.height - SOURCE_CUE_MARGIN_PX - CUE_SIZE.height - SOURCE_CUE_GAP_PX - 100 };
+  assert.equal(sourceCuePlace(fits, CUE_SIZE, VIEW).top, fits.y + fits.h + SOURCE_CUE_GAP_PX);
+  const short = { ...fits, h: fits.h + 1 };
+  assert.ok(sourceCuePlace(short, CUE_SIZE, VIEW).top < short.y, 'flipped above');
+});
+
+test('with room for neither, the cue is pinned to the window bottom; it never leaves the window sideways', () => {
+  const tall = { x: 40, y: 10, w: 320, h: 790 };
+  assert.equal(sourceCuePlace(tall, CUE_SIZE, VIEW).top, VIEW.height - SOURCE_CUE_MARGIN_PX - CUE_SIZE.height);
+  const right = sourceCuePlace({ x: 1150, y: 100, w: 40, h: 20 }, CUE_SIZE, VIEW);
+  assert.equal(right.left, VIEW.width - CUE_SIZE.width - SOURCE_CUE_MARGIN_PX);
+  const left = sourceCuePlace({ x: -30, y: 100, w: 40, h: 20 }, CUE_SIZE, VIEW);
+  assert.equal(left.left, SOURCE_CUE_MARGIN_PX);
+  assert.throws(() => sourceCuePlace(tall, { width: 280, height: -1 }, VIEW), /Assertion failed: sourceCuePlace: the cue has a height/);
 });

@@ -106,7 +106,6 @@ export const messages = {
   'preview.text.source.blocked.template': 'Este texto se construye con una plantilla con expresiones en {file}: edítalo allí.',
   'preview.text.source.blocked.unreadable': 'No se pudo leer el archivo de datos {file}.',
   'preview.text.source.blocked.unsupported': '{file} no es un script del proyecto ni un archivo JSON que este editor pueda escribir.',
-  'preview.text.source.hover': 'Doble clic para editar · actualiza {path}',
   'preview.text.source.label': 'Editando el origen',
   'preview.text.source.pageFile': 'esta página',
   'preview.text.source.saved': '{path} actualizado en {file}',

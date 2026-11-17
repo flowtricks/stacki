@@ -56,10 +56,18 @@ its words and could not tell which of the two was meant.
 
 | Moment | Shown | Where |
 |---|---|---|
-| Pointer on the element | "Double-click to edit · updates `aiCallout1.body`" | `CanvasTextSourceCue` (`canvasSourceHover`) |
-| Typing in it | "Editing source" + `src/lib/homepage/content.ts › aiCallout1.body` (path highlighted, start-truncated), plus "Used in N places" when N is more than 1 | the same chip, anchored to the element (`canvasSourceCue`, from `avb:text-active`'s `rect`) |
+| Pointer on the element, or the element selected | Nothing: not even for one frame | — |
+| Typing in it (from the double click that opens the editor) | "Editing source" + `src/lib/homepage/content.ts › aiCallout1.body` (path highlighted, start-truncated), plus "Used in N places" when N is more than 1 | `CanvasTextSourceCue`, under the element's bottom edge and left-aligned with it (`canvasSourceCue`, from `avb:text-active`'s `rect`; `sourceCuePlace`) |
 | Saved | toast "Updated {path} in {file}" with **Undo** | `reportActionToast` |
 | Not editable | the refusal sentence above | toast, from `avb:text-refused` with `reason: 'source-blocked'` and the blocked text's `key` |
+
+The chip goes above the element only when there is no room below it in the window, and then above the
+selection label's band (`SOURCE_CUE_LABEL_BAND_PX`), so it never covers the component's name. With room for
+neither it is pinned to the window's bottom. The selection label stays above the element as before.
+
+A hover hint ("Double-click to edit · updates …") was dropped: it was set on `avb:hover-node` and cleared by
+the next frame message of any other kind, so it showed as a one-frame flash on every hover. The cue now
+belongs to editing alone.
 
 "Used in N places" counts the places on the page that resolve to the same literal. Other pages that import
 the same module are not counted; their dev-server renders update when the write lands.
@@ -81,4 +89,7 @@ the same module are not counted; their dev-server renders update when the write 
 `test/renderer/preview/boundText.test.js` (tracing for each source kind, escaping and round trips, byte-exact
 rewrites and undo, refusals, multiple use, loops, contracts, a JSDOM double click that opens the editor and a
 save that writes the source and not the markup, the refusal of blocked text) and
-`test/renderer/preview/canvasSourceCue.test.js` (the chip; the Settings panel draws nothing).
+`test/renderer/preview/canvasSourceCue.test.js` (the chip; its place below the element and the flip above
+the label; the Settings panel draws nothing) and `test/renderer/preview/canvasSourceCueFrames.test.js` (a
+per-frame recording of the real canvas text hook: no frame draws the chip while the pointer moves over bound
+text; the chip appears with the message that opens the editor).
