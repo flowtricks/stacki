@@ -6219,22 +6219,37 @@ body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel /* A n
 .node-outline-tag {
   display: none;
 }
-/* Typing in text a component instance shows: the text takes the band above,
-   tagless, and the instance keeps its parent outline and its tag — it is still
-   the selection, and the tag says what is being edited inside. */
+/* Typing in text: the selection keeps its outline, and its name tag above goes
+   (an element's, a component instance's parent tag, and a text mark's). The
+   text being typed in is what is edited, and a data-bound text's source cue
+   sits under it (CanvasTextSourceCue). Keyed on the editor marker
+   (canvasTextOverlay.ts), which the same message that opens and closes the
+   editor adds and removes, so the tag is never seen while typing and is back
+   in the first frame after. */
+body:has(#stacki-canvas-text-editor) .node-outline.sel .node-outline-tag {
+  display: none;
+}
 body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent {
   outline-width: 2px;
   outline-offset: -1px;
   opacity: 1;
 }
-body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent .node-outline-tag {
-  display: inline-flex;
-}
+/* Shared words are the exception: the tag stays as the warning that the edit
+   changes other uses too, with the name left out. */
 body:has(#stacki-canvas-text-editor[data-shared]) .node-outline.sel {
   outline-color: #8b5cf6;
 }
 body:has(#stacki-canvas-text-editor[data-shared]) .node-outline.sel .node-outline-tag {
+  display: inline-flex;
+  gap: 0;
+  font-size: 0;
   background: #8b5cf6;
+}
+body:has(#stacki-canvas-text-editor[data-shared]) .node-outline.sel .node-outline-tag > * {
+  display: none;
+}
+body:has(#stacki-canvas-text-editor[data-shared]) .node-outline.sel .node-outline-tag::after {
+  font-size: 10.5px;
 }
 body:has(#stacki-canvas-text-editor[data-shared='cms']) .node-outline.sel .node-outline-tag::after {
   content: 'Shared CMS content · changes other uses too';

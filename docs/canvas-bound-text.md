@@ -61,9 +61,14 @@ its words and could not tell which of the two was meant.
 | Saved | toast "Updated {path} in {file}" with **Undo** | `reportActionToast` |
 | Not editable | the refusal sentence above | toast, from `avb:text-refused` with `reason: 'source-blocked'` and the blocked text's `key` |
 
-The chip goes above the element only when there is no room below it in the window, and then above the
-selection label's band (`SOURCE_CUE_LABEL_BAND_PX`), so it never covers the component's name. With room for
-neither it is pinned to the window's bottom. The selection label stays above the element as before.
+While typing, the selection keeps its outline but its name tag above goes: an element's tag, a component
+instance's parent tag, and a text mark's tag alike (`styles.css`, keyed on the `#stacki-canvas-text-editor`
+marker that `canvasTextOverlay.ts` adds on `avb:text-active` and removes on `avb:text-inactive`). The tag is
+back in the first frame after editing ends. Shared words (CMS, variable) keep the tag as their warning
+("Shared CMS content · changes other uses too"), with the name left out.
+
+The chip goes directly above the element only when there is no room below it in the window (there is no
+name tag to clear while typing). With room for neither it is pinned to the window's bottom.
 
 A hover hint ("Double-click to edit · updates …") was dropped: it was set on `avb:hover-node` and cleared by
 the next frame message of any other kind, so it showed as a one-frame flash on every hover. The cue now
@@ -90,6 +95,9 @@ the same module are not counted; their dev-server renders update when the write 
 rewrites and undo, refusals, multiple use, loops, contracts, a JSDOM double click that opens the editor and a
 save that writes the source and not the markup, the refusal of blocked text) and
 `test/renderer/preview/canvasSourceCue.test.js` (the chip; its place below the element and the flip above
-the label; the Settings panel draws nothing) and `test/renderer/preview/canvasSourceCueFrames.test.js` (a
+the element; the Settings panel draws nothing) and `test/renderer/preview/canvasSourceCueFrames.test.js` (a
 per-frame recording of the real canvas text hook: no frame draws the chip while the pointer moves over bound
-text; the chip appears with the message that opens the editor).
+text; the chip appears with the message that opens the editor) and
+`test/renderer/preview/canvasEditingTagChromium.test.js` (in Chromium, with the real overlays and styles: no
+frame while typing shows the name tag, no frame shows the tag and the chip together, the tag is back in the
+first frame after; for an element, a component instance's text and a text mark).

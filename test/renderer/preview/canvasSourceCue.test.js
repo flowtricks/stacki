@@ -1,5 +1,5 @@
 // Goal: a bound text says where editing it writes: the canvas cue under the text being typed in. The Settings panel shows no hint. The cue names the file and binding, says 'Used in N places' only when N is more than one, and gives up the START
-// of a long path first. It sits under the element, left-aligned; above it, clear of the selection label, only when there is no room below.
+// of a long path first. It sits under the element, left-aligned; directly above it only when there is no room below.
 // Method: bundle the real components for the browser, mount them in jsdom with react-dom's act, set the live values the editor
 // sets, and read the text drawn. The pure path helper is tested directly.
 const test = require('node:test');
@@ -9,7 +9,7 @@ const { buildSync } = require('esbuild');
 const { repoPath } = require('../../helpers/sources.js');
 const loadRenderer = require('../../helpers/rendererModule');
 
-const { truncateStart, sourceCuePath, sourceCuePlace, SOURCE_CUE_CHARS_MAX, SOURCE_CUE_GAP_PX, SOURCE_CUE_LABEL_BAND_PX, SOURCE_CUE_MARGIN_PX } =
+const { truncateStart, sourceCuePath, sourceCuePlace, SOURCE_CUE_CHARS_MAX, SOURCE_CUE_GAP_PX, SOURCE_CUE_MARGIN_PX } =
   loadRenderer('src/app/shell/sourceCueText.ts');
 
 const ENTRY = `
@@ -112,11 +112,11 @@ test('the cue sits under the element, left-aligned with it', () => {
   assert.ok(place.top >= box.y + box.h, 'tag.top is at or under element.bottom');
 });
 
-test('with no room below, the cue goes above the element and above the selection label band', () => {
+test('with no room below, the cue sits directly above the element: the name tag is hidden while typing', () => {
   const box = { x: 40, y: 740, w: 320, h: 48 };
   const place = sourceCuePlace(box, CUE_SIZE, VIEW);
-  assert.ok(place.top + CUE_SIZE.height <= box.y - SOURCE_CUE_LABEL_BAND_PX, 'the cue ends above the label band');
-  assert.equal(place.top, box.y - SOURCE_CUE_LABEL_BAND_PX - SOURCE_CUE_GAP_PX - CUE_SIZE.height);
+  assert.ok(place.top + CUE_SIZE.height <= box.y, 'the cue ends above the element');
+  assert.equal(place.top, box.y - SOURCE_CUE_GAP_PX - CUE_SIZE.height);
 });
 
 test('the last pixel of room below still places the cue below; one less flips it', () => {
