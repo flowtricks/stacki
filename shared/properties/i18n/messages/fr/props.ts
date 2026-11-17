@@ -460,14 +460,14 @@ export const messages = {
   'props.loop.note.unknownShape':
     "Stacki ne voit pas ce que contient cette liste. Saisissez les noms de champs pour filtrer et trier ; la liste reste telle qu'écrite.",
   'props.loop.typed.boolean': 'Oui ou non',
-  'props.loop.typed.date': 'Date',
+  'props.loop.typed.date': 'Date', // same
   'props.loop.typed.invalid': 'Utilisez un nom de champ comme title ou author.name.',
   'props.loop.typed.number': 'Nombre',
   'props.loop.typed.open': 'Utiliser un nom de champ personnalisé…',
   'props.loop.typed.path': 'Nom du champ',
   'props.loop.typed.placeholder': 'title ou author.name',
   'props.loop.typed.text': 'Texte',
-  'props.loop.typed.type': 'Type',
+  'props.loop.typed.type': 'Type', // same
   'props.loop.typed.use': 'Utiliser ce champ',
   'props.loop.value': 'Valeur',
   'props.loop.when': 'Quand',
@@ -542,7 +542,7 @@ export const messages = {
   'props.remove.spreads': 'À vérifier à la main : ces spreads pourraient encore la transmettre.',
   'props.remove.title': 'Supprimer {name} ?',
   'props.remove.undo': 'Une seule annulation rétablit tout.',
-  'props.remove.usageFile': '{path} · {count}',
+  'props.remove.usageFile': '{path} · {count}', // same
   'props.remove.usages': { one: 'Retire sa valeur de {count} instance :', other: 'Retire sa valeur de {count} instances :' },
   'props.rename.aliased': 'Astro.props est transmis ou aliasé. Mettez ce code à jour explicitement avant de modifier cette propriété.',
   'props.rename.computed': 'Astro.props a une clé calculée. Rendez cet accès explicite avant de modifier cette propriété.',

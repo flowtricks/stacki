@@ -233,7 +233,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'hidden',
   'settings.roles.components.hide': 'Hide {name}',
   'settings.roles.components.info':
-    'Hidden components cannot be added by this role from the palette or the Components panel. Ones already on a page stay and stay editable. New components are visible to every role.',
+    'This role can’t add hidden components from the palette or the Components panel. Ones already on a page stay editable. New components are visible to every role.',
   'settings.roles.components.missing': 'Rules for paths that no longer exist',
   'settings.roles.components.noMatch': 'No components match.',
   'settings.roles.components.none': 'This project has no components yet.',

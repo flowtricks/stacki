@@ -82,7 +82,7 @@ export const messages = {
   'palette.other.text': 'Texto',
   'palette.panel.checking': 'Comprobando instancias...',
   'palette.panel.instances': { one: '{count} instancia', other: '{count} instancias' },
-  'palette.roles.menu': 'Roles',
+  'palette.roles.menu': 'Roles', // same
   'palette.roles.hiddenByFolder': 'oculto por la carpeta {folder}',
   'palette.roles.showInstances': 'Mostrar instancias',
   'palette.roles.someVisible': '{visible} de {total} visibles',

@@ -134,7 +134,7 @@ export const messages = {
   'palette.rename.folder': 'Ordner',
   'palette.rename.folderInvalid': 'Verwende für einen Ordner Buchstaben, Zahlen, Bindestriche und Unterstriche, mit / zwischen den Ebenen.',
   'palette.rename.hideFiles': 'Dateien ausblenden',
-  'palette.rename.name': 'Name',
+  'palette.rename.name': 'Name', // same
   'palette.rename.newFolder': 'Neuer Ordner…',
   'palette.rename.newFolderName': 'Name des neuen Ordners',
   'palette.rename.notice.keptLocalName': '{file} behält den lokalen Namen, weil dort der neue schon verwendet wird',

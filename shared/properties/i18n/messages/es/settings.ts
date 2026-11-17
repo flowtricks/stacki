@@ -235,7 +235,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'oculto',
   'settings.roles.components.hide': 'Ocultar {name}',
   'settings.roles.components.info':
-    'Este rol no puede añadir componentes ocultos desde la paleta ni el panel de componentes. Los que ya están en una página se quedan y siguen siendo editables. Los componentes nuevos son visibles para todos los roles.',
+    'Este rol no puede añadir componentes ocultos desde la paleta ni el panel de componentes. Los que ya están en una página siguen siendo editables. Los componentes nuevos son visibles para todos los roles.',
   'settings.roles.components.missing': 'Reglas de rutas que ya no existen',
   'settings.roles.components.noMatch': 'Ningún componente coincide.',
   'settings.roles.components.none': 'Este proyecto aún no tiene componentes.',

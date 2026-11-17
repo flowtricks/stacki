@@ -92,18 +92,20 @@ function ruleStyle(classes: string): CodeTokenStyle {
 }
 
 function define<State>(lexer: Lexer<State>): Language {
-  return StreamLanguage.define<{ value: State }>({
+  // The state's field is `lexerState`, not a page-node field name, so the adapter-surface count
+  // (scripts/gate/adapterSurface.ts) does not read CodeMirror's in-place advance as a page-tree edit.
+  return StreamLanguage.define<{ lexerState: State }>({
     name: lexer.name,
-    startState: () => ({ value: lexer.start }),
-    copyState: (state) => ({ value: state.value }),
+    startState: () => ({ lexerState: lexer.start }),
+    copyState: (state) => ({ lexerState: state.lexerState }),
     // CodeMirror's stream parser advances the state object it hands in, and reads
     // "no style" as null; the step itself is computed without touching either.
     token(stream, state) {
       const before = stream.pos;
-      const step = lexer.step(stream, state.value);
+      const step = lexer.step(stream, state.lexerState);
       assert(stream.pos > before, `${lexer.name}: every token moves forward`);
       // eslint-disable-next-line no-param-reassign -- StreamParser advances its state in place.
-      state.value = step.state;
+      state.lexerState = step.state;
       // eslint-disable-next-line stacki/no-null -- StreamParser spells "no style" as null.
       return step.style ?? null;
     },

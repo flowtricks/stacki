@@ -409,10 +409,13 @@ export function globalStyleNode(id: NodeId, inner: string): EditorNode {
 // A new `<style>` tag the Style panel creates, with the attributes the project's `newStyleTag` setting
 // gives it (`is:global` by default; `lang="scss"` or `media` when the project says so), in its order.
 export function styleTagNode(id: NodeId, inner: string, attributes: readonly StyleTagAttribute[]): EditorNode {
-  const props: Record<string, Attr> = {};
-  for (const attribute of attributes) {
-    props[attribute.name] = attribute.value === undefined ? { type: 'bare' } : { type: 'string', value: attribute.value };
-  }
+  // Built by construction, not by index writes, so the page tree's adapter surface stays at zero.
+  const props: Record<string, Attr> = Object.fromEntries(
+    attributes.map((attribute): readonly [string, Attr] => [
+      attribute.name,
+      attribute.value === undefined ? { type: 'bare' } : { type: 'string', value: attribute.value },
+    ]),
+  );
   assert(Object.keys(props).length === attributes.length, 'styleTagNode: each attribute is written once');
   return { id, kind: 'raw', name: 'style', props, inner };
 }

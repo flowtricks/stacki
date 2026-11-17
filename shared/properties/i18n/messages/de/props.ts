@@ -471,7 +471,7 @@ export const messages = {
   'props.loop.typed.open': 'Eigenen Feldnamen verwenden…',
   'props.loop.typed.path': 'Feldname',
   'props.loop.typed.placeholder': 'title oder author.name',
-  'props.loop.typed.text': 'Text',
+  'props.loop.typed.text': 'Text', // same
   'props.loop.typed.type': 'Typ',
   'props.loop.typed.use': 'Dieses Feld verwenden',
   'props.loop.value': 'Wert',
@@ -548,7 +548,7 @@ export const messages = {
   'props.remove.spreads': 'Von Hand prüfen: Diese Spreads könnten sie noch übergeben.',
   'props.remove.title': '{name} löschen?',
   'props.remove.undo': 'Ein Rückgängig stellt alles wieder her.',
-  'props.remove.usageFile': '{path} · {count}',
+  'props.remove.usageFile': '{path} · {count}', // same
   'props.remove.usages': { one: 'Entfernt ihren Wert aus {count} Instanz:', other: 'Entfernt ihren Wert aus {count} Instanzen:' },
   'props.rename.aliased': 'Astro.props wird weitergegeben oder hat einen Alias. Passe diesen Code ausdrücklich an, bevor du diese Eigenschaft bearbeitest.',
   'props.rename.computed': 'Astro.props hat einen berechneten Schlüssel. Mache diesen Zugriff ausdrücklich, bevor du diese Eigenschaft bearbeitest.',

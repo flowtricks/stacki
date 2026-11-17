@@ -84,6 +84,11 @@ function parseKept(input: unknown): PropertyKeptConstant {
   if (kept.lines.length === 0) {
     throw new Error('Property removal: a constant is kept only for code that reads the prop');
   }
+  // Paired with line(): every read is a 1-based line on disk.
+  assert(
+    kept.lines.every((read) => read >= 1),
+    'Property removal: a kept constant reads lines from 1',
+  );
   return kept;
 }
 
@@ -92,6 +97,7 @@ function keptSource(input: unknown): PropertyKeptSource {
   if (source === undefined) {
     throw new Error('Property removal: unknown kept constant source');
   }
+  assert(KEPT_SOURCES.includes(source), 'Property removal: a kept source is one of the known sources');
   return source;
 }
 
@@ -100,6 +106,7 @@ function line(input: unknown): number {
   if (value === 0) {
     throw new Error('Property removal: lines are 1-based');
   }
+  assert(Number.isSafeInteger(value), 'Property removal: a line is a whole number');
   return value;
 }
 

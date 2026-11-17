@@ -540,7 +540,7 @@ export const messages = {
   'props.remove.spreads': 'Verifique à mão: estes spreads ainda podem passá-la.',
   'props.remove.title': 'Excluir {name}?',
   'props.remove.undo': 'Um único Desfazer restaura tudo.',
-  'props.remove.usageFile': '{path} · {count}',
+  'props.remove.usageFile': '{path} · {count}', // same
   'props.remove.usages': { one: 'Remove o valor de {count} instância:', other: 'Remove o valor de {count} instâncias:' },
   'props.rename.aliased': 'Astro.props é repassado ou tem um alias. Atualize esse código explicitamente antes de editar esta propriedade.',
   'props.rename.computed': 'Astro.props tem uma chave calculada. Torne esse acesso explícito antes de editar esta propriedade.',
