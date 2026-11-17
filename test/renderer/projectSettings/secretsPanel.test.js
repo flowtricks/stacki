@@ -312,9 +312,20 @@ test('an existing file offers the .gitignore flow when it is not ignored', async
   await mount();
   // The button alone is shown; the risk is its tooltip and its description, never a sentence beside it.
   const offer = button('Add to .gitignore');
-  assert.equal(offer.title, '.env is not in .gitignore: secrets could be committed');
-  assert.equal(offer.getAttribute('aria-description'), offer.title);
+  const why = '.env is not in .gitignore: secrets could be committed';
+  assert.equal(offer.getAttribute('aria-description'), why);
+  assert.equal(offer.title, '', 'no system tooltip, which waits longer and may not show on a second hover');
   assert.ok(!document.body.textContent.includes('secrets could be committed'));
+  // Stacki's own tip: shown after the shared wait, gone when the pointer leaves, and back on every hover.
+  const tip = () => document.querySelector('.rail-tooltip')?.textContent;
+  for (const hover of ['first', 'second']) {
+    await act(async () => offer.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true, relatedTarget: document.body })));
+    assert.equal(tip(), undefined, `the ${hover} hover waits before the tip`);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
+    assert.equal(tip(), why, `the ${hover} hover shows the reason`);
+    await act(async () => offer.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body })));
+    assert.equal(tip(), undefined, `the tip goes when the pointer leaves after the ${hover} hover`);
+  }
   await click(offer);
   assert.match(document.body.textContent, /Add \.env to \.gitignore\?/);
   await click(button('Add line'));
