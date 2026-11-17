@@ -1,7 +1,7 @@
 // Goal: the `stacki` program a person or a script types works for every command in the table: each command documents itself, runs from a real
 // command line against a scratch project, answers the documented exit code, writes nothing without --apply, and the defects found by the docs
 // review stay fixed (breakpoints sync with --value, doctor failing on errors, options before the command, role-filtered help, per-command help,
-// the component list without a cap, roles components with a positional path).
+// the component list without a cap, roles components with a positional path, a flag-named argument with the other one positional).
 // Method: `main()` (the entry the executable calls) is driven with argument lists, exactly as a shell passes them, on generated fixture projects
 // (never a real one). A table holds one realistic dry-run line per command and its expected exit code; every line is also run with --help. The
 // project tree is snapshot before and after each dry run and must not change. The regressions get their own tests below the table.
@@ -272,4 +272,19 @@ test('list components lists every component of a big, deep project, with no cap'
   const components = listOf(dig(listed, 'result', 'components'));
   assert.equal(components.length, count + 2, 'every component, the fixture Card included');
   assert.ok(components.includes(`src/components/${deep}/Deep.astro`), 'a component 14 folders deep is listed');
+});
+
+test('a positional argument named by its flag leaves the bare word to the next one', async () => {
+  const root = makeProject(SITE_FILES);
+  for (const argv of [
+    ['roles', 'members', 'add', '--role', 'editor', 'newbie'],
+    ['roles', 'members', 'add', 'newbie', '--role', 'editor'],
+    ['roles', 'members', 'add', 'editor', '--login', 'newbie'],
+    ['roles', 'members', 'add', 'editor', 'newbie'],
+  ]) {
+    const ran = await run(root, [...argv, '--json']);
+    assert.equal(ran.code, 0, `${argv.join(' ')}: ${ran.output}`);
+    assert.equal(dig(parseJson(ran.output), 'summary'), 'Add newbie to editor.', argv.join(' '));
+  }
+  assert.equal((await run(root, ['roles', 'members', 'add', '--role', 'editor', 'newbie', 'extra'])).code, 2, 'a word too many is a usage error');
 });

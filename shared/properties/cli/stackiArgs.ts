@@ -168,6 +168,10 @@ export function parseLine(tokens: readonly string[], extra: readonly CommandSpec
   while (index < tokens.length && words.length < COMMAND_WORDS_MAX) {
     const token = tokens[index] ?? '';
     if (token.startsWith('--')) {
+      if (words.length > 0) {
+        // A flag after a command word ends the words: from here on a command's own argument wins a shared spelling (readRest).
+        break;
+      }
       const consumed = leadingGlobal(tokens, index);
       if (!consumed.ok) {
         return consumed;
@@ -195,7 +199,7 @@ export function parseLine(tokens: readonly string[], extra: readonly CommandSpec
   const rest = tokens.slice(index);
   const helpAsked = helpWord || leading.includes('--help') || rest.includes('--help');
   if (helpAsked || tokens.length === 0) {
-    const options = readGlobals([...leading, ...rest.filter((token) => token.startsWith('--'))], 'lenient');
+    const options = readGlobals([...leading, ...rest], 'lenient');
     return options.ok ? ok({ kind: 'help', words, options: options.value }) : options;
   }
   if (words.length === 0) {
@@ -291,19 +295,15 @@ function readRest(spec: CommandSpec, leading: readonly string[], rest: readonly 
     return before;
   }
   const global: Record<string, string> = {};
-  const positional = spec.args.filter((argument) => argument.positional === true);
-  let nextPositional = 0;
+  // Bare words are placed after the flags are read, into the positional arguments no flag named, in order: in
+  // `roles members add --role editor newbie`, --role fills <role>, so `newbie` is the <login>.
+  const bare: string[] = [];
   for (let position = 0; position < rest.length; position += 1) {
     const token = rest[position] ?? '';
     const equals = token.startsWith('--') ? token.indexOf('=') : -1;
     const flag = equals > 0 ? token.slice(0, equals) : token;
     if (!token.startsWith('--')) {
-      const target = positional[nextPositional];
-      if (target === undefined) {
-        return usage(`${spec.words.join(' ')}: unexpected argument "${token}"`);
-      }
-      raw[target.name] = token;
-      nextPositional += 1;
+      bare.push(token);
       continue;
     }
     if (GLOBAL_BARE.includes(flag)) {
@@ -331,6 +331,15 @@ function readRest(spec: CommandSpec, leading: readonly string[], rest: readonly 
       raw[argument.name] = value;
     }
   }
+  const open = spec.args.filter((argument) => argument.positional === true && raw[argument.name] === undefined);
+  for (const [index, token] of bare.entries()) {
+    const target = open[index];
+    if (target === undefined) {
+      return usage(`${spec.words.join(' ')}: unexpected argument "${token}"`);
+    }
+    raw[target.name] = token;
+  }
+  assert(bare.length <= open.length, 'Every bare word found a positional argument');
   const checked = checkArgs(spec, raw);
   if (!checked.ok) {
     return checked;
