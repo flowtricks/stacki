@@ -213,9 +213,20 @@ async function mountStylePanel(fixture) {
     renderedClassesKnown: true,
   };
   let current = props;
+  // The props of the last render React committed to the DOM. `current` changes the moment a test
+  // calls render, but a concurrent root commits a little later (much later on a slow runner), so a
+  // frame sampled in between pairs the new selection with the DOM of the old one: a state no app
+  // frame can show, since the app paints its breadcrumb and this panel in the same commit.
+  let committed = props;
+  const Committed = (panelProps) => {
+    React.useLayoutEffect(() => {
+      committed = panelProps;
+    });
+    return React.createElement(StylePanel, panelProps);
+  };
   const render = (next) => {
     current = next;
-    root.render(React.createElement(StylePanel, next));
+    root.render(React.createElement(Committed, next));
   };
   render(props);
   const popovers = createPopoverLog(dom.window);
@@ -230,6 +241,10 @@ async function mountStylePanel(fixture) {
     popovers,
     get props() {
       return current;
+    },
+    /** The props of the render the DOM shows now: what a recorded frame belongs to. */
+    get committedProps() {
+      return committed;
     },
     /** The host state the panel published, as its subscribers read it. */
     host: () => env.getHost(),

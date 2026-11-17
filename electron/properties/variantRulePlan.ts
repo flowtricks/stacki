@@ -8,6 +8,7 @@ import { assert } from '../../shared/core/assert';
 import { err, ok, type Result } from '../../shared/core/result';
 import { inFile, refusal } from '../../shared/properties/propertyErrors';
 import type { VariantRuleEdit } from '../../shared/properties/variantRules';
+import { toPosix } from '../lib/mainHelpers';
 import { sameFilesystemPath } from '../lib/platform';
 import { readPropertyConsumers } from './propertyConsumers';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
@@ -80,7 +81,7 @@ function planInstanceRenames(
     const original = own ? component.after : consumer.source;
     const renamed = renameComponentOptionValues(original, consumer.names, controller, renames);
     if (!renamed.ok) {
-      return err(inFile(path.relative(request.projectPath, consumer.file), renamed.error));
+      return err(inFile(projectLabel(request.projectPath, consumer.file), renamed.error));
     }
     if (own) {
       changes.unshift({ ...component, after: renamed.value });
@@ -103,10 +104,10 @@ function passedOption(request: VariantPlanRequest, component: VariantFileChange,
     const source = sameFilesystemPath(consumer.file, request.file) ? component.after : consumer.source;
     const probed = renameComponentOptionValues(source, consumer.names, controller, [{ from: JSON.stringify(value), to: REMOVED_OPTION }]);
     if (!probed.ok) {
-      return err(inFile(path.relative(request.projectPath, consumer.file), probed.error));
+      return err(inFile(projectLabel(request.projectPath, consumer.file), probed.error));
     }
     if (probed.value !== source) {
-      const file = path.relative(request.projectPath, consumer.file);
+      const file = projectLabel(request.projectPath, consumer.file);
       return err(refusal('in-use', 'componentProps.variants.optionPassed', { file, value, name: controller }));
     }
   }
@@ -123,10 +124,10 @@ function passedProp(request: VariantPlanRequest, component: VariantFileChange, p
     if (!sameFilesystemPath(consumer.file, request.file)) {
       const probed = renameComponentReferences(consumer.source, consumer.names, { from: prop, to: REMOVED_PROPERTY }, 'consumer');
       if (!probed.ok) {
-        return err(inFile(path.relative(request.projectPath, consumer.file), probed.error));
+        return err(inFile(projectLabel(request.projectPath, consumer.file), probed.error));
       }
       if (probed.value !== consumer.source) {
-        return err(refusal('in-use', 'props.edit.stillPasses', { file: path.relative(request.projectPath, consumer.file), name: prop }));
+        return err(refusal('in-use', 'props.edit.stillPasses', { file: projectLabel(request.projectPath, consumer.file), name: prop }));
       }
     }
   }
@@ -156,18 +157,26 @@ function forbiddenPassed(request: VariantPlanRequest, component: VariantFileChan
     const source = sameFilesystemPath(consumer.file, request.file) ? component.after : consumer.source;
     const instances = instancesPassing(source, consumer.names, prop);
     if (!instances.ok) {
-      return err(inFile(path.relative(request.projectPath, consumer.file), instances.error));
+      return err(inFile(projectLabel(request.projectPath, consumer.file), instances.error));
     }
     for (const instance of instances.value) {
       for (const rule of forbidding) {
         const passed = instance.attributes.get(rule.controller);
         const value = passed === undefined ? rule.fallback : passed.kind === 'literal' ? passed.value : undefined;
         if (value !== undefined && rule.forbidden.includes(value)) {
-          const file = path.relative(request.projectPath, consumer.file);
+          const file = projectLabel(request.projectPath, consumer.file);
           return err(refusal('in-use', 'componentProps.variants.forbiddenPassed', { file, name: prop, controller: rule.controller, value }));
         }
       }
     }
   }
   return ok([component]);
+}
+
+/** A consumer's path as a refusal names it: relative to the project, with `/` on every platform, as the app shows paths everywhere. */
+function projectLabel(projectPath: string, file: string): string {
+  assert(projectPath.length > 0, 'projectLabel: a refusal names a file relative to a project');
+  const label = toPosix(path.relative(projectPath, file));
+  assert(label.length > 0, 'projectLabel: a consumer is a file inside the project, not the project itself');
+  return label;
 }

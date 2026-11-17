@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as path from 'node:path';
-import { buildProject, removeProject, volumeIsCaseInsensitive } from '../../helpers/projectFixtures.ts';
+import { ASTRO_BIN_NAME, buildProject, removeProject, volumeIsCaseInsensitive } from '../../helpers/projectFixtures.ts';
 import { hasDependencies, isAstroProject, listAstroFiles, routeForPage } from '#dist/electron/project/projectFiles.js';
 import { detectPackageManager } from '#dist/electron/project/packageManager.js';
 
@@ -42,7 +42,7 @@ test('a folder is an Astro project by dependency, by config file, or by a worksp
 
 test('installed packages are found in the package or in any parent workspace root', (context) => {
   const built = buildProject({
-    'own/node_modules/.bin/astro': '#!/bin/sh',
+    [`own/node_modules/.bin/${ASTRO_BIN_NAME}`]: '#!/bin/sh',
     'hoisted/node_modules/astro/package.json': '{}',
     'hoisted/apps/web/package.json': '{}',
     'pnp/.pnp.cjs': '',

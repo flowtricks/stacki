@@ -17,7 +17,7 @@
 // with the fake canvas holding every reply until the test releases it. Each element in the
 // fixture carries one class no other element has (its marker). A recorder samples, after every
 // DOM mutation and every animation frame, the chips, the element line and the selection the app
-// holds at that moment; a frame fails when it shows a marker of an element other than the
+// held in the render that DOM was committed from; a frame fails when it shows a marker of an element other than the
 // selected one. The steps cover selecting A then B on a page, entering a component instance's
 // inner element (with an id the page also has, and with one it does not), leaving back to the
 // page, rapid arrow-key style navigation without waiting for answers, and undo/redo.
@@ -92,7 +92,9 @@ function projectFor(panel) {
     const placeholder = well === null || well.classList.contains('is-placeholder');
     const chips = placeholder ? [] : [...container.querySelectorAll('.embed-editor_selector-chip')].map((chip) => chip.textContent.trim());
     const line = container.querySelector('.embed-editor_selector-box')?.textContent.trim() ?? '';
-    return { selection: selectionKey(panel.props), placeholder, chips, line };
+    // The selection the shown DOM was rendered for, not one a test has just asked for and React has not
+    // committed yet: the app's breadcrumb and this panel change in the same commit, so that is what a frame pairs.
+    return { selection: selectionKey(panel.committedProps), placeholder, chips, line };
   };
 }
 

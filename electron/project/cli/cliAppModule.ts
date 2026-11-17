@@ -5,7 +5,8 @@
 //   - the child is `process.execPath` with FIXED arguments and `shell: false`: nothing the app or a user typed is ever a command line;
 //   - its environment is `{ STACKI_CLI_PROTOCOL: '1' }` and nothing else: no inherited variable, so no token or secret, and the project's `.env`
 //     is a file the child cannot read (below). One exception: inside Electron the binary needs ELECTRON_RUN_AS_NODE=1 to run a script at all;
-//     it is added only then, and carries no data;
+//     it is added only then, and carries no data. The operating system adds its own start-up variables to every child (on Windows, libuv
+//     copies PATH, SYSTEMROOT, TEMP, USERPROFILE and the like from the parent); those are the platform's, not the parent's secrets;
 //   - Node's permission model (`--permission`): the only readable path is the app's own folder; there is no `--allow-fs-write`, no
 //     `--allow-child-process`, no `--allow-worker`, no `--allow-addons`, no `--allow-wasi`, so the module cannot read the project, write a file,
 //     spawn a process or load a native addon;

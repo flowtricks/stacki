@@ -139,8 +139,9 @@ window.__measure = () => {
   const entry = path.join(directory, 'entry.ts');
   fs.writeFileSync(
     entry,
-    `import * as frame from '${path.join(ROOT, 'electron/preload/frameMeasure.ts')}';
-import * as boxes from '${path.join(ROOT, 'src/features/preview/outlineBoxes.ts')}';
+    // Each path is written as a JSON string literal so a Windows path's `\` stays a separator, not an escape.
+    `import * as frame from ${JSON.stringify(path.join(ROOT, 'electron/preload/frameMeasure.ts'))};
+import * as boxes from ${JSON.stringify(path.join(ROOT, 'src/features/preview/outlineBoxes.ts'))};
 (window as unknown as Record<string, unknown>)['__frame'] = frame;
 (window as unknown as Record<string, unknown>)['__boxes'] = boxes;`,
   );

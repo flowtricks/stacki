@@ -32,6 +32,9 @@ export const ASTRO_BASE: FixtureFiles = {
   'src/pages/index.astro': '---\n---\n<h1>Home</h1>\n',
 };
 
+// The file a package manager links for the `astro` command, which is what the app looks for: Windows runs the `.cmd` shim.
+export const ASTRO_BIN_NAME = process.platform === 'win32' ? 'astro.cmd' : 'astro';
+
 const PROJECT_FOLDERS_MAX = 100000;
 
 /** Writes `files` under a new folder in the OS temp directory and returns it. */

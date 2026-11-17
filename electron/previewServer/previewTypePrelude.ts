@@ -109,7 +109,9 @@ export function resolveImportFile(
   for (const base of bases) {
     const stem = base.replace(/\.(js|mjs)$/, '');
     for (const suffix of TYPE_FILE_SUFFIXES) {
-      const candidate = stem + suffix;
+      // Normalised so an `/index.ts` suffix takes the platform separator: on Windows the same file must not
+      // be named two ways, or the seen set would read it twice and an exact-path reader would miss it.
+      const candidate = path.normalize(stem + suffix);
       if (accept.test(candidate) && files.read(candidate) !== undefined) {
         return candidate;
       }

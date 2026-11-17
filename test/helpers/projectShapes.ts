@@ -9,7 +9,7 @@
 // (relative to the pages folder) a scan must list, so the sweep checks the result as well as
 // "did not throw". Text is plain generated source: nothing here is executed.
 
-import { ASTRO_BASE, type FixtureFiles } from './projectFixtures.ts';
+import { ASTRO_BASE, ASTRO_BIN_NAME, type FixtureFiles } from './projectFixtures.ts';
 
 export type ShapeArea = 'config' | 'workspace' | 'content' | 'routes' | 'filesystem' | 'css';
 
@@ -174,7 +174,7 @@ function workspaceShapes(): readonly ProjectShape[] {
       pages: ['index.astro'],
       files: {
         'package.json': '{"private":true,"workspaces":["site"]}',
-        'node_modules/.bin/astro': '#!/bin/sh\n',
+        [`node_modules/.bin/${ASTRO_BIN_NAME}`]: '#!/bin/sh\n',
         'site/package.json': '{"dependencies":{"astro":"5"}}',
         'site/src/pages/index.astro': PAGE,
       },
@@ -236,7 +236,8 @@ function routeShapes(): readonly ProjectShape[] {
       '🎉.astro': PAGE,
       '(group)/name.astro': PAGE,
       'a b/c d.md': '# x\n',
-      'weird\nname.astro': PAGE,
+      // Windows forbids a line break in a file name, so only the platforms that allow one can hold this page.
+      ...(process.platform === 'win32' ? {} : { 'weird\nname.astro': PAGE }),
       "it's.astro": PAGE,
     }),
     withPages('index variants', { 'index.astro': PAGE, 'blog/index.astro': PAGE, 'blog/index.md': '# i\n' }),

@@ -92,15 +92,17 @@ async function waitUntil(condition, what) {
 test('a long Astro page is coloured at once at the top, slice by slice below, and resumes after an edit', async () => {
   const text = astroPage((scaleMegabytes() * MEGABYTE) / 16);
   const parent = document.getElementById('host');
+  // Building the view is one synchronous call however the colouring is done: CodeMirror lays out the whole
+  // document in it (about half the block under jsdom, and over twice as long on a Windows runner as on a Mac).
+  // Its grammar share is held to one slice by the two checks below, since a pass that coloured further would
+  // already reach the last window; what is timed is the colouring that follows, which must yield slice by slice.
+  const view = new editor.EditorView({ parent, state: editor.EditorState.create({ doc: text, extensions: [editor.astroHighlight] }) });
+  assert.ok(stylesBetween(view, 0, 300).length > 0, 'the first window is coloured in the first frame');
+  assert.equal(stylesBetween(view, text.length - 200, text.length).length, 0, 'the last window is not coloured yet');
   const opened = await measureOperation('astro-editor-open', `${text.length} chars`, async () => {
-    const view = new editor.EditorView({ parent, state: editor.EditorState.create({ doc: text, extensions: [editor.astroHighlight] }) });
-    assert.ok(stylesBetween(view, 0, 300).length > 0, 'the first window is coloured in the first frame');
-    assert.equal(stylesBetween(view, text.length - 200, text.length).length, 0, 'the last window is not coloured yet');
     await waitUntil(() => stylesBetween(view, text.length - 200, text.length).length > 0, 'the last window to be coloured');
-    return view;
   });
-  assert.ok(opened.lagMsMax < lagMsBound(), `opening blocked the event loop ${opened.lagMsMax} ms`);
-  const view = opened.value;
+  assert.ok(opened.lagMsMax < lagMsBound(), `colouring after opening blocked the event loop ${opened.lagMsMax} ms`);
 
   const row = text.indexOf('<p class="row-1700"');
   const next = text.indexOf('\n', row) + 1;

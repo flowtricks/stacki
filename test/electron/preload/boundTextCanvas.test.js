@@ -68,7 +68,8 @@ function resolve(root, from, spec) {
   const base = spec.startsWith('@lib/') ? path.join(root, 'src/lib', spec.slice(5)) : path.resolve(root, path.dirname(from), spec);
   for (const candidate of [base, `${base}.ts`, `${base}/index.ts`]) {
     if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-      return path.relative(root, candidate);
+      // Project paths cross the bridge with `/`, as `src:resolvePath` answers them, on Windows too.
+      return path.relative(root, candidate).split(path.sep).join('/');
     }
   }
   return undefined;

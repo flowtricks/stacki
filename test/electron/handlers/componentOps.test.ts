@@ -63,7 +63,8 @@ function trashInto(root: string) {
   return {
     moved,
     trash: async (target: string) => {
-      moved.push(path.relative(root, target));
+      // Recorded with `/` so the expected project paths read the same on Windows, whose `path.relative` answers with `\`.
+      moved.push(path.relative(root, target).split(path.sep).join('/'));
       fs.rmSync(target, { recursive: true });
     },
   };

@@ -116,8 +116,11 @@ const STYLE = `<style>
            win.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: n });
            win.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: n });
          }
-         await new Promise((resolve) => setTimeout(resolve, 500));
-         const editing = await run('!!' + frame + '.document.querySelector("[data-avb-text-editor]")');
+         // The editor's presence is awaited, not guessed with a sleep: a slow Windows runner delivers the double click later. A wait that
+         // runs out is not thrown here; it reads as editing false below, so the check names the selector and the posts seen.
+         const editorOpen = '!!' + frame + '.document.querySelector("[data-avb-text-editor]")';
+         await waitFor({ what: 'the editor opened on ' + selector, read: () => run(editorOpen), until: (open) => open === true }).catch(() => undefined);
+         const editing = await run(editorOpen);
          const during = await read(selector);
          win.webContents.focus();
          await win.webContents.insertText('.');
@@ -125,6 +128,8 @@ const STYLE = `<style>
          const typing = await read(selector);
          const tail = await run('(() => { const e = ' + frame + '.document.querySelector(' + JSON.stringify(selector) + '); return { last: e.lastChild && e.lastChild.nodeName, children: e.childNodes.length, style: e.getAttribute("style"), whiteSpace: getComputedStyle(e).whiteSpace }; })()');
          await post({ type: 'avb:text-close', session: 'one', action: 'cancel' });
+         // The next selector's double click must not land while this editor is still closing.
+         await waitFor({ what: 'the editor closed on ' + selector, read: () => run(editorOpen), until: (open) => open === false }).catch(() => undefined);
          await new Promise((resolve) => setTimeout(resolve, 400));
          const after = await read(selector);
          out[selector] = { before, during, typing, after, editing, tail, posts: await run('JSON.stringify(window.posts.filter((m) => /^avb:text/.test(m.type)).map((m) => m.type + (m.reason ? ":" + m.reason : "")))') };

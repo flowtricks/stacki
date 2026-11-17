@@ -17,6 +17,14 @@ import { removeProjects } from '../../../helpers/cliProject.ts';
 
 afterEach(removeProjects);
 
+// Variables the operating system adds to every child however empty its environment is, so no CLI can withhold them: macOS sets the text encoding,
+// and on Windows libuv copies the variables a Windows process needs to start (src/win/process.c, `required_vars`) from the parent. None of them
+// can carry the parent's secret, which the test checks separately.
+const PLATFORM_ADDED_VARIABLES: readonly string[] =
+  process.platform === 'win32'
+    ? ['HOMEDRIVE', 'HOMEPATH', 'LOGONSERVER', 'PATH', 'SYSTEMDRIVE', 'SYSTEMROOT', 'TEMP', 'USERDOMAIN', 'USERNAME', 'USERPROFILE', 'WINDIR']
+    : ['__CF_USER_TEXT_ENCODING'];
+
 async function probe(root: string, input: Record<string, unknown>): ReturnType<typeof runCommand> {
   const extensions = await loadExtensions(root);
   assert.ok(extensions !== undefined);
@@ -34,7 +42,7 @@ test('the module sees no inherited variable, cannot read the project .env, canno
     const keys = listOf(dig(result.result, 'envKeys')).map(String);
     assert.ok(keys.includes('STACKI_CLI_PROTOCOL'));
     for (const key of keys) {
-      assert.ok(['STACKI_CLI_PROTOCOL', '__CF_USER_TEXT_ENCODING'].includes(key), `unexpected variable ${key}`);
+      assert.ok(key === 'STACKI_CLI_PROTOCOL' || PLATFORM_ADDED_VARIABLES.includes(key.toUpperCase()), `unexpected variable ${key}`);
     }
     assert.equal(JSON.stringify(result).includes('fixture-not-a-secret'), false, 'the secret reaches neither the env nor the .env read');
     assert.deepEqual(dig(result.result, 'dotenv'), { ok: false, code: 'ERR_ACCESS_DENIED' });
