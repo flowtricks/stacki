@@ -8,9 +8,11 @@ import { Switch } from '../../../ui/Switch';
 
 const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
 
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { type SelectOption, type SelectTag, type Props } from './selectTypes';
+import { useHoverTip } from './CssPropertyTip';
+import { CodeInline } from '../../../ui/CodeBlock';
 
 // A ReactNode given as null by a caller means "none", the same as leaving it out.
 export const present = (node: ReactNode): boolean => (node ?? undefined) !== undefined;
@@ -214,13 +216,7 @@ export function SelectTrigger<T extends string>({
     );
   }
   if (props.variant === 'link') {
-    return (
-      <button {...shared} className="u-select-link" data-tone={selectedOption?.tone}>
-        {icon}
-        <span className="u-select-label">{triggerLabel}</span>
-        {CHEVRON}
-      </button>
-    );
+    return <LinkTrigger shared={shared} tone={selectedOption?.tone} icon={icon} label={triggerLabel} />;
   }
   return (
     <button {...shared} className="u-select-button" data-tone={selectedOption?.tone} title={selectedOption?.title}>
@@ -236,6 +232,60 @@ export function SelectTrigger<T extends string>({
       </span>
       {CHEVRON}
     </button>
+  );
+}
+
+// The link trigger: a one-line chip whose label is usually a file path. The path is cut
+// from its start, so the end (the file name) always stays visible; embedEditor.css says
+// how. A cut label shows its whole text in the app's tooltip after the panel's usual rest
+// (useHoverTip); a label that fits keeps the native title, as there is nothing more to
+// read. The label's own box does the cutting and is the tooltip's anchor.
+function LinkTrigger({
+  shared,
+  tone,
+  icon,
+  label,
+}: {
+  readonly shared: Omit<ComponentProps<'button'>, 'className' | 'ref'> & { readonly ref: RefObject<HTMLButtonElement> };
+  readonly tone: SelectOption<string>['tone'];
+  readonly icon: ReactNode;
+  readonly label: string;
+}) {
+  const [truncated, setTruncated] = useState(false);
+  const { ref, hoverProps, hide, tip } = useHoverTip<HTMLSpanElement>(<CodeInline text={label} className="u-select-link-tip-code" />);
+  return (
+    <>
+      <button
+        {...shared}
+        className="u-select-link"
+        data-tone={tone}
+        title={truncated ? undefined : label}
+        onClick={(event) => {
+          // A menu opening must not leave a tip standing over it.
+          hide();
+          shared.onClick?.(event);
+        }}
+      >
+        {icon}
+        <span
+          ref={ref}
+          className="u-select-label is-path"
+          onMouseEnter={(event) => {
+            // Measured here: the panel's width and the label both change under it.
+            const cut = event.currentTarget.scrollWidth > event.currentTarget.clientWidth;
+            setTruncated(cut);
+            if (cut) {
+              hoverProps.onMouseEnter?.();
+            }
+          }}
+          onMouseLeave={hoverProps.onMouseLeave}
+        >
+          <bdi dir="ltr">{label}</bdi>
+        </span>
+        {CHEVRON}
+      </button>
+      {tip}
+    </>
   );
 }
 
