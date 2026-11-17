@@ -19,7 +19,7 @@ import ProviderLogo from '../../ui/ProviderLogo';
 import InfoHint from '../../ui/InfoHint';
 import { addServerWithSecrets, type SecretToStore } from './mcpFlows';
 import { PASTE_PROBLEM_KEYS, PROVIDER_PROBLEM_KEYS } from './mcpModel';
-import { problemKey } from './secretsModel';
+import { DEFAULT_SECRETS_FILE_PARAMS, problemKey } from './secretsModel';
 
 interface AddProps {
   readonly projectPath: string;
@@ -196,7 +196,7 @@ function ProviderForm({
       })}
       {problem !== undefined && (
         <span className="secrets-hint secrets-problem" role="alert">
-          {translate(problem)}
+          {translate(problem, DEFAULT_SECRETS_FILE_PARAMS)}
         </span>
       )}
       <div className="mcp-form-actions">
@@ -338,7 +338,7 @@ function PasteRow({ projectPath, listing, envNames, onAdded, onFailure, onPick }
           )}
           {problem !== undefined && (
             <span className="secrets-hint secrets-problem" role="alert">
-              {translate(problem)}
+              {translate(problem, DEFAULT_SECRETS_FILE_PARAMS)}
             </span>
           )}
         </div>

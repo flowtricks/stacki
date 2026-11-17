@@ -2,8 +2,14 @@
 // message that says why not. The rules are the main process's (shared/properties/envFile.ts), checked
 // here first so a person sees the reason beside the field instead of after a round trip.
 import { ENV_LIMITS, envValueProblem, isEnvName } from '../../../shared/properties/envFile';
-import type { SecretsErrorCode, SecretSummary } from '../../../shared/properties/secrets';
+import { SECRETS_FILE_DEFAULT, type SecretsErrorCode, type SecretSummary } from '../../../shared/properties/secrets';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+
+/**
+ * The `{file}` a Secrets message names when it comes from the MCP tab, which stores secrets in the
+ * default file only. A message key from `problemKey` can name the file, so every caller fills it.
+ */
+export const DEFAULT_SECRETS_FILE_PARAMS = { file: SECRETS_FILE_DEFAULT } as const;
 
 /** What a masked row shows: a fixed run of bullets, so the real length is never visible. */
 export const SECRET_MASK = '••••••••';

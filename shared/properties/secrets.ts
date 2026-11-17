@@ -1,5 +1,5 @@
 // The Settings panel's Secrets tab: the contract between the renderer and the main
-// process for the project's `.env`. The list carries names only. A value crosses once,
+// process for the project's env files, one file at a time. The list carries names only. A value crosses once,
 // in a `secrets:read` reply, when a person reveals or edits it, and is never part of a
 // listing, an error or a log line. Every change names the revision (a digest of the file's
 // exact bytes) it was authored against, so a file edited outside Stacki is refused with
@@ -13,7 +13,46 @@ import type { Digest } from '../core/brand';
 import type { Result } from '../core/result';
 import { ENV_LIMITS, envValueProblem, isEnvName, type EnvChange } from './envFile';
 
-export const SECRETS_FILE_NAME = '.env';
+/**
+ * The env files the dev server loads, in the order it loads them: a name set in a later file
+ * wins over the same name in an earlier one. `.env.production` is for builds and is not here.
+ */
+export const SECRETS_FILE_NAMES = ['.env', '.env.local', '.env.development', '.env.development.local'] as const;
+export type SecretsFileName = (typeof SECRETS_FILE_NAMES)[number];
+
+/** The file the tab opens on, and the one other features (the MCP tab) write secrets to. */
+export const SECRETS_FILE_DEFAULT: SecretsFileName = '.env';
+
+/**
+ * Whether the tab offers to add a file to `.gitignore`. `.env.development` is left out: it is
+ * usually committed on purpose, for values that are not secret.
+ */
+export function secretsFileIgnorable(file: SecretsFileName): boolean {
+  return file !== '.env.development';
+}
+
+/** Whether `later` loads after `file`, so a name set in both takes `later`'s value. */
+export function secretsFileLoadsAfter(later: SecretsFileName, file: SecretsFileName): boolean {
+  return SECRETS_FILE_NAMES.indexOf(later) > SECRETS_FILE_NAMES.indexOf(file);
+}
+
+/** One of the dev env files, from the wire. */
+export function parseSecretsFileName(input: unknown): SecretsFileName {
+  const file = SECRETS_FILE_NAMES.find((name) => name === input);
+  if (file === undefined) {
+    throw new Error('Secrets: expected a dev env file name');
+  }
+  return file;
+}
+
+/** A file the panel may add to `.gitignore`. */
+export function parseSecretsIgnorableFile(input: unknown): SecretsFileName {
+  const file = parseSecretsFileName(input);
+  if (!secretsFileIgnorable(file)) {
+    throw new Error('Secrets: this file is not offered for .gitignore');
+  }
+  return file;
+}
 
 /** Where `.env` stands with Git: `unknown` outside a repository, where nothing can be committed. */
 export const SECRETS_IGNORE_STATES = ['ignored', 'not-ignored', 'tracked', 'unknown'] as const;
@@ -49,9 +88,13 @@ export interface SecretSummary {
   readonly name: string;
   readonly duplicate: boolean;
   readonly multiline: boolean;
+  /** The last file in load order that sets the same name, when one loads after this file: dev uses that value. */
+  readonly overriddenBy?: SecretsFileName;
 }
 
 export interface SecretsListing {
+  /** The file this listing reads. */
+  readonly file: SecretsFileName;
   /** The digest of the file's bytes, or of no bytes when the file does not exist. */
   readonly revision: Digest;
   readonly exists: boolean;
@@ -134,11 +177,17 @@ export function parseSecretsListing(input: unknown): SecretsListing {
   if (typeof exists !== 'boolean') {
     throw new Error('Secrets: expected a presence flag');
   }
-  const listing: SecretsListing = { revision: digest(fields['revision']), exists, entries: entries.map(parseSummary), invalidLines, ignore };
+  const file = parseSecretsFileName(fields['file']);
+  const listing: SecretsListing = { file, revision: digest(fields['revision']), exists, entries: entries.map(parseSummary), invalidLines, ignore };
   assert(
     listing.entries.every((entry, at) => entry.index === at),
     'Secrets are listed in index order',
   );
+  for (const entry of listing.entries) {
+    if (entry.overriddenBy !== undefined) {
+      assert(secretsFileLoadsAfter(entry.overriddenBy, file), 'A secret is overridden only by a file that loads after its own');
+    }
+  }
   return listing;
 }
 
@@ -176,7 +225,9 @@ function parseSummary(input: unknown): SecretSummary {
   if (typeof duplicate !== 'boolean' || typeof multiline !== 'boolean') {
     throw new Error('Secrets: expected entry flags');
   }
-  return { index: parseSecretIndex(fields['index']), name: parseSummaryName(fields['name']), duplicate, multiline };
+  const summary = { index: parseSecretIndex(fields['index']), name: parseSummaryName(fields['name']), duplicate, multiline };
+  const overriddenBy = optional(parseSecretsFileName)(fields['overriddenBy']);
+  return overriddenBy === undefined ? summary : { ...summary, overriddenBy };
 }
 
 // A name read from a file is listed as written; only the editable ones pass `isEnvName`'s length bound.

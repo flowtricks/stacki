@@ -84,6 +84,16 @@
   align-items: center;
   gap: 6px;
 }
+/* A button's text stays on one line however narrow the panel: the row wraps, the label never does. */
+.secrets button {
+  white-space: nowrap;
+}
+/* Wide enough for the longest dev env file name, so the dropdown never takes the row from the buttons. */
+.secrets-heading .secrets-file {
+  width: 190px;
+  max-width: 100%;
+  margin-top: 6px;
+}
 .secrets-actions .primary,
 .secrets-row-actions .primary {
   display: inline-flex;
@@ -104,6 +114,12 @@
 }
 .secrets-failure {
   background: color-mix(in srgb, var(--red) 16%, transparent);
+}
+/* A warning that is only its button: the button says what to do, its tooltip says why. */
+.secrets-warning-action {
+  justify-content: flex-start;
+  padding: 0;
+  background: none;
 }
 .secrets-empty {
   display: flex;

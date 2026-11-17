@@ -1,7 +1,10 @@
-// Goal: the Settings panel's Secrets tab shows the project's `.env` with every value hidden (the real
+// Goal: the Settings panel's Secrets tab shows one of the project's dev env files, `.env` first, picked in
+// a dropdown that lists the four in load order; every message names the picked file, a name a later file
+// sets again says which file dev uses, nothing revealed for one file survives a switch, and `.env.development`
+// (usually committed on purpose) gets no Git warning. For the picked file it shows every value hidden (the real
 // text is in no DOM node until it is revealed), reveals and hides one or all, edits a name and a value
 // inline (Enter saves, Escape cancels), deletes behind the app's own confirm, adds with validation
-// messages, treats a missing `.env` as the normal empty state with a Create button, warns when `.env`
+// messages, treats a missing `.env` as the normal empty state where adding a secret creates it, warns when `.env`
 // is not ignored, refuses a save over an outside change, names real read failures, and tells the person
 // to restart when the running app lacks the channels. It never shows a plain-text loading line: a first load
 // paints placeholder rows in the real layout, a reopened tab paints its cached names in its first render and
@@ -25,7 +28,7 @@ esbuild.buildSync({
     contents: [
       "export { default as ProjectSettingsPanel } from './src/features/projectSettings/ProjectSettingsPanel';",
       "export { default as SecretsTab } from './src/features/projectSettings/SecretsTab';",
-      "export { secretsListingCache, prewarmSecretsListing } from './src/features/projectSettings/secretsCache';",
+      "export { secretsCacheKey, secretsListingCache, prewarmSecretsListing } from './src/features/projectSettings/secretsCache';",
       "export { ConfirmHost } from './src/ui/ConfirmDialog';",
       "export { changeEnvFile, parseEnvFile, serializeEnvFile, envEntries, envInvalidLines } from './shared/properties/envFile';",
     ].join('\n'),
@@ -44,6 +47,8 @@ esbuild.buildSync({
 
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
 require('../../helpers/popupDom').installPopupDOM(dom.window);
+// The DOM here has no layout, so it has no `scrollIntoView`; the file dropdown scrolls its highlighted row into view.
+dom.window.HTMLElement.prototype.scrollIntoView ??= () => undefined;
 global.window = dom.window;
 for (const name of ['document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'getComputedStyle']) {
   Object.defineProperty(global, name, { value: dom.window[name], configurable: true, writable: true });
@@ -57,52 +62,72 @@ const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
 
-// The project as main would answer for it.
+// The project as main would answer for it: `.env` in `text`, the other dev env files in `others`.
+const FILES = ['.env', '.env.local', '.env.development', '.env.development.local'];
 let text; // undefined: no .env
+let others; // file name → text, for the files after .env
 let ignore;
 let applied;
 let ignored;
+let asked; // the file each list call named
 const digest = (value) =>
   crypto
     .createHash('sha256')
     .update(value ?? '')
     .digest('hex');
 const failure = (code) => ({ ok: false, error: { code, message: 'm' } });
-function listing() {
-  const parsed = panel.parseEnvFile(text ?? '');
-  const entries = panel.envEntries(parsed.value).map(({ index, name, duplicate, multiline }) => ({ index, name, duplicate, multiline }));
-  return { revision: digest(text), exists: text !== undefined, entries, invalidLines: panel.envInvalidLines(parsed.value), ignore };
+const textOf = (file) => (file === '.env' ? text : others.get(file));
+const setText = (file, value) => (file === '.env' ? (text = value) : others.set(file, value));
+const namesOf = (source) => panel.envEntries(panel.parseEnvFile(source ?? '').value).map((entry) => entry.name);
+function listing(file = '.env') {
+  const parsed = panel.parseEnvFile(textOf(file) ?? '');
+  // As main does: a name a later file sets again is marked with the last such file.
+  const later = FILES.slice(FILES.indexOf(file) + 1);
+  const overrides = new Map();
+  for (const candidate of later) {
+    for (const name of namesOf(textOf(candidate))) {
+      overrides.set(name, candidate);
+    }
+  }
+  const entries = panel.envEntries(parsed.value).map(({ index, name, duplicate, multiline }) => {
+    const overriddenBy = overrides.get(name);
+    return overriddenBy === undefined ? { index, name, duplicate, multiline } : { index, name, duplicate, multiline, overriddenBy };
+  });
+  return { file, revision: digest(textOf(file)), exists: textOf(file) !== undefined, entries, invalidLines: panel.envInvalidLines(parsed.value), ignore };
 }
 function installMain() {
   window.avb = {
-    listSecrets: async () => ({ ok: true, value: listing() }),
-    readSecret: async ({ revision, index }) => {
-      if (revision !== digest(text)) {
+    listSecrets: async ({ file }) => {
+      asked.push(file);
+      return { ok: true, value: listing(file) };
+    },
+    readSecret: async ({ file, revision, index }) => {
+      if (revision !== digest(textOf(file))) {
         return failure('changed');
       }
-      const entry = panel.envEntries(panel.parseEnvFile(text ?? '').value)[index];
+      const entry = panel.envEntries(panel.parseEnvFile(textOf(file) ?? '').value)[index];
       return entry === undefined ? failure('not-found') : { ok: true, value: { value: entry.value } };
     },
-    applySecretsChange: async ({ revision, change }) => {
-      if (revision !== digest(text)) {
+    applySecretsChange: async ({ file, revision, change }) => {
+      if (revision !== digest(textOf(file))) {
         return failure('changed');
       }
-      applied.push(change);
+      applied.push(file === '.env' ? change : { file, ...change });
       if (change.kind === 'create') {
-        text ??= '';
-        return { ok: true, value: listing() };
+        setText(file, textOf(file) ?? '');
+        return { ok: true, value: listing(file) };
       }
-      const next = panel.changeEnvFile(panel.parseEnvFile(text ?? '').value, change);
+      const next = panel.changeEnvFile(panel.parseEnvFile(textOf(file) ?? '').value, change);
       if (!next.ok) {
         return failure(next.error);
       }
-      text = panel.serializeEnvFile(next.value);
-      return { ok: true, value: listing() };
+      setText(file, panel.serializeEnvFile(next.value));
+      return { ok: true, value: listing(file) };
     },
-    ignoreSecretsFile: async () => {
-      ignored.push(true);
+    ignoreSecretsFile: async ({ file }) => {
+      ignored.push(file === '.env' ? true : file);
       ignore = 'ignored';
-      return { ok: true, value: listing() };
+      return { ok: true, value: listing(file) };
     },
   };
 }
@@ -146,11 +171,15 @@ async function unmount() {
 }
 function reset(initial, ignoreState = 'ignored') {
   text = initial;
+  others = new Map();
   ignore = ignoreState;
   applied = [];
   ignored = [];
+  asked = [];
   installMain();
 }
+// The cache key of a project's `.env`, the file the tab opens on.
+const envKey = (projectPath) => panel.secretsCacheKey(projectPath, '.env');
 
 test('hidden values are in no DOM node; the eye reveals and hides one, and Reveal all hides again', async () => {
   reset(`API_KEY=${SECRET}\nOTHER=${OTHER}\n`);
@@ -254,38 +283,50 @@ test('adding: validation messages, then the new line is appended', async () => {
   await unmount();
 });
 
-test('no .env is the empty state with a Create button, not an error', async () => {
+test('no .env is the empty state, not an error, and Add secret is the one way in', async () => {
   reset(undefined);
   await mount();
   assert.match(document.body.textContent, /No secrets yet/);
-  assert.match(document.body.textContent, /No \.env file yet/);
+  assert.match(document.body.textContent, /No \.env file yet\. Adding a secret creates it\./);
   assert.ok(!document.body.textContent.includes('could not be read'));
-  await click(button('Create .env file'));
-  assert.equal(text, '');
-  assert.deepEqual(applied, [{ kind: 'create' }]);
-  assert.equal(button('Create .env file') ?? undefined, undefined, 'the button goes once the file exists');
-  assert.match(document.body.textContent, /Adding a secret creates \.env/);
-  assert.ok(button('Add secret'));
+  assert.ok(![...document.querySelectorAll('button')].some((candidate) => /^Create/.test(candidate.textContent.trim())), 'no button offers an empty file');
+  await click(button('Add secret'));
+  await type(byLabel('Name'), 'A');
+  await type(byLabel('Value'), 'x');
+  await click(button('Save'));
+  assert.equal(text, 'A=x\n');
+  assert.deepEqual(applied, [{ kind: 'add', name: 'A', value: 'x' }]);
   await unmount();
 });
 
-test('a created file offers the .gitignore flow when it is not ignored', async () => {
-  reset(undefined, 'not-ignored');
+test('an existing empty .env says it is empty', async () => {
+  reset('');
   await mount();
-  await click(button('Create .env file'));
-  assert.match(document.body.textContent, /\.env is not in \.gitignore: secrets could be committed/);
-  await click(button('Add to .gitignore'));
+  assert.match(document.body.textContent, /\.env is empty\./);
+  assert.ok(!document.body.textContent.includes('creates'), 'an existing file is never said to be created');
+  await unmount();
+});
+
+test('an existing file offers the .gitignore flow when it is not ignored', async () => {
+  reset('', 'not-ignored');
+  await mount();
+  // The button alone is shown; the risk is its tooltip and its description, never a sentence beside it.
+  const offer = button('Add to .gitignore');
+  assert.equal(offer.title, '.env is not in .gitignore: secrets could be committed');
+  assert.equal(offer.getAttribute('aria-description'), offer.title);
+  assert.ok(!document.body.textContent.includes('secrets could be committed'));
+  await click(offer);
   assert.match(document.body.textContent, /Add \.env to \.gitignore\?/);
   await click(button('Add line'));
   assert.deepEqual(ignored, [true]);
-  assert.ok(!document.body.textContent.includes('secrets could be committed'));
+  assert.equal(button('Add to .gitignore') ?? undefined, undefined);
   await unmount();
 });
 
 test('a tracked .env gets a warning with no button', async () => {
   reset('A=1\n', 'tracked');
   await mount();
-  assert.match(document.body.textContent, /tracked by Git/);
+  assert.match(document.body.textContent, /\.env is committed to Git/);
   assert.equal(button('Add to .gitignore') ?? undefined, undefined);
   await unmount();
 });
@@ -450,7 +491,7 @@ test('the cache holds names only: a revealed or edited value is never in it', as
   await click(byLabel('Reveal API_KEY'));
   await click(byLabel('Edit OTHER'));
   assert.ok(document.body.innerHTML.includes(SECRET));
-  const cached = panel.secretsListingCache.get('/names-only');
+  const cached = panel.secretsListingCache.get(envKey('/names-only'));
   assert.equal(cached.kind, 'ready');
   const serialized = JSON.stringify(cached);
   assert.ok(!serialized.includes(SECRET) && !serialized.includes(OTHER), 'no value in the cache');
@@ -467,20 +508,101 @@ test('the cache is bounded to the most recent projects', async () => {
     await mount(`/bound-${project}`);
     await unmount();
   }
-  assert.equal(panel.secretsListingCache.get('/bound-0') ?? undefined, undefined, 'the oldest is dropped');
-  assert.equal(panel.secretsListingCache.get('/bound-3') ?? undefined, undefined);
-  assert.equal(panel.secretsListingCache.get('/bound-11').kind, 'ready', 'the newest is kept');
-  assert.equal(panel.secretsListingCache.get('/bound-4').kind, 'ready', 'the eighth most recent is kept');
+  assert.equal(panel.secretsListingCache.get(envKey('/bound-0')) ?? undefined, undefined, 'the oldest is dropped');
+  assert.equal(panel.secretsListingCache.get(envKey('/bound-3')) ?? undefined, undefined);
+  assert.equal(panel.secretsListingCache.get(envKey('/bound-11')).kind, 'ready', 'the newest is kept');
+  assert.equal(panel.secretsListingCache.get(envKey('/bound-4')).kind, 'ready', 'the eighth most recent is kept');
 });
 
 test('a prefetch fills the cache so the first open has no placeholder; an app without the channels fills nothing', async () => {
   reset('A=1\n');
   await panel.prewarmSecretsListing('/prefetched');
-  assert.equal(panel.secretsListingCache.get('/prefetched').kind, 'ready');
+  assert.equal(panel.secretsListingCache.get(envKey('/prefetched')).kind, 'ready');
+  assert.deepEqual(asked, ['.env'], 'the prefetch reads the file the tab opens on, and only that one');
   delete window.avb.listSecrets;
   await panel.prewarmSecretsListing('/no-channels');
-  assert.equal(panel.secretsListingCache.get('/no-channels') ?? undefined, undefined);
+  assert.equal(panel.secretsListingCache.get(envKey('/no-channels')) ?? undefined, undefined);
   window.avb.listSecrets = async () => failure('denied');
   await panel.prewarmSecretsListing('/denied');
-  assert.equal(panel.secretsListingCache.get('/denied') ?? undefined, undefined, 'a failure is never cached as an empty list');
+  assert.equal(panel.secretsListingCache.get(envKey('/denied')) ?? undefined, undefined, 'a failure is never cached as an empty list');
+});
+
+// The labels of the open dropdown's options, in the order they are listed.
+const optionLabels = () => [...document.querySelectorAll('.dd-option .dd-option-label')].map((label) => label.textContent.trim());
+
+// Picks a file in the tab's dropdown, as a person would: open the menu, click the option.
+async function pick(file) {
+  await click(byLabel('Env file'));
+  const option = [...document.querySelectorAll('.dd-option')].find((candidate) => candidate.querySelector('.dd-option-label')?.textContent.trim() === file);
+  await click(option);
+}
+
+test('the dropdown lists the four dev files in load order, and opens on .env', async () => {
+  reset('A=1\n');
+  await mount('/files');
+  assert.equal(byLabel('Env file').textContent.trim(), '.env');
+  await click(byLabel('Env file'));
+  assert.deepEqual(optionLabels(), FILES);
+  await click(byLabel('Env file'));
+  await unmount();
+});
+
+test('another file is listed, created and changed on its own, and every message names it', async () => {
+  reset('A=1\n');
+  await mount('/other-file');
+  await pick('.env.local');
+  assert.equal(asked.at(-1), '.env.local');
+  assert.equal(byLabel('Env file').textContent.trim(), '.env.local');
+  assert.match(document.body.textContent, /No \.env\.local file yet/);
+  await click(button('Add secret'));
+  await type(byLabel('Name'), 'B');
+  await type(byLabel('Value'), SECRET);
+  await click(button('Save'));
+  assert.equal(others.get('.env.local'), `B=${SECRET}\n`);
+  assert.equal(text, 'A=1\n', '.env is left as it was');
+  assert.deepEqual(applied, [{ file: '.env.local', kind: 'add', name: 'B', value: SECRET }]);
+  await click(byLabel('Delete B'));
+  assert.match(document.body.textContent, /Removes the line from \.env\.local/);
+  await click(button('Cancel'));
+  await unmount();
+});
+
+test('a value revealed in one file is gone when another file is picked', async () => {
+  reset(`API_KEY=${SECRET}\n`);
+  await mount('/switch');
+  await click(byLabel('Reveal API_KEY'));
+  assert.ok(document.body.innerHTML.includes(SECRET));
+  await pick('.env.local');
+  assert.ok(!document.body.innerHTML.includes(SECRET), 'nothing revealed for .env is shown beside .env.local');
+  await pick('.env');
+  assert.ok(!document.body.innerHTML.includes(SECRET), 'coming back starts hidden');
+  await unmount();
+});
+
+test('a name a later file sets again says which file dev uses', async () => {
+  reset('A=1\nB=2\n');
+  others.set('.env.local', 'A=local\n');
+  others.set('.env.development', 'A=dev\n');
+  await mount('/overridden');
+  const rows = rowText();
+  assert.match(rows[0], /Dev uses the value in \.env\.development/);
+  assert.ok(!rows[1].includes('Dev uses'), 'a name set only here has no note');
+  assert.ok(!document.body.textContent.includes('local'), 'only the last overriding file is named');
+  await unmount();
+});
+
+test('.env.development is not offered for .gitignore, and its Git state is no warning', async () => {
+  reset('A=1\n', 'not-ignored');
+  others.set('.env.development', 'PUBLIC_URL=x\n');
+  await mount('/development');
+  assert.ok(button('Add to .gitignore'), '.env still warns');
+  await pick('.env.development');
+  assert.equal(button('Add to .gitignore') ?? undefined, undefined);
+  ignore = 'tracked';
+  await pick('.env.local');
+  await pick('.env.development');
+  assert.ok(!document.body.textContent.includes('committed to Git'));
+  await pick('.env.local');
+  assert.match(document.body.textContent, /\.env\.local is committed to Git/);
+  await unmount();
 });

@@ -23,12 +23,12 @@ import { assert } from '../../shared/core/assert';
 import { DescribedError } from '../../shared/properties/describedError';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { SANITY_LOGIN_TIMEOUT_MS, type SanityLoginRequest, type SanityLoginState, type SanityProjectChoice } from '../../shared/properties/cmsConnections';
+import { SECRETS_FILE_NAMES } from '../../shared/properties/secrets';
 import type { CmsConnectionStore } from './cmsConnectionStore';
 import { SanityRequestError, createSanityEditorKey, sanityLoginURL, sanityLogout, sanityProjects, sanityTokenForSession } from './sanityApi';
 
 const SUCCESS_PAGE = 'https://www.sanity.io/login/success';
 // The .env lines read for a suggestion, and the longest file read for them.
-const ENV_FILES = ['.env', '.env.local', '.env.development'] as const;
 const ENV_BYTES_MAX = 64 * 1024;
 
 // One sign-in: its state, and what it holds while it runs. Ending it releases
@@ -270,7 +270,7 @@ function failureProblem(error: unknown): Described {
 // of the person's projects has them.
 function siteSuggestion(projectRoot: string, projects: readonly SanityProjectChoice[]) {
   const values = new Map<string, string>();
-  for (const name of ENV_FILES) {
+  for (const name of SECRETS_FILE_NAMES) {
     for (const [key, value] of envEntries(path.join(projectRoot, name))) {
       values.set(key, value);
     }

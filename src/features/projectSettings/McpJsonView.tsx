@@ -9,6 +9,7 @@ import type { McpListing, McpText } from '../../../shared/properties/mcp';
 import { mcpJsonIssues } from '../../../shared/properties/mcpJson';
 import type { Result } from '../../../shared/core/result';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+import { DEFAULT_SECRETS_FILE_PARAMS } from './secretsModel';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
 import { readMcpText, saveMcpText } from './mcpBridge';
@@ -130,7 +131,7 @@ export default function McpJsonView({
       )}
       {failure !== undefined && (
         <div className="secrets-warning secrets-failure" role="alert">
-          <span>{translate(failure)}</span>
+          <span>{translate(failure, DEFAULT_SECRETS_FILE_PARAMS)}</span>
         </div>
       )}
       {issues.length > 0 && (
