@@ -41,7 +41,7 @@ import {
   parseMediaName,
   parseMediaOrder,
 } from '../properties/mediaHosting';
-import { parseSecretReadIndex, parseSecretsChange, parseSecretsRevision } from '../properties/secrets';
+import { parseSecretReadIndex, parseSecretsChange, parseSecretsFileName, parseSecretsIgnorableFile, parseSecretsRevision } from '../properties/secrets';
 import { parseMcpChange, parseMcpCodexChange, parseMcpRevision, parseMcpServerName, parseMcpTextInput } from '../properties/mcp';
 import { parseConnectionKeyCopy, parseDataSampleRequest, parseEnvPayloadName, parsePageTemplateDraft, parseSecretValue } from '../properties/pageTemplate';
 import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
@@ -628,11 +628,11 @@ export const IPC_PAYLOADS = {
   'pageTemplate:plan': object({ ...project, draft: parsePageTemplateDraft }),
   'pageTemplate:sample': object({ ...project, request: parseDataSampleRequest }),
   'project:setEnv': object({ ...project, name: parseEnvPayloadName, value: parseSecretValue }),
-  // The Settings panel's Secrets tab (shared/properties/secrets.ts): names listed, one value read on request, one change applied against a revision.
-  'secrets:list': object({ ...project }),
-  'secrets:read': object({ ...project, revision: parseSecretsRevision, index: parseSecretReadIndex }),
-  'secrets:apply': object({ ...project, revision: parseSecretsRevision, change: parseSecretsChange }),
-  'secrets:ignore': object({ ...project }),
+  // The Settings panel's Secrets tab (shared/properties/secrets.ts), one dev env file at a time: names listed, one value read on request, one change applied against a revision.
+  'secrets:list': object({ ...project, file: parseSecretsFileName }),
+  'secrets:read': object({ ...project, file: parseSecretsFileName, revision: parseSecretsRevision, index: parseSecretReadIndex }),
+  'secrets:apply': object({ ...project, file: parseSecretsFileName, revision: parseSecretsRevision, change: parseSecretsChange }),
+  'secrets:ignore': object({ ...project, file: parseSecretsIgnorableFile }),
   // The Settings panel's MCP tab (shared/properties/mcp.ts): the project's .mcp.json listed, read as text, one server revealed, a change or the whole text saved against a revision, and Codex's file.
   'mcp:read': object({ ...project }),
   'mcp:readText': object({ ...project }),

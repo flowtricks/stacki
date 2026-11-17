@@ -8,11 +8,11 @@ import path from 'node:path';
 
 import { assert } from '../../shared/core/assert';
 import { toRecord } from '../../shared/core/record';
+import { SECRETS_FILE_DEFAULT, SECRETS_FILE_NAMES, type SecretsFileName } from '../../shared/properties/secrets';
 import { createProjectText, writeProjectText } from '../documents/documentWrites';
 
-// Vite's order: a later file wins, and every one of these is read in dev.
-const ENV_FILES = ['.env', '.env.local', '.env.development', '.env.development.local'] as const;
-const ENV_FILE = '.env';
+// A secret saved from a page template's connection goes where the Secrets tab opens.
+const ENV_FILE = SECRETS_FILE_DEFAULT;
 const ENV_BYTES_MAX = 256 * 1024;
 const ENV_LINES_MAX = 4000;
 const ASSIGNMENT = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/;
@@ -25,7 +25,8 @@ export type Git = (projectPath: string, args: readonly string[]) => Promise<unkn
 /** Every variable the project's env files set, by name. Values stay in this process. */
 export function readProjectEnv(projectRoot: string): ReadonlyMap<string, string> {
   const values = new Map<string, string>();
-  for (const name of ENV_FILES) {
+  // Vite's order: a later file wins, and every one of these is read in dev.
+  for (const name of SECRETS_FILE_NAMES) {
     for (const [key, value] of envEntries(readEnvFile(path.join(projectRoot, name)) ?? '')) {
       values.set(key, value);
     }
@@ -59,15 +60,19 @@ export function withEnvValue(source: string, name: string, value: string): strin
   return lines.map((candidate, index) => (index === at ? line : candidate)).join('\n');
 }
 
-/** The .gitignore text that ignores .env, or undefined when it already does. */
-export function gitignoreWithEnv(source: string | undefined): string | undefined {
+/** The .gitignore text that ignores `file`, or undefined when a rule for it is already written. */
+export function gitignoreWithEnv(source: string | undefined, file: SecretsFileName): string | undefined {
+  // `*.env` matches `.env` alone; `.env*` matches every dev env file.
+  const rules = file === '.env' ? [file, `/${file}`, '.env*', '*.env'] : [file, `/${file}`, '.env*'];
   const lines = (source ?? '').split(/\r?\n/).map((line) => line.trim());
-  if (lines.some((line) => line === '.env' || line === '/.env' || line === '.env*' || line === '*.env')) {
+  if (lines.some((line) => rules.includes(line))) {
     return undefined;
   }
   const text = source ?? '';
   const lead = text.length === 0 || text.endsWith('\n') ? text : `${text}\n`;
-  return `${lead}.env\n`;
+  const next = `${lead}${file}\n`;
+  assert(next.startsWith(text), 'gitignoreWithEnv: the existing rules are kept as written');
+  return next;
 }
 
 /**
@@ -76,11 +81,11 @@ export function gitignoreWithEnv(source: string | undefined): string | undefined
  * missing, before the secret is written.
  */
 export async function writeProjectSecret(projectRoot: string, input: { readonly name: string; readonly value: string }, git: Git): Promise<IgnoreChange> {
-  if (await isTracked(projectRoot, git)) {
+  if (await isTracked(projectRoot, git, ENV_FILE)) {
     throw new Error('.env is tracked by Git, so a secret saved there would be published. Remove it from Git first.');
   }
-  const change = writeIgnoreRule(projectRoot);
-  if ((await ignoreState(projectRoot, git)) === 'not-ignored') {
+  const change = writeIgnoreRule(projectRoot, ENV_FILE);
+  if ((await ignoreState(projectRoot, git, ENV_FILE)) === 'not-ignored') {
     throw new Error('.gitignore does not ignore .env, so the secret was not saved. Check .gitignore for a rule that brings it back.');
   }
   const file = path.join(projectRoot, ENV_FILE);
@@ -95,10 +100,10 @@ export async function writeProjectSecret(projectRoot: string, input: { readonly 
   return change;
 }
 
-export function writeIgnoreRule(projectRoot: string): IgnoreChange {
+export function writeIgnoreRule(projectRoot: string, envFile: SecretsFileName): IgnoreChange {
   const file = path.join(projectRoot, '.gitignore');
   const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined;
-  const text = gitignoreWithEnv(before);
+  const text = gitignoreWithEnv(before, envFile);
   if (text === undefined) {
     return 'already-ignored';
   }
@@ -111,10 +116,10 @@ export function writeIgnoreRule(projectRoot: string): IgnoreChange {
 }
 
 // `git ls-files --error-unmatch` fails for a path Git does not track, and in a
-// folder that is not a repository, and both mean .env is not tracked.
-export async function isTracked(projectRoot: string, git: Git): Promise<boolean> {
+// folder that is not a repository, and both mean the file is not tracked.
+export async function isTracked(projectRoot: string, git: Git, file: SecretsFileName): Promise<boolean> {
   try {
-    await git(projectRoot, ['ls-files', '--error-unmatch', '--', ENV_FILE]);
+    await git(projectRoot, ['ls-files', '--error-unmatch', '--', file]);
     return true;
   } catch {
     return false;
@@ -122,9 +127,9 @@ export async function isTracked(projectRoot: string, git: Git): Promise<boolean>
 }
 
 // `git check-ignore` exits 1 for a path it does not ignore, and 128 outside a repository.
-export async function ignoreState(projectRoot: string, git: Git): Promise<'ignored' | 'not-ignored' | 'no-repository'> {
+export async function ignoreState(projectRoot: string, git: Git, file: SecretsFileName): Promise<'ignored' | 'not-ignored' | 'no-repository'> {
   try {
-    await git(projectRoot, ['check-ignore', '--quiet', '--', ENV_FILE]);
+    await git(projectRoot, ['check-ignore', '--quiet', '--', file]);
     return 'ignored';
   } catch (error: unknown) {
     return toRecord(error)?.['code'] === 1 ? 'not-ignored' : 'no-repository';

@@ -13,6 +13,7 @@ import type { McpCodexState, McpListing, McpServerItem } from '../../../shared/p
 import { MCP_PROVIDERS } from '../../../shared/properties/mcpProviders';
 import { moveLiteralsToSecrets } from '../../../shared/properties/mcpSecrets';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+import { DEFAULT_SECRETS_FILE_PARAMS } from './secretsModel';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { ChevronDownIcon, ChevronRightIcon, CodeIcon, PlugIcon } from '../../ui/Icons';
@@ -299,7 +300,7 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
       {header}
       {failure !== undefined && (
         <div className="secrets-warning secrets-failure" role="alert">
-          <span>{translate(failure)}</span>
+          <span>{translate(failure, DEFAULT_SECRETS_FILE_PARAMS)}</span>
           {stale && (
             <button
               type="button"

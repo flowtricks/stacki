@@ -816,16 +816,22 @@ role's UI. It changes only the renderer's active role (`src/lib/currentRole.ts`:
 The Settings rail button (`projectSettings`, access feature `panel:projectSettings`, admin only until a
 role is granted it; shortcut ⌥S) sits directly above the AI button and opens a panel with a typed tab
 registry (`src/features/projectSettings/settingsTabs.ts`). It is the project's settings, apart from the
-app's own Settings screen (`src/app/settings`). Its one tab, Secrets, edits the project's `.env`.
+app's own Settings screen (`src/app/settings`). Its Secrets tab edits one of the project's dev env files
+at a time (`SECRETS_FILE_NAMES`: `.env`, `.env.local`, `.env.development`, `.env.development.local`, the
+dev server's load order), picked in a dropdown that opens on `.env`. `.env.production` is not listed.
 
 - `shared/properties/envFile.ts` is the codec. It keeps comments, blank lines, quoting, `export`
   prefixes, spacing, the byte-order mark and line endings: parse then serialize is byte-identical, and an
   edit rewrites only the line it touches. Bounds: names 128 characters, values 16 KiB, 512 variables,
   4000 lines, 256 KiB. Multi-line quoted values are listed but not edited here.
-- `secrets:list` returns names only. `secrets:read` returns one value, for a person who revealed or began
-  editing it. `secrets:apply` applies one change (`add`, `update`, `remove`, `create`) against the revision
-  (digest of the file's bytes) it was authored on; a file that changed since is refused with `changed`.
-  `secrets:ignore` appends `.env` to `.gitignore`. A missing `.env` is the ordinary empty list.
+- Every `secrets:*` message names its `file`, and the parser refuses any name outside `SECRETS_FILE_NAMES`.
+  `secrets:list` returns names only; a row whose name a file loading later sets again carries
+  `overriddenBy` (the last such file, worked out from that file's names alone). `secrets:read` returns one
+  value, for a person who revealed or began editing it. `secrets:apply` applies one change (`add`,
+  `update`, `remove`, `create`) against the revision (digest of the file's bytes) it was authored on; a
+  file that changed since is refused with `changed`. `secrets:ignore` appends the file to `.gitignore`; it
+  refuses `.env.development`, which is usually committed on purpose and gets no Git warning in the tab.
+  A missing file is the ordinary empty list. The MCP tab stores secrets in `.env` only.
 - Writes go through the document actors (atomic, mode kept); a new `.env` is made mode 0600 first.
   No value appears in a log, an error, a listing or the DOM of a hidden row; failures are fixed text per code.
 - The list reloads when the window regains focus; there is no file watcher for `.env` yet.

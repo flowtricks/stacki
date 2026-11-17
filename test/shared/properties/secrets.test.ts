@@ -6,10 +6,26 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ENV_LIMITS } from '#dist/shared/properties/envFile.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
-import { parseSecretValueReply, parseSecretsChange, parseSecretsListing, parseSecretsResult } from '#dist/shared/properties/secrets.js';
+import {
+  SECRETS_FILE_NAMES,
+  parseSecretValueReply,
+  parseSecretsChange,
+  parseSecretsFileName,
+  parseSecretsListing,
+  parseSecretsResult,
+  secretsFileIgnorable,
+  secretsFileLoadsAfter,
+} from '#dist/shared/properties/secrets.js';
 
 const revision = 'a'.repeat(64);
-const listing = { revision, exists: true, entries: [{ index: 0, name: 'A', duplicate: false, multiline: false }], invalidLines: 0, ignore: 'ignored' };
+const listing = {
+  file: '.env',
+  revision,
+  exists: true,
+  entries: [{ index: 0, name: 'A', duplicate: false, multiline: false }],
+  invalidLines: 0,
+  ignore: 'ignored',
+};
 
 test('changes: known-good shapes parse', () => {
   assert.deepEqual(parseSecretsChange({ kind: 'add', name: 'A_1', value: '' }), { kind: 'add', name: 'A_1', value: '' });
@@ -69,13 +85,51 @@ test('listing, value and result parsers', () => {
   assert.throws(() => parseSecretsResult({ ok: 'maybe' }, parseSecretValueReply));
 });
 
-test('channels: payloads for list, read, apply and ignore', () => {
-  assert.deepEqual(parseIpcPayload('secrets:list', { projectPath: '/site' }), { projectPath: '/site' });
-  assert.equal(parseIpcPayload('secrets:read', { projectPath: '/site', revision, index: 0 }).index, 0);
-  assert.equal(parseIpcPayload('secrets:apply', { projectPath: '/site', revision, change: { kind: 'remove', index: 0 } }).change.kind, 'remove');
-  assert.deepEqual(parseIpcPayload('secrets:ignore', { projectPath: '/site' }), { projectPath: '/site' });
-  assert.throws(() => parseIpcPayload('secrets:read', { projectPath: '/site', revision: 'short', index: 0 }));
-  assert.throws(() => parseIpcPayload('secrets:read', { projectPath: '/site', revision, index: -1 }));
-  assert.throws(() => parseIpcPayload('secrets:apply', { projectPath: '/site', revision, change: { kind: 'add', name: '', value: '' } }));
+test('files: the four dev files in load order, and nothing else', () => {
+  assert.deepEqual(SECRETS_FILE_NAMES, ['.env', '.env.local', '.env.development', '.env.development.local']);
+  for (const file of SECRETS_FILE_NAMES) {
+    assert.equal(parseSecretsFileName(file), file);
+  }
+  for (const bad of ['.env.production', '.env.test', '../.env', '/etc/passwd', 'env', '', '.ENV', undefined, 3]) {
+    assert.throws(() => parseSecretsFileName(bad), /expected a dev env file name/);
+  }
+  assert.equal(secretsFileLoadsAfter('.env.local', '.env'), true);
+  assert.equal(secretsFileLoadsAfter('.env.development.local', '.env.development'), true);
+  assert.equal(secretsFileLoadsAfter('.env', '.env.local'), false);
+  assert.equal(secretsFileLoadsAfter('.env', '.env'), false);
+  assert.deepEqual(
+    SECRETS_FILE_NAMES.filter((file) => !secretsFileIgnorable(file)),
+    ['.env.development'],
+  );
+});
+
+test('listing: a row is overridden only by a file that loads after the listed one', () => {
+  const entry = { index: 0, name: 'A', duplicate: false, multiline: false };
+  const overridden = parseSecretsListing({ ...listing, entries: [{ ...entry, overriddenBy: '.env.local' }] });
+  assert.equal(overridden.entries[0]?.overriddenBy, '.env.local');
+  assert.equal('overriddenBy' in (parseSecretsListing(listing).entries[0] ?? {}), false);
+  assert.throws(() => parseSecretsListing({ ...listing, file: '.env.production' }));
+  assert.throws(() => parseSecretsListing({ ...listing, file: undefined }));
+  assert.throws(() => parseSecretsListing({ ...listing, entries: [{ ...entry, overriddenBy: '.env.production' }] }));
+  assert.throws(
+    () => parseSecretsListing({ ...listing, file: '.env.local', entries: [{ ...entry, overriddenBy: '.env' }] }),
+    /overridden only by a file that loads after its own/,
+  );
+  assert.throws(() => parseSecretsListing({ ...listing, entries: [{ ...entry, overriddenBy: '.env' }] }), /overridden only by a file that loads after its own/);
+});
+
+test('channels: payloads for list, read, apply and ignore name the file', () => {
+  const site = { projectPath: '/site', file: '.env.local' };
+  assert.deepEqual(parseIpcPayload('secrets:list', site), site);
+  assert.equal(parseIpcPayload('secrets:read', { ...site, revision, index: 0 }).index, 0);
+  assert.equal(parseIpcPayload('secrets:apply', { ...site, revision, change: { kind: 'remove', index: 0 } }).change.kind, 'remove');
+  assert.deepEqual(parseIpcPayload('secrets:ignore', site), site);
+  assert.throws(() => parseIpcPayload('secrets:read', { ...site, revision: 'short', index: 0 }));
+  assert.throws(() => parseIpcPayload('secrets:read', { ...site, revision, index: -1 }));
+  assert.throws(() => parseIpcPayload('secrets:apply', { ...site, revision, change: { kind: 'add', name: '', value: '' } }));
   assert.throws(() => parseIpcPayload('secrets:list', {}));
+  assert.throws(() => parseIpcPayload('secrets:list', { projectPath: '/site' }));
+  assert.throws(() => parseIpcPayload('secrets:list', { projectPath: '/site', file: '../.env' }));
+  assert.throws(() => parseIpcPayload('secrets:apply', { projectPath: '/site', file: '.env.production', revision, change: { kind: 'create' } }));
+  assert.throws(() => parseIpcPayload('secrets:ignore', { projectPath: '/site', file: '.env.development' }), /not offered for .gitignore/);
 });

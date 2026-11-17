@@ -108,7 +108,15 @@ function configOf(text, name) {
 function envListing() {
   const parsed = panel.parseEnvFile(envText ?? '');
   const entries = panel.envEntries(parsed.value).map(({ index, name, duplicate, multiline }) => ({ index, name, duplicate, multiline }));
-  return { revision: digest(envText), exists: envText !== undefined, entries, invalidLines: panel.envInvalidLines(parsed.value), ignore: 'ignored' };
+  // The MCP tab stores secrets in `.env` only, so main answers for that file.
+  return {
+    file: '.env',
+    revision: digest(envText),
+    exists: envText !== undefined,
+    entries,
+    invalidLines: panel.envInvalidLines(parsed.value),
+    ignore: 'ignored',
+  };
 }
 function codexState() {
   if (codexText === undefined) {

@@ -6,6 +6,7 @@
 import type { Digest } from '../../../shared/core/brand';
 import type { McpChange, McpListing } from '../../../shared/properties/mcp';
 import type { McpServerConfig } from '../../../shared/properties/mcpConfig';
+import { SECRETS_FILE_DEFAULT } from '../../../shared/properties/secrets';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { applyMcpChange } from './mcpBridge';
 import { MCP_ERROR_KEYS } from './mcpModel';
@@ -23,7 +24,7 @@ export type FlowResult =
 /** The names in `.env`, or `undefined` when they cannot be read (a card then claims nothing about secrets). */
 export async function envNamesOf(projectPath: string): Promise<ReadonlySet<string> | undefined> {
   try {
-    const listed = await listSecrets(projectPath);
+    const listed = await listSecrets(projectPath, SECRETS_FILE_DEFAULT);
     return listed.ok ? new Set(listed.value.entries.map((entry) => entry.name)) : undefined;
   } catch {
     return undefined;
@@ -35,13 +36,13 @@ export async function storeSecrets(projectPath: string, secrets: readonly Secret
   if (secrets.length === 0) {
     return undefined;
   }
-  const listed = await listSecrets(projectPath);
+  const listed = await listSecrets(projectPath, SECRETS_FILE_DEFAULT);
   if (!listed.ok) {
     return problemKey(listed.error.code);
   }
   let listing = listed.value;
   if (!listing.exists) {
-    const created = await applySecretsChange(projectPath, listing.revision, { kind: 'create' });
+    const created = await applySecretsChange(projectPath, SECRETS_FILE_DEFAULT, listing.revision, { kind: 'create' });
     if (!created.ok) {
       return problemKey(created.error.code);
     }
@@ -51,7 +52,7 @@ export async function storeSecrets(projectPath: string, secrets: readonly Secret
     if (listing.entries.some((entry) => entry.name === secret.name)) {
       continue;
     }
-    const added = await applySecretsChange(projectPath, listing.revision, { kind: 'add', name: secret.name, value: secret.value });
+    const added = await applySecretsChange(projectPath, SECRETS_FILE_DEFAULT, listing.revision, { kind: 'add', name: secret.name, value: secret.value });
     if (!added.ok) {
       return problemKey(added.error.code);
     }

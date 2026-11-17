@@ -1,22 +1,35 @@
-// The Settings panel's Secrets tab: the names in the project's `.env`, their values hidden until a
-// person reveals one, with edit, delete and add. The list holds names only. A value is fetched when
+// The Settings panel's Secrets tab: the names in one of the project's dev env files, chosen at the top
+// (`.env` first), their values hidden until a person reveals one, with edit, delete and add. A name a
+// file loading later sets again says which file dev takes it from. The list holds names only. A value is fetched when
 // a person reveals it or begins editing it (`readSecret`) and lives in this component's state until the
 // tab closes, the project changes or the file does, so a hidden value is in neither the DOM nor the
 // React tree. Every change names the revision it was authored against; if the file changed on disk the
 // save is refused and the person reloads (nothing is overwritten). The list reloads when the window
-// regains focus, which is how an outside edit shows up. The last listing per project is kept in memory
-// (secretsCache.ts), so a reopened tab paints its names at once and refreshes behind them; with nothing
-// cached it paints placeholder rows, never a word.
+// regains focus, which is how an outside edit shows up. The last listing per project and file is kept in
+// memory (secretsCache.ts), so a reopened tab paints its names at once and refreshes behind them; with
+// nothing cached it paints placeholder rows, never a word. Choosing another file remounts the file's view,
+// so nothing revealed or typed for one file is ever shown beside another's names.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ENV_LIMITS } from '../../../shared/properties/envFile';
-import type { SecretsChange, SecretsErrorCode, SecretsListing, SecretsResult, SecretSummary } from '../../../shared/properties/secrets';
+import {
+  SECRETS_FILE_DEFAULT,
+  SECRETS_FILE_NAMES,
+  secretsFileIgnorable,
+  type SecretsChange,
+  type SecretsErrorCode,
+  type SecretsFileName,
+  type SecretsListing,
+  type SecretsResult,
+  type SecretSummary,
+} from '../../../shared/properties/secrets';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
+import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { HideIcon, LockIcon, PencilIcon, PlusIcon, PreviewIcon, TrashIcon } from '../../ui/Icons';
 import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 import InfoHint from '../../ui/InfoHint';
-import { cachedSecretsListing, secretsListingCache } from './secretsCache';
+import { cachedSecretsListing, secretsCacheKey, secretsListingCache } from './secretsCache';
 import { SecretsUnavailableError, applySecretsChange, ignoreSecretsFile, listSecrets, readSecret } from './secretsBridge';
 import { SECRET_MASK, SECRET_NAME_EXAMPLE, VALUE_KIB_MAX, nameProblem, problemKey, valueProblem, type DraftProblem } from './secretsModel';
 import './projectSettings.css';
@@ -48,9 +61,31 @@ const NO_REVEALED: Revealed = new Map();
 /** Placeholder rows drawn on a first load: about what a small `.env` fills. */
 const SECRETS_SKELETON_ROWS = 4;
 
+/** The file choice, remembered with the project it was made in: another project opens on the default file again. */
+interface FileChoice {
+  readonly projectPath: string;
+  readonly file: SecretsFileName;
+}
+
 export default function SecretsTab({ projectPath }: { readonly projectPath: string }) {
+  const [choice, setChoice] = useState<FileChoice>({ projectPath, file: SECRETS_FILE_DEFAULT });
+  const file = choice.projectPath === projectPath ? choice.file : SECRETS_FILE_DEFAULT;
+  return <SecretsFileView key={file} projectPath={projectPath} file={file} onFileChange={(next) => setChoice({ projectPath, file: next })} />;
+}
+
+function SecretsFileView({
+  projectPath,
+  file,
+  onFileChange,
+}: {
+  readonly projectPath: string;
+  readonly file: SecretsFileName;
+  readonly onFileChange: (file: SecretsFileName) => void;
+}) {
   const translate = useTranslate();
-  const { state, replace, reload } = useListing(projectPath);
+  const { state, replace, reload } = useListing(projectPath, file);
+  // Every message that names the env file fills `{file}` from here.
+  const named = { file };
   const [revealed, setRevealed] = useState<Revealed>(NO_REVEALED);
   const [draft, setDraft] = useState<Draft>({ kind: 'none' });
   const [failure, setFailure] = useState<SecretsErrorCode | undefined>(undefined);
@@ -69,7 +104,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
     return (
       <div className="secrets">
         <div className="secrets-head">
-          <SecretsHeading />
+          <SecretsHeading file={file} onFileChange={onFileChange} />
           <div className="secrets-actions">
             <button type="button" className="primary" disabled>
               <PlusIcon size={12} />
@@ -92,10 +127,11 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
   if (state.kind === 'failed') {
     return (
       <div className="secrets-note" role="alert">
-        <p>{translate(problemKey(state.code))}</p>
+        <p>{translate(problemKey(state.code), named)}</p>
         <button type="button" className="ghost" onClick={reload}>
           {translate('settings.secrets.reload')}
         </button>
+        <SecretsFilePicker file={file} onChange={onFileChange} />
       </div>
     );
   }
@@ -104,7 +140,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
   const notice = failure ?? state.refreshFailure;
 
   const show = async (index: number): Promise<void> => {
-    const read = await readSecret(projectPath, listing.revision, index);
+    const read = await readSecret(projectPath, file, listing.revision, index);
     if (read.ok) {
       setRevealed((current) => new Map(current).set(index, read.value.value));
     } else {
@@ -125,7 +161,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
       return;
     }
     const reads = await Promise.all(
-      listing.entries.map(async (entry) => ({ index: entry.index, read: await readSecret(projectPath, listing.revision, entry.index) })),
+      listing.entries.map(async (entry) => ({ index: entry.index, read: await readSecret(projectPath, file, listing.revision, entry.index) })),
     );
     const next = new Map<number, string>();
     for (const { index, read } of reads) {
@@ -141,7 +177,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
   const commit = async (change: SecretsChange): Promise<boolean> => {
     setBusy(true);
     setFailure(undefined);
-    const applied = await applySecretsChange(projectPath, listing.revision, change);
+    const applied = await applySecretsChange(projectPath, file, listing.revision, change);
     setBusy(false);
     if (applied.ok) {
       replace(applied.value);
@@ -157,7 +193,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
     if (entry.multiline) {
       return;
     }
-    const read = await readSecret(projectPath, listing.revision, entry.index);
+    const read = await readSecret(projectPath, file, listing.revision, entry.index);
     if (!read.ok) {
       setDraft({ kind: 'none' });
       setFailure(read.error.code);
@@ -176,7 +212,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
     const problem =
       nameProblem(draft.name, listing.entries, own) ?? (draft.kind === 'edit' && draft.original === undefined ? undefined : valueProblem(draft.value));
     if (problem !== undefined) {
-      setDraft({ ...draft, problem: describe(translate, problem) });
+      setDraft({ ...draft, problem: describe(translate, problem, file) });
       return;
     }
     if (draft.kind === 'add') {
@@ -199,7 +235,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
   const remove = async (entry: SecretSummary): Promise<void> => {
     const confirmed = await confirmDialog({
       title: translate('settings.secrets.delete.title', { name: entry.name }),
-      body: translate('settings.secrets.delete.body'),
+      body: translate('settings.secrets.delete.body', named),
       confirmLabel: translate('settings.secrets.delete.confirm'),
       cancelLabel: translate('settings.secrets.cancel'),
       danger: true,
@@ -211,15 +247,15 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
 
   const ignore = async (): Promise<void> => {
     const confirmed = await confirmDialog({
-      title: translate('settings.secrets.ignore.title'),
-      body: translate('settings.secrets.ignore.body'),
+      title: translate('settings.secrets.ignore.title', named),
+      body: translate('settings.secrets.ignore.body', named),
       confirmLabel: translate('settings.secrets.ignore.confirm'),
       cancelLabel: translate('settings.secrets.cancel'),
     });
     if (confirmed !== true) {
       return;
     }
-    const result = await ignoreSecretsFile(projectPath);
+    const result = await ignoreSecretsFile(projectPath, file);
     if (result.ok) {
       replace(result.value);
     } else {
@@ -228,10 +264,12 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
   };
 
   const empty = listing.entries.length === 0 && draft.kind !== 'add';
+  // `.env.development` is usually committed on purpose, for values that are not secret: its Git state is no warning.
+  const warnsAboutGit = secretsFileIgnorable(file);
   return (
     <div className="secrets">
       <div className="secrets-head">
-        <SecretsHeading />
+        <SecretsHeading file={file} onFileChange={onFileChange} />
         <div className="secrets-actions">
           {listing.entries.length > 0 && (
             <button type="button" className="ghost" onClick={() => void toggleAll()}>
@@ -249,22 +287,27 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
           </button>
         </div>
       </div>
-      {listing.ignore === 'not-ignored' && (
-        <div className="secrets-warning" role="status">
-          <span>{translate('settings.secrets.ignore.warning')}</span>
-          <button type="button" className="ghost" onClick={() => void ignore()}>
+      {warnsAboutGit && listing.ignore === 'not-ignored' && (
+        // The button alone, so no sentence wraps beside it; the risk it removes is its tooltip and its description.
+        <div className="secrets-warning secrets-warning-action" role="status">
+          <button
+            type="button"
+            title={translate('settings.secrets.ignore.warning', named)}
+            aria-description={translate('settings.secrets.ignore.warning', named)}
+            onClick={() => void ignore()}
+          >
             {translate('settings.secrets.ignore.action')}
           </button>
         </div>
       )}
-      {listing.ignore === 'tracked' && (
+      {warnsAboutGit && listing.ignore === 'tracked' && (
         <div className="secrets-warning" role="status">
-          <span>{translate('settings.secrets.tracked.warning')}</span>
+          <span>{translate('settings.secrets.tracked.warning', named)}</span>
         </div>
       )}
       {notice !== undefined && (
         <div className="secrets-warning secrets-failure" role="alert">
-          <span>{translate(problemKey(notice))}</span>
+          <span>{translate(problemKey(notice), named)}</span>
           {(failure === undefined || failure === 'changed' || failure === 'not-found') && (
             <button
               type="button"
@@ -281,25 +324,22 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
         </div>
       )}
       {empty && (
+        // Add secret is the one way in: adding to a missing file creates it, private, so no second button offers an empty file.
         <div className="secrets-empty">
           <LockIcon size={20} />
           <strong>{translate('settings.secrets.empty.title')}</strong>
-          <span>{translate(listing.exists ? 'settings.secrets.empty.body' : 'settings.secrets.empty.noFileBody')}</span>
-          {!listing.exists && (
-            <button type="button" className="primary" disabled={busy} onClick={() => void commit({ kind: 'create' })}>
-              {translate('settings.secrets.create')}
-            </button>
-          )}
+          <span>{translate(listing.exists ? 'settings.secrets.empty.body' : 'settings.secrets.empty.noFileBody', named)}</span>
         </div>
       )}
       <div className="secrets-list" role="list">
         {draft.kind === 'add' && (
-          <DraftRow draft={draft} busy={busy} onChange={setDraft} onSubmit={() => void submit()} onCancel={() => setDraft({ kind: 'none' })} />
+          <DraftRow file={file} draft={draft} busy={busy} onChange={setDraft} onSubmit={() => void submit()} onCancel={() => setDraft({ kind: 'none' })} />
         )}
         {listing.entries.map((entry) =>
           draft.kind === 'edit' && draft.index === entry.index ? (
             <DraftRow
               key={entry.index}
+              file={file}
               draft={draft}
               busy={busy}
               valueLocked={entry.multiline}
@@ -310,6 +350,7 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
           ) : (
             <SecretRow
               key={entry.index}
+              file={file}
               entry={entry}
               shown={revealed.get(entry.index)}
               onToggle={() => (revealed.has(entry.index) ? hide(entry.index) : void show(entry.index))}
@@ -319,12 +360,13 @@ export default function SecretsTab({ projectPath }: { readonly projectPath: stri
           ),
         )}
       </div>
-      {listing.invalidLines > 0 && <p className="secrets-note">{translate('settings.secrets.invalidLines', { count: listing.invalidLines })}</p>}
+      {listing.invalidLines > 0 && <p className="secrets-note">{translate('settings.secrets.invalidLines', { count: listing.invalidLines, file })}</p>}
     </div>
   );
 }
 
-function SecretsHeading() {
+// The title, and under it the file the tab shows: the dropdown names the file, so no sentence repeats it.
+function SecretsHeading({ file, onFileChange }: { readonly file: SecretsFileName; readonly onFileChange: (file: SecretsFileName) => void }) {
   const translate = useTranslate();
   return (
     <div className="secrets-heading">
@@ -332,8 +374,24 @@ function SecretsHeading() {
         {translate('settings.secrets.title')}
         <InfoHint text={translate('settings.secrets.info')} />
       </h3>
-      <p>{translate('settings.secrets.intro')}</p>
+      <SecretsFilePicker file={file} onChange={onFileChange} />
     </div>
+  );
+}
+
+// The dev env files in the order the dev server loads them, so the list itself shows which one wins.
+const FILE_OPTIONS: readonly DropdownOption<SecretsFileName>[] = SECRETS_FILE_NAMES.map((name) => ({ value: name, label: name }));
+
+function SecretsFilePicker({ file, onChange }: { readonly file: SecretsFileName; readonly onChange: (file: SecretsFileName) => void }) {
+  const translate = useTranslate();
+  return (
+    <Dropdown<SecretsFileName>
+      className="secrets-file"
+      ariaLabel={translate('settings.secrets.file')}
+      value={file}
+      options={FILE_OPTIONS}
+      onChange={onChange}
+    />
   );
 }
 
@@ -357,12 +415,14 @@ function SecretSkeletonRow({ widthPercent }: { readonly widthPercent: number }) 
 }
 
 function SecretRow({
+  file,
   entry,
   shown,
   onToggle,
   onEdit,
   onDelete,
 }: {
+  readonly file: SecretsFileName;
   readonly entry: SecretSummary;
   readonly shown: string | undefined;
   readonly onToggle: () => void;
@@ -371,13 +431,14 @@ function SecretRow({
 }) {
   const translate = useTranslate();
   const visible = shown !== undefined;
+  const named = { file };
   return (
     <div className="secrets-row" role="listitem">
-      <span className="secrets-name" title={entry.duplicate ? translate('settings.secrets.duplicate') : undefined}>
+      <span className="secrets-name" title={entry.duplicate ? translate('settings.secrets.duplicate', named) : undefined}>
         {entry.name}
       </span>
       {entry.multiline ? (
-        <span className="secrets-value secrets-value-static" title={translate('settings.secrets.multiline')}>
+        <span className="secrets-value secrets-value-static" title={translate('settings.secrets.multiline', named)}>
           {visible ? shown : SECRET_MASK}
         </span>
       ) : (
@@ -415,13 +476,15 @@ function SecretRow({
           <TrashIcon size={14} />
         </button>
       </span>
-      {entry.duplicate && <span className="secrets-hint">{translate('settings.secrets.duplicate')}</span>}
-      {entry.multiline && <span className="secrets-hint">{translate('settings.secrets.multiline')}</span>}
+      {entry.duplicate && <span className="secrets-hint">{translate('settings.secrets.duplicate', named)}</span>}
+      {entry.multiline && <span className="secrets-hint">{translate('settings.secrets.multiline', named)}</span>}
+      {entry.overriddenBy !== undefined && <span className="secrets-hint">{translate('settings.secrets.overridden', { file: entry.overriddenBy })}</span>}
     </div>
   );
 }
 
 function DraftRow({
+  file,
   draft,
   busy,
   valueLocked = false,
@@ -429,6 +492,7 @@ function DraftRow({
   onSubmit,
   onCancel,
 }: {
+  readonly file: SecretsFileName;
   readonly draft: Exclude<Draft, { readonly kind: 'none' }>;
   readonly busy: boolean;
   readonly valueLocked?: boolean;
@@ -490,26 +554,30 @@ function DraftRow({
           {draft.problem}
         </span>
       )}
-      {valueLocked && <span className="secrets-hint">{translate('settings.secrets.multiline')}</span>}
+      {valueLocked && <span className="secrets-hint">{translate('settings.secrets.multiline', { file })}</span>}
     </div>
   );
 }
 
-function describe(translate: Translator, problem: DraftProblem): string {
+function describe(translate: Translator, problem: DraftProblem, file: SecretsFileName): string {
   if (problem === 'nameTooLong') {
-    return translate(problemKey(problem), { max: ENV_LIMITS.nameCharsMax });
+    return translate(problemKey(problem), { max: ENV_LIMITS.nameCharsMax, file });
   }
   if (problem === 'valueTooLong') {
-    return translate(problemKey(problem), { max: VALUE_KIB_MAX });
+    return translate(problemKey(problem), { max: VALUE_KIB_MAX, file });
   }
-  return translate(problemKey(problem));
+  return translate(problemKey(problem), { file });
 }
 
-// The listing: the cached one at once when this project has been read before, otherwise loading; then a
+// The listing: the cached one at once when this file has been read before, otherwise loading; then a
 // read on mount and whenever the window regains focus (an edit outside Stacki shows then). A reply for a
-// project the panel has since left is dropped. A failed read keeps a listing already shown.
-function useListing(projectPath: string): { readonly state: ListingState; readonly replace: (listing: SecretsListing) => void; readonly reload: () => void } {
-  const [state, setState] = useState<ListingState>(() => initialState(projectPath));
+// project the panel has since left is dropped. A failed read keeps a listing already shown. The view is
+// remounted for another file (SecretsTab's key), so `file` is fixed for the life of this hook.
+function useListing(
+  projectPath: string,
+  file: SecretsFileName,
+): { readonly state: ListingState; readonly replace: (listing: SecretsListing) => void; readonly reload: () => void } {
+  const [state, setState] = useState<ListingState>(() => initialState(projectPath, file));
   const latest = useRef(0);
   const seeded = useRef(projectPath);
   const load = useCallback(() => {
@@ -524,7 +592,7 @@ function useListing(projectPath: string): { readonly state: ListingState; readon
       } else if (result === undefined) {
         setState((current) => failedState(current, 'unreadable'));
       } else if (result.ok) {
-        secretsListingCache.set(projectPath, result.value);
+        secretsListingCache.set(secretsCacheKey(projectPath, file), result.value);
         // An unchanged revision keeps the state object, so a refocus does not redraw or hide anything.
         setState((current) =>
           current.kind === 'ready' &&
@@ -539,12 +607,12 @@ function useListing(projectPath: string): { readonly state: ListingState; readon
       }
     };
     // A rejected call is a broken boundary, not an operating failure; the panel says it could not read the file and shows no detail.
-    void listSecrets(projectPath).then(settle, (error: unknown) => settle(error instanceof SecretsUnavailableError ? 'unavailable' : undefined));
-  }, [projectPath]);
+    void listSecrets(projectPath, file).then(settle, (error: unknown) => settle(error instanceof SecretsUnavailableError ? 'unavailable' : undefined));
+  }, [projectPath, file]);
   useEffect(() => {
     if (seeded.current !== projectPath) {
       seeded.current = projectPath;
-      setState(initialState(projectPath));
+      setState(initialState(projectPath, file));
     }
     load();
     window.addEventListener('focus', load);
@@ -552,21 +620,21 @@ function useListing(projectPath: string): { readonly state: ListingState; readon
       latest.current += 1;
       window.removeEventListener('focus', load);
     };
-  }, [load, projectPath]);
+  }, [load, projectPath, file]);
   const replace = useCallback(
     (listing: SecretsListing) => {
       latest.current += 1;
-      secretsListingCache.set(projectPath, listing);
+      secretsListingCache.set(secretsCacheKey(projectPath, file), listing);
       setState({ kind: 'ready', listing, refreshFailure: undefined });
     },
-    [projectPath],
+    [projectPath, file],
   );
   return { state, replace, reload: load };
 }
 
 // What the tab paints in its first frame: the names it showed last time, or the placeholder when it has none.
-function initialState(projectPath: string): ListingState {
-  const listing = cachedSecretsListing(projectPath);
+function initialState(projectPath: string, file: SecretsFileName): ListingState {
+  const listing = cachedSecretsListing(projectPath, file);
   return listing === undefined ? { kind: 'loading' } : { kind: 'ready', listing, refreshFailure: undefined };
 }
 

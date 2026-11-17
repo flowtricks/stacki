@@ -662,10 +662,15 @@ test('env text is read and changed one line at a time', () => {
   assert.equal(withEnvValue('', 'A', 'q"\\'), 'A="q\\"\\\\"\n');
   assert.equal(envEntries(withEnvValue('', 'A', 'q"\\ #x'))[0][1], 'q"\\ #x', 'a value reads back as written');
   assert.throws(() => withEnvValue('', 'A', 'two\nlines'), /one line/);
-  assert.equal(gitignoreWithEnv('.env\n'), undefined);
-  assert.equal(gitignoreWithEnv('dist\n.env*\n'), undefined);
-  assert.equal(gitignoreWithEnv('dist'), 'dist\n.env\n');
-  assert.equal(gitignoreWithEnv(undefined), '.env\n');
+  assert.equal(gitignoreWithEnv('.env\n', '.env'), undefined);
+  assert.equal(gitignoreWithEnv('dist\n.env*\n', '.env'), undefined);
+  assert.equal(gitignoreWithEnv('*.env\n', '.env'), undefined);
+  assert.equal(gitignoreWithEnv('dist', '.env'), 'dist\n.env\n');
+  assert.equal(gitignoreWithEnv(undefined, '.env'), '.env\n');
+  // Another dev env file gets its own rule: `.env` and `*.env` do not cover it, `.env*` does.
+  assert.equal(gitignoreWithEnv('.env\n*.env\n', '.env.local'), '.env\n*.env\n.env.local\n');
+  assert.equal(gitignoreWithEnv('/.env.local\n', '.env.local'), undefined);
+  assert.equal(gitignoreWithEnv('.env*\n', '.env.development.local'), undefined);
 });
 
 const gitRun = (root, args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
