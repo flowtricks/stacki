@@ -1666,7 +1666,10 @@ arrive in the query, in a `url` parameter, or in the fragment, which a page on t
 and returns once in the query. The id is exchanged for the person's login token, used only in
 the main process to list projects and datasets and to create a project key with the Editor
 role, then logged out. Only the key is kept. The sign-in page must be on `https://www.sanity.io`.
-A suggestion comes from the site's `.env` (`*SANITY_PROJECT_ID`, `*SANITY_DATASET`). Sessions
+A suggestion comes from the site's `.env` (`*SANITY_PROJECT_ID`, `*SANITY_DATASET`); when that
+names none of the person's projects, from a `projectId: '…'` string literal in the site's `astro.config.*`,
+`sanity.config.*` or `sanity.cli.*`, at the root or in `studio/`, read without running them.
+Only a project the person belongs to is suggested. Sessions
 time out after five minutes. A role that cannot create keys is told to paste an Editor key instead.
 
 While Stacki previews a project with a Sanity connection, its dev server gets

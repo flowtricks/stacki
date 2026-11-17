@@ -179,6 +179,27 @@ test('signing in saves an Editor key for the chosen project and logs the login o
     }
   }));
 
+test('a site that writes its project id in a config file, not in .env, gets it suggested', () =>
+  withFolder(async (folder) => {
+    const root = path.join(folder, 'site');
+    fs.mkdirSync(path.join(root, 'studio'), { recursive: true });
+    // The shape of a site with an embedded Studio: the id in code, the dataset in .env.development.
+    fs.writeFileSync(path.join(root, 'astro.config.mjs'), `// projectId: 'old111'\nconst sanityProject = { projectId: "nope999" };`);
+    fs.writeFileSync(path.join(root, 'studio', 'sanity.cli.ts'), `export default defineCliConfig({ api: { projectId: 'abc123' } })`);
+    fs.writeFileSync(path.join(root, '.env.development'), 'PUBLIC_SANITY_DATASET=production\n');
+    const realFetch = globalThis.fetch;
+    const login = new SanityLogin(new CmsConnectionStore(crypt(), () => folder));
+    try {
+      globalThis.fetch = fakeSanity([]);
+      const id = await signIn(login, root);
+      const choosing = await until(login, root, id, 'choosing');
+      assert.deepEqual(choosing.suggestion, { projectId: 'abc123', dataset: 'production' }, 'an id outside the account is passed over');
+      login.request(root, { action: 'cancel', id });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }));
+
 test('a role that cannot create keys says so, and nothing is saved', () =>
   withFolder(async (folder) => {
     const calls = [];
