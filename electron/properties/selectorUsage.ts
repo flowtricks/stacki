@@ -189,15 +189,14 @@ function hitsFor(region: StyleRegion, sheet: AstroSheet | undefined, scans: Proj
   return hits;
 }
 
-// A locked stylesheet (or one in a locked folder) is a library meant to sit
-// unused until needed: a selector the proof finds unused there is `kept`, so
-// every cleanup — the panel's, the delete offer and `style:removeSelectors`
-// itself, which re-runs this check — leaves it alone. Other verdicts stand:
-// "used" and "can't tell" are never removed anyway.
+// An explicit stylesheet lock is the user's decision to retain its selectors.
+// Surface that decision as `kept` even when outside data prevents an unused
+// proof: uncertainty must not hide the lock in the panel. Used and untracked
+// selectors retain their verdicts because they do not need retention protection.
 function lockedVerdict(verdict: SelectorVerdict, sheet: { readonly locked: boolean }): SelectorVerdict {
   if (sheet.locked) {
-    if (verdict.kind === 'unused') {
-      assert(verdict.names.length > 0, 'lockedVerdict: an unused selector names what is missing');
+    if (verdict.kind === 'unused' || verdict.kind === 'unknown') {
+      assert(verdict.names.length > 0, 'lockedVerdict: a protected selector names what is missing');
       return { kind: 'kept', names: verdict.names };
     }
     return verdict;
