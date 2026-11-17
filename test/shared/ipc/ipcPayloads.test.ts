@@ -451,6 +451,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'component:planRename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/forms/Button.astro' } },
   'component:rename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/ContactButton.astro' } },
   'component:revertRename': { token: 'component-rename-1', direction: 'undo' },
+  'component:previewPropertyRemoval': { projectPath: '/site', file: '/site/src/components/Button.astro', name: 'direction' },
   'breakpointSync:restore': { projectPath: '/site', journalId: 'journal-1', direction: 'undo' },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
   'content:sampleValue': {

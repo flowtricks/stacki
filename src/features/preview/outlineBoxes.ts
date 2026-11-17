@@ -48,64 +48,13 @@ export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): rea
   // Largest first, so a box is measured against the ones that could contain
   // it rather than the other way round.
   const order = [...list].sort((left, right) => right.w * right.h - left.w * left.h);
-  const index = createKeeperIndex(list);
-  const kept = new Set<T>();
+  const kept: T[] = [];
   for (const box of order) {
-    if (!index.candidates(box).some((keeper) => covers(keeper, box))) {
-      kept.add(box);
-      index.add(box);
+    if (!kept.some((keeper) => covers(keeper, box))) {
+      kept.push(box);
     }
   }
-  const drawn = list.filter((box) => kept.has(box));
-  assert(drawn.length <= list.length, 'onePerPlace: never draws more boxes than were reported');
-  return drawn;
-}
-
-/** A kept box spanning more grid cells than this is checked against every box instead of filed per cell. */
-const KEEPER_CELLS_MAX = 16;
-
-/**
- * A grid over the kept boxes, so "does a kept box cover this one?" looks at the few kept boxes
- * near it rather than all of them. Why: a loop's items are all kept (none contains another), and
- * checking each against every one before it was quadratic: 8,000 copies of a card took 180 ms
- * per overlay render. A covering box must contain the covered box's top-left corner, so a lookup
- * reads the one cell holding that corner, plus the few kept boxes too large to file per cell.
- * Cells are as big as a typical box, so a loop's item sits in about one cell.
- */
-function createKeeperIndex<T extends Box>(boxes: readonly T[]): { readonly add: (box: T) => void; readonly candidates: (box: T) => readonly T[] } {
-  const sizes = boxes.map((box) => Math.max(box.w, box.h)).sort((left, right) => left - right);
-  const cellPx = Math.max(sizes[Math.floor(sizes.length / 2)] ?? 1, 1);
-  assert(Number.isFinite(cellPx), 'onePerPlace: a grid cell has a finite size');
-  const cells = new Map<string, T[]>();
-  const wide: T[] = [];
-  const cellOf = (value: number): number => Math.floor(value / cellPx);
-  return {
-    add(box) {
-      const left = cellOf(box.x - SLACK);
-      const right = cellOf(box.x + box.w + SLACK);
-      const top = cellOf(box.y - SLACK);
-      const bottom = cellOf(box.y + box.h + SLACK);
-      if ((right - left + 1) * (bottom - top + 1) > KEEPER_CELLS_MAX) {
-        wide.push(box);
-        return;
-      }
-      for (let column = left; column <= right; column++) {
-        for (let row = top; row <= bottom; row++) {
-          const key = `${column}:${row}`;
-          const cell = cells.get(key);
-          if (cell === undefined) {
-            cells.set(key, [box]);
-          } else {
-            cell.push(box);
-          }
-        }
-      }
-    },
-    candidates(box) {
-      const near = cells.get(`${cellOf(box.x)}:${cellOf(box.y)}`) ?? [];
-      return wide.length === 0 ? near : [...near, ...wide];
-    },
-  };
+  return list.filter((box) => kept.includes(box));
 }
 
 /** A side under this many frame px has no size worth drawing: it is 0px as far as the page is concerned. */

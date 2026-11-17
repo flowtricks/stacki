@@ -24,7 +24,8 @@ test('component properties lifecycle and controls', async () => {
      export {default as Rail} from './src/app/LeftRail';
      export {literalOptions} from './src/features/componentProperties/PropertyEditor';
      export {movePropertyItem} from './src/features/componentProperties/PropertyReorder';
-     export {EditorView} from '@codemirror/view';`,
+     export {EditorView} from '@codemirror/view';
+     export {ConfirmHost} from './src/ui/ConfirmDialog';`,
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -52,7 +53,7 @@ test('component properties lifecycle and controls', async () => {
   const React = require('react');
   const { act } = React;
   const { createRoot } = require('react-dom/client');
-  const { Panel, Rail, literalOptions, movePropertyItem, EditorView } = require(bundle);
+  const { Panel, Rail, literalOptions, movePropertyItem, EditorView, ConfirmHost } = require(bundle);
   const names = ['title', 'variant', 'visible'];
   assert.deepEqual(movePropertyItem(names, 0, 3), ['variant', 'visible', 'title']);
   assert.deepEqual(movePropertyItem(names, 2, 0), ['visible', 'title', 'variant']);
@@ -152,6 +153,11 @@ test('component properties lifecycle and controls', async () => {
       return result.ok ? { ...result, value: { ...result.value, undo: UNDO_TOKEN } } : result;
     },
     revertComponentProperties: async () => ({ ok: true, value: { undo: UNDO_TOKEN } }),
+    // A deletion asks first, with what it will take out across the site (propertyRemovalDialog.tsx).
+    previewPropertyRemoval: async (request) => ({
+      ok: true,
+      value: { name: request.name, component: 'src/components/Card.astro', usages: [{ path: 'src/pages/index.astro', count: 2 }], reviews: [] },
+    }),
     __editProperties: async (request) => {
       edits.push(request);
       order.push('write');
@@ -291,7 +297,19 @@ test('component properties lifecycle and controls', async () => {
   assert.match(toastMessages(), /Write failed/, 'a save refused as the form closes still says why');
   assert.deepEqual(literalOptions('"One | two" | "Three"'), ['"One | two"', '"Three"']);
   assert.equal(literalOptions('string | { tag: "a" | "b" }'), undefined);
+  const confirmRoot = createRoot(document.body.appendChild(document.createElement('div')));
+  await act(async () => confirmRoot.render(React.createElement(ConfirmHost)));
   await act(async () => document.querySelector('[aria-label="Delete title"]').click());
+  await settle();
+  assert.match(
+    document.querySelector('.confirm-dialog').textContent,
+    /Delete title\?.*Removes its value from 2 instances:.*src\/pages\/index\.astro · 2.*One Undo restores everything\./,
+  );
+  assert.notDeepEqual(edits.at(-1).change, { kind: 'remove', name: 'title' }, 'nothing is deleted before the answer');
+  await act(async () => [...document.querySelectorAll('.confirm-dialog button')].find((button) => button.textContent === 'Delete property').click());
+  await settle();
+  assert.equal(document.querySelectorAll('.confirm-dialog').length, 0, 'the answer closes the dialog');
+  await act(async () => confirmRoot.unmount());
   assert.deepEqual(edits.at(-1).change, { kind: 'remove', name: 'title' });
   await act(async () => document.querySelector('.property-row-main').click());
   await dragOptions(0, 2);

@@ -458,6 +458,13 @@ token, and `component:revertProperties` applies that batch's inverse — every
 file checked against the bytes the batch left — and answers with the redo
 token. Main keeps the batches; the renderer holds tokens only.
 
+Deleting a prop is asked first: `component:previewPropertyRemoval` (`{ projectPath, file, name }`)
+plans the deletion from disk, writes nothing, and answers with a
+`PropertyRemovalPreview` (`shared/properties/propertyRemoval.ts`): the instance
+values it would remove per file, and the lines left for review. The deletion is
+the `{ kind: 'remove' }` batch on `component:editProperties`, planned again
+(docs/component-properties.md, "Deleting a prop").
+
 A component's variant rules travel on the same channels: `component:properties`
 answers with `variantGroups` (`shared/properties/variantRules.ts`, parsed by
 `parseVariantGroups`), and a `{ kind: 'variantRules', edit }` property change

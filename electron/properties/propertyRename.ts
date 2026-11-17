@@ -571,7 +571,8 @@ function renameSpread(source: string, attribute: AttributeNode, rename: Property
   return ok(edits);
 }
 
-function literalSpreadObject(expression: string, prefix: string): ts.ObjectLiteralExpression | undefined {
+/** The object a spread attribute writes inline (`{...{ a: 1 }}`), parsed after `prefix`; undefined when it is anything else, or holds a spread or a computed key of its own. */
+export function literalSpreadObject(expression: string, prefix: string): ts.ObjectLiteralExpression | undefined {
   const syntax = ts.createSourceFile('spread.ts', prefix + expression + ');', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const nodes = syntaxNodes(syntax);
   const object = nodes.find(ts.isObjectLiteralExpression);

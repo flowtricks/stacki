@@ -10,6 +10,7 @@ import { sameFilesystemPath } from '../lib/platform';
 import { readComponentProperties } from './propertyDefinitions';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
 import { planVariantRuleChanges } from './variantRulePlan';
+import { planPropertyRemoval as planSitePropertyRemoval, removalChanges } from './propertyRemoval';
 interface PropertyLocation {
   readonly projectPath: string;
   readonly file: string;
@@ -120,19 +121,20 @@ function validateOptionRenames(
   return ok(undefined);
 }
 
+// The component without the prop, and every instance without the value that passes it (propertyRemoval.ts).
 function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, name: string): Result<readonly FileChange[]> {
-  const consumers = readPropertyConsumers(request);
-  if (!consumers.ok) {
-    return consumers;
+  const plan = planSitePropertyRemoval(request, name);
+  if (!plan.ok) {
+    return plan;
   }
-  for (const consumer of consumers.value) {
-    const result = renameComponentReferences(consumer.source, consumer.names, { from: name, to: '_stackiDeletedProperty' }, 'consumer');
-    if (!result.ok) {
-      return result;
-    }
-    if (result.value !== consumer.source) {
-      return err(refusal('in-use', 'props.edit.stillPasses', { file: consumer.file, name }));
-    }
+  const changes = removalChanges(plan.value);
+  if (!changes.ok) {
+    return changes;
   }
-  return ok([change]);
+  const component = changes.value.find((entry) => sameFilesystemPath(entry.file, request.file));
+  assert(component !== undefined, 'A removal writes the component');
+  // The definition edit already took the declarations out; the site plan may only take more out (a self-instance's value).
+  assert(component.before === change.before, 'The removal plans from the source the edit was checked against');
+  assert(component.after.length <= change.after.length, 'Removing instance values only takes text out of the component');
+  return changes;
 }

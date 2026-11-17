@@ -5,6 +5,7 @@
 import {
   inverseBatch,
   loadComponentProperties,
+  previewComponentPropertyRemoval,
   PropertyUndoStore,
   revertComponentProperties,
   updateComponentProperties,
@@ -128,6 +129,7 @@ function registerComponentCreateHandlers({
     assert(undo !== undefined, 'An applied batch recorded its inverse');
     return ok({ ...result.value, undo });
   });
+  ipcMain.handle('component:previewPropertyRemoval', (_event, { projectPath, file, name }) => previewComponentPropertyRemoval({ projectPath, file }, name));
   ipcMain.handle('component:revertProperties', (_event, { token }) => revertComponentProperties(token, propertyUndo, { documents, noteWrite: noteAppWrite }));
 
   // Which files hold instances of a component — the palette’s instance count.

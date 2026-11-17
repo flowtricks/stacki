@@ -2,7 +2,8 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readComponentProperties, editPropertyDefinition } from '../../../vendor/stacki/electron/properties/propertyDefinitions';
 import { planPropertyChanges } from '../../../vendor/stacki/electron/properties/propertyPlan';
-import { parsePropertyChange } from '../../../vendor/stacki/shared/properties/propertyEditing';
+import { parsePropertyChange, propertyName } from '../../../vendor/stacki/shared/properties/propertyEditing';
+import { planPropertyRemoval } from '../../../vendor/stacki/electron/properties/propertyRemoval';
 import { err, ok } from '../../../vendor/stacki/shared/core/result';
 import type { createRooms } from '../collaboration/rooms';
 import { safePath } from '../project/projectServer';
@@ -21,6 +22,9 @@ export function propertyRoutes(root: string, rooms: Rooms) {
     const input = request.method === 'POST' ? record(JSON.parse(await readBody())) : undefined;
     const result = await rooms.coordinator.run(async () => {
       if (input) {
+        if (input['removal'] !== undefined) {
+          return previewRemoval(root, rooms, input);
+        }
         return input['undo'] === undefined ? editProperties(root, rooms, batches, input) : restoreProperties(rooms, batches, string(input['undo'], 36));
       }
       if (request.method !== 'GET') {
@@ -64,6 +68,14 @@ async function editProperties(root: string, rooms: Rooms, batches: PropertyBatch
   }));
   await commitProperties(rooms, changes);
   return ok({ ...readComponentProperties(await rooms.read(file)), undo: batches.record(changes) });
+}
+// The deletion's preview reads the same sources its plan writes; nothing is committed.
+async function previewRemoval(root: string, rooms: Rooms, input: Record<string, unknown>) {
+  const file = componentFile(input['file']);
+  const name = propertyName(input['removal']);
+  const absolute = await safePath(root, file);
+  const plan = planPropertyRemoval({ projectPath: root, file: absolute, source: await rooms.read(file) }, name);
+  return plan.ok ? ok(plan.value.preview) : plan;
 }
 async function restoreProperties(rooms: Rooms, batches: PropertyBatches, token: string) {
   const changes = batches.get(token);

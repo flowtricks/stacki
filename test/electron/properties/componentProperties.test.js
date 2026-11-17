@@ -972,7 +972,7 @@ test('re-exports, runtime aliases, and dynamic imports cannot cause partial rena
   }
 });
 
-test('deleting a property refuses live instance values', () => {
+test('deleting a property removes live instance values in the same batch (propertyRemoval.test.ts covers every form)', () => {
   project(({ root, component, page }) => {
     const input = '---\ninterface Props { title?: string }\n---\n<slot/>';
     fs.writeFileSync(component, input);
@@ -985,10 +985,9 @@ test('deleting a property refuses live instance values', () => {
       },
       writer,
     );
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /still passes title/);
-    assert.equal(fs.readFileSync(component, 'utf8'), input);
-    assert.match(fs.readFileSync(page, 'utf8'), /title=\{title\}/);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(fs.readFileSync(component, 'utf8'), '---\ninterface Props { }\n---\n<slot/>');
+    assert.match(fs.readFileSync(page, 'utf8'), /<Alias\/><Other title="untouched"\/><p>title<\/p>/);
   });
 });
 

@@ -296,6 +296,7 @@ function pageBridge() {
     componentProperties: invoke('component:properties'),
     editComponentProperties: invoke('component:editProperties'),
     revertComponentProperties: invoke('component:revertProperties'),
+    previewPropertyRemoval: invoke('component:previewPropertyRemoval'),
     componentUsage: invoke('component:usage'),
     dynamicPaths: invoke('page:dynamicPaths'),
     emDashProject: invoke('emdash:project'),

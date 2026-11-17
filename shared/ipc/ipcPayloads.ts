@@ -63,7 +63,7 @@ import { parseCommitAvatarRequest } from './commitAvatars';
 import { parsePreferenceName } from './preferences';
 import { parseStudioSource } from './studioSetup';
 import { parseStudioRequestId } from './studioProgress';
-import { parsePropertyChange, propertySource } from '../properties/propertyEditing';
+import { parsePropertyChange, propertyName, propertySource } from '../properties/propertyEditing';
 import { parseEdit, parseEditBatchRequest, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
 import { AI_PAYLOADS } from './aiChat';
@@ -357,6 +357,8 @@ export const IPC_PAYLOADS = {
     source: propertySource,
     change: parsePropertyChange,
   }),
+  // What deleting a prop would do across the site, for its confirmation; the deletion itself is `component:editProperties`.
+  'component:previewPropertyRemoval': object({ ...project, file: pathText, name: propertyName }),
   'component:usage': object({ ...named, exclude: optional(text) }),
   'content:collections': pathText,
   'content:config': object({ ...project, force: maybeFlag }),

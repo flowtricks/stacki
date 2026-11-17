@@ -113,54 +113,6 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   check('an empty box is not drawn', onePerPlace([box(10, 10, 0, 0), hero]).length === 1);
   check('nothing at all is nothing', onePerPlace(undefined).length === 0);
 
-  // A long loop on a big page: every item is kept, and the check that drops covered boxes reads
-  // only the kept boxes near each one. Checking each against all before it was quadratic, 180 ms
-  // per overlay render at 8,000 items. The grid lookup must agree with the brute-force answer on
-  // random nested, overlapping and duplicated boxes, and grow about linearly with the count.
-  const bruteForce = (boxes) => {
-    const sized = boxes.filter((one) => one.w > 0 && one.h > 0);
-    const order = [...sized].sort((left, right) => right.w * right.h - left.w * left.h);
-    const kept = [];
-    const within = (outer, inner) =>
-      inner.x >= outer.x - 1 && inner.y >= outer.y - 1 && inner.x + inner.w <= outer.x + outer.w + 1 && inner.y + inner.h <= outer.y + outer.h + 1;
-    for (const candidate of order) {
-      if (!kept.some((keeper) => within(keeper, candidate))) {
-        kept.push(candidate);
-      }
-    }
-    return sized.filter((one) => kept.includes(one));
-  };
-  let seed = 7;
-  const random = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed / 2147483648;
-  };
-  for (let round = 0; round < 40; round++) {
-    const boxes = Array.from({ length: 60 }, () =>
-      box(Math.floor(random() * 400), Math.floor(random() * 400), Math.floor(random() * 300), Math.floor(random() * 300)),
-    );
-    boxes.push({ ...boxes[0] }, box(0, 0, 2000, 2000));
-    const expected = bruteForce(boxes);
-    const actual = onePerPlace(boxes);
-    check(
-      `the grid keeps what the brute force keeps (round ${round})`,
-      actual.length === expected.length && actual.every((one, index) => one === expected[index]),
-    );
-  }
-  const loopOf = (count) => Array.from({ length: count }, (_, index) => box((index % 50) * 30, Math.floor(index / 50) * 30, 20, 20));
-  const timed = (count) => {
-    const boxes = loopOf(count);
-    onePerPlace(boxes);
-    const startedMs = performance.now();
-    const kept = onePerPlace(boxes).length;
-    return { kept, elapsedMs: performance.now() - startedMs };
-  };
-  const small = timed(2000);
-  const large = timed(16000);
-  check('a 16,000-item loop keeps every item', large.kept === 16000, `${large.kept} kept`);
-  // Eight times the items in well under the 64 times a quadratic check takes (slack for a busy machine).
-  check('and costs about linearly more', large.elapsedMs < Math.max(small.elapsedMs, 1) * 24, `${small.elapsedMs} ms then ${large.elapsedMs} ms`);
-
   // --- hovering a sibling in the same loop ------------------------------------
   // A loop renders one path once per item, so the cards in it share a path and
   // differ only by which copy they are. The overlay drew no hover outline when

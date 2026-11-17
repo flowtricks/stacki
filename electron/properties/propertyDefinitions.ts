@@ -36,6 +36,7 @@ import { orderDefaultReads } from './defaultOrder';
 import { bindingEdits, memberComment, memberEdits, sameDeclaration, sameProperty } from './propertyMemberEdits';
 import type { DeclaredFields } from './propertyMemberEdits';
 import { declareInHost } from './propertyHosts';
+import { propertyReadLines, type PropertyReadTarget, type ReadOrigin } from './propertyReads';
 
 interface Definitions {
   readonly document: PropertySyntax;
@@ -266,10 +267,7 @@ function editCommonDefinition(definitions: Definitions, change: Exclude<Property
     return reorderDefinitions(definitions, change.names);
   }
   const name = change.kind === 'save' ? change.originalName : change.name;
-  const contracts = readPropertyContracts(definitions.document);
-  const declared = contracts.declared.get(name) ?? [];
-  const [primary, ...others] = declared;
-  const common = { ...definitions, members: primary === undefined ? [] : [primary], others };
+  const common = commonDefinitions(definitions, name);
   if (change.kind === 'remove') {
     return removeDefinition(common, name);
   }
@@ -277,6 +275,14 @@ function editCommonDefinition(definitions: Definitions, change: Exclude<Property
     return saveDefinitionOptions(common, name, change.type);
   }
   return saveDefinition(common, name, change.property);
+}
+
+// The definitions a combined contract edits a prop through: its first declaration, with every other one (variants, intersected types, the runtime type) beside it.
+function commonDefinitions(definitions: Definitions, name: string): Definitions {
+  const contracts = readPropertyContracts(definitions.document);
+  const declared = contracts.declared.get(name) ?? [];
+  const [primary, ...others] = declared;
+  return { ...definitions, members: primary === undefined ? [] : [primary], others };
 }
 
 function readDefinitions(source: string): Definitions {
@@ -726,22 +732,45 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
   );
 }
 
-// Whether the file reads the prop as `Astro.props.name` or through a name that holds the props object.
-function readThroughProps(definitions: Definitions, name: string): boolean {
-  const holders = ['Astro.props', ...plainAliases(definitions.document.syntax)];
-  return syntaxNodes(definitions.document.syntax).some(
-    (node) => ts.isPropertyAccessExpression(node) && node.name.text === name && holders.includes(node.expression.getText().replace(/\s/g, '')),
-  );
+/** A prop's declarations and destructure taken out, and what its code would read it by. */
+export interface PropertyDeclarationRemoval {
+  readonly source: string;
+  readonly target: PropertyReadTarget;
+  /** The text before, and the ranges taken out of it, so a read is listed at the line on disk. */
+  readonly origin: ReadOrigin;
+}
+
+/**
+ * The source with a prop's declarations (every variant of a combined
+ * contract) and its destructure taken out. Nothing here checks for reads left
+ * behind: `removeDefinition` refuses them, and the deletion's preview lists
+ * them (propertyRemoval.ts).
+ */
+export function removePropertyDeclarations(source: string, name: string): PropertyDeclarationRemoval {
+  const definitions = readDefinitions(source);
+  return removedDeclarations(definitions.advanced ? commonDefinitions(definitions, name) : definitions, name);
 }
 
 function removeDefinition(definitions: Definitions, name: string): Result<string> {
+  const removed = removedDeclarations(definitions, name);
+  // A read left behind would name a variable nothing declares: the deletion waits until the code no longer reads it.
+  const lines = propertyReadLines(removed.source, removed.target, removed.origin);
+  if (!lines.ok) {
+    return lines;
+  }
+  if (lines.value.length > 0) {
+    return err(refusal('in-use', 'props.edit.readsInCode', { name, lines: lines.value.join(', ') }));
+  }
+  return ok(removed.source);
+}
+
+function removedDeclarations(definitions: Definitions, name: string): PropertyDeclarationRemoval {
   const member = definitions.members.find((item) => propertyKey(item.name) === name);
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === name);
-  if (!member && !binding) {
-    // A prop the file only reads (`Astro.props.name`) has no declaration to take out: it can go once nothing reads it.
-    const reads = readThroughProps(definitions, name);
-    return reads ? err(refusal('in-use', 'props.edit.inUse')) : ok(definitions.document.source);
-  }
+  // The names that hold the props object, a rest of it included: `props.name` and `rest.name` read the prop too.
+  const rests = definitions.patterns.flatMap((pattern) => pattern.elements).filter((element) => element.dotDotDotToken !== undefined);
+  const holders = new Set([...plainAliases(definitions.document.syntax), ...rests.map((element) => element.name.getText())]);
+  const target = { local: binding?.name.getText() ?? name, name, holders };
   const edits: SourceEdit[] = [member, ...definitions.others].flatMap((declared) =>
     declared ? [{ start: declared.getFullStart(), end: declared.end, text: '' }] : [],
   );
@@ -757,14 +786,14 @@ function removeDefinition(definitions: Definitions, name: string): Result<string
       text: '',
     });
   }
-  const frontmatter = applySourceEdits(definitions.document.frontmatter, edits);
-  const output = replaceFrontmatter(definitions.document, frontmatter);
-  const local = binding?.name.getText() ?? name;
-  // Conservative mention detection is deliberate: removing a live lexical binding
-  // breaks rendering, while a false positive can still be resolved in source.
-  const escaped = local.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (new RegExp(`(^|[^\\w$])${escaped}([^\\w$]|$)`).test(output)) {
-    return err(refusal('in-use', 'props.edit.inUse'));
+  if (edits.length === 0) {
+    // A prop the file only reads (`Astro.props.name`) has no declaration to take out: it can go once nothing reads it.
+    return { source: definitions.document.source, target, origin: { source: definitions.document.source, removed: [] } };
   }
-  return ok(output);
+  const frontmatter = applySourceEdits(definitions.document.frontmatter, edits);
+  const start = definitions.document.start;
+  // A document with no frontmatter gains a fence, so its lines move: none of its declarations were there to take out.
+  assert(start > 0, 'Declarations to take out live in a frontmatter');
+  const removed = edits.map((edit) => ({ start: start + edit.start, end: start + edit.end, text: '' }));
+  return { source: replaceFrontmatter(definitions.document, frontmatter), target, origin: { source: definitions.document.source, removed } };
 }

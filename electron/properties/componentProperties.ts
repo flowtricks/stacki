@@ -14,6 +14,7 @@ import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { described } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import type { PropertyRemovalPreview } from '../../shared/properties/propertyRemoval';
 import type { ComponentProperties, PropertyChange, PropertyOptionRename } from '../../shared/properties/propertyEditing';
 import { inFile, refusal, withLead, type PropertyError } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
@@ -25,6 +26,7 @@ import { editPropertyDefinition, readComponentProperties } from './propertyDefin
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
 import { planSharedPropertyChange, withSharedProperties } from './sharedProperties';
 import { planVariantRuleChanges } from './variantRulePlan';
+import { planPropertyRemoval as planSitePropertyRemoval, removalChanges } from './propertyRemoval';
 
 interface PropertyLocation {
   readonly projectPath: string;
@@ -122,6 +124,20 @@ export function loadComponentProperties(location: PropertyLocation): Result<Comp
     return source;
   }
   return withSharedProperties(target.value, readComponentProperties(source.value));
+}
+
+/** What deleting `name` would do across the site, read from disk, for the confirmation; nothing is written. */
+export function previewComponentPropertyRemoval(location: PropertyLocation, name: string): Result<PropertyRemovalPreview> {
+  const target = validateLocation(location);
+  if (!target.ok) {
+    return target;
+  }
+  const source = readBoundedSource(target.value.file);
+  if (!source.ok) {
+    return source;
+  }
+  const plan = planSitePropertyRemoval({ ...target.value, source: source.value }, name);
+  return plan.ok ? ok(plan.value.preview) : plan;
 }
 
 export function updateComponentProperties(request: PropertyEditRequest, writer: PropertyWriter): Result<ComponentProperties> {
@@ -405,19 +421,20 @@ function restorePropertyFile(change: FileChange, writer: PropertyWriter): 'resto
   }
 }
 
+// The component without the prop, and every instance without the value that passes it (propertyRemoval.ts).
 function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, name: string): Result<readonly FileChange[]> {
-  const consumers = readPropertyConsumers(request);
-  if (!consumers.ok) {
-    return consumers;
+  const plan = planSitePropertyRemoval(request, name);
+  if (!plan.ok) {
+    return plan;
   }
-  for (const consumer of consumers.value) {
-    const result = renameComponentReferences(consumer.source, consumer.names, { from: name, to: '_stackiDeletedProperty' }, 'consumer');
-    if (!result.ok) {
-      return result;
-    }
-    if (result.value !== consumer.source) {
-      return err(refusal('in-use', 'props.edit.stillPasses', { file: consumer.file, name }));
-    }
+  const changes = removalChanges(plan.value);
+  if (!changes.ok) {
+    return changes;
   }
-  return ok([change]);
+  const component = changes.value.find((entry) => sameFilesystemPath(entry.file, request.file));
+  assert(component !== undefined, 'A removal writes the component');
+  // The definition edit already took the declarations out; the site plan may only take more out (a self-instance's value).
+  assert(component.before === change.before, 'The removal plans from the source the edit was checked against');
+  assert(component.after.length <= change.after.length, 'Removing instance values only takes text out of the component');
+  return changes;
 }

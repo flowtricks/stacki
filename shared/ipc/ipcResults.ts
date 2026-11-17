@@ -56,6 +56,7 @@ export interface StudioEventResults {
   readonly 'studio:progress': StudioInstallProgress;
 }
 import type { ComponentProperties } from '../properties/propertyEditing';
+import type { PropertyRemovalPreview } from '../properties/propertyRemoval';
 import type { PreviewVerdict } from '../page/previewToken';
 import type { Result } from '../core/result';
 import type { Digest } from '../core/brand';
@@ -165,6 +166,7 @@ export interface IpcResults extends AiResults {
   readonly 'component:properties': Result<ComponentProperties>;
   readonly 'component:editProperties': Result<ComponentProperties & { readonly undo: string }>;
   readonly 'component:revertProperties': Result<{ readonly undo: string }>;
+  readonly 'component:previewPropertyRemoval': Result<PropertyRemovalPreview>;
   readonly 'assets:delete':
     | {
         readonly ok: false;

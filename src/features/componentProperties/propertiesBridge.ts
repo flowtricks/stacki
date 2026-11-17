@@ -3,6 +3,7 @@ import { parseComponentProperties, parsePropertiesResult } from '../../../shared
 import type { ComponentProperties, PropertyChange } from '../../../shared/properties/propertyEditing';
 import { toRecord } from '../../../shared/core/record';
 import type { PropertyResult } from '../../../shared/properties/propertyErrors';
+import { parsePropertyRemovalPreview, type PropertyRemovalPreview } from '../../../shared/properties/propertyRemoval';
 
 export async function readComponentProperties(projectPath: string, file: string): Promise<PropertyResult<ComponentProperties>> {
   const payload = parseIpcPayload('component:properties', { projectPath, file });
@@ -29,6 +30,13 @@ export async function editComponentProperties(
     ...parseComponentProperties(value),
     undo: undoToken(value),
   }));
+}
+
+/** What deleting `name` would do across the site, for its confirmation; nothing is written (propertyRemoval.ts). */
+export async function previewPropertyRemoval(projectPath: string, file: string, name: string): Promise<PropertyResult<PropertyRemovalPreview>> {
+  const payload = parseIpcPayload('component:previewPropertyRemoval', { projectPath, file, name });
+  const result: unknown = await window.avb.previewPropertyRemoval(payload);
+  return parsePropertiesResult(result, parsePropertyRemovalPreview);
 }
 
 /** Apply a property batch's inverse; the result names the batch that redoes it. */

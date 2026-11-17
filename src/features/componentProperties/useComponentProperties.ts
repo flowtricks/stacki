@@ -7,6 +7,7 @@ import { onWindowReturn } from '../../lib/windowReturn';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { err, ok } from '../../../shared/core/result';
 import { editComponentProperties, readComponentProperties } from './propertiesBridge';
+import { confirmPropertyRemoval } from './propertyRemovalDialog';
 import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
 import { refusalOf, savePhaseOf, type PropertySaveHost, type PropertySaveOutcome } from './propertyAutosave';
 
@@ -85,7 +86,13 @@ export function useComponentProperties(props: ComponentPropertiesPanelProps) {
       }
     }
   };
-  const save = async (change: PropertyChange): Promise<boolean> => (await run(change, 'panel')).kind === 'saved';
+  const save = async (change: PropertyChange): Promise<boolean> => {
+    // A deletion reaches every instance on the site, so it is confirmed first, with what it will take out (propertyRemovalDialog.tsx).
+    if (change.kind === 'remove' && !(await confirmPropertyRemoval({ projectPath: props.projectPath, file: props.file, name: change.name, translate }))) {
+      return false;
+    }
+    return (await run(change, 'panel')).kind === 'saved';
+  };
   const saveHost: PropertySaveHost = {
     save: (change) => run(change, 'form'),
     reload: async (name) => {

@@ -12,8 +12,7 @@ the same `ListField` rows and click-to-edit popover as component list props, inc
 Add item, drag-and-drop, and hover trash actions. The adapter keeps literal types
 and defaults intact even when string and non-string options share a visible label.
 Clicking the open option again closes its popover and commits the current edit.
-Unused props can be deleted;
-props still referenced by a component or consumer must be disconnected first.
+Deleting a prop asks first and removes it across the site (see "Deleting a prop").
 A required field and a default
 are independent: a runtime fallback does not remove the caller's type obligation.
 Locally declared fields stay visually editable when `Props` extends another type,
@@ -90,6 +89,50 @@ renames validate every revision, atomically replace each file in a synchronous
 batch, and restore written files if an operating error occurs. The renderer flushes pending page
 and code saves before making a request, then refreshes the model and schemas.
 File, byte, field, and AST limits cap project traversal and refactoring work.
+
+## Deleting a prop
+
+The trash button (in the prop's settings, or on its row) never deletes at once.
+Main reads the site first (`component:previewPropertyRemoval`, which writes
+nothing) and the window's own confirmation (`ConfirmDialog`, never a native one)
+says what will happen, one short line each:
+
+- the prop, and that it leaves the component, every variant included;
+- how many instances pass it, and in which files (six listed, then "and N more");
+- spreads to check by hand, by file and line;
+- that one Undo restores everything.
+
+Confirming sends the ordinary `{ kind: 'remove' }` batch on
+`component:editProperties`, planned again from disk
+(`electron/properties/propertyRemoval.ts`), so a file changed in between is read
+afresh and an outside edit refuses the batch. It removes:
+
+- every declaration of the prop: the `Props` member, each discriminated-union
+  branch's member (`direction?: never` included), the runtime type's member;
+- its destructure entry and default;
+- the value every instance passes, in every file that imports the component:
+  `direction="back"`, `direction={value}`, `` direction=`…` ``, `{direction}`, a
+  bare `direction`, and the key of an inline spread (`{...{ direction: 'back' }}`;
+  the whole spread when that key is all it holds). The space before an attribute
+  goes with it; every other byte is copied, not re-printed.
+
+Two cases are never guessed at:
+
+- **The component's own code still reads the prop** (`direction === 'back'`,
+  `data-direction={direction}`, `Astro.props.direction`, `rest.direction`).
+  Deleting it would leave a variable nothing declares, so nothing is deleted:
+  the dialog lists each line ("can't be deleted yet") and the batch refuses with
+  the same lines (`props.edit.readsInCode`). The scan is syntactic and
+  conservative: a shadowing loop variable counts too. Keys, CSS
+  (`flex-direction`), markup text and client scripts do not.
+- **An instance spreads an object Stacki cannot see into** (`{...props}`). It may
+  or may not carry the prop; the deletion goes ahead, leaves that object alone,
+  and lists the line under "Check by hand".
+
+Each written file must parse again before the batch is written. The consumer
+scan is the rename's (`readPropertyConsumers`): the same refusals for consumers
+that use the component in code, re-export it or import it dynamically. A prop
+declared by a shared type is deleted in that type's file, as before.
 
 ## Runtime dependencies
 

@@ -99,6 +99,10 @@ export const messages = {
   'props.condition.useControls': 'Bedingungssteuerung verwenden',
   'props.condition.value': 'Wert',
   'props.condition.writeCode': 'Bedingung als Code schreiben',
+  'props.conditional.always': 'Immer',
+  'props.conditional.computed': 'Berechnet',
+  'props.conditional.computedCondition': 'Eine Bedingung, die die Zeilen nicht zeigen können, bleibt wie geschrieben',
+  'props.conditional.computedTitle': 'Durch Code berechnet, den die Bedingungen nicht zeigen können',
   'props.conditional.chip': 'Bedingt',
   'props.conditional.dragGroup': 'Ziehen, um Gruppe {number} neu anzuordnen',
   'props.conditional.edit': 'Bedingungen bearbeiten',
@@ -220,6 +224,7 @@ export const messages = {
   'props.edit.optionNeedsExisting': 'Nur eine bestehende Eigenschaft kann Optionen umbenennen.',
   'props.edit.optionNeedsUnion': 'Zum Umbenennen von Optionen ist eine bearbeitbare Literal-Union nötig.', // review
   'props.edit.raced': '{file} wurde während des Speicherns von einem anderen Prozess geändert',
+  'props.edit.readsInCode': 'Der Code dieser Komponente liest {name} noch (Zeile {lines}). Entferne diese Stellen, bevor du die Eigenschaft löschst.',
   'props.edit.reorder': 'Die neue Reihenfolge muss jede deklarierte Eigenschaft genau einmal enthalten.',
   'props.edit.restored': 'Speichern fehlgeschlagen; die Änderungen wurden wiederhergestellt.',
   'props.edit.rollbackBoth':
@@ -517,6 +522,19 @@ export const messages = {
   'props.panel.noAttributes': 'Dieses HTML-Element hat keine Attribute.',
   'props.panel.noProps':
     'Diese Komponente deklariert keine Eigenschaften (füge ein interface Props oder eine Astro.props-Destrukturierung hinzu, um welche bereitzustellen).',
+  'props.remove.blockedTitle': '{name} kann noch nicht gelöscht werden',
+  'props.remove.checkFailed': 'Stacki konnte nicht prüfen, wo {name} verwendet wird:',
+  'props.remove.component': 'Entfernt {name} aus {component}, in allen Varianten.',
+  'props.remove.confirm': 'Eigenschaft löschen',
+  'props.remove.moreFiles': { one: 'und {count} weitere Datei', other: 'und {count} weitere Dateien' },
+  'props.remove.noUsages': 'Keine Instanz übergibt sie.',
+  'props.remove.reads': 'Der eigene Code liest sie noch. Entferne zuerst diese Stellen:',
+  'props.remove.reviewLine': '{path}, Zeile {line}',
+  'props.remove.spreads': 'Von Hand prüfen: Diese Spreads könnten sie noch übergeben.',
+  'props.remove.title': '{name} löschen?',
+  'props.remove.undo': 'Ein Rückgängig stellt alles wieder her.',
+  'props.remove.usageFile': '{path} · {count}',
+  'props.remove.usages': { one: 'Entfernt ihren Wert aus {count} Instanz:', other: 'Entfernt ihren Wert aus {count} Instanzen:' },
   'props.rename.aliased': 'Astro.props wird weitergegeben oder hat einen Alias. Passe diesen Code ausdrücklich an, bevor du diese Eigenschaft bearbeitest.',
   'props.rename.computed': 'Astro.props hat einen berechneten Schlüssel. Mache diesen Zugriff ausdrücklich, bevor du diese Eigenschaft bearbeitest.',
   'props.rename.consumerDynamicImport':

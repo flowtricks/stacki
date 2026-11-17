@@ -118,6 +118,7 @@ interface InvokeChannels {
   readonly componentProperties: 'component:properties';
   readonly editComponentProperties: 'component:editProperties';
   readonly revertComponentProperties: 'component:revertProperties';
+  readonly previewPropertyRemoval: 'component:previewPropertyRemoval';
   readonly componentUsage: 'component:usage';
   readonly dynamicPaths: 'page:dynamicPaths';
   readonly emDashProject: 'emdash:project';
