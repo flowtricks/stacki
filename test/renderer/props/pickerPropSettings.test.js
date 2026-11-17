@@ -154,6 +154,11 @@ const flush = () => act(async () => new Promise((resolve) => setTimeout(resolve,
 // Long enough for typing to count as paused.
 const pause = () => act(async () => new Promise((resolve) => setTimeout(resolve, 700)));
 const click = (element) => act(async () => element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+// Visibility: Required, picked from its Dropdown as a person picks it.
+const pickRequired = async () => {
+  await click(document.querySelector('.property-visibility .dd-trigger'));
+  await click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Required'));
+};
 const type = (input, value) =>
   act(async () => {
     const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value').set;
@@ -283,7 +288,8 @@ test('the form loads every option a list prop has', async () => {
   await openFeatures();
   assert.equal(labelled('Name').querySelector('input').value, 'features');
   assert.match(form().querySelector('.property-type .dd-trigger').textContent, /List/);
-  assert.equal(form().querySelector('input[aria-label="Required"]').checked, false);
+  // Required is the Visibility field's plain state (PropertyVisibility.tsx): Allowed until picked.
+  assert.equal(form().querySelector('.property-visibility .dd-trigger').textContent.trim(), 'Allowed');
   assert.ok(form().querySelector('input[aria-label="Readonly"]') === null, 'Readonly is not offered');
   assert.equal(labelled('Tooltip').querySelector('textarea').value, 'The plan’s features.'.replace('’', "'"));
   assert.deepEqual(
@@ -324,7 +330,7 @@ test('a toggle saves at once', async () => {
   const { saver, source, log } = project();
   await drawPicker(saver);
   await openFeatures();
-  await click(form().querySelector('input[aria-label="Required"]'));
+  await pickRequired();
   await flush();
   assert.equal(log.edits, 1);
   assert.match(source(), /\bfeatures: readonly/);
@@ -584,7 +590,7 @@ test('a file changed on disk reloads under the form, and the edit is kept and sa
   // Someone else's edit lands while the form is open: its source is stale.
   const newer = source().replace('heading: string;', 'heading: string;\n  extra?: string;').replace("/** The plan's features. */", '/** From elsewhere. */');
   fs.writeFileSync(saver.file, newer);
-  await click(form().querySelector('input[aria-label="Required"]'));
+  await pickRequired();
   await flush();
   assert.equal(log.edits, 2, 'refused once, then saved against the file as it is');
   assert.match(source(), /extra\?: string;/, 'the other edit is kept');
