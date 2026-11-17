@@ -17,7 +17,7 @@ import { assert } from '../../shared/core/assert';
 import { err, ok, type Result } from '../../shared/core/result';
 import { refusal } from '../../shared/properties/propertyErrors';
 import { VARIANT_LIMITS, variantOptionValue } from '../../shared/properties/variantRules';
-import type { VariantRuleEdit, VariantRuleState } from '../../shared/properties/variantRules';
+import type { VariantRuleEdit, VariantRuleState, VisibilityRule } from '../../shared/properties/variantRules';
 import { applySourceEdits, propertyKey, readPropertySyntax, replaceFrontmatter, syntaxError, syntaxNodes, validatePropertyCode } from './propertySyntax';
 import type { SourceEdit } from './propertySyntax';
 import { memberComment } from './propertyMemberEdits';
@@ -48,6 +48,9 @@ function editVariantRulesAt(source: string, edit: VariantRuleEdit, depth: number
   assert(depth <= VARIANT_LIMITS.editDepthMax, 'editVariantRules: an edit applies itself again a bounded number of times');
   if (edit.kind === 'switchController') {
     return switchController(source, { from: edit.controller, to: edit.to, prop: edit.prop }, depth);
+  }
+  if (edit.kind === 'setVisibility') {
+    return setVisibility(source, edit.prop, edit.rules, depth);
   }
   if (edit.kind === 'setDefaultTable') {
     // A default table is keyed by any prop, a controller or not: it is the table's edit, not a group's.
@@ -208,6 +211,71 @@ function switchController(source: string, change: { readonly from: string; reado
   return ok(output);
 }
 
+// A prop's whole Visibility as one write: let go of every controller the
+// Visibility no longer names, join the new ones (allowed where the rule does
+// not forbid it), then set each option's state where it differs. Each step is
+// one of the edits above, applied to the text the step before it wrote.
+function setVisibility(source: string, prop: string, rules: readonly VisibilityRule[], depth: number): Result<string> {
+  assert(rules.length <= VARIANT_LIMITS.groupsMax, 'setVisibility: the rules are bounded');
+  const ruling = (text: string) =>
+    variantGroupsOf(readVariantSyntax(readPropertySyntax(text))).filter((group) => group.editing.kind !== 'candidate' && group.props.includes(prop));
+  let output = source;
+  const step = (edit: VariantRuleEdit): Result<string> => {
+    const next = editVariantRulesAt(output, edit, depth + 1);
+    if (next.ok) {
+      output = next.value;
+    }
+    return next;
+  };
+  const wanted = new Set(rules.map((rule) => rule.controller));
+  for (const group of ruling(source)) {
+    if (!wanted.has(group.controller)) {
+      const detached = step({ kind: 'detachProp', controller: group.controller, prop });
+      if (!detached.ok) {
+        return detached;
+      }
+    }
+  }
+  for (const rule of rules) {
+    const allowed = rule.states.filter((entry) => entry.state !== 'forbidden').map((entry) => entry.option);
+    if (allowed.length === 0) {
+      return err(refusal('restricted', 'componentProps.variants.switchForbidsAll', { name: rule.controller }));
+    }
+    if (!ruling(output).some((group) => group.controller === rule.controller)) {
+      const attached = step({ kind: 'attachProp', controller: rule.controller, prop, options: allowed });
+      if (!attached.ok) {
+        return attached;
+      }
+    }
+    for (const entry of rule.states) {
+      const set = step({ kind: 'setRule', controller: rule.controller, option: entry.option, prop, state: entry.state });
+      if (!set.ok) {
+        return set;
+      }
+    }
+  }
+  verifyVisibility(output, prop, rules);
+  return ok(output);
+}
+
+function verifyVisibility(output: string, prop: string, rules: readonly VisibilityRule[]): void {
+  const groups = variantGroupsOf(readVariantSyntax(readPropertySyntax(output))).filter(
+    (group) => group.editing.kind !== 'candidate' && group.props.includes(prop),
+  );
+  assert(groups.length === rules.length, 'verifyVisibility: exactly the named controllers rule the prop');
+  for (const rule of rules) {
+    const group = groups.find((candidate) => candidate.controller === rule.controller);
+    assert(group !== undefined, 'verifyVisibility: each named controller rules the prop');
+    const index = group.props.indexOf(prop);
+    for (const entry of rule.states) {
+      assert(
+        group.options.find((option) => option.value === entry.option)?.rules[index]?.state === entry.state,
+        'verifyVisibility: each state reads back as set',
+      );
+    }
+  }
+}
+
 // The one place that branches on the edit: each helper below plans text and
 // returns it, or refuses.
 function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: VariantRuleEdit): Result<PlannedEdits> {
@@ -236,10 +304,14 @@ function planEdit(syntax: VariantSyntax, group: VariantGroupSyntax, edit: Varian
       return planRuleDeclarations(syntax, group, edit.prop, edit.options, { type: edit.type });
     case 'setRuleDescription':
       return planRuleDeclarations(syntax, group, edit.prop, edit.options, { description: edit.description });
+    case 'setRuleDescriptions':
+      return planRuleDescriptions(syntax, group, edit.prop, edit.entries);
     case 'switchController':
       throw new Error('Assertion failed: a controller switch is two edits, applied before planning');
     case 'setDefaultTable':
       throw new Error('Assertion failed: a default table is written before planning');
+    case 'setVisibility':
+      throw new Error('Assertion failed: a Visibility is written as its steps, before planning');
     default: {
       const exhaustive: never = edit;
       return exhaustive;
@@ -312,6 +384,26 @@ function planRuleDeclarations(
     edits.push(...memberEdits(frontmatter, field, previous, { ...previous, ...change }));
   }
   assert(edits.length <= options.length * 2, 'planRuleDeclarations: at most a head and a type per option');
+  return ok({ frontmatter: edits, template: [] });
+}
+
+// Each option's own tooltip, in one plan: each declaration's doc comment, as setRuleDescription writes one.
+function planRuleDescriptions(
+  syntax: VariantSyntax,
+  group: VariantGroupSyntax,
+  prop: string,
+  entries: readonly { readonly option: string; readonly description: string }[],
+): Result<PlannedEdits> {
+  assert(entries.length <= VARIANT_LIMITS.optionsMax, 'planRuleDescriptions: the entries are bounded');
+  const edits: SourceEdit[] = [];
+  for (const entry of entries) {
+    const planned = planRuleDeclarations(syntax, group, prop, [entry.option], { description: entry.description });
+    if (!planned.ok) {
+      return planned;
+    }
+    edits.push(...planned.value.frontmatter);
+  }
+  assert(edits.length <= entries.length, 'planRuleDescriptions: one comment edit per option at most');
   return ok({ frontmatter: edits, template: [] });
 }
 
@@ -957,7 +1049,12 @@ function templateMentions(syntax: VariantSyntax, local: string, value: string): 
 // --- Postconditions: the source read back says what the edit asked. ---
 
 function verifyEdit(output: string, edit: VariantRuleEdit): void {
-  const group = variantGroupsOf(readVariantSyntax(readPropertySyntax(output))).find((candidate) => candidate.controller === edit.controller);
+  if (edit.kind === 'setVisibility') {
+    verifyVisibility(output, edit.prop, edit.rules);
+    return;
+  }
+  const controller = edit.controller;
+  const group = variantGroupsOf(readVariantSyntax(readPropertySyntax(output))).find((candidate) => candidate.controller === controller);
   assert(group !== undefined, 'verifyEdit: the group survives its edit');
   const values = group.options.map((option) => option.value);
   switch (edit.kind) {
@@ -998,6 +1095,15 @@ function verifyEdit(output: string, edit: VariantRuleEdit): void {
     case 'switchController':
     case 'setDefaultTable':
       return;
+    case 'setRuleDescriptions': {
+      const index = group.props.indexOf(edit.prop);
+      for (const entry of edit.entries) {
+        const rule = group.options.find((option) => option.value === entry.option)?.rules[index];
+        assert(rule !== undefined, 'verifyEdit: the option still rules the prop');
+        assert(rule.description === entry.description.trim(), 'verifyEdit: each tooltip reads back as set');
+      }
+      return;
+    }
     case 'setRuleType':
     case 'setRuleDescription': {
       const index = group.props.indexOf(edit.prop);

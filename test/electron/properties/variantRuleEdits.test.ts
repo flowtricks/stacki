@@ -651,3 +651,60 @@ test('the first group of an interface writes it as a type, keeping its body, in 
     ],
   );
 });
+
+const VARIANT_OPTIONS = ['main', 'link', 'play', 'close', 'arrow'] as const;
+const visibility = (states: Readonly<Record<string, 'optional' | 'required' | 'forbidden'>>) => ({
+  controller: 'variant',
+  states: VARIANT_OPTIONS.map((option) => ({ option, state: states[option] ?? 'optional' })),
+});
+
+test('setVisibility: the rules as read write nothing; a changed state writes that member alone', () => {
+  const asRead = visibility({ main: 'forbidden', link: 'forbidden' });
+  assert.equal(edited(BUTTON, { kind: 'setVisibility', prop: 'label', rules: [asRead] }), BUTTON);
+  const output = edited(BUTTON, { kind: 'setVisibility', prop: 'label', rules: [visibility({ main: 'forbidden', link: 'forbidden', play: 'required' })] });
+  assert.equal(output, replaced(BUTTON, [[PLAY_LABEL_LINE, PLAY_LABEL_LINE.replace('label?:', 'label:')]]));
+});
+
+test('setVisibility: a second controller joins in the same write; no rules give the prop back to every option', () => {
+  const both = edited(BUTTON, {
+    kind: 'setVisibility',
+    prop: 'label',
+    rules: [
+      visibility({ main: 'forbidden', link: 'forbidden' }),
+      {
+        controller: 'element',
+        states: [
+          { option: 'button', state: 'optional' },
+          { option: 'link', state: 'forbidden' },
+        ],
+      },
+    ],
+  });
+  const groups = readVariantGroups(both);
+  assert.ok(groupOf(groups, 'element').props.includes('label'));
+  assert.ok(groupOf(groups, 'variant').props.includes('label'));
+  const none = edited(BUTTON, { kind: 'setVisibility', prop: 'label', rules: [] });
+  assert.ok(!groupOf(readVariantGroups(none), 'variant').props.includes('label'));
+  assert.equal(
+    refused(BUTTON, {
+      kind: 'setVisibility',
+      prop: 'label',
+      rules: [visibility({ main: 'forbidden', link: 'forbidden', play: 'forbidden', close: 'forbidden', arrow: 'forbidden' })],
+    }),
+    'restricted',
+  );
+});
+
+test('setRuleDescriptions: each option gets its own words in one write', () => {
+  const output = edited(BUTTON, {
+    kind: 'setRuleDescriptions',
+    controller: 'variant',
+    prop: 'label',
+    entries: [
+      { option: 'play', description: 'Accessible label. Defaults to `Play` or `Pause`.' },
+      { option: 'close', description: 'Closes the dialog.' },
+      { option: 'arrow', description: 'Accessible label. Defaults to `Next` or `Previous`.' },
+    ],
+  });
+  assert.equal(output, replaced(BUTTON, [[CLOSE_LABEL_LINE, '      /** Closes the dialog. */\n      label?: string;']]));
+});

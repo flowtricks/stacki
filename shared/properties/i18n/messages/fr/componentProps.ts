@@ -125,6 +125,7 @@ export const messages = {
     one: 'Partagée : modifie {typeName} dans {path}, utilisée par {count} composant ({names}) et ses instances.',
     other: 'Partagée : modifie {typeName} dans {path}, utilisée par {count} composants ({names}) et leurs instances.',
   }, // review
+  'componentProps.tooltips.perOption': 'Une info-bulle ne peut dépendre que de {controller}.', // review
   'componentProps.type.attributesNote': 'Une propriété d’attributs se crée depuis un élément : ouvrez le point de liaison de ses attributs.',
   'componentProps.type.codeType': 'Type de code',
   'componentProps.type.controllerKind': 'Ses options décident de son genre', // review
@@ -133,18 +134,14 @@ export const messages = {
   'componentProps.type.noType': 'Aucun type',
   'componentProps.type.search': 'Rechercher des genres…', // review
   'componentProps.type.typescript': 'TypeScript', // same
-  'componentProps.variants.addCondition': 'Ajouter une condition', // review
-  'componentProps.variants.and': 'et', // review
   'componentProps.variants.badIndex': 'Cette position est en dehors des options.', // review
   'componentProps.variants.badValue': 'Utilisez un nom court sans guillemets ni barres obliques inverses.', // review
   'componentProps.variants.booleanOptions': '{name} vaut true ou false : ses deux options ne peuvent pas être ajoutées, renommées ni supprimées.', // review
   'componentProps.variants.cannotAttach':
     '{name} n’est pas déclarée dans les propriétés partagées par toutes les options ; elle ne peut donc pas recevoir de règles de variante ici.', // review
   'componentProps.variants.cannotGroup': 'Props n’est pas écrit comme un type auquel Stacki peut ajouter des règles de variante.', // review
-  'componentProps.variants.cell': '{prop} quand {controller} vaut {value}', // review
   'componentProps.variants.condition': '{controller} : {options}', // review
   'componentProps.variants.conditional': 'Conditionnelle', // review
-  'componentProps.variants.controlledBy': 'Contrôlé par', // review
   'componentProps.variants.duplicateOption': 'Une option {value} existe déjà.', // review
   'componentProps.variants.forbiddenPassed': '{file} transmet {name} avec {controller} {value}. Modifiez d’abord cette instance.', // review
   'componentProps.variants.lastOptions': 'Gardez au moins deux options.', // review
@@ -155,26 +152,25 @@ export const messages = {
     'Le composant ne lit pas ses propriétés par une seule déstructuration ; la propriété ne peut donc pas être ajoutée ici.', // review
   'componentProps.variants.noRuntimeType': 'Le type d’exécution du composant ne peut pas recevoir de nouvelle propriété ici.', // review
   'componentProps.variants.noType': '{name} n’a pas de type à autoriser. Donnez-lui d’abord un type.', // review
-  'componentProps.variants.none': 'Aucun', // review
   'componentProps.variants.notAllowedThere': '{name} n’est pas autorisé pour {value}.', // review
-  'componentProps.variants.optionDetails': 'Réglages de {value}', // review
   'componentProps.variants.optionInCode':
     'Le code du composant utilise {value} d’une façon que Stacki ne peut pas mettre à jour. Modifiez-le dans le code source.', // review
-  'componentProps.variants.optionKind': 'Genre pour {value}', // review
   'componentProps.variants.optionPassed': '{file} transmet {value} comme {name}. Modifiez d’abord cette instance.', // review
-  'componentProps.variants.optionTooltip': 'Info-bulle pour {value}', // review
   'componentProps.variants.optionsLimit': 'Une propriété peut avoir au plus {max} options.', // review
   'componentProps.variants.readOnly': 'Les règles de variante contrôlées par {name} ne peuvent être modifiées que dans le code source.', // review
   'componentProps.variants.reason.nested': 'Imbriqué', // review
   'componentProps.variants.reason.runtime': 'Exécution', // review
   'componentProps.variants.reason.shape': 'Complexe', // review
   'componentProps.variants.reason.shared': 'Partagé', // review
-  'componentProps.variants.removeCondition': 'Retirer {controller}', // review
   'componentProps.variants.removeFallback': '{value} est l’option par défaut. Choisissez d’abord une autre option par défaut.', // review
-  'componentProps.variants.rules': 'Règles', // review
   'componentProps.variants.state.forbidden': 'Non autorisé', // review
   'componentProps.variants.state.optional': 'Autorisé', // review
   'componentProps.variants.state.required': 'Obligatoire', // review
   'componentProps.variants.switchForbidsAll': 'Aucune option de {name} n’autoriserait cette propriété.', // review
-  'componentProps.variants.varies': 'Variable', // review
+  'componentProps.visibility.combination': 'TypeScript ne peut pas exprimer cette combinaison. Donnez à chaque choix ses propres groupes.', // review
+  'componentProps.visibility.otherwise': '{state} sinon', // review
+  'componentProps.visibility.shape': 'Chaque groupe a besoin d’une condition sur un choix ou un interrupteur.', // review
+  'componentProps.visibility.subject': '{name} n’est ni un choix ni un interrupteur.', // review
+  'componentProps.visibility.title': 'Visibilité', // review
+  'componentProps.visibility.when': '{state} quand {conditions}', // review
 } as const satisfies CatalogOf<MessageKey>;

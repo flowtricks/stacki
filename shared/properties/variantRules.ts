@@ -111,12 +111,38 @@ export type VariantRuleEdit =
       readonly description: string;
     }
   /**
+   * A prop's whole Visibility, as one write: for each controller that rules
+   * it, the state of each option; a controller not listed no longer rules it.
+   * `controller` is unused (the edit names its controllers in `rules`) and
+   * kept '' so every edit has the field.
+   */
+  | { readonly kind: 'setVisibility'; readonly prop: string; readonly rules: readonly VisibilityRule[] }
+  /** Each option's own tooltip for the prop, as one write: the Tooltip set by conditions on the controller. */
+  | {
+      readonly kind: 'setRuleDescriptions';
+      readonly controller: string;
+      readonly prop: string;
+      readonly entries: readonly VariantDescriptionEntry[];
+    }
+  /**
    * A default set per option, written into the lookup table the component
    * already reads it from (`label ?? named[variant]`): `controller` names the
    * prop whose local keys the table, `entries` the whole table as it should be.
    * An entry whose code is unchanged keeps its bytes.
    */
   | { readonly kind: 'setDefaultTable'; readonly controller: string; readonly prop: string; readonly entries: readonly VariantDefaultEntry[] };
+
+/** One controller's part of a Visibility: each of its options' state for the prop. */
+export interface VisibilityRule {
+  readonly controller: string;
+  readonly states: readonly { readonly option: string; readonly state: VariantRuleState }[];
+}
+
+/** One option's tooltip for a prop: '' for none. */
+export interface VariantDescriptionEntry {
+  readonly option: string;
+  readonly description: string;
+}
 
 /** One row of a default table: the option it is keyed by, and its value as code (`"Close"`, `pressed ? "Pause" : "Play"`). */
 export interface VariantDefaultEntry {
@@ -333,6 +359,30 @@ export function parseVariantRuleEdit(input: unknown): VariantRuleEdit {
       }
       return { kind, ...change };
     }
+    case 'setVisibility': {
+      const change = object({ prop: propertyName, rules: (item) => boundedList(item, VARIANT_LIMITS.groupsMax, parseVisibilityRule) })(input);
+      if (new Set(change.rules.map((rule) => rule.controller)).size !== change.rules.length) {
+        throw new Error('A controller appears once in a Visibility');
+      }
+      if (change.rules.some((rule) => rule.controller === change.prop)) {
+        throw new Error('A prop does not control its own Visibility');
+      }
+      return { kind, ...change };
+    }
+    case 'setRuleDescriptions': {
+      const change = object({
+        controller: propertyName,
+        prop: propertyName,
+        entries: (item) => boundedList(item, VARIANT_LIMITS.optionsMax, parseDescriptionEntry),
+      })(input);
+      if (change.entries.length === 0 || new Set(change.entries.map((entry) => entry.option)).size !== change.entries.length) {
+        throw new Error('Tooltips are given once for each of one or more options');
+      }
+      if (change.prop === change.controller) {
+        throw new Error('A controller does not rule itself');
+      }
+      return { kind, ...change };
+    }
     case 'setDefaultTable': {
       const change = object({
         controller: propertyName,
@@ -393,6 +443,24 @@ function parseVariantDefault(input: unknown): VariantDefault {
     return { kind: 'computed', ...object({ prop: propertyName, code: parseTypeText })(input) };
   }
   throw new Error('Unknown variant default');
+}
+
+function parseVisibilityRule(input: unknown): VisibilityRule {
+  const rule = object({
+    controller: propertyName,
+    states: (item) => boundedList(item, VARIANT_LIMITS.optionsMax, (entry) => object({ option: parseOptionValue, state: parseVariantRuleState })(entry)),
+  })(input);
+  if (rule.states.length === 0 || new Set(rule.states.map((entry) => entry.option)).size !== rule.states.length) {
+    throw new Error('A Visibility rule gives each of one or more options one state');
+  }
+  assert(rule.states.length <= VARIANT_LIMITS.optionsMax, 'parseVisibilityRule: the states are bounded');
+  return rule;
+}
+
+function parseDescriptionEntry(input: unknown): VariantDescriptionEntry {
+  const entry = object({ option: parseOptionValue, description: propertyText })(input);
+  assert(entry.description.length <= VARIANT_LIMITS.codeCharsMax, 'parseDescriptionEntry: a tooltip is bounded');
+  return entry;
 }
 
 function parseDefaultEntry(input: unknown): VariantDefaultEntry {

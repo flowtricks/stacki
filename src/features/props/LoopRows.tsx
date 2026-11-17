@@ -7,7 +7,7 @@ import type { ReactNode, RefCallback } from 'react';
 import Popup from '../../ui/Popup';
 import ExprInput from '../../ui/ExprInput';
 import { ResetLabel } from '../../ui/ResetLabel';
-import { dataPickerPosition } from './dataPickerPosition';
+import { dataPickerPosition, popupHeightPxMax } from './dataPickerPosition';
 import type { FieldPosition } from './bindingTypes';
 import {
   AssetManagerIcon,
@@ -94,15 +94,25 @@ export function RowPopup(props: {
   readonly children: ReactNode;
 }) {
   const translate = useTranslate();
-  const [placed, setPlaced] = useState<{ readonly anchor: HTMLElement; readonly position: FieldPosition } | undefined>(undefined);
+  const [placed, setPlaced] = useState<{ readonly anchor: HTMLElement; readonly position: FieldPosition & { readonly maxHeight: number } } | undefined>(
+    undefined,
+  );
   const { anchor } = props;
   const heightPxMax = props.heightPxMax ?? ROW_POPUP_HEIGHT_PX_MAX;
   const { widthPxMin } = props;
   useLayoutEffect(() => {
-    if (anchor !== undefined) {
-      const rectangle = anchor.getBoundingClientRect();
-      setPlaced({ anchor, position: dataPickerPosition(rectangle, widthPxMin === undefined ? { heightPxMax } : { heightPxMax, widthPxMin }) });
+    if (anchor === undefined) {
+      return undefined;
     }
+    // Placed again when the window is resized: a shorter window gives the pop-up less room, never a cut-off edge.
+    const place = (): void => {
+      const rectangle = anchor.getBoundingClientRect();
+      const position = dataPickerPosition(rectangle, widthPxMin === undefined ? { heightPxMax } : { heightPxMax, widthPxMin });
+      setPlaced({ anchor, position: { ...position, maxHeight: popupHeightPxMax(position.top, heightPxMax) } });
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
   }, [anchor, heightPxMax, widthPxMin]);
   if (placed === undefined) {
     return undefined;

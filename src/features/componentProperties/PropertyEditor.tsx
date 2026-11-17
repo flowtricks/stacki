@@ -1,18 +1,9 @@
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
-import {
-  VariantControlledBy,
-  VariantTooltip,
-  allowingOptions,
-  fallbackEdit,
-  optionListEdit,
-  rulingTips,
-  useVariantHost,
-  useVariantRun,
-  variantRoleOf,
-} from './PropertyVariants';
+import { fallbackEdit, optionListEdit, useVariantHost, useVariantRun, variantRoleOf } from './PropertyVariants';
 import type { VariantHost } from './PropertyVariants';
+import { PropertyTooltipField, PropertyVisibilityField } from './PropertyVisibility';
 import type { VariantDefault, VariantGroup } from '../../../shared/properties/variantRules';
 import { variantDefaultOf } from '../../../shared/properties/variantRules';
 import { CloseIcon, TrashIcon } from '../../ui/Icons';
@@ -314,22 +305,27 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
       )}
       <PropertyKindSettings key={`${property.type} settings`} property={property} onChange={(description) => update('description', description)} />
       {listFields !== undefined && <PropertyItemFields form={form} frontmatter={frontmatter} fields={listFields} />}
-      {/* A prop with variant rules is required per option, and a controller by its Default: neither has the one checkbox. */}
-      {role.kind === 'ruled' && variants !== undefined ? (
-        <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} property={property} frontmatter={frontmatter} />
-      ) : (
-        role.kind !== 'controller' && (
-          // The same Required the Settings panel's Property settings has (PropertySections.tsx); readonly is kept as read.
+      {/* Visibility: Allowed or Required, or set by conditions on other props (written as unions). A controller's is its Default. */}
+      {role.kind !== 'controller' &&
+        (variants !== undefined && defaults !== undefined ? (
+          <PropertyVisibilityField
+            name={form.savedName}
+            property={property}
+            properties={defaults.properties}
+            groups={variants.groups}
+            pending={variantRun.pending}
+            onRequired={(required) => form.edit('at-once', (current) => ({ ...current, required }))}
+            run={variantRun.run}
+            onProblem={report}
+          />
+        ) : (
+          // A new prop has no conditions yet: the same Required the Settings panel's Property settings has (PropertySections.tsx).
           <PropertyFlagsFields
             required={property.required}
             readonly={property.readonly}
             onChange={(flags) => form.edit('at-once', (current) => ({ ...current, ...flags }))}
           />
-        )
-      )}
-      {role.kind === 'attachable' && variants !== undefined && (
-        <VariantControlledBy name={form.savedName} role={role} host={variants} onProblem={report} property={property} frontmatter={frontmatter} />
-      )}
+        ))}
       {listFields === undefined ? (
         <PropertyDefault
           key={property.type}
@@ -365,21 +361,15 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
         />
       )}
       <PropertyDefaultNote property={property} />
-      {role.kind === 'ruled' && variants !== undefined && rulingTips(role, form.savedName).length > 1 ? (
-        // Each option documents the prop in its own words: the one field writes the same words to every one.
-        <VariantTooltip
-          onChange={(description) => {
-            const [group] = role.groups;
-            if (group !== undefined) {
-              void variantRun.run({
-                kind: 'setRuleDescription',
-                controller: group.controller,
-                prop: form.savedName,
-                options: allowingOptions(group, form.savedName),
-                description,
-              });
-            }
-          }}
+      {variants !== undefined && defaults !== undefined ? (
+        <PropertyTooltipField
+          name={form.savedName}
+          property={property}
+          properties={defaults.properties}
+          groups={variants.groups}
+          onChange={(description) => update('description', description)}
+          run={variantRun.run}
+          onProblem={report}
         />
       ) : (
         <PropertyTooltip property={property} onChange={(description) => update('description', description)} />

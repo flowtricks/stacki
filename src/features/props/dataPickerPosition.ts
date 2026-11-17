@@ -44,3 +44,16 @@ export function dataPickerPosition(
   assert(width <= widthPxRoom, 'dataPickerPosition: picker wider than the window');
   return { left, top, width };
 }
+
+/**
+ * The tallest a pop-up placed at `top` may be: what is left of the window
+ * below it, less the gutter, and never more than it asked for. A pop-up whose
+ * content is taller scrolls inside this, so nothing is ever cut off below the
+ * window's edge, whatever the window's height.
+ */
+export function popupHeightPxMax(top: number, heightPxMax: number, viewport: ViewportSize = { width: window.innerWidth, height: window.innerHeight }): number {
+  assert(heightPxMax > 0, 'popupHeightPxMax: a pop-up asks for a positive height');
+  assert(Number.isFinite(top), 'popupHeightPxMax: the top is a position');
+  const room = Math.max(0, Math.floor(viewport.height - VIEWPORT_GUTTER_PX - top));
+  return Math.min(heightPxMax, room);
+}

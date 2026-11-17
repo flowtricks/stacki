@@ -207,3 +207,107 @@ function normalized(model: ConditionalValue): ConditionalValue {
     otherwise: model.otherwise.kind === 'none' ? NO_VALUE : model.otherwise,
   };
 }
+
+/**
+ * The draft the Value conditions editor opens on to set the default for one
+ * option: the default's own groups (or none, its plain value the Else), with a
+ * group for `key = option` added at the end when none tests that option yet.
+ */
+export function optionDefaultStart(model: ConditionalValue, key: string, option: string): ConditionalValue {
+  if (model.groups.some((group) => group.conditions.some((condition) => testsOption(condition, key, option)))) {
+    return model;
+  }
+  if (model.groups.length >= CONDITIONAL_LIMITS.groupsMax) {
+    return model;
+  }
+  const added: ConditionGroup = { match: 'all', conditions: [keyCondition(key, option)], value: NO_VALUE };
+  const next = { ...model, groups: [...model.groups, added] };
+  assert(next.groups.length <= CONDITIONAL_LIMITS.groupsMax, 'optionDefaultStart: the groups stay bounded');
+  return next;
+}
+
+function testsOption(condition: Condition, key: string, option: string): boolean {
+  if (condition.kind !== 'compare' || condition.subject !== key || condition.operator !== 'in') {
+    return false;
+  }
+  return condition.values.some((value) => value.kind === 'string' && value.value === option);
+}
+
+/** One option's tooltip for a prop, as the Tooltip's conditions read and write it. */
+export interface OptionTooltip {
+  readonly option: string;
+  readonly description: string;
+}
+
+/**
+ * A prop's per-option tooltips as conditions on its controller: one group per
+ * distinct tooltip, testing every option that has it, and the tooltip most
+ * options share as the Else (none when no two share one).
+ */
+export function tooltipConditional(controller: string, tooltips: readonly OptionTooltip[]): ConditionalValue {
+  assert(tooltips.length <= VARIANT_LIMITS.optionsMax, 'tooltipConditional: the options are bounded');
+  const counts = new Map<string, number>();
+  for (const tooltip of tooltips) {
+    counts.set(tooltip.description, (counts.get(tooltip.description) ?? 0) + 1);
+  }
+  const [shared] = [...counts].sort((left, right) => right[1] - left[1]);
+  const base = shared !== undefined && shared[1] > 1 ? shared[0] : '';
+  const groups: ConditionGroup[] = [];
+  for (const description of counts.keys()) {
+    if (description !== base) {
+      const values = tooltips.filter((tooltip) => tooltip.description === description).map((tooltip) => ({ kind: 'string' as const, value: tooltip.option }));
+      const value: ConditionalResult = description === '' ? NO_VALUE : { kind: 'text', text: description };
+      groups.push({ match: 'all', conditions: [{ kind: 'compare', subject: controller, operator: 'in', values }], value });
+    }
+  }
+  const parsed = parseConditionalValue({ groups, otherwise: base === '' ? NO_VALUE : { kind: 'text', text: base } });
+  assert(parsed.ok, 'tooltipConditional: the tooltips make a valid model');
+  return parsed.value;
+}
+
+/**
+ * The tooltip each option gets from an edited model, or why it cannot: every
+ * group must be one condition, the controller is any of some options (a
+ * tooltip is written per option, so it can depend on nothing else), and each
+ * value plain words. An option no group names takes the Else.
+ */
+export function tooltipEntries(model: ConditionalValue, controller: string, options: readonly string[]): Result<readonly OptionTooltip[], 'perOption'> {
+  assert(options.length <= VARIANT_LIMITS.optionsMax, 'tooltipEntries: the options are bounded');
+  const fallback = plainWords(model.otherwise);
+  if (fallback === undefined) {
+    return err('perOption');
+  }
+  const given = new Map<string, string>();
+  for (const group of model.groups) {
+    const option = optionsOf(group, controller);
+    const text = plainWords(group.value);
+    if (option === undefined || text === undefined) {
+      return err('perOption');
+    }
+    for (const value of option) {
+      if (options.includes(value) && !given.has(value)) {
+        given.set(value, text);
+      }
+    }
+  }
+  const entries = options.map((option) => ({ option, description: given.get(option) ?? fallback }));
+  assert(entries.length === options.length, 'tooltipEntries: one tooltip per option');
+  return ok(entries);
+}
+
+// A tooltip is words or nothing: a value read from a prop cannot be a doc comment.
+function plainWords(result: ConditionalResult): string | undefined {
+  if (result.kind === 'none') {
+    return '';
+  }
+  return result.kind === 'text' ? result.text.trim() : undefined;
+}
+
+// The options a group is for, when its one condition is the controller being any of them.
+function optionsOf(group: ConditionGroup, controller: string): readonly string[] | undefined {
+  const [only] = group.conditions;
+  if (group.conditions.length !== 1 || only === undefined || only.kind !== 'compare' || only.operator !== 'in' || only.subject !== controller) {
+    return undefined;
+  }
+  return only.values.flatMap((value) => (value.kind === 'string' ? [value.value] : []));
+}

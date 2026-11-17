@@ -115,7 +115,7 @@ export function PropertyDefault({ property, frontmatter, onChange, conditions }:
           </button>
         )}
       </div>
-      {starting && conditions !== undefined && (
+      {starting && chain === undefined && conditions !== undefined && (
         <ConditionalDefaultStart
           defaultResult={defaultAttrOf(property.defaultValue)}
           context={context}

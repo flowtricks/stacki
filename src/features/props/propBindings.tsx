@@ -21,7 +21,20 @@ import { referencedName, symbolTarget, VarSourceEditor } from './BindingEditors'
 export { default as CodeTextField } from './CodeTextField';
 // A prop's Default value set by conditions, in the attribute fields' own editor (ConditionalDefaultField.tsx).
 export { ComputedDefault, ConditionalDefaultField, ConditionalDefaultStart, useDefaultConditionContext } from './ConditionalDefaultField';
-export { conditionalOfDefault, defaultOfConditional, tableConditional, tableEntries, type TableDefault } from './conditionalDefault';
+export {
+  conditionalOfDefault,
+  conditionSchema,
+  defaultOfConditional,
+  optionDefaultStart,
+  tooltipConditional,
+  tooltipEntries,
+  type OptionTooltip,
+  tableConditional,
+  tableEntries,
+  type TableDefault,
+} from './conditionalDefault';
+export { stateOf, visibilityConditional, visibilityRules, type VisibilityController, type VisibilityProblem } from './visibility';
+export { conditionWords, conditionProps } from './conditionalModel';
 export {
   referencedName,
   SourceEditButton,

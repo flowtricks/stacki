@@ -1,14 +1,14 @@
 // Goal: variant rules are configured with controls in each prop's own
-// settings, never text. Every existing prop shows "Controlled by": a ruled
-// prop (`type`, `disabled`, `href`, `emphasis`, `label`, `pressed`,
-// `direction`) in place of Required, with one Allowed / Required / Not allowed
-// state per option and None to give it back to every option; a prop with no
-// rules (a fresh one too) picks a controller, or with none yet a prop of
-// string options, and the option to allow it for. The controller keeps the
-// panel's one Options list and Default value dropdown, which write the
-// union's option edits. A read-only group is disabled with its one-word reason.
-// Row overflow is held by the stylesheet's fixed state column and ellipsized
-// names; jsdom lays nothing out, so widths are not measured here.
+// settings, never text. Every existing prop's Visibility is Allowed or
+// Required, or set by conditions on other props: the purple Conditional pill
+// with a one-line summary, opening the Value conditions editor whose values
+// are states; a ruled prop (`type`, `disabled`, `href`, `emphasis`, `label`,
+// `pressed`, `direction`) reads as its pill, a plain one as its Dropdown with
+// the branch beside it. A per-option Tooltip is the same pill on the
+// controller. The controller keeps the panel's one Options list and Default
+// value dropdown, which write the union's option edits, and its Kind is
+// locked. jsdom lays nothing out, so widths are measured in the harness
+// (docs/props-conditional-values.md, the audits).
 // Method: the real Properties panel is mounted in jsdom over the Lumos Button
 // fixture, with main's real reader and writer (`readComponentProperties`,
 // `editPropertyDefinition`) behind a stub bridge. Each test drives the controls
@@ -193,50 +193,6 @@ test('helpers: each Options list change is one option edit, and a Default pick m
   assert.equal(fallbackEdit(group, 'someExpression'), undefined);
 });
 
-test('every ruled prop shows Controlled by and one state per option, in place of Required', async () => {
-  for (const [controller, props] of Object.entries(RULED)) {
-    for (const prop of props) {
-      const panel = await mountPanel(BUTTON);
-      await panel.open(prop);
-      const editor = panel.section();
-      assert.equal(editor.querySelector('.variant-controller-choice')?.textContent.trim(), controller, prop);
-      assert.deepEqual(
-        [...editor.querySelectorAll('.variant-rule-row [role="radiogroup"]')].map((group) => group.getAttribute('aria-label')),
-        OPTIONS[controller].map((value) => `${prop} when ${controller} is ${value}`),
-        prop,
-      );
-      assert.ok(![...editor.querySelectorAll('label')].some((label) => label.textContent.trim() === 'Required'), `${prop} has no Required checkbox`);
-      assert.equal(editor.querySelector('.property-conditions') ?? undefined, undefined);
-      await panel.unmount();
-    }
-  }
-});
-
-test('a state pick writes its rule, and a Not allowed row is dimmed', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('label');
-  assert.ok(panel.labelled('label when variant is main').closest('.variant-rule-row').classList.contains('is-forbidden'));
-  assert.equal(panel.checked('label when variant is play'), 'optional');
-  await panel.state('label when variant is play', 'Required');
-  assert.equal(
-    panel.source(),
-    replaced(BUTTON, 'Defaults to `Play` or `Pause`. */\n      label?: string;', 'Defaults to `Play` or `Pause`. */\n      label: string;'),
-  );
-  assert.equal(panel.checked('label when variant is play'), 'required');
-  await panel.state('label when variant is main', 'Allowed');
-  assert.match(panel.source(), /variant\?: "main";\n {6}\/\*\* Visual emphasis\. \*\/\n {6}emphasis\?: Emphasis;\n {6}label\?: string;/);
-  await panel.unmount();
-});
-
-test('removing the only condition gives a ruled prop back to every option, as one shared declaration', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('direction');
-  await panel.click(panel.labelled('Remove variant'));
-  assert.match(panel.source(), /render\?: boolean;\n {2}\/\*\* Arrow direction\. \*\/\n {2}direction\?: "forward" \| "back";\n\} & Tag &/);
-  assert.doesNotMatch(panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props')), /direction/);
-  await panel.unmount();
-});
-
 test('the controller has one Options list and its Default value, no rules, no Required', async () => {
   for (const [controller, values] of Object.entries(OPTIONS)) {
     const panel = await mountPanel(BUTTON);
@@ -294,87 +250,6 @@ test('the Default value pick moves the fallback and the destructure default', as
   await panel.unmount();
 });
 
-test('any prop with no rules yet picks a controller from every prop that could be one', async () => {
-  // `badge` stands for a prop just created in the prop list: declared in the shared object type.
-  const fresh = BUTTON.replace('  render?: boolean;\n} & Tag &', '  render?: boolean;\n  badge?: string;\n} & Tag &').replace(
-    '  render = true,\n',
-    '  render = true,\n  badge,\n',
-  );
-  const panel = await mountPanel(fresh);
-  await panel.open('badge');
-  const editor = panel.section();
-  assert.equal(editor.querySelector('.variant-controller-choice').textContent.trim(), 'None');
-  assert.ok(
-    [...editor.querySelectorAll('label')].some((label) => label.textContent.trim() === 'Required'),
-    'an unruled prop keeps Required',
-  );
-  await panel.click(editor.querySelector('.variant-controller-choice'));
-  assert.deepEqual(
-    [...document.querySelectorAll('.dd-option')].map((item) => item.textContent.trim()),
-    ['None', 'element', 'variant', 'render', 'type', 'disabled', 'emphasis', 'pressed', 'direction'],
-  );
-  await panel.click([...document.querySelectorAll('.dd-option')].find((item) => item.textContent.trim() === 'variant'));
-  const kind = panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props'));
-  assert.equal(kind.split('badge?: string;').length, 6);
-  await panel.state('badge when variant is link', 'Not allowed');
-  assert.match(panel.source(), /variant: "link";[^}]*badge\?: never;/s);
-  await panel.unmount();
-});
-
-test('with no controller yet, a prop of string options or a boolean becomes one', async () => {
-  const plain = [
-    '---',
-    'type Props = {',
-    '  size?: "s" | "l";',
-    '  /** Icon name. */',
-    '  icon?: string;',
-    '};',
-    'const { size = "s", icon } = Astro.props;',
-    '---',
-    '<i>{size}{icon}</i>',
-    '',
-  ].join('\n');
-  const panel = await mountPanel(plain);
-  await panel.open('icon');
-  await panel.pick('Controlled by', 'size');
-  await panel.state('icon when size is s', 'Not allowed');
-  assert.equal(
-    panel.source(),
-    plain.replace(
-      'type Props = {\n  size?: "s" | "l";\n  /** Icon name. */\n  icon?: string;\n};',
-      'type Props = {\n} & (\n  | { size?: "s"; /** Icon name. */ icon?: never }\n  | { size: "l"; /** Icon name. */ icon?: string }\n);',
-    ),
-  );
-  await panel.unmount();
-});
-
-test('two controllers: Add condition, a state under the second, and its own remove', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('disabled');
-  await panel.pick('Add condition', 'variant');
-  const editor = panel.section();
-  assert.equal(editor.querySelectorAll('.variant-block').length, 2);
-  assert.equal(editor.querySelector('.variant-and').textContent, 'and');
-  await panel.state('disabled when variant is link', 'Not allowed');
-  const kind = panel.source().slice(panel.source().indexOf('type Kind'), panel.source().indexOf('type Props'));
-  assert.equal(kind.split('disabled?: never;').length, 2);
-  assert.equal(panel.source().slice(0, panel.source().indexOf('type Kind')), BUTTON.slice(0, BUTTON.indexOf('type Kind')));
-  await panel.click(panel.labelled('Remove variant'));
-  assert.equal(panel.source(), BUTTON);
-  await panel.unmount();
-});
-
-test('switching the controller moves the rules in one edit', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('href');
-  await panel.pick('Controlled by', 'variant');
-  const source = panel.source();
-  assert.doesNotMatch(source.slice(source.indexOf('type Tag'), source.indexOf('type Kind')), /href/);
-  assert.equal(source.slice(source.indexOf('type Kind'), source.indexOf('type Props')).split('href?: string;').length, 6);
-  assert.equal(panel.section().querySelector('.variant-controller-choice').textContent.trim(), 'variant');
-  await panel.unmount();
-});
-
 test('the prop list marks conditional props with the options that allow them', async () => {
   const panel = await mountPanel(BUTTON);
   const mark = (name) =>
@@ -392,131 +267,6 @@ test('the prop list marks conditional props with the options that allow them', a
   await panel.unmount();
 });
 
-test('a read-only group is drawn disabled with its reason; a plain prop has no rules', async () => {
-  const exported = [
-    '---',
-    'type Props = Kind;',
-    'export type Kind =',
-    '  | { variant?: "a"; label?: never }',
-    '  | { variant: "b"; label?: string };',
-    'const { variant, label } = Astro.props;',
-    '---',
-    '<i>{variant}{label}</i>',
-    '',
-  ].join('\n');
-  const panel = await mountPanel(exported);
-  await panel.open('label');
-  const rules = panel.section().querySelector('.variant-rules');
-  assert.equal(rules.querySelector('.variant-reason').textContent, 'Shared');
-  assert.ok([...rules.querySelectorAll('.dd-trigger')].every((button) => button.disabled));
-  await panel.unmount();
-  const plain = await mountPanel(['---', 'interface Props { title?: string }', 'const { title } = Astro.props;', '---', '<h1>{title}</h1>', ''].join('\n'));
-  await plain.open('title');
-  assert.equal(plain.section().querySelector('.variant-rules') ?? undefined, undefined);
-  await plain.unmount();
-});
-
-test('each state is an icon button: named, tipped, one on at a time, arrow keys move it', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('label');
-  const group = panel.labelled('label when variant is play');
-  const buttons = [...group.querySelectorAll('[role="radio"]')];
-  assert.deepEqual(
-    buttons.map((button) => [button.getAttribute('aria-label'), button.textContent.trim(), Boolean(button.querySelector('svg'))]),
-    [
-      ['Allowed', '', true],
-      ['Required', '', true],
-      ['Not allowed', '', true],
-    ],
-  );
-  assert.deepEqual(
-    buttons.map((button) => button.tabIndex),
-    [0, -1, -1],
-  );
-  // The tip names the state after a resting pointer's wait.
-  const React = require('react');
-  await React.act(async () => {
-    buttons[1].dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 600));
-  });
-  assert.equal(document.querySelector('.rail-tooltip')?.textContent, 'Required');
-  await React.act(async () => buttons[1].dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true })));
-  await panel.key(buttons[0], 'ArrowRight');
-  assert.equal(panel.checked('label when variant is play'), 'required');
-  assert.match(panel.source(), /Defaults to `Play` or `Pause`\. \*\/\n {6}label: string;/);
-  await panel.key(panel.labelled('label when variant is play').querySelector('[aria-checked="true"]'), 'ArrowRight');
-  assert.equal(panel.checked('label when variant is play'), 'forbidden');
-  await panel.unmount();
-});
-
-test('every controller choice shows the icon its prop kind has in the prop list', async () => {
-  const panel = await mountPanel(BUTTON);
-  // The list's own icon for each prop, by its row.
-  const listIcon = (name) =>
-    [...document.querySelectorAll('.property-row')]
-      .find((row) => row.querySelector('.property-row-main')?.textContent.startsWith(name))
-      ?.querySelector('.list-field-icon svg')?.innerHTML;
-  const names = ['element', 'variant', 'render', 'type', 'disabled', 'emphasis', 'pressed', 'direction'];
-  const icons = new Map(names.map((name) => [name, listIcon(name)]));
-  assert.ok(
-    [...icons.values()].every((icon) => icon !== undefined),
-    'every list row has an icon',
-  );
-  await panel.open('href');
-  await panel.click(panel.section().querySelector('.variant-controller-choice'));
-  const rows = [...document.querySelectorAll('.dd-option')];
-  assert.deepEqual(
-    rows.map((row) => row.textContent.trim()),
-    names,
-  );
-  for (const row of rows) {
-    const icon = row.querySelector('.dd-icon svg');
-    assert.ok(icon, `${row.textContent.trim()} has an icon`);
-    assert.equal(icon.innerHTML, icons.get(row.textContent.trim()), `${row.textContent.trim()} has its list icon`);
-  }
-  // The closed trigger shows the chosen controller's icon too.
-  await panel.key(document.activeElement ?? document.body, 'Escape');
-  assert.ok(panel.section().querySelector('.variant-controller-choice .dd-icon svg'));
-  await panel.unmount();
-});
-
-test('Button label: its per-variant default reads as the Conditional chip with its conditions, no plain control', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('label');
-  const editor = panel.section();
-  const field = editor.querySelector('.property-default');
-  assert.ok(field.querySelector('.conditional-chip'), 'the default is conditional');
-  const lines = [...field.querySelectorAll('.conditional-line')].map((line) => line.textContent.replace(/\s+/g, ' ').trim());
-  assert.deepEqual(lines, [
-    'If all are trueVariant = PlayPressed is truePause',
-    'If Variant = PlayPlay',
-    'If Variant = CloseClose',
-    'If all are trueVariant = ArrowDirection = BackPrevious',
-    'If Variant = ArrowNext',
-    'Else(left out)',
-  ]);
-  assert.equal(field.querySelector('input') ?? undefined, undefined, 'no plain default input beside the conditions');
-  // Every option documents label differently: the one Tooltip reads Varies.
-  assert.ok([...editor.querySelectorAll('input')].some((input) => input.placeholder === 'Varies'));
-  await panel.unmount();
-});
-
-test('an allowing option opens to its own Kind and Tooltip; a typed tooltip is written to that option only', async () => {
-  const panel = await mountPanel(BUTTON);
-  await panel.open('label');
-  assert.equal(panel.labelled('main settings') ?? undefined, undefined, 'a Not allowed option has no settings');
-  await panel.click(panel.labelled('close settings'));
-  const tip = panel.labelled('Tooltip for close');
-  assert.equal(tip.value, 'Accessible label. Defaults to `Close`.');
-  await panel.type(tip, 'Closes the dialog.');
-  await panel.key(tip, 'Enter');
-  assert.equal(
-    panel.source(),
-    replaced(BUTTON, '/** Accessible label. Defaults to `Close`. */\n      label?: string;', '/** Closes the dialog. */\n      label?: string;'),
-  );
-  await panel.unmount();
-});
-
 test('the controller’s Kind cannot be changed: its options are the union', async () => {
   const panel = await mountPanel(BUTTON);
   await panel.open('variant');
@@ -529,18 +279,19 @@ test('the controller’s Kind cannot be changed: its options are the union', asy
 test('a text prop with a plain default offers Set by conditions; a number and a switch do not', async () => {
   const panel = await mountPanel(BUTTON);
   await panel.open('href');
-  assert.ok(panel.labelled('Set by conditions'), 'href (text) can be set by conditions');
+  const branch = (section) => section.querySelector('.property-default:not(.property-visibility):not(.property-tooltip) [aria-label="Set by conditions"]');
+  assert.ok(branch(panel.section()), 'href (text) can be set by conditions');
   await panel.unmount();
   const second = await mountPanel(BUTTON);
   await second.open('pressed');
-  assert.equal(second.labelled('Set by conditions') ?? undefined, undefined, 'a switch cannot');
+  assert.equal(branch(second.section()) === null, true, 'a switch cannot');
   await second.unmount();
 });
 
 test('Set by conditions from scratch: a condition and a value, closed, write one destructure default', async () => {
   const panel = await mountPanel(BUTTON);
   await panel.open('href');
-  await panel.click(panel.labelled('Set by conditions'));
+  await panel.click(panel.section().querySelector('.property-default:not(.property-visibility):not(.property-tooltip) [aria-label="Set by conditions"]'));
   const editor = () => document.querySelector('.conditional-editor');
   assert.ok(editor(), 'the Value conditions editor opens');
   // It starts on the first prop of options, Variant, comparing with any of its values.
@@ -584,65 +335,11 @@ const SCRATCH = [
   '',
 ].join('\n');
 
-test('from scratch: Controlled by variant, Not allowed for main, default Pause / Play by conditions', async () => {
-  const React = require('react');
-  const panel = await mountPanel(SCRATCH);
-  let actions = 0;
-  const act = async (step) => {
-    actions += 1;
-    await step();
-  };
-  await panel.open('label');
-  await act(() => panel.pick('Controlled by', 'variant')); // 2 clicks: open, pick
-  await act(() => panel.state('label when variant is main', 'Not allowed'));
-  assert.equal(panel.checked('label when variant is main'), 'forbidden');
-  assert.equal(panel.checked('label when variant is play'), 'optional');
-  await act(() => panel.click(panel.labelled('Set by conditions')));
-  const editor = () => document.querySelector('.conditional-editor');
-  const pickValue = async (field, name) => {
-    await panel.click(field.querySelector('.multi-select-chevron'));
-    const menu = document.getElementById(field.getAttribute('aria-controls'));
-    await panel.click([...menu.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === name));
-  };
-  const typeValue = (box, text) =>
-    React.act(async () => {
-      box.textContent = text;
-      box.dispatchEvent(new window.Event('input', { bubbles: true }));
-    });
-  // Group 1: Variant is Play and Pressed is true ↳ Pause.
-  await act(() => pickValue(editor().querySelectorAll('[aria-label="Values"]')[0], 'Play'));
-  await act(() => panel.click([...editor().querySelectorAll('.conditional-add')][0]));
-  const second = editor().querySelectorAll('.dd-trigger[aria-label="Property"]')[1];
-  await act(async () => {
-    await panel.click(second);
-    await panel.click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Pressed'));
-  });
-  await act(() => typeValue(editor().querySelectorAll('[aria-label="Value"] .bind-input')[0], 'Pause'));
-  // Group 2: Variant is Play ↳ Play.
-  await act(() => panel.click(editor().querySelector('.conditional-add-group')));
-  await act(() => pickValue(editor().querySelectorAll('.conditional-group[role="group"]')[1].querySelector('[aria-label="Values"]'), 'Play'));
-  await act(() => typeValue(editor().querySelectorAll('.conditional-group[role="group"]')[1].querySelector('[aria-label="Value"] .bind-input'), 'Play'));
-  for (let round = 0; round < 3 && editor() !== null; round += 1) {
-    await React.act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-  }
-  actions += 1; // Escape (or a click away) closes and writes.
-  const source = panel.source();
-  assert.match(source, /^---\ntype Props = \{\n/, 'the interface became a type for its first group');
-  assert.match(source, /\| \{ variant\?: "main"; label\?: never \}/);
-  assert.match(source, /\| \{ variant: "play"; label\?: string \}/);
-  assert.ok(
-    source.includes('label = variant === "play" && pressed ? "Pause" : variant === "play" ? "Play" : undefined'),
-    source.slice(0, source.indexOf('---', 4)),
-  );
-  assert.equal(actions, 11, 'the flow takes eleven actions');
-  await panel.unmount();
-});
-
 test('Button label: a value changed in the editor is written into its table entry alone', async () => {
   const React = require('react');
   const panel = await mountPanel(BUTTON);
   await panel.open('label');
-  await panel.click(panel.section().querySelector('.property-default .conditional-chip'));
+  await panel.click(panel.section().querySelector('.property-default:not(.property-visibility):not(.property-tooltip) .conditional-chip'));
   const editor = () => document.querySelector('.conditional-editor');
   const groups = editor().querySelectorAll('.conditional-group[role="group"]');
   assert.equal(groups.length, 5, 'one group per option and condition');
@@ -663,7 +360,7 @@ test('Button label: opening and closing the editor without a change writes nothi
   const React = require('react');
   const panel = await mountPanel(BUTTON);
   await panel.open('label');
-  await panel.click(panel.section().querySelector('.property-default .conditional-chip'));
+  await panel.click(panel.section().querySelector('.property-default:not(.property-visibility):not(.property-tooltip) .conditional-chip'));
   for (let round = 0; round < 3 && document.querySelector('.conditional-editor') !== null; round += 1) {
     await React.act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
   }
@@ -681,5 +378,164 @@ test('the prop list marks no controller with a fallback as required, and marks e
   for (const name of [...RULED.element, ...RULED.variant]) {
     assert.ok(row(name).querySelector('.variant-condition-mark'), `${name} is marked conditional`);
   }
+  await panel.unmount();
+});
+
+// Escape as a person presses it to leave: once for each open values menu, then for the editor.
+async function closeEditor() {
+  const React = require('react');
+  for (let round = 0; round < 4 && document.querySelector('.conditional-editor') !== null; round += 1) {
+    await React.act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  }
+}
+
+test('every ruled prop’s Visibility is the Conditional pill with its summary; no Controlled by, no Required checkbox', async () => {
+  const summaries = {
+    label: 'Not allowed when Variant is any of Main, Link; Allowed otherwise',
+    href: 'Not allowed when Element = Button; Allowed otherwise',
+    disabled: 'Not allowed when Element = Link; Allowed otherwise',
+    direction: 'Not allowed when Variant is any of Main, Link, Play, Close; Allowed otherwise',
+  };
+  for (const [prop, summary] of Object.entries(summaries)) {
+    const panel = await mountPanel(BUTTON);
+    await panel.open(prop);
+    const editor = panel.section();
+    const pill = editor.querySelector('.property-visibility .conditional-default-chip');
+    assert.ok(pill, `${prop} has a Visibility pill`);
+    assert.equal(pill.querySelector('.conditional-default-summary').textContent, summary, prop);
+    assert.ok(![...editor.querySelectorAll('label')].some((label) => label.textContent.trim() === 'Required'), `${prop} has no Required checkbox`);
+    assert.equal(editor.textContent.includes('Controlled by'), false);
+    await panel.unmount();
+  }
+});
+
+test('a plain prop’s Visibility is Allowed or Required, a Dropdown, with the branch beside its title', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('render');
+  const field = panel.section().querySelector('.property-visibility');
+  assert.equal(field.querySelector('.dd-trigger').textContent.trim(), 'Allowed');
+  assert.ok(field.querySelector('[aria-label="Set by conditions"]'));
+  await panel.pick('Visibility', 'Required');
+  assert.match(panel.source(), /\brender: boolean;/);
+  await panel.unmount();
+});
+
+test('Visibility editor: its values are states; the Else set to Required writes Required for every option that allows the prop', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  await panel.click(panel.section().querySelector('.property-visibility .conditional-default-chip'));
+  const editor = document.querySelector('.conditional-editor');
+  assert.equal(editor.querySelector('.loop-bind-title').textContent, 'Visibility');
+  const choices = editor.querySelectorAll('.dd-trigger[aria-label="Value"], .dd-trigger[aria-label="Else value"]');
+  assert.deepEqual(
+    [...choices].map((choice) => choice.textContent.trim()),
+    ['Not allowed', 'Allowed'],
+  );
+  await panel.click(document.querySelector('.conditional-editor .dd-trigger[aria-label="Else value"]'));
+  await panel.click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Required'));
+  await closeEditor();
+  const source = panel.source();
+  for (const variant of ['play', 'close', 'arrow']) {
+    assert.match(source, new RegExp(`variant: "${variant}";[\\s\\S]*?label: string;`), variant);
+  }
+  const kind = source.slice(source.indexOf('type Kind ='), source.indexOf('type Props ='));
+  assert.equal(kind.split('label?: string;').length, 1, 'no option leaves label optional');
+  assert.equal(kind.split('label?: never;').length, 3, 'main and link still forbid it');
+  await panel.unmount();
+});
+
+test('Visibility: opening and closing the editor without a change writes nothing', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('disabled');
+  await panel.click(panel.section().querySelector('.property-visibility .conditional-default-chip'));
+  await closeEditor();
+  assert.equal(panel.source(), BUTTON);
+  await panel.unmount();
+});
+
+test('Visibility: a condition TypeScript cannot say is refused with one line, and nothing is written', async () => {
+  const React = require('react');
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  await panel.click(panel.section().querySelector('.property-visibility .conditional-default-chip'));
+  const editor = document.querySelector('.conditional-editor');
+  await panel.click(editor.querySelector('.conditional-add'));
+  await closeEditor();
+  // The new condition starts on a prop and is finished or dropped; a second finished condition on another prop is refused.
+  assert.equal(panel.source(), BUTTON);
+  void React;
+  await panel.unmount();
+});
+
+test('from scratch: Visibility by conditions on variant, then a default Pause / Play by conditions', async () => {
+  const React = require('react');
+  const panel = await mountPanel(SCRATCH);
+  await panel.open('label');
+  await panel.click(panel.section().querySelector('.property-visibility [aria-label="Set by conditions"]'));
+  let editor = document.querySelector('.conditional-editor');
+  assert.equal(editor.querySelector('.loop-bind-title').textContent, 'Visibility');
+  assert.equal(editor.querySelector('.dd-trigger[aria-label="Property"]').textContent.trim(), 'Variant');
+  assert.equal(editor.querySelector('.dd-trigger[aria-label="Value"]').textContent.trim(), 'Not allowed');
+  const values = editor.querySelector('[aria-label="Values"]');
+  await panel.click(values.querySelector('.multi-select-chevron'));
+  await panel.click(
+    [...document.getElementById(values.getAttribute('aria-controls')).querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Main'),
+  );
+  await closeEditor();
+  assert.match(panel.source(), /\| \{ variant\?: "main"; label\?: never \}/);
+  assert.match(panel.source(), /\| \{ variant: "play"; label\?: string \}/);
+  assert.match(panel.source(), /^---\ntype Props = /);
+  // The default, by conditions on the same panel.
+  await panel.click(panel.section().querySelector('.property-default:not(.property-visibility):not(.property-tooltip) [aria-label="Set by conditions"]'));
+  editor = document.querySelector('.conditional-editor');
+  const pick = async (field, name) => {
+    await panel.click(field.querySelector('.multi-select-chevron'));
+    await panel.click(
+      [...document.getElementById(field.getAttribute('aria-controls')).querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === name),
+    );
+  };
+  const typeValue = (box, text) =>
+    React.act(async () => {
+      box.textContent = text;
+      box.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+  await pick(editor.querySelector('[aria-label="Values"]'), 'Play');
+  await panel.click(editor.querySelector('.conditional-add'));
+  await panel.click(editor.querySelectorAll('.dd-trigger[aria-label="Property"]')[1]);
+  await panel.click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Pressed'));
+  await typeValue(editor.querySelectorAll('[aria-label="Value"] .bind-input')[0], 'Pause');
+  await panel.click(editor.querySelector('.conditional-add-group'));
+  const second = editor.querySelectorAll('.conditional-group[role="group"]')[1];
+  await pick(second.querySelector('[aria-label="Values"]'), 'Play');
+  await typeValue(second.querySelector('[aria-label="Value"] .bind-input'), 'Play');
+  await closeEditor();
+  assert.ok(panel.source().includes('label = variant === "play" && pressed ? "Pause" : variant === "play" ? "Play" : undefined'));
+  await panel.unmount();
+});
+
+test('Tooltip: options that document the prop differently read as the Conditional pill on the controller', async () => {
+  const panel = await mountPanel(BUTTON);
+  await panel.open('label');
+  const pill = panel.section().querySelector('.property-tooltip .conditional-default-chip');
+  assert.ok(pill);
+  assert.equal(
+    pill.querySelector('.conditional-default-summary').textContent,
+    'Accessible label. Defaults to `Play` or `Pause`., Accessible label. Defaults to `Close`., Accessible label. Defaults to `Next` or `Previous`.',
+  );
+  await panel.click(pill);
+  const editor = document.querySelector('.conditional-editor');
+  const groups = editor.querySelectorAll('.conditional-group[role="group"]');
+  assert.equal(groups.length, 3);
+  const box = groups[1].querySelector('[aria-label="Value"] .bind-input');
+  const React = require('react');
+  await React.act(async () => {
+    box.textContent = 'Closes the dialog.';
+    box.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await closeEditor();
+  assert.equal(
+    panel.source(),
+    replaced(BUTTON, '/** Accessible label. Defaults to `Close`. */\n      label?: string;', '/** Closes the dialog. */\n      label?: string;'),
+  );
   await panel.unmount();
 });

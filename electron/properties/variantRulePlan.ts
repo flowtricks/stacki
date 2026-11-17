@@ -42,6 +42,7 @@ export function planVariantRuleChanges(request: VariantPlanRequest, component: V
       return edit.state === 'forbidden' ? forbiddenPassed(request, component, edit.prop) : ok([component]);
     case 'attachProp':
     case 'switchController':
+    case 'setVisibility':
       return forbiddenPassed(request, component, edit.prop);
     case 'addOption':
     case 'moveOption':
@@ -50,6 +51,7 @@ export function planVariantRuleChanges(request: VariantPlanRequest, component: V
     case 'detachProp':
     case 'setRuleType':
     case 'setRuleDescription':
+    case 'setRuleDescriptions':
     case 'setDefaultTable':
       return ok([component]);
     default: {

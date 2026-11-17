@@ -373,6 +373,14 @@
   position: fixed;
   /* Under the menus its own dropdowns open (.dd-popup, 400), over the panel. */
   z-index: 390;
+  /* Never taller than the window below it (its max-height is set where it is
+     placed, RowPopup): a column whose content scrolls inside it, the content's
+     own scroll region first (a Value conditions body), else the pop-up itself. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 10px;
   border-radius: 10px;
   background: #232323;

@@ -8,6 +8,7 @@
 // the description only ever holds a value that reads back.
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
@@ -43,14 +44,22 @@ export function PropertyKindSettings({ property, onChange }: SettingsProps) {
 /** The tooltip: the description's words, without the setting tags the fields above own. */
 // Legacy `@onLabel`/`@offLabel` tags stay as written until the person edits
 // these docs; then the field offers to take them out.
-export function PropertyTooltip({ property, onChange }: SettingsProps) {
+export function PropertyTooltip({ property, onChange, branch }: SettingsProps & { readonly branch?: ReactNode }) {
   const translate = useTranslate();
   const [editing, setEditing] = useState(false);
   const legacy = legacyTagsOf(property.description);
   return (
     <>
       <label>
-        {translate('componentProps.settings.tooltip')}
+        {/* The branch beside the title makes the tooltip one per option of the prop's controller (PropertyVisibility.tsx). */}
+        {branch === undefined ? (
+          translate('componentProps.settings.tooltip')
+        ) : (
+          <span className="property-default-title">
+            {translate('componentProps.settings.tooltip')}
+            {branch}
+          </span>
+        )}
         <AutoTextarea
           value={tooltipOf(property.description)}
           maxLength={PROPERTY_LIMITS.textCharsMax}

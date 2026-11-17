@@ -34,6 +34,7 @@ import { CodeTokens } from '../../ui/CodeBlock';
 import type { CodeLine, CodeToken } from '../../ui/codeHighlight';
 import { declarationTokens, styleDeclarations } from './StyleEditor';
 import Dropdown from '../../ui/Dropdown';
+import type { DropdownOption } from '../../ui/Dropdown';
 import MultiSelect from '../../ui/MultiSelect';
 import { BranchIcon, CloseIcon, CornerIcon, DragIcon, PlusIcon, TrashIcon, UnlinkIcon } from '../../ui/Icons';
 import { BindHandle, FieldDataPicker } from './BindingEditors';
@@ -277,6 +278,14 @@ export interface ConditionalEditorProps {
   readonly language: ValueLanguage;
   readonly onApply: (value: Attr | undefined) => void;
   readonly onClose: () => void;
+  /**
+   * A value picked from a list rather than typed (a prop's Visibility:
+   * Allowed, Required, Not allowed): each group's value and the Else are
+   * that Dropdown, its option's value the words the branch gives.
+   */
+  readonly valueChoices?: readonly DropdownOption[] | undefined;
+  /** The editor's title, when it edits something other than an attribute's value. */
+  readonly title?: string | undefined;
 }
 
 /** The Value conditions pop-up, writing its draft once as it closes. */
@@ -329,6 +338,18 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
     apply(draft);
     props.onClose();
   };
+  // A group added at the bottom of a long list is scrolled into view, so the new rows are where the eye goes.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const revealAdded = useRef(false);
+  const groupCount = draft.groups.length;
+  useEffect(() => {
+    if (!revealAdded.current) {
+      return;
+    }
+    revealAdded.current = false;
+    const groups = bodyRef.current?.querySelectorAll('.conditional-group[role="group"]');
+    groups?.item(groups.length - 1).scrollIntoView?.({ block: 'nearest' });
+  }, [groupCount]);
   const decision = view === 'code' ? decideConditionView({ source: code, readable: isReadableConditional, chosen: 'code' }) : CONTROLS_DECISION;
   const choose = (next: ConditionView): void => {
     if (next === 'code') {
@@ -363,12 +384,12 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
       anchor={anchor}
       heightPxMax={EDITOR_HEIGHT_PX_MAX}
       widthPxMin={EDITOR_WIDTH_PX_MIN}
-      label={translate('props.conditional.editorTitle')}
+      label={props.title ?? translate('props.conditional.editorTitle')}
       onClose={close}
     >
       <div className="conditional-editor">
         <div className="loop-property-head">
-          <span className="loop-bind-title">{translate('props.conditional.editorTitle')}</span>
+          <span className="loop-bind-title">{props.title ?? translate('props.conditional.editorTitle')}</span>
           <ConditionCodeToggle decision={decision} onChoose={choose} />
           <button
             type="button"
@@ -386,20 +407,42 @@ export function ConditionalEditor(props: ConditionalEditorProps) {
             <ConditionCodeBox code={code} seed={codeSeed} context={props.bindContext} onChange={setCode} />
           </>
         ) : (
-          <>
-            <GroupList draft={draft} catalog={catalog} bindContext={props.bindContext} language={props.language} setDraft={setDraft} />
-            <AddGroupRow disabled={draft.groups.length >= CONDITIONAL_LIMITS.groupsMax} onAdd={() => setDraft((current) => withGroupAdded(current, catalog))} />
+          <div className="conditional-editor-body" ref={bodyRef} tabIndex={-1}>
+            <GroupList
+              draft={draft}
+              catalog={catalog}
+              bindContext={props.bindContext}
+              language={props.language}
+              valueChoices={props.valueChoices}
+              setDraft={setDraft}
+            />
+            <AddGroupRow
+              disabled={draft.groups.length >= CONDITIONAL_LIMITS.groupsMax}
+              onAdd={() => {
+                setDraft((current) => withGroupAdded(current, catalog));
+                revealAdded.current = true;
+              }}
+            />
             <div className="conditional-group conditional-else">
               <div className="conditional-group-head">{translate('props.conditional.summary.else')}</div>
-              <ResultField
-                label={translate('props.conditional.elseValue')}
-                result={draft.otherwise}
-                bindContext={props.bindContext}
-                language={props.language}
-                onChange={(otherwise) => setDraft((current) => ({ ...current, otherwise }))}
-              />
+              {props.valueChoices === undefined ? (
+                <ResultField
+                  label={translate('props.conditional.elseValue')}
+                  result={draft.otherwise}
+                  bindContext={props.bindContext}
+                  language={props.language}
+                  onChange={(otherwise) => setDraft((current) => ({ ...current, otherwise }))}
+                />
+              ) : (
+                <ChoiceResult
+                  label={translate('props.conditional.elseValue')}
+                  result={draft.otherwise}
+                  choices={props.valueChoices}
+                  onChange={(otherwise) => setDraft((current) => ({ ...current, otherwise }))}
+                />
+              )}
             </div>
-          </>
+          </div>
         )}
       </div>
     </RowPopup>
@@ -415,6 +458,7 @@ function GroupList(props: {
   readonly catalog: readonly ConditionProp[];
   readonly bindContext: RichContext | undefined;
   readonly language: ValueLanguage;
+  readonly valueChoices: readonly DropdownOption[] | undefined;
   readonly setDraft: (change: (draft: ConditionalDraft) => ConditionalDraft) => void;
 }) {
   const { draft, setDraft } = props;
@@ -437,6 +481,7 @@ function GroupList(props: {
         catalog={props.catalog}
         bindContext={props.bindContext}
         language={props.language}
+        valueChoices={props.valueChoices}
         row={{
           ...row,
           // Only the grip starts a drag: a press in a field is a caret, not a move.
@@ -473,6 +518,7 @@ function GroupEditor(props: {
   readonly catalog: readonly ConditionProp[];
   readonly bindContext: RichContext | undefined;
   readonly language: ValueLanguage;
+  readonly valueChoices: readonly DropdownOption[] | undefined;
   readonly row: HTMLAttributes<HTMLElement> & { readonly ref: RefCallback<HTMLElement> };
   readonly dragging: boolean;
   readonly gap: 'before' | 'after' | undefined;
@@ -525,13 +571,22 @@ function GroupEditor(props: {
           onAdd={() => onChange((current) => withConditionAdded(current, catalog))}
         />
         <div className="conditional-divider" />
-        <ResultField
-          label={translate('props.conditional.valueLabel')}
-          result={group.value}
-          bindContext={props.bindContext}
-          language={props.language}
-          onChange={(value) => onChange((current) => ({ ...current, value }))}
-        />
+        {props.valueChoices === undefined ? (
+          <ResultField
+            label={translate('props.conditional.valueLabel')}
+            result={group.value}
+            bindContext={props.bindContext}
+            language={props.language}
+            onChange={(value) => onChange((current) => ({ ...current, value }))}
+          />
+        ) : (
+          <ChoiceResult
+            label={translate('props.conditional.valueLabel')}
+            result={group.value}
+            choices={props.valueChoices}
+            onChange={(value) => onChange((current) => ({ ...current, value }))}
+          />
+        )}
       </div>
     </>
   );
@@ -855,6 +910,30 @@ export function ResultField(props: {
           onClose={() => setPicker(undefined)}
         />
       )}
+    </div>
+  );
+}
+
+// "↳ Value [Dropdown]": a branch value picked from a list, laid out as the typed value's row is.
+function ChoiceResult(props: {
+  readonly label: string;
+  readonly result: ConditionalResult;
+  readonly choices: readonly DropdownOption[];
+  readonly onChange: (result: ConditionalResult) => void;
+}) {
+  const translate = useTranslate();
+  const value = props.result.kind === 'text' ? props.result.text : '';
+  return (
+    <div className="conditional-value-row">
+      <CornerIcon size={12} />
+      <span className="conditional-value-label">{translate('props.conditional.valueLabel')}</span>
+      <Dropdown
+        ariaLabel={props.label}
+        className="conditional-value-choice"
+        value={value}
+        options={props.choices}
+        onChange={(text) => props.onChange({ kind: 'text', text })}
+      />
     </div>
   );
 }

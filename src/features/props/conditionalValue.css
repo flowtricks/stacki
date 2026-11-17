@@ -101,6 +101,24 @@
   gap: 8px;
   width: 100%;
   min-width: 300px;
+  /* In its pop-up's column: as tall as the window allows, the head fixed and the body scrolling. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* The groups, New group and the Else: the one region that scrolls, by wheel,
+   keys and drag, with a stable gutter so the rows do not shift as it appears. */
+.conditional-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.conditional-editor:has(.conditional-editor-body) {
+  overflow: hidden;
 }
 .conditional-group {
   position: relative;
@@ -407,4 +425,39 @@
   background: var(--bg-input);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* A prop's Default value set by conditions (ConditionalDefaultField.tsx): the
+   field's own full-width Conditional chip, its values after it on the same
+   line, cut to the room there is; each option's own default is on its row. */
+.conditional-default {
+  display: flex;
+  min-width: 0;
+}
+.conditional-default-chip {
+  min-width: 0;
+  overflow: hidden;
+}
+.conditional-default-chip > svg {
+  flex: none;
+}
+.conditional-default-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(215, 204, 255, 0.72);
+  font-weight: 400;
+}
+.conditional-value-row > .conditional-value-choice {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The head: the title with its `{}` beside it, as Kind {} and Default value {} sit in a prop's settings; the remove at the far end. */
+.conditional-editor > .loop-property-head {
+  justify-content: flex-start;
+  gap: 6px;
+}
+.conditional-editor > .loop-property-head > .loop-settings-remove {
+  margin-left: auto;
 }
