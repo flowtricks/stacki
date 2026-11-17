@@ -5,8 +5,8 @@
 //      sign-in page with that server as the place to come back to.
 //   2. Sanity redirects back with a one-time session id, exchanged for the
 //      person's login token.
-//   3. Their projects and datasets are listed; the one the site's own .env
-//      names is suggested.
+//   3. Their projects and datasets are listed; the one the site's own .env or
+//      config files name is suggested.
 //   4. On their choice, a project key with the Editor role is created and kept
 //      (encrypted, cmsConnectionStore.ts), and the login token is logged out.
 //
@@ -26,6 +26,7 @@ import { SANITY_LOGIN_TIMEOUT_MS, type SanityLoginRequest, type SanityLoginState
 import { SECRETS_FILE_NAMES } from '../../shared/properties/secrets';
 import type { CmsConnectionStore } from './cmsConnectionStore';
 import { SanityRequestError, createSanityEditorKey, sanityLoginURL, sanityLogout, sanityProjects, sanityTokenForSession } from './sanityApi';
+import { siteConfigProjectIds } from './sanityProjectSource';
 
 const SUCCESS_PAGE = 'https://www.sanity.io/login/success';
 // The .env lines read for a suggestion, and the longest file read for them.
@@ -266,8 +267,9 @@ function failureProblem(error: unknown): Described {
   return message.length > 0 ? { message: message.slice(0, 900) } : described('cmsBackend.sanity.signInFailed');
 }
 
-// The project and dataset the site itself reads, from its .env files, when one
-// of the person's projects has them.
+// The project and dataset the site itself reads, when one of the person's
+// projects has them: the project from its .env files, else from a `projectId`
+// its config files write (sanityProjectSource.ts); the dataset from .env.
 function siteSuggestion(projectRoot: string, projects: readonly SanityProjectChoice[]) {
   const values = new Map<string, string>();
   for (const name of SECRETS_FILE_NAMES) {
@@ -276,9 +278,10 @@ function siteSuggestion(projectRoot: string, projects: readonly SanityProjectCho
     }
   }
   const pick = (suffix: string) => [...values].find(([key]) => /^(PUBLIC_|SANITY_STUDIO_|NEXT_PUBLIC_)?SANITY_/.test(key) && key.endsWith(suffix))?.[1];
-  const projectId = pick('PROJECT_ID');
+  const envProjectId = pick('PROJECT_ID');
+  const candidates = envProjectId === undefined ? siteConfigProjectIds(projectRoot) : [envProjectId, ...siteConfigProjectIds(projectRoot)];
   const dataset = pick('DATASET') ?? 'production';
-  const project = projects.find((entry) => entry.id === projectId);
+  const project = candidates.map((id) => projects.find((entry) => entry.id === id)).find((entry) => entry !== undefined);
   return project && project.datasets.includes(dataset) ? { projectId: project.id, dataset } : undefined;
 }
 
