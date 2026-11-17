@@ -15,6 +15,7 @@
 // uses it. Clicks and typing are dispatched as a person makes them.
 
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -257,7 +258,7 @@ test('the gear is a focusable, named button, kept in the tab order', async () =>
   assert.notEqual(gear.tabIndex, -1);
   assert.equal(gear.getAttribute('aria-label'), 'Edit features settings');
   gear.focus();
-  assert.equal(document.activeElement, gear);
+  assertSameElement(document.activeElement, gear);
   const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
   const rest = css.match(/\n\.dp-settings \{[^}]*\}/)?.[0] ?? '';
   assert.match(rest, /color: var\(--text-faint\)/, 'muted at rest');
@@ -564,7 +565,7 @@ test('opening and closing the form writes nothing, and the picker is as it was l
   assert.deepEqual(picks, []);
   assert.equal(document.querySelector('.data-picker').className, 'data-picker', 'the picker is back');
   assert.equal(document.querySelector('.dp-search input').value, 'fea', 'with its search');
-  assert.equal(document.activeElement, document.querySelector('.dp-search input'), 'and the keyboard on it');
+  assertSameElement(document.activeElement, document.querySelector('.dp-search input'), 'and the keyboard on it');
   await clear();
 });
 

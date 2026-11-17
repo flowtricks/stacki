@@ -14,6 +14,7 @@
 // submits, and read each write back with the shared parser.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const path = require('node:path');
 const fs = require('node:fs');
 const esbuild = require('esbuild');
@@ -133,7 +134,7 @@ const permission = (name, label) => card(name).querySelector(`[role="switch"][ar
 async function rename(name, value, key = 'Enter') {
   await click(card(name).querySelector(`button[aria-label="Rename ${name}"]`));
   const input = card(name).querySelector('input[aria-label="Role name"]');
-  assert.equal(document.activeElement, input, 'clicking the name focuses its field');
+  assertSameElement(document.activeElement, input, 'clicking the name focuses its field');
   await type(input, value);
   await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
   await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
@@ -574,7 +575,7 @@ test('Duplicate copies a role after itself, without members, as "<Name> copy", a
   assert.deepEqual(copy.members, [], 'members never copy: a person is in one role');
   assert.deepEqual(copy.access, ['panel:cms', 'panel:apps', 'app:seo']);
   assert.deepEqual(copy.pinnedApps, ['seo', 'crm'], 'pins copy in order');
-  assert.equal(document.activeElement, card('Writer copy').querySelector('input[aria-label="Role name"]'), 'the copy opens its name to rename');
+  assertSameElement(document.activeElement, card('Writer copy').querySelector('input[aria-label="Role name"]'), 'the copy opens its name to rename');
   await act(async () => document.activeElement.blur());
 
   await click(card('Writer').querySelector('button[aria-label="Duplicate Writer"]'));
@@ -626,7 +627,7 @@ test('Delete asks first, Cancel keeps the role, and a deleted default or View as
   );
   await click(menuRows()[0]);
   await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
-  assert.equal(document.activeElement, card('Client').querySelector('input[aria-label="Role name"]'), 'Rename in the menu opens the name field');
+  assertSameElement(document.activeElement, card('Client').querySelector('input[aria-label="Role name"]'), 'Rename in the menu opens the name field');
   await act(async () =>
     card('Client')
       .querySelector('input[aria-label="Role name"]')
@@ -649,7 +650,7 @@ test('Delete asks first, Cancel keeps the role, and a deleted default or View as
   assert.match(dialog().textContent, /Delete Writer\?/);
   assert.match(dialog().textContent, /Its 2 members \(sam, kim\) become people in no role\./);
   assert.match(dialog().textContent, /role for people in no role, so that becomes Admin/);
-  assert.equal(document.activeElement, dialogButton('Cancel'), 'a destructive question starts on Cancel');
+  assertSameElement(document.activeElement, dialogButton('Cancel'), 'a destructive question starts on Cancel');
   await click(dialogButton('Cancel'));
   await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
   assert.equal(writes.length, 0, 'Cancel writes nothing');

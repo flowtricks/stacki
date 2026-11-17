@@ -32,6 +32,7 @@
 // driven by events, reading the DOM after each step.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
@@ -517,7 +518,7 @@ test('an app’s details open in a popup from ⋯ → Details only, show each se
   await click(uninstall());
   await settle();
   assert.match(document.querySelector('.confirm-dialog').textContent, /Uninstall Heat map\?/);
-  assert.equal(document.activeElement, confirmButton('Cancel'), 'Cancel has focus, so Return cannot remove the app');
+  assertSameElement(document.activeElement, confirmButton('Cancel'), 'Cancel has focus, so Return cannot remove the app');
   await click(confirmButton('Cancel'));
   await settle();
   assert.deepEqual(removed, [], 'cancelled, nothing removed');
@@ -556,7 +557,7 @@ test('Remove app asks first, from the row’s ⋯ menu and the details header’
   await settle();
   assert.match(document.querySelector('.confirm-dialog').textContent, /Uninstall Heat map\?/);
   assert.match(document.querySelector('.confirm-dialog').textContent, /Removes the app and its files from this project for everyone\./);
-  assert.equal(document.activeElement, confirmButton('Cancel'), 'Cancel has focus');
+  assertSameElement(document.activeElement, confirmButton('Cancel'), 'Cancel has focus');
   await click(confirmButton('Cancel'));
   await settle();
   assert.deepEqual(removed, [], 'cancelled, nothing removed');

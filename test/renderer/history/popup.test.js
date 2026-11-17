@@ -2,6 +2,7 @@
 // Methodology: mount the shared component in jsdom, emulate native dialog focus, and
 // exercise gestures, nested layers, keyboard dismissal, reduced motion and interrupted exits.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -86,7 +87,7 @@ test('shared popup motion, dismissal and nested focus', async () => {
     await tick(180);
     assert.deepEqual(events, ['parent']);
     assert.equal(document.querySelector('dialog') === null, true);
-    assert.equal(document.activeElement, trigger);
+    assertSameElement(document.activeElement, trigger);
 
     await render({ open: false });
     await render({ open: true });

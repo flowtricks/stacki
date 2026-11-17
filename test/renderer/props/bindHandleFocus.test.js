@@ -15,6 +15,7 @@
 // focus in the field, focus elsewhere, and focus on a non-editable control.
 
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -127,7 +128,7 @@ test('an attribute pressed while typing: the chip lands at the caret, and over a
     field.focus();
     select(field.firstChild, range[0], range[1]);
     await fire(field, 'mouseup');
-    assert.equal(document.activeElement, field);
+    assertSameElement(document.activeElement, field);
     await pressDot(dot);
     await click(rowNamed('title'));
     const last = writes.at(-1);

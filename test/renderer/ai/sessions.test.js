@@ -13,6 +13,7 @@
 // section boxes are stubbed as stacked 30px rows for the pointer drag.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const path = require('node:path');
 const fs = require('node:fs');
 const esbuild = require('esbuild');
@@ -615,7 +616,7 @@ test('rename in place: Enter commits, Escape cancels, empty and unchanged names 
   assert.ok(input, 'the row became a field');
   assert.equal(input.value, 'Sidebar idea');
   assert.equal(input.getAttribute('maxlength'), '200', 'typing is bounded');
-  assert.equal(document.activeElement, input, 'it has the keyboard, name selected');
+  assertSameElement(document.activeElement, input, 'it has the keyboard, name selected');
   await type(input, '  A better name  ');
   await view.press(input, { key: 'Enter' });
   assert.deepEqual(view.main.named('aiChatUpdate').at(-1).payload, { projectPath: PROJECT, chat: chatId('f'), title: 'A better name' }, 'trimmed');

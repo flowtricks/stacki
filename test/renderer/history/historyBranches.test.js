@@ -2,6 +2,7 @@
 // Methodology: mount the real controls and graph against a parsed, stubbed IPC transport;
 // Exercise filtering, create/switch, deletion consent, conflicts and partial commit recovery.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -291,7 +292,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     await click(button('Cancel'));
     await click(document.querySelector('[title="Delete feature"]'));
     assert.match(document.querySelector('[role="alertdialog"]').textContent, /Delete.*feature/);
-    assert.equal(document.activeElement, button('Cancel'));
+    assertSameElement(document.activeElement, button('Cancel'));
     assert.equal(
       requests.some(([kind]) => kind === 'delete'),
       false,
@@ -340,7 +341,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     assert.equal(checkouts().length, 0);
     await click(document.querySelector('[aria-label="Close new branch"]'));
     assert.equal(document.querySelector('[aria-label="New branch name"]') === null, true);
-    assert.equal(document.activeElement, button('New branch'));
+    assertSameElement(document.activeElement, button('New branch'));
     await click(button('New branch'));
     assert.equal(document.querySelector('[aria-label="New branch name"]').value, '');
     await act(async () => {

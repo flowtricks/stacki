@@ -3,6 +3,7 @@
 // Method: render the real panel in JSDOM and exercise pointer/keyboard actions;
 // inspect the pure wrapping gesture and its edit requests for valid and invalid trees.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
@@ -214,7 +215,7 @@ async function checkMenu(StructurePanel) {
   const menu = document.querySelector('[aria-label="Element actions"]');
   assert.equal(menu.style.left, '796px');
   assert.equal(menu.style.top, '460px');
-  assert.equal(document.activeElement, menu, 'right-click does not preselect an action');
+  assertSameElement(document.activeElement, menu, 'right-click does not preselect an action');
   await click('Open component');
   assert.deepEqual(calls.at(-1), ['open', 'Card', 'n1']);
   assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined);
@@ -241,11 +242,11 @@ async function checkMenu(StructurePanel) {
   await open('n0');
   const selected = calls.filter((call) => call[0] === 'select').length;
   await key(document.activeElement, 'ArrowUp');
-  assert.equal(document.activeElement, item('Delete'));
+  assertSameElement(document.activeElement, item('Delete'));
   await key(document.activeElement, 'ArrowDown');
-  assert.equal(document.activeElement, item('Wrap in'));
+  assertSameElement(document.activeElement, item('Wrap in'));
   await key(document.activeElement, 'ArrowDown');
-  assert.equal(document.activeElement, item('Cut'));
+  assertSameElement(document.activeElement, item('Cut'));
   assert.equal(calls.filter((call) => call[0] === 'select').length, selected);
   await key(document.activeElement, 'Escape');
   assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined);

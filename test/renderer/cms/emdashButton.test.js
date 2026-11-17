@@ -13,6 +13,7 @@
 // stream), drive the dialog with dispatched events, and read the DOM. Waits go through test/helpers/waitFor.js.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const path = require('node:path');
 const fs = require('node:fs');
 const esbuild = require('esbuild');
@@ -223,19 +224,19 @@ test('the dialog is a modal: centred native dialog, title row with the mark and 
   // The close button.
   await pressButton('.emdash-dialog-close');
   await popupGone('the close button closes it');
-  assert.equal(document.activeElement, button(), 'focus is back on the button');
+  assertSameElement(document.activeElement, button(), 'focus is back on the button');
   // Escape.
   await click();
   await popupShown('it opens again');
   await act(async () => key(document, 'Escape'));
   await popupGone('Escape closes it');
-  assert.equal(document.activeElement, button());
+  assertSameElement(document.activeElement, button());
   // A press on the backdrop.
   await click();
   await popupShown('it opens a third time');
   await pressBackdrop();
   await popupGone('a backdrop press closes it');
-  assert.equal(document.activeElement, button());
+  assertSameElement(document.activeElement, button());
 });
 
 test('while the project is read the dialog shows skeleton rows, not words', async () => {

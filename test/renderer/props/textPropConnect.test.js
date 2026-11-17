@@ -18,6 +18,7 @@
 // slot, the span — are proven untouched.
 
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -300,7 +301,7 @@ test('pressed while typing: the chip lands at the caret, or over the selection',
     const field = document.querySelector('.props-field textarea');
     field.focus();
     field.setSelectionRange(range[0], range[1]);
-    assert.equal(document.activeElement, field);
+    assertSameElement(document.activeElement, field);
     await pressDot();
     await click(rowNamed('title'));
     assert.equal(await edit.write(), COMPONENT.replace('<slot />Text<span', `<slot />${expected}<span`), `caret ${range.join('–')}`);

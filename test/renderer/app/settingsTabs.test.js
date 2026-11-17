@@ -9,6 +9,7 @@
 // checked directly, including values an earlier build or a corrupt store could hold.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const path = require('node:path');
 const fs = require('node:fs');
 const esbuild = require('esbuild');
@@ -189,7 +190,7 @@ test('the arrow keys move between tabs and wrap', async () => {
   tab('Editor settings').focus();
   await pressKey(document.activeElement, 'ArrowDown');
   assert.equal(selectedTab().textContent.trim(), 'Folders');
-  assert.equal(document.activeElement, selectedTab(), 'focus follows the selection');
+  assertSameElement(document.activeElement, selectedTab(), 'focus follows the selection');
   await pressKey(document.activeElement, 'ArrowDown');
   assert.equal(selectedTab().textContent.trim(), 'CMS connections');
   await pressKey(document.activeElement, 'ArrowDown');

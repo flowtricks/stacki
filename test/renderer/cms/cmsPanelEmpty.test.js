@@ -4,6 +4,7 @@
 // another Astro file, and exercise the creation and cancel controls.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const { buildSync } = require('esbuild');
@@ -77,7 +78,7 @@ test('a panel with no collections offers content collections and creation', asyn
       );
       await act(async () => document.querySelector('button[title="New collection"]').click());
       const input = document.querySelector('input[placeholder="Collection name"]');
-      assert.equal(document.activeElement, input);
+      assertSameElement(document.activeElement, input);
       await act(async () => {
         input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });

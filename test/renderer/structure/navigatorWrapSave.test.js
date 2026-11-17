@@ -4,6 +4,7 @@
 // Open the real canvas menu too, proving that it selects and edits the right source node.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -64,7 +65,7 @@ test('navigator wrappers save and undo through the document engine', async (cont
   );
   const menu = document.querySelector('[aria-label="Element actions"]');
   assert.ok(menu, 'the canvas opens the navigator action menu');
-  assert.equal(document.activeElement, menu, 'no action is initially focused');
+  assertSameElement(document.activeElement, menu, 'no action is initially focused');
   assert.equal(__panels.StructurePanel.selectedId, nodeAt([0, 0]).id);
   const item = (label) => [...document.querySelectorAll('[role="menuitem"]')].find((entry) => entry.firstElementChild?.textContent === label);
   await app.act(() => item('Wrap in').click());

@@ -14,6 +14,7 @@
 // bar loses it, asks first only when synced queries are remembered, and records an undo step; the list may be emptied; a corrupt file
 // shows the defaults and is never written over; versions 1 and 2 read at the same widths without a write.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -398,7 +399,7 @@ test('adding a breakpoint: no direction to choose, the side follows the number, 
   const nameInput = addCard().querySelector('.breakpoints-name-input');
   assert.equal(nameInput.value, '', 'the name reads as text, empty until typed');
   assert.equal(nameInput.getAttribute('placeholder'), 'Large', 'with the default name as its placeholder');
-  assert.equal(document.activeElement, addValue(), 'the value is focused as the card opens');
+  assertSameElement(document.activeElement, addValue(), 'the value is focused as the card opens');
   assert.equal(storage.state.writes.length, 0, 'nothing is written until it is added');
   assert.equal(addCard().querySelector('.breakpoints-query').textContent, 'Matches width >= 100rem · wider than Desktop');
   await act(async () => {

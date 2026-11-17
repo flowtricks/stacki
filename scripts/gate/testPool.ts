@@ -3,8 +3,14 @@
 // terminal: a finished command prints one line, and its full output only when
 // it failed. Why not interleave: 150 commands writing at once is unreadable,
 // and the failure is the part anyone needs.
+//
+// Memory is bounded too: a sampler reads every running command's process-group resident memory
+// once a second and kills a group past its bound. Why: one failing `assert.equal` on two
+// React-rendered jsdom nodes built a diff of the whole fiber tree and passed 4 GB in five seconds,
+// outside the V8 heap where `--max-old-space-size` cannot stop it (docs/memory-safety.md). With
+// fifteen jobs, or several agents each running the gate, that froze a 24 GB Mac.
 
-import { spawn, spawnSync, type SpawnOptionsWithStdioTuple, type StdioNull, type StdioPipe } from 'node:child_process';
+import { execFile, spawn, spawnSync, type SpawnOptionsWithStdioTuple, type StdioNull, type StdioPipe } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 
 export interface TestCommand {
@@ -23,6 +29,11 @@ export interface TestCommand {
    * verify ran 600 s on GitHub's macOS runner and hit the default). At most `commandMsLimit`.
    */
   readonly timeoutMs?: number;
+  /**
+   * This command's own bound on its process group's resident memory, for the static checks that
+   * legitimately run large (type-aware ESLint has a 6 GB heap). Absent means the default for its kind.
+   */
+  readonly rssBytesMax?: number;
 }
 
 export interface TestOutcome {
@@ -66,9 +77,91 @@ export const POOL_LIMITS = {
    * batches 101 s, 126 s and 40 s), so it gets 25 minutes: comfortably above that, still bounded.
    */
   studioVerifyMsMax: 25 * 60 * 1000,
+  /**
+   * Resident memory one test command's process group may hold. The heaviest suites measured well
+   * under 1.5 GB (jsdom with a bundled panel about 400 MB; Electron with its helpers and an Astro dev
+   * server about 2 GB), so a group past 4 GB is runaway, not work.
+   */
+  commandRssBytesMax: 4 * 1024 * 1024 * 1024,
+  /** The same for `kind: 'electron'` commands: main, GPU, renderers and a dev server together. */
+  electronRssBytesMax: 6 * 1024 * 1024 * 1024,
+  /** The static checks (ESLint's 6 GB heap, Studio verify's batches): large, still bounded. */
+  staticCheckRssBytesMax: 10 * 1024 * 1024 * 1024,
+  /** How often the memory sampler reads the running groups; one `ps` serves every command. */
+  memorySampleMs: 1000,
 } as const satisfies Record<string, number>;
 
 const running = new Set<ReturnType<typeof spawn>>();
+
+/** Each running command's memory bound and what to do when its group passes it. */
+const memoryWatches = new Map<number, { readonly rssBytesMax: number; readonly onExceeded: (rssBytes: number) => void }>();
+let memorySampler: ReturnType<typeof setInterval> | undefined;
+let memorySampleRunning = false;
+
+/**
+ * Watch a process group's resident memory until `memoryUnwatch`. One interval serves every running
+ * command, and it stops when none is left, so an idle runner holds no timer. Windows has no process
+ * groups and no `ps`, so it is not watched there; its time limit still holds.
+ */
+function memoryWatch(processGroup: number, rssBytesMax: number, onExceeded: (rssBytes: number) => void): void {
+  if (process.platform === 'win32') {
+    return;
+  }
+  if (rssBytesMax <= 0) {
+    throw new Error(`memoryWatch: a memory bound must be positive, got ${rssBytesMax}`);
+  }
+  memoryWatches.set(processGroup, { rssBytesMax, onExceeded });
+  memorySampler ??= setInterval(memoryWatchSample, POOL_LIMITS.memorySampleMs);
+  memorySampler.unref();
+}
+
+function memoryUnwatch(processGroup: number): void {
+  memoryWatches.delete(processGroup);
+  if (memoryWatches.size === 0 && memorySampler !== undefined) {
+    clearInterval(memorySampler);
+    memorySampler = undefined;
+  }
+}
+
+// One `ps` per sample for every group. A sample still running when the next tick comes is not
+// doubled: a loaded machine slows `ps`, and piling samples on it would add to the load.
+function memoryWatchSample(): void {
+  if (memorySampleRunning) {
+    return;
+  }
+  memorySampleRunning = true;
+  execFile('ps', ['-A', '-o', 'pgid=,rss='], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+    memorySampleRunning = false;
+    if (error !== null) {
+      // A failed sample is skipped, not fatal: the next one comes in a second and the time limit holds.
+      return;
+    }
+    const totals = memoryWatchTotals(stdout);
+    for (const [processGroup, watch] of memoryWatches) {
+      const rssBytes = totals.get(processGroup) ?? 0;
+      if (rssBytes > watch.rssBytesMax) {
+        watch.onExceeded(rssBytes);
+      }
+    }
+  });
+}
+
+/** Resident bytes per process group from `ps -o pgid=,rss=` output (rss in kilobytes). */
+export function memoryWatchTotals(psOutput: string): ReadonlyMap<number, number> {
+  const totals = new Map<number, number>();
+  for (const line of psOutput.split('\n')) {
+    const fields = line.trim().split(/\s+/);
+    if (fields.length !== 2) {
+      continue;
+    }
+    const processGroup = Number(fields[0]);
+    const rssKilobytes = Number(fields[1]);
+    if (Number.isSafeInteger(processGroup) && Number.isSafeInteger(rssKilobytes)) {
+      totals.set(processGroup, (totals.get(processGroup) ?? 0) + rssKilobytes * 1024);
+    }
+  }
+  return totals;
+}
 
 /**
  * Kill a command's whole process group: the command, the Electron processes a probe started, and
@@ -165,6 +258,10 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
   if (limitMs <= 0 || limitMs > POOL_LIMITS.commandMsLimit) {
     throw new Error(`runTestCommand: ${command.name}'s limit of ${limitMs} ms is outside 1 to ${POOL_LIMITS.commandMsLimit}`);
   }
+  const rssBytesMax = command.rssBytesMax ?? (command.kind === 'electron' ? POOL_LIMITS.electronRssBytesMax : POOL_LIMITS.commandRssBytesMax);
+  if (rssBytesMax <= 0 || rssBytesMax > POOL_LIMITS.staticCheckRssBytesMax) {
+    throw new Error(`runTestCommand: ${command.name}'s memory bound of ${rssBytesMax} bytes is outside 1 to ${POOL_LIMITS.staticCheckRssBytesMax}`);
+  }
   const output = createOutputTail(POOL_LIMITS.outputBytesMax);
   return new Promise((resolve) => {
     const spawnOptions: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe> = {
@@ -180,6 +277,20 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
         ? spawn(command.command, [], { ...spawnOptions, shell: true })
         : spawn(command.command, [...command.argumentsList], spawnOptions);
     running.add(child);
+    const processGroup = child.pid;
+    if (processGroup !== undefined) {
+      memoryWatch(processGroup, rssBytesMax, (rssBytes) => {
+        memoryUnwatch(processGroup);
+        const gigabytes = (bytes: number): string => (bytes / 1024 / 1024 / 1024).toFixed(1);
+        output.push(
+          Buffer.from(
+            `\nKilled: its processes held ${gigabytes(rssBytes)} GB, past the ${gigabytes(rssBytesMax)} GB bound. ` +
+              'A failing assert.equal on DOM nodes is the usual cause; see docs/memory-safety.md.\n',
+          ),
+        );
+        killProcessGroup(child);
+      });
+    }
     const timer = setTimeout(() => {
       output.push(Buffer.from(`\nKilled after ${limitMs / 1000} s without exiting.\n`));
       killProcessGroup(child);
@@ -189,6 +300,9 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
     const finish = (ending: { readonly passed: boolean; readonly note: string }): void => {
       clearTimeout(timer);
       running.delete(child);
+      if (processGroup !== undefined) {
+        memoryUnwatch(processGroup);
+      }
       // A command that passed or failed has no business leaving processes behind: sweep what it
       // started (an Electron helper that outlived its probe is the usual straggler). Windows has
       // no group to sweep, and its tree is already gone when the command exits on its own.

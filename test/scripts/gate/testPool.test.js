@@ -3,7 +3,9 @@
 // keeps, and rejects job counts outside its limits.
 // It also holds the Electron cap (windowed suites never exceed their own limit while other
 // suites keep running), the sweep that leaves no process of a finished command behind, and
-// the Dock preload's inertness outside Electron.
+// the Dock preload's inertness outside Electron, and the memory bound: a command whose process
+// group passes its resident-memory bound is killed and reported, so a runaway suite cannot take the
+// machine (docs/memory-safety.md).
 // Method: run tiny `node -e` commands through the real pool. Each command marks
 // itself running with a file in a shared directory and records how many marks
 // it saw, so the highest count observed is the concurrency actually reached.
@@ -14,7 +16,7 @@ const childProcess = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { repoPath } = require('../../helpers/sources.js');
-const { parseElectronJobs, parseJobs, runTestPool, withDockPreload, POOL_LIMITS } = require('#dist/scripts/gate/testPool.js');
+const { memoryWatchTotals, parseElectronJobs, parseJobs, runTestPool, withDockPreload, POOL_LIMITS } = require('#dist/scripts/gate/testPool.js');
 
 const node = JSON.stringify(process.execPath);
 const options = (jobs) => ({ jobs, cwd: process.cwd(), environment: process.env });
@@ -200,4 +202,38 @@ test('a command may carry its own time limit, bounded by the ceiling, and is kil
     runTestPool([unbounded], { cwd: process.cwd(), environment: process.env, jobs: 1 }, () => {}),
     /outside 1 to 1800000/,
   );
+});
+
+test('a command whose processes pass its memory bound is killed and says why', { skip: process.platform === 'win32' }, async () => {
+  // Touches 400 MB page by page so it is resident, then holds it; the bound is 150 MB.
+  const script = 'const block = Buffer.alloc(400 * 1024 * 1024, 1); setInterval(() => block[0]++, 100);';
+  const greedy = { name: 'greedy', command: process.execPath, argumentsList: ['-e', script], rssBytesMax: 150 * 1024 * 1024, timeoutMs: 20_000 };
+  const [outcome] = await runTestPool([greedy], options(1), () => {});
+  assert.equal(outcome.passed, false);
+  assert.match(outcome.output, /Killed: its processes held \d+\.\d GB, past the 0\.1 GB bound\./);
+  assert.ok(outcome.durationMs < 15_000, `killed by the memory bound, not the time limit (${outcome.durationMs} ms)`);
+  // A modest command under its bound passes untouched.
+  const modest = { name: 'modest', command: process.execPath, argumentsList: ['-e', 'Buffer.alloc(8 * 1024 * 1024, 1)'], rssBytesMax: 512 * 1024 * 1024 };
+  const [passed] = await runTestPool([modest], options(1), () => {});
+  assert.equal(passed.passed, true);
+  // Bounds outside the range are refused before anything is spawned.
+  const unbounded = { ...modest, rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax + 1 };
+  await assert.rejects(
+    runTestPool([unbounded], options(1), () => {}),
+    /memory bound of \d+ bytes is outside 1 to/,
+  );
+  await assert.rejects(
+    runTestPool([{ ...modest, rssBytesMax: 0 }], options(1), () => {}),
+    /memory bound of 0 bytes is outside/,
+  );
+});
+
+test('process-group memory totals sum every member and skip lines that are not a group and a size', () => {
+  const totals = memoryWatchTotals(' 10  100\n10 50\n  7 1\nPGID RSS\n\n12\n');
+  assert.equal(totals.get(10), 150 * 1024);
+  assert.equal(totals.get(7), 1024);
+  assert.equal(totals.has(12), false);
+  assert.equal(totals.size, 2);
+  assert.ok(POOL_LIMITS.commandRssBytesMax < POOL_LIMITS.electronRssBytesMax);
+  assert.ok(POOL_LIMITS.electronRssBytesMax < POOL_LIMITS.staticCheckRssBytesMax);
 });

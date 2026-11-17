@@ -11,6 +11,7 @@
 // and changes the committed subject, and the type is remembered for the project
 // across a remount but not carried to another project.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -203,7 +204,7 @@ test('the Git panel commits as typed by default, and with the picked type once c
     const key = (name) => act(async () => document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', { key: name, bubbles: true })));
     await act(async () => query('[aria-label="Commit type"]').click());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
-    assert.equal(document.activeElement, query('.dd-search'), 'the search box takes focus when the menu opens');
+    assertSameElement(document.activeElement, query('.dd-search'), 'the search box takes focus when the menu opens');
     await search('bug');
     assert.deepEqual(labels(), ['No type', 'fix']);
     await search('css');

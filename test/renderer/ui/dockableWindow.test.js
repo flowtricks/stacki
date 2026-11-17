@@ -2,6 +2,7 @@
 // Method: mount the actual frame and nested popup in jsdom, then exercise pointer,
 // keyboard, viewport and dismissal events, including iframe crossing and unmount cleanup.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -97,7 +98,7 @@ test('floating tools preserve content while docking and using the canvas', async
     input.focus();
     await act(async () => changeMode('docked'));
     assert.equal(frame.dataset.windowMode, 'docked');
-    assert.equal(document.activeElement, input);
+    assertSameElement(document.activeElement, input);
     assert.equal(frame.querySelector('input'), input);
     assert.equal(input.value, 'unsaved');
     assert.equal(sheet.scrollTop, 140);

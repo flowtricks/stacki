@@ -148,16 +148,17 @@ const buildCommands = (stage: BuildStage): readonly TestCommand[] => {
     return [buildCommand(stage)];
   }
   const bundler = path.join(root, 'dist/scripts/build/bundleClients.js');
-  return [buildCommand(stage), { name: `${stage} (bundle)`, command: node, argumentsList: [bundler, client] }];
+  return [buildCommand(stage), { name: `${stage} (bundle)`, command: node, argumentsList: [bundler, client], rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax }];
 };
 const buildCommand = (stage: BuildStage): TestCommand => {
   const argumentsList = buildArguments[stage];
   if (plan.kind === 'targeted' && INCREMENTAL_STAGES.has(stage)) {
     const buildInfo = path.join(root, 'dist', '.tsbuildinfo', `${stage.slice('build:'.length)}.tsbuildinfo`);
     const incremental = ['--incremental', '--tsBuildInfoFile', buildInfo];
-    return { name: stage, command: node, argumentsList: [...argumentsList, ...incremental] };
+    return { name: stage, command: node, argumentsList: [...argumentsList, ...incremental], rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax };
   }
-  return { name: stage, command: node, argumentsList };
+  // Compilers and bundlers hold the whole program, so they get the static checks' memory bound.
+  return { name: stage, command: node, argumentsList, rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax };
 };
 // The type checks keep what they learned between runs, outside dist/ so a
 // clean keeps it. tsc re-checks every file whose own text or dependencies
@@ -176,11 +177,13 @@ const staticChecks: readonly TestCommand[] = [
     command: node,
     argumentsList: [path.join(root, 'scripts/policy/studioChecks.mts'), '--full'],
     timeoutMs: POOL_LIMITS.studioVerifyMsMax,
+    rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax,
   },
   {
     name: 'tsc --noEmit',
     command: node,
     argumentsList: [typeScript, '--noEmit', '--incremental', '--tsBuildInfoFile', path.join(typeCheckCache, 'root.tsbuildinfo')],
+    rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax,
   },
   {
     // The scripts emit CommonJS, so their build config cannot hold
@@ -195,6 +198,7 @@ const staticChecks: readonly TestCommand[] = [
       '--tsBuildInfoFile',
       path.join(typeCheckCache, 'scripts.tsbuildinfo'),
     ],
+    rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax,
   },
   {
     name: 'eslint',
@@ -202,6 +206,7 @@ const staticChecks: readonly TestCommand[] = [
     // Type-aware lint of the whole tree passed Node's default heap (about 2 GB) on
     // GitHub's macOS runner in 1.1.0; 6 GB leaves room on every runner, which has 7 GB or more.
     argumentsList: ['--max-old-space-size=6144', path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js'), '--max-warnings', '0', '.'],
+    rssBytesMax: POOL_LIMITS.staticCheckRssBytesMax,
   },
   {
     // Line width, shell scripts, test headers, the dependency record, one

@@ -7,6 +7,7 @@
 // document as a browser delivers them; stand in for IntersectionObserver to scroll cards away.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { loadTranscript } = require('../../helpers/aiTranscriptDom.js');
 
 const {
@@ -228,14 +229,14 @@ test('a card that appears while the composer is empty takes the keyboard; a comp
   await act(async () => {
     root.render(React.createElement(view.PermissionCard, { item: permission('p1'), tool: tool(), onAnswer: () => undefined }));
   });
-  assert.equal(document.activeElement, container.querySelector('.ai-permission'), 'empty composer: focus moves to the card');
+  assertSameElement(document.activeElement, container.querySelector('.ai-permission'), 'empty composer: focus moves to the card');
   await act(async () => root.render(React.createElement(React.Fragment)));
   composer.value = 'half a sentence';
   composer.focus();
   await act(async () => {
     root.render(React.createElement(view.PermissionCard, { item: permission('p2'), tool: tool(), onAnswer: () => undefined }));
   });
-  assert.equal(document.activeElement, composer, 'typed text is not interrupted');
+  assertSameElement(document.activeElement, composer, 'typed text is not interrupted');
 });
 
 class FakeObserver {

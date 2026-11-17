@@ -10,6 +10,7 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { readComponentProperties, editPropertyDefinition } = require('#dist/electron/properties/propertyDefinitions.js');
 
 test('component properties lifecycle and controls', async () => {
@@ -421,8 +422,10 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   const pressDown = async (element) => act(async () => element.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
   assert.ok(document.querySelector('.property-options input') === null);
   await act(async () => document.querySelector('.property-options .list-field-text').click());
-  const firstOption = document.querySelector('.list-item-field input');
-  assert.equal(document.activeElement, firstOption);
+  const firstOption = document.querySelector('.list-item-editor input');
+  // Never assert.equal on nodes: a failing one inspected the whole fiber tree and took over 4 GB in
+  // 5 s here (docs/memory-safety.md).
+  assertSameElement(document.activeElement, firstOption, 'the first option has the keyboard');
   assert.equal(firstOption.selectionStart, 0);
   assert.equal(firstOption.selectionEnd, 'small'.length);
   await pressDown(firstOption);
