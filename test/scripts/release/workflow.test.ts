@@ -44,10 +44,9 @@ function verifySandboxSteps(steps: readonly Record<string, unknown>[]): void {
   assert.doesNotMatch(command(steps[probe] ?? {}), /--no-sandbox/);
 }
 
-test('Check and Release prepare the Linux sandbox after install and before Electron tests', () => {
+test('Check prepares the Linux sandbox after install and before Electron tests', () => {
   const check = workflowJobs('.github/workflows/check.yml');
-  const release = workflowJobs('.github/workflows/release.yml');
-  for (const job of [check['shard'], release['tests']]) {
+  for (const job of [check['shard'], check['static'], check['studio']]) {
     const steps = jobSteps(job);
     verifySandboxSteps(steps);
     // Reproduce the missing setup, wrong runner guard, and wrong-order regressions.
@@ -66,7 +65,7 @@ test('Check and Release prepare the Linux sandbox after install and before Elect
 });
 
 test('extracted AppImage smoke launches with APPDIR supplied by the missing FUSE runtime', () => {
-  const jobs = workflowJobs('.github/workflows/release.yml');
+  const jobs = workflowJobs('.github/workflows/candidate.yml');
   const launch = jobSteps(jobs['build-linux']).find((step) =>
     command(step).includes('squashfs-root/AppRun'),
   );
@@ -84,7 +83,7 @@ test('Windows certificates remain optional while Mac signing stays required', ()
   assert.equal(record(build['win'])['forceCodeSigning'], false);
   assert.equal(record(build['mac'])['forceCodeSigning'], true);
   assert.equal(record(build['mac'])['notarize'], true);
-  const jobs = workflowJobs('.github/workflows/release.yml');
+  const jobs = workflowJobs('.github/workflows/candidate.yml');
   const commands = jobSteps(jobs['build-windows']).map(command).join('\n');
   assert.match(commands, /electron-builder --win/);
   assert.doesNotMatch(commands, /IsNullOrWhiteSpace|WIN_CSC_\w+ is missing|forceCodeSigning=true/);
@@ -95,17 +94,19 @@ test('Windows checkouts preserve source LF endings before formatting checks', ()
   assert.match(attributes, /^\*\s+text=auto\s+eol=lf\s*$/m);
 });
 
-test('every job that uploads to the release waits for the single draft job', () => {
+test('only the promotion uploads, and it creates the draft before its single upload step', () => {
   // Three parallel electron-builder jobs once each created a draft (v1.2.2): uploads need one target.
-  const jobs = workflowJobs('.github/workflows/release.yml');
-  const draftCommands = jobSteps(jobs['draft']).map(command).join('\n');
-  assert.match(draftCommands, /gh release view "\$TAG" --repo flowtricks\/stacki-releases/);
-  assert.match(draftCommands, /gh release create "\$TAG"[\s\S]*--draft/);
-  for (const name of ['build-mac', 'build-windows', 'build-linux', 'build-studio', 'publish']) {
-    const needs = record(jobs[name])['needs'];
-    const names = typeof needs === 'string' ? [needs] : list(text)(needs);
-    assert.ok(names.includes('draft'), `${name} must need the draft job`);
+  // Now the candidate builds never upload, and one promotion step creates the draft, then uploads.
+  const candidate = workflowJobs('.github/workflows/candidate.yml');
+  for (const [name, job] of Object.entries(candidate)) {
+    assert.doesNotMatch(jobSteps(job).map(command).join('\n'), /gh release (create|upload|edit)|--publish always/, `${name} must not publish`);
   }
+  const promote = jobSteps(workflowJobs('.github/workflows/release.yml')['publish']);
+  const uploads = promote.filter((step) => command(step).includes('gh release upload'));
+  assert.equal(uploads.length, 1, 'one upload step');
+  const upload = command(uploads[0] ?? {});
+  assert.ok(upload.indexOf('gh release view "$TAG" --repo flowtricks/stacki-releases') >= 0);
+  assert.ok(upload.indexOf('--draft') < upload.indexOf('gh release upload'), 'the draft exists before the upload');
 });
 
 test('create-stacki publishing checks npm trusted publishing before the long test run', () => {

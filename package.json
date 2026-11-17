@@ -32,6 +32,7 @@
     "build:cli": "npm run build:scripts && node dist/scripts/build/bundleStackiCli.js",
     "stacki": "node dist/electron/handlers/stackiCli.js",
     "release": "npm run build:scripts && node dist/scripts/release/release.js",
+    "release:ship": "node --experimental-strip-types scripts/release/releaseShip.mts",
     "build:contracts": "tsc -p shared/tsconfig.json",
     "build:electron": "tsc -p electron/tsconfig.json && npm run build:renderer",
     "build:scripts": "tsc -p scripts/tsconfig.build.json",

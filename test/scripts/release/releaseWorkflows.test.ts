@@ -73,34 +73,13 @@ test('every script a workflow names exists, and TypeScript scripts run under typ
   }
 });
 
-test('the controller and the post chain run only scripts, and pass inputs through the environment', () => {
-  for (const name of ['release-go.yml', 'release-post.yml']) {
-    for (const run of runs(workflow(name))) {
-      const allowed = /^node --experimental-strip-types scripts\/release\/\w+\.mts( .*)?$/.test(run) || run === 'npm ci --ignore-scripts';
-      assert.ok(allowed, `${name}: "${run}" is logic in YAML; put it in a script`);
-      assert.doesNotMatch(run, /\$\{\{/, `${name}: interpolate nothing into a shell line; pass it as an env variable`);
-    }
+test('the post chain runs only scripts, and passes inputs through the environment', () => {
+  for (const run of runs(workflow('release-post.yml'))) {
+    const allowed = /^node --experimental-strip-types scripts\/release\/\w+\.mts( .*)?$/.test(run) || run === 'npm ci --ignore-scripts';
+    assert.ok(allowed, `release-post.yml: "${run}" is logic in YAML; put it in a script`);
+    assert.doesNotMatch(run, /\$\{\{/, 'release-post.yml: interpolate nothing into a shell line; pass it as an env variable');
   }
-});
-
-test('the controller: dry run by default, one release at a time, approval before the push', () => {
-  const file = workflow('release-go.yml');
-  assert.notEqual(file['name'], 'Release', 'release-post.yml listens for the workflow named Release (release.yml)');
-  const dispatch = asNode(asNode(file['on'], 'on')['workflow_dispatch'], 'workflow_dispatch');
-  const inputs = asNode(dispatch['inputs'], 'inputs');
-  assert.equal(asNode(inputs['dry_run'], 'dry_run')['default'], true);
-  assert.equal(asNode(inputs['allow_minor'], 'allow_minor')['default'], false);
-  assert.deepEqual(file['concurrency'], { group: 'release', 'cancel-in-progress': false });
-  const controller = jobs(file);
-  const approve = asNode(controller['approve'], 'approve');
-  assert.equal(approve['environment'], 'release');
-  assert.equal(approve['needs'], 'preflight');
-  const tag = asNode(controller['prepare-and-tag'], 'prepare-and-tag');
-  assert.deepEqual(tag['needs'], ['preflight', 'approve']);
-  assert.match(String(tag['if']), /needs\.approve\.result == 'success' \|\| needs\.preflight\.outputs\.mode == 'dry-run'/);
-  const checkout = steps(tag).find((step) => step['uses'] === 'actions/checkout@v6');
-  assert.match(String(asNode(checkout?.['with'], 'with')['token']), /secrets\.RELEASE_PUSH_TOKEN/);
-  assert.equal(asNode(checkout?.['with'], 'with')['ref'], '${{ needs.preflight.outputs.sha }}');
+  assert.equal(existsSync('.github/workflows/release-go.yml'), false, 'the Release button needed settings that never existed; npm run release:ship replaced it');
 });
 
 test('the post chain follows release.yml by name and never calls the npm publish as a reusable workflow', () => {
@@ -114,34 +93,55 @@ test('the post chain follows release.yml by name and never calls the npm publish
   }
 });
 
-test('release.yml: one plan output switches the suite; every build, package and install step stays', () => {
-  const release = jobs(workflow('release.yml'));
-  const plan = asNode(release['plan'], 'plan');
-  assert.deepEqual(plan['outputs'], { run_tests: '${{ steps.plan.outputs.run_tests }}' });
-  const testsJob = asNode(release['tests'], 'tests');
-  assert.equal(testsJob['needs'], 'plan');
-  for (const step of steps(testsJob)) {
-    assert.match(String(step['if']), /needs\.plan\.outputs\.run_tests (==|!=) 'true'/, 'every tests step is switched by the plan output alone');
+test('candidate.yml: the plan gates every build; nothing is published or retested; the final job needs every build', () => {
+  const file = workflow('candidate.yml');
+  assert.deepEqual(file['concurrency'], { group: 'candidate-${{ github.ref }}', 'cancel-in-progress': true }, 'a newer push supersedes an older candidate');
+  assert.match(String(file['run-name']), /\(rehearsal\)/, 'promote.mts tells a rehearsal by its title');
+  const candidate = jobs(file);
+  for (const name of ['build-mac', 'build-windows', 'build-linux', 'build-studio']) {
+    const job = asNode(candidate[name], name);
+    assert.equal(job['if'], "needs.plan.outputs.build == 'true'", `${name} runs only for an unreleased version or a rehearsal`);
+    const commands = steps(job).map((step) => String(step['run'] ?? ''));
+    assert.ok(!commands.some((command) => /\bnpm test\b/.test(command)), `${name}: the suite lives in check.yml`);
+    assert.ok(!commands.some((command) => /gh release|--publish (always|onTag)/.test(command)), `${name}: a candidate never publishes`);
+    assert.ok(Number(job['timeout-minutes']) > 0, `${name} has a time bound`);
   }
-  const testRuns = steps(testsJob).map((step) => String(step['run'] ?? ''));
-  assert.ok(testRuns.includes('xvfb-run --auto-servernum npm test'));
-  assert.ok(testRuns.includes('npm test'));
   for (const name of ['build-mac', 'build-windows', 'build-linux']) {
-    const commands = steps(release[name]).map((step) => String(step['run'] ?? ''));
+    const commands = steps(candidate[name]).map((step) => String(step['run'] ?? ''));
     assert.ok(commands.includes('npm run build'), `${name} builds what it packages`);
-    assert.ok(commands.some((command) => command.includes('electron-builder')), `${name} still packages`);
-    assert.ok(!commands.some((command) => /\bnpm test\b/.test(command)), `${name}: the suite lives in the tests job`);
+    assert.ok(commands.some((command) => /^npx electron-builder --(mac|win|linux) --publish never$/.test(command)), `${name} packages without publishing`);
   }
-  const linux = steps(release['build-linux']).map((step) => String(step['run'] ?? '')).join('\n');
+  const linux = steps(candidate['build-linux']).map((step) => String(step['run'] ?? '')).join('\n');
   assert.match(linux, /linuxSmoke\.js \/opt\/Stacki\/stacki/, 'the deb install smoke test stays');
   assert.match(linux, /squashfs-root\/AppRun/, 'the AppImage smoke test stays');
-  const publish = asNode(release['publish'], 'publish');
-  const needs = asList(publish['needs'], 'publish needs');
-  for (const required of ['plan', 'tests', 'build-mac', 'build-windows', 'build-linux', 'test-linux-install', 'build-studio']) {
-    assert.ok(needs.includes(required), `publish needs ${required}`);
+  const final = asNode(candidate['candidate'], 'candidate');
+  assert.deepEqual(final['needs'], ['plan', 'build-mac', 'build-windows', 'build-linux', 'test-linux-install', 'build-studio']);
+  assert.equal(final['if'], undefined, 'skipped builds skip the final job, which is what promote.mts reads');
+  assert.ok(steps(final).some((step) => String(step['run'] ?? '').includes('candidate.mts --stage=assets')));
+});
+
+test('release.yml: proves the candidate first, rebuilds and retests nothing, and uploads only on a tag push', () => {
+  const file = workflow('release.yml');
+  const on = asNode(file['on'], 'on');
+  assert.deepEqual(asNode(on['push'], 'push'), { tags: ['v*'] });
+  const publish = steps(asNode(jobs(file)['publish'], 'publish'));
+  const commands = publish.map((step) => String(step['run'] ?? ''));
+  assert.ok(!commands.some((command) => /\bnpm (test|ci|run build)\b|electron-builder/.test(command)), 'promotion never rebuilds or retests');
+  const prove = publish.findIndex((step) => step['id'] === 'prove');
+  const firstDownload = publish.findIndex((step) => step['uses'] === 'actions/download-artifact@v7');
+  const firstUpload = publish.findIndex((step) => String(step['run'] ?? '').includes('gh release upload'));
+  assert.ok(prove >= 0);
+  assert.ok(prove < firstDownload, 'the proof comes before any download');
+  assert.ok(firstDownload < firstUpload, 'the files come from the candidate run');
+  assert.match(String(publish[prove]?.['run']), /^node --experimental-strip-types scripts\/release\/promote\.mts /);
+  for (const step of publish.filter((candidate) => candidate['uses'] === 'actions/download-artifact@v7')) {
+    assert.equal(asNode(step['with'], 'with')['run-id'], '${{ steps.prove.outputs.candidate_run_id }}');
   }
-  const planRun = String(steps(plan).find((step) => step['id'] === 'plan')?.['run']);
-  assert.match(planRun, /--sha="\$GITHUB_SHA"/);
+  for (const step of publish.filter((candidate) => /gh release (upload|edit|create)|gh workflow run/.test(String(candidate['run'] ?? '')))) {
+    assert.equal(step['if'], "steps.target.outputs.dry_run == 'false'", `${String(step['name'])} is skipped in a dry run`);
+  }
+  const target = String(publish.find((step) => step['id'] === 'target')?.['run']);
+  assert.match(target, /if \[ "\$EVENT" = push \]/, 'only a tag push is a real promotion');
 });
 
 test('publish-create-stacki: the plan switches only the suite; build, pack and publish always run', () => {

@@ -6,6 +6,13 @@ on:
     branches:
       - main
 
+# A newer push to the same branch supersedes the older run: only the tip can be
+# released (release:ship tags origin/main's HEAD), and a stale run would hold
+# scarce macOS runners for half an hour (11 runs that week waited on them).
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   # The per-platform aggregate jobs read this run's shard results.

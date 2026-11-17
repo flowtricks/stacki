@@ -1,0 +1,298 @@
+name: Candidate
+
+# Build once, test once, promote. While the version on main is unreleased
+# (`npm run release:ship` bumped it and no vX.Y.Z tag exists yet), every push
+# to main builds, signs, notarizes and smoke-tests every installer here, in
+# parallel with check.yml, and keeps the files as this run's artifacts. The
+# release tag is created only when this run and Check are green on the same
+# SHA, and release.yml then publishes exactly these files: nothing is rebuilt
+# or retested after a tag exists, so a release can no longer fail for a test
+# after its version is spent. scripts/release/candidate.mts holds the rules.
+#
+# A push whose version is already released builds nothing (the plan says why).
+# A manual run with `rehearsal` builds any commit for timing and checks; it is
+# marked "(rehearsal)" in its title, and promote.mts never promotes one.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      rehearsal:
+        description: Build and test this commit without making it promotable
+        type: boolean
+        default: true
+
+run-name: ${{ inputs.rehearsal && format('Candidate {0} (rehearsal)', github.ref_name) || format('Candidate {0}', github.ref_name) }}
+
+# A newer push supersedes an older candidate: only the tip of main can be tagged.
+concurrency:
+  group: candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      version: ${{ steps.plan.outputs.version }}
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - id: plan
+        run: node --experimental-strip-types scripts/release/candidate.mts --stage=plan --rehearsal="$REHEARSAL"
+        env:
+          REHEARSAL: ${{ inputs.rehearsal == true }}
+
+  build-mac:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: macos-latest
+    # Signing and notarization measured 17 minutes at p50 and 36 at p95 (Nov 2026).
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - run: npm run build
+      - name: Validate mac signing secrets
+        run: |
+          test -n "$MAC_CSC_LINK" || { echo "MAC_CSC_LINK is missing"; exit 1; }
+          test -n "$MAC_CSC_KEY_PASSWORD" || { echo "MAC_CSC_KEY_PASSWORD is missing"; exit 1; }
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      # Built, signed and notarized, never uploaded: the files become this
+      # run's artifacts, and only release.yml publishes them.
+      - run: npx electron-builder --mac --publish never
+        env:
+          DEBUG: electron-osx-sign*,electron-builder
+          CSC_LINK: 'data:application/x-pkcs12;base64,${{ secrets.MAC_CSC_LINK }}'
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Electron 44 requires macOS 13 (Darwin 22). The older updater already
+      # honors this field, so incompatible Macs keep their working installation.
+      - name: Set the macOS update requirement
+        run: node dist/scripts/release/macUpdateMetadata.js
+      - uses: actions/upload-artifact@v6
+        with:
+          name: candidate-mac
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  build-windows:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - run: npm run build
+      # Windows signing is optional, matching the existing release channel.
+      # Electron-builder signs when credentials exist and otherwise builds unsigned.
+      - run: npx electron-builder --win --publish never
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: candidate-windows
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  build-linux:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    # Build native modules on the oldest supported Ubuntu so the resulting
+    # glibc/libstdc++ requirements also work on newer desktop distributions.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - run: npm run build
+      - run: npx electron-builder --linux --publish never
+      - name: Install and test Debian package
+        # Refresh the package index first: the runner image's index named archive files that
+        # were gone, and the install failed to fetch them (1.1.2, 1.1.4). Retries ride out DNS.
+        run: |
+          sudo apt-get update || { sleep 15; sudo apt-get update; }
+          sudo apt-get install --yes ./release/*.deb || { sleep 15; sudo apt-get update && sudo apt-get install --yes ./release/*.deb; }
+          test "$(stat -c '%u:%g:%a' /opt/Stacki/chrome-sandbox)" = '0:0:4755'
+          test "$(cat /opt/Stacki/resources/package-type)" = deb
+          xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki
+      - name: Test portable AppImage payload and launcher
+        run: |
+          cd release
+          for appimage in ./*.AppImage; do
+            "$appimage" --appimage-extract >/dev/null
+            export APPIMAGE="$(realpath "$appimage")"
+          done
+          test ! -e squashfs-root/resources/package-type
+          test -f squashfs-root/resources/app-update.yml
+          if grep -q -- --no-sandbox squashfs-root/*.desktop; then exit 1; fi
+          # Extraction bypasses the FUSE runtime that normally sets APPDIR.
+          export APPDIR="$(realpath squashfs-root)"
+          xvfb-run --auto-servernum node ../dist/scripts/release/linuxSmoke.js \
+            squashfs-root/AppRun
+      - uses: actions/upload-artifact@v6
+        with:
+          name: candidate-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/latest-linux.yml
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-install-smoke
+          path: |
+            release/*.deb
+            dist/scripts/release/linuxSmoke.js
+          retention-days: 3
+
+  test-linux-install:
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v7
+        with:
+          name: linux-install-smoke
+      # Exercise the installed sandbox under Ubuntu's newer AppArmor policy.
+      # No global sysctl changes or sandbox-disabling launch flags are needed.
+      - name: Install and launch on Ubuntu 24.04
+        run: |
+          sudo apt-get update || { sleep 15; sudo apt-get update; }
+          sudo apt-get install --yes ./release/*.deb
+          test "$(stat -c '%u:%g:%a' /opt/Stacki/chrome-sandbox)" = '0:0:4755'
+          xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki
+
+  build-studio:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+      - run: npm --prefix studio ci
+      - run: npm --prefix studio/test/fixtures/site ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+        working-directory: studio
+      - run: npm run verify
+        working-directory: studio
+      - name: Test Studio in the browser
+        working-directory: studio
+        run: |
+          node dist/cli.mjs dev test/fixtures/site --background
+          npm run test:browser
+      - run: npm run release:bundle
+        working-directory: studio
+      - uses: actions/upload-artifact@v6
+        with:
+          name: candidate-studio
+          path: studio/release/stacki-studio-*.json
+          if-no-files-found: error
+          retention-days: 14
+      # The stacki.build demo is optional: a failure here must never hold back a
+      # release, so its files are a separate artifact outside the required list.
+      - name: Build the optional Studio demo
+        continue-on-error: true
+        run: npm --prefix studio run release:demo
+      - uses: actions/upload-artifact@v6
+        continue-on-error: true
+        with:
+          name: optional-demo
+          path: studio/.studio/demo-release/upload/*
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The one job promote.mts reads: it runs only when every build and install
+  # test passed, and it proves the merged files are a complete release whose
+  # update feeds name exactly those files at their real sizes.
+  candidate:
+    needs: [plan, build-mac, build-windows, build-linux, test-linux-install, build-studio]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: candidate-*
+          path: candidate
+          merge-multiple: true
+      - run: node --experimental-strip-types scripts/release/candidate.mts --stage=assets --version="$VERSION" --directory=candidate
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
