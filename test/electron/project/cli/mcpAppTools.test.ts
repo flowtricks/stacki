@@ -1,7 +1,7 @@
 // Goal: the MCP server serves an installed app's commands as tools exactly as the shell runs them, and follows the project as it changes: an enabled
 // app adds tools and a schema resource, `apps disable` removes them on the very next call, and a role sees only what it may run.
 // Method: a McpSession is driven message by message on a generated fixture project with a fixture app. tools/list is read before and after the app
-// is disabled and enabled through the server itself; tools/call is a dry run, then an apply; a viewer's list and call are checked; resources/list
+// is disabled and enabled through the server itself (which owes a tools/list_changed notification); tools/call is a dry run, then an apply; a viewer's list and call are checked; resources/list
 // and resources/read name the app's declared settings file.
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
@@ -35,6 +35,13 @@ test('tools/list shows the app commands, drops them after apps disable, and brin
   assert.deepEqual(dig(tool, 'inputSchema', 'required'), ['title']);
   const disabled = await send(session, 3, 'tools/call', { name: 'stacki_apps_disable', arguments: { app: 'notes', apply: true } });
   assert.equal(dig(disabled, 'result', 'isError'), false);
+  // The server said in initialize that it announces tool-list changes, so disabling the app owes exactly one notification.
+  const owed = session.takeNotifications().map((message) => dig(message, 'method'));
+  assert.deepEqual(
+    owed.filter((method) => method === 'notifications/tools/list_changed'),
+    ['notifications/tools/list_changed'],
+  );
+  assert.deepEqual(session.takeNotifications(), [], 'a notification is sent once');
   const after = await toolNames(session);
   assert.equal(
     after.some((name) => name.startsWith('stacki_notes_')),

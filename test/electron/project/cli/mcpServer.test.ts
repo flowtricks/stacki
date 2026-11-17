@@ -1,7 +1,9 @@
 // Goal: the MCP server is the CLI commands and nothing else: its tool list matches the command table for the pinned role, a write tool plans
 // first and applies only on request, errors have the JSON-RPC shapes, and no tool input can change the role the server is pinned to.
 // Method: a McpSession is driven message by message (no process, no stdio) on generated fixture projects, covering initialize, tools/list for the
-// owner and for a read-only role, tools/call dry run then apply, a role-denied call, unknown tools, bad arguments, notifications and malformed JSON-RPC.
+// owner and for a read-only role, tools/call dry run then apply, a role-denied call, unknown tools, bad arguments, notifications and malformed JSON-RPC,
+// a project with roles and no pinned role (no tool runs, never admin by default), the deletion confirmation in tool terms, and the list_changed
+// notification a new settings file owes.
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { handleLine, McpSession } from '#dist/electron/project/cli/mcpServer.js';
@@ -73,7 +75,7 @@ test('a server pinned to a read-only role lists only the tools that role may run
 
 test('tools/call plans by default, applies on request, and re-checks the role', async () => {
   const root = makeProject({ '.stacki/roles.json': ROLES_FIXTURE });
-  const owner = new McpSession({ project: root });
+  const owner = new McpSession({ project: root, role: 'admin' });
   const plan = await send(owner, call(4, 'stacki_guides_set', { visible: true }));
   assert.equal(plan?.result?.structuredContent?.mode, 'plan');
   assert.equal(readText(root, '.stacki/guide.json'), undefined);
@@ -93,7 +95,7 @@ test('a tool input cannot change the pinned role or smuggle an option', async ()
   const reply = await send(viewer, call(7, 'stacki_guides_set', { visible: true, role: 'admin', apply: true }));
   assert.equal(reply?.result?.structuredContent?.ok, false);
   assert.equal(readText(root, '.stacki/guide.json'), undefined);
-  const bad = await send(new McpSession({ project: root }), call(8, 'stacki_guides_set', { opacity: 'loud' }));
+  const bad = await send(new McpSession({ project: root, role: 'admin' }), call(8, 'stacki_guides_set', { opacity: 'loud' }));
   assert.equal(bad?.result?.structuredContent?.error?.code, 'usage');
 });
 
@@ -115,4 +117,38 @@ test('resources list the key references and the current files', async () => {
   assert.ok(!uris.includes('stacki://state/guide'), 'a file that does not exist has no state resource');
   const read = await send(session, { jsonrpc: '2.0', id: 14, method: 'resources/read', params: { uri: 'stacki://schema/guide' } });
   assert.ok(JSON.stringify(read).includes('settings'));
+});
+
+test('a project with roles.json and no pinned role runs no tool: the server never falls back to admin', async () => {
+  const root = makeProject({ '.stacki/roles.json': ROLES_FIXTURE });
+  const session = new McpSession({ project: root });
+  const tools = (await send(session, { jsonrpc: '2.0', id: 15, method: 'tools/list' }))?.result?.tools ?? [];
+  assert.equal(tools.length, 0);
+  const refused = await send(session, call(16, 'stacki_guides_set', { visible: true, apply: true }));
+  assert.equal(refused?.result?.isError, true);
+  assert.equal(refused?.result?.structuredContent?.error?.code, 'usage');
+  assert.match(JSON.stringify(refused), /needs a role: start it with --role/);
+  assert.equal(readText(root, '.stacki/guide.json'), undefined);
+});
+
+test('a deletion without yes tells the agent the tool inputs, not the shell flags', async () => {
+  const root = makeProject();
+  const session = new McpSession({ project: root });
+  await send(session, call(17, 'stacki_breakpoints_add', { name: 'Wide', value: 100, unit: 'rem', apply: true }));
+  const refused = await send(session, call(18, 'stacki_breakpoints_remove', { id: 'bp-1', apply: true }));
+  assert.equal(refused?.result?.structuredContent?.error?.code, 'confirmation-required');
+  const text = JSON.stringify(refused);
+  assert.match(text, /apply=true and yes=true/);
+  assert.doesNotMatch(text, /--apply --yes/);
+});
+
+test('an apply that creates a settings file owes one resources/list_changed notification', async () => {
+  const root = makeProject();
+  const session = new McpSession({ project: root });
+  await send(session, { jsonrpc: '2.0', id: 19, method: 'resources/list' });
+  assert.deepEqual(session.takeNotifications(), []);
+  await send(session, call(20, 'stacki_guides_set', { visible: true }));
+  assert.deepEqual(session.takeNotifications(), [], 'a plan changes nothing, so nothing is announced');
+  await send(session, call(21, 'stacki_guides_set', { visible: true, apply: true }));
+  assert.deepEqual(session.takeNotifications(), [{ jsonrpc: '2.0', method: 'notifications/resources/list_changed' }]);
 });

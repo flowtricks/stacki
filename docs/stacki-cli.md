@@ -17,7 +17,8 @@ Context Protocol. This page is the design, the safety rules, the command referen
 document actors (`electron/documents`, `electron/project/projectMetadata.ts`), which Studio's vendored source does not ship, so
 extending `astro-studio` would mean moving them into the Studio package: a release-pipeline change of its own. The bundle is built with
 esbuild from the same sources (`scripts/build/bundleStackiCli.ts`), the way the repository bundles its other CLIs. `astro-studio
-check-project` keeps working; `stacki doctor` runs the same parsers (`validateMetadata`) plus the key reference. Nothing here is published.
+check-project` keeps working; `stacki doctor` runs the same parsers (`validateMetadata`) plus the key reference. Nothing here is published: `stacki`
+runs from a checkout (`npm run build:cli`, then `node dist/cli/stacki.cjs` or `npm link`).
 
 **Rules live in one place.** A command never re-implements a rule: breakpoints use `withBreakpointAdded`/`checkedConfig`, folders use
 `addFolder`, role component rules use `setComponentState`, roles use `parseProjectRoles`/`serializeProjectRoles`, every file is finally judged
@@ -75,7 +76,16 @@ shape and the codes (`test/shared/properties/cli/stackiCommands.test.ts`); a cha
 | 5 | `role-denied` |
 
 Options on every command: `--project <dir>` (default: nearest ancestor with `.stacki` or an Astro config), `--json`, `--apply`, `--yes`, `--wait <s>`,
-`--as-role <role>`, `--login <github-login>` (or `STACKI_LOGIN`).
+`--as-role <role>`, `--login <github-login>` (or `STACKI_LOGIN`). They may come before the command (`stacki --json doctor`) or after it
+(`stacki doctor --json`). After the command, a command's own argument wins a shared spelling: `roles members add` has a `role` argument, so there
+`--role` is that argument and `--as-role` chooses the role to act as.
+
+Help: `stacki --help` lists the commands the chosen role may run (`stacki --help --as-role viewer`); `stacki <command> --help` (or
+`stacki help <command>`) prints that command's usage line, every argument, whether it writes, its feature and its MCP tool; `stacki <group> --help`
+(`stacki roles --help`) lists a group. Help always exits 0.
+
+`stacki doctor` exits 1 (`invalid-file`) when any settings file is refused, with the findings in `result` of the failure envelope, so CI can gate on
+it; warnings alone exit 0. `stacki list components` lists every component at any depth (no count or depth cap; symbolic links are not followed).
 
 ## Commands and role features
 
@@ -99,12 +109,12 @@ files other people rely on and a newly installed command should never be runnabl
 | `stacki breakpoints set <id> [--value --unit --name]` | write | `cli:breakpoints` | `cli.breakpoints.set` | `stacki_breakpoints_set` |
 | `stacki breakpoints add <name> --value --unit` | write | `cli:breakpoints` | `cli.breakpoints.add` | `stacki_breakpoints_add` |
 | `stacki breakpoints remove <id>` | write, deletes | `cli:breakpoints` | `cli.breakpoints.remove` | `stacki_breakpoints_remove` |
-| `stacki breakpoints sync <id> --value [--unit]` | read (scan) | `cli:read` | `cli.breakpoints.sync` | `stacki_breakpoints_sync` |
-| `stacki roles add\|remove`, `roles members add\|remove`, `roles access grant\|revoke`, `roles components hide\|show` | write | `cli:roles` | `cli.roles.*` | `stacki_roles_*` |
-| `stacki folders add\|remove\|reset` | write | `cli:folders` | `cli.folders.*` | `stacki_folders_*` |
+| `stacki breakpoints sync <id> --value <n> [--unit rem\|px] [--from <length>] [--places checked\|all]` | write | `cli:breakpoints` | `cli.breakpoints.sync` | `stacki_breakpoints_sync` |
+| `stacki roles add <name>`, `roles remove <role>`, `roles members add\|remove <role> <login>`, `roles access grant\|revoke <role> <feature>`, `roles components hide\|show <role> <path>` (or `--path <path>`) | write | `cli:roles` | `cli.roles.*` | `stacki_roles_*` |
+| `stacki folders add\|remove <kind> <folder>`, `folders reset <kind>` | write | `cli:folders` | `cli.folders.*` | `stacki_folders_*` |
 | `stacki apps commands` | read | `cli:read` | `cli.apps.commands` | `stacki_apps_commands` |
 | `stacki apps settings set <app> <setting> <value>` | write | `cli:apps` | `cli.apps.settings.set` | `stacki_apps_settings_set` |
-| `stacki apps enable\|disable <app>` | write | `cli:roles` | `cli.apps.enable` | `stacki_apps_enable` |
+| `stacki apps enable <app> [--network]`, `apps disable <app>` | write | `cli:roles` | `cli.apps.enable`, `.disable` | `stacki_apps_enable`, `_disable` |
 | `stacki apps add <folder\|.zip>` | write | `cli:apps` | `cli.apps.add` | `stacki_apps_add` |
 | `stacki apps remove <app>` | write, deletes | `cli:apps` | `cli.apps.remove` | `stacki_apps_remove` |
 | `stacki components rename <path> <Name>`, `components move <path> <folder>` | write | `cli:components` | `cli.components.rename`, `.move` | `stacki_components_rename`, `_move` |
@@ -115,6 +125,25 @@ files other people rely on and a newly installed command should never be runnabl
 Config on `roles` needs `cli:roles`, on the apps files `cli:apps`, on `cli.json` `cli:roles`, whatever the command's own feature: no route around the
 high-privilege features. A file also needs the app feature its UI asks (`stacki schema` shows `requires`), so a role with `cli:config` still cannot change
 a file its role cannot change in the app.
+
+### Breakpoints: moving a boundary and its media queries
+
+`stacki breakpoints sync <id> --value <n>` does what Settings > Breakpoints does after a number is saved: the breakpoint takes the new boundary in
+`.stacki/breakpoints.json`, and every media query in the project's stylesheets and the `<style>` blocks of its pages and components that still holds
+the old boundary moves with it. It reuses the app's code unchanged: `scanBreakpointSync` finds the places, the dialog's `initialChecked` and
+`applyRequest` choose them, `planBreakpointSyncTexts` (the same function `applyBreakpointSync` writes through) produces each new text, checked against
+the scan's digest, read back and CSS-parsed, and `syncRecordAfter` remembers the places left alone in `.stacki/breakpoint-sync.json`.
+
+- `--value <n>` (required) is the new boundary; `--unit rem|px` defaults to the breakpoint's current unit. The new value must keep the breakpoint's
+  order and the canvas bounds, as in Settings. Desktop is not a media query boundary: use `breakpoints set desktop`.
+- `--from <length>` (such as `64rem`) names the boundary the queries still hold when `.stacki/breakpoints.json` already has the new one (after
+  `breakpoints set` or a change in Settings); the default is the saved boundary.
+- `--places checked` (default) changes the places the Settings dialog checks first: exact matches not remembered as "Not synced". `--places all`
+  changes every place found (inclusive and exclusive forms too).
+- In a Lumos project (rem), the queries are written in rem, whatever unit they had.
+- A dry run prints the files and, in `result.places`, every place found with its line, the query before and after, and whether it is synced. `--apply`
+  writes the stylesheets and both settings files all or none; `stacki undo <id> --apply` puts them back. Running the same sync again succeeds and
+  changes nothing (exit 0).
 
 ### Components and apps: the plan model's effects
 
@@ -161,7 +190,7 @@ every effect already applied and puts back every file already written.
 | File | Keys | Domain commands | Needs |
 |---|---|---|---|
 | `.stacki/guide.json` | version, settings | guides set/clear | `settings:editor` |
-| `.stacki/breakpoints.json` | version, desktop, breakpoints | breakpoints set/add/remove | `settings:breakpoints` |
+| `.stacki/breakpoints.json` | version, desktop, breakpoints | breakpoints set/add/remove/sync | `settings:breakpoints` |
 | `.stacki/breakpoint-sync.json` | version, per-breakpoint records | breakpoints remove/sync | `settings:breakpoints` |
 | `.stacki/roles.json` | version, defaultRole, roles (id, name, members, access, appPermissions, pinnedApps, componentRules) | roles ... | `settings:roles` |
 | `.stacki/components.json` | version, components (props, text, children, nested component refs) | components rename/move/duplicate/delete | `component:edit` |
@@ -214,7 +243,7 @@ as other features; apps' own switches use `appPermissions`.
 | Studio / hosted | The authenticated identity, resolved server-side by Studio's existing role resolution, on every write Studio makes (metadata, roles, apps) | **Enforced.** Studio exposes no CLI endpoint; nothing here weakens it. A hosted CLI route would call `runCommand` with the authenticated role (not built). |
 | Local human | `--login <github login>` / `STACKI_LOGIN` maps to roles.json members (an unlisted login gets the default role); no claim means the project owner (admin) | **Cooperative.** Anyone who can run the CLI as the owner, or edit `roles.json`, can pick another role. |
 | `--as-role <role>` in a shell | Acts as that role for the command, to test or restrict a script | Cooperative, same reason. |
-| AI agent over MCP | `stacki mcp --role <role>`: pinned by whoever configures the server; **tool inputs cannot change it** (an unknown `role` input is refused); `tools/list` shows only what the role may run; `tools/call` re-checks | Cooperative on a local machine (the agent runs as the owner's user), strong against the model choosing its own role. Writes are still plans until the user approves `apply`. |
+| AI agent over MCP | `stacki mcp --role <role>` (or `--login`): pinned by whoever configures the server; **tool inputs cannot change it** (an unknown `role` input is refused); `tools/list` shows only what the role may run; `tools/call` re-checks. **In a project with `.stacki/roles.json`, a server started without `--role` or `--login` runs no tool** (an empty `tools/list`, every call refused with `usage` and the reason, also printed on stderr at start): it never falls back to admin, so an agent's power is chosen on purpose; `--role admin` acts as admin. Without a roles file everyone is the owner, as in a shell. | Cooperative on a local machine (the agent runs as the owner's user), strong against the model choosing its own role. Writes are still plans until the user approves `apply`. |
 
 A denied command answers `role-denied` with the feature key and the role and **no plan details**; denied commands are absent from `--help` and MCP `tools/list`. The role
 is never passed to an app's code handler and never read from a command's own arguments.
@@ -225,7 +254,10 @@ is never passed to an app's code handler and never read from a command's own arg
 `tools/call`, `resources/list`, `resources/read`, and notifications. Hand-written on purpose (no dependency, AGENTS.md section 17: the surface is small, the SDK
 would add a dependency tree to a tool whose point is a small auditable surface); the protocol tests pin it. Tools are the command table
 (`stacki_<words>`); write tools take `apply` (default false) and deletes also `yes`; descriptions tell the agent to **plan first, show the user the plan, and apply only
-on approval**. Input is read line by line, one message in memory at a time. Tool results are the same envelope (`structuredContent` and text).
+on approval**. Input is read line by line, one message in memory at a time. Tool results are the same envelope (`structuredContent` and text); a
+refusal speaks in tool terms (a deletion asks for `apply=true` and `yes=true`, not `--apply --yes`). After an applied call that changes what the role
+may run (`apps enable`, `apps disable`, a roles edit) the server sends `notifications/tools/list_changed`, and after one that adds or removes a settings
+file `notifications/resources/list_changed`, as its `initialize` capabilities promise.
 
 ## Adding a command
 

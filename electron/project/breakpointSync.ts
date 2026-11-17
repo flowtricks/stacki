@@ -178,11 +178,29 @@ interface JournalEntry {
 
 const journal = new Map<string, JournalEntry>();
 
-/** Writes the checked places. All or nothing for the files it writes; files that moved since the scan are skipped and reported. */
-export function applyBreakpointSync(projectPath: string, request: BreakpointSyncApply): BreakpointSyncApplied {
-  assert(path.isAbsolute(projectPath), 'applyBreakpointSync: the project path is absolute');
+/** One file a sync would write: its text now and after the checked places are replaced (read back and verified). */
+export interface PlannedSyncText {
+  readonly abs: string;
+  readonly rel: string;
+  readonly before: string;
+  readonly after: string;
+  readonly places: number;
+}
+
+export interface PlannedSyncTexts {
+  readonly planned: readonly PlannedSyncText[];
+  readonly skipped: ReadonlyArray<{ readonly rel: string; readonly reason: 'stale' | 'mismatch' | 'verify' }>;
+}
+
+/**
+ * The texts an apply would write, without writing: each file checked against the digest its scan read, each replacement against the token it
+ * expects, and the result read back (bounds counted, the CSS parsed). Settings > Breakpoints writes these through `applyBreakpointSync`; the CLI
+ * (`stacki breakpoints sync`) turns them into a plan, so both write the same text.
+ */
+export function planBreakpointSyncTexts(projectPath: string, request: Pick<BreakpointSyncApply, 'files'>): PlannedSyncTexts {
+  assert(path.isAbsolute(projectPath), 'planBreakpointSyncTexts: the project path is absolute');
   const skipped: Array<{ rel: string; reason: 'stale' | 'mismatch' | 'verify' }> = [];
-  const planned: Array<{ abs: string; rel: string; before: string; after: string; places: number }> = [];
+  const planned: PlannedSyncText[] = [];
   for (const file of request.files) {
     const abs = path.join(projectPath, ...file.rel.split('/'));
     const text = readIfReadable(abs);
@@ -197,7 +215,16 @@ export function applyBreakpointSync(projectPath: string, request: BreakpointSync
     }
     planned.push({ abs, rel: file.rel, before: text, after: changed, places: file.edits.length });
   }
-  const written: typeof planned = [];
+  assert(planned.length + skipped.length === request.files.length, 'planBreakpointSyncTexts: every file is planned or skipped');
+  return { planned, skipped };
+}
+
+/** Writes the checked places. All or nothing for the files it writes; files that moved since the scan are skipped and reported. */
+export function applyBreakpointSync(projectPath: string, request: BreakpointSyncApply): BreakpointSyncApplied {
+  assert(path.isAbsolute(projectPath), 'applyBreakpointSync: the project path is absolute');
+  const { planned, skipped: skippedFiles } = planBreakpointSyncTexts(projectPath, request);
+  const skipped = [...skippedFiles];
+  const written: PlannedSyncText[] = [];
   for (const target of planned) {
     try {
       writeProjectText(target.abs, target.after, target.before);
@@ -320,9 +347,31 @@ function saveRecord(
   if (!current.ok) {
     return undefined;
   }
-  const parsed = parseBreakpointSyncSource(current.value.source);
+  const source = syncRecordAfter(current.value.source, request, written);
+  if (source === undefined) {
+    return undefined;
+  }
+  const saved = writeProjectMetadata(projectPath, {
+    kind: 'breakpointSync',
+    source,
+    ...(current.value.source === undefined ? {} : { base: current.value.source }),
+  });
+  return saved.ok ? { before: current.value.source, after: source } : undefined;
+}
+
+/**
+ * The text `.stacki/breakpoint-sync.json` holds after a sync that wrote `written`: unchecked places are remembered as "Not synced", written ones
+ * become linked. Undefined when the record would not change, or when the current text cannot be read (a file that cannot be read is never written
+ * over). Pure, so Settings and the CLI remember the same choices.
+ */
+export function syncRecordAfter(
+  currentSource: string | undefined,
+  request: Pick<BreakpointSyncApply, 'key' | 'files' | 'unchecked'>,
+  written: ReadonlyArray<{ readonly rel: string }>,
+): string | undefined {
+  assert(request.key.length > 0, 'syncRecordAfter: a sync names its breakpoint');
+  const parsed = parseBreakpointSyncSource(currentSource);
   if (!parsed.ok) {
-    // A file that cannot be read is never written over.
     return undefined;
   }
   const entry = entryOf(parsed.value, request.key);
@@ -341,12 +390,8 @@ function saveRecord(
     return undefined;
   }
   const source = serializeBreakpointSyncRecord(next);
-  const saved = writeProjectMetadata(projectPath, {
-    kind: 'breakpointSync',
-    source,
-    ...(current.value.source === undefined ? {} : { base: current.value.source }),
-  });
-  return saved.ok ? { before: current.value.source, after: source } : undefined;
+  assert(parseBreakpointSyncSource(source).ok, 'syncRecordAfter: the record written reads back');
+  return source;
 }
 
 const SYNC_RECORD_BOUND = 2_000;

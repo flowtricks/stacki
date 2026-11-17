@@ -3,7 +3,8 @@
 // Tiers, honest about what each can enforce:
 //   - A person at a shell: no role claimed means the project owner (admin); `--login <github login>` (or `STACKI_LOGIN`) acts as the role roles.json
 //     gives that member, and as the default role for a login it does not list. `--as-role <id>` acts as that role for the command.
-//   - An AI agent over MCP: `stacki mcp --role <id>` pins the server to a role; tool inputs cannot change it.
+//   - An AI agent over MCP: `stacki mcp --role <id>` pins the server to a role; tool inputs cannot change it. In a project with roles.json a server
+//     started without --role or --login refuses every tool (it never falls back to admin), so an agent's power is always chosen on purpose.
 //   Both are COOPERATIVE guardrails on a local machine: anyone who can run the CLI as the owner can edit roles.json or run another role. The real
 //   enforcement is the Studio server, which resolves the authenticated identity and answers for it (docs/stacki-cli.md, "Roles and identity").
 import { err, ok, type Result } from '../../../shared/core/result';
@@ -26,6 +27,11 @@ export interface RoleRequest {
   readonly role?: string | undefined;
   /** A GitHub login whose role roles.json decides. */
   readonly login?: string | undefined;
+  /**
+   * Who acts when neither a role nor a login is named and the project has roles: the owner (a person at a shell, the default), or nobody
+   * (`require`: the MCP server, whose agent must be pinned to a role on purpose rather than inherit admin silently).
+   */
+  readonly unnamed?: 'owner' | 'require';
 }
 
 export interface RoleContext {
@@ -67,6 +73,14 @@ export function resolveRoleContext(root: string, request: RoleRequest): Result<R
   }
   if (request.login !== undefined && roles.value !== undefined) {
     return ok({ view: resolveRole(roles.value, request.login, 'default'), basis: 'login' });
+  }
+  if (roles.value !== undefined && request.unnamed === 'require') {
+    return err({
+      code: 'usage',
+      message: `This project has .stacki/roles.json, so the MCP server needs a role: start it with --role <role> (${roles.value.roles
+        .map((role) => role.id)
+        .join(', ')}) or --login <github-login>. It never acts as admin unless --role admin is given.`,
+    });
   }
   return ok({ view: ADMIN_VIEW, basis: 'owner' });
 }

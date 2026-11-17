@@ -196,12 +196,11 @@ test('a command line for an app command parses against the rows apps add, and th
   assert.ok(parsed.kind === 'ready');
   const specs = parsed.section.commands.map((entry) => appCommandSpec('notes', entry));
   const line = parseLine(['notes', 'set-title', '--title', 'Hello', '--apply'], specs);
-  assert.ok(line.ok && typeof line.value === 'object');
-  if (line.ok && typeof line.value === 'object') {
-    assert.deepEqual(line.value.spec.words, ['notes', 'set-title']);
-    assert.deepEqual(line.value.args, { title: 'Hello' });
-    assert.equal(line.value.options.apply, 'apply');
-  }
+  assert.ok(line.ok);
+  assert.ok(line.value.kind === 'run');
+  assert.deepEqual(line.value.spec.words, ['notes', 'set-title']);
+  assert.deepEqual(line.value.args, { title: 'Hello' });
+  assert.equal(line.value.options.apply, 'apply');
   assert.ok(!parseLine(['notes', 'set-title'], specs).ok, 'a required input is required');
   assert.ok(!parseLine(['notes', 'nope'], specs).ok);
   assert.ok(!parseLine(['notes', 'set-title', '--title', 'x']).ok, 'without the apps the line is unknown');

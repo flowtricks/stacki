@@ -17,6 +17,8 @@ export interface ArgSpec {
   readonly positional?: boolean;
   readonly description: string;
   readonly values?: readonly string[];
+  /** What help writes for the value, when the kind alone says too little: `--from <length>`. */
+  readonly placeholder?: string;
 }
 
 export interface CommandSpec {
@@ -42,7 +44,7 @@ const arg = (
   name: string,
   kind: ArgKind,
   description: string,
-  options: { readonly required?: boolean; readonly positional?: boolean; readonly values?: readonly string[] } = {},
+  options: { readonly required?: boolean; readonly positional?: boolean; readonly values?: readonly string[]; readonly placeholder?: string } = {},
 ): ArgSpec => ({
   name,
   kind,
@@ -50,6 +52,7 @@ const arg = (
   required: options.required ?? false,
   ...(options.positional === undefined ? {} : { positional: options.positional }),
   ...(options.values === undefined ? {} : { values: options.values }),
+  ...(options.placeholder === undefined ? {} : { placeholder: options.placeholder }),
 });
 
 const FILE = arg('file', 'string', 'The settings file: its id from "stacki schema" (guide, roles, breakpoints, ...) or its .stacki/ path.', {
@@ -167,10 +170,24 @@ export const COMMANDS: readonly CommandSpec[] = [
   }),
   command(
     ['breakpoints', 'sync'],
-    "Report where a breakpoint's boundary is written in styles and pages (read-only scan of what a sync would touch).",
-    'cli:read',
+    "Move a breakpoint's boundary and every media query in styles, pages and components that still holds the old one, as Settings > Breakpoints does.",
+    'cli:breakpoints',
     {
-      args: [arg('id', 'string', 'The breakpoint id.', { required: true, positional: true })],
+      write: true,
+      args: [
+        arg('id', 'string', 'The breakpoint id (laptop, tablet, phone, bp-4, ...).', { required: true, positional: true }),
+        arg('value', 'number', 'The new boundary number.', { required: true }),
+        arg('unit', 'enum', "rem or px; default the breakpoint's current unit.", { values: ['rem', 'px'] }),
+        arg(
+          'from',
+          'string',
+          'The boundary the media queries still hold, such as 64rem, when .stacki/breakpoints.json already has the new one; default its saved boundary.',
+          { placeholder: 'length' },
+        ),
+        arg('places', 'enum', 'checked (default): the places Settings checks first (exact matches not remembered as "Not synced"); all: every place found.', {
+          values: ['checked', 'all'],
+        }),
+      ],
     },
   ),
   command(['roles', 'add'], 'Add a custom role with only the default access (cli:read).', 'cli:roles', {
@@ -221,7 +238,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     write: true,
     args: [
       arg('role', 'string', 'The role id.', { required: true, positional: true }),
-      arg('path', 'string', 'A project-relative component file or folder.', { required: true }),
+      arg('path', 'string', 'A project-relative component file or folder (also accepted as --path).', { required: true, positional: true }),
     ],
   }),
   command(
@@ -232,7 +249,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       write: true,
       args: [
         arg('role', 'string', 'The role id.', { required: true, positional: true }),
-        arg('path', 'string', 'A project-relative component file or folder.', { required: true }),
+        arg('path', 'string', 'A project-relative component file or folder (also accepted as --path).', { required: true, positional: true }),
       ],
     },
   ),

@@ -2,8 +2,8 @@
 //
 // Roles on a shell are a COOPERATIVE guardrail (docs/stacki-cli.md): `--as-role` and `--login` choose the role this command acts as, and
 // anyone who can run the CLI as the project owner can choose another. The real enforcement is the Studio server.
-import { parseLine } from '../../../shared/properties/cli/stackiArgs';
-import { COMMANDS } from '../../../shared/properties/cli/stackiCommands';
+import { parseLine, spellingOf, usageOf } from '../../../shared/properties/cli/stackiArgs';
+import { COMMANDS, toolNameOf, type CommandSpec } from '../../../shared/properties/cli/stackiCommands';
 import { exitCodeOf, CLI_SCHEMA_VERSION, type CliEnvelope } from '../../../shared/properties/cli/stackiOutput';
 import { findProject } from './cliFiles';
 import { runCommand, visibleCommands } from './cliRun';
@@ -24,17 +24,64 @@ export const HELP_HEADER = [
   '',
 ].join('\n');
 
-export async function helpText(project: string, request: { readonly role?: string | undefined; readonly login?: string | undefined }): Promise<string> {
+const MCP_ROW = '  stacki mcp [--role <role>]      Run an MCP server over these commands, pinned to a role.';
+
+/**
+ * Help for the whole table (no words), a group (`roles`) or one command (`breakpoints sync`), listing only what the chosen role may run.
+ * `project` is the directory the line works in (its `--project`, else the current directory).
+ */
+export async function helpText(
+  project: string,
+  request: { readonly role?: string | undefined; readonly login?: string | undefined },
+  words: readonly string[] = [],
+): Promise<string> {
   const root = findProject(project);
-  const rows = (specs: typeof COMMANDS): string =>
-    specs.map((spec) => `  stacki ${spec.words.join(' ').padEnd(26)} ${spec.access === 'write' ? '[writes] ' : '         '}${spec.summary}`).join('\n');
-  if (!root.ok) {
-    return `${HELP_HEADER}Commands:\n${rows(COMMANDS)}\n`;
+  const role = root.ok ? resolveRoleContext(root.value, request) : undefined;
+  const extensions = root.ok ? await loadExtensions(root.value) : undefined;
+  const all: readonly CommandSpec[] = [...COMMANDS, ...(extensions?.declared ?? [])];
+  const visible: readonly CommandSpec[] = role?.ok === true ? visibleCommands(role.value, extensions) : COMMANDS;
+  const roleLabel = role?.ok === true ? ` for role "${role.value.view.id}"` : '';
+  const problem = role !== undefined && !role.ok ? `note: ${role.error.message}\n` : '';
+  const exact = words.length === 0 ? undefined : all.find((spec) => sameWords(spec.words, words));
+  if (exact !== undefined) {
+    const allowed = visible.some((spec) => sameWords(spec.words, words));
+    return `${problem}${commandHelp(exact, allowed ? 'allowed' : 'denied', role?.ok === true ? role.value.view.id : 'admin')}`;
   }
-  const role = resolveRoleContext(root.value, request);
-  const extensions = await loadExtensions(root.value);
-  const specs = role.ok ? visibleCommands(role.value, extensions) : COMMANDS;
-  return `${HELP_HEADER}Commands${role.ok ? ` for role "${role.value.view.id}"` : ''}:\n${rows(specs)}\n  stacki mcp --role <role>      Run an MCP server over these commands, pinned to a role.\n`;
+  const group = visible.filter((spec) => words.every((word, index) => spec.words[index] === word));
+  if (words.length > 0 && group.length > 0) {
+    return `${problem}Commands under "stacki ${words.join(' ')}"${roleLabel}:\n${rows(group)}\nRun "stacki <command> --help" for a command's arguments.\n`;
+  }
+  return `${problem}${HELP_HEADER}Commands${roleLabel}:\n${rows(visible)}\n${MCP_ROW}\nRun "stacki <command> --help" for a command's arguments.\n`;
+}
+
+function rows(specs: readonly CommandSpec[]): string {
+  return specs.map((spec) => `  stacki ${spec.words.join(' ').padEnd(26)} ${spec.access === 'write' ? '[writes] ' : '         '}${spec.summary}`).join('\n');
+}
+
+function sameWords(first: readonly string[], second: readonly string[]): boolean {
+  return first.length === second.length && first.every((word, index) => word === second[index]);
+}
+
+/** One command's help: its usage line, what it does, its arguments, its access and the options every command takes. */
+export function commandHelp(spec: CommandSpec, access: 'allowed' | 'denied', roleId: string): string {
+  const lines = [`Usage: ${usageOf(spec)}`, '', spec.summary, ''];
+  if (spec.args.length > 0) {
+    lines.push('Arguments:');
+    for (const argument of spec.args) {
+      lines.push(`  ${spellingOf(argument).padEnd(28)} ${argument.required ? '(required) ' : ''}${argument.description}`);
+    }
+    lines.push('');
+  }
+  const writes =
+    spec.access === 'write'
+      ? `Writes files: a dry run that prints its plan unless --apply is given${spec.destructive ? '; it deletes, so it also needs --yes' : ''}.`
+      : 'Reads only: never writes a file.';
+  lines.push(writes, `Feature: ${spec.feature} (${spec.featureKey}). MCP tool: ${toolNameOf(spec)}.`);
+  if (access === 'denied') {
+    lines.push(`Role "${roleId}" may not run this command: it needs ${spec.feature}.`);
+  }
+  lines.push('Options on every command: --project <dir>  --json  --apply  --yes  --wait <seconds>  --as-role <role>  --login <github-login>', '');
+  return lines.join('\n');
 }
 
 export function formatText(envelope: CliEnvelope): string {
@@ -80,8 +127,9 @@ export async function main(argv: readonly string[], cwd: string, write: (text: s
     write(argv.includes('--json') ? `${JSON.stringify(failed)}\n` : formatText(failed));
     return exitCodeOf(failed);
   }
-  if (parsed.value === 'top-help' || parsed.value.options.help === 'help') {
-    write(await helpText(cwd, parsed.value === 'top-help' ? {} : { role: parsed.value.options.role, login: parsed.value.options.login }));
+  if (parsed.value.kind === 'help') {
+    const { options, words } = parsed.value;
+    write(await helpText(options.project ?? cwd, { role: options.role, login: options.login ?? process.env['STACKI_LOGIN'] }, words));
     return 0;
   }
   const { spec, args, options } = parsed.value;

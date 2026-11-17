@@ -28,7 +28,8 @@ test('every command has a unique feature key and tool name and a feature from th
 
 test('a command line is read back to its row, with positional and flag arguments', () => {
   const parsed = parseLine(['config', 'set', 'guide', 'settings.visible', 'true', '--apply', '--role', 'editor']);
-  assert.ok(parsed.ok && parsed.value !== 'top-help');
+  assert.ok(parsed.ok);
+  assert.ok(parsed.value.kind === 'run');
   assert.deepEqual(parsed.value.spec.words, ['config', 'set']);
   assert.deepEqual(parsed.value.args, { file: 'guide', path: 'settings.visible', value: true });
   assert.equal(parsed.value.options.apply, 'apply');

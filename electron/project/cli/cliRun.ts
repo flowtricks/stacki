@@ -34,6 +34,8 @@ export interface RunRequest {
   readonly effectApplier?: EffectApplier;
   /** Commands installed apps contribute (cliExtensions.ts); absent means none. */
   readonly extensions?: ExtensionProvider;
+  /** Who reads the answer: a shell (flags such as --apply --yes) or an MCP client (the tool inputs apply and yes). Default shell. */
+  readonly surface?: 'shell' | 'mcp';
 }
 
 // Handlers registered at startup by modules that live where their planners do (electron/handlers/cliComponentCommands.ts); written only at load.
@@ -138,6 +140,9 @@ async function finish(request: RunRequest, spec: CommandSpec, root: string, role
     summary: outcome.summary,
   };
   if (outcome.kind === 'read') {
+    if (outcome.verdict !== undefined) {
+      return { ...failure(name, outcome.verdict), result: outcome.result };
+    }
     return { ...base, mode: 'read', applied: false, files: [], result: outcome.result };
   }
   for (const edit of outcome.edits) {
@@ -165,7 +170,7 @@ async function finish(request: RunRequest, spec: CommandSpec, root: string, role
       return failure(name, refusal);
     }
   }
-  return writeOrPlan(request, spec, root, base, staged.value, effects);
+  return writeOrPlan(request, spec, root, outcome.result === undefined ? base : { ...base, result: outcome.result }, staged.value, effects);
 }
 
 async function writeOrPlan(
@@ -180,6 +185,7 @@ async function writeOrPlan(
     readonly role: string;
     readonly notes: readonly string[];
     readonly summary: string;
+    readonly result?: unknown;
   },
   staged: readonly StagedFile[],
   effects: readonly EffectRecord[],
@@ -192,7 +198,10 @@ async function writeOrPlan(
   if (spec.destructive && request.yes !== 'yes') {
     return failure(base.command, {
       code: 'confirmation-required',
-      message: `"${base.command}" removes things people made. Show the plan to the person; apply it with --apply --yes only when they approve.`,
+      message:
+        request.surface === 'mcp'
+          ? `"${base.command}" removes things people made. Show the plan to the person; call the tool again with apply=true and yes=true only when they approve.`
+          : `"${base.command}" removes things people made. Show the plan to the person; apply it with --apply --yes only when they approve.`,
     });
   }
   const applied = await applyStaged(root, base.command, staged, effects, {

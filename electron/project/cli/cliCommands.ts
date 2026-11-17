@@ -5,6 +5,7 @@
 // app's functions in shared/properties/, called here, never copied: the CLI and Settings cannot disagree about what is allowed.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
 import { toRecord } from '../../../shared/core/record';
 import type { ConfigOperation } from '../../../shared/properties/cli/stackiConfigEdit';
@@ -69,7 +70,14 @@ export interface CommandContext {
 }
 
 export type Outcome =
-  | { readonly kind: 'read'; readonly result: unknown; readonly summary: string; readonly notes?: readonly string[] }
+  | {
+      readonly kind: 'read';
+      readonly result: unknown;
+      readonly summary: string;
+      readonly notes?: readonly string[];
+      /** A read whose answer is a failure (a health check that found errors): the envelope fails with this error and still carries `result`. */
+      readonly verdict?: CliError;
+    }
   | {
       readonly kind: 'write';
       readonly edits: readonly Edit[];
@@ -77,6 +85,8 @@ export type Outcome =
       readonly effects?: readonly EffectRecord[];
       readonly summary: string;
       readonly notes?: readonly string[];
+      /** Facts a person needs to judge the plan that are not file changes (the places a breakpoint sync found); carried in the envelope. */
+      readonly result?: unknown;
     };
 
 export type Handler = (context: CommandContext) => Result<Outcome, CliError> | Promise<Result<Outcome, CliError>>;
@@ -330,7 +340,7 @@ function breakpointsSet(context: CommandContext): Result<Outcome, CliError> {
         kind: 'write',
         edits: edits.value,
         summary: `Change breakpoint ${id}.`,
-        notes: ['Where the old boundary is written in styles and pages is not changed; "stacki breakpoints sync" reports those places.'],
+        notes: ['Media queries that hold the old boundary are not changed. To move them too, use "stacki breakpoints sync <id> --value <n>" instead.'],
       })
     : edits;
 }
@@ -681,32 +691,43 @@ function listCommand(context: CommandContext): Result<Outcome, CliError> {
   }
 }
 
-const LIST_LIMITS = { componentsMax: 5000, depthMax: 12 } as const;
-
+// Every component is listed, at any depth (owner rule: no hard limit that stops a big project). The walk is bounded by the folder tree itself:
+// it never follows a symbolic link (a Dirent from readdir does not), so a link cycle cannot loop it, and each real directory is read once.
 function componentFiles(root: string, folders: readonly string[]): readonly string[] {
   const found: string[] = [];
-  const walk = (directory: string, depth: number): void => {
-    if (depth > LIST_LIMITS.depthMax || found.length >= LIST_LIMITS.componentsMax) {
-      return;
-    }
+  const visited = new Set<string>();
+  // Depth first, in name order: the stack holds folders still to read, last pushed first.
+  const pending: string[] = [...folders].reverse().map((folder) => folder.replace(/\/$/, ''));
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    assert(directory !== undefined, 'A pending folder exists while the stack is not empty');
+    let real: string;
     let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(path.join(root, directory), { withFileTypes: true });
+      real = fs.realpathSync(path.join(root, directory));
+      entries = fs.readdirSync(real, { withFileTypes: true });
     } catch {
-      return;
+      continue;
     }
+    if (visited.has(real)) {
+      continue;
+    }
+    visited.add(real);
+    const children: string[] = [];
     for (const entry of entries.sort((first, second) => first.name.localeCompare(second.name))) {
       const relative = `${directory}/${entry.name}`;
       if (entry.isDirectory() && entry.name !== 'node_modules') {
-        walk(relative, depth + 1);
-      } else if (entry.isFile() && entry.name.endsWith('.astro') && found.length < LIST_LIMITS.componentsMax) {
+        children.push(relative);
+      } else if (entry.isFile() && entry.name.endsWith('.astro')) {
         found.push(relative);
       }
     }
-  };
-  for (const folder of folders) {
-    walk(folder.replace(/\/$/, ''), 0);
+    pending.push(...children.reverse());
   }
+  assert(
+    found.every((file) => file.endsWith('.astro')),
+    'Only component files are listed',
+  );
   return found;
 }
 
@@ -725,55 +746,29 @@ function doctorCommand(context: CommandContext): Result<Outcome, CliError> {
   }
   const errors = findings.filter((finding) => finding.level === 'error').length;
   const warnings = findings.filter((finding) => finding.level === 'warning').length;
+  const summary = errors === 0 ? `Healthy: no errors${warnings === 0 ? '' : `, ${warnings} warnings`}.` : `${errors} errors, ${warnings} warnings.`;
+  // Errors fail the command (exit 1), so CI can gate on "stacki doctor"; warnings alone do not. The findings travel either way.
+  const verdict: CliError | undefined =
+    errors === 0
+      ? undefined
+      : {
+          code: 'invalid-file',
+          message: `${summary} ${findings
+            .filter((finding) => finding.level === 'error')
+            .map((finding) => `${finding.file}: ${finding.message}`)
+            .join('; ')}`,
+        };
   return ok({
     kind: 'read',
-    summary: errors === 0 ? `Healthy: no errors${warnings === 0 ? '' : `, ${warnings} warnings`}.` : `${errors} errors, ${warnings} warnings.`,
+    summary,
     result: { healthy: errors === 0, errors, warnings, findings },
     notes: ['Selector usage and component-default catalog checks need the component scan: run "astro-studio check-project" for those.'],
+    ...(verdict === undefined ? {} : { verdict }),
   });
 }
 
 import { checkFile } from './cliDoctor';
-import { scanBreakpointSync } from '../breakpointSync';
-
-async function breakpointsSync(context: CommandContext): Promise<Result<Outcome, CliError>> {
-  const id = text(context, 'id');
-  const breakpointSchema = fileSchemaById('breakpoints');
-  if (breakpointSchema === undefined) {
-    return refused('The breakpoints registry is missing.', 'internal');
-  }
-  const state = readFileState(context.root, breakpointSchema);
-  if (!state.ok) {
-    return state;
-  }
-  const config = state.value.source === undefined ? ok(BREAKPOINT_DEFAULT_CONFIG) : breakpointConfig(state.value);
-  if (!config.ok) {
-    return config;
-  }
-  const old = config.value.list.find((entry) => entry.id === id);
-  if (old === undefined) {
-    return refused(`There is no breakpoint "${id}".`, 'missing');
-  }
-  const next = checkedSetting({ value: context.args['value'], unit: context.args['unit'] ?? old.setting.unit });
-  if (!next.ok) {
-    return refused(next.error.message, 'invalid-value');
-  }
-  const scan = await scanBreakpointSync(context.root, { key: id, old, next: next.value });
-  const places = scan.files.reduce((total, file) => total + file.occurrences.length, 0);
-  return ok({
-    kind: 'read',
-    summary: `${places} places in ${scan.files.length} files write the old boundary of ${id}.`,
-    result: {
-      id,
-      files: scan.files.map((file) => ({
-        file: file.rel,
-        kind: file.kind,
-        places: file.occurrences.map((place) => ({ line: place.line, before: place.beforeText, after: place.afterText, checked: place.checked })),
-      })),
-    },
-    notes: ['This reports what a sync would change. Applying a sync is done in Settings > Breakpoints, which keeps its own undo.'],
-  });
-}
+import { breakpointsSync } from './cliBreakpointSync';
 
 export const CORE_HANDLERS: Readonly<Record<string, Handler>> = {
   schema: schemaCommand,

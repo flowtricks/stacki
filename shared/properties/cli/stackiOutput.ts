@@ -93,6 +93,8 @@ export interface CliFailure {
   readonly ok: false;
   readonly command: string;
   readonly error: CliError;
+  /** What a check found when the finding is the failure (`stacki doctor` with errors lists them here); absent otherwise. */
+  readonly result?: unknown;
 }
 
 export type CliEnvelope = CliSuccess | CliFailure;

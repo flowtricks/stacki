@@ -68,7 +68,24 @@ if (command === 'check-project') {
   await writeFile(manifest, JSON.stringify(value, null, 2) + '\n');
   console.log(`Cloudflare deployment template created in ${destination}. Configure cloudflare/wrangler.jsonc and secrets using the deployment guide.`);
 } else {
-  console.log(
-    'Astro Studio\n\n  astro-studio dev [project-directory]\n  astro-studio init-cloudflare [new-directory]\n  astro-studio build-demo <project-directory> --out <directory> [--base /demo/site/]\n\nastro-studio check-project [project-directory]\n  astro-studio check-update\n  astro-studio update <project> <exact-version-or-release.json> --replace-customizations\n\nPORT overrides 4350. STUDIO_WORKSPACE selects the draft workspace.',
-  );
+  // Help is asked for (no command, `help`, `--help`, `-h`) or the command is unknown: an unknown one goes to stderr and exits 2, so a typo in a
+  // script or CI step fails instead of passing silently.
+  const help = [
+    'Astro Studio',
+    '',
+    '  astro-studio dev [project-directory]',
+    '  astro-studio init-cloudflare [new-directory]',
+    '  astro-studio build-demo <project-directory> --out <directory> [--base /demo/site/]',
+    '  astro-studio check-project [project-directory]',
+    '  astro-studio check-update',
+    '  astro-studio update <project> <exact-version-or-release.json> --replace-customizations',
+    '',
+    'PORT overrides 4350. STUDIO_WORKSPACE selects the draft workspace.',
+  ].join('\n');
+  if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
+    console.log(help);
+  } else {
+    console.error(`astro-studio: unknown command "${command}".\n\n${help}`);
+    process.exitCode = 2;
+  }
 }

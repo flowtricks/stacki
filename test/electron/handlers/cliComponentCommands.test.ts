@@ -191,7 +191,7 @@ test('components commands need cli:components, and the MCP tools are the same co
   const root = project({ '.stacki/roles.json': ROLES_FIXTURE });
   const denied = await runCommand(request(root, ['components', 'duplicate'], { path: 'src/components/Button.astro' }, 'apply', 'no', 'editor'));
   assert.ok(!denied.ok && denied.error.code === 'role-denied');
-  const session = new McpSession({ project: root });
+  const session = new McpSession({ project: root, role: 'admin' });
   const list = JSON.stringify(await session.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }));
   for (const name of ['stacki_components_rename', 'stacki_components_move', 'stacki_components_duplicate', 'stacki_components_delete']) {
     assert.ok(list.includes(name), name);

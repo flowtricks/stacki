@@ -92,11 +92,26 @@ export function toolOf(spec: CommandSpec): Json {
   };
 }
 
+/** The notifications a session can owe its client: the tool list or the resource list changed after an applied command. */
+const LIST_CHANGED = { tools: 'notifications/tools/list_changed', resources: 'notifications/resources/list_changed' } as const;
+
 export class McpSession {
   readonly #options: McpOptions;
+  // What the client was last told (or would have been told) the lists hold; an applied command that changes them owes a notification.
+  #toolsSeen: string | undefined;
+  #resourcesSeen: string | undefined;
+  // Notifications to send after the reply that caused them; at most one of each kind is ever pending.
+  #pending: Json[] = [];
 
   constructor(options: McpOptions) {
     this.#options = options;
+  }
+
+  /** The notifications owed since the last call, oldest first; the caller sends them after the reply. */
+  takeNotifications(): readonly Json[] {
+    const owed = this.#pending;
+    this.#pending = [];
+    return owed;
   }
 
   /** One incoming message; undefined for a notification (no reply). */
@@ -148,7 +163,7 @@ export class McpSession {
     if (!root.ok) {
       return { failure: { schemaVersion: 1, ok: false, command: 'mcp', error: root.error } };
     }
-    const role = resolveRoleContext(root.value, { role: this.#options.role, login: this.#options.login });
+    const role = resolveRoleContext(root.value, { role: this.#options.role, login: this.#options.login, unnamed: 'require' });
     return role.ok ? { root: root.value, role: role.value } : { failure: { schemaVersion: 1, ok: false, command: 'mcp', error: role.error } };
   }
 
@@ -158,7 +173,34 @@ export class McpSession {
       return rpcResult(id, { tools: [] });
     }
     const extensions = await loadExtensions(context.root);
-    return rpcResult(id, { tools: visibleCommands(context.role, extensions).map(toolOf) });
+    const tools = visibleCommands(context.role, extensions).map(toolOf);
+    this.#toolsSeen = signatureOf(tools.map((tool) => String(tool['name'])));
+    return rpcResult(id, { tools });
+  }
+
+  // After an applied command: enabling an app adds tools, a roles edit can hide some, a created settings file adds a state resource.
+  async #noteListChanges(): Promise<void> {
+    const context = await this.#context();
+    if ('failure' in context) {
+      return;
+    }
+    const extensions = await loadExtensions(context.root);
+    const tools = signatureOf(visibleCommands(context.role, extensions).map(toolNameOf));
+    if (this.#toolsSeen !== undefined && tools !== this.#toolsSeen) {
+      this.#owe(LIST_CHANGED.tools);
+    }
+    this.#toolsSeen = tools;
+    const resources = signatureOf(this.#resourceList(context).map((resource) => resource.uri));
+    if (this.#resourcesSeen !== undefined && resources !== this.#resourcesSeen) {
+      this.#owe(LIST_CHANGED.resources);
+    }
+    this.#resourcesSeen = resources;
+  }
+
+  #owe(method: string): void {
+    if (!this.#pending.some((message) => message['method'] === method)) {
+      this.#pending.push({ jsonrpc: '2.0', method });
+    }
   }
 
   async #callTool(id: unknown, params: Json): Promise<Json> {
@@ -187,13 +229,17 @@ export class McpSession {
       words: spec.words,
       args: checked.value,
       project: this.#options.project,
-      role: { role: this.#options.role, login: this.#options.login },
+      role: { role: this.#options.role, login: this.#options.login, unnamed: 'require' },
+      surface: 'mcp',
       apply: apply === true ? 'apply' : 'plan',
       yes: yes === true ? 'yes' : 'no',
       waitSeconds: 0,
       ...(this.#options.writer === undefined ? {} : { writer: this.#options.writer }),
       ...(extensions === undefined ? {} : { extensions }),
     });
+    if (envelope.ok && envelope.applied) {
+      await this.#noteListChanges();
+    }
     return rpcResult(id, toolResult(envelope));
   }
 
@@ -204,6 +250,12 @@ export class McpSession {
     }
     // Loading the extensions replaces the registry's app files, so the schemas listed are those of the apps enabled right now.
     await loadExtensions(context.root);
+    const resources = this.#resourceList(context);
+    this.#resourcesSeen = signatureOf(resources.map((resource) => resource.uri));
+    return rpcResult(id, { resources });
+  }
+
+  #resourceList(context: { readonly root: string; readonly role: RoleContext }): ReadonlyArray<{ readonly uri: string }> {
     const schemas = allFiles().map((file) => ({
       uri: `stacki://schema/${file.id}`,
       name: `Key reference: ${file.file}`,
@@ -216,7 +268,7 @@ export class McpSession {
         ? [{ uri: `stacki://state/${file.id}`, name: `Current: ${file.file}`, mimeType: 'application/json', description: `What ${file.file} holds now.` }]
         : [];
     });
-    return rpcResult(id, { resources: [...schemas, ...(roleDenial(context.role.view, 'cli:read', 'cli.state') === undefined ? states : [])] });
+    return [...schemas, ...(roleDenial(context.role.view, 'cli:read', 'cli.state') === undefined ? states : [])];
   }
 
   async #readResource(id: unknown, params: Json): Promise<Json> {
@@ -239,6 +291,10 @@ export class McpSession {
     }
     return rpcResult(id, { contents: [{ uri, mimeType: 'application/json', text: state.value.source }] });
   }
+}
+
+function signatureOf(names: readonly string[]): string {
+  return [...names].sort().join('\n');
 }
 
 function toolResult(envelope: CliEnvelope): Json {
@@ -279,13 +335,23 @@ export async function startMcpServer(argv: readonly string[], cwd: string): Prom
     }
     options.set(flag === '--as-role' ? '--role' : flag, value);
   }
-  const session = new McpSession({ project: options.get('--project') ?? cwd, role: options.get('--role'), login: options.get('--login') });
+  const project = options.get('--project') ?? cwd;
+  const session = new McpSession({ project, role: options.get('--role'), login: options.get('--login') });
+  // Said once at start, on stderr (stdout is the protocol): a server that cannot act should say why before the client asks.
+  const root = findProject(project);
+  const role = root.ok ? resolveRoleContext(root.value, { role: options.get('--role'), login: options.get('--login'), unnamed: 'require' }) : root;
+  if (!role.ok) {
+    process.stderr.write(`stacki mcp: ${role.error.message}\n`);
+  }
   let pending = '';
   let oversized = false;
   const reply = async (line: string): Promise<void> => {
     const answer = await handleLine(session, line);
     if (answer !== undefined) {
       process.stdout.write(`${JSON.stringify(answer)}\n`);
+    }
+    for (const notification of session.takeNotifications()) {
+      process.stdout.write(`${JSON.stringify(notification)}\n`);
     }
   };
   process.stdin.setEncoding('utf8');
