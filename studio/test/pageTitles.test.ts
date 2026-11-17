@@ -10,7 +10,7 @@ import { parseProject } from '../src/features/project/projectClient';
 import { livePageTitles, projectPageLabel } from '../src/features/project/pageLabels';
 import { parsePage } from '../src/features/source/source';
 import { ENGLISH_TRANSLATE } from '../vendor/stacki/shared/properties/i18n/englishTranslator';
-import { LIMITS } from '../vendor/stacki/shared/core/limits';
+import { LIMITS, PLATFORM_LIMITS } from '../vendor/stacki/shared/core/limits';
 
 const file = 'src/pages/resources.astro';
 const source = (props: string) => `---
@@ -71,7 +71,9 @@ test('Studio validates optional title metadata before exposing labels', () => {
   };
   assert.deepEqual(parseProject(project).pageMetadata, []);
   const page = { path: file, name: 'resources.astro', route: '/resources' };
-  for (const title of [42, {}, [], null, 'x'.repeat(LIMITS.ipcFieldCharsMax + 1)]) {
+  // A title is bounded only by the longest string the platform holds, so a longer one cannot be built: pin the bound.
+  assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  for (const title of [42, {}, [], null]) {
     assert.throws(() => parseProject({ ...project, pageMetadata: [{ ...page, title }] }));
     assert.throws(() => parseProject({ ...project, pageMetadata: [{ ...page, inheritedTitle: title }] }));
   }

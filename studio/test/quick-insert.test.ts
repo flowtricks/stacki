@@ -30,7 +30,8 @@ const choices = [
   { type: 'element', tag: 'slot' },
   { type: 'astroAsset', name: 'Image' },
   { type: 'astroAsset', name: 'Picture' },
-  ...['map', 'cond', 'text', 'comment', 'expr', 'doctype', 'style', 'script'].map((type) => ({
+  // A doctype belongs only at the top of a page (shared/engine/planPlacement.ts): it is refused inside a node below.
+  ...['map', 'cond', 'text', 'comment', 'expr', 'style', 'script'].map((type) => ({
     type,
   })),
 ];
@@ -50,6 +51,10 @@ for (const choice of choices) {
     assert.notEqual(result, source);
   });
 }
+test('palette refuses a doctype inside a node and leaves the source alone', () => {
+  const action = parseAction({ kind: 'insert-content', target: 'n0', placement: 'inside', content: { type: 'doctype' } });
+  assert.throws(() => structuralEdits(source, action), /invalid-placement/);
+});
 test('asset insertion reuses aliases and avoids project component collisions', () => {
   const action = parseAction({
     kind: 'insert-content',

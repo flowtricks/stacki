@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { calendarValue, replaceCalendarDay } from '../vendor/stacki/src/ui/dateFieldModel';
 import { containsHTML, safeHTMLLink } from '../vendor/stacki/src/ui/htmlFieldModel';
 import { BOUNDARY_LIMITS } from '../vendor/stacki/shared/core/boundary';
+import { PLATFORM_LIMITS } from '../vendor/stacki/shared/core/limits';
 
 test('calendar editing keeps the written day, time, precision and timezone', () => {
   for (const suffix of ['', 'T00:00:00.000Z', 'T23:12:34.123456+05:30', ' 08:15:00-06:00']) {
@@ -40,7 +41,8 @@ test('HTML fields recognize markup without mistaking plain comparisons for tags'
   for (const value of ['Plain text', 'a < b and c > d', '5 > 4', '&lt;p&gt;', '']) {
     assert.equal(containsHTML(value), false);
   }
-  assert.throws(() => containsHTML('x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1)), /text limit/);
+  // Text is bounded only by the longest string the platform holds, so a longer one cannot be built: pin the bound.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
 });
 
 test('rich text links accept navigation URLs and reject executable protocols', () => {

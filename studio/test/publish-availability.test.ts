@@ -96,7 +96,8 @@ for (const scenario of [
     button: 'ready',
   },
   { draft: source, deployed: otherRevision, github: 'current', hosting: 'pending', commits: 0, button: 'ready' },
-  { draft: source, deployed: 'invalid', github: 'current', hosting: 'unknown', commits: 0, button: 'ready' },
+  // An unanswered hosting check rests neutral, never as confirmed changes (shared/properties/publishState.ts).
+  { draft: source, deployed: 'invalid', github: 'current', hosting: 'unknown', commits: 0, button: 'unconfirmed' },
 ]) {
   test(`HTTP status: ${scenario.github}/${scenario.hosting}/${scenario.deployed}`, async (t) => {
     const fixture = await sourceFixture();

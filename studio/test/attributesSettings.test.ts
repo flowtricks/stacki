@@ -162,7 +162,11 @@ test('a spread is removed with the space in front of it; a new one is refused', 
 });
 
 test('a write the planner refuses says why and leaves the page alone', () => {
+  // The parser now refuses a tag that writes one attribute twice (electron/parse/astroAttrs.ts), so the page is
+  // never handed to the planner: the write says to fix the syntax instead of editing one copy of the attribute.
   const page = PAGE.replace('<h1 class="title">', '<h1 class="title" class="other">');
-  assert.throws(() => writeAttributes(page, idOf(heading(page)), { class: { type: 'string', value: 'x' } }), /written more than once/);
+  const parsed = parsePage(page, { locs: true });
+  assert.equal(parsed.editable, false);
+  assert.throws(() => writeAttributes(page, idOf(heading(PAGE)), { class: { type: 'string', value: 'x' } }), /Fix the page syntax/);
   assert.throws(() => writeAttributes(PAGE, 'missing', { id: { type: 'string', value: 'x' } }), /Selection changed/);
 });

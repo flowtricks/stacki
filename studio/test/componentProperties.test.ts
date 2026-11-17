@@ -68,7 +68,7 @@ test('property API renames definition and aliased instances, persists drafts and
   }
 });
 
-test('property API renames option values and rejects deletion of an in-use prop', async () => {
+test('property API renames option values, and deleting a prop the template reads keeps it as a constant', async () => {
   const fixture = await propertyFixture();
   try {
     const data = await fixture.get();
@@ -92,8 +92,13 @@ test('property API renames option values and rejects deletion of an in-use prop'
       source: current,
       change: { kind: 'remove', name: 'title' },
     });
-    assert.equal(removed['ok'], false);
-    assert.equal(await fixture.rooms.read(component), current);
+    // The template still reads `title`, so the deletion keeps a constant of that name holding its default,
+    // typed as the prop was (53541c7e), and the page keeps rendering.
+    assert.equal(removed['ok'], true, JSON.stringify(removed));
+    const after = await fixture.rooms.read(component);
+    assert.match(after, /const title = 'Hello' as string;/);
+    assert.doesNotMatch(after, /title\?: string/);
+    assert.match(after, /\{title\}/);
   } finally {
     await fixture.close();
   }

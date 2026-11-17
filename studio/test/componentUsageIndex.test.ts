@@ -1,11 +1,11 @@
 // Goal: counting all components reuses source analysis without changing alias semantics.
 // Method: inspect prepared indexes for renamed imports, shadowing, frontmatter,
-// markdown, repeated queries, and oversized inputs; fresh indexes reflect edits.
+// markdown, repeated queries, and large inputs (no product size limit); fresh indexes reflect edits.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { instanceCounts, instancesIn } from '../vendor/stacki/electron/properties/componentUsage';
-import { LIMITS } from '../vendor/stacki/shared/core/limits';
+import { LIMITS, PLATFORM_LIMITS } from '../vendor/stacki/shared/core/limits';
 
 const file = path.resolve('/project/src/pages/index.astro');
 const card = path.resolve('/project/src/components/Card.astro');
@@ -39,8 +39,11 @@ test('markdown imports and missing markup do not invent instances', () => {
   assert.equal(empty({ targetPath: card, name: 'Card' }), 0);
 });
 
-test('source and tag indexes reject excessive growth', () => {
-  assert.throws(() => instanceCounts('x'.repeat(LIMITS.sourceBytesMax + 1), file, []), /Usage source stays within the reader limit/);
+test('source and tag indexes take a page of any size', () => {
+  // A source is bounded only by the longest string the platform holds (no product size limit), so a longer one
+  // cannot be built: the bound is pinned instead of exceeded.
+  assert.equal(LIMITS.sourceBytesMax, PLATFORM_LIMITS.stringUnitsMax);
   const source = Array.from({ length: 10_001 }, (_, index) => `<Tag${index}/>`).join('');
-  assert.throws(() => instanceCounts(source, file, []), /10,000 tag names/);
+  // The old 10,000 tag-name cap is gone: every distinct tag is read, none refused.
+  assert.doesNotThrow(() => instanceCounts(source, file, []));
 });

@@ -25,12 +25,7 @@ import { STUDIO_STATE_DIRECTORY } from '../../vendor/stacki/shared/properties/st
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { markSourceFile } from '../../vendor/stacki/electron/previewServer/previewMarkers';
-import {
-  componentPreviewPlugin,
-  PREVIEW_RECIPE_FILE,
-  renderComponentPreviewPage,
-  renderComponentPreviewRecipe,
-} from '../../vendor/stacki/electron/previewServer/componentPreview';
+import { componentPreviewPlugin, previewSupportFiles, renderComponentPreviewPage } from '../../vendor/stacki/electron/previewServer/componentPreview';
 import { createRooms } from '../features/collaboration/rooms';
 import { safePath, preparePath, readSource } from '../features/project/projectServer';
 import { filePath, sourcePath, string, record, MAX_SOURCE } from '../shared/validation';
@@ -71,8 +66,11 @@ export default function studio(options: Options): AstroIntegration {
           const entrypoint = path.join(options.root, '.stacki/studio/state/component-preview.astro');
           // The route's globs follow the project's component folders (.stacki/folders.json) at start.
           await writeFile(entrypoint, renderComponentPreviewPage(configOf(readProjectFolders(options.root))));
-          // The page imports the recipe node component from beside it (componentPreviewRecipe.ts).
-          await writeFile(path.join(path.dirname(entrypoint), PREVIEW_RECIPE_FILE), renderComponentPreviewRecipe());
+          // The page imports the recipe node, attempt and guard components from beside it, as Desktop's
+          // dev server writes them (electron/handlers/devServers.ts); a missing one fails every preview.
+          for (const [name, text] of Object.entries(previewSupportFiles())) {
+            await writeFile(path.join(path.dirname(entrypoint), name), text);
+          }
           injectRoute({ pattern: '/__avb/preview', entrypoint });
         }
         addMiddleware({
