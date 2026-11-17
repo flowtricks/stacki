@@ -1,5 +1,5 @@
 // Goal: the Add query form is compact and sound in real layout: its rows are 32px with the official
-// breakpoint icons, every row ends in the same 16px check slot, left and right insets match, nothing
+// breakpoint icons, every row ends in the same 16px check slot, left and right insets match (net of the scrollbar gutter), nothing
 // scrolls sideways at the panel's width, the preview line is shown under the Custom row, and the
 // list scrolls inside its own cap rather than growing the panel.
 // Method: a real Electron window (skipped without Electron; the pattern of contextDropdownScroll)
@@ -78,7 +78,20 @@ const check = (what, condition, detail) => {
          const f = form.getBoundingClientRect();
          const rows = [...document.querySelectorAll('.embed-editor_aq-row')];
          const list = document.querySelector('.embed-editor_aq-list');
-         const inset = (el) => { const r = el.getBoundingClientRect(); return { left: r.left - f.left, right: f.right - r.right } };
+         // The room reserved for vertical scrollbars between an element and a box that holds it: each
+         // scrolling ancestor's stable gutter (docs/scroll-gutter.md). Its width is the platform's bar
+         // (0 for overlay bars on macOS, 15px classic on Linux, 8px in the app), so insets are compared
+         // net of it. A gutter on a box that does not scroll is not counted: it is waste.
+         const gutter = (el, stop) => {
+           let total = 0;
+           for (let node = el.parentElement, depth = 0; node && depth < 64; node = node.parentElement, depth += 1) {
+             const c = getComputedStyle(node);
+             if (c.overflowY === 'auto' || c.overflowY === 'scroll') total += node.offsetWidth - node.clientWidth - parseFloat(c.borderLeftWidth) - parseFloat(c.borderRightWidth);
+             if (node === stop) break;
+           }
+           return total;
+         };
+         const inset = (el) => { const r = el.getBoundingClientRect(); return { left: r.left - f.left, right: f.right - r.right, gutter: gutter(el, form) } };
          return {
            rowHeights: rows.map((r) => r.offsetHeight),
            checkWidths: rows.map((r) => r.querySelector('.embed-editor_aq-check').offsetWidth),
@@ -131,8 +144,9 @@ const check = (what, condition, detail) => {
       check(`${name}: every row wears an official icon`, state.icons.every(Boolean), JSON.stringify(state.icons));
       check(`${name}: nothing scrolls sideways`, state.sideways === false);
       check(
-        `${name}: left and right insets match`,
-        state.insets.every((inset) => Math.abs(inset.left - inset.right) <= 1),
+        // The list keeps a stable scrollbar gutter (docs/scroll-gutter.md): net of its measured width, the insets are equal.
+        `${name}: left and right insets match, net of the scrollbar gutter`,
+        state.insets.every((inset) => Math.abs(inset.left - (inset.right - inset.gutter)) <= 1),
         JSON.stringify(state.insets),
       );
     }

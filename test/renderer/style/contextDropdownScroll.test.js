@@ -3,8 +3,8 @@
 // under them), only the rows scroll (one scrollbar, no chaining to the page behind), and the list
 // never moves by itself: not on open, not when the pointer crosses a partly hidden row, not when
 // its options re-render, The list is flat (no group cards), rows are
-// 32px, every row ends in the same 16px check slot, left and right insets match when nothing
-// scrolls, the trigger is one line, and the typical list (Base, three width queries, an Other section, Add
+// 32px, every row ends in the same 16px check slot, left and right insets match net of the
+// reserved scrollbar gutter, whatever width the platform draws it, the trigger is one line, and the typical list (Base, three width queries, an Other section, Add
 // query) fits in about 360px without a scrollbar. The cap is 36rem (80vh), shrinking to the room.
 //
 // Method: layout is a browser question, so this runs in a real Electron window (the pattern of
@@ -150,6 +150,19 @@ const check = (what, condition, detail) => {
            while (el && el.parentElement) { el = el.parentElement; const o = getComputedStyle(el).overflowY; if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) return el; if (el.classList.contains('u-select-list')) break; }
            return document.querySelector('.u-select-list');
          },
+         // The room reserved for vertical scrollbars between a row and a box that holds it: each
+         // scrolling ancestor's stable gutter (docs/scroll-gutter.md). Its width is the platform's
+         // bar (0 for overlay bars on macOS, 15px classic on Linux, 8px in the app), so insets are
+         // compared net of it. A gutter on a box that does not scroll is not counted: it is waste.
+         gutter(el, stop) {
+           let total = 0;
+           for (let node = el.parentElement, depth = 0; node && depth < 64; node = node.parentElement, depth += 1) {
+             const c = getComputedStyle(node);
+             if (c.overflowY === 'auto' || c.overflowY === 'scroll') total += node.offsetWidth - node.clientWidth - parseFloat(c.borderLeftWidth) - parseFloat(c.borderRightWidth);
+             if (node === stop) break;
+           }
+           return total;
+         },
          footer() { return document.querySelector('.u-select-option.is-footer'); },
          rects() {
            const s = window.__q.scroller(), f = window.__q.footer(), l = document.querySelector('.u-select-list');
@@ -190,7 +203,7 @@ const check = (what, condition, detail) => {
          await js("document.querySelector('.u-select-button').click(); true");
          await pollUntil({ what: 'list open again', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
          await settled('menu opened again');
-         const measured = await js(\`(() => { try { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); const inset = (el) => { const e = el.getBoundingClientRect(), p = document.querySelector('.u-select-list').getBoundingClientRect(); return { left: e.left - p.left, right: p.right - e.right } }; return { ...r, base: inset(document.querySelector('.u-select-list [role=option]')), second: inset(document.querySelectorAll('.u-select-scroll [role=option]')[1]), rowHeight: document.querySelectorAll('.u-select-scroll [role=option]')[0].offsetHeight, checkWidths: [...document.querySelectorAll('.u-select-list [role=option] .u-select-check')].map((c) => c.offsetWidth), cards: document.querySelectorAll('.u-select-group').length, headings: (() => { const scroll = document.querySelector('.u-select-scroll'); const firstIcon = scroll.querySelector('[role=option] .u-select-icon').getBoundingClientRect().left; return [...scroll.querySelectorAll('.u-select-heading')].map((h) => { const lead = (h.querySelector('.u-select-tag') ?? h.querySelector('.u-select-icon')).getBoundingClientRect(); const prev = h.previousElementSibling.getBoundingClientRect(); const next = h.nextElementSibling.getBoundingClientRect(); const box = h.getBoundingClientRect(); const rowIcon = (h.nextElementSibling.querySelector('.u-select-icon') ?? scroll.querySelector('[role=option] .u-select-icon')).getBoundingClientRect().left; return { text: h.textContent, height: h.offsetHeight, leadLeft: lead.left, rowIconLeft: rowIcon, firstIconLeft: firstIcon, above: box.top - prev.bottom, below: next.top - box.bottom, afterBase: h.previousElementSibling.getAttribute('role') === 'option' && h.previousElementSibling.textContent.startsWith('Base') } }) })(), headerOutside: document.querySelector('.u-select-header') !== null && !document.querySelector('.u-select-scroll').contains(document.querySelector('.u-select-header')), trigger: (() => { const t = document.querySelector('.u-select-button').getBoundingClientRect(); return { height: t.height, oneLine: document.querySelector('.u-select-button .has-prefix') !== null && document.querySelector('.u-select-button .has-overline') === null } })(), dotTitles: [...document.querySelectorAll('.u-select-dot')].every((d) => d.title === 'Has styles here' && d.getAttribute('aria-label') === 'Has styles here'), maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } } catch (error) { return { probeError: String(error && error.stack) } } })()\`);
+         const measured = await js(\`(() => { try { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); const inset = (el) => { const list = document.querySelector('.u-select-list'); const e = el.getBoundingClientRect(), p = list.getBoundingClientRect(); return { left: e.left - p.left, right: p.right - e.right, gutter: window.__q.gutter(el, list) } }; return { ...r, base: inset(document.querySelector('.u-select-list [role=option]')), second: inset(document.querySelectorAll('.u-select-scroll [role=option]')[1]), rowHeight: document.querySelectorAll('.u-select-scroll [role=option]')[0].offsetHeight, checkWidths: [...document.querySelectorAll('.u-select-list [role=option] .u-select-check')].map((c) => c.offsetWidth), cards: document.querySelectorAll('.u-select-group').length, headings: (() => { const scroll = document.querySelector('.u-select-scroll'); const firstIcon = scroll.querySelector('[role=option] .u-select-icon').getBoundingClientRect().left; return [...scroll.querySelectorAll('.u-select-heading')].map((h) => { const lead = (h.querySelector('.u-select-tag') ?? h.querySelector('.u-select-icon')).getBoundingClientRect(); const prev = h.previousElementSibling.getBoundingClientRect(); const next = h.nextElementSibling.getBoundingClientRect(); const box = h.getBoundingClientRect(); const rowIcon = (h.nextElementSibling.querySelector('.u-select-icon') ?? scroll.querySelector('[role=option] .u-select-icon')).getBoundingClientRect().left; return { text: h.textContent, height: h.offsetHeight, leadLeft: lead.left, rowIconLeft: rowIcon, firstIconLeft: firstIcon, above: box.top - prev.bottom, below: next.top - box.bottom, afterBase: h.previousElementSibling.getAttribute('role') === 'option' && h.previousElementSibling.textContent.startsWith('Base') } }) })(), headerOutside: document.querySelector('.u-select-header') !== null && !document.querySelector('.u-select-scroll').contains(document.querySelector('.u-select-header')), trigger: (() => { const t = document.querySelector('.u-select-button').getBoundingClientRect(); return { height: t.height, oneLine: document.querySelector('.u-select-button .has-prefix') !== null && document.querySelector('.u-select-button .has-overline') === null } })(), dotTitles: [...document.querySelectorAll('.u-select-dot')].every((d) => d.title === 'Has styles here' && d.getAttribute('aria-label') === 'Has styles here'), maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } } catch (error) { return { probeError: String(error && error.stack) } } })()\`);
          if (measured.probeError !== undefined) {
            throw new Error('measuring the open list threw in the page: ' + measured.probeError);
          }
@@ -243,12 +256,15 @@ const check = (what, condition, detail) => {
     check('the list scrolls (the fixture is taller than the cap)', out.open.scrollMax > 0, JSON.stringify(out.open));
     check('only one region scrolls', out.scrollers === 1, `${out.scrollers} scrolling regions`);
     check('scrolling does not chain to the page behind', out.listStyle.overscroll === 'contain', out.listStyle.overscroll);
+    // The scrolling rows keep a stable gutter (docs/scroll-gutter.md), so the right inset holds the bar's
+    // room as well; net of that room, which is measured on this platform, the two insets are equal.
+    const netEqual = (inset) => Math.abs(inset.left - (inset.right - inset.gutter)) <= 1;
     check(
-      'no reserved gutter: a list that does not scroll has equal insets left and right',
-      Math.abs(out.typical900.base.left - out.typical900.base.right) <= 1,
+      'a list that does not scroll has equal insets left and right, net of the scrollbar gutter',
+      netEqual(out.typical900.base),
       JSON.stringify(out.typical900.base),
     );
-    check('and so do its rows below the first', Math.abs(out.typical900.second.left - out.typical900.second.right) <= 1, JSON.stringify(out.typical900.second));
+    check('and so do its rows below the first', netEqual(out.typical900.second), JSON.stringify(out.typical900.second));
     for (const [name, state] of [
       ['typical', out.typical900],
       ['long', out.long900],

@@ -1120,6 +1120,10 @@ body.is-scrubbing * {
   gap: 0;
   padding: 0;
   overflow: hidden;
+  /* The frame clips and never scrolls; its rows region below reserves the bar's room. A gutter
+     inherited from the plain list would also be reserved here (Chromium keeps it on a hidden box),
+     pushing the pinned strip, the footer and the rows in by a second bar's width on the right. */
+  scrollbar-gutter: auto;
 }
 .u-select-list.has-footer > .u-select-scroll {
   display: flex;

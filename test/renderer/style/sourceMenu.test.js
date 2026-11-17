@@ -161,16 +161,30 @@ const check = (what, condition, detail) => {
          const list = document.querySelector('.u-select-list');
          const l = list.getBoundingClientRect();
          const p = document.querySelector('.embed-editor_root').getBoundingClientRect();
-         const s = document.querySelector('.u-select-search-input').getBoundingClientRect();
+         const search = document.querySelector('.u-select-search-input');
+         const s = search.getBoundingClientRect();
+         // The room reserved for vertical scrollbars between an element and a box that holds it: each
+         // scrolling ancestor's stable gutter (docs/scroll-gutter.md). Its width is the platform's bar
+         // (0 for overlay bars on macOS, 15px classic on Linux, 8px in the app), so insets are compared
+         // net of it. A gutter on a box that does not scroll is not counted: it is waste.
+         const gutter = (el, stop) => {
+           let total = 0;
+           for (let node = el.parentElement, depth = 0; node && depth < 64; node = node.parentElement, depth += 1) {
+             const c = getComputedStyle(node);
+             if (c.overflowY === 'auto' || c.overflowY === 'scroll') total += node.offsetWidth - node.clientWidth - parseFloat(c.borderLeftWidth) - parseFloat(c.borderRightWidth);
+             if (node === stop) break;
+           }
+           return total;
+         };
          const rows = [...list.querySelectorAll('.u-select-option')].map((o) => {
            const r = o.getBoundingClientRect();
-           return { left: r.left - l.left, right: l.right - r.right, checkLast: o.lastElementChild.classList.contains('u-select-check') };
+           return { left: r.left - l.left, right: l.right - r.right, gutter: gutter(o, list), checkLast: o.lastElementChild.classList.contains('u-select-check') };
          });
          const selected = list.querySelector('.u-select-option.is-selected');
          return {
            inlineTransform: list.style.transform, inlineTranslate: list.style.translate,
            panel: { left: l.left - p.left, right: p.right - l.right },
-           search: { left: s.left - l.left, right: l.right - s.right },
+           search: { left: s.left - l.left, right: l.right - s.right, gutter: gutter(search, list) },
            rows, checked: selected ? !!selected.lastElementChild.querySelector('svg') : false,
          };
        })()\`);
@@ -200,9 +214,12 @@ const check = (what, condition, detail) => {
     const near = (first, second) => Math.abs(first - second) < 0.5;
     check('the menu keeps the panel margin on the left', near(out.panel.left, 8), JSON.stringify(out.panel));
     check('and the same margin on the right', near(out.panel.right, 8), JSON.stringify(out.panel));
-    check('the search field has equal insets', near(out.search.left, out.search.right), JSON.stringify(out.search));
+    // The list keeps a stable scrollbar gutter (docs/scroll-gutter.md), so a right inset also holds the
+    // bar's room; net of that room, measured on this platform, the insets are equal.
+    const netEqual = (inset) => near(inset.left, inset.right - inset.gutter);
+    check('the search field has equal insets, net of the scrollbar gutter', netEqual(out.search), JSON.stringify(out.search));
     for (const row of out.rows) {
-      check('each row has equal insets', near(row.left, row.right), JSON.stringify(row));
+      check('each row has equal insets, net of the scrollbar gutter', netEqual(row), JSON.stringify(row));
       check('each row ends with its check column', row.checkLast === true);
     }
     check('the selected row shows its check at the end', out.checked === true);
