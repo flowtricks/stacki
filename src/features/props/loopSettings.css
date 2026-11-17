@@ -1051,6 +1051,10 @@
    look. A name with a problem says so in red words beneath it; the field
    itself keeps its fill, so the problem reads as text, not as an alarm. */
 .new-prop-form .loop-bind-name {
+  /* Stated here too: opened from a field's dot, the form sits inside the
+     field's .props-field, whose `label { display: block }` would stack each
+     label over its box. */
+  display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
 }
 .new-prop-form .loop-bind-name input[aria-invalid='true'] {

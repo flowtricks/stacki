@@ -3120,6 +3120,14 @@ body > .embed-editor_provenance {
   padding: 0;
   overflow: hidden;
 }
+/* The picker's rows carry their own inset; the Property settings form a
+   "New … property" row opens in its place does not, and leans on the pop-up's
+   10px padding, as it does in the loop Source pop-up (.loop-settings-popup).
+   Without it the form's fields, Required row and buttons sat on the edges. */
+.bind-menu.is-form {
+  padding: 10px;
+  overflow-y: auto;
+}
 .data-picker {
   display: flex;
   flex-direction: column;

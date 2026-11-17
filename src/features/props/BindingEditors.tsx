@@ -351,7 +351,8 @@ export function FieldDataPicker({
       mode="popover"
       portal={false}
       onClose={onClose}
-      className="dd-popup bind-menu"
+      // The settings form has no inset of its own: the pop-up gives it one, as the loop Source pop-up does (.bind-menu.is-form).
+      className={(offer !== undefined && creating) || (classOffer !== undefined && creatingClassList) ? 'dd-popup bind-menu is-form' : 'dd-popup bind-menu'}
       style={{ left: position.left, top: position.top, width: position.width }}
     >
       {classOffer !== undefined && creatingClassList ? (
