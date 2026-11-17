@@ -645,6 +645,7 @@ export function createRuleAtRoot(
   // the rule goes inside it, after the rules there. A tag that does not hold it is written as ever.
   const container = wrapperContainer(region.root, wrappers);
   if (container !== undefined) {
+    openEmptyWrapper(container);
     return createRuleInAtRule(container, selector, prop, declared);
   }
   // Attached first, as in createRuleInAtRule, so the body indents from the rule's line.
@@ -653,6 +654,26 @@ export function createRuleAtRoot(
   setDeclOnRule(rule, cleanProp, { value: cleanValue, important: declared.important });
   placeNewRuleBody(rule);
   return true;
+}
+
+/**
+ * A template's wrapper written on one line (`@layer components {}` or `{ }`) closes on a line of its
+ * own once it holds a rule, as `@layer components {\n}` does; otherwise the rule's last line ran
+ * into both closing braces (`color: red;}}`). Only an empty wrapper is touched: one that already
+ * holds anything keeps the person's own layout.
+ */
+function openEmptyWrapper(container: AtRule): void {
+  if ((container.nodes ?? []).length > 0) {
+    return;
+  }
+  const after = container.raws.after ?? '';
+  if (after.includes('\n')) {
+    return;
+  }
+  const before = container.raws.before ?? '';
+  const lineIndent = before.includes('\n') ? before.slice(before.lastIndexOf('\n') + 1) : '';
+  container.assign({ raws: { ...container.raws, after: `\n${lineIndent}` } });
+  assert((container.raws.after ?? '').startsWith('\n'), 'openEmptyWrapper: the closing brace starts a line');
 }
 
 /**

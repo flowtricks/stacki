@@ -1409,6 +1409,7 @@
     "src/features/style/model/fieldHooks.ts",
     "src/features/style/model/filter.ts",
     "src/features/style/model/firstStyleBlock.ts",
+    "src/features/style/model/firstTagLane.ts",
     "src/features/style/model/followWidth.ts",
     "src/features/style/model/gapHover.ts",
     "src/features/style/model/gradient.ts",

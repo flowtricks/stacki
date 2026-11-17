@@ -216,7 +216,7 @@ const classAttr = (value) => ({ type: 'string', value });
 
 // Mount the panel over `nodes` with the element `n1` selected and the given sources. The host
 // answers addClass and addStyleBlock the way Desktop does: by changing the nodes it shows.
-async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, refuse, styles }) {
+async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, refuse, styles, blockDelayMs = 0 }) {
   const { dom, React, createRoot, EmbedEditor, setHost, subscribeErrorToasts } = await panelEnvironment();
   const calls = [];
   // The panel reports a failure as an error toast; the app's toast owner is stood in for here.
@@ -252,6 +252,8 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
       if (refuse) {
         return { tag: 'refused', message: refuse };
       }
+      // Desktop queues the edit and then waits for the save to reach disk: other edits can arrive meanwhile.
+      await wait(blockDelayMs);
       if (request.className) {
         withClass(request.className);
       }
@@ -285,7 +287,7 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
   await wait(900);
   const selectorTexts = () => [...container.querySelectorAll('.embed-editor_selector-chip')].map((chip) => chip.textContent);
   // Type into the Opacity field and commit with Enter: a write like any other.
-  const typeOpacity = async (value) => {
+  const typeOpacity = async (value, settleMs = 900) => {
     const input = [...container.querySelectorAll('input')].find((candidate) => candidate.getAttribute('aria-label') === 'Opacity');
     assert.ok(input, 'the Opacity field is drawn');
     input.focus();
@@ -293,7 +295,25 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await wait(40);
     input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    await wait(900);
+    await wait(settleMs);
+  };
+  // Drag the padding-top number down by `distancePx` and let go. Shift held on release writes all
+  // four sides and Alt the opposite one too: one setProp per side, back to back in one event,
+  // before the panel has seen any of them land (SpacingFill.tsx useSideDrag).
+  const dragPadding = async (distancePx, modifiers = {}, settleMs = 900) => {
+    const label = container.querySelector('button[data-prop="padding-top"]');
+    assert.ok(label, 'the padding-top label is drawn');
+    const pointer = (type, y) =>
+      label.dispatchEvent(
+        new (dom.window.PointerEvent ?? dom.window.MouseEvent)(type, { bubbles: true, cancelable: true, clientX: 100, clientY: y, pointerId: 1, ...modifiers }),
+      );
+    pointer('pointerdown', 100);
+    for (let step = 1; step <= 4; step += 1) {
+      pointer('pointermove', 100 + Math.round((distancePx * step) / 4));
+      await wait(20);
+    }
+    pointer('pointerup', 100 + distancePx);
+    await wait(settleMs);
   };
   // Select another element: the host's selection moves and the panel is told.
   const select = async (id) => {
@@ -306,6 +326,7 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
     container,
     state,
     typeOpacity,
+    dragPadding,
     selectorTexts,
     select,
     errorText: () => toasts.join(' | '),
@@ -450,4 +471,103 @@ test('with the setting on, the block is global and the template wraps the rule; 
   assert.doesNotMatch(label, /Create/);
   await tagged.typeOpacity('0.5');
   assert.deepEqual(kinds(tagged.calls), ['writeStyleNode'], 'the page tag, not the stylesheet, takes the first style');
+});
+
+// ───────────────── One tag however fast the first styles arrive ─────────────────
+//
+// A Shift-drag of a padding band (or Shift+Enter in its editor) commits four sides back to back
+// in one event; a quick series of drags commits again while the first save is still on its way
+// to disk. Each of those commits found no rule for the new class, and each made a `<style>` of
+// its own: four tags where one was meant. The first tag is now created once per file, and every
+// write that arrives while it is being created lands in that same tag.
+
+const STYLESHEET = { rel: 'src/styles/site.css', name: 'site.css', path: '/p/src/styles/site.css', size: 20 };
+const blockCalls = (calls) => calls.filter((call) => call[0] === 'addStyleBlock');
+// The page's `<style>` nodes, as the host now shows them.
+const styleTags = (panel) => panel.state.nodes.filter((node) => node.name === 'style');
+
+test('a Shift-drag of a padding on a fresh class makes ONE tag holding all four sides, in one host call', async (context) => {
+  const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '.other { color: red; }', blockDelayMs: 120 });
+  context.after(panel.unmount);
+  await panel.dragPadding(24, { shiftKey: true });
+  assert.equal(blockCalls(panel.calls).length, 1, `one tag is created: ${kinds(panel.calls)}`);
+  assert.equal(panel.calls[0][0], 'addStyleBlock', 'the four sides go in with the tag, so one undo takes the whole drag back');
+  const css = panel.calls[0][1].css;
+  assert.equal(css.match(/\.my-class/g).length, 1, `one rule: ${css}`);
+  // Four equal sides are written as the shorthand (spacingShorthand.test.js), so all four are in this one write.
+  assert.match(css, /\tpadding: [\d.]+rem;/, css);
+  assert.doesNotMatch(css, /padding-(top|right|bottom|left)/, css);
+  assert.equal(styleTags(panel).length, 1);
+  assert.equal(kinds(panel.calls).filter((kind) => kind === 'writeStyleFile').length, 0, 'the stylesheet is left alone');
+});
+
+test('drags that arrive while the first tag is saving land in that tag: one rule, one declaration', async (context) => {
+  const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '', blockDelayMs: 300 });
+  context.after(panel.unmount);
+  for (const distancePx of [4, 8, 12, 16, 20]) {
+    await panel.dragPadding(distancePx, {}, 0);
+  }
+  await wait(1500);
+  assert.equal(blockCalls(panel.calls).length, 1, `exactly one tag: ${kinds(panel.calls)}`);
+  assert.equal(styleTags(panel).length, 1);
+  const inner = styleTags(panel)[0].inner;
+  assert.equal(inner.match(/\.my-class/g).length, 1, `one rule: ${inner}`);
+  assert.equal(inner.match(/padding-top/g).length, 1, `one declaration: ${inner}`);
+  assert.equal(kinds(panel.calls).filter((kind) => kind === 'writeStyleFile').length, 0, 'the stylesheet is left alone');
+});
+
+test('commits made while the first tag is saving: the last value wins', async (context) => {
+  const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '', blockDelayMs: 400 });
+  context.after(panel.unmount);
+  for (const value of ['0.1', '0.2', '0.3', '0.4', '0.5']) {
+    await panel.typeOpacity(value, 0);
+  }
+  await wait(1500);
+  assert.equal(blockCalls(panel.calls).length, 1, `exactly one tag: ${kinds(panel.calls)}`);
+  const inner = styleTags(panel)[0].inner;
+  assert.equal(inner.match(/\.my-class/g).length, 1, `one rule: ${inner}`);
+  assert.equal(inner.match(/opacity/g).length, 1, `one declaration: ${inner}`);
+  assert.match(inner, /opacity: 0\.5;/, inner);
+  assert.equal(kinds(panel.calls).filter((kind) => kind === 'writeStyleFile').length, 0, 'the stylesheet is left alone');
+});
+
+test('two properties interleaved during the first save share one tag and one rule', async (context) => {
+  const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '', blockDelayMs: 300 });
+  context.after(panel.unmount);
+  await panel.dragPadding(10, {}, 0);
+  await panel.typeOpacity('0.5', 0);
+  await panel.dragPadding(30, { altKey: true }, 0);
+  await wait(1500);
+  assert.equal(blockCalls(panel.calls).length, 1, `exactly one tag: ${kinds(panel.calls)}`);
+  assert.equal(kinds(panel.calls).filter((kind) => kind === 'writeStyleFile').length, 0, `the stylesheet is left alone: ${kinds(panel.calls)}`);
+  const inner = styleTags(panel)[0].inner;
+  assert.equal(inner.match(/\.my-class/g).length, 1, `one rule: ${inner}`);
+  assert.match(inner, /padding-(top|block)/, inner);
+  assert.match(inner, /opacity: 0\.5;/, inner);
+});
+
+test('with the template on, the first tag holds the wrapper once and later commits stay inside it', async (context) => {
+  const styles = { version: 1, keep: [], newStyleTag: { version: 1, isGlobal: true, content: '@layer components {}' } };
+  const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '', styles, blockDelayMs: 200 });
+  context.after(panel.unmount);
+  await panel.dragPadding(12, { shiftKey: true }, 0);
+  await panel.typeOpacity('0.5', 0);
+  await wait(1500);
+  assert.equal(blockCalls(panel.calls).length, 1, `exactly one tag: ${kinds(panel.calls)}`);
+  assert.equal(panel.calls[0][1].scope, 'global');
+  const inner = styleTags(panel)[0].inner;
+  assert.equal(inner.match(/@layer components/g).length, 1, `one wrapper: ${inner}`);
+  assert.equal(inner.match(/\.my-class/g).length, 1, `one rule: ${inner}`);
+  assert.match(inner, /@layer components \{[\s\S]*\.my-class \{[\s\S]*padding: [\d.]+rem;[\s\S]*opacity: 0\.5;[\s\S]*\}\s*\}/, inner);
+});
+
+test('a refused first tag leaves nothing queued behind it: the next commit tries again, once', async (context) => {
+  const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '', refuse: 'the edit could not be queued', blockDelayMs: 100 });
+  context.after(panel.unmount);
+  await panel.dragPadding(10, { shiftKey: true });
+  assert.equal(blockCalls(panel.calls).length, 1, 'four sides, one attempt');
+  assert.match(panel.errorText(), /the edit could not be queued/);
+  await panel.dragPadding(12);
+  assert.equal(blockCalls(panel.calls).length, 2, 'a later commit is a new attempt');
+  assert.equal(styleTags(panel).length, 0);
 });
