@@ -10,6 +10,12 @@ import type { TypedMessageRef } from '../../../shared/properties/i18n/messageRef
 import type { ExtractionPlan, ExtractionValue } from '../../editor/extractFrontmatter';
 import type { ComponentUsageFile } from './paletteModel';
 import { componentNameProblem, toComponentName } from './componentName';
+import { folderInput, type RenameCandidate } from './renameAvailability';
+import { detectFolderStyle, identifierOfFileName } from '../../../shared/properties/componentNaming';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
+import { LIMITS } from '../../../shared/core/limits';
+import Dropdown from '../../ui/Dropdown';
+import './createComponent.css';
 import { prettyComponentName, usageFileLabel } from './paletteModel';
 import { CloseIcon, ElementComponentIcon, FileIcon, LayoutIcon } from '../../ui/Icons';
 
@@ -46,15 +52,25 @@ export type UsagePopup =
 
 interface CreateComponentModalProps {
   readonly source: Extract<ComponentCreationSource, { readonly kind: 'ready' }>;
-  readonly taken: readonly string[];
+  /** Every component's project-relative file and name: a name is taken only in the folder chosen, and warned about elsewhere. */
+  readonly components: readonly RenameCandidate[];
+  /** The components folder a new component goes in (`src/components`, the first configured folder); folders are chosen below it. */
+  readonly root: string;
   readonly onClose: () => void;
-  readonly onCreate: (name: string, options: { readonly asProp: readonly string[] }) => void;
+  /** `folder` is below `root`, `/`-separated, `''` for the root itself. */
+  readonly onCreate: (name: string, options: { readonly asProp: readonly string[]; readonly folder: string }) => void;
 }
+
+/** The folder choice that opens the typed field; NUL cannot be in a path, so it can never be a folder. */
+const NEW_FOLDER = '\u0000new-folder';
 
 export function CreateComponentModal(props: CreateComponentModalProps) {
   const [text, setText] = useState(props.source.name);
   // Empty is the default on purpose: every value moves unless the person says otherwise.
   const [asProp, setAsProp] = useState<ReadonlySet<string>>(new Set());
+  // The root, always: the last folder chosen is not remembered, so a new component lands where it always has unless picked otherwise.
+  const [folderChoice, setFolderChoice] = useState('');
+  const [newFolder, setNewFolder] = useState('');
   const { plan: planFor } = props.source;
   const plan = useMemo(() => planFor(asProp), [planFor, asProp]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -65,12 +81,14 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
   const name = toComponentName(text);
-  const problem = componentNameProblem(text, props.taken);
+  const target = useCreateTarget(props, name, folderChoice, newFolder);
+  const problem = componentNameProblem(text, []) ?? target.taken;
+  const blocked = problem !== undefined || target.folder === undefined;
   const error = problem === undefined ? undefined : translateDescribed(problem);
   const shown = text.trim() ? error : undefined;
   const submit = (): void => {
-    if (problem === undefined) {
-      props.onCreate(name, { asProp: [...asProp] });
+    if (problem === undefined && target.folder !== undefined) {
+      props.onCreate(name, { asProp: [...asProp], folder: target.folder });
     }
   };
   return (
@@ -84,8 +102,23 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
               text={text}
               setText={setText}
               name={name}
+              file={target.file}
               error={shown}
               source={props.source}
+              submit={submit}
+              onClose={close}
+            />
+            {shown === undefined && target.twin !== undefined && (
+              <div className="create-folder-warning">{translate('palette.rename.sameNameElsewhere', { name, file: target.twin })}</div>
+            )}
+            <FolderField
+              root={props.root}
+              folders={target.folders}
+              choice={folderChoice}
+              newFolder={newFolder}
+              problem={target.folderProblem === undefined ? undefined : translateDescribed(target.folderProblem)}
+              setChoice={setFolderChoice}
+              setNewFolder={setNewFolder}
               submit={submit}
               onClose={close}
             />
@@ -93,7 +126,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
           </div>
           <div className="modal-footer">
             <button onClick={close}>{translate('ui.cancel')}</button>
-            <button className="primary" disabled={problem !== undefined} onClick={submit}>
+            <button className="primary" disabled={blocked} onClick={submit}>
               {translate('palette.create.submit')}
             </button>
           </div>
@@ -103,11 +136,70 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
   );
 }
 
+/** Where the new component would be written, worked out from what is typed and chosen on every keystroke (no round trip). */
+interface CreateTarget {
+  /** Folders below the root that hold a component, and the folders between: the choices besides the root. */
+  readonly folders: readonly string[];
+  /** The folder below the root, or undefined while a typed new folder is empty or cannot be used. */
+  readonly folder: string | undefined;
+  readonly folderProblem: Described | undefined;
+  /** The file it would be saved as, for the hint: `…` stands for a folder not yet usable. */
+  readonly file: string;
+  /** A component already at that file, compared without case. */
+  readonly taken: Described | undefined;
+  /** Another component with the same name in another folder: allowed, but a page importing both needs an alias. */
+  readonly twin: string | undefined;
+}
+
+function useCreateTarget(props: CreateComponentModalProps, name: string, choice: string, newFolder: string): CreateTarget {
+  const folders = useMemo(() => subfoldersOf(props.root, props.components), [props.root, props.components]);
+  const style = useMemo(() => detectFolderStyle(folders.map((folder) => folder.slice(folder.lastIndexOf('/') + 1))), [folders]);
+  const typed = choice === NEW_FOLDER ? folderInput(newFolder, style, folders) : undefined;
+  const folderProblem = typed !== undefined && newFolder.trim() !== '' ? typed.problem : undefined;
+  const folder = typed === undefined ? choice : typed.problem === undefined ? typed.path : undefined;
+  const directory = folder === undefined ? `${props.root}/…` : folder === '' ? props.root : `${props.root}/${folder}`;
+  const file = `${directory}/${name || 'Name'}.astro`;
+  const clash = folder === undefined || name === '' ? undefined : props.components.find((other) => other.file.toLowerCase() === file.toLowerCase());
+  const twin =
+    name === ''
+      ? undefined
+      : props.components.find((other) => other.file !== clash?.file && identifierOfFileName(other.name).toLowerCase() === name.toLowerCase());
+  assert(folder === undefined || !folder.startsWith('/'), 'useCreateTarget: a folder is below the root');
+  assert(folder === undefined || !folder.endsWith('/'), 'useCreateTarget: a folder has no trailing slash');
+  return {
+    folders,
+    folder,
+    folderProblem,
+    file,
+    taken: clash === undefined ? undefined : described('palette.create.taken', { file: clash.file }),
+    twin: twin?.file,
+  };
+}
+
+/** Every folder below `root` that holds a component, and the folders between, sorted; never the root itself. */
+export function subfoldersOf(root: string, components: readonly RenameCandidate[]): readonly string[] {
+  assert(!root.endsWith('/'), 'subfoldersOf: the root has no trailing slash');
+  assert(components.length <= LIMITS.scanEntriesMax, 'subfoldersOf: the component list fits the scan limit');
+  const found = new Set<string>();
+  for (const component of components) {
+    const directory = component.file.slice(0, component.file.lastIndexOf('/'));
+    if (!directory.startsWith(`${root}/`)) {
+      continue;
+    }
+    const levels = directory.slice(root.length + 1).split('/');
+    for (let depth = 1; depth <= levels.length; depth += 1) {
+      found.add(levels.slice(0, depth).join('/'));
+    }
+  }
+  return [...found].sort((left, right) => left.localeCompare(right));
+}
+
 function ComponentNameField({
   inputRef,
   text,
   setText,
   name,
+  file,
   error,
   source,
   submit,
@@ -117,6 +209,7 @@ function ComponentNameField({
   readonly text: string;
   readonly setText: React.Dispatch<React.SetStateAction<string>>;
   readonly name: string;
+  readonly file: string;
   readonly error: string | undefined;
   readonly source: Extract<ComponentCreationSource, { readonly kind: 'ready' }>;
   readonly submit: () => void;
@@ -149,8 +242,60 @@ function ComponentNameField({
           {translateRich('palette.create.hint', {
             label: source.label,
             tag: <code>&lt;{name || 'Name'} /&gt;</code>,
-            file: <code>src/components/{name || 'Name'}.astro</code>,
+            file: <code>{file}</code>,
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The folder under the components root: the root first and chosen, every folder that holds a component as its path, and a
+// last row that opens a field for a new one, nested with `/`. What is typed is checked as it is typed and the reason shown.
+function FolderField(props: {
+  readonly root: string;
+  readonly folders: readonly string[];
+  readonly choice: string;
+  readonly newFolder: string;
+  readonly problem: string | undefined;
+  readonly setChoice: (choice: string) => void;
+  readonly setNewFolder: (text: string) => void;
+  readonly submit: () => void;
+  readonly onClose: () => void;
+}) {
+  const translate = useTranslate();
+  const rootName = props.root.slice(props.root.lastIndexOf('/') + 1);
+  const options = [
+    { value: '', label: translate('palette.create.folderRoot', { folder: rootName }) },
+    ...props.folders.map((folder) => ({ value: folder, label: folder })),
+    { value: NEW_FOLDER, label: translate('palette.rename.newFolder') },
+  ];
+  return (
+    <div className="create-folder">
+      <label>{translate('palette.rename.folder')}</label>
+      <Dropdown value={props.choice} ariaLabel={translate('palette.rename.folder')} options={options} onChange={props.setChoice} />
+      {props.choice === NEW_FOLDER && (
+        <input
+          className="create-folder-input"
+          value={props.newFolder}
+          spellCheck={false}
+          autoFocus={true}
+          aria-label={translate('palette.rename.newFolderName')}
+          // i18n-ignore: an example folder path, not prose.
+          placeholder="Global/Layout"
+          onChange={(event) => props.setNewFolder(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              props.submit();
+            } else if (event.key === 'Escape') {
+              props.onClose();
+            }
+          }}
+        />
+      )}
+      {props.problem !== undefined && (
+        <div className="create-folder-problem" role="status">
+          {props.problem}
         </div>
       )}
     </div>

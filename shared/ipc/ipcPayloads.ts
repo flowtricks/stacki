@@ -53,6 +53,7 @@ import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata'
 import { parseInstructionFilePath, parseInstructionPath } from '../properties/instructions';
 import { parseComponentOpTarget } from '../properties/componentOps';
 import { parseComponentRenameRequest, parseRenameDirection } from '../properties/componentRename';
+import { parseComponentSubfolder } from '../properties/componentNaming';
 import { parseGitHubLoginQuery } from '../properties/projectRoles';
 import { parseSelectorFileChanges, parseSelectorFileDigests, parseSelectorIds } from '../properties/selectorUsage';
 import { parseCreatePackageManager } from '../properties/packageManager';
@@ -337,6 +338,8 @@ export const IPC_PAYLOADS = {
     imports: optional(list(componentImport)),
     props: optional(list(data)),
     frontmatter: optional(object({ imports: list(componentImport), code: text })),
+    // Below the first component folder; absent or '' is that folder itself (componentNaming.ts says what a folder may be).
+    folder: optional(parseComponentSubfolder),
   }),
   // The Components panel's "…" menu: a copy of a component or folder, its deletion, and the undo of a deletion (componentOps.ts).
   // Renaming or moving a component: the plan's summary for the dialog, the rename itself, and its undo and redo (componentRename.ts).
@@ -346,7 +349,8 @@ export const IPC_PAYLOADS = {
   'component:duplicate': object({ ...project, target: parseComponentOpTarget }),
   'component:remove': object({ ...project, target: parseComponentOpTarget }),
   'component:restoreRemoved': object({ token: text }),
-  'component:discard': object({ ...project, path: pathText, checksum: digest, force: maybeFlag }),
+  // `folders`: the folders the creation made (its reply), each removed once empty; main removes only folders inside a component folder.
+  'component:discard': object({ ...project, path: pathText, checksum: digest, force: maybeFlag, folders: optional(list(pathText)) }),
   'component:properties': object({ ...project, file: pathText }),
   // Undo of a property batch (step 6): the token its edit returned. Main
   // holds the inverse batch; the renderer can apply only what an edit wrote.

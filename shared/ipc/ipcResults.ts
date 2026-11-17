@@ -255,6 +255,8 @@ export interface IpcResults extends AiResults {
     readonly rel: string;
     readonly name: string;
     readonly checksum: Digest;
+    /** Absolute paths of the folders this creation made, outermost first: empty when the folder was there already. */
+    readonly folders: readonly string[];
   };
   readonly 'component:planRename': Result<ComponentRenameSummary>;
   readonly 'component:rename': Result<ComponentRenameSummary & { readonly undo: string }>;

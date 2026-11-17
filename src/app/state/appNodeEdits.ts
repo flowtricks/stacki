@@ -330,7 +330,7 @@ export function useCreateComponent(
   // restores the page and the markup, and takes the new file back
   // (componentCreation.ts).
   const createComponentFromSelection = useCallback(
-    async (name: string, options: { readonly asProp: readonly string[] }) => {
+    async (name: string, options: { readonly asProp: readonly string[]; readonly folder: string }) => {
       const page = pageStateRef.current.currentPage;
       const state = pageStateRef.current.pageState;
       const model = state?.editable ? state.model : undefined;
@@ -350,6 +350,7 @@ export function useCreateComponent(
         imports: model.imports || [],
         props,
         frontmatter: plan.moved,
+        folder: options.folder,
       };
       let created;
       try {
@@ -359,10 +360,17 @@ export function useCreateComponent(
         return;
       }
       const createdPath = created.path;
+      // The folders the file's creation made, so Undo takes them back with it once they are empty; Redo may make them again.
+      let createdFolders = created.folders;
       const files = createdComponentFiles(
         {
-          discard: async ({ checksum, force }) => (await discardProjectComponent({ projectPath, path: createdPath, checksum, force })).outcome,
-          create: async () => (await createProjectComponent(input)).checksum,
+          discard: async ({ checksum, force }) =>
+            (await discardProjectComponent({ projectPath, path: createdPath, checksum, force, folders: createdFolders })).outcome,
+          create: async () => {
+            const again = await createProjectComponent(input);
+            createdFolders = again.folders;
+            return again.checksum;
+          },
           confirmDelete: async () =>
             (await confirmDialog({
               title: translate('shell.component.deleteTitle', { rel: created.rel }),

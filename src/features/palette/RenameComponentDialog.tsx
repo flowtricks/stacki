@@ -60,7 +60,9 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
   const creatingFolder = folder === NEW_FOLDER;
   const style = useMemo(() => detectNamingStyle(props.components.map((component) => baseOf(component.file))), [props.components]);
   const folderStyle = useMemo(() => detectFolderStyle(folderLevels(folders, props.roots)), [folders, props.roots]);
-  const typedFolder = folderInput(newFolder, folderStyle);
+  // Below the root, so a typed level differing from an existing folder only in case takes that folder's spelling.
+  const belowRoot = useMemo(() => folders.filter((value) => value.startsWith(`${root}/`)).map((value) => value.slice(root.length + 1)), [folders, root]);
+  const typedFolder = folderInput(newFolder, folderStyle, belowRoot);
   const folderProblem = creatingFolder ? typedFolder.problem : undefined;
   const chosenFolder = creatingFolder ? `${root}/${typedFolder.path}` : folder;
   const availability = renameAvailability({ current: props.file, name, folder: chosenFolder, style, components: props.components });

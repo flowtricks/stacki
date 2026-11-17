@@ -9,6 +9,8 @@
 // emoji, a letter with no Latin base) cannot be mapped to a valid name: the normalizer reports it so the caller can name it, and the
 // word break it leaves is only a best guess for callers that choose to be lenient.
 import { assert } from '../core/assert';
+import { err, ok, type Result } from '../core/result';
+import { COMPONENT_ACCESS_LIMITS } from './componentAccess';
 
 export type NamingStyle = 'pascal' | 'kebab';
 
@@ -112,4 +114,128 @@ export function normalizeFolderPath(input: string, style: NamingStyle): { readon
     }
   }
   return { path: levels.join('/'), rejected };
+}
+
+// A folder under the components root, as the Create and Rename dialogs take it and main checks it again before it writes.
+// What is typed is normalized level by level (above), after the refusals a person must be told about: a path that climbs out
+// (`..`), one that starts at the disk (`/x`, `C:\x`, `~/x`), an empty level (`a//b`), or a character no name can hold. Backslashes
+// count as slashes and a trailing slash is dropped, so `Global\Layout\` is `Global/Layout`. A level that differs from an existing
+// folder only in case takes the existing spelling: on a Mac `forms` and `Forms` are one folder, and two spellings would split a
+// group in the Components panel.
+
+/** Why a typed folder cannot be used; the dialogs word it (renameAvailability.ts). */
+export type FolderPathProblem =
+  | { readonly kind: 'empty' }
+  | { readonly kind: 'absolute' }
+  | { readonly kind: 'parent' }
+  | { readonly kind: 'empty-level' }
+  | { readonly kind: 'character'; readonly character: string }
+  | { readonly kind: 'too-long' }
+  | { readonly kind: 'too-deep' };
+
+/** Characters no file system level may hold (Windows' reserved set and control characters), checked on every folder main writes. */
+const FOLDER_ILLEGAL = /[<>:"|?*\u0000-\u001f]/;
+
+/** A typed folder below the components root: `ok` with its normalized path (`/`-separated, no leading or trailing slash), or why not. */
+export function parseTypedFolderPath(input: string, style: NamingStyle, existing: readonly string[] = []): Result<string, FolderPathProblem> {
+  const typed = input.slice(0, NAMING_LIMITS.inputCharsMax).trim().replaceAll('\\', '/');
+  if (typed === '') {
+    return err({ kind: 'empty' });
+  }
+  if (typed.startsWith('/') || typed.startsWith('~') || /^[A-Za-z]:/.test(typed)) {
+    return err({ kind: 'absolute' });
+  }
+  const levels = typed.replace(/\/+$/, '').split('/');
+  const normalized: string[] = [];
+  for (const level of levels) {
+    const trimmed = level.trim();
+    if (trimmed === '') {
+      return err({ kind: 'empty-level' });
+    }
+    if (trimmed === '.' || trimmed === '..') {
+      return err({ kind: 'parent' });
+    }
+    const name = normalizeComponentName(trimmed, style);
+    const stray = name.rejected[0];
+    if (stray !== undefined) {
+      return err({ kind: 'character', character: stray });
+    }
+    if (name.fileName === '') {
+      return err({ kind: 'empty-level' });
+    }
+    normalized.push(name.fileName);
+  }
+  const folded = foldFolderCase(normalized, existing);
+  const problem = componentFolderProblem(folded);
+  if (problem !== undefined) {
+    return err(problem);
+  }
+  assert(!folded.startsWith('/'), 'A typed folder is relative to the components root');
+  assert(!folded.split('/').includes('..'), 'A typed folder never climbs out of the components root');
+  return ok(folded);
+}
+
+/**
+ * Whether a folder below the components root can be written to as it stands, for a folder chosen from the list (whatever its
+ * spelling on disk) and for main's own check. `''` is the root itself. Undefined when it can.
+ */
+export function componentFolderProblem(folder: string): FolderPathProblem | undefined {
+  if (folder === '') {
+    return undefined;
+  }
+  if (folder.length > COMPONENT_ACCESS_LIMITS.pathCharsMax) {
+    return { kind: 'too-long' };
+  }
+  if (folder.startsWith('/') || /^[A-Za-z]:/.test(folder) || folder.includes('\\')) {
+    return { kind: 'absolute' };
+  }
+  const levels = folder.split('/');
+  if (levels.length > COMPONENT_ACCESS_LIMITS.pathDepthMax) {
+    return { kind: 'too-deep' };
+  }
+  for (const level of levels) {
+    if (level === '') {
+      return { kind: 'empty-level' };
+    }
+    if (level === '.' || level === '..') {
+      return { kind: 'parent' };
+    }
+    const illegal = FOLDER_ILLEGAL.exec(level);
+    if (illegal !== null) {
+      return { kind: 'character', character: illegal[0] };
+    }
+  }
+  return undefined;
+}
+
+/** The boundary parser for a folder crossing into main: a string `componentFolderProblem` accepts, else a throw. */
+export function parseComponentSubfolder(input: unknown): string {
+  if (typeof input !== 'string') {
+    throw new Error('A component folder is a string');
+  }
+  const problem = componentFolderProblem(input);
+  if (problem !== undefined) {
+    throw new Error(`"${input.slice(0, NAMING_LIMITS.inputCharsMax)}" is not a folder under the components folder (${problem.kind})`);
+  }
+  return input;
+}
+
+// Level by level, the spelling of an existing folder that differs only in case. Below a level with no match nothing can match
+// either (a new folder has nothing in it yet), so those levels keep the spelling typed.
+function foldFolderCase(levels: readonly string[], existing: readonly string[]): string {
+  assert(levels.length > 0, 'foldFolderCase: a path has a level');
+  const known = new Map(existing.map((folder) => [folder.toLowerCase(), folder] as const));
+  const folded: string[] = [];
+  for (const level of levels) {
+    const candidate = [...folded, level].join('/');
+    const match = known.get(candidate.toLowerCase());
+    if (match === undefined) {
+      folded.push(level);
+      continue;
+    }
+    const spelled = match.slice(match.lastIndexOf('/') + 1);
+    folded.push(spelled);
+  }
+  assert(folded.length === levels.length, 'foldFolderCase: folding keeps every level');
+  return folded.join('/');
 }

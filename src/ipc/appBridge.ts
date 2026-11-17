@@ -6,6 +6,7 @@ import type { Data } from '../../shared/core/boundary';
 import type { IpcResults, WireDataRecord, WireInjectedRoute, WireRouteParams, WireUsageFile } from '../../shared/ipc/ipcResults';
 import { boolean, count, data, dictionary, digest, list, optional, pathText, record, text } from '../../shared/core/boundary';
 import type { Digest } from '../../shared/core/brand';
+import { COMPONENT_ACCESS_LIMITS } from '../../shared/properties/componentAccess';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { parseScopeSamples } from '../../shared/page/previewScope';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
@@ -52,6 +53,8 @@ interface CreateComponentInput {
   readonly props: readonly string[];
   /** Code moving out of the parent into the new file. */
   readonly frontmatter: { readonly imports: readonly CreateComponentImport[]; readonly code: string };
+  /** Below the first component folder, `/`-separated; `''` is that folder itself. */
+  readonly folder: string;
 }
 
 export function diagnoseProject(projectPath: string): Promise<IpcResults['dev:diagnose']> {
@@ -317,6 +320,7 @@ export function createProjectComponent(input: CreateComponentInput): Promise<Ipc
     imports: input.imports,
     props: input.props.map(data),
     frontmatter: input.frontmatter,
+    folder: input.folder,
   });
   return window.avb.createComponent(payload).then((raw) => {
     const value = record(raw);
@@ -325,6 +329,7 @@ export function createProjectComponent(input: CreateComponentInput): Promise<Ipc
       rel: pathText(value['rel']),
       name: text(value['name']),
       checksum: digest(value['checksum']),
+      folders: createdFoldersOf(value['folders']),
     };
   });
 }
@@ -336,9 +341,21 @@ export function discardProjectComponent(input: {
   readonly path: string;
   readonly checksum: Digest;
   readonly force: boolean;
+  /** The folders its creation made, deepest last: each goes too once it is empty. */
+  readonly folders: readonly string[];
 }): Promise<IpcResults['component:discard']> {
   const payload = parseIpcPayload('component:discard', input);
   return window.avb.discardComponent(payload).then((raw) => ({ outcome: discardOutcome(record(raw)['outcome']) }));
+}
+
+// The folders a component's creation made, as main answered them: absolute paths, outermost first, at most one per level a
+// component path can have.
+function createdFoldersOf(input: unknown): readonly string[] {
+  const folders = list(pathText)(input);
+  if (folders.length > COMPONENT_ACCESS_LIMITS.pathDepthMax) {
+    throw new Error('A component creation made more folders than a component path has levels');
+  }
+  return folders;
 }
 
 function discardOutcome(input: unknown): IpcResults['component:discard']['outcome'] {

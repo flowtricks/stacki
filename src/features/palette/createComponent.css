@@ -1,0 +1,22 @@
+/* The Create component dialog's folder field and its warning. Fills, not borders; the field sits under the name with a step of air. */
+.modal.create-component .create-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.modal.create-component .create-folder label {
+  margin-bottom: 0;
+}
+.modal.create-component .create-folder-warning {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 190, 80, 0.14);
+  color: #ffd08a;
+  font-size: 12px;
+}
+.modal.create-component .create-folder-problem {
+  font-size: 12px;
+  color: #ff9b9b;
+}

@@ -11,6 +11,8 @@ export const messages = {
   'palette.apps.empty.title': 'Noch keine Apps',
   'palette.apps.loading': 'Apps werden geladen …',
   'palette.apps.marketplace': 'Marketplace', // same
+  'palette.create.folderRoot': '{folder} (Hauptordner)',
+  'palette.create.taken': '{file} gibt es schon.',
   'palette.create.hint': '{label} wird zu {tag}, gespeichert als {file}',
   'palette.create.name': 'Name', // same
   'palette.create.submit': 'Erstellen',
@@ -28,6 +30,11 @@ export const messages = {
   'palette.element.content': 'gerenderter Markdown-Eintrag',
   'palette.element.fragment': 'Gruppe ohne umschließendes Element',
   'palette.element.slot': 'was der Aufrufer übergibt',
+  'palette.folder.absolute': 'Beginne im Komponentenordner: kein / und kein Laufwerk am Anfang.',
+  'palette.folder.emptyLevel': 'Jede Ebene braucht einen Namen: entferne das überzählige /.',
+  'palette.folder.parent': '„..“ geht nicht: Der Ordner bleibt im Komponentenordner.',
+  'palette.folder.tooDeep': 'Dieser Ordner ist zu tief verschachtelt.',
+  'palette.folder.tooLong': 'Dieser Ordnerpfad ist zu lang.',
   'palette.insert.folders': 'Komponentenordner',
   'palette.insert.hint': 'einfügen',
   'palette.instances.looking': 'Suche …',

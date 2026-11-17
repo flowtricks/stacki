@@ -14,7 +14,6 @@ import {
 import { createProjectText } from '../documents/documentWrites';
 import { definedFields } from '../../shared/core/boundary';
 import { translateMain } from '../lib/mainLocale';
-import { isPathDescendant } from '../lib/platform';
 import { assert } from '../../shared/core/assert';
 import { err, ok } from '../../shared/core/result';
 import * as path from 'path';
@@ -30,7 +29,7 @@ import { desktopRenameWriter } from '../project/pageRenameDesktop';
 import { runSliced } from '../lib/slicedWork';
 import { ComponentRemovalStore, duplicateComponentTarget, removeComponentTarget, restoreRemovedComponent } from './componentOps';
 import { projectFoldersFor } from '../lib/projectFolders';
-import { componentSpecifier } from '../properties/componentImports';
+import { componentImportPaths } from '../properties/componentImports';
 
 // Step 6: every applied property batch leaves its inverse here, and the reply
 // carries the token Undo sends back (componentProperties.ts).
@@ -55,10 +54,14 @@ function registerComponentCreateHandlers({
   // The checksum is what Undo hands back to `component:discard`: the file goes
   // only while it still holds these bytes.
   ipcMain.handle('component:create', async (_event, options) => {
-    const { path: target, rel, text } = componentFile({ ...options, componentFolders: projectFoldersFor(options.projectPath, 'components') });
+    const { path: target, rel, text, folders } = componentFile({ ...options, componentFolders: projectFoldersFor(options.projectPath, 'components') });
     fs.mkdirSync(path.dirname(target), { recursive: true });
     const checksum = createProjectText(target, text);
-    return { path: target, rel, name: options.name, checksum };
+    assert(
+      folders.every((folder) => fs.existsSync(folder)),
+      'Every folder the component needed was made',
+    );
+    return { path: target, rel, name: options.name, checksum, folders };
   });
 
   // The Components panel's "…" menu. Expected refusals (used, outside the component folders, a name that cannot be found)
@@ -98,7 +101,7 @@ function registerComponentCreateHandlers({
   });
 
   // Undo of creating a component: one step with the page edit that placed it.
-  ipcMain.handle('component:discard', async (_event, { projectPath, path: target, checksum, force }) => {
+  ipcMain.handle('component:discard', async (_event, { projectPath, path: target, checksum, force, folders }) => {
     noteAppWrite();
     return {
       outcome: discardComponentFile({
@@ -107,6 +110,7 @@ function registerComponentCreateHandlers({
         checksum,
         force: force === true,
         componentFolders: projectFoldersFor(projectPath, 'components'),
+        folders: folders ?? [],
       }),
     };
   });
@@ -135,22 +139,9 @@ function registerComponentCreateHandlers({
   // Which files hold instances of a component — the palette’s instance count.
   ipcMain.handle('component:usage', async (_event, { projectPath, name, exclude }) => componentUsage(definedFields({ projectPath, name, exclude })));
 
-  ipcMain.handle('page:importPathFor', async (_event, { pagePath, targetPath, projectPath }) => {
-    const preferred = projectPath ? componentSpecifier(projectPath, targetPath) : undefined;
-    if (preferred !== undefined) {
-      return { relative: preferred, srcRelative: undefined };
-    }
-    const rel = toPosix(path.relative(path.dirname(pagePath), targetPath));
-    const relative = rel.startsWith('.') ? rel : './' + rel;
-    let sourceRelative: string | undefined = undefined;
-    if (projectPath) {
-      const sourceDirectory = path.join(projectPath, 'src');
-      if (isPathDescendant(sourceDirectory, targetPath)) {
-        sourceRelative = toPosix(path.relative(sourceDirectory, targetPath));
-      }
-    }
-    return { relative, srcRelative: sourceRelative };
-  });
+  ipcMain.handle('page:importPathFor', async (_event, { pagePath, targetPath, projectPath }) =>
+    componentImportPaths({ pagePath, targetPath, projectPath: projectPath ?? undefined }),
+  );
 
   // The same import, written for another page.
   //

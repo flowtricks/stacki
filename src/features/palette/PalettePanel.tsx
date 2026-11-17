@@ -18,6 +18,8 @@ import { componentRuleFile } from '../../../shared/properties/componentAccess';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
 import { CopyIcon, ElementComponentIcon, GearIcon, LayoutIcon, MoveFolderIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon, UsersIcon } from '../../ui/Icons';
 import { RenameComponentDialog } from './RenameComponentDialog';
+import type { RenameCandidate } from './renameAvailability';
+import { DEFAULT_PROJECT_FOLDERS } from '../../../shared/properties/projectFolders';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
@@ -37,7 +39,8 @@ interface PalettePanelProps {
   readonly trailingSlash: TrailingSlash;
   readonly onInsert: (name: string) => void;
   readonly onDragBegin?: () => void;
-  readonly onCreateComponent: (name: string, options: { readonly asProp: readonly string[] }) => void;
+  /** `folder` is below the first component folder, `''` for that folder itself (CreateComponentModal). */
+  readonly onCreateComponent: (name: string, options: { readonly asProp: readonly string[]; readonly folder: string }) => void;
   readonly onUsage?: (component: ScanComponent) => Promise<unknown>;
   readonly onOpenUsage?: (file: ComponentUsageFile) => void;
   readonly pageInstances?: (name: string) => readonly { readonly id: string }[];
@@ -494,12 +497,14 @@ function PalettePopups({
   readonly setRenaming: (request: RenameRequest | undefined) => void;
 }) {
   const source = props.createFrom;
+  const candidates = useMemo(() => componentCandidates(props.components), [props.components]);
   return (
     <>
       {creating && source.kind === 'ready' && (
         <CreateComponentModal
           source={source}
-          taken={props.components.map((component) => component.name)}
+          components={candidates}
+          root={props.management?.rename?.roots[0] ?? DEFAULT_PROJECT_FOLDERS.components[0] ?? 'src/components'}
           onClose={() => setCreating(false)}
           onCreate={(name, options) => {
             setCreating(false);
@@ -538,6 +543,14 @@ function PalettePopups({
   );
 }
 
+// Each component's project-relative file and name, for the Create and Rename dialogs; a package component has no file and is left out.
+function componentCandidates(components: readonly ScanComponent[]): readonly RenameCandidate[] {
+  return components.flatMap((other) => {
+    const otherFile = componentRuleFile(other);
+    return otherFile === undefined ? [] : [{ file: otherFile, name: other.name }];
+  });
+}
+
 // The dialog over the panel's components: names and files come from the scan, so a taken name is known without asking main.
 function RenameDialogHost(props: {
   readonly request: RenameRequest;
@@ -547,14 +560,7 @@ function RenameDialogHost(props: {
 }) {
   const { component } = props.request;
   const file = componentRuleFile(component);
-  const candidates = useMemo(
-    () =>
-      props.components.flatMap((other) => {
-        const otherFile = componentRuleFile(other);
-        return otherFile === undefined ? [] : [{ file: otherFile, name: other.name }];
-      }),
-    [props.components],
-  );
+  const candidates = useMemo(() => componentCandidates(props.components), [props.components]);
   if (file === undefined) {
     return undefined;
   }

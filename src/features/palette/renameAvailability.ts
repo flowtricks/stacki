@@ -14,8 +14,11 @@ import {
   identifierOfFileName,
   normalizeComponentName,
   normalizeFolderPath,
+  parseTypedFolderPath,
+  type FolderPathProblem,
   type NamingStyle,
 } from '../../../shared/properties/componentNaming';
+import { assert } from '../../../shared/core/assert';
 import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 
 export interface RenameCandidate {
@@ -88,12 +91,40 @@ export function renameAvailability(input: RenameInput): RenameAvailability {
   return { kind: 'available', path, fileName: normalized.fileName, change, sameNameIn: twin?.file };
 }
 
-/** A typed new folder: normalized level by level in the folders' own style, or why it cannot be used. */
-export function folderInput(input: string, style: NamingStyle): { readonly path: string; readonly problem: Described | undefined } {
-  const normalized = normalizeFolderPath(input, style);
-  const stray = normalized.rejected[0];
-  if (stray !== undefined) {
-    return { path: normalized.path, problem: described('palette.rename.badCharacter', { character: stray }) };
+/** A typed new folder: normalized level by level in the folders' own style, case folded onto `existing` folders, or why it cannot be used. */
+export function folderInput(
+  input: string,
+  style: NamingStyle,
+  existing: readonly string[] = [],
+): { readonly path: string; readonly problem: Described | undefined } {
+  const parsed = parseTypedFolderPath(input, style, existing);
+  if (parsed.ok) {
+    assert(parsed.value !== '', 'folderInput: a parsed folder has a level');
+    return { path: parsed.value, problem: undefined };
   }
-  return { path: normalized.path, problem: normalized.path === '' ? described('palette.rename.folderInvalid') : undefined };
+  return { path: normalizeFolderPath(input, style).path, problem: folderProblemText(parsed.error) };
+}
+
+/** The sentence for a folder that cannot be used, shared by the Create and Rename dialogs. */
+export function folderProblemText(problem: FolderPathProblem): Described {
+  switch (problem.kind) {
+    case 'empty':
+      return described('palette.rename.folderInvalid');
+    case 'absolute':
+      return described('palette.folder.absolute');
+    case 'parent':
+      return described('palette.folder.parent');
+    case 'empty-level':
+      return described('palette.folder.emptyLevel');
+    case 'character':
+      return described('palette.rename.badCharacter', { character: problem.character });
+    case 'too-long':
+      return described('palette.folder.tooLong');
+    case 'too-deep':
+      return described('palette.folder.tooDeep');
+    default: {
+      const exhaustive: never = problem;
+      return exhaustive;
+    }
+  }
 }

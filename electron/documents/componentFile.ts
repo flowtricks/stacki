@@ -30,6 +30,8 @@ import type { Digest } from '../../shared/core/brand';
 import { mapModuleSpecifiers } from '../../shared/page/frontmatterSource';
 import { isPathDescendant } from '../lib/platform';
 import { DEFAULT_PROJECT_FOLDERS } from '../../shared/properties/projectFolders';
+import { COMPONENT_ACCESS_LIMITS } from '../../shared/properties/componentAccess';
+import { componentFolderProblem } from '../../shared/properties/componentNaming';
 import { digestOf } from './atomicWrite';
 import { serializePage, serializeNodes } from '../parse/astroParser';
 import { CODE_INDENT_UNIT } from '../../shared/core/indent';
@@ -66,6 +68,8 @@ interface ComponentFileArgs {
   readonly frontmatter?: MovedFrontmatter;
   /** The project's component folders (.stacki/folders.json), read by the caller; the new file goes in the first. */
   readonly componentFolders?: readonly string[];
+  /** The folder below the first component folder, already parsed at the boundary (componentNaming.ts); `''` or absent is that folder. */
+  readonly folder?: string | undefined;
 }
 
 /**
@@ -82,10 +86,13 @@ function componentFile({
   props = [],
   frontmatter,
   componentFolders = DEFAULT_PROJECT_FOLDERS.components,
+  folder = '',
 }: ComponentFileArgs): {
   path: string;
   rel: string;
   text: string;
+  /** The folders below the component folder that do not exist yet, outermost first: the caller makes them, Undo takes them back. */
+  folders: readonly string[];
 } {
   if (!VALID_NAME.test(String(name || ''))) {
     throw new Error('A component name has to be a word starting with a capital letter.');
@@ -100,14 +107,20 @@ function componentFile({
     throw new Error('This project lists no component folders. Add one in Settings → Folders.');
   }
   const componentsDirectory = path.join(projectPath, ...componentFolder.split('/'));
-  const target = path.join(componentsDirectory, `${name}.astro`);
+  const folderProblem = componentFolderProblem(folder);
+  if (folderProblem !== undefined) {
+    throw new Error(`"${folder}" is not a folder under ${componentFolder} (${folderProblem.kind}).`);
+  }
+  const placed = folderOnDisk(componentsDirectory, folder);
+  const directory = placed.directory;
+  const target = path.join(directory, `${name}.astro`);
+  assert(isPathDescendant(componentsDirectory, target), 'A new component lands inside the component folder');
   // Case-insensitively: on a Mac, Card.astro and card.astro are the same file,
   // and writing the second silently replaces the first.
-  const clash = fs.existsSync(componentsDirectory)
-    ? fs.readdirSync(componentsDirectory).find((fileName) => fileName.toLowerCase() === `${name.toLowerCase()}.astro`)
-    : undefined;
+  const clash = fs.existsSync(directory) ? fs.readdirSync(directory).find((fileName) => fileName.toLowerCase() === `${name.toLowerCase()}.astro`) : undefined;
   if (clash) {
-    throw new Error(`There's already a component called ${path.basename(clash, '.astro')}.`);
+    const where = toPosix(path.relative(projectPath, path.join(directory, clash)));
+    throw new Error(`There's already a component called ${path.basename(clash, '.astro')} (${where}).`);
   }
 
   // Which of the page's imports this piece actually uses. Matched against the
@@ -125,7 +138,7 @@ function componentFile({
     if (!spec.startsWith('.')) {
       return spec;
     }
-    const rel = toPosix(path.relative(componentsDirectory, path.resolve(pageDirectory, spec)));
+    const rel = toPosix(path.relative(directory, path.resolve(pageDirectory, spec)));
     return rel.startsWith('.') ? rel : './' + rel;
   };
   const moved = [...used, ...needed].map((imp) => ({ ...imp, path: rebased(String(imp.path || '')) }));
@@ -151,7 +164,40 @@ function componentFile({
     CODE_INDENT_UNIT,
   );
 
-  return { path: target, rel: toPosix(path.relative(projectPath, target)), text };
+  return { path: target, rel: toPosix(path.relative(projectPath, target)), text, folders: placed.missing };
+}
+
+// Where a folder below the component folder is on disk: each level that exists already in another case is spelled as the disk
+// spells it (on a Mac `forms` and `Forms` are one folder, and the Components panel groups by the spelling it reads), and the
+// levels that do not exist yet are listed, outermost first, for the caller to make and for Undo to take back.
+function folderOnDisk(componentsDirectory: string, folder: string): { readonly directory: string; readonly missing: readonly string[] } {
+  if (folder === '') {
+    return { directory: componentsDirectory, missing: [] };
+  }
+  const levels = folder.split('/');
+  assert(levels.length <= COMPONENT_ACCESS_LIMITS.pathDepthMax, 'folderOnDisk: a parsed folder is within the depth bound');
+  let directory = componentsDirectory;
+  const missing: string[] = [];
+  for (const level of levels) {
+    const existing = missing.length === 0 ? existingSpelling(directory, level) : undefined;
+    directory = path.join(directory, existing ?? level);
+    if (existing === undefined) {
+      missing.push(directory);
+    }
+  }
+  assert(isPathDescendant(componentsDirectory, directory), 'folderOnDisk: the folder stays inside the component folder');
+  assert(missing.length <= levels.length, 'folderOnDisk: at most every level is new');
+  return { directory, missing };
+}
+
+// The name of the folder in `parent` that is `level` but for case, if there is one.
+function existingSpelling(parent: string, level: string): string | undefined {
+  if (!fs.existsSync(parent)) {
+    return undefined;
+  }
+  const wanted = level.toLowerCase();
+  const entry = fs.readdirSync(parent, { withFileTypes: true }).find((candidate) => candidate.isDirectory() && candidate.name.toLowerCase() === wanted);
+  return entry?.name;
 }
 
 interface NewPageLayout {
@@ -196,6 +242,8 @@ interface ComponentDiscardArgs {
   readonly force: boolean;
   /** The project's component folders, read by the caller: only a file in one of them can be taken back. */
   readonly componentFolders?: readonly string[];
+  /** The folders the creation made, outermost first: each is removed, deepest first, once the file is gone and it is empty. */
+  readonly folders?: readonly string[];
 }
 
 /**
@@ -210,6 +258,7 @@ function discardComponentFile({
   checksum,
   force,
   componentFolders = DEFAULT_PROJECT_FOLDERS.components,
+  folders = [],
 }: ComponentDiscardArgs): ComponentDiscard {
   // Any listed component folder: the one it was made in is the first of them.
   const inComponentFolder = componentFolders.some((folder) => isPathDescendant(path.join(projectPath, ...folder.split('/')), target));
@@ -219,16 +268,43 @@ function discardComponentFile({
   if (path.extname(target) !== '.astro') {
     throw new Error('Only a component file can be taken back.');
   }
+  // The folders go only from inside a component folder, and never a component folder itself: the request crosses a process boundary.
+  const roots = componentFolders.map((folder) => path.join(projectPath, ...folder.split('/')));
+  for (const folder of folders) {
+    if (!roots.some((root) => isPathDescendant(root, folder))) {
+      throw new Error('Only a folder made for a component can be taken back.');
+    }
+    if (!isPathDescendant(folder, target)) {
+      throw new Error('Only the folders holding the component can be taken back.');
+    }
+  }
   if (!fs.existsSync(target)) {
+    removeEmptyFolders(folders);
     return 'missing';
   }
   const unchanged = digestOf(fs.readFileSync(target)) === checksum;
   if (unchanged || force) {
     fs.rmSync(target);
     assert(!fs.existsSync(target), 'A discarded component is gone');
+    removeEmptyFolders(folders);
     return 'deleted';
   }
   return 'edited';
+}
+
+// Deepest first, and only while empty: anything put in a folder since it was made keeps it, and every folder above it.
+function removeEmptyFolders(folders: readonly string[]): void {
+  assert(folders.length <= COMPONENT_ACCESS_LIMITS.pathDepthMax, 'removeEmptyFolders: at most one folder per level');
+  for (const folder of [...folders].reverse()) {
+    if (!fs.existsSync(folder)) {
+      continue;
+    }
+    if (fs.readdirSync(folder).length > 0) {
+      return;
+    }
+    fs.rmdirSync(folder);
+    assert(!fs.existsSync(folder), 'An emptied folder is gone');
+  }
 }
 
 export { componentFile, discardComponentFile, newPageText };
