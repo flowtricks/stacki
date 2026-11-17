@@ -330,15 +330,6 @@
 }
 
 /* The class-list editor: a row per class, its grip, field and remove on one line. */
-.class-list-entry-head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.class-list-entry-head > .conditional-value-row {
-  flex: 1;
-  min-width: 0;
-}
 .conditional-bullet-when {
   color: var(--text-faint);
 }
@@ -460,4 +451,93 @@
 }
 .conditional-editor > .loop-property-head > .loop-settings-remove {
   margin-left: auto;
+}
+
+/* Code the conditions cannot read (ComputedField): the same pill as
+   Conditional, greyed and not pressable, its code under it and the {} at the
+   pill's end, which opens the code editor. */
+.conditional-computed-field {
+  position: relative;
+}
+.conditional-badge-computed,
+.conditional-chip-computed {
+  background: var(--bg-input);
+  color: var(--text-dim);
+  cursor: default;
+}
+.conditional-computed-toggle {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+
+/* A fallback (`label ?? named[variant]`): its values in a row, the operator muted between them. */
+.conditional-fallback,
+.conditional-fallback-operand {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-fallback-operator {
+  color: var(--text-faint);
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+}
+.conditional-result .conditional-computed-code,
+.conditional-fallback .conditional-computed-code {
+  display: inline;
+  width: auto;
+  padding: 1px 4px;
+}
+
+/* A test the rows cannot show: its code, locked, as wide as the row allows. */
+.conditional-condition > .conditional-code-condition {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.conditional-condition > .conditional-code-condition + .conditional-values-none {
+  display: none;
+}
+
+/* Under a computed value's row, the prop condition it is the same as: a quiet
+   row on the secondary fill, its words muted, a compact Switch at its end. */
+.conditional-plainer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.conditional-plainer-words {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conditional-plainer-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+.conditional-plainer-switch:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
 }

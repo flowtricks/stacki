@@ -157,12 +157,7 @@ function GroupView(props: {
     <>
       {props.groupIndex > 0 && <div className="conditional-or">{translate('props.conditional.or')}</div>}
       <div className="conditional-group" role="group" aria-label={translate('props.conditional.group', { number: props.groupIndex + 1 })}>
-        <GroupHeading
-          groupIndex={props.groupIndex}
-          match={group.match}
-          onMatch={(match) => onChange((current) => ({ ...current, match }))}
-          onRemove={props.onRemove}
-        />
+        <GroupHeading match={group.match} onMatch={(match) => onChange((current) => ({ ...current, match }))} onRemove={props.onRemove} />
         {group.conditions.map((row, rowIndex) => (
           <RowView
             key={rowIndex}

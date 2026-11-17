@@ -1,5 +1,5 @@
 /* A choice of several in one field (MultiSelect.tsx): an input's box holding
-   the chosen values as chips, a box to type in, a clear-all and a chevron.
+   the chosen values as chips, a box to type in and a chevron.
    The menu is Dropdown's (.dd-popup, .dd-option). */
 .multi-select {
   display: flex;
@@ -13,6 +13,18 @@
   border-radius: 6px;
   background: var(--bg-input);
   cursor: text;
+}
+/* The chevron sits in room kept at the end of every line, pinned to the
+   bottom one: chips wrap before they reach it, so no line holds only the
+   chevron, however many chips there are. */
+.multi-select.has-chevron {
+  position: relative;
+  padding-right: 26px;
+}
+.multi-select.has-chevron > .multi-select-chevron {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
 }
 .multi-select:focus-within {
   border-color: var(--accent);
@@ -39,12 +51,21 @@
   color: var(--text);
   font-size: 12px;
 }
+/* After chips the box takes only the room left on their line, so it never
+   wraps onto a line of its own; typing in it gives it room to type in. */
+.multi-select.has-values .multi-select-input {
+  flex-basis: 2px;
+  min-width: 2px;
+}
+.multi-select.has-values:focus-within .multi-select-input {
+  flex-basis: 40px;
+  min-width: 40px;
+}
 .multi-select-input:focus {
   border: none;
   background: transparent;
 }
 .multi-select-chip > button,
-.multi-select-clear,
 .multi-select-chevron {
   display: inline-flex;
   align-items: center;
@@ -60,11 +81,7 @@
   cursor: pointer;
 }
 .multi-select-chip > button:hover:not(:disabled),
-.multi-select-clear:hover:not(:disabled),
 .multi-select-chevron:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
-}
-.multi-select-clear {
-  margin-left: auto;
 }

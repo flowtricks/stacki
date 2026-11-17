@@ -105,3 +105,27 @@ Tests that hold the corpus: `test/electron/properties/variantDefaults.test.ts`,
 | Default read from another prop | 1 | 2 | 3 |
 | `Astro.props as X` | 8 | 0 | 2 |
 | Generic props | 0 | 0 | 4 |
+
+## Attribute expressions
+
+The attribute values (not prop declarations) of the same projects, read from
+the templates only: `test/fixtures/lumos` (my-site's components),
+`webflow-shop`, `Webflow.com-Astro-Build` and `pigeon`. 231 attributes choose
+between values; how each is drawn is in docs/props-conditional-values.md,
+"Attribute values: the rich reading".
+
+| Where | Attribute | Shape | Panel |
+|---|---|---|---|
+| Lumos Button | `aria-label` | `isWritten ? undefined : (label ?? named[variant])` | Conditional: group leaves it out, Else a fallback with a lookup |
+| Lumos Button | `aria-pressed` | `variant === "play" ? pressed : undefined` | Conditional |
+| All four (99) | `class:list` | entries `cond && value`, `padClass(…)` calls | Class list, calls locked |
+| webflow-shop form fields | `required`, `checked`, `open` | `x \|\| undefined` | Conditional: a fallback |
+| webflow-shop, Webflow.com | `name`, `alt`, `heading`, `tone` | `a ?? slug(b)`, `a?.heading ?? "…"`, `a ?? ""` | Conditional: a fallback, code locked |
+| Webflow.com lists | `tabindex`, `md` | `i === 0 ? 0 : -1` | Conditional: numbers locked |
+| Webflow.com | `style`, `class`, `aria-current` | `index >= PAGE_SIZE ? "display:none" : undefined` | Conditional: a code condition |
+| Webflow.com | `type` | `as === "button" ? (type ?? "button") : undefined` | Conditional: a fallback in a branch |
+| Webflow.com | `publishedTime` | `d ? String(d) : (item.publishedAt ?? undefined)` | Conditional: call locked |
+| Webflow.com | `class:list` | `[borderless && (compact ? "a" : "b")]`, `ratio === "x" ? "a" : \`b-${ratio}\`` | Class list: the ternary locked |
+| webflow-shop Nav | `aria-current` | a regular expression in the test | Computed |
+| webflow-shop FlutedGlass, ProductDetail; Webflow.com ResourceTemplate | `style`, `alt`, `formName` | a condition inside a template | Computed |
+| Webflow.com HoverFeatures, PricingMatrixDialog | `hidden`, `open` | a test with no value: `a && b !== c` | Computed |

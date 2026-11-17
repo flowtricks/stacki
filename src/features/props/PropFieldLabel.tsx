@@ -173,6 +173,7 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
           value={value}
           bindContext={bindContext}
           language={valueLanguageOf(type === 'style' ? 'style' : field.name)}
+          shapes="rich"
           onApply={(next) => onChange(next, true)}
           onClose={() => setConditional(false)}
         />

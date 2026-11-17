@@ -158,6 +158,21 @@ const byText = (text) =>
   [...document.querySelectorAll('button')].find((element) => element.textContent.trim() === text) ??
   [...document.querySelectorAll('div, span')].find((element) => element.textContent.trim() === text);
 const editor = () => document.querySelector('.conditional-editor');
+// What a group shows, top to bottom: the If head, the condition rows, + New condition, then the Value.
+const groupOrder = (group) =>
+  [...group.children].flatMap((child) => {
+    for (const [name, selector] of [
+      ['head', '.conditional-group-head'],
+      ['condition', '.conditional-condition'],
+      ['add', '.conditional-add'],
+      ['value', '.conditional-value-row'],
+    ]) {
+      if (child.matches(selector)) {
+        return [name];
+      }
+    }
+    return [];
+  });
 // A value picked from a values field's menu, opened by its chevron, as a person picks one.
 async function pickValue(field, name) {
   if (field.getAttribute('aria-expanded') !== 'true') {
@@ -249,7 +264,8 @@ test('Create conditional: the editor builds the conditions, closing writes them 
   assert.equal(editor().querySelectorAll('.conditional-group[role="group"]').length, 1, 'it starts with one group');
   assert.equal(editor().querySelector('[aria-label="Property"]').textContent.trim(), 'Theme', 'on the first prop');
   assert.equal(editor().querySelector('[aria-label="Operator"]').textContent.trim(), 'is any');
-  assert.equal(editor().querySelector('[aria-label="Else value"] .bind-input').textContent, 'Click me', 'the Else is what the field held');
+  assert.equal(editor().querySelector('[aria-label="Value"] .bind-input').textContent, 'Click me', 'the group starts with what the field held');
+  assert.equal(editor().querySelector('[aria-label="Else value"] .bind-input').textContent, '', 'and the Else leaves it out');
 
   await pickValue(editor().querySelector('[aria-label="Values"]'), 'Dark');
   assert.deepEqual(
@@ -277,7 +293,7 @@ test('Create conditional: the editor builds the conditions, closing writes them 
   await escape();
   assert.equal(editor() ?? undefined, undefined, 'Escape closes the editor');
   // Written in the quote the file already uses (its frontmatter's double quotes).
-  const code = 'theme === "dark" ? "night" : "Click me"';
+  const code = 'theme === "dark" ? "night" : undefined';
   assert.deepEqual(writes, [{ name: 'data-label', value: { type: 'expr', value: code }, immediate: true }], 'one write, at once: one undo step');
 
   // Written as the app writes it, then undone as undo sends it.
@@ -331,9 +347,92 @@ test('a conditional value shows as its chip and summary, and either reopens the 
   await act(async () => root.unmount());
 });
 
-test('code the editor cannot draw stays code, and a page offers no conditional', async (context) => {
-  // An escape in a template is code the model does not write, so it stays code.
-  const code = "theme === 'dark' ? `night\\t${title}` : 'day'";
+test('Button’s aria-label shape is the Conditional pill: a group that leaves it out, an Else that is the first set of a prop and a table entry', async (context) => {
+  // As Lumos Button writes it: aria-label={isWritten ? undefined : (label ?? named[variant])}.
+  const code = 'theme === "dark" ? undefined : (title ?? named[paddingTop])';
+  const source = COMPONENT.replace('data-label="Click me"', `data-label={${code}}`);
+  const { read } = await project(context, source);
+  installDom();
+  const anchor = elementOf(read.model.nodes, 'a');
+  const container = document.getElementById('root');
+  const root = createRoot(container);
+  const writes = [];
+  await renderSection(container, root, anchor, {
+    frontmatter: read.model.extraFrontmatter,
+    host: HOST,
+    names: ['data-label'],
+    onSetProp: (name, value, immediate) => writes.push({ name, value, immediate }),
+  });
+  assert.equal(container.querySelector('.attr-row .conditional-badge').textContent.trim(), 'Conditional', 'the row shows the pill, not the code');
+  await click(container.querySelector('.attr-row'));
+  assert.equal(document.querySelector('.attr-editor .conditional-chip').textContent.trim(), 'Conditional');
+  const lines = [...document.querySelectorAll('.conditional-summary .conditional-line')].map((line) => line.textContent);
+  // Written value-last, it reads value first: the group that leaves it out is shown as the Else.
+  assert.deepEqual(lines, ['If Theme ≠ Darktitle??named[paddingTop]', 'Else(left out)'], 'the value first, left out in the Else');
+  assert.equal(
+    document.querySelector('.conditional-summary .conditional-fallback-operator').textContent,
+    '??',
+    'the fallback reads as its values with ?? between',
+  );
+  assert.deepEqual(
+    [...document.querySelectorAll('.conditional-summary .conditional-fallback .loop-bind-chip')].map((chip) => chip.textContent),
+    ['title', 'named[paddingTop]'],
+    'the prop and the table entry are each one bound value',
+  );
+
+  await click(document.querySelector('.conditional-summary'));
+  assert.equal(editor().querySelectorAll('.conditional-group[role="group"]').length, 1);
+  assert.equal(editor().querySelector('[aria-label="Property"]').textContent.trim(), 'Theme');
+  assert.deepEqual(
+    groupOrder(editor().querySelector('.conditional-group[role="group"]')),
+    ['head', 'condition', 'add', 'value'],
+    'If and its conditions first, the Value after',
+  );
+  assert.equal(editor().querySelector('[aria-label="Operator"]').textContent.trim(), 'is not any', 'the condition is the exact negation');
+  assert.match(editor().querySelector('[aria-label="Value"]').textContent, /named\[paddingTop\]/, 'the group holds the fallback as code it can edit');
+  assert.equal(editor().querySelector('[aria-label="Else value"] .bind-input').textContent, '', 'the Else leaves it out');
+  await escape();
+  assert.deepEqual(writes, [], 'opened and closed unchanged: not a byte written');
+
+  // An edit writes the value-first form; the locked parts come back exactly as they were.
+  await click(document.querySelector('.conditional-chip'));
+  await click(byText('New group'));
+  await pickValue(editor().querySelectorAll('[aria-label="Values"]')[1], 'Light');
+  await typeBox([...editor().querySelectorAll('[aria-label="Value"] .bind-input')].at(-1), 'day');
+  await escape();
+  assert.deepEqual(writes, [
+    {
+      name: 'data-label',
+      value: { type: 'expr', value: 'theme !== "dark" ? (title ?? named[paddingTop]) : theme === "light" ? "day" : undefined' },
+      immediate: true,
+    },
+  ]);
+  await act(async () => root.unmount());
+
+  // A test the rows cannot show is a locked row of code; the group stays editable around it.
+  const locked = COMPONENT.replace('data-label="Click me"', 'data-label={title.length >= 3 ? "long" : undefined}');
+  const second = await project(context, locked);
+  installDom();
+  const lockedRoot = createRoot(document.getElementById('root'));
+  await renderSection(document.getElementById('root'), lockedRoot, elementOf(second.read.model.nodes, 'a'), {
+    frontmatter: second.read.model.extraFrontmatter,
+    host: HOST,
+    names: ['data-label'],
+  });
+  await click(document.querySelector('.attr-row'));
+  await click(document.querySelector('.conditional-summary'));
+  assert.equal(editor().querySelector('.conditional-code-condition').textContent, 'title.length >= 3', 'the code, highlighted and locked');
+  assert.equal(
+    editor().querySelector('.conditional-code-condition').closest('.conditional-condition').querySelector('[aria-label="Property"]') ?? undefined,
+    undefined,
+  );
+  assert.ok(editor().querySelector('[aria-label="Remove condition"]'), 'it can still be removed');
+  await act(async () => lockedRoot.unmount());
+});
+
+test('code that chooses between values but cannot be read is the Computed pill; its {} opens the code; a page offers no conditional', async (context) => {
+  // A regular expression is code the reader cannot cut into tokens, so the whole stays code, shown under Computed.
+  const code = "theme === 'dark' ? title.replace(/\\s+/g, '-') : 'day'";
   const source = COMPONENT.replace('data-label="Click me"', `data-label={${code}}`);
   const { read } = await project(context, source);
   installDom();
@@ -341,11 +440,13 @@ test('code the editor cannot draw stays code, and a page offers no conditional',
   const container = document.getElementById('root');
   const root = createRoot(container);
   await renderSection(container, root, anchor, { frontmatter: read.model.extraFrontmatter, host: HOST, names: ['data-label'] });
-  assert.equal(container.querySelector('.conditional-badge') ?? undefined, undefined, 'no chip for code');
-  assert.match(container.querySelector('.attr-row .attr-value').textContent, /night/, 'the row shows the code as written');
+  assert.equal(container.querySelector('.attr-row .conditional-badge').textContent, 'Computed', 'the row shows the Computed pill, not bare code');
   await click(container.querySelector('.attr-row'));
-  assert.equal(document.querySelector('.attr-editor .conditional-chip') ?? undefined, undefined);
-  assert.ok(document.querySelector('.attr-editor .cm-editor'), 'the highlighted code editor holds it');
+  assert.equal(document.querySelector('.attr-editor .conditional-chip-computed').textContent, 'Computed', 'the field is the Computed pill');
+  assert.match(document.querySelector('.attr-editor .conditional-computed-field .conditional-computed-code').textContent, /replace/, 'its code, highlighted');
+  assert.equal(document.querySelector('.attr-editor .cm-editor') ?? undefined, undefined, 'no code editor until asked for');
+  await click(document.querySelector('.attr-editor .conditional-computed-toggle'));
+  assert.ok(document.querySelector('.attr-editor .cm-editor'), 'the {} opens the highlighted code editor');
   await click(document.querySelector('.attr-value-field .bind-handle'));
   assert.equal(byText('Create conditional'), undefined, 'a value a branch cannot hold is not offered a conditional');
   await act(async () => root.unmount());
@@ -388,10 +489,10 @@ test('a schema-driven prop field offers the conditional too, and shows one as it
   await click(byText('Create conditional'));
   assert.ok(editor(), 'the editor opens from a prop field');
   assert.ok(document.querySelector('.loop-settings-popup .conditional-editor'), 'placed in its pop-up');
-  assert.equal(editor().querySelector('[aria-label="Else value"] .bind-input').textContent, 'Read more');
+  assert.equal(editor().querySelector('[aria-label="Value"] .bind-input').textContent, 'Read more', 'a new conditional gives the value first');
   await pickValue(editor().querySelector('[aria-label="Values"]'), 'Light');
   await escape();
-  assert.deepEqual(writes, [{ next: { type: 'expr', value: 'theme === "light" ? undefined : "Read more"' }, immediate: true }]);
+  assert.deepEqual(writes, [{ next: { type: 'expr', value: 'theme === "light" ? "Read more" : undefined' }, immediate: true }]);
 
   await draw(writes[0].next);
   assert.equal(container.querySelector('.conditional-chip').textContent.trim(), 'Conditional', 'the field shows its chip');
@@ -821,7 +922,7 @@ test('a pop-up opened from the attribute editor stacks above it, and a menu in t
   await click(document.querySelector('.class-list-summary'));
   const popup = document.querySelector('.loop-settings-popup');
   assert.equal(popup.style.zIndex, '451', 'the Class list sits one above the attribute editor it came from');
-  assert.match(popup.textContent, /Only when\s*all\s*conditions are true/, 'a row’s conditions read as a group’s do');
+  assert.match(popup.textContent, /If\s*all\s*conditions in this group are true/, 'a row’s conditions read as a group’s do');
   await click(popup.querySelector('.class-list-entry [aria-label="Match"]'));
   assert.equal(document.querySelector('.dd-popup').style.zIndex, '452', 'and its menu one above that');
   sheet.remove();
@@ -870,7 +971,7 @@ test('back to a plain value: code it can hold converts, code it cannot stays cod
   await act(async () => root.unmount());
 });
 
-test('a class row’s condition is removed without the class, by its header or its last row', async (context) => {
+test('a class row’s condition is removed without the class, by its last row, and the row says Always', async (context) => {
   const { read } = await project(context, CLASSES);
   installDom();
   const heading = elementOf(read.model.nodes, 'h2');
@@ -900,33 +1001,41 @@ test('a class row’s condition is removed without the class, by its header or i
   await click(document.querySelector('.class-list-summary'));
   const rows = () => [...document.querySelectorAll('.class-list-entry')];
   assert.ok(
-    rows().every((row) => row.querySelector('.class-list-entry-head > .conditional-grip')),
+    rows().every((row) => row.querySelector('.conditional-group-head > .conditional-grip')),
     'every row, the first too, leads with its grip',
   );
+  assert.deepEqual(
+    groupOrder(rows()[1]),
+    ['head', 'condition', 'add', 'value'],
+    'a class row is laid out as a Value conditions group: If first, the class after',
+  );
+  assert.deepEqual(groupOrder(rows()[0]), ['head', 'add', 'value'], 'a class given always: its head, + New condition, the class');
   const condition = rows()[1].querySelector('.conditional-condition');
   assert.ok(condition.querySelector('[aria-label="Property"] .dd-icon .is-enum'), 'an option prop wears the options icon');
   const parts = [...condition.children].map((child) => child.getAttribute('aria-label') ?? child.className);
   assert.deepEqual(parts, ['Property', 'Operator', 'Values', 'Remove condition'], 'prop, operator, values and one remove, in a row');
   assert.equal(condition.querySelectorAll('[aria-label="Remove condition"], [aria-label="Clear values"]').length, 1, 'no second remove');
 
-  // The header's remove takes the condition away and leaves the class.
-  await click(rows()[1].querySelector('.conditional-group-head [aria-label="Remove condition"]'));
+  // Removing its last condition row leaves the class, given always again.
+  await click(rows()[1].querySelector('.conditional-condition [aria-label="Remove condition"]'));
   assert.equal(rows().length, 3, 'the class stays');
   assert.equal(rows()[1].querySelectorAll('.conditional-condition').length, 0);
-  assert.equal(rows()[1].querySelector('button.conditional-add').textContent.trim(), 'Only when', 'and offers its condition again');
+  assert.equal(rows()[1].querySelector('.conditional-group-head').textContent.trim(), 'Always', 'its head says it is given always');
+  assert.equal(rows()[1].querySelector('button.conditional-add').textContent.trim(), 'New condition', 'and offers a condition again');
 
-  // So does removing the last condition row.
+  // A condition added and removed again leaves the row as it was.
   await click(rows()[0].querySelector('button.conditional-add'));
   assert.equal(rows()[0].querySelectorAll('.conditional-condition').length, 1);
+  assert.match(rows()[0].querySelector('.conditional-group-head').textContent, /If\s*all\s*conditions in this group are true/);
   await click(rows()[0].querySelector('.conditional-condition [aria-label="Remove condition"]'));
-  assert.equal(rows()[0].querySelector('button.conditional-add').textContent.trim(), 'Only when');
+  assert.equal(rows()[0].querySelector('.conditional-group-head').textContent.trim(), 'Always');
 
   await click(document.querySelector('[aria-label="Close class list"]'));
   assert.deepEqual(writes, [{ name: 'class:list', value: { type: 'expr', value: '["heading", `text-style-${variant}`, className]' }, immediate: true }]);
   await act(async () => root.unmount());
 });
 
-test('a values field is one multi-select: several picked, unpicked by menu or chip, cleared, Backspace, filtered by typing', async (context) => {
+test('a values field is one multi-select: several picked, unpicked by menu or chip (no clear-all), Backspace, filtered by typing', async (context) => {
   const { read } = await project(context, COMPONENT);
   installDom();
   const anchor = elementOf(read.model.nodes, 'a');
@@ -953,8 +1062,10 @@ test('a values field is one multi-select: several picked, unpicked by menu or ch
 
   await pickValue(field(), 'Dark');
   await pickValue(field(), 'Light');
-  await click(field().querySelector('[aria-label="Clear all"]'));
-  assert.deepEqual(chips(), [], 'clear all');
+  assert.equal(field().querySelector('.multi-select-clear') ?? undefined, undefined, 'there is no clear-all: each chip has its own ×');
+  assert.equal(field().querySelectorAll('button[aria-label^="Remove "]').length, 2, 'one remove per chip');
+  await click(field().querySelector('[aria-label="Remove Light"]'));
+  await click(field().querySelector('[aria-label="Remove Dark"]'));
 
   const input = field().querySelector('.multi-select-input');
   await pickValue(field(), 'Dark');
@@ -985,5 +1096,85 @@ test('a menu is never narrower than its trigger and grows to its longest option'
   assert.equal(menu.style.width, 'max-content', 'as wide as its options');
   assert.ok(Number.parseFloat(menu.style.minWidth) >= 40, 'and never narrower than the trigger');
   await escape();
+  await act(async () => root.unmount());
+});
+
+test('a values field never grows a line holding only its chevron: chips wrap before the chevron, pinned to the last line', async (context) => {
+  // The DOM here (jsdom) cannot lay out, so the classes the field wears are checked in the DOM and the rules they meet in the stylesheet.
+  const { read } = await project(context, COMPONENT);
+  installDom();
+  const anchor = elementOf(read.model.nodes, 'a');
+  const container = document.getElementById('root');
+  const root = createRoot(container);
+  await renderSection(container, root, anchor, { frontmatter: read.model.extraFrontmatter, host: HOST, names: ['data-label'] });
+  await click(container.querySelector('.attr-row'));
+  await click(document.querySelector('.attr-value-field .bind-handle'));
+  await click(byText('Create conditional'));
+  const field = () => editor().querySelector('[aria-label="Values"]');
+  assert.equal(field().classList.contains('has-chevron'), true, 'a field with options keeps room for its chevron');
+  assert.equal(field().classList.contains('has-values'), false, 'with nothing picked the box holds the placeholder');
+  await pickValue(field(), 'Dark');
+  await pickValue(field(), 'Light');
+  assert.equal(field().classList.contains('has-values'), true);
+  assert.equal(field().lastElementChild.className, 'multi-select-chevron', 'the chevron is the field’s last item');
+  await act(async () => root.unmount());
+
+  const css = fs.readFileSync(repoPath('src/ui/multiSelect.css'), 'utf8');
+  const rule = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const found = new RegExp(`(^|\\n)${escaped} \\{([^}]*)\\}`).exec(css);
+    assert.ok(found, `the stylesheet has ${selector}`);
+    return found[2];
+  };
+  assert.match(rule('.multi-select.has-chevron'), /position: relative;/);
+  assert.match(rule('.multi-select.has-chevron'), /padding-right: 26px;/, 'every line keeps the chevron’s room, so chips wrap before it');
+  assert.match(rule('.multi-select.has-chevron > .multi-select-chevron'), /position: absolute;/, 'the chevron is out of the flow of chips');
+  assert.match(rule('.multi-select.has-chevron > .multi-select-chevron'), /bottom: 4px;/, 'pinned to the last line');
+  assert.match(rule('.multi-select.has-values .multi-select-input'), /min-width: 2px;/, 'after chips the box never wraps onto a line of its own');
+  assert.doesNotMatch(css, /multi-select-clear/, 'no clear-all is styled');
+});
+
+test('a value the frontmatter computes is listed under Computed in code, with its definition, and offers the prop condition it means', async (context) => {
+  const source = COMPONENT.replace('---\n<a', 'const isDark = theme === "dark";\n---\n<a').replace(
+    'data-label="Click me"',
+    'data-label={isDark ? "night" : undefined}',
+  );
+  const { read } = await project(context, source);
+  installDom();
+  const container = document.getElementById('root');
+  const root = createRoot(container);
+  const writes = [];
+  await renderSection(container, root, elementOf(read.model.nodes, 'a'), {
+    frontmatter: read.model.extraFrontmatter,
+    host: HOST,
+    names: ['data-label'],
+    onSetProp: (name, value, immediate) => writes.push({ name, value, immediate }),
+  });
+  await click(container.querySelector('.attr-row'));
+  await click(document.querySelector('.conditional-summary'));
+  assert.equal(editor().querySelector('[aria-label="Property"]').textContent.trim(), 'Is Dark');
+  await click(editor().querySelector('[aria-label="Property"]'));
+  const menu = [...document.querySelectorAll('.dd-popup .dd-group-label, .dd-popup .dd-option-label')].map((row) => row.textContent);
+  assert.deepEqual(menu, ['Theme', 'Padding Top', 'Title', 'Computed in code', 'Is Dark'], 'after the props, under its own heading');
+  const row = [...document.querySelectorAll('.dd-popup .dd-option')].find((option) => option.textContent.includes('Is Dark'));
+  assert.equal(row.getAttribute('title'), 'Is Dark is computed in code: Theme = Dark\ntheme === "dark"', 'its tooltip says what it is');
+  assert.ok(row.querySelector('.dd-icon svg'), 'with its own icon');
+  await escape();
+  const offer = editor().querySelector('.conditional-plainer');
+  assert.equal(offer.querySelector('.conditional-plainer-words').textContent, 'Same as: Theme = Dark', 'the plainer condition is suggested');
+  const switcher = offer.querySelector('.conditional-plainer-switch');
+  assert.equal(switcher.textContent, 'Switch');
+  assert.equal(switcher.getAttribute('aria-label'), 'Replace this condition with Theme = Dark (same result, editable with dropdowns)');
+  assert.equal(
+    editor().querySelector('[aria-label="Property"]').getAttribute('title'),
+    'Is Dark is computed in code: Theme = Dark\ntheme === "dark"',
+    'the subject says what it is',
+  );
+  assert.deepEqual(writes, [], 'nothing changes until Switch is pressed');
+  await click(switcher);
+  assert.equal(editor().querySelector('[aria-label="Property"]').textContent.trim(), 'Theme', 'taken, it is the prop’s own condition');
+  assert.equal(editor().querySelector('.conditional-plainer') ?? undefined, undefined);
+  await escape();
+  assert.deepEqual(writes, [{ name: 'data-label', value: { type: 'expr', value: 'theme === "dark" ? "night" : undefined' }, immediate: true }]);
   await act(async () => root.unmount());
 });

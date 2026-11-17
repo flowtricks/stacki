@@ -88,7 +88,6 @@ export const messages = {
   'ui.htmlToolbar.visual': 'Visual', // same
   'ui.infoLabel.about': 'Sobre {label}',
   'ui.loading': 'Carregando',
-  'ui.multiSelect.clearAll': 'Limpar tudo',
   'ui.multiSelect.closeOptions': 'Fechar opções',
   'ui.multiSelect.openOptions': 'Abrir opções',
   'ui.multiSelect.options': 'Opções',

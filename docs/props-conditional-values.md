@@ -183,3 +183,139 @@ Every edit is one `component:editProperties` batch: one write, one undo.
   not split; that union keeps the read-only conditions list.
 - The Value conditions editor holds 16 groups of 16 conditions; a bigger
   table stays read-only.
+
+## One group layout everywhere
+
+Every conditions pop-up draws a group the same way, top to bottom, through
+one component (`ConditionGroupBody` in `src/features/props/ConditionalValue.tsx`):
+
+1. **If [all] conditions in this group are true** (the grip, the all/any
+   picker, the group's remove),
+2. the condition rows,
+3. **+ New condition**,
+4. a divider, then **↳ Value**: what the group gives.
+
+Value conditions on an attribute (Heading `style`, `aria-label`), a Default
+value, a Tooltip and a Visibility all use it, and so does the Class list: a
+class given only when its conditions hold is a group whose value is the
+class, so its conditions come first and the class after. A class given always
+has no conditions; its head says **Always**, and its + New condition makes it
+conditional. Removing a class's last condition gives it always again (in a
+Value conditions group the last condition takes the group with it, as a group
+with no condition would always hold).
+
+The Class list once drew its rows value-first ("↳ Value", then "Only when
+[all] conditions are true"); that order dated from the list's first version
+(b39f372b), not from a later change. It now follows the order above.
+
+## Attribute values: the rich reading
+
+An attribute's value is code an author wrote, so the Attributes section reads
+it richly (`readConditionalExpression(code, { shapes: 'rich' })`,
+`src/editor/conditionalValue.ts`): any ternary chain is the Conditional pill,
+and the parts the rows and value fields cannot draw are kept as **locked
+code**, byte for byte, instead of turning the whole attribute back into code.
+
+| Written | Read as |
+|---|---|
+| `cond ? undefined : X`, `null` | a group whose value leaves the attribute out |
+| `a ?? b`, `a \|\| b` | a **fallback**: its values in order, the first that is set wins; shown as the values with `??` between them |
+| `named[variant]` | a **lookup**: the entry of a table a prop picks, one bound-value chip |
+| `0`, `-1`, `false`, `slug(label)`, `` `cc-${a ?? "b"}` `` | **computed**: locked code in the value, highlighted |
+| `index >= PAGE_SIZE`, `selected?.id === id` | a **code condition**: a locked row, removable, the other rows editable |
+| `a && b \|\| c` | an any group whose first condition is the code `a && b` |
+| `(a \|\| b) && c` | an all group whose first condition is the code `a \|\| b` |
+| `a ? (b ? x : y) : z` | flattened: `a && b ? x : a ? y : z`, the same meaning |
+| `(…)` around any part | read through |
+
+Lumos Button's `aria-label={isWritten ? undefined : (label ?? named[variant])}`
+is one group (If Is Written is set ↳ left out) and an Else that is the
+fallback `label ?? named[variant]`.
+
+Write rules for the rich reading:
+
+- **Opened and closed unchanged writes nothing.** An edit writes the whole
+  expression again; every part it did not touch comes back as it was: locked
+  code verbatim, and parentheses where JavaScript needs them or Prettier
+  writes them (`(label ?? named[variant])` in a branch, `(a && b) || c`), so
+  Prettier changes nothing. Over the corpus below, all 219 drawn attributes
+  write back token for token.
+- A flattened nested ternary is written flattened once an edit is made: the
+  same meaning, a different spelling.
+- **Computed.** Code that chooses between values (a ternary, `&&`, `||` or
+  `??` at its top level, or in a template's holes: `isConditionalShaped`)
+  but that the reader cannot delimit (a regular expression, an arrow
+  function, a condition inside a template, a test with no value to give such
+  as `open={a && b}`) is the grey **Computed** pill, read-only, with the code
+  highlighted; its `{}` opens the code editor. Code that does not choose
+  (`slug(label)`, `item.image?.url`) keeps its code field.
+- The plain reading, used by Default value, Visibility, Tooltip and the
+  inline style branches, is unchanged: it refuses every rich part, because
+  those writers cannot write them back.
+
+### Coverage
+
+Every `{…}` attribute in the templates of the corpus
+(`docs/props-complex-shapes.md`: Lumos, webflow-shop, the Webflow.com build,
+pigeon): 2,498 expression attributes, 231 of them with `?`, `&&`, `||` or `??`.
+
+| | Before | After |
+|---|---|---|
+| Conditional pill or Class list, editable | 142 (61.5%) | 219 (94.8%) |
+| Computed pill | 0 | 6 (2.6%) |
+| Raw code as the main control | 89 (38.5%) | 0 of the choosing ones |
+
+The 6 left as code do not choose between values (the audit's text match
+counted `?.`, a `?` in a URL and an `&&` inside an arrow function).
+
+## The values field
+
+A condition's values field (`MultiSelect`, `src/ui/MultiSelect.tsx`) holds
+the chosen values as chips, each with its own ×; there is no clear-all. Its
+chevron sits in room every line keeps at its end, pinned to the last line, so
+chips wrap before they reach it and the field never grows a line holding only
+the chevron.
+
+## The value first
+
+A conditional is shown the way people say it, the value first. One group
+that leaves the value out before an Else that gives one, as Lumos Button
+writes `aria-label={isWritten ? undefined : (label ?? named[variant])}`, is
+shown flipped (`presentedModel`, `src/features/props/conditionalModel.ts`):
+**If Is Written is false ↳ `label ?? named[variant]`; Else left out**.
+
+- The negation must be exact: is set ↔ is empty, is true ↔ is false, is any
+  ↔ is not any, equals ↔ not equals; several conditions flip all ↔ any (not
+  all of them is any of their negations). A code condition, whose negation
+  the rows do not draw, is never flipped; neither is a model of two or more
+  groups, nor one whose Else leaves the value out too.
+- Showing it changes no code: closed unchanged, the editor writes nothing
+  (`draftUnchanged`). Only an edit writes, and it writes the flipped form
+  (`!isWritten ? (label ?? named[variant]) : undefined`).
+- A new conditional starts the same way round: its first group gives what the
+  field held, and its Else leaves the value out.
+
+## Computed in code
+
+In the template a condition can test what the frontmatter computes from props
+(`const isWritten = variant === "main" || variant === "link";`), not only the
+props. Such a value is never drawn as a prop: the subject menu lists it after
+the props under **Computed in code**, with the Central `code` icon, and its
+tooltip says what it is computed from, in words when they say it exactly
+("Is Written is computed in code: Variant is any of Main, Link") and as the
+code. A value is listed when its one-line `const` is a test of props alone; a
+ternary, an object or a call is not one. Default value, Visibility and
+Tooltip conditions never list them: a default or a type cannot read the
+frontmatter.
+
+When the definition is provably one condition on a prop (a comparison of a
+prop with literals, or one prop's `===` joined by `||`, or `!==` joined by
+`&&`), a quiet row under the condition suggests it, on the secondary fill
+with the branch icon: **Same as: Variant is none of Main, Link** (for Is
+Written is false, the negation), and a compact **Switch** at its end. Its
+tooltip says why it is offered ("Is Written is computed in code: Variant is
+any of Main, Link"); Switch's says what it does ("Replace this condition with
+Variant is none of Main, Link (same result, editable with dropdowns)").
+Nothing changes until Switch is pressed; the editor writes once, as it
+closes, so it is one undo step. The subject's own trigger has the
+definition as its tooltip too.

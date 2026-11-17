@@ -13,12 +13,27 @@
 // negations) or tests it on its own (`shown`, `!shown`).
 //
 // The expression is read back into the model only when it says exactly what a
-// model can say (readConditionalExpression); anything else, a ternary nested
-// in a branch, a call, `&&` mixed with `||`, stays code, so the UI never
-// rewrites what it cannot draw. Reading ignores what carries no meaning
-// (spacing, line breaks, quote style, redundant parentheses), so a file
-// Prettier formatted still reads; writing is single-line, single-quoted and
-// free of redundant parentheses, which Prettier leaves as it is.
+// model can say (readConditionalExpression). Reading ignores what carries no
+// meaning (spacing, line breaks, quote style, redundant parentheses), so a
+// file Prettier formatted still reads; writing is single-line, single-quoted
+// and parenthesised as Prettier parenthesises, so Prettier leaves it as it is.
+//
+// Two readings, one reader. The plain reading (Default value, Visibility,
+// inline style branches) takes only what those writers can write back: a
+// chain of prop tests giving words, a name in scope, a template or nothing.
+// The rich reading (an attribute's value) takes every ternary chain an author
+// writes, and keeps the parts it cannot draw as locked code, byte for byte,
+// rather than turning the whole attribute back into code:
+//
+//   aria-label={isWritten ? undefined : (label ?? named[variant])}
+//
+// is one group (If Is Written is set ↳ left out) and an Else that is the first
+// set of `label` and the `named` entry for `variant`. A test the condition
+// rows cannot show (`index >= PAGE_SIZE`, `a && b` inside an `||`) is a code
+// condition; a branch the value field cannot show (`0`, `slug(label)`) is
+// computed code; a ternary in a branch is flattened into groups. Code the
+// reader cannot delimit (a regular expression, an escape it does not know)
+// stays code: the field shows it under Computed (isConditionalShaped).
 
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
@@ -37,6 +52,10 @@ export const CONDITIONAL_LIMITS = {
   // Parentheses around one test or clause: more than this is code no person wrote for the UI.
   parenthesesDepthMax: 8,
   templatePartsMax: 64,
+  // `a ?? b ?? c`: more than this is code no person wrote for one field.
+  fallbackOperandsMax: 8,
+  // A ternary in a branch of a ternary, flattened into groups: deeper is code.
+  nestingDepthMax: 8,
 } as const satisfies Record<string, number>;
 
 export const GROUP_MATCHES = ['all', 'any'] as const;
@@ -54,11 +73,16 @@ export type ConditionLiteral = { readonly kind: 'string'; readonly value: string
 /**
  * One condition on a prop. `in` holds when the prop equals any of `values`,
  * `notIn` when it equals none; `truthy` and `falsy` test the prop itself (a
- * switch that is on, a text that is set).
+ * switch that is on, a text that is set). `code` is a test the rows cannot
+ * show (`index >= PAGE_SIZE`), kept as written and shown locked.
  */
 export type Condition =
   | { readonly kind: 'compare'; readonly subject: string; readonly operator: CompareOperator; readonly values: readonly ConditionLiteral[] }
-  | { readonly kind: 'test'; readonly subject: string; readonly operator: TestOperator };
+  | { readonly kind: 'test'; readonly subject: string; readonly operator: TestOperator }
+  | { readonly kind: 'code'; readonly code: string };
+
+/** A condition on a prop the rows can draw: every condition but locked code. */
+export type PropCondition = Exclude<Condition, { readonly kind: 'code' }>;
 
 /** A run of a template branch: its words, or the value a name in scope holds, written `${name}`. */
 export type TemplatePart = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'reference'; readonly path: string };
@@ -67,16 +91,42 @@ export type TemplatePart = { readonly kind: 'text'; readonly text: string } | { 
 export const NO_VALUE_WORDS = ['undefined', 'null'] as const;
 export type NoValueWord = (typeof NO_VALUE_WORDS)[number];
 
+export const FALLBACK_OPERATORS = ['??', '||'] as const;
+export type FallbackOperator = (typeof FALLBACK_OPERATORS)[number];
+
 /**
- * What a branch gives: words; the value a prop (or another name in scope)
- * holds; words with values in them (a template, `--_mw: ${maxWidth}ch;`); or
- * no value at all (`undefined`), which leaves the attribute out.
+ * One value a branch can give: words; the value a prop (or another name in
+ * scope) holds; words with values in them (a template, `--_mw: ${maxWidth}ch;`);
+ * no value at all (`undefined`), which leaves the attribute out; the entry of
+ * a table a prop picks (`named[variant]`); or code the field shows locked
+ * (`0`, `slug(label)`), written back exactly as it was read.
  */
-export type ConditionalResult =
+export type ValueResult =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'reference'; readonly path: string }
   | { readonly kind: 'template'; readonly parts: readonly TemplatePart[] }
-  | { readonly kind: 'none'; readonly word: NoValueWord };
+  | { readonly kind: 'none'; readonly word: NoValueWord }
+  | { readonly kind: 'lookup'; readonly table: string; readonly key: string }
+  | { readonly kind: 'computed'; readonly code: string };
+
+/** What a branch gives: one value, or the first of several that is set (`label ?? named[variant]`). */
+export type ConditionalResult = ValueResult | { readonly kind: 'fallback'; readonly operator: FallbackOperator; readonly operands: readonly ValueResult[] };
+
+/** The results the plain reading holds: the ones every writer of a model can write back. */
+export type PlainResult = Extract<ConditionalResult, { readonly kind: 'text' | 'reference' | 'template' | 'none' }>;
+
+/** Whether `result` is one the plain reading holds. */
+export function isPlainResult(result: ConditionalResult): result is PlainResult {
+  return result.kind === 'text' || result.kind === 'reference' || result.kind === 'template' || result.kind === 'none';
+}
+
+/** Whether every part of `model` is one the plain reading holds: no locked code, no lookup, no fallback. */
+export function isPlainModel(model: ConditionalValue): boolean {
+  if (!isPlainResult(model.otherwise)) {
+    return false;
+  }
+  return model.groups.every((group) => isPlainResult(group.value) && group.conditions.every((condition) => condition.kind !== 'code'));
+}
 
 export interface ConditionGroup {
   readonly match: GroupMatch;
@@ -162,6 +212,13 @@ function parseCondition(input: unknown, where: string): Result<Condition, string
   if (record === undefined) {
     return err(`${where}: expected an object`);
   }
+  if (record['kind'] === 'code') {
+    const code = record['code'];
+    if (typeof code !== 'string' || !isCodeText(code)) {
+      return err(`${where}.code: expected one expression`);
+    }
+    return ok({ kind: 'code', code });
+  }
   const subject = record['subject'];
   if (typeof subject !== 'string' || !isReferencePath(subject)) {
     return err(`${where}.subject: expected a name in scope`);
@@ -174,7 +231,7 @@ function parseCondition(input: unknown, where: string): Result<Condition, string
     return ok({ kind: 'test', subject, operator });
   }
   if (record['kind'] !== 'compare') {
-    return err(`${where}.kind: expected compare or test`);
+    return err(`${where}.kind: expected compare, test or code`);
   }
   if (operator !== 'in' && operator !== 'notIn') {
     return err(`${where}.operator: expected in or notIn`);
@@ -232,40 +289,94 @@ function parseResult(input: unknown, where: string): Result<ConditionalResult, s
   if (record === undefined) {
     return err(`${where}: expected an object`);
   }
-  if (record['kind'] === 'text') {
-    const text = record['text'];
-    if (typeof text !== 'string') {
-      return err(`${where}.text: expected a string`);
-    }
-    if (text.length > LIMITS.attrCharsMax) {
-      return err(`${where}.text: exceeds ${LIMITS.attrCharsMax} characters`);
-    }
-    return ok({ kind: 'text', text });
+  if (record['kind'] !== 'fallback') {
+    return parseValueResult(record, where);
   }
-  if (record['kind'] === 'reference') {
-    const path = record['path'];
-    if (typeof path !== 'string' || !isReferencePath(path)) {
-      return err(`${where}.path: expected a name in scope`);
+  const operator = record['operator'];
+  if (operator !== '??' && operator !== '||') {
+    return err(`${where}.operator: expected ?? or ||`);
+  }
+  const operandsInput = toArray(record['operands']);
+  if (operandsInput === undefined) {
+    return err(`${where}.operands: expected an array`);
+  }
+  if (operandsInput.length < 2) {
+    return err(`${where}.operands: a fallback has at least two values`);
+  }
+  if (operandsInput.length > CONDITIONAL_LIMITS.fallbackOperandsMax) {
+    return err(`${where}.operands: more than ${CONDITIONAL_LIMITS.fallbackOperandsMax}`);
+  }
+  const operands: ValueResult[] = [];
+  for (const [index, entry] of operandsInput.entries()) {
+    const operandRecord = toRecord(entry);
+    if (operandRecord === undefined) {
+      return err(`${where}.operands[${index}]: expected an object`);
     }
-    return ok({ kind: 'reference', path });
-  }
-  if (record['kind'] === 'none') {
-    const word = record['word'];
-    if (word !== 'undefined' && word !== 'null') {
-      return err(`${where}.word: expected undefined or null`);
+    const operand = parseValueResult(operandRecord, `${where}.operands[${index}]`);
+    if (!operand.ok) {
+      return operand;
     }
-    return ok({ kind: 'none', word });
+    operands.push(operand.value);
   }
-  if (record['kind'] === 'template') {
-    return parseTemplate(record['parts'], `${where}.parts`);
+  assert(operands.length === operandsInput.length, 'parseResult: every operand is kept');
+  return ok({ kind: 'fallback', operator, operands });
+}
+
+function parseValueResult(record: Readonly<Record<string, unknown>>, where: string): Result<ValueResult, string> {
+  switch (record['kind']) {
+    case 'text': {
+      const text = record['text'];
+      if (typeof text !== 'string') {
+        return err(`${where}.text: expected a string`);
+      }
+      if (text.length > LIMITS.attrCharsMax) {
+        return err(`${where}.text: exceeds ${LIMITS.attrCharsMax} characters`);
+      }
+      return ok({ kind: 'text', text });
+    }
+    case 'reference': {
+      const path = record['path'];
+      if (typeof path !== 'string' || !isReferencePath(path)) {
+        return err(`${where}.path: expected a name in scope`);
+      }
+      return ok({ kind: 'reference', path });
+    }
+    case 'none': {
+      const word = record['word'];
+      if (word !== 'undefined' && word !== 'null') {
+        return err(`${where}.word: expected undefined or null`);
+      }
+      return ok({ kind: 'none', word });
+    }
+    case 'template':
+      return parseTemplate(record['parts'], `${where}.parts`);
+    case 'lookup': {
+      const table = record['table'];
+      const key = record['key'];
+      if (typeof table !== 'string' || !isReferencePath(table)) {
+        return err(`${where}.table: expected a name in scope`);
+      }
+      if (typeof key !== 'string' || !isReferencePath(key)) {
+        return err(`${where}.key: expected a name in scope`);
+      }
+      return ok({ kind: 'lookup', table, key });
+    }
+    case 'computed': {
+      const code = record['code'];
+      if (typeof code !== 'string' || !isCodeText(code)) {
+        return err(`${where}.code: expected one expression`);
+      }
+      return ok({ kind: 'computed', code });
+    }
+    default:
+      return err(`${where}.kind: expected text, reference, template, none, lookup, computed or fallback`);
   }
-  return err(`${where}.kind: expected text, reference, template or none`);
 }
 
 // A template's parts: words a template literal holds as they are (no
 // backtick, backslash or `${`, which would be code), and names in scope,
 // never two runs of words side by side (they are one run).
-function parseTemplate(input: unknown, where: string): Result<ConditionalResult, string> {
+function parseTemplate(input: unknown, where: string): Result<ValueResult, string> {
   const partsInput = toArray(input);
   if (partsInput === undefined) {
     return err(`${where}: expected an array`);
@@ -315,6 +426,22 @@ function parseTemplate(input: unknown, where: string): Result<ConditionalResult,
 /** Whether `text` can stand in a template literal as it is, with no escape. */
 export function isTemplateText(text: string): boolean {
   return !text.includes('`') && !text.includes('\\') && !text.includes('${');
+}
+
+/**
+ * Whether `code` is one expression the model can keep as locked code: not
+ * empty, no space around it, balanced, and no top-level comma (which would
+ * split the place it is written into).
+ */
+export function isCodeText(code: string): boolean {
+  if (code.length === 0 || code.length > LIMITS.attrCharsMax || code.trim() !== code) {
+    return false;
+  }
+  const source = codeSource(code);
+  if (source === undefined || source.tokens.length === 0) {
+    return false;
+  }
+  return !hasBase(source, 0, source.tokens.length, [',', ';']);
 }
 
 /** Whether two literals are the same value of the same kind. */
@@ -408,6 +535,14 @@ export function quoteOf(code: string): Quote | undefined {
 }
 
 /**
+ * Where a value is written, which decides its parentheses: the whole
+ * attribute, a ternary's branch, an operand of a fallback, or the class after
+ * a class-list entry's conditions. Parentheses are written where JavaScript
+ * needs them or Prettier writes them, so Prettier leaves the code alone.
+ */
+type Place = 'whole' | 'branch' | 'operand' | 'classValue';
+
+/**
  * The expression for `model`: one ternary per group, chained through the else
  * branch, ending in the Else value. A model with no groups is its Else value.
  */
@@ -415,9 +550,9 @@ export function emitConditionalExpression(model: ConditionalValue, options: Writ
   assert(model.groups.length <= CONDITIONAL_LIMITS.groupsMax, 'emitConditionalExpression: the groups are bounded');
   let code = '';
   for (const group of model.groups) {
-    code += `${groupCode(group, options)} ? ${resultCode(group.value, options)} : `;
+    code += `${groupCode(group, options)} ? ${resultCode(group.value, options, 'branch')} : `;
   }
-  code += resultCode(model.otherwise, options);
+  code += resultCode(model.otherwise, options, model.groups.length === 0 ? 'whole' : 'branch');
   assert(code.length > 0, 'emitConditionalExpression: an expression is never empty');
   return code;
 }
@@ -439,7 +574,10 @@ export function conditionalAttr(model: ConditionalValue, options: WriteOptions =
     case 'reference':
       return { type: 'expr', value: otherwise.path };
     case 'template':
-      return { type: 'expr', value: resultCode(otherwise, options) };
+    case 'lookup':
+    case 'computed':
+    case 'fallback':
+      return { type: 'expr', value: resultCode(otherwise, options, 'whole') };
     case 'none':
       return undefined; // No value: the attribute is left out.
     default: {
@@ -452,15 +590,24 @@ export function conditionalAttr(model: ConditionalValue, options: WriteOptions =
 function groupCode(group: ConditionGroup, options: WriteOptions): string {
   assert(group.conditions.length > 0, 'groupCode: a group has a condition');
   assert(group.conditions.length <= CONDITIONAL_LIMITS.conditionsPerGroupMax, 'groupCode: the conditions are bounded');
-  return group.conditions.map((condition) => conditionCode(condition, options)).join(group.match === 'all' ? ' && ' : ' || ');
+  return conditionsCode(group.conditions, group.match, options);
 }
 
-function conditionCode(condition: Condition, options: WriteOptions): string {
-  assert(isReferencePath(condition.subject), 'conditionCode: the subject is a name in scope');
+// Conditions joined by `&&` or `||`; a code condition is parenthesised where
+// it would otherwise bind to its neighbours, or where Prettier would add them.
+function conditionsCode(conditions: readonly Condition[], match: GroupMatch, options: WriteOptions): string {
+  const single = conditions.length === 1;
+  const unsafe: readonly string[] = single ? ['?', '??', '=>'] : match === 'all' ? ['?', '??', '||', '=>'] : ['?', '??', '&&', '=>'];
+  return conditions.map((condition) => conditionCode(condition, options, unsafe)).join(match === 'all' ? ' && ' : ' || ');
+}
+
+function conditionCode(condition: Condition, options: WriteOptions, unsafe: readonly string[]): string {
   switch (condition.kind) {
     case 'test':
+      assert(isReferencePath(condition.subject), 'conditionCode: the subject is a name in scope');
       return condition.operator === 'truthy' ? condition.subject : `!${condition.subject}`;
     case 'compare': {
+      assert(isReferencePath(condition.subject), 'conditionCode: the subject is a name in scope');
       const [only] = condition.values;
       assert(only !== undefined, 'conditionCode: a comparison has a value');
       if (condition.values.length === 1) {
@@ -469,6 +616,9 @@ function conditionCode(condition: Condition, options: WriteOptions): string {
       const list = `[${condition.values.map((value) => literalCode(value, options)).join(', ')}].includes(${condition.subject})`;
       return condition.operator === 'in' ? list : `!${list}`;
     }
+    case 'code':
+      assert(isCodeText(condition.code), 'conditionCode: code is one expression');
+      return guarded(condition.code, unsafe);
     default: {
       const exhaustive: never = condition;
       return exhaustive;
@@ -491,7 +641,19 @@ function literalCode(literal: ConditionLiteral, options: WriteOptions): string {
   }
 }
 
-function resultCode(result: ConditionalResult, options: WriteOptions): string {
+function resultCode(result: ConditionalResult, options: WriteOptions, place: Place): string {
+  if (result.kind !== 'fallback') {
+    return valueCode(result, options, place);
+  }
+  assert(result.operands.length >= 2, 'resultCode: a fallback has two values');
+  assert(result.operands.length <= CONDITIONAL_LIMITS.fallbackOperandsMax, 'resultCode: the operands are bounded');
+  const code = result.operands.map((operand) => valueCode(operand, options, 'operand')).join(` ${result.operator} `);
+  // `??` in a branch is parenthesised by Prettier; after `cond &&` either one needs them.
+  const wrap = place === 'classValue' || (place === 'branch' && result.operator === '??');
+  return wrap ? `(${code})` : code;
+}
+
+function valueCode(result: ValueResult, options: WriteOptions, place: Place): string {
   switch (result.kind) {
     case 'text':
       return quoted(result.text, options.quote);
@@ -502,11 +664,30 @@ function resultCode(result: ConditionalResult, options: WriteOptions): string {
       return templateCode(result.parts);
     case 'none':
       return result.word;
+    case 'lookup':
+      assert(isReferencePath(result.table), 'valueCode: a table is a name in scope');
+      assert(isReferencePath(result.key), 'valueCode: a key is a name in scope');
+      return `${result.table}[${result.key}]`;
+    case 'computed':
+      assert(isCodeText(result.code), 'valueCode: computed code is one expression');
+      return place === 'operand' || place === 'classValue' ? guarded(result.code, ['?', '??', '||', '&&', '=>']) : result.code;
     default: {
       const exhaustive: never = result;
       return exhaustive;
     }
   }
+}
+
+// `code` in parentheses when an operator in `unsafe` stands at its top level,
+// unless the parentheses are already there.
+function guarded(code: string, unsafe: readonly string[]): string {
+  const source = codeSource(code);
+  assert(source !== undefined, 'guarded: locked code is balanced');
+  const count = source.tokens.length;
+  if (count === 0 || wrappedWhole(source)) {
+    return code;
+  }
+  return hasBase(source, 0, count, unsafe) ? `(${code})` : code;
 }
 
 function templateCode(parts: readonly TemplatePart[]): string {
@@ -562,25 +743,75 @@ function escaped(character: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Reading.
+// Tokens: the code cut into names, literals and punctuators, each with its
+// place in the code, and the brackets matched, so any part can be sliced out
+// exactly as it was written.
 // ---------------------------------------------------------------------------
 
-type Token =
+type TokenBody =
   | { readonly kind: 'name'; readonly text: string }
   | { readonly kind: 'string'; readonly value: string }
   | { readonly kind: 'number'; readonly value: number }
   | { readonly kind: 'template'; readonly parts: readonly TemplatePart[] }
+  // A string or template the model does not write (an escape it does not know, a hole holding code): kept whole, as code.
+  | { readonly kind: 'opaque'; readonly text: string }
   | { readonly kind: 'punctuator'; readonly text: string };
 
-// Longest first, so `===` is never read as `==` and `=`.
-const PUNCTUATORS = ['===', '!==', '&&', '||', '?', ':', '(', ')', '[', ']', ',', '.', '!'] as const;
+type Token = TokenBody & { readonly start: number; readonly end: number };
 
-/**
- * The model `code` says, or undefined when it says something a model cannot:
- * no condition at all (a plain value is not conditional), or any code beyond
- * the shapes the model writes. Never throws on input; code is data here.
- */
-export function readConditionalExpression(code: string): ConditionalValue | undefined {
+// Longest first, so `===` is never read as `==` and `=`.
+const PUNCTUATORS = [
+  '...',
+  '===',
+  '!==',
+  '=>',
+  '??',
+  '?.',
+  '&&',
+  '||',
+  '==',
+  '!=',
+  '<=',
+  '>=',
+  '**',
+  '?',
+  ':',
+  '(',
+  ')',
+  '[',
+  ']',
+  '{',
+  '}',
+  ',',
+  ';',
+  '.',
+  '!',
+  '<',
+  '>',
+  '+',
+  '-',
+  '*',
+  '/',
+  '%',
+  '=',
+  '~',
+  '&',
+  '|',
+  '^',
+] as const;
+
+const OPENERS: Readonly<Record<string, string>> = { '(': ')', '[': ']', '{': '}' };
+const CLOSERS: ReadonlySet<string> = new Set([')', ']', '}']);
+
+/** The code, its tokens, the bracket depth before each token, and each opening bracket's closer. */
+interface CodeSource {
+  readonly code: string;
+  readonly tokens: readonly Token[];
+  readonly depths: readonly number[];
+  readonly closers: ReadonlyMap<number, number>;
+}
+
+function codeSource(code: string): CodeSource | undefined {
   if (code.length > LIMITS.attrCharsMax) {
     return undefined;
   }
@@ -588,16 +819,30 @@ export function readConditionalExpression(code: string): ConditionalValue | unde
   if (tokens === undefined) {
     return undefined;
   }
-  const reader = new TokenReader(tokens);
-  const model = readChain(reader);
-  if (model === undefined || !reader.done() || model.groups.length === 0) {
+  const depths: number[] = [];
+  const closers = new Map<number, number>();
+  const open: number[] = [];
+  for (const [index, token] of tokens.entries()) {
+    depths.push(open.length);
+    if (token.kind !== 'punctuator') {
+      continue;
+    }
+    if (OPENERS[token.text] !== undefined) {
+      open.push(index);
+    } else if (CLOSERS.has(token.text)) {
+      const opener = open.pop();
+      const openToken = opener === undefined ? undefined : tokens[opener];
+      if (opener === undefined || openToken?.kind !== 'punctuator' || OPENERS[openToken.text] !== token.text) {
+        return undefined;
+      }
+      closers.set(opener, index);
+    }
+  }
+  if (open.length > 0) {
     return undefined;
   }
-  // The reader builds the model from parts each check above already passed;
-  // the parser proves the whole once more, as every model in the app is made.
-  const checked = parseConditionalValue(model);
-  assert(checked.ok, 'readConditionalExpression: what the reader builds is a valid model');
-  return checked.value;
+  assert(depths.length === tokens.length, 'codeSource: one depth per token');
+  return { code, tokens, depths, closers };
 }
 
 function tokenize(code: string): readonly Token[] | undefined {
@@ -617,15 +862,15 @@ function tokenize(code: string): readonly Token[] | undefined {
       return undefined;
     }
     assert(step.end > index, 'tokenize: every token moves forward');
-    tokens.push(step.token);
+    tokens.push({ ...step.token, start: index, end: step.end });
     index = step.end;
   }
   assert(index === code.length, 'tokenize: the whole code is read');
   return tokens;
 }
 
-function readToken(code: string, start: number): { readonly token: Token; readonly end: number } | undefined {
-  const rest = code.slice(start);
+function readToken(code: string, start: number): { readonly token: TokenBody; readonly end: number } | undefined {
+  const rest = code.slice(start, start + 512);
   const name = /^[A-Za-z_$][\w$]*/.exec(rest);
   if (name !== null) {
     return { token: { kind: 'name', text: name[0] }, end: start + name[0].length };
@@ -637,10 +882,14 @@ function readToken(code: string, start: number): { readonly token: Token; readon
   }
   const quote = code.charAt(start);
   if (quote === "'" || quote === '"') {
-    return readString(code, start, quote);
+    return readString(code, start, quote) ?? opaque(code, start, stringEnd(code, start, quote));
   }
   if (quote === '`') {
-    return readTemplate(code, start);
+    return readTemplate(code, start) ?? opaque(code, start, templateEnd(code, start));
+  }
+  // `a?.5:1` is a ternary on `.5`, not an optional chain.
+  if (rest.startsWith('?.') && /^\d$/.test(rest.charAt(2))) {
+    return { token: { kind: 'punctuator', text: '?' }, end: start + 1 };
   }
   const punctuator = PUNCTUATORS.find((candidate) => rest.startsWith(candidate));
   if (punctuator !== undefined) {
@@ -649,10 +898,14 @@ function readToken(code: string, start: number): { readonly token: Token; readon
   return undefined;
 }
 
+function opaque(code: string, start: number, end: number | undefined): { readonly token: TokenBody; readonly end: number } | undefined {
+  return end === undefined ? undefined : { token: { kind: 'opaque', text: code.slice(start, end) }, end };
+}
+
 // A template literal of words and `${name}` holes, read as the model writes
 // one. An escape, a nested backtick or a hole holding anything but a name in
-// scope is code the model does not write, so the whole expression stays code.
-function readTemplate(code: string, start: number): { readonly token: Token; readonly end: number } | undefined {
+// scope is code the model does not write: the token is then kept whole.
+function readTemplate(code: string, start: number): { readonly token: TokenBody; readonly end: number } | undefined {
   const parts: TemplatePart[] = [];
   let text = '';
   for (let index = start + 1; index < code.length; index += 1) {
@@ -688,9 +941,72 @@ function readTemplate(code: string, start: number): { readonly token: Token; rea
   return undefined;
 }
 
+// Where a template literal holding anything ends: past its closing backtick,
+// stepping over escapes and over holes, whose code may hold strings, braces
+// and templates of its own. Undefined when it never ends or nests too deep.
+function templateEnd(code: string, start: number): number | undefined {
+  const open: ('template' | 'code')[] = ['template'];
+  let index = start + 1;
+  while (index < code.length) {
+    const top = open.at(-1);
+    const character = code.charAt(index);
+    if (top === 'template') {
+      if (character === '\\') {
+        index += 2;
+      } else if (character === '`') {
+        open.pop();
+        index += 1;
+        if (open.length === 0) {
+          return index;
+        }
+      } else if (character === '$' && code.charAt(index + 1) === '{') {
+        open.push('code');
+        index += 2;
+      } else {
+        index += 1;
+      }
+    } else if (character === "'" || character === '"') {
+      const end = stringEnd(code, index, character);
+      if (end === undefined) {
+        return undefined;
+      }
+      index = end;
+    } else if (character === '`' || character === '{') {
+      open.push(character === '`' ? 'template' : 'code');
+      index += 1;
+    } else if (character === '}') {
+      open.pop();
+      index += 1;
+    } else {
+      index += 1;
+    }
+    if (open.length > CONDITIONAL_LIMITS.parenthesesDepthMax) {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+// Where a quoted string ends, any escape stepped over; undefined at a line break.
+function stringEnd(code: string, start: number, quote: string): number | undefined {
+  for (let index = start + 1; index < code.length; index += 1) {
+    const character = code.charAt(index);
+    if (character === quote) {
+      return index + 1;
+    }
+    if (character === '\n' || character === '\r') {
+      return undefined;
+    }
+    if (character === '\\') {
+      index += 1;
+    }
+  }
+  return undefined;
+}
+
 // A quoted string with the escapes `quoted` writes, plus `\"`; any other
 // escape (`\x41`, a line continuation) is code the model does not write.
-function readString(code: string, start: number, quote: string): { readonly token: Token; readonly end: number } | undefined {
+function readString(code: string, start: number, quote: string): { readonly token: TokenBody; readonly end: number } | undefined {
   let value = '';
   for (let index = start + 1; index < code.length; index += 1) {
     const character = code.charAt(index);
@@ -722,12 +1038,80 @@ function unescaped(after: string): { readonly character: string; readonly length
     return { character: known, length: 1 };
   }
   if (after.startsWith('u2028')) {
-    return { character: ' ', length: 5 };
+    return { character: '\u2028', length: 5 };
   }
   if (after.startsWith('u2029')) {
-    return { character: ' ', length: 5 };
+    return { character: '\u2029', length: 5 };
   }
   return undefined;
+}
+
+function isPunctuatorToken(token: Token | undefined, text: string): boolean {
+  return token !== undefined && token.kind === 'punctuator' && token.text === text;
+}
+
+// The tokens of [from, to) at the range's own depth that are one of `texts`.
+function baseIndices(source: CodeSource, from: number, to: number, texts: readonly string[]): readonly number[] {
+  assert(from <= to, 'baseIndices: a range runs forwards');
+  const base = source.depths[from];
+  const out: number[] = [];
+  for (let index = from; index < to; index += 1) {
+    const token = source.tokens[index];
+    if (source.depths[index] === base && token?.kind === 'punctuator' && texts.includes(token.text)) {
+      out.push(index);
+    }
+  }
+  return out;
+}
+
+function hasBase(source: CodeSource, from: number, to: number, texts: readonly string[]): boolean {
+  return baseIndices(source, from, to, texts).length > 0;
+}
+
+// [from, to) cut at each top-level `text`, the pieces in order.
+function splitAt(source: CodeSource, from: number, to: number, text: string): readonly (readonly [number, number])[] {
+  const cuts = baseIndices(source, from, to, [text]);
+  const pieces: (readonly [number, number])[] = [];
+  let start = from;
+  for (const cut of cuts) {
+    pieces.push([start, cut]);
+    start = cut + 1;
+  }
+  pieces.push([start, to]);
+  assert(pieces.length === cuts.length + 1, 'splitAt: one piece more than cuts');
+  return pieces;
+}
+
+// [from, to) without the parentheses wrapped round all of it; undefined when deeper than the bound.
+function stripped(source: CodeSource, from: number, to: number): readonly [number, number] | undefined {
+  let start = from;
+  let end = to;
+  for (let depth = 0; end - start >= 2; depth += 1) {
+    if (!isPunctuatorToken(source.tokens[start], '(') || source.closers.get(start) !== end - 1) {
+      return [start, end];
+    }
+    if (depth === CONDITIONAL_LIMITS.parenthesesDepthMax) {
+      return undefined;
+    }
+    start += 1;
+    end -= 1;
+  }
+  return [start, end];
+}
+
+function wrappedWhole(source: CodeSource): boolean {
+  const last = source.tokens.length - 1;
+  return isPunctuatorToken(source.tokens[0], '(') && source.closers.get(0) === last;
+}
+
+// The code of [from, to) exactly as written.
+function sliceCode(source: CodeSource, from: number, to: number): string {
+  assert(from < to, 'sliceCode: a slice holds a token');
+  const first = source.tokens[from];
+  const last = source.tokens[to - 1];
+  assert(first !== undefined, 'sliceCode: the slice starts inside the code');
+  assert(last !== undefined, 'sliceCode: the slice ends inside the code');
+  return source.code.slice(first.start, last.end);
 }
 
 class TokenReader {
@@ -746,8 +1130,7 @@ class TokenReader {
   }
 
   isPunctuator(text: string, offset = 0): boolean {
-    const token = this.peek(offset);
-    return token !== undefined && token.kind === 'punctuator' && token.text === text;
+    return isPunctuatorToken(this.peek(offset), text);
   }
 
   /** Takes the punctuator `text` when it is next; answers whether it was. */
@@ -766,91 +1149,249 @@ class TokenReader {
     }
     return token;
   }
-
-  get position(): number {
-    return this.index;
-  }
-
-  rewind(position: number): void {
-    assert(position >= 0, 'TokenReader.rewind: a position is never negative');
-    assert(position <= this.index, 'TokenReader.rewind: only backwards');
-    this.index = position;
-  }
 }
 
-// `test ? value : test ? value : … : value`, read iteratively: each group's
-// test and value, then the else, which is either the next group or the end.
-function readChain(reader: TokenReader): ConditionalValue | undefined {
+// ---------------------------------------------------------------------------
+// Reading.
+// ---------------------------------------------------------------------------
+
+/** Which shapes a reading takes: `plain` only what every writer writes back, `rich` every chain an author writes. */
+export type ReadShapes = 'plain' | 'rich';
+
+export interface ReadOptions {
+  readonly shapes: ReadShapes;
+}
+
+const PLAIN_READING: ReadOptions = { shapes: 'plain' };
+
+// What one reading carries: the code, and whether a ternary in a branch was flattened (which the plain reading refuses).
+interface ReadContext {
+  readonly source: CodeSource;
+  flattened: boolean;
+}
+
+/**
+ * The model `code` says, or undefined when it says something a model cannot:
+ * no condition at all (a plain value is not conditional, though a fallback,
+ * `a ?? b`, is), or code the reading does not take. Never throws on input;
+ * code is data here.
+ */
+export function readConditionalExpression(code: string, options: ReadOptions = PLAIN_READING): ConditionalValue | undefined {
+  const source = codeSource(code);
+  if (source === undefined || source.tokens.length === 0) {
+    return undefined;
+  }
+  const context: ReadContext = { source, flattened: false };
+  const model = readChain(context, 0, source.tokens.length, 0);
+  if (model === undefined) {
+    return undefined;
+  }
+  if (model.groups.length === 0 && model.otherwise.kind !== 'fallback') {
+    return undefined;
+  }
+  if (options.shapes === 'plain' && (context.flattened || !isPlainModel(model))) {
+    return undefined;
+  }
+  // The reader builds the model from parts each check above already passed;
+  // the parser proves the whole once more, as every model in the app is made.
+  const checked = parseConditionalValue(model);
+  assert(checked.ok, `readConditionalExpression: what the reader builds is a valid model (${checked.ok ? '' : checked.error})`);
+  return checked.value;
+}
+
+/**
+ * The conditions `code` tests, when every one is a condition on a name the
+ * rows can draw (`variant === "main" || variant === "link"`): a frontmatter
+ * value computed from props reads as what it means. Undefined for any other
+ * code, a test kept as code included. Never throws on input.
+ */
+export function readConditionTest(code: string): { readonly match: GroupMatch; readonly conditions: readonly PropCondition[] } | undefined {
+  const source = codeSource(code);
+  if (source === undefined || source.tokens.length === 0) {
+    return undefined;
+  }
+  const test = readTest({ source, flattened: false }, 0, source.tokens.length);
+  if (test === undefined) {
+    return undefined;
+  }
+  const conditions: PropCondition[] = [];
+  for (const condition of test.conditions) {
+    if (condition.kind === 'code') {
+      return undefined;
+    }
+    conditions.push(condition);
+  }
+  assert(conditions.length === test.conditions.length, 'readConditionTest: every condition is a prop condition');
+  return { match: test.match, conditions };
+}
+
+const SHAPE_OPERATORS: readonly string[] = ['?', '??', '&&', '||'];
+const SHAPE_TEXT = /\?(?!\.)|&&|\|\|/;
+const STRING_TEXT = /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g;
+
+/**
+ * Whether `code` chooses between values (a ternary, `&&`, `||`, `??` at its
+ * top level, or in a template's holes): such code a field shows under the
+ * Conditional pill, or under Computed when the reading cannot take it, never
+ * as bare code. A call or a name on its own is not.
+ */
+export function isConditionalShaped(code: string): boolean {
+  if (code.length > LIMITS.attrCharsMax) {
+    return false;
+  }
+  const source = codeSource(code);
+  if (source === undefined) {
+    // Code the tokens cannot cut (a regular expression): its operators outside strings decide.
+    return SHAPE_TEXT.test(code.replace(STRING_TEXT, "''"));
+  }
+  return source.tokens.some((token, index) => {
+    if (token.kind === 'opaque') {
+      return token.text.startsWith('`') && SHAPE_TEXT.test(token.text.replace(STRING_TEXT, "''"));
+    }
+    return source.depths[index] === 0 && token.kind === 'punctuator' && SHAPE_OPERATORS.includes(token.text);
+  });
+}
+
+// `test ? value : test ? value : … : value`: each round reads one group's
+// test and value, then goes on with the else, until the else is a value.
+// A ternary in a value is read (recursively, to a bound) and flattened.
+function readChain(context: ReadContext, from: number, to: number, depth: number): ConditionalValue | undefined {
+  assert(depth <= CONDITIONAL_LIMITS.nestingDepthMax, 'readChain: the nesting is bounded');
+  const { source } = context;
   const groups: ConditionGroup[] = [];
+  let start = from;
+  let stop = to;
   for (let round = 0; round <= CONDITIONAL_LIMITS.groupsMax; round += 1) {
-    const start = reader.position;
-    const value = readResult(reader);
-    if (value !== undefined && reader.done()) {
-      return { groups, otherwise: value };
-    }
-    reader.rewind(start);
-    if (groups.length === CONDITIONAL_LIMITS.groupsMax) {
+    const range = stripped(source, start, stop);
+    if (range === undefined || range[0] >= range[1]) {
       return undefined;
     }
-    const test = readTest(reader);
-    if (test === undefined || !reader.take('?')) {
+    const [first, end] = range;
+    stop = end; // The else runs to the end of what the parentheses held.
+    const [question] = baseIndices(source, first, end, ['?']);
+    if (question === undefined || hasBase(source, first, end, ['=>'])) {
+      const value = readValue(context, first, end);
+      return value === undefined ? undefined : { groups, otherwise: value };
+    }
+    const colon = matchingColon(source, question, end);
+    const test = readTest(context, first, question);
+    if (colon === undefined || test === undefined || depth >= CONDITIONAL_LIMITS.nestingDepthMax) {
       return undefined;
     }
-    const branch = readResult(reader);
-    if (branch === undefined || !reader.take(':')) {
+    const branch = readChain(context, question + 1, colon, depth + 1);
+    if (branch === undefined) {
       return undefined;
     }
-    groups.push({ ...test, value: branch });
+    if (branch.groups.length === 0) {
+      groups.push({ ...test, value: branch.otherwise });
+    } else {
+      context.flattened = true;
+      const flat = flattened(test, branch);
+      if (flat === undefined) {
+        return undefined;
+      }
+      groups.push(...flat);
+    }
+    if (groups.length > CONDITIONAL_LIMITS.groupsMax) {
+      return undefined;
+    }
+    start = colon + 1;
   }
   return undefined;
 }
 
-// A group's test: its conditions joined by one operator, in as many
-// parentheses as Prettier or a person put around it.
-function readTest(reader: TokenReader): Pick<ConditionGroup, 'match' | 'conditions'> | undefined {
-  return inParentheses(reader, () => {
-    const conditions: Condition[] = [];
-    let match: GroupMatch | undefined;
-    for (let round = 0; round < CONDITIONAL_LIMITS.conditionsPerGroupMax; round += 1) {
-      const condition = inParentheses(reader, () => readCondition(reader));
-      if (condition === undefined) {
-        return undefined;
-      }
-      conditions.push(condition);
-      const joiner = reader.isPunctuator('&&') ? 'all' : reader.isPunctuator('||') ? 'any' : undefined;
-      if (joiner === undefined) {
-        return { match: match ?? 'all', conditions };
-      }
-      if (match !== undefined && match !== joiner) {
-        return undefined; // `&&` beside `||` is precedence the model cannot draw.
-      }
-      match = joiner;
-      reader.next();
+// The `:` that closes the `?` at `question`, nested ternaries counted.
+function matchingColon(source: CodeSource, question: number, end: number): number | undefined {
+  let open = 0;
+  for (const index of baseIndices(source, question + 1, end, ['?', ':'])) {
+    if (isPunctuatorToken(source.tokens[index], '?')) {
+      open += 1;
+    } else if (open === 0) {
+      return index;
+    } else {
+      open -= 1;
     }
-    return undefined;
-  });
+  }
+  return undefined;
 }
 
-// Reads `read` inside any number of balanced parentheses, up to the bound.
-function inParentheses<T>(reader: TokenReader, read: () => T | undefined): T | undefined {
-  let depth = 0;
-  while (depth < CONDITIONAL_LIMITS.parenthesesDepthMax && reader.isPunctuator('(')) {
-    reader.next();
-    depth += 1;
+// `test ? (inner) : …` as groups: each inner group under the test, then the
+// test giving the inner Else. Exactly what the nested ternary means, as the
+// first group that holds gives the value.
+function flattened(test: Pick<ConditionGroup, 'match' | 'conditions'>, inner: ConditionalValue): readonly ConditionGroup[] | undefined {
+  const outer = termsOf(test);
+  const groups: ConditionGroup[] = [];
+  for (const group of inner.groups) {
+    for (const term of termsOf(group)) {
+      for (const prefix of outer) {
+        if (groups.length === CONDITIONAL_LIMITS.groupsMax || prefix.length + term.length > CONDITIONAL_LIMITS.conditionsPerGroupMax) {
+          return undefined;
+        }
+        groups.push({ match: 'all', conditions: [...prefix, ...term], value: group.value });
+      }
+    }
   }
-  const value = read();
-  if (value === undefined) {
+  groups.push({ ...test, value: inner.otherwise });
+  assert(groups.length > inner.groups.length, 'flattened: every inner group and the Else are kept');
+  return groups;
+}
+
+// A group's test as alternatives each of which holds all its conditions.
+function termsOf(group: Pick<ConditionGroup, 'match' | 'conditions'>): readonly (readonly Condition[])[] {
+  return group.match === 'all' ? [group.conditions] : group.conditions.map((condition) => [condition]);
+}
+
+// A group's test: conditions joined by one operator. A condition the rows
+// cannot draw, `&&` inside an `||` or the other way round included, is code.
+function readTest(context: ReadContext, from: number, to: number): Pick<ConditionGroup, 'match' | 'conditions'> | undefined {
+  const { source } = context;
+  const range = stripped(source, from, to);
+  if (range === undefined || range[0] >= range[1]) {
     return undefined;
   }
-  for (let closed = 0; closed < depth; closed += 1) {
-    if (!reader.take(')')) {
+  const [start, end] = range;
+  if (hasBase(source, start, end, ['?', '??', '=>', '=', ','])) {
+    const code = codeCondition(source, start, end);
+    return code === undefined ? undefined : { match: 'all', conditions: [code] };
+  }
+  const ors = splitAt(source, start, end, '||');
+  const match: GroupMatch = ors.length > 1 ? 'any' : 'all';
+  const pieces = match === 'any' ? ors : splitAt(source, start, end, '&&');
+  if (pieces.length > CONDITIONAL_LIMITS.conditionsPerGroupMax) {
+    return undefined;
+  }
+  const conditions: Condition[] = [];
+  for (const [pieceFrom, pieceTo] of pieces) {
+    const condition = readCondition(source, pieceFrom, pieceTo);
+    if (condition === undefined) {
       return undefined;
     }
+    conditions.push(condition);
   }
-  return value;
+  assert(conditions.length === pieces.length, 'readTest: one condition per piece');
+  return { match, conditions };
 }
 
-function readCondition(reader: TokenReader): Condition | undefined {
+function readCondition(source: CodeSource, from: number, to: number): Condition | undefined {
+  const range = stripped(source, from, to);
+  if (range === undefined || range[0] >= range[1]) {
+    return undefined;
+  }
+  const [start, end] = range;
+  const reader = new TokenReader(source.tokens.slice(start, end));
+  const condition = readPropCondition(reader);
+  if (condition !== undefined && reader.done()) {
+    return condition;
+  }
+  return codeCondition(source, start, end);
+}
+
+function codeCondition(source: CodeSource, from: number, to: number): Condition | undefined {
+  const code = sliceCode(source, from, to);
+  return isCodeText(code) ? { kind: 'code', code } : undefined;
+}
+
+function readPropCondition(reader: TokenReader): PropCondition | undefined {
   const negated = reader.take('!');
   if (reader.isPunctuator('[')) {
     const list = readIncludes(reader);
@@ -917,23 +1458,80 @@ function readLiteral(reader: TokenReader): ConditionLiteral | undefined {
   return undefined;
 }
 
-function readResult(reader: TokenReader): ConditionalResult | undefined {
-  const token = reader.peek();
-  if (token?.kind === 'string') {
-    reader.next();
-    return token.value.length > LIMITS.attrCharsMax ? undefined : { kind: 'text', text: token.value };
+// A branch's value: a fallback (`a ?? b`, `a || b`), or one value.
+function readValue(context: ReadContext, from: number, to: number): ConditionalResult | undefined {
+  const { source } = context;
+  const range = stripped(source, from, to);
+  if (range === undefined || range[0] >= range[1]) {
+    return undefined;
   }
-  if (token?.kind === 'template') {
-    reader.next();
-    const parsed = parseTemplate(token.parts, 'template');
-    return parsed.ok ? parsed.value : undefined;
+  const [start, end] = range;
+  if (hasBase(source, start, end, ['?', '=>'])) {
+    return computed(source, start, end);
   }
-  if (token?.kind === 'name' && (token.text === 'undefined' || token.text === 'null') && !reader.isPunctuator('.', 1)) {
-    reader.next();
-    return { kind: 'none', word: token.text };
+  if (hasBase(source, start, end, [':', ',', ';'])) {
+    return undefined;
   }
+  for (const operator of FALLBACK_OPERATORS) {
+    const pieces = splitAt(source, start, end, operator);
+    if (pieces.length === 1) {
+      continue;
+    }
+    if (pieces.length > CONDITIONAL_LIMITS.fallbackOperandsMax) {
+      return computed(source, start, end);
+    }
+    const operands: ValueResult[] = [];
+    for (const [pieceFrom, pieceTo] of pieces) {
+      const operand = readAtom(source, pieceFrom, pieceTo);
+      if (operand === undefined) {
+        return undefined;
+      }
+      // Locked code keeps its own parentheses: `a ?? (b || c)` needs them.
+      operands.push(operand.kind === 'computed' && pieceFrom < pieceTo ? { kind: 'computed', code: sliceCode(source, pieceFrom, pieceTo) } : operand);
+    }
+    return { kind: 'fallback', operator, operands };
+  }
+  return readAtom(source, start, end);
+}
+
+// One value: words, a template, no value, a name in scope, a table's entry
+// for a prop (`named[variant]`), or any other expression as locked code.
+function readAtom(source: CodeSource, from: number, to: number): ValueResult | undefined {
+  const range = stripped(source, from, to);
+  if (range === undefined || range[0] >= range[1]) {
+    return undefined;
+  }
+  const [start, end] = range;
+  const token = source.tokens[start];
+  if (end - start === 1 && token !== undefined) {
+    if (token.kind === 'string' && token.value.length <= LIMITS.attrCharsMax) {
+      return { kind: 'text', text: token.value };
+    }
+    if (token.kind === 'template') {
+      const parsed = parseTemplate(token.parts, 'template');
+      return parsed.ok ? parsed.value : computed(source, start, end);
+    }
+    if (token.kind === 'name' && (token.text === 'undefined' || token.text === 'null')) {
+      return { kind: 'none', word: token.text };
+    }
+  }
+  const reader = new TokenReader(source.tokens.slice(start, end));
   const path = readPath(reader);
-  return path === undefined ? undefined : { kind: 'reference', path };
+  if (path !== undefined && reader.done()) {
+    return { kind: 'reference', path };
+  }
+  if (path !== undefined && reader.take('[')) {
+    const key = readPath(reader);
+    if (key !== undefined && reader.take(']') && reader.done()) {
+      return { kind: 'lookup', table: path, key };
+    }
+  }
+  return computed(source, start, end);
+}
+
+function computed(source: CodeSource, from: number, to: number): ValueResult | undefined {
+  const code = sliceCode(source, from, to);
+  return isCodeText(code) ? { kind: 'computed', code } : undefined;
 }
 
 // `name(.name)*`, a name in scope; a call, an index or a keyword is not one.
@@ -957,9 +1555,10 @@ function readPath(reader: TokenReader): string | undefined {
 
 // ---------------------------------------------------------------------------
 // Class lists: `class:list={["heading", variant !== "inherit" && `text-style-${variant}`, className]}`.
-// Each entry is a class (words, a name in scope, or a template) given always,
-// or only when its conditions all hold (`cond && cond && value`). An object,
-// a spread, a nested array or a call is code the list does not draw.
+// Each entry is a class (words, a name in scope, a template, a fallback or
+// locked code) given always, or only when its conditions all hold (`cond &&
+// cond && value`) or any holds (`(a || b) && value`). A spread is code the
+// list does not draw.
 // ---------------------------------------------------------------------------
 
 export const CLASS_LIST_LIMITS = {
@@ -1038,16 +1637,15 @@ export function parseClassListValue(input: unknown): Result<ClassListValue, stri
 export function emitClassListExpression(model: ClassListValue, options: WriteOptions = SINGLE_QUOTES): string {
   assert(model.entries.length <= CLASS_LIST_LIMITS.entriesMax, 'emitClassListExpression: the entries are bounded');
   const items = model.entries.map((entry) => {
-    const value = resultCode(entry.value, options);
-    const conditions = entry.when.map((condition) => conditionCode(condition, options));
-    if (conditions.length === 0) {
-      return value;
+    if (entry.when.length === 0) {
+      return resultCode(entry.value, options, 'whole');
     }
+    const value = resultCode(entry.value, options, 'classValue');
     // Any of several needs its parentheses: `||` binds looser than the `&&` before the class.
-    if (entry.match === 'any' && conditions.length > 1) {
-      return `(${conditions.join(' || ')}) && ${value}`;
+    if (entry.match === 'any' && entry.when.length > 1) {
+      return `(${conditionsCode(entry.when, 'any', options)}) && ${value}`;
     }
-    return `${conditions.join(' && ')} && ${value}`;
+    return `${conditionsCode(entry.when, 'all', options)} && ${value}`;
   });
   const code = `[${items.join(', ')}]`;
   assert(code.startsWith('['), 'emitClassListExpression: a list is an array');
@@ -1056,78 +1654,81 @@ export function emitClassListExpression(model: ClassListValue, options: WriteOpt
 
 /** The class list `code` says, or undefined for anything a class list cannot draw. Never throws on input. */
 export function readClassListExpression(code: string): ClassListValue | undefined {
-  if (code.length > LIMITS.attrCharsMax) {
+  const source = codeSource(code);
+  if (source === undefined) {
     return undefined;
   }
-  const tokens = tokenize(code);
-  if (tokens === undefined) {
+  const last = source.tokens.length - 1;
+  if (last < 1 || !isPunctuatorToken(source.tokens[0], '[') || source.closers.get(0) !== last) {
     return undefined;
   }
-  const reader = new TokenReader(tokens);
-  if (!reader.take('[')) {
-    return undefined;
-  }
+  const pieces = last === 1 ? [] : splitAt(source, 1, last, ',');
   const entries: ClassEntry[] = [];
-  for (let round = 0; round <= CLASS_LIST_LIMITS.entriesMax; round += 1) {
-    if (reader.take(']')) {
-      break;
+  for (const [index, [from, to]] of pieces.entries()) {
+    if (from === to && index === pieces.length - 1 && index > 0) {
+      break; // A trailing comma, as Prettier writes one in a long list.
     }
     if (entries.length === CLASS_LIST_LIMITS.entriesMax) {
       return undefined;
     }
-    const entry = readClassEntry(reader);
+    const entry = readClassEntry(source, from, to);
     if (entry === undefined) {
       return undefined;
     }
     entries.push(entry);
-    if (!reader.take(',') && !reader.isPunctuator(']')) {
-      return undefined;
-    }
-  }
-  if (!reader.done()) {
-    return undefined;
   }
   const checked = parseClassListValue({ entries });
   return checked.ok ? checked.value : undefined;
 }
 
 // `cond && cond && value`, every operand but the last a condition and the
-// last the class; or `(cond || cond) && value`, the class given when any holds.
-function readClassEntry(reader: TokenReader): ClassEntry | undefined {
-  const start = reader.position;
-  const all = readClassEntryAll(reader);
-  if (all !== undefined) {
-    return all;
-  }
-  reader.rewind(start);
-  const test = readTest(reader);
-  if (test === undefined || !reader.take('&&')) {
+// last the class; `(cond || cond) && value`, the class given when any holds;
+// anything else whose top level is not `&&` is the class itself.
+function readClassEntry(source: CodeSource, from: number, to: number): ClassEntry | undefined {
+  const context: ReadContext = { source, flattened: false };
+  const range = stripped(source, from, to);
+  if (range === undefined || range[0] >= range[1] || isPunctuatorToken(source.tokens[range[0]], '...')) {
     return undefined;
   }
-  const value = readResult(reader);
-  if (value === undefined || value.kind === 'none' || !(reader.isPunctuator(',') || reader.isPunctuator(']'))) {
+  const [start, end] = range;
+  const pieces = splitAt(source, start, end, '&&');
+  // `a && b ? x : y` and `a && b || c` bind looser than `&&`: the whole is the class.
+  const whole = pieces.length === 1 || hasBase(source, start, end, ['?', '=>', '||', '??']);
+  if (whole) {
+    const value = classValue(context, start, end);
+    return value === undefined ? undefined : { value, match: 'all', when: [] };
+  }
+  const tail = pieces.at(-1);
+  assert(tail !== undefined, 'readClassEntry: a split has a last piece');
+  const value = classValue(context, tail[0], tail[1]);
+  const heads = pieces.slice(0, -1);
+  if (value === undefined || heads.length > CLASS_LIST_LIMITS.conditionsPerEntryMax) {
     return undefined;
   }
-  return { value, match: test.match, when: test.conditions };
-}
-
-function readClassEntryAll(reader: TokenReader): ClassEntry | undefined {
+  const [only] = heads;
+  if (heads.length === 1 && only !== undefined) {
+    const test = readTest(context, only[0], only[1]);
+    return test === undefined ? undefined : { value, match: test.match, when: test.conditions };
+  }
   const when: Condition[] = [];
-  for (let round = 0; round <= CLASS_LIST_LIMITS.conditionsPerEntryMax; round += 1) {
-    const start = reader.position;
-    const value = readResult(reader);
-    if (value !== undefined && value.kind !== 'none' && (reader.isPunctuator(',') || reader.isPunctuator(']'))) {
-      return { value, match: 'all', when };
-    }
-    reader.rewind(start);
-    if (when.length === CLASS_LIST_LIMITS.conditionsPerEntryMax) {
-      return undefined;
-    }
-    const condition = inParentheses(reader, () => readCondition(reader));
-    if (condition === undefined || !reader.take('&&')) {
+  for (const [headFrom, headTo] of heads) {
+    const condition = readCondition(source, headFrom, headTo);
+    if (condition === undefined) {
       return undefined;
     }
     when.push(condition);
   }
-  return undefined;
+  return { value, match: 'all', when };
+}
+
+// A class: never no value; locked code keeps its parentheses, which it needs after `cond &&`.
+function classValue(context: ReadContext, from: number, to: number): ClassValue | undefined {
+  if (from >= to) {
+    return undefined;
+  }
+  const value = readValue(context, from, to);
+  if (value === undefined || value.kind === 'none') {
+    return undefined;
+  }
+  return value.kind === 'computed' ? { kind: 'computed', code: sliceCode(context.source, from, to) } : value;
 }

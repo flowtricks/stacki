@@ -21,6 +21,8 @@ import {
   sameLiteral,
   type Condition,
   type ConditionLiteral,
+  type PropCondition,
+  type ReadOptions,
   type ConditionalResult,
   type ConditionalValue,
   type GroupMatch,
@@ -30,7 +32,9 @@ import {
   CLASS_LIST_LIMITS,
   emitClassListExpression,
   parseClassListValue,
+  isConditionalShaped,
   quoteOf,
+  readConditionTest,
   readClassListExpression,
 } from '../../editor/conditionalValue';
 import { titled } from './loopCatalog';
@@ -45,7 +49,26 @@ export interface ConditionProp {
   readonly kind: ConditionPropKind;
   /** The values an option prop can take; empty for every other kind. */
   readonly options: readonly string[];
+  /**
+   * Set for a value the frontmatter computes from props rather than a prop
+   * (`const isWritten = variant === "main" || variant === "link"`): its
+   * definition, and, when that is exactly one condition on a prop, that
+   * condition, which the row offers as the plainer way to say it.
+   */
+  readonly computed?: ComputedDefinition | undefined;
 }
+
+export interface ComputedDefinition {
+  readonly code: string;
+  readonly equivalent: Condition | undefined;
+}
+
+/** Which names a condition can test: the props, or (in the template, which sees the frontmatter) its computed values too. */
+export type ConditionReach = 'props' | 'template';
+
+// A frontmatter is read for at most this many computed values: more is a script, not a component's settings.
+const COMPUTED_LOCALS_MAX = 64;
+const CONST_LINE = /^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+?)\s*;?\s*$/;
 
 /** The schema as the catalog reads it: a field's type and, for a choice, its options. */
 export type ConditionSchemaField = Pick<SchemaField, 'name' | 'type' | 'options'>;
@@ -55,7 +78,7 @@ export type ConditionSchemaField = Pick<SchemaField, 'name' | 'type' | 'options'
  * (by its local name) and every other prop its `interface Props` declares,
  * less those whose value is structure (a slot, a list, code, attributes).
  */
-export function conditionProps(frontmatter: string, schema: readonly ConditionSchemaField[]): readonly ConditionProp[] {
+export function conditionProps(frontmatter: string, schema: readonly ConditionSchemaField[], reach: ConditionReach = 'props'): readonly ConditionProp[] {
   assert(schema.length <= LIMITS.propSchemaFieldsMax, 'conditionProps: the schema is bounded');
   const entries = readPropsDestructure(frontmatter)?.entries ?? [];
   const out: ConditionProp[] = [];
@@ -79,7 +102,127 @@ export function conditionProps(frontmatter: string, schema: readonly ConditionSc
     }
   }
   assert(out.length <= entries.length + schema.length, 'conditionProps: one entry per prop at most');
+  // A default or a type cannot read the frontmatter's values; only the template can.
+  return reach === 'template' ? [...out, ...computedLocals(frontmatter, out)] : out;
+}
+
+/**
+ * The values the frontmatter computes as a test of props, one line each
+ * (`const isLink = element === "link";`), as switches: listed after the props
+ * under their own heading, each with its definition.
+ */
+export function computedLocals(frontmatter: string, props: readonly ConditionProp[]): readonly ConditionProp[] {
+  const out: ConditionProp[] = [];
+  for (const line of frontmatter.split('\n')) {
+    if (out.length === COMPUTED_LOCALS_MAX) {
+      break;
+    }
+    const match = CONST_LINE.exec(line);
+    const name = match?.[1];
+    const code = match?.[2];
+    if (name === undefined || code === undefined || props.some((prop) => prop.name === name) || !isReferencePath(name)) {
+      continue;
+    }
+    const test = readConditionTest(code);
+    if (test === undefined || !test.conditions.some((condition) => condition.kind === 'compare' || condition.operator === 'falsy')) {
+      continue; // `const label = title` is a value, not a test.
+    }
+    out.push({ name, label: titled(name), kind: 'switch', options: [], computed: { code, equivalent: equivalentOf(test, props) } });
+  }
+  assert(out.length <= COMPUTED_LOCALS_MAX, 'computedLocals: the values are bounded');
   return out;
+}
+
+// The one condition on a prop a test means, when it is one: a comparison, or
+// several of one prop joined so they are one list (`a === "x" || a === "y"`
+// is `a` is any of x, y; `a !== "x" && a !== "y"` is none of them).
+function equivalentOf(test: { readonly match: GroupMatch; readonly conditions: readonly Condition[] }, props: readonly ConditionProp[]): Condition | undefined {
+  const [first] = test.conditions;
+  if (first === undefined || first.kind === 'code' || !props.some((prop) => prop.name === first.subject && prop.computed === undefined)) {
+    return undefined;
+  }
+  if (test.conditions.length === 1) {
+    return first;
+  }
+  const operator = test.match === 'any' ? 'in' : 'notIn';
+  const values: ConditionLiteral[] = [];
+  for (const condition of test.conditions) {
+    if (condition.kind !== 'compare' || condition.subject !== first.subject || condition.operator !== operator) {
+      return undefined;
+    }
+    for (const value of condition.values) {
+      if (!values.some((known) => sameLiteral(known, value)) && values.length < CONDITIONAL_LIMITS.valuesPerConditionMax) {
+        values.push(value);
+      }
+    }
+  }
+  assert(values.length > 0, 'equivalentOf: a list of comparisons has values');
+  return { kind: 'compare', subject: first.subject, operator, values };
+}
+
+/** The condition that holds exactly when `condition` does not, or undefined for locked code (whose negation is not drawn). */
+export function negatedCondition(condition: Condition): Condition | undefined {
+  switch (condition.kind) {
+    case 'test':
+      return { ...condition, operator: condition.operator === 'truthy' ? 'falsy' : 'truthy' };
+    case 'compare':
+      return { ...condition, operator: condition.operator === 'in' ? 'notIn' : 'in' };
+    case 'code':
+      return undefined;
+    default: {
+      const exhaustive: never = condition;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * The condition a computed value's row offers instead (Is Written is true is
+ * Variant is any of Main, Link), or undefined when its definition is not one
+ * condition on a prop.
+ */
+export function plainerCondition(condition: ConditionDraft, catalog: readonly ConditionProp[]): ConditionDraft | undefined {
+  const entry = condition.subject === undefined ? undefined : catalog.find((prop) => prop.name === condition.subject);
+  const equivalent = entry?.computed?.equivalent;
+  if (equivalent === undefined || condition.code !== undefined) {
+    return undefined;
+  }
+  const meant = condition.operator === 'falsy' ? negatedCondition(equivalent) : condition.operator === 'truthy' ? equivalent : undefined;
+  return meant === undefined ? undefined : conditionDraftOf(meant);
+}
+
+/**
+ * The way a conditional is shown: as written, except one group that leaves
+ * the value out before an Else that gives one (`isWritten ? undefined :
+ * label`), which reads the other way round, the value first: If Is Written
+ * is false ↳ label, Else left out. Only when the negation is exact (no code
+ * condition); the code is rewritten only if an edit is then made
+ * (draftUnchanged).
+ */
+export function presentedModel(model: ConditionalValue): ConditionalValue {
+  const [only] = model.groups;
+  if (model.groups.length !== 1 || only === undefined || only.value.kind !== 'none' || model.otherwise.kind === 'none') {
+    return model;
+  }
+  const negated: Condition[] = [];
+  for (const condition of only.conditions) {
+    const flipped = negatedCondition(condition);
+    if (flipped === undefined) {
+      return model;
+    }
+    negated.push(flipped);
+  }
+  // Not (all of them) is any of their negations, and the other way round.
+  const match: GroupMatch = only.conditions.length === 1 ? 'all' : only.match === 'all' ? 'any' : 'all';
+  const presented = { groups: [{ match, conditions: negated, value: model.otherwise }], otherwise: only.value };
+  const parsed = parseConditionalValue(presented);
+  assert(parsed.ok, 'presentedModel: the flipped model is a valid model');
+  return parsed.value;
+}
+
+/** Whether a draft is still the one the editor opened on: closing it then writes nothing, whatever its spelling. */
+export function draftUnchanged(draft: ConditionalDraft, opened: ConditionalDraft): boolean {
+  return JSON.stringify(draft) === JSON.stringify(opened);
 }
 
 function kindOf(field: ConditionSchemaField | undefined): ConditionPropKind | undefined {
@@ -109,7 +252,7 @@ export function propOf(catalog: readonly ConditionProp[], subject: string): Cond
 // Operators.
 // ---------------------------------------------------------------------------
 
-export type DraftOperator = Condition['operator'];
+export type DraftOperator = PropCondition['operator'];
 
 /** The "all / any" choice of a group, with its words. */
 export function matchOptions(translate: Translator = ENGLISH_TRANSLATE): readonly { readonly value: GroupMatch; readonly label: string }[] {
@@ -161,11 +304,31 @@ export function takesValues(operator: DraftOperator): boolean {
 // The draft.
 // ---------------------------------------------------------------------------
 
-/** A condition as it is being chosen: no prop yet, or a comparison with no value yet. */
+/**
+ * A condition as it is being chosen: no prop yet, or a comparison with no
+ * value yet. With `code`, a test the rows cannot show, kept locked as written.
+ */
 export interface ConditionDraft {
   readonly subject: string | undefined;
   readonly operator: DraftOperator;
   readonly values: readonly ConditionLiteral[];
+  readonly code?: string | undefined;
+}
+
+/** The draft row a condition opens as. */
+export function conditionDraftOf(condition: Condition): ConditionDraft {
+  switch (condition.kind) {
+    case 'code':
+      return { subject: undefined, operator: 'truthy', values: [], code: condition.code };
+    case 'test':
+      return { subject: condition.subject, operator: condition.operator, values: [] };
+    case 'compare':
+      return { subject: condition.subject, operator: condition.operator, values: condition.values };
+    default: {
+      const exhaustive: never = condition;
+      return exhaustive;
+    }
+  }
 }
 
 export interface GroupDraft {
@@ -186,11 +349,7 @@ export function draftOf(model: ConditionalValue): ConditionalDraft {
     groups: model.groups.map((group) => ({
       match: group.match,
       value: group.value,
-      conditions: group.conditions.map((condition) => ({
-        subject: condition.subject,
-        operator: condition.operator,
-        values: condition.kind === 'compare' ? condition.values : [],
-      })),
+      conditions: group.conditions.map(conditionDraftOf),
     })),
   };
 }
@@ -211,6 +370,9 @@ export function modelOf(draft: ConditionalDraft): ConditionalValue {
 }
 
 function completed(condition: ConditionDraft): readonly Condition[] {
+  if (condition.code !== undefined) {
+    return [{ kind: 'code', code: condition.code }];
+  }
   const subject = condition.subject;
   if (subject === undefined) {
     return [];
@@ -343,9 +505,28 @@ export function literalOfInput(kind: ConditionPropKind, text: string): Condition
 // conditional is written back as.
 // ---------------------------------------------------------------------------
 
-/** The conditional a field's value is, or undefined for any other value. */
+/** An attribute's value is read richly: every chain an author writes, its undrawable parts locked (conditionalValue.ts). */
+export const ATTRIBUTE_READING: ReadOptions = { shapes: 'rich' };
+
+/** The conditional an attribute's value is, or undefined for any other value. */
 export function conditionalOfAttr(value: Attr | undefined): ConditionalValue | undefined {
-  return value?.type === 'expr' ? readConditionalExpression(value.value) : undefined;
+  return value?.type === 'expr' ? readConditionalExpression(value.value, ATTRIBUTE_READING) : undefined;
+}
+
+/**
+ * An attribute's code when it chooses between values (isConditionalShaped)
+ * but neither the conditions nor the class list can read it: the field shows
+ * it under Computed. Undefined for any other value.
+ */
+export function computedOfAttr(value: Attr | undefined): string | undefined {
+  if (value?.type !== 'expr') {
+    return undefined;
+  }
+  const code = value.value.trim();
+  if (!isConditionalShaped(code) || readConditionalExpression(code, ATTRIBUTE_READING) !== undefined || readClassListExpression(code) !== undefined) {
+    return undefined;
+  }
+  return code;
 }
 
 /**
@@ -354,7 +535,7 @@ export function conditionalOfAttr(value: Attr | undefined): ConditionalValue | u
  * hold (a call, an escape in a template), so making it conditional is not
  * offered rather than offered and lossy.
  */
-export function resultOfAttr(value: Attr | undefined): ConditionalResult | undefined {
+export function resultOfAttr(value: Attr | undefined, options: ReadOptions = { shapes: 'plain' }): ConditionalResult | undefined {
   // No attribute is a branch that leaves it out; a bare one (`hidden`) is there, empty.
   if (value === undefined) {
     return { kind: 'none', word: 'undefined' };
@@ -366,7 +547,7 @@ export function resultOfAttr(value: Attr | undefined): ConditionalResult | undef
     case 'string':
       return { kind: 'text', text: value.value };
     case 'expr':
-      return resultOfCode(value.value.trim());
+      return resultOfCode(value.value.trim(), options);
     case 'spread':
       return undefined;
     default: {
@@ -378,23 +559,30 @@ export function resultOfAttr(value: Attr | undefined): ConditionalResult | undef
 
 // One branch value as code, read by the model's own reader: `x ? <code> : ''`
 // holds exactly the branches it can read, so the two can never disagree.
-function resultOfCode(code: string): ConditionalResult | undefined {
+function resultOfCode(code: string, options: ReadOptions): ConditionalResult | undefined {
   if (code === '') {
     return { kind: 'text', text: '' };
   }
-  const read = readConditionalExpression(`x ? ${code} : ''`);
+  const read = readConditionalExpression(`x ? ${code} : ''`, options);
   const [only] = read?.groups ?? [];
   return read?.groups.length === 1 ? only?.value : undefined;
 }
 
-/** The model the editor opens on for a field: its conditional, or a new one whose Else is what the field holds. */
+/**
+ * The model the editor opens on for a field: its conditional (shown value
+ * first, presentedModel), or a new one that reads the way people say it: If
+ * <condition> ↳ what the field holds, Else left out.
+ */
 export function startingConditional(value: Attr | undefined, catalog: readonly ConditionProp[]): ConditionalDraft | undefined {
   const existing = conditionalOfAttr(value);
   if (existing !== undefined) {
-    return draftOf(existing);
+    return draftOf(presentedModel(existing));
   }
-  const otherwise = resultOfAttr(value);
-  return otherwise === undefined ? undefined : { groups: [newGroup(catalog)], otherwise };
+  const current = resultOfAttr(value, ATTRIBUTE_READING);
+  if (current === undefined) {
+    return undefined;
+  }
+  return { groups: [{ ...newGroup(catalog), value: current }], otherwise: { kind: 'none', word: 'undefined' } };
 }
 
 /** What closing the editor writes: nothing when the field already holds it, else the attribute (undefined leaves it out). */
@@ -403,6 +591,15 @@ export type AppliedValue = { readonly kind: 'unchanged' } | { readonly kind: 'wr
 export function appliedAttr(draft: ConditionalDraft, before: Attr | undefined, options: WriteOptions = { quote: "'" }): AppliedValue {
   const next = conditionalAttr(modelOf(draft), options);
   return sameAttr(next, before) ? { kind: 'unchanged' } : { kind: 'write', value: next };
+}
+
+/**
+ * What closing a new conditional writes: nothing until a group is finished
+ * (a new conditional left half-way must not take the field's value away), then
+ * what appliedAttr writes.
+ */
+export function appliedStart(draft: ConditionalDraft, before: Attr | undefined, options: WriteOptions = { quote: "'" }): AppliedValue {
+  return modelOf(draft).groups.length === 0 ? { kind: 'unchanged' } : appliedAttr(draft, before, options);
 }
 
 /**
@@ -461,6 +658,9 @@ export function summaryLines(model: ConditionalValue, catalog: readonly Conditio
 
 /** A condition in words: `Theme = Dark`, `Padding Top ≠ Small`, `Shown is true`. */
 export function conditionWords(condition: Condition, catalog: readonly ConditionProp[], translate: Translator = ENGLISH_TRANSLATE): string {
+  if (condition.kind === 'code') {
+    return condition.code; // A test the rows cannot show reads as the code it is.
+  }
   const prop = propOf(catalog, condition.subject);
   switch (condition.kind) {
     case 'test':
@@ -511,6 +711,11 @@ export function bodyOfResult(result: ConditionalResult): string {
       return result.parts.map((part) => (part.kind === 'text' ? part.text : `\${${part.path}}`)).join('');
     case 'none':
       return '';
+    case 'lookup':
+    case 'computed':
+    case 'fallback':
+      // Code a body cannot hold: the code field shows it as code (ResultField picks the field).
+      return `\${${resultWords(result)}}`;
     default: {
       const exhaustive: never = result;
       return exhaustive;
@@ -563,6 +768,12 @@ export function resultWords(result: ConditionalResult): string {
       return result.parts.map((part) => (part.kind === 'text' ? part.text : `{${part.path}}`)).join('');
     case 'none':
       return '(left out)';
+    case 'lookup':
+      return `${result.table}[${result.key}]`;
+    case 'computed':
+      return result.code;
+    case 'fallback':
+      return result.operands.map(resultWords).join(` ${result.operator} `);
     default: {
       const exhaustive: never = result;
       return exhaustive;
@@ -603,11 +814,7 @@ export function classDraftOf(model: ClassListValue): ClassListDraft {
     entries: model.entries.map((entry) => ({
       value: entry.value,
       match: entry.match,
-      when: entry.when.map((condition) => ({
-        subject: condition.subject,
-        operator: condition.operator,
-        values: condition.kind === 'compare' ? condition.values : [],
-      })),
+      when: entry.when.map(conditionDraftOf),
     })),
   };
 }

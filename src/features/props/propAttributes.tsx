@@ -16,9 +16,9 @@ import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propB
 import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon, MaximizeIcon } from '../../ui/Icons';
 import { AttributesPropControl } from './AttributesPropBinding';
 import { CodeInline } from '../../ui/CodeBlock';
-import { ConditionalBadge, ConditionalEditor, ConditionalField, useConditionCatalog } from './ConditionalValue';
+import { ComputedField, ConditionalBadge, ConditionalEditor, ConditionalField, useConditionCatalog } from './ConditionalValue';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
-import { classListOfAttr, conditionalOfAttr, startingConditional, valueLanguageOf } from './conditionalModel';
+import { classListOfAttr, computedOfAttr, conditionalOfAttr, startingConditional, valueLanguageOf } from './conditionalModel';
 import { ClassListField } from './ClassListValue';
 import { isReferencePath } from '../../editor/conditionalValue';
 import { readAttributesBinding } from '../../editor/attributesBinding';
@@ -199,6 +199,13 @@ function AttributeRowValue({ name, value }: { readonly name: string; readonly va
     return (
       <span className="attr-value">
         <ConditionalBadge label={translate('props.classList.title')} />
+      </span>
+    );
+  }
+  if (computedOfAttr(value) !== undefined) {
+    return (
+      <span className="attr-value">
+        <ConditionalBadge label={translate('props.conditional.computed')} tone="computed" />
       </span>
     );
   }
@@ -730,6 +737,9 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
   const conditional = conditionalOfAttr(encodeAttr(draftValue));
   // A `class:list` in the shape the class-list editor draws is drawn by it.
   const classList = state.draftName === 'class:list' ? classListOfAttr(encodeAttr(draftValue)) : undefined;
+  // Code that chooses between values but cannot be drawn is the Computed pill until its {} asks for the code.
+  const computed = computedOfAttr(encodeAttr(draftValue));
+  const [codeShown, setCodeShown] = useState(false);
   return isStyleValue ? (
     // A style attribute is CSS, so edit it as CSS — one declaration per
     // line, highlighted. An {expression} value stays a plain field:
@@ -767,6 +777,8 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
       language={valueLanguageOf(state.draftName)}
       onApply={(next) => applyValue(state, next)}
     />
+  ) : computed !== undefined && !codeShown ? (
+    <ComputedField code={computed} onEditCode={() => setCodeShown(true)} />
   ) : (
     // The same field a schema-driven prop gets: text with data in it shown
     // as chips, and real code edited as code — JavaScript, highlighted. A
@@ -863,6 +875,7 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
           value={encodeAttr(draftValue)}
           bindContext={bindContext}
           language={valueLanguageOf(draftName)}
+          shapes="rich"
           onApply={(next) => applyValue(state, next)}
           onClose={() => state.setConditionalOpen(false)}
         />

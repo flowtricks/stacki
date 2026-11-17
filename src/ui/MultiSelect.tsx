@@ -1,6 +1,8 @@
 // A choice of several from a list, in one field: the chosen ones as chips
-// inside it, typing after them to filter the menu, a clear-all at the end and
-// the chevron that opens the menu. The menu is Dropdown's (dropdown.css): it
+// inside it, typing after them to filter the menu, and the chevron that opens
+// the menu, pinned to the end of the last line of chips (multiSelect.css), so
+// the field never grows a line that holds only the chevron. Each chip has its
+// own remove; there is no clear-all. The menu is Dropdown's (dropdown.css): it
 // lists every option, checks the chosen ones at the end of the row, and keeps
 // them chosen as more are picked. Backspace in an empty box takes the last
 // chip off; Enter picks the highlighted option, or, where the caller accepts
@@ -98,7 +100,7 @@ export default function MultiSelect<T>(props: MultiSelectProps<T>) {
   return (
     <div
       ref={fieldRef}
-      className={`multi-select${open ? ' is-open' : ''}`}
+      className={`multi-select${open ? ' is-open' : ''}${values.length > 0 ? ' has-values' : ''}${options.length > 0 ? ' has-chevron' : ''}`}
       role="combobox"
       aria-label={props.ariaLabel}
       aria-expanded={open}
@@ -149,18 +151,6 @@ export default function MultiSelect<T>(props: MultiSelectProps<T>) {
         }}
         onKeyDown={onKey}
       />
-      {values.length > 0 && (
-        <button
-          type="button"
-          className="multi-select-clear"
-          aria-label={translate('ui.multiSelect.clearAll')}
-          title={translate('ui.multiSelect.clearAll')}
-          tabIndex={-1}
-          onClick={() => onChange([])}
-        >
-          <CloseIcon size={10} />
-        </button>
-      )}
       {options.length > 0 && (
         <button
           type="button"

@@ -42,6 +42,8 @@ export interface DropdownOption<T = string> {
   /** A mark beside the group's heading (a CMS's logo); taken from the group's first option. */
   readonly groupIcon?: ReactNode;
   readonly description?: string;
+  /** The row's tooltip: more than its label says (what a computed value is computed from). */
+  readonly title?: string;
   readonly icon?: ReactNode;
   readonly dim?: boolean;
   /** Listed but not choosable; its `description` says why. */
@@ -157,6 +159,8 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
         aria-expanded={state.open}
         ref={state.triggerRef}
         className={`dd-trigger ${props.className || ''}`}
+        // The chosen row's tooltip is the trigger's too: what it names is the same.
+        title={state.selected?.title}
         onMouseEnter={props.onPrepare}
         onFocus={props.onPrepare}
         onClick={() => (state.open ? actions.close() : actions.openPopup())}
@@ -581,6 +585,7 @@ function DropdownRow<T>({ option, index, control }: { readonly option: DropdownO
     <div
       className={`dd-option ${highlight} ${selected} ${option.dim ? 'dim' : ''} ${option.disabled === true ? 'disabled' : ''}`}
       aria-disabled={option.disabled === true ? true : undefined}
+      title={option.title}
       onMouseEnter={() => control.hover(index)}
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse' && event.button === 0) {
