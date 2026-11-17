@@ -260,6 +260,8 @@ function parseVariantRule(input: unknown): VariantRule {
       throw new Error('A prop an option does not name is forbidden there');
     }
   }
+  assert(rule.type.length <= VARIANT_LIMITS.codeCharsMax, 'parseVariantRule: a type is bounded');
+  assert(rule.description.length <= VARIANT_LIMITS.codeCharsMax, 'parseVariantRule: a tooltip is bounded');
   return rule;
 }
 
@@ -367,6 +369,7 @@ export function parseVariantDefaults(input: unknown): readonly VariantDefault[] 
   if (new Set(defaults.map((item) => `${item.kind}:${item.prop}`)).size !== defaults.length) {
     throw new Error('One default of each kind per prop');
   }
+  assert(defaults.length <= VARIANT_LIMITS.propsMax, 'parseVariantDefaults: the defaults are bounded');
   return defaults;
 }
 
@@ -383,6 +386,7 @@ function parseVariantDefault(input: unknown): VariantDefault {
     if (table.prop === table.controller) {
       throw new Error('A default table is keyed by another prop');
     }
+    assert(table.entries.length <= VARIANT_LIMITS.optionsMax, 'parseVariantDefault: a table has one entry per option at most');
     return { kind: 'table', ...table };
   }
   if (value?.['kind'] === 'computed') {
@@ -392,7 +396,10 @@ function parseVariantDefault(input: unknown): VariantDefault {
 }
 
 function parseDefaultEntry(input: unknown): VariantDefaultEntry {
-  return object({ option: parseOptionValue, code: parseTypeText })(input);
+  const entry = object({ option: parseOptionValue, code: parseTypeText })(input);
+  assert(entry.code.trim() !== '', 'parseDefaultEntry: an entry has code');
+  assert(entry.option.length <= VARIANT_LIMITS.valueCharsMax, 'parseDefaultEntry: an option is a short value');
+  return entry;
 }
 
 function parseOptionList(input: unknown): readonly string[] {
@@ -403,6 +410,7 @@ function parseOptionList(input: unknown): readonly string[] {
   if (new Set(options).size !== options.length) {
     throw new Error('Options repeat');
   }
+  assert(options.length <= VARIANT_LIMITS.optionsMax, 'parseOptionList: the options are bounded');
   return options;
 }
 
@@ -415,6 +423,7 @@ function parseOptionValue(input: unknown): string {
   if (value !== raw) {
     throw new Error('Variant option must be trimmed');
   }
+  assert(value.length <= VARIANT_LIMITS.valueCharsMax, 'parseOptionValue: an option is a short value');
   return value;
 }
 
@@ -427,6 +436,7 @@ function propertyName(input: unknown): string {
   if (!/^[A-Za-z_$][\w$]*$/.test(value)) {
     throw new Error('Use a TypeScript identifier for the property name');
   }
+  assert(value.length > 0, 'propertyName: a name is never empty');
   return value;
 }
 
