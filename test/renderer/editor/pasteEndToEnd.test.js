@@ -134,7 +134,7 @@ test('owner scenario: stat_wrap copied out of StatWrap and pasted into the page 
     resolveImportPath: (targetPath) => harness.invoke('page:importPathFor', { pagePath, targetPath, projectPath: root }),
     rebase: async (fromPagePath, spec) => (await harness.invoke('page:rebaseImport', { fromPagePath, toPagePath: pagePath, spec })).path,
   });
-  const style = modules.carriedStyleNode(plan.bundle, { scope: 'global', content: '' }, read.source);
+  const style = modules.carriedStyleNode(plan.bundle, { attributes: [{ name: 'is:global', value: undefined }], content: '' }, read.source);
   const place = { parentId: main.id, index: main.children.length };
   const gesture = modules.contextPasteGesture(
     read.model,

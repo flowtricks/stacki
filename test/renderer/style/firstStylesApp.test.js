@@ -72,7 +72,11 @@ async function firstStyles(app, at, request) {
 
 test('the first styles add a global block and a class in one edit, and undo restores every byte', async (context) => {
   const { app, page } = await openProject(context);
-  const outcome = await firstStyles(app, find((node) => node.name === 'h1').at, { scope: 'global', css: RULE, className: 'class' });
+  const outcome = await firstStyles(app, find((node) => node.name === 'h1').at, {
+    attributes: [{ name: 'is:global', value: undefined }],
+    css: RULE,
+    className: 'class',
+  });
   assert.deepEqual(outcome, { tag: 'applied' });
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE.replace('<h1>', '<h1 class="class">') + BLOCK);
   assert.deepEqual(refusals(), []);
@@ -86,7 +90,7 @@ test('the first styles add a global block and a class in one edit, and undo rest
 
 test('a class already on the element is kept: the new one is appended, never replacing', async (context) => {
   const { app, page } = await openProject(context);
-  await firstStyles(app, find((node) => node.name === 'p').at, { scope: 'global', css: RULE, className: 'class' });
+  await firstStyles(app, find((node) => node.name === 'p').at, { attributes: [{ name: 'is:global', value: undefined }], css: RULE, className: 'class' });
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE.replace('class="intro"', 'class="intro class"') + BLOCK);
   await undo(app);
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE);
@@ -94,7 +98,11 @@ test('a class already on the element is kept: the new one is appended, never rep
 
 test('a block alone: the element already carries the selector, so no class is added', async (context) => {
   const { app, page } = await openProject(context);
-  await firstStyles(app, find((node) => node.name === 'p').at, { scope: 'global', css: '.intro {\n\tcolor: red;\n}\n', className: undefined });
+  await firstStyles(app, find((node) => node.name === 'p').at, {
+    attributes: [{ name: 'is:global', value: undefined }],
+    css: '.intro {\n\tcolor: red;\n}\n',
+    className: undefined,
+  });
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE + '<style is:global>\n\t.intro {\n\t\tcolor: red;\n\t}\n</style>\n');
   await undo(app);
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE);
@@ -103,7 +111,7 @@ test('a block alone: the element already carries the selector, so no class is ad
 test('a CRLF page keeps its line endings in the block', async (context) => {
   const crlf = PAGE.replace(/\n/g, '\r\n');
   const { app, page } = await openProject(context, { text: crlf });
-  await firstStyles(app, find((node) => node.name === 'h1').at, { scope: 'global', css: RULE, className: 'class' });
+  await firstStyles(app, find((node) => node.name === 'h1').at, { attributes: [{ name: 'is:global', value: undefined }], css: RULE, className: 'class' });
   const written = fs.readFileSync(page, 'utf8');
   assert.ok(written.includes('<style is:global>'), 'the block is written');
   assert.equal(written.replace(/\r\n/g, ''), written.replace(/\r\n/g, '').replace(/\n/g, ''), 'no bare LF is left in a CRLF file');
@@ -115,7 +123,7 @@ test('a CRLF page keeps its line endings in the block', async (context) => {
 test('a page indented with spaces gets a block indented with spaces', async (context) => {
   const spaced = PAGE.replace(/\t/g, '  ');
   const { app, page } = await openProject(context, { text: spaced });
-  await firstStyles(app, find((node) => node.name === 'h1').at, { scope: 'global', css: RULE, className: 'class' });
+  await firstStyles(app, find((node) => node.name === 'h1').at, { attributes: [{ name: 'is:global', value: undefined }], css: RULE, className: 'class' });
   assert.equal(
     fs.readFileSync(page, 'utf8'),
     spaced.replace('<h1>', '<h1 class="class">') + '<style is:global>\n  .class {\n    padding: 1rem;\n  }\n</style>\n',
@@ -146,7 +154,7 @@ for (const shape of [
 ]) {
   test(`${shape.name} takes the class the way it writes its classes`, async (context) => {
     const { app, page } = await openProject(context, { text: SHAPES_PAGE });
-    const outcome = await firstStyles(app, find(shape.pick).at, { scope: 'global', css: RULE, className: 'class' });
+    const outcome = await firstStyles(app, find(shape.pick).at, { attributes: [{ name: 'is:global', value: undefined }], css: RULE, className: 'class' });
     assert.deepEqual(outcome, { tag: 'applied' });
     assert.equal(fs.readFileSync(page, 'utf8'), shape.after + BLOCK);
     await undo(app);
@@ -157,7 +165,11 @@ for (const shape of [
 test('a component instance takes the class on its own tag, as a typed class does', async (context) => {
   const text = ['---', "import Card from '../components/Card.astro';", '---', '<main>', '\t<Card />', '</main>', ''].join('\n');
   const { app, page } = await openProject(context, { text, extra: { 'Card.astro': '<div class="card"></div>\n' } });
-  const outcome = await firstStyles(app, find((node) => node.kind === 'component').at, { scope: 'global', css: RULE, className: 'class' });
+  const outcome = await firstStyles(app, find((node) => node.kind === 'component').at, {
+    attributes: [{ name: 'is:global', value: undefined }],
+    css: RULE,
+    className: 'class',
+  });
   assert.deepEqual(outcome, { tag: 'applied' });
   assert.equal(fs.readFileSync(page, 'utf8'), text.replace('<Card />', '<Card class="class" />') + BLOCK);
 });
@@ -166,7 +178,7 @@ test('text with no tag is refused with a reason and the page is untouched', asyn
   const text = ['<main>', '\tplain words', '</main>', ''].join('\n');
   const { app, page } = await openProject(context, { text });
   const words = find((node) => node.kind === 'text' && String(node.value).includes('plain'));
-  const outcome = await firstStyles(app, words.at, { scope: 'global', css: RULE, className: 'class' });
+  const outcome = await firstStyles(app, words.at, { attributes: [{ name: 'is:global', value: undefined }], css: RULE, className: 'class' });
   assert.equal(outcome.tag, 'refused');
   assert.match(outcome.message, /no tag to hold a class/);
   assert.equal(fs.readFileSync(page, 'utf8'), text);
@@ -174,7 +186,11 @@ test('text with no tag is refused with a reason and the page is untouched', asyn
 
 test('a class name that cannot be written is refused before the block is queued', async (context) => {
   const { app, page } = await openProject(context);
-  const outcome = await firstStyles(app, find((node) => node.name === 'h1').at, { scope: 'global', css: RULE, className: 'two classes' });
+  const outcome = await firstStyles(app, find((node) => node.name === 'h1').at, {
+    attributes: [{ name: 'is:global', value: undefined }],
+    css: RULE,
+    className: 'two classes',
+  });
   assert.equal(outcome.tag, 'refused');
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE, 'no block without its class');
 });
@@ -186,7 +202,7 @@ test('a Markdown page is refused: it has no place for a style block', async (con
   let outcome;
   await gesture(app, async () => {
     outcome = await __panels.StylePanel.onAddStyleBlock(
-      { scope: 'global', css: RULE, className: 'class', placement: PLACEMENT_END },
+      { attributes: [{ name: 'is:global', value: undefined }], css: RULE, className: 'class', placement: PLACEMENT_END },
       __panels.StylePanel.node.id,
     );
   });
@@ -203,7 +219,11 @@ test('inside an opened component the block and class land in the component, not 
     __panels.StructurePanel.onOpenComponent('Card', find((node) => node.kind === 'component').node.id);
     await new Promise((resolve) => setTimeout(resolve, 300));
   });
-  const outcome = await firstStyles(app, find((node) => node.name === 'h2').at, { scope: 'global', css: RULE, className: 'class' });
+  const outcome = await firstStyles(app, find((node) => node.name === 'h2').at, {
+    attributes: [{ name: 'is:global', value: undefined }],
+    css: RULE,
+    className: 'class',
+  });
   assert.deepEqual(outcome, { tag: 'applied' });
   assert.equal(fs.readFileSync(cardPath, 'utf8'), card.replace('<h2>', '<h2 class="class">') + BLOCK);
   assert.equal(fs.readFileSync(page, 'utf8'), text, 'the page is untouched');
@@ -214,10 +234,23 @@ test('inside an opened component the block and class land in the component, not 
 test('a scoped setting creates a plain <style> with the template body, and one undo removes the tag again', async (context) => {
   const { app, page } = await openProject(context);
   const css = '@layer components {\n\t.intro {\n\t\tcolor: red;\n\t}\n}\n';
-  const outcome = await firstStyles(app, find((node) => node.name === 'p').at, { scope: 'scoped', css, className: undefined });
+  const outcome = await firstStyles(app, find((node) => node.name === 'p').at, { attributes: [], css, className: undefined });
   assert.deepEqual(outcome, { tag: 'applied' });
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE + '<style>\n\t@layer components {\n\t\t.intro {\n\t\t\tcolor: red;\n\t\t}\n\t}\n</style>\n');
   assert.ok(!find((node) => node.kind === 'raw' && node.name === 'style').node.props['is:global'], 'the tag is not global');
+  await undo(app);
+  assert.equal(fs.readFileSync(page, 'utf8'), PAGE, 'one undo removes the tag again, byte for byte');
+});
+
+test('the project’s attributes go on the new tag as written, in their order', async (context) => {
+  const { app, page } = await openProject(context);
+  const attributes = [
+    { name: 'is:global', value: undefined },
+    { name: 'lang', value: 'scss' },
+  ];
+  const outcome = await firstStyles(app, find((node) => node.name === 'p').at, { attributes, css: '.intro {\n\tcolor: red;\n}\n', className: undefined });
+  assert.deepEqual(outcome, { tag: 'applied' });
+  assert.equal(fs.readFileSync(page, 'utf8'), PAGE + '<style is:global lang="scss">\n\t.intro {\n\t\tcolor: red;\n\t}\n</style>\n');
   await undo(app);
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE, 'one undo removes the tag again, byte for byte');
 });

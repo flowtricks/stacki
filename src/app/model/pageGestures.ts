@@ -5,6 +5,8 @@
 import type { Translator } from '../../lib/i18n/localeContext';
 import { labelsNode } from '../../../shared/page/leadingNote';
 import type { ImportDecl, PageNode } from '../../../shared/page/pageNode';
+import type { Attr } from '../../../shared/page/pageNodeTypes';
+import type { StyleTagAttribute } from '../../../shared/properties/newStyleTag';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { findWithParent } from '../../editor/treeSelection';
 import { ASTRO_ASSETS_MODULE, PLACEHOLDER_PROPS } from '../../features/palette/astroAssets';
@@ -25,6 +27,7 @@ import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath, rebaseProjectImport, type ImportPaths } from '../../ipc/appBridge';
 import { newId, defaultText, voided, frontmatterOf } from './nodeFactory';
 import { STYLE_GLOBAL_ATTRIBUTE } from './styleBlockScope';
+import { assert } from '../../../shared/core/assert';
 import { chooseImportPath } from './pageModelGestures';
 export { ASSET_IMPORT_RE, chooseImportPath, COMPONENT_IMPORT_RE, prunableImport, withLayoutField, withPrunedImports } from './pageModelGestures';
 
@@ -403,9 +406,15 @@ export function globalStyleNode(id: NodeId, inner: string): EditorNode {
   return { id, kind: 'raw', name: 'style', props: { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' } }, inner };
 }
 
-// A new `<style>` tag the Style panel creates, global or not as the project's `newStyleTag` setting says.
-export function styleTagNode(id: NodeId, inner: string, scope: 'global' | 'scoped'): EditorNode {
-  return scope === 'global' ? globalStyleNode(id, inner) : { id, kind: 'raw', name: 'style', props: {}, inner };
+// A new `<style>` tag the Style panel creates, with the attributes the project's `newStyleTag` setting
+// gives it (`is:global` by default; `lang="scss"` or `media` when the project says so), in its order.
+export function styleTagNode(id: NodeId, inner: string, attributes: readonly StyleTagAttribute[]): EditorNode {
+  const props: Record<string, Attr> = {};
+  for (const attribute of attributes) {
+    props[attribute.name] = attribute.value === undefined ? { type: 'bare' } : { type: 'string', value: attribute.value };
+  }
+  assert(Object.keys(props).length === attributes.length, 'styleTagNode: each attribute is written once');
+  return { id, kind: 'raw', name: 'style', props, inner };
 }
 
 // A new node for an insert-palette item that needs no import, or undefined for one

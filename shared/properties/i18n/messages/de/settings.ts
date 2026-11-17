@@ -173,6 +173,7 @@ export const messages = {
   'settings.empty.folders': 'Öffne ein Projekt, um seine Ordner auszuwählen.',
   'settings.empty.instructions': 'Öffne ein Projekt, um auszuwählen, was das Anweisungen-Panel ausblendet.',
   'settings.empty.roles': 'Öffne ein Projekt, um seine Rollen festzulegen.',
+  'settings.empty.styles': 'Öffne ein Projekt, um festzulegen, womit seine neuen Style-Tags beginnen.',
   'settings.empty.studio': 'Öffne ein Projekt, um Stacki Studio hinzuzufügen.',
   'settings.folders.cms.info': 'Sammlungen und Datendateien, die das CMS-Panel auflistet.',
   'settings.folders.collections.info': 'Aus Astros Content-Konfiguration gelesen.',
@@ -325,20 +326,12 @@ export const messages = {
   'settings.sections': 'Einstellungsbereiche',
   'settings.studio.info':
     'Bearbeiten und Zusammenarbeiten im Browser für dieses Projekt. Die Einrichtung installiert Studio lokal und führt durch das Cloud-Deployment.',
-  'settings.styleTags.caption':
-    'Schreibe {token} an die Stelle für neue Regeln, etwa in @layer components. Ohne Platzhalter landen Regeln in einem letzten @layer- oder @media-Block oder nach der Vorlage.',
-  'settings.styleTags.content': 'Anfangsinhalt neuer <style>-Tags',
-  'settings.styleTags.error.inRule': 'Der Platzhalter muss auf oberster Ebene oder in At-Regel-Blöcken wie @layer stehen, nicht in einer Style-Regel.',
-  'settings.styleTags.error.repeated': 'Die Vorlage nennt den Regel-Platzhalter mehrfach.',
   'settings.styleTags.error.save': 'Die Einstellungen für Style-Tags konnten nicht gespeichert werden. {message}',
-  'settings.styleTags.error.unbalanced': 'In der Vorlage ist eine Klammer, ein Kommentar oder ein String nicht geschlossen.',
-  'settings.styleTags.global': 'Neue <style>-Tags sind global (is:global)',
-  'settings.styleTags.globalInfo':
-    'Astro beschränkt ein einfaches <style> auf die eigene Datei, wodurch einfache Selektoren Elemente aus Komponenten nicht erreichen. Bestehende Tags werden nie geändert.',
+  'settings.styleTags.hint': 'Regeln kommen in den letzten @layer- oder @media-Block oder dorthin, wo du {token} schreibst.',
   'settings.styleTags.info':
-    'Womit ein <style>-Tag beginnt, wenn das Style-Panel einen anlegt. Wird im Projekt in .stacki/styles.json gespeichert, sodass alle dieselben Tags erhalten.',
-  'settings.styleTags.preview': 'Das Tag, das angelegt würde',
-  'settings.styleTags.title': 'Style-Tags',
+    'Womit ein neuer Style-Tag beginnt, wenn das Style-Panel einen anlegt: seine Attribute und sein Inhalt. Mit dem Projekt in .stacki/styles.json gespeichert.',
+  'settings.styleTags.invalid': 'Ungültig',
+  'settings.styleTags.title': 'Neue Style-Tags',
   'settings.tab.audits': 'Audits', // same
   'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'CMS-Verbindungen',
@@ -346,6 +339,7 @@ export const messages = {
   'settings.tab.folders': 'Ordner',
   'settings.tab.instructions': 'Anweisungen',
   'settings.tab.roles': 'Rollen',
+  'settings.tab.styles': 'Style-Tags',
   'settings.tab.studio': 'Stacki Studio', // same
   'settings.mcp.add.docs': 'Einrichtungsanleitung für {name}',
   'settings.mcp.add.name': 'Servername',

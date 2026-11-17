@@ -1051,12 +1051,18 @@ style selectors panel writes the file through `project:writeMetadata` against th
 A `trustedScripts` key from an earlier version is read and dropped.
 
 **New style tags** (`newStyleTag`, `shared/properties/newStyleTag.ts`). An optional section of
-`.stacki/styles.json`, `{ version?: 1, isGlobal?: boolean, content?: string }`, says what a
-`<style>` tag the Style panel creates starts with. Absent (every project made before it existed)
-means a plain `<style>` holding just the rules; projects made by Stacki are written with
-`isGlobal: true` (`electron/project/newProjectDefaults.ts`, called by `finishNewSite` for the starter
-and the Astro wizard; create-stacki and opened existing sites keep the legacy default). In code the
-setting is `scope: 'global' | 'scoped'`. `content` is a template; the rules placeholder is the CSS comment
+`.stacki/styles.json`, `{ version: 2, attributes?: string, content?: string }`, says what a `<style>` tag
+the Style panel creates starts with. `attributes` is the opening tag's attribute text as written
+(`is:global lang="scss" media="screen"`): Astro attribute names, quoted values, no `{expressions}`, no
+name twice; `""` is a plain `<style>`. Absent (the section or the key) means `is:global`, Stacki's
+default, because the panel writes plain selectors and a scoped tag would hash them away from elements
+rendered through components; projects made by Stacki also have it written out
+(`electron/project/newProjectDefaults.ts`). Version 1 (`{ version?: 1, isGlobal?: boolean, content? }`,
+written by earlier Stacki versions) is still read: `isGlobal: true` is `is:global`, `false` is a plain
+`<style>`, absent is the default; the next save writes version 2. A version 2 section with `isGlobal`
+is refused. In code the setting is `{ attributes: StyleTagAttribute[], content }`; the hosts write the
+attributes in order (`styleTagNode` in Desktop, `addStyleBlockSource` in Studio). `content` is a
+template; the rules placeholder is the CSS comment
 `/* stacki:rules */`, at most once, at the top level or inside at-rule blocks (never inside a style
 rule). With no placeholder, a template ending in a block `@layer`/`@media`/`@supports`/`@container`/`@scope`
 takes rules inside that block, after what it holds; any other template gets rules after it, at the top
@@ -1064,10 +1070,22 @@ level. A placeholder at the top level means after the template's own content. A 
 parse (unclosed brace, comment or string, repeated or misplaced placeholder) is refused by the file
 parser and by the Settings page, which never saves it. A tag follows the template when its top level
 already holds the wrapper chain (same at-rule names and parameters, whitespace-insensitive): new rules
-go inside the innermost wrapper after the rules there; any other tag is written exactly as before.
-Stacki never wraps or moves rules a person wrote. Settings > Breakpoints > Style tags edits it; the CLI
-reaches it as `newStyleTag.isGlobal` and `newStyleTag.content` (`stacki config set styles
-newStyleTag.isGlobal true`).
+go inside the innermost wrapper after the rules there; a one-line wrapper (`@layer components {}`) is
+opened onto its own lines when its first rule goes in; any other tag is written exactly as before.
+Stacki never wraps or moves rules a person wrote. Settings > Style tags edits it as one code block holding
+the whole tag (`src/app/settings/StyleTagSettings.tsx`): the attributes and the content are editable,
+`<style`, the opening `>` and `</style>` are locked (`styleTagEditor.ts`), and attributes that do not
+parse mark the block invalid and are not saved. The Style panel's "Add custom styles in" list links to it
+(Style tag defaults…). The CLI reaches it as `newStyleTag.attributes` and `newStyleTag.content`
+(`stacki config set styles newStyleTag.attributes 'is:global lang="scss"'`).
+
+**The first tag is created once** (`model/firstTagLane.ts`, driven by `embed/useEditorResolution.ts`).
+Every write that needs a new tag before the panel's scan shows it joins the one tag being created for the
+open file: writes made in the same event (the four sides of a Shift-drag) go into the tag as one host
+edit and one undo step; writes made while it saves wait, one per selector and property (the last value
+wins), and are written into that tag once the scan shows it. A failed tag drops what waited; a scan that
+never shows the tag stops being waited for after a bounded number of scans. Duplicate `<style>` tags a
+page already has are never merged or rewritten.
 
 **Where a new selector's first style goes** (`model/newStyleTarget.ts`, consumed by
 `embed/useEditorContexts.ts`). A selector with rules keeps going to the file that defines them

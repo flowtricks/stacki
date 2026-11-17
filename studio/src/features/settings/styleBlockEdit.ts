@@ -15,16 +15,16 @@ import { addStyleClass } from './styleClassEdit';
 
 /**
  * The source after the first styles: `request.className` on the element `id` (when given) and a
- * `<style>` block (`is:global` when `request.scope` says so) holding `request.css` as the last thing in the file. Throws, with a
+ * `<style>` block (with `request.attributes` on its opening tag) holding `request.css` as the last thing in the file. Throws, with a
  * message for the person, when the file cannot hold a block or the class cannot be added; the
  * source is then unchanged because nothing was returned.
  */
-export function addStyleBlockSource(source: string, file: string, id: string, request: Pick<StyleBlockRequest, 'className' | 'css' | 'scope'>): string {
+export function addStyleBlockSource(source: string, file: string, id: string, request: Pick<StyleBlockRequest, 'className' | 'css' | 'attributes'>): string {
   if (!styleBlockFileSupported(file)) {
     throw new Error(UNSUPPORTED_FILE_MESSAGE);
   }
   const layout = fileLayoutOf(source);
   const classed = request.className === undefined ? source : addStyleClass(source, id, request.className);
   const closed = classed.endsWith('\n') ? classed : `${classed}${layout.eol}`;
-  return `${closed}${newStyleTagOpening(request.scope)}${styleBlockInner(request.css, layout)}</style>${layout.eol}`;
+  return `${closed}${newStyleTagOpening(request.attributes)}${styleBlockInner(request.css, layout)}</style>${layout.eol}`;
 }

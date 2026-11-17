@@ -3,12 +3,12 @@
 // The setting lives in `.stacki/styles.json` (shared/properties/newStyleTag.ts) and is read
 // asynchronously; the panel's writers are synchronous, so the last value read is held here, the
 // way host.ts holds the app state. Until a read lands, and in a project that never wrote the
-// section, it is the legacy behaviour: a scoped tag holding just the rules. The Settings page
+// section, it is Stacki's default: a `<style is:global>` tag holding just the rules. The Settings page
 // publishes a change here as it saves it, so the next write already uses it.
 
-import { LEGACY_NEW_STYLE_TAG, templateFrame, type NewStyleTagSettings, type TemplateFrame } from '../../../../shared/properties/newStyleTag';
+import { DEFAULT_NEW_STYLE_TAG, sameNewStyleTag, templateFrame, type NewStyleTagSettings, type TemplateFrame } from '../../../../shared/properties/newStyleTag';
 
-let current: NewStyleTagSettings = LEGACY_NEW_STYLE_TAG;
+let current: NewStyleTagSettings = DEFAULT_NEW_STYLE_TAG;
 const listeners = new Set<() => void>();
 
 export function getNewStyleTagSettings(): NewStyleTagSettings {
@@ -16,7 +16,7 @@ export function getNewStyleTagSettings(): NewStyleTagSettings {
 }
 
 export function publishNewStyleTagSettings(next: NewStyleTagSettings): void {
-  if (next.scope === current.scope && next.content === current.content) {
+  if (sameNewStyleTag(next, current)) {
     return;
   }
   current = next;

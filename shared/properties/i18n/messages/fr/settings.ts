@@ -172,6 +172,7 @@ export const messages = {
   'settings.empty.folders': 'Ouvrez un projet pour choisir ses dossiers.',
   'settings.empty.instructions': 'Ouvrez un projet pour choisir ce que le panneau Instructions masque.',
   'settings.empty.roles': 'Ouvrez un projet pour définir ses rôles.',
+  'settings.empty.styles': 'Ouvrez un projet pour définir le contenu de départ de ses nouvelles balises style.',
   'settings.empty.studio': 'Ouvrez un projet pour ajouter Stacki Studio.',
   'settings.folders.cms.info': 'Collections et fichiers de données listés par le panneau CMS.',
   'settings.folders.collections.info': 'Lues depuis la configuration de contenu d’Astro.',
@@ -324,20 +325,12 @@ export const messages = {
   'settings.sections': 'Sections des réglages',
   'settings.studio.info':
     'Édition et collaboration dans le navigateur pour ce projet. La configuration installe Studio en local, puis guide le déploiement cloud.',
-  'settings.styleTags.caption':
-    'Écrivez {token} là où vont les nouvelles règles, par exemple dans @layer components. Sans lui, les règles vont dans un dernier bloc @layer ou @media, ou après le modèle.',
-  'settings.styleTags.content': 'Contenu initial des nouvelles balises <style>',
-  'settings.styleTags.error.inRule': "L'espace réservé doit être au premier niveau ou dans des blocs de règle @ comme @layer, pas dans une règle de style.",
-  'settings.styleTags.error.repeated': "Le modèle nomme plusieurs fois l'espace réservé aux règles.",
   'settings.styleTags.error.save': "Les réglages des balises style n'ont pas pu être enregistrés. {message}",
-  'settings.styleTags.error.unbalanced': 'Le modèle contient une accolade, un commentaire ou une chaîne non fermés.',
-  'settings.styleTags.global': 'Les nouvelles balises <style> sont globales (is:global)',
-  'settings.styleTags.globalInfo':
-    'Astro limite un <style> simple à son propre fichier, ce qui cache les sélecteurs simples aux éléments rendus par des composants. Les balises existantes ne sont jamais modifiées.',
+  'settings.styleTags.hint': 'Les règles vont dans le dernier bloc @layer ou @media, ou là où vous écrivez {token}.',
   'settings.styleTags.info':
-    'Ce par quoi commence une balise <style> créée par le panneau Style. Enregistré avec le projet dans .stacki/styles.json, donc tout le monde obtient les mêmes balises.',
-  'settings.styleTags.preview': 'La balise qui serait créée',
-  'settings.styleTags.title': 'Balises style',
+    'Ce que contient une nouvelle balise style quand le panneau Style en crée une : ses attributs et son contenu. Enregistré avec le projet dans .stacki/styles.json.',
+  'settings.styleTags.invalid': 'Invalide',
+  'settings.styleTags.title': 'Nouvelles balises style',
   'settings.tab.audits': 'Audits', // same
   'settings.tab.breakpoints': 'Points d’arrêt',
   'settings.tab.cms': 'Connexions CMS',
@@ -345,6 +338,7 @@ export const messages = {
   'settings.tab.folders': 'Dossiers',
   'settings.tab.instructions': 'Instructions', // same
   'settings.tab.roles': 'Rôles',
+  'settings.tab.styles': 'Balises style',
   'settings.tab.studio': 'Stacki Studio', // same
   'settings.mcp.add.docs': 'Guide de configuration de {name}',
   'settings.mcp.add.name': 'Nom du serveur',

@@ -9,7 +9,7 @@ import Select from '../components/Select';
 import type { SelectOption, SelectTag } from '../components/selectTypes';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { homeRoundDoor as centralHomeRoundDoor, link as centralLink } from '../../../ui/central/centralGeometry';
-import { FilterIcon, UnlinkIcon } from '../../../ui/Icons';
+import { FilterIcon, GearIcon, UnlinkIcon } from '../../../ui/Icons';
 import { useHoverTip } from '../components/CssPropertyTip';
 import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { breakpointLabel } from '../../../lib/breakpointLabel';
@@ -454,8 +454,15 @@ export function SourcePickerRow({ card }: { card: StyleCardProps }) {
           searchPlaceholder={translate('styleModel.embed.card.searchEmbeds')}
           className="embed-editor_source-link"
           value={card.sourceValue}
-          options={card.sourceOptions.map(sourceSelectOption)}
-          onChange={(next) => card.onSourceChange(next)}
+          options={sourceOptionsWithDefaults(card.sourceOptions, translate('styleModel.embed.card.styleTagDefaults'))}
+          onChange={(next) => {
+            const openSettings = getHost().openStyleTagSettings;
+            if (next === STYLE_TAG_DEFAULTS && openSettings !== undefined) {
+              openSettings();
+            } else {
+              card.onSourceChange(next);
+            }
+          }}
           ariaLabel={translate('styleModel.embed.card.source')}
         />
         {card.loading ? (
@@ -473,6 +480,20 @@ export function SourcePickerRow({ card }: { card: StyleCardProps }) {
       ) : undefined}
     </div>
   );
+}
+
+// The value of the footer row that opens the project's new-tag settings: never a source key, which
+// is a file path or `node:` key, nor the virtual Create <style> entry.
+const STYLE_TAG_DEFAULTS = '\u0000style-tag-defaults';
+
+// The sources, and last, pinned below them, "Style tag defaults…": where what a new `<style>` holds
+// is set (Settings → Style tags). Only where the host has those settings (Desktop); Studio has none.
+function sourceOptionsWithDefaults(options: readonly SourceOption[], label: string): SelectOption<string>[] {
+  const rows: SelectOption<string>[] = options.map(sourceSelectOption);
+  if (getHost().openStyleTagSettings === undefined) {
+    return rows;
+  }
+  return [...rows, { value: STYLE_TAG_DEFAULTS, label, icon: <GearIcon />, footer: true }];
 }
 
 // A source as a dropdown option. Trigger tag: component embeds show the component icon

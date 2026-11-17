@@ -44,20 +44,28 @@ test('known-bad documents are refused by the registry', () => {
   }
 });
 
-test('the newStyleTag section is reachable, round-trips, and bad shapes are refused', () => {
-  const withSection = { version: 1, keep: [], newStyleTag: { version: 1, isGlobal: true, content: '@layer components {}' } };
+test('the newStyleTag section is reachable, round-trips as version 2, and bad shapes are refused', () => {
+  const withSection = { version: 1, keep: [], newStyleTag: { version: 2, attributes: 'is:global lang="scss"', content: '@layer components {}' } };
   assert.equal(registryRefusal(withSection), undefined);
   assert.equal(refusalOfSource(STYLES_FILE, serializeDocument(STYLES_FILE, withSection)), undefined);
   assert.equal(serializeDocument(STYLES_FILE, withSection), `${JSON.stringify(withSection, undefined, 2)}\n`);
+  // A version 1 section an older Stacki wrote is still accepted, and written back as version 2.
+  const older = { version: 1, keep: [], newStyleTag: { version: 1, isGlobal: false, content: '@layer components {}' } };
+  assert.equal(registryRefusal(older), undefined);
+  assert.ok(
+    serializeDocument(STYLES_FILE, older).includes('"newStyleTag": {\n    "version": 2,\n    "attributes": "",\n    "content": "@layer components {}"\n  }'),
+    'written back as version 2',
+  );
   const bad: ReadonlyArray<readonly [string, unknown, RegExp]> = [
     ['an unknown section key', { version: 1, newStyleTag: { global: true } }, /unknown key/],
     ['a non-boolean isGlobal', { version: 1, newStyleTag: { isGlobal: 'yes' } }, /true or false/],
     ['a non-string content', { version: 1, newStyleTag: { content: 4 } }, /expected text/],
-    ['a wrong section version', { version: 1, newStyleTag: { version: 2 } }, /expected 1/],
+    ['a wrong section version', { version: 1, newStyleTag: { version: 3 } }, /2/],
   ];
   for (const [what, document, reason] of bad) {
     const refusal = registryRefusal(document);
     assert.ok(refusal !== undefined && reason.test(refusal), `${what}: ${String(refusal)}`);
   }
   assert.throws(() => serializeDocument(STYLES_FILE, { version: 1, newStyleTag: { content: '@layer a {' } }), /unclosed/);
+  assert.throws(() => serializeDocument(STYLES_FILE, { version: 1, newStyleTag: { version: 2, attributes: 'lang={x}' } }), /expressions/);
 });

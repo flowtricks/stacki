@@ -170,6 +170,7 @@ export const messages = {
   'settings.empty.folders': 'Abra um projeto para escolher suas pastas.',
   'settings.empty.instructions': 'Abra um projeto para escolher o que o painel Instruções oculta.',
   'settings.empty.roles': 'Abra um projeto para definir seus papéis.',
+  'settings.empty.styles': 'Abra um projeto para definir com o que suas novas tags style começam.',
   'settings.empty.studio': 'Abra um projeto para adicionar o Stacki Studio.',
   'settings.folders.cms.info': 'Coleções e arquivos de dados que o painel CMS lista.',
   'settings.folders.collections.info': 'Lidas da configuração de conteúdo do Astro.',
@@ -321,20 +322,12 @@ export const messages = {
   'settings.secrets.valueHidden': 'Valor oculto',
   'settings.sections': 'Seções das configurações',
   'settings.studio.info': 'Edição e colaboração no navegador para este projeto. A configuração instala o Studio localmente e guia a implantação na nuvem.',
-  'settings.styleTags.caption':
-    'Escreva {token} onde as novas regras vão, por exemplo dentro de @layer components. Sem ele, as regras vão para um último bloco @layer ou @media, ou depois do modelo.',
-  'settings.styleTags.content': 'Conteúdo inicial de novas tags <style>',
-  'settings.styleTags.error.inRule': 'O marcador deve ficar no nível superior ou dentro de blocos @ como @layer, não dentro de uma regra de estilo.',
-  'settings.styleTags.error.repeated': 'O modelo cita o marcador de regras mais de uma vez.',
   'settings.styleTags.error.save': 'Não foi possível salvar as configurações das tags style. {message}',
-  'settings.styleTags.error.unbalanced': 'O modelo tem uma chave, um comentário ou uma string sem fechar.',
-  'settings.styleTags.global': 'Novas tags <style> são globais (is:global)',
-  'settings.styleTags.globalInfo':
-    'O Astro limita um <style> simples ao próprio arquivo, o que esconde seletores simples de elementos renderizados por componentes. Tags existentes nunca são alteradas.',
+  'settings.styleTags.hint': 'As regras vão no último bloco @layer ou @media, ou onde você escrever {token}.',
   'settings.styleTags.info':
-    'Com o que começa uma tag <style> quando o painel Estilo cria uma. Salvo com o projeto em .stacki/styles.json, então todos recebem as mesmas tags.',
-  'settings.styleTags.preview': 'A tag que seria criada',
-  'settings.styleTags.title': 'Tags style',
+    'Com o que uma tag style nova começa quando o painel de estilos cria uma: seus atributos e seu conteúdo. Salvo com o projeto em .stacki/styles.json.',
+  'settings.styleTags.invalid': 'Inválido',
+  'settings.styleTags.title': 'Novas tags style',
   'settings.tab.audits': 'Auditorias',
   'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'Conexões de CMS',
@@ -342,6 +335,7 @@ export const messages = {
   'settings.tab.folders': 'Pastas',
   'settings.tab.instructions': 'Instruções',
   'settings.tab.roles': 'Papéis',
+  'settings.tab.styles': 'Tags style',
   'settings.tab.studio': 'Stacki Studio', // same
   'settings.mcp.add.docs': 'Guia de configuração de {name}',
   'settings.mcp.add.name': 'Nome do servidor',

@@ -4,7 +4,7 @@
 // `check-project` command, so every tool answers "may this go?" the same way.
 import { assert } from '../core/assert';
 import { list, record, text } from '../core/boundary';
-import { NEW_PROJECT_NEW_STYLE_TAG, newStyleTagDocument, parseNewStyleTag, type NewStyleTagSettings } from './newStyleTag';
+import { DEFAULT_NEW_STYLE_TAG, newStyleTagDocument, parseNewStyleTag, sameNewStyleTag, type NewStyleTagSettings } from './newStyleTag';
 
 export const STYLE_KEEP_LIMITS = {
   /** Patterns in one keep list. A design system's state classes fit in dozens. */
@@ -80,8 +80,11 @@ export function serializeStyleKeepList(keepList: StyleKeepList): string {
   const reread = parseStyleKeepList(written);
   assert(reread.keep.length === keep.length, 'serializeStyleKeepList: keep patterns round-trip');
   assert(reread.lockedStylesheets.length === lockedStylesheets.length, 'serializeStyleKeepList: locked stylesheets round-trip');
-  assert(reread.newStyleTag?.scope === keepList.newStyleTag?.scope, 'serializeStyleKeepList: the new style tag scope round-trips');
-  assert(reread.newStyleTag?.content === keepList.newStyleTag?.content, 'serializeStyleKeepList: the new style tag template round-trips');
+  assert((reread.newStyleTag === undefined) === (keepList.newStyleTag === undefined), 'serializeStyleKeepList: the new style tag section round-trips');
+  assert(
+    reread.newStyleTag === undefined || keepList.newStyleTag === undefined || sameNewStyleTag(reread.newStyleTag, keepList.newStyleTag),
+    'serializeStyleKeepList: the new style tag attributes and template round-trip',
+  );
   return source;
 }
 
@@ -199,7 +202,7 @@ function lockedPath(input: unknown): string {
 }
 
 /**
- * The `.stacki/styles.json` text a project made by Stacki starts with: `newStyleTag.isGlobal` on,
+ * The `.stacki/styles.json` text a project made by Stacki starts with: the new style tag `is:global`,
  * because the Style panel writes plain selectors and a scoped tag would hash them away from the
  * element. An existing file keeps everything it holds, and a section it already wrote is kept as it
  * is. Undefined when the existing text is not a styles file the parser accepts: such a file is never
@@ -207,7 +210,7 @@ function lockedPath(input: unknown): string {
  */
 export function newProjectStylesSource(existing: string | undefined): string | undefined {
   if (existing === undefined) {
-    return serializeStyleKeepList({ version: 1, keep: [], lockedStylesheets: [], newStyleTag: NEW_PROJECT_NEW_STYLE_TAG });
+    return serializeStyleKeepList({ version: 1, keep: [], lockedStylesheets: [], newStyleTag: DEFAULT_NEW_STYLE_TAG });
   }
   let keepList: StyleKeepList;
   try {
@@ -216,7 +219,5 @@ export function newProjectStylesSource(existing: string | undefined): string | u
   } catch {
     return undefined;
   }
-  return keepList.newStyleTag === undefined
-    ? serializeStyleKeepList({ ...keepList, newStyleTag: NEW_PROJECT_NEW_STYLE_TAG })
-    : serializeStyleKeepList(keepList);
+  return keepList.newStyleTag === undefined ? serializeStyleKeepList({ ...keepList, newStyleTag: DEFAULT_NEW_STYLE_TAG }) : serializeStyleKeepList(keepList);
 }

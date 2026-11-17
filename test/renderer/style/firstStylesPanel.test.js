@@ -216,7 +216,7 @@ const classAttr = (value) => ({ type: 'string', value });
 
 // Mount the panel over `nodes` with the element `n1` selected and the given sources. The host
 // answers addClass and addStyleBlock the way Desktop does: by changing the nodes it shows.
-async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, refuse, styles, blockDelayMs = 0 }) {
+async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, refuse, styles, blockDelayMs = 0, openStyleTagSettings }) {
   const { dom, React, createRoot, EmbedEditor, setHost, subscribeErrorToasts } = await panelEnvironment();
   const calls = [];
   // The panel reports a failure as an error toast; the app's toast owner is stood in for here.
@@ -241,6 +241,7 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
     openFileKind: 'page',
     renderedClasses: [],
     pathOf: () => undefined,
+    openStyleTagSettings,
     addClass: async (name, placement) => {
       calls.push(['addClass', name, placement]);
       withClass(name);
@@ -257,7 +258,10 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
       if (request.className) {
         withClass(request.className);
       }
-      state.nodes = [...state.nodes, request.scope === 'global' ? styleNode(`\n${request.css}`) : scopedNode(`\n${request.css}`)];
+      state.nodes = [
+        ...state.nodes,
+        request.attributes.some((attribute) => attribute.name === 'is:global') ? styleNode(`\n${request.css}`) : scopedNode(`\n${request.css}`),
+      ];
       setHost({ ...host, ...shown(), renderedClasses: state.nodes[0].props?.class?.value.split(' ') ?? [] });
       return { tag: 'applied' };
     },
@@ -449,7 +453,7 @@ test('a new selector with a stylesheet and no <style> goes to Create <style>: no
   await panel.typeOpacity('0.5');
   assert.deepEqual(kinds(panel.calls), ['addStyleBlock']);
   const [, request] = panel.calls[0];
-  assert.equal(request.scope, 'scoped', 'a project that never wrote the section keeps plain tags');
+  assert.deepEqual(request.attributes, [{ name: 'is:global', value: undefined }], 'a project that never wrote the section gets Stacki’s default, is:global');
   assert.equal(request.css, '\n.fresh {\n\topacity: 0.5;\n}');
   assert.equal(request.className, undefined);
 });
@@ -461,7 +465,7 @@ test('with the setting on, the block is global and the template wraps the rule; 
   context.after(panel.unmount);
   await panel.typeOpacity('0.5');
   const request = panel.calls[0][1];
-  assert.equal(request.scope, 'global');
+  assert.deepEqual(request.attributes, [{ name: 'is:global', value: undefined }]);
   assert.match(request.css, /@layer components \{[\s\S]*\.fresh \{[\s\S]*opacity: 0\.5;[\s\S]*\}\s*\}/);
   panel.unmount();
   const tagged = await mountPanel({ nodes: [div('n1', 'fresh'), scopedNode('')], files: [sheet], disk: '' });
@@ -554,7 +558,7 @@ test('with the template on, the first tag holds the wrapper once and later commi
   await panel.typeOpacity('0.5', 0);
   await wait(1500);
   assert.equal(blockCalls(panel.calls).length, 1, `exactly one tag: ${kinds(panel.calls)}`);
-  assert.equal(panel.calls[0][1].scope, 'global');
+  assert.deepEqual(panel.calls[0][1].attributes, [{ name: 'is:global', value: undefined }]);
   const inner = styleTags(panel)[0].inner;
   assert.equal(inner.match(/@layer components/g).length, 1, `one wrapper: ${inner}`);
   assert.equal(inner.match(/\.my-class/g).length, 1, `one rule: ${inner}`);
@@ -570,4 +574,55 @@ test('a refused first tag leaves nothing queued behind it: the next commit tries
   await panel.dragPadding(12);
   assert.equal(blockCalls(panel.calls).length, 2, 'a later commit is a new attempt');
   assert.equal(styleTags(panel).length, 0);
+});
+
+test('the "Add custom styles in" list ends with a link to the style tag defaults, only where the host has them', async (context) => {
+  const opened = [];
+  const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '', openStyleTagSettings: () => opened.push('styles') });
+  context.after(panel.unmount);
+  const trigger = panel.container.querySelector('.embed-editor_source-picker button');
+  assert.ok(trigger, 'the source picker is drawn');
+  trigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await wait(100);
+  const link = [...document.querySelectorAll('.u-select-footer [role="option"], .u-select-footer *')].find(
+    (element) => element.textContent === 'Style tag defaults…',
+  );
+  assert.ok(link, 'the footer row is there');
+  link.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
+  link.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await wait(100);
+  assert.deepEqual(opened, ['styles'], 'it opens the settings');
+  assert.match(panel.container.querySelector('.embed-editor_source-picker').textContent, /Create <style>/, 'the source pick is unchanged');
+  assert.deepEqual(panel.calls, [], 'nothing is written');
+  panel.unmount();
+
+  const studio = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '' });
+  context.after(studio.unmount);
+  studio.container.querySelector('.embed-editor_source-picker button').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await wait(100);
+  assert.ok(
+    ![...document.querySelectorAll('.u-select-footer *')].some((element) => element.textContent === 'Style tag defaults…'),
+    'no link without settings to open',
+  );
+});
+
+test('a version 2 setting with its own attributes gives the new tag exactly those, and a scoped one stays scoped', async (context) => {
+  const styles = { version: 1, keep: [], newStyleTag: { version: 2, attributes: 'lang="scss" media="screen"', content: '' } };
+  const panel = await mountPanel({ nodes: [div('n1', 'fresh')], files: [STYLESHEET], disk: '', styles });
+  context.after(panel.unmount);
+  await panel.typeOpacity('0.5');
+  assert.deepEqual(panel.calls[0][1].attributes, [
+    { name: 'lang', value: 'scss' },
+    { name: 'media', value: 'screen' },
+  ]);
+  panel.unmount();
+  const scoped = await mountPanel({
+    nodes: [div('n1', 'fresh')],
+    files: [STYLESHEET],
+    disk: '',
+    styles: { version: 1, keep: [], newStyleTag: { version: 1, isGlobal: false } },
+  });
+  context.after(scoped.unmount);
+  await scoped.typeOpacity('0.5');
+  assert.deepEqual(scoped.calls[0][1].attributes, [], 'an explicit version 1 choice of a plain <style> is kept');
 });

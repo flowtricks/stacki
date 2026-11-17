@@ -369,7 +369,7 @@ export function useSourceOptions(
     const optionList: SourceOption[] = [];
     // First in the list: where a new selector goes when the page has no `<style>` tag of its own.
     if (createOffered) {
-      optionList.push({ value: CREATE_STYLE_TAG_KEY, label: translate('styleModel.embed.source.createStyleTag'), create: true });
+      optionList.push({ value: CREATE_STYLE_TAG_KEY, label: translate('styleModel.embed.source.createStyleTag', { tag: '<style>' }), create: true });
     }
     for (const embedDocument of embedList) {
       if (!embedDocument.source.fromComponent) {

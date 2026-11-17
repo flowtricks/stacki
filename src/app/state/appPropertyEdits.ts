@@ -271,7 +271,7 @@ function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle:
       if (plan.tag === 'refused') {
         return { tag: 'refused', message: plan.message };
       }
-      const block = styleTagNode(newId(), styleBlockInner(request.css, fileLayoutOf(state.source)), request.scope);
+      const block = styleTagNode(newId(), styleBlockInner(request.css, fileLayoutOf(state.source)), request.attributes);
       const insert = insertGesture(state.model, block, undefined, { urgency: true });
       if (!commitEdit(plan.tag === 'edit' ? sequence(insert, plan.gesture) : insert)) {
         return { tag: 'refused', message: translate('shell.refusal.notQueued') };

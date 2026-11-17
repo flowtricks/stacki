@@ -57,7 +57,6 @@ import { iconFor, type DeviceIconKind } from '../../features/preview/breakpointD
 import { breakpointLabel } from '../../lib/breakpointLabel';
 import { BreakpointSyncDialog } from './BreakpointSyncDialog';
 import { BreakpointUsageLine, BreakpointUsageList, hasUsage } from './BreakpointUsage';
-import { StyleTagSettings } from './StyleTagSettings';
 import { BreakpointAddCard, type AddDraft } from './BreakpointAddCard';
 import { useBreakpointUsage } from './useBreakpointUsage';
 import { applyRequest, type CheckedPlaces } from '../../../shared/properties/breakpointSyncSelection';
@@ -529,7 +528,6 @@ export function BreakpointsSettings({
           </span>
         </div>
       </SettingsSection>
-      <StyleTagSettings projectPath={projectPath} editable={editable && !blocked} track={indicator.track} />
       {run !== undefined && (
         <BreakpointSyncDialog
           state={run.scan === undefined ? { kind: 'scanning' } : { kind: 'ready', scan: run.scan }}

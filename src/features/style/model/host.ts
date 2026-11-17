@@ -11,7 +11,7 @@ import { LIMITS } from '../../../../shared/core/limits';
 import { PX_LENGTHS, type LengthUnit } from '../../../../shared/properties/lengthUnit';
 import type { ClassPlacement } from '../../../editor/classAttr';
 import type { TypedMessageRef } from '../../../../shared/properties/i18n/messageRef';
-import type { StyleTagScope } from '../../../../shared/properties/newStyleTag';
+import type { StyleTagAttribute } from '../../../../shared/properties/newStyleTag';
 
 type HostAttr = { readonly type: string; readonly value?: string };
 
@@ -58,8 +58,8 @@ export type StyleBlockRequest = {
   /** The block's CSS as the panel builds it: tab-indented rule lines ended by `\n`. The host
    *  sets it between the tags in the file's own indent and line ending (styleBlockInner). */
   readonly css: string;
-  /** Whether the new tag carries `is:global`: the project's `newStyleTag` setting at the time of the write. */
-  readonly scope: StyleTagScope;
+  /** The opening tag's attributes (`is:global`, `lang="scss"`): the project's `newStyleTag` setting at the time of the write. */
+  readonly attributes: readonly StyleTagAttribute[];
   /** The class to put on the selected element, or undefined when it already carries the selector. */
   readonly className: string | undefined;
   readonly placement: ClassPlacement;
@@ -140,11 +140,14 @@ export type HostState = {
    *  is written only after it applied (step 6, plan §3.3 — outcome-gated). */
   addClass: ((className: string, placement: ClassPlacement) => Promise<ClassOutcome>) | undefined;
   /** Create the page's first `<style>` tag (model/firstStyleBlock.ts, newStyleTarget.ts), global or not as
-   *  `request.scope` says: add a block holding `css` at the end of the open file and, when
+   *  `request.attributes` say: add a block holding `css` at the end of the open file and, when
    *  `className` is given, put that class on the selected element, as ONE page edit and so
    *  one undo step. The CSS is the block's whole text, rule included. Resolves once the edit
    *  reached disk or was refused; a refusal says why. Absent where the host cannot add a node. */
   addStyleBlock: ((request: StyleBlockRequest) => Promise<ClassOutcome>) | undefined;
+  /** Open the project's settings for new `<style>` tags (Desktop's Settings → Style tags), from the
+   *  "Add custom styles in" list. Absent where the host has no such settings: the list then has no link. */
+  openStyleTagSettings: (() => void) | undefined;
   /** Take a class, or an attribute, off the selected element: a chip selected in
    *  the selector field and then Delete. Only a name written literally on the
    *  element is removed; anything computed is refused, and the refusal says why
@@ -227,6 +230,7 @@ const state: HostState = {
   recordUndo: undefined,
   addClass: undefined,
   addStyleBlock: undefined,
+  openStyleTagSettings: undefined,
   removeClass: undefined,
   removeAttribute: undefined,
   setInlineStyle: undefined,

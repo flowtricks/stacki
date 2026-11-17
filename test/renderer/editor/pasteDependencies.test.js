@@ -155,7 +155,7 @@ test('the paste gesture writes frontmatter, markup and one new style tag in a si
   const pageModel = model(PAGE);
   const plan = modules.planPaste(node, source, modules.pasteTargetOf(pageModel, page));
   const main = firstElement(pageModel.nodes, 'main');
-  const style = modules.carriedStyleNode(plan.bundle, { scope: 'global', content: '' }, PAGE);
+  const style = modules.carriedStyleNode(plan.bundle, { attributes: [{ name: 'is:global', value: undefined }], content: '' }, PAGE);
   assert.equal(style.props['is:global'].type, 'bare', 'The project default is honoured');
   assert.equal(style.props['define:vars'].value, '{ accent }');
   const gesture = modules.contextPasteGesture(
@@ -175,7 +175,7 @@ test('the paste gesture writes frontmatter, markup and one new style tag in a si
 test('a template with a layer wrapper puts the carried rules inside it', () => {
   const { node, source } = sourceOf(STAT_WRAP, component);
   const plan = modules.planPaste(node, source, modules.pasteTargetOf(model(PAGE), page));
-  const style = modules.carriedStyleNode(plan.bundle, { scope: 'scoped', content: '@layer components {\n  /* stacki:rules */\n}' }, PAGE);
+  const style = modules.carriedStyleNode(plan.bundle, { attributes: [], content: '@layer components {\n  /* stacki:rules */\n}' }, PAGE);
   assert.equal(style.props['is:global'], undefined);
   assert.match(style.inner, /@layer components \{[\s\S]*\.stat_wrap::before[\s\S]*\}/);
   assert.doesNotMatch(style.inner, /stacki:rules/);

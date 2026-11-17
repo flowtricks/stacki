@@ -1,16 +1,16 @@
 import { useCodeAccess, ManagedValue } from './CodeAccess';
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { basicSetup, EditorView } from 'codemirror';
+import { basicSetup, EditorView, minimalSetup } from 'codemirror';
 import type { MutableRefObject } from 'react';
 import type { LanguageSupport } from '@codemirror/language';
 import { assert } from '../../shared/core/assert';
-import { Annotation, EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
+import { Annotation, EditorState, StateEffect, StateField, Transaction, type Extension } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
 import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { html } from '@codemirror/lang-html';
-import { syntaxHighlighting, HighlightStyle, LanguageDescription } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, indentOnInput, LanguageDescription } from '@codemirror/language';
 import { search } from '@codemirror/search';
 import { astroHighlight } from './astroHighlight';
 import { codeIndentExtensions } from './codeEditorIndent';
@@ -98,6 +98,9 @@ export const appTheme = EditorView.theme(
   { dark: true },
 );
 
+// A code field's text starts where a field's text does, with no gutter to the left of it.
+const fieldTheme = EditorView.theme({ '.cm-content': { padding: '10px 0' }, '.cm-line': { padding: '0 12px' } });
+
 export const appHighlight = syntaxHighlighting(
   HighlightStyle.define(
     CODE_TOKEN_RULES.map(({ tag, style }) => ({ tag, ...style })),
@@ -126,6 +129,17 @@ export interface CodeEditorProps {
   readonly componentRanges?: readonly CodeEditorComponentRange[] | undefined;
   readonly onPositionChange?: ((position: number) => void) | undefined;
   readonly onOpenComponent?: ((name: string, id: string) => void) | undefined;
+  /**
+   * More CodeMirror extensions, read when the editor is made (as `language` is): a caller's own
+   * rules about what may be typed, such as the locked delimiters of Settings' style tag block.
+   */
+  readonly extensions?: Extension | undefined;
+  /**
+   * `minimal` is a code field rather than a code window: no line numbers, no fold gutter, no
+   * active-line band and no search, one uniform fill, as a short field in Settings needs. Read when the
+   * editor is made. Default `full`.
+   */
+  readonly chrome?: 'full' | 'minimal' | undefined;
 }
 
 export type CodeEditorIndentation = CodeExtent | 'spaces';
@@ -341,16 +355,17 @@ function codeEditorCreate(parent: HTMLDivElement, language: string | undefined, 
     state: EditorState.create({
       doc: opened.text,
       extensions: [
-        basicSetup,
+        latest.current.chrome === 'minimal' ? [minimalSetup, indentOnInput(), fieldTheme] : basicSetup,
         codeIndentExtensions(latest.current.indentation === 'spaces' ? 'spaces' : 'tabs'),
         // Search stays above the document so it cannot cover the final match.
-        search({ top: true }),
+        latest.current.chrome === 'minimal' ? [] : search({ top: true }),
         codeEditorLanguage(language),
         appTheme,
         language === 'astro' ? astroHighlight : appHighlight,
         codeDecorationField,
         latest.current.stickyHeaders === true ? codeStickyScroll() : [],
         codeEditorInteractions(refs),
+        latest.current.extensions ?? [],
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             if (!update.transactions.some((transaction) => transaction.annotation(externalValue))) {

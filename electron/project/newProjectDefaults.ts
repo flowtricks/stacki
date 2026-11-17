@@ -1,11 +1,10 @@
 // The `.stacki` settings a project made by Stacki starts with.
 //
-// A site started from a starter or from `create astro` gets `newStyleTag.isGlobal` on in
-// `.stacki/styles.json`, so the first style the panel writes lands in a `<style is:global>` tag that
-// reaches the elements it was written for. A project that already has the file keeps everything in
-// it (shared/properties/styleKeepList.ts newProjectStylesSource); a project that never went through
-// here (an existing site opened in Stacki, or given Studio by create-stacki) keeps the legacy
-// behaviour, a plain `<style>`, until its owner turns the setting on.
+// A site started from a starter or from `create astro` gets the new style tag written out in
+// `.stacki/styles.json` (`is:global`, Stacki's default), so the project says what it does and a
+// teammate's older Stacki agrees. A project that already has the file keeps everything in it
+// (shared/properties/styleKeepList.ts newProjectStylesSource); a project that never went through
+// here gets the same default from the absent section (shared/properties/newStyleTag.ts).
 
 import fs from 'fs';
 import path from 'path';

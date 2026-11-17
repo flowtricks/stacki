@@ -1,15 +1,13 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { requestSelectorFocus } from './embed/SelectorPicker';
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useStyleFiles } from './useStyleFiles';
-import type { ClassOutcome, HostNode, HostState, StyleBlockRequest } from './model/host';
+import type { ClassOutcome, HostState, StyleBlockRequest } from './model/host';
 import type { ClassPlacement } from '../../editor/classAttr';
-import { findNode } from './model/host';
 import { styleableSelection } from './model/styleTarget';
 import { setHost } from './model/host';
 import { prefetchComponentSources } from './model/componentSourceCache';
 import { awaitComputedStyles, computedStylesSettled, prefetchComputedStyles } from './model/computedStyle';
-import { prepareScanSnapshot } from './embed/scanSnapshotCache';
 import { assert } from '../../../shared/core/assert';
 import { PX_LENGTHS, sameLengthUnit, type LengthUnit } from '../../../shared/properties/lengthUnit';
 import EmbedEditor from './EmbedEditor';
@@ -35,8 +33,9 @@ interface StylePanelProps {
   readonly onCanvasWidth?: HostState['setCanvasWidth'] | undefined;
   readonly onDesktopCanvas?: HostState['showDesktopCanvas'] | undefined;
   readonly onRecordUndo?: HostState['recordUndo'] | undefined;
-  // The element writes name the node they are for: the element the panel is SHOWING, which
-  // is the previous one while the panel holds it across a switch (useSwitchHold).
+  readonly onOpenStyleTagSettings?: HostState['openStyleTagSettings'];
+  // The element writes name the node they are for: the element the panel shows
+  // (useShownElementWrites), so a write in flight does not follow the selection.
   readonly onAddClass?: ((className: string, placement: ClassPlacement, nodeId: string) => Promise<ClassOutcome>) | undefined;
   readonly onAddStyleBlock?: ((request: StyleBlockRequest, nodeId: string) => Promise<ClassOutcome>) | undefined;
   readonly onRemoveClass?: ((className: string, nodeId: string) => Promise<ClassOutcome>) | undefined;
@@ -79,7 +78,7 @@ export default function StylePanel(rawProps: StylePanelProps) {
   const lengthUnit = useStableLengthUnit(props.lengthUnit ?? PX_LENGTHS);
   const renderedClasses = useStableList(props.renderedClasses ?? NO_PATHS);
   const projectClasses = useStableList(props.projectClasses ?? NO_PATHS);
-  const selection = useSwitchHold(props, renderedClasses);
+  const selection = useSelectionShown(props, renderedClasses);
   const writes = useShownElementWrites(props, selection);
   const host = hostState(
     { ...props, ...selection.props },
@@ -118,22 +117,12 @@ function withStyleableNode(props: StylePanelProps): StylePanelProps {
 }
 
 // What the panel is told about the selected element. Everything here describes ONE
-// element, so it is published to the host together (useSwitchHold).
+// element, so it is published to the host together.
 type SelectionProps = Pick<StylePanelProps, 'node' | 'renderedClassesKnown' | 'selectedComponentPath' | 'pseudoRequest'>;
 interface ShownSelection {
   readonly props: SelectionProps;
   readonly renderedClasses: string[];
-  /** The page tree the selection was made in: the node the panel shows is this tree's. */
-  readonly nodes: HostState['nodes'];
 }
-
-// The longest the panel keeps showing the previous element after another is selected.
-// The hold ends as soon as the next element's answer is in hand (about one canvas round
-// trip); this bounds a canvas that is slow or never answers, after which the next element
-// is shown with the placeholders its sections draw while they wait.
-const SWITCH_HOLD_MS_MAX = 1500;
-// However often the selection moves during a hold, the panel shows an element within this.
-const SWITCH_HOLD_TOTAL_MS_MAX = 3000;
 
 function selectionOf(props: StylePanelProps, renderedClasses: string[]): ShownSelection {
   return {
@@ -144,60 +133,25 @@ function selectionOf(props: StylePanelProps, renderedClasses: string[]): ShownSe
       pseudoRequest: props.pseudoRequest,
     },
     renderedClasses,
-    nodes: props.model?.nodes ?? NO_NODES,
   };
 }
 
 type ElementWrites = Pick<HostState, 'addClass' | 'addStyleBlock' | 'removeClass' | 'removeAttribute' | 'setInlineStyle'>;
 
-// What makes a node the same element after the tree is re-read: node ids are tree paths, so
-// an insertion before it puts another element at its id. Its kind, name and attributes
-// (classes included) are what the person saw in the panel.
-function sameElement(shown: HostNode | undefined, current: HostNode | undefined): boolean {
-  if (shown === undefined || current === undefined) {
-    return false;
-  }
-  if (shown === current) {
-    return true;
-  }
-  if (shown.kind !== current.kind || shown.name !== current.name) {
-    return false;
-  }
-  return JSON.stringify(shown.props ?? {}) === JSON.stringify(current.props ?? {});
-}
-
 /**
  * The element writes the panel makes (classes, a first style block, attributes, the inline
- * style), each bound to the element the panel SHOWS. Across a switch the panel holds the
- * previous element for up to SWITCH_HOLD_MS_MAX while the app has already selected the next
- * one, and the app's own callbacks wrote to its selection: an edit made to what the person
- * saw landed on another element. Each write now names the shown node, and is refused in
- * plain words, writing nothing, when that node is no longer the same element in the tree
- * the app holds now (an edit moved it during the hold).
+ * style), each addressed to the element the panel shows, which is always the app's selection
+ * (useSelectionShown). Naming the node keeps an edit from following the selection: a write
+ * still in flight when the person selects another element lands on the one it was made for.
  */
 function useShownElementWrites(props: StylePanelProps, selection: ShownSelection): ElementWrites {
   const translate = useTranslate();
   const shownId = selection.props.node?.id;
-  // Read when a write runs, not when it was bound: the tree can change after the render.
-  const treeRef = useRef({ shown: selection.nodes, current: props.model?.nodes ?? NO_NODES });
-  treeRef.current = { shown: selection.nodes, current: props.model?.nodes ?? NO_NODES };
   const { onAddClass, onAddStyleBlock, onRemoveClass, onRemoveAttribute, onSetInlineStyle } = props;
   return useMemo(() => {
-    // Undefined when the write may go ahead for `nodeId`, else why it may not.
-    const refusalFor = (nodeId: string | undefined): string | undefined => {
-      if (nodeId === undefined) {
-        return translate('shell.refusal.noElement');
-      }
-      const tree = treeRef.current;
-      if (tree.shown === tree.current) {
-        return undefined;
-      }
-      return sameElement(findNode(tree.shown, nodeId), findNode(tree.current, nodeId)) ? undefined : translate('style.stylePanel.elementChanged');
-    };
     const guarded = (write: (nodeId: string) => Promise<ClassOutcome>): Promise<ClassOutcome> => {
-      const refusal = refusalFor(shownId);
-      if (refusal !== undefined || shownId === undefined) {
-        return Promise.resolve({ tag: 'refused', message: refusal ?? translate('shell.refusal.noElement') });
+      if (shownId === undefined) {
+        return Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') });
       }
       return write(shownId);
     };
@@ -206,133 +160,49 @@ function useShownElementWrites(props: StylePanelProps, selection: ShownSelection
       addStyleBlock: onAddStyleBlock === undefined ? undefined : (request) => guarded((nodeId) => onAddStyleBlock(request, nodeId)),
       removeClass: onRemoveClass === undefined ? undefined : (className) => guarded((nodeId) => onRemoveClass(className, nodeId)),
       removeAttribute: onRemoveAttribute === undefined ? undefined : (attributeName) => guarded((nodeId) => onRemoveAttribute(attributeName, nodeId)),
-      // Addressed by the node the panel read its style attribute from (useInlineTarget, the
-      // shown element); a node that is no longer that element is not written.
-      setInlineStyle:
-        onSetInlineStyle === undefined
-          ? undefined
-          : (nodeId, style) => {
-              if (refusalFor(nodeId) === undefined) {
-                onSetInlineStyle(nodeId, style);
-              }
-            },
+      // Addressed by the node the panel read its style attribute from (useInlineTarget).
+      setInlineStyle: onSetInlineStyle,
     };
   }, [onAddClass, onAddStyleBlock, onRemoveClass, onRemoveAttribute, onSetInlineStyle, shownId, translate]);
 }
 
-// How many times a switch reads the next element's values again because they were dropped
-// before it could be shown: the canvas re-renders on some selections (its answers are then
-// forgotten, computedStyle.ts forgetComputedStyles), and an edit or undo moves the scope.
-// Each retry waits SWITCH_PREPARE_RETRY_MS first, so the canvas can finish re-rendering; the
-// hold's deadline ends the wait in any case.
-const SWITCH_PREPARE_ATTEMPTS_MAX = 20;
-const SWITCH_PREPARE_RETRY_MS = 50;
-
-/** Read the next element ahead; true once its values are all in hand. */
-async function prepareSwitch(targetId: string, isCancelled: () => boolean): Promise<boolean> {
-  for (let attempt = 0; attempt < SWITCH_PREPARE_ATTEMPTS_MAX; attempt += 1) {
-    if (isCancelled()) {
-      return false;
-    }
-    await Promise.all([prepareScanSnapshot(targetId), prefetchComputedStyles(targetId)]);
-    if (computedStylesSettled(targetId)) {
-      return true;
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, SWITCH_PREPARE_RETRY_MS));
-  }
-  return false;
-}
-
-// From one element to another: the only change worth holding the previous one for.
-function isSwitch(shownId: string | undefined, targetId: string | undefined): boolean {
-  if (shownId === undefined) {
-    return false;
-  }
-  if (targetId === undefined) {
-    return false;
-  }
-  return shownId !== targetId;
+// Which element is selected, in which document: node ids are tree paths, so the page's `0/1`
+// and a component's `0/1` are different elements under one id.
+function selectionKeyOf(props: StylePanelProps): string {
+  return `${props.openFilePath ?? ''}\u0000${props.node?.id ?? ''}`;
 }
 
 /**
- * The selection the panel shows: the app's, except across a switch from one element to
- * another, where the previous element stays on screen until the next one's answer is in
- * hand (stale-while-revalidate, for the whole panel at once). The next element's match,
- * its chips and the page's computed values for its fields are read ahead
- * (prepareScanSnapshot, prefetchComputedStyles) and its rendered classes are waited for;
- * then the host gets the new element in one write and the panel draws it in one render.
- * Published as the app sends it, the header changed first, the fields showed "Default"
- * and empty values while the page was asked, and the previous element's chips and rows
- * outlived the header by a frame or more.
- *
- * Selecting nothing, or selecting from nothing, is shown at once: there is no element to
- * hold, and nothing to prepare. The hold is bounded by SWITCH_HOLD_MS_MAX from its start,
- * however often the selection moves during it.
+ * The selection the panel shows: always the app's, in the render that receives it. The panel
+ * used to keep the previous element on screen until the next one's answer was in hand, up to
+ * 1.5 s; in that time its chips, header and rows belonged to an element the app had already
+ * left, and entering or leaving a component (another document, where the next element could
+ * not be read ahead at all) showed them for the whole wait, or showed a third element: the
+ * held id looked up in the newly opened document's tree. Now the next element is shown at
+ * once: an element seen before under the same CSS paints from its last settled answer, and
+ * one that is not draws the chip-shaped placeholders until its answer lands whole
+ * (useElementReset). Its fields wait in their placeholders for the page's computed values
+ * rather than draw "Default" and empty inputs that the answer then replaces
+ * (awaitComputedStyles), and those values are asked for in one batch.
  */
-function useSwitchHold(props: StylePanelProps, renderedClasses: string[]): ShownSelection {
-  const live = selectionOf(props, renderedClasses);
+function useSelectionShown(props: StylePanelProps, renderedClasses: string[]): ShownSelection {
+  const key = selectionKeyOf(props);
+  const shownKeyRef = useRef(key);
   const targetId = props.node?.id;
-  const [shownId, setShownId] = useState(targetId);
-  // The selection as it last stood for the element on screen: the app's props already
-  // describe the next element (its classes, its component), so the held element's own
-  // are kept from before the switch.
-  const heldRef = useRef(live);
-  const holdStartMsRef = useRef<number | undefined>(undefined);
-  const targetStartRef = useRef<{ readonly id: string; readonly startMs: number } | undefined>(undefined);
-  const holding = isSwitch(shownId, targetId);
-  if (!holding && shownId !== targetId) {
-    setShownId(targetId);
-  }
-  const classesKnown = props.renderedClassesKnown !== false;
-  useEffect(() => {
-    if (!holding || targetId === undefined) {
-      holdStartMsRef.current = undefined;
-      targetStartRef.current = undefined;
-      return undefined;
+  // Before paint, so no frame draws the fields without their values; the listeners it
+  // wakes are other components', which may not be updated while this one renders.
+  useLayoutEffect(() => {
+    const previousKey = shownKeyRef.current;
+    shownKeyRef.current = key;
+    if (previousKey === key || targetId === undefined) {
+      return;
     }
-    const nowMs = performance.now();
-    const startMs = holdStartMsRef.current ?? nowMs;
-    holdStartMsRef.current = startMs;
-    let cancelled = false;
-    const release = () => {
-      if (!cancelled) {
-        setShownId(targetId);
-      }
-    };
-    // Each element selected gets its own wait, so a quick second pick is not shown before its
-    // answer only because the first one used the time; the whole hold is capped as well.
-    const targetStartMs = targetStartRef.current?.id === targetId ? targetStartRef.current.startMs : nowMs;
-    targetStartRef.current = { id: targetId, startMs: targetStartMs };
-    const remainingMs = Math.max(0, Math.min(SWITCH_HOLD_MS_MAX - (nowMs - targetStartMs), SWITCH_HOLD_TOTAL_MS_MAX - (nowMs - startMs)));
-    const deadline = window.setTimeout(() => {
-      // Out of time with the values still owed: the sections wait for them in their
-      // placeholders, briefly, rather than draw "Default" and empty fields.
-      if (!computedStylesSettled(targetId)) {
-        awaitComputedStyles(targetId);
-      }
-      release();
-    }, remainingMs);
-    void prepareSwitch(targetId, () => cancelled)
-      .catch(() => false)
-      .then((ready) => {
-        // Not ready: the deadline releases it. The rendered classes are part of the
-        // element's answer too (chip colours, the class list); the app bounds their wait
-        // itself (AppPanes RENDERED_CLASSES_WAIT_MS).
-        if (ready && classesKnown) {
-          release();
-        }
-      });
-    return () => {
-      cancelled = true;
-      window.clearTimeout(deadline);
-    };
-  }, [holding, targetId, classesKnown]);
-  if (holding) {
-    assert(heldRef.current.props.node?.id === shownId, 'useSwitchHold: the held selection is the element on screen');
-    return heldRef.current;
-  }
-  heldRef.current = live;
-  return live;
+    if (!computedStylesSettled(targetId)) {
+      awaitComputedStyles(targetId);
+      void prefetchComputedStyles(targetId);
+    }
+  }, [key, targetId]);
+  return selectionOf(props, renderedClasses);
 }
 
 // A row the panel can find again after a switch: a field by its property, a dropdown or a
@@ -600,6 +470,7 @@ function hostState(props: StylePanelProps, inputs: HostInputs): HostState {
     setCanvasWidth: props.onCanvasWidth,
     showDesktopCanvas: props.onDesktopCanvas,
     recordUndo: props.onRecordUndo,
+    openStyleTagSettings: props.onOpenStyleTagSettings,
     ...inputs.writes,
     pageComponentPaths: props.pageComponentPaths ?? NO_PATHS,
     renderedClassesKnown: props.renderedClassesKnown ?? true,

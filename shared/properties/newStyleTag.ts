@@ -1,11 +1,16 @@
 // What a `<style>` tag the Style panel creates starts with: the `newStyleTag` section of
 // `.stacki/styles.json`. Two settings, both optional in the file:
 //
-// - `isGlobal`: whether the new tag carries `is:global`. Absent means no: a project that
-//   never wrote the key keeps the scoped tags it always got. New Stacki projects are
-//   written with it on (electron/project/newProjectDefaults.ts), because the Style panel
-//   writes plain selectors and a scoped tag would hash them away from the element.
+// - `attributes`: the opening tag's attributes as written (`is:global lang="scss"`). Absent
+//   means `is:global`, Stacki's default: the Style panel writes plain selectors, and a scoped
+//   tag would hash them away from elements rendered through components. A project that set
+//   them keeps what it set, `""` (a plain scoped `<style>`) included.
 // - `content`: the template of the tag's body, with a placeholder for where rules go.
+//
+// The file shape is versioned. Version 2 writes `attributes`; version 1 wrote `isGlobal`, a
+// boolean, and is still read (`true` is `is:global`, `false` is no attributes, absent is the
+// default), so a project saved by an older Stacki keeps its choice and moves to version 2 on its
+// next save.
 //
 // The template rules (one place, so Desktop, Studio, the CLI and the Settings page agree):
 //
@@ -38,20 +43,114 @@ const TOKEN_COMMENT_BODY = 'stacki:rules';
 /** Block at-rules that exist to contain rules, so a template ending in one means "rules go inside". */
 const WRAPPER_AT_RULES: ReadonlySet<string> = new Set(['layer', 'media', 'supports', 'container', 'scope']);
 
-/** `global`: the tag is written `<style is:global>`; `scoped`: a plain `<style>`. */
+/** `global`: the tag carries `is:global`; `scoped`: it does not. */
 export type StyleTagScope = 'global' | 'scoped';
 
+/** One attribute of the opening tag: `is:global` (bare, `value` undefined) or `lang="scss"`. */
+export interface StyleTagAttribute {
+  readonly name: string;
+  readonly value: string | undefined;
+}
+
 export interface NewStyleTagSettings {
-  readonly scope: StyleTagScope;
+  /** The opening tag's attributes, in the order written; empty means a plain `<style>`. */
+  readonly attributes: readonly StyleTagAttribute[];
   /** The template; empty means just the rules. */
   readonly content: string;
 }
 
-/** The behaviour of every project that never wrote the section. */
-export const LEGACY_NEW_STYLE_TAG: NewStyleTagSettings = { scope: 'scoped', content: '' };
+const IS_GLOBAL: StyleTagAttribute = { name: 'is:global', value: undefined };
 
-/** What a project made by Stacki starts with. */
-export const NEW_PROJECT_NEW_STYLE_TAG: NewStyleTagSettings = { scope: 'global', content: '' };
+/** What every project gets until it says otherwise, and what a project made by Stacki starts with. */
+export const DEFAULT_NEW_STYLE_TAG: NewStyleTagSettings = { attributes: [IS_GLOBAL], content: '' };
+
+/** Whether the tag these attributes open is global. */
+export function styleTagScopeOf(attributes: readonly StyleTagAttribute[]): StyleTagScope {
+  return attributes.some((attribute) => attribute.name === IS_GLOBAL.name) ? 'global' : 'scoped';
+}
+
+/** Why an attribute text cannot open a style tag. */
+export type AttributeErrorCode = 'syntax' | 'duplicate' | 'expression';
+
+export type AttributesResult =
+  | { readonly ok: true; readonly attributes: readonly StyleTagAttribute[] }
+  | { readonly ok: false; readonly error: { readonly code: AttributeErrorCode; readonly message: string } };
+
+const ATTRIBUTE_MESSAGES: Record<AttributeErrorCode, string> = {
+  syntax: 'The attributes are not written as name or name="value".',
+  duplicate: 'An attribute is written twice.',
+  expression: 'A new style tag takes plain attributes, not {expressions}.',
+};
+
+// An Astro attribute name: letters, digits and the `:` `-` `_` `.` `@` that directives use.
+const ATTRIBUTE_NAME = /^[A-Za-z_@][\w:.@-]*/;
+
+/**
+ * The attributes of an opening `<style ...>` as typed: `is:global lang="scss" media='print'`.
+ * Names are Astro attribute names; values are quoted strings (no `{expressions}`, which a tag
+ * written by Stacki has nothing to evaluate them with). Expected failures are values. The loop
+ * consumes at least one character per turn, so it is bounded by the text's length.
+ */
+export function parseStyleTagAttributes(input: string): AttributesResult {
+  const attributes: StyleTagAttribute[] = [];
+  const fail = (code: AttributeErrorCode): AttributesResult => ({ ok: false, error: { code, message: ATTRIBUTE_MESSAGES[code] } });
+  let index = 0;
+  while (index < input.length) {
+    const rest = input.slice(index);
+    const space = /^\s+/.exec(rest);
+    if (space !== null) {
+      index += space[0].length;
+      continue;
+    }
+    if (rest.startsWith('{')) {
+      return fail('expression');
+    }
+    const name = ATTRIBUTE_NAME.exec(rest);
+    if (name === null) {
+      return fail('syntax');
+    }
+    index += name[0].length;
+    let value: string | undefined = undefined;
+    if (input.charAt(index) === '=') {
+      const quote = input.charAt(index + 1);
+      if (quote === '{') {
+        return fail('expression');
+      }
+      if (quote !== '"' && quote !== "'") {
+        return fail('syntax');
+      }
+      const end = input.indexOf(quote, index + 2);
+      if (end < 0) {
+        return fail('syntax');
+      }
+      value = input.slice(index + 2, end);
+      index = end + 1;
+      if (index < input.length && !/\s/.test(input.charAt(index))) {
+        return fail('syntax');
+      }
+    } else if (index < input.length && !/\s/.test(input.charAt(index))) {
+      return fail('syntax');
+    }
+    if (attributes.some((attribute) => attribute.name === name[0])) {
+      return fail('duplicate');
+    }
+    attributes.push({ name: name[0], value });
+  }
+  assert(attributes.length <= input.length, 'parseStyleTagAttributes: each attribute takes at least one character');
+  return { ok: true, attributes };
+}
+
+/** The attributes as written in the opening tag, each after a space: ` is:global lang="scss"`. */
+export function styleTagAttributesText(attributes: readonly StyleTagAttribute[]): string {
+  const written = attributes.map((attribute) => {
+    if (attribute.value === undefined) {
+      return ` ${attribute.name}`;
+    }
+    const quote = attribute.value.includes('"') ? "'" : '"';
+    return ` ${attribute.name}=${quote}${attribute.value}${quote}`;
+  });
+  return written.join('');
+}
 
 export interface TemplateWrapper {
   /** Lower-case at-rule name without the `@`: `layer`. */
@@ -238,42 +337,58 @@ function placedFrame(content: string, placeholder: { readonly start: number; rea
 /** The settings of a `newStyleTag` section; throws, with a reason, on a shape the file may not hold. */
 export function parseNewStyleTag(input: unknown): NewStyleTagSettings {
   const value = record(input);
-  if (value['version'] !== undefined && value['version'] !== 1) {
+  const version = value['version'] ?? 1;
+  if (version !== 1 && version !== 2) {
     throw new Error('Unsupported newStyleTag version');
-  }
-  const isGlobal = value['isGlobal'];
-  if (isGlobal !== undefined && typeof isGlobal !== 'boolean') {
-    throw new Error('newStyleTag.isGlobal: expected true or false');
   }
   const content = value['content'] === undefined ? '' : text(value['content']);
   const frame = templateFrame(content);
   if (!frame.ok) {
     throw new Error(`newStyleTag.content: ${frame.error.message}`);
   }
-  return { scope: isGlobal === true ? 'global' : 'scoped', content };
+  if (version === 2 && value['isGlobal'] !== undefined) {
+    throw new Error('newStyleTag.isGlobal: version 2 writes attributes (is:global) instead');
+  }
+  return { attributes: version === 1 ? attributesOfVersion1(value['isGlobal']) : attributesOfVersion2(value['attributes']), content };
 }
 
-/** The section as the file holds it. `content` is written only when there is one. */
+// Version 1 said only whether the tag was global.
+function attributesOfVersion1(isGlobal: unknown): readonly StyleTagAttribute[] {
+  if (isGlobal === undefined) {
+    return DEFAULT_NEW_STYLE_TAG.attributes;
+  }
+  if (typeof isGlobal !== 'boolean') {
+    throw new Error('newStyleTag.isGlobal: expected true or false');
+  }
+  return isGlobal ? [IS_GLOBAL] : [];
+}
+
+function attributesOfVersion2(attributes: unknown): readonly StyleTagAttribute[] {
+  if (attributes === undefined) {
+    return DEFAULT_NEW_STYLE_TAG.attributes;
+  }
+  const parsed = parseStyleTagAttributes(text(attributes));
+  if (!parsed.ok) {
+    throw new Error(`newStyleTag.attributes: ${parsed.error.message}`);
+  }
+  return parsed.attributes;
+}
+
+/** The section as the file holds it, always version 2. `content` is written only when there is one. */
 export function newStyleTagDocument(settings: NewStyleTagSettings): Record<string, unknown> {
   const frame = templateFrame(settings.content);
   assert(frame.ok, 'newStyleTagDocument: the template parses');
-  return settings.content === ''
-    ? { version: 1, isGlobal: settings.scope === 'global' }
-    : { version: 1, isGlobal: settings.scope === 'global', content: settings.content };
+  const attributes = styleTagAttributesText(settings.attributes).trim();
+  assert(parseStyleTagAttributes(attributes).ok, 'newStyleTagDocument: the attributes read back');
+  return settings.content === '' ? { version: 2, attributes } : { version: 2, attributes, content: settings.content };
 }
 
 /** The opening tag a new style tag gets. */
-export function newStyleTagOpening(scope: StyleTagScope): string {
-  return scope === 'global' ? '<style is:global>' : '<style>';
+export function newStyleTagOpening(attributes: readonly StyleTagAttribute[]): string {
+  return `<style${styleTagAttributesText(attributes)}>`;
 }
 
-/**
- * The tag as it would be created for the first rule: what the Settings preview shows. The
- * placeholder stays visible as a comment in the preview, so the person sees where rules land.
- */
-export function newStyleTagPreview(settings: NewStyleTagSettings): string {
-  const frame = templateFrame(settings.content);
-  const body = frame.ok && settings.content.includes(NEW_STYLE_TAG_RULES_TOKEN) ? settings.content : frame.ok ? frame.frame.skeleton : settings.content;
-  const inner = body.trim() === '' ? '  /* rules */' : body.replace(/\s+$/, '');
-  return `${newStyleTagOpening(settings.scope)}\n${inner}\n</style>`;
+/** Whether two settings say the same thing. */
+export function sameNewStyleTag(left: NewStyleTagSettings, right: NewStyleTagSettings): boolean {
+  return left.content === right.content && styleTagAttributesText(left.attributes) === styleTagAttributesText(right.attributes);
 }

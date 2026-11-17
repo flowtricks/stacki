@@ -283,7 +283,7 @@ export function useWriteNewRule(
         firstStyles !== undefined && firstStyles.kind !== 'class'
           ? await writeFirstStyleBlock(embedDocument, {
               className: firstStyles.kind === 'block-and-class' ? firstStyles.className : undefined,
-              scope: getNewStyleTagSettings().scope,
+              attributes: getNewStyleTagSettings().attributes,
             })
           : await writeEmbedDocument(embedDocument);
       if (firstStyles !== undefined && result.ok) {

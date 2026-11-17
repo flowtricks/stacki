@@ -34,7 +34,13 @@ import { type AnyElement, serializeElementId, nodeById, buildSnapshot } from './
 import { type CanvasAsk, canvasIdentityOf } from './canvasAsk';
 import { isGlobalRegion } from './projectResources';
 import { PLACEMENT_END } from '../../../editor/classAttr';
-import { newStyleTagOpening, templateFrame, type NewStyleTagSettings, type StyleTagScope } from '../../../../shared/properties/newStyleTag';
+import {
+  newStyleTagOpening,
+  templateFrame,
+  type NewStyleTagSettings,
+  type StyleTagAttribute,
+  type StyleTagScope,
+} from '../../../../shared/properties/newStyleTag';
 export { type ProjectVariable, streamProjectVariables, getProjectFontFamilies, type ImageAsset, getImageAssets } from './projectResources';
 
 export {
@@ -572,7 +578,7 @@ export function blankStyleDocument(settings: NewStyleTagSettings): EmbedDocument
   const skeleton = frame.frame.skeleton;
   const source: EmbedSource = {
     key: `node:${host.openFilePath ?? ''}:new`,
-    label: newStyleTagOpening(settings.scope),
+    label: newStyleTagOpening(settings.attributes),
     classNames: [],
     fromComponent: host.openFileKind === 'component',
     componentName: undefined,
@@ -591,7 +597,7 @@ export function blankStyleDocument(settings: NewStyleTagSettings): EmbedDocument
  */
 export async function writeFirstStyleBlock(
   embedDocument: EmbedDocument,
-  block: { readonly className: string | undefined; readonly scope: StyleTagScope },
+  block: { readonly className: string | undefined; readonly attributes: readonly StyleTagAttribute[] },
 ): Promise<EmbedWriteResult> {
   embedWriteCount += 1;
   const add = getHost().addStyleBlock;
@@ -603,7 +609,7 @@ export async function writeFirstStyleBlock(
     return failureOf('styleModel.write.nothingToAdd');
   }
   try {
-    const outcome = await add({ css: code, scope: block.scope, className: block.className, placement: PLACEMENT_END });
+    const outcome = await add({ css: code, attributes: block.attributes, className: block.className, placement: PLACEMENT_END });
     if (outcome.tag === 'refused') {
       return { ok: false, error: outcome.message };
     }

@@ -155,7 +155,7 @@ export function carriedStyleNode(bundle: Pick<PasteBundle, 'styles'>, settings: 
     return undefined;
   }
   const css = withinTemplate(settings.content, bundle.styles.rules.join('\n\n'));
-  const node = styleTagNode(newId(), styleBlockInner(css, fileLayoutOf(source)), settings.scope);
+  const node = styleTagNode(newId(), styleBlockInner(css, fileLayoutOf(source)), settings.attributes);
   if (bundle.styles.defineVars === undefined || node.kind !== 'raw') {
     return node;
   }

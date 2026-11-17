@@ -38,6 +38,7 @@ import { canvasPageOf, findEditorNodeById as findNodeById } from '../../editor/p
 import { rawContentsMatch } from '../model/pageModelGestures';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
+import { openAppSettings } from '../settings/LazySettings';
 import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView, InstructionsView } from '../appPanels';
 import { selectInstruction, useInstructionSelection } from '../../features/instructions/instructionSelection';
 import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
@@ -52,6 +53,9 @@ import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { selectedPseudo } from '../model/selectionStructure';
 import { appOverlayLayer, useAppOverlayPaths } from './DesktopApps';
 
+// One function for the life of the app: the Style panel publishes its host on every render, and a
+// new arrow each time would wake every host subscriber (StylePanel.tsx useStableList says why).
+const openStyleTagSettings = (): void => openAppSettings('styles');
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
   const hoverNodeId = useLiveValue(app.hoverNode);
@@ -545,6 +549,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       canvasWidthPx={app.canvasWidthPx}
       onDesktopCanvas={app.showDesktopCanvas}
       onRecordUndo={app.pushCommand}
+      onOpenStyleTagSettings={openStyleTagSettings}
       // Each write names the element the panel is SHOWING, which is not the app's selection
       // while the panel holds the previous element across a switch (StylePanel
       // useSwitchHold): the edit lands on the element the person sees.

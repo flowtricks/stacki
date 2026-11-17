@@ -4,16 +4,20 @@
 // Method: tables of templates with the wrapper chain and skeleton each must give (placeholder at
 // top level, in a layer, nested, absent with a trailing wrapper, absent with a rule block, empty),
 // the negative space (unbalanced, repeated placeholder, placeholder inside a rule), then the file
-// parser and serializer: a legacy file reads as scoped with no template, a section round-trips,
-// and bad sections throw with their reason.
+// parser and serializer: an absent section means `is:global` with no template, a version 1 section
+// keeps its choice and is written back as version 2, a section round-trips, and bad sections throw
+// with their reason. Last, the attribute parser: every shape an opening tag may hold, and the ones
+// it may not.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  LEGACY_NEW_STYLE_TAG,
-  NEW_PROJECT_NEW_STYLE_TAG,
+  DEFAULT_NEW_STYLE_TAG,
   NEW_STYLE_TAG_RULES_TOKEN,
-  newStyleTagPreview,
+  newStyleTagOpening,
   parseNewStyleTag,
+  parseStyleTagAttributes,
+  styleTagAttributesText,
+  styleTagScopeOf,
   templateFrame,
 } from '#dist/shared/properties/newStyleTag.js';
 import { parseStyleKeepList, serializeStyleKeepList } from '#dist/shared/properties/styleKeepList.js';
@@ -66,37 +70,71 @@ test('invalid templates are refused with a code', () => {
   assert.equal(refusal('/* an ordinary comment */ @layer a {}'), undefined);
 });
 
-test('a file without the section reads as the legacy behaviour; new projects are global', () => {
+const GLOBAL = { name: 'is:global', value: undefined };
+
+test('an absent section or key means is:global; a version 1 choice is kept', () => {
   assert.equal(parseStyleKeepList({ version: 1, keep: [] }).newStyleTag, undefined);
-  assert.deepEqual(LEGACY_NEW_STYLE_TAG, { scope: 'scoped', content: '' });
-  assert.deepEqual(NEW_PROJECT_NEW_STYLE_TAG, { scope: 'global', content: '' });
-  assert.deepEqual(parseNewStyleTag({}), LEGACY_NEW_STYLE_TAG);
-  assert.deepEqual(parseNewStyleTag({ isGlobal: true }), NEW_PROJECT_NEW_STYLE_TAG);
+  assert.deepEqual(DEFAULT_NEW_STYLE_TAG, { attributes: [GLOBAL], content: '' });
+  assert.deepEqual(parseNewStyleTag({}), DEFAULT_NEW_STYLE_TAG);
+  assert.deepEqual(parseNewStyleTag({ version: 2 }), DEFAULT_NEW_STYLE_TAG);
+  assert.deepEqual(parseNewStyleTag({ isGlobal: true }), DEFAULT_NEW_STYLE_TAG);
+  assert.deepEqual(parseNewStyleTag({ version: 1, isGlobal: false, content: '@layer a {}' }), { attributes: [], content: '@layer a {}' });
+  assert.deepEqual(parseNewStyleTag({ version: 2, attributes: '' }), { attributes: [], content: '' }, 'an explicit plain <style> is kept');
+  assert.equal(styleTagScopeOf(DEFAULT_NEW_STYLE_TAG.attributes), 'global');
+  assert.equal(styleTagScopeOf([]), 'scoped');
 });
 
-test('the section round-trips through the serializer and a legacy file stays byte-identical', () => {
+test('the section round-trips as version 2, and a version 1 section moves to version 2 on its next save', () => {
   const legacy = serializeStyleKeepList(parseStyleKeepList({ version: 1, keep: ['a'] }));
-  assert.equal(legacy, '{\n  "version": 1,\n  "keep": [\n    "a"\n  ]\n}\n');
+  assert.equal(legacy, '{\n  "version": 1,\n  "keep": [\n    "a"\n  ]\n}\n', 'a file without the section stays byte-identical');
   const content = `@layer components {\n  ${NEW_STYLE_TAG_RULES_TOKEN}\n}`;
-  const written = serializeStyleKeepList({ version: 1, keep: [], lockedStylesheets: [], newStyleTag: { scope: 'global', content } });
-  const reread = parseStyleKeepList(JSON.parse(written));
-  assert.deepEqual(reread.newStyleTag, { scope: 'global', content });
-  const bare = serializeStyleKeepList({ version: 1, keep: [], lockedStylesheets: [], newStyleTag: NEW_PROJECT_NEW_STYLE_TAG });
-  assert.ok(bare.includes('"isGlobal": true'));
-  assert.ok(!bare.includes('"content"'));
+  const attributes = [GLOBAL, { name: 'lang', value: 'scss' }];
+  const written = serializeStyleKeepList({ version: 1, keep: [], lockedStylesheets: [], newStyleTag: { attributes, content } });
+  assert.ok(written.includes('"attributes": "is:global lang=\\"scss\\""'), written);
+  assert.deepEqual(parseStyleKeepList(JSON.parse(written)).newStyleTag, { attributes, content });
+  const migrated = serializeStyleKeepList(parseStyleKeepList({ version: 1, keep: [], newStyleTag: { version: 1, isGlobal: false } }));
+  assert.ok(migrated.includes('"newStyleTag": {\n    "version": 2,\n    "attributes": ""\n  }'), migrated);
+  const bare = serializeStyleKeepList({ version: 1, keep: [], lockedStylesheets: [], newStyleTag: DEFAULT_NEW_STYLE_TAG });
+  assert.ok(bare.includes('"newStyleTag": {\n    "version": 2,\n    "attributes": "is:global"\n  }'), bare);
 });
 
 test('bad sections are refused', () => {
   const bad = (section: unknown) => () => parseStyleKeepList({ version: 1, keep: [], newStyleTag: section });
   assert.throws(bad('x'), /Expected object/);
-  assert.throws(bad({ version: 2 }), /version/);
+  assert.throws(bad({ version: 3 }), /version/);
   assert.throws(bad({ isGlobal: 'yes' }), /isGlobal/);
+  assert.throws(bad({ version: 2, attributes: 7 }), /Expected string/);
+  assert.throws(bad({ version: 2, attributes: 'lang={x}' }), /expressions/);
   assert.throws(bad({ content: 7 }), /Expected string/);
   assert.throws(bad({ content: '@layer a {' }), /unclosed/);
   assert.throws(bad({ content: `${NEW_STYLE_TAG_RULES_TOKEN}${NEW_STYLE_TAG_RULES_TOKEN}` }), /more than once/);
 });
 
-test('the preview shows the opening tag the setting makes and the template', () => {
-  assert.equal(newStyleTagPreview({ scope: 'global', content: '' }), '<style is:global>\n  /* rules */\n</style>');
-  assert.equal(newStyleTagPreview({ scope: 'scoped', content: '@layer a {}' }), '<style>\n@layer a {}\n</style>');
+test('attributes: what an opening tag may hold, and what it may not', () => {
+  const ok = (text: string) => {
+    const result = parseStyleTagAttributes(text);
+    assert.ok(result.ok, text);
+    return result.attributes;
+  };
+  assert.deepEqual(ok(''), []);
+  assert.deepEqual(ok('  is:global  '), [GLOBAL]);
+  assert.deepEqual(ok('is:global lang="scss" media=\'print\''), [GLOBAL, { name: 'lang', value: 'scss' }, { name: 'media', value: 'print' }]);
+  assert.deepEqual(ok('data-x=""'), [{ name: 'data-x', value: '' }]);
+  assert.deepEqual(ok('\n  is:inline\n'), [{ name: 'is:inline', value: undefined }]);
+  const refused = (text: string) => {
+    const result = parseStyleTagAttributes(text);
+    return result.ok ? undefined : result.error.code;
+  };
+  assert.equal(refused('lang=scss'), 'syntax', 'an unquoted value');
+  assert.equal(refused('lang="scss'), 'syntax', 'an unclosed quote');
+  assert.equal(refused('lang="a"media="b"'), 'syntax', 'two attributes with no space');
+  assert.equal(refused('9lang'), 'syntax');
+  assert.equal(refused('is:global/'), 'syntax');
+  assert.equal(refused('is:global is:global'), 'duplicate');
+  assert.equal(refused('{...props}'), 'expression');
+  assert.equal(refused('define:vars={{ a }}'), 'expression');
+  assert.equal(styleTagAttributesText([GLOBAL, { name: 'lang', value: 'scss' }]), ' is:global lang="scss"');
+  assert.equal(styleTagAttributesText([{ name: 'title', value: 'say "hi"' }]), ` title='say "hi"'`, 'a value holding " is quoted with \'');
+  assert.equal(newStyleTagOpening([]), '<style>');
+  assert.equal(newStyleTagOpening(DEFAULT_NEW_STYLE_TAG.attributes), '<style is:global>');
 });

@@ -6,7 +6,7 @@
 // so the keep list and locked stylesheets the Selectors panel owns are carried over untouched and an
 // edit made since is refused rather than lost.
 
-import { LEGACY_NEW_STYLE_TAG, type NewStyleTagSettings } from '../../shared/properties/newStyleTag';
+import { DEFAULT_NEW_STYLE_TAG, type NewStyleTagSettings } from '../../shared/properties/newStyleTag';
 import { EMPTY_KEEP_LIST, parseStyleKeepList, serializeStyleKeepList, type StyleKeepList } from '../../shared/properties/styleKeepList';
 import { readMetadata, writeMetadata } from './projectMetadataBridge';
 
@@ -24,10 +24,10 @@ async function readStored(projectPath: string): Promise<Stored> {
   return { keepList: parseStyleKeepList(input), source: stored.source };
 }
 
-/** The project's setting; the legacy behaviour when the file or the section is absent. */
+/** The project's setting; Stacki's default (`<style is:global>`) when the file or the section is absent. */
 export async function readNewStyleTag(projectPath: string): Promise<NewStyleTagSettings> {
   const stored = await readStored(projectPath);
-  return stored.keepList.newStyleTag ?? LEGACY_NEW_STYLE_TAG;
+  return stored.keepList.newStyleTag ?? DEFAULT_NEW_STYLE_TAG;
 }
 
 /** Saves the setting, keeping everything else in the file; resolves to what the file now holds. */

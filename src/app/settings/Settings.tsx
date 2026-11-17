@@ -12,13 +12,14 @@ import StudioSetup from '../../features/studioSetup/StudioSetup';
 import { cleanError } from '../../lib/cleanError';
 import { readPreferences, savePreference } from './preferencesBridge';
 import './settings.css';
-import { CloseIcon } from '../../ui/Icons';
+import { BracesIcon, CloseIcon } from '../../ui/Icons';
 import { Switch } from '../../ui/Switch';
 import { useScrollEdges } from '../../ui/useScrollEdges';
 import { FolderSettings } from './FolderSettings';
 import { InstructionsSettings } from './InstructionsSettings';
 import { AuditsSettings } from './AuditsSettings';
 import { BreakpointsSettings, type BreakpointSyncUndo } from './BreakpointsSettings';
+import { StyleTagSettingsPage } from './StyleTagSettings';
 import { SETTINGS_TABS, loadSettingsTab, saveSettingsTab, settingsTabAfterKey, type SettingsTab } from './settingsTab';
 import { RolesSettings } from './RolesSettings';
 import { useCurrentRole } from '../../lib/useCurrentRole';
@@ -93,11 +94,23 @@ const TAB_LABELS: Readonly<Record<SettingsTab, MessageKey>> = {
   instructions: 'settings.tab.instructions',
   audits: 'settings.tab.audits',
   breakpoints: 'settings.tab.breakpoints',
+  styles: 'settings.tab.styles',
   roles: 'settings.tab.roles',
 };
 
 function TabIcon(props: { readonly tab: SettingsTab }) {
-  return <FeatureIcon feature={`settings:${props.tab}`} size={14} />;
+  return <SettingsTabIcon tab={props.tab} size={14} />;
+}
+
+// Style tags are the project's style setup, as its breakpoints are, so the tab is governed by the
+// breakpoints permission: a role that could edit them under Breakpoints still can, and no existing
+// roles file has to learn a new feature. Its icon is the code braces of the template it edits.
+function accessTabOf(tab: SettingsTab): Exclude<SettingsTab, 'styles'> {
+  return tab === 'styles' ? 'breakpoints' : tab;
+}
+
+function SettingsTabIcon(props: { readonly tab: SettingsTab; readonly size: number }) {
+  return props.tab === 'styles' ? <BracesIcon size={props.size} /> : <FeatureIcon feature={`settings:${accessTabOf(props.tab)}`} size={props.size} />;
 }
 
 interface DialogProps extends Props {
@@ -111,7 +124,7 @@ function SettingsDialog(props: DialogProps) {
   const translate = useTranslate();
   // Tabs the project's role hides are left out; a hidden tab opens on the first shown one.
   const role = useCurrentRole();
-  const shown = SETTINGS_TABS.filter((item) => canSettingsTab(role, item));
+  const shown = SETTINGS_TABS.filter((item) => canSettingsTab(role, accessTabOf(item)));
   const [chosen, setChosen] = useState<SettingsTab>(props.tab);
   const tab = shown.includes(chosen) ? chosen : (shown[0] ?? 'roles');
   const tabButtons = useRef(new Map<SettingsTab, HTMLButtonElement>());
@@ -211,7 +224,7 @@ function SettingsDialog(props: DialogProps) {
 
 function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onClose: () => void }) {
   const translate = useTranslate();
-  const icon = <FeatureIcon feature={`settings:${props.tab}`} size={20} />;
+  const icon = <SettingsTabIcon tab={props.tab} size={20} />;
   switch (props.tab) {
     case 'editor':
       return <Preferences />;
@@ -260,6 +273,12 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
         />
       ) : (
         <SettingsEmpty icon={icon}>{translate('settings.empty.breakpoints')}</SettingsEmpty>
+      );
+    case 'styles':
+      return props.projectPath ? (
+        <StyleTagSettingsPage key={`styles:${props.projectPath}`} projectPath={props.projectPath} />
+      ) : (
+        <SettingsEmpty icon={icon}>{translate('settings.empty.styles')}</SettingsEmpty>
       );
     case 'roles':
       return props.projectPath ? (

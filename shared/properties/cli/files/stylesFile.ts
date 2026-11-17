@@ -4,7 +4,7 @@
 import { BOUNDARY_LIMITS } from '../../../core/boundary';
 import { NEW_STYLE_TAG_RULES_TOKEN } from '../../newStyleTag';
 import { STYLE_KEEP_LIMITS, parseStyleKeepList, serializeStyleKeepList } from '../../styleKeepList';
-import { arrayOf, bool, field, jsonValue, literal, objectOf, text, type FileSchema } from '../stackiSchema';
+import { arrayOf, bool, field, integer, jsonValue, literal, objectOf, text, type FileSchema } from '../stackiSchema';
 
 export const STYLES_FILE: FileSchema = {
   id: 'styles',
@@ -29,9 +29,14 @@ export const STYLES_FILE: FileSchema = {
     ),
     newStyleTag: field(
       objectOf({
-        version: field(literal(1), 'The section format version; absent reads as 1.'),
-        isGlobal: field(bool(), 'Whether a <style> tag the Style panel creates carries is:global. Projects made by Stacki start with it on.', {
-          default: false,
+        version: field(integer(1, 2), 'The section format version: 2 writes attributes, 1 wrote isGlobal; absent reads as 1. Every save writes 2.'),
+        attributes: field(
+          text(BOUNDARY_LIMITS.textLengthMax),
+          'The opening tag\'s attributes as written, for example is:global lang="scss". Names are Astro attribute names; values are quoted strings, never {expressions}. Empty means a plain <style>.',
+          { default: 'is:global' },
+        ),
+        isGlobal: field(bool(), 'Version 1 only: whether the new tag carries is:global. Read, and written as attributes on the next save.', {
+          default: true,
         }),
         content: field(
           text(BOUNDARY_LIMITS.textLengthMax),
@@ -39,8 +44,8 @@ export const STYLES_FILE: FileSchema = {
           { default: 'just the rules' },
         ),
       }),
-      'What a <style> tag created by the Style panel starts with. Absent: a plain <style> holding just the rules.',
-      { default: 'a plain <style> holding just the rules' },
+      'What a <style> tag created by the Style panel starts with. Absent: <style is:global> holding just the rules.',
+      { default: '<style is:global> holding just the rules' },
     ),
     trustedScripts: field(
       jsonValue('Dropped on the next save; no reader uses it.'),

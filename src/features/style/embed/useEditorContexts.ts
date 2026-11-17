@@ -51,6 +51,7 @@ import { instanceSourceKey, type InstanceStyleDocument } from '../model/instance
 import { followSource, selectorHomeKey } from '../model/selectorHome';
 import { CREATE_STYLE_TAG_KEY, defaultStyleTarget, defaultTargetKey, type StyleTagFact } from '../model/newStyleTarget';
 import { getNewStyleTagSettings, onNewStyleTagSettings } from '../model/newStyleTagSettings';
+import { styleTagScopeOf } from '../../../../shared/properties/newStyleTag';
 import { styleBlockFileSupported } from '../model/firstStyleBlock';
 import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
@@ -355,7 +356,7 @@ export function useNativeTarget(
     [embedList, openFile],
   );
   const fileCanHoldTag = canAddTag ? 'yes' : 'no';
-  const defaultTarget = defaultStyleTarget({ tags: styleTags, preferredScope: newStyleTag.scope, fileCanHoldTag });
+  const defaultTarget = defaultStyleTarget({ tags: styleTags, preferredScope: styleTagScopeOf(newStyleTag.attributes), fileCanHoldTag });
   const createOffered = defaultTarget.kind === 'create';
   const defaultKey = defaultTargetKey(defaultTarget);
   // The source dropdown only picks where NEW styles are created — it does not scope
