@@ -24,6 +24,7 @@
 // testSuites.ts. Each runs as a direct spawn with an argument list, never a
 // shell line.
 
+import fs = require('node:fs');
 import os = require('node:os');
 import path = require('node:path');
 import { gatePlanFor, targetedNotice, type BuildStage, type ChecksPart } from './gatePlan';
@@ -41,6 +42,7 @@ import {
 import { repositoryRoot } from '../lib/repoRoot';
 import { discoverTestFiles, selectSuites, startsElectron, suitesFor, type Suite } from './testDiscovery';
 import { flushAndExit } from './flushExit';
+import { judgeQuarantine } from './quarantine';
 import { gateVersion, markerFolder, workingTreeHash, writeMarker } from './gateMarker';
 import { parseShard, suitesInShard, type Shard } from './testShard';
 
@@ -82,7 +84,8 @@ if (shard !== undefined && queries.length > 0) {
   console.error('--shard splits the full gate; it cannot be combined with named suites.');
   process.exit(1);
 }
-const matched = selectSuites(suitesFor(discoverTestFiles(root)), queries);
+const allSuites = suitesFor(discoverTestFiles(root));
+const matched = selectSuites(allSuites, queries);
 const unmatched = matched.unmatched;
 const selected = shard === undefined ? matched.selected : suitesInShard(matched.selected, shard);
 if (selected.length === 0 || unmatched.length > 0) {
@@ -96,6 +99,21 @@ if (flags.includes('--list')) {
 
 const startedMs = Date.now();
 const failed: string[] = [];
+// The expiring quarantine (quarantine.ts): judged on every run, so an expired or invalid entry
+// fails Check on every platform; a valid entry's failure is reported and tolerated.
+const quarantineFile = path.join(root, 'scripts', 'gate', 'quarantine.json');
+const quarantineVerdict = judgeQuarantine(
+  fs.existsSync(quarantineFile) ? fs.readFileSync(quarantineFile, 'utf8') : '{"entries":[]}',
+  new Set(allSuites.map((suite) => suite.name)),
+  new Date().toISOString().slice(0, 10),
+);
+if (quarantineVerdict.problems.length > 0) {
+  console.error(`[gate] The quarantine is invalid:\n  ${quarantineVerdict.problems.join('\n  ')}`);
+  process.exit(1);
+}
+for (const entry of quarantineVerdict.entries) {
+  console.log(`[gate] Quarantined until ${entry.expires}: ${entry.suite} (${entry.owner}: ${entry.reason})`);
+}
 const pathValue = process.env['PATH'] ?? '';
 const environment = {
   ...process.env,
@@ -393,7 +411,7 @@ function summarize(outcomes: readonly TestOutcome[]): void {
   const testSeconds = ((Date.now() - testsStartedMs) / 1000).toFixed(1);
   console.log(`\nTest suites took ${testSeconds}s. Slowest: ${named.join(', ')}`);
 
-  const quarantined: readonly string[] = [];
+  const quarantined: readonly string[] = quarantineVerdict.entries.map((entry) => entry.suite);
   const flaky = selected.filter((suite) => suite.options.flaky !== undefined).map((suite) => suite.name);
   const durationSeconds = ((Date.now() - startedMs) / 1000).toFixed(1);
   const passed = names.length - failed.length;
@@ -403,11 +421,12 @@ function summarize(outcomes: readonly TestOutcome[]): void {
   }
   const tolerated = [...quarantined, ...flaky];
   const unexpected = failed.filter((name) => !tolerated.includes(name));
-  const healed = quarantined.filter((name) => !failed.includes(name) && names.includes(name));
-  if (healed.length > 0) {
-    console.error(`\nQuarantined tests now pass — remove them: ${healed.join(', ')}`);
+  const toleratedFailures = failed.filter((name) => quarantined.includes(name));
+  if (toleratedFailures.length > 0) {
+    console.error(`\nQuarantined, so tolerated (scripts/gate/quarantine.json): ${toleratedFailures.join(', ')}`);
   }
-  process.exitCode = unexpected.length > 0 || healed.length > 0 ? 1 : 0;
+  // A flaky suite passes most runs, so a pass says nothing; the expiry is what ends a quarantine.
+  process.exitCode = unexpected.length > 0 ? 1 : 0;
   if (process.exitCode === 0) {
     recordPass();
   }
