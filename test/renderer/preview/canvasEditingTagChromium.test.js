@@ -21,13 +21,15 @@ const { repoPath } = require('../../helpers/sources.js');
 const CYCLES = 3;
 const FRAMES_PER_PHASE = 8;
 
+// The import paths are JSON-quoted: a Windows path's `\` inside a plain quoted string is an
+// escape (`\s` is a syntax error in esbuild), so a quoted literal only works on POSIX.
 const HARNESS = `
-import '${repoPath('src/app/styles.css')}';
+import ${JSON.stringify(repoPath('src/app/styles.css'))};
 import React, { useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { PreviewOverlays } from '${repoPath('src/features/preview/PreviewOverlays.tsx')}';
-import { useCanvasText } from '${repoPath('src/features/preview/useCanvasText.ts')}';
-import { CanvasTextSourceCue } from '${repoPath('src/app/shell/CanvasTextSourceCue.tsx')}';
+import { PreviewOverlays } from ${JSON.stringify(repoPath('src/features/preview/PreviewOverlays.tsx'))};
+import { useCanvasText } from ${JSON.stringify(repoPath('src/features/preview/useCanvasText.ts'))};
+import { CanvasTextSourceCue } from ${JSON.stringify(repoPath('src/app/shell/CanvasTextSourceCue.tsx'))};
 
 const SCENARIOS = {
   element: { kind: 'element', label: 'Heading', textLabel: 'Heading', bound: true, picked: undefined },

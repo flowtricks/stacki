@@ -79,7 +79,9 @@ function astroFiles(directory: string): readonly string[] {
           work.push({ folder: full, depth: item.depth + 1 });
         }
       } else if (entry.name.endsWith('.astro')) {
-        found.push(full);
+        // Keyed with `/` on every platform: path.join writes `\` on Windows, so CARD_PATH
+        // (and any other repository path) would never match a key there.
+        found.push(full.split(path.sep).join('/'));
       }
     }
   }
