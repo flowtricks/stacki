@@ -42,7 +42,12 @@ export type VariantRuleState = (typeof VARIANT_RULE_STATES)[number];
 export const VARIANT_GROUP_REASONS = ['shape', 'nested', 'shared', 'runtime'] as const;
 export type VariantGroupReason = (typeof VARIANT_GROUP_REASONS)[number];
 
-/** One prop under one option. `listed` is false when the option's type does not name the prop (TypeScript then refuses it, as `never` does). */
+/**
+ * One prop under one option. `listed` is false when the option's own member
+ * does not name the prop: it then has it as the type `Props` intersects the
+ * union with declares it (`Base & (A | B)`), or, declared nowhere else, not
+ * at all (forbidden, as `never` would say). Absence alone never forbids.
+ */
 export interface VariantRule {
   readonly prop: string;
   readonly state: VariantRuleState;
@@ -280,11 +285,6 @@ function parseVariantRule(input: unknown): VariantRule {
     }
   } else if (rule.type.trim() === '') {
     throw new Error('An allowed prop has a type');
-  }
-  if (!rule.listed) {
-    if (rule.state !== 'forbidden') {
-      throw new Error('A prop an option does not name is forbidden there');
-    }
   }
   assert(rule.type.length <= VARIANT_LIMITS.codeCharsMax, 'parseVariantRule: a type is bounded');
   assert(rule.description.length <= VARIANT_LIMITS.codeCharsMax, 'parseVariantRule: a tooltip is bounded');

@@ -249,10 +249,6 @@ test('the boundary parser accepts the Button model and refuses each broken shape
       'a forbidden prop with a type',
       [{ ...variant, options: [{ ...variant.options[1], rules: variant.options[1]?.rules.map((rule) => ({ ...rule, type: 'string' })) }] }],
     ],
-    [
-      'an unlisted prop that is allowed',
-      [{ ...variant, options: [{ ...variant.options[2], rules: variant.options[2]?.rules.map((rule) => ({ ...rule, listed: false })) }] }],
-    ],
     ['an attachable prop the group rules', [{ ...variant, attachable: ['label'] }]],
     ['an unknown reason', [{ ...variant, editing: { kind: 'readonly', reason: 'other' } }]],
     ['a quoted option', [{ ...variant, options: [{ ...variant.options[0], value: 'ma"in' }] }]],
@@ -261,6 +257,9 @@ test('the boundary parser accepts the Button model and refuses each broken shape
   for (const [title, input] of broken) {
     assert.throws(() => parseVariantGroups(JSON.parse(JSON.stringify(input))), Error, title);
   }
+  // An option that does not name a prop may still have it, from the type the union is intersected with (`Base & (A | B)`).
+  const inherited = [{ ...variant, options: [{ ...variant.options[2], rules: variant.options[2]?.rules.map((rule) => ({ ...rule, listed: false })) }] }];
+  assert.equal(parseVariantGroups(JSON.parse(JSON.stringify(inherited))).length, 1);
 });
 
 test('option values: trimmed words, never quotes, backslashes or control characters', () => {

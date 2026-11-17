@@ -327,19 +327,30 @@ function planSetRule(syntax: VariantSyntax, group: VariantGroupSyntax, option: s
   if (!group.props.includes(prop)) {
     return err(refusal('missing', 'componentProps.variants.missingProp', { name: prop }));
   }
-  const current = ruleOf(member, prop);
+  const current = ruleOf(member, prop, syntax.inherited);
   if (current.state === state) {
     return ok(NO_EDITS);
   }
   const frontmatter = syntax.document.frontmatter;
   const field = member.fields.get(prop);
   if (state === 'forbidden') {
-    assert(field !== undefined, 'planSetRule: an allowed prop is declared');
+    if (field === undefined) {
+      // Allowed only by the shared declaration (`Base & (A | B)`): the member's own `never` takes it away.
+      assert(syntax.inherited.has(prop), 'planSetRule: an allowed prop the member does not name is shared');
+      return ok({ frontmatter: [insertField(frontmatter, member.literal, `${prop}?: never`)], template: [] });
+    }
     return ok({ frontmatter: [...optionalEdits(field, 'optional'), typeEdit(field, 'never')], template: [] });
   }
   const type = propTypeOf(syntax, group, prop);
   if (!type.ok) {
     return type;
+  }
+  // A shared requirement holds in every member: one option cannot make it optional again.
+  const shared = syntax.inherited.get(prop);
+  if (state === 'optional' && shared !== undefined) {
+    if (shared.questionToken === undefined) {
+      return err(refusal('shape', 'componentProps.variants.cannotGroup'));
+    }
   }
   if (field === undefined) {
     return ok({ frontmatter: [insertField(frontmatter, member.literal, declarationText(prop, state, type.value))], template: [] });
@@ -370,19 +381,25 @@ function planRuleDeclarations(
   }
   const frontmatter = syntax.document.frontmatter;
   const edits: SourceEdit[] = [];
+  const written = new Set<ts.PropertySignature>();
   for (const option of options) {
     const member = group.members.find((candidate) => candidate.value === option);
     if (member === undefined) {
       return err(refusal('missing', 'componentProps.variants.missingOption', { value: option }));
     }
-    const field = member.fields.get(prop);
-    const rule = ruleOf(member, prop);
+    // An option that inherits the prop is changed where it is declared: the shared declaration, once for all who share it.
+    const field = member.fields.get(prop) ?? syntax.inherited.get(prop);
+    const rule = ruleOf(member, prop, syntax.inherited);
     if (field === undefined || rule.state === 'forbidden') {
       return err(refusal('restricted', 'componentProps.variants.notAllowedThere', { name: prop, value: option }));
     }
-    const previous: DeclaredFields = { name: prop, type: rule.type, required: rule.state === 'required', readonly: false, description: rule.description };
-    edits.push(...memberEdits(frontmatter, field, previous, { ...previous, ...change }));
+    if (!written.has(field)) {
+      written.add(field);
+      const previous: DeclaredFields = { name: prop, type: rule.type, required: rule.state === 'required', readonly: false, description: rule.description };
+      edits.push(...memberEdits(frontmatter, field, previous, { ...previous, ...change }));
+    }
   }
+  assert(written.size <= options.length, 'planRuleDeclarations: one declaration per option at most');
   assert(edits.length <= options.length * 2, 'planRuleDeclarations: at most a head and a type per option');
   return ok({ frontmatter: edits, template: [] });
 }
@@ -401,7 +418,15 @@ function planRuleDescriptions(
     if (!planned.ok) {
       return planned;
     }
-    edits.push(...planned.value.frontmatter);
+    for (const edit of planned.value.frontmatter) {
+      // Options that inherit the prop share one declaration: the same comment is written once; two different ones cannot be.
+      const same = edits.find((other) => other.start === edit.start && other.end === edit.end);
+      if (same === undefined) {
+        edits.push(edit);
+      } else if (same.text !== edit.text) {
+        return err(refusal('restricted', 'componentProps.variants.notAllowedThere', { name: prop, value: entry.option }));
+      }
+    }
   }
   assert(edits.length <= entries.length, 'planRuleDescriptions: one comment edit per option at most');
   return ok({ frontmatter: edits, template: [] });
@@ -732,7 +757,7 @@ function planDetachProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: 
   if (!type.ok) {
     return type;
   }
-  const rules = group.members.map((member) => ruleOf(member, prop));
+  const rules = group.members.map((member) => ruleOf(member, prop, syntax.inherited));
   const state = rules.every((rule) => rule.state === 'required') ? 'required' : 'optional';
   const frontmatter = syntax.document.frontmatter;
   const source = group.members.map((member) => member.fields.get(prop)).find((field) => field !== undefined && field.type?.kind !== ts.SyntaxKind.NeverKeyword);
@@ -747,6 +772,9 @@ function planDetachProp(syntax: VariantSyntax, group: VariantGroupSyntax, prop: 
   const elsewhere = syntax.groups.some((other) => other !== group && other.props.includes(prop));
   const literal = syntax.commonLiterals[0];
   if (elsewhere) {
+    assert(edits.length > 0, 'planDetachProp: a ruled prop has declarations to remove');
+  } else if (syntax.inherited.has(prop)) {
+    // Already declared outside the union (`Base & (A | B)`): the members' own declarations go, the shared one stays.
     assert(edits.length > 0, 'planDetachProp: a ruled prop has declarations to remove');
   } else if (literal !== undefined) {
     edits.push(insertField(frontmatter, literal, documentation === '' ? declaration : documentedDeclaration(frontmatter, literal, documentation, declaration)));
@@ -812,7 +840,7 @@ function newOptionValue(group: VariantGroupSyntax, value: string): Result<string
 /** The prop's type to write where an option allows it again: the first option's that allows it, else the runtime type's. */
 function propTypeOf(syntax: VariantSyntax, group: VariantGroupSyntax, prop: string): Result<string> {
   for (const member of group.members) {
-    const rule = ruleOf(member, prop);
+    const rule = ruleOf(member, prop, syntax.inherited);
     if (rule.state !== 'forbidden') {
       return ok(rule.type);
     }

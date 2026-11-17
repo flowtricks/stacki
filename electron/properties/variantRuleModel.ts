@@ -72,6 +72,14 @@ export interface VariantSyntax {
    * file and not exported. Each can be given variant rules (`attachProp`).
    */
   readonly common: ReadonlyMap<string, ts.PropertySignature>;
+  /**
+   * Every prop `Props` declares outside its unions, in this file, exported or
+   * not (`type Base = { theme?: Theme }` in `Base & (A | B)`): a member that
+   * does not name one still has it, as declared here. Only a member's own
+   * `prop?: never` takes it away. Read, never written: `common` is the part
+   * the writer may edit.
+   */
+  readonly inherited: ReadonlyMap<string, ts.PropertySignature>;
   /** The shared object types themselves, in written order: where a prop detached from a group goes. */
   readonly commonLiterals: readonly ts.TypeLiteralNode[];
   /** The `type Props` alias, when it is one this reader follows: a new group is intersected onto it. */
@@ -115,6 +123,7 @@ interface Candidate {
 interface PropsParts {
   readonly candidates: readonly Candidate[];
   readonly common: ReadonlyMap<string, ts.PropertySignature>;
+  readonly inherited: ReadonlyMap<string, ts.PropertySignature>;
   readonly commonLiterals: readonly ts.TypeLiteralNode[];
 }
 
@@ -146,10 +155,31 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
       }
     }
     const candidates = controllerCandidates(common, [], declarations, pattern);
-    return { document, groups: [], runtime: runtime.syntax, pattern, common, commonLiterals: [], props: undefined, candidates, propsInterface: props };
+    return {
+      document,
+      groups: [],
+      runtime: runtime.syntax,
+      pattern,
+      common,
+      inherited: common,
+      commonLiterals: [],
+      props: undefined,
+      candidates,
+      propsInterface: props,
+    };
   }
   if (declarations === undefined || props === undefined || !ts.isTypeAliasDeclaration(props) || props.typeParameters !== undefined) {
-    return { document, groups: [], runtime: runtime.syntax, pattern, common: NO_COMMON, commonLiterals: [], props: undefined, candidates: [] };
+    return {
+      document,
+      groups: [],
+      runtime: runtime.syntax,
+      pattern,
+      common: NO_COMMON,
+      inherited: NO_COMMON,
+      commonLiterals: [],
+      props: undefined,
+      candidates: [],
+    };
   }
   const groups: VariantGroupSyntax[] = [];
   const parts = propsParts(props, declarations);
@@ -173,6 +203,7 @@ export function readVariantSyntax(document: PropertySyntax): VariantSyntax {
     runtime: runtime.syntax,
     pattern,
     common: parts.common,
+    inherited: parts.inherited,
     commonLiterals: parts.commonLiterals,
     props: exported ? undefined : props,
     candidates,
@@ -271,7 +302,7 @@ export function variantGroupsOf(syntax: VariantSyntax): readonly VariantGroup[] 
       value: member.value,
       // An optional controller in a member of several options (`variant?: "default" | "notice"`): the first is the fallback.
       fallback: member.discriminant.questionToken !== undefined && member.firstOfMember,
-      rules: group.props.map((prop) => ruleOf(member, prop)),
+      rules: group.props.map((prop) => ruleOf(member, prop, syntax.inherited)),
     }));
     assert(options.length === group.members.length, 'variantGroupsOf: one option per member');
     // A prop this group does not rule yet can be given its rules: shared, or
@@ -306,20 +337,40 @@ export function attachableProps(syntax: VariantSyntax): readonly string[] {
   return [...names].filter((name) => !controllers.has(name));
 }
 
-/** A prop's rule in one option: its state there, as the member's declaration says. */
-export function ruleOf(member: VariantMemberSyntax, prop: string): VariantRule {
-  const field = member.fields.get(prop);
+/**
+ * A prop's rule in one option: its state there, as the member's declaration
+ * says. A member that does not name the prop has it as `inherited` declares it
+ * (`Base & (A | B)`, TypeScript intersects them), unlisted; with no such
+ * declaration it does not have it at all: forbidden, as `never` would say.
+ */
+export function ruleOf(member: VariantMemberSyntax, prop: string, inherited: ReadonlyMap<string, ts.PropertySignature>): VariantRule {
+  const own = member.fields.get(prop);
+  const shared = inherited.get(prop);
+  const field = own ?? shared;
   if (field === undefined) {
     return { prop, state: 'forbidden', listed: false, type: '', description: '' };
   }
+  const listed = own !== undefined;
+  assert(listed || shared !== undefined, 'ruleOf: an unlisted rule is read from the shared declaration');
   const type = field.type;
   assert(type !== undefined, 'ruleOf: a modelled declaration has a type');
-  if (type.kind === ts.SyntaxKind.NeverKeyword) {
-    return { prop, state: 'forbidden', listed: true, type: '', description: '' };
+  // Both declarations hold (an intersection): a shared `never` or a shared requirement wins over the member's.
+  const sharedType = shared?.type;
+  if (isForbiddingType(type) || (sharedType !== undefined && isForbiddingType(sharedType))) {
+    return { prop, state: 'forbidden', listed, type: '', description: '' };
   }
+  const required = field.questionToken === undefined || (shared !== undefined && shared.questionToken === undefined);
   // The member's own doc comment: an option documents the prop in its own words (`Defaults to \`Close\`.`).
   const description = memberComment(field.getSourceFile().text, field)?.description ?? '';
-  return { prop, state: field.questionToken === undefined ? 'required' : 'optional', listed: true, type: type.getText(), description };
+  return { prop, state: required ? 'required' : 'optional', listed, type: type.getText(), description };
+}
+
+/** `never`, or `undefined` alone: a declaration that refuses every value, so the prop may not be passed. */
+export function isForbiddingType(type: ts.TypeNode): boolean {
+  if (type.kind === ts.SyntaxKind.NeverKeyword) {
+    return true;
+  }
+  return type.kind === ts.SyntaxKind.UndefinedKeyword;
 }
 
 /**
@@ -362,7 +413,16 @@ function localDeclarations(syntax: ts.SourceFile): ReadonlyMap<string, Declarati
 function propsParts(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<string, Declaration>): PropsParts {
   const candidates: Candidate[] = [];
   const common = new Map<string, ts.PropertySignature>();
+  const inherited = new Map<string, ts.PropertySignature>();
   const commonLiterals: ts.TypeLiteralNode[] = [];
+  const inherit = (members: readonly ts.TypeElement[]): void => {
+    for (const field of members) {
+      const name = ts.isPropertySignature(field) ? plainName(field) : undefined;
+      if (name !== undefined && ts.isPropertySignature(field) && field.type !== undefined && !inherited.has(name)) {
+        inherited.set(name, field);
+      }
+    }
+  };
   const work: { readonly node: ts.TypeNode; readonly exported: boolean; readonly path: readonly string[] }[] = [
     { node: props.type, exported: isExported(props), path: ['Props'] },
   ];
@@ -377,7 +437,10 @@ function propsParts(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<st
       work.push(...[...node.types].reverse().map((type) => ({ ...item, node: type })));
     } else if (ts.isUnionTypeNode(node)) {
       candidates.push({ union: node, exported: item.exported });
-    } else if (ts.isTypeLiteralNode(node) && !item.exported) {
+    } else if (ts.isTypeLiteralNode(node) && item.exported) {
+      inherit(node.members);
+    } else if (ts.isTypeLiteralNode(node)) {
+      inherit(node.members);
       commonLiterals.push(node);
       for (const field of node.members) {
         const name = ts.isPropertySignature(field) ? plainName(field) : undefined;
@@ -387,18 +450,21 @@ function propsParts(props: ts.TypeAliasDeclaration, declarations: ReadonlyMap<st
       }
     } else if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName) && node.typeArguments === undefined) {
       const declaration = declarations.get(node.typeName.text);
-      // A cycle stops at the first repeat; an interface holds no union.
+      // A cycle stops at the first repeat; an interface holds no union, but its props are every option's.
       if (declaration !== undefined && ts.isTypeAliasDeclaration(declaration) && declaration.typeParameters === undefined) {
         if (!item.path.includes(declaration.name.text)) {
           work.push({ node: declaration.type, exported: item.exported || isExported(declaration), path: [...item.path, declaration.name.text] });
         }
+      } else if (declaration !== undefined && ts.isInterfaceDeclaration(declaration) && declaration.typeParameters === undefined) {
+        inherit(declaration.members);
       }
     }
     assert(work.length <= PROPERTY_LIMITS.nodesMax, 'propsParts: the queue is bounded');
   }
   assert(work.length === 0, 'propsParts: the walk finishes within its budget');
   assert(common.size <= PROPERTY_LIMITS.fieldsMax, 'propsParts: shared props are bounded');
-  return { candidates, common, commonLiterals };
+  assert(inherited.size >= common.size, 'propsParts: every shared prop is inherited');
+  return { candidates, common, inherited, commonLiterals };
 }
 
 interface MemberReading {

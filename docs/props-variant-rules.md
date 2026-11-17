@@ -59,8 +59,25 @@ type Kind =
 - **Props**: every prop a member names, the controller excluded, in the order
   first written.
 - **Rule**: a prop under an option is `optional` (Show), `required`
-  (Required) or `forbidden` (Hide). `forbidden` is either `prop?: never`
-  or not named at all (`listed: false`); TypeScript refuses both.
+  (Required) or `forbidden` (Hide). `forbidden` is `prop?: never` (or
+  `prop?: undefined`), or a prop the member does not name that no type
+  beside the union declares either (`listed: false`); TypeScript refuses
+  all three.
+- **Inherited**: absence alone never forbids. A prop declared outside the
+  union, in a type `Props` intersects with it (`type Props = Base & (A | B | C)`,
+  Lumos's Card: `theme` in `Base`, `theme?: never` only in stacked), is
+  every member's unless the member says `never`: a member that does not
+  name it reads as the shared declaration says (`listed: false`, its type
+  and tooltip). Both hold, so a shared `never` or a shared requirement wins
+  over the member's own declaration. The instance panel's union tables
+  (`electron/parse/propModel/propDeclarations.ts`) read it the same way.
+  Writing: Hide appends the member's own `prop?: never`; Show everywhere
+  removes the members' declarations and keeps the shared one (never a
+  second); a tooltip or type for options that inherit it is written once,
+  on the shared declaration; making a shared requirement optional for one
+  option is refused. `test/electron/properties/variantVisibilityCorpus.test.ts`
+  holds both readers to the TypeScript checker over the corpus
+  (docs/props-complex-shapes.md).
 
 Members may intersect attribute types the file does not declare
 (`HTMLAttributes<"a"> & {…}`, `Omit<HTMLAttributes<"a">, "type"> & {…}`):

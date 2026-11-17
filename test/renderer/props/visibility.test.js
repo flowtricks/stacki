@@ -233,3 +233,34 @@ test('tooltip code: a group that does not name the prop is a programmer error', 
   const other = { ...group('variant', 'string', ['main'], { main: { state: 'optional', type: '' } }), props: ['href'] };
   assert.throws(() => model.tooltipCode({ ...LABEL, description: '' }, other), /Assertion failed: tooltipCode: the group names the prop/);
 });
+
+// Card (Lumos): `theme` is declared in `Base`, which `Props` intersects with the variant union; only stacked says `theme?: never`.
+test("Card's theme reads Show unless the variant is stacked, and plain Show once no variant hides it", () => {
+  const card = { name: 'variant', options: ['default', 'cover', 'stacked'], kind: 'string' };
+  const rules = [
+    {
+      controller: 'variant',
+      states: [
+        { option: 'default', state: 'optional' },
+        { option: 'cover', state: 'optional' },
+        { option: 'stacked', state: 'forbidden' },
+      ],
+    },
+  ];
+  const read = model.visibilityConditional(rules, [card]);
+  assert.equal(read.groups.length, 1);
+  assert.equal(read.groups[0].value.text, 'optional');
+  assert.equal(read.groups[0].conditions[0].operator, 'notIn');
+  assert.deepEqual(
+    read.groups[0].conditions[0].values.map((value) => value.value),
+    ['stacked'],
+  );
+  assert.equal(read.otherwise.text, 'forbidden');
+  const written = model.visibilityRules(read, [card]);
+  assert.ok(written.ok);
+  assert.deepEqual(written.value, rules);
+  // Allowed for every option: no condition, no pill, a plain Show.
+  const everywhere = model.visibilityConditional([], [card]);
+  assert.equal(everywhere.groups.length, 0);
+  assert.equal(everywhere.otherwise.text, 'optional');
+});

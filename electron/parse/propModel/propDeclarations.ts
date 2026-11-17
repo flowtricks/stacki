@@ -56,7 +56,7 @@ export function readPropsType(frontmatter: ts.SourceFile, prelude: ts.SourceFile
       blocks.push(declared.node.members.filter(ts.isPropertySignature).map((member) => ({ member, file: declared.file })));
     } else {
       typeBlocks(declared.node.type, declared.file, scope, new Set(), blocks);
-      collectUnions(declared.node.type, declared.file, scope, new Set(), unions);
+      collectUnions(declared.node.type, declared.file, scope, new Set(), NO_SHARED, unions);
     }
   }
   if (asserted !== undefined) {
@@ -64,7 +64,7 @@ export function readPropsType(frontmatter: ts.SourceFile, prelude: ts.SourceFile
     if (named !== undefined) {
       declarationBlocks(named, scope, new Set([asserted]), blocks);
       if (named.kind === 'alias') {
-        collectUnions(named.node.type, named.file, scope, new Set([asserted]), unions);
+        collectUnions(named.node.type, named.file, scope, new Set([asserted]), NO_SHARED, unions);
       }
     }
   }
@@ -187,22 +187,33 @@ function declarationBlocks(declaration: TypeDeclaration, scope: TypeScope, seen:
 // Unions of prop shapes
 // ---------------------------------------------------------------------------
 
+const NO_SHARED: ReadonlySet<string> = new Set();
+
 // Each top-level `A | B` of object types in the props type is one table: a
 // branch per arm, saying what the arm forbids (`never`, or a member the other
 // arms tell apart by a literal field and this one leaves out), what it pins
-// to literal values, and the fallbacks its own doc comments state.
-function collectUnions(node: ts.TypeNode, file: ts.SourceFile, scope: TypeScope, seen: Set<string>, out: PropUnion[]): void {
+// to literal values, and the fallbacks its own doc comments state. `shared`
+// names the props the types intersected beside the union declare
+// (`Base & (A | B)`): an arm that leaves one of those out still has it.
+function collectUnions(node: ts.TypeNode, file: ts.SourceFile, scope: TypeScope, seen: Set<string>, shared: ReadonlySet<string>, out: PropUnion[]): void {
   const aliasDepth = seen.size;
   if (aliasDepth > PROP_TYPE_LIMITS.aliasDepthMax || out.length >= PROP_MODEL_LIMITS.unionsMax) {
     return;
   }
   if (ts.isParenthesizedTypeNode(node)) {
-    collectUnions(node.type, file, scope, seen, out);
+    collectUnions(node.type, file, scope, seen, shared, out);
     return;
   }
   if (ts.isIntersectionTypeNode(node)) {
-    for (const child of node.types) {
-      collectUnions(child, file, scope, seen, out);
+    const declared = node.types.map((child) => sharedNames(child, scope));
+    for (const [index, child] of node.types.entries()) {
+      const beside = new Set(shared);
+      for (const [other, names] of declared.entries()) {
+        if (other !== index) {
+          names.forEach((name) => beside.add(name));
+        }
+      }
+      collectUnions(child, file, scope, seen, beside, out);
     }
     return;
   }
@@ -213,7 +224,7 @@ function collectUnions(node: ts.TypeNode, file: ts.SourceFile, scope: TypeScope,
       return blocks;
     });
     if (branches.every((blocks) => blocks.length > 0)) {
-      const union = unionTable(branches, scope);
+      const union = unionTable(branches, scope, shared);
       if (union !== undefined) {
         out.push(union);
       }
@@ -223,11 +234,61 @@ function collectUnions(node: ts.TypeNode, file: ts.SourceFile, scope: TypeScope,
   const declaration = referencedDeclaration(node, scope);
   if (declaration?.kind === 'alias' && !seen.has(declaration.node.name.text)) {
     seen.add(declaration.node.name.text);
-    collectUnions(declaration.node.type, declaration.file, scope, seen, out);
+    collectUnions(declaration.node.type, declaration.file, scope, seen, shared, out);
   }
 }
 
-function unionTable(branchBlocks: readonly (readonly (readonly FiledSignature[])[])[], scope: TypeScope): PropUnion | undefined {
+// The props a type declares outside any union, so every value of it has them:
+// its object types, through parentheses, intersections, local aliases and
+// interfaces (with what they extend). A union, or a type from elsewhere, adds
+// none: that is the old reading, which treats a left-out prop as forbidden. A
+// `never` declaration is not counted: it forbids the prop everywhere.
+function sharedNames(node: ts.TypeNode, scope: TypeScope): ReadonlySet<string> {
+  const names = new Set<string>();
+  const seen = new Set<string>();
+  const work: ts.TypeNode[] = [node];
+  for (let steps = 0; steps < PROP_MODEL_LIMITS.propsMax && work.length > 0; steps++) {
+    const item = work.pop();
+    assert(item !== undefined, 'sharedNames: a work item exists');
+    if (ts.isParenthesizedTypeNode(item)) {
+      work.push(item.type);
+    } else if (ts.isIntersectionTypeNode(item)) {
+      work.push(...item.types);
+    } else if (ts.isTypeLiteralNode(item)) {
+      addDeclaredNames(item.members, names);
+    } else {
+      const declaration = referencedDeclaration(item, scope);
+      if (declaration !== undefined && !seen.has(declaration.node.name.text)) {
+        seen.add(declaration.node.name.text);
+        if (declaration.kind === 'alias') {
+          work.push(declaration.node.type);
+        } else {
+          addDeclaredNames(declaration.node.members, names);
+          const heritage = (declaration.node.heritageClauses ?? []).flatMap((clause) => clause.types);
+          work.push(
+            ...heritage.filter((type) => type.typeArguments === undefined).map((type) => ts.factory.createTypeReferenceNode(type.expression.getText())),
+          );
+        }
+      }
+    }
+  }
+  assert(seen.size <= PROP_MODEL_LIMITS.propsMax, 'sharedNames: each alias is followed once, within the step budget');
+  // A type too large to walk within the budget shares nothing: the old reading, never a wrong allowance.
+  return work.length === 0 ? names : NO_SHARED;
+}
+
+function addDeclaredNames(members: readonly ts.TypeElement[], names: Set<string>): void {
+  for (const member of members) {
+    if (ts.isPropertySignature(member) && member.type !== undefined && member.type.kind !== ts.SyntaxKind.NeverKeyword) {
+      const name = memberKey(member.name);
+      if (name !== undefined) {
+        names.add(name);
+      }
+    }
+  }
+}
+
+function unionTable(branchBlocks: readonly (readonly (readonly FiledSignature[])[])[], scope: TypeScope, shared: ReadonlySet<string>): PropUnion | undefined {
   if (branchBlocks.length > PROP_MODEL_LIMITS.propVariantsMax) {
     return undefined;
   }
@@ -283,7 +344,8 @@ function unionTable(branchBlocks: readonly (readonly (readonly FiledSignature[])
   const finished: UnionBranch[] = branches.map((branch, index) => {
     const members = entries[index]?.members;
     assert(members !== undefined, 'unionTable: every branch has its members');
-    const missing = told ? names.filter((name) => !members.has(name) && !branch.forbids.includes(name)) : [];
+    // A member the union leaves out but a type beside it declares (`Base & (A | B)`) is there all the same.
+    const missing = told ? names.filter((name) => !members.has(name) && !branch.forbids.includes(name) && !shared.has(name)) : [];
     return { ...branch, forbids: [...branch.forbids, ...missing] };
   });
   // A union that forbids nothing and pins nothing tells the panel nothing.
