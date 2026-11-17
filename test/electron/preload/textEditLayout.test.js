@@ -98,7 +98,9 @@ const STYLE = `<style>
      app.on('window-all-closed', () => app.quit());
      const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
-       const win = new BrowserWindow({ show: false, width: 900, height: 1150, webPreferences: { preload: ${JSON.stringify(preload)}, contextIsolation: true, nodeIntegration: false, nodeIntegrationInSubFrames: true } });
+       // Shorter than the 1100 px frame on purpose: the lower elements start out of view on every machine, as they do on a CI screen,
+       // so scrolling each one into view before its click is exercised everywhere, not only on a small runner.
+       const win = new BrowserWindow({ show: false, width: 900, height: 600, webPreferences: { preload: ${JSON.stringify(preload)}, contextIsolation: true, nodeIntegration: false, nodeIntegrationInSubFrames: true } });
        const run = (code) => win.webContents.executeJavaScript(code);
        const frame = 'document.getElementById("canvas").contentWindow';
        const post = (message) => run(frame + '.postMessage(' + JSON.stringify(message) + ', "*")');
@@ -110,8 +112,13 @@ const STYLE = `<style>
        const read = (selector) => run('(() => { const d = ' + frame + '.document; const e = d.querySelector(' + JSON.stringify(selector) + '); const r = e.getBoundingClientRect(); const p = e.parentElement.getBoundingClientRect(); return { top: r.top, left: r.left, width: r.width, height: r.height, parentHeight: p.height, html: e.innerHTML.length }; })()');
        const out = {};
        for (const selector of ['h2', 'h1', 'p', 'button', 'span']) {
+         // A hidden window is clamped to the runner's screen, which on CI is shorter than the 1150 px asked for, so an element low on
+         // the page can sit below the visible viewport, where input never reaches it. The host page is scrolled to bring the element
+         // into view, and the click lands at its place in the host's viewport (the frame's offset plus the element's box). The frame's own
+         // document does not scroll, so every box read inside it stays comparable before, during and after.
+         await run('(() => { const e = ' + frame + '.document.querySelector(' + JSON.stringify(selector) + '); e.scrollIntoView({ block: "center", inline: "center", behavior: "instant" }); })()');
          const before = await read(selector);
-         const point = await run('(() => { const r = ' + frame + '.document.querySelector(' + JSON.stringify(selector) + ').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + 8) }; })()');
+         const point = await run('(() => { const f = document.getElementById("canvas").getBoundingClientRect(); const r = ' + frame + '.document.querySelector(' + JSON.stringify(selector) + ').getBoundingClientRect(); return { x: Math.round(f.left + r.left + r.width / 2), y: Math.round(f.top + r.top + 8) }; })()');
          for (let n = 1; n <= 2; n++) {
            win.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: n });
            win.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: n });

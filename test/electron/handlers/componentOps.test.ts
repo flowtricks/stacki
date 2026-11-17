@@ -35,6 +35,12 @@ function project(extra: Record<string, string> = {}): string {
   return root;
 }
 
+// A file's project path with `/` on every platform, as the app and the expected values in this file name it (Windows'
+// `path.relative` answers with `\`).
+function projectKey(root: string, full: string): string {
+  return path.relative(root, full).split(path.sep).join('/');
+}
+
 function snapshot(root: string): Record<string, string> {
   const result: Record<string, string> = {};
   const pending = [root];
@@ -47,11 +53,11 @@ function snapshot(root: string): Record<string, string> {
         continue;
       }
       if (entry.isSymbolicLink()) {
-        result[path.relative(root, full)] = `link:${fs.readlinkSync(full)}`;
+        result[projectKey(root, full)] = `link:${fs.readlinkSync(full)}`;
       } else if (entry.isDirectory()) {
         pending.push(full);
       } else {
-        result[path.relative(root, full)] = fs.readFileSync(full, 'utf8');
+        result[projectKey(root, full)] = fs.readFileSync(full, 'utf8');
       }
     }
   }
@@ -63,8 +69,7 @@ function trashInto(root: string) {
   return {
     moved,
     trash: async (target: string) => {
-      // Recorded with `/` so the expected project paths read the same on Windows, whose `path.relative` answers with `\`.
-      moved.push(path.relative(root, target).split(path.sep).join('/'));
+      moved.push(projectKey(root, target));
       fs.rmSync(target, { recursive: true });
     },
   };
@@ -180,6 +185,7 @@ test('an unused component goes to the Trash, its settings are cleaned, and Undo 
   assert.ok(restored.ok);
   assert.equal(restored.value.metadata, 'restored');
   assert.equal(fs.readFileSync(path.join(root, 'src/components/Button.astro'), 'utf8'), BUTTON);
+  assert.ok(before['.stacki/components.json'] !== undefined, 'the snapshot names the settings file by its project path');
   assert.equal(fs.readFileSync(path.join(root, '.stacki/components.json'), 'utf8'), before['.stacki/components.json']);
   const again = restoreRemovedComponent(removed.value.undo, store);
   assert.ok(!again.ok && again.error.code === 'unknown-undo', 'a token works once');

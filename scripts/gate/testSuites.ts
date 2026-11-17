@@ -38,6 +38,11 @@ export const TEST_SUITES: Readonly<Record<string, SuiteOptions>> = {
   // its timing assumptions hold.
   'test/renderer/style/selectorWell.test.js': { phase: 'alone' },
   'test/electron/project/thumbs.test.js': { phase: 'alone', runner: 'electron' },
+  // Both hold the longest event-loop block to lagMsBound(). In the pool, fifteen other suites share a CI runner's
+  // three or four cores, so the process is descheduled mid-slice and the measured block is the neighbours' work,
+  // not this code's (331 ms on a macOS runner for slices that take about 30 ms alone). Alone, it measures the code.
+  'test/electron/handlers/projectScale.test.ts': { phase: 'alone' },
+  'test/renderer/ui/astroEditorScale.test.js': { phase: 'alone' },
   // Loads an app page over the real `stacki-app:` scheme, which only Electron has.
   'test/electron/handlers/appFrameFetch.test.js': { runner: 'electron' },
   // Loads the UI kit inside an app frame over the real `stacki-app:` scheme, which only Electron has.
