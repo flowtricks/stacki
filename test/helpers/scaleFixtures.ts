@@ -23,11 +23,69 @@ export function scaleMegabytes(): number {
   return parsed;
 }
 
-/** Longest event-loop block, in milliseconds, an operation meant to yield may show. Raise with STACKI_SCALE_LAG_MS on a loaded machine. */
+// The bound is relative, not absolute: 250 ms on the reference machine (the maintainer's Mac,
+// where the calibration below takes CALIBRATION_REFERENCE_MS), scaled by how much slower this
+// process runs the same fixed workload, measured once per process. A loaded shared CI runner is
+// then held to the same standard as the Mac instead of failing on 278 ms against 250 (1.4.7,
+// astroEditorScale on macOS). The factor never goes below 1 (the bound is never stricter than
+// before) and is capped at 4: an operation that does not yield at all blocks for seconds and still
+// fails everywhere.
+export const LAG_LIMITS = {
+  lagMsReference: 250,
+  calibrationReferenceMs: 15,
+  calibrationRuns: 7,
+  factorMax: 4,
+} as const satisfies Record<string, number>;
+
+/** A fixed CPU workload like a slice of grammar work: regular expressions and JSON over markup. */
+export function calibrationWorkload(): number {
+  let text = '';
+  for (let index = 0; index < 4000; index += 1) {
+    text += `<p class="row-${index}" data-index={${index}}>{title} item ${index}</p>\n`;
+  }
+  let count = 0;
+  for (let pass = 0; pass < 18; pass += 1) {
+    for (const match of text.matchAll(/<(\w+)\s+class="([^"]*)"[^>]*>/g)) {
+      count += (match[2] ?? '').length;
+    }
+    const rows: unknown = JSON.parse(JSON.stringify(text.split('\n').map((line, index) => ({ line, index }))));
+    count += Array.isArray(rows) ? rows.length : 0;
+  }
+  return count;
+}
+
+/** How much slower than the reference this process runs the workload: the median of several runs. */
+export function measureSpeedFactor(time: () => number = () => performance.now()): number {
+  calibrationWorkload();
+  const durations: number[] = [];
+  for (let run = 0; run < LAG_LIMITS.calibrationRuns; run += 1) {
+    const started = time();
+    calibrationWorkload();
+    durations.push(time() - started);
+  }
+  durations.sort((left, right) => left - right);
+  const median = durations[Math.floor(durations.length / 2)] ?? LAG_LIMITS.calibrationReferenceMs;
+  return speedFactorFor(median);
+}
+
+/** The factor for one measured calibration time, clamped to [1, factorMax]. */
+export function speedFactorFor(calibrationMs: number): number {
+  if (!Number.isFinite(calibrationMs) || calibrationMs <= 0) {
+    throw new Error('speedFactorFor: the calibration time is a positive number of milliseconds');
+  }
+  return Math.min(LAG_LIMITS.factorMax, Math.max(1, calibrationMs / LAG_LIMITS.calibrationReferenceMs));
+}
+
+let speedFactorCached: number | undefined;
+
+/** Longest event-loop block, in milliseconds, an operation meant to yield may show. STACKI_SCALE_LAG_MS overrides it. */
 export function lagMsBound(): number {
   const raw = process.env['STACKI_SCALE_LAG_MS'];
   if (raw === undefined || raw === '') {
-    return 250;
+    speedFactorCached ??= measureSpeedFactor();
+    const bound = Math.round(LAG_LIMITS.lagMsReference * speedFactorCached);
+    console.log(`SCALE lag bound ${bound} ms (speed factor ${speedFactorCached.toFixed(2)} against the reference machine)`);
+    return bound;
   }
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 1) {

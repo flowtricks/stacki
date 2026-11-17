@@ -345,9 +345,21 @@ const check = (what, condition, detail) => {
          win.webContents.insertText('pin');
          const lastEvent = () => js('window.searchEvents[window.searchEvents.length - 1]');
          await pollUntil({ what: 'the typed change heard', read: lastEvent, until: (event) => event === 'change:pin' });
-         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-         await pollUntil({ what: 'the clearing change heard', read: lastEvent, until: (event) => event === 'change:' });
+         // The gate runs several Electron suites at once on one virtual display (the Linux runner),
+         // and another suite's window can take page focus between our focus() and the key: Blink then
+         // drops the Escape (1.4.7: the events stopped at "change:pin"). So the page and the field are
+         // focused again right before each press, and a press that was not heard is repeated, bounded.
+         // A repeated Escape on a cleared field changes nothing, so it cannot add events.
+         for (let press = 1; press <= 5; press += 1) {
+           win.webContents.focus();
+           await js("document.querySelector('#search input').focus()");
+           win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+           win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+           const heard = await pollUntil({ what: 'the clearing change heard', read: lastEvent, until: (event) => event === 'change:', pollCountMax: 20 });
+           if (heard.kind === 'reached') {
+             break;
+           }
+         }
          const search = await js(\`({ events: window.searchEvents, value: document.getElementById('search').value, field: document.querySelector('#search input').value })\`);
          win.destroy();
          console.log(JSON.stringify({ rest, changes, search }));
