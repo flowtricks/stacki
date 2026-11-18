@@ -478,6 +478,8 @@ export function BreakpointsSettings({
           />
           <span className="breakpoints-canvas">{translate('settings.breakpoints.frame', { width: frame })}</span>
         </div>
+        {/* Where the other cards have their remove button (Desktop cannot be removed), so its value lines up with theirs. */}
+        <span className="breakpoints-spacer" aria-hidden="true" />
         {problem !== undefined && (
           <p className="breakpoints-problem" role="alert">
             {problem}
