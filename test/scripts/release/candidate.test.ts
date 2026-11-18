@@ -15,7 +15,9 @@ import { recordingReporter } from '../../../scripts/release/actionsReport.mts';
 import {
   candidateAssetProblems,
   decideCandidate,
+  normalizeAssetFolder,
   parseCandidateArguments,
+  releaseAssetName,
   readAssetFolder,
   readCheckoutVersion,
   requiredAssetNames,
@@ -137,7 +139,31 @@ test('the plan stage reads the checkout version and the tag on origin', () => {
   assert.equal(readCheckoutVersion('[]').ok, false);
 });
 
+test('the Windows installer takes the dashed name its update feed gives it (rehearsal 44206405239)', () => {
+  assert.equal(releaseAssetName('Stacki Setup 1.4.8.exe'), 'Stacki-Setup-1.4.8.exe');
+  assert.equal(releaseAssetName('Stacki Setup 1.4.8.exe.blockmap'), 'Stacki-Setup-1.4.8.exe.blockmap');
+  assert.equal(releaseAssetName('Stacki-1.4.8-arm64.dmg'), 'Stacki-1.4.8-arm64.dmg');
+  assert.throws(() => releaseAssetName(''), /Assertion failed: releaseAssetName: a file name/);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-candidate-normalize-'));
+  try {
+    fs.writeFileSync(path.join(root, 'Stacki Setup 1.4.8.exe'), 'exe');
+    fs.writeFileSync(path.join(root, 'latest.yml'), feed('Stacki-Setup-1.4.8.exe', 3));
+    assert.deepEqual(normalizeAssetFolder(root), ok(['Stacki Setup 1.4.8.exe -> Stacki-Setup-1.4.8.exe']));
+    assert.deepEqual(fs.readdirSync(root).sort(), ['Stacki-Setup-1.4.8.exe', 'latest.yml']);
+    const read = readAssetFolder(root);
+    assert.ok(read.ok);
+    assert.deepEqual(updateFeedProblems('latest.yml', read.value.get('latest.yml')?.feedText ?? '', VERSION, read.value), [], 'the feed now names a present file');
+    fs.writeFileSync(path.join(root, 'Stacki Setup 1.4.8.exe'), 'again');
+    const clash = normalizeAssetFolder(root);
+    assert.ok(!clash.ok && clash.error.code === 'assets-duplicate');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('arguments: each stage needs its own flags', () => {
+  assert.deepEqual(parseCandidateArguments(['--stage=normalize', '--directory=release']), ok({ stage: 'normalize', directory: 'release' }));
+  assert.equal(parseCandidateArguments(['--stage=normalize']).ok, false);
   assert.deepEqual(parseCandidateArguments(['--stage=plan', '--rehearsal=true']), ok({ stage: 'plan', rehearsal: true }));
   assert.deepEqual(parseCandidateArguments(['--stage=assets', '--version=1.4.8', '--directory=out']), ok({ stage: 'assets', version: '1.4.8', directory: 'out' }));
   for (const bad of [[], ['--stage=publish'], ['--stage=plan', '--rehearsal=yes'], ['--stage=assets', '--directory=out'], ['--stage=assets', '--version=1.4.8'], ['--force']]) {

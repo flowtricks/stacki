@@ -136,6 +136,8 @@ jobs:
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      # "Stacki Setup X.Y.Z.exe" becomes "Stacki-Setup-X.Y.Z.exe", the name latest.yml gives it.
+      - run: node --experimental-strip-types scripts/release/candidate.mts --stage=normalize --directory=release
       - uses: actions/upload-artifact@v6
         with:
           name: candidate-windows

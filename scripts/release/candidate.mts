@@ -4,6 +4,7 @@
 // later promotes exactly those files, so nothing is rebuilt or retested after a tag exists.
 //
 //   node --experimental-strip-types scripts/release/candidate.mts --stage=plan --rehearsal=<true|false>
+//   node --experimental-strip-types scripts/release/candidate.mts --stage=normalize --directory=DIR
 //   node --experimental-strip-types scripts/release/candidate.mts --stage=assets --version=X.Y.Z --directory=DIR
 //
 // plan    reads the version the checkout carries and whether its tag already exists on origin. A
@@ -176,6 +177,43 @@ export function readAssetFolder(directory: string): Result<ReadonlyMap<string, A
   return ok(files);
 }
 
+/**
+ * The name GitHub gives an uploaded file, which every update feed already uses: electron-builder
+ * names the Windows installer "Stacki Setup X.Y.Z.exe" but writes `url: Stacki-Setup-X.Y.Z.exe`
+ * into latest.yml, because its own uploader replaced spaces with dashes. The candidate is uploaded
+ * by release.yml instead, so the files take that name before they are kept (the first rehearsal,
+ * run 44206405239, failed on exactly this).
+ */
+export function releaseAssetName(fileName: string): string {
+  assert(fileName.length > 0, 'releaseAssetName: a file name');
+  assert(!fileName.includes('/'), 'releaseAssetName: a base name, not a path');
+  return fileName.replace(/ +/g, '-');
+}
+
+/** Renames every file in the folder whose name differs from its release asset name. */
+export function normalizeAssetFolder(directory: string): Result<readonly string[]> {
+  let names: string[];
+  try {
+    names = fs.readdirSync(directory);
+  } catch (error: unknown) {
+    return fail('assets-unreadable', `${directory}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  assert(names.length <= CANDIDATE_LIMITS.assetCountMax * 10, 'normalizeAssetFolder: the folder is bounded');
+  const renamed: string[] = [];
+  for (const name of names) {
+    const target = releaseAssetName(name);
+    if (target === name) {
+      continue;
+    }
+    if (names.includes(target)) {
+      return fail('assets-duplicate', `${name} and ${target} would both be ${target}.`);
+    }
+    fs.renameSync(path.join(directory, name), path.join(directory, target));
+    renamed.push(`${name} -> ${target}`);
+  }
+  return ok(renamed);
+}
+
 export function readCheckoutVersion(packageJsonText: string): Result<string> {
   const record = parseRecord(packageJsonText, 'package.json');
   if (!record.ok) {
@@ -195,6 +233,7 @@ export function readTagExists(runner: CommandRunner, version: string): Result<bo
 
 export type CandidateArguments =
   | { readonly stage: 'plan'; readonly rehearsal: boolean }
+  | { readonly stage: 'normalize'; readonly directory: string }
   | { readonly stage: 'assets'; readonly version: string; readonly directory: string };
 
 export function parseCandidateArguments(argumentsList: readonly string[]): Result<CandidateArguments> {
@@ -214,6 +253,10 @@ export function parseCandidateArguments(argumentsList: readonly string[]): Resul
     }
     return ok({ stage, rehearsal: rehearsal === 'true' });
   }
+  if (stage === 'normalize') {
+    const directory = values.get('directory') ?? '';
+    return directory.length === 0 ? fail('usage', '--directory is required') : ok({ stage, directory });
+  }
   if (stage === 'assets') {
     const version = values.get('version') ?? '';
     const directory = values.get('directory') ?? '';
@@ -225,7 +268,7 @@ export function parseCandidateArguments(argumentsList: readonly string[]): Resul
     }
     return ok({ stage, version, directory });
   }
-  return fail('usage', '--stage is plan or assets');
+  return fail('usage', '--stage is plan, normalize or assets');
 }
 
 export function runPlanStage(options: { readonly rehearsal: boolean; readonly packageJsonText: string }, runner: CommandRunner, reporter: Reporter): number {
@@ -273,6 +316,17 @@ function main(argumentsList: readonly string[]): number {
   switch (parsed.value.stage) {
     case 'plan':
       return runPlanStage({ rehearsal: parsed.value.rehearsal, packageJsonText: fs.readFileSync('package.json', 'utf8') }, systemCommandRunner(process.env), reporter);
+    case 'normalize': {
+      const renamed = normalizeAssetFolder(parsed.value.directory);
+      if (!renamed.ok) {
+        reporter.error(renamed.error.message);
+        return 1;
+      }
+      for (const line of renamed.value) {
+        reporter.notice(`renamed ${line}`);
+      }
+      return 0;
+    }
     case 'assets':
       return runAssetsStage(parsed.value.version, parsed.value.directory, reporter);
     default: {

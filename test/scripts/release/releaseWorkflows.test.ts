@@ -111,6 +111,13 @@ test('candidate.yml: the plan gates every build; nothing is published or reteste
     assert.ok(commands.includes('npm run build'), `${name} builds what it packages`);
     assert.ok(commands.some((command) => /^npx electron-builder --(mac|win|linux) --publish never$/.test(command)), `${name} packages without publishing`);
   }
+  const windows = steps(candidate['build-windows']);
+  const normalize = windows.findIndex((step) => String(step['run'] ?? '').includes('candidate.mts --stage=normalize --directory=release'));
+  assert.ok(normalize >= 0, 'the Windows installer takes the dashed name latest.yml gives it');
+  assert.ok(
+    normalize < windows.findIndex((step) => step['uses'] === 'actions/upload-artifact@v6'),
+    'renamed before it is kept',
+  );
   const linux = steps(candidate['build-linux']).map((step) => String(step['run'] ?? '')).join('\n');
   assert.match(linux, /linuxSmoke\.js \/opt\/Stacki\/stacki/, 'the deb install smoke test stays');
   assert.match(linux, /squashfs-root\/AppRun/, 'the AppImage smoke test stays');
