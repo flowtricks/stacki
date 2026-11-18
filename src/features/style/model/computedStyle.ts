@@ -25,7 +25,10 @@ const AUTHORED_PREFIX = 'authored:';
 const SOURCE_LABEL_PREFIX = 'source-label:';
 const SOURCE_PATH_PREFIX = 'source-path:';
 const CASCADE_PREFIX = 'cascade:';
-const PREFIXES = [AUTHORED_PREFIX, SOURCE_LABEL_PREFIX, SOURCE_PATH_PREFIX, CASCADE_PREFIX];
+// The winning declaration as written, with no computed fallback: '' when no stylesheet the page can
+// read sets the property (a browser default, an inaccessible sheet). Seeds the large value editor.
+const DECLARED_PREFIX = 'declared:';
+const PREFIXES = [AUTHORED_PREFIX, SOURCE_LABEL_PREFIX, SOURCE_PATH_PREFIX, CASCADE_PREFIX, DECLARED_PREFIX];
 // Answers are kept per element, under a key naming the node as well as its rendered path
 // (`nodeId NUL path`): the tag check and the text-node context belong to the node asked
 // about, which is not always the one selected. The panel asks about the NEXT element while
@@ -58,6 +61,9 @@ const cache = createQueryCache(async (elementKey, keys) => {
       }
       if (key.startsWith(SOURCE_PATH_PREFIX)) {
         return [key, source?.path];
+      }
+      if (key.startsWith(DECLARED_PREFIX)) {
+        return [key, answer?.authoredProps[property]?.trim()];
       }
       const computed = answer?.computedProps[property];
       const value = key.startsWith(AUTHORED_PREFIX) ? answer?.authoredProps[property] || computed : computed;
@@ -324,6 +330,16 @@ export function useComputedValue(prop: string): string {
  * Computed values remain the fallback for browser defaults and inaccessible CSS. */
 export function useStyleHint(prop: string): string {
   return useComputedAnswer(prop ? `${AUTHORED_PREFIX}${prop}` : '').value;
+}
+
+/**
+ * The declaration that wins `prop` for the selected element, as written (`var(--text)`, never the
+ * `rgb(…)` it computes to), from whichever rule, inline style or ancestor it comes: '' when only a
+ * browser default sets it. Pass '' to skip asking. Read, never written: the value a field shows for a
+ * property its selector does not set.
+ */
+export function useDeclaredValue(prop: string): string {
+  return useComputedAnswer(prop ? `${DECLARED_PREFIX}${prop}` : '').value;
 }
 
 /** Source metadata shares the value cache, so selection and history changes

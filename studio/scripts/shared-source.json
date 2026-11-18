@@ -1401,6 +1401,7 @@
     "src/features/style/model/componentStyleWrite.ts",
     "src/features/style/model/computedColor.ts",
     "src/features/style/model/computedStyle.ts",
+    "src/features/style/model/customValueSeed.ts",
     "src/features/style/model/contextOrder.ts",
     "src/features/style/model/css.ts",
     "src/features/style/model/cssCode.ts",
