@@ -526,7 +526,13 @@ test('commits made while the first tag is saving: the last value wins', async (c
   for (const value of ['0.1', '0.2', '0.3', '0.4', '0.5']) {
     await panel.typeOpacity(value, 0);
   }
-  await wait(1500);
+  // Wait, bounded, for the last value to land rather than a fixed pause: on the Linux runner the
+  // queued commits behind the 400 ms first save finished after 1.5 s and the check read 0.4 (Check
+  // on a428bc5a). A last value that never lands still fails here, at the bound.
+  for (let poll = 0; poll < 200 && !/opacity: 0\.5;/.test(styleTags(panel)[0]?.inner ?? ''); poll += 1) {
+    await wait(50);
+  }
+  await wait(300);
   assert.equal(blockCalls(panel.calls).length, 1, `exactly one tag: ${kinds(panel.calls)}`);
   const inner = styleTags(panel)[0].inner;
   assert.equal(inner.match(/\.my-class/g).length, 1, `one rule: ${inner}`);
