@@ -44,7 +44,7 @@ function Page() {
 function Harness() {
   const [device, setDevice] = useState('tablet');
   const dimensions = usePreviewDimensions();
-  const sizing = usePreviewSizing(device, dimensions, BREAKPOINT_DEFAULTS, { deviceShortcuts: mode === 'design' }, setDevice);
+  const sizing = usePreviewSizing(device, dimensions, BREAKPOINT_DEFAULTS, { deviceShortcuts: mode === 'design', desktopFramePx: 1440 }, setDevice);
   window.harness = { device, width: sizing.viewport.width, scale: sizing.viewport.scale };
   if (mode === 'design') {
     return React.createElement('div', { className: 'preview-frame-wrap', ref: sizing.wrapRef, style: { position: 'absolute', inset: 0 } },

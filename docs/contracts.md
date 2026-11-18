@@ -971,9 +971,11 @@ Opening a project without saved guide preferences uses defaults in memory. It do
 
 `.stacki/breakpoints.json` contains `{ version: 4, desktop: { value, unit }, breakpoints: [...] }`
 (`shared/properties/projectBreakpoints.ts`): Desktop's frame width and an ordered list of `{ id, name?, value, unit }`,
-`unit` `rem` or `px`. Desktop is 90rem (1440px) unless set. It is **never a media query**: its only uses are the width of the
-Desktop frame in the side-by-side (all breakpoints) view and the line that decides on which side of Desktop a breakpoint is. The
-single canvas's Desktop button is still the full available width. A breakpoint has no stored direction: it is DERIVED from its
+`unit` `rem` or `px`. Desktop is 90rem (1440px) unless set. It is **never a media query**: its uses are the width of the
+Desktop frame in the side-by-side (all breakpoints) view, the narrowest width the single canvas's Desktop button draws the page
+at, and the line that decides on which side of Desktop a breakpoint is. The Desktop button fills a pane at least that wide (below
+the narrowest `up` canvas) and otherwise draws that width scaled to fit (`desktopCanvasWidth` in `shared/properties/breakpointIcon.ts`),
+so no breakpoint query applies under it: Base in a desktop-first component, the widest `width >= X` in a mobile-first one. A breakpoint has no stored direction: it is DERIVED from its
 number against Desktop's (`directionOf`). Wider than Desktop it is `up`, the query `width >= X` (mobile first), and its canvas is
 exactly X (100rem is 1600px); narrower it is `down`, `width < X`, canvas X less 1px (64rem is 1023px); equal to Desktop is refused.
 The defaults, with no file, are the Lumos 64rem, 48rem and 30rem breakpoints (ids `laptop`, `tablet`, `phone`, names read in the
@@ -2397,13 +2399,13 @@ See docs/startup.md.
 
 The Components panel's "…" menu (`src/features/palette/PalettePanel.tsx`) adds Edit settings, Duplicate and
 Delete through `PaletteManagement` (`paletteManagement.ts`). The channels are `component:duplicate`,
-`component:remove` and `component:restoreRemoved`; each takes a `ComponentOpTarget` (`shared/properties/componentOps.ts`:
+`component:planRemove`, `component:remove` and `component:restoreRemoved`; each takes a `ComponentOpTarget` (`shared/properties/componentOps.ts`:
 `component` or `folder`, a project-relative path) and answers a `Result` whose refusals are typed
 (`ComponentOpError`: outside the component folders, missing, in use, foreign files, too large, write failed).
 Main resolves the path itself: it must sit under a folder from `.stacki/folders.json` `components`, may not climb
 or be a link, and a folder may hold only `.astro` files within `COMPONENT_OP_LIMITS`.
 
 - Duplicate copies the bytes to `FooCopy`, `FooCopy2`, ... (dashed names keep their style), case-insensitively free, through the document actors. Nothing is rewritten and no recipe is added.
-- Delete refuses anything a file other than itself uses, removes the component's `.stacki/components.json` recipe and every nested `component` reference, and drops its `.stacki/roles.json` `componentRules`, then moves it to the operating system's Trash. Main keeps the removed texts and the settings as they were and as the deletion left them under a token: Undo restores the files and restores each setting only while it still reads as the deletion left it.
-- Folder rows in the panel are real folders, so a folder row offers Duplicate (confirmed from 6 components) and Delete (only while no component under it is used anywhere).
+- Delete is planned first (`component:planRemove` answers a `ComponentRemovalPreview`, `shared/properties/componentRemoval.ts`, parsed at the boundary) and confirmed with what it takes out; `component:remove` carries `uses`: `'remove'` (the panel) takes every instance and import out with the file (see docs/components.md, "Deleting a component"), `'refuse'` (a duplicate's undo) refuses a used component. Either way it removes the component's `.stacki/components.json` recipe and every nested `component` reference, and drops its `.stacki/roles.json` `componentRules`, then moves it to the operating system's Trash. Main keeps the removed texts and the settings as they were and as the deletion left them under a token: Undo restores the files and restores each setting only while it still reads as the deletion left it.
+- Folder rows in the panel are real folders, so a folder row offers Duplicate (confirmed from 6 components) and Delete (planned and confirmed the same way, over every component under it).
 - Studio's panel passes no `management`, so the rows are left out: its server has neither a copy/trash operation nor an undo store for them yet.

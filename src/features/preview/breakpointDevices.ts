@@ -1,6 +1,6 @@
 // The devices of the preview bar, from the project's breakpoints (`.stacki/breakpoints.json`, shared/properties/projectBreakpoints.ts).
 //
-// The bar reads left to right: the `up` breakpoints widest first, Desktop (the base: full width), the `down` breakpoints widest
+// The bar reads left to right: the `up` breakpoints widest first, Desktop (the base: desktopCanvasWidth), the `down` breakpoints widest
 // first, then the all-breakpoints canvas. A device is named by its breakpoint's id (`laptop`, `bp-1`), or `desktop`, `canvas` or
 // `custom` (a dragged width); the shortcuts 1 to 9 are the bar's positions, so they follow the list.
 //
@@ -37,7 +37,7 @@ export function barDevices(resolved: readonly ResolvedBreakpoint[]): readonly Ba
   ];
 }
 
-/** The viewport width a device simulates; undefined for the full available width (Desktop, the all-breakpoints canvas, a custom drag). */
+/** The viewport width a breakpoint device simulates; undefined for any other (Desktop is desktopCanvasWidth's, a custom drag its own width). */
 export function deviceWidth(device: PreviewDevice, resolved: readonly ResolvedBreakpoint[]): number | undefined {
   return resolved.find((breakpoint) => breakpoint.id === device)?.widthPx;
 }

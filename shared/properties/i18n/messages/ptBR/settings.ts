@@ -15,7 +15,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Extragrande',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
-  'settings.breakpoints.desktopNote': 'Largura do quadro na visualização lado a lado. Nunca usada como media query.',
+  'settings.breakpoints.desktopNote': 'Largura do Desktop no canvas e lado a lado, em escala para caber. Nunca usada como media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) ficaria do outro lado do Desktop.',
   'settings.breakpoints.error.file': 'Não foi possível usar o arquivo de breakpoints, então os padrões aparecem e o arquivo fica como está. {message}',
   'settings.breakpoints.error.name': 'Um nome tem de 1 a {maximum} caracteres, e cada um é diferente.',

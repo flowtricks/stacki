@@ -62,7 +62,8 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
     requestAnimationFrame: window.requestAnimationFrame.bind(window),
     cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
   });
-  let containerWidth = 1000;
+  // Wider than the Desktop frame (1440): Desktop fills a pane at least that wide, by CSS (desktopCanvasWidth).
+  let containerWidth = 2000;
   const observers = new Set();
   global.ResizeObserver = class {
     constructor(callback) {
@@ -81,7 +82,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
   let device = 'desktop';
   function Canvas() {
     const dimensions = hold.usePreviewDimensions();
-    const sizing = hold.usePreviewSizing(device, dimensions, hold.BREAKPOINT_DEFAULTS, { deviceShortcuts: true }, () => {});
+    const sizing = hold.usePreviewSizing(device, dimensions, hold.BREAKPOINT_DEFAULTS, { deviceShortcuts: true, desktopFramePx: 1440 }, () => {});
     renders.push({ width: sizing.viewport.width, scale: sizing.viewport.scale, settling: sizing.panelSettling });
     return React.createElement('div', { ref: sizing.wrapRef });
   }
@@ -96,24 +97,24 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
   const root = createRoot(document.getElementById('root'));
   try {
     await act(() => root.render(React.createElement(Canvas)));
-    assert.equal(last().width, 1000);
+    assert.equal(last().width, 2000);
     assert.equal(last().settling, false);
     await act(() => hold.setPanelDragPhase('dragging'));
     assert.equal(last().settling, true, 'The frame skips its width transition during the drag');
     const dragStart = renders.length;
     // Widen the panel (the canvas narrows), then narrow it back past the start.
-    for (const width of [900, 760, 640, 820, 1100]) {
+    for (const width of [1900, 1760, 1640, 1820, 2100]) {
       await resize(width);
     }
     assert.equal(renders.length, dragStart, 'A fluid frame follows by CSS: no preview render mid-drag');
     await act(() => hold.setPanelDragPhase('idle'));
-    assert.equal(last().width, 1100, 'Release measures once, with the final width');
+    assert.equal(last().width, 2100, 'Release measures once, with the final width');
     assert.ok(renders.length - dragStart <= 3, 'Release renders the preview a fixed few times, not once per step');
     assert.equal(last().settling, true, 'The release frame also skips the width transition');
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
     assert.equal(last().settling, false, 'The transition returns the frame after release');
-    await resize(700);
-    assert.equal(last().width, 700, 'Without a drag the canvas follows its container');
+    await resize(1700);
+    assert.equal(last().width, 1700, 'Without a drag the canvas follows its container');
     // A fixed-width frame rescales at each step, both ways, because its scale is React state.
     device = 'tablet';
     await act(() => root.render(React.createElement(Canvas)));

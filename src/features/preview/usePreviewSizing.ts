@@ -3,6 +3,7 @@ import { assert } from '../../../shared/core/assert';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { activeDeviceFor, deviceForShortcut, deviceWidth, type PreviewDevice } from './breakpointDevices';
+import { desktopCanvasWidth } from '../../../shared/properties/breakpointIcon';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
 import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
 import { panelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
@@ -20,9 +21,11 @@ export type PreviewSizing = ReturnType<typeof usePreviewSizing>;
 
 /** How a sized frame takes part in the window. `deviceShortcuts` listens for the device
  *  keys (1 to 5): only one frame per window does, so a second frame over the canvas (the
- *  preview mode) does not set the same device twice for one key. */
+ *  preview mode) does not set the same device twice for one key. `desktopFramePx` is the
+ *  Desktop width from Settings (useProjectBreakpoints), the narrowest the Desktop device draws. */
 export interface PreviewSizingOptions {
   readonly deviceShortcuts: boolean;
+  readonly desktopFramePx: number;
 }
 
 export function usePreviewSizing(
@@ -38,10 +41,7 @@ export function usePreviewSizing(
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const { customWidth, setCustomWidth, customHeight, setCustomHeight } = dimensions;
   const [resizing, setResizing] = useState(false);
-  // A custom width belongs to the custom device. Read on any other, it drew one frame at
-  // the old custom width after a device button was pressed, until the effect below
-  // cleared it.
-  const width = device === 'custom' ? (customWidth ?? deviceWidth(device, breakpoints)) : deviceWidth(device, breakpoints);
+  const width = previewFrameWidth(device, customWidth, breakpoints, available.width, options.desktopFramePx);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
   useDeviceShortcuts(breakpoints, options, onDevice);
@@ -84,6 +84,29 @@ export function usePreviewSizing(
     activeDevice,
     startResize,
   };
+}
+
+/**
+ * The width the frame draws the page at, or undefined to fill the canvas by CSS. A custom
+ * width belongs to the custom device: read on any other, it drew one frame at the old custom
+ * width after a device button was pressed, until the effect in usePreviewSizing cleared it.
+ * Desktop is never narrower than its frame width (desktopCanvasWidth): a narrow pane scales it.
+ */
+export function previewFrameWidth(
+  device: PreviewDevice,
+  customWidth: number | undefined,
+  breakpoints: readonly ResolvedBreakpoint[],
+  availablePx: number,
+  desktopFramePx: number,
+): number | undefined {
+  if (device === 'custom') {
+    return customWidth ?? deviceWidth(device, breakpoints);
+  }
+  if (device === 'desktop') {
+    const desktop = desktopCanvasWidth(availablePx, breakpoints, desktopFramePx);
+    return desktop.kind === 'fixed' ? desktop.widthPx : undefined;
+  }
+  return deviceWidth(device, breakpoints);
 }
 
 // Measures the canvas. During a side-panel drag the canvas follows the panel live, by CSS
