@@ -12,10 +12,17 @@ const keys = new Set([
   'g',
   'backspace',
   'delete',
+  // The device keys, one per toolbar position (usePreviewSizing useDeviceShortcuts); sent by
+  // their own listener below, in both canvas modes and from the preview mode.
   '1',
   '2',
   '3',
   '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
   'escape',
   'enter',
   // The Navigator's arrows: ↑ parent, ↓ first child, ← → siblings (navigatorArrows.ts).
@@ -25,6 +32,7 @@ const keys = new Set([
   'arrowright',
 ]);
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+const DEVICE_KEY = /^[1-9]$/;
 export function forwardPreviewKeys(post: (message: unknown) => void, interactive: () => boolean) {
   // The app command range (APP_RESERVED_SHORTCUTS, ⌘⌥⇧1 to 9), as Desktop's canvas forwards it
   // (frameDesign.ts forwardShortcut): the editor's own listener (AppsHost.tsx) never sees a key
@@ -73,8 +81,28 @@ export function forwardPreviewKeys(post: (message: unknown) => void, interactive
     },
     true,
   );
+  // The device keys 1 to 9, as Desktop's frame forwards them (frameDesign.ts forwardShortcut): a
+  // click in the page puts keyboard focus in here, and the preview mode draws no toolbar, so the
+  // editor's listener never sees them otherwise. Sent from select mode, interact mode and the
+  // preview mode alike, and left to the page too (no preventDefault); a field keeps its digits.
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (!isDeviceKey(event)) {
+        return;
+      }
+      if (keyInField(event.target)) {
+        return;
+      }
+      post({ type: 'studio:key', key: event.key, ctrlKey: false, metaKey: false, shiftKey: false });
+    },
+    true,
+  );
   document.addEventListener('keydown', (event) => {
     if (ARROWS.has(event.key)) {
+      return; // Forwarded above.
+    }
+    if (DEVICE_KEY.test(event.key)) {
       return; // Forwarded above.
     }
     const insert = (event.metaKey || event.ctrlKey) && ['f', 'e'].includes(event.key.toLowerCase());
@@ -114,6 +142,23 @@ export function receivePreviewKey(input: unknown) {
       cancelable: true,
     }),
   );
+}
+
+/** A device key sent from the preview mode's frame: the editor replays it as it does the canvas's. */
+export function receivePreviewDeviceKey(input: unknown) {
+  const value = record(input);
+  if (typeof value['key'] === 'string' && DEVICE_KEY.test(value['key'])) {
+    receivePreviewKey(value);
+  }
+}
+
+// A digit 1 to 9 with no modifier. Shift is ruled out by the key itself (it makes "!" of "1" on
+// most layouts), so a key that still reads as a digit is the plain one.
+function isDeviceKey(event: KeyboardEvent): boolean {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) {
+    return false;
+  }
+  return DEVICE_KEY.test(event.key);
 }
 
 // A field in the page, or the canvas's text editor (contenteditable), types with the key.

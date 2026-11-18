@@ -12,6 +12,7 @@ import { PreviewModeStage } from '../../../vendor/stacki/src/features/preview/Si
 import { usePreviewSizing, type PreviewDimensions } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
 import type { PreviewDevice } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
 import { useProjectBreakpoints } from '../../../vendor/stacki/src/ipc/useProjectBreakpoints';
+import { receivePreviewDeviceKey } from './previewKeys';
 import { previewBase, previewFrameRoute, previewLandedPage, previewNeedsRoute, previewUnderBase, type PreviewOpening } from './previewRoute';
 
 interface Options {
@@ -208,6 +209,10 @@ function usePreviewEvents(active: boolean, origin: string | undefined, frame: Re
       }
       if (value.type === 'studio:interaction') {
         window.dispatchEvent(new Event('studio:interaction'));
+      }
+      // A device key pressed in the site (previewKeys.ts): the canvas below picks the breakpoint.
+      if (value.type === 'studio:key') {
+        receivePreviewDeviceKey(value);
       }
     };
     window.addEventListener('keydown', key, true);

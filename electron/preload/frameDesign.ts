@@ -189,6 +189,21 @@ function forwardShortcut(event: KeyboardEvent): void {
     }
     return;
   }
+  // The device keys 1 to 9 (usePreviewSizing useDeviceShortcuts) pick a breakpoint from the
+  // canvas, interact mode and the live preview alike: a click in the page puts keyboard focus
+  // in here, and in the preview mode the toolbar is not even drawn, so without this the keys
+  // never reach the app. Replayed there as the plain key, through the one listener that reads
+  // them. Not taken from the page (no preventDefault), and a field in the page keeps its digits.
+  if (isDeviceKey(event)) {
+    if (!eventInField(event)) {
+      try {
+        window.parent.postMessage({ type: 'avb:shortcut', name: 'key', key: event.key, meta: false }, '*');
+      } catch {
+        /* ignore */
+      }
+    }
+    return;
+  }
   if (!canvasSelects()) {
     return;
   }
@@ -254,6 +269,15 @@ function isPreviewKey(event: KeyboardEvent): boolean {
     return false;
   }
   return event.code === 'KeyP';
+}
+
+// A digit 1 to 9 with no modifier: the device keys. Shift is ruled out by the key itself (it
+// makes "!" of "1" on most layouts), so a key that still reads as a digit is the plain one.
+function isDeviceKey(event: KeyboardEvent): boolean {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) {
+    return false;
+  }
+  return /^[1-9]$/.test(event.key);
 }
 
 // Is the key going to a field in the page, which keeps it for typing?
