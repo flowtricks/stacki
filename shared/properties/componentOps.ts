@@ -36,6 +36,17 @@ export interface ComponentOpTarget {
   readonly path: string;
 }
 
+/** What a deletion does with a component something still uses: refuse (a duplicate's undo, the CLI) or take every use out with it. */
+export type ComponentUses = 'refuse' | 'remove';
+
+/** The deletion mode read at the boundary: one of the two, never a default (AGENTS.md section 6). */
+export function parseComponentUses(input: unknown): ComponentUses {
+  if (input === 'refuse' || input === 'remove') {
+    return input;
+  }
+  throw new Error('A deletion mode is "refuse" or "remove"');
+}
+
 /** A target read at the boundary: a kind, and a project-relative path with no climbing segments. */
 export function parseComponentOpTarget(input: unknown): ComponentOpTarget {
   const value = record(input);
@@ -150,9 +161,4 @@ export function dropRulesFor(rules: readonly ComponentRule[], target: ComponentO
   const kept = rules.filter((rule) => !(rule.path === target.path || (target.kind === 'folder' && rule.path.startsWith(`${target.path}/`))));
   assert(kept.length <= rules.length, 'Cleanup never adds a rule');
   return kept;
-}
-
-/** The reason a delete is refused for a component still on pages, for the disabled row's tip; undefined when it may go. */
-export function usedPlaces(instances: number | undefined): number | undefined {
-  return instances !== undefined && instances > 0 ? instances : undefined;
 }

@@ -10,7 +10,8 @@ import {
   type ComponentRenameSummary,
   type RenameDirection,
 } from '../../shared/properties/componentRename';
-import { parseComponentOpError, type ComponentOpError, type ComponentOpTarget } from '../../shared/properties/componentOps';
+import { parseComponentOpError, type ComponentOpError, type ComponentOpTarget, type ComponentUses } from '../../shared/properties/componentOps';
+import { parseComponentRemovalPreview, type ComponentRemovalPreview } from '../../shared/properties/componentRemoval';
 
 export interface ComponentCopy {
   readonly kind: 'component' | 'folder';
@@ -42,8 +43,18 @@ export async function duplicateProjectComponent(projectPath: string, target: Com
   });
 }
 
-export async function removeProjectComponent(projectPath: string, target: ComponentOpTarget): Promise<Result<ComponentRemoval, ComponentOpError>> {
-  const payload = parseIpcPayload('component:remove', { projectPath, target });
+/** What deleting a component would remove, edit and clean, and what blocks it: worked out by main without writing. */
+export async function planProjectComponentRemoval(projectPath: string, target: ComponentOpTarget): Promise<Result<ComponentRemovalPreview, ComponentOpError>> {
+  const payload = parseIpcPayload('component:planRemove', { projectPath, target });
+  return readReply(await window.avb.planComponentRemoval(payload), parseComponentRemovalPreview);
+}
+
+export async function removeProjectComponent(
+  projectPath: string,
+  target: ComponentOpTarget,
+  uses: ComponentUses,
+): Promise<Result<ComponentRemoval, ComponentOpError>> {
+  const payload = parseIpcPayload('component:remove', { projectPath, target, uses });
   return readReply(await window.avb.removeComponent(payload), (value) => ({
     name: text(value['name']),
     files: count(value['files']),

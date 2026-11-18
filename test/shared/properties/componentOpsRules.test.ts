@@ -15,7 +15,7 @@ import {
   parseComponentOpError,
   parseComponentOpTarget,
   targetOwns,
-  usedPlaces,
+  parseComponentUses,
 } from '#dist/shared/properties/componentOps.js';
 
 test('a copy takes the first free name, in the style of the original', () => {
@@ -123,8 +123,10 @@ test('a target is a component or folder with a clean project path; anything else
   assert.throws(() => parseComponentOpError({ code: 'nope', message: 'x' }));
 });
 
-test('only a counted, positive use blocks a delete', () => {
-  assert.equal(usedPlaces(undefined), undefined);
-  assert.equal(usedPlaces(0), undefined);
-  assert.equal(usedPlaces(13), 13);
+test('a deletion mode is read at the boundary and never defaulted', () => {
+  assert.equal(parseComponentUses('refuse'), 'refuse');
+  assert.equal(parseComponentUses('remove'), 'remove');
+  for (const bad of ['', 'delete', undefined, true]) {
+    assert.throws(() => parseComponentUses(bad), /A deletion mode is "refuse" or "remove"/);
+  }
 });

@@ -405,7 +405,7 @@ function metadataEdit(change: MetadataChange): Edit | undefined {
 }
 
 function remove(context: CommandContext): Result<Outcome, CliError> {
-  const planned = planRemoveTarget(context.root, targetOf(textOf(context, 'path')));
+  const planned = planRemoveTarget(context.root, targetOf(textOf(context, 'path')), 'refuse');
   if (!planned.ok) {
     return refused(planned.error.message, 'refused');
   }

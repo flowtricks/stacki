@@ -291,6 +291,7 @@ function pageBridge() {
     planComponentRename: invoke('component:planRename'),
     renameComponent: invoke('component:rename'),
     revertComponentRename: invoke('component:revertRename'),
+    planComponentRemoval: invoke('component:planRemove'),
     removeComponent: invoke('component:remove'),
     restoreRemovedComponent: invoke('component:restoreRemoved'),
     componentProperties: invoke('component:properties'),

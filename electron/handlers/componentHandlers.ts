@@ -27,7 +27,7 @@ import { applyComponentRename, ComponentRenameStore, revertComponentRename } fro
 import { planComponentRenameWork } from './componentRenamePlan';
 import { desktopRenameWriter } from '../project/pageRenameDesktop';
 import { runSliced } from '../lib/slicedWork';
-import { ComponentRemovalStore, duplicateComponentTarget, removeComponentTarget, restoreRemovedComponent } from './componentOps';
+import { ComponentRemovalStore, duplicateComponentTarget, previewRemoveTarget, removeComponentTarget, restoreRemovedComponent } from './componentOps';
 import { projectFoldersFor } from '../lib/projectFolders';
 import { componentImportPaths } from '../properties/componentImports';
 
@@ -91,13 +91,16 @@ function registerComponentCreateHandlers({
     return done.ok ? ok({ files: plan.texts.length }) : err(done.error);
   });
   ipcMain.handle('component:duplicate', async (_event, { projectPath, target }) => duplicateComponentTarget(projectPath, target));
-  ipcMain.handle('component:remove', async (_event, { projectPath, target }) => {
+  // Deleting a component: the plan the confirmation shows (no write), then the deletion with every instance and import
+  // (componentRemovalPlan.ts), pages first and the file last, undone in one step.
+  ipcMain.handle('component:planRemove', async (_event, { projectPath, target }) => previewRemoveTarget(projectPath, target));
+  ipcMain.handle('component:remove', async (_event, { projectPath, target, uses }) => {
     noteAppWrite();
-    return removeComponentTarget(projectPath, target, removalUndo, { trash: (file) => shell.trashItem(file) });
+    return removeComponentTarget(projectPath, target, removalUndo, { trash: (file) => shell.trashItem(file), writer: desktopRenameWriter() }, uses);
   });
   ipcMain.handle('component:restoreRemoved', async (_event, { token }) => {
     noteAppWrite();
-    return restoreRemovedComponent(token, removalUndo);
+    return restoreRemovedComponent(token, removalUndo, desktopRenameWriter());
   });
 
   // Undo of creating a component: one step with the page edit that placed it.

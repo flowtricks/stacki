@@ -8,6 +8,7 @@ import { COMPONENT_OP_LIMITS, type ComponentOpTarget } from '../../../shared/pro
 import type { ManagedItem, PaletteManagement } from '../../features/palette/paletteManagement';
 import {
   duplicateProjectComponent,
+  planProjectComponentRemoval,
   planProjectComponentRename,
   removeProjectComponent,
   renameProjectComponent,
@@ -21,6 +22,7 @@ import { configOf, foldersFor, readProjectFoldersSource } from '../../../shared/
 import { cleanError } from '../../lib/cleanError';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
+import { confirmComponentRemoval } from './componentRemovalDialog';
 import type { ShellView } from '../App';
 
 export function useComponentManagement(app: ShellView): PaletteManagement {
@@ -64,7 +66,7 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
         label: translate('palette.manage.labelDuplicate', { name: item.name }),
         // Undo takes the copy out the same way a deletion does; a copy that something now uses is kept, and the person is told.
         undo: async () => {
-          const removed = await removeProjectComponent(projectPath, { kind: copy.kind, path: copy.path });
+          const removed = await removeProjectComponent(projectPath, { kind: copy.kind, path: copy.path }, 'refuse');
           if (!removed.ok) {
             fail(removed.error.message);
             return;
@@ -92,25 +94,23 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
   const remove = useCallback(
     async (item: ManagedItem): Promise<void> => {
       const target: ComponentOpTarget = { kind: item.kind, path: item.path };
-      const sure = await confirmDialog({
-        title: translate('palette.manage.deleteTitle', { name: item.name }),
-        body:
-          item.kind === 'folder'
-            ? translate('palette.manage.deleteBodyFolder', { count: item.files })
-            : translate('palette.manage.deleteBodyComponent', { name: item.name }),
-        confirmLabel: translate('palette.manage.deleteConfirm'),
-        danger: true,
-      });
-      if (sure !== true) {
+      // Pending canvas edits land first: the plan reads the pages from disk, and so does the deletion.
+      await flushSave();
+      const preview = await planProjectComponentRemoval(projectPath, target);
+      if (!preview.ok) {
+        fail(preview.error.message);
         return;
       }
-      const removed = await removeProjectComponent(projectPath, target);
+      if (!(await confirmComponentRemoval(preview.value, translate))) {
+        return;
+      }
+      const removed = await removeProjectComponent(projectPath, target, 'remove');
       if (!removed.ok) {
         fail(removed.error.message);
         return;
       }
       let undoToken = removed.value.undo;
-      await rescan(projectPath);
+      await reloadOpen();
       showToast(translate('palette.manage.deleteDone', { name: item.name }), 'success');
       pushCommand({
         label: translate('palette.manage.labelDelete', { name: item.name }),
@@ -123,20 +123,21 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
           if (restored.value.metadata === 'kept') {
             showToast(translate('palette.manage.undoMetadataKept'), 'warning');
           }
-          await rescan(projectPath);
+          await reloadOpen();
         },
         redo: async () => {
-          const again = await removeProjectComponent(projectPath, target);
+          const again = await removeProjectComponent(projectPath, target, 'remove');
           if (!again.ok) {
             fail(again.error.message);
             return;
           }
           undoToken = again.value.undo;
-          await rescan(projectPath);
+          await reloadOpen();
         },
       });
     },
-    [fail, projectPath, pushCommand, rescan, showToast, translate],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the reload helper reads the latest app state through refs on `app`
+    [fail, flushSave, projectPath, pushCommand, rescan, showToast, translate],
   );
 
   const roots = useComponentRoots(projectPath);
@@ -184,6 +185,18 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the reload helper reads the latest app state through refs on `app`
     [roots, projectPath, flushSave, fail, pushCommand, showToast, translate],
   );
+
+  // A deletion edits the pages that used the component: the open page is reloaded from disk, as after a rename.
+  async function reloadOpen(): Promise<void> {
+    const scan = await rescan(projectPath);
+    if (app.currentPage?.kind === 'component' || currentScanPage === undefined) {
+      return;
+    }
+    const page = scan.pages.find((candidate) => candidate.path === currentScanPage.path);
+    if (page !== undefined) {
+      onSelectPage(page);
+    }
+  }
 
   // Whatever is open may have changed on disk: a moved component is reopened at its new place, a page that imported it is reloaded.
   async function reloadAfterRename(request: ComponentRenameRequest): Promise<true | undefined> {

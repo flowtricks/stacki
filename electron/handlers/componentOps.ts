@@ -1,9 +1,11 @@
 // Duplicating and deleting components and component folders (the Components panel's "…" menu).
 //
-// Every write goes through the document actors (createProjectText, writeProjectMetadata), so a copy
-// appears whole or not at all and a project setting is never overwritten blind. Nothing here rewrites a
-// reference: a copy is a new file holding the original's bytes, and a deletion refuses a component that
-// any file still uses.
+// Every write goes through the document actors (createProjectText, writeProjectMetadata, the rename
+// writer), so a copy appears whole or not at all and a project setting is never overwritten blind. A copy
+// is a new file holding the original's bytes. A deletion from the panel takes every reference with it
+// (componentRemovalPlan.ts): instances and imports leave every file first, then the settings are cleaned,
+// then the file goes, so the dev server never sees a page importing a file that is gone. Undoing a
+// duplicate deletes the copy only while nothing uses it (`uses: 'refuse'`), as the command line does.
 //
 // A deletion is undoable and never a bare unlink. The file (or folder) goes to the operating system's
 // Trash, the way the app deletes collections and images, and main keeps what it removed (the texts, and
@@ -25,9 +27,10 @@ import {
   type ComponentOpError,
   type ComponentOpErrorCode,
   type ComponentOpTarget,
+  type ComponentUses,
 } from '../../shared/properties/componentOps';
 import { parseProjectRolesSource, serializeProjectRoles } from '../../shared/properties/projectRoles';
-import type { MetadataKind } from '../../shared/properties/projectMetadata';
+import { METADATA_FILES, type MetadataKind } from '../../shared/properties/projectMetadata';
 import { isPathDescendant } from '../lib/platform';
 import { readSource } from '../lib/mainLimits';
 import { translateMain } from '../lib/mainLocale';
@@ -35,6 +38,9 @@ import { projectFoldersFor } from '../lib/projectFolders';
 import { componentUsage } from '../properties/componentUsage';
 import { readProjectMetadata, writeProjectMetadata } from '../project/projectMetadata';
 import { createProjectText } from '../documents/documentWrites';
+import type { ComponentRemovalPreview } from '../../shared/properties/componentRemoval';
+import type { RenameWriter } from '../project/pageRenameWrite';
+import { planComponentReferences, type ComponentReferencePlan, type RemovalText } from './componentRemovalPlan';
 
 export interface ComponentCopied {
   readonly kind: 'component' | 'folder';
@@ -63,6 +69,8 @@ export interface ComponentRestored {
 export interface ComponentOpsHost {
   /** Moves a file or folder to the operating system's Trash. */
   readonly trash: (target: string) => Promise<void>;
+  /** Writes the edited pages through the document actors (desktopRenameWriter), all leased at once. */
+  readonly writer: RenameWriter;
 }
 
 /** One file of a target, read once: what a copy writes and what a restore puts back. */
@@ -83,11 +91,12 @@ export interface Resolved {
 
 type Failure = Result<never, ComponentOpError>;
 
-/** A deleted target's undo: the files, and each `.stacki` file as it was and as the deletion left it. */
+/** A deleted target's undo: the files, every page it edited, and each `.stacki` file as it was and as the deletion left it. */
 interface RemovalRecord {
   readonly projectPath: string;
   readonly directories: readonly string[];
   readonly files: readonly TargetFile[];
+  readonly texts: readonly RemovalText[];
   readonly metadata: readonly MetadataChange[];
 }
 
@@ -119,6 +128,12 @@ export class ComponentRemovalStore {
     const entry = this.#entries.get(token);
     this.#entries.delete(token);
     return entry;
+  }
+
+  /** Puts back an entry an undo could not use yet (a page changed since), so a later undo can try again. */
+  keep(token: string, entry: RemovalRecord): void {
+    assert(!this.#entries.has(token), 'A kept entry was taken first');
+    this.#entries.set(token, entry);
   }
 }
 
@@ -165,71 +180,140 @@ export function duplicateComponentTarget(projectPath: string, target: ComponentO
   return ok({ kind: target.kind, path: rel, name, files: resolved.files.length });
 }
 
-/** What a deletion would do, worked out and not written: the target, and the `.stacki` text it would clean. */
+/** What a deletion would do, worked out and not written: the target, the pages it edits, and the `.stacki` text it would clean. */
 export interface RemovalPlan {
   readonly resolved: Resolved;
+  readonly references: ComponentReferencePlan;
   readonly changes: readonly MetadataChange[];
 }
 
-/** Refuses a target that is used or outside the component folders, else says what a deletion would remove and clean. No write. */
-export function planRemoveTarget(projectPath: string, target: ComponentOpTarget): Result<RemovalPlan, ComponentOpError> {
+const NO_REFERENCES: ComponentReferencePlan = { texts: [], instances: [], imports: [], reviews: [] };
+
+/**
+ * Says what a deletion would remove, edit and clean, without writing. `uses: 'refuse'` refuses a target anything
+ * renders; `uses: 'remove'` plans every instance and import out, and refuses only what lists a place to review.
+ */
+export function planRemoveTarget(projectPath: string, target: ComponentOpTarget, uses: ComponentUses): Result<RemovalPlan, ComponentOpError> {
+  const previewed = previewRemovalPlan(projectPath, target, uses);
+  if (!previewed.ok) {
+    return previewed;
+  }
+  const review = previewed.value.references.reviews[0];
+  if (review !== undefined) {
+    const count = previewed.value.references.reviews.length;
+    return failure('in-use', translateMain('error.componentRemoval.needsReview', { count, place: `${review.path}:${String(review.line)}` }));
+  }
+  return previewed;
+}
+
+/** The confirmation's summary of a deletion: the plan as counts and places, including the places that block it. No write. */
+export function previewRemoveTarget(projectPath: string, target: ComponentOpTarget): Result<ComponentRemovalPreview, ComponentOpError> {
+  const planned = previewRemovalPlan(projectPath, target, 'remove');
+  if (!planned.ok) {
+    return planned;
+  }
+  const { resolved, references, changes } = planned.value;
+  const name = path.basename(resolved.absolute, target.kind === 'component' ? '.astro' : '');
+  assert(resolved.files.length > 0 || target.kind === 'folder', 'A component deletion removes its file');
+  return ok({
+    name,
+    files: Math.max(1, resolved.files.length),
+    instances: references.instances,
+    imports: references.imports,
+    settings: changes.map((change) => METADATA_FILE_NAMES[change.kind]),
+    reviews: references.reviews,
+  });
+}
+
+const METADATA_FILE_NAMES: Readonly<Record<MetadataKind, string>> = METADATA_FILES;
+
+// The plan with its reviews still in it: the preview shows them, the deletion refuses on them.
+function previewRemovalPlan(projectPath: string, target: ComponentOpTarget, uses: ComponentUses): Result<RemovalPlan, ComponentOpError> {
   const resolved = resolveTarget(projectPath, target);
   if (!resolved.ok) {
     return resolved;
   }
-  const used = firstUse(projectPath, resolved.value.files);
-  if (used !== undefined) {
-    return failure('in-use', translateMain('error.component.inUse', { name: used.name, count: used.count }));
+  let references = NO_REFERENCES;
+  if (uses === 'refuse') {
+    const used = firstUse(projectPath, resolved.value.files);
+    if (used !== undefined) {
+      return failure('in-use', translateMain('error.component.inUse', { name: used.name, count: used.count }));
+    }
+  } else if (resolved.value.files.length > 0) {
+    const planned = planComponentReferences(
+      projectPath,
+      resolved.value.files.map((file) => file.absolute),
+    );
+    if (!planned.ok) {
+      return planned;
+    }
+    references = planned.value;
   }
   const changes = planMetadataChanges(projectPath, target);
-  return changes.ok ? ok({ resolved: resolved.value, changes: changes.value }) : changes;
+  return changes.ok ? ok({ resolved: resolved.value, references, changes: changes.value }) : changes;
 }
 
 /**
- * Deletes a component, or a folder of components, that nothing uses: the metadata that names it is cleaned, the file goes to the
- * Trash, and the reply carries the token Undo sends back. Used anywhere (by any file but itself): refused, nothing changed.
+ * Deletes a component, or a folder of components, in one step: with `uses: 'remove'` every instance and import leaves every
+ * page first (all pages or none), then the metadata that names it is cleaned, then the file goes to the Trash; the reply
+ * carries the one token Undo sends back. A use Stacki cannot rewrite, or with `uses: 'refuse'` any use: refused, nothing changed.
  */
 export async function removeComponentTarget(
   projectPath: string,
   target: ComponentOpTarget,
   store: ComponentRemovalStore,
   host: ComponentOpsHost,
+  uses: ComponentUses,
 ): Promise<Result<ComponentRemoved, ComponentOpError>> {
-  const resolved = resolveTarget(projectPath, target);
-  if (!resolved.ok) {
-    return resolved;
+  const planned = planRemoveTarget(projectPath, target, uses);
+  if (!planned.ok) {
+    return planned;
   }
-  const { absolute, files, directories } = resolved.value;
-  const used = firstUse(projectPath, files);
-  if (used !== undefined) {
-    return failure('in-use', translateMain('error.component.inUse', { name: used.name, count: used.count }));
+  const { absolute, files, directories } = planned.value.resolved;
+  const texts = planned.value.references.texts;
+  const written = writeTexts(texts, host.writer, projectPath);
+  if (!written.ok) {
+    return written;
   }
   const changes = cleanMetadata(projectPath, target);
   if (!changes.ok) {
+    writeTexts(inverse(texts), host.writer, projectPath);
     return changes;
   }
   try {
     await host.trash(absolute);
   } catch (error: unknown) {
     restoreMetadata(projectPath, changes.value, 'after');
+    writeTexts(inverse(texts), host.writer, projectPath);
     return failure(
       'write-failed',
       translateMain('error.component.writeFailed', { file: toPosix(path.relative(projectPath, absolute)), reason: String(error) }),
     );
   }
   assert(!fs.existsSync(absolute), 'A deleted target is gone from the project');
-  const undo = store.record({ projectPath, directories, files, metadata: changes.value });
+  const undo = store.record({ projectPath, directories, files, texts, metadata: changes.value });
   return ok({ name: path.basename(absolute, target.kind === 'component' ? '.astro' : ''), files: files.length, undo });
 }
 
-/** Undo of a deletion: the files return through the actors, and the settings only if nothing changed them since. */
-export function restoreRemovedComponent(token: string, store: ComponentRemovalStore): Result<ComponentRestored, ComponentOpError> {
+/**
+ * Undo of a deletion: the component files return first, then every page gets its instances and imports back byte for byte,
+ * then the settings, only if nothing changed them since. A page edited since the deletion refuses the whole undo, with
+ * nothing changed, and the undo stays available.
+ */
+export function restoreRemovedComponent(token: string, store: ComponentRemovalStore, writer: RenameWriter): Result<ComponentRestored, ComponentOpError> {
   const record = store.take(token);
   if (record === undefined) {
     return failure('unknown-undo', translateMain('error.component.unknownUndo'));
   }
   const first = record.files[0] ?? record.directories[0];
   assert(first !== undefined || record.files.length === 0, 'A removal record names what it removed');
+  for (const text of record.texts) {
+    const current = writer.current(text.file);
+    if (!current.ok || current.value !== text.after) {
+      store.keep(token, record);
+      return failure('write-failed', translateMain('error.componentRemoval.changedSince', { file: toPosix(path.relative(record.projectPath, text.file)) }));
+    }
+  }
   for (const directory of record.directories) {
     fs.mkdirSync(directory, { recursive: true });
   }
@@ -247,7 +331,52 @@ export function restoreRemovedComponent(token: string, store: ComponentRemovalSt
     restored += 1;
   }
   assert(restored === record.files.length, 'Every removed file is written back');
+  // The component exists again before any page imports it: the dev server never sees an import of a missing file.
+  const pages = writeTexts(inverse(record.texts), writer, record.projectPath);
+  if (!pages.ok) {
+    return pages;
+  }
   return ok({ files: restored, metadata: putMetadataBack(record) });
+}
+
+function inverse(texts: readonly RemovalText[]): readonly RemovalText[] {
+  return texts.map((text) => ({ file: text.file, before: text.after, after: text.before }));
+}
+
+// Every text written as one leased unit: each must still hold what the plan read, and a failure puts back what was written.
+function writeTexts(texts: readonly RemovalText[], writer: RenameWriter, projectPath: string): Result<true, ComponentOpError> {
+  if (texts.length === 0) {
+    return ok(true);
+  }
+  const leased = writer.lease(texts, () => {
+    for (const text of texts) {
+      const current = writer.current(text.file);
+      if (!current.ok || current.value !== text.before) {
+        return err({
+          code: 'conflict',
+          message: translateMain('error.componentRemoval.changedSince', { file: toPosix(path.relative(projectPath, text.file)) }),
+        });
+      }
+    }
+    const done: RemovalText[] = [];
+    for (const text of texts) {
+      const saved = writer.write(text);
+      if (!saved.ok) {
+        // The failed write is put back too: a filesystem error can come after the replacement.
+        for (const back of [...inverse([...done, text])].reverse()) {
+          const current = writer.current(back.file);
+          if (current.ok && current.value === back.before) {
+            writer.write(back);
+          }
+        }
+        return saved;
+      }
+      done.push(text);
+    }
+    assert(done.length === texts.length, 'Every planned text was written');
+    return ok(undefined);
+  });
+  return leased.ok ? ok(true) : failure(leased.error.code === 'conflict' ? 'conflict' : 'write-failed', leased.error.message);
 }
 
 // What the project's settings say about the target now, cleaned. Nothing is written: both files must parse first.

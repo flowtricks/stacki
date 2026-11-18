@@ -61,3 +61,31 @@ the component, never a component folder itself. Redo writes the file again and r
 - **Paste** and the **CLI / MCP** do not create component files. **Studio** shares the dialog but does not offer creation.
 - The Components panel groups by the scan's folder, so a new component appears in its folder's group after the rescan that
   follows creation.
+
+## Deleting a component
+
+Delete in the Components panel's "…" menu is one step over the whole site, planned before anything is written
+(`electron/handlers/componentRemovalPlan.ts`, applied by `componentOps.ts`), and one Undo puts every byte back.
+
+- **The confirmation** (`src/app/shell/componentRemovalDialog.tsx`, the window's own dialog) says what will happen: the file
+  moves to the Trash; N instances leave M files (listed with counts); N imports are removed; the `.stacki` settings that name it
+  are cleaned. With nothing using it, it still asks, in one line.
+- **Instances** go with everything inside them, the comment that labels them and the whitespace before them: the span Delete on
+  the canvas takes. **Imports** go wherever they bind the component: default and aliased imports, `{ default as Div }`,
+  side-effect imports, extension-less and `@/` specifiers, and `{ Div }` through one barrel (whose own `export … from` line goes
+  too); in `import { Div, Card } from` only `Div` goes. **Settings**: its recipe and every nested `component` reference in
+  `.stacki/components.json`, and its rules in `.stacki/roles.json`.
+- **Refused, nothing written**, with every place listed by file and line: `import()` or `require()` of it, an
+  `import.meta.glob` / `Astro.glob` that matches it, a re-export chain (a barrel of a barrel, `export … from` in an .astro file),
+  a use as a value (`{Div}`, `{ Div }` in code, `<Div.Item>`, `UI.Div`), an instance inside a `{…}` expression, an instance in
+  Markdown or MDX, a Markdown `layout:` naming it, and a file that names it but does not parse. Show instances stays available.
+- **Order**: every edited page is written first (leased together; a failure puts back what was written), then the settings,
+  then the file goes to the Trash. Undo writes the file back first, then the pages, then the settings. Each edited page must
+  still parse after the edit, or the whole plan is refused.
+- **The dev server**: the canvas patches pages instead of reloading them, so the browser keeps the deleted component's
+  stylesheet modules (`Div.astro?astro&type=style&index=0`). When the file goes, Vite sends their update, the browser asks for
+  them again and Astro answers "No cached compile metadata found", shown as its error overlay. The preview plugin
+  (`electron/preview/markerConfig.ts`) must leave those modules out of a deleted file's update: a style count of 0 for a file
+  that is gone.
+- Duplicate's Undo deletes the copy with `uses: 'refuse'`: a copy something now uses is kept. The CLI's `components delete`
+  refuses a used component the same way.

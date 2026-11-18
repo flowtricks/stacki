@@ -51,7 +51,7 @@ import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
 import { parseInstructionFilePath, parseInstructionPath } from '../properties/instructions';
-import { parseComponentOpTarget } from '../properties/componentOps';
+import { parseComponentOpTarget, parseComponentUses } from '../properties/componentOps';
 import { parseComponentRenameRequest, parseRenameDirection } from '../properties/componentRename';
 import { parseComponentSubfolder } from '../properties/componentNaming';
 import { parseGitHubLoginQuery } from '../properties/projectRoles';
@@ -347,7 +347,9 @@ export const IPC_PAYLOADS = {
   'component:rename': object({ ...project, request: parseComponentRenameRequest }),
   'component:revertRename': object({ token: text, direction: parseRenameDirection }),
   'component:duplicate': object({ ...project, target: parseComponentOpTarget }),
-  'component:remove': object({ ...project, target: parseComponentOpTarget }),
+  'component:planRemove': object({ ...project, target: parseComponentOpTarget }),
+  // `uses`: 'remove' takes every instance and import out with the file; 'refuse' (a duplicate's undo) refuses a used one.
+  'component:remove': object({ ...project, target: parseComponentOpTarget, uses: parseComponentUses }),
   'component:restoreRemoved': object({ token: text }),
   // `folders`: the folders the creation made (its reply), each removed once empty; main removes only folders inside a component folder.
   'component:discard': object({ ...project, path: pathText, checksum: digest, force: maybeFlag, folders: optional(list(pathText)) }),

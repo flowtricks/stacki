@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { parseDefaultsSource } from '#dist/shared/properties/componentDefaults.js';
+import { err, ok, type Result } from '#dist/shared/core/result.js';
 import { parseProjectRolesSource } from '#dist/shared/properties/projectRoles.js';
 import { ComponentRemovalStore, duplicateComponentTarget, removeComponentTarget, restoreRemovedComponent } from '#dist/electron/handlers/componentOps.js';
 
@@ -64,10 +65,26 @@ function snapshot(root: string): Record<string, string> {
   return result;
 }
 
+// Writes each text straight to disk, checking it still holds `before`: the document actors' contract without the actors.
+function diskWriter() {
+  return {
+    current: (file: string) => (fs.existsSync(file) ? ok(fs.readFileSync(file, 'utf8')) : err({ code: 'missing', message: file })),
+    write: (entry: { readonly file: string; readonly before: string; readonly after: string }) => {
+      if (fs.readFileSync(entry.file, 'utf8') !== entry.before) {
+        return err({ code: 'write', message: `${entry.file} changed` });
+      }
+      fs.writeFileSync(entry.file, entry.after);
+      return ok(undefined);
+    },
+    lease: (_texts: readonly unknown[], run: () => Result<void>) => run(),
+  };
+}
+
 function trashInto(root: string) {
   const moved: string[] = [];
   return {
     moved,
+    writer: diskWriter(),
     trash: async (target: string) => {
       moved.push(projectKey(root, target));
       fs.rmSync(target, { recursive: true });
@@ -132,13 +149,13 @@ test('a used component cannot be deleted, and nothing changes', async () => {
   const before = snapshot(root);
   const store = new ComponentRemovalStore();
   const trash = trashInto(root);
-  const result = await removeComponentTarget(root, component('src/components/Card.astro'), store, trash);
+  const result = await removeComponentTarget(root, component('src/components/Card.astro'), store, trash, 'refuse');
   assert.ok(!result.ok);
   assert.equal(result.error.code, 'in-use');
   assert.match(result.error.message, /Card is used in 1 place/);
   assert.deepEqual(trash.moved, []);
   assert.deepEqual(snapshot(root), before);
-  const folderResult = await removeComponentTarget(root, folder('src/components/ui'), store, trash);
+  const folderResult = await removeComponentTarget(root, folder('src/components/ui'), store, trash, 'refuse');
   assert.ok(folderResult.ok, 'an unused folder may go');
 });
 
@@ -170,7 +187,7 @@ test('an unused component goes to the Trash, its settings are cleaned, and Undo 
   const before = snapshot(root);
   const store = new ComponentRemovalStore();
   const trash = trashInto(root);
-  const removed = await removeComponentTarget(root, component('src/components/Button.astro'), store, trash);
+  const removed = await removeComponentTarget(root, component('src/components/Button.astro'), store, trash, 'remove');
   assert.ok(removed.ok, removed.ok ? '' : removed.error.message);
   assert.deepEqual(trash.moved, ['src/components/Button.astro']);
   assert.ok(!fs.existsSync(path.join(root, 'src/components/Button.astro')));
@@ -181,13 +198,13 @@ test('an unused component goes to the Trash, its settings are cleaned, and Undo 
   const rolesNow = parseProjectRolesSource(fs.readFileSync(path.join(root, '.stacki/roles.json'), 'utf8'));
   assert.deepEqual(rolesNow.roles.find((role) => role.id === 'client')?.componentRules, [{ kind: 'folder', path: 'src/components/ui', effect: 'hide' }]);
 
-  const restored = restoreRemovedComponent(removed.value.undo, store);
+  const restored = restoreRemovedComponent(removed.value.undo, store, diskWriter());
   assert.ok(restored.ok);
   assert.equal(restored.value.metadata, 'restored');
   assert.equal(fs.readFileSync(path.join(root, 'src/components/Button.astro'), 'utf8'), BUTTON);
   assert.ok(before['.stacki/components.json'] !== undefined, 'the snapshot names the settings file by its project path');
   assert.equal(fs.readFileSync(path.join(root, '.stacki/components.json'), 'utf8'), before['.stacki/components.json']);
-  const again = restoreRemovedComponent(removed.value.undo, store);
+  const again = restoreRemovedComponent(removed.value.undo, store, diskWriter());
   assert.ok(!again.ok && again.error.code === 'unknown-undo', 'a token works once');
 });
 
@@ -195,11 +212,11 @@ test('Undo leaves settings changed since the deletion as they are', async () => 
   const defaults = { version: 1, components: { 'src/components/Button.astro': { props: { label: 'Hi' } } } };
   const root = project({ '.stacki/components.json': `${JSON.stringify(defaults)}\n` });
   const store = new ComponentRemovalStore();
-  const removed = await removeComponentTarget(root, component('src/components/Button.astro'), store, trashInto(root));
+  const removed = await removeComponentTarget(root, component('src/components/Button.astro'), store, trashInto(root), 'remove');
   assert.ok(removed.ok);
   const edited = `${JSON.stringify({ version: 1, components: { 'src/components/Card.astro': { text: 'new' } } })}\n`;
   fs.writeFileSync(path.join(root, '.stacki/components.json'), edited);
-  const restored = restoreRemovedComponent(removed.value.undo, store);
+  const restored = restoreRemovedComponent(removed.value.undo, store, diskWriter());
   assert.ok(restored.ok);
   assert.equal(restored.value.metadata, 'kept');
   assert.equal(fs.readFileSync(path.join(root, '.stacki/components.json'), 'utf8'), edited);
@@ -211,11 +228,11 @@ test('deleting refuses a path outside the component folders and broken settings,
   const before = snapshot(root);
   const store = new ComponentRemovalStore();
   const trash = trashInto(root);
-  const outside = await removeComponentTarget(root, component('src/pages/index.astro'), store, trash);
+  const outside = await removeComponentTarget(root, component('src/pages/index.astro'), store, trash, 'remove');
   assert.ok(!outside.ok && outside.error.code === 'outside-components');
-  const traversal = await removeComponentTarget(root, component('src/components/../../package.json'), store, trash);
+  const traversal = await removeComponentTarget(root, component('src/components/../../package.json'), store, trash, 'remove');
   assert.ok(!traversal.ok && traversal.error.code === 'outside-components');
-  const broken = await removeComponentTarget(root, component('src/components/Button.astro'), store, trash);
+  const broken = await removeComponentTarget(root, component('src/components/Button.astro'), store, trash, 'remove');
   assert.ok(!broken.ok && broken.error.code === 'write-failed');
   assert.deepEqual(trash.moved, []);
   assert.deepEqual(snapshot(root), before);
@@ -225,11 +242,18 @@ test('a failed Trash move puts the cleaned settings back', async () => {
   const defaults = { version: 1, components: { 'src/components/Button.astro': { props: { label: 'Hi' } } } };
   const root = project({ '.stacki/components.json': `${JSON.stringify(defaults)}\n` });
   const before = snapshot(root);
-  const result = await removeComponentTarget(root, component('src/components/Button.astro'), new ComponentRemovalStore(), {
-    trash: async () => {
-      throw new Error('no trash here');
+  const result = await removeComponentTarget(
+    root,
+    component('src/components/Button.astro'),
+    new ComponentRemovalStore(),
+    {
+      writer: diskWriter(),
+      trash: async () => {
+        throw new Error('no trash here');
+      },
     },
-  });
+    'remove',
+  );
   assert.ok(!result.ok && result.error.code === 'write-failed');
   assert.deepEqual(snapshot(root), before);
 });

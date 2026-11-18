@@ -10,7 +10,6 @@ import { ComponentPreviewPopup } from './ComponentPreviewPopup';
 import { useAddableComponents } from './componentVisibility';
 import type { PaletteRoleRules } from './componentRolesMenu';
 import type { ManagedItem, PaletteManagement, RenameHost } from './paletteManagement';
-import { usedPlaces } from '../../../shared/properties/componentOps';
 import { PaletteRowMenu } from './PaletteRowMenu';
 import type { MenuEntry } from '../../ui/Menu';
 import { rolesSubmenu } from './componentRolesMenu';
@@ -391,23 +390,14 @@ function componentChanges(
   const duplicate: readonly MenuEntry[] = can(role, 'component:create')
     ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), icon: <CopyIcon size={14} />, onSelect: () => management.duplicate(item) }]
     : [];
-  const remove: readonly MenuEntry[] = can(role, 'component:edit')
-    ? [deleteRow({ instances: component.instances, translate }, () => management.remove(item))]
-    : [];
+  const remove: readonly MenuEntry[] = can(role, 'component:edit') ? [deleteRow(translate, () => management.remove(item))] : [];
   return renamable.length + duplicate.length + remove.length === 0 ? [] : [{ kind: 'divider', id: 'changes' }, ...renamable, ...duplicate, ...remove];
 }
 
-// Delete, disabled while anything uses what it would remove: the reason is the row's own info mark.
-function deleteRow(
-  { instances, translate }: { readonly instances: number | undefined; readonly translate: ReturnType<typeof useTranslate> },
-  onSelect: () => void,
-): MenuEntry {
-  const used = usedPlaces(instances);
-  const base = { kind: 'item', id: 'delete', label: translate('palette.menu.delete'), icon: <TrashIcon size={14} />, danger: true, onSelect } as const;
-  if (instances === undefined) {
-    return { ...base, disabled: true, info: translate('palette.panel.checking') };
-  }
-  return used === undefined ? base : { ...base, disabled: true, info: translate('palette.menu.usedIn', { count: used }) };
+// Delete: always offered. What it would take out (instances, imports, settings) is worked out and confirmed when chosen,
+// and a use it cannot rewrite is listed there (src/app/shell/componentRemovalDialog.tsx), so the row needs no count.
+function deleteRow(translate: ReturnType<typeof useTranslate>, onSelect: () => void): MenuEntry {
+  return { kind: 'item', id: 'delete', label: translate('palette.menu.delete'), icon: <TrashIcon size={14} />, danger: true, onSelect };
 }
 
 // The same for a folder header: Roles over the folder, then Duplicate and Delete of the folder and every component under it.
@@ -445,14 +435,10 @@ function folderChanges(
     return [];
   }
   const item: ManagedItem = { kind: 'folder', path: folder.path, name: folder.folder, files: folder.under.length };
-  const unknown = folder.under.some((component) => component.instances === undefined);
-  const total = folder.under.reduce((sum, component) => sum + (component.instances ?? 0), 0);
   const duplicate: readonly MenuEntry[] = can(role, 'component:create')
     ? [{ kind: 'item', id: 'duplicate', label: translate('palette.menu.duplicate'), icon: <CopyIcon size={14} />, onSelect: () => management.duplicate(item) }]
     : [];
-  const remove: readonly MenuEntry[] = can(role, 'component:edit')
-    ? [deleteRow({ instances: unknown ? undefined : total, translate }, () => management.remove(item))]
-    : [];
+  const remove: readonly MenuEntry[] = can(role, 'component:edit') ? [deleteRow(translate, () => management.remove(item))] : [];
   return duplicate.length + remove.length === 0 ? [] : [{ kind: 'divider', id: 'changes' }, ...duplicate, ...remove];
 }
 

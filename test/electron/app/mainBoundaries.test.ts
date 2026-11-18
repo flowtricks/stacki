@@ -112,7 +112,8 @@ test('the complete channel inventory matches real main and terminal registration
   // Preview health adds one (dev:inspect); the palette row menu adds three (component:duplicate, :remove and
   // :restoreRemoved), renaming or moving a component three (component:planRename, :rename and :revertRename),
   // and deleting a prop across the site one (component:previewPropertyRemoval), 285 in all.
-  assert.equal(harness.handlers.size, 285);
+  // Deleting a component with its instances and imports adds its plan (component:planRemove), 286 in all.
+  assert.equal(harness.handlers.size, 286);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

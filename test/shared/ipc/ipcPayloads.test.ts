@@ -447,7 +447,8 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     unchecked: [{ file: 'src/styles/b.css', locator: 'media:1' }],
   },
   'component:duplicate': { projectPath: '/site', target: { kind: 'component', path: 'src/components/Button.astro' } },
-  'component:remove': { projectPath: '/site', target: { kind: 'folder', path: 'src/components/ui' } },
+  'component:planRemove': { projectPath: '/site', target: { kind: 'component', path: 'src/components/Div.astro' } },
+  'component:remove': { projectPath: '/site', target: { kind: 'folder', path: 'src/components/ui' }, uses: 'remove' },
   'component:restoreRemoved': { token: 'component-removal-1' },
   'component:planRename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/forms/Button.astro' } },
   'component:rename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/ContactButton.astro' } },
@@ -716,9 +717,13 @@ test('the microphone channels take no payload: a renderer can never choose the a
 });
 
 test('component operation payloads refuse paths that climb, other kinds, and names that are not components', () => {
-  const bad = (channel: 'component:duplicate' | 'component:remove', target: unknown) =>
-    assert.throws(() => parseIpcPayload(channel, { projectPath: '/site', target }));
-  for (const channel of ['component:duplicate', 'component:remove'] as const) {
+  const bad = (channel: 'component:duplicate' | 'component:planRemove' | 'component:remove', target: unknown) =>
+    assert.throws(() => parseIpcPayload(channel, { projectPath: '/site', target, uses: 'remove' }));
+  // The deletion mode is never defaulted: a missing or unknown one is refused at the boundary.
+  for (const uses of [undefined, 'delete', true]) {
+    assert.throws(() => parseIpcPayload('component:remove', { projectPath: '/site', target: { kind: 'component', path: 'src/components/A.astro' }, uses }));
+  }
+  for (const channel of ['component:duplicate', 'component:planRemove', 'component:remove'] as const) {
     bad(channel, { kind: 'component', path: '../outside.astro' });
     bad(channel, { kind: 'component', path: 'src/../x.astro' });
     bad(channel, { kind: 'page', path: 'src/components/A.astro' });
