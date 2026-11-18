@@ -4,7 +4,7 @@ import { parseContextPoint, type ContextPoint } from './contextPosition';
 import { canvasClickBox, coordinateOf, type CanvasClickBox } from '../../ui/canvasClickSlot';
 import type { Box } from './outlineBoxes';
 import type { MarginCollapse, Spacing } from './spacingBands';
-import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
+import { boolean, count, dictionary, digest, list, optional, pathText, record, text } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
 import { LIMITS } from '../../../shared/core/limits';
 import { ITERATION_LIMITS, type PreviewIteration } from '../../../shared/page/previewIteration';
@@ -70,6 +70,12 @@ export type PreviewMessage =
   | { readonly kind: 'render-problem'; readonly problem: FrameRenderProblem }
   /** The canvas reloaded instead of patching, and why (step 7). */
   | { readonly kind: 'preview-reload'; readonly reason: PreviewReloadReason }
+  /**
+   * The dev server's error overlay came up over the page, or went away (electron/preload/frameErrorOverlay.ts). An
+   * overlay is the dev server's HMR client reporting a module the page asked for that failed: the page answered 200,
+   * so no failed navigation says so. `message` is the overlay's own words, bounded, when it had any.
+   */
+  | { readonly kind: 'error-overlay'; readonly shown: boolean; readonly message: string | undefined }
   | { readonly kind: 'query-result'; readonly input: unknown }
   /** What is under a point, for an app dragging an overlay item (src/ui/canvasPointQuery.ts parses it). */
   | { readonly kind: 'point-result'; readonly input: unknown }
@@ -255,6 +261,8 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
       return { kind: 'render-problem', problem: parseRenderProblem(value['problem']) };
     case 'avb:preview-reload':
       return { kind: 'preview-reload', reason: parseReloadReason(value['reason']) };
+    case 'avb:error-overlay':
+      return { kind: 'error-overlay', shown: boolean(value['shown']), message: optional(parseOverlayMessage)(value['message']) };
     case 'avb:query-result':
       return { kind: 'query-result', input: value };
     case 'avb:point-result':
@@ -345,6 +353,17 @@ function parseRenderProblem(input: unknown): FrameRenderProblem {
     throw new Error('Preview render problem: unknown value');
   }
   return found;
+}
+
+/** Characters of the overlay's words the frame sends; the notice shows fewer, the dev log has all of them. */
+export const OVERLAY_MESSAGE_CHARS_MAX = 2_000;
+
+function parseOverlayMessage(input: unknown): string {
+  const message = text(input);
+  if (message.length > OVERLAY_MESSAGE_CHARS_MAX) {
+    throw new Error('Preview overlay: message exceeds limit');
+  }
+  return message;
 }
 
 function parseReloadReason(input: unknown): PreviewReloadReason {

@@ -21,6 +21,7 @@ import type { CanvasClickProblem } from './canvasClickRecovery';
 import type { CanvasEventRequest } from '../../editor/canvasClick';
 import { canvasClicksCaptured, noteCanvasOpen, observeCanvasClick, takeCanvasClick } from '../../ui/canvasClickSlot';
 import { receiveCanvasPoint } from '../../ui/canvasPointQuery';
+import { reportFrameOverlay } from './canvasRecoveryBus';
 import { canvasHighlight, noteDeepHover, resendCanvasOutlineMode, subscribeCanvasHighlight } from '../../ui/canvasOutlineMode';
 
 /** Whether a click or double-click on the canvas may select what it names
@@ -452,6 +453,11 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
     case 'preview-reload':
       announceRender(refs.render, undefined); // The reloaded page announces its own.
       refs.props.current.onPreviewReload?.(message.reason);
+      break;
+    case 'error-overlay':
+      // The canvas recovery controller hears it (src/app/state/appLifecycle.ts): the overlay is an error the page's
+      // own answer does not show, and the next change that fixes it reloads the canvas.
+      reportFrameOverlay(message.shown ? { kind: 'shown', message: message.message } : { kind: 'cleared' });
       break;
     case 'canvas-ready':
       noteCanvasReady();

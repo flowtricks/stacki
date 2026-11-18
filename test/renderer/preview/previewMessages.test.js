@@ -8,9 +8,8 @@ const assert = require('node:assert/strict');
 // so the negative space below includes it. It is read from JSON, because our own
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
-const { parsePreviewMessage, parseShortcutMessage, describePreviewReload, PREVIEW_RELOAD_REASONS } = require('../../helpers/rendererModule')(
-  'src/features/preview/previewMessages.ts',
-);
+const { parsePreviewMessage, parseShortcutMessage, describePreviewReload, PREVIEW_RELOAD_REASONS, OVERLAY_MESSAGE_CHARS_MAX } =
+  require('../../helpers/rendererModule')('src/features/preview/previewMessages.ts');
 
 const box = { x: -1.5, y: 2, w: 30, h: 40 };
 const TOKEN = 'a'.repeat(64);
@@ -126,6 +125,18 @@ test('a reload names its reason; only the caps are announced to the user (step 7
   assert.equal(parsePreviewMessage({ type: 'avb:preview-reload' }), undefined);
   const announced = PREVIEW_RELOAD_REASONS.filter((reason) => describePreviewReload(reason));
   assert.deepEqual(announced, ['markers-over-cap', 'diff-over-cap']);
+});
+
+test('the error overlay message carries whether it shows and its bounded words', () => {
+  const shown = { type: 'avb:error-overlay', shown: true, message: 'No Astro CSS at index 0' };
+  assert.deepEqual(parsePreviewMessage(shown), { kind: 'error-overlay', shown: true, message: 'No Astro CSS at index 0' });
+  assert.deepEqual(parsePreviewMessage({ type: 'avb:error-overlay', shown: false }), { kind: 'error-overlay', shown: false, message: undefined });
+  assert.deepEqual(parsePreviewMessage({ ...shown, message: 'x'.repeat(OVERLAY_MESSAGE_CHARS_MAX) }).message.length, OVERLAY_MESSAGE_CHARS_MAX);
+  assert.equal(parsePreviewMessage({ ...shown, message: 'x'.repeat(OVERLAY_MESSAGE_CHARS_MAX + 1) }), undefined, 'over the bound');
+  assert.equal(parsePreviewMessage({ ...shown, message: 42 }), undefined, 'words are text');
+  assert.equal(parsePreviewMessage({ ...shown, message: PLATFORM_NULL }), undefined, 'null is not absence');
+  assert.equal(parsePreviewMessage({ type: 'avb:error-overlay', message: 'x' }), undefined, 'shown is required');
+  assert.equal(parsePreviewMessage({ type: 'avb:error-overlay', shown: 'yes' }), undefined, 'shown is a boolean');
 });
 
 test('preview message parser ignores unknown and malformed project messages', () => {

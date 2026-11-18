@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToastStack, type ToastNotice } from '../../features/notifications/useToastStack';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import { createCanvasRecovery, isCurrentPageFailure, type CanvasRecovery } from '../../features/preview/canvasRecovery';
-import { publishCanvasRecovery } from '../../features/preview/canvasRecoveryBus';
+import { onFrameOverlay, publishCanvasRecovery } from '../../features/preview/canvasRecoveryBus';
 import { tellCanvas } from '../../editor/canvasQuery';
 import { readPage, scanProject } from '../../ipc/bridge';
 import { assert } from '../../../shared/core/assert';
@@ -273,6 +273,23 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
       recovery.loaded();
     }
     const offFailure = subscribePreviewFailure(recovery, pageUrl);
+    // The dev server's error overlay over a page that loaded: an error the page's answer does not show.
+    const offOverlay = onFrameOverlay((report) => {
+      switch (report.kind) {
+        case 'shown': {
+          recovery.overlayShown(pageUrl(), report.message);
+          return;
+        }
+        case 'cleared': {
+          recovery.overlayCleared();
+          return;
+        }
+        default: {
+          const unreachable: never = report;
+          return unreachable;
+        }
+      }
+    });
     // Every write the app makes, plus every change made outside it.
     const offWrite = onPageMaybeChanged((event) => {
       recovery.trigger(event.external ? 'external' : 'write');
@@ -294,6 +311,7 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
       window.removeEventListener('focus', onVisible);
       offWrite();
       offFailure();
+      offOverlay();
       recovery.stop();
       if (recoveryRef.current === recovery) {
         recoveryRef.current = undefined;

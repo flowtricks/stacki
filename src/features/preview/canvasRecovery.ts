@@ -49,8 +49,18 @@ export const CANVAS_POLL_DELAYS_MS = [400, 800, 1_600, 3_000] as const;
 
 export type RecoveryTrigger = 'write' | 'external' | 'restart' | 'focus' | 'load';
 
+/**
+ * Who saw the error. `response`: the dev server's answer for the page (a status, a cut-off body, its error screen),
+ * which a check can look at again. `frame`: the dev server's error overlay drawn over a page that loaded, by its HMR
+ * client after a module the page asked for failed; the page itself still answers 200, so a check cannot see it and
+ * polling would "recover" at once. A frame error is looked at again only when something may have fixed it: a write,
+ * an outside change or a dev server restart.
+ */
+export type CanvasErrorOrigin = 'response' | 'frame';
+
 /** What the canvas is showing instead of the page, as the verdict describes it. */
 export interface CanvasError {
+  readonly origin: CanvasErrorOrigin;
   readonly kind: PreviewHealthKind;
   readonly status: number;
   /** The words the notice shows; undefined until the dev server has said why. */
@@ -105,6 +115,10 @@ export interface CanvasRecovery {
   readonly trigger: (cause: RecoveryTrigger) => void;
   /** The canvas failed to show `url` (an error status, a navigation that failed). */
   readonly failed: (url: string) => void;
+  /** The page on show put up the dev server's error overlay, with its words when it had any. */
+  readonly overlayShown: (url: string, message: string | undefined) => void;
+  /** The overlay went away by itself: the dev server's next good update closed it. */
+  readonly overlayCleared: () => void;
   /** The frame finished loading a document. */
   readonly loaded: () => void;
   /** Another page is on show, or none: forget everything about the old one. */
@@ -138,12 +152,34 @@ export function canvasErrorOf(health: PreviewHealth, url: string): CanvasError |
   const joined = lines.slice(0, 3).join(' · ');
   const message = joined.length <= CANVAS_RECOVERY_LIMITS.messageCharsMax ? joined : `${joined.slice(0, CANVAS_RECOVERY_LIMITS.messageCharsMax - 1)}…`;
   return {
+    origin: 'response',
     kind: health.kind,
     status: health.status,
     message: lines.length === 0 ? undefined : message,
     fingerprint: `${health.kind}|${health.status}|${first}`,
     url,
   };
+}
+
+/** The error an overlay in the frame describes: the words of the overlay, bounded like a verdict's. */
+export function overlayErrorOf(url: string, message: string | undefined): CanvasError {
+  const lines = (message ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  const joined = lines.slice(0, 3).join(' · ');
+  const words = joined.length <= CANVAS_RECOVERY_LIMITS.messageCharsMax ? joined : `${joined.slice(0, CANVAS_RECOVERY_LIMITS.messageCharsMax - 1)}…`;
+  const error: CanvasError = {
+    origin: 'frame',
+    kind: 'error-overlay',
+    status: 0,
+    message: lines.length === 0 ? undefined : words,
+    fingerprint: `frame|${(lines[0] ?? '').slice(0, CANVAS_RECOVERY_LIMITS.fingerprintCharsMax)}`,
+    url,
+  };
+  assert(error.fingerprint.length <= CANVAS_RECOVERY_LIMITS.fingerprintCharsMax + 'frame|'.length, 'A fingerprint is bounded');
+  assert(error.message === undefined || error.message.length <= CANVAS_RECOVERY_LIMITS.messageCharsMax, 'The notice words are bounded');
+  return error;
 }
 
 /**
@@ -190,6 +226,8 @@ export function createCanvasRecovery(environment: CanvasRecoveryEnvironment): Ca
   return {
     trigger: (cause) => controller.trigger(cause),
     failed: (url) => controller.failed(url),
+    overlayShown: (url, message) => controller.overlayShown(url, message),
+    overlayCleared: () => controller.overlayCleared(),
     loaded: () => controller.loaded(),
     pageChanged: () => controller.pageChanged(),
     visibilityChanged: () => controller.visibilityChanged(),
@@ -211,6 +249,9 @@ class CanvasRecoveryController {
   private lastChangeAt = -Infinity;
   private lastCheckAt = -Infinity;
   private recoveries: number[] = [];
+  // When the last reload for a recovery was issued: an overlay that comes up on the reloaded page soon after is a
+  // recovery that did not hold, counted like a failed navigation of it.
+  private lastRecoveryAt = -Infinity;
 
   constructor(private readonly environment: CanvasRecoveryEnvironment) {
     this.timers = environment.timers ?? realTimers;
@@ -233,6 +274,17 @@ class CanvasRecoveryController {
         return;
       }
       case 'error': {
+        if (this.state.error.origin === 'frame') {
+          if (cause === 'focus' || cause === 'load') {
+            // Nothing that could have fixed it, and a check cannot see an overlay: it would "recover" at once.
+            return;
+          }
+          // A change may have fixed it: look once; the page answering means the reload shows it fixed. The window is
+          // for the polls of the response error the look may find instead.
+          this.state = { ...this.state, windowEndsAt: now + CANVAS_RECOVERY_LIMITS.pollWindowMs, polling: this.waiting(0, CANVAS_RECOVERY_LIMITS.settleMs) };
+          this.schedule(CANVAS_RECOVERY_LIMITS.settleMs);
+          return;
+        }
         // Anything that could have fixed it starts the quick polls again, with a fresh window.
         this.state = { ...this.state, windowEndsAt: now + CANVAS_RECOVERY_LIMITS.pollWindowMs, polling: this.waiting(0, CANVAS_RECOVERY_LIMITS.settleMs) };
         this.schedule(CANVAS_RECOVERY_LIMITS.settleMs);
@@ -257,7 +309,7 @@ class CanvasRecoveryController {
     const now = this.timers.now();
     switch (this.state.kind) {
       case 'healthy': {
-        this.enter({ kind: 'server-error', status: 0, message: undefined, fingerprint: 'pending', url }, now);
+        this.enter({ origin: 'response', kind: 'server-error', status: 0, message: undefined, fingerprint: 'pending', url }, now);
         this.schedule(0);
         return;
       }
@@ -265,11 +317,17 @@ class CanvasRecoveryController {
         // The new document failed too: count it, so a page the check likes and the canvas does not cannot loop.
         this.recoveries.push(now);
         this.clearRecovering();
-        this.enter({ ...this.state.from, url }, now);
+        this.enter({ ...this.state.from, origin: 'response', url }, now);
         this.schedule(CANVAS_RECOVERY_LIMITS.settleMs);
         return;
       }
       case 'error': {
+        if (this.state.error.origin === 'frame') {
+          // The page itself now fails to load: a response error, which a check can see and poll.
+          this.enter({ origin: 'response', kind: 'server-error', status: 0, message: undefined, fingerprint: 'pending', url }, now);
+          this.schedule(0);
+          return;
+        }
         this.trigger('load');
         return;
       }
@@ -277,6 +335,69 @@ class CanvasRecoveryController {
         const unreachable: never = this.state;
         return unreachable;
       }
+    }
+  }
+
+  overlayShown(url: string, message: string | undefined): void {
+    if (this.stopped) {
+      return;
+    }
+    const now = this.timers.now();
+    const error = overlayErrorOf(url, message);
+    assert(error.origin === 'frame', 'An overlay is an error the frame saw');
+    switch (this.state.kind) {
+      case 'healthy': {
+        if (now - this.lastRecoveryAt <= CANVAS_RECOVERY_LIMITS.flapWindowMs) {
+          // The page this controller reloaded put the overlay up again: a recovery that did not hold.
+          this.recoveries.push(now);
+        }
+        this.enterFrameError(error, now);
+        this.environment.onEvent({ kind: 'failed', error });
+        return;
+      }
+      case 'recovering': {
+        this.recoveries.push(now);
+        this.clearRecovering();
+        this.enterFrameError(error, now);
+        this.environment.onEvent({ kind: 'failed', error });
+        return;
+      }
+      case 'error': {
+        if (this.state.error.origin === 'response') {
+          // The dev server's error screen is on show, and it carries its own overlay: the response is the error.
+          return;
+        }
+        const before = this.state.error;
+        this.enterFrameError(error, now);
+        if (before.fingerprint !== error.fingerprint) {
+          this.environment.onEvent({ kind: 'failed', error });
+        }
+        return;
+      }
+      default: {
+        const unreachable: never = this.state;
+        return unreachable;
+      }
+    }
+  }
+
+  overlayCleared(): void {
+    if (this.stopped) {
+      return;
+    }
+    if (this.state.kind === 'error') {
+      if (this.state.error.origin === 'frame') {
+        const from = this.state.error;
+        this.generation += 1; // A check in flight about the overlay has nothing left to decide.
+        this.timers.clearTimeout(this.timer);
+        this.timer = undefined;
+        this.state = { kind: 'healthy' };
+        this.environment.onEvent({ kind: 'recovered', from });
+      } else {
+        // The dev server's error screen has no overlay of its own to close; the response decides.
+      }
+    } else {
+      // Healthy or reloading: nothing was shown that the canvas has to take back.
     }
   }
 
@@ -300,6 +421,10 @@ class CanvasRecoveryController {
         return;
       }
       case 'error': {
+        if (this.state.error.origin === 'frame') {
+          // A new document replaced the one with the overlay; if it fails too, its frame says so again.
+          this.overlayCleared();
+        }
         return;
       }
       default: {
@@ -326,6 +451,9 @@ class CanvasRecoveryController {
     }
     // Back in front: an error looks again now, a healthy canvas takes one look.
     if (this.state.kind === 'error') {
+      if (this.state.error.origin === 'frame') {
+        return; // A check cannot see an overlay; only a change looks again (see `trigger`).
+      }
       this.schedule(0);
     } else {
       this.trigger('focus');
@@ -345,6 +473,15 @@ class CanvasRecoveryController {
     this.again = false;
     this.state = { kind: 'healthy' };
     this.recoveries = [];
+    this.lastRecoveryAt = -Infinity;
+  }
+
+  // A frame error waits for a change (see `trigger`): no polls, so its polling is spent from the start.
+  private enterFrameError(error: CanvasError, now: number): void {
+    assert(error.origin === 'frame', 'Only an overlay waits for a change');
+    this.timers.clearTimeout(this.timer);
+    this.timer = undefined;
+    this.state = { kind: 'error', error, windowEndsAt: now, polling: { kind: 'exhausted' } };
   }
 
   private enter(error: CanvasError, now: number): void {
@@ -493,6 +630,7 @@ class CanvasRecoveryController {
       return;
     }
     this.state = { kind: 'recovering', from };
+    this.lastRecoveryAt = now;
     this.environment.onEvent({ kind: 'recovered', from });
     this.environment.reload();
     this.timers.clearTimeout(this.recoveringTimer);

@@ -3,13 +3,16 @@
 // generated preview config (avb-morph in electron/preview/markerConfig.ts) compiles a file whose
 // <style> text changed before Vite announces the new stylesheet — and keeps
 // filtering the stylesheet out of updates whose style text did not change, so
-// typing into a text field never restarts an animation.
+// typing into a text field never restarts an animation. And a <style> block
+// that was deleted, asked for again by the browser, is an empty stylesheet
+// rather than Astro's "No Astro CSS at index N" error.
 // Method: write the real preview config into a temporary project with the
 // windowless main harness and import it, as Astro would. Seed a file through
 // the marker plugin's load, edit the file on disk, and call avb-morph's
 // handleHotUpdate with a fake Vite server: its environments say which files
 // their module graphs hold and record every transformRequest, in order. Each
 // case states what the hook returns, what was compiled, and in which order.
+// The load of a deleted block's stylesheet is called directly, against the file on disk.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -41,7 +44,7 @@ async function preview() {
     harness.dispose();
     fs.rmSync(root, { recursive: true, force: true });
   };
-  return { markers: plugin('avb-node-markers'), morph: plugin('avb-morph'), file, dispose };
+  return { markers: plugin('avb-node-markers'), morph: plugin('avb-morph'), vanished: plugin('avb-vanished-styles'), file, dispose };
 }
 
 // A Vite server whose environments hold `file` as `holders` says. Each
@@ -230,6 +233,113 @@ test('a page only the prerender environment holds is compiled there', async () =
     const { server, log } = fakeServer(page, ['client', 'prerender']);
     assert.equal(await hotUpdate(morph, page, server), undefined);
     assert.deepEqual(log, ['start prerender /src/pages/index.astro', 'end prerender']);
+  } finally {
+    dispose();
+  }
+});
+
+// Deleting a <style> block (docs/canvas-recovery.md, "No Astro CSS at index 0"): Vite's update still names the
+// modules of the blocks the file had, the browser asks for them again, and Astro's load throws for a block that is
+// gone. The marker plugin's load answers that ask with an empty stylesheet; every block that still exists is left
+// to Astro, and the update itself keeps its stylesheet modules, which Astro's reload logic needs.
+const STYLED = (blocks) => `<div class="my-class">Hello</div>\n${blocks.map((block) => `\n${block}\n`).join('')}`;
+const LAYERED = '<style>\n  @layer components {\n    .my-class {\n      padding: 1.25rem;\n    }\n  }\n</style>';
+const styleAsk = (page, index) => `${page}?astro&type=style&index=${index}&lang.css`;
+const EMPTY = { code: '' };
+// What a load hook returns for "not mine, ask the next plugin" is Rollup's null; read from JSON, since our own code
+// never writes one.
+const PASSED_ON = JSON.parse('null');
+
+test("the ask for a deleted block is an empty stylesheet; a block that exists is Astro's", async () => {
+  const { markers, morph, file, dispose } = await preview();
+  try {
+    const page = file('index.astro', STYLED([LAYERED]));
+    markers.load.handler(page);
+    assert.equal(markers.load.handler(styleAsk(page, 0)), PASSED_ON, 'block 0 exists: Astro serves it');
+    file('index.astro', STYLED([]));
+    const { server, log } = fakeServer(page, ['ssr']);
+    const returned = await hotUpdate(morph, page, server);
+    assert.equal(returned, undefined, 'the update goes out whole: Astro sees the stylesheet module changed');
+    assert.deepEqual(log, ['start ssr /src/pages/index.astro', 'end ssr'], 'the file compiles first');
+    assert.deepEqual(markers.load.handler(styleAsk(page, 0)), EMPTY, 'the browser asking for block 0 gets nothing, not an error');
+    // Undo puts the block back: it is Astro's again.
+    file('index.astro', STYLED([LAYERED]));
+    assert.equal(markers.load.handler(styleAsk(page, 0)), PASSED_ON, 'restored');
+  } finally {
+    dispose();
+  }
+});
+
+test('deleting block 0 of two: the old block 1 is past the end, block 0 is still served', async () => {
+  const { markers, file, dispose } = await preview();
+  try {
+    const page = file('index.astro', STYLED(['<style>.a { color: red; }</style>', '<style>.b { color: blue; }</style>']));
+    assert.equal(markers.load.handler(styleAsk(page, 1)), PASSED_ON);
+    file('index.astro', STYLED(['<style>.b { color: blue; }</style>']));
+    assert.equal(markers.load.handler(styleAsk(page, 0)), PASSED_ON, 'block 0 is now the old block 1');
+    assert.deepEqual(markers.load.handler(styleAsk(page, 1)), EMPTY, 'there is no block 1');
+    assert.deepEqual(markers.load.handler(styleAsk(page, 7)), EMPTY);
+  } finally {
+    dispose();
+  }
+});
+
+test('is:inline is not a module; global, scss and define:vars blocks count like any other', async () => {
+  const { markers, file, dispose } = await preview();
+  try {
+    const blocks = [
+      '<style is:global>.g { color: red; }</style>',
+      '<style lang="scss">.s { .t { color: red; } }</style>',
+      '<style define:vars={{ c: "red" }}>.v { color: var(--c); }</style>',
+      '<style is:inline>.i { color: red; }</style>',
+    ];
+    const page = file('index.astro', STYLED(blocks));
+    assert.equal(markers.load.handler(styleAsk(page, 2)), PASSED_ON, 'three compiled blocks');
+    assert.deepEqual(markers.load.handler(styleAsk(page, 3)), EMPTY, 'the inline block has no module');
+    file('index.astro', STYLED(blocks.slice(1)));
+    assert.equal(markers.load.handler(styleAsk(page, 1)), PASSED_ON);
+    assert.deepEqual(markers.load.handler(styleAsk(page, 2)), EMPTY, 'deleting the global block leaves two');
+  } finally {
+    dispose();
+  }
+});
+
+test('other asks pass untouched (scripts, no index, a non-Astro file); a deleted file has no blocks', async () => {
+  const { markers, file, dispose } = await preview();
+  try {
+    const page = file('index.astro', STYLED([]));
+    assert.equal(markers.load.handler(`${page}?astro&type=script&index=0&lang.ts`), PASSED_ON, 'a script is not a style');
+    assert.equal(markers.load.handler(`${page}?astro&type=style&lang.css`), PASSED_ON, 'no index: Astro says what is wrong');
+    assert.deepEqual(markers.load.handler(styleAsk(page.replace('index.astro', 'gone.astro'), 0)), EMPTY, 'a deleted file has no blocks');
+    const markdown = file('post.md', '# Post\n');
+    assert.equal(markers.load.handler(`${markdown}?astro&type=style&index=0&lang.css`), PASSED_ON, 'only .astro files have blocks');
+  } finally {
+    dispose();
+  }
+});
+
+// The browser's update (the client environment's hotUpdate) leaves out the blocks past the file's last; the server's
+// update is untouched, since Astro's reload logic reads its stylesheet modules to refresh the page's collected CSS.
+const clientStyle = (page, index) => ({ id: styleAsk(page, index), url: `/src/pages/index.astro?astro&type=style&index=${index}&lang.css` });
+const hotUpdateIn = (vanished, environmentName, file, modules) =>
+  Reflect.apply(vanished.hotUpdate, { environment: { name: environmentName } }, [{ file, modules }]);
+
+test('the browser is never told about a block the file no longer has', async () => {
+  const { markers, vanished, file, dispose } = await preview();
+  try {
+    const page = file('index.astro', STYLED(['<style>.b { color: blue; }</style>']));
+    const pageModule = { id: page, url: '/src/pages/index.astro' };
+    const modules = [pageModule, clientStyle(page, 0), clientStyle(page, 1)];
+    assert.deepEqual(hotUpdateIn(vanished, 'client', page, modules), [pageModule, clientStyle(page, 0)], 'block 1 is gone: left out');
+    assert.equal(hotUpdateIn(vanished, 'ssr', page, modules), undefined, "the server update is Astro's, whole");
+    assert.equal(hotUpdateIn(vanished, 'client', page, [pageModule, clientStyle(page, 0)]), undefined, 'nothing to leave out');
+    file('index.astro', STYLED([]));
+    assert.deepEqual(hotUpdateIn(vanished, 'client', page, modules), [pageModule], 'the only block deleted');
+    fs.rmSync(page);
+    assert.deepEqual(hotUpdateIn(vanished, 'client', page, modules), [pageModule], 'a deleted component has no blocks');
+    assert.deepEqual(markers.load.handler(styleAsk(page, 0)), EMPTY, 'and an ask for one is an empty stylesheet');
+    const markdown = file('post.md', '# Post\n');
+    assert.equal(hotUpdateIn(vanished, 'client', markdown, [{ id: markdown, url: '/src/pages/post.md' }]), undefined, 'not an Astro file');
   } finally {
     dispose();
   }

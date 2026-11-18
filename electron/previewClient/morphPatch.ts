@@ -35,9 +35,24 @@ const pinned = (node: Node): boolean => {
 // attribute. Reading it here compared a stamped path against an id, decided
 // every element was a different element, and fell back to reloading the page
 // on every keystroke: the exact thing this was written to stop.
+//
+// The one exception is a dev stylesheet, which the server and the live page
+// both name by its data-vite-dev-id (Vite reuses the server's element): the
+// component and the <style> block it came from. Unkeyed, every <style> of the
+// head was interchangeable, so when a component's block was deleted the diff
+// paired the rest by position and removed the LAST stylesheet instead of the
+// deleted one: the deleted block's rules stayed on the page (an is:global
+// block went on styling it) while another component lost its own.
 const keyOf = (node: Node | undefined): string | undefined => {
   if (node !== undefined && asElement(node)) {
-    return node.getAttribute('id') || undefined;
+    const id = node.getAttribute('id');
+    if (id) {
+      return id;
+    }
+    if (node.tagName === 'STYLE') {
+      return node.getAttribute('data-vite-dev-id') || undefined;
+    }
+    return undefined;
   }
   return undefined;
 };

@@ -176,6 +176,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     case 'canvas-ready':
     case 'guide':
     case 'preview-reload':
+    case 'error-overlay':
     case 'query-result':
     case 'point-result':
     case 'text-marks':

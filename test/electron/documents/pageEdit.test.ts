@@ -1093,3 +1093,38 @@ test('wrappedTextHunk keeps layout outside the tag and checks its inputs', () =>
   assert.throws(() => wrappedTextHunk('words', toByteSpan(0, 4), 'span'), /A run is the text of its span/);
   assert.throws(() => wrappedTextHunk('words', toByteSpan(0, 5), '<b>'), /A wrapped run gets a valid tag name/);
 });
+
+// The Navigator deletes a <style> block with `remove-node` on the raw node that holds it. The removal takes the block
+// and the line it sat on, and nothing else: no blank line is left where it was, so deleting and undoing leaves the
+// file byte for byte, and the dev server sees a file with one block fewer (electron/preview/markerConfig.ts).
+const STYLE_BLOCK = '<style>\n  @layer components {\n    .my-class {\n      padding: 1.25rem;\n    }\n  }\n</style>';
+
+test('deleting a <style> block from the Navigator writes the file without it and no stray lines', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  fs.mkdirSync(path.join(harness.root, 'src/components'), { recursive: true });
+  const cases: readonly (readonly [string, string, string])[] = [
+    ['only block, after a blank line', `---\n---\n<div class="my-class">Hello</div>\n\n${STYLE_BLOCK}\n`, '---\n---\n<div class="my-class">Hello</div>\n'],
+    ['only block, no blank line', `<div class="my-class">Hello</div>\n${STYLE_BLOCK}\n`, '<div class="my-class">Hello</div>\n'],
+    [
+      'first of two',
+      `<div class="my-class">Hello</div>\n\n${STYLE_BLOCK}\n\n<style>.b { color: blue; }</style>\n`,
+      `<div class="my-class">Hello</div>\n\n<style>.b { color: blue; }</style>\n`,
+    ],
+    ['global block', `<div>Hi</div>\n\n<style is:global>\n  .g { color: red; }\n</style>\n`, '<div>Hi</div>\n'],
+  ];
+  for (const [name, before, after] of cases) {
+    const file = path.join(harness.root, 'src/components/Div.astro');
+    fs.writeFileSync(file, before);
+    const page = await read(harness, file);
+    assert.ok(page.editable, `${name}: parses`);
+    const index = page.model.nodes.findIndex((node) => node.kind === 'raw' && node.name === 'style');
+    assert.ok(index >= 0, `${name}: the block is a node`);
+    const removed = await edit(harness, file, page.checksum, { tag: 'remove-node', target: refAt(page, [index]) });
+    assert.ok(removed.ok, `${name}: removed`);
+    assert.equal(fs.readFileSync(file, 'utf8'), after, `${name}: the bytes`);
+    const undone = await edit(harness, file, removed.value.checksum, { tag: 'revert', hunks: removed.value.inverse });
+    assert.ok(undone.ok, `${name}: undone`);
+    assert.equal(fs.readFileSync(file, 'utf8'), before, `${name}: undo restores every byte`);
+  }
+});

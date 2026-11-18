@@ -24,3 +24,27 @@ export function onCanvasRecovery(listener: Listener): () => void {
     listeners.delete(listener);
   };
 }
+
+/**
+ * What the canvas frame said about the dev server's error overlay (electron/preload/frameErrorOverlay.ts): it came
+ * up over the page, with its words, or it went away. The frame's messages are read where the canvas lives
+ * (previewRuntime.ts) and the controller lives in the lifecycle hooks, so this news passes through here too.
+ */
+export type FrameOverlayReport = { readonly kind: 'shown'; readonly message: string | undefined } | { readonly kind: 'cleared' };
+
+type OverlayListener = (report: FrameOverlayReport) => void;
+const overlayListeners = new Set<OverlayListener>();
+
+export function reportFrameOverlay(report: FrameOverlayReport): void {
+  for (const listener of [...overlayListeners]) {
+    listener(report);
+  }
+}
+
+export function onFrameOverlay(listener: OverlayListener): () => void {
+  assert(overlayListeners.size < CANVAS_RECOVERY_LISTENERS_MAX, 'Frame overlay listeners are released when their owner goes');
+  overlayListeners.add(listener);
+  return () => {
+    overlayListeners.delete(listener);
+  };
+}

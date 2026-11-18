@@ -405,6 +405,63 @@ const avbIsStyleModule = (m) => {
   return u.indexOf('type=style') !== -1 || u.indexOf('lang.css') !== -1 || /\\.css($|\\?)/.test(u);
 };
 
+// Deleting a <style> block took the canvas to "No Astro CSS at index 0".
+// Astro serves block N of a file as \`File.astro?astro&type=style&index=N\`,
+// and the browser holds a module for every block of the last rendering. When
+// a block goes, Vite's update for the browser still names the old modules
+// (they are the file's modules); the browser asks for block N again, the file
+// has no block N any more, and Astro's load throws, which the dev server shows
+// as its error overlay over a page that is fine. Deleting block 0 of two is the
+// same bug at index 1. So the browser's update leaves out every block past the
+// file's last (avbVanishedStyles, a client-only hotUpdate: the server's update
+// keeps them, since Astro's reload logic needs them to refresh the page's
+// collected CSS), and the page's reload or patch takes the rendering's styles
+// from the server (refreshDevStyles). An ask that still comes (a document
+// rendered before the edit, a Vite without per-environment hooks) is answered
+// by the marker load with an empty stylesheet, which serves the server's
+// environment and a file Astro has not compiled again yet. The count is read from the file on disk, which the update has already
+// written; an is:inline block stays in the markup and is not counted, as
+// Astro compiles no module for it. A deleted file has none; a count that
+// cannot be read for any other reason changes nothing.
+const avbStyleBlocksOf = (source) => (source.match(/<style[^>]*>[\\s\\S]*?<\\/style>/gi) || []).filter((block) => !/^<style[^>]*\\sis:inline\\b/i.test(block));
+const avbStyleIndexOf = (query) => {
+  if (!/(?:^|&)type=style(?:&|$)/.test(query) || !/(?:^|&)astro(?:&|=|$)/.test(query)) return undefined;
+  const found = /(?:^|&)index=(\\d+)(?:&|$)/.exec(query);
+  return found ? Number(found[1]) : undefined;
+};
+const avbStyleCountOf = (file) => {
+  if (!/\\.astro$/i.test(file)) return undefined;
+  try {
+    return avbStyleBlocksOf(readFileSync(file, 'utf8')).length;
+  } catch (error) {
+    // A deleted component has no blocks: the browser still holds their modules (the canvas patched the page rather
+    // than reloading it), and Vite's delete update would have it ask for them again.
+    return error && error.code === 'ENOENT' ? 0 : undefined;
+  }
+};
+const avbVanishedStyle = (file, query) => {
+  const index = avbStyleIndexOf(query);
+  if (index === undefined) return false;
+  const count = avbStyleCountOf(file);
+  return count !== undefined && index >= count;
+};
+const avbVanishedStyles = {
+  name: 'avb-vanished-styles',
+  enforce: 'pre',
+  hotUpdate(options) {
+    if (!this.environment || this.environment.name !== 'client') return;
+    const count = avbStyleCountOf(options.file);
+    if (count === undefined) return;
+    const kept = options.modules.filter((m) => {
+      const id = m.id || m.url || '';
+      const qi = id.indexOf('?');
+      const index = qi === -1 ? undefined : avbStyleIndexOf(id.slice(qi + 1));
+      return index === undefined || index < count;
+    });
+    return kept.length === options.modules.length ? undefined : kept;
+  },
+};
+
 // Astro hands the browser a component's <style> from the last compile of its
 // file (its load hook for \`?astro&type=style\`), and only a server-side
 // transform of the file compiles it. Vite announces the new stylesheet in the
@@ -582,6 +639,7 @@ const avbMarkers = {
     // the ?raw import with the Fragment's key; mark the chunk here so its
     // nodes outline like any other. Runs before vite:asset's own ?raw load.
     if (query) {
+      if (avbVanishedStyle(file, query)) return { code: '' };
       const m = /(?:^|&)avb=([^&]+)/.exec(query);
       if (!m) return null;
       try {
@@ -772,7 +830,7 @@ export default {
     ...(base.vite || {}),
     plugins: [studioEntryPlugin(PROJECT_DIRS[0]),
       componentPreviewPlugin(PROJECT_DIRS, readPackagePreviews),
-      avbMarkers, avbMorph,
+      avbMarkers, avbMorph, avbVanishedStyles,
       ...((base.vite && base.vite.plugins) || [])],
   },
 };

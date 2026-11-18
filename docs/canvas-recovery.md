@@ -39,6 +39,30 @@ after a failed navigation of exactly the open route and assumed "serving" otherw
 - **Notice** (`appCompileRecovery.ts`): the dev server's words, "Undo last change" when the failure
   follows the app's own write, and "Reload canvas".
 
+## An overlay over a page that loaded
+
+Some errors never reach the page's answer: the page loads with a 200, then a module it asked for fails
+and the dev server's HMR client draws its error overlay (`vite-error-overlay`, Astro's overlay uses the
+same tag) over it. Deleting a component's only `<style>` block did that ("No Astro CSS at index 0"):
+Vite's update still named the block's stylesheet module, the browser asked for it again, and Astro's
+load threw for a block the file no longer has. A check of the page sees a 200, so the controller never
+heard of it, and the next edit did not take it down either (the dev plugin turns Vite's reload into a
+patch, and a patch leaves the overlay).
+
+- **Cause, removed** (`electron/preview/markerConfig.ts`): the browser's update leaves out every
+  `?astro&type=style&index=N` module past the file's last block (a client-only `hotUpdate`; the
+  server's update keeps them, which Astro's reload logic reads). An ask that still comes is answered
+  with an empty stylesheet where Astro has no compile for it. The patch keys each dev stylesheet by its
+  `data-vite-dev-id` (`electron/previewClient/morphPatch.ts`), so the deleted block's stylesheet is the
+  one removed from the head, not the last one.
+- **Seen**: the frame reports the overlay coming and going (`avb:error-overlay`,
+  `electron/preload/frameErrorOverlay.ts`); the controller holds it as a `frame` error, with the
+  overlay's words on the notice.
+- **Recovered**: a check cannot see an overlay, so nothing polls it. The next write, outside change or
+  dev server restart looks once, and a page that answers is reloaded once; an overlay the dev server
+  closes itself (its next good update) needs no reload. An overlay that comes back on the reloaded page
+  counts toward the same cap (3 per minute). "Reload canvas" on the notice and the toolbar stay.
+
 ## Measured (generated fixture, real Astro dev server, `npm run integration:recovery`)
 
 | Fix | Healthy canvas after the fix |
@@ -53,3 +77,7 @@ after a failed navigation of exactly the open route and assumed "serving" otherw
 - `test/renderer/preview/canvasRecovery.test.js`: schedule, bounds, state machine, hidden tick, flaps.
 - `test/integration/canvasRecovery.js`: real dev server, scenarios a to e.
 - `test/shared/ipc/previewHealth.test.ts`: a marked page is not "truncated".
+- `test/electron/previewServer/styleRecompile.test.js`: the update and the load for a deleted block.
+- `test/electron/previewClient/devStyleMorph.test.js`: the patch removes the deleted block's stylesheet.
+- `test/integration/styleDelete.js` (`npm run integration:style-delete`): real dev server and preload;
+  deletes, undoes, and the overlay's recovery.

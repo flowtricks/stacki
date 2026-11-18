@@ -6,11 +6,13 @@
 // Time moves only when the test advances it, so the schedule is asserted exactly (400, 800, 1600, 3000,
 // then every 5 s, for 120 s) instead of "eventually". Every wait is on the clock, never a real sleep. The
 // same controller runs against a real Astro dev server in test/integration/canvasRecovery.js.
+// The dev server's error overlay over a page that loaded (`overlayShown`, a frame error) is checked separately:
+// a check of the page cannot see it, so only a change looks again, and one good look reloads the canvas once.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
-const { CANVAS_POLL_DELAYS_MS, CANVAS_RECOVERY_LIMITS, canvasErrorOf, createCanvasRecovery, isCurrentPageFailure, pollDelayMs } =
+const { CANVAS_POLL_DELAYS_MS, CANVAS_RECOVERY_LIMITS, canvasErrorOf, createCanvasRecovery, isCurrentPageFailure, overlayErrorOf, pollDelayMs } =
   loadRenderer('src/features/preview/canvasRecovery.ts');
 
 const PAGE_URL = 'http://127.0.0.1:4321/about';
@@ -379,4 +381,107 @@ test('another page, or stopping, forgets the error and cancels everything', asyn
   await stopped.advance(30_000);
   assert.equal(stopped.state.inspects.length, 0);
   assert.equal(stopped.pendingTimers(), 0);
+});
+
+const OVERLAY = 'No Astro CSS at index 0\nAn error occurred.';
+
+test('an overlay is a frame error: bounded words, the first line names it', () => {
+  const error = overlayErrorOf(PAGE_URL, OVERLAY);
+  assert.equal(error.origin, 'frame');
+  assert.equal(error.kind, 'error-overlay');
+  assert.equal(error.message, 'No Astro CSS at index 0 · An error occurred.');
+  assert.equal(error.url, PAGE_URL);
+  assert.notEqual(overlayErrorOf(PAGE_URL, 'Other').fingerprint, error.fingerprint);
+  assert.equal(overlayErrorOf(PAGE_URL, undefined).message, undefined);
+  assert.equal(overlayErrorOf(PAGE_URL, 'x'.repeat(5000)).message.length, CANVAS_RECOVERY_LIMITS.messageCharsMax);
+  assert.equal(canvasErrorOf(bad(), PAGE_URL).origin, 'response');
+});
+
+test('an overlay waits for a change, then one good look reloads the canvas once', async () => {
+  const scene = world();
+  scene.state.answers = [ok()];
+  scene.recovery.overlayShown(PAGE_URL, OVERLAY);
+  assert.equal(scene.recovery.state().kind, 'error');
+  assert.deepEqual(kinds(scene.state.events), ['failed']);
+  assert.equal(scene.state.events[0].error.message, 'No Astro CSS at index 0 · An error occurred.');
+  // Nothing that could have fixed it: no check, which would see a 200 and "recover" into the same overlay.
+  scene.recovery.trigger('focus');
+  scene.recovery.trigger('load');
+  scene.recovery.visibilityChanged();
+  await scene.advance(130_000);
+  assert.equal(scene.state.inspects.length, 0, 'no polling: a check cannot see an overlay');
+  assert.equal(scene.state.reloads, 0);
+  // The person's next edit, or the watcher's outside change: the dev server compiled the page; look once.
+  scene.recovery.trigger('write');
+  await scene.advance(CANVAS_RECOVERY_LIMITS.settleMs + 10);
+  assert.equal(scene.state.inspects.length, 1);
+  assert.equal(scene.state.reloads, 1, 'exactly one reload');
+  assert.deepEqual(kinds(scene.state.events), ['failed', 'recovered']);
+  assert.equal(scene.recovery.state().kind, 'recovering');
+  scene.recovery.loaded();
+  assert.equal(scene.recovery.state().kind, 'healthy', 'the reloaded page has no overlay');
+  await scene.advance(30_000);
+  assert.equal(scene.state.reloads, 1);
+  scene.recovery.stop();
+  assert.equal(scene.pendingTimers(), 0);
+});
+
+test('an overlay the dev server closes itself needs no reload', async () => {
+  const scene = world();
+  scene.recovery.overlayShown(PAGE_URL, OVERLAY);
+  scene.recovery.overlayShown(PAGE_URL, OVERLAY);
+  assert.deepEqual(kinds(scene.state.events), ['failed'], 'the same overlay says nothing again');
+  scene.recovery.overlayShown(PAGE_URL, 'Another error');
+  assert.deepEqual(kinds(scene.state.events), ['failed', 'failed'], 'a different one replaces the notice');
+  scene.recovery.overlayCleared();
+  assert.equal(scene.recovery.state().kind, 'healthy');
+  assert.deepEqual(kinds(scene.state.events), ['failed', 'failed', 'recovered']);
+  scene.recovery.overlayCleared();
+  assert.equal(kinds(scene.state.events).length, 3, 'a second clear is nothing');
+  await scene.advance(10_000);
+  assert.equal(scene.state.reloads, 0);
+  scene.recovery.stop();
+});
+
+test('an overlay that keeps coming back after its reloads stops the reloading at the cap', async () => {
+  const scene = world();
+  scene.state.answers = [ok()];
+  for (let turn = 0; turn < CANVAS_RECOVERY_LIMITS.flapsMax + 3; turn++) {
+    scene.recovery.overlayShown(PAGE_URL, OVERLAY);
+    scene.recovery.trigger('write');
+    await scene.advance(CANVAS_RECOVERY_LIMITS.settleMs + 10);
+    if (scene.recovery.state().kind === 'recovering') {
+      scene.recovery.loaded(); // The reloaded page loads, and its overlay comes back on the next turn.
+    }
+  }
+  assert.equal(scene.state.reloads, CANVAS_RECOVERY_LIMITS.flapsMax, 'the cap holds');
+  assert.equal(scene.recovery.state().kind, 'error');
+  assert.equal(scene.recovery.state().polling.kind, 'exhausted');
+  assert.ok(kinds(scene.state.events).includes('gave-up'));
+  scene.recovery.stop();
+});
+
+test('a page that stops answering while an overlay shows becomes an error a check can poll', async () => {
+  const scene = world();
+  scene.state.answers = [bad(), bad(), ok()];
+  scene.recovery.overlayShown(PAGE_URL, OVERLAY);
+  scene.recovery.failed(PAGE_URL);
+  assert.equal(scene.recovery.state().error.origin, 'response');
+  await scene.advance(2_000);
+  assert.equal(scene.state.inspects.length, 3, 'polled on the schedule, as any response error');
+  assert.equal(scene.state.reloads, 1);
+  scene.recovery.stop();
+});
+
+test('a write that finds the page failing turns the overlay into a polled response error', async () => {
+  const scene = world();
+  scene.state.answers = [bad(), ok()];
+  scene.recovery.overlayShown(PAGE_URL, OVERLAY);
+  scene.recovery.trigger('write');
+  await scene.advance(CANVAS_RECOVERY_LIMITS.settleMs + 10);
+  assert.equal(scene.recovery.state().kind, 'error');
+  assert.equal(scene.recovery.state().error.origin, 'response');
+  await scene.advance(CANVAS_POLL_DELAYS_MS[0] + 10);
+  assert.equal(scene.state.reloads, 1, 'the next poll found it fixed');
+  scene.recovery.stop();
 });
