@@ -43,10 +43,15 @@ test('demo release assets can never be taken for an installer', () => {
 });
 
 test('a release does not wait for the demo', async () => {
-  const workflow = await readFile(path.join(studio, '../.github/workflows/release.yml'), 'utf8');
-  const required = /for required in([\s\S]*?); do/.exec(workflow)?.[1] ?? '';
+  // The files a release requires are one list in the candidate tooling; the demo is not on it.
+  const candidate = await readFile(path.join(studio, '../scripts/release/candidate.mts'), 'utf8');
+  const required = /export function requiredAssetNames[\s\S]*?const names = \[([\s\S]*?)\];/.exec(candidate)?.[1] ?? '';
   assert.ok(required.includes('latest-mac.yml'), 'The required list was found');
   assert.doesNotMatch(required, /stacki-demo/);
+  // The demo travels as its own optional artifact, outside the `candidate-*` files promoted as the release.
+  const workflow = await readFile(path.join(studio, '../.github/workflows/candidate.yml'), 'utf8');
+  assert.match(workflow, /name: optional-demo/);
+  assert.doesNotMatch(workflow, /name: candidate-demo/);
 });
 
 test('no release folder or file is the demo', () => {
