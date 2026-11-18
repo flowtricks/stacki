@@ -111,9 +111,15 @@ app.whenReady().then(async () => {
       fs.writeFileSync(path.join(DIRECTORY, mode + '-desktop-${PANE.width}.png'), image.toPNG());
     }
     await host(RECORD);
+    // Each switch waits, bounded, until the recorder has drawn a frame with that device committed.
+    // A fixed pause was not enough on the Linux runner, where a hidden window's frames come slowly
+    // under load: the Phone switch was undone before any frame saw it (Check on a428bc5a).
     for (const device of ${JSON.stringify(SWITCHES)}) {
+      const start = await host('window.frames_recorded.length');
       await host('window.harness.setDevice(' + JSON.stringify(device) + ')');
-      await sleep(150);
+      const seen = 'window.frames_recorded.slice(' + start + ').some((frame) => frame.device === ' + JSON.stringify(device) + ')';
+      for (let spin = 0; spin < 250 && !(await host(seen)); spin += 1) { await sleep(20); }
+      await sleep(60);
     }
     output.frames = await host('window.frames_recorded');
   } catch (error) { output.error = String((error && error.stack) || error); }
