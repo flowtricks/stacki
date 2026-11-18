@@ -76,7 +76,7 @@ export const messages = {
   'palette.remove.reason.reExport': 'une réexportation',
   'palette.remove.reason.unreadable': 'un fichier illisible',
   'palette.remove.reason.value': 'utilisé comme valeur',
-  'palette.remove.reviewLine': '{path}:{line}, {reason}',
+  'palette.remove.reviewLine': '{path}:{line}, {reason}', // same
   'palette.remove.settings': 'Ses entrées dans {files} sont retirées.',
   'palette.remove.undo': 'Un seul Annuler rétablit tout.',
   'palette.remove.unused': 'Rien ne l’utilise.',

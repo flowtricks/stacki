@@ -1,6 +1,7 @@
 // Goal: the "…" menu on a Components panel row offers Edit settings, Show instances, (Roles), Duplicate and Delete in that
-// order for a component, and Duplicate and Delete (after Roles) on a folder header; Delete is disabled, with the number of
-// places as its reason, while anything uses what it would remove; choosing a row hands the host the right target (component or
+// order for a component, and Duplicate and Delete (after Roles) on a folder header; Delete is offered even while something uses
+// what it would remove, because choosing it plans the removal of every instance and import and confirms it in the host's dialog
+// (f39e4dfc, src/app/shell/componentRemovalDialog.tsx); choosing a row hands the host the right target (component or
 // folder, its project-relative path, how many components it holds); a host with no management (Studio) and a role without the
 // rights get none of these rows; the folder rows count every component under the folder.
 // Method: bundle the real PalettePanel, mount it in jsdom with generated components and a stub management that records calls,
@@ -131,14 +132,14 @@ test('choosing Edit settings, Duplicate and Delete tells the host which componen
   await view.unmount();
 });
 
-test('Delete is disabled while the component is used, and choosing it does nothing', async () => {
+test('Delete is offered while the component is used, and choosing it hands the host the component to plan', async () => {
   const view = await mount([component('Arrow', '', 13), component('Checking', '', undefined)]);
   await view.open(view.buttons()[0]);
   const used = view.rows().find((row) => row.label.startsWith('Delete'));
-  assert.equal(used.disabled, true);
-  assert.ok(used.row.querySelector('.menu-info'), 'the reason is on the row as an info mark');
+  assert.equal(used.disabled, false, 'the host plans and confirms the instances and imports it takes');
+  assert.equal(used.row.querySelector('.menu-info') ?? undefined, undefined, 'no count on the row: the confirmation lists every place');
   await view.act(() => used.row.click());
-  assert.deepEqual(view.calls, []);
+  assert.deepEqual(view.calls, [['remove', { kind: 'component', path: 'src/components/Arrow.astro', name: 'Arrow', files: 1 }]]);
   await view.unmount();
 });
 
@@ -152,7 +153,7 @@ test('a folder header menu duplicates and deletes the folder, counting every com
     view.rows().map((row) => [row.label.replace(/Used in.*/, ''), row.disabled]),
     [
       ['Duplicate', false],
-      ['Delete', true],
+      ['Delete', false],
     ],
   );
   await view.act(() => document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));

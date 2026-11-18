@@ -65,7 +65,7 @@ export const messages = {
     other: 'Se quitan {count} instancias, con todo lo que contienen:',
   },
   'palette.remove.more': { one: 'y {count} archivo más', other: 'y {count} archivos más' },
-  'palette.remove.place': '{path}: {count}',
+  'palette.remove.place': '{path}: {count}', // same
   'palette.remove.reason.content': 'una instancia en Markdown',
   'palette.remove.reason.dynamicImport': 'una importación dinámica',
   'palette.remove.reason.expression': 'una instancia dentro de una expresión',
@@ -74,7 +74,7 @@ export const messages = {
   'palette.remove.reason.reExport': 'una reexportación',
   'palette.remove.reason.unreadable': 'un archivo que no se puede leer',
   'palette.remove.reason.value': 'usado como valor',
-  'palette.remove.reviewLine': '{path}:{line}, {reason}',
+  'palette.remove.reviewLine': '{path}:{line}, {reason}', // same
   'palette.remove.settings': 'Se quitan sus entradas en {files}.',
   'palette.remove.undo': 'Un solo Deshacer lo recupera todo.',
   'palette.remove.unused': 'Nada lo usa.',

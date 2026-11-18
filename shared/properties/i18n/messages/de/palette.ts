@@ -68,7 +68,7 @@ export const messages = {
   'palette.remove.imports': { one: '{count} Import wird entfernt:', other: '{count} Importe werden entfernt:' },
   'palette.remove.instances': { one: '{count} Instanz wird mit allem darin entfernt:', other: '{count} Instanzen werden mit allem darin entfernt:' },
   'palette.remove.more': { one: 'und {count} weitere Datei', other: 'und {count} weitere Dateien' },
-  'palette.remove.place': '{path}: {count}',
+  'palette.remove.place': '{path}: {count}', // same
   'palette.remove.reason.content': 'eine Instanz in Markdown',
   'palette.remove.reason.dynamicImport': 'ein dynamischer Import',
   'palette.remove.reason.expression': 'eine Instanz in einem Ausdruck',
@@ -77,7 +77,7 @@ export const messages = {
   'palette.remove.reason.reExport': 'ein Re-Export',
   'palette.remove.reason.unreadable': 'eine Datei, die nicht gelesen werden kann',
   'palette.remove.reason.value': 'als Wert verwendet',
-  'palette.remove.reviewLine': '{path}:{line}, {reason}',
+  'palette.remove.reviewLine': '{path}:{line}, {reason}', // same
   'palette.remove.settings': 'Ihre Einträge in {files} werden entfernt.',
   'palette.remove.undo': 'Ein Rückgängig stellt alles wieder her.',
   'palette.remove.unused': 'Nichts verwendet sie.',

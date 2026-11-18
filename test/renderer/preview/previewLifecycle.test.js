@@ -692,7 +692,14 @@ test('custom widths preserve layout size, scale ' + 'to fit, and reset with devi
     await setWidth('7680');
     assert.equal(sized.style.width, '7680px');
     await act(() => document.querySelector('[data-tooltip="Reset canvas to available width"]').click());
-    // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without a render.
+    // An 824px pane is narrower than the Desktop frame (1440px, Settings): Desktop draws at the frame width, scaled to fit,
+    // so the page never shows its Laptop layout under the Desktop button (5cad1579, desktopCanvasWidth).
+    assert.equal(sized.style.width, '1440px');
+    assert.match(sized.style.transform, /scale\(/);
+    containerWidth = 2000;
+    await act(() => observers.forEach((callback) => callback()));
+    // A pane at least the Desktop frame wide: the fluid frame fills the canvas by CSS, so it follows a side-panel drag
+    // without a render.
     assert.equal(sized.style.width, '100%');
     assert.equal(sized.style.height, '100%');
     assert.doesNotMatch(sized.style.transform, /scale/);
