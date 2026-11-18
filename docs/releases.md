@@ -50,24 +50,15 @@ include later changes.
 ## 1.4.8
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.8.
-- **Features**
-  - style: every keyword control connects to a variable
-  - release: build once, promote, and one release:ship command
-  - gate: an expiring quarantine that fails Check when it lapses
-- **Fixes**
-  - canvas: a scrubbed Fragment's outline wraps all its children
-  - navigator: pseudo-elements belong only to an HTML element
-  - gate: drain output before a failed gate exits
-  - studio: lock the vendor assemble and sync it file by file
-  - canvas: write bound text back through calls and parsed YAML
-  - i18n: the keyword Variable label is the same word in es, de, fr
-  - canvas: interact-mode link cards keep the page's own modal
-  - release: the Windows installer takes its update-feed name
-- **Documentation**
-  - release: measured timeline, design and one-command runbook
-- **CI and build**
-  - release: candidate builds before the tag; release.yml promotes
-  - static checks on Linux only; bump only on a green base Check
+- Style panel: every keyword control (display, position, alignment and the rest) can connect to a variable, and copy and paste keep variable chips as `var()` references.
+- Style panel: `=` opens the value editor on the value the field shows; committed and cleared values update in the same frame as the press; the Follow canvas toggle edits Base, and picking a breakpoint moves the canvas to it.
+- Delete a component together with its instances and imports, from the palette. Instance counts follow the open page as you edit.
+- Preview: the canvas resize handles work in preview mode, number keys switch breakpoints, and the Desktop device draws at its frame width, scaled to fit the pane, wherever no breakpoint applies.
+- A new `<style>` tag's rules have no blank lines, and deleting a `<style>` block never shows the error overlay.
+- Canvas: a scrubbed Fragment's outline wraps all its children; editing bound text writes back through function calls and parsed YAML; interact-mode link cards keep the page's own modal instead of flashing Stacki's.
+- Navigator: pseudo-elements belong only to an HTML element.
+- Settings: the Desktop breakpoint input aligns with the other rows.
+- Releases are now built once and promoted: installers are built, signed and tested before the tag, and a version is tagged only when every check is green, so a test failure can no longer burn a version number (`npm run release:ship`, docs/release-runbook.md).
 
 ## 1.4.7
 
