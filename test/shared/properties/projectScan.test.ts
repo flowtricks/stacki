@@ -193,3 +193,50 @@ test('the scan carries the project length unit', () => {
     message: 'LengthUnit.kind: expected "px" or "rem"',
   });
 });
+
+// Each component's per-file shares (`uses`) are what the Components panel swaps the open file's live
+// count into (src/app/model/liveInstanceCounts.ts): they must name project files the same way on
+// every platform, list each file once, and add up to the total they explain.
+test('a component carries its per-file instance shares, which sum to its count', () => {
+  const component = (uses: unknown, instances: unknown = 3) => ({ path: '/p/src/components/Div.astro', name: 'Div', folder: '', instances, uses });
+  const scan = (uses: unknown, instances?: unknown) => parseScanResult({ ...structuredClone(goodScan), components: [component(uses, instances)] });
+  const good = [
+    { file: 'src/pages/index.astro', count: 1 },
+    { file: 'src/pages/about.astro', count: 2 },
+  ];
+  assert.deepEqual(scan(good).components[0]?.uses, good);
+  assert.deepEqual(scan([], 0).components[0]?.uses, [], 'an unused component lists no file');
+  assert.equal(parseScanResult(structuredClone(goodScan)).components[0]?.uses, undefined, 'absent from an older host');
+});
+
+test('malformed instance shares are refused with a pinned reason', () => {
+  const scan = (uses: unknown, instances: unknown = 1) =>
+    parseScanResult({ ...structuredClone(goodScan), components: [{ path: '/p/src/components/Div.astro', name: 'Div', folder: '', instances, uses }] });
+  const rows: ReadonlyArray<readonly [unknown, RegExp, unknown?]> = [
+    [{}, /uses: expected array/],
+    [[jsonNull], /expected object/],
+    [[{ file: 'src/pages/index.astro', count: 2 }], /uses: counts do not sum to instances/],
+    [[{ file: 'src/pages/index.astro', count: 0 }], /count: a file that uses the component none is left out/, 0],
+    [[{ file: 'src/pages/index.astro', count: 1.5 }], /count: expected an integer/],
+    [[{ file: 'src/pages/index.astro', count: '1' }], /count: expected an integer/],
+    [[{ file: '/p/src/pages/index.astro', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [[{ file: 'src\\pages\\index.astro', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [[{ file: '../index.astro', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [[{ file: '', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [
+      [
+        { file: 'src/pages/index.astro', count: 1 },
+        { file: 'src/pages/index.astro', count: 1 },
+      ],
+      /file: listed twice/,
+      2,
+    ],
+  ];
+  for (const [uses, reason, instances] of rows) {
+    assert.throws(() => scan(uses, instances ?? 1), reason);
+  }
+  assert.throws(
+    () => parseScanResult({ ...structuredClone(goodScan), components: [{ path: '/p/x.astro', name: 'X', folder: '', uses: [] }] }),
+    /uses: written only beside instances/,
+  );
+});

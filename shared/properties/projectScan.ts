@@ -67,6 +67,12 @@ export interface ScanComponent {
   readonly folder: string;
   readonly isLayout?: boolean;
   readonly instances?: number;
+  /**
+   * Where `instances` come from: each file that uses the component and how often, files with none
+   * left out, summing to `instances`. Absent from an older host. The Components panel swaps the open
+   * file's share for its live tree's count, so an edit shows in the count in the frame it is made in.
+   */
+  readonly uses?: readonly ScanComponentUse[];
   // safeSchema output — absent when the component's source could not be read.
   readonly schema?: readonly PropField[];
   readonly extendsTag?: string | undefined;
@@ -76,6 +82,14 @@ export interface ScanComponent {
   /** The component the template opens with (`Section` for `<Section>…`), when the root is one. */
   readonly rootComponent?: string | undefined;
   readonly hasRest?: boolean;
+}
+
+/** One file's share of a component's instance count (ScanComponent.uses). */
+export interface ScanComponentUse {
+  /** Project-relative and `/`-separated on every platform (`src/pages/index.astro`). */
+  readonly file: string;
+  /** At least one: a file that uses the component none is not listed. */
+  readonly count: number;
 }
 
 export interface ScanResult {
@@ -151,6 +165,29 @@ function parsePage(input: unknown, where: string): ScanPage {
   };
 }
 
+function parseComponentUses(input: unknown, where: string): readonly ScanComponentUse[] {
+  const files = new Set<string>();
+  return asArray(input, where, LIMITS.scanEntriesMax).map((entry, index) => {
+    const record = asRecord(entry, `${where}[${index}]`);
+    const file = asString(record['file'], `${where}[${index}].file`);
+    if (file.length === 0 || file.startsWith('/') || file.includes('\\') || file.split('/').includes('..')) {
+      fail(`${where}[${index}]`, 'file: expected a project-relative, /-separated path');
+    }
+    if (files.has(file)) {
+      fail(`${where}[${index}]`, 'file: listed twice');
+    }
+    files.add(file);
+    const count = record['count'];
+    if (typeof count !== 'number' || !Number.isSafeInteger(count)) {
+      fail(`${where}[${index}]`, 'count: expected an integer');
+    }
+    if (count < 1) {
+      fail(`${where}[${index}]`, 'count: a file that uses the component none is left out');
+    }
+    return { file, count };
+  });
+}
+
 function parseComponent(input: unknown, where: string): ScanComponent {
   const record = asRecord(input, where);
   const out: Record<string, unknown> = {
@@ -177,6 +214,17 @@ function parseComponent(input: unknown, where: string): ScanComponent {
       fail(where, 'instances: expected nonnegative integer');
     }
     out['instances'] = record['instances'];
+  }
+  if (record['uses'] !== undefined) {
+    if (out['instances'] === undefined) {
+      fail(where, 'uses: written only beside instances');
+    }
+    const uses = parseComponentUses(record['uses'], `${where}.uses`);
+    // The pair the panel's arithmetic stands on: the shares add up to the total they explain.
+    if (uses.reduce((total, use) => total + use.count, 0) !== out['instances']) {
+      fail(where, 'uses: counts do not sum to instances');
+    }
+    out['uses'] = uses;
   }
   if (record['schema'] !== undefined) {
     out['schema'] = parseSchemaArray(record['schema'], `${where}.schema`);

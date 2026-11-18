@@ -14,7 +14,7 @@ import { astroListingSliced, foldersSliced, hasDependencies, routeForPage } from
 import { walkFolderSliced, type WalkProblem } from '../project/projectWalk';
 import { detectPackageManager } from '../project/packageManager';
 import { configWarnings, dependencyWarning, stepFailedWarning, walkWarnings } from '../project/scanWarnings';
-import type { ScanPage, ScanWarning } from '../../shared/properties/projectScan';
+import type { ScanComponentUse, ScanPage, ScanWarning } from '../../shared/properties/projectScan';
 import { pageTitlesSliced } from '../properties/pageTitles';
 import { safeSchema } from '../properties/propDefaults';
 import type { MainHost } from './mainHost';
@@ -135,20 +135,16 @@ function* projectScanSliced(projectPath: string, run: ScanRun) {
   // That function counts under the name each FILE imports it as: a layout
   // imported as `Layout` is never written `<BaseLayout>`, and counting the
   // filename found none of them.
+  //
+  // Each count is also written per file (`uses`): the editor holds the open file's tree, so the
+  // Components panel replaces that file's share with the live tree's own count in the frame an
+  // edit is made in (src/app/model/liveInstanceCounts.ts), instead of waiting for a rescan that
+  // the app's own saves never cause.
   for (const comp of [...components, ...layouts]) {
-    comp.instances = allSources.reduce(
-      (count, { file, text, counts }) =>
-        count +
-        (sameFilesystemPath(file, comp.path)
-          ? 0 // a file is not one of its own users
-          : instancesIn(text, {
-              file,
-              targetPath: comp.path,
-              name: comp.name,
-              counts,
-            })),
-      0,
-    );
+    const uses = componentUses(projectPath, comp, allSources);
+    comp.instances = uses.reduce((total, use) => total + use.count, 0);
+    Object.assign(comp, { uses });
+    assert(uses.length <= allSources.length, 'A component is used in at most every source once');
     // One component against every source is the unit: components times pages is the work, and it
     // is the product of two counts that nothing bounds, so it yields per component.
     yield;
@@ -170,6 +166,29 @@ function* projectScanSliced(projectPath: string, run: ScanRun) {
     ...astroPagesFields(config),
     ...(manager === undefined ? {} : { packageManager: manager }),
   };
+}
+
+// The files that use one component and how often each does, project-relative and `/`-separated
+// (the key the renderer finds its open file under on every platform). Files that use it none are
+// left out, so the list is bounded by the sources and usually far shorter.
+function componentUses(
+  projectPath: string,
+  comp: { readonly path: string; readonly name: string },
+  sources: ReadonlyArray<ReturnType<typeof scanCountSource>>,
+): readonly ScanComponentUse[] {
+  const uses: ScanComponentUse[] = [];
+  for (const { file, text, counts } of sources) {
+    // A file is not one of its own users.
+    if (sameFilesystemPath(file, comp.path)) {
+      continue;
+    }
+    const count = instancesIn(text, { file, targetPath: comp.path, name: comp.name, counts });
+    assert(Number.isSafeInteger(count), 'An instance count is an integer');
+    if (count > 0) {
+      uses.push({ file: toPosix(path.relative(projectPath, file)), count });
+    }
+  }
+  return uses;
 }
 
 function scanCountSource(file: string, aliases: readonly Alias[]) {

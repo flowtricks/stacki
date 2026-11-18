@@ -43,6 +43,7 @@ import {
 import { type OpenFileOptions, openFileSelection, parseTrailingSlash } from '../model/nodeFactory';
 import { savedForNavigation } from '../model/appKeys';
 import { keepsAcrossPages } from '../model/pageQueries';
+import { scanBegin, scanRecord } from '../model/scanSequence';
 import {
   useProjectState,
   useCanvasReportState,
@@ -339,7 +340,9 @@ export function useScans(coreState: ReturnType<typeof useCoreState>) {
           // The bridge parses the payload against the scan contract before any of
           // this code sees it.
           scans: createCoalescedRun(async () => {
+            const sequence = scanBegin();
             const result = await scanProject(projectPath);
+            scanRecord(result.components, sequence);
             if (projectScansRef.current === opened && !opened.scans.superseded()) {
               setScan(result);
               if (result.trailingSlash) {

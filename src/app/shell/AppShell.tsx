@@ -55,6 +55,7 @@ import { PreviewModeStage } from '../../features/preview/SizedFrame';
 import { usePreviewSizing } from '../../features/preview/usePreviewSizing';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { prefetchPanels, prefetchTimeline } from './panelPrefetch';
+import { useLiveInsertables } from './useLiveInsertables';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
 import { selectedPseudo } from '../model/selectionStructure';
 import type { ShellView } from '../App';
@@ -629,9 +630,11 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
 export function PaletteTab({ app }: { readonly app: ShellView }) {
   const roleRules = useComponentRoleRules(app.project.path, app.reportFailure);
   const management = useComponentManagement(app);
+  // Counts that follow the open tree: an instance deleted on the page is gone from the count in the same frame.
+  const components = useLiveInsertables(app);
   return (
     <PalettePanel
-      components={app.insertables}
+      components={components}
       roleRules={roleRules}
       management={management}
       devUrl={app.devUrl}
