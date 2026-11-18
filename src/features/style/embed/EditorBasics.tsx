@@ -56,8 +56,12 @@ export type ScanState = {
 
 export type Phase = 'idle' | 'scanning' | 'ready' | 'no-selection' | 'unsupported';
 
-// A write commits a value, with or without !important.
-export type SetProp = (prop: string, value: string, important: boolean) => void;
+// A write commits a value, with or without !important. What it returns tells the panel when its
+// optimistic value can hand over to the model (useOptimisticEdits.ts): a promise that settles once
+// the save and the model rebuild behind it are done; `until-model` for a write made synchronously,
+// which the model hears about on its next change; undefined when nothing was written.
+export type WriteSettle = Promise<unknown> | 'until-model' | undefined;
+export type SetProp = (prop: string, value: string, important: boolean) => WriteSettle;
 
 // One property's committed value, on its way to a native class style or an embed.
 export interface PropWrite {

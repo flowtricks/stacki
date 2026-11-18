@@ -37,7 +37,7 @@ import {
 } from '../model/resolved';
 import { selectorLayerOf } from '../model/selectors';
 import type { ElementSnapshot, ParsedRule } from '../model/styleTypes';
-import { type LiveSetProp } from './EditorBasics';
+import { type LiveSetProp, type SetProp } from './EditorBasics';
 import type { PreviewProp } from '../connectFieldHelpers';
 import { usePanelLayer } from './editorModel';
 import { type SourceOption, type SelectorSuggestion } from './LayoutRows';
@@ -782,7 +782,8 @@ export type StyleCardProps = {
   resolving: boolean;
   busy: boolean;
   pending: boolean;
-  setProp: (prop: string, value: string, important: boolean) => void;
+  /** Settles once the save and the model rebuild behind it are done; undefined when nothing waits (EditorBasics.ts SetProp). */
+  setProp: SetProp;
   clearProp: (prop: string | string[]) => Promise<void>;
   liveSetProp: LiveSetProp;
   /** The picker's hover preview: shown on the canvas, never written (connectFieldHelpers' PreviewProp). */

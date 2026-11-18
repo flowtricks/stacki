@@ -267,7 +267,7 @@ export function useInlineCard(
       ...withChip,
       inlineCode: { kind: 'readonly', code: style.code, reason: translateDescribed({ message: style.message, messageRef: style.messageRef }) },
       setProp: ignoreWrite,
-      onAdd: ignoreWrite,
+      onAdd: ignoreAdd,
       liveSetProp: ignoreLive,
       clearProp: () => Promise.resolve(),
     };
@@ -275,6 +275,8 @@ export function useInlineCard(
   const setProp: SetProp = (prop, typed, important) => {
     const value = writtenValue(prop, typed);
     write([prop], value.trim() === '' ? { tag: 'remove' } : inlineDeclaration(value, { important }));
+    // Written at once into the page model; the panel's model hears of it on its next change.
+    return 'until-model';
   };
   const writes = {
     setProp,
@@ -328,6 +330,7 @@ export function useInlineCard(
 
 // The read-only target writes nothing.
 const ignoreWrite: SetProp = () => undefined;
+const ignoreAdd = (): void => undefined;
 const ignoreLive: LiveSetProp = () => undefined;
 
 // The expression as it stands: the node's attribute (or the write not yet in it),

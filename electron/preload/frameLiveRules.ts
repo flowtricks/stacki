@@ -499,18 +499,14 @@ export function matchingRules(page: Document, target: LiveRuleTarget): Result<re
   const context = target.context.filter(isConditionAtRule).map(normalizeAtRule).join('\n');
   const wanted = sourceSelectorKey(target.selector);
   const rules: CSSStyleRule[] = [];
-  for (let sheetAt = 0; sheetAt < page.styleSheets.length; sheetAt += 1) {
-    const sheet = page.styleSheets.item(sheetAt);
-    if (sheet === null) {
-      continue;
-    }
-    const sheetPath = sheetPathOf(sheet);
-    if (sheetPath === undefined) {
-      continue;
-    }
-    if (!sheetPathIsSource(sheetPath, target.source)) {
-      continue;
-    }
+  const own = sheetsOf(page, (sheetPath) => sheetPathIsSource(sheetPath, target.source));
+  // A stylesheet another one imports (`@import "./patterns.css" layer(patterns)` in global.css) is
+  // not on the page as itself: Vite inlines it into the importing sheet, whose path is the importer's.
+  // Its rules are then looked for in the page's other plain stylesheets, and a preview is shown only
+  // when exactly one rule there fits, so a selector two files share is never previewed on the wrong one.
+  const imported = own.length === 0 && isPlainStylesheet(target.source);
+  const sheets = imported ? sheetsOf(page, (sheetPath) => isPlainStylesheet(sheetPath)) : own;
+  for (const { sheet, sheetPath } of sheets) {
     const index = sheetIndex(sheet, sheetPath);
     if (index === undefined) {
       continue;
@@ -527,7 +523,37 @@ export function matchingRules(page: Document, target: LiveRuleTarget): Result<re
     }
   }
   assert(rules.length <= LIVE_RULE_LIMITS.sheetRulesMax, 'matchingRules: bounded by the index');
+  if (imported) {
+    return ok(rules.length === 1 ? rules : []);
+  }
   return ok(rules);
+}
+
+// The page's stylesheets with a path `accepts`, in document order. Bounded by the page's own list.
+function sheetsOf(page: Document, accepts: (sheetPath: string) => boolean): readonly { readonly sheet: CSSStyleSheet; readonly sheetPath: string }[] {
+  const found: { readonly sheet: CSSStyleSheet; readonly sheetPath: string }[] = [];
+  for (let sheetAt = 0; sheetAt < page.styleSheets.length; sheetAt += 1) {
+    const sheet = page.styleSheets.item(sheetAt);
+    if (sheet === null) {
+      continue;
+    }
+    const sheetPath = sheetPathOf(sheet);
+    if (sheetPath === undefined) {
+      continue;
+    }
+    if (accepts(sheetPath)) {
+      found.push({ sheet, sheetPath });
+    }
+  }
+  assert(found.length <= page.styleSheets.length, 'sheetsOf: a subset of the page sheets');
+  return found;
+}
+
+// A stylesheet file of its own (`.css`, `.scss`, …), not a block compiled from an .astro file.
+function isPlainStylesheet(path: string): boolean {
+  const queryAt = path.indexOf('?');
+  const file = queryAt < 0 ? path : path.slice(0, queryAt);
+  return /\.(?:css|scss|sass|less|styl|pcss|postcss)$/i.test(file);
 }
 
 // The file a stylesheet was compiled from: Vite's id for a dev <style>, or a link's path.

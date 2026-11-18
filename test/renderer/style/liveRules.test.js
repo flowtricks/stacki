@@ -206,6 +206,33 @@ test('conditions must match, layers do not matter, and :global stays apart from 
   assert.equal(sizeOf(CARD, 0), '10px');
 });
 
+test('a stylesheet another one imports is previewed in the importer, only when one rule fits', () => {
+  // Vite inlines `@import "./patterns.css" layer(patterns)` into global.css: no sheet on the page is
+  // patterns.css itself, so its rules are found in the plain stylesheet that holds them.
+  const PATTERNS = { source: 'src/styles/patterns.css', context: [], selector: '.heading', property: 'color' };
+  const RED = { kind: 'value', value: 'color-mix(in srgb, red 10%, transparent var(--mix))', important: false };
+  installDom(
+    devStyle('src/styles/global.css', '@layer patterns { .heading { color: blue } .text { color: blue } } .twice { color: blue }') +
+      devStyle('src/styles/other.css', '.twice { color: blue }') +
+      devStyle(CARD, '.heading[data-astro-cid-aaa] { color: blue }'),
+  );
+  const frame = loadFrame();
+  frame.receiveLiveRules(set(PATTERNS, RED));
+  const importer = ruleOf('src/styles/global.css');
+  assert.equal(importer.cssRules[0].style.getPropertyValue('color'), RED.value, 'the one fitting rule shows the edit');
+  assert.equal(importer.cssRules[1].style.getPropertyValue('color'), 'blue', 'its neighbour is untouched');
+  assert.equal(ruleOf(CARD).style.getPropertyValue('color'), 'blue', "a component's own block is never searched");
+  frame.receiveLiveRules(drop(PATTERNS));
+  assert.equal(importer.cssRules[0].style.getPropertyValue('color'), 'blue', 'a failed save puts it back');
+  // Two rules fit (one per importing sheet): which file holds the edited one is unknown, so neither moves.
+  frame.receiveLiveRules(set({ ...PATTERNS, selector: '.twice' }, RED));
+  assert.equal(ruleOf('src/styles/global.css', 1).style.getPropertyValue('color'), 'blue');
+  assert.equal(ruleOf('src/styles/other.css').style.getPropertyValue('color'), 'blue');
+  // An .astro source that is not on the page is not looked for elsewhere.
+  frame.receiveLiveRules(set({ ...PATTERNS, source: HERO }, RED));
+  assert.equal(importer.cssRules[0].style.getPropertyValue('color'), 'blue');
+});
+
 test("a failed save puts the page's own value back, priority and absence included", () => {
   installDom(devStyle(CARD, '.title[data-astro-cid-aaa] { font-size: 10px !important }'));
   const frame = loadFrame();

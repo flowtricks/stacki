@@ -28,7 +28,7 @@ import { getNewStyleTagSettings, newStyleTagFrame } from '../model/newStyleTagSe
 import { isAutoClassSelector, planFirstStyles, type FirstStylesPlan } from '../model/firstStyleBlock';
 import { FirstTagLane } from '../model/firstTagLane';
 import { assert } from '../../../../shared/core/assert';
-import { type PropWrite } from './EditorBasics';
+import { type PropWrite, type WriteSettle } from './EditorBasics';
 import {
   upgradedDefault,
   type EmbedRegion,
@@ -338,9 +338,9 @@ export function useCreateRule(
     // A tag is on its way for this file: this write lands in it, never in a tag of its own.
     if (firstTagLane.holds(getHost().openFilePath)) {
       firstTagLane.join(requested, write);
-      return;
+      return 'until-model'; // Written with the tag, later: the panel's model shows it then.
     }
-    createRules([write], requested);
+    return createRules([write], requested);
   };
   // A Webflow-breakpoint context with no equivalent embed query yet writes into a
   // synthesized @media block; otherwise the embed's base or existing query block.
@@ -348,7 +348,8 @@ export function useCreateRule(
     currentContext.embedAtContext === undefined && currentContext.breakpoint && currentContext.breakpoint !== 'main'
       ? mediaParamsForBreakpoint(currentContext.breakpoint)
       : undefined;
-  const createRules = (writes: readonly PropWrite[], requested: string) => {
+  // Settles once the new rule is written and the model rebuilt (EditorBasics.ts WriteSettle).
+  const createRules = (writes: readonly PropWrite[], requested: string): WriteSettle => {
     assert(writes.length > 0, 'createRules: at least one property is written');
     const embedContext = currentContext.embedAtContext;
     const bpMedia = contextBpMedia();
@@ -358,25 +359,23 @@ export function useCreateRule(
     const plan = firstStylesPlan(requested);
     if (plan.kind === 'refused') {
       setSaveError(translateDescribed(plan));
-      return;
+      return undefined;
     }
     if (plan.kind === 'normal') {
       if (!where) {
         setStatus('No embed here to write to — add an HTML embed first.'); // i18n-ignore: write-only status, never rendered.
-        return;
+        return undefined;
       }
-      void writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: requested }, writes);
-      return;
+      return writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: requested }, writes);
     }
     // First styles (model/firstStyleBlock.ts). With a block already there the rule goes into it
     // and the class is put on first.
     if (plan.kind === 'class') {
       if (!where) {
         setStatus('No embed here to write to — add an HTML embed first.'); // i18n-ignore: write-only status, never rendered.
-        return;
+        return undefined;
       }
-      void writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: `.${plan.className}`, firstStyles: plan }, writes);
-      return;
+      return writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: `.${plan.className}`, firstStyles: plan }, writes);
     }
     // A new tag. It is built in a blank document and handed to the host with its class, as one
     // edit, after every write of this same event has joined it: the four sides of a Shift-drag
@@ -385,7 +384,7 @@ export function useCreateRule(
     const blank = blankTarget();
     if (filePath === undefined || blank === undefined) {
       setStatus('No embed here to write to — add an HTML embed first.'); // i18n-ignore: write-only status, never rendered.
-      return;
+      return undefined;
     }
     const selector = plan.kind === 'block' ? requested : `.${plan.className}`;
     firstTagLane.open({ filePath, requested, selector, knownKeys: documentByKey.keys() });
@@ -399,6 +398,7 @@ export function useCreateRule(
         () => firstTagLane.settle('failed'),
       );
     });
+    return 'until-model'; // The tag is written in a later task, with its writes: the model shows them then.
   };
   // Each scan may be the one that shows the new tag: the writes that waited for it then go the
   // ordinary way, which finds the tag (and the rule in it, merging by selector) like any other.
@@ -422,7 +422,7 @@ export function useCreateRule(
     const tagRegion = tagDocument?.regions[0];
     for (const batch of outcome.batches) {
       if (tagDocument === undefined || tagRegion === undefined) {
-        createRules(batch.writes, batch.selector);
+        void createRules(batch.writes, batch.selector);
         continue;
       }
       void writeNewRule(
@@ -733,10 +733,11 @@ export function useNativeSet(
   const { writeEmbedProp } = addQuery;
   const { attemptNative, clearCoercedNative } = nativeAttempt;
 
-  const nativeSetOrFallback = (index: number, write: PropWrite) => {
+  // Settles once the native write (or its embed fallback's start) and the refresh are done.
+  const nativeSetOrFallback = (index: number, write: PropWrite): Promise<unknown> => {
     const { prop } = write;
     const value = hslaToRgba(write.value);
-    void runNativeOp(async () => {
+    return runNativeOp(async () => {
       setNativeFallback(undefined); // clear any prior fallback notice as this edit begins
       const { applied, reason } = await attemptNative('Saving…', async () => {
         const result = await applyNativePropertyAt(selectedRef.current, nativeWriteTargetAt(index), prop, value, optionsFor(currentContext, stateKey));
@@ -754,7 +755,7 @@ export function useNativeSet(
       setNativeFallback(
         reason ? translate('styleModel.embed.hook.nativeApplyFailedReason', { prop, reason }) : translate('styleModel.embed.hook.nativeApplyFailed', { prop }),
       );
-      writeEmbedProp({ ...write, value });
+      void writeEmbedProp({ ...write, value });
     });
   };
   return { nativeSetOrFallback };
@@ -818,9 +819,9 @@ export function useNativeCreate(
   // First edit on a class that has no base Style yet: create the base class in
   // Webflow, write the property, then refresh (subsequent edits use the normal
   // native path once the style resolves). Falls back to an embed if creation fails.
-  const nativeCreateAndSet = (className: string, write: PropWrite) => {
+  const nativeCreateAndSet = (className: string, write: PropWrite): Promise<unknown> => {
     const value = hslaToRgba(write.value); // see nativeSetOrFallback
-    void runNativeOp(async () => {
+    return runNativeOp(async () => {
       setNativeFallback(undefined);
       const { applied, created, reason } = await attemptNative('Creating Webflow class…', async () => createNativeClass(className, { ...write, value }));
       if (applied) {
@@ -834,7 +835,7 @@ export function useNativeCreate(
           ? translate('styleModel.embed.hook.nativeCreateFailedReason', { className, reason })
           : translate('styleModel.embed.hook.nativeCreateFailed', { className }),
       );
-      writeEmbedProp({ ...write, value });
+      void writeEmbedProp({ ...write, value });
     });
   };
   return { nativeCreateAndSet };

@@ -68,32 +68,28 @@ export function useSetProp(
     liveOriginRef.current.delete(prop);
     if (pseudoPickPending(activeSelector)) {
       setStatus('Reading this pseudo-element’s rules. Try that again in a moment.'); // i18n-ignore: write-only status, never rendered.
-      return;
+      return undefined;
     }
     if (!activeSelector) {
       const route = autoSelectForEdit();
       if (route && 'native' in route) {
-        nativeSetOrFallback(route.native, write);
-        return;
+        return nativeSetOrFallback(route.native, write);
       }
       if (route && 'embedSelector' in route) {
-        createSelectedRule(write, route.embedSelector);
-        return;
+        return createSelectedRule(write, route.embedSelector);
       }
       setStatus('Nothing to style here — add a class in Webflow first.'); // i18n-ignore: write-only status, never rendered.
-      return;
+      return undefined;
     }
     if (propLayer(prop) === 'native') {
       if (selectedNativeIndex !== undefined) {
-        nativeSetOrFallback(selectedNativeIndex, write);
-        return;
+        return nativeSetOrFallback(selectedNativeIndex, write);
       }
       if (creatableClass) {
-        nativeCreateAndSet(creatableClass, write);
-        return;
+        return nativeCreateAndSet(creatableClass, write);
       }
     }
-    writeEmbedProp(write);
+    return writeEmbedProp(write);
   };
   return { setProp };
 }
@@ -121,7 +117,7 @@ export function useClearProp(
   const { propLayer } = addQuery;
 
   // Resolves once every write has finished and the model has been rebuilt from it, so the
-  // panel knows when its optimistic cleared look (useOptimisticClear.ts) can hand over.
+  // panel knows when its optimistic cleared look (useOptimisticEdits.ts) can hand over.
   const clearProp = (prop: string | string[]): Promise<void> => {
     const props = Array.isArray(prop) ? prop : [prop];
     // Clearing is a write too; the page then computes the property's own cascade, not the preview.

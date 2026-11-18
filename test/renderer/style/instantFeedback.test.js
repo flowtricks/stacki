@@ -38,7 +38,7 @@ const frame = () =>
   await esbuild.build({
     stdin: {
       contents: `export { WeightField } from './src/features/style/FontFields'
-export { useOptimisticClear } from './src/features/style/embed/useOptimisticClear'
+export { useOptimisticEdits } from './src/features/style/embed/useOptimisticEdits'
 export { PreviewPropContext } from './src/features/style/connectFieldHelpers'`,
       resolveDir: ROOT,
       loader: 'tsx',
@@ -94,7 +94,7 @@ export { PreviewPropContext } from './src/features/style/connectFieldHelpers'`,
   const React = require('react');
   const { createRoot } = require('react-dom/client');
   act = React.act;
-  const { WeightField, useOptimisticClear, PreviewPropContext } = require(bundlePath);
+  const { WeightField, useOptimisticEdits, PreviewPropContext } = require(bundlePath);
   // A hover-scrub is a look: it reaches the canvas-only preview, never liveSetProp (a write).
   const liveWrites = [];
 
@@ -119,7 +119,7 @@ export { PreviewPropContext } from './src/features/style/connectFieldHelpers'`,
   };
   let held = true; // false = the "before" panel, which reads the model alone
   function Harness() {
-    const optimistic = useOptimisticClear(model, baseClear);
+    const optimistic = useOptimisticEdits(model, { setProp: () => undefined, clearProp: baseClear, selector: '.card' });
     const read = held ? optimistic.read : (prop) => model.get(prop);
     const clearProp = held ? optimistic.clearProp : baseClear;
     return React.createElement(

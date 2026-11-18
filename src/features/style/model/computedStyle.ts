@@ -276,9 +276,37 @@ function answeredNow(prop: string): Answer {
   learnKey(prop);
   const known = currentCache().read(path, prop);
   if (known.kind === 'pending') {
-    return { value: '', pending: true, path };
+    // The page is being asked again (an edit dropped its answers): what it said last about this
+    // element shows meanwhile, and the new answer refines it. A cleared field showed the empty
+    // placeholder for the whole round trip, then the value; now it shows the ghost it had before.
+    return { value: lastAnswers.get(lastAnswerKey(path, prop)) ?? '', pending: true, path };
   }
+  rememberAnswer(path, prop, known.answer ?? '');
   return { value: known.answer ?? '', pending: false, path };
+}
+
+// The last answer the page gave per element and key, kept across the cache's invalidations (an
+// edit, a re-render): the stand-in while the same question is asked again. Never sent anywhere and
+// never written; bounded, and emptied when full.
+const LAST_ANSWERS_MAX = 2048;
+const lastAnswers = new Map<string, string>();
+
+// Scoped to the project and file as well: the same node path in another page is another element.
+function lastAnswerKey(path: string, prop: string): string {
+  const host = getHost();
+  return [host.projectPath ?? '', host.openFilePath ?? '', path, prop].join(ELEMENT_KEY_SEPARATOR);
+}
+
+function rememberAnswer(path: string, prop: string, value: string): void {
+  const key = lastAnswerKey(path, prop);
+  if (lastAnswers.get(key) === value) {
+    return;
+  }
+  if (lastAnswers.size >= LAST_ANSWERS_MAX) {
+    lastAnswers.clear();
+  }
+  lastAnswers.set(key, value);
+  assert(lastAnswers.size <= LAST_ANSWERS_MAX, 'rememberAnswer: the remembered answers are bounded');
 }
 
 // `pending` is the part worth having. '' means two different things — "the page
