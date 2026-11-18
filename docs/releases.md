@@ -47,6 +47,28 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.8
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.8.
+- **Features**
+  - style: every keyword control connects to a variable
+  - release: build once, promote, and one release:ship command
+  - gate: an expiring quarantine that fails Check when it lapses
+- **Fixes**
+  - canvas: a scrubbed Fragment's outline wraps all its children
+  - navigator: pseudo-elements belong only to an HTML element
+  - gate: drain output before a failed gate exits
+  - studio: lock the vendor assemble and sync it file by file
+  - canvas: write bound text back through calls and parsed YAML
+  - i18n: the keyword Variable label is the same word in es, de, fr
+  - canvas: interact-mode link cards keep the page's own modal
+  - release: the Windows installer takes its update-feed name
+- **Documentation**
+  - release: measured timeline, design and one-command runbook
+- **CI and build**
+  - release: candidate builds before the tag; release.yml promotes
+  - static checks on Linux only; bump only on a green base Check
+
 ## 1.4.7
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.7.
