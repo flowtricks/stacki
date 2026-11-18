@@ -387,6 +387,13 @@ html[data-platform='win32'] .titlebar {
   border: none;
   display: block;
 }
+/* The live site at the canvas's size: a device or dragged width sits centred on the canvas's
+   own background, with the same resize handles (SizedFrame.tsx). Fit fills the stage, as the
+   preview always did. */
+.preview-mode.preview-mode-stage {
+  background: var(--bg);
+  overflow: hidden;
+}
 
 /* A question, asked in the app's own window rather than the browser's.
    Narrow, because a confirm that needs a wide window is a confirm asking too
@@ -5036,7 +5043,8 @@ body > .embed-editor_provenance {
     opacity 0.15s,
     background 0.15s;
 }
-.preview-frame-wrap:hover .rz-handle {
+.preview-frame-wrap:hover .rz-handle,
+.preview-mode-stage:hover .rz-handle {
   opacity: 1;
 }
 .rz-handle:hover,

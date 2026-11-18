@@ -5,7 +5,8 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
-import { useCanvasWidthRequest, usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest } from './usePreviewSizing';
+import { useCanvasWidthRequest, usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest, type PreviewDimensions } from './usePreviewSizing';
+import { SizedFrame } from './SizedFrame';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
 import type { OverlayInfo, RectMap, SpacingHover } from './PreviewOverlays';
@@ -75,6 +76,10 @@ interface PreviewPaneProps {
   readonly focusWhole?: boolean;
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
+  /** The custom width and height, when the host holds them: Desktop's preview mode draws the
+   *  page at the same size (AppShell PreviewModeView), so a resize in either mode is kept by
+   *  the other. A host without a preview mode leaves them to the pane. */
+  readonly dimensions?: PreviewDimensions | undefined;
   /** A width asked of the canvas from outside (the style panel's media query
    *  pick), applied as a typed width is: a `custom` device at that width. */
   readonly canvasWidthRequest?: CanvasWidthRequest | undefined;
@@ -104,9 +109,10 @@ export default function PreviewPane(props: PreviewPaneProps) {
     pages: props.pageRoutes === undefined ? undefined : { base: '', routes: props.pageRoutes },
   });
   const source = usePreviewSource(url, runtime.post);
-  const dimensions = usePreviewDimensions();
+  const ownDimensions = usePreviewDimensions();
+  const dimensions = props.dimensions ?? ownDimensions;
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectPath);
-  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, props.onDevice);
+  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true }, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
   const measured = props.device !== 'canvas' && (sizing.width !== undefined || sizing.wrapWidth > 0);
@@ -221,32 +227,19 @@ function DesignPreview({
   const scale = sizing.viewport.scale;
   return (
     <>
-      <div
-        ref={sizing.frameRef}
-        className={`frame-sized ${width ? '' : 'full'} ${sizing.resizing || sizing.panelSettling ? 'resizing' : ''}`}
-        // A fluid frame fills the canvas by CSS, so it follows a side-panel drag each frame
-        // without a render (usePreviewSizing puts off its measure until release).
-        style={
-          width
-            ? { width: sizing.viewport.width, height: sizing.viewport.height, bottom: 'auto', transform: `translateX(-50%) scale(${scale})` }
-            : { width: '100%', height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
-        }
-      >
-        <div className="frame-clip">
-          <PreviewFrame
-            refreshKey={props.refreshKey ?? ''}
-            frameRef={runtime.iframeRef}
-            url={url}
-            title={translate('preview.pane.title')}
-            onLoad={() => {
-              runtime.registerFrame();
-              runtime.sendTrack();
-              props.onPreviewLoaded?.();
-            }}
-          />
-        </div>
-        <ResizeHandles sizing={sizing} />
-      </div>
+      <SizedFrame sizing={sizing}>
+        <PreviewFrame
+          refreshKey={props.refreshKey ?? ''}
+          frameRef={runtime.iframeRef}
+          url={url}
+          title={translate('preview.pane.title')}
+          onLoad={() => {
+            runtime.registerFrame();
+            runtime.sendTrack();
+            props.onPreviewLoaded?.();
+          }}
+        />
+      </SizedFrame>
       <div
         className={`preview-overlay-layer ${width ? '' : 'full'}`}
         style={
@@ -288,21 +281,6 @@ function measuredOutlines(runtime: Runtime) {
     hoverOcc: runtime.hoverOcc,
     textMarks: runtime.textMarks,
   };
-}
-
-function ResizeHandles({ sizing }: { readonly sizing: Sizing }) {
-  return (
-    <>
-      <div className="rz-handle rz-w" onPointerDown={sizing.startResize('w')} />
-      <div className="rz-handle rz-e" onPointerDown={sizing.startResize('e')} />
-      <div className="rz-handle rz-s" onPointerDown={sizing.startResize('s')} />
-      {sizing.resizing && (
-        <div className="rz-readout">
-          {Math.round(sizing.width ?? sizing.wrapWidth ?? 0)} × {sizing.customHeight ?? sizing.frameRef.current?.offsetHeight ?? ''}
-        </div>
-      )}
-    </>
-  );
 }
 
 function PreviewPlaceholder({ props }: { readonly props: PreviewPaneProps }) {

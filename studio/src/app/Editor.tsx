@@ -106,7 +106,10 @@ export function Editor(props: EditorProps) {
         <DefaultsCanvasBar canvas={defaultsCanvas} />
         <CanvasContextMenu props={props} model={scopedModel} defaultsCanvas={defaultsCanvas} />
         <SyncNotice refresh={props.refresh} report={props.report} />
-        <PreviewWorkspace preview={interactivePreview}>
+        <PreviewWorkspace
+          preview={interactivePreview}
+          size={{ projectName: props.project.name, device: props.view.device, dimensions: props.view.dimensions, onDevice: props.view.setDevice }}
+        >
           <EditorRail
             componentOpen={componentOpen}
             projectPath={props.project.name}

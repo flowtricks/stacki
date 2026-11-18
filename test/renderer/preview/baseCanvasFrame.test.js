@@ -80,7 +80,7 @@ async function mountCanvas() {
   function Canvas() {
     const windowState = frame.useWindowState();
     const dimensions = frame.usePreviewDimensions();
-    const sizing = frame.usePreviewSizing(windowState.device, dimensions, frame.BREAKPOINT_DEFAULTS, windowState.setDevice);
+    const sizing = frame.usePreviewSizing(windowState.device, dimensions, frame.BREAKPOINT_DEFAULTS, { deviceShortcuts: true }, windowState.setDevice);
     frame.useCanvasWidthRequest(windowState.canvasWidthRequest, dimensions.setCustomWidth);
     handle.windowState = windowState;
     const state = { device: windowState.device, active: sizing.activeDevice, width: sizing.viewport.width ?? 'fluid' };

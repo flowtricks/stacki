@@ -51,6 +51,9 @@ import { prewarmSecretsListing } from '../../features/projectSettings/secretsCac
 import { prewarmInstalledApps } from '../../features/apps/installedAppsCache';
 import { prewarmPageOrder } from '../../features/pages/pageOrderPersistence';
 import { useEffect } from 'react';
+import { PreviewModeStage } from '../../features/preview/SizedFrame';
+import { usePreviewSizing } from '../../features/preview/usePreviewSizing';
+import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { prefetchPanels, prefetchTimeline } from './panelPrefetch';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
 import { selectedPseudo } from '../model/selectionStructure';
@@ -124,11 +127,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
             />
           </AssetPickOverlay>
         )}
-        {app.inPreview && app.previewSource && (
-          <div className="preview-mode">
-            <iframe ref={app.previewIframeRef} src={app.previewSource} title={translate('shell.preview.interactiveTitle')} />
-          </div>
-        )}
+        {app.inPreview && app.previewSource && <PreviewModeView app={app} source={app.previewSource} />}
         <OldVersionCover app={app} />
         {app.pageState?.editable && !app.previewRef && (
           // An open CMS item has nothing to style, so the CMS takes the Style and
@@ -145,6 +144,20 @@ export function AppShell({ app }: { readonly app: ShellView }) {
       <AuditsHost app={app} />
       <AiHost app={app} />
     </div>
+  );
+}
+
+// The site with no editing, over the panels, at the canvas's own size: the width and height
+// handles resize it as they do the canvas, and into the same custom size, so leaving the
+// preview keeps the size picked in it. The canvas below keeps listening for the device keys.
+function PreviewModeView({ app, source }: { readonly app: ShellView; readonly source: string }) {
+  const translate = useTranslate();
+  const { resolved: breakpoints } = useProjectBreakpoints(app.project.path);
+  const sizing = usePreviewSizing(app.device, app.previewDimensions, breakpoints, { deviceShortcuts: false }, app.setDevice);
+  return (
+    <PreviewModeStage sizing={sizing}>
+      <iframe ref={app.previewIframeRef} src={source} title={translate('shell.preview.interactiveTitle')} />
+    </PreviewModeStage>
   );
 }
 

@@ -81,7 +81,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
   let device = 'desktop';
   function Canvas() {
     const dimensions = hold.usePreviewDimensions();
-    const sizing = hold.usePreviewSizing(device, dimensions, hold.BREAKPOINT_DEFAULTS, () => {});
+    const sizing = hold.usePreviewSizing(device, dimensions, hold.BREAKPOINT_DEFAULTS, { deviceShortcuts: true }, () => {});
     renders.push({ width: sizing.viewport.width, scale: sizing.viewport.scale, settling: sizing.panelSettling });
     return React.createElement('div', { ref: sizing.wrapRef });
   }

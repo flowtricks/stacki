@@ -101,6 +101,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         focusWhole={app.focusWhole}
         device={app.device}
         onDevice={app.setDevice}
+        dimensions={app.previewDimensions}
         canvasWidthRequest={app.canvasWidthRequest}
         onViewportWidth={app.setCanvasWidthPx}
         projectPath={app.project.path}

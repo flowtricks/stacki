@@ -13,7 +13,7 @@ import type { ScanResult } from '../../../shared/properties/projectScan';
 import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
 import type { DevDiagnosis } from '../../features/preview/DevOffline';
 import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
-import type { CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
+import { usePreviewDimensions, type CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
 import type { VariableSelection } from '../../ipc/variablesBridge';
 import { bootSeed, bootSnapshotFor } from '../../lib/bootSeed';
 import { type CodeWindowState } from '../../features/code/codeWindowTarget';
@@ -374,6 +374,10 @@ export function useWindowState() {
   // not silently drop the user out of the view they picked (which would
   // reload every preview iframe and flash the canvas white).
   const [device, setDevice] = useState<PreviewDevice>('desktop');
+  // The custom width and height dragged or typed on the canvas, here beside the device for the
+  // same reason, and because the preview mode draws the page at that size too: a resize in
+  // either mode is the size the other opens on (AppShell PreviewModeView).
+  const previewDimensions = usePreviewDimensions();
   // A width the style panel asks the canvas for (a picked media query, see
   // features/style/model/queryWidth.ts). Counted, so asking for the same width
   // twice still applies it after the canvas was resized by hand in between.
@@ -430,6 +434,7 @@ export function useWindowState() {
     livePathRef,
     canvasPathForRef,
     openCodeWindowRef,
+    previewDimensions,
     previewInfo,
     previewRef,
     revealTick,

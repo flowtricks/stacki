@@ -25,6 +25,7 @@ import { useProjectBreakpoints } from '../../../vendor/stacki/src/ipc/useProject
 import { usePreviewSizing } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
 import type { usePreviewDimensions } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
 import '../../../vendor/stacki/src/features/preview/previewViewport.css';
+import { SizedFrame } from '../../../vendor/stacki/src/features/preview/SizedFrame';
 import { CollectionEditor } from '../collections/CollectionEditor';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { nodeId, type ParserNode } from '../source/source';
@@ -69,7 +70,7 @@ export function PreviewCanvas(props: Props) {
     pages: props.sitePages,
   });
   const { resolved: breakpoints } = useProjectBreakpoints(props.projectName);
-  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, props.onDevice);
+  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true }, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
     preview: props.preview,
@@ -203,45 +204,20 @@ function DesignFrame({
   const frameAddress = useFrameAddress(props.preview.frame, props.preview.url);
   return (
     <>
-      <div
-        ref={sizing.frameRef}
-        className={`frame-sized ${sizing.width ? '' : 'full'} ${sizing.resizing || sizing.panelSettling ? 'resizing' : ''}`}
-        // A fluid frame fills the canvas by CSS, so it follows a side-panel drag each frame
-        // without a render (usePreviewSizing puts off its measure until release).
-        style={
-          sizing.width
-            ? {
-                width: sizing.viewport.width,
-                height: sizing.viewport.height,
-                bottom: 'auto',
-                transform: `translateX(-50%) scale(${sizing.viewport.scale})`,
-              }
-            : { width: '100%', height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
-        }
-      >
-        <div className="frame-clip">
-          <iframe
-            ref={props.preview.frame}
-            title={translate('preview.pane.title')}
-            src={frameAddress}
-            onLoad={() => {
-              props.preview.loaded({ preserveNavigation: interactive ?? false });
-              // Interact mode selects too, so the frame needs its scope, labels and selection.
-              props.restoreSelection();
-              // The render subscription catches edits made during navigation. A load-time
-              // pull races that render and repeats work for every page switch.
-            }}
-          />
-        </div>
-        {(['w', 'e', 's'] as const).map((edge) => (
-          <div key={edge} className={`rz-handle rz-${edge}`} onPointerDown={sizing.startResize(edge)} />
-        ))}
-        {sizing.resizing && (
-          <div className="rz-readout">
-            {Math.round(sizing.viewport.width)} × {Math.round(sizing.viewport.height)}
-          </div>
-        )}
-      </div>
+      <SizedFrame sizing={sizing}>
+        <iframe
+          ref={props.preview.frame}
+          title={translate('preview.pane.title')}
+          src={frameAddress}
+          onLoad={() => {
+            props.preview.loaded({ preserveNavigation: interactive ?? false });
+            // Interact mode selects too, so the frame needs its scope, labels and selection.
+            props.restoreSelection();
+            // The render subscription catches edits made during navigation. A load-time
+            // pull races that render and repeats work for every page switch.
+          }}
+        />
+      </SizedFrame>
       <CanvasOverlays props={props} sizing={sizing} shownGuide={shownGuide} />
     </>
   );

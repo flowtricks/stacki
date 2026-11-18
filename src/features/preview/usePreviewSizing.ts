@@ -15,10 +15,21 @@ export function usePreviewDimensions() {
   const [customHeight, setCustomHeight] = useState<number | undefined>(undefined);
   return { customWidth, setCustomWidth, customHeight, setCustomHeight };
 }
+export type PreviewDimensions = ReturnType<typeof usePreviewDimensions>;
+export type PreviewSizing = ReturnType<typeof usePreviewSizing>;
+
+/** How a sized frame takes part in the window. `deviceShortcuts` listens for the device
+ *  keys (1 to 5): only one frame per window does, so a second frame over the canvas (the
+ *  preview mode) does not set the same device twice for one key. */
+export interface PreviewSizingOptions {
+  readonly deviceShortcuts: boolean;
+}
+
 export function usePreviewSizing(
   device: PreviewDevice,
-  dimensions: ReturnType<typeof usePreviewDimensions>,
+  dimensions: PreviewDimensions,
   breakpoints: readonly ResolvedBreakpoint[],
+  options: PreviewSizingOptions,
   onDevice: (device: PreviewDevice) => void,
 ) {
   const startDrag = usePointerDrag();
@@ -33,7 +44,7 @@ export function usePreviewSizing(
   const width = device === 'custom' ? (customWidth ?? deviceWidth(device, breakpoints)) : deviceWidth(device, breakpoints);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
-  useDeviceShortcuts(breakpoints, onDevice);
+  useDeviceShortcuts(breakpoints, options, onDevice);
   useEffect(() => {
     if (device !== 'custom') {
       setCustomWidth(undefined);
@@ -142,12 +153,16 @@ function usePanelSettling(phase: PanelDragPhase): boolean {
   return phase === 'dragging' || settling !== 'live';
 }
 
-function useDeviceShortcuts(breakpoints: readonly ResolvedBreakpoint[], onDevice: (device: PreviewDevice) => void): void {
+function useDeviceShortcuts(breakpoints: readonly ResolvedBreakpoint[], options: PreviewSizingOptions, onDevice: (device: PreviewDevice) => void): void {
   const onDeviceRef = useRef(onDevice);
   onDeviceRef.current = onDevice;
   const breakpointsRef = useRef(breakpoints);
   breakpointsRef.current = breakpoints;
+  const listening = options.deviceShortcuts;
   useEffect(() => {
+    if (!listening) {
+      return undefined;
+    }
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target ?? undefined)) {
         return;
@@ -159,7 +174,7 @@ function useDeviceShortcuts(breakpoints: readonly ResolvedBreakpoint[], onDevice
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [listening]);
 }
 
 function isTypingTarget(target: EventTarget | undefined): boolean {

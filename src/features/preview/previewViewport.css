@@ -53,7 +53,8 @@
 
 /* Only the iframe frame scales. The sibling overlay uses screen coordinates so
    outlines retain their stroke width and labels retain their readable size. */
-.preview-frame-wrap > .frame-sized {
+.preview-frame-wrap > .frame-sized,
+.preview-mode-stage > .frame-sized {
   transform-origin: top center;
   /* The frame and overlay must move in the same paint when changing devices. */
   transition: none;

@@ -1050,6 +1050,7 @@
     "src/features/preview/PreviewOverlays.tsx",
     "src/features/preview/PreviewSizeControls.tsx",
     "src/features/preview/PreviewToolbar.tsx",
+    "src/features/preview/SizedFrame.tsx",
     "src/features/preview/ToolbarOverflow.tsx",
     "src/features/preview/ToolbarTooltip.tsx",
     "src/features/preview/breakpointDevices.ts",
