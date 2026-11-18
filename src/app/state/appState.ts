@@ -241,6 +241,10 @@ export function useDataState() {
   // reads the loop item that copy was made from (editor/loopSelection.ts).
   const [canvasCopy, setCanvasCopy] = useState<CanvasCopy | undefined>(undefined);
   const [dynamicError, setDynamicError] = useState<string | undefined>(undefined);
+  // The entry of a dynamic page a link in the canvas landed on (`/projects/p1` of
+  // `/projects/[slug]`), shown while that page's entries are read and kept until one
+  // of them is picked: the canvas stays where the visitor went (canvasLandingFor).
+  const [linkedEntry, setLinkedEntry] = useState<LinkedEntry | undefined>(undefined);
   return {
     collectionSamples,
     collections,
@@ -250,6 +254,7 @@ export function useDataState() {
     injectedRoutes,
     itemPaging,
     canvasCopy,
+    linkedEntry,
     sampleAskedRef,
     setCollectionSamples,
     setCollections,
@@ -263,7 +268,14 @@ export function useDataState() {
     setInjectedRoutes,
     setItemPaging,
     setCanvasCopy,
+    setLinkedEntry,
   };
+}
+
+/** A dynamic page's entry a canvas link landed on: the page's file and the entry's route. */
+export interface LinkedEntry {
+  readonly pagePath: string;
+  readonly route: string;
 }
 
 // The panel the last session left open for the project this window opens, when it is one the rail still has.

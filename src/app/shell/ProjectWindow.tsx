@@ -48,12 +48,14 @@ function canvasRouteOf(app: AppView) {
   // A dynamic page's route is a pattern, not a URL — /posts/[slug] is a 404.
   // Preview one of the entries it actually stands for; `dynamicEntry` is which.
   const dynamicEntry = app.dynamicPaths[app.dynamicIndex] || undefined;
+  // Where a canvas link landed on this dynamic page, until its entries name it (canvasLandingFor).
+  const linkedRoute = linkedRouteOf(app.linkedEntry, pageEntry?.path);
   // With no page selected and none to select — a project whose routes all come
   // from an integration, before one is picked — the dev server is still serving
   // a site. Show its root rather than an empty canvas: something running should
   // look like it is running.
   const rootFallback = !patternRoute && !app.scan.pages.length && app.devStatus === 'on' ? '/' : undefined;
-  const pageRoute = dynamicEntry ? dynamicEntry.route : patternRoute || rootFallback;
+  const pageRoute = linkedRoute ?? (dynamicEntry ? dynamicEntry.route : patternRoute || rootFallback);
   const pageUrlPath = pageRoute ? routeToPath(pageRoute, app.trailingSlash) : undefined;
   const liveUrl = app.devUrl && pageUrlPath ? app.devUrl + pageUrlPath : undefined;
   // The old version is served by its own dev server, on the same route the
@@ -234,7 +236,11 @@ function entryNavOf(app: AppView, dynamicEntry: DynamicEntry | undefined) {
     index: app.dynamicIndex,
     count,
     label: dynamicEntry?.label || '',
-    onStep: (step: number) => app.setDynamicIndex((i) => (i + step + count) % count),
+    onStep: (step: number) => {
+      // A step is the person's: the entry a canvas link landed on stops standing in.
+      app.setLinkedEntry(undefined);
+      app.setDynamicIndex((i) => (i + step + count) % count);
+    },
   };
 }
 
@@ -247,4 +253,12 @@ function valueSamplesOf(samples: Readonly<Record<string, unknown>>, file: string
       .filter(([key]) => file !== undefined && key.startsWith(prefix))
       .map(([key, value]) => [key.slice(prefix.length), value]),
   );
+}
+
+// The route a canvas link landed on, when it was on the page the canvas renders.
+function linkedRouteOf(linked: AppView['linkedEntry'], pagePath: string | undefined): string | undefined {
+  if (linked === undefined) {
+    return undefined;
+  }
+  return linked.pagePath === pagePath ? linked.route : undefined;
 }

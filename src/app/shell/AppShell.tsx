@@ -319,7 +319,17 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
           is what gets edited either way — this only changes the data it's
           rendered against. */}
       {patternRoute?.includes('[') && (
-        <DynamicPicker entries={app.dynamicPaths} index={app.dynamicIndex} onPick={app.setDynamicIndex} error={app.dynamicError} pattern={patternRoute} />
+        <DynamicPicker
+          entries={app.dynamicPaths}
+          index={app.dynamicIndex}
+          onPick={(index) => {
+            // A pick is the person's: the entry a canvas link landed on stops standing in.
+            app.setLinkedEntry(undefined);
+            app.setDynamicIndex(index);
+          }}
+          error={app.dynamicError}
+          pattern={patternRoute}
+        />
       )}
     </div>
   );

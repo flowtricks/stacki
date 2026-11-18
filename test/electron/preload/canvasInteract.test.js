@@ -2,7 +2,10 @@
 // still selects (the app is told which node), and the page also receives the
 // activation: a button's own listener runs, and a link navigates once the
 // double-click window has passed, unless a second click turns it into a
-// double-click. Select mode keeps links inert, as it always has. A link that
+// double-click. The page's own script hears a link click first and may keep it
+// (a card that opens its project in a lightbox); only a click it leaves alone loads
+// the other page, and under a client-side router the canvas loads it unasked.
+// Select mode keeps links inert, as it always has. A link that
 // is not one of the site's pages never navigates the canvas: a web link opens
 // in the browser, anything else does nothing, and a page script sending the
 // frame to another site is cancelled. Main refuses the same navigations for
@@ -165,12 +168,70 @@ test('interact mode: a link click selects at once and navigates after the double
     assert.equal(event.defaultPrevented, true, 'the real click is held back');
     assert.deepEqual(seen, [], 'the page has not seen it yet');
     await settle(LINK_HOLD_WAIT_MS);
-    assert.deepEqual(seen, [], 'the canvas loads the page itself: no client-side router swaps it in unmarked');
-    assert.equal(page.navigations.length, 1, 'the link was followed');
+    assert.deepEqual(seen, [false], "the page's own handler heard the click once, as a browser gives it");
+    assert.equal(page.navigations.length, 1, 'the link was followed once');
     assert.deepEqual(page.selections(), ['1'], 'the replayed click selected nothing again');
   } finally {
     page.window.close();
   }
+});
+
+// A card that links to its project page and opens the project in a lightbox instead:
+// its script cancels the click, and the canvas stays on the page with the lightbox.
+test('interact mode: a link click the page takes stays on the page', async () => {
+  const page = await frame();
+  try {
+    page.mode('interact');
+    const link = page.window.document.getElementById('about');
+    let lightboxes = 0;
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      lightboxes += 1;
+    });
+    page.click(page.window.document.getElementById('words'));
+    await settle(LINK_HOLD_WAIT_MS);
+    assert.equal(lightboxes, 1, "the page's script ran once");
+    assert.equal(page.navigations.length, 0, 'the canvas stayed on the page');
+    assert.deepEqual(page.selections(), ['1'], 'the click still selected the link');
+  } finally {
+    page.window.close();
+  }
+});
+
+// Astro's <ClientRouter /> takes every link click to swap the next page in, which the
+// canvas could not address: under it the canvas loads the page itself, unasked.
+test('interact mode: under a client-side router the canvas loads the page itself', async () => {
+  const page = await frame();
+  try {
+    page.mode('interact');
+    const meta = page.window.document.createElement('meta');
+    meta.setAttribute('name', 'astro-view-transitions-enabled');
+    meta.setAttribute('content', 'true');
+    page.window.document.head.append(meta);
+    const seen = [];
+    page.window.document.addEventListener('click', (event) => {
+      seen.push(event.detail);
+      event.preventDefault();
+    });
+    page.click(page.window.document.getElementById('words'));
+    await settle(LINK_HOLD_WAIT_MS);
+    assert.deepEqual(seen, [], 'the router never saw the click');
+    assert.equal(page.navigations.length, 1, 'the canvas loaded the page itself');
+  } finally {
+    page.window.close();
+  }
+});
+
+test('canvasLeavesDocument: only another document leaves, never a fragment', () => {
+  const { canvasLeavesDocument } = loadRenderer('electron/preload/frameInteraction.ts');
+  const frameURL = 'http://127.0.0.1:4321/work/?tab=1#avb-design';
+  assert.equal(canvasLeavesDocument('#project-2', frameURL), false, 'a fragment stays');
+  assert.equal(canvasLeavesDocument('/work/?tab=1#top', frameURL), false, 'the same document, another fragment');
+  assert.equal(canvasLeavesDocument('/work/?tab=2', frameURL), true, 'another query is another document');
+  assert.equal(canvasLeavesDocument('/projects/p1/', frameURL), true, 'another path leaves');
+  assert.equal(canvasLeavesDocument('https://example.com/work/?tab=1', frameURL), true, 'another origin leaves');
+  assert.equal(canvasLeavesDocument('http://[', frameURL), true, 'an address that does not parse is refused');
+  assert.throws(() => canvasLeavesDocument('/a', 'not a url'), /canvasLeavesDocument: the frame has a URL/);
 });
 
 test('interact mode: a double-click on a link stays on the page', async () => {

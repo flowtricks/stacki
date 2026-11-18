@@ -40,7 +40,7 @@ import {
 } from '../../ipc/appBridge';
 import { appShortcutRoute } from '../../features/apps/appsRuntime';
 import { newId, routeToPath } from '../model/nodeFactory';
-import { previewNeedsPath, previewPageFor, previewPathOfPage } from '../model/previewPage';
+import { dynamicEntryIndexOf, previewNeedsPath, previewPageFor, previewPathOfPage } from '../model/previewPage';
 import { astroAssetGesture, insertedNode } from '../model/pageGestures';
 import { type AppKeys, handleAppKeyDown, copySelectionTrail, inEditable, type MenuEdits, menuCopy, menuPaste } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
@@ -591,8 +591,11 @@ export function isPreviewKey(event: Pick<KeyboardEvent, 'altKey' | 'metaKey' | '
 
 // Injected routes and a dynamic page’s entries.
 export function useRoutes(coreState: ReturnType<typeof useCoreState>) {
-  const { currentPage, devStatus, devUrl, editStack, pageState, project, scan } = coreState;
-  const { setDynamicError, setDynamicIndex, setDynamicPaths, setInjectedRoutes } = coreState;
+  const { currentPage, devStatus, devUrl, editStack, linkedEntry, pageState, project, scan } = coreState;
+  const { setDynamicError, setDynamicIndex, setDynamicPaths, setInjectedRoutes, setLinkedEntry } = coreState;
+  // Read when the entries arrive, not a reason to read them again.
+  const linkedRef = useRef(linkedEntry);
+  linkedRef.current = linkedEntry;
 
   // The route list is written by the dev server as it resolves its routes, so
   // it is read once the server is up — and again after a rescan, since adding
@@ -634,10 +637,17 @@ export function useRoutes(coreState: ReturnType<typeof useCoreState>) {
         if (!live) {
           return;
         }
-        setDynamicPaths(result?.entries || []);
+        const entries = result?.entries || [];
+        setDynamicPaths(entries);
         // Keep showing the same entry across reloads where we can — the
-        // params are what identify it, not its position in the list.
-        setDynamicIndex((i) => (i < (result?.entries || []).length ? i : 0));
+        // params are what identify it, not its position in the list. An entry a
+        // canvas link landed on is shown instead, and from now on by its index.
+        const linked = linkedRef.current;
+        const landed = linked?.pagePath === entry.path ? dynamicEntryIndexOf(entries, linked.route) : undefined;
+        setDynamicIndex((i) => landed ?? (i < entries.length ? i : 0));
+        if (landed !== undefined) {
+          setLinkedEntry(undefined);
+        }
         if (result?.error) {
           setDynamicError(result.error);
         } else {
@@ -651,7 +661,7 @@ export function useRoutes(coreState: ReturnType<typeof useCoreState>) {
     // Frontmatter rather than the whole pageState: getStaticPaths lives there,
     // and depending on the model would re-run a collection query on every
     // keystroke in the page body.
-  }, [project, editStack, currentPage, devStatus, devUrl, pageFrontmatter, setDynamicError, setDynamicIndex, setDynamicPaths]);
+  }, [project, editStack, currentPage, devStatus, devUrl, pageFrontmatter, setDynamicError, setDynamicIndex, setDynamicPaths, setLinkedEntry]);
   return { model, pageFrontmatter };
 }
 

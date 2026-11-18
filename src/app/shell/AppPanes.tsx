@@ -24,6 +24,7 @@ import { parsePseudoLayerTarget, type PseudoLayerTarget } from '../../../shared/
 import { noteText } from '../../editor/treeSelection';
 import { canvasClickAction } from '../../editor/canvasClick';
 import { leftTabAfterCanvasSelection } from '../model/canvasSelectionTab';
+import { canvasLandingFor, dynamicEntryIndexOf } from '../model/previewPage';
 import PreviewPane from '../../features/preview/PreviewPane';
 import SaveConflictNotice from '../SaveConflictNotice';
 import { nodeAtPath } from '../../editor/editorTree';
@@ -77,14 +78,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         devDiag={app.devDiag}
         route={app.pageUrlPath}
         pageRoutes={app.scan.pages.map((page) => page.route)}
-        onEditRoute={(route) => {
-          const page = app.scan.pages.find((entry) => (entry.route.replace(/\/$/, '') || '/') === route);
-          if (page) {
-            app.onSelectPage(page);
-          } else {
-            app.setRefreshKey((count) => count + 1);
-          }
-        }}
+        onEditRoute={(route) => followCanvasRoute(app, route)}
         refreshKey={app.refreshKey}
         crumbs={app.crumbs}
         onCrumb={(id) => app.setSelectedId(id)}
@@ -796,3 +790,31 @@ export function ConflictNotice({ app }: { readonly app: ShellView }) {
 }
 
 export { BusyOverlay } from './BusyOverlay';
+
+// A canvas in interact mode followed a link to `route` (useCanvasInteraction): the editor opens
+// the page the frame landed on, so the model and the visible document stay one page. A dynamic
+// page opens at the entry it landed on (canvasLandingFor); a route that is none of the site's
+// pages takes the canvas back to the page the editor has open.
+function followCanvasRoute(app: ShellView, route: string): void {
+  const landing = canvasLandingFor(app.scan.pages, route);
+  if (landing === undefined) {
+    app.setRefreshKey((count) => count + 1);
+    return;
+  }
+  if (landing.entry === undefined) {
+    app.onSelectPage(landing.page);
+    return;
+  }
+  const shownPath = (app.editStack[0] ?? app.currentPage)?.path;
+  const index = landing.page.path === shownPath ? dynamicEntryIndexOf(app.dynamicPaths, landing.entry) : undefined;
+  if (index !== undefined) {
+    // The template is open with its entries read: the entry is picked like any other.
+    app.setLinkedEntry(undefined);
+    app.setDynamicIndex(index);
+    return;
+  }
+  app.setLinkedEntry({ pagePath: landing.page.path, route: landing.entry });
+  if (landing.page.path !== shownPath) {
+    app.onSelectPage(landing.page);
+  }
+}

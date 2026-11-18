@@ -20,6 +20,10 @@ let heldLink: ReturnType<typeof setTimeout> | undefined;
 // same-origin link counts as one, as it did before the host could say.
 let sitePages: CanvasSitePages | undefined;
 let replaying = false;
+// A replayed click on a link to another page under way (replayLeavingClick), and
+// whether it started a navigation: that navigation is the canvas's to make, with the
+// design hash, so the guard refuses it and the replay reports it.
+let leavingReplay: { navigated: boolean } | undefined;
 
 // The canvas turns the pointer into selection, in either mode.
 export function canvasSelects(): boolean {
@@ -147,18 +151,27 @@ export function holdLinkClick(event: MouseEvent): void {
     assert(!canvasInert(), 'A held link click outlives interact mode');
     switch (destination.kind) {
       case 'page': {
-        // Another page of the site: the canvas loads it itself (see canvasPageAddress).
+        // A morph may have replaced the words clicked; the link still stands for them.
+        const receiver = target.isConnected ? target : anchor;
         const address = canvasPageAddress(anchor.getAttribute('href') ?? '', location.href, sitePages);
-        if (address !== undefined) {
-          location.assign(address);
+        if (address === undefined) {
+          // Within the page, or a script: the page's own handlers run it.
+          if (receiver.isConnected) {
+            replayLinkClick(receiver, init);
+          }
           return;
         }
-        // Within the page, or a script: the page's own handlers run it. A morph may
-        // have replaced the words clicked; the link still stands for them.
-        const receiver = target.isConnected ? target : anchor;
-        if (receiver.isConnected) {
-          replayLinkClick(receiver, init);
+        // Another page of the site. The page's own script hears the click first, as it
+        // would in a browser: a card that is a link to its project page and opens that
+        // project in a lightbox instead (`preventDefault`) keeps its lightbox. Only a
+        // click the page leaves to the browser loads the other page, and the canvas
+        // loads it itself (see canvasPageAddress). Astro's <ClientRouter /> is not
+        // asked: it takes every link click to swap the page in, which the canvas
+        // cannot address.
+        if (pageTookLeavingClick(receiver, init)) {
+          return;
         }
+        location.assign(address);
         return;
       }
       case 'browser': {
@@ -265,6 +278,61 @@ function replayLinkClick(receiver: Element, init: MouseEventInit): void {
   }
 }
 
+// The page's own answer to a held click on a link to another page: true when its
+// script took the click (replayLeavingClick), so the canvas stays where it is.
+function pageTookLeavingClick(receiver: Element, init: MouseEventInit): boolean {
+  if (!receiver.isConnected) {
+    return false;
+  }
+  if (clientRouted()) {
+    return false;
+  }
+  return replayLeavingClick(receiver, init) === 'taken';
+}
+
+// Whether the page swaps pages in itself with Astro's <ClientRouter />, which marks
+// the documents it routes with this meta.
+function clientRouted(): boolean {
+  return document.querySelector('meta[name="astro-view-transitions-enabled"]') !== null;
+}
+
+// A link to another page of the site, replayed for the page's own handlers: `taken`
+// when one of them cancelled it (the page opened a lightbox, a modal, a menu),
+// `left` when the page left it to the browser. The browser never follows the
+// replayed click itself: its own address drops the design hash, so the caller loads
+// the page instead. Two stops, since a page handler may stop the click's propagation
+// before it reaches the window: the last listener on the window cancels the click,
+// and the navigation guard cancels the navigation such a click would still start
+// (guardCanvasNavigationEvent).
+function replayLeavingClick(receiver: Element, init: MouseEventInit): 'taken' | 'left' {
+  assert(!replaying, 'replayLeavingClick: one replay at a time');
+  assert(leavingReplay === undefined, 'replayLeavingClick: no leaving replay is under way');
+  const click = new MouseEvent('click', init);
+  const replay = { navigated: false };
+  let seenByWindow: { readonly cancelled: boolean } | undefined;
+  const last = (event: Event): void => {
+    if (event === click) {
+      seenByWindow = { cancelled: event.defaultPrevented };
+      event.preventDefault();
+    }
+  };
+  window.addEventListener('click', last, false);
+  replaying = true;
+  leavingReplay = replay;
+  try {
+    receiver.dispatchEvent(click);
+  } finally {
+    replaying = false;
+    leavingReplay = undefined;
+    window.removeEventListener('click', last, false);
+  }
+  if (replay.navigated) {
+    return 'left'; // The browser, or the page's own handler, went to follow it.
+  }
+  const cancelled = seenByWindow === undefined ? click.defaultPrevented : seenByWindow.cancelled;
+  return cancelled ? 'taken' : 'left';
+}
+
 const DESIGN_HASH = '#avb-design';
 
 // The address a same-origin page link loads in the canvas: the link's page with
@@ -273,7 +341,8 @@ const DESIGN_HASH = '#avb-design';
 // strips every marker (morphAnchors.ts), so nothing on it could be selected. Left
 // to the page, a client-side router (Astro's <ClientRouter />) fetches the page and
 // swaps it in, and the swapped-in page is no rendering the canvas can address
-// either. So the page's handlers do not see a click that leaves the page.
+// either. So the canvas loads the page itself, once the page's own handlers have
+// left the click alone (holdLinkClick); under the router they never see it.
 //
 // Under a base (the static demo serves its pages at /demo/site/), a link written
 // from the site root (`/features`) moves under it, at the folder its baked
@@ -410,9 +479,32 @@ function guardCanvasNavigationEvent(event: Event): void {
   if (typeof url !== 'string') {
     return;
   }
+  if (leavingReplay !== undefined) {
+    if (canvasLeavesDocument(url, location.href)) {
+      // The replayed link click went to leave the page (replayLeavingClick): the canvas
+      // loads that page itself, with the design hash, once the replay is over. A
+      // fragment the page's own lightbox sets (`#project-2`) is the page's business.
+      leavingReplay.navigated = true;
+      event.preventDefault();
+      return;
+    }
+  }
   if (canvasLeavesOrigin(url, location.href)) {
     event.preventDefault();
   }
+}
+
+// Whether a navigation to `url` loads another document: anything but a new fragment.
+export function canvasLeavesDocument(url: string, frameURL: string): boolean {
+  assert(URL.canParse(frameURL), 'canvasLeavesDocument: the frame has a URL');
+  if (!URL.canParse(url, frameURL)) {
+    return true;
+  }
+  const destination = new URL(url, frameURL);
+  const current = new URL(frameURL);
+  destination.hash = '';
+  current.hash = '';
+  return destination.href !== current.href;
 }
 
 // Whether a navigation to `url` takes the frame off its own origin. A URL that
