@@ -1474,6 +1474,7 @@
     "src/features/style/spacingValue.ts",
     "src/features/style/stylePanelBridge.ts",
     "src/features/style/tokenFieldCaret.ts",
+    "src/features/style/tokenFieldClipboard.ts",
     "src/features/style/tokenFieldHistory.ts",
     "src/features/style/tokens.css",
     "src/features/style/transformIcons.tsx",

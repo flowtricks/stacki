@@ -12,6 +12,7 @@ import { isHTMLElementInDocument } from './model/dom';
 import { assert } from '../../../shared/core/assert';
 import { caretPlacementAt, placeCaret } from './tokenFieldCaret';
 import { EMPTY_FIELD_HISTORY, type FieldHistory, type FieldSnapshot, recordEdit, redoStep, undoStep } from './tokenFieldHistory';
+import { chipSource, type PastedLineBreaks, pastedSegments, pastedText, selectedSource, selectionRangeIn } from './tokenFieldClipboard';
 
 // ── Inline token editor ──────────────────────────────────────────────────────
 // The applied variable renders as a purple chip *inside* the field, with editable
@@ -248,7 +249,8 @@ export function serializeTokens(root: HTMLElement, bare: string, varForm: string
     .replace(/\u0000/g, () => {
       const binding = chips[at++];
       if (chips.length === 1 && !hasText) {
-        return bare;
+        // A lone chip pasted in is its own reference; one read back by name is the field's.
+        return chipSource(binding ?? '', bare);
       }
       return binding || varForm;
     })
@@ -431,6 +433,8 @@ export function TokenField({
   onCommit,
   onDraft,
   onChipClick,
+  chipOf,
+  lineBreaks,
 }: TokenFieldProps) {
   // Every edit, to whoever is holding this field's value. Recorded as synced too: a
   // parent that stores it hands it straight back as `value`, and rebuilding the field
@@ -455,6 +459,18 @@ export function TokenField({
     report(element);
   };
   useFieldHistoryInput(editorRef, { record, travel });
+  // A paste, a cut or a drop is one undo step, answered here (tokenFieldClipboard.ts):
+  // the browser's own copies a chip as a line break and pastes a reference as plain text.
+  const clipboard = (element: HTMLElement, edit: ClipboardEdit): void => {
+    record(element, edit.kind);
+    if (edit.kind === 'cut') {
+      deleteSelection(element);
+    } else {
+      insertSource(element, edit.text, chipOf);
+    }
+    // The field's own input path re-colours and reports it, and the wrapper reads the caret.
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: CLIPBOARD_INPUT_TYPES[edit.kind] }));
+  };
   return (
     <div
       ref={editorRef}
@@ -529,6 +545,55 @@ export function TokenField({
         }
         tokenFieldKeyDown(event, { code: !!code, stepMin, report, record });
       }}
+      onCopy={(event) => {
+        const source = selectedSource(event.currentTarget, chipBare);
+        if (source === undefined) {
+          return;
+        }
+        event.preventDefault();
+        event.clipboardData.setData('text/plain', source);
+      }}
+      onCut={(event) => {
+        const source = selectedSource(event.currentTarget, chipBare);
+        if (source === undefined) {
+          return;
+        }
+        event.preventDefault();
+        event.clipboardData.setData('text/plain', source);
+        if (disabled) {
+          return;
+        }
+        clipboard(event.currentTarget, { kind: 'cut' });
+      }}
+      onPaste={(event) => {
+        event.preventDefault();
+        const text = pastedText(event.clipboardData.getData('text/plain'), lineBreaks);
+        if (disabled || text === '') {
+          return;
+        }
+        clipboard(event.currentTarget, { kind: 'paste', text });
+      }}
+      onDragStart={(event) => {
+        // What is dragged out is the same CSS a copy writes, never the chips' labels.
+        const source = selectedSource(event.currentTarget, chipBare);
+        if (source === undefined) {
+          return;
+        }
+        event.dataTransfer.clearData();
+        event.dataTransfer.setData('text/plain', source);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const text = pastedText(event.dataTransfer.getData('text/plain'), lineBreaks);
+        if (disabled || text === '') {
+          return;
+        }
+        const element = event.currentTarget;
+        // The text goes where it was dropped; the dragged original stays where it was.
+        placeCaretAtPoint(element, { x: event.clientX, y: event.clientY });
+        element.focus();
+        clipboard(element, { kind: 'drop', text });
+      }}
       onMouseDown={(event) => {
         const chip = pressedChip(event.currentTarget, event.target);
         if (chip !== undefined) {
@@ -545,6 +610,87 @@ export function TokenField({
       }}
     />
   );
+}
+
+// What a clipboard event does to the field: take the selection out, or put text in over it.
+type ClipboardEdit = { readonly kind: 'cut' } | { readonly kind: 'paste' | 'drop'; readonly text: string };
+
+// The input each clipboard edit is reported as, the names the browser gives its own.
+const CLIPBOARD_INPUT_TYPES = { cut: 'deleteByCut', paste: 'insertFromPaste', drop: 'insertFromDrop' } as const satisfies Record<ClipboardEdit['kind'], string>;
+
+/**
+ * Put `text` in the field over its selection (or at the caret), each variable
+ * reference in it drawn as the chip `chipOf` makes for it, and leave the caret
+ * behind what went in. Text with no reference in it, or an unclosed `var(`, goes in as text.
+ */
+export function insertSource(root: HTMLElement, text: string, chipOf: (reference: string) => Chip): void {
+  const range = selectionRangeIn(root) ?? endRange(root);
+  const before = root.querySelectorAll('[data-chip]').length;
+  const segments = pastedSegments(text);
+  const references = segments.filter((segment) => segment.kind === 'reference').length;
+  range.deleteContents();
+  const left = root.querySelectorAll('[data-chip]').length;
+  const template = root.ownerDocument.createElement('template');
+  template.innerHTML = segments.map((segment) => (segment.kind === 'reference' ? tokenChipHtml(chipOf(segment.text)) : escapeHtml(segment.text))).join('');
+  const first = template.content.firstChild ?? undefined;
+  const last = template.content.lastChild ?? undefined;
+  range.insertNode(template.content);
+  if (first !== undefined && isHTMLElementInDocument(first, root.ownerDocument) && first.dataset['chip'] !== undefined) {
+    // A chip pasted at the very start keeps a caret slot in front, as buildTokenHtml draws one.
+    slotBeside(first, 'before');
+  }
+  assert(root.querySelectorAll('[data-chip]').length === left + references, 'insertSource: every reference went in as a chip');
+  assert(left <= before, 'insertSource: replacing the selection only took chips away');
+  if (last === undefined) {
+    return;
+  }
+  if (isHTMLElementInDocument(last, root.ownerDocument) && last.dataset['chip'] !== undefined) {
+    placeCaret(root, { kind: 'text', node: slotBeside(last, 'after'), offset: 0 });
+    return;
+  }
+  assert(last.nodeType === 3, 'insertSource: the last thing put in is a chip or text');
+  const TextConstructor = root.ownerDocument.defaultView?.Text;
+  assert(TextConstructor !== undefined, 'insertSource: the field belongs to a window');
+  if (last instanceof TextConstructor) {
+    placeCaret(root, { kind: 'text', node: last, offset: last.length });
+  }
+}
+
+/** Take the field's selection out, chips whole; the caret stays where it began. */
+export function deleteSelection(root: HTMLElement): void {
+  const range = selectionRangeIn(root);
+  if (range === undefined) {
+    return;
+  }
+  range.deleteContents();
+  const selection = root.ownerDocument.getSelection();
+  assert(selection !== null, 'deleteSelection: a field with a selection has one to collapse');
+  selection.removeAllRanges();
+  selection.addRange(range);
+  assert(range.collapsed, 'deleteSelection: nothing is left selected');
+}
+
+// A caret at the end of the field, for a paste with no selection in it.
+function endRange(root: HTMLElement): Range {
+  const range = root.ownerDocument.createRange();
+  range.selectNodeContents(root);
+  range.collapse(false);
+  return range;
+}
+
+// The field's caret at a viewport point (a drop), when the point is in the field.
+function placeCaretAtPoint(root: HTMLElement, point: { readonly x: number; readonly y: number }): void {
+  const ownerDocument = root.ownerDocument;
+  const range = ownerDocument.caretRangeFromPoint(point.x, point.y);
+  if (range === null || !root.contains(range.startContainer)) {
+    return;
+  }
+  const selection = ownerDocument.getSelection();
+  if (selection === null) {
+    return;
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 // A press on the field that is not on a chip. Only a plain single press is
@@ -619,6 +765,10 @@ export type TokenFieldProps = {
   onDraft?: (value: string) => void;
   /** A chip was pressed: which one, so a pick can swap that chip and no other. */
   onChipClick: (chip: PressedChip) => void;
+  /** The chip a variable reference pasted or dropped into the field is drawn as. */
+  chipOf: (reference: string) => Chip;
+  /** What a paste or drop does with line breaks: kept in a multi-line editor, joined in a one-line field. */
+  lineBreaks: PastedLineBreaks;
   /** Treat the value as code: colour it as it is typed, and let the arrow keys
    *  step the number the caret is in. */
   code?: boolean;

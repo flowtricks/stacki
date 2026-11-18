@@ -17,6 +17,7 @@ import VariableHint from './VariableHint';
 import { useDeclaredValue } from './model/computedStyle';
 import { customValueSeed, customValueWrites, type CustomValueSeed } from './model/customValueSeed';
 import { type Chip, CHIP_MARK, fieldText, type PressedChip, pressedChip, serializeTokens, TokenField } from './TokenField';
+import { VARIABLE_REFERENCE_PATTERN } from './tokenFieldClipboard';
 import './embedEditor.css';
 import {
   childValue,
@@ -321,6 +322,7 @@ export default function VariableConnect(props: VariableConnectProps) {
           ariaLabel={ariaLabel}
           value={value}
           chips={applied.chips}
+          chipOf={(reference) => referenceChip(reference, applied.vars)}
           chipText={chipText}
           hintValue={hintValue}
           field={field}
@@ -427,7 +429,7 @@ function useVariableConnect({ prop, code, canvasProperty, children }: VariableCo
   // A variable hint uses the same catalog and chips, but stays outside the
   // editable value so reading or focusing it cannot create a local declaration.
   const hintValue = value === '' && /var\(/i.test(placeholder) ? placeholder : '';
-  const applied = useAppliedVariable({ value: value || hintValue, open, prop });
+  const applied = useAppliedVariable({ value: value || hintValue, open, focused: active, prop });
   // Render the token editor while a variable is applied, or while it still has focus.
   const showToken = applied.isVar || active || !!code;
   const field = useWrappedField(children);
@@ -492,6 +494,7 @@ function ConnectTokenField({
   ariaLabel,
   value,
   chips,
+  chipOf,
   chipText,
   hintValue,
   field,
@@ -501,6 +504,7 @@ function ConnectTokenField({
   onChip,
 }: {
   connect: VariableConnectProps;
+  chipOf: (reference: string) => Chip;
   guard: PreviewGuard;
   ariaLabel: string;
   value: string;
@@ -520,6 +524,9 @@ function ConnectTokenField({
         chips={hintValue ? [] : chips}
         chipBare={chipText}
         chipVar={chipText}
+        chipOf={chipOf}
+        // The big editor wraps a text area, which holds line breaks; a panel's one-line input cannot.
+        lineBreaks={isValidElement(connect.children) && connect.children.type === 'textarea' ? 'keep' : 'join'}
         onDraft={connect.onDraft ?? ((next) => pushDraft(field, next))}
         className={`${field.childClass} embed-editor_varconnect-editor`}
         ariaLabel={ariaLabel}
@@ -636,14 +643,15 @@ function ConnectPopups({
 // like calc(var(…) + 10px) — or when a bare value equals a project variable's NAME (a
 // native binding reads back as its "group/leaf" name). Load the shared list only when
 // the value could carry a variable (so numbers, lengths, colors don't trigger it).
-function useAppliedVariable({ value, open, prop }: { value: string; open: boolean; prop: string | undefined }) {
+function useAppliedVariable({ value, open, focused, prop }: { value: string; open: boolean; focused: boolean; prop: string | undefined }) {
   const raw = value.replace(/!\s*important\s*$/i, '').trim();
   const embedVar = raw.match(/var\(\s*--[A-Za-z0-9_-]+[^)]*\)/i)?.[0];
   // Native size variables may read back as `group/name (resolved value)`. Match using
   // the name portion while keeping the complete raw text as the replaceable token.
   const nativeNames = nativeVariableNames(raw);
   const nameLike = !embedVar && nativeNames.some((name) => name !== '' && /[A-Za-z]/.test(name) && !name.includes('(') && !/^[#.\d]/.test(name));
-  const { vars, loading } = useSharedVars({ active: open || !!embedVar || nameLike });
+  // A field in use loads them too: a reference pasted into it is drawn with its catalog name.
+  const { vars, loading } = useSharedVars({ active: open || focused || !!embedVar || nameLike });
   const current = resolveVariable({ vars, embedVar, nameLike, nativeNames, prop });
   const isVar = !!embedVar || !!current;
   const binding = current?.binding ?? embedVar;
@@ -684,6 +692,19 @@ function resolveVariable({
   });
 }
 
+// The chip one `var(--…)` reference is drawn as: the catalog's name, type and value when the
+// project declares it, and its own name drawn as a size otherwise. Pasted references are drawn
+// with it too, so a paste looks the way the value will once it is read back.
+export function referenceChip(reference: string, vars: readonly ProjectVariable[]): Chip {
+  const known = vars.find((variable) => variable.binding === reference);
+  return {
+    text: reference,
+    name: known?.name ?? bindingName(reference),
+    type: known?.type ?? 'Size', // i18n-ignore: a variable type id.
+    ...(known === undefined ? {} : { value: known.value }),
+  };
+}
+
 // Every variable in the value, as chips. An expression built out of tokens — a
 // clamp() of four of them — is the normal case in a variables sheet, and showing
 // only the first as a chip left the rest looking like text that happens to say
@@ -704,15 +725,7 @@ function valueChips({
   if (!varText) {
     return [];
   }
-  const chips = [...raw.matchAll(/var\(\s*--[A-Za-z0-9_-]+[^)]*\)/gi)].map((match) => {
-    const known = vars.find((variable) => variable.binding === match[0]);
-    return {
-      text: match[0],
-      name: known?.name ?? bindingName(match[0]),
-      type: known?.type ?? 'Size', // i18n-ignore: a variable type id.
-      ...(known === undefined ? {} : { value: known.value }),
-    };
-  });
+  const chips = [...raw.matchAll(VARIABLE_REFERENCE_PATTERN)].map((match) => referenceChip(match[0], vars));
   if (chips.length) {
     return chips;
   }
