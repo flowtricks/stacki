@@ -182,7 +182,7 @@ export function renderEmbed(segments: string[], regions: StyleRegion[]): string 
     if (region === undefined) {
       throw new Error(`Style region ${i} is missing`);
     }
-    out += region.root ? region.root.toString() : region.css;
+    out += regionText(region);
     out += segments[i + 1] ?? '';
   }
   return out;
@@ -258,7 +258,7 @@ export function placeChild(parent: Rule | AtRule, child: ChildNode): void {
 // The indentation of `parent`'s children: that of one already on its own line,
 // or, with none, the parent's own plus the step this stylesheet indents by.
 function indentInside(parent: Rule | AtRule): string | undefined {
-  const own = lineIndentOf(parent.raws.before);
+  const own = lineIndentOf(parent.raws.before) ?? regionStartIndent(parent);
   const children = (parent.nodes ?? []).filter((node) => node.raws.before !== undefined);
   const lined = children.find((node) => lineIndentOf(node.raws.before) !== undefined);
   if (lined !== undefined) {
@@ -268,6 +268,47 @@ function indentInside(parent: Rule | AtRule): string | undefined {
     return undefined; // One line, or a parent not on a line of its own.
   }
   return own + indentStep(parent.root());
+}
+
+// A block written first, flush at the start of its stylesheet, starts a line at column 0: a new
+// tag's template (`@layer components {}`) is one, and the tag sets it on a line of its own
+// (firstStyleBlock.ts). Without this its first rule had no indentation to follow and PostCSS
+// guessed the rule's whitespace from other blocks, blank lines included. Anything else that
+// does not start a line is undefined.
+function regionStartIndent(node: Rule | AtRule): string | undefined {
+  const parent = node.parent;
+  if (parent === undefined) {
+    return undefined;
+  }
+  if (parent.type !== 'root') {
+    return undefined;
+  }
+  if (parent.first !== node) {
+    return undefined;
+  }
+  return node.raws.before === '' ? '' : undefined;
+}
+
+/**
+ * The text a region's tree writes back, in the region's own line endings. The panel builds new
+ * nodes with `\n`, so in a stylesheet written with `\r\n` the edited lines came out mixed. A
+ * region that already mixes the two keeps whatever each line has.
+ */
+export function regionText(region: StyleRegion): string {
+  if (region.root === undefined) {
+    return region.css;
+  }
+  const text = region.root.toString();
+  if (!region.css.includes('\r\n')) {
+    return text;
+  }
+  if (/(^|[^\r])\n/.test(region.css)) {
+    return text;
+  }
+  const crlf = text.replace(/\r?\n/g, '\r\n');
+  assert(!/(^|[^\r])\n/.test(crlf), 'regionText: every line ends in \\r\\n');
+  assert(crlf.replace(/\r/g, '') === text.replace(/\r/g, ''), 'regionText: only line endings change');
+  return crlf;
 }
 
 // What follows the last line break of a node's leading whitespace; undefined

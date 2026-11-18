@@ -87,7 +87,13 @@ test('the first style written at that breakpoint creates the media block after t
   const css = panel.writes[0].css;
   assert.ok(css.startsWith(GRID), 'the existing rule is untouched and first');
   assert.equal((css.match(/@media \(width < 48rem\)/g) ?? []).length, 1, 'one new block');
-  assert.equal(css, `${GRID}@media (width < 48rem) {.grid { row-gap: 2rem; column-gap: 2rem; } }`, 'the exact bytes the panel writes for a new query block');
+  // The new block starts and closes lines of its own, even after a one-line rule: copied from
+  // that rule, it was once written `.grid { … }@media (width < 48rem) {.grid { … } }`.
+  assert.equal(
+    css,
+    `${GRID}\n@media (width < 48rem) {\n\t.grid {\n\t\trow-gap: 2rem;\n\t\tcolumn-gap: 2rem;\n\t}\n}`,
+    'the exact bytes the panel writes for a new query block',
+  );
   assert.match(shown(panel), /< 48rem/, 'the target is still the breakpoint');
   const again = [...panel.container.querySelectorAll('input')].find((candidate) => /gap/i.test(candidate.closest('.embed-editor_size-row')?.textContent ?? ''));
   again.focus();

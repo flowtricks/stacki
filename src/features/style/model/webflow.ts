@@ -21,7 +21,7 @@ import { styleTransport } from '../../../ipc/editorEnvironment';
 
 import { LayerRegistry } from './cascadeLayers';
 import { orderByImports } from './cssImportOrder';
-import { collectRules, parseRegion, renderEmbed, splitEmbed } from './css';
+import { collectRules, parseRegion, regionText, renderEmbed, splitEmbed } from './css';
 import { assert } from '../../../../shared/core/assert';
 import { englishText, messageRef } from '../../../../shared/properties/i18n/messageRef';
 import { failureOf, type Failure } from './failureMessage';
@@ -356,7 +356,8 @@ export function serializeDocument(embedDocument: EmbedDocument): string {
   if (embedDocument.source.origin.kind === 'astro') {
     return renderEmbed(embedDocument.segments, embedDocument.regions);
   }
-  return embedDocument.regions[0]?.root?.toString() ?? embedDocument.regions[0]?.css ?? '';
+  const region = embedDocument.regions[0];
+  return region === undefined ? '' : regionText(region);
 }
 
 /**

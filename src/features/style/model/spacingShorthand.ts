@@ -86,6 +86,17 @@ export function setPaddingDeclaration(node: Rule | AtRule, prop: string, declare
   const key = prop.trim().toLowerCase();
   assert(isPaddingProperty(key), 'setPaddingDeclaration: the property is a padding property');
   const paddingFirst = paddingDeclarations(node).length === 0;
+  // The same property, already the last padding written: its value changes where it stands. Moved
+  // to the rule's end, a rewrite of the same value reordered the rule. One written earlier is
+  // moved, so the new value is not overridden by a later padding.
+  const last = paddingDeclarations(node).at(-1);
+  if (last !== undefined && last.prop.toLowerCase() === key) {
+    last.assign({ value: declared.value, important: declared.important });
+    node.assign({ raws: { ...node.raws, semicolon: true } });
+    assert(paddingDeclarations(node).at(-1) === last, 'setPaddingDeclaration: the edited padding stays the last');
+    compactPadding(node);
+    return;
+  }
   for (const declaration of paddingDeclarations(node)) {
     if (declaration.prop.toLowerCase() === key) {
       declaration.remove();

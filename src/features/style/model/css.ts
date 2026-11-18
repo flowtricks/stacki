@@ -26,7 +26,7 @@ import {
   placeChild,
   setDeclDirect,
 } from './cssRegions';
-export { type DeclarationValue, extractStyleRegions, parseRegion, splitEmbed, renderEmbed, directDecls, appendDecl } from './cssRegions';
+export { type DeclarationValue, extractStyleRegions, parseRegion, splitEmbed, renderEmbed, regionText, directDecls, appendDecl } from './cssRegions';
 
 export { atRuleQueryText, queryKey, splitQuery, countAtRuleQuery, renameAtRuleQuery } from './cssQueries';
 import { splitQuery } from './cssQueries';
@@ -421,9 +421,22 @@ function appendTopLevel(root: Root, node: ChildNode): void {
   if (previous === undefined) {
     return;
   }
-  if (node.type === 'rule' || node.type === 'atrule') {
-    node.assign({ raws: { ...node.raws, before: previous.before, after: previous.after } });
+  if (node.type !== 'rule' && node.type !== 'atrule') {
+    return;
   }
+  // A block that does not start a line of its own (the first one in `<style>.grid { … }`) or
+  // closes on its own line (`.grid { color: red; }`) is not a layout to copy: copied, the new
+  // block ran onto the end of the old one and closed on its last line
+  // (`.grid { … }@media (width < 48rem) {.grid { … } }`). Nor is an empty block's inside
+  // (`@layer components {\n\n}`): its blank line came along to the new block's closing brace.
+  // A new block starts a line, spaced from the one before as that one is from its own
+  // predecessor, and closes on the line after its last child, at its own indentation.
+  const lineIndent = previous.before.includes('\n') ? previous.before.slice(previous.before.lastIndexOf('\n') + 1) : '';
+  const before = previous.before.includes('\n') ? previous.before : `\n${lineIndent}`;
+  const after = `\n${lineIndent}`;
+  node.assign({ raws: { ...node.raws, before, after } });
+  assert((node.raws.before ?? '').includes('\n'), 'appendTopLevel: a new block starts a line');
+  assert((node.raws.after ?? '').includes('\n'), 'appendTopLevel: a new block closes on a line of its own');
 }
 
 // The whitespace around a block (before its selector, before its closing brace),
@@ -657,23 +670,24 @@ export function createRuleAtRoot(
 }
 
 /**
- * A template's wrapper written on one line (`@layer components {}` or `{ }`) closes on a line of its
- * own once it holds a rule, as `@layer components {\n}` does; otherwise the rule's last line ran
- * into both closing braces (`color: red;}}`). Only an empty wrapper is touched: one that already
- * holds anything keeps the person's own layout.
+ * An empty template wrapper closes on the line right after the rule it receives, however the
+ * template spelled its inside: one line (`@layer components {}` or `{ }`), a line break
+ * (`{\n}`) or a blank line to type into (`{\n\n}`). The blank space is where the rules go, so
+ * the first rule takes its place. Left as written, a one-line wrapper ran the rule's last line
+ * into both closing braces (`color: red;}}`), and a blank line stayed between the rule and the
+ * wrapper's brace, and PostCSS copied it inside the new rule too (it guesses a new rule's
+ * closing whitespace from the stylesheet's other blocks). Only an empty wrapper is touched: one
+ * that already holds anything keeps the person's own layout.
  */
 function openEmptyWrapper(container: AtRule): void {
   if ((container.nodes ?? []).length > 0) {
-    return;
-  }
-  const after = container.raws.after ?? '';
-  if (after.includes('\n')) {
     return;
   }
   const before = container.raws.before ?? '';
   const lineIndent = before.includes('\n') ? before.slice(before.lastIndexOf('\n') + 1) : '';
   container.assign({ raws: { ...container.raws, after: `\n${lineIndent}` } });
   assert((container.raws.after ?? '').startsWith('\n'), 'openEmptyWrapper: the closing brace starts a line');
+  assert(!/\n[ \t]*\n/.test(container.raws.after ?? ''), 'openEmptyWrapper: no blank line before the closing brace');
 }
 
 /**
