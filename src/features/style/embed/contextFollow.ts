@@ -1,9 +1,10 @@
 // Whether the style panel's edit target follows the canvas width, or is held where the person put it.
 //
 // Following is the default: as the canvas is resized, the query that holds at that width is
-// the edit target (model/followWidth.ts). Unchecking that query, or choosing any row by hand,
-// holds ("pins") the target: it stays where the person put it while the canvas is resized,
-// until they check the matching row, the "Follow canvas size" row, or the pin on the trigger.
+// the edit target (model/followWidth.ts). The link on the trigger (or the "0" key) holds
+// ("pins") the target on Base, and picking a row with no canvas width holds it there: it stays
+// where the person put it while the canvas is resized, until they check the matching row or the
+// link again. The whole table is embed/followTransition.ts (docs/style-follow-canvas.md).
 //
 // The hold lasts the session only. An earlier version kept it in browser storage per project,
 // and one stray click on Base then pinned the panel for good with nothing to say how to get
@@ -12,7 +13,8 @@
 // Resizing the canvas never releases a hold (that would defeat "edit every size without
 // resizing"); only the person's explicit check does.
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { flushSync } from 'react-dom';
 import { assert } from '../../../../shared/core/assert';
 import { getHost, onHostChange } from '../model/host';
 
@@ -103,16 +105,47 @@ export function useCanvasDevice(): string {
   return useSyncExternalStore(subscribeHost, readCanvasDevice);
 }
 
+// The mounted panels' toggle: the "0" key does what the link on the trigger does, and only a panel
+// knows its edit target (turning following off while on a query also moves the target to Base,
+// embed/followTransition.ts). One per mounted style panel; the bound catches a leaked registration.
+const TOGGLE_HANDLERS_MAX = 16;
+const toggleHandlers = new Set<(from: FollowMode) => void>();
+
+/** Lets the "0" key reach a mounted panel's toggle, for as long as the panel is mounted. */
+export function useFollowToggleHandler(handler: (from: FollowMode) => void): void {
+  useEffect(() => {
+    toggleHandlers.add(handler);
+    assert(toggleHandlers.size <= TOGGLE_HANDLERS_MAX, 'useFollowToggleHandler: one handler per mounted style panel');
+    return () => {
+      toggleHandlers.delete(handler);
+    };
+  }, [handler]);
+}
+
 /**
- * Flips the hold for the open project: following becomes held and held becomes following. Only
- * where a canvas width is known (without one there is nothing to follow). True when it flipped.
- * The "0" key calls this (model/appKeys.ts); the toggle on the trigger sets the same record.
+ * Turns following off or on for the open project, as the link on the trigger does. Only where a
+ * canvas width is known (without one there is nothing to follow). True when it toggled. The "0"
+ * key calls this (model/appKeys.ts). With a panel mounted the panel applies the whole transition
+ * (target included); with none, only the mode flips.
  */
 export function toggleFollowMode(projectKey: string | undefined): boolean {
   if (readCanvasWidth() === undefined) {
     return false;
   }
-  setModeOf(projectKey, modeOf(projectKey) === 'follow' ? 'pinned' : 'follow');
+  // Read once, so every mounted panel toggles from the same mode and they all land on the same one.
+  const from = modeOf(projectKey);
+  if (toggleHandlers.size === 0) {
+    setModeOf(projectKey, from === 'follow' ? 'pinned' : 'follow');
+    return true;
+  }
+  // One commit for the mode and the target. The key arrives outside a React event, where the mode's store
+  // update renders at sync priority and the target's state update at default priority, in two commits: one
+  // frame showed the old query beside a link already off. flushSync puts both in the same synchronous render.
+  flushSync(() => {
+    for (const handler of [...toggleHandlers]) {
+      handler(from);
+    }
+  });
   return true;
 }
 
@@ -127,8 +160,14 @@ export function followRetargetKey(state: {
   readonly settled: boolean;
   readonly matchedKey: string | undefined;
   readonly context: string;
+  /** A row was picked while following and the canvas has not reached its width yet: following waits for it, or the
+   *  target would snap back to the row at the old width for a frame (embed/followTransition.ts). */
+  readonly pickPending?: boolean;
 }): string | undefined {
   if (!state.following || !state.settled || state.matchedKey === undefined) {
+    return undefined;
+  }
+  if (state.pickPending === true) {
     return undefined;
   }
   return state.matchedKey === state.context ? undefined : state.matchedKey;

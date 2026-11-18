@@ -1,10 +1,11 @@
-// Goal: the style panel's edit target follows the canvas width, can be unchecked to edit every
+// Goal: the style panel's edit target follows the canvas width, can be held on Base to edit every
 // size without moving the canvas, and stays out of the way of the open list.
 //   - the query that holds at the canvas width is the target (trigger and checked row), and
 //     it changes as the width changes, with no file write and no canvas move;
-//   - unchecking the matched row pins the target to Base WITHOUT moving the canvas; a pinned
-//     target survives canvas resizes; checking the matched row again follows again;
-//   - choosing Base by hand still moves the canvas (one pixel under the smallest query) and pins;
+//   - clicking the matched row changes nothing; the link on the trigger holds the target on Base
+//     WITHOUT moving the canvas; a held target survives canvas resizes; checking the matched row
+//     again follows again (embed/followTransition.ts has the whole table);
+//   - choosing Base or another breakpoint while following moves the canvas there and keeps following;
 //   - an open list stays open, and checks the new row in place, while the width changes.
 // Method: the real StylePanel through the shared harness over one stylesheet with three
 // min-width queries on `.grid`. Widths arrive as the `canvasWidthPx` prop (what the preview
@@ -68,31 +69,30 @@ test('the target follows the canvas width, with no write and no canvas move', as
   assert.deepEqual(canvasRequests, [], 'and never moves the canvas');
 });
 
-test('unchecking the matched row edits every size: Base, canvas where it was, pinned through resizes', async (context) => {
+test('clicking the row the canvas is already on changes nothing: same target, still following, no canvas move', async (context) => {
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
   await open(panel);
   assert.match(checkedRow(), /≥ 48rem/, 'the matched row is the checked one');
-  await panel.user('uncheck the matched row', () => press(panel, row('Tablet')));
-  assert.equal(shown(panel), 'Base', 'the target is Base');
-  assert.deepEqual(canvasRequests, [], 'the canvas did not move: uncheck is not a click on Base');
-  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'false', 'the trigger says it is held');
+  await panel.user('click the matched row', () => press(panel, row('Tablet')));
+  assert.match(shown(panel), /≥ 48rem/, 'the target is still the matched row');
+  assert.deepEqual(canvasRequests, [], 'the canvas did not move');
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'true', 'and the trigger still follows');
   await resizeTo(panel, 1300);
-  assert.equal(shown(panel), 'Base', 'a pinned target ignores canvas resizes');
-  await resizeTo(panel, 500);
-  assert.equal(shown(panel), 'Base');
-  assert.deepEqual(canvasRequests, []);
+  assert.match(shown(panel), /≥ 64rem/, 'following goes on with the canvas');
   assert.deepEqual(panel.writes, []);
 });
 
-test('checking the matched row again follows again, without moving the canvas', async (context) => {
+test('the link turns following off onto Base with the canvas where it is; held through resizes; the matched row follows again', async (context) => {
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
-  await open(panel);
-  await panel.user('uncheck', () => press(panel, row('Tablet')));
+  await panel.user('press the link', () => press(panel, pinOf(panel)));
+  assert.equal(shown(panel), 'Base', 'the target is Base');
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'false', 'the trigger says it is held');
   await resizeTo(panel, 1100);
+  assert.equal(shown(panel), 'Base', 'a held target ignores canvas resizes');
   await open(panel);
-  assert.equal(checkedRow(), 'Base', 'pinned: Base is checked, not the row that holds');
+  assert.equal(checkedRow(), 'Base', 'held: Base is checked, not the row that holds');
   await panel.user('check the matching row', () => press(panel, row('Laptop')));
   assert.match(shown(panel), /≥ 64rem/);
   assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'true', 'the toggle is on once following');
@@ -101,27 +101,32 @@ test('checking the matched row again follows again, without moving the canvas', 
   assert.match(shown(panel), /≥ 30rem/, 'and the target follows again');
 });
 
-test('choosing Base by hand moves the canvas under the smallest query and pins', async (context) => {
+test('choosing Base while following moves the canvas under the smallest query and keeps following', async (context) => {
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
   await open(panel);
   await panel.user('click Base', () => press(panel, row('Base')));
   assert.deepEqual(canvasRequests, [479], 'Base lands one pixel under 30rem');
-  assert.equal(shown(panel), 'Base');
-  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'false', 'a choice is held');
+  assert.equal(shown(panel), 'Base', 'the target is Base before the canvas reports the new width');
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'true', 'still following');
   await resizeTo(panel, 479);
+  assert.equal(shown(panel), 'Base');
   await resizeTo(panel, 1100);
-  assert.equal(shown(panel), 'Base', 'and stays pinned while the canvas moves');
+  assert.match(shown(panel), /≥ 64rem/, 'and following goes on with the canvas');
 });
 
-test('choosing another query pins to it, and moves the canvas inside it', async (context) => {
+test('choosing another query while following moves the canvas inside it and keeps following', async (context) => {
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
   await open(panel);
   await panel.user('pick 30rem', () => press(panel, row('Phone')));
   assert.deepEqual(canvasRequests, [480]);
+  assert.match(shown(panel), /≥ 30rem/, 'the pick shows at once, not the row at the old width');
+  await resizeTo(panel, 480);
+  assert.match(shown(panel), /≥ 30rem/);
+  assert.equal(pinOf(panel).getAttribute('aria-pressed'), 'true');
   await resizeTo(panel, 1100);
-  assert.match(shown(panel), /≥ 30rem/, 'the choice is held through a resize');
+  assert.match(shown(panel), /≥ 64rem/, 'following goes on');
 });
 
 test('an open list stays open and checks the new row in place while the canvas is resized', async (context) => {
@@ -173,8 +178,7 @@ test('a fresh session follows even when an old stored pin exists, and the old re
 test('the pin on the trigger lets go of the hold', async (context) => {
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
-  await open(panel);
-  await panel.user('uncheck the matched row', () => press(panel, row('Tablet')));
+  await panel.user('hold', () => press(panel, pinOf(panel)));
   assert.equal(shown(panel), 'Base');
   const pin = trigger(panel).querySelector('.u-select-pin');
   assert.equal(pin.getAttribute('aria-label'), 'Follow canvas size');

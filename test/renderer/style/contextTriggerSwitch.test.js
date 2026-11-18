@@ -63,6 +63,23 @@ const projectTrigger = (container) => {
   return button === null ? 'no trigger' : text(button);
 };
 
+// Holds the target at a breakpoint: the link turns following off onto Base (embed/followTransition.ts),
+// and a row picked while held is the target alone, the canvas staying where it is. The pick is made at
+// a width where the row does not hold (picking the row the canvas is on follows again), then the canvas
+// goes back to `widthPx`.
+async function holdAt(panel, label, widthPx) {
+  pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
+  await panel.settle();
+  assert.equal(pin(panel).getAttribute('aria-pressed'), 'false', 'the press holds');
+  assert.equal(text(trigger(panel)), 'Base', 'on Base');
+  await panel.data('canvas away', () => panel.rerender({ canvasWidthPx: 400 }));
+  await panel.user('open the list', () => press(panel, trigger(panel)));
+  const option = [...document.querySelectorAll('.embed-editor_context-select [role="option"]')].find((candidate) => text(candidate).startsWith(label));
+  await panel.user(`hold at ${label}`, () => press(panel, option));
+  await panel.data('canvas back', () => panel.rerender({ canvasWidthPx: widthPx }));
+  assert.equal(pin(panel).getAttribute('aria-pressed'), 'false', 'still held');
+}
+
 async function switchTo(panel, id) {
   panel.bridge.mode = 'held';
   const recorder = recordFrames(panel, projectTrigger);
@@ -93,9 +110,7 @@ test('switching elements while following never paints Base or an empty trigger o
 test('switching elements while held keeps the held target in every frame', async (context) => {
   const panel = await mount(1000);
   context.after(() => panel.unmount());
-  pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
-  await panel.settle();
-  assert.equal(pin(panel).getAttribute('aria-pressed'), 'false', 'the first press holds');
+  await holdAt(panel, 'Tablet', 1000);
   const held = text(trigger(panel));
   for (const id of ['n2', 'n1']) {
     const frames = await switchTo(panel, id);
@@ -113,11 +128,11 @@ test('the trigger carries the Follow canvas size toggle, pressed while following
   assert.equal(pin(panel).getAttribute('title') === null, true, 'the tooltip is the app tooltip, not a native title');
   assert.equal(pin(panel).getAttribute('aria-label'), 'Follow canvas size');
   assert.equal([...select(panel).querySelectorAll('[role="switch"]')].length, 0, 'the closed trigger has no switch; the list row is gone too (checked below)');
-  const shown = text(trigger(panel));
+  assert.match(text(trigger(panel)), /≥ 48rem/);
   pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
   await panel.settle();
   assert.equal(pin(panel).getAttribute('aria-pressed'), 'false', 'pressing it holds the target');
-  assert.equal(text(trigger(panel)), shown, 'holding keeps the target where it is');
+  assert.equal(text(trigger(panel)), 'Base', 'holding off a query edits Base, with the canvas where it is');
   assert.equal(document.querySelector('.embed-editor_context-select .u-select-list') === null, true, 'and never opened the list');
   pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
   await panel.settle();
@@ -158,9 +173,7 @@ test('a following panel retargets only once the element has been read', async ()
 test('held at a breakpoint, the target ignores every canvas width and device change; following still retargets', async (context) => {
   const panel = await mount(1000);
   context.after(() => panel.unmount());
-  pin(panel).dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
-  await panel.settle();
-  assert.equal(pin(panel).getAttribute('aria-pressed'), 'false', 'held');
+  await holdAt(panel, 'Tablet', 1000);
   const held = text(trigger(panel));
   assert.match(held, /≥ 48rem/);
   const steps = [

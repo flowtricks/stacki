@@ -10,7 +10,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mountStylePanel, recordFrames, directFailure } = require('../../helpers/stylePanelHarness.js');
+const { mountStylePanel, recordFrames, directFailure, press } = require('../../helpers/stylePanelHarness.js');
 
 const MOBILE_FIRST = '.heading { font-size: 2rem; @media (width >= 48rem) { font-size: 3rem; } }';
 const DESKTOP_FIRST = '.heading { font-size: 3rem; @media (width < 48rem) { font-size: 2rem; } }';
@@ -69,9 +69,13 @@ test('held on ≥ 48rem, the icon still tracks the device the edit shows on', as
   context.after(() => panel.unmount());
   const pin = trigger(panel.container).querySelector('.u-select-pin');
   assert.ok(pin, 'the follow toggle is drawn');
+  // The link holds on Base (embed/followTransition.ts); a row picked while held, away from the canvas, is the target alone.
   pin.dispatchEvent(new panel.window.MouseEvent('click', { bubbles: true }));
   await panel.settle();
   await moveCanvas(panel, PHONE_WIDTH);
+  await panel.user('open the list', () => press(panel, trigger(panel.container)));
+  const tablet = [...document.querySelectorAll('.embed-editor_context-select [role="option"]')].find((option) => text(option).startsWith('Tablet'));
+  await panel.user('hold at ≥ 48rem', () => press(panel, tablet));
   assert.match(text(trigger(panel.container)), /≥ 48rem/, 'held through the resize');
   assert.equal(iconName(panel.container), 'tablet', 'outside the canvas the row keeps its own icon');
   await moveCanvas(panel, DESKTOP);

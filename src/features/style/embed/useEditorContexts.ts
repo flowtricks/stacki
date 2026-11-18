@@ -36,7 +36,9 @@ import { baseCanvasTarget } from '../model/baseWidth';
 import { followedContextKey } from '../model/followWidth';
 import { followBreakpoint } from './followBreakpoint';
 import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
-import { followRetargetKey, useCanvasWidthPx, useFollowMode } from './contextFollow';
+import { followRetargetKey, useCanvasWidthPx, useFollowMode, useFollowToggleHandler, type FollowMode } from './contextFollow';
+import { followTransition, rowPlacement, type RowPlacement } from './followTransition';
+import { assert } from '../../../../shared/core/assert';
 import { isGlobalSelector, type MatchTarget } from '../model/selectors';
 import { selectedInstanceMarkup, selectedInstanceMarkupPending, selectedInstanceScope } from '../model/webflowElement';
 import { rememberChipProvenance, rememberedGreenChips } from '../model/chipProvenanceMemory';
@@ -769,6 +771,26 @@ function showBaseOnCanvas(atContexts: readonly string[]): void {
   }
 }
 
+// Puts the canvas on a picked row's placement (embed/followTransition.ts rowPlacement), through the host's
+// own width and Desktop actions, the ones the toolbar uses.
+function showRowOnCanvas(placement: RowPlacement): void {
+  const host = getHost();
+  switch (placement.kind) {
+    case 'width':
+      host.setCanvasWidth?.(placement.widthPx);
+      return;
+    case 'desktop':
+      host.showDesktopCanvas?.();
+      return;
+    case 'none':
+      return;
+    default: {
+      const exhaustive: never = placement;
+      return exhaustive;
+    }
+  }
+}
+
 // Switch context, keeping or re-picking a selector styled there.
 export function useContextChange(
   selectionState: ReturnType<typeof useSelectionState>,
@@ -793,17 +815,18 @@ export function useContextChange(
     () => (canvasWidthPx === undefined ? undefined : followBreakpoint(styleContexts, canvasWidthPx, projectBreakpoints)),
     [canvasWidthPx, styleContexts, projectBreakpoints],
   );
+  // The row following picks at a width: the canvas's now, or the one a pick would move it to (followTransition.ts).
+  const followKeyAt = useCallback(
+    (widthPx: number): string => {
+      const target = followBreakpoint(styleContexts, widthPx, projectBreakpoints);
+      const rows =
+        target === undefined || target.existingKey !== undefined ? styleContexts : [...styleContexts, { key: target.query, embedAtContext: target.query }];
+      return followedContextKey(rows, widthPx, ROOT_FONT_SIZE_PX);
+    },
+    [styleContexts, projectBreakpoints],
+  );
   // The row that holds at the canvas's width, whether or not the panel is following it.
-  const matchedKey = useMemo(() => {
-    if (canvasWidthPx === undefined) {
-      return undefined;
-    }
-    const rows =
-      breakpointTarget === undefined || breakpointTarget.existingKey !== undefined
-        ? styleContexts
-        : [...styleContexts, { key: breakpointTarget.query, embedAtContext: breakpointTarget.query }];
-    return followedContextKey(rows, canvasWidthPx, ROOT_FONT_SIZE_PX);
-  }, [canvasWidthPx, styleContexts, breakpointTarget]);
+  const matchedKey = useMemo(() => (canvasWidthPx === undefined ? undefined : followKeyAt(canvasWidthPx)), [canvasWidthPx, followKeyAt]);
 
   // Switching context auto-selects a selector that has styles in the new query:
   // keep the current pick if it's styled there, otherwise jump to the strongest.
@@ -862,67 +885,119 @@ export function useContextChange(
   const changeContextRef = useRef(changeContext);
   changeContextRef.current = changeContext;
 
-  // The dropdown's pick. Three different things can happen to a row press, and they are told
-  // apart here, in one place:
-  //   - the checked, matched row while following: UNCHECK. The target becomes Base and the
-  //     panel is pinned; the canvas stays exactly where it is, so edits apply to every size
-  //     without resizing the canvas;
-  //   - the matched row while pinned: CHECK AGAIN. The panel follows the canvas again; the
-  //     canvas is already inside that query, so it does not move either;
-  //   - any other row, Base included: a choice. The panel is pinned to it and the canvas moves
-  //     to show it (Base lands where Base is the layer in effect), as picking always has.
+  // A row picked while following moves the canvas to it, and following must not snap the target back
+  // to the row at the old width before the canvas reports the new one. Held until the width changes
+  // (one pick, one width); any later pick or toggle replaces or clears it.
+  const pickPendingRef = useRef<{ readonly fromWidthPx: number } | undefined>(undefined);
+
+  // The dropdown's pick and the follow toggle (the link on the trigger and the "0" key) are one
+  // table, embed/followTransition.ts; this applies its answer. Where no canvas width is known there
+  // is nothing to follow, and a pick is the style target alone, moving the canvas as it always did.
   const onContextChange = useCallback(
     (next: ContextKey) => {
-      if (followMode === 'follow' && next !== '' && next === context && next === matchedKey) {
-        setFollowMode('pinned');
-        changeContext('', { canvas: 'keep', selector: 'keep' });
+      if (canvasWidthPx === undefined) {
+        changeContext(next, { canvas: 'move', selector: 'repick' });
         return;
       }
-      if (followMode === 'pinned' && next !== '' && next === matchedKey) {
-        setFollowMode('follow');
-        changeContext(next, { canvas: 'keep', selector: 'keep' });
-        return;
+      const row = styleContexts.find((entry) => entry.key === next) ?? { key: next, embedAtContext: next };
+      const placement = rowPlacement(row, styleContexts, projectBreakpoints, ROOT_FONT_SIZE_PX, followKeyAt);
+      const outcome = followTransition(
+        { following: followMode === 'follow', targetIsBase: context === '' },
+        { kind: 'pick', holdsAtCanvas: next === matchedKey, placement },
+      );
+      assert(outcome.target === 'row', 'onContextChange: a pick always targets the picked row');
+      assert(outcome.canvas === 'keep' || placement.kind !== 'none', 'onContextChange: the canvas moves only to a placement');
+      pickPendingRef.current = outcome.canvas === 'move' ? { fromWidthPx: canvasWidthPx } : undefined;
+      setFollowMode(outcome.following ? 'follow' : 'pinned');
+      changeContext(next, { canvas: 'keep', selector: next === context ? 'keep' : 'repick' });
+      if (outcome.canvas === 'move') {
+        showRowOnCanvas(placement);
       }
-      // Held (Follow canvas size off): the pick is only the style target, and the canvas stays at the
-      // width the person set. Following: a pick pins the target and moves the canvas to show it, as it
-      // always has (Base lands where Base is the layer in effect), so Phone, Tablet and Base agree.
-      const held = followMode === 'pinned' && canvasWidthPx !== undefined;
-      if (followMode === 'follow' && canvasWidthPx !== undefined) {
-        setFollowMode('pinned');
-      }
-      changeContext(next, { canvas: held ? 'keep' : 'move', selector: 'repick' });
     },
-    [followMode, context, matchedKey, canvasWidthPx, changeContext, setFollowMode],
+    [followMode, context, matchedKey, canvasWidthPx, styleContexts, projectBreakpoints, followKeyAt, changeContext, setFollowMode],
   );
+
+  // The element's rules and the reach of its nested queries have both been answered.
+  const settled = (scan === undefined || scan.settled) && !reachPending;
+
+  // Moves the target to the row following picks, in the same update as whatever else the caller changes. A
+  // breakpoint nobody has written yet is registered like a typed query: it is listed and checked, and the first
+  // style written under it creates the block. Nothing is written here, the canvas stays, the selector stays.
+  const retargetTo = useCallback(
+    (target: ContextKey) => {
+      if (breakpointTarget !== undefined && breakpointTarget.existingKey === undefined && target === breakpointTarget.query) {
+        setTypedContexts((previous) => (previous.includes(target) ? previous : [...previous, target]));
+      }
+      changeContextRef.current(target, { canvas: 'keep', selector: 'keep' });
+    },
+    [breakpointTarget, setTypedContexts],
+  );
+
+  // The link on the trigger and the "0" key: turning following off while on a query edits Base with the
+  // canvas where it is; turning it on targets the row that holds at the canvas in the same update, so no
+  // frame shows the link on beside the old target. `from` is the mode the key read.
+  const toggleFollow = useCallback(
+    (from: FollowMode) => {
+      const outcome = followTransition({ following: from === 'follow', targetIsBase: context === '' }, { kind: 'toggle' });
+      assert(outcome.canvas === 'keep', 'toggleFollow: the toggle never moves the canvas');
+      assert(outcome.target !== 'row', 'toggleFollow: the toggle picks no row');
+      pickPendingRef.current = undefined;
+      setFollowMode(outcome.following ? 'follow' : 'pinned');
+      switch (outcome.target) {
+        case 'base':
+          changeContext('', { canvas: 'keep', selector: 'keep' });
+          return;
+        case 'matched':
+          // Until the element's rules are read the follow effect below retargets once they are (followRetargetKey).
+          if (settled && matchedKey !== undefined && matchedKey !== context) {
+            retargetTo(matchedKey);
+          }
+          return;
+        case 'keep':
+          return;
+        default: {
+          const exhaustive: never = outcome.target;
+          return exhaustive;
+        }
+      }
+    },
+    [context, settled, matchedKey, changeContext, retargetTo, setFollowMode],
+  );
+  useFollowToggleHandler(toggleFollow);
 
   // While following, the target is the row that holds at the canvas's width. It moves the
   // target only: no write, no canvas move, and the active selector stays where it is. The
   // dropdown, if open, just checks the new row in place.
   const following = followMode === 'follow' && matchedKey !== undefined;
-  // The element's rules and the reach of its nested queries have both been answered.
-  const settled = (scan === undefined || scan.settled) && !reachPending;
   useEffect(() => {
-    const target = followRetargetKey({ following, settled, matchedKey, context });
-    if (target !== undefined) {
-      // A breakpoint nobody has written yet is registered like a typed query: it is listed and checked, and the
-      // first style written under it creates the block. Nothing is written here.
-      if (breakpointTarget !== undefined && breakpointTarget.existingKey === undefined && target === breakpointTarget.query) {
-        setTypedContexts((previous) => (previous.includes(target) ? previous : [...previous, target]));
-      }
-      changeContextRef.current(target, { canvas: 'keep', selector: 'keep' });
+    const pending = pickPendingRef.current;
+    if (pending !== undefined && pending.fromWidthPx !== canvasWidthPx) {
+      // The canvas reached the picked row's width: following takes over from here.
+      pickPendingRef.current = undefined;
     }
-  }, [following, settled, matchedKey, context, breakpointTarget, setTypedContexts]);
+    const pickPending = pickPendingRef.current !== undefined;
+    const target = followRetargetKey({ following, settled, matchedKey, context, pickPending });
+    if (target !== undefined) {
+      retargetTo(target);
+    }
+  }, [following, settled, matchedKey, context, canvasWidthPx, retargetTo]);
 
   // The follow control exists only where there is a canvas width to follow. Checking the
-  // matching row, the Follow canvas size row or the pin on the trigger lets go of a hold;
-  // resizing the canvas never does.
+  // matching row or the link on the trigger lets go of a hold; resizing the canvas never does.
+  // The link is drawn with the target it belongs to: the trigger shows the last settled target while a
+  // new one is read (useEditorWrites useHeldWhileUnsettled), and a link turned off a frame before Base
+  // shows would paint "< 48rem, held", a state the person never chose. Held by the same `settled`.
+  const followingShownRef = useRef(followMode === 'follow');
+  if (settled) {
+    followingShownRef.current = followMode === 'follow';
+  }
   const contextFollow =
     canvasWidthPx === undefined
       ? undefined
       : {
-          following: followMode === 'follow',
-          onFollow: () => setFollowMode('follow'),
-          onHold: () => setFollowMode('pinned'),
+          following: followingShownRef.current,
+          onFollow: () => toggleFollow('pinned'),
+          onHold: () => toggleFollow('follow'),
         };
   return { onContextChange, contextFollow, contextsSettled: settled };
 }

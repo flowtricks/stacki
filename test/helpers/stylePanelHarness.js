@@ -74,6 +74,7 @@ async function panelEnvironment() {
         `export { default as StylePanel } from './src/features/style/StylePanel'`,
         `export { setHost, getHost } from './src/features/style/model/host'`,
         `export { setCanvasFrame, receiveCanvasReply, noteCanvasRendered } from './src/editor/canvasQuery'`,
+        `export { toggleFollowMode } from './src/features/style/embed/contextFollow'`,
       ].join('\n'),
       resolveDir: ROOT,
       loader: 'tsx',
@@ -270,6 +271,8 @@ async function mountStylePanel(fixture) {
     },
     /** The canvas announces a rendering (the frame patched, or showed a stand-in ahead of one). */
     noteRendered: () => env.noteCanvasRendered(),
+    /** The "0" key: what model/appKeys.ts calls for it, with the open project. True when it toggled. */
+    followToggleKey: () => env.toggleFollowMode(env.getHost().projectPath),
     settle: () => settle(container),
     user: (label, action) => popovers.step({ label, cause: 'user' }, action, () => settle(container)),
     data: (label, action) => popovers.step({ label, cause: 'data' }, action, () => settle(container)),
