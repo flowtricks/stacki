@@ -138,7 +138,7 @@ test('late conflicts stay visible and pending saves cannot submit twice', async 
   assert.equal(apply().disabled, false);
 });
 
-test('Desktop rename action opens the popup instead of an inline rename input', async (context) => {
+test('a page row’s settings gear opens the rename popup where the host draws no settings dialog', async (context) => {
   const setup = fixture(context);
   const pages = inventory.pages.map((name) => ({
     path: '/site/src/pages/' + name,
@@ -161,7 +161,7 @@ test('Desktop rename action opens the popup instead of an inline rename input', 
       }),
     ),
   );
-  await act(async () => document.querySelector('[data-order-key="old.astro"] [aria-label="Rename page"]').click());
+  await act(async () => document.querySelector('[data-order-key="old.astro"] [aria-label="Page settings"]').click());
   assert.equal(document.querySelector('.modal input').value, 'old');
   assert.equal(document.querySelector('.rename-input') === null, true);
   assert.equal(apply().textContent, 'Apply');

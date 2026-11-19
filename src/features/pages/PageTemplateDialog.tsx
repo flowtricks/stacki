@@ -338,7 +338,7 @@ function SourceKindField({ form, set }: { readonly form: TemplateForm; readonly 
   );
 }
 
-function ContentFields({
+export function ContentFields({
   projectPath,
   form,
   set,

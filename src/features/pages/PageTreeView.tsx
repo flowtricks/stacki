@@ -1,4 +1,5 @@
 import { PageRenameButton } from './PageRenameButton';
+import { PageSettingsButton } from './PageSettingsButton';
 import { TreeDragRow } from '../../ui/TreeDragDrop';
 import { PageOrderGap } from './PageOrderGap';
 import type { PageOrder } from '../../../shared/properties/pageOrder';
@@ -11,7 +12,8 @@ import { isCollectionRoute } from './pageOrder';
 import { countTreePages } from './pageTree';
 import { pageDisplayLabel, pageFolderDisplayName } from '../../lib/pageName';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { CmsIcon, FileIcon, FolderIcon, FolderOpenIcon, TrashIcon } from '../../ui/Icons';
+import { CmsIcon, FileIcon, FolderIcon, FolderOpenIcon, HomeIcon, TrashIcon } from '../../ui/Icons';
+import { isHomePage } from '../../../shared/properties/pageSettings';
 import { allowDragEffect } from '../../editor/dragState';
 import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
@@ -69,7 +71,6 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
   // Rename and delete appear only for a role that may do them (shared/properties/projectRoles.ts).
   const translate = useTranslate();
   const role = useCurrentRole();
-  const renamable = can(role, 'page:rename');
   const deletable = can(role, 'page:delete');
   return (
     <TreeDragRow
@@ -90,17 +91,15 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
       }}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        if (renamable) {
-          props.actions.setEditing({ kind: 'page', key: page.path });
-        }
+        props.actions.setEditing({ kind: 'page', key: page.path });
       }}
     >
-      <span className="icon">{collection ? <CmsIcon size={13} /> : <FileIcon size={13} />}</span>
+      <span className="icon">{pageRowIcon(page.name, { collection })}</span>
       <span className="page-list-copy">
         <span className="label">{pageDisplayLabel(page, translate)}</span>
         <span className="sub">{page.route}</span>
       </span>
-      {renamable && <PageRenameButton kind="page" rename={() => props.actions.setEditing({ kind: 'page', key: page.path })} />}
+      <PageSettingsButton open={() => props.actions.setEditing({ kind: 'page', key: page.path })} />
       {deletable && (
         <button
           className="row-action"
@@ -200,6 +199,14 @@ function FolderRow({
       )}
     </TreeDragRow>
   );
+}
+
+// The homepage's row carries the house, the icon Page settings shows on its Homepage badge.
+function pageRowIcon(name: string, { collection }: { readonly collection: boolean }) {
+  if (collection) {
+    return <CmsIcon size={13} />;
+  }
+  return isHomePage(name) ? <HomeIcon size={13} /> : <FileIcon size={13} />;
 }
 
 function startPageDrag(event: React.DragEvent<HTMLDivElement>, page: PageTreePage): void {

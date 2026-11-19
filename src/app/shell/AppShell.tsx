@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { DesktopPageSettings } from './PageSettingsDesktop';
 import { CanvasTextFormatBar } from './CanvasTextFormatBar';
 import { CanvasTextSourceCue } from './CanvasTextSourceCue';
 import { ResizablePanel } from './ResizablePanel';
@@ -565,6 +566,7 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
       }}
       onRenameFolder={app.onRenamePageFolder}
       onDeleteFolder={app.onDeletePageFolder}
+      renderPageSettings={(page, close) => <DesktopPageSettings app={app} page={page} close={close} />}
     />
   );
 }

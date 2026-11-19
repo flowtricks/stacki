@@ -1,4 +1,9 @@
 import { RenamePageDialog } from './RenamePageDialog';
+import { PageSettingsDialog, type PageSettingsHost } from '../../../vendor/stacki/src/features/pages/PageSettingsDialog';
+import { pageURLPath } from '../../../vendor/stacki/shared/properties/pageRename';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
+import { problemOf } from '../../../vendor/stacki/shared/properties/describedError';
+import { err, ok } from '../../../vendor/stacki/shared/core/result';
 import { usePageRename } from './usePageRename';
 import { useProjectPageOrder } from '../../../vendor/stacki/src/features/pages/pageOrderPersistence';
 import { usePageOrderDrag } from '../../../vendor/stacki/src/features/pages/usePageOrderDrag';
@@ -140,19 +145,48 @@ function PagesHeader({ collection, create }: { readonly collection: boolean; rea
 }
 
 function ProjectRenameDialog({ renaming, project }: { readonly renaming: ReturnType<typeof usePageRename>; readonly project: Project }) {
-  if (!renaming.item) {
+  const item = renaming.item;
+  if (!item) {
     return undefined;
   }
-  return (
-    <RenamePageDialog
-      key={renaming.item.kind + ':' + renaming.item.from}
-      item={renaming.item}
-      inventory={{
-        pages: project.pages.map((page) => page.slice(10)),
-        folders: project.pageFolders ?? [],
-      }}
-      save={renaming.save}
-      close={renaming.close}
-    />
-  );
+  const inventory = { pages: project.pages.map((page) => page.slice(10)), folders: project.pageFolders ?? [] };
+  if (item.kind === 'page') {
+    // Desktop's Page settings dialog; Studio renames, and says where the rest (homepage, duplicate, delete) is done.
+    const pages = inventory.pages.map((name) => ({ path: 'src/pages/' + name, name, route: pageURLPath(name) }));
+    const page = pages.find((entry) => entry.name === item.from);
+    if (page === undefined) {
+      return undefined;
+    }
+    return (
+      <PageSettingsDialog
+        key={item.from}
+        page={page}
+        pages={pages}
+        folders={inventory.folders}
+        host={studioSettingsHost(renaming)}
+        allowed={{ rename: true, create: false, remove: false }}
+        close={renaming.close}
+      />
+    );
+  }
+  return <RenamePageDialog key={item.kind + ':' + item.from} item={item} inventory={inventory} save={renaming.save} close={renaming.close} />;
+}
+
+function studioSettingsHost(renaming: ReturnType<typeof usePageRename>): PageSettingsHost {
+  const unavailable = described('pages.settings.unavailable');
+  return {
+    plan: undefined,
+    unavailable,
+    apply: async (request) => {
+      if (request.kind !== 'rename') {
+        return err({ code: 'unavailable', ...unavailable });
+      }
+      try {
+        await renaming.save({ kind: 'page', from: request.from, to: request.to });
+        return ok(undefined);
+      } catch (problem: unknown) {
+        return err({ code: 'rename', ...problemOf(problem) });
+      }
+    },
+  };
 }

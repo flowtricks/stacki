@@ -1649,6 +1649,42 @@ Escape and blur never rename anything. Errors appear below the field, including 
 conflicts from outside edits. Studio project scans include bounded `pageFolders` entries so
 empty folders reserve destinations during live validation as well as during the final write.
 
+### Page settings
+
+The gear on a page row opens the Page settings dialog (`src/features/pages/PageSettingsDialog.tsx`, shared by Desktop
+and Studio; Desktop's host is `src/app/shell/PageSettingsDesktop.tsx`). Its contract is
+`shared/properties/pageSettings.ts`: `isHomePage` (only a root `index.astro`, `index.md` or `index.mdx`), `homeSwapPlan`
+(which page may become the homepage, and the two moves), `checkUrlName` (the rename field's live check: the page
+rename rules plus `index` reserved beside the homepage) and the wire parsers of the channels below.
+
+- `page:planSettings` plans a step without writing and answers its summary: files changed, links rewritten (or, for a
+  deletion, links that would break), the moves, and lines listed for review (file and 1-based line, bounded).
+- `page:applySettings` plans again from disk and writes the step all or nothing (`electron/project/pageRelocationWrite.ts`),
+  answering one undo token; `page:revertSettings` undoes and redoes it. A step is texts edited in place plus files that
+  move, appear or go. Every byte is witnessed first; texts are written through the document actors, then each arriving
+  file's final bytes are staged in `.stacki/io`, every leaving file is moved there, and every staged file is moved to
+  its destination, so the dev server never sees a page whose imports do not match its folder, a swap never collides and
+  a case-only rename works on a case-insensitive disk. A failure puts back every byte; undo is the inverse step.
+- Making a page the homepage swaps two files, each keeping its extension (`about.md` becomes `index.md`, `index.astro`
+  becomes `about.astro`; a page in a folder sends the homepage into that folder). Links to `/` and to the page's route
+  swap in one pass (`electron/project/pageSwapLinks.ts`), so none is swapped back: attributes, Markdown destinations,
+  sitemap locations, configured-site absolute URLs and string literals, with `base` and `trailingSlash: 'always'`
+  respected. A bare `'/'` string is the homepage only after a link key (`href:`, `url:`, `"to":` …): elsewhere it is a
+  path separator, and lines comparing it with `Astro.url` are listed for review. astro.config files are never rewritten
+  (a redirect's source is a route of another kind): their redirect lines are listed, as are feed and sitemap files.
+  Relative imports in both files follow the move (the page rename's import rewriter). `.stacki/pages.json` keeps its
+  rows: the new homepage takes the old homepage's place. Refused, nothing written: a dynamic page (a `[param]` file or
+  one that declares `getStaticPaths`), a root 404 or 500 page, a page in an i18n locale folder, a project with two
+  homepage files or none, a route another file also answers, and any changed text that would not parse.
+- Duplicate copies beside the page as `<name>-copy` (then `-copy-2` …), so relative imports still resolve; deleting
+  lists every link that would break by file and line and refuses the homepage.
+- `page:readTemplate` reads a CMS template page back into the Create page template dialog's settings
+  (`electron/content/pageTemplateRead.ts`): only by writing its pieces again and finding them byte for byte, so a
+  template changed by hand reads as `custom` and is shown as code, never rewritten. `page:retargetTemplate` replaces
+  exactly the paths function and the entry type, as an undoable step.
+- The Layout props section draws the layout instance's props with the Properties panel's own editors
+  (`InstancePropFields`) and the same handlers, so an edit there is the panel's edit, one undo step.
+
 ### CMS connections
 
 A project's hosted CMS connections (`shared/properties/cmsConnections.ts`) name which CMS its

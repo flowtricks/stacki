@@ -1,4 +1,5 @@
 import { PageRenameButton } from '../../../vendor/stacki/src/features/pages/PageRenameButton';
+import { PageSettingsButton } from '../../../vendor/stacki/src/features/pages/PageSettingsButton';
 import { PageOrderGap } from '../../../vendor/stacki/src/features/pages/PageOrderGap';
 import { PageSearchPath } from '../../../vendor/stacki/src/features/pages/PageSearchPath';
 import { Fragment, useMemo, useState } from 'react';
@@ -175,7 +176,7 @@ function FileRow({
         {!props.collection && <PageSearchPath path={page.route} query={props.query} />}
       </span>
       {!props.collection && <PagePresence peers={props.peers} page={page.path} />}
-      {!props.collection && props.rename && <PageRenameButton kind="page" rename={() => props.rename?.('page', page.name)} />}
+      {!props.collection && props.rename && <PageSettingsButton open={() => props.rename?.('page', page.name)} />}
     </div>
   );
 }

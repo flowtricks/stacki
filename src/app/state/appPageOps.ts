@@ -675,7 +675,13 @@ export function useSelectedSchema(
       : selectedFields(selectedNode, selectedComponent);
   // Props the component's loop reads its settings from, drawn with the loop's editors.
   const listProps = useListProps(project?.path, selectedComponent?.path);
-  return { currentLayoutName, layoutNode, selectedSchema, selectedComponent, selectedComponentFile, listProps };
+  // The layout's own fields whatever is selected: the Page settings dialog edits them beside the canvas selection.
+  const layoutComponent =
+    layoutNode?.kind === 'component'
+      ? componentReference({ name: layoutNode.name, project: project?.path, file: currentPage?.path, imports: model?.imports ?? [], components: insertables })
+      : undefined;
+  const layoutSchema = layoutNode === undefined ? [] : selectedFields(layoutNode, layoutComponent);
+  return { currentLayoutName, layoutNode, layoutComponent, layoutSchema, selectedSchema, selectedComponent, selectedComponentFile, listProps };
 }
 
 function selectedFields(node: ReturnType<typeof useCreateFrom>['selectedNode'], component: ScanComponent | undefined): readonly FieldDefinition[] {

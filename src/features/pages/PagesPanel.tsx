@@ -42,6 +42,8 @@ interface PagesPanelProps {
   readonly onRename: (change: PageRename) => Promise<void>;
   readonly onRenameFolder: (from: string, to: string) => void;
   readonly onDeleteFolder: (rel: string, pageCount: number) => void;
+  /** Draws the Page settings dialog for a page (the gear on its row); without it the row opens the rename dialog. */
+  readonly renderPageSettings?: (page: ScanPage, close: () => void) => React.ReactNode;
 }
 
 export default function PagesPanel(props: PagesPanelProps) {
@@ -90,7 +92,7 @@ export default function PagesPanel(props: PagesPanelProps) {
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
       </div>
-      <PageTreeRenameDialog editing={editing} scan={props.scan} save={props.onRename} close={() => actions.setEditing({ kind: 'none' })} />
+      <PageEditingDialog editing={editing} props={props} close={() => actions.setEditing({ kind: 'none' })} />
       <PageOrderNotice state={ordering.state} reload={ordering.reload} />
       <PageBody
         order={ordering.state.order}
@@ -134,6 +136,16 @@ export default function PagesPanel(props: PagesPanelProps) {
       )}
     </div>
   );
+}
+
+// A page opens its settings where the host draws them; a folder, or a host without settings, opens the rename dialog.
+function PageEditingDialog({ editing, props, close }: { readonly editing: PageEditing; readonly props: PagesPanelProps; readonly close: () => void }) {
+  const render = props.renderPageSettings;
+  if (editing.kind === 'page' && render !== undefined) {
+    const page = props.scan.pages.find((entry) => entry.path === editing.key);
+    return page === undefined ? undefined : <React.Fragment key={page.path}>{render(page, close)}</React.Fragment>;
+  }
+  return <PageTreeRenameDialog editing={editing} scan={props.scan} save={props.onRename} close={close} />;
 }
 
 function usePagesPanel(props: PagesPanelProps) {
