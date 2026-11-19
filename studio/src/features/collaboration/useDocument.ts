@@ -5,6 +5,8 @@ import { SelectionIntent } from './selectionIntent';
 import { watchConnection } from './connectionWatch';
 import { SaveWatch } from './saveWatch';
 import { parseSaveSequence } from './saveProtocol';
+import { addCause, causeFromServerError, type AttentionCause } from './attention';
+import { parseMessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import { receiveSharedPublish } from '../publishing/sharedPublish';
 import { getEditorRole, subscribeRole } from '../roles/roleStore';
 import { assertClientAction, assertClientSourceChange } from '../roles/clientPolicy';
@@ -42,6 +44,8 @@ export class SharedDocument {
   private page = '';
   private occurrence = 0;
   status = 'Connecting';
+  // Why the status reads 'Needs attention': every path that sets that status records its cause here, and a confirmed save clears them.
+  attention: readonly AttentionCause[] = [];
   error = '';
   get selectionNotice(): ActionableNotice | undefined {
     const owner = selectionOwner(this.peers, this.selfId, this.file, this.selected);
@@ -194,7 +198,7 @@ export class SharedDocument {
       this.restartConnection();
     } else {
       this.disconnectConnection();
-      this.status = 'Needs attention';
+      this.needAttention({ kind: 'save-unconfirmed' });
       this.error = studioTranslate('studio.collab.saveUnconfirmed');
       this.emit();
     }
@@ -214,7 +218,7 @@ export class SharedDocument {
             // the local draft intact and stop transport recovery until it is resolved.
             this.ready = false;
             this.disconnectConnection();
-            this.status = 'Needs attention';
+            this.needAttention({ kind: 'draft-replaced' });
             this.emit();
             return;
           }
@@ -232,6 +236,7 @@ export class SharedDocument {
           this.saves.reset();
           this.synchronized = true;
           this.ready = true;
+          this.attention = [];
           this.status = shouldReplay ? 'Saving' : 'Saved';
           if (shouldReplay) {
             this.send({
@@ -256,7 +261,8 @@ export class SharedDocument {
       } else if (message['type'] === 'error') {
         this.refuseAction();
         this.error = studioWireText(message);
-        this.status = 'Needs attention';
+        const reference = parseMessageRef(message['messageRef']);
+        this.needAttention(causeFromServerError(reference.ok ? reference.value.key : undefined, this.error));
       } else if (message['type'] === 'presence' && Array.isArray(message['peers'])) {
         this.peers = message['peers'].slice(0, 3000).map((peer: unknown) => parsePeer(peer, this.file));
       }
@@ -325,7 +331,28 @@ export class SharedDocument {
     if (!this.saves.pending) {
       this.saveRecoveries = 0;
       this.error = '';
+      this.attention = [];
     }
+  }
+  private needAttention(cause: AttentionCause) {
+    this.status = 'Needs attention';
+    this.attention = addCause(this.attention, cause);
+    if (this.attention.length === 0) {
+      throw new Error('Assertion failed: a status that needs attention has a cause');
+    }
+  }
+  /**
+   * Sends the local edits again on a fresh connection, after a save that was not confirmed or stored. The sync handshake replays the whole
+   * local document, so nothing typed since is lost. A replaced draft is not repaired by this (see the epoch check in receive): that cause
+   * comes straight back, and the transport stays quiet.
+   */
+  retrySave() {
+    if (this.closed || this.suspended) {
+      return;
+    }
+    this.saveRecoveries = 0;
+    this.attempts = 0;
+    this.restartConnection();
   }
   private applyServerUpdate(message: Record<string, unknown>) {
     const ownAction = message['ownAction'] === true;

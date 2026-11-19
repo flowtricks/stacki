@@ -31,13 +31,16 @@ try {
     });
   });
   await page.reload();
-  await page.locator('.save-state').filter({ hasText: 'Needs attention' }).waitFor();
+  await page.locator('.save-state').filter({ hasText: 'Draft replaced' }).waitFor();
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   assert.ok((await page.locator('.cm-content').innerText()).includes('Preserved local draft'));
   await page.clock.install();
   await page.clock.fastForward(300_000);
   assert.equal(connections, 1, 'An incompatible draft is not repaired by opening another socket');
-  assert.equal(await page.locator('.save-state').innerText(), 'Needs attention');
+  assert.equal(await page.locator('.save-state').innerText(), 'Draft replaced');
+  // The status explains itself: the menu names the cause and offers the fix.
+  await page.locator('.save-state-button').click();
+  await page.getByRole('menu', { name: 'What needs attention' }).getByRole('menuitem', { name: 'Copy my draft' }).waitFor();
   console.log('Draft identity mismatch preserves source and stops transport recovery.');
 } finally {
   await browser.close();

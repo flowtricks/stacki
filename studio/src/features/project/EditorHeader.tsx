@@ -1,4 +1,3 @@
-import { saveStatusLabel } from '../collaboration/saveStatus';
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { Peer } from '../collaboration/presence';
@@ -15,6 +14,7 @@ import { useComponentBack } from './useComponentBack';
 import { TemplateEntryPicker } from '../pages/TemplateEntryPicker';
 import { useStudioRole } from '../roles/useEditorRole';
 import { projectPages } from './pageLabels';
+import { SaveStatus } from './SaveStatus';
 import { PreviewButton, type InteractivePreviewState } from '../preview/InteractivePreview';
 interface HeaderProps {
   readonly cursorChat: (() => void) | undefined;
@@ -45,7 +45,6 @@ export function EditorHeader({
   closeDefaults,
   defaultsMode,
 }: HeaderProps) {
-  const translate = useTranslate();
   const studioRole = useStudioRole();
   const direct = session?.kind === 'local' && session.editing === 'source';
   const pages = projectPages(project);
@@ -64,9 +63,7 @@ export function EditorHeader({
       <div className="studio-titlebar-start">
         <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} cursorChat={cursorChat} />
         <span className="project-name">{project.name}</span>
-        <span className="save-state" role="status" data-saved={document?.status === 'Saved' ? '' : undefined}>
-          {saveStatusLabel(document?.status ?? 'Connecting', translate)}
-        </span>
+        <SaveStatus document={document} report={report} />
         {!studioRole.isAdmin && <span className="client-role-badge">{studioRole.name}</span>}
         {componentOpen && switcher}
       </div>

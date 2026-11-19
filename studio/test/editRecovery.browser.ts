@@ -61,7 +61,12 @@ async function checkFailedSave(page: Page) {
   await mkdir(obstruction);
   try {
     await page.locator('.rich-content').fill('Keep my unsaved edit');
-    await page.locator('.save-state').filter({ hasText: 'Needs attention' }).waitFor();
+    await page.locator('.save-state-button').waitFor();
+    // A write the disk refuses is one cause, so the status names it and the menu offers the fix.
+    assert.equal(await page.locator('.save-state').innerText(), 'Draft not saved');
+    await page.locator('.save-state-button').click();
+    await page.getByRole('menu', { name: 'What needs attention' }).getByRole('menuitem', { name: 'Retry save' }).waitFor();
+    await page.keyboard.press('Escape');
     assert.equal(await readFile(file, 'utf8'), original);
     assert.equal(await page.locator('.rich-content').innerText(), 'Keep my unsaved edit');
   } finally {

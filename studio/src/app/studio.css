@@ -75,6 +75,24 @@
   color: var(--text-dim);
   white-space: nowrap;
 }
+.save-state-button {
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+}
+.save-state-button:hover,
+.save-state-button[aria-expanded='true'] {
+  background: var(--bg-hover);
+}
+.save-state-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 /* A phone's title bar has no room to spare, and "Saved" is the quiet,
    expected state, so it is hidden from sight there. It stays readable to
    screen readers, and every other state (connecting, saving, offline)
