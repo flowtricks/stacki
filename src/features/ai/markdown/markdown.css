@@ -4,8 +4,21 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+/* Long inline code and links break where they must instead of widening the column. */
+.ai-markdown .code-inline,
+.ai-markdown a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.ai-markdown > *,
+.ai-markdown li,
+.ai-md-item {
+  min-width: 0;
+  max-width: 100%;
 }
 .ai-markdown > *,
 .ai-markdown p,
@@ -114,7 +127,10 @@
 
 /* Tables scroll sideways inside their own box: a wide one never widens the panel. */
 .ai-md-table-wrap {
+  box-sizing: border-box;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-gutter: stable;
   border-radius: 6px;

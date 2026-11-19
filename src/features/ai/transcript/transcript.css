@@ -5,7 +5,11 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* The transcript never scrolls sideways: a wide table or block scrolls inside its own box. */
+  overflow-x: hidden;
   scrollbar-gutter: stable;
+  min-width: 0;
+  max-width: 100%;
   padding: 4px 2px;
   font-size: 12.5px;
   line-height: 1.5;
@@ -15,6 +19,7 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 .ai-earlier,
 .ai-group-earlier {

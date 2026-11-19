@@ -4,6 +4,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   height: 100%;
 }
 /* The panel takes the background of the rail of icons beside it (--bg-panel), so the two read as one dark side; the
@@ -39,6 +40,9 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  /* Nothing inside may be wider than the panel: wide content scrolls in its own box. */
+  min-width: 0;
+  max-width: 100%;
   gap: 6px;
   /* The same 10px inset from the window's bottom edge as the rail's AI button (.rail-anchor). */
   padding: 0 8px 10px;
