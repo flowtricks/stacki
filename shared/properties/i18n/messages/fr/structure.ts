@@ -64,6 +64,7 @@ export const messages = {
   'structure.row.imported': 'Importé depuis {file}',
   'structure.binding.label': 'Liaison de données {path}',
   'structure.search.capped': 'Affichage des {count} premières correspondances. Précisez votre recherche pour les réduire.',
+  'structure.search.hint': 'Mots, .class, #id, [attr=value], <tag>, /* commentaire',
   'structure.search.noMatch': 'Aucun élément ne correspond',
   'structure.search.placeholder': 'Rechercher des calques',
   'structure.status.empty': 'N’affiche rien sur la page avec ses props actuelles',

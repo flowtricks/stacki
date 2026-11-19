@@ -64,6 +64,7 @@ export const messages = {
   'structure.row.imported': 'Importado desde {file}',
   'structure.binding.label': 'Vínculo de datos {path}',
   'structure.search.capped': 'Se muestran las primeras {count} coincidencias. Escribe más para acotarlas.',
+  'structure.search.hint': 'Palabras, .class, #id, [attr=value], <tag>, /* comentario',
   'structure.search.noMatch': 'Ningún elemento coincide',
   'structure.search.placeholder': 'Buscar capas',
   'structure.status.empty': 'No muestra nada en la página con sus props actuales',

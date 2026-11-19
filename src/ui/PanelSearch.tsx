@@ -7,9 +7,11 @@ export interface PanelSearchProps {
   readonly value: string;
   readonly placeholder: string;
   readonly onChange: (value: string) => void;
+  /** A line shown as the box's tooltip, for a panel whose search reads more than plain words. */
+  readonly hint?: string;
 }
 
-export function PanelSearch({ value, placeholder, onChange }: PanelSearchProps) {
+export function PanelSearch({ value, placeholder, onChange, hint }: PanelSearchProps) {
   return (
     <div style={{ padding: '0 12px 8px' }}>
       <input
@@ -17,6 +19,7 @@ export function PanelSearch({ value, placeholder, onChange }: PanelSearchProps) 
         value={value}
         placeholder={placeholder}
         aria-label={placeholder}
+        {...(hint === undefined ? {} : { title: hint })}
         spellCheck={false}
         onChange={(event) => onChange(event.currentTarget.value)}
         onKeyDown={(event) => {

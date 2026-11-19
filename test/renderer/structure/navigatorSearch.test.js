@@ -6,6 +6,8 @@
 // both branches, accents, no match, an empty query, and the bound on matches. Speed is held as a ratio,
 // never as milliseconds: the best of several searches over 20,000 nodes is compared with the same amount
 // of work done as repeated searches over a 65-node page, so only a search that stops being linear fails.
+// The selector and markup forms (.class, #id, [attr], <tag>, /* comment) each get a test on the same
+// trees, plus half-typed and malformed queries, which must fall back to plain words and never throw.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
@@ -158,4 +160,151 @@ test('highlight cuts a label where the words land, whatever the case or accents'
   assert.deepEqual(runs('hero', 'zzz'), ['hero']);
   assert.deepEqual(runs('hero', ''), ['hero']);
   assert.deepEqual(runs('', 'a'), []);
+});
+
+// ---- Selector and markup queries ------------------------------------------------------------------
+
+const comment = (value) => ({ id: next('comment'), kind: 'comment', value });
+const attrs = (props) =>
+  Object.fromEntries(Object.entries(props).map(([name, value]) => [name, value === true ? { type: 'bare' } : { type: 'string', value }]));
+function markup() {
+  const note = comment(' Hero banner ');
+  const banner = element('section', { ...klass('banner wide'), ...attrs({ 'data-Theme': 'Dark-Mode', id: 'top', hidden: true }) });
+  const button = { id: 'button', kind: 'component', name: 'Button', props: attrs({ 'data-kind': 'primary action' }), children: [] };
+  const plain = element('p', klass('lede'));
+  const loose = comment(' trailing text ');
+  return { nodes: [note, banner, button, plain, loose], note, banner, button, plain, loose };
+}
+const found = (nodes, query) => flatten(run(nodes, query).nodes);
+
+test('.class matches a class token, and a prefix while it is typed', () => {
+  const { nodes, banner, plain } = markup();
+  assert.deepEqual(found(nodes, '.banner'), [banner.id]);
+  assert.deepEqual(found(nodes, '.wid'), [banner.id]);
+  assert.deepEqual(found(nodes, '.LEDE'), [plain.id]);
+  assert.deepEqual(found(nodes, '.nothing'), []);
+  assert.deepEqual(found(nodes, '.ledes'), [], 'a longer token than any class finds nothing');
+});
+
+test('#id matches ids', () => {
+  const { nodes, banner } = markup();
+  assert.deepEqual(found(nodes, '#top'), [banner.id]);
+  assert.deepEqual(found(nodes, '#to'), [banner.id]);
+  assert.deepEqual(found(nodes, '#bottom'), []);
+});
+
+test('attribute selectors: exists, =, quoted, ^=, $=, *=, ~=, case-blind names', () => {
+  const { nodes, banner, button } = markup();
+  assert.deepEqual(found(nodes, '[data-theme]'), [banner.id]);
+  assert.deepEqual(found(nodes, '[DATA-THEME]'), [banner.id]);
+  assert.deepEqual(found(nodes, '[hidden]'), [banner.id]);
+  assert.deepEqual(found(nodes, '[data-theme=dark-mode]'), [banner.id]);
+  assert.deepEqual(found(nodes, '[data-theme="dark-mode"]'), [banner.id]);
+  assert.deepEqual(found(nodes, "[data-theme='Dark-Mode']"), [banner.id]);
+  assert.deepEqual(found(nodes, '[data-theme=dark]'), []);
+  assert.deepEqual(found(nodes, '[data-theme^=dark]'), [banner.id]);
+  assert.deepEqual(found(nodes, '[data-theme$=mode]'), [banner.id]);
+  assert.deepEqual(found(nodes, '[data-theme*=k-m]'), [banner.id]);
+  assert.deepEqual(found(nodes, '[data-kind~=action]'), [button.id]);
+  assert.deepEqual(found(nodes, '[data-kind~=act]'), []);
+  assert.deepEqual(found(nodes, '[data-kind="primary action"]'), [button.id]);
+});
+
+test('<tag>, <tag, </tag> and component names match by name', () => {
+  const { nodes, banner, button, plain } = markup();
+  assert.deepEqual(found(nodes, '<section>'), [banner.id]);
+  assert.deepEqual(found(nodes, '</section>'), [banner.id]);
+  assert.deepEqual(found(nodes, '<Button>'), [button.id]);
+  assert.deepEqual(found(nodes, '<butt'), [button.id], 'unclosed is a prefix');
+  assert.deepEqual(found(nodes, '<p>'), [plain.id]);
+  assert.deepEqual(found(nodes, '<sect>'), [], 'closed is exact');
+});
+
+test('comments match by text in /* */, /*, /*text, and <!-- forms; a comment labelling a row brings the row', () => {
+  const { nodes, note, banner, loose } = markup();
+  assert.deepEqual(found(nodes, '/* hero banner */'), [note.id, banner.id], 'the row the comment labels is kept with it');
+  assert.deepEqual(found(nodes, '/* hero'), [note.id, banner.id]);
+  assert.deepEqual(found(nodes, '/*hero'), [note.id, banner.id]);
+  assert.deepEqual(found(nodes, '<!-- hero banner -->'), [note.id, banner.id]);
+  assert.deepEqual(found(nodes, '/* trailing'), [loose.id], 'a comment labelling nothing is a row of its own');
+  assert.equal(found(nodes, '/*').length > 0, true, 'a bare opener finds every comment');
+  assert.deepEqual(found(nodes, '/* nothing here'), []);
+});
+
+test('terms are joined by AND on one row, and plain words keep working beside them', () => {
+  const { nodes, banner } = markup();
+  assert.deepEqual(found(nodes, '<section> .banner [hidden]'), [banner.id]);
+  assert.deepEqual(found(nodes, '<section> .lede'), []);
+  assert.deepEqual(found(nodes, 'section banner'), [banner.id]);
+});
+
+test('partial and malformed input falls back to plain words and never throws', () => {
+  const { nodes } = markup();
+  for (const query of [
+    '[',
+    '[data-theme',
+    '[data-theme=',
+    '[=x]',
+    '[]',
+    '[a b]',
+    '.',
+    '#',
+    '<',
+    '</',
+    '<>',
+    '/',
+    '{/*',
+    '[data-theme^]',
+    '[[[[',
+    '....',
+    '<<<<',
+  ]) {
+    assert.doesNotThrow(() => run(nodes, query), query);
+    assert.ok(Array.isArray(run(nodes, query).nodes));
+  }
+  assert.deepEqual(
+    search.parseNavigatorQuery('.').map((term) => term.kind),
+    ['word'],
+  );
+  assert.deepEqual(
+    search.parseNavigatorQuery('[data-x').map((term) => term.kind),
+    ['word'],
+  );
+});
+
+test('the parser is bounded: a long query is cut and the number of terms is capped', () => {
+  const long = search.parseNavigatorQuery('a'.repeat(5_000));
+  assert.equal(long.length, 1);
+  assert.ok(long[0].word.length <= search.NAVIGATOR_QUERY_LENGTH_MAX);
+  assert.ok(search.parseNavigatorQuery('.a '.repeat(100)).length <= search.NAVIGATOR_TERMS_MAX);
+  const started = Date.now();
+  search.parseNavigatorQuery('['.repeat(5_000) + '"'.repeat(5_000));
+  assert.ok(Date.now() - started < 1_000, 'adversarial input is read in a pass');
+});
+
+test('each kind of term gives the words the panel marks', () => {
+  assert.deepEqual(search.navigatorHighlightWords('.btn'), ['btn']);
+  assert.deepEqual(search.navigatorHighlightWords('#top'), ['top']);
+  assert.deepEqual(search.navigatorHighlightWords('<Button>'), ['button']);
+  assert.deepEqual(search.navigatorHighlightWords('[data-x="Dark Mode"]'), ['dark mode']);
+  assert.deepEqual(search.navigatorHighlightWords('[hidden]'), ['hidden']);
+  assert.deepEqual(search.navigatorHighlightWords('/* Hero banner'), ['hero', 'banner']);
+  assert.deepEqual(search.navigatorHighlightWords('plain Words'), ['plain', 'words']);
+});
+
+test('5,000 nodes searched with selector queries cost no more than the same work over 65', () => {
+  const large = big(5_000);
+  const small = big(65);
+  const largeIndex = search.buildNavigatorIndex(large);
+  const smallIndex = search.buildNavigatorIndex(small);
+  const passes = Math.ceil(5_000 / 65);
+  for (const query of ['.qq-none', '[data-qq=none]', '<qqnone>', '/* qq none']) {
+    const largeTime = bestOf(7, () => search.searchNavigator(large, largeIndex, query));
+    const smallTime = bestOf(7, () => {
+      for (let pass = 0; pass < passes; pass += 1) {
+        search.searchNavigator(small, smallIndex, query);
+      }
+    });
+    assert.ok(largeTime <= smallTime * 6, `${query}: ${largeTime} ns over 5,000 nodes vs ${smallTime} ns over ${passes} walks of 65`);
+  }
 });

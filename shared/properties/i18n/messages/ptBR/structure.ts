@@ -64,6 +64,7 @@ export const messages = {
   'structure.row.imported': 'Importado de {file}',
   'structure.binding.label': 'Vínculo de dados {path}',
   'structure.search.capped': 'Mostrando as primeiras {count} correspondências. Digite mais para restringir.',
+  'structure.search.hint': 'Palavras, .class, #id, [attr=value], <tag>, /* comentário',
   'structure.search.noMatch': 'Nenhum elemento corresponde',
   'structure.search.placeholder': 'Buscar camadas',
   'structure.status.empty': 'Não renderiza nada na página com as props atuais',

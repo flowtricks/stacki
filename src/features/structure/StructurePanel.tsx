@@ -2,8 +2,8 @@ import { TreeDragRow, useTreeDragCleanup } from '../../ui/TreeDragDrop';
 import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { PanelSearch } from '../../ui/PanelSearch';
-import { isSearching, queryWords } from '../../lib/searchText';
-import { buildNavigatorIndex, searchNavigator } from './navigatorSearch';
+import { isSearching } from '../../lib/searchText';
+import { buildNavigatorIndex, navigatorHighlightWords, searchNavigator } from './navigatorSearch';
 import type { NavigatorNode, StructurePageState, StructureProjection, DropLocation, DropTarget } from './structureModel';
 import type { PseudoKind, PseudoNodeIds, StructureTreeContext } from './StructureTree';
 import type { ContextPosition } from './StructureContextMenu';
@@ -593,7 +593,12 @@ function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly
           {state.allExpanded ? translate('structure.collapseAll') : translate('structure.expandAll')}
         </div>
       )}
-      <PanelSearch value={state.query} placeholder={translate('structure.search.placeholder')} onChange={state.setQuery} />
+      <PanelSearch
+        value={state.query}
+        placeholder={translate('structure.search.placeholder')}
+        hint={translate('structure.search.hint')}
+        onChange={state.setQuery}
+      />
     </>
   );
 }
@@ -665,7 +670,7 @@ function useNavigatorSearch(nodes: readonly NavigatorNode[], query: string, { id
   const index = useMemo(() => (searching ? buildNavigatorIndex(nodes) : undefined), [nodes, searching]);
   const filtering = searching && idle;
   const result = useMemo(() => (filtering && index !== undefined ? searchNavigator(nodes, index, query) : undefined), [filtering, index, nodes, query]);
-  const words = useMemo(() => queryWords(query), [query]);
+  const words = useMemo(() => navigatorHighlightWords(query), [query]);
   return {
     filtering: filtering && result !== undefined,
     nodes: result?.nodes ?? [],

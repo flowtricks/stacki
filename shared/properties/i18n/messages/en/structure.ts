@@ -64,6 +64,7 @@ export const messages = {
   'structure.row.imported': 'Imported from {file}',
   'structure.binding.label': 'Data binding {path}',
   'structure.search.capped': 'Showing the first {count} matches. Type more to narrow them.',
+  'structure.search.hint': 'Words, .class, #id, [attr=value], <tag>, /* comment',
   'structure.search.noMatch': 'No elements match',
   'structure.search.placeholder': 'Search layers',
   'structure.status.empty': 'Renders nothing on the page with its current props',

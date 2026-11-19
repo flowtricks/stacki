@@ -520,7 +520,7 @@ function RowLabel({
       {noteValue !== undefined && (
         <span className="node-note" title={noteValue.trim()}>
           {' / '}
-          {truncate(noteText(noteValue).replace(/\s+/g, ' '), 44)}
+          <MarkedLabel label={truncate(noteText(noteValue).replace(/\s+/g, ' '), 44)} words={highlightWords} />
         </span>
       )}
     </span>
