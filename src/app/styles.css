@@ -2208,6 +2208,156 @@ html[data-platform='win32'] .titlebar {
   font-size: 10.5px;
 }
 
+/* The Assets panel's three views (src/features/assets/AssetItems.tsx). Only the rows on screen are
+   drawn: they sit in a window moved down a spacer as tall as every row. The sizes here are
+   VIEW_METRICS in assetLayout.ts; change one, change both. */
+.asset-items {
+  position: relative;
+  margin: 6px 0 8px;
+}
+.asset-items-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+}
+.asset-items .asset-tile {
+  min-width: 0;
+  border-radius: 8px;
+  outline: none;
+}
+.asset-items .asset-tile:focus-visible {
+  background: var(--bg-active);
+}
+/* A name cut in the middle: the head gives way with an ellipsis, the tail (the end of the name and its
+   extension) always shows. Joined, the two spans read as the whole name. */
+.asset-items .asset-name {
+  display: flex;
+  min-width: 0;
+  margin-top: 0;
+  height: 14px;
+  line-height: 14px;
+}
+.asset-name-head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+.asset-name-tail {
+  flex-shrink: 0;
+  white-space: pre;
+}
+.asset-items-grid .asset-thumb {
+  aspect-ratio: 1 / 1;
+}
+.asset-items-grid .asset-tile-text {
+  margin-top: 4px;
+}
+.asset-items-grid .asset-name {
+  justify-content: center;
+}
+.asset-items-list .asset-tile,
+.asset-items-compact .asset-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px;
+}
+.asset-items-list .asset-tile:hover,
+.asset-items-compact .asset-tile:hover {
+  background: var(--bg-hover);
+}
+.asset-items-list .asset-thumb,
+.asset-items-compact .asset-thumb {
+  flex: none;
+  aspect-ratio: auto;
+}
+.asset-items-list .asset-thumb {
+  width: 64px;
+  height: 64px;
+}
+.asset-items-compact .asset-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+}
+.asset-items-compact .asset-font {
+  font-size: 20px;
+}
+.asset-items-compact .asset-ext {
+  font-size: 8px;
+}
+.asset-tile-text {
+  flex: 1;
+  min-width: 0;
+}
+.asset-items-list .asset-name,
+.asset-items-compact .asset-name {
+  height: 16px;
+  line-height: 16px;
+  font-size: 11.5px;
+  color: var(--text);
+}
+/* The List view's second line keeps its height while the pixel size is read, so nothing moves when it lands. */
+.asset-detail {
+  height: 14px;
+  margin-top: 3px;
+  line-height: 14px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* In a row the menu sits at its end, over the text, and only while the row is pointed at or focused,
+   so the name keeps the row's whole width the rest of the time. */
+.asset-items-list .asset-tile-menu,
+.asset-items-compact .asset-tile-menu {
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+}
+.asset-items-list .asset-selectable,
+.asset-items-compact .asset-selectable {
+  padding: 2px;
+}
+.asset-items-list .asset-select,
+.asset-items-compact .asset-select {
+  top: 8px;
+  left: 8px;
+}
+/* Pinned under the files: the sort on the left, the view on the right, on the panel's raised fill. */
+.asset-footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 4px 6px;
+  background: var(--bg-panel-2);
+}
+.asset-footer button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.asset-footer button:hover,
+.asset-footer button[aria-expanded='true'] {
+  color: var(--text);
+}
+.asset-footer-sort-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Asset field (src/poster props) */
 .asset-field {
   position: relative;

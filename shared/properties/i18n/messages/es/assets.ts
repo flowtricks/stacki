@@ -169,6 +169,16 @@ export const messages = {
   'assets.input.what.secretAccessKey': 'Clave de acceso secreta',
   'assets.input.what.storagePassword': 'Contraseña de almacenamiento',
   'assets.input.what.storageZone': 'Zona de almacenamiento',
+  'assets.item.detail': '{dimensions} • {size}', // same
+  'assets.item.dimensions': '{width} x {height}', // same
+  'assets.item.kindDetail': '{kind} • {size}', // same
+  'assets.items.label': 'Archivos de recursos',
+  'assets.kind.audio': 'Audio', // same
+  'assets.kind.file': 'Archivo',
+  'assets.kind.font': 'Fuente',
+  'assets.kind.image': 'Imagen',
+  'assets.kind.text': 'Texto',
+  'assets.kind.video': 'Vídeo',
   'assets.link.copied': 'Enlace copiado',
   'assets.link.copyFailed': 'No se pudo copiar el enlace: {error}',
   'assets.listing.label': 'recursos',
@@ -199,6 +209,14 @@ export const messages = {
   'assets.selection.selectAll': 'Seleccionar todos los recursos',
   'assets.selection.selectAllTitle': 'Seleccionar todo',
   'assets.selection.wait': 'Espera a que termine el lote actual',
+  'assets.sort.label': 'Orden: {sort}',
+  'assets.sort.largest': 'Más grandes primero',
+  'assets.sort.menu': 'Ordenar recursos',
+  'assets.sort.nameAscending': 'Alfabético (A-Z)',
+  'assets.sort.nameDescending': 'Alfabético (Z-A)',
+  'assets.sort.newest': 'Más recientes primero',
+  'assets.sort.oldest': 'Más antiguos primero',
+  'assets.sort.smallest': 'Más pequeños primero',
   'assets.source.addConnector': 'Añadir conector',
   'assets.source.project': 'Proyecto',
   'assets.source.removeBody': 'Stacki olvida este host y sus claves. Los archivos del host no se tocan y los enlaces a ellos siguen funcionando.',
@@ -218,4 +236,9 @@ export const messages = {
   'assets.undo.rename': 'renombrar a {name}',
   'assets.upload.limit': 'Sube de 1 a {max} archivos a la vez.',
   'assets.upload.nothing': 'No se subió nada.',
+  'assets.view.compact': 'Lista - Pequeña',
+  'assets.view.grid': 'Cuadrícula',
+  'assets.view.label': 'Vista: {view}',
+  'assets.view.list': 'Lista',
+  'assets.view.menu': 'Vista de recursos',
 } as const satisfies CatalogOf<MessageKey>;

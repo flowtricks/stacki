@@ -2992,6 +2992,72 @@ export const layout = {
   ),
 };
 
+export const layoutGridTwo = {
+  name: 'layoutGridTwo',
+  // Figma variant 10805:25931 (layout-grid-2).
+  compact: (
+    <>
+      <path
+        d="M3.75 6.95C3.75 5.8299 3.75 5.26984 3.96799 4.84202C4.15973 4.46569 4.46569 4.15973 4.84202 3.96799C5.26984 3.75 5.8299 3.75 6.95 3.75H10.25V10.25H3.75V6.95Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13.75 3.75H17.05C18.1701 3.75 18.7302 3.75 19.158 3.96799C19.5343 4.15973 19.8403 4.46569 20.032 4.84202C20.25 5.26984 20.25 5.8299 20.25 6.95V10.25H13.75V3.75Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.75 13.75H10.25V20.25H6.95C5.8299 20.25 5.26984 20.25 4.84202 20.032C4.46569 19.8403 4.15973 19.5343 3.96799 19.158C3.75 18.7302 3.75 18.1701 3.75 17.05V13.75Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13.75 13.75H20.25V17.05C20.25 18.1701 20.25 18.7302 20.032 19.158C19.8403 19.5343 19.5343 19.8403 19.158 20.032C18.7302 20.25 18.1701 20.25 17.05 20.25H13.75V13.75Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  // Figma variant 10805:25951 (layout-grid-2).
+  standard: (
+    <>
+      <path
+        d="M3.5 6.7C3.5 5.5799 3.5 5.01984 3.71799 4.59202C3.90973 4.21569 4.21569 3.90973 4.59202 3.71799C5.01984 3.5 5.5799 3.5 6.7 3.5H10.5V10.5H3.5V6.7Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13.5 3.5H17.3C18.4201 3.5 18.9802 3.5 19.408 3.71799C19.7843 3.90973 20.0903 4.21569 20.282 4.59202C20.5 5.01984 20.5 5.5799 20.5 6.7V10.5H13.5V3.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.5 13.5H10.5V20.5H6.7C5.5799 20.5 5.01984 20.5 4.59202 20.282C4.21569 20.0903 3.90973 19.7843 3.71799 19.408C3.5 18.9802 3.5 18.4201 3.5 17.3V13.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13.5 13.5H20.5V17.3C20.5 18.4201 20.5 18.9802 20.282 19.408C20.0903 19.7843 19.7843 20.0903 19.408 20.282C18.9802 20.5 18.4201 20.5 17.3 20.5H13.5V13.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+};
+
 export const linebreak = {
   name: 'linebreak',
   // Figma variant 9336:26684.

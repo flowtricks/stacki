@@ -169,7 +169,9 @@ const check = (what, condition, detail) => {
   });
 
   const tiles = () => [...container.querySelectorAll('.asset-tile')];
-  const menuButton = (i) => tiles()[i]?.querySelector('.asset-tile-menu');
+  // The panel sorts its files (Newest first, by name without times), so a tile is found by its name.
+  const byName = (name) => tiles().find((tile) => tile.querySelector('.asset-name')?.textContent === name);
+  const menuButton = (name) => byName(name)?.querySelector('.asset-tile-menu');
   const rows = () => [...document.querySelectorAll('.more-menu-item')].map((item) => item.textContent.trim());
   // A missing button is a FAILURE to report, not a stack trace: every check
   // after it would otherwise be lost.
@@ -191,10 +193,14 @@ const check = (what, condition, detail) => {
     'every tile has a menu button',
     tiles().every((tile) => tile.querySelector('.asset-tile-menu')),
   );
-  check('which says what it is for', /photo\.jpg/.test(menuButton(0)?.getAttribute('aria-label') || ''), menuButton(0)?.getAttribute('aria-label'));
+  check(
+    'which says what it is for',
+    /photo\.jpg/.test(menuButton('photo.jpg')?.getAttribute('aria-label') || ''),
+    menuButton('photo.jpg')?.getAttribute('aria-label'),
+  );
   check('and nothing is open yet', rows().length === 0, rows().join());
 
-  await press(menuButton(0), 'a menu button on the first tile');
+  await press(menuButton('photo.jpg'), 'a menu button on the photo tile');
   check('pressing it opens a menu', rows().length > 0, container.innerHTML.slice(0, 160));
   check('with Delete in it', rows().includes('Delete'), rows().join());
   check('with link, compression and replacement before it', rows().join('|') === 'Copy link|Compress…|Replace…|Delete', rows().join());
@@ -226,7 +232,7 @@ const check = (what, condition, detail) => {
   check('the dialog can be answered', said, [...document.querySelectorAll('button')].map((button) => button.textContent).join('|'));
   check('saying no deletes nothing', deleted.length === 0, deleted.join());
 
-  await press(menuButton(0), 'the menu button again');
+  await press(menuButton('photo.jpg'), 'the menu button again');
   await press(deleteRow(), 'the Delete row again');
   await answer('delete');
   check('saying yes deletes the file it was opened on', deleted.join() === 'public/photo.jpg', deleted.join());
@@ -234,7 +240,6 @@ const check = (what, condition, detail) => {
   // Selection uses the whole tile and takes every kind of file: Delete applies
   // to all of them. Compress takes the images it can re-encode and says what it skips.
   await answer('select');
-  const byName = (name) => tiles().find((tile) => tile.querySelector('.asset-name')?.textContent === name);
   check(
     'no tile is disabled or dimmed',
     tiles().every((tile) => !tile.querySelector('input').disabled && !tile.classList.contains('is-disabled')),

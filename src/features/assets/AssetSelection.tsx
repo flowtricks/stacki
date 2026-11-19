@@ -9,6 +9,11 @@ import AssetThumb from '../../ui/AssetThumb';
 import { TrashIcon } from '../../ui/Icons';
 import { convertible, selectableAsset, type AssetBatch } from './AssetBatchTools';
 import type { AssetFile } from './assetPaths';
+import type { AssetView } from './assetOrder';
+import { VIEW_METRICS } from './assetLayout';
+import type { ItemSlot } from './AssetItems';
+import type { DimensionCache } from './assetDimensionCache';
+import { AssetDetail, AssetName, videoSizeRecorder } from './AssetItemParts';
 
 export function AssetSelectionToolbar({ batch, files }: { readonly batch: AssetBatch; readonly files: readonly AssetFile[] }) {
   const translate = useTranslate();
@@ -96,26 +101,43 @@ function compressTitle(selected: number, compressible: number, skipped: number, 
   return translate('assets.selection.compress');
 }
 
-export function SelectableAssetTile({ file, batch }: { readonly file: AssetFile; readonly batch: AssetBatch }) {
+export function SelectableAssetTile({
+  file,
+  batch,
+  view,
+  slot,
+  dimensions,
+}: {
+  readonly file: AssetFile;
+  readonly batch: AssetBatch;
+  readonly view: AssetView;
+  readonly slot: ItemSlot;
+  readonly dimensions: DimensionCache;
+}) {
   const translate = useTranslate();
   const checked = batch.selected.has(file.rel);
   // Only a batch in progress makes a tile unavailable, and the tile says so.
   const busy = batch.progress !== undefined;
   return (
     <label
-      className={`asset-tile asset-selectable ${checked ? 'selected' : ''} ${busy ? 'is-disabled' : ''}`}
+      {...slot}
+      className={`asset-tile asset-tile-${view} asset-selectable ${checked ? 'selected' : ''} ${busy ? 'is-disabled' : ''}`}
       title={busy ? translate('assets.selection.wait') : file.name}
     >
       <input
         type="checkbox"
         className="asset-select"
+        tabIndex={-1}
         aria-label={translate('assets.selection.select', { name: file.name })}
         checked={checked}
         disabled={busy}
         onChange={() => batch.toggle(file.rel)}
       />
-      <AssetThumb file={file} />
-      <div className="asset-name">{file.name}</div>
+      <AssetThumb file={file} onImageLoad={videoSizeRecorder(file, dimensions)} />
+      <div className="asset-tile-text">
+        <AssetName name={file.name} tailChars={VIEW_METRICS[view].nameTailChars} />
+        {view === 'list' && <AssetDetail file={file} cache={dimensions} />}
+      </div>
     </label>
   );
 }

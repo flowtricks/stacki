@@ -31,6 +31,13 @@ import MoreMenu from '../../ui/MoreMenu';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { allowDragEffect } from '../../editor/dragState';
 import { PICK_HOME, type AssetFile, kindMatches, pickPrompt, buildCrumbs, parentOf, basename, isInPickHome, assetTitle } from './assetPaths';
+import { sortAssets, sortFolders, type AssetView } from './assetOrder';
+import { VIEW_METRICS } from './assetLayout';
+import { useAssetViewChoice } from './assetViewPreferences';
+import { AssetFooter } from './AssetFooter';
+import { AssetItems, type ItemSlot } from './AssetItems';
+import { AssetDetail, AssetName, dimensionCacheFor, videoSizeRecorder } from './AssetItemParts';
+import type { DimensionCache } from './assetDimensionCache';
 
 const FILE_DROP_COUNT_MAX = assetDropLimit;
 type Toast = (message: string, kind: 'error' | 'success') => void;
@@ -446,9 +453,19 @@ function AssetPanelBody({
   readonly actions: AssetActions;
 }) {
   const translate = useTranslate();
-  const folders = state.entries.filter((entry) => entry.isDir && entry.parent === state.cwd);
-  const files = state.entries.filter(
-    (entry): entry is AssetFile => !entry.isDir && entry.parent === state.cwd && (!props.pick || kindMatches(props.pick.mediaKind, entry.name)),
+  // The view and the sort are read before the first frame, so the panel never draws the default first.
+  const [choice, setChoice] = useAssetViewChoice(props.project.path);
+  const folders = useMemo(() => sortFolders(state.entries.filter((entry) => entry.isDir && entry.parent === state.cwd)), [state.entries, state.cwd]);
+  const pickKind = props.pick?.mediaKind;
+  const files = useMemo(
+    () =>
+      sortAssets(
+        state.entries.filter(
+          (entry): entry is AssetFile => !entry.isDir && entry.parent === state.cwd && (pickKind === undefined || kindMatches(pickKind, entry.name)),
+        ),
+        choice.sort,
+      ),
+    [state.entries, state.cwd, pickKind, choice.sort],
   );
   return (
     <div className="panel-section grow" role="region" aria-label={translate('assets.title')}>
@@ -458,7 +475,8 @@ function AssetPanelBody({
       <PickBanner {...(props.pick === undefined ? {} : { pick: props.pick })} {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })} />
       {!props.pick && <AssetBatchTools batch={state.batch} files={files} />}
       <AssetBreadcrumbs state={state} actions={actions} />
-      <AssetContents props={props} state={state} actions={actions} folders={folders} files={files} />
+      <AssetContents props={props} state={state} actions={actions} folders={folders} files={files} view={choice.view} />
+      <AssetFooter choice={choice} onChange={setChoice} />
     </div>
   );
 }
@@ -568,16 +586,25 @@ function AssetContents({
   actions,
   folders,
   files,
+  view,
 }: {
   readonly props: AssetsPanelProps;
   readonly state: AssetPanelState;
   readonly actions: AssetActions;
   readonly folders: readonly AssetPanelEntry[];
   readonly files: readonly AssetFile[];
+  readonly view: AssetView;
 }) {
   const translate = useTranslate();
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const dimensions = dimensionCacheFor(props.project.path);
+  const onItemKey = useCallback(
+    (file: AssetFile, event: React.KeyboardEvent<HTMLElement>): boolean => itemKey(file, event.key, { props, state }),
+    [props, state],
+  );
   return (
     <div
+      ref={scrollerRef}
       className={`panel-body asset-body ${state.dragTarget === state.cwd ? 'drop' : ''}`}
       onDragOver={actions.dragOverInto(state.cwd)}
       onDragLeave={(event) => {
@@ -591,11 +618,14 @@ function AssetContents({
       {folders.map((folder) => (
         <AssetFolder key={folder.rel} folder={folder} state={state} actions={actions} />
       ))}
-      <div className="asset-grid">
-        {files.map((file) => (
-          <AssetTile key={file.rel} file={file} props={props} state={state} actions={actions} />
-        ))}
-      </div>
+      <AssetItems
+        view={view}
+        items={files}
+        label={translate('assets.items.label')}
+        scrollerRef={scrollerRef}
+        onItemKey={onItemKey}
+        renderItem={(file, slot) => <AssetTile file={file} view={view} slot={slot} dimensions={dimensions} props={props} state={state} actions={actions} />}
+      />
       <PanelReadStatus state={state.listing} label={translate('assets.listing.label')} layout="assets" retry={state.refresh} />
       {state.listing.kind === 'ready' && folders.length === 0 && files.length === 0 && !state.newFolder && (
         <div className="props-empty">{translate('assets.empty')}</div>
@@ -657,25 +687,60 @@ function AssetFolder({ folder, state, actions }: { readonly folder: AssetPanelEn
   );
 }
 
+// What Enter, Space and F2 do to the focused file: the same as a click on it (pick it, tick it, or open
+// a text file), and F2 renames. True when the key did something.
+function itemKey(file: AssetFile, key: string, { props, state }: { readonly props: AssetsPanelProps; readonly state: AssetPanelState }): boolean {
+  if (props.pick) {
+    if (key === 'Enter' || key === ' ') {
+      props.pick.onPick(file.rel, file);
+      return true;
+    }
+    return false;
+  }
+  if (state.batch.selecting) {
+    if ((key === 'Enter' || key === ' ') && state.batch.progress === undefined) {
+      state.batch.toggle(file.rel);
+      return true;
+    }
+    return false;
+  }
+  if (key === 'F2') {
+    state.setRenaming(file.rel);
+    return true;
+  }
+  if (key === 'Enter' && TEXT_EXT.test(file.name)) {
+    props.onOpenFile?.({ rel: file.rel, name: file.name });
+    return true;
+  }
+  return false;
+}
+
 function AssetTile({
   file,
+  view,
+  slot,
+  dimensions,
   props,
   state,
   actions,
 }: {
   readonly file: AssetFile;
+  readonly view: AssetView;
+  readonly slot: ItemSlot;
+  readonly dimensions: DimensionCache;
   readonly props: AssetsPanelProps;
   readonly state: AssetPanelState;
   readonly actions: AssetActions;
 }) {
   const translate = useTranslate();
   if (!props.pick && state.batch.selecting) {
-    return <SelectableAssetTile file={file} batch={state.batch} />;
+    return <SelectableAssetTile file={file} batch={state.batch} view={view} slot={slot} dimensions={dimensions} />;
   }
   const editable = TEXT_EXT.test(file.name);
   return (
     <div
-      className={`asset-tile ${props.pick ? 'pickable' : ''} ${props.pick?.current === file.rel ? 'selected' : ''}`}
+      {...slot}
+      className={`asset-tile asset-tile-${view} ${props.pick ? 'pickable' : ''} ${props.pick?.current === file.rel ? 'selected' : ''}`}
       draggable={state.renaming !== file.rel}
       onDragStart={(event) => startAssetDrag(event, file.rel)}
       title={assetTitle(file, { editable, picking: Boolean(props.pick) }, translate)}
@@ -684,19 +749,21 @@ function AssetTile({
       <AssetThumb
         file={file}
         className={editable && !props.pick ? 'editable' : ''}
+        onImageLoad={videoSizeRecorder(file, dimensions)}
         onClick={() => {
           if (!props.pick && editable) {
             props.onOpenFile?.({ rel: file.rel, name: file.name });
           }
         }}
       />
-      {state.renaming === file.rel ? (
-        <RenameInput entry={file} onCommit={actions.commitRename} />
-      ) : (
-        <div className="asset-name" onDoubleClick={() => state.setRenaming(file.rel)}>
-          {file.name}
-        </div>
-      )}
+      <div className="asset-tile-text">
+        {state.renaming === file.rel ? (
+          <RenameInput entry={file} onCommit={actions.commitRename} />
+        ) : (
+          <AssetName name={file.name} tailChars={VIEW_METRICS[view].nameTailChars} onDoubleClick={() => state.setRenaming(file.rel)} />
+        )}
+        {view === 'list' && <AssetDetail file={file} cache={dimensions} />}
+      </div>
       {!props.pick && (
         <MoreMenu
           className="asset-tile-menu"

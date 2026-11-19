@@ -78,6 +78,9 @@ import {
   settings as centralSettings,
   target as centralTarget,
   sort as centralSort,
+  layoutGridTwo as centralLayoutGridTwo,
+  listMenu as centralListMenu,
+  textBlock as centralTextBlock,
   sparkle as centralSparkle,
   sync as centralSync,
   tablet as centralTablet,
@@ -450,6 +453,11 @@ export const FilterIcon = centralIcon(centralFilter);
 
 // A list's sort: an up-and-down arrow beside the lines it orders.
 export const SortIcon = centralIcon(centralSort);
+
+// The Assets panel's views: tiles in a grid, rows with a thumbnail and two lines, and compact rows.
+export const GridViewIcon = centralIcon(centralLayoutGridTwo);
+export const ListViewIcon = centralIcon(centralTextBlock);
+export const CompactListViewIcon = centralIcon(centralListMenu);
 
 // Disconnecting a setting from a property: a chain link broken in two.
 // A link broken in two: what disconnecting a value from what it was bound to does.

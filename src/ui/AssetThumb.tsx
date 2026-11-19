@@ -118,6 +118,9 @@ export default function AssetThumb({ file, className = '', onImageLoad, onClick 
           key={source}
           src={source}
           alt=""
+          // Off-screen tiles wait, and a large picture decodes beside the frame instead of in it.
+          loading="lazy"
+          decoding="async"
           draggable={false}
           onLoad={(event) =>
             onImageLoad?.({

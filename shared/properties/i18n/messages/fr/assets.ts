@@ -170,6 +170,16 @@ export const messages = {
   'assets.input.what.secretAccessKey': 'Clé d’accès secrète',
   'assets.input.what.storagePassword': 'Mot de passe de stockage',
   'assets.input.what.storageZone': 'Zone de stockage',
+  'assets.item.detail': '{dimensions} • {size}', // same
+  'assets.item.dimensions': '{width} x {height}', // same
+  'assets.item.kindDetail': '{kind} • {size}', // same
+  'assets.items.label': 'Fichiers de ressources',
+  'assets.kind.audio': 'Audio', // same
+  'assets.kind.file': 'Fichier',
+  'assets.kind.font': 'Police',
+  'assets.kind.image': 'Image', // same
+  'assets.kind.text': 'Texte',
+  'assets.kind.video': 'Vidéo',
   'assets.link.copied': 'Lien copié',
   'assets.link.copyFailed': 'Impossible de copier le lien : {error}',
   'assets.listing.label': 'ressources',
@@ -200,6 +210,14 @@ export const messages = {
   'assets.selection.selectAll': 'Sélectionner toutes les ressources',
   'assets.selection.selectAllTitle': 'Tout sélectionner',
   'assets.selection.wait': 'Attendez la fin du lot en cours',
+  'assets.sort.label': 'Tri : {sort}',
+  'assets.sort.largest': 'Plus grands d’abord',
+  'assets.sort.menu': 'Trier les ressources',
+  'assets.sort.nameAscending': 'Alphabétique (A-Z)',
+  'assets.sort.nameDescending': 'Alphabétique (Z-A)',
+  'assets.sort.newest': 'Plus récents d’abord',
+  'assets.sort.oldest': 'Plus anciens d’abord',
+  'assets.sort.smallest': 'Plus petits d’abord',
   'assets.source.addConnector': 'Ajouter un connecteur',
   'assets.source.project': 'Projet',
   'assets.source.removeBody':
@@ -220,4 +238,9 @@ export const messages = {
   'assets.undo.rename': 'renommer en {name}',
   'assets.upload.limit': 'Importez de 1 à {max} fichiers à la fois.',
   'assets.upload.nothing': 'Rien n’a été importé.',
+  'assets.view.compact': 'Liste - Compacte',
+  'assets.view.grid': 'Grille',
+  'assets.view.label': 'Affichage : {view}',
+  'assets.view.list': 'Liste',
+  'assets.view.menu': 'Affichage des ressources',
 } as const satisfies CatalogOf<MessageKey>;
