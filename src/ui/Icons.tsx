@@ -473,10 +473,13 @@ export const ReplaceIcon = centralIcon(centralArrowLeftRight);
 const AstroImageIcon = centralIcon(centralImage);
 const AstroPictureIcon = centralIcon(centralLayers);
 
-// Astro's accent distinguishes optimized images from plain HTML images.
-export function astroAssetIcon(name: unknown, size = 16, className?: string) {
+// Astro's accent distinguishes optimized images from plain HTML images in the
+// palette, props and navigator. `tint: 'inherit'` keeps currentColor for a
+// surface that colours its own icons (the canvas tag, whose text and outline
+// are one colour; an orange glyph there read as an error).
+export function astroAssetIcon(name: unknown, size = 16, className?: string, tint: 'astro' | 'inherit' = 'astro') {
   const Icon = name === 'Picture' ? AstroPictureIcon : AstroImageIcon;
-  return <Icon size={size} className={className} style={{ color: ASTRO_ASSET_ACCENT }} />;
+  return <Icon size={size} className={className} style={tint === 'astro' ? { color: ASTRO_ASSET_ACCENT } : undefined} />;
 }
 
 // Boolean prop — a switch, matching the True/False control the field renders.
