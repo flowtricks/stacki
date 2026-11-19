@@ -11,7 +11,7 @@ import { readAssetDimensions } from '../../ipc/assetBridge';
 import { AUDIO_EXT, FONT_EXT, IMAGE_EXT, TEXT_EXT, VIDEO_EXT } from '../../ui/AssetThumb';
 import { createDimensionCache, useDimensions, type DimensionCache, type DimensionState } from './assetDimensionCache';
 import { middleParts } from './assetOrder';
-import type { AssetFile } from './assetPaths';
+import { parentOf, type AssetFile } from './assetPaths';
 
 export function AssetName({ name, tailChars, onDoubleClick }: { readonly name: string; readonly tailChars: number; readonly onDoubleClick?: () => void }) {
   const parts = middleParts(name, tailChars);
@@ -19,6 +19,25 @@ export function AssetName({ name, tailChars, onDoubleClick }: { readonly name: s
     <div className="asset-name" title={name} onDoubleClick={onDoubleClick}>
       <span className="asset-name-head">{parts.head}</span>
       <span className="asset-name-tail">{parts.tail}</span>
+    </div>
+  );
+}
+
+/** Characters of a folder path that stay whole at its end when the row is too narrow for all of it. */
+const PATH_TAIL_CHARS = 18;
+
+/**
+ * Where a found file lives, as the secondary line of a search result in the list views, so two files
+ * of one name are told apart. Cut in the middle like a name: the top folder and the folder it sits in
+ * both stay readable.
+ */
+export function AssetPath({ file }: { readonly file: AssetFile }) {
+  const folder = `/${parentOf(file.rel)}`;
+  const parts = middleParts(folder, PATH_TAIL_CHARS);
+  return (
+    <div className="asset-path" title={folder}>
+      <span className="asset-path-head">{parts.head}</span>
+      <span className="asset-path-tail">{parts.tail}</span>
     </div>
   );
 }

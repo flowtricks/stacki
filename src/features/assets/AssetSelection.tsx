@@ -13,7 +13,7 @@ import type { AssetView } from './assetOrder';
 import { VIEW_METRICS } from './assetLayout';
 import type { ItemSlot } from './AssetItems';
 import type { DimensionCache } from './assetDimensionCache';
-import { AssetDetail, AssetName, videoSizeRecorder } from './AssetItemParts';
+import { AssetDetail, AssetName, AssetPath, videoSizeRecorder } from './AssetItemParts';
 
 export function AssetSelectionToolbar({ batch, files }: { readonly batch: AssetBatch; readonly files: readonly AssetFile[] }) {
   const translate = useTranslate();
@@ -107,12 +107,15 @@ export function SelectableAssetTile({
   view,
   slot,
   dimensions,
+  showPath,
 }: {
   readonly file: AssetFile;
   readonly batch: AssetBatch;
   readonly view: AssetView;
   readonly slot: ItemSlot;
   readonly dimensions: DimensionCache;
+  /** A search result in a list view names its folder under its name. */
+  readonly showPath: boolean;
 }) {
   const translate = useTranslate();
   const checked = batch.selected.has(file.rel);
@@ -136,6 +139,7 @@ export function SelectableAssetTile({
       <AssetThumb file={file} onImageLoad={videoSizeRecorder(file, dimensions)} />
       <div className="asset-tile-text">
         <AssetName name={file.name} tailChars={VIEW_METRICS[view].nameTailChars} />
+        {showPath && view !== 'grid' && <AssetPath file={file} />}
         {view === 'list' && <AssetDetail file={file} cache={dimensions} />}
       </div>
     </label>

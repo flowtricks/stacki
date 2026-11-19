@@ -16,6 +16,7 @@ import { rolesSubmenu } from './componentRolesMenu';
 import { componentRuleFile } from '../../../shared/properties/componentAccess';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
 import { CopyIcon, ElementComponentIcon, GearIcon, LayoutIcon, MoveFolderIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon, UsersIcon } from '../../ui/Icons';
+import { PanelSearch } from '../../ui/PanelSearch';
 import { RenameComponentDialog } from './RenameComponentDialog';
 import type { RenameCandidate } from './renameAvailability';
 import { DEFAULT_PROJECT_FOLDERS } from '../../../shared/properties/projectFolders';
@@ -223,11 +224,7 @@ function PaletteHeader({
 
 function PaletteSearch({ query, setQuery }: { readonly query: string; readonly setQuery: React.Dispatch<React.SetStateAction<string>> }) {
   const translate = useTranslate();
-  return (
-    <div style={{ padding: '0 12px 8px' }}>
-      <input value={query} placeholder={translate('palette.panel.search')} spellCheck={false} onChange={(event) => setQuery(event.currentTarget.value)} />
-    </div>
-  );
+  return <PanelSearch value={query} placeholder={translate('palette.panel.search')} onChange={setQuery} />;
 }
 
 interface PaletteListProps {

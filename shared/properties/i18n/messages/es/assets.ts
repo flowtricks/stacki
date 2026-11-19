@@ -190,6 +190,8 @@ export const messages = {
   'assets.pick.video': 'Elige un vídeo',
   'assets.provider.s3': 'Compatible con S3',
   'assets.request.failed': 'Falló la solicitud de medios.',
+  'assets.search.noMatch': 'Ningún recurso coincide',
+  'assets.search.placeholder': 'Buscar recursos',
   'assets.selection.all': 'Todos los recursos',
   'assets.selection.compress': 'Comprimir las imágenes seleccionadas',
   'assets.selection.compressAria': 'Comprimir los recursos seleccionados',

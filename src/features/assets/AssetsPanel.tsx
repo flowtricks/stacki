@@ -7,7 +7,7 @@ import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { SelectableAssetTile } from './AssetSelection';
 import { AssetBatchTools, useAssetBatch, convertible, type AssetBatch } from './AssetBatchTools';
 import { assetDropLimit } from '../../ipc/editorEnvironment';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AssetRequest } from '../../ui/assetPick';
 import type { AssetPanelEntry } from './assetPanelBridge';
 import type { Result } from '../../../shared/core/result';
@@ -36,7 +36,9 @@ import { VIEW_METRICS } from './assetLayout';
 import { useAssetViewChoice } from './assetViewPreferences';
 import { AssetFooter } from './AssetFooter';
 import { AssetItems, type ItemSlot } from './AssetItems';
-import { AssetDetail, AssetName, dimensionCacheFor, videoSizeRecorder } from './AssetItemParts';
+import { AssetDetail, AssetName, AssetPath, dimensionCacheFor, videoSizeRecorder } from './AssetItemParts';
+import { PanelSearch } from '../../ui/PanelSearch';
+import { buildAssetIndex, isSearching, searchAssets } from './assetSearch';
 import type { DimensionCache } from './assetDimensionCache';
 
 const FILE_DROP_COUNT_MAX = assetDropLimit;
@@ -455,17 +457,28 @@ function AssetPanelBody({
   const translate = useTranslate();
   // The view and the sort are read before the first frame, so the panel never draws the default first.
   const [choice, setChoice] = useAssetViewChoice(props.project.path);
-  const folders = useMemo(() => sortFolders(state.entries.filter((entry) => entry.isDir && entry.parent === state.cwd)), [state.entries, state.cwd]);
+  // The search text is this panel's alone and is never remembered: a new panel starts on its folder.
+  const [query, setQuery] = useState('');
+  const searching = isSearching(query);
   const pickKind = props.pick?.mediaKind;
+  // Searching looks through the whole project, so it lists files only: a folder is somewhere to go, and a result is not in one.
+  const folders = useMemo(
+    () => (searching ? NO_FOLDERS : sortFolders(state.entries.filter((entry) => entry.isDir && entry.parent === state.cwd))),
+    [state.entries, state.cwd, searching],
+  );
+  // Built once per listing; each keystroke is then one pass over it (assetSearch.ts).
+  const index = useMemo(() => buildAssetIndex(state.entries, (file) => pickKind === undefined || kindMatches(pickKind, file.name)), [state.entries, pickKind]);
   const files = useMemo(
     () =>
       sortAssets(
-        state.entries.filter(
-          (entry): entry is AssetFile => !entry.isDir && entry.parent === state.cwd && (pickKind === undefined || kindMatches(pickKind, entry.name)),
-        ),
+        searching
+          ? searchAssets(index, query)
+          : state.entries.filter(
+              (entry): entry is AssetFile => !entry.isDir && entry.parent === state.cwd && (pickKind === undefined || kindMatches(pickKind, entry.name)),
+            ),
         choice.sort,
       ),
-    [state.entries, state.cwd, pickKind, choice.sort],
+    [index, query, searching, state.entries, state.cwd, pickKind, choice.sort],
   );
   return (
     <div className="panel-section grow" role="region" aria-label={translate('assets.title')}>
@@ -474,12 +487,15 @@ function AssetPanelBody({
       )}
       <PickBanner {...(props.pick === undefined ? {} : { pick: props.pick })} {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })} />
       {!props.pick && <AssetBatchTools batch={state.batch} files={files} />}
-      <AssetBreadcrumbs state={state} actions={actions} />
-      <AssetContents props={props} state={state} actions={actions} folders={folders} files={files} view={choice.view} />
+      <PanelSearch value={query} placeholder={translate('assets.search.placeholder')} onChange={setQuery} />
+      {!searching && <AssetBreadcrumbs state={state} actions={actions} />}
+      <AssetContents props={props} state={state} actions={actions} folders={folders} files={files} view={choice.view} search={{ searching, query }} />
       <AssetFooter choice={choice} onChange={setChoice} />
     </div>
   );
 }
+
+const NO_FOLDERS: readonly AssetPanelEntry[] = [];
 
 function AssetHeader({
   cwd,
@@ -587,6 +603,7 @@ function AssetContents({
   folders,
   files,
   view,
+  search,
 }: {
   readonly props: AssetsPanelProps;
   readonly state: AssetPanelState;
@@ -594,9 +611,11 @@ function AssetContents({
   readonly folders: readonly AssetPanelEntry[];
   readonly files: readonly AssetFile[];
   readonly view: AssetView;
+  readonly search: { readonly searching: boolean; readonly query: string };
 }) {
   const translate = useTranslate();
   const scrollerRef = useRef<HTMLDivElement>(null);
+  useSearchScroll(scrollerRef, search);
   const dimensions = dimensionCacheFor(props.project.path);
   const onItemKey = useCallback(
     (file: AssetFile, event: React.KeyboardEvent<HTMLElement>): boolean => itemKey(file, event.key, { props, state }),
@@ -614,7 +633,7 @@ function AssetContents({
       }}
       onDrop={actions.dropInto(state.cwd)}
     >
-      {state.newFolder && <NewFolderRow state={state} actions={actions} />}
+      {state.newFolder && !search.searching && <NewFolderRow state={state} actions={actions} />}
       {folders.map((folder) => (
         <AssetFolder key={folder.rel} folder={folder} state={state} actions={actions} />
       ))}
@@ -624,14 +643,50 @@ function AssetContents({
         label={translate('assets.items.label')}
         scrollerRef={scrollerRef}
         onItemKey={onItemKey}
-        renderItem={(file, slot) => <AssetTile file={file} view={view} slot={slot} dimensions={dimensions} props={props} state={state} actions={actions} />}
+        renderItem={(file, slot) => (
+          <AssetTile file={file} view={view} slot={slot} dimensions={dimensions} props={props} state={state} actions={actions} showPath={search.searching} />
+        )}
       />
       <PanelReadStatus state={state.listing} label={translate('assets.listing.label')} layout="assets" retry={state.refresh} />
       {state.listing.kind === 'ready' && folders.length === 0 && files.length === 0 && !state.newFolder && (
-        <div className="props-empty">{translate('assets.empty')}</div>
+        <div className="props-empty">{translate(search.searching ? 'assets.search.noMatch' : 'assets.empty')}</div>
       )}
     </div>
   );
+}
+
+// A search starts at the top of its results and ends back where the folder was scrolled to. The
+// folder's position is noted from scroll events while no search is on (the browser clamps it as the
+// results shrink the list, and that clamp must not overwrite it), and put back when the query clears.
+function useSearchScroll(scrollerRef: React.RefObject<HTMLElement>, search: { readonly searching: boolean; readonly query: string }): void {
+  const folderScrollTop = useRef(0);
+  const searchingRef = useRef(false);
+  const wasSearching = useRef(false);
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (scroller === null) {
+      return undefined;
+    }
+    const note = (): void => {
+      if (!searchingRef.current) {
+        folderScrollTop.current = scroller.scrollTop;
+      }
+    };
+    scroller.addEventListener('scroll', note, { passive: true });
+    return () => scroller.removeEventListener('scroll', note);
+  }, [scrollerRef]);
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    searchingRef.current = search.searching;
+    if (scroller !== null) {
+      if (search.searching) {
+        scroller.scrollTop = 0;
+      } else if (wasSearching.current) {
+        scroller.scrollTop = folderScrollTop.current;
+      }
+    }
+    wasSearching.current = search.searching;
+  }, [scrollerRef, search.searching, search.query]);
 }
 
 function NewFolderRow({ state, actions }: { readonly state: AssetPanelState; readonly actions: AssetActions }) {
@@ -723,6 +778,7 @@ function AssetTile({
   props,
   state,
   actions,
+  showPath,
 }: {
   readonly file: AssetFile;
   readonly view: AssetView;
@@ -731,10 +787,12 @@ function AssetTile({
   readonly props: AssetsPanelProps;
   readonly state: AssetPanelState;
   readonly actions: AssetActions;
+  /** A search result names its folder under its name in the list views, so equal names can be told apart. */
+  readonly showPath: boolean;
 }) {
   const translate = useTranslate();
   if (!props.pick && state.batch.selecting) {
-    return <SelectableAssetTile file={file} batch={state.batch} view={view} slot={slot} dimensions={dimensions} />;
+    return <SelectableAssetTile file={file} batch={state.batch} view={view} slot={slot} dimensions={dimensions} showPath={showPath} />;
   }
   const editable = TEXT_EXT.test(file.name);
   return (
@@ -762,6 +820,7 @@ function AssetTile({
         ) : (
           <AssetName name={file.name} tailChars={VIEW_METRICS[view].nameTailChars} onDoubleClick={() => state.setRenaming(file.rel)} />
         )}
+        {showPath && view !== 'grid' && <AssetPath file={file} />}
         {view === 'list' && <AssetDetail file={file} cache={dimensions} />}
       </div>
       {!props.pick && (
