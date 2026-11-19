@@ -35,6 +35,8 @@ export interface StructureTreeContext {
   readonly currentLayoutName: string;
   readonly dropTarget: DropTarget | undefined;
   readonly setDropTarget: React.Dispatch<React.SetStateAction<DropTarget | undefined>>;
+  /** The node a canvas drag is moving: its row is muted while the drag lasts (src/editor/canvasDragSession.ts). */
+  readonly movingId?: string | undefined;
   readonly isCollapsed: (node: NavigatorNode) => boolean;
   readonly isDndPayload: (event: React.DragEvent<HTMLElement>) => boolean;
   readonly performDrop: (event: React.DragEvent<HTMLElement>, target: DropLocation) => void;
@@ -288,6 +290,7 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     currentLayoutName: props.currentLayoutName,
     dropTarget: props.dropTarget,
     setDropTarget: props.setDropTarget,
+    movingId: props.movingId,
     isCollapsed: props.isCollapsed,
     isDndPayload: props.isDndPayload,
     performDrop: props.performDrop,
@@ -315,6 +318,7 @@ interface NodeView {
   readonly layout: boolean;
   readonly selected: boolean;
   readonly dropInto: boolean;
+  readonly moving: boolean;
   readonly description: NodeDescription;
   readonly hint: string | undefined;
 }
@@ -343,6 +347,7 @@ function nodeView(props: TreeNodeProps, shape: Pick<NodeView, 'children' | 'host
     layout,
     selected,
     dropInto: props.dropTarget?.kind === 'into' && props.dropTarget.intoId === node.id,
+    moving: props.movingId === node.id,
     description,
     hint,
   };
@@ -517,7 +522,13 @@ function RowLabel({
 
 function rowClassName(view: NodeView & { readonly node: NavigatorNode }): string {
   const family = navigatorFamily(view.node, { componentRow: view.component });
-  return ['structure-node', family === undefined ? '' : `is-${family}`, view.layout ? 'layout-node' : '', view.selected ? 'selected' : ''].join(' ');
+  return [
+    'structure-node',
+    family === undefined ? '' : `is-${family}`,
+    view.layout ? 'layout-node' : '',
+    view.selected ? 'selected' : '',
+    view.moving ? 'is-moving' : '',
+  ].join(' ');
 }
 
 const fragmentTitle = 'Inline group in this file. Expand it to edit its children; there is no separate file to open.';

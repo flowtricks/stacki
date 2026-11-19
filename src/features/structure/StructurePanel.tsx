@@ -1,6 +1,6 @@
 import { TreeDragRow, useTreeDragCleanup } from '../../ui/TreeDragDrop';
 import { ErrorToast } from '../../ui/ErrorToast';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { NavigatorNode, StructurePageState, StructureProjection, DropLocation, DropTarget } from './structureModel';
 import type { PseudoKind, PseudoNodeIds, StructureTreeContext } from './StructureTree';
 import type { ContextPosition } from './StructureContextMenu';
@@ -20,7 +20,8 @@ import {
   structureProjection,
 } from './structureModel';
 import CodeEditor from '../../ui/CodeEditor';
-import { NodeList } from './StructureTree';
+import { NodeList, scrollRowIntoScroller } from './StructureTree';
+import { canvasDragView, dropReasonText, subscribeCanvasDrag, type CanvasDragView } from '../../editor/canvasDragSession';
 import { clearDrag } from '../../editor/dragState';
 import { parseNavigatorDrop } from './navigatorDrop';
 import { dropPlacement, type DropPlacement } from './dropPlacement';
@@ -164,11 +165,14 @@ type EditableProps = StructurePanelProps & {
 
 function EditableStructurePanel(props: EditableProps) {
   const state = useTreeState(props);
-  const treeContext = treeContextOf(props, state);
+  // A drag on the canvas is drawn here too, from the same decision, in the same commit (canvasDragSession.ts).
+  const canvasDrag = useSyncExternalStore(subscribeCanvasDrag, canvasDragView);
+  useCanvasDragReveal(state.bodyRef, canvasDrag?.revealId);
+  const treeContext = treeContextOf(props, state, canvasDrag);
   return (
     <div className="panel-section grow navigator">
       <NavigatorHeader state={state} nodes={props.pageState.model.nodes} />
-      <NavigatorBody props={props} state={state} treeContext={treeContext} />
+      <NavigatorBody props={props} state={state} treeContext={treeContext} canvasDrag={canvasDrag} />
       {state.contextMenu && (
         <ElementContextMenu {...props} nodes={props.pageState.model.nodes} position={state.contextMenu} onClose={() => state.setContextMenu(undefined)} />
       )}
@@ -409,8 +413,10 @@ function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string, 
   bodyElement.scrollTop += rowBounds.top - bodyBounds.top - (bodyBounds.height - rowBounds.height) / 2;
 }
 
-function treeContextOf(props: EditableProps, state: TreeState): StructureTreeContext {
-  const isCollapsed = (node: NavigatorNode): boolean => collapsedState(node, state.toggled);
+function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: CanvasDragView | undefined): StructureTreeContext {
+  // A canvas drag opens the rows its mark sits in for as long as it lasts, without touching what the person
+  // opened or closed: when the drag ends the set is empty and every row is as it was.
+  const isCollapsed = (node: NavigatorNode): boolean => (canvasDrag?.expand.has(node.id) === true ? false : collapsedState(node, state.toggled));
   return {
     clientMode: props.clientMode === true,
     selectedId: props.selectedId,
@@ -424,8 +430,9 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
     ...(props.onSelectPseudo === undefined ? {} : { onSelectPseudo: props.onSelectPseudo }),
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
     currentLayoutName: props.currentLayoutName,
-    dropTarget: state.dropTarget,
+    dropTarget: canvasDrag === undefined ? state.dropTarget : canvasDrag.navigator,
     setDropTarget: state.setDropTarget,
+    movingId: canvasDrag === undefined || canvasDrag.subject.kind === 'new' ? undefined : canvasDrag.subject.id,
     isCollapsed,
     isDndPayload,
     performDrop: (event, target) => dropOnTree(event, target, props, state),
@@ -571,10 +578,12 @@ function NavigatorBody({
   props,
   state,
   treeContext,
+  canvasDrag,
 }: {
   readonly props: EditableProps;
   readonly state: TreeState;
   readonly treeContext: StructureTreeContext;
+  readonly canvasDrag: CanvasDragView | undefined;
 }) {
   const nodes = props.pageState.model.nodes;
   // Drop gaps overlap the row edges instead of taking room between rows, so
@@ -606,9 +615,34 @@ function NavigatorBody({
         <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
       </div>
       {!props.clientMode && nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
-      <DropNoteChip note={state.dropNote} />
+      {canvasDrag === undefined ? <DropNoteChip note={state.dropNote} /> : <CanvasDropNote view={canvasDrag} />}
     </div>
   );
+}
+
+// The canvas drag's note, in the words the canvas shows beside the pointer.
+function CanvasDropNote({ view }: { readonly view: CanvasDragView }) {
+  const translate = useTranslate();
+  const text = dropReasonText(view, translate);
+  if (text === undefined) {
+    return undefined;
+  }
+  return (
+    <div className="navigator-drop-note" role="status" data-tone={view.verdict.kind === 'refused' ? 'refused' : 'warning'}>
+      {text}
+    </div>
+  );
+}
+
+// Keeps the row a canvas drag points at in view, before the frame paints: the mark moves and the tree follows.
+function useCanvasDragReveal(bodyRef: React.RefObject<HTMLDivElement>, revealId: string | undefined): void {
+  useLayoutEffect(() => {
+    if (revealId === undefined) {
+      return;
+    }
+    const row = bodyRef.current?.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(revealId)}"]`) ?? undefined;
+    scrollRowIntoScroller(row);
+  }, [bodyRef, revealId]);
 }
 
 type BodyDrag = 'idle' | 'dragging';

@@ -4285,6 +4285,10 @@ body > .embed-editor_provenance {
 .navigator-drop-note[data-tone='warning'] {
   color: var(--text-dim);
 }
+/* The row a canvas drag is moving: still where it stands until the drop, muted (canvasDragSession.ts). */
+.structure-node.is-moving {
+  opacity: 0.45;
+}
 
 /* An insert-palette item with no valid place for the current selection: still listed, dimmed, with the reason below the list. */
 .insert-placement {
