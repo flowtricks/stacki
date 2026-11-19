@@ -30,7 +30,6 @@ export const messages = {
   'preview.drag.outside': 'Relâchez pour annuler',
   'preview.drag.page': 'Page',
   'preview.drag.self': 'Un élément ne peut pas aller dans lui-même',
-  'preview.frame.loading': 'Chargement de la page…',
   'preview.frame.previous': '{title} (page précédente)',
   'preview.guide.color': 'Couleur',
   'preview.guide.colorLabel': 'Couleur du repère',

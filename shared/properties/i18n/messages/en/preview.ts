@@ -30,7 +30,6 @@ export const messages = {
   'preview.drag.outside': 'Release to cancel',
   'preview.drag.page': 'Page',
   'preview.drag.self': "An element can't go inside itself",
-  'preview.frame.loading': 'Loading page…',
   'preview.frame.previous': '{title} (previous page)',
   'preview.guide.color': 'Color',
   'preview.guide.colorLabel': 'Guide color',

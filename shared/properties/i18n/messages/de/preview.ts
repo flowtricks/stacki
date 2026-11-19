@@ -30,7 +30,6 @@ export const messages = {
   'preview.drag.outside': 'Loslassen zum Abbrechen',
   'preview.drag.page': 'Seite',
   'preview.drag.self': 'Ein Element kann nicht in sich selbst liegen',
-  'preview.frame.loading': 'Seite wird geladen …',
   'preview.frame.previous': '{title} (vorherige Seite)',
   'preview.guide.color': 'Farbe',
   'preview.guide.colorLabel': 'Farbe der Hilfslinien',

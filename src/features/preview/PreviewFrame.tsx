@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { pageLoadEnd, pageLoadStart } from './pageLoadState';
 import { parsePreviewMessage } from './previewMessages';
 
 interface FrameSource {
@@ -26,6 +27,15 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
   const attach = useFrameReady(target, frameRef, setShown);
   const loading = shown?.key !== target.key;
   const retained = loading ? shown : undefined;
+  // The address bar draws the loading line from this; ending on unmount keeps it from sticking.
+  const frameId = useId();
+  useEffect(() => {
+    if (!loading) {
+      return undefined;
+    }
+    pageLoadStart(frameId);
+    return () => pageLoadEnd(frameId);
+  }, [loading, frameId]);
   const frames = retained ? [retained, target] : [target];
   return (
     <>
@@ -53,11 +63,6 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
           />
         );
       })}
-      {loading && (
-        <div className="preview-page-loading" role="status">
-          {translate('preview.frame.loading')}
-        </div>
-      )}
     </>
   );
 }

@@ -827,7 +827,7 @@ test('navigation keeps a loaded page visible while isolating its replacement', a
     assert.equal(first.style.pointerEvents, 'none', 'The retained page cannot receive edits');
     assert.equal(first.tabIndex, -1);
     assert.equal(next.style.visibility, 'hidden', 'An unfinished document cannot flash white');
-    assert.equal(document.querySelector('[role="status"]').textContent, 'Loading page…');
+    assert.ok(document.querySelector('[role="status"]') === null, 'No text announces the load: the address bar draws a line instead');
     const sent = [];
     next.contentWindow.postMessage = (message) => sent.push(message);
     const query = queryCanvas('0');

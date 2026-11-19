@@ -70,6 +70,7 @@ import { AiHost, AiTab, useAiRailButton } from './DesktopAi';
 import { selectFromPanel } from './panelSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { SettingsButton } from './WelcomeView';
+import { PageLoadLine } from '../../features/preview/PageLoadLine';
 
 // The editor around an open project.
 export function AppShell({ app }: { readonly app: ShellView }) {
@@ -329,6 +330,7 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
           }}
         />
         <OpenBrowserButton liveUrl={liveUrl} />
+        <PageLoadLine />
       </div>
       {/* Which entry of a dynamic route the canvas is showing. The template
           is what gets edited either way — this only changes the data it's

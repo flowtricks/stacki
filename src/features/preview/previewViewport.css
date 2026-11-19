@@ -87,17 +87,3 @@
 .preview-overlay-layer.full {
   top: 0;
 }
-
-.preview-page-loading {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text);
-  font-size: 12px;
-  pointer-events: none;
-}
