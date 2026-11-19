@@ -35,6 +35,14 @@ function setUp() {
     const [left, top, width, height] = box;
     return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
   };
+  // The browser's hit test: the innermost element whose box holds the point.
+  document.elementFromPoint = (x, y) => {
+    const inside = [...document.querySelectorAll('[data-box]')].filter((element) => {
+      const [left, top, width, height] = element.getAttribute('data-box').split(',').map(Number);
+      return x >= left && x <= left + width && y >= top && y <= top + height;
+    });
+    return inside.at(-1) ?? undefined;
+  };
   return dom;
 }
 

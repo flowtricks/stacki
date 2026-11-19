@@ -193,6 +193,10 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     const boxes = loop !== undefined ? [loop] : copiesToDraw(all, outline.occ);
     // Hovering a slot says why nothing inside it can be picked: a muted fill and its reason, not the accent. Picking the slot itself stays as it was.
     const muted = info.hostContent && outline.type === 'hover';
+    // The words under the pointer take the hover: the component around them is not drawn as well, unless it is the selection.
+    if (outline.type === 'hover' && outline.slot !== 'highlight' && props.textMarks?.hover !== undefined && outline.path !== props.selPath) {
+      return [];
+    }
     return boxes.map((box, index) => {
       const collapse = collapseKind(box);
       return (
@@ -325,7 +329,7 @@ export function outlineIcon(info: OverlayInfo): React.ReactNode {
     if (info.kind === 'element') {
       return <CustomElementIcon size={size} />;
     }
-    return info.astroAsset ? astroAssetIcon(info.label, size) : <ElementComponentIcon size={size} />;
+    return info.astroAsset ? astroAssetIcon(info.label, size, undefined, 'inherit') : <ElementComponentIcon size={size} />;
   }
   switch (info.nodeKind) {
     case 'map':
@@ -358,7 +362,7 @@ function TextMarkOutlines({ marks, instances, scale }: { readonly marks: TextMar
     ...(marks.picked ? [['sel', marks.picked] as const] : []),
   ];
   return drawn.map(([type, box]) => (
-    <div key={type} className={`node-outline ${type} component text-mark`} style={boxStyle(box, scale)}>
+    <div key={type} className={`node-outline ${type} component text-mark${box.kind === 'refused' ? ' refused' : ''}`} style={boxStyle(box, scale)}>
       {!instances.some((instance) => tagsCollide(instance, box, scale)) && (
         <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
           {box.kind === 'component' ? <ElementComponentIcon size={11} /> : <TextIcon size={11} />}

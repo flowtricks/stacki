@@ -1,0 +1,115 @@
+// Goal: the words a component prints from a prop show their hover outline and name under the
+// pointer with nothing selected, not only after the component is selected. A prop bound to code
+// the editor cannot follow shows a muted, refused look instead; the page's own slot text and
+// words outside every component are left to the element hover as before.
+// Method: a JSDOM page tagged like a rendered Card and Button with per-element boxes, a stubbed
+// `elementFromPoint`, animation frames run at once, no focus at all, and the frame's
+// `avb:text-marks` messages to the app collected and checked.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { JSDOM } = require('jsdom');
+const loadRenderer = require('../../helpers/rendererModule');
+
+const PAGE = [
+  '<div data-avb-p="Card.astro|0.0 0.1" data-box="0,0,600,300">',
+  '<h3 data-avb-p="Heading.astro|0 Card.astro|0.0.1" data-box="20,20,300,40">Card heading</h3>',
+  '<p data-avb-p="Paragraph.astro|0 Card.astro|0.0.2" data-box="20,80,300,40">Computed words</p>',
+  '<span data-avb-p="Slot.astro|0 0.1.0" data-box="20,140,300,40">Slot words</span>',
+  '</div>',
+].join('');
+
+const dom = new JSDOM(`<body>${PAGE}</body>`);
+const { window } = dom;
+for (const name of ['document', 'window', 'HTMLElement', 'Node', 'Element', 'Text', 'Comment']) {
+  global[name] = name === 'document' ? window.document : name === 'window' ? window : window[name];
+}
+global.NodeFilter = window.NodeFilter;
+global.location = window.location;
+global.CSSStyleSheet = class {
+  replaceSync() {}
+};
+window.document.adoptedStyleSheets = [];
+global.requestAnimationFrame = (run) => {
+  run(0);
+  return 0;
+};
+const boxOf = (element) => {
+  const [left, top, width, height] = (element.getAttribute('data-box') ?? '0,0,0,0').split(',').map(Number);
+  return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
+};
+window.Element.prototype.getBoundingClientRect = function box() {
+  return boxOf(this);
+};
+// The innermost element whose box holds the point, as the browser's hit test answers.
+document.elementFromPoint = (x, y) => {
+  const inside = [...document.querySelectorAll('[data-box]')].filter((element) => {
+    const box = boxOf(element);
+    return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+  });
+  return inside.at(-1) ?? undefined;
+};
+
+const target = (extra) => ({ kind: 'component', label: 'Edit text', nested: false, siblings: [], from: 'prop', scope: '0.1', ...extra });
+const CATALOG = {
+  type: 'avb:text-catalog',
+  session: 's',
+  file: 'f',
+  checksum: 'c',
+  targets: [
+    target({
+      key: 'prop:0.1:heading:Card.astro|0.0.1#0',
+      path: 'Card.astro|0.0.1#0',
+      parent: 'Card.astro|0.0.1',
+      value: 'Card heading',
+      segment: 0,
+      tag: 'Heading',
+    }),
+    target({ key: 'slot', path: '0.1.0', parent: '0.1.0', value: 'Slot words', from: 'slot', tag: 'Slot' }),
+  ],
+  blocked: [{ key: 'prop:0.1:text:Card.astro|0.0.2', path: 'Card.astro|0.0.2' }],
+};
+
+const posted = [];
+// The region map and the marks share one bundle, as they share module state in a frame.
+const { installTextMarks, regions } = loadRenderer('test/helpers/frameTextEntry.js');
+regions.set('Card.astro|0.0.2', [[document.querySelector('p').firstChild]]);
+installTextMarks({
+  catalog: () => CATALOG,
+  editing: () => undefined,
+  editingElement: () => undefined,
+  focus: () => new Set(),
+  visible: () => true,
+  post: (message) => posted.push(message),
+});
+const move = (x, y) => window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: x, clientY: y }));
+
+test('prop text under the pointer is hovered with nothing selected', () => {
+  move(40, 40);
+  const hover = posted.at(-1).hover;
+  assert.ok(hover, 'the heading is hovered before its Card is selected');
+  assert.deepEqual(
+    [hover.kind, hover.x, hover.y, hover.w, hover.h],
+    ['component', 20, 20, 300, 40],
+    'the outline is the words box, named for the component that draws it',
+  );
+  assert.equal(hover.label, 'Heading');
+  assert.equal(posted.at(-1).picked, undefined, 'hover picks nothing: a click still selects the component');
+});
+
+test('off the words nothing is hovered', () => {
+  move(500, 250);
+  assert.equal(posted.at(-1).hover, undefined);
+});
+
+test('a prop bound to code the editor cannot follow shows the refused look', () => {
+  move(40, 100);
+  const hover = posted.at(-1).hover;
+  assert.ok(hover, 'the refused words are named too');
+  assert.equal(hover.kind, 'refused');
+  assert.equal(hover.y, 80);
+});
+
+test('slot text of an unselected instance is not taken over by the text hover', () => {
+  move(40, 160);
+  assert.equal(posted.at(-1).hover, undefined, 'only prop text hovers before selection');
+});

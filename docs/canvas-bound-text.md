@@ -110,6 +110,10 @@ the instance showed the component's default. `canvasPropSites.ts` finds where a 
 | `heading={title}` on the instance | The source the binding leads to (escaped, when the component prints it as HTML) |
 | A binding that leads to no one string (`a + b`, `cond ? x : y`, a call, data holding markup) | Refused by name, with the file to edit, like any other bound text; never written |
 
+Pointing at these words outlines and names them at once, with nothing selected (`frameTextMarks.ts`,
+`hoverBeforeSelect`); a click still selects the component. Words from a refused binding show a muted outline.
+The first 4,000 instances of a page are read, in tree order, and the edits kept are bounded by the catalog.
+
 Repeated instances each get their own target (keyed by instance), so typing in one writes that instance only.
 Tests: `test/renderer/preview/canvasPropTextComponents.test.js` (the finder on Card-shaped components) and
 `test/electron/preload/componentPropTextCanvas.test.js` (a real window: double click, type, the page file

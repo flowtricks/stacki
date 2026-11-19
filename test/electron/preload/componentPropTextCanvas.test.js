@@ -225,11 +225,26 @@ const COMPONENTS = [
        await waitFor({ what: 'the page loaded', read: () => run('document.getElementById("canvas").contentDocument.querySelectorAll("h3").length'), until: (count) => count === 2 });
        await post({ type: 'avb:track', paths: ['0', '1'], scope: '', focus: '', focusOcc: 0 });
        await post(JSON.parse(fs.readFileSync(${JSON.stringify(catalogFile)}, 'utf8')));
+       const centre = (selector, index) => run('(() => { const r = ' + frame + '.document.querySelectorAll(' + JSON.stringify(selector) + ')[' + index + '].getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }; })()');
+       const posts = () => run('JSON.stringify(window.posts.filter((m) => /^avb:text/.test(m.type)))').then(JSON.parse);
+       // With nothing selected, pointing at a Card's words outlines and names them at once; pointing at nothing does not.
+       const point = (at) => win.webContents.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y });
+       const marksWithHover = (list) => list.filter((m) => m.type === 'avb:text-marks' && m.hover);
+       out.hover = await waitFor({
+         what: 'the heading was hovered with nothing selected',
+         read: async () => {
+           point(await centre('h3', 1));
+           return marksWithHover(await posts());
+         },
+         until: (list) => list.length > 0,
+       });
+       await run('window.posts.length = 0');
+       point({ x: 790, y: 690 });
+       out.hoverGone = await waitFor({ what: 'the hover ended off the words', read: posts, until: (list) => list.some((m) => m.type === 'avb:text-marks' && !m.hover) });
+       await run('window.posts.length = 0');
        // Selecting both Cards marks the words each can edit; four marks (two words a Card) mean the frame matched every target.
        await post({ type: 'avb:text-focus', paths: ['0', '1'] });
        out.marks = await waitFor({ what: 'the editable words were marked', read: () => run('document.getElementById("canvas").contentDocument.querySelector("[data-avb-text-marks]")?.children.length ?? 0'), until: (count) => count === 4 });
-       const centre = (selector, index) => run('(() => { const r = ' + frame + '.document.querySelectorAll(' + JSON.stringify(selector) + ')[' + index + '].getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }; })()');
-       const posts = () => run('JSON.stringify(window.posts.filter((m) => /^avb:text/.test(m.type)))').then(JSON.parse);
        const doubleClick = async (point) => {
          for (let n = 1; n <= 2; n++) {
            win.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: n });
@@ -290,6 +305,17 @@ const COMPONENTS = [
     check('the browser probe ran', false, `${run.stdout}\n${run.stderr}`.slice(0, 1500));
   } else {
     const result = JSON.parse(line.slice('RESULT '.length));
+    const hovered = result.hover.at(-1)?.hover;
+    check(
+      'the Card heading is hovered before anything is selected, named for the component that draws it',
+      hovered?.label === 'Heading' && hovered.w > 0 && hovered.h > 0,
+      JSON.stringify(result.hover),
+    );
+    check(
+      'pointing off the words ends the hover',
+      result.hoverGone.some((message) => !message.hover),
+      JSON.stringify(result.hoverGone),
+    );
     check('the frame marks the Card heading and paragraph of both Cards as editable words', result.marks === 4, String(result.marks));
     const saved = (step, edit, what) => {
       const active = step.opened.find((message) => message.type === 'avb:text-active');

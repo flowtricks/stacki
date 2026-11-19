@@ -6550,6 +6550,13 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: #6b6b6b;
   color: white;
 }
+.node-outline.hover.text-mark.refused {
+  outline: 1px dashed #6b6b6b;
+  background: rgb(128 128 128 / 14%);
+}
+.node-outline.hover.text-mark.refused .node-outline-tag {
+  background: #6b6b6b;
+}
 .node-outline-tag.inside {
   transform: none;
 }

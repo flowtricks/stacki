@@ -102,8 +102,8 @@ export const NO_TEXT_MARKS: TextMarks = { hover: undefined, picked: undefined };
 
 export interface TextMarkBox extends Box {
   readonly label: string;
-  /** `component` when the element is a component's own root, `text` otherwise. */
-  readonly kind: 'component' | 'text';
+  /** `component` when the element is a component's own root, `text` otherwise, `refused` for prop text that is computed and cannot be written. */
+  readonly kind: 'component' | 'text' | 'refused';
 }
 
 /** Why the canvas patcher reloaded (electron/previewClient/morphClient.ts): past one of its
@@ -461,8 +461,8 @@ function parseBox(input: unknown): Box {
 function parseTextMarkBox(input: unknown): TextMarkBox {
   const value = record(input);
   const kind = value['kind'];
-  if (kind !== 'component' && kind !== 'text') {
-    throw new Error('Text mark: expected component or text');
+  if (kind !== 'component' && kind !== 'text' && kind !== 'refused') {
+    throw new Error('Text mark: expected component, text or refused');
   }
   return { ...parseBox(value), label: pathText(value['label']), kind };
 }
