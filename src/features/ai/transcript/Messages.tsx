@@ -57,12 +57,22 @@ export function UserMessage({
   );
 }
 
-export function AgentMessage({ text, at, ...fold }: FoldProps & { readonly text: string; readonly at: number | undefined }) {
+export function AgentMessage({
+  text,
+  at,
+  onQuickReply,
+  ...fold
+}: FoldProps & {
+  readonly text: string;
+  readonly at: number | undefined;
+  /** Sends one of the agent's numbered options as the person's reply. Given only to the reply that may still be answered. */
+  readonly onQuickReply?: ((reply: string) => void) | undefined;
+}) {
   const folding = useFold(text, fold);
   return (
     <div className="ai-message ai-message-agent ai-msg ai-msg-agent">
       <div className={`ai-msg-body${folding.folded ? ' ai-msg-folded' : ''}`}>
-        <ChatText text={text} />
+        <ChatText text={text} onQuickReply={onQuickReply} />
       </div>
       <ShowMore folding={folding} />
       <MessageToolbar text={text} at={at} onEdit={undefined} onResend={undefined} />

@@ -25,7 +25,7 @@ import { UntrackedChangesNote } from './UntrackedChangesNote';
 import { CompactionRow } from './CompactionRow';
 import { ErrorRow } from './ErrorRow';
 import { AgentMessage, UserMessage } from './Messages';
-import { lastUserMessageId } from './messageModel';
+import { answerableMessageId, lastUserMessageId } from './messageModel';
 import { PermissionCard, PermissionPin } from './PermissionCard';
 import { relativePath } from './paths';
 import { sentPartsView } from './SentParts';
@@ -146,6 +146,7 @@ export function Transcript({
   const standaloneRetry = canRetry && lastEnd?.kind === 'turn-end' && lastEnd.stop !== 'error' && (lastEnd.stop !== 'sign-in' || !retryHeldByCard);
   const retryLast = (): void => void sendPrompt(chatId, view.lastPrompt?.text ?? '');
   const lastUser = lastUserMessageId(view.items);
+  const answerable = answerableMessageId(view.items, { running: view.running !== undefined });
   const toolsByCall = useMemo(() => toolItemsByCall(view.items), [view.items]);
   const waiting = useMemo(() => waitingPermissions(view), [view]);
   const lastItem = view.items[view.items.length - 1];
@@ -206,6 +207,7 @@ export function Transcript({
               tool={row.item.kind === 'permission' ? toolsByCall.get(row.item.call) : undefined}
               onRetry={canRetry && row.index === lastEndIndex ? retryLast : undefined}
               resendable={view.running === undefined && row.item.id === lastUser}
+              answerable={row.item.id === answerable}
               streaming={view.running !== undefined && row === rows[rows.length - 1] && row.item === lastItem}
             />
           ),
@@ -260,6 +262,7 @@ const Item = memo(function Item({
   tool,
   onRetry,
   resendable,
+  answerable,
   streaming,
 }: {
   readonly item: TranscriptItem;
@@ -273,6 +276,8 @@ const Item = memo(function Item({
   readonly onRetry: (() => void) | undefined;
   /** The person's last message while the chat is idle: it may be edited or sent again. */
   readonly resendable: boolean;
+  /** The agent's last reply, once it is done: its numbered options may be answered with a click. */
+  readonly answerable: boolean;
   /** The reply is still arriving: it is drawn whole, never cut to a preview. */
   readonly streaming: boolean;
 }) {
@@ -286,7 +291,7 @@ const Item = memo(function Item({
       return item.role === 'thought' ? (
         <ThinkingBlock item={item} chatId={chatId} live={streaming} />
       ) : (
-        <AgentRow item={item} chatId={chatId} streaming={streaming} />
+        <AgentRow item={item} chatId={chatId} streaming={streaming} answerable={answerable} />
       );
     case 'tool':
       return <ToolCard item={item} chatId={chatId} projectPath={projectPath} live={false} childCount={0} />;
@@ -350,10 +355,27 @@ function UserRow({ item, chatId, resendable }: { readonly item: UserItem; readon
 }
 
 /** The agent's reply. One still arriving is drawn whole, so it does not jump as it grows. */
-function AgentRow({ item, chatId, streaming }: { readonly item: TextItem; readonly chatId: ChatId; readonly streaming: boolean }) {
+function AgentRow({
+  item,
+  chatId,
+  streaming,
+  answerable,
+}: {
+  readonly item: TextItem;
+  readonly chatId: ChatId;
+  readonly streaming: boolean;
+  readonly answerable: boolean;
+}) {
   const [expanded, change] = useOpenState(chatId, `message:${item.id}`, { open: false });
   return (
-    <AgentMessage text={item.text} at={item.at} collapsible={streaming ? 'none' : 'clamp'} expanded={expanded} onExpandedChange={(open) => change({ open })} />
+    <AgentMessage
+      text={item.text}
+      at={item.at}
+      collapsible={streaming ? 'none' : 'clamp'}
+      expanded={expanded}
+      onExpandedChange={(open) => change({ open })}
+      onQuickReply={answerable ? (reply) => void sendPrompt(chatId, reply) : undefined}
+    />
   );
 }
 

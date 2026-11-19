@@ -52,28 +52,6 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.ai-markdown p,
-.ai-markdown ul,
-.ai-markdown ol {
-  margin: 0 0 6px;
-}
-/* The app's reset zeroes list padding, which leaves a list's markers outside the message and clipped by the scroller. */
-.ai-markdown ul,
-.ai-markdown ol {
-  padding-left: 18px;
-}
-.ai-markdown h3 {
-  font-size: 12.5px;
-  margin: 8px 0 4px;
-}
-.ai-markdown .code-block {
-  background: var(--bg-input);
-  border-radius: 6px;
-  padding: 8px;
-  overflow-x: auto;
-  scrollbar-gutter: stable;
-  font: 11.5px / 1.5 var(--mono, ui-monospace, monospace);
-}
 .ai-thought {
   color: var(--text-dim);
 }

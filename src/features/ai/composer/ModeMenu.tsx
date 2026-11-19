@@ -11,6 +11,7 @@ import type { ChatId } from '../../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
+import { WarningTriangleIcon } from '../../../ui/Icons';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
 import { currentChoiceName, modeOption, planOption, type ComposerSettings } from './composerSettings';
 import { StatusChip } from './StatusChip';
@@ -115,9 +116,16 @@ export function ModeMenu({ settings }: { readonly settings: ComposerSettings }) 
         disabled={settings.running}
         tone={dangerous ? 'danger' : 'plain'}
         ariaLabel={translate('ai.composer.mode')}
-        title={settings.running ? translate('ai.composer.mode.locked') : translate('ai.composer.mode.title', { mode: label })}
+        title={
+          settings.running
+            ? translate('ai.composer.mode.locked')
+            : dangerous
+              ? translate('ai.composer.mode.dangerTitle', { mode: label, agent: agentLabel(settings.agent) })
+              : translate('ai.composer.mode.title', { mode: label })
+        }
         onClick={trigger.toggle}
       >
+        {dangerous && <WarningTriangleIcon size={12} />}
         <span className="ai-chip-text">{label}</span>
       </StatusChip>
       <Menu

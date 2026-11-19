@@ -295,8 +295,15 @@
 .ai-chip:disabled {
   opacity: 0.55;
 }
+/* A mode that asks for nothing is a filled, labelled control with a warning mark, not a loose red word. */
 .ai-chip.is-danger {
-  color: #ff9b9b;
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+  color: color-mix(in srgb, var(--red), #fff 30%);
+}
+.ai-chip.is-danger:hover:not(:disabled),
+.ai-chip.is-danger.is-open {
+  background: color-mix(in srgb, var(--red) 26%, transparent);
+  color: color-mix(in srgb, var(--red), #fff 40%);
 }
 .ai-chip-logo {
   display: inline-flex;

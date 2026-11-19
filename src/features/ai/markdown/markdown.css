@@ -1,0 +1,258 @@
+/* An agent's reply (ChatText.tsx). Surfaces are separated by background fills, never borders. */
+.ai-markdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.ai-markdown > *,
+.ai-markdown p,
+.ai-markdown h1,
+.ai-markdown h2,
+.ai-markdown h3,
+.ai-markdown h4,
+.ai-markdown h5,
+.ai-markdown h6 {
+  margin: 0;
+}
+.ai-markdown h1,
+.ai-markdown h2,
+.ai-markdown h3,
+.ai-markdown h4,
+.ai-markdown h5,
+.ai-markdown h6 {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+/* A heading pulls away from what came before, so a section reads as a section. */
+.ai-markdown > * + h1,
+.ai-markdown > * + h2,
+.ai-markdown > * + h3 {
+  margin-top: 6px;
+}
+.ai-markdown h1 {
+  font-size: 15px;
+}
+.ai-markdown h2 {
+  font-size: 14px;
+}
+.ai-markdown h3 {
+  font-size: 13px;
+}
+.ai-markdown h5,
+.ai-markdown h6 {
+  color: var(--text-dim);
+}
+.ai-markdown strong {
+  font-weight: 600;
+  color: var(--text);
+}
+.ai-markdown s {
+  color: var(--text-dim);
+}
+
+/* Lists. The app's reset zeroes list padding, which leaves markers outside the message and clipped by the scroller. */
+.ai-markdown ul,
+.ai-markdown ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.ai-markdown li + li {
+  margin-top: 3px;
+}
+.ai-markdown li::marker {
+  color: var(--text-faint);
+}
+.ai-md-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-markdown ul.ai-md-tasks {
+  padding-left: 0;
+  list-style: none;
+}
+.ai-md-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ai-md-box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border-radius: 4px;
+  background: var(--bg-active);
+  color: #fff;
+}
+.ai-md-box.is-checked {
+  background: var(--accent);
+}
+
+/* Quotes and rules */
+.ai-md-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.ai-md-rule {
+  height: 2px;
+  margin: 4px 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--bg-active);
+}
+.ai-md-link {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+.ai-md-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* Tables scroll sideways inside their own box: a wide one never widens the panel. */
+.ai-md-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.ai-md-table-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.ai-md-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.ai-md-table th,
+.ai-md-table td {
+  max-width: 28em;
+  padding: 5px 10px;
+  text-align: start;
+  vertical-align: top;
+}
+.ai-md-table th {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ai-md-table tbody tr:nth-child(even) td {
+  background: var(--bg-hover);
+}
+.ai-md-table th:first-child {
+  border-top-left-radius: 8px;
+}
+.ai-md-table th:last-child {
+  border-top-right-radius: 8px;
+}
+
+/* Fenced code: a language label, and Copy on hover or focus. */
+.ai-md-code {
+  position: relative;
+  min-width: 0;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.ai-md-code-lang {
+  display: block;
+  padding: 5px 10px 0;
+  color: var(--text-faint);
+  font: 10.5px / 1.3 var(--mono, ui-monospace, monospace);
+}
+.ai-md-code .code-block {
+  padding: 6px 10px 8px;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  font: 11.5px / 1.5 var(--mono, ui-monospace, monospace);
+}
+.ai-md-code-copy {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ai-md-code:hover .ai-md-code-copy,
+.ai-md-code-copy:focus-visible {
+  opacity: 1;
+}
+.ai-md-code-copy:hover {
+  color: var(--text);
+}
+@media (hover: none) {
+  .ai-md-code-copy {
+    opacity: 1;
+  }
+}
+
+/* The agent's numbered options, as buttons */
+.ai-quick {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-quick-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text);
+  justify-content: flex-start;
+  text-align: left;
+  user-select: text;
+}
+.ai-quick-option:hover,
+.ai-quick-option:focus-visible {
+  background: var(--bg-active);
+}
+.ai-quick-option:active {
+  background: var(--accent-soft);
+}
+.ai-quick-number {
+  flex: none;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.ai-quick-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-md-code-copy {
+    transition: none;
+  }
+}

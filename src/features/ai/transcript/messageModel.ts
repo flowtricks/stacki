@@ -40,6 +40,30 @@ export function lastUserMessageId(items: readonly { readonly kind: string; reado
   return undefined;
 }
 
+/**
+ * The id of the agent reply the person may answer with a button: the last message of the conversation,
+ * and only once the agent is done. An older reply's options are a question that was already answered
+ * (or moved past), so they stay text.
+ */
+export function answerableMessageId(
+  items: readonly { readonly kind: string; readonly id: number; readonly role?: string }[],
+  { running }: { readonly running: boolean },
+): number | undefined {
+  if (running) {
+    return undefined;
+  }
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (item?.kind === 'user') {
+      return undefined;
+    }
+    if (item?.kind === 'text' && item.role === 'agent') {
+      return item.id;
+    }
+  }
+  return undefined;
+}
+
 /** "2:14 PM" in the person's locale; undefined for a message with no time (stored before timestamps) or a time that is not a date. */
 export function timeLabel(at: number | undefined, formatDate: Formatters['formatDate']): string | undefined {
   if (at === undefined || !Number.isFinite(at) || at <= 0) {
