@@ -138,6 +138,7 @@
     "electron/preload/frameTextMatch.ts",
     "electron/preload/frameTextNative.ts",
     "electron/preload/frameTextNativeEvents.ts",
+    "electron/preload/frameTextPointer.ts",
     "electron/preload/frameTextSelection.ts",
     "electron/preload/frameTextSession.ts",
     "electron/preload/frameUnionTarget.ts",

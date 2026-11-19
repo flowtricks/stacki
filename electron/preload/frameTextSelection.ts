@@ -69,7 +69,7 @@ function caretOffsetsAt(nodes: readonly Text[], x: number, y: number) {
 // The line nearest the point's height is found from each character's own box, then the character whose box holds the point's x;
 // past either end of the line the caret goes to that end. Characters read are bounded.
 const CARET_CHARS_MAX = 20_000;
-function caretByGeometry(nodes: readonly Text[], x: number, y: number) {
+export function caretByGeometry(nodes: readonly Text[], x: number, y: number) {
   const lines: {
     readonly top: number;
     readonly bottom: number;

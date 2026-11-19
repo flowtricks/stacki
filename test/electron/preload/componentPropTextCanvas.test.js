@@ -284,6 +284,60 @@ const COMPONENTS = [
          const closed = await waitFor({ what: 'the save was posted', read: posts, until: (list) => list.some((m) => m.type === 'avb:text-save') });
          return { opened, closed, caret };
        };
+       // Inside the words being edited, under a link stretched over the card: a press moves the caret, a drag selects, a double click selects a word, and the
+       // edit goes on; a press outside ends it. The editor text node is read back from the frame after each step.
+       const selectionNow = () => run('(() => { const s = ' + frame + '.getSelection(); return { collapsed: s.isCollapsed, offset: s.anchorOffset, text: s.toString() }; })()');
+       const press = (point, count) => {
+         win.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: count });
+         win.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: count });
+       };
+       const heardInactive = async () => (await posts()).some((m) => m.type === 'avb:text-inactive' || m.type === 'avb:text-save');
+       await run('window.posts.length = 0');
+       await waitFor({
+         what: 'the first heading opened for editing',
+         read: async () => {
+           if (!(await posts()).some((m) => m.type === 'avb:text-active')) {
+             await doubleClick(await charPoint('h3', 0, 2));
+           }
+           return posts();
+         },
+         until: (list) => list.some((m) => m.type === 'avb:text-active'),
+       });
+       out.inside = {};
+       out.inside.entered = await selectionNow();
+       press(await charPoint('h3', 0, 8), 1);
+       out.inside.clicked = await waitFor({ what: 'the caret moved to the clicked character', read: selectionNow, until: (found) => found.collapsed && found.offset === 8 });
+       out.inside.stillEditing = !(await heardInactive());
+       win.webContents.focus();
+       await win.webContents.insertText('X');
+       out.inside.typed = await run(frame + '.document.querySelectorAll("h3")[0].textContent.trim().slice(0, 16)');
+       const from = await charPoint('h3', 0, 1);
+       const to = await charPoint('h3', 0, 5);
+       win.webContents.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button: 'left', clickCount: 1 });
+       win.webContents.sendInputEvent({ type: 'mouseMove', x: to.x, y: to.y, button: 'left' });
+       win.webContents.sendInputEvent({ type: 'mouseUp', x: to.x, y: to.y, button: 'left', clickCount: 1 });
+       out.inside.dragged = await waitFor({ what: 'the drag selected words', read: selectionNow, until: (found) => !found.collapsed });
+       const wordPoint = await charPoint('h3', 0, 15);
+       press(wordPoint, 1);
+       press(wordPoint, 2);
+       out.inside.word = await waitFor({ what: 'a double click selected a word', read: selectionNow, until: (found) => !found.collapsed && found.text.length > 2 && found.text.length < 9 });
+       await post({ type: 'avb:text-close', session: 'one', action: 'cancel' });
+       await waitFor({ what: 'the first editing session ended', read: heardInactive, until: (ended) => ended === true });
+       // A press outside the words ends an edit that changed nothing.
+       await run('window.posts.length = 0');
+       await waitFor({
+         what: 'the first heading opened again',
+         read: async () => {
+           if (!(await posts()).some((m) => m.type === 'avb:text-active')) {
+             await doubleClick(await charPoint('h3', 0, 2));
+           }
+           return posts();
+         },
+         until: (list) => list.some((m) => m.type === 'avb:text-active'),
+       });
+       press({ x: 790, y: 690 }, 1);
+       out.inside.outside = await waitFor({ what: 'a press outside ended the edit', read: heardInactive, until: (ended) => ended === true });
+       await run('window.posts.length = 0');
        out.heading = await edit('h3', 1, ' ADDED', 7);
        out.paragraph = await edit('p', 0, ' ADDED', 20);
        console.log('RESULT ' + JSON.stringify(out));
@@ -333,6 +387,16 @@ const COMPONENTS = [
       result.paragraph.caret.collapsed === true && result.paragraph.caret.offset === 20,
       JSON.stringify(result.paragraph.caret),
     );
+    const inside = result.inside;
+    check(
+      'a press inside the edited words moves the caret to that character, and the edit goes on',
+      inside.clicked.offset === 8 && inside.stillEditing === true,
+      JSON.stringify(inside),
+    );
+    check('typing lands at the new caret position', inside.typed.startsWith('Lorem ipXsum'), JSON.stringify(inside.typed));
+    check('a drag inside the words selects them', inside.dragged.collapsed === false && inside.dragged.text.length >= 3, JSON.stringify(inside.dragged));
+    check('a double click inside selects a word, not the line', inside.word.text.length > 2 && inside.word.text.length < 9, JSON.stringify(inside.word));
+    check('a press outside the words ends the edit', inside.outside === true, JSON.stringify(inside));
     const saved = (step, edit, what) => {
       const active = step.opened.find((message) => message.type === 'avb:text-active');
       check(`a double click on the ${what} opens its editor`, active?.key === edit.target.key, JSON.stringify(step.opened));

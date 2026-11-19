@@ -2,6 +2,7 @@ import type { TextMatch } from './frameTextMatch';
 import { createTextBuffer, type TextRunChange } from './frameTextBuffer';
 import { placeTextCaret, textEditorRoot, textSelection, type TextSpace } from './frameTextSelection';
 import { installNativeTextEvents } from './frameTextNativeEvents';
+import { installInterceptedPointer, pointOnWords } from './frameTextPointer';
 
 let editingRoot: HTMLElement | undefined;
 let stylesheet: CSSStyleSheet | undefined;
@@ -69,6 +70,7 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
     }
     closed = true;
     cleanup();
+    stopPointer();
     clearNativeTextSelection(root);
     const changes = action === 'apply' ? buffer.changes() : [];
     // The original words come back first: the save is checked against them.
@@ -83,6 +85,7 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
   };
   editingRoot = root;
   const { cleanup, pressed } = installNativeTextEvents({ root, space, buffer, finish, refused });
+  const stopPointer = installInterceptedPointer(root, match.nodes);
   root.focus({ preventScroll: true });
   placeTextCaret(match.nodes, event);
   return {
@@ -100,7 +103,8 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
         return true;
       }
       const range = document.caretRangeFromPoint(click.clientX, click.clientY);
-      return isCanvasTextEditing(click.target) && !!range && !!textSelection(match.nodes, range);
+      // A press on the words themselves is the editor's even when something lies over them (a stretched link): it moved the caret.
+      return pointOnWords(match.nodes, click.clientX, click.clientY) || (isCanvasTextEditing(click.target) && !!range && !!textSelection(match.nodes, range));
     },
   };
 }
