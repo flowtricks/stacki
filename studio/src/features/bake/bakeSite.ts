@@ -10,6 +10,7 @@ import path from 'node:path';
 import { err, ok, type Result } from '../../../vendor/stacki/shared/core/result';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { METADATA_FILES } from '../../../vendor/stacki/shared/properties/projectMetadata';
+import { scanStyleBlocks } from '../../../vendor/stacki/electron/previewServer/styleBlockScan';
 import { assetCatalog } from '../assets/assetCatalog';
 import { scanProjectVariables } from '../variables/variableServer';
 import { scanProject, walk } from '../project/projectServer';
@@ -454,8 +455,14 @@ function authoredBlock(source: string, section: string): string {
   if (index === undefined) {
     return source;
   }
-  const blocks = [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)];
-  return blocks[Number(index)]?.[1] ?? '';
+  // The section's index is Astro's (`?astro&type=style&index=N`), which counts only the blocks it extracts: not an
+  // is:inline one, not a self-closing tag, not one in a comment. A file the scan cannot read pairs no URLs.
+  const scan = scanStyleBlocks(source);
+  if (scan.kind === 'uncertain') {
+    return '';
+  }
+  const block = scan.elements.filter((element) => element.extracted)[Number(index)];
+  return block === undefined ? '' : source.slice(block.bodyStart, block.bodyEnd);
 }
 
 function bakeSections(styles: BakedStyles, sources: Readonly<Record<string, string>>): readonly BakeSection[] {

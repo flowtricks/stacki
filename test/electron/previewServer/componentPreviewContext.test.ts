@@ -141,6 +141,16 @@ test('only literal inline and global CSS is copied from a template', () => {
   assert.deepEqual(componentPreviewInlineStyles(globalStyles), ['button { background-color: unset; padding: unset; }']);
   assert.deepEqual(componentPreviewInlineStyles('---\nconst css = "<style is:inline>.x{}</style>";\n---\n<div />'), [], 'frontmatter text is not markup');
   assert.deepEqual(componentPreviewInlineStyles('<style is:global>  </style><style is:global>.a { color: red; }</style>'), ['.a { color: red; }']);
+  // A self-closing inline tag has no body: the scoped block after it is not inline CSS (1.4.8).
+  assert.deepEqual(componentPreviewInlineStyles('<style is:inline set:html={"x"} />\n<style>.scoped { color: red; }</style>'), []);
+  assert.deepEqual(
+    componentPreviewInlineStyles('<!-- <style is:inline>.x {}</style> -->\n<style is:inline>.y {}</style>'),
+    ['.y {}'],
+    'a commented tag is text',
+  );
+  // A template the scan cannot read (an unclosed <p>) is matched as written, the self-closing tag still skipped.
+  assert.deepEqual(componentPreviewInlineStyles('<p>a<style is:inline set:html={"x"} /><style is:global>.g {}</style>'), []);
+  assert.deepEqual(componentPreviewInlineStyles('<p>a<style is:global>.g {}</style>'), ['.g {}']);
 });
 
 test('document attributes keep literal classes and data attributes only', () => {

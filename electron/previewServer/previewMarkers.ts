@@ -24,6 +24,8 @@ import { toDigest } from '../../shared/core/brand';
 import { stampComment, stampPathProblem, type PreviewStamp } from '../../shared/page/previewToken';
 import { markChunkHtml, parsePage, resolveChunks, serializePageMarked } from '../parse/astroParser';
 import { withScopeCapture } from './scopeCapture';
+// The generated config counts a file's extracted <style> blocks with it (avbStyleBlockCount); it requires only this module.
+export { scanStyleBlocks } from './styleBlockScan';
 import { parseVariantHeader, VARIANT_HEADER, VARIANT_SCOPE_GLOBAL, withVariantOverride, type VariantOverride } from '../../shared/page/variantOverride';
 
 export interface MarkedSource {

@@ -13,6 +13,9 @@
 //     never names the deleted block's stylesheet to the browser; undo brings the padding back, no overlay;
 // (b) block 0 of two: the remaining block still applies; undo restores both;
 // (c) an is:global block, a define:vars block, and the only block of a layout two pages use;
+// (e) a component whose regular block follows a self-closing <style is:inline … />, and the same with the inline tag
+//     closed (1.4.8: the self-closing one read as no block, its stylesheet was served empty and the component rendered
+//     unstyled): block 0 of each is the component's CSS, and both render red in the page;
 // (d) the overlay itself, put up the way the dev server's HMR client puts it up for an error message (the message
 //     the deleted block caused before this fix); the overlay shows (screenshot),
 //     the controller holds it as an error with the dev server's words and reloads nothing while nothing changes,
@@ -39,6 +42,12 @@ const FILES = {
   'src/components/Vars.astro':
     '---\nconst tone = "rgb(0, 128, 0)";\n---\n<p class="v" id="v">Vars</p>\n\n<style define:vars={{ tone }}>\n  .v { color: var(--tone); }\n</style>\n',
   'src/layouts/Layout.astro': '<html><body><main id="m"><slot /></main></body></html>\n\n<style>\n  main { padding-left: 3px; }\n</style>\n',
+  'src/components/SelfClosing.astro':
+    '<div class="repro-a" id="sa">A</div>\n<style is:inline set:html={"/* inline */"} />\n<style>.repro-a { color: red; }</style>\n',
+  'src/components/Closed.astro':
+    '<div class="repro-b" id="sb">B</div>\n<style is:inline set:html={"/* inline */"}></style>\n<style>.repro-b { color: red; }</style>\n',
+  'src/pages/self-closing.astro':
+    '---\nimport Layout from "../layouts/Layout.astro";\nimport SelfClosing from "../components/SelfClosing.astro";\nimport Closed from "../components/Closed.astro";\n---\n<Layout><SelfClosing /><Closed /></Layout>\n',
   'src/pages/index.astro':
     '---\nimport Layout from "../layouts/Layout.astro";\nimport Two from "../components/Two.astro";\n---\n<Layout><h1>Home</h1><Two /></Layout>\n',
   'src/pages/example-components.astro':
@@ -299,6 +308,28 @@ async function inElectron() {
     assert.notEqual(await until(async () => (await computed('d', 'paddingTop')) === '20px', 30000), undefined, 'the page renders with the block');
     await sleep(1500);
     await shoot('style-delete-0-start.png');
+
+    say('=== e a self-closing <style is:inline /> before a block');
+    route = '/self-closing';
+    await mount();
+    // The page has rendered once the closed one is red: the closed form styled correctly in 1.4.8 too.
+    assert.notEqual(await until(async () => (await computed('sb', 'color')) === 'rgb(255, 0, 0)', 15000), undefined, 'e: the page renders');
+    for (const [name, id, className] of [
+      ['SelfClosing', 'sa', 'repro-a'],
+      ['Closed', 'sb', 'repro-b'],
+    ]) {
+      // As the browser asks for it: Vite answers with the stylesheet as a module, the CSS in a string.
+      const response = await fetch(`${server.url}/src/components/${name}.astro?astro&type=style&index=0&lang.css`);
+      const body = await response.text();
+      assert.equal(response.status, 200, `e: ${name} block 0 answers`);
+      assert.match(body, new RegExp(`\\.${className}[^{]*\\{(?:\\\\n|\\s)*color:\\s*red`), `e: ${name} block 0 is its CSS: ${body.slice(-300)}`);
+      const shown = await until(async () => (await computed(id, 'color')) === 'rgb(255, 0, 0)', 10000);
+      assert.notEqual(shown, undefined, `e: ${name} renders red in the page (it is ${await computed(id, 'color').catch(() => '?')})`);
+    }
+    route = '/example-components';
+    await mount();
+    assert.notEqual(await until(async () => (await computed('d', 'paddingTop')) === '20px', 15000), undefined, 'e: back on the component page');
+    results.push('e self-closing and closed inline style before a block: block 0 served, both red');
 
     say('=== a the only block of a component');
     hmr.messages.length = 0;

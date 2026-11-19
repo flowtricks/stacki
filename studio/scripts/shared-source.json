@@ -162,6 +162,7 @@
     "electron/previewServer/previewTypePrelude.ts",
     "electron/previewServer/scopeCapture.ts",
     "electron/previewServer/studioLocalMove.ts",
+    "electron/previewServer/styleBlockScan.ts",
     "electron/project/appFilesStore.ts",
     "electron/project/appGitHub.ts",
     "electron/project/appGitHubWrite.ts",

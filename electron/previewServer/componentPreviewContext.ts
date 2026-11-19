@@ -14,6 +14,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseAttrs } from '../parse/astroAttrs';
 import { scanTag } from '../parse/astroTag';
+import { scanStyleBlocks } from './styleBlockScan';
 import { assert } from '../../shared/core/assert';
 
 export type PreviewSampleValue = string | boolean | number;
@@ -143,11 +144,38 @@ export function componentPreviewGlobalFiles(pages: ReadonlyArray<ReadonlyArray<s
  * would need the compiler, so neither is copied.
  */
 export function componentPreviewInlineStyles(source: string): readonly string[] {
-  const template = templateOf(source);
+  // Read as the compiler reads the template (styleBlockScan.ts): a self-closing `<style is:inline … />` has no body,
+  // and the block after it is not its body; a `<style>` in a comment or an expression is not a block.
+  const scan = scanStyleBlocks(source);
+  if (scan.kind === 'uncertain') {
+    return inlineStylesMatched(templateOf(source));
+  }
+  const styles: string[] = [];
+  for (const element of scan.elements) {
+    const css = source.slice(element.bodyStart, element.bodyEnd).trim();
+    if (css.length === 0) {
+      continue;
+    }
+    if (element.attributes.includes('lang')) {
+      continue;
+    }
+    if (element.attributes.includes('is:inline') || element.attributes.includes('is:global')) {
+      styles.push(css);
+    }
+  }
+  assert(styles.length <= scan.elements.length, 'Every copied style is one of the template’s blocks');
+  return styles;
+}
+
+// A template the scan cannot read: its `<style>…</style>` pairs as written, a self-closing tag skipped rather than
+// read as the start of the block after it.
+function inlineStylesMatched(template: string): readonly string[] {
   const styles: string[] = [];
   for (const match of template.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style\s*>/gi)) {
     const attributes = match[1] ?? '';
-    const css = (match[2] ?? '').trim();
+    // From a self-closing tag the match runs on to the next block's end: the CSS is that block's.
+    const selfClosing = attributes.trimEnd().endsWith('/');
+    const css = (selfClosing ? '' : (match[2] ?? '')).trim();
     if (css.length === 0) {
       continue;
     }

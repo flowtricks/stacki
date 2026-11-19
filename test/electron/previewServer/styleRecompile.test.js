@@ -12,7 +12,9 @@
 // handleHotUpdate with a fake Vite server: its environments say which files
 // their module graphs hold and record every transformRequest, in order. Each
 // case states what the hook returns, what was compiled, and in which order.
-// The load of a deleted block's stylesheet is called directly, against the file on disk.
+// The load of a deleted block's stylesheet is called directly, against the file on disk. Astro's compile of a file is
+// stood in for by the module text it produces (one `?astro&type=style&index=N` import per extracted block), handed to
+// avb-style-check's transform as the server environment would.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -44,7 +46,15 @@ async function preview() {
     harness.dispose();
     fs.rmSync(root, { recursive: true, force: true });
   };
-  return { markers: plugin('avb-node-markers'), morph: plugin('avb-morph'), vanished: plugin('avb-vanished-styles'), file, dispose };
+  return {
+    markers: plugin('avb-node-markers'),
+    morph: plugin('avb-morph'),
+    vanished: plugin('avb-vanished-styles'),
+    check: plugin('avb-style-check'),
+    configText: fs.readFileSync(configPath, 'utf8'),
+    file,
+    dispose,
+  };
 }
 
 // A Vite server whose environments hold `file` as `holders` says. Each
@@ -340,6 +350,108 @@ test('the browser is never told about a block the file no longer has', async () 
     assert.deepEqual(markers.load.handler(styleAsk(page, 0)), EMPTY, 'and an ask for one is an empty stylesheet');
     const markdown = file('post.md', '# Post\n');
     assert.equal(hotUpdateIn(vanished, 'client', markdown, [{ id: markdown, url: '/src/pages/post.md' }]), undefined, 'not an Astro file');
+  } finally {
+    dispose();
+  }
+});
+
+// 1.4.8: a self-closing <style is:inline … /> before a block read as no block, so block 0 was answered empty and the
+// component rendered unstyled. The count now comes from a scan that reads the template as the compiler does, or from
+// Astro's own compile of the same bytes; a count that is not certain never empties a block.
+const SELF_CLOSING = '<div class="repro-a">A</div>\n<style is:inline set:html={"/* inline */"} />\n<style>.repro-a { color: red; }</style>\n';
+const CLOSED = '<div class="repro-a">A</div>\n<style is:inline set:html={"/* inline */"}></style>\n<style>.repro-a { color: red; }</style>\n';
+const compiledWith = (page, blocks) =>
+  Array.from({ length: blocks }, (_, index) => `import "${page}?astro&type=style&index=${index}&lang.css";`).join('\n') + '\nexport default {};\n';
+const compileIn = (check, page, blocks) =>
+  Reflect.apply(check.transform, { environment: { config: { consumer: 'server' } } }, [compiledWith(page, blocks), page, {}]);
+
+test("a self-closing is:inline tag before a block: block 0 is Astro's, LF and CRLF", async () => {
+  const { markers, vanished, file, dispose } = await preview();
+  try {
+    for (const [name, text] of [
+      ['self-closing', SELF_CLOSING],
+      ['closed', CLOSED],
+      ['self-closing CRLF', SELF_CLOSING.replace(/\n/g, '\r\n')],
+    ]) {
+      const page = file('index.astro', text);
+      markers.load.handler(page);
+      assert.equal(markers.load.handler(styleAsk(page, 0)), PASSED_ON, `${name}: block 0 exists`);
+      assert.deepEqual(markers.load.handler(styleAsk(page, 1)), EMPTY, `${name}: there is no block 1`);
+      const pageModule = { id: page, url: '/src/pages/index.astro' };
+      assert.equal(hotUpdateIn(vanished, 'client', page, [pageModule, clientStyle(page, 0)]), undefined, `${name}: the browser keeps block 0`);
+    }
+  } finally {
+    dispose();
+  }
+});
+
+test('the scan is uncertain of a template: no ask is answered empty', async () => {
+  const { markers, vanished, file, dispose } = await preview();
+  try {
+    // An unclosed <p> is a compile error to Astro: what it serves, it serves.
+    const page = file('index.astro', '<p>a<style is:inline set:html={"x"} />\n<style>.a { color: red; }</style>\n');
+    assert.equal(markers.load.handler(styleAsk(page, 0)), PASSED_ON);
+    assert.equal(markers.load.handler(styleAsk(page, 3)), PASSED_ON, 'not even past any count it could have');
+    const pageModule = { id: page, url: '/src/pages/index.astro' };
+    assert.equal(hotUpdateIn(vanished, 'client', page, [pageModule, clientStyle(page, 0), clientStyle(page, 1)]), undefined, 'the browser update is whole');
+  } finally {
+    dispose();
+  }
+});
+
+test("Astro's compile of the bytes on disk is the count; a scan it contradicts is not used again until one agrees", async () => {
+  const { markers, check, file, dispose } = await preview();
+  try {
+    const page = file('index.astro', STYLED(['<style>.a { color: red; }</style>']));
+    markers.load.handler(page);
+    // Astro extracted two blocks where the scan read one: for these bytes Astro's count holds.
+    compileIn(check, page, 2);
+    assert.equal(markers.load.handler(styleAsk(page, 1)), PASSED_ON, 'block 1 is served as Astro serves it');
+    assert.deepEqual(markers.load.handler(styleAsk(page, 2)), EMPTY, 'past what Astro extracted');
+    // New bytes Astro has not compiled: the scan read this file wrong once, so it is not trusted alone.
+    file('index.astro', STYLED([]));
+    assert.equal(markers.load.handler(styleAsk(page, 0)), PASSED_ON, 'never an empty block 0 on a scan that disagreed');
+    // A compile that agrees with the scan restores it.
+    markers.load.handler(page);
+    compileIn(check, page, 0);
+    file('index.astro', STYLED(['<style>.b { color: blue; }</style>']));
+    markers.load.handler(page);
+    compileIn(check, page, 1);
+    file('index.astro', STYLED([]));
+    assert.deepEqual(markers.load.handler(styleAsk(page, 0)), EMPTY, 'the deleted block, on a scan that agrees');
+  } finally {
+    dispose();
+  }
+});
+
+test('only a server compile of the file itself is a count: the browser stub, sub-modules and gaps are not', async () => {
+  const { markers, check, file, dispose } = await preview();
+  try {
+    const page = file('index.astro', STYLED(['<style>.a { color: red; }</style>']));
+    markers.load.handler(page);
+    Reflect.apply(check.transform, { environment: { config: { consumer: 'client' } } }, [compiledWith(page, 3), page, {}]);
+    Reflect.apply(check.transform, { environment: { config: { consumer: 'server' } } }, [compiledWith(page, 3), styleAsk(page, 0), {}]);
+    assert.deepEqual(markers.load.handler(styleAsk(page, 1)), EMPTY, 'neither the client nor a sub-module counted');
+    // Imports numbered 0 and 2, but not 1: not a count Astro could have made.
+    const gapped = `import "${page}?astro&type=style&index=0&lang.css";\nimport "${page}?astro&type=style&index=2&lang.css";\n`;
+    Reflect.apply(check.transform, { environment: { config: { consumer: 'server' } } }, [gapped, page, {}]);
+    assert.deepEqual(markers.load.handler(styleAsk(page, 1)), EMPTY, 'the scan still counts one');
+    // Vite 5: no environments, the ssr flag says server.
+    markers.load.handler(page);
+    Reflect.apply(check.transform, {}, [compiledWith(page, 2), page, { ssr: true }]);
+    assert.equal(markers.load.handler(styleAsk(page, 1)), PASSED_ON, 'the ssr compile counted');
+  } finally {
+    dispose();
+  }
+});
+
+test('the generated config counts blocks with the scan, not a regular expression over the source', async () => {
+  const { configText, dispose } = await preview();
+  try {
+    assert.ok(!configText.includes('<style[^>]*>[\\s\\S]*?<\\/style>'), 'the 1.4.8 expression is gone');
+    assert.ok(!configText.includes('avbStyleBlocksOf'), 'and the helper that used it');
+    assert.ok(configText.includes('scanStyleBlocks'), 'the scan is required from the markers module');
+    assert.ok(configText.includes("name: 'avb-style-check'"), "and Astro's compile is checked against it");
   } finally {
     dispose();
   }
