@@ -7,7 +7,7 @@
 // them (astroCollectionSettings.ts).
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import type { CollectionSettings, NewFieldKind, SettingsChange, SettingsField, SettingsFieldKind } from '../../../shared/properties/collectionSettings';
-import { newFieldSettings, pointsAtCollection } from '../../../shared/properties/collectionSettings';
+import { MEMBER_KINDS, newFieldMembers, newFieldSettings, pointsAtCollection } from '../../../shared/properties/collectionSettings';
 import { useLocale, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { DescribedTranslator, MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { confirmDialog } from '../../ui/ConfirmDialog';
@@ -40,8 +40,9 @@ import { labelize } from './cmsSchema';
 import { nameInSentence } from './remoteFieldTypes';
 import type { RemoteCmsSelection } from './remoteCmsShared';
 import { changeCollectionSettings, collectionSettings, remoteCollections } from '../../ipc/remoteSource';
-import { applyDrafts, fieldSettingsOf, newFieldFormState, openFieldFormState, replayDrafts, type FieldFormState } from './settingsDraft';
+import { applyDrafts, plainItemKind, fieldSettingsOf, newFieldFormState, openFieldFormState, replayDrafts, type FieldFormState } from './settingsDraft';
 import { FieldInputs } from './RemoteFieldSettings';
+import { KIND_LABELS } from './settingsKindLabels';
 
 // Stages changes together, or none of them, and says whether it did.
 type Change = (changes: readonly SettingsChange[]) => boolean;
@@ -434,6 +435,7 @@ function AddField(props: {
               <button key={option} type="button" className="remote-cms-settings-kind-tile" onClick={() => setKind(option)}>
                 <Icon size={22} />
                 <span>{translate(KIND_LABELS[option])}</span>
+                {KIND_HINTS[option] !== undefined && <span className="remote-cms-settings-kind-hint">{translate(KIND_HINTS[option])}</span>}
               </button>
             );
           })}
@@ -463,13 +465,18 @@ function NewFieldForm(props: {
     kind,
     ...newFieldSettings(kind),
     editable: true,
+    members: newFieldMembers(kind),
+    // A list holds plain text until its items are set to something else.
+    itemKind: kind === 'list' ? 'text' : undefined,
   }));
   const [draft, setDraft] = useState(field);
   const pointing = pointsAtCollection(kind);
   // The collections may still be loading when the form opens, so an unchosen target follows them.
   const [chosen, setChosen] = useState<string | undefined>(undefined);
   const target = chosen ?? props.collections[0] ?? '';
-  const state = useMemo(() => newFieldFormState(settings, { draft, kind, target }), [settings, draft, kind, target]);
+  // A list given groups for items is saved as a repeater.
+  const savedKind: NewFieldKind = draft.kind === 'repeater' ? 'repeater' : kind;
+  const state = useMemo(() => newFieldFormState(settings, { draft, kind: savedKind, target }), [settings, draft, savedKind, target]);
   useFormReport('adding', state, props.onForm);
   const add = () => {
     if (props.onChange(readyChanges(state))) {
@@ -526,15 +533,25 @@ async function removeField(props: { readonly field: SettingsField; readonly onCh
 // A copy: a new field of the same kind beside it, given the same settings.
 function duplicateField(props: { readonly field: SettingsField; readonly onChange: Change }) {
   const { field } = props;
-  if (!duplicable(field.kind)) {
+  if (!duplicable(field.kind) || !(field.members ?? []).every((member) => MEMBER_KINDS.some((kind) => kind === member.kind))) {
     return;
   }
-  props.onChange([{ kind: 'addField', name: `${field.name}-copy`, fieldKind: field.kind, target: undefined, settings: fieldSettingsOf(field) }]);
+  props.onChange([
+    {
+      kind: 'addField',
+      name: `${field.name}-copy`,
+      fieldKind: field.kind,
+      target: undefined,
+      settings: fieldSettingsOf(field),
+      members: field.members?.map((member) => ({ ...member, from: undefined })),
+      itemKind: plainItemKind(field),
+    },
+  ]);
 }
 
 // A reference is not duplicated: the collection it points at is not read back here.
 function duplicable(kind: SettingsFieldKind): kind is NewFieldKind {
-  return NEW_KINDS.some((option) => option === kind) && !pointsAtCollection(kind);
+  return (NEW_KINDS.some((option) => option === kind) || kind === 'repeater') && !pointsAtCollection(kind);
 }
 
 // The order after a drag: `from` lands before the row at `to`.
@@ -547,6 +564,13 @@ function moved(fields: readonly SettingsField[], from: number, to: number): read
   names.splice(to > from ? to - 1 : to, 0, name);
   return names;
 }
+
+// A word on the kinds that are not obvious from their name: a list holds items of
+// its own, among them groups of fields, which is how a repeater is made.
+const KIND_HINTS: { readonly [K in SettingsFieldKind]?: MessageKey } = {
+  list: 'cmsRemote.fieldHint.list',
+  group: 'cmsRemote.fieldHint.group',
+};
 
 const NEW_KINDS: readonly NewFieldKind[] = [
   'text',
@@ -572,32 +596,6 @@ const NEW_KINDS: readonly NewFieldKind[] = [
   'any',
 ];
 
-// The name of each kind of field, as a key translated where it is drawn.
-const KIND_LABELS: Readonly<Record<SettingsFieldKind, MessageKey>> = {
-  text: 'cmsRemote.fieldType.plainText',
-  richText: 'cmsRemote.fieldType.richText',
-  image: 'cmsRemote.fieldType.image',
-  multiImage: 'cmsRemote.fieldType.multiImage',
-  videoLink: 'cmsRemote.fieldType.videoLink',
-  link: 'cmsRemote.fieldType.link',
-  email: 'cmsRemote.fieldType.email',
-  phone: 'cmsRemote.fieldType.phone',
-  number: 'cmsRemote.fieldType.number',
-  date: 'cmsRemote.fieldType.dateTime',
-  switch: 'cmsRemote.fieldType.switch',
-  color: 'cmsRemote.fieldType.color',
-  option: 'cmsRemote.fieldType.option',
-  file: 'cmsRemote.fieldType.file',
-  reference: 'cmsRemote.fieldType.reference',
-  multiReference: 'cmsRemote.fieldType.multiReference',
-  list: 'cmsRemote.fieldType.list',
-  group: 'cmsRemote.fieldType.group',
-  keyValue: 'cmsRemote.fieldType.keyValue',
-  constant: 'cmsRemote.fieldType.constant',
-  any: 'cmsRemote.fieldType.anyValue',
-  other: 'cmsRemote.fieldType.custom',
-};
-
 const KIND_ICONS: Readonly<Record<SettingsFieldKind, (props: IconProps) => ReactElement>> = {
   text: TextIcon,
   richText: ParagraphIcon,
@@ -616,6 +614,7 @@ const KIND_ICONS: Readonly<Record<SettingsFieldKind, (props: IconProps) => React
   reference: CollectionIcon,
   multiReference: CollectionIcon,
   list: ElementListDefaultIcon,
+  repeater: ElementListDefaultIcon,
   group: BracesIcon,
   keyValue: ElementListDefaultIcon,
   constant: TagIcon,

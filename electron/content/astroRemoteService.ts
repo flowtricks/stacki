@@ -537,7 +537,29 @@ function writeField(projectPath: string, context: { readonly collection: Collect
     writeEntry(projectPath, entry, [], { body: write.value ?? '' });
     return;
   }
-  writeEntry(projectPath, entry, [{ path: [write.field], value: write.value }]);
+  writeEntry(projectPath, entry, [{ path: [write.field], value: withoutEditorKeys(write.value, 0) }]);
+}
+
+// The list editor tells items apart with `_key` and `_type`, as Sanity does. A content
+// collection has neither (a field's key never starts with an underscore), and a strict
+// schema would refuse them, so they are dropped from what reaches the file.
+function withoutEditorKeys(input: RemoteValue | undefined, depth: number): RemoteValue | undefined {
+  assert(depth <= REMOTE_SCHEMA_LIMITS.valueDepthMax, 'A written value is bounded in depth');
+  if (input === undefined || typeof input !== 'object') {
+    return input;
+  }
+  if (Array.isArray(input)) {
+    const items: readonly RemoteValue[] = input;
+    return items.map((item) => withoutEditorKeys(item, depth + 1)).filter((item): item is RemoteValue => item !== undefined);
+  }
+  const kept: Record<string, RemoteValue> = {};
+  for (const [key, item] of Object.entries(input)) {
+    const value = key === '_key' || key === '_type' ? undefined : withoutEditorKeys(item, depth + 1);
+    if (value !== undefined) {
+      kept[key] = value;
+    }
+  }
+  return kept;
 }
 
 async function createEntry(projectPath: string, collection: Collection): Promise<RemoteDocumentSummary> {

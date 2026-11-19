@@ -15,6 +15,8 @@ import { parseFieldChecks, parseFieldDefault, parseFieldOptions, type FieldCheck
 
 export const COLLECTION_SETTINGS_LIMITS = {
   fieldsMax: 200,
+  /** The fields one group or repeater holds. */
+  membersMax: 50,
   descriptionCharsMax: 500,
   fieldNameCharsMax: 64,
 } as const;
@@ -24,7 +26,8 @@ export const COLLECTION_SETTINGS_LIMITS = {
  * a zod schema in the content config (astroSchemaEdit.ts): text is a string,
  * a link a `.url()` string, an option a `z.enum`, an image `image()`, a
  * reference `reference('collection')`, and their lists `z.array(…)`; a group
- * is a nested `z.object`, key–value pairs a `z.record`, a constant a
+ * is a nested `z.object`, a repeater a list of them (`z.array(z.object({ … }))`:
+ * team members, FAQs), key–value pairs a `z.record`, a constant a
  * `z.literal`, and any value `z.unknown()`. Rich text,
  * a phone number and a file are strings too, so once written they read back as
  * plain text.
@@ -47,6 +50,7 @@ export const SETTINGS_FIELD_KINDS = [
   'reference',
   'multiReference',
   'list',
+  'repeater',
   'group',
   'keyValue',
   'constant',
@@ -54,6 +58,78 @@ export const SETTINGS_FIELD_KINDS = [
   'other',
 ] as const;
 export type SettingsFieldKind = (typeof SETTINGS_FIELD_KINDS)[number];
+
+/**
+ * The kinds a field inside a group or repeater may be. A reference names a
+ * collection and so needs one chosen, and a group or repeater inside another
+ * is written by hand: it is read, kept and removed, never made here.
+ */
+export const MEMBER_KINDS = [
+  'text',
+  'richText',
+  'image',
+  'multiImage',
+  'videoLink',
+  'link',
+  'email',
+  'phone',
+  'number',
+  'date',
+  'switch',
+  'color',
+  'option',
+  'file',
+  'list',
+  'keyValue',
+  'constant',
+  'any',
+] as const;
+export type MemberKind = (typeof MEMBER_KINDS)[number];
+
+/** Whether a group or repeater holds fields of its own. */
+export function holdsMembers(kind: SettingsFieldKind): boolean {
+  return kind === 'group' || kind === 'repeater';
+}
+
+/**
+ * One field of a group or repeater. Only its name, its kind (when new) and
+ * whether it is required are edited here; every other check it has is read
+ * from, and left in, the content config. `from` is the name it has there now,
+ * absent for one just added; `editable` is false for one written by hand.
+ */
+export interface SettingsMember {
+  readonly name: string;
+  readonly kind: SettingsFieldKind;
+  readonly required: boolean;
+  readonly from: string | undefined;
+  readonly editable: boolean;
+}
+
+/**
+ * What a list holds, as the form offers it: a plain value of one kind, or a
+ * group of fields of its own (a repeater: team members, FAQs). A list whose
+ * items are written some other way reads as `other` and keeps its items as written.
+ */
+export const ITEM_KINDS = ['text', 'number', 'link', 'email', 'switch', 'date', 'group'] as const;
+export type ItemKind = (typeof ITEM_KINDS)[number];
+
+/** The kind a list of these items is: a list of groups is a repeater. */
+export function listKindOf(item: ItemKind): 'list' | 'repeater' {
+  return item === 'group' ? 'repeater' : 'list';
+}
+
+/** What a list or repeater field holds, as its form shows it. */
+export function itemKindOf(field: Pick<SettingsField, 'kind' | 'itemKind'>): ItemKind | 'other' | undefined {
+  if (field.kind === 'repeater') {
+    return 'group';
+  }
+  return field.kind === 'list' ? (field.itemKind ?? 'text') : undefined;
+}
+
+/** A new group's or repeater's fields until the form says otherwise: a title, as the config is written with. */
+export function newFieldMembers(kind: SettingsFieldKind): readonly SettingsMember[] | undefined {
+  return holdsMembers(kind) ? [{ name: 'title', kind: 'text', required: false, from: undefined, editable: true }] : undefined;
+}
 
 /** The kinds a new field may be: every kind but one written by hand. */
 export type NewFieldKind = Exclude<SettingsFieldKind, 'other'>;
@@ -81,6 +157,10 @@ export interface SettingsField {
   readonly editable: boolean;
   /** The collection a reference points at; absent for every other kind. */
   readonly target?: string | undefined;
+  /** A group's or repeater's own fields, in order; absent for every other kind. */
+  readonly members?: readonly SettingsMember[] | undefined;
+  /** What a plain list holds; a repeater's items are groups, and every other kind has none. */
+  readonly itemKind?: ItemKind | 'other' | undefined;
 }
 
 export interface CollectionSettings {
@@ -102,6 +182,10 @@ export interface FieldSettings {
 /** An existing field's settings as the form saves them. */
 export interface FieldUpdate extends FieldSettings {
   readonly name: string;
+  /** A group's or repeater's fields as the form leaves them; absent for every other kind. */
+  readonly members?: readonly SettingsMember[] | undefined;
+  /** What a list holds as the form leaves it (a change from the current item kind rewrites its items); absent for every other kind. */
+  readonly itemKind?: ItemKind | undefined;
 }
 
 export type SettingsChange =
@@ -117,6 +201,10 @@ export type SettingsChange =
       readonly target: string | undefined;
       /** Its settings, written with it: help text, checks, required, a default. */
       readonly settings: FieldSettings;
+      /** A group's or repeater's first fields; absent for every other kind (a new one starts with a title). */
+      readonly members?: readonly SettingsMember[] | undefined;
+      /** What a new list holds; absent means plain text. */
+      readonly itemKind?: ItemKind | undefined;
     }
   | { readonly kind: 'removeField'; readonly name: string }
   | { readonly kind: 'deleteCollection' };
@@ -215,6 +303,8 @@ export function parseSettingsChange(input: unknown): SettingsChange {
         fieldKind,
         target: pointsAtCollection(fieldKind) ? target : undefined,
         settings: parseFieldSettings(value['settings']),
+        members: holdsMembers(fieldKind) ? parseMembers(value['members']) : undefined,
+        itemKind: fieldKind === 'list' ? parseItemKind(value['itemKind']) : undefined,
       };
     }
     case 'removeField':
@@ -228,7 +318,60 @@ export function parseSettingsChange(input: unknown): SettingsChange {
 
 export function parseFieldUpdate(input: unknown): FieldUpdate {
   const value = record(input);
-  return { name: parseSettingsFieldName(value['name']), ...parseFieldSettings(input) };
+  return {
+    name: parseSettingsFieldName(value['name']),
+    ...parseFieldSettings(input),
+    members: parseMembers(value['members']),
+    itemKind: parseItemKind(value['itemKind']),
+  };
+}
+
+function parseStoredItemKind(input: unknown): ItemKind | 'other' | undefined {
+  return input === 'other' ? 'other' : parseItemKind(input);
+}
+
+function parseItemKind(input: unknown): ItemKind | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  const kind = ITEM_KINDS.find((candidate) => candidate === input);
+  if (kind === undefined) {
+    throw new Error('Unknown list item kind.');
+  }
+  return kind;
+}
+
+/** A group's or repeater's fields from the wire: bounded, each a key, a known kind, unique names. */
+export function parseMembers(input: unknown): readonly SettingsMember[] | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(input) || input.length > COLLECTION_SETTINGS_LIMITS.membersMax) {
+    throw new Error('Expected the group’s fields.');
+  }
+  const items: readonly unknown[] = input;
+  const members = items.map(parseMember);
+  if (new Set(members.map((member) => member.name)).size !== members.length) {
+    throw new Error('A group’s fields have different names.');
+  }
+  assert(members.length <= COLLECTION_SETTINGS_LIMITS.membersMax, 'A group holds bounded fields');
+  return members;
+}
+
+function parseMember(input: unknown): SettingsMember {
+  const value = record(input);
+  const kind = SETTINGS_FIELD_KINDS.find((candidate) => candidate === value['kind']);
+  const required = value['required'];
+  const editable = value['editable'];
+  if (kind === undefined || typeof required !== 'boolean' || typeof editable !== 'boolean') {
+    throw new Error('Expected a group field’s settings.');
+  }
+  const from = value['from'] === undefined ? undefined : parseSettingsFieldName(value['from']);
+  // A field made here is one of the kinds a form offers; any other can only have been read.
+  if (from === undefined && !MEMBER_KINDS.some((candidate) => candidate === kind)) {
+    throw new Error('A new group field is a kind a group can hold.');
+  }
+  return { name: parseSettingsFieldName(value['name']), kind, required, from, editable };
 }
 
 export function parseFieldSettings(input: unknown): FieldSettings {
@@ -288,6 +431,8 @@ function parseSettingsField(input: unknown): SettingsField {
     defaultValue: parseFieldDefault(value['defaultValue']),
     editable,
     target: optionalCollection(value['target']),
+    members: parseMembers(value['members']),
+    itemKind: parseStoredItemKind(value['itemKind']),
   };
 }
 

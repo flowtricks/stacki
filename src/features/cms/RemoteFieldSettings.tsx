@@ -9,6 +9,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import Dropdown from '../../ui/Dropdown';
 import { ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
+import { ListItems } from './RemoteListItems';
 import { checkLabel, choicesFor, typedValue, withCheck } from './fieldCheckInputs';
 
 type Draft = (draft: SettingsField) => void;
@@ -48,6 +49,7 @@ export function FieldInputs(props: {
         )}
         {props.field.editable && draft.kind === 'option' && <OptionValues draft={draft} onDraft={onDraft} />}
       </div>
+      {props.field.editable && <ListItems draft={draft} onDraft={onDraft} />}
       {props.field.editable ? (
         <FieldRules draft={draft} onDraft={onDraft} />
       ) : (

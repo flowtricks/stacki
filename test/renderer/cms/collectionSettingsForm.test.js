@@ -132,7 +132,10 @@ async function mount(options = {}) {
     ),
   );
   const button = (label) => {
-    const found = [...container.querySelectorAll('button')].find((each) => each.textContent.trim() === label);
+    const found = [...container.querySelectorAll('button')].find(
+      (each) =>
+        (each.querySelector('.remote-cms-settings-kind-hint') ? each.firstElementChild.nextElementSibling.textContent : each.textContent).trim() === label,
+    );
     assert.notEqual(found, undefined, `the ${label} button shows`);
     return found;
   };
@@ -161,7 +164,7 @@ async function mount(options = {}) {
     await act(async () => root.unmount());
     container.remove();
   };
-  return { project, selected, button, click, nameInput, typeName, openForm, addField, openRow, rows, problem, note, close };
+  return { container, project, selected, button, click, nameInput, typeName, openForm, addField, openRow, rows, problem, note, close };
 }
 
 test('the reported sequence: a name with a space survives Add and Save and reaches the config', async () => {
@@ -366,5 +369,20 @@ test('an open form flushed into a refused save stays in the list and is not sent
   await form.click(form.button('Save collection'));
   assert.equal(form.project.sent.filter((change) => change.name === 'subtitle').length, 2, 'one refused, one written');
   assert.match(form.project.config, /subtitle: z\.string\(\)\.optional\(\),/);
+  await form.close();
+});
+
+test('a new list says what its items are, and Group of fields makes a repeater with its own fields', async () => {
+  const form = await mount();
+  await form.openForm('List');
+  const section = () => form.container.querySelector('.list-items') ?? undefined;
+  assert.notEqual(section(), undefined, 'the form has a List items section');
+  assert.match(section().textContent, /List items/);
+  assert.match(section().textContent, /Plain text/, 'items default to plain text');
+  assert.equal(section().querySelector('.list-items-row') ?? undefined, undefined, 'plain text items have no fields of their own');
+  await form.typeName('Tags');
+  await form.click(form.button('Add field'));
+  await form.click(form.button('Save collection'));
+  assert.match(form.project.config, /Tags: z\.array\(z\.string\(\)\)\.optional\(\),/, 'the list is written as a list of text');
   await form.close();
 });

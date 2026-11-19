@@ -1474,3 +1474,43 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* A list's items (RemoteListItems.tsx): the kind of item, and a group's fields as
+   rows on a filled background, one to a line. */
+.list-items {
+  display: grid;
+  gap: 10px;
+}
+.list-items-fields {
+  display: grid;
+  gap: 8px;
+}
+.list-items-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.list-items-row > input[type='text'],
+.list-items-row > input:not([type]) {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.list-items-kind {
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+.remote-cms-settings-kind-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.3;
+}

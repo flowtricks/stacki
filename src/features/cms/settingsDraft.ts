@@ -11,13 +11,19 @@ import { described, type Described } from '../../../shared/properties/i18n/messa
 import {
   COLLECTION_SETTINGS_LIMITS,
   fieldNameProblem,
+  holdsMembers,
+  itemKindOf,
+  listKindOf,
+  newFieldMembers,
   pointsAtCollection,
   typedFieldName,
   type CollectionSettings,
+  type ItemKind,
   type FieldSettings,
   type NewFieldKind,
   type SettingsChange,
   type SettingsField,
+  type SettingsMember,
 } from '../../../shared/properties/collectionSettings';
 
 export type DraftResult = { readonly ok: true; readonly value: CollectionSettings } | ({ readonly ok: false } & Described);
@@ -49,10 +55,22 @@ export function newFieldFormState(
       if (pointing && form.target === '') {
         return { kind: 'invalid', ...described('cms.draft.chooseTarget') };
       }
+      const members = resolvedMembers(form.draft);
+      if (!members.ok) {
+        return { kind: 'invalid', ...members };
+      }
       return {
         kind: 'ready',
         changes: [
-          { kind: 'addField', name: typed.key, fieldKind: form.kind, target: pointing ? form.target : undefined, settings: fieldSettingsOf(form.draft) },
+          {
+            kind: 'addField',
+            name: typed.key,
+            fieldKind: form.kind,
+            target: pointing ? form.target : undefined,
+            settings: fieldSettingsOf(form.draft),
+            members: members.value,
+            itemKind: plainItemKind(form.draft),
+          },
         ],
       };
     default: {
@@ -64,7 +82,8 @@ export function newFieldFormState(
 
 /** The form of an existing field: renamed first, so its settings follow it to the new key. */
 export function openFieldFormState(settings: CollectionSettings, field: SettingsField, draft: SettingsField): FieldFormState {
-  assert(field.kind === draft.kind, 'A field keeps its kind while it is edited');
+  // A list may change what it holds, which makes it a repeater or a list again; no other field changes kind.
+  assert(field.kind === draft.kind || (holdsItems(field.kind) && holdsItems(draft.kind)), 'A field keeps its kind while it is edited');
   const typed = typedFieldName(draft.name);
   switch (typed.kind) {
     case 'blank':
@@ -78,15 +97,75 @@ export function openFieldFormState(settings: CollectionSettings, field: Settings
         return { kind: 'invalid', ...described('cms.draft.fieldExists', { name }) };
       }
       const renames: readonly SettingsChange[] = name === field.name ? [] : [{ kind: 'renameField', from: field.name, to: name }];
+      const members = resolvedMembers(draft);
+      if (!members.ok) {
+        return { kind: 'invalid', ...members };
+      }
       const update = fieldSettingsOf(draft);
-      const updated = field.editable && JSON.stringify(update) !== JSON.stringify(fieldSettingsOf(field));
-      return { kind: 'ready', changes: updated ? [...renames, { kind: 'updateField', update: { name, ...update } }] : renames };
+      const changed =
+        JSON.stringify([update, members.value, plainItemKind(draft)]) !== JSON.stringify([fieldSettingsOf(field), field.members, plainItemKind(field)]);
+      const updated = field.editable && changed;
+      return {
+        kind: 'ready',
+        changes: updated ? [...renames, { kind: 'updateField', update: { name, ...update, members: members.value, itemKind: plainItemKind(draft) } }] : renames,
+      };
     }
     default: {
       const exhaustive: never = typed;
       return exhaustive;
     }
   }
+}
+
+/**
+ * A group's or repeater's fields as they would be saved: each name made a key
+ * the way a field's is, none repeated, and at least one. Anything else has no
+ * fields, which is not a mistake.
+ */
+export function resolvedMembers(
+  draft: Pick<SettingsField, 'kind' | 'members'>,
+): { readonly ok: true; readonly value: readonly SettingsMember[] | undefined } | ({ readonly ok: false } & Described) {
+  if (!holdsMembers(draft.kind) || draft.members === undefined) {
+    return { ok: true, value: undefined };
+  }
+  if (draft.members.length === 0) {
+    return { ok: false, ...described('cms.draft.membersEmpty') };
+  }
+  if (draft.members.length > COLLECTION_SETTINGS_LIMITS.membersMax) {
+    return { ok: false, ...described('cms.draft.membersMax', { count: COLLECTION_SETTINGS_LIMITS.membersMax }) };
+  }
+  const resolved: SettingsMember[] = [];
+  for (const member of draft.members) {
+    const typed = typedFieldName(member.name);
+    switch (typed.kind) {
+      case 'blank':
+        return { ok: false, ...described('cms.draft.nameField') };
+      case 'invalid':
+        return { ok: false, message: typed.message, messageRef: typed.messageRef };
+      case 'key':
+        if (resolved.some((each) => each.name === typed.key)) {
+          return { ok: false, ...described('cms.draft.memberExists', { name: typed.key }) };
+        }
+        resolved.push({ ...member, name: typed.key });
+        break;
+      default: {
+        const exhaustive: never = typed;
+        return exhaustive;
+      }
+    }
+  }
+  assert(resolved.length === draft.members.length, 'Every field of a group is kept or refused');
+  return { ok: true, value: resolved };
+}
+
+function holdsItems(kind: SettingsField['kind']): boolean {
+  return kind === 'list' || kind === 'repeater';
+}
+
+/** What a list holds, as the form saves it; absent for any other field and for items written by hand. */
+export function plainItemKind(field: Pick<SettingsField, 'kind' | 'itemKind'>): ItemKind | undefined {
+  const item = itemKindOf(field);
+  return item === 'other' ? undefined : item;
 }
 
 /** What the form saves beside a field's name: blank help text is no help text. */
@@ -174,7 +253,7 @@ export function applyDraft(settings: CollectionSettings, change: SettingsChange)
       }
       return withFields(
         settings,
-        fields.map((field) => (field.name === update.name ? { ...field, ...update } : field)),
+        fields.map((field) => (field.name === update.name ? updated(field, update) : field)),
       );
     }
     case 'addField': {
@@ -215,5 +294,19 @@ function newField(change: Extract<SettingsChange, { readonly kind: 'addField' }>
     ...change.settings,
     editable: true,
     target: change.target,
+    members: keptMembers(change.members ?? newFieldMembers(change.fieldKind)),
+    itemKind: change.fieldKind === 'list' ? (change.itemKind ?? 'text') : undefined,
   };
+}
+
+// A field with its update made: a list given other items becomes a list or a repeater by them.
+function updated(field: SettingsField, update: Extract<SettingsChange, { readonly kind: 'updateField' }>['update']): SettingsField {
+  const kind = update.itemKind !== undefined && holdsItems(field.kind) ? listKindOf(update.itemKind) : field.kind;
+  const itemKind = kind === 'list' ? (update.itemKind ?? field.itemKind) : undefined;
+  return { ...field, ...update, kind, itemKind, members: keptMembers(kind === 'repeater' ? (update.members ?? newFieldMembers(kind)) : undefined) };
+}
+
+// A group's fields once saved: each is now in the config under the name it has.
+function keptMembers(members: readonly SettingsMember[] | undefined): readonly SettingsMember[] | undefined {
+  return members?.map((member) => ({ ...member, from: member.name }));
 }

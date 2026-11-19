@@ -138,11 +138,19 @@ export function schemaObject(call: ts.CallExpression | undefined): ts.ObjectLite
   if (schema === undefined) {
     return undefined;
   }
-  let node: ts.Node | undefined = unwrap(schema.initializer);
+  let node: ts.Expression | undefined = unwrap(schema.initializer);
   if (node !== undefined && ts.isArrowFunction(node)) {
     node = ts.isBlock(node.body) ? returned(node.body) : unwrap(node.body);
   }
-  // Down the chain (`z.object({…}).passthrough()`) to the z.object call itself.
+  return objectShape(node);
+}
+
+/**
+ * The `{ … }` of the `z.object({ … })` a schema expression is, down its chain
+ * (`z.object({…}).passthrough()`), or undefined when it is anything else.
+ */
+export function objectShape(start: ts.Expression | undefined): ts.ObjectLiteralExpression | undefined {
+  let node: ts.Expression | undefined = unwrap(start);
   for (let step = 0; step < CHAIN_STEPS_MAX && node !== undefined && ts.isCallExpression(node); step += 1) {
     const callee = node.expression;
     if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'object' && callee.expression.getText() === 'z') {

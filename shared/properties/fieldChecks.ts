@@ -94,6 +94,7 @@ export function checksFor(kind: SettingsFieldKind): readonly FieldCheckKey[] {
     case 'multiImage':
     case 'multiReference':
     case 'list':
+    case 'repeater':
       return ['min', 'max', 'length', 'nullable'];
     case 'switch':
     case 'option':
