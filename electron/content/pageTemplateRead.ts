@@ -13,8 +13,6 @@ export type { TemplateReading };
 import { contentTemplatePieces } from './pageTemplateSource';
 
 export const TEMPLATE_READ_LIMITS = {
-  /** Fields listed as used by one page's markup. */
-  usedFieldsMax: 100,
   /** Address fields tried when recognising a template: every field the frontmatter names. */
   candidatesMax: 200,
 } as const satisfies Record<string, number>;
@@ -41,8 +39,7 @@ export function readPageTemplate(page: string, source: string): TemplateReading 
       const pieces = contentTemplatePieces(route, { collection, slug }, api);
       if (frontmatter.includes(pieces.paths)) {
         if (frontmatter.includes(pieces.entryType)) {
-          const markup = fence === null ? source : source.slice(fence[0].length);
-          return { kind: 'content', collection, slug, param: route.param, api, code, usedFields: usedFields(markup) };
+          return { kind: 'content', collection, slug, param: route.param, api, code };
         }
       }
     }
@@ -102,15 +99,4 @@ function slugCandidates(frontmatter: string): readonly ContentSlug[] {
     { kind: 'field', name, treatment: 'slugified' },
   ]);
   return [{ kind: 'entry-id' }, ...fields];
-}
-
-function usedFields(markup: string): readonly string[] {
-  const names: string[] = [];
-  for (const match of markup.matchAll(FIELD)) {
-    const name = match[1] ?? match[2]?.replace(/\\(.)/g, '$1');
-    if (name !== undefined && !names.includes(name) && names.length < TEMPLATE_READ_LIMITS.usedFieldsMax) {
-      names.push(name);
-    }
-  }
-  return names;
 }

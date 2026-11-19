@@ -119,7 +119,6 @@ export const messages = {
   'pages.settings.template.custom': 'Eigene Vorlage',
   'pages.settings.template.customBody': 'Der Code dieser Vorlage wurde von Hand geändert, deshalb zeigt Stacki ihn als Code, statt ihn umzuschreiben.',
   'pages.settings.template.editCode': 'Code bearbeiten',
-  'pages.settings.template.missingFields': 'Felder dieser Seite, die {collection} nicht hat: {fields}',
   'pages.settings.template.newCollection': 'Lege eine neue Sammlung zuerst über „Seitenvorlage erstellen“ an.',
   'pages.settings.template.showCode': 'Code anzeigen',
   'pages.settings.title': 'Einstellungen: {name}',

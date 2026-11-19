@@ -249,7 +249,8 @@ function SettingsSections({ model, props }: { readonly model: Model; readonly pr
         <h3>{translate('pages.settings.section.general')}</h3>
         {home ? <HomeBadge /> : <UrlNameField model={model} props={props} />}
       </section>
-      {!home && (
+      {/* A template answers many addresses; the homepage is one, so the section is not offered at all (main refuses too). */}
+      {!home && !props.page.name.includes('[') && (
         <section className="page-settings-section">
           <h3>{translate('pages.settings.section.homepage')}</h3>
           <HomeSection model={model} props={props} />

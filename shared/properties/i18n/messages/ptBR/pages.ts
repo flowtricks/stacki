@@ -118,7 +118,6 @@ export const messages = {
   'pages.settings.template.custom': 'Modelo personalizado',
   'pages.settings.template.customBody': 'O código deste modelo foi alterado manualmente, então o Stacki o mostra como código em vez de reescrevê-lo.',
   'pages.settings.template.editCode': 'Editar código',
-  'pages.settings.template.missingFields': 'Campos que esta página mostra e que {collection} não tem: {fields}',
   'pages.settings.template.newCollection': 'Crie a nova coleção primeiro em Criar modelo de página.',
   'pages.settings.template.showCode': 'Mostrar o código',
   'pages.settings.title': 'Configurações de {name}',

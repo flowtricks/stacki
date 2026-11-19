@@ -176,7 +176,6 @@ test('a template reading parses each kind and refuses malformed replies', () => 
     param: 'slug',
     api: 'current',
     code: '',
-    usedFields: ['title'],
   };
   assert.deepEqual(parseTemplateReading(content), content);
   const bad: readonly unknown[] = [
@@ -186,8 +185,6 @@ test('a template reading parses each kind and refuses malformed replies', () => 
     { ...content, param: '1slug' },
     { ...content, api: 'future' },
     { ...content, slug: { kind: 'field' } },
-    { ...content, usedFields: [''] },
-    { ...content, usedFields: Array.from({ length: 101 }, (_, index) => 'f' + index) },
   ];
   for (const input of bad) {
     assert.throws(() => parseTemplateReading(input), JSON.stringify(input));

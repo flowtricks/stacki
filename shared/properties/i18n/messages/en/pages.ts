@@ -115,7 +115,6 @@ export const messages = {
   'pages.settings.template.custom': 'Custom template',
   'pages.settings.template.customBody': 'This template’s code was changed by hand, so Stacki shows it as code instead of rewriting it.',
   'pages.settings.template.editCode': 'Edit code',
-  'pages.settings.template.missingFields': 'Fields this page shows that {collection} doesn’t have: {fields}',
   'pages.settings.template.newCollection': 'Create a new collection from Create page template first.',
   'pages.settings.template.showCode': 'Show the code',
   'pages.settings.title': '{name} settings',

@@ -1,12 +1,7 @@
 // A template page's settings as main read them back from its code (electron/content/pageTemplateRead.ts), on the
 // wire to the Page settings dialog. `custom` carries only the code: a template changed by hand is shown, never modelled.
-import { list, record, text } from '../core/boundary';
+import { record, text } from '../core/boundary';
 import { parseContentSlug, type ContentSlug } from './pageTemplate';
-
-export const TEMPLATE_READING_LIMITS = {
-  usedFieldsMax: 100,
-  fieldNameCharsMax: 200,
-} as const satisfies Record<string, number>;
 
 export type TemplateReading =
   | { readonly kind: 'none' }
@@ -18,8 +13,6 @@ export type TemplateReading =
       readonly param: string;
       readonly api: 'current' | 'legacy';
       readonly code: string;
-      /** Fields of the entry the page's markup shows (`entry.data.title`), to warn when a new collection lacks one. */
-      readonly usedFields: readonly string[];
     };
 
 /** The reply as it crosses IPC: the same shape. */
@@ -45,14 +38,7 @@ export function parseTemplateReading(input: unknown): TemplateReading {
       if (api !== 'current' && api !== 'legacy') {
         throw new Error('Template reading: unknown collection API');
       }
-      const usedFields = list(text)(value['usedFields']);
-      if (usedFields.length > TEMPLATE_READING_LIMITS.usedFieldsMax) {
-        throw new Error('Template reading: too many used fields');
-      }
-      if (usedFields.some((field) => field.length === 0 || field.length > TEMPLATE_READING_LIMITS.fieldNameCharsMax)) {
-        throw new Error('Template reading: invalid field name');
-      }
-      return { kind: 'content', collection, slug: parseContentSlug(value['slug']), param, api, code: text(value['code']), usedFields };
+      return { kind: 'content', collection, slug: parseContentSlug(value['slug']), param, api, code: text(value['code']) };
     }
     default:
       throw new Error('Template reading: unknown kind');

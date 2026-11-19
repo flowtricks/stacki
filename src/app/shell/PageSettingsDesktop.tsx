@@ -281,7 +281,6 @@ function ContentTemplateForm(props: {
   const initial = formOf(reading, page);
   const [form, setForm] = useState<TemplateForm>(initial);
   const [collections, setCollections] = useState<readonly AppCollection[] | undefined>(undefined);
-  const [fields, setFields] = useState<readonly string[] | undefined>(undefined);
   const [showCode, setShowCode] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -297,7 +296,6 @@ function ContentTemplateForm(props: {
   }, [projectPath]);
   const slug = slugOf(form);
   const changed = form.collection !== initial.collection || form.contentSlug !== initial.contentSlug || form.slugTreatment !== initial.slugTreatment;
-  const missing = fields === undefined || form.collection === reading.collection ? [] : reading.usedFields.filter((field) => !fields.includes(field));
   const isNew = form.collection.startsWith('\u0000');
   const apply = async (): Promise<void> => {
     if (slug === undefined || isNew || busy) {
@@ -336,19 +334,8 @@ function ContentTemplateForm(props: {
   };
   return (
     <div className="page-settings-field page-template-dialog">
-      <ContentFields
-        projectPath={projectPath}
-        form={form}
-        set={setForm}
-        collections={collections}
-        onSample={(list) => setFields(list === undefined ? undefined : list.fields.map((field) => field.path))}
-      />
+      <ContentFields projectPath={projectPath} form={form} set={setForm} collections={collections} onSample={() => undefined} />
       {isNew && <div className="page-settings-note">{translate('pages.settings.template.newCollection')}</div>}
-      {missing.length > 0 && (
-        <div className="page-settings-problem">
-          {translate('pages.settings.template.missingFields', { collection: form.collection, fields: missing.join(', ') })}
-        </div>
-      )}
       {showCode && <CodeBlock className="page-settings-template-code" text={reading.code} language="typescript" />}
       {problem !== undefined && <div className="page-settings-problem">{problem}</div>}
       <div className="page-settings-row">

@@ -119,7 +119,6 @@ export const messages = {
   'pages.settings.template.custom': 'Plantilla personalizada',
   'pages.settings.template.customBody': 'El código de esta plantilla se cambió a mano, así que Stacki lo muestra como código en lugar de reescribirlo.',
   'pages.settings.template.editCode': 'Editar código',
-  'pages.settings.template.missingFields': 'Campos que muestra esta página y que {collection} no tiene: {fields}',
   'pages.settings.template.newCollection': 'Crea primero la colección nueva desde Crear plantilla de página.',
   'pages.settings.template.showCode': 'Mostrar el código',
   'pages.settings.title': 'Ajustes de {name}',

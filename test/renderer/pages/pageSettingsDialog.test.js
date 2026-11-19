@@ -146,19 +146,15 @@ test('Cancel in the confirm step returns to the settings and writes nothing', as
   assert.ok(button('Make this page the homepage'));
 });
 
-test('pages that cannot be the homepage disable the house button and say why', async (context) => {
+test('error pages disable the house button with the reason; templates have no Homepage section', async (context) => {
   const setup = fixture(context);
-  const table = [
-    ['blog/[slug].astro', 'Dynamic pages can’t be the homepage.'],
-    ['404.astro', 'Error pages (404, 500) can’t be the homepage.'],
-  ];
-  for (const [name, reason] of table) {
-    await setup.show(name);
-    assert.equal(button('Make this page the homepage').disabled, true, name);
-    assert.equal(document.querySelector('.page-settings-reason').textContent, reason);
-  }
-  // A dynamic route's pattern is shown, never edited.
+  await setup.show('404.astro');
+  assert.equal(button('Make this page the homepage').disabled, true);
+  assert.equal(document.querySelector('.page-settings-reason').textContent, 'Error pages (404, 500) can’t be the homepage.');
+  // A CMS template has no Homepage section at all, and its route pattern is shown, never edited.
   await setup.show('blog/[slug].astro');
+  assert.equal(button('Make this page the homepage'), undefined);
+  assert.equal(text().includes('Homepage'), false);
   assert.equal(document.querySelector('.page-settings-field input').readOnly, true);
   assert.equal(setup.planned.length, 0);
 });

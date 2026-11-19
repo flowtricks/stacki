@@ -401,12 +401,7 @@ test('a content template reads back the settings it was created with, and only i
       }).replace(/\n/g, eol);
       const reading = readPageTemplate('posts/[slug].astro', text);
       assert.equal(reading.kind, 'content', JSON.stringify(slug));
-      assert.deepEqual(reading.kind === 'content' ? [reading.collection, reading.slug, reading.param, reading.usedFields] : [], [
-        'posts',
-        slug,
-        'slug',
-        ['title'],
-      ]);
+      assert.deepEqual(reading.kind === 'content' ? [reading.collection, reading.slug, reading.param] : [], ['posts', slug, 'slug']);
       const changed = retargetPageTemplate('posts/[slug].astro', text, { collection: 'articles', slug: { kind: 'entry-id' } });
       assert.ok(changed.ok);
       const after = changed.value;
