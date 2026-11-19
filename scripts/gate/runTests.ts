@@ -255,6 +255,14 @@ const staticChecks: readonly TestCommand[] = [
     command: node,
     argumentsList: [path.join(root, 'dist/scripts/gate/adapterSurface.js')],
   },
+  {
+    // Fixed pauses and absolute-millisecond bounds in test code, against their expiring
+    // allowlist (testTimingScan.ts): the two patterns behind the suites that failed only on
+    // loaded runners. A grep over the test files: a second or two.
+    name: 'test-timing',
+    command: node,
+    argumentsList: [path.join(root, 'dist/scripts/gate/testTimingScan.js')],
+  },
 ];
 
 // The checks a run holds: all of them, or CI's two halves. Studio's verify is the long one, so CI

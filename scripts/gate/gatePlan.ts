@@ -90,6 +90,6 @@ export function targetedNotice(plan: GatePlan): string {
   const renderer = plan.beside.includes('build:web') ? '' : ', the renderer bundle';
   return (
     `[gate] Named suites only: skipping the clean, tsc, ESLint, Prettier, the policy ` +
-    `scan, adapter-surface${renderer}. \`npm test\` with no suite runs the full gate.`
+    `scan, adapter-surface, test-timing${renderer}. \`npm test\` with no suite runs the full gate.`
   );
 }
