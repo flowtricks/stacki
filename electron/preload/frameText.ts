@@ -18,8 +18,7 @@ export function installCanvasText(
     editing: session.editing,
     editingElement: session.editingElement,
     focus: session.focus,
-    // No mark or hover while a drag is in flight (a drag is no hover).
-    visible: () => selects() && !canvasDragged(),
+    visible: selects,
     post,
   });
   window.addEventListener('message', (event: MessageEvent<unknown>) => {

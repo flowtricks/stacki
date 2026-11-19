@@ -193,10 +193,6 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     const boxes = loop !== undefined ? [loop] : copiesToDraw(all, outline.occ);
     // Hovering a slot says why nothing inside it can be picked: a muted fill and its reason, not the accent. Picking the slot itself stays as it was.
     const muted = info.hostContent && outline.type === 'hover';
-    // The words under the pointer take the hover: the component around them is not drawn as well, unless it is the selection.
-    if (outline.type === 'hover' && outline.slot !== 'highlight' && props.textMarks?.hover !== undefined && outline.path !== props.selPath) {
-      return [];
-    }
     return boxes.map((box, index) => {
       const collapse = collapseKind(box);
       return (

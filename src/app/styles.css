@@ -10626,7 +10626,9 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   max-width: min(480px, calc(100vw - 16px));
   padding: 4px 8px;
   border-radius: 6px;
-  background: rgba(146, 116, 255, 0.28);
+  /* Solid: the chip sits over the page, and a translucent purple let the button and words beneath show through it.
+     The tint is composed onto the dark panel colour (purple 28% over #1c1c1e) so it keeps the data chips' purple. */
+  background: #3f3763;
   color: #c4afff;
   font-size: 11px;
   line-height: 1.4;
@@ -10636,11 +10638,12 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .canvas-source-cue-path {
   min-width: 0;
   overflow: hidden;
-  background: transparent;
+  background: none;
   font-size: 11px;
 }
 .canvas-source-cue-uses {
-  opacity: 0.85;
+  /* A solid colour for the quieter count, never opacity: the chip stays opaque throughout. */
+  color: #b3a0ee;
 }
 
 /* A data chip in a Navigator row: the chip keeps its own purple (never restyled); the row only lets it shrink. */

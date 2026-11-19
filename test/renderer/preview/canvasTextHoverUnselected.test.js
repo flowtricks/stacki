@@ -69,6 +69,7 @@ const CATALOG = {
   blocked: [{ key: 'prop:0.1:text:Card.astro|0.0.2', path: 'Card.astro|0.0.2' }],
 };
 
+let focus = new Set();
 const posted = [];
 // The region map and the marks share one bundle, as they share module state in a frame.
 const { installTextMarks, regions } = loadRenderer('test/helpers/frameTextEntry.js');
@@ -77,7 +78,7 @@ installTextMarks({
   catalog: () => CATALOG,
   editing: () => undefined,
   editingElement: () => undefined,
-  focus: () => new Set(),
+  focus: () => focus,
   visible: () => true,
   post: (message) => posted.push(message),
 });
@@ -112,4 +113,27 @@ test('a prop bound to code the editor cannot follow shows the refused look', () 
 test('slot text of an unselected instance is not taken over by the text hover', () => {
   move(40, 160);
   assert.equal(posted.at(-1).hover, undefined, 'only prop text hovers before selection');
+});
+
+test('the words are still hovered with their own component selected, or any other element, after a click moved on', () => {
+  for (const selected of [new Set(['0.1']), new Set(['0.9'])]) {
+    focus = selected;
+    // A click, then the pointer travels on: the click's gesture must not read as a drag still in flight.
+    window.dispatchEvent(new window.MouseEvent('pointerdown', { clientX: 400, clientY: 250, buttons: 1 }));
+    window.dispatchEvent(new window.MouseEvent('pointerup', { clientX: 400, clientY: 250, buttons: 0 }));
+    move(500, 250);
+    move(40, 40);
+    const hover = posted.at(-1).hover;
+    assert.ok(hover, `hovered with ${[...selected]} selected`);
+    assert.equal(hover.label, 'Heading');
+  }
+  focus = new Set();
+});
+
+test('nothing is hovered while a button is held down: a drag or a resize is in flight', () => {
+  move(500, 250);
+  window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: 40, clientY: 40, buttons: 1 }));
+  assert.equal(posted.at(-1).hover, undefined);
+  move(40, 40);
+  assert.ok(posted.at(-1).hover, 'hovered again once the button is up');
 });

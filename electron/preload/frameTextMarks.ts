@@ -45,6 +45,9 @@ export function installTextMarks(source: MarkSource): () => void {
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646;contain:strict;';
   let frame = 0;
   let pointer: { readonly x: number; readonly y: number } | undefined;
+  // A button held while the pointer moves is a drag or a resize in flight: nothing is hovered until it ends. (The interaction
+  // module's own drag flag stays set after a click's pointer has moved on, so it cannot say whether a drag is going on now.)
+  let held = false;
   // The text clicked while its instance stays selected, by catalog key.
   let picked: string | undefined;
   let reported = '';
@@ -56,7 +59,7 @@ export function installTextMarks(source: MarkSource): () => void {
     const editing = source.editing();
     const typing = shown.some(({ target }) => target.key === editing);
     picked = typing ? editing : shown.some(({ target }) => target.key === picked) ? picked : undefined;
-    const at = pointer;
+    const at = held ? undefined : pointer;
     // The selected instance's marked words first; otherwise any prop text under the pointer, selected or not.
     const hover = at ? (shown.find(({ element }) => holds(element, at)) ?? hoverBeforeSelect(source, at)) : undefined;
     const chosen = shown.find(({ target }) => target.key === picked);
@@ -79,6 +82,7 @@ export function installTextMarks(source: MarkSource): () => void {
   };
   window.addEventListener('pointermove', (event) => {
     pointer = { x: event.clientX, y: event.clientY };
+    held = event.buttons !== 0;
     schedule();
   });
   // The preload installs this before the page has a root element, so leaving
