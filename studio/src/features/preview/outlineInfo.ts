@@ -26,6 +26,7 @@ export function outlineInfo(nodes: readonly ParserNode[], path: string): Overlay
     childCount: Array.isArray(node.children) ? node.children.length : 0,
     isLayout: node.id === 'layout',
     bound: kind === 'element' && isDataBound(node),
+    hostContent: node.kind === 'element' && node.name === 'slot',
   };
 }
 export function outlineNode(nodes: readonly ParserNode[], path: string): ParserNode | undefined {

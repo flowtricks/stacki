@@ -448,6 +448,7 @@ export function useOverlayInfo(
       childCount: 'children' in node && Array.isArray(node.children) ? node.children.length : 0,
       isLayout: node.id === 'layout',
       bound: kind === 'element' && isDataBound(node),
+      hostContent: node.kind === 'element' && node.name === 'slot',
     };
   };
   return { overlayInfo };

@@ -368,7 +368,7 @@ function TreeRow(props: TreeRowProps) {
       ref={props.rowRef}
       data-node-id={node.id}
       aria-disabled={!props.canEdit(node.id)}
-      title={props.fragment ? fragmentTitle : undefined}
+      title={props.fragment ? fragmentTitle : isSlotRow(node) ? translate('preview.overlay.slotHost') : undefined}
       className={rowClassName(props)}
       data-depth={props.depth}
       style={{ paddingLeft: navigatorIndent(props.depth) }}
@@ -526,9 +526,15 @@ function rowClassName(view: NodeView & { readonly node: NavigatorNode }): string
     'structure-node',
     family === undefined ? '' : `is-${family}`,
     view.layout ? 'layout-node' : '',
+    isSlotRow(view.node) ? 'is-slot' : '',
     view.selected ? 'selected' : '',
     view.moving ? 'is-moving' : '',
   ].join(' ');
+}
+
+// A `<slot>` shows the host page's content, which this file cannot pick: hovering its row reads muted (styles.css), with the reason as its title.
+function isSlotRow(node: NavigatorNode): boolean {
+  return node.kind === 'element' && node.name === 'slot';
 }
 
 const fragmentTitle = 'Inline group in this file. Expand it to edit its children; there is no separate file to open.';

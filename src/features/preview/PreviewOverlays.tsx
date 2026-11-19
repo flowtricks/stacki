@@ -37,6 +37,8 @@ export interface OverlayInfo {
   readonly childCount: number;
   readonly isLayout: boolean;
   readonly bound: boolean;
+  /** A `<slot>`: it renders the host page's content, which cannot be picked from the component that holds it. */
+  readonly hostContent?: boolean | undefined;
 }
 
 export interface SpacingHover {
@@ -170,6 +172,7 @@ function collapseKey(partner: CollapsePartner) {
 }
 
 function NodeOutlines(props: PreviewOverlaysProps) {
+  const translate = useTranslate();
   // An app's highlight (`canvas.highlight`), in its own slot: the real selection and hover are untouched beside it.
   const highlight = useSyncExternalStore(subscribeCanvasHighlight, canvasHighlight, canvasHighlight);
   const outlines = outlineTargets(props, highlight);
@@ -188,19 +191,21 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     // A loop is every copy; anything else is the copy it names (copiesToDraw).
     const loop = info.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
     const boxes = loop !== undefined ? [loop] : copiesToDraw(all, outline.occ);
+    // Hovering a slot says why nothing inside it can be picked: a muted fill and its reason, not the accent. Picking the slot itself stays as it was.
+    const muted = info.hostContent && outline.type === 'hover';
     return boxes.map((box, index) => {
       const collapse = collapseKind(box);
       return (
         <div
           key={`${outline.slot}-${index}`}
-          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${
+          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${
             outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path }) : ''
           }`}
           style={boxStyle(box, props.scale)}
         >
           <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
             {outlineIcon(info)}
-            {info.label}
+            {muted ? translate('preview.overlay.slotHost') : info.label}
             {outline.slot === 'sel' && <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(box)} onOpen={props.onOpenComponent} />}
             {/* A highlight shows the selected chip's component icon, but opens nothing: it is display only. */}
             {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (
