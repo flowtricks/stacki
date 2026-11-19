@@ -1,0 +1,96 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slotContent } from "@/utils/slots.ts";
+import { uid } from "@/utils/unique-id.ts";
+
+type Props = HTMLAttributes<"div"> & {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Keep only one item open. */
+  single?: boolean;
+  /** Open the first item on load. */
+  openFirst?: boolean;
+  /** Keep all items open in design mode. */
+  preview?: boolean;
+};
+
+const {
+  render = true,
+  single = true,
+  openFirst = false,
+  preview = false,
+  class: className,
+  ...rest
+} = Astro.props;
+
+const group = single ? `name="${uid("accordion")}"` : "";
+const slot = await slotContent(Astro.slots);
+const items = (
+  openFirst ? slot.replace("data-accordion-group", `${group} open`) : slot
+).replaceAll("data-accordion-group", group);
+---
+
+{render && items && (
+  <div
+    class:list={[
+      "accordion_wrap",
+      single && "single",
+      preview && "preview",
+      className,
+    ]}
+    {...rest}
+  >
+    <Fragment set:html={items} />
+  </div>
+)}
+
+<script>
+  const accordions = document.querySelectorAll<HTMLElement>(".accordion_wrap");
+
+  const sync = () => {
+    const designing =
+      document.documentElement.classList.contains("stacki-designer");
+
+    for (const accordion of accordions) {
+      const preview = designing && accordion.classList.contains("preview");
+
+      for (const item of accordion.querySelectorAll<HTMLDetailsElement>(
+        ".accordion_item",
+      )) {
+        if (item.closest(".accordion_wrap") !== accordion) continue;
+
+        if (preview && item.hasAttribute("name")) {
+          item.dataset.accordionName = item.getAttribute("name")!;
+          item.removeAttribute("name");
+        } else if (!preview && item.dataset.accordionName) {
+          item.setAttribute("name", item.dataset.accordionName);
+          delete item.dataset.accordionName;
+        }
+
+        if (preview || item.classList.contains("stacki-opened")) {
+          item.open = true;
+        }
+      }
+    }
+  };
+
+  if (accordions.length > 0) {
+    sync();
+
+    const watcher = new MutationObserver(sync);
+    const settings = { attributes: true, attributeFilter: ["class"] };
+
+    watcher.observe(document.documentElement, settings);
+    for (const accordion of accordions) {
+      watcher.observe(accordion, { ...settings, subtree: true });
+    }
+  }
+</script>
+
+<style is:global>
+  @layer components {
+    .accordion_wrap {
+      width: 100%;
+    }
+  }
+</style>

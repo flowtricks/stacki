@@ -1,0 +1,227 @@
+---
+import { Image, imageConfig } from "astro:assets";
+import type { LocalImageProps, RemoteImageProps } from "astro:assets";
+import { isRemoteAllowed } from "astro/assets/utils";
+import type { HTMLAttributes } from "astro/types";
+
+type ImageVariant = "full-width" | "constrained" | "densities";
+
+type ImageQuality = "low" | "mid" | "high" | "max";
+
+type Base = Omit<
+  HTMLAttributes<"img">,
+  "src" | "width" | "height" | "loading" | "fetchpriority"
+> & {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Image source. Imports are optimized; `public/` files are served as-is. */
+  src: ImageMetadata | string;
+  /** Alt text. Omit for decorative images. */
+  alt?: string;
+  /** Image width. The other dimension is inferred.
+   *
+   * @min 1
+   * @int */
+  width?: number;
+  /** Image height. The other dimension is inferred.
+   *
+   * @min 1
+   * @int */
+  height?: number;
+  /** Fit without cropping and remove the skeleton tint. */
+  transparent?: boolean;
+  /** Loading behavior. */
+  loading?: "lazy" | "eager";
+  /** Fetch priority. */
+  fetchPriority?: "auto" | "high" | "low";
+};
+
+type Props = Base &
+  (
+    | {
+        /** Responsive image mode. */
+        variant?: "full-width";
+        sizes?: never;
+      }
+    | {
+        variant: "constrained";
+        /** Responsive `sizes` value. */
+        sizes?: string;
+      }
+    | { variant: "densities"; sizes?: never }
+  ) & {
+    /** Output quality. */
+    quality?: ImageQuality;
+  };
+
+type AllProps = Base & {
+  variant?: ImageVariant;
+  sizes?: string;
+  quality?: ImageQuality;
+};
+
+const {
+  render = true,
+  src,
+  alt: altProp,
+  variant = "full-width",
+  width,
+  height,
+  sizes,
+  quality = "high",
+  transparent = false,
+  loading = "lazy",
+  fetchPriority = "auto",
+  class: className,
+  ...attrs
+} = Astro.props as AllProps;
+
+const alt = altProp ?? "";
+
+if (import.meta.env.DEV && !src) {
+  console.warn("[lumos] <Img> rendered without a `src`; nothing was output.");
+}
+
+const isSvg =
+  typeof src === "string" ? /\.svg(\?|#|$)/i.test(src) : src?.format === "svg";
+const resolvedFormat = isSvg ? "svg" : undefined;
+
+const isFetchable = typeof src === "string" && /^https?:\/\//i.test(src);
+const remoteAllowed =
+  isFetchable && isRemoteAllowed(src as string, imageConfig);
+const hasBothDimensions = width !== undefined && height !== undefined;
+const hasEitherDimension = width !== undefined || height !== undefined;
+const sizing =
+  isFetchable && !hasBothDimensions
+    ? { inferSize: true as const, width, height }
+    : { width, height };
+
+const isPublicPath = typeof src === "string" && !isFetchable;
+
+if (import.meta.env.DEV && src && (isPublicPath || isSvg)) {
+  const inert: string[] = [];
+  if ((Astro.props as AllProps).quality !== undefined) inert.push("quality");
+  if (sizes !== undefined) inert.push("sizes");
+  if (inert.length) {
+    const why = isPublicPath
+      ? `files in public/ are served as-is — import from src/assets to optimize`
+      : `SVG sources are passed through unoptimized`;
+    console.warn(`[lumos] <Img> ignores ${inert.join(", ")}: ${why}.`);
+  }
+}
+
+if (
+  import.meta.env.DEV &&
+  src &&
+  !isPublicPath &&
+  !isSvg &&
+  variant === "densities" &&
+  !hasEitherDimension
+) {
+  console.warn(
+    `[lumos] <Img variant="densities"> has no width or height, so both densities resolve to the source's own size and each srcset entry points at the same file. Set the size it displays at.`,
+  );
+}
+
+const variantSpecified = (Astro.props as AllProps).variant !== undefined;
+const unoptimizedRemote = isFetchable && !variantSpecified;
+
+if (import.meta.env.DEV && isFetchable && variantSpecified && !remoteAllowed) {
+  console.warn(
+    `[lumos] <Img src="${src}"> generates a srcset for a remote host. Every entry repeats the original URL unless the host is listed in image.remotePatterns or image.domains.`,
+  );
+}
+
+const VIEWPORT_MAX = 1440;
+
+const displayWidth = (width ?? VIEWPORT_MAX) / 16;
+
+const defaultSizes = `(min-width: ${displayWidth}rem) ${displayWidth}rem, 100vw`;
+
+const BREAKPOINTS = [640, 750, 828, 1080, 1280, 1668, 2048, 2560];
+
+const source = typeof src === "string" ? undefined : src;
+const cropsToRatio =
+  source !== undefined && width !== undefined && height !== undefined;
+
+const widthLimit = cropsToRatio
+  ? Math.min(source.width, Math.round(source.height * (width / height)))
+  : isFetchable && hasBothDimensions
+    ? width
+    : undefined;
+
+const withinLimit = (widths: number[]) => {
+  const limit = widthLimit as number;
+  const kept = widths.filter((w) => w <= limit);
+  return kept.at(-1) === limit ? kept : [...kept, limit];
+};
+
+if (import.meta.env.DEV && cropsToRatio) {
+  const dropped = BREAKPOINTS.filter(
+    (w) => w <= (source as ImageMetadata).width && w > (widthLimit as number),
+  );
+  if (variant === "full-width" && dropped.length) {
+    console.warn(
+      `[lumos] <Img> crops to ${width}×${height}, which a ${source!.width}×${source!.height} source can only hold up to ${widthLimit}px wide. Widths ${dropped.join(", ")} were dropped rather than enlarged; a source that tall is needed to serve them.`,
+    );
+  }
+}
+
+const srcset =
+  unoptimizedRemote || isSvg
+    ? { layout: "none" as const }
+    : variant === "densities"
+      ? {
+          densities:
+            cropsToRatio && width * 2 > (widthLimit as number) ? [1] : [1, 2],
+        }
+      : variant === "full-width"
+        ? {
+            layout: variant,
+            ...(widthLimit !== undefined
+              ? { widths: withinLimit(BREAKPOINTS) }
+              : {}),
+            ...(loading === "lazy" ? { sizes: "auto" } : {}),
+          }
+        : {
+            sizes: sizes ?? defaultSizes,
+            layout: variant,
+            ...(cropsToRatio
+              ? { widths: withinLimit([width, width * 2]) }
+              : {}),
+          };
+
+const classes = [
+  "image",
+  variant === "densities" && "densities",
+  transparent && "transparent",
+  className,
+];
+
+const shared = {
+  src,
+  alt,
+  quality: quality === "high" ? undefined : quality,
+  loading,
+  format: resolvedFormat,
+  ...(fetchPriority !== "auto" ? { fetchpriority: fetchPriority } : {}),
+  ...sizing,
+  ...srcset,
+  ...attrs,
+  "class:list": classes,
+} as unknown as LocalImageProps | RemoteImageProps;
+---
+
+{render &&
+  src &&
+  (isPublicPath ? (
+    <img
+      src={src as string}
+      {...{ alt, width, height, loading }}
+      fetchpriority={fetchPriority === "auto" ? undefined : fetchPriority}
+      {...attrs}
+      class:list={classes}
+    />
+  ) : (
+    <Image {...shared} />
+  ))}

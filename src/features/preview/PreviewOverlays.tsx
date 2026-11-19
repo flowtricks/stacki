@@ -8,6 +8,7 @@ import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
+import { ownerClasses } from './textOwnerState';
 import { copiesToDraw, hoverIsSelection, loopChildPaths, collapseKind, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
 import { clipBand, spacingBands, withLiveSpacing, type CollapsePartner } from './spacingBands';
 import {
@@ -198,9 +199,14 @@ function NodeOutlines(props: PreviewOverlaysProps) {
       return (
         <div
           key={`${outline.slot}-${index}`}
-          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${ownsText(props.textMarks, { ...outline, pointedAt: props.hoverPath === outline.path }) ? ' text-owner' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${
-            outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path, path: outline.path }) : ''
-          }`}
+          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${ownerClasses(
+            props.textMarks,
+            {
+              path: outline.path,
+              slot: outline.slot === 'highlight' ? 'highlight' : outline.type === 'sel' ? 'sel' : 'hover',
+              pointedAt: props.hoverPath === outline.path,
+            },
+          )}`}
           style={boxStyle(box, props.scale)}
         >
           <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
@@ -397,39 +403,6 @@ function tagsCollide(instance: Box, mark: Box, scale: number): boolean {
     return verticalPx < TAG_HEIGHT_PX;
   }
   return false;
-}
-
-// How the selected instance shows the state of its text. While one is
-// picked it reads as that text's parent, tinted when the pointer is on the
-// instance beside the text rather than on it. Pointing at any other text of
-// it tints it too, as pointing at a component does.
-function textMarkState(marks: TextMarks | undefined, pointer: { readonly pointedAt: boolean; readonly path: string }): string {
-  const picked = marks?.picked;
-  const hover = marks?.hover;
-  // Words that name the instance they belong to (`scope`) mark that instance alone (text-owner); a tint is for words that do not say.
-  const onOtherText = hover !== undefined && !sameBox(hover, picked) && hover.scope === undefined;
-  const besideText = picked !== undefined && pointer.pointedAt && hover === undefined;
-  return (picked ? ' parent' : '') + (onOtherText || besideText ? ' tinted' : '');
-}
-
-/**
- * The instance whose words are under the pointer, or whose words are selected while the pointer is off its body, reads as the
- * field around them, the way a component does while its text is typed in: a thick faint outline and no name tag. Only that
- * instance, selected or hovered; its ancestors and the rest of the page are not drawn for it. Pointing at its body while its
- * words are selected is the plain component hover instead (the state matrix is beside `.node-outline.text-owner` in styles.css).
- */
-function ownsText(
-  marks: TextMarks | undefined,
-  outline: { readonly path: string; readonly slot: 'hover' | 'sel' | 'highlight'; readonly pointedAt: boolean },
-): boolean {
-  if (outline.slot === 'highlight') {
-    return false;
-  }
-  if (marks?.hover?.scope === outline.path) {
-    return true;
-  }
-  const bodyHovered = outline.pointedAt && marks?.hover === undefined;
-  return marks?.picked?.scope === outline.path && !bodyHovered;
 }
 
 function sameBox(left: Box, right: Box | undefined): boolean {

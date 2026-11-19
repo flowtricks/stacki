@@ -1,0 +1,68 @@
+---
+import type { HTMLAttributes } from "astro/types";
+
+interface Props extends HTMLAttributes<"div"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Overlay style. */
+  variant?: "solid" | "gradient";
+  /**
+   * Tint strength as a percentage.
+   *
+   * @min 0
+   * @max 100
+   * @int
+   */
+  strength?: number;
+}
+
+const {
+  render = true,
+  variant = "solid",
+  strength = 50,
+  class: className,
+  ...rest
+} = Astro.props;
+---
+
+{render && (
+  <div
+    class:list={["overlay", variant !== "solid" && variant, className]}
+    style={`--_strength: ${strength};`}
+    {...rest}
+  />
+)}
+
+<style is:global>
+  @layer components {
+    .overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background-color: color-mix(
+        in srgb,
+        black calc(var(--_strength, 50) / 100 * 80%),
+        transparent
+      );
+
+      &.gradient {
+        background-color: color-mix(
+          in srgb,
+          black calc(var(--_strength, 50) / 100 * 60%),
+          transparent
+        );
+        background-image: linear-gradient(
+          to bottom,
+          transparent,
+          color-mix(
+              in srgb,
+              black calc(var(--_strength, 50) / 100 * 62%),
+              transparent
+            )
+            84%
+        );
+      }
+    }
+  }
+</style>

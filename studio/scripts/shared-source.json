@@ -1104,6 +1104,7 @@
     "src/features/preview/previewViewport.css",
     "src/features/preview/previewViewport.ts",
     "src/features/preview/spacingBands.ts",
+    "src/features/preview/textOwnerState.ts",
     "src/features/preview/toolbarFit.ts",
     "src/features/preview/toolbarOverflow.css",
     "src/features/preview/useCanvasInteraction.ts",

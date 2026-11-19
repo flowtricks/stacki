@@ -97,7 +97,11 @@ test('the owning instance reads as the field around its words: thick faint outli
   }
   const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
   const rule = (selector) => css.slice(css.indexOf(`\n${selector} {`), css.indexOf('\n}', css.indexOf(`\n${selector} {`)));
-  assert.match(rule('.node-outline.text-owner'), /outline-width:\s*4px;[\s\S]*opacity:\s*0\.2;/, 'the thick faint outline of text being edited');
+  assert.match(
+    rule('.node-outline.text-owner'),
+    /outline-width:\s*4px;[\s\S]*outline-color:\s*color-mix/,
+    'the thick faint outline of text being edited, faint in its colour',
+  );
   assert.match(rule('.node-outline.text-owner .node-outline-tag'), /display:\s*none;/, 'its name tag goes');
 });
 
@@ -160,7 +164,7 @@ test('matrix: a selected layout and a hovered Card on its body draw the Card hov
 test('matrix: words selected, pointer on neither the words nor the Card, the Card rests as the faint field', () => {
   const drawn = cardLook('0.3', true, false, 'none');
   assert.equal(drawn.length, 1);
-  assert.match(drawn[0], /sel component text-owner parent/);
+  assert.match(drawn[0], /sel component text-owner owner-tag parent/);
 });
 
 test('matrix: words selected, pointer on the words, the Card is the field beside the words hover', () => {

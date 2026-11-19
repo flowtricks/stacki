@@ -1,0 +1,36 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slotContent } from "@/utils/slots.ts";
+
+type WrapperMargin =
+  "default" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "auto";
+
+interface Props extends HTMLAttributes<"div"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Top margin. */
+  marginTop?: WrapperMargin;
+}
+
+const {
+  render = true,
+  marginTop = "default",
+  class: className,
+  ...rest
+} = Astro.props;
+
+const content = await slotContent(Astro.slots);
+---
+
+{render && content && (
+  <div
+    class:list={[
+      "button-wrapper",
+      marginTop !== "default" && `margin-top-${marginTop}`,
+      className,
+    ]}
+    {...rest}
+  >
+    <Fragment set:html={content} />
+  </div>
+)}
