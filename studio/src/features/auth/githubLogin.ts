@@ -5,7 +5,7 @@ import { record, string } from '../../shared/validation';
 import { cookie, sessionCookie, signSession, verifySession } from './session';
 import { SignInFailure, signInMessageKeys, signInStep, type SignInProblem } from './signInFailure';
 import { translatorForLanguages } from '../../shared/requestTranslate';
-import { retryAt } from './githubRateLimit';
+import { isRateLimited, retryAt } from './githubRateLimit';
 import { loginWait, waitCookie } from './loginCooldown';
 import { loginCountdown } from './loginCountdown';
 import { loginLifetimeMs, type LoginAttempts } from './loginAttempts';
@@ -17,12 +17,9 @@ export interface AuthConfig {
   readonly EDITOR_GITHUB_IDS: string;
   readonly STUDIO_ORIGIN: string;
 }
-export async function githubLogin(
-  request: Request,
-  config: AuthConfig,
-  attempts: LoginAttempts,
-  authorize: (profile: GitHubProfile) => Promise<boolean>,
-): Promise<Response | undefined> {
+// `fresh` asks for a live repository lookup; false accepts a recent cached answer to spare GitHub.
+export type AuthorizeProfile = (profile: GitHubProfile, fresh: boolean) => Promise<boolean>;
+export async function githubLogin(request: Request, config: AuthConfig, attempts: LoginAttempts, authorize: AuthorizeProfile): Promise<Response | undefined> {
   const url = new URL(request.url);
   if (url.pathname === '/studio/auth/logout') {
     return logout(request, config);
@@ -79,10 +76,11 @@ export async function githubLogin(
   }
 }
 
-async function reuseLoginSession(request: Request, config: AuthConfig, authorize: (profile: GitHubProfile) => Promise<boolean>): Promise<Response | undefined> {
+async function reuseLoginSession(request: Request, config: AuthConfig, authorize: AuthorizeProfile): Promise<Response | undefined> {
   const current = await verifySession(cookie(request, '__Host-studio'), config.SESSION_SECRET, 'studio');
   if (current) {
-    if (await authorize(current)) {
+    // A signed session is already proof of an earlier sign-in, so a cached permission is enough and costs GitHub nothing.
+    if (await authorize(current, false)) {
       // Back, refresh, and a second callback should reuse an authorized session instead of OAuth.
       return new Response(null, {
         status: 302,
@@ -93,7 +91,7 @@ async function reuseLoginSession(request: Request, config: AuthConfig, authorize
   return undefined;
 }
 
-async function finishLogin(request: Request, config: AuthConfig, attempts: LoginAttempts, authorize: (profile: GitHubProfile) => Promise<boolean>) {
+async function finishLogin(request: Request, config: AuthConfig, attempts: LoginAttempts, authorize: AuthorizeProfile) {
   const url = new URL(request.url);
   const languages = request.headers.get('Accept-Language');
   const state = await verifySession(cookie(request, '__Host-studio-state'), config.SESSION_SECRET, 'login');
@@ -122,10 +120,10 @@ async function finishLogin(request: Request, config: AuthConfig, attempts: Login
   }
 }
 
-async function completeLogin(code: string, config: AuthConfig, authorize: (profile: GitHubProfile) => Promise<boolean>, languages: string | null) {
+async function completeLogin(code: string, config: AuthConfig, authorize: AuthorizeProfile, languages: string | null) {
   const token = await signInStep('token', () => exchangeCode(code, config));
   const profile = await signInStep('profile', () => fetchProfile(token));
-  if (!(await signInStep('repository', () => authorize(profile)))) {
+  if (!(await signInStep('repository', () => authorize(profile, true)))) {
     return loginPage('access', 403, '', 0, languages);
   }
   const session = await signInStep('session', () => signSession({ ...profile, expires: Date.now() + 28_800_000, audience: 'studio' }, config.SESSION_SECRET));
@@ -148,8 +146,8 @@ async function fetchProfile(token: string) {
     signal: AbortSignal.timeout(15_000),
   });
   if (!profileResponse.ok) {
-    if (profileResponse.status === 429) {
-      throw new SignInFailure('rate-limit', 'profile', 429, 'http', retryAt(profileResponse.headers));
+    if (isRateLimited(profileResponse.status, profileResponse.headers)) {
+      throw new SignInFailure('rate-limit', 'profile', profileResponse.status, 'http', retryAt(profileResponse.headers));
     }
     throw new SignInFailure('unavailable', 'profile', profileResponse.status, 'http');
   }
@@ -236,9 +234,9 @@ async function exchangeCode(code: string, config: AuthConfig) {
     }),
   });
   if (!tokenResponse.ok) {
-    if (tokenResponse.status === 429) {
+    if (isRateLimited(tokenResponse.status, tokenResponse.headers)) {
       reportTokenLimit(tokenResponse);
-      throw new SignInFailure('rate-limit', 'token', 429, 'http', retryAt(tokenResponse.headers));
+      throw new SignInFailure('rate-limit', 'token', tokenResponse.status, 'http', retryAt(tokenResponse.headers));
     }
     throw new SignInFailure('unavailable', 'token', tokenResponse.status, 'http');
   }

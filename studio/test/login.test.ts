@@ -7,7 +7,7 @@ import { githubLogin as handleLogin, type AuthConfig } from '../src/features/aut
 import type { GitHubProfile } from '../src/features/auth/profile';
 import { loginAttemptFixture } from './loginAttemptFixture';
 import { signSession, verifySession } from '../src/features/auth/session';
-import { retryAt } from '../src/features/auth/githubRateLimit';
+import { GitHubRateLimitError, isRateLimited, rateLimitWaitMsMax, retryAt } from '../src/features/auth/githubRateLimit';
 
 const attempts = loginAttemptFixture().create();
 function githubLogin(request: Request, configuration: AuthConfig, authorize: (profile: GitHubProfile) => Promise<boolean>) {
@@ -219,4 +219,65 @@ test('a callback opened during an existing wait clears its old state without con
   );
   assert.equal(response?.status, 429);
   assert.ok(response?.headers.getSetCookie().some((value) => value.startsWith('__Host-studio-state=;') && value.includes('Max-Age=0')));
+});
+
+test('secondary limits arrive as 403 with Retry-After or an exhausted quota and still show the wait page', async (t) => {
+  for (const [path, headers] of [
+    ['/login/oauth/access_token', { 'Retry-After': '184' }],
+    ['/user', { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 200) }],
+  ] as const) {
+    t.mock.method(globalThis, 'fetch', async (input: string | URL | Request) =>
+      String(input).endsWith(path) ? new Response('secret upstream body', { status: 403, headers }) : Response.json({ access_token: 'token' }),
+    );
+    const response = await githubLogin(await callback(), config, async () => assert.fail('Must not authorize'));
+    assert.equal(response?.status, 429);
+    assert.match(response?.headers.get('Retry-After') ?? '', /^(18[0-4]|19\d|200)$/);
+    assert.ok(!(await response?.text())?.includes('secret upstream body'));
+    t.mock.restoreAll();
+  }
+});
+
+test('a plain 403 without limit headers stays an unavailable error, not a wait', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 403 }));
+  const response = await githubLogin(await callback(), config, async () => assert.fail('Must not authorize'));
+  assert.equal(response?.status, 503);
+});
+
+test('a rate limit while checking repository access shows the wait page and is not retried', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (input: string | URL | Request) =>
+    String(input).endsWith('/user') ? Response.json({ id: 1, login: 'editor' }) : Response.json({ access_token: 'token' }),
+  );
+  const response = await githubLogin(await callback(), config, async () => {
+    throw new GitHubRateLimitError(403, Date.now() + 90_000);
+  });
+  assert.equal(response?.status, 429);
+  assert.match(response?.headers.get('Retry-After') ?? '', /^(89|90)$/);
+});
+
+test('an existing session is checked against the cache, never forcing a fresh GitHub lookup', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => assert.fail('No GitHub call'));
+  const token = await signSession({ id: 123, login: 'editor', audience: 'studio', expires: Date.now() + 600_000 }, config.SESSION_SECRET);
+  let fresh: boolean | undefined;
+  const response = await handleLogin(
+    new Request(config.STUDIO_ORIGIN + '/studio/auth/login', { headers: { Cookie: '__Host-studio=' + token } }),
+    config,
+    attempts,
+    async (_profile, wanted) => {
+      fresh = wanted;
+      return true;
+    },
+  );
+  assert.equal(response?.status, 302);
+  assert.equal(fresh, false);
+});
+
+test('wait times are bounded and 403 detection needs a limit signal', () => {
+  const now = 1_000_000;
+  assert.equal(retryAt(new Headers({ 'Retry-After': '999999999' }), now), now + rateLimitWaitMsMax);
+  assert.equal(isRateLimited(429, new Headers()), true);
+  assert.equal(isRateLimited(403, new Headers()), false);
+  assert.equal(isRateLimited(403, new Headers({ 'Retry-After': '5' })), true);
+  assert.equal(isRateLimited(403, new Headers({ 'x-ratelimit-remaining': '0' })), true);
+  assert.equal(isRateLimited(403, new Headers({ 'x-ratelimit-remaining': '4' })), false);
+  assert.equal(isRateLimited(500, new Headers({ 'Retry-After': '5' })), false);
 });

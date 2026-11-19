@@ -1,4 +1,5 @@
 import { GitHubRepository, type GitHubConfig } from '../github/github';
+import { throwIfRateLimited } from './githubRateLimit';
 import { record } from '../../shared/validation';
 import type { Identity } from './session';
 
@@ -50,9 +51,36 @@ export function createAccessCheck(lookup: (config: GitHubConfig, login: string) 
     return allowed;
   };
 }
-export const canEdit = createAccessCheck(async (config, login) => {
-  const token = await new GitHubRepository(config).installationToken();
-  const response = await fetch(`https://api.github.com/repos/${config.repository}/collaborators/${encodeURIComponent(login)}/permission`, {
+// An installation token lasts an hour, so minting one per sign-in (a JWT-signed POST) only spends GitHub's limits. Reuse it briefly.
+export const installationTokenTtlMs = 600_000;
+export const installationTokenEntriesMax = 8;
+
+export function createTokenCache(now: () => number = Date.now) {
+  const entries = new Map<string, { token: string; until: number }>();
+  return {
+    async get(key: string, mint: () => Promise<string>): Promise<string> {
+      const cached = entries.get(key);
+      if (cached && cached.until > now()) {
+        return cached.token;
+      }
+      const token = await mint();
+      if (entries.size >= installationTokenEntriesMax) {
+        entries.clear();
+      }
+      entries.set(key, { token, until: now() + installationTokenTtlMs });
+      return token;
+    },
+    evict(key: string): void {
+      entries.delete(key);
+    },
+  };
+}
+const tokens = createTokenCache();
+
+export async function collaboratorPermission(config: GitHubConfig, login: string, transport: typeof fetch = (...args) => fetch(...args)): Promise<unknown> {
+  const key = `${config.appId}:${config.installationId}:${config.repository}`;
+  const token = await tokens.get(key, () => new GitHubRepository(config).installationToken());
+  const response = await transport(`https://api.github.com/repos/${config.repository}/collaborators/${encodeURIComponent(login)}/permission`, {
     headers: {
       // i18n-ignore: an HTTP header value sent to GitHub.
       Authorization: `Bearer ${token}`,
@@ -66,9 +94,15 @@ export const canEdit = createAccessCheck(async (config, login) => {
   if (response.status === 404) {
     return null;
   }
+  if (response.status === 401) {
+    // The cached token was revoked early; the next attempt mints a new one. There is no retry loop here.
+    tokens.evict(key);
+  }
   if (!response.ok) {
+    throwIfRateLimited(response);
     throw new Error('Could not verify repository access. Please retry.');
   }
   const data: unknown = await response.json();
   return data;
-});
+}
+export const canEdit = createAccessCheck((config, login) => collaboratorPermission(config, login));

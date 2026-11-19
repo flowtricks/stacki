@@ -26,7 +26,7 @@ export class PreviewContainer extends Container<Environment> {
   override pingEndpoint = 'localhost/studio/api/status';
   override async fetch(request: Request): Promise<Response> {
     // OAuth coordination uses the existing Durable Object without starting the preview Container.
-    const auth = await githubLogin(request, this.env, this.loginAttempts, (profile) => canEdit(profile, this.env, true));
+    const auth = await githubLogin(request, this.env, this.loginAttempts, (profile, fresh) => canEdit(profile, this.env, fresh));
     if (auth) {
       return auth;
     }

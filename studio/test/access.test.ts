@@ -111,3 +111,30 @@ test('avatars use a verified GitHub ID, never an arbitrary peer-provided image U
   assert.throws(() => parseProfile({ id: -1, login: 'editor' }));
   assert.throws(() => parseProfile({ id: 123, login: '../other' }));
 });
+
+test('the permission lookup reuses one installation token and surfaces a GitHub limit with its wait', async () => {
+  const { collaboratorPermission } = await import('../src/features/auth/repositoryAccess');
+  const { GitHubRateLimitError } = await import('../src/features/auth/githubRateLimit');
+  const { generateKeyPairSync } = await import('node:crypto');
+  const privateKey = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const github = { appId: 'app', installationId: 'cache-test', privateKey, repository: 'owner/site', branch: 'main' };
+  let mints = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    if (String(input).includes('/access_tokens')) {
+      mints++;
+      return Response.json({ token: 'installation-token' });
+    }
+    return new Response(null, { status: 403, headers: { 'Retry-After': '120' } });
+  };
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await assert.rejects(collaboratorPermission(github, 'editor', globalThis.fetch), (error: unknown) => {
+        return error instanceof GitHubRateLimitError && error.retryAt > Date.now() + 100_000;
+      });
+    }
+    assert.equal(mints, 1, 'The second lookup reuses the cached token');
+  } finally {
+    globalThis.fetch = original;
+  }
+});

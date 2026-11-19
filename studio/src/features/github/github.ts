@@ -1,6 +1,7 @@
 import { prepareStudioBranch } from '../updates/githubUpdate';
 import type { StudioRelease } from '../updates/release';
 import { GitHubRequestError } from './githubErrors';
+import { throwIfRateLimited } from '../auth/githubRateLimit';
 import type { PublishSource, PublishReceipt } from '../../shared/publishSource';
 import type { Result } from '../../../vendor/stacki/shared/core/result';
 import type { ReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
@@ -177,6 +178,7 @@ export class GitHubRepository {
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
+      throwIfRateLimited(response);
       throw new GitHubRequestError(response.status);
     }
     const result: unknown = await response.json();
