@@ -8,6 +8,7 @@ import { CanvasTextSourceCue } from '../../../vendor/stacki/src/app/shell/Canvas
 import { useCanvasInteraction } from '../../../vendor/stacki/src/features/preview/useCanvasInteraction';
 import './previewToolbar.css';
 import { PreviewLoading, usePreviewLoading } from './PreviewLoading';
+import { useStartupView } from '../startup/useStartupView';
 import { CollaboratorOutlines } from '../collaboration/CollaboratorOutlines';
 import { useCursorChatShortcut, useCursorScale } from '../collaboration/cursorChat';
 import type { Peer } from '../collaboration/presence';
@@ -170,6 +171,8 @@ function PreviewSurface({
 }) {
   const loading = usePreviewLoading(props.preview.url, sizing.wrapRef, props.device === 'canvas', props.preview.retry);
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectName);
+  // A page that is already ready costs no request: the first read waits long enough for it to arrive.
+  const startup = useStartupView(!loading.ready, 1500);
   return (
     <div className="preview-frame-wrap" ref={sizing.wrapRef} data-preview-loading={!loading.ready} aria-busy={!loading.ready}>
       {props.preview.url &&
@@ -184,7 +187,7 @@ function PreviewSurface({
         ) : (
           <DesignFrame key={loading.attempt} interactive={interactive ?? false} props={props} sizing={sizing} shownGuide={shownGuide} />
         ))}
-      {!loading.ready && <PreviewLoading slow={loading.slow} retry={loading.retry} />}
+      {!loading.ready && <PreviewLoading slow={loading.slow} retry={loading.retry} startup={startup} />}
     </div>
   );
 }

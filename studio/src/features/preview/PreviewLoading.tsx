@@ -1,5 +1,8 @@
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useLayoutEffect, useState } from 'react';
+import { STARTUP_LIMITS, type StartupView } from '../startup/startupStages';
+import { STARTUP_STAGE_KEYS } from '../startup/startupText';
+import { useElapsed } from '../startup/useElapsed';
 
 // Readiness belongs to the document the frame is showing, not to the URL Studio
 // last asked for. Following a link in interact mode loads the new page in the
@@ -72,13 +75,24 @@ function readyPath(input: unknown): string | undefined {
   return input.startsWith('/') ? input : undefined;
 }
 
-export function PreviewLoading({ slow, retry }: { readonly slow: boolean; readonly retry: () => void }) {
+export function PreviewLoading({ slow, retry, startup }: { readonly slow: boolean; readonly retry: () => void; readonly startup: StartupView | undefined }) {
   const translate = useTranslate();
+  // While the container itself is still starting, the page cannot load and Retry cannot help:
+  // say which stage it is in, and offer Retry only after the stated limit.
+  const cold = startup !== undefined && startup.stage !== 'ready';
+  const late = useElapsed(STARTUP_LIMITS.retryAfterMs);
+  const message =
+    startup !== undefined && cold
+      ? translate(STARTUP_STAGE_KEYS[startup.stage])
+      : slow
+        ? translate('preview.studio.slow')
+        : translate('preview.studio.loadingYours');
+  const showRetry = cold ? late : slow;
   return (
     <div className="studio-preview-loading" role="status">
       <span className="studio-preview-spinner" aria-hidden="true" />
-      <p>{slow ? translate('preview.studio.slow') : translate('preview.studio.loadingYours')}</p>
-      {slow && <button onClick={retry}>{translate('preview.studio.retry')}</button>}
+      <p>{message}</p>
+      {showRetry && <button onClick={retry}>{translate('preview.studio.retry')}</button>}
     </div>
   );
 }

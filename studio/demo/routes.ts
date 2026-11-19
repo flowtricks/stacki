@@ -162,6 +162,9 @@ function readRoute(context: RouteContext, url: URL): Response | undefined {
       return json(200, { kind: 'local', editing: 'draft' });
     case '/studio/api/status':
       return json(200, { publishing: context.publish.poll() });
+    case '/studio/api/startup':
+      // The demo has no container to start: it is ready as soon as it opens.
+      return json(200, { stage: 'ready', history: [] });
     case '/studio/api/publish/availability':
       return json(200, context.publish.availability());
     case '/studio/api/publish/site-url':
