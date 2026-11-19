@@ -205,7 +205,15 @@ function report(match: TextMatchAt | undefined) {
     return undefined;
   }
   const box = match.element.getBoundingClientRect();
-  return { x: box.left, y: box.top, w: box.width, h: box.height, ...labelOf(match.element) };
+  // `scope` names the page instance the words belong to, so the app can draw that instance (and no other) as their owner.
+  return {
+    x: box.left,
+    y: box.top,
+    w: box.width,
+    h: box.height,
+    ...labelOf(match.element),
+    ...(match.target.scope === undefined ? {} : { scope: match.target.scope }),
+  };
 }
 
 function labelOf(element: Element): { readonly label: string; readonly kind: string } {

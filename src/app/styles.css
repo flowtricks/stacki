@@ -6420,6 +6420,21 @@ body > .embed-editor_provenance {
 .node-outline.sel {
   outline-width: 2px;
 }
+/* The component whose words are under the pointer: the same thick faint outline and missing name tag as while its text is typed in,
+   selected or only hovered, and no fill (the words carry the hover). */
+.node-outline.text-owner {
+  outline-width: 4px;
+  outline-offset: -2px;
+  opacity: 0.2;
+  background: none;
+}
+.node-outline.text-owner .node-outline-tag {
+  display: none;
+}
+.node-outline.hover.component.text-owner,
+.node-outline.sel.tinted.text-owner {
+  background: none;
+}
 /* Text editing reuses the selection outline; no second field border covers the page.
    Plain text steps back while it is typed into: the tag would cover the line
    above, and a thick faint band marks the field without competing with the

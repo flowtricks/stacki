@@ -198,8 +198,8 @@ function NodeOutlines(props: PreviewOverlaysProps) {
       return (
         <div
           key={`${outline.slot}-${index}`}
-          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${
-            outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path }) : ''
+          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${ownsHoveredText(props.textMarks, outline) ? ' text-owner' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${
+            outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path, path: outline.path }) : ''
           }`}
           style={boxStyle(box, props.scale)}
         >
@@ -403,12 +403,23 @@ function tagsCollide(instance: Box, mark: Box, scale: number): boolean {
 // picked it reads as that text's parent, tinted when the pointer is on the
 // instance beside the text rather than on it. Pointing at any other text of
 // it tints it too, as pointing at a component does.
-function textMarkState(marks: TextMarks | undefined, pointer: { readonly pointedAt: boolean }): string {
+function textMarkState(marks: TextMarks | undefined, pointer: { readonly pointedAt: boolean; readonly path: string }): string {
   const picked = marks?.picked;
   const hover = marks?.hover;
-  const onOtherText = hover !== undefined && !sameBox(hover, picked);
+  // Words that name the instance they belong to (`scope`) mark that instance alone (text-owner); a tint is for words that do not say.
+  const onOtherText = hover !== undefined && !sameBox(hover, picked) && hover.scope === undefined;
   const besideText = picked !== undefined && pointer.pointedAt && hover === undefined;
   return (picked ? ' parent' : '') + (onOtherText || besideText ? ' tinted' : '');
+}
+
+/**
+ * The instance whose words are under the pointer reads as the field around them, the way a component does while its text is
+ * typed in: a thick faint outline and no name tag. Only that instance, selected or hovered; its ancestors and the rest of the
+ * page are not drawn for it.
+ */
+function ownsHoveredText(marks: TextMarks | undefined, outline: { readonly path: string; readonly slot: 'hover' | 'sel' | 'highlight' }): boolean {
+  const scope = marks?.hover?.scope;
+  return scope !== undefined && outline.slot !== 'highlight' && outline.path === scope;
 }
 
 function sameBox(left: Box, right: Box | undefined): boolean {

@@ -32,7 +32,7 @@ const { renderToStaticMarkup } = require('react-dom/server');
 const { PreviewOverlays } = require(output);
 
 const BUTTON = { x: 100, y: 100, w: 180, h: 44 };
-const WORDS = { x: 120, y: 110, w: 100, h: 20, kind: 'text', label: '.button_text' };
+const WORDS = { x: 120, y: 110, w: 100, h: 20, kind: 'text', label: '.button_text', scope: '0.3' };
 const INFO = {
   label: 'Button',
   kind: 'component',
@@ -87,4 +87,24 @@ test('hovering the selected component draws no second component outline over its
   const drawn = outlines(render('0.3'));
   assert.equal(drawn.filter((name) => name.startsWith('node-outline hover') && !name.includes('text-mark')).length, 0);
   assert.ok(drawn.some((name) => name.includes('text-mark')));
+});
+
+test('the owning instance reads as the field around its words: thick faint outline, no name tag', () => {
+  for (const selected of [undefined, '0.5', '0.3']) {
+    const markup = render(selected);
+    const owners = [...markup.matchAll(/class="(node-outline (?:hover|sel)[^"]*text-owner[^"]*)"/g)];
+    assert.equal(owners.length, 1, `exactly the instance is drawn as the owner with ${selected} selected`);
+  }
+  const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
+  const rule = (selector) => css.slice(css.indexOf(`\n${selector} {`), css.indexOf('\n}', css.indexOf(`\n${selector} {`)));
+  assert.match(rule('.node-outline.text-owner'), /outline-width:\s*4px;[\s\S]*opacity:\s*0\.2;/, 'the thick faint outline of text being edited');
+  assert.match(rule('.node-outline.text-owner .node-outline-tag'), /display:\s*none;/, 'its name tag goes');
+});
+
+test('an ancestor that is selected is not tinted or marked for words that belong to another instance', () => {
+  // The layout (0.5) is selected and the pointer is on the Button's words (scope 0.3).
+  const markup = render('0.5');
+  const selected = [...markup.matchAll(/class="(node-outline sel[^"]*)"/g)].map((match) => match[1]);
+  assert.equal(selected.length, 1);
+  assert.doesNotMatch(selected[0], /tinted|text-owner/, selected[0]);
 });
