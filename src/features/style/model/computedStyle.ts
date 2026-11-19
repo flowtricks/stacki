@@ -119,69 +119,6 @@ export function computedStylesSettled(nodeId: string): boolean {
   return [...learnedKeys].every((key) => reading.read(elementKey, key).kind === 'settled');
 }
 
-// The element a switch showed before its computed values arrived (StylePanel useSelectionShown),
-// and until when its sections may wait for them. One element at a time: the panel
-// shows one.
-const COMPUTED_AWAIT_MS_MAX = 1500;
-let awaited: { readonly nodeId: string; readonly untilMs: number } | undefined;
-const awaitedListeners = new Set<() => void>();
-
-// Any popup the panel draws says what it is (usePopupOpen.ts uses the same roles).
-const POPUP_SELECTOR = '[role="menu"],[role="dialog"],[role="listbox"]';
-
-function popupOnScreen(): boolean {
-  return typeof document !== 'undefined' && document.querySelector(POPUP_SELECTOR) !== null;
-}
-
-/** A switch showed `nodeId` without its values in hand: its sections wait for them, bounded. */
-export function awaitComputedStyles(nodeId: string): void {
-  assert(nodeId.length > 0, 'awaitComputedStyles: a node id is never empty');
-  if (popupOnScreen()) {
-    return;
-  }
-  awaited = { nodeId, untilMs: performance.now() + COMPUTED_AWAIT_MS_MAX };
-  for (const listener of awaitedListeners) {
-    listener();
-  }
-}
-
-/**
- * Whether the selected element's sections should wait in their placeholders for its computed
- * values. Only after a switch to an element whose values were not in hand (awaitComputedStyles): a field drawn
- * then is the "Default" or the empty input that the answer replaces. Bounded by
- * COMPUTED_AWAIT_MS_MAX, after which the fields show what there is; once the values have
- * settled, later waits hold what was shown instead (useStableStyleValue).
- */
-export function useComputedStylesAwaiting(): boolean {
-  const [, bump] = useState(0);
-  useEffect(() => {
-    const sync = () => bump((count) => count + 1);
-    const offCache = cache.subscribe(sync);
-    awaitedListeners.add(sync);
-    const timer = window.setInterval(sync, COMPUTED_AWAIT_MS_MAX);
-    return () => {
-      offCache();
-      awaitedListeners.delete(sync);
-      window.clearInterval(timer);
-    };
-  }, []);
-  const nodeId = getHost().selectedId;
-  if (awaited === undefined || awaited.nodeId !== nodeId) {
-    return false;
-  }
-  // A menu or picker the person opened lives in those fields: placeholders would unmount it.
-  // Showing the fields as they are is the lesser wrong, so the wait ends.
-  if (popupOnScreen()) {
-    awaited = undefined;
-    return false;
-  }
-  if (performance.now() >= awaited.untilMs || computedStylesSettled(awaited.nodeId)) {
-    awaited = undefined;
-    return false;
-  }
-  return true;
-}
-
 /**
  * Ask the page about `nodeId` before it is selected: every key a control has asked for,
  * in one batch. Resolves once each has an answer (or the page could not answer), so the

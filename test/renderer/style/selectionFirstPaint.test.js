@@ -4,8 +4,9 @@
 // font-family, font-weight, font-size, line-height, letter-spacing and text-transform
 // variable values) must never put a plain-field editor for those properties on screen:
 // no "Default" Font or Weight dropdown, no literal value, from the selection event until the
-// chips are there. While the new element is being read the Typography section draws
-// placeholders in the fields' shape; when the answer lands the chips replace them.
+// chips are there. While the new element is being read the Typography section keeps showing the
+// element it just left (held: not pressable, never a grey skeleton); when the answer lands the
+// chips replace it. A plain editor is allowed only inside that held body.
 // Method: the real EmbedEditor is mounted in jsdom over a host like Desktop's, with the
 // stylesheet read held back 200 ms (the bridge reply, artificially slow). A MutationObserver
 // samples the typography rows after every DOM change from the selection event to the end, and
@@ -171,9 +172,14 @@ function frameOf(container) {
   const section = [...container.querySelectorAll('section, .embed-editor_section')].find((node) => /Typography/i.test(node.textContent ?? ''));
   const scope = section ?? container;
   return {
-    placeholders: scope.querySelectorAll('.ui-skeleton').length,
+    // The sections only: the selector well has its own chip placeholders.
+    placeholders: container.querySelectorAll('.embed-editor_decls .ui-skeleton').length,
     chips: scope.querySelectorAll('[data-chip]').length,
-    defaults: [...scope.querySelectorAll('button, [role="combobox"], select')].filter((node) => /^\s*Default\s*$/.test(node.textContent ?? '')).length,
+    held: scope.querySelectorAll('.is-held').length,
+    // Only a plain editor outside the held body is the new element's.
+    defaults: [...scope.querySelectorAll('button, [role="combobox"], select')].filter(
+      (node) => /^\s*Default\s*$/.test(node.textContent ?? '') && node.closest('.is-held') === null,
+    ).length,
     text: (scope.textContent ?? '').replace(/\s+/g, ' ').slice(0, 200),
   };
 }
@@ -192,7 +198,9 @@ test('selecting a variable-styled element never paints plain fields first', asyn
   await wait(DELAY_MS + 900);
   observer.disconnect();
   for (const frame of frames) {
-    console.log(JSON.stringify({ at: frame.at, placeholders: frame.placeholders, chips: frame.chips, defaults: frame.defaults }));
+    console.log(
+      JSON.stringify({ at: frame.at, placeholders: frame.placeholders, chips: frame.chips, held: frame.held, defaults: frame.defaults, text: frame.text }),
+    );
   }
   assert.ok(frames.length > 0, 'the panel changed');
   assert.ok(
@@ -200,16 +208,15 @@ test('selecting a variable-styled element never paints plain fields first', asyn
     'no Default dropdown is ever drawn for the new element',
   );
   assert.ok(
-    frames.every((frame) => frame.placeholders > 0 || frame.chips > 0),
-    'every frame is a placeholder or the chips, never plain fields',
+    frames.every((frame) => frame.placeholders === 0),
+    'no skeleton is ever drawn in the sections',
   );
-  assert.ok(frames[0].placeholders > 0 && frames[0].chips === 0, 'the first frame after the selection is the placeholder');
   assert.ok(
-    frames.some((frame) => frame.at < DELAY_MS && frame.chips === 0),
-    'the placeholder holds until the answer',
+    frames.every((frame) => frame.held > 0 || frame.chips > 0),
+    "every frame is the held body or the chips, never the new element's plain fields",
   );
   const last = frames[frames.length - 1];
-  assert.ok(last.chips >= 6 && last.placeholders === 0, `the chips replace it: ${JSON.stringify(last)}`);
+  assert.ok(last.chips >= 6 && last.held === 0, `the chips replace it: ${JSON.stringify(last)}`);
   assert.ok(
     frames.every((frame) => frame.chips === 0 || frame.chips >= 6),
     'the chips arrive together, not in steps',
@@ -232,7 +239,7 @@ test('a dropdown opened after the answer stays open through a data refresh, keep
   context.after(panel.unmount);
   globalThis.__delayMs = DELAY_MS;
   panel.select('n2', 'heading big');
-  assert.ok(weightChip(panel.container) === undefined, 'before the answer there is no control to open: only placeholders');
+  assert.ok(weightChip(panel.container) === undefined, "before the answer there is no chip to open: the held body is the last element's");
   await wait(DELAY_MS + 700);
   const picker = await openWeightPicker(panel);
   assert.ok(picker, 'the dropdown opened');

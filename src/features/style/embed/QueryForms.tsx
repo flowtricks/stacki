@@ -737,9 +737,9 @@ export type StyleCardProps = {
   /** Whether the selected element's chips have finished landing (ScanState.settled). */
   selectionSettled: boolean;
   /**
-   * The selected element has not been read yet: nothing about its rules is known, so a field
-   * drawn now would be the plain default that the real answer then replaces. The sections
-   * draw placeholders in the fields' shape until it lands.
+   * The selected element has no settled answer yet: a field drawn now would be the plain default
+   * that the real answer then replaces. The sections keep showing what they showed, untouchable,
+   * until it lands (bounded by the canvas's own deadline).
    */
   selectionAwaiting: boolean;
   cssCodeOpen: boolean;

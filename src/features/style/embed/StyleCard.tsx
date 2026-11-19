@@ -32,7 +32,6 @@ import FlexChildSection from '../FlexChildSection';
 import EffectsSection from '../EffectsSection';
 import { groupProps } from '../model/sections';
 import { type ResolvedProp, type ResolvedStyle } from '../model/resolved';
-import { SkeletonRows, Skeleton } from '../../../ui/Skeleton';
 import { assert } from '../../../../shared/core/assert';
 import { queryKey } from '../model/css';
 import { PencilIcon, EmbedIcon, CreateStyleTagIcon, ComponentIcon, breakpointIcon } from './EditorBasics';
@@ -49,7 +48,6 @@ import {
 import { ALIGN_PROPS, GRID_CONTROL_PROPS, LayoutModeSections, type SourceOption } from './LayoutRows';
 import { SelectorPicker, ADD_QUERY, PlusIcon } from './SelectorPicker';
 import { useOptimisticEdits } from './useOptimisticEdits';
-import { useComputedStylesAwaiting } from '../model/computedStyle';
 import { PreviewPropContext } from '../connectFieldHelpers';
 import { AddQueryForm, EditQueryForm, CssCodeSection, type StyleCardProps } from './QueryForms';
 
@@ -534,9 +532,6 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
   const groups = groupProps([...resolved.props.keys()], SECTION_ORDER);
   const sectionIds = groups.map((group) => group.def.id);
   const [closedSectionIds, toggleSection] = useSectionVisibility();
-  // Just after a switch the page may still owe the element's computed values: the
-  // sections wait in their placeholders rather than draw the fields the answer replaces.
-  const computedAwaiting = useComputedStylesAwaiting();
   // One place for every section: a committed or cleared property reads as the edit made it until its save settles.
   const { read, setProp, clearProp } = useOptimisticEdits(resolved.props, { setProp: card.setProp, clearProp: card.clearProp, selector: card.activeSelector });
   // Read during render: a switch re-renders the card (the scan resets), and the host holds it.
@@ -577,14 +572,10 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
             mark={group.props.some((prop) => read(prop)?.source === 'selected') ? 'own' : group.props.length ? 'other' : undefined}
             headerAction={group.def.id === 'spacing' ? <SpacingCenterButton read={read} busy={card.busy} setProp={setProp} clearProp={clearProp} /> : undefined}
           >
-            {card.selectionAwaiting || computedAwaiting ? (
-              <SectionPlaceholder rows={PLACEHOLDER_ROWS[group.def.id] ?? PLACEHOLDER_ROWS_DEFAULT} />
-            ) : (
-              <>
-                {SECTION_CONTROLS[group.def.id]?.(section)}
-                <FallThroughRows props={fallThroughProps(group.def.id, group.props)} resolved={resolved} section={section} />
-              </>
-            )}
+            <HeldBody hold={card.selectionAwaiting}>
+              {SECTION_CONTROLS[group.def.id]?.(section)}
+              <FallThroughRows props={fallThroughProps(group.def.id, group.props)} resolved={resolved} section={section} />
+            </HeldBody>
           </SectionBlock>
         ))}
       </div>
@@ -592,23 +583,21 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
   );
 }
 
-// How many rows each section's placeholder draws while the selected element is being read.
-// Without an answer there is nothing to show (a field drawn now would be the plain default
-// that a variable chip then replaces), so the section holds a skeleton in the fields' shape.
-const PLACEHOLDER_ROWS: Readonly<Record<string, number>> = { typography: 7, size: 4, spacing: 4, layout: 3, position: 3, backgrounds: 3, borders: 3 };
-const PLACEHOLDER_ROWS_DEFAULT = 2;
-
-function SectionPlaceholder({ rows }: { readonly rows: number }) {
+// A section's body, held while the selected element has no settled answer. Drawn from the source alone it would
+// be the plain defaults that the answer then replaces (a variable's chip flipping to a dropdown and back), and
+// a placeholder in their place was the grey skeleton a switch showed for up to 1.5 s. So the body the section
+// last drew from an answer stays on screen, the same element as before so React leaves it alone, and cannot be
+// pressed: it belongs to the element the person just left. It lasts until the canvas's answer lands.
+// The wrapper is always there (`display: contents`) so a hold starting or ending never remounts what is inside.
+function HeldBody({ hold, children }: { readonly hold: boolean; readonly children: ReactNode }) {
+  const last = useRef<ReactNode>(undefined);
+  if (!hold || last.current === undefined) {
+    last.current = children;
+  }
   return (
-    <SkeletonRows
-      count={rows}
-      row={(widthPercent) => (
-        <div className="embed-editor_size-row">
-          <Skeleton width="30%" />
-          <Skeleton width={`${widthPercent}%`} height="1.75rem" />
-        </div>
-      )}
-    />
+    <div className={`embed-editor_body${hold ? ' is-held' : ''}`} aria-busy={hold}>
+      {last.current}
+    </div>
   );
 }
 

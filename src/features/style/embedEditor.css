@@ -6236,3 +6236,12 @@
   min-width: 0;
   padding: 0;
 }
+
+/* A section's body (StyleCard HeldBody): no box of its own, so the rows lay out as if it were not there.
+   While held it shows the element the person just left, which cannot be pressed. */
+.embed-editor_body {
+  display: contents;
+}
+.embed-editor_body.is-held {
+  pointer-events: none;
+}

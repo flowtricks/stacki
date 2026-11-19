@@ -7,7 +7,7 @@ import type { ClassPlacement } from '../../editor/classAttr';
 import { styleableSelection } from './model/styleTarget';
 import { setHost } from './model/host';
 import { prefetchComponentSources } from './model/componentSourceCache';
-import { awaitComputedStyles, computedStylesSettled, prefetchComputedStyles } from './model/computedStyle';
+import { computedStylesSettled, prefetchComputedStyles } from './model/computedStyle';
 import { assert } from '../../../shared/core/assert';
 import { PX_LENGTHS, sameLengthUnit, type LengthUnit } from '../../../shared/properties/lengthUnit';
 import EmbedEditor from './EmbedEditor';
@@ -181,9 +181,9 @@ function selectionKeyOf(props: StylePanelProps): string {
  * held id looked up in the newly opened document's tree. Now the next element is shown at
  * once: an element seen before under the same CSS paints from its last settled answer, and
  * one that is not draws the chip-shaped placeholders until its answer lands whole
- * (useElementReset). Its fields wait in their placeholders for the page's computed values
- * rather than draw "Default" and empty inputs that the answer then replaces
- * (awaitComputedStyles), and those values are asked for in one batch.
+ * (useElementReset). The sections never draw placeholders: their real controls are in the
+ * first frame, from what the source already says, and the page's computed values are asked
+ * for in one batch so they land as soon as the canvas can answer.
  */
 function useSelectionShown(props: StylePanelProps, renderedClasses: string[]): ShownSelection {
   const key = selectionKeyOf(props);
@@ -198,7 +198,6 @@ function useSelectionShown(props: StylePanelProps, renderedClasses: string[]): S
       return;
     }
     if (!computedStylesSettled(targetId)) {
-      awaitComputedStyles(targetId);
       void prefetchComputedStyles(targetId);
     }
   }, [key, targetId]);

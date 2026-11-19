@@ -455,7 +455,9 @@ export function useSelectionCard(
     activePicked: selectedSelectorText !== undefined,
     // No scan at all (the panel's first moments) has nothing on its way to hold for.
     selectionSettled: scan === undefined || scan.settled,
-    // Set by a change of element until its first settled answer (ScanState.awaitingFirstAnswer).
+    // Set by a change of element until its first settled answer (ScanState.awaitingFirstAnswer). Until then
+    // the sections hold what they last showed (StyleCard HeldBody) rather than draw a skeleton or the
+    // source-only fields that the canvas's answer would replace.
     selectionAwaiting: scan?.awaitingFirstAnswer === true,
     selectors: selectorChips,
     suggestions: selectorSuggestions,
