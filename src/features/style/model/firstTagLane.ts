@@ -107,6 +107,24 @@ export class FirstTagLane {
     lane.queue.set(key, { selector, write });
   }
 
+  /**
+   * A write of `prop` for `requested` went around the lane: the scan already shows the new tag and
+   * its rule, so the panel wrote (or cleared) the property in place while the lane still waited for
+   * the scan that drains it. That write is newer than any waiting one for the same selector and
+   * property, so the waiting one is dropped; draining it afterwards put the older value back
+   * (Check on 20293df9, Windows: 0.5 typed as the tag landed, 0.4 left on the page). Says whether a
+   * waiting write was dropped.
+   */
+  supersede(requested: string, prop: string): 'dropped' | 'none-waiting' {
+    const lane = this.lane;
+    assert(lane !== undefined, 'FirstTagLane.supersede: a lane is open');
+    assert(prop.length > 0, 'FirstTagLane.supersede: a write names a property');
+    const selector = requested === lane.requested ? lane.selector : requested;
+    const dropped = lane.queue.delete(`${selector}\u0000${prop}`);
+    assert(!lane.queue.has(`${selector}\u0000${prop}`), 'FirstTagLane.supersede: nothing older waits for this property');
+    return dropped ? 'dropped' : 'none-waiting';
+  }
+
   /** The writes that go into the new tag itself: the first selector's, joined in the event that opened the lane. */
   takeFirstWrites(): readonly LaneWrite[] {
     const lane = this.lane;

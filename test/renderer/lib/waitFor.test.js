@@ -7,7 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MOTION_SETTLED_EXPRESSION, WAIT_LIMITS, pollUntil, waitFor } = require('../../helpers/waitFor.js');
+const { MOTION_SETTLED_EXPRESSION, WAIT_LIMITS, pollUntil, waitFor, waitForSteady } = require('../../helpers/waitFor.js');
 
 const counter = () => {
   let count = 0;
@@ -67,4 +67,31 @@ test('the default bound is stated and finite', () => {
   assert.ok(Number.isSafeInteger(WAIT_LIMITS.pollCountMax));
   assert.ok(WAIT_LIMITS.pollCountMax * WAIT_LIMITS.pollIntervalMs <= 10_000, 'a default wait ends within ten seconds');
   assert.ok(MOTION_SETTLED_EXPRESSION.includes('data-popup-phase'), 'the motion check covers a popup opening');
+});
+
+test('waitForSteady returns a value only once it has held, unchanged, for the steady count', async () => {
+  // 1, 2, 3, then 3 forever: steady from the third read on, so the sixth poll is the third equal one.
+  const read = counter();
+  const value = await waitForSteady({
+    what: 'three, steady',
+    read: () => Math.min(read(), 3),
+    until: (seen) => seen >= 3,
+    steadyPollCount: 3,
+    pollIntervalMs: 1,
+  });
+  assert.equal(value, 3);
+});
+
+test('waitForSteady never takes a value that is overwritten: a late change starts the count again', async () => {
+  // The panel race this exists for: the last value lands, then an older queued one is written over it.
+  const sequence = ['0.4', '0.5', '0.5', '0.4', '0.4', '0.4', '0.4'];
+  let index = 0;
+  const read = () => sequence[Math.min(index++, sequence.length - 1)];
+  await assert.rejects(
+    waitForSteady({ what: 'the last value steady', read, until: (seen) => seen === '0.5', steadyPollCount: 3, pollCountMax: 7, pollIntervalMs: 1 }),
+    { message: 'waitForSteady: the last value steady did not hold steady for 3 polls within 7 polls (~7 ms); last observed: "0.4"' },
+  );
+  await assert.rejects(waitForSteady({ what: 'x', read: () => 1, until: () => true, steadyPollCount: 1 }), {
+    message: 'Assertion failed: waitForSteady(x) steadyPollCount must be an integer of at least 2',
+  });
 });

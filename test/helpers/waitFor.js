@@ -17,6 +17,9 @@ const WAIT_LIMITS = Object.freeze({
   // 200 polls of 50 ms is ten seconds: an order of magnitude past the slowest
   // runner seen for any single UI transition, well inside every test's timeout.
   pollCountMax: 200,
+  // Six equal polls (~300 ms) of nothing changing: longer than any one follow-up task the
+  // panels queue after a commit, shorter than the fixed 900 ms pauses this replaces.
+  steadyPollCount: 6,
 });
 
 // A page expression for Electron probes (`executeJavaScript(MOTION_SETTLED_EXPRESSION)`): true
@@ -106,4 +109,42 @@ async function waitFor(options) {
   }
 }
 
-module.exports = { MOTION_SETTLED_EXPRESSION, WAIT_LIMITS, describeObserved, pollUntil, waitFor };
+/**
+ * Waits for a state to hold AND stay put: polls `read` until `until(value)` holds on
+ * `steadyPollCount` consecutive polls with the same serialized value, then returns that value.
+ * For "the panel went quiet" after an action whose follow-up writes arrive in later tasks (a
+ * queued save, a rescan): a fixed pause guesses how long they take; this waits until they have
+ * stopped changing anything the test can see, and throws at the bound, naming `what`, if they
+ * never do. A late change resets the count, so a value that lands and is then overwritten is
+ * never mistaken for the final one.
+ */
+async function waitForSteady(options) {
+  const steadyPollCount = options.steadyPollCount ?? WAIT_LIMITS.steadyPollCount;
+  if (!Number.isSafeInteger(steadyPollCount) || steadyPollCount < 2) {
+    throw new Error(`Assertion failed: waitForSteady(${options.what}) steadyPollCount must be an integer of at least 2`);
+  }
+  let previous;
+  let steady = 0;
+  const outcome = await pollUntil({
+    ...options,
+    until: (value) => {
+      const text = describeObserved(value);
+      if (options.until(value) && text === previous) {
+        steady += 1;
+      } else {
+        steady = options.until(value) ? 1 : 0;
+      }
+      previous = text;
+      return steady >= steadyPollCount;
+    },
+  });
+  if (outcome.kind === 'reached') {
+    return outcome.value;
+  }
+  const { pollIntervalMs } = assertWaitOptions(options);
+  throw new Error(
+    `waitForSteady: ${options.what} did not hold steady for ${steadyPollCount} polls within ${outcome.pollCount} polls (~${outcome.pollCount * pollIntervalMs} ms); last observed: ${describeObserved(outcome.value)}`,
+  );
+}
+
+module.exports = { MOTION_SETTLED_EXPRESSION, WAIT_LIMITS, describeObserved, pollUntil, waitFor, waitForSteady };

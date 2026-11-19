@@ -114,7 +114,7 @@ export function useClearProp(
   const { selectedNativeIndex } = resolvedHook;
   const { nativeClearAt } = nativeOps;
   const { ruleFor, rulesSetting } = writeNewRuleHook;
-  const { propLayer } = addQuery;
+  const { propLayer, supersedeFirstTagWrite } = addQuery;
 
   // Resolves once every write has finished and the model has been rebuilt from it, so the
   // panel knows when its optimistic cleared look (useOptimisticEdits.ts) can hand over.
@@ -138,6 +138,10 @@ export function useClearProp(
         entry.props.push(embedProp);
         byRule.set(rule.ruleId, entry);
       }
+    }
+    // A clear is newer than a value still waiting for the page's first tag (firstTagLane.ts).
+    for (const embedProp of embedProps) {
+      supersedeFirstTagWrite(embedProp);
     }
     byRule.forEach(({ rule, props: ruleProps }) => settled.push(onClearProp(rule, ruleProps)));
     return Promise.all(settled).then(() => undefined);

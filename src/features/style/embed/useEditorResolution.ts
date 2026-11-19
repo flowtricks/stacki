@@ -342,6 +342,14 @@ export function useCreateRule(
     }
     return createRules([write], requested);
   };
+  // A write or clear of `prop` that goes straight to a rule the scan already shows, while the lane
+  // still holds the writes that waited for the new tag: the older waiting value is dropped, or the
+  // drain would write it over this newer one (firstTagLane.ts supersede).
+  const supersedeFirstTagWrite = (prop: string): void => {
+    if (firstTagLane.holds(getHost().openFilePath)) {
+      firstTagLane.supersede(activeSelector, prop);
+    }
+  };
   // A Webflow-breakpoint context with no equivalent embed query yet writes into a
   // synthesized @media block; otherwise the embed's base or existing query block.
   const contextBpMedia = () =>
@@ -512,7 +520,7 @@ export function useCreateRule(
     }
     return placed;
   };
-  return { createSelectedRule, liveCreateInNestedQuery };
+  return { createSelectedRule, liveCreateInNestedQuery, supersedeFirstTagWrite };
 }
 
 // Scaffold a just-typed query into the embed.
@@ -591,7 +599,7 @@ export function useAddQuery(
   const { canNative } = nativeTarget;
   const { nativeContextOk, resolved, selectedNativeIndex } = resolvedHook;
   const { ruleFor } = writeNewRuleHook;
-  const { createSelectedRule } = createRule;
+  const { createSelectedRule, supersedeFirstTagWrite } = createRule;
   const { writeEmptyContext } = emptyContext;
 
   // Add a custom query (@media/@container/@supports) to the current selector from the
@@ -625,7 +633,11 @@ export function useAddQuery(
   // new one. Also the fallback target when a native value won't apply.
   const writeEmbedProp = (write: PropWrite) => {
     const rule = ruleFor(write.prop);
-    return rule ? onSetProp(rule, write.prop, write.value, write.important) : createSelectedRule(write);
+    if (rule === undefined) {
+      return createSelectedRule(write);
+    }
+    supersedeFirstTagWrite(write.prop);
+    return onSetProp(rule, write.prop, write.value, write.important);
   };
 
   // Native edits go to the picked class style. Webflow accepts nearly any
@@ -654,7 +666,7 @@ export function useAddQuery(
     }
     return canNative ? 'native' : 'embed';
   };
-  return { nativeHandle, onAddQuery, propLayer, writeEmbedProp };
+  return { nativeHandle, onAddQuery, propLayer, supersedeFirstTagWrite, writeEmbedProp };
 }
 
 // Native write attempts, and clearing a coerced value after a failed one.

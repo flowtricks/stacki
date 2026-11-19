@@ -65,6 +65,29 @@ test('writes made while the tag saves wait for the scan that shows it, then drai
   assert.deepEqual(lane.afterScan(PAGE, []), { kind: 'idle' });
 });
 
+test('a write that went straight to the shown rule drops the older one waiting for the same property, and only that one', () => {
+  // The panel's half (firstStylesPanel.test.js): 0.5 committed into the rule the scan shows while
+  // 0.4 still waited; draining 0.4 afterwards wrote it over 0.5.
+  const lane = opened();
+  lane.join('div', write('opacity', '0.1'));
+  lane.takeFirstWrites();
+  lane.join('div', write('opacity', '0.4'));
+  lane.join('div', write('padding-top', '1rem'));
+  lane.join('.other', write('opacity', '0.9'));
+  lane.settle('written');
+  assert.equal(lane.supersede('div', 'opacity'), 'dropped', 'the requested selector maps to the new rule, as join does');
+  assert.equal(lane.supersede('.class', 'opacity'), 'none-waiting', 'dropped once');
+  assert.equal(lane.supersede('.class', 'color'), 'none-waiting', 'another property waits for nothing');
+  const outcome = lane.afterScan(PAGE, ['node:/p/src/pages/index.astro:n9']);
+  assert.deepEqual(outcome.batches, [
+    { selector: '.class', writes: [write('padding-top', '1rem')] },
+    { selector: '.other', writes: [write('opacity', '0.9')] },
+  ]);
+  assert.throws(() => lane.supersede('div', 'opacity'), /a lane is open/, 'the panel asks only while the lane holds');
+  const fresh = opened();
+  assert.throws(() => fresh.supersede('div', ''), /a write names a property/);
+});
+
 test('a failed tag lets go at once and drops what waited for it', () => {
   const lane = opened();
   lane.join('div', write('opacity', '0.1'));
