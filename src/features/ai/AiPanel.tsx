@@ -29,6 +29,7 @@ import {
   useAiState,
   type AiState,
 } from './aiStore';
+import { loadReviewMode } from './reviewChanges';
 import { ChatComposer } from './composer/ChatComposer';
 import { usePrewarm } from './prewarm';
 import { agentBadge, type AgentBadge } from './agentSwitch';
@@ -62,6 +63,10 @@ export default function AiPanel(props: AiPanelProps) {
   useEffect(() => {
     void loadAiProject(props.projectPath).then(() => openStartingChat());
   }, [props.projectPath]);
+  // Whether changes wait for Keep is the person's setting, read once the panel opens.
+  useEffect(() => {
+    void loadReviewMode();
+  }, []);
   // The panel is on screen while it is mounted: a turn that ends in the open chat is read at once.
   useEffect(() => {
     setPanelVisibility('visible');

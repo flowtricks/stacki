@@ -196,6 +196,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
     appsPersonHidden: false,
     aiAskBeforeTrust: false,
     aiTrackChanges: true,
+    aiReviewChanges: false,
     localePreference: 'system',
   });
   assert.equal(parseSettings({ sound: true, appsPersonHidden: true }).appsPersonHidden, true);
@@ -207,6 +208,13 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
   assert.equal(parseSettings({ sound: true, aiTrackChanges: true }).aiTrackChanges, true);
   for (const bad of ['yes', 'false', 0, 1, {}]) {
     assert.throws(() => parseSettings({ sound: true, aiTrackChanges: bad }), /boolean/);
+  }
+  // Changes apply without asking unless the person turned review on; a file written before the setting existed stays off.
+  assert.equal(parseSettings({ sound: true }).aiReviewChanges, false);
+  assert.equal(parseSettings({ sound: true, aiReviewChanges: true }).aiReviewChanges, true);
+  assert.equal(parseSettings({ sound: true, aiReviewChanges: false }).aiReviewChanges, false);
+  for (const bad of ['yes', 'true', 0, 1, {}]) {
+    assert.throws(() => parseSettings({ sound: true, aiReviewChanges: bad }), /boolean/);
   }
   assert.throws(() => parseSettings({ sound: true, appsPersonHidden: 'yes' }), /boolean/);
   assert.throws(() => parseSettings({ sound: 'yes' }), /boolean/);
@@ -225,6 +233,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
       appsPersonHidden: false,
       aiAskBeforeTrust: false,
       aiTrackChanges: true,
+      aiReviewChanges: false,
       localePreference: 'system',
     },
   );

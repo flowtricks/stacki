@@ -1,6 +1,6 @@
 import { boolean, object } from '../core/boundary';
 
-export const PREFERENCE_NAMES = ['sound', 'usageCountsEnabled', 'appsPersonHidden', 'aiAskBeforeTrust', 'aiTrackChanges'] as const;
+export const PREFERENCE_NAMES = ['sound', 'usageCountsEnabled', 'appsPersonHidden', 'aiAskBeforeTrust', 'aiTrackChanges', 'aiReviewChanges'] as const;
 export type PreferenceName = (typeof PREFERENCE_NAMES)[number];
 
 export function parsePreferenceName(input: unknown): PreferenceName {
@@ -17,6 +17,7 @@ export const parsePreferences = object({
   appsPersonHidden: boolean,
   aiAskBeforeTrust: boolean,
   aiTrackChanges: boolean,
+  aiReviewChanges: boolean,
 });
 export const parsePreferenceResult = object({
   sound: boolean,
@@ -24,5 +25,6 @@ export const parsePreferenceResult = object({
   appsPersonHidden: boolean,
   aiAskBeforeTrust: boolean,
   aiTrackChanges: boolean,
+  aiReviewChanges: boolean,
   saved: boolean,
 });

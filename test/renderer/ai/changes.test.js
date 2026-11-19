@@ -1,5 +1,6 @@
 // Goal: the changes card and the diff view do what they show. The card says how many files changed
-// and how many lines, lists a row per file with Keep and Undo while pending and Kept or Undone after,
+// and how many lines, lists a row per file with Keep and Undo while pending (with "Ask me to keep AI changes" on) or
+// "Applied" and Undo alone (off, the default) and Kept or Undone after,
 // opens a row to the file's diff (fetched once), reaches the existing review flow unchanged (Keep all
 // and Undo all settle one file at a time), and offers "Open file" only when the shell gave it.
 // The diff view draws line numbers, signs, folded context with "Show N lines", marked words, and
@@ -20,7 +21,11 @@ const {
   "export { DiffView } from './src/features/ai/transcript/DiffView';",
   "export { resetChangeDiffs } from './src/features/ai/transcript/changeDiffs';",
   "export { loadAiProject, resetAiStore } from './src/features/ai/aiStore';",
+  "export { publishReviewMode } from './src/features/ai/reviewChanges';",
 ]);
+
+// The tests below describe the review flow, so they run with review on; the auto-apply ones turn it off themselves.
+view.publishReviewMode('review');
 
 const PROJECT = '/site';
 const CHAT = `c${'a'.repeat(24)}`;
@@ -106,6 +111,50 @@ test('the head counts files and lines; each row shows its own counts, status and
   assert.match(rows[1].querySelector('.ai-file-counts').textContent, /\+1\s*−0/);
   assert.equal(rows[2].querySelector('.ai-file-done').textContent, 'Kept');
   assert.equal(rows[2].querySelectorAll('.ai-file-actions button').length, 0, 'a settled file has no Keep or Undo');
+});
+
+test('with review off (the default) a pending file reads Applied with Undo alone, and bulk offers Undo all only', async (context) => {
+  fakeMain();
+  view.publishReviewMode('auto');
+  context.after(() => view.publishReviewMode('review'));
+  const reviews = [];
+  const { container, root } = await mountCard({
+    files: files(['/site/src/a.ts', 'modified', 'pending'], ['/site/src/new.ts', 'created', 'pending'], ['/site/notes.md', 'modified', 'undone']),
+    onReview: (path, action) => void reviews.push([path, action]),
+  });
+  context.after(() => act(() => root.unmount()));
+  const rows = [...container.querySelectorAll('.ai-file')];
+  assert.equal(rows[0].querySelector('.ai-file-done').textContent, 'Applied');
+  assert.deepEqual(
+    [...rows[0].querySelectorAll('.ai-file-actions button')].map((element) => element.textContent),
+    ['Undo'],
+  );
+  assert.equal(rows[2].querySelector('.ai-file-done').textContent, 'Undone');
+  const bulk = [...container.querySelectorAll('.ai-changes-bulk button')].map((element) => element.textContent);
+  assert.deepEqual(bulk, ['Undo all']);
+  assert.equal(container.textContent.includes('Keep'), false, 'no Keep anywhere while review is off');
+  await click(button(container, 'Undo all'));
+  assert.deepEqual(reviews, [
+    ['/site/src/a.ts', 'undo'],
+    ['/site/src/new.ts', 'undo'],
+  ]);
+});
+
+test('flipping the setting changes a card on screen at once, in both directions', async (context) => {
+  fakeMain();
+  view.publishReviewMode('auto');
+  context.after(() => view.publishReviewMode('review'));
+  const { container, root } = await mountCard({ files: files(['/site/src/a.ts', 'modified', 'pending']), onReview: () => undefined });
+  context.after(() => act(() => root.unmount()));
+  assert.equal(container.querySelector('.ai-file-done').textContent, 'Applied');
+  await act(async () => view.publishReviewMode('review'));
+  assert.equal(container.querySelector('.ai-file-done') === null, true);
+  assert.deepEqual(
+    [...container.querySelectorAll('.ai-file-actions button')].map((element) => element.textContent),
+    ['Keep', 'Undo'],
+  );
+  await act(async () => view.publishReviewMode('auto'));
+  assert.equal(container.querySelector('.ai-file-done').textContent, 'Applied');
 });
 
 test('with every file counted the head totals them', async (context) => {

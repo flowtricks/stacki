@@ -44,6 +44,7 @@ export const messages = {
   'ai.agent.switch.newChat': 'Wechselt zu einem neuen Chat',
   'ai.agent.switch.title': 'Agent wechseln (Claude oder Codex)',
   'ai.bridge.unexpectedReply': 'Unerwartete Antwort von Stacki: {detail}',
+  'ai.changes.applied': 'Angewendet',
   'ai.changes.deleted': 'Gelöscht',
   'ai.changes.filesChanged': {
     one: '{count} Datei geändert',
@@ -251,6 +252,8 @@ export const messages = {
   'ai.mention.group.skill': 'Skills', // same
   'ai.mention.skillTitle': 'Skill {name} ({path})',
   'ai.mention.skillTitleShort': 'Skill {name}',
+  'ai.menu.reviewChanges': 'KI-Änderungen bestätigen lassen',
+  'ai.menu.reviewChanges.info': 'Aus: Änderungen werden sofort angewendet und lassen sich zurücksetzen. An: Pro Datei wählst du Behalten oder Zurücksetzen.',
   'ai.message.actions': 'Nachrichtenaktionen',
   'ai.message.copy': 'Nachricht kopieren',
   'ai.message.edit': 'Nachricht bearbeiten',

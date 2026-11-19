@@ -150,6 +150,9 @@ export const messages = {
   'settings.editor.ai.askBeforeTrust.info':
     'Desactivado: abrir el chat de IA en un proyecto deja que Claude y Codex trabajen ahí, y se recuerda. Los agentes también ejecutan los hooks y servidores .mcp.json del proyecto.',
   'settings.editor.ai.askBeforeTrust.label': 'Preguntar antes de permitir agentes en un proyecto nuevo',
+  'settings.editor.ai.reviewChanges.info':
+    'Desactivado: los cambios de IA se aplican al instante y muestran «Aplicado», con Deshacer. Activado: cada archivo espera Conservar o Deshacer.',
+  'settings.editor.ai.reviewChanges.label': 'Pedirme conservar los cambios de IA',
   'settings.editor.ai.trackChanges.info':
     'Guarda una instantánea oculta antes y después de cada turno de IA para mostrar cambios. No añade commits a tu historial. Desactivado es más rápido en proyectos grandes.',
   'settings.editor.ai.trackChanges.label': 'Captura antes y después de cada cambio de IA',

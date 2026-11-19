@@ -26,6 +26,7 @@ import { useCurrentRole } from '../../lib/useCurrentRole';
 import { canSettingsTab } from '../../lib/roleAccess';
 import { FeatureIcon } from '../featureIcons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { publishReviewMode, reviewModeOf } from '../../features/ai/reviewChanges';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { LanguageSetting } from './LanguageSetting';
 import { SettingsEmpty, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
@@ -335,6 +336,8 @@ function usePreferences() {
     try {
       const result = await indicator.track(savePreference(input));
       setValue(result);
+      // The AI panel's cards follow the switch at once, wherever it was flipped.
+      publishReviewMode(reviewModeOf({ enabled: result.aiReviewChanges }));
       if (!result.saved) {
         setError(translate('settings.editor.saveFailed'));
       }
@@ -377,6 +380,13 @@ function Preferences() {
           checked={value?.aiTrackChanges ?? true}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'aiTrackChanges', enabled: !value?.aiTrackChanges })}
+        />
+        <PreferenceToggle
+          label={translate('settings.editor.ai.reviewChanges.label')}
+          info={translate('settings.editor.ai.reviewChanges.info')}
+          checked={value?.aiReviewChanges ?? false}
+          disabled={!value || busy}
+          onToggle={() => void change({ setting: 'aiReviewChanges', enabled: !value?.aiReviewChanges })}
         />
       </SettingsSection>
       <SettingsSection title={translate('settings.editor.section.privacy')}>

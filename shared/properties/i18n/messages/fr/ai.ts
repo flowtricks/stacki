@@ -44,6 +44,7 @@ export const messages = {
   'ai.agent.switch.newChat': 'Passe à une nouvelle conversation',
   'ai.agent.switch.title': 'Changer d’agent (Claude ou Codex)',
   'ai.bridge.unexpectedReply': 'Réponse inattendue de Stacki : {detail}',
+  'ai.changes.applied': 'Appliqué',
   'ai.changes.deleted': 'Supprimé',
   'ai.changes.filesChanged': {
     one: '{count} fichier modifié',
@@ -251,6 +252,9 @@ export const messages = {
   'ai.mention.group.skill': 'Skills', // same
   'ai.mention.skillTitle': 'Skill {name} ({path})',
   'ai.mention.skillTitleShort': 'Skill {name}',
+  'ai.menu.reviewChanges': 'Me demander de conserver les modifications d’IA',
+  'ai.menu.reviewChanges.info':
+    'Désactivé : les modifications s’appliquent aussitôt et peuvent être annulées. Activé : vous choisissez Conserver ou Annuler pour chaque fichier.',
   'ai.message.actions': 'Actions du message',
   'ai.message.copy': 'Copier le message',
   'ai.message.edit': 'Modifier le message',

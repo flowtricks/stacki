@@ -149,6 +149,8 @@ export const messages = {
   'settings.editor.ai.askBeforeTrust.info':
     'Off: opening AI chat in a project lets Claude and Codex work there, remembered. Agents also run the project’s hooks and .mcp.json servers.',
   'settings.editor.ai.askBeforeTrust.label': 'Ask before allowing agents in a new project',
+  'settings.editor.ai.reviewChanges.info': 'Off: AI edits apply at once and show “Applied”, with Undo. On: each changed file waits for Keep or Undo.',
+  'settings.editor.ai.reviewChanges.label': 'Ask me to keep AI changes',
   'settings.editor.ai.trackChanges.info':
     'Saves a hidden snapshot before and after each AI turn to show changes. Adds no commits to your history. Off is faster on big projects.',
   'settings.editor.ai.trackChanges.label': 'Snapshot before & after each AI change',

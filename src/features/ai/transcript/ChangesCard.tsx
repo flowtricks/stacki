@@ -1,13 +1,16 @@
 // What an agent changed in one turn: "N files changed +A −R", a row per file (name, counts, and
 // Keep or Undo while it is pending, Kept or Undone after), each row opening to the file's diff.
 //
-// Keep and Undo are the existing review flow, unchanged: the card only calls `onReview`. A drifted
+// Keep and Undo are the existing review flow, unchanged: the card only calls `onReview`. With "Ask me to keep
+// AI changes" off (the default) a pending file reads "Applied" and offers Undo alone: the edit is already on
+// disk, and Keep has nothing left to decide. With it on, the card is what it always was. A drifted
 // undo (the file moved on since the agent's edit) reaches the merge editor through the caller's
 // `runReview`, which is why the bulk actions wait for one file's review before the next.
 import { useEffect, useRef, useState } from 'react';
 import type { ChatFileChange, ChatId, TurnId } from '../../../../shared/properties/ai/chatModel';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { ChevronDownIcon, ChevronRightIcon, ExternalIcon } from '../../../ui/Icons';
+import { useReviewMode, type ReviewMode } from '../reviewChanges';
 import { CHANGE_DIFF_LIMITS, loadFileDiff, rememberedCounts, type LoadedDiff } from './changeDiffs';
 import { countsLabel, type ChangeCounts } from './diffModel';
 import { DiffView } from './DiffView';
@@ -38,6 +41,7 @@ export function ChangesCard({
   readonly onOpenFile?: ((path: string) => void) | undefined;
 }) {
   const translate = useTranslate();
+  const reviewMode = useReviewMode();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [working, setWorking] = useState<ReadonlySet<string>>(new Set());
   const loaded = useLoadedDiffs(source, files);
@@ -84,18 +88,20 @@ export function ChangesCard({
             >
               {translate('ai.changes.undoAll')}
             </button>
-            <button
-              className="ai-changes-keep"
-              disabled={working.size > 0}
-              onClick={() =>
-                void review(
-                  pending.map((file) => file.path),
-                  'keep',
-                )
-              }
-            >
-              {translate('ai.changes.keepAll')}
-            </button>
+            {reviewMode === 'review' && (
+              <button
+                className="ai-changes-keep"
+                disabled={working.size > 0}
+                onClick={() =>
+                  void review(
+                    pending.map((file) => file.path),
+                    'keep',
+                  )
+                }
+              >
+                {translate('ai.changes.keepAll')}
+              </button>
+            )}
           </span>
         )}
       </div>
@@ -108,6 +114,7 @@ export function ChangesCard({
           diff={loaded.get(file.path)}
           open={open.has(file.path)}
           busy={working.has(file.path)}
+          reviewMode={reviewMode}
           onToggle={() =>
             setOpen((previous) => {
               const next = new Set(previous);
@@ -132,6 +139,7 @@ function FileRow({
   diff,
   open,
   busy,
+  reviewMode,
   onToggle,
   onReview,
   onOpenFile,
@@ -142,6 +150,7 @@ function FileRow({
   readonly diff: LoadedDiff | 'loading' | undefined;
   readonly open: boolean;
   readonly busy: boolean;
+  readonly reviewMode: ReviewMode;
   readonly onToggle: () => void;
   readonly onReview: (action: ReviewAction) => void;
   readonly onOpenFile: ((path: string) => void) | undefined;
@@ -175,9 +184,13 @@ function FileRow({
         </button>
         {file.review === 'pending' ? (
           <span className="ai-file-actions">
-            <button disabled={busy} onClick={() => onReview('keep')}>
-              {translate('ai.changes.keep')}
-            </button>
+            {reviewMode === 'review' ? (
+              <button disabled={busy} onClick={() => onReview('keep')}>
+                {translate('ai.changes.keep')}
+              </button>
+            ) : (
+              <span className="ai-file-done">{translate('ai.changes.applied')}</span>
+            )}
             <button disabled={busy} onClick={() => onReview('undo')}>
               {translate('ai.changes.undo')}
             </button>

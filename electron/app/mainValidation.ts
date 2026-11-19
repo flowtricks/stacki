@@ -20,6 +20,8 @@ export interface AppSettings {
   readonly aiAskBeforeTrust: boolean;
   /** Snapshot the project before and after each AI turn so the panel can show and undo its changes; on unless turned off. */
   readonly aiTrackChanges: boolean;
+  /** Ask the person to Keep each AI change; off (the default): edits apply at once and show "Applied", with Undo. */
+  readonly aiReviewChanges: boolean;
   /** The interface language the renderer last chose (docs/i18n-playbook.md, "Main process"); "system" follows the operating system. */
   readonly localePreference: LocalePreference;
 }
@@ -33,6 +35,7 @@ export function parseSettings(input: unknown): AppSettings {
     appsPersonHidden: optional(boolean),
     aiAskBeforeTrust: optional(boolean),
     aiTrackChanges: optional(boolean),
+    aiReviewChanges: optional(boolean),
     localePreference: optional(parseLocalePreferenceValue),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
@@ -48,6 +51,7 @@ export function parseSettings(input: unknown): AppSettings {
     appsPersonHidden: value.appsPersonHidden ?? false,
     aiAskBeforeTrust: value.aiAskBeforeTrust ?? false,
     aiTrackChanges: value.aiTrackChanges ?? true,
+    aiReviewChanges: value.aiReviewChanges ?? false,
     localePreference: value.localePreference ?? 'system',
     ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
   };

@@ -40,7 +40,15 @@ async function mount(reason) {
   return { container, root };
 }
 
-const saved = (enabled) => ({ sound: false, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: false, aiTrackChanges: enabled, saved: true });
+const saved = (enabled) => ({
+  sound: false,
+  usageCountsEnabled: true,
+  appsPersonHidden: false,
+  aiAskBeforeTrust: false,
+  aiTrackChanges: enabled,
+  aiReviewChanges: false,
+  saved: true,
+});
 
 test('off: one quiet line, and Turn on flips the setting at once', async (context) => {
   const calls = fakePreferences(() => saved(true));

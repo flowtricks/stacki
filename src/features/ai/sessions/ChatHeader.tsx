@@ -10,6 +10,7 @@ import { ChevronLeftIcon, MoreIcon, PlusIcon } from '../../../ui/Icons';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
 import { newChat, openChat, preferredAgent, renameChat, useAiState } from '../aiStore';
 import { chatMenuEntries } from './chatActions';
+import { saveReviewMode, useReviewMode, type ReviewMode } from '../reviewChanges';
 import { collapseAllItems, expandAllItems } from '../transcript/transcriptUi';
 import { RenameField } from './RenameField';
 import { SessionsFilter } from './SessionsFilter';
@@ -58,6 +59,7 @@ function OpenChatTitle({ chat }: { readonly chat: ChatSummary }) {
   const translate = useTranslate();
   const { sections } = useAiState();
   const trigger = useMenuTrigger();
+  const reviewMode = useReviewMode();
   const [renaming, setRenaming] = useState(false);
   // Renaming replaces the menu's button before the menu can report that it closed.
   const { close: closeMenu } = trigger;
@@ -103,7 +105,9 @@ function OpenChatTitle({ chat }: { readonly chat: ChatSummary }) {
         label={translate('ai.sessions.chatActions')}
         placement="below-end"
         entries={
-          trigger.open ? [...transcriptEntries(chat, translate), ...chatMenuEntries(chat, sections, { rename: () => setRenaming(true) }, translate)] : []
+          trigger.open
+            ? [...transcriptEntries(chat, reviewMode, translate), ...chatMenuEntries(chat, sections, { rename: () => setRenaming(true) }, translate)]
+            : []
         }
         onClose={trigger.close}
       />
@@ -111,9 +115,21 @@ function OpenChatTitle({ chat }: { readonly chat: ChatSummary }) {
   );
 }
 
-/** What only the open chat's menu offers: folding every tool group, thought and long message of its transcript at once. */
-function transcriptEntries(chat: ChatSummary, translate: Translator): readonly MenuEntry[] {
+/**
+ * What only the open chat's menu offers: folding every tool group, thought and long message of its transcript
+ * at once, and the person-wide switch for being asked to Keep AI changes (it applies to every chat, at once).
+ */
+function transcriptEntries(chat: ChatSummary, reviewMode: ReviewMode, translate: Translator): readonly MenuEntry[] {
   return [
+    {
+      kind: 'item',
+      id: 'review-changes',
+      label: translate('ai.menu.reviewChanges'),
+      description: translate('ai.menu.reviewChanges.info'),
+      checked: reviewMode === 'review',
+      onSelect: () => void saveReviewMode(reviewMode === 'review' ? 'auto' : 'review'),
+    },
+    { kind: 'divider', id: 'divider-review' },
     { kind: 'item', id: 'expand-all', label: translate('ai.sessions.expandAll'), accelerator: 'e', onSelect: () => expandAllItems(chat.id) },
     { kind: 'item', id: 'collapse-all', label: translate('ai.sessions.collapseAll'), accelerator: 'c', onSelect: () => collapseAllItems(chat.id) },
     { kind: 'divider', id: 'divider-transcript' },

@@ -984,6 +984,7 @@ test('an open chat’s header: back, title, a menu with the same actions, and a 
   assert.ok(view.container.querySelector('button[aria-label="All chats"]'));
   await view.click(view.container.querySelector('button[aria-label="Chat actions"]'));
   assert.deepEqual(view.menuTexts(), [
+    'Ask me to keep AI changes Off: edits apply at once and can be undone. On: you choose Keep or Undo for each file.',
     'Expand all',
     'Collapse all',
     'Pin P',

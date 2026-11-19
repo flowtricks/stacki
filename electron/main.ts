@@ -862,6 +862,8 @@ const SETTINGS_DEFAULTS: AppSettings = {
   aiAskBeforeTrust: false,
   // On: the change ledger's snapshots are what the AI panel's Changes cards are made of, and what people had before this setting.
   aiTrackChanges: true,
+  // Off: an AI edit is applied the moment it is made and shows "Applied" with Undo; on, the person Keeps or Undoes each file.
+  aiReviewChanges: false,
   localePreference: LOCALE_PREFERENCE_DEFAULT,
 };
 let settings: AppSettings = { ...SETTINGS_DEFAULTS };
@@ -898,6 +900,7 @@ const publicSettings = () => ({
   appsPersonHidden: settings.appsPersonHidden,
   aiAskBeforeTrust: settings.aiAskBeforeTrust,
   aiTrackChanges: settings.aiTrackChanges,
+  aiReviewChanges: settings.aiReviewChanges,
 });
 ipcMain.handle('settings:get', publicSettings);
 ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
@@ -911,6 +914,9 @@ ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
     saved = writeSettings();
   } else if (setting === 'aiTrackChanges') {
     settings = { ...settings, aiTrackChanges: enabled };
+    saved = writeSettings();
+  } else if (setting === 'aiReviewChanges') {
+    settings = { ...settings, aiReviewChanges: enabled };
     saved = writeSettings();
   } else if (setting === 'appsPersonHidden') {
     settings = { ...settings, appsPersonHidden: enabled };

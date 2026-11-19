@@ -44,6 +44,7 @@ export const messages = {
   'ai.agent.switch.newChat': 'Switches to a new chat',
   'ai.agent.switch.title': 'Change agent (Claude or Codex)',
   'ai.bridge.unexpectedReply': 'Unexpected reply from Stacki: {detail}',
+  'ai.changes.applied': 'Applied',
   'ai.changes.deleted': 'Deleted',
   'ai.changes.filesChanged': {
     one: '{count} file changed',
@@ -251,6 +252,8 @@ export const messages = {
   'ai.mention.group.skill': 'Skills',
   'ai.mention.skillTitle': '{name} skill ({path})',
   'ai.mention.skillTitleShort': '{name} skill',
+  'ai.menu.reviewChanges': 'Ask me to keep AI changes',
+  'ai.menu.reviewChanges.info': 'Off: edits apply at once and can be undone. On: you choose Keep or Undo for each file.',
   'ai.message.actions': 'Message actions',
   'ai.message.copy': 'Copy message',
   'ai.message.edit': 'Edit message',

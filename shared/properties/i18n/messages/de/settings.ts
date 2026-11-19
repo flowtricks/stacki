@@ -152,6 +152,9 @@ export const messages = {
   'settings.editor.ai.askBeforeTrust.info':
     'Aus: Wer den KI-Chat in einem Projekt öffnet, lässt Claude und Codex dort arbeiten; das wird gemerkt. Agenten führen auch die Hooks und .mcp.json-Server des Projekts aus.',
   'settings.editor.ai.askBeforeTrust.label': 'Nachfragen, bevor Agenten in einem neuen Projekt erlaubt werden',
+  'settings.editor.ai.reviewChanges.info':
+    'Aus: KI-Änderungen werden sofort angewendet und zeigen „Angewendet“, mit Zurücksetzen. An: Jede geänderte Datei wartet auf Behalten oder Zurücksetzen.',
+  'settings.editor.ai.reviewChanges.label': 'KI-Änderungen bestätigen lassen',
   'settings.editor.ai.trackChanges.info':
     'Speichert vor und nach jedem KI-Durchgang einen versteckten Schnappschuss, um Änderungen zu zeigen. Fügt keine Commits hinzu. Aus ist schneller bei großen Projekten.',
   'settings.editor.ai.trackChanges.label': 'Snapshot vor und nach jeder KI-Änderung',

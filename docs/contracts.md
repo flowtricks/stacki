@@ -1974,6 +1974,13 @@ turn and records a `user` event with `mode: 'steer'`; with no turn running the m
 prompt (`startedNewTurn`); an agent that did not advertise `_meta.steering.supported` answers
 `unsupported`, an adapter that refuses answers its failure (`agent-failed`), and in both cases nothing
 was sent, so the renderer queues the message. A plain `ai:prompt` while a turn runs stays `busy`.
+Keep or apply: an agent's edit is on disk the moment it is made; "Keep" only settles the ledger entry
+(`pending` to `kept`, dropping the saved text), and "Undo" writes the saved text back. The app preference
+`aiReviewChanges` (the AI panel's "..." menu and Settings > Editor > AI, "Ask me to keep AI changes";
+`settings:get` and `settings:set`, default off, kept per person in `settings.json`, never in the project)
+only changes what the changes card offers, applied at once in every open card: off, a pending file reads
+"Applied" with Undo (the entry stays pending so Undo keeps working); on, it waits for Keep or Undo as before.
+The ledger, the `ai:review` channel and the stored reviews file are the same either way.
 Change snapshots (a hidden git tree, never a commit in the project history): the app preference `aiTrackChanges` (Settings > Editor > AI, "Snapshot before & after each AI change"; `settings:get`
 and `settings:set`, default on, kept in `settings.json`) decides whether the change ledger snapshots the
 project (`git add --all` against a temporary index, `git write-tree`) before and after a turn. The agent host
