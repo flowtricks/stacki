@@ -10,18 +10,14 @@
 //   body-hover  its words are picked, the pointer is on its own body   the plain solid green hover and its tag
 //
 // An instance that is the selection keeps its selected outline in every state; only the thickness, colour strength and the tag change.
+import { assert } from '../../../shared/core/assert';
 import type { TextMarks } from './previewMessages';
 
 export type OwnerState = 'none' | 'field' | 'resting' | 'body-hover';
 
-interface Box {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
-}
-
 export interface OwnerOutline {
+  /** Whether the outline is of a component instance that can own words: never a layout or page host, never a plain element. */
+  readonly ownable: boolean;
   readonly path: string;
   readonly slot: 'hover' | 'sel' | 'highlight';
   /** Whether the pointer is on the instance itself (the app's hover path names it). */
@@ -29,9 +25,15 @@ export interface OwnerOutline {
 }
 
 export function ownerState(marks: TextMarks | undefined, outline: OwnerOutline): OwnerState {
-  if (outline.slot === 'highlight' || marks === undefined) {
+  // By construction the state belongs to the one resolved owner: words that name no owner, or an outline that is a layout or a
+  // host, take none of it (never a fallback to the page or to everything).
+  if (outline.slot === 'highlight' || marks === undefined || !outline.ownable) {
     return 'none';
   }
+  assert(
+    new Set([marks.hover?.scope, marks.picked?.scope].filter((scope) => scope !== undefined)).size <= 2,
+    'Words hovered and picked name at most two owners',
+  );
   const { hover, picked } = marks;
   if (hover?.scope === outline.path) {
     // The pointer on words of the owner: the field, unless some words of it are already picked (the same or another text), when it rests with its tag.
@@ -50,13 +52,6 @@ export function ownerClasses(marks: TextMarks | undefined, outline: OwnerOutline
   if (outline.slot !== 'sel') {
     return own;
   }
-  // Words picked make the selected instance their parent. Words under the pointer that name no instance (an older frame) tint it.
-  const picked = marks?.picked;
-  const hover = marks?.hover;
-  const legacyTint = hover !== undefined && hover.scope === undefined && !sameBox(hover, picked);
-  return `${own}${picked ? ' parent' : ''}${state === 'body-hover' || legacyTint ? ' tinted' : ''}`;
-}
-
-function sameBox(left: Box, right: Box | undefined): boolean {
-  return right !== undefined && left.x === right.x && left.y === right.y && left.w === right.w && left.h === right.h;
+  // Words picked make the selected instance their parent; the tint is only ever the body hover of the words' own owner.
+  return `${own}${state !== 'none' && marks?.picked?.scope === outline.path ? ' parent' : ''}${state === 'body-hover' ? ' tinted' : ''}`;
 }

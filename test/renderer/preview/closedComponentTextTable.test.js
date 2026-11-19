@@ -83,6 +83,12 @@ window.Element.prototype.getBoundingClientRect = function box() {
   const found = boxes.get(this) ?? { left: 0, top: 0, width: 0, height: 0 };
   return { ...found, right: found.left + found.width, bottom: found.top + found.height, x: found.left, y: found.top };
 };
+// A range's box is its container's: the words of an element lie on its first row.
+window.Range.prototype.getBoundingClientRect = function box() {
+  const owner = this.startContainer.nodeType === 1 ? this.startContainer : this.startContainer.parentElement;
+  const found = boxes.get(owner) ?? { left: 0, top: 0, width: 0, height: 0 };
+  return { ...found, right: found.left + found.width, bottom: found.top + found.height, x: found.left, y: found.top };
+};
 const ELEMENTS = [...document.body.querySelectorAll('*')];
 document.elementFromPoint = (x, y) => {
   let found;
@@ -100,7 +106,7 @@ const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { canvasPropEdits } = loadRenderer('src/app/model/canvasPropText.ts');
 const { canvasTextPlans } = loadRenderer('src/features/preview/canvasTextSource.ts');
 const { createTreeIndex } = loadRenderer('src/editor/editorTree.ts');
-const { installTextMarks, pathsOf } = loadRenderer('test/helpers/frameTextEntry.js');
+const { installTextMarks, pathsOf, findTextHit } = loadRenderer('test/helpers/frameTextEntry.js');
 const { ownerState } = loadRenderer('src/features/preview/textOwnerState.ts');
 
 function parsed(text) {
@@ -186,7 +192,7 @@ function outlines({ scope, selected, hoverPath, marks }) {
       focusPath: undefined,
       focusWhole: false,
       textMarks: marks,
-      overlayInfo: () => INFO,
+      overlayInfo: (target) => (target === 'layout' ? { ...INFO, label: 'BaseLayout', isLayout: true } : INFO),
     }),
   );
   // The owner's outline is the one at its box; the layout's is the one at the layout's.
@@ -265,6 +271,13 @@ test('every text-bearing element of the real page follows the state machine', as
         failures.push(`${label}: the layout changed (${drawn.layout})`);
       }
     }
+    // A double click edits exactly the words under the pointer: the target it resolves from the point is the hovered one.
+    const hit = findTextHit(catalog, { target: document.elementFromPoint(at.x, at.y), clientX: at.x, clientY: at.y });
+    if (!(hit && hit.target.scope === scope && (hit.match.element === element || element.contains(hit.match.element) || hit.match.element.contains(element)))) {
+      failures.push(
+        `${component} "${element.textContent.trim().slice(0, 20)}": a double click resolves ${hit ? `${hit.target.key}` : 'nothing'}, not the hovered words`,
+      );
+    }
     // One click picks the hovered words at once, whatever is selected.
     focus = new Set();
     settle();
@@ -289,8 +302,33 @@ test('every text-bearing element of the real page follows the state machine', as
     if (!(bodyOutlines.owner?.includes('tinted') && !bodyOutlines.owner.includes('text-owner'))) {
       failures.push(`${component} "${element.textContent.trim().slice(0, 20)}": body-hover owner is ${bodyOutlines.owner}`);
     }
-    assert.equal(ownerState({ hover: undefined, picked }, { path: scope, slot: 'sel', pointedAt: false }), 'resting');
+    assert.equal(ownerState({ hover: undefined, picked }, { ownable: true, path: scope, slot: 'sel', pointedAt: false }), 'resting');
   }
+  // A sweep of the pointer over every part of the page (every element's first row and its middle): whatever the frame reports, the
+  // layout never takes any state of ours, and no more than the hovered and the picked text's owners do.
+  let swept = 0;
+  for (const element of ELEMENTS) {
+    const box = boxes.get(element);
+    for (const at of [
+      { x: box.left + 3, y: box.top + 2 },
+      { x: box.left + box.width / 2, y: box.top + box.height / 2 },
+    ]) {
+      for (const picked of [false, true]) {
+        focus = new Set();
+        settle();
+        move(at.x, at.y);
+        const message = last();
+        const scope = message.hover?.scope;
+        const marks = { hover: message.hover, picked: picked ? message.hover : undefined };
+        const drawn = outlines({ scope: scope ?? 'owner', selected: 'layout', hoverPath: 'layout', marks });
+        swept += 1;
+        if (drawn.layout?.some((name) => ['tinted', 'text-owner', 'owner-tag', 'parent'].includes(name))) {
+          failures.push(`the layout took a state at ${at.x},${at.y}: ${drawn.layout}`);
+        }
+      }
+    }
+  }
+  assert.ok(swept > 1000, `${swept} pointer positions swept`);
   // Selected text A with the pointer on text B of the same owner, on A itself, and on the owner's body.
   let pairs = 0;
   for (const [scope, texts] of scopes) {
@@ -345,7 +383,7 @@ test('no tag of the text and owner states is translucent', () => {
   const rules = [...css.matchAll(/(^|\n)([^{}\n]*\.node-outline-tag[^{}\n]*)\s*\{([^}]*)\}/g)].filter((match) =>
     /text-mark|text-owner|owner-tag|\.sel\.parent/.test(match[2]),
   );
-  assert.ok(rules.length >= 4, `${rules.length} tag rules for the text states`);
+  assert.ok(rules.length >= 3, `${rules.length} tag rules for the text states`);
   for (const [, , selector, body] of rules) {
     const background = /background:\s*([^;]+);/.exec(body)?.[1];
     if (background !== undefined) {
@@ -353,5 +391,29 @@ test('no tag of the text and owner states is translucent', () => {
     }
     assert.doesNotMatch(body, /opacity\s*:/, `${selector}: no opacity`);
   }
-  assert.match(css, /\.node-outline\.hover\.text-mark \.node-outline-tag \{[^}]*background: var\(--green\);/, 'the hovered text tag is the solid green chip');
+  // Hover tags are unfilled (the existing rule for every hover, text included); selected tags are the solid green chip.
+  assert.doesNotMatch(css, /\.node-outline\.hover\.text-mark \.node-outline-tag/, 'no tag rule of its own for hovered text');
+  const rule = (selector) => css.slice(css.indexOf(`\n${selector} {`), css.indexOf('\n}', css.indexOf(`\n${selector} {`)));
+  assert.match(rule('.node-outline.hover .node-outline-tag'), /background:\s*transparent;/);
+  assert.match(rule('.node-outline.component .node-outline-tag'), /background:\s*var\(--green\);/);
+});
+
+test('no grey, muted or alpha tag or text outline exists in any state, editable or refused text alike', () => {
+  const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
+  // Text that cannot be edited is hovered exactly like text that can: its reason comes when the person tries to edit it.
+  assert.doesNotMatch(css, /text-mark\.refused|\.refused\s+\.node-outline-tag/, 'no refused look for hovered text');
+  const allowed = ['var(--green)', 'var(--accent)', '#7ddc94', 'transparent'];
+  const tagRules = [...css.matchAll(/(^|\n)([^{}\n]*\.node-outline[^{}\n]*\.node-outline-tag[^{}\n]*)\s*\{([^}]*)\}/g)].filter((match) =>
+    /text-mark|text-owner|owner-tag|\.sel\.parent/.test(match[2]),
+  );
+  for (const [, , selector, body] of tagRules) {
+    const background = /background:\s*([^;]+);/.exec(body)?.[1]?.trim();
+    if (background !== undefined) {
+      assert.ok(allowed.includes(background), `${selector} uses ${background}`);
+    }
+  }
+  // The hovered text's outline is the component green; the owner's faint outline is a green too.
+  assert.match(css, /\.node-outline\.component \{\s*outline-color: var\(--green\);/);
+  assert.match(css, /\.node-outline\.text-owner \{[^}]*outline-color: color-mix\(in srgb, var\(--green\)/);
+  assert.doesNotMatch(css.slice(css.indexOf('.node-outline.text-owner {'), css.indexOf('.node-outline.text-owner {') + 900), /grey|gray|#6b6b6b|128 128 128/);
 });

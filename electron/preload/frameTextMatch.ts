@@ -9,6 +9,27 @@ export interface TextMatch {
   readonly nodes: readonly Text[];
   readonly element: Element;
 }
+/**
+ * The elements at a point, the clicked one first: everything the browser's hit test stacks there, not only its topmost. A
+ * component may lay an element over its whole box (a card whose link is stretched by a `::after`), so the topmost element is
+ * the link and the words the pointer is on lie beneath it in the stack.
+ */
+export function elementsAt(x: number, y: number, first?: Element): Element[] {
+  const found: Element[] = first === undefined ? [] : [first];
+  const stack: readonly (Element | undefined)[] =
+    typeof document.elementsFromPoint === 'function'
+      ? document.elementsFromPoint(x, y)
+      : typeof document.elementFromPoint === 'function'
+        ? [document.elementFromPoint(x, y) ?? undefined]
+        : [];
+  for (const element of stack) {
+    if (element !== undefined && !found.includes(element) && found.length < 24) {
+      found.push(element);
+    }
+  }
+  return found;
+}
+
 export function matchCanvasText(target: CanvasTextTarget, clicked: Element): TextMatch | undefined {
   // Every element carrying the path around the click is on the click's own
   // ancestor chain, so they nest: a component that passes its slot on to a

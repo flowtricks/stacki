@@ -19,7 +19,7 @@ import { assert } from '../../shared/core/assert';
 import { elementsWithPath, pathsOf, runsOf } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
 import { ownClasses } from './frameMeasure';
-import { matchCanvasText } from './frameTextMatch';
+import { elementsAt, matchCanvasText } from './frameTextMatch';
 
 // Matches made at most per question; a page with more marked text marks the first ones.
 const MATCHES_MAX = 200;
@@ -211,12 +211,14 @@ function inertTextAt(source: MarkSource, at: { readonly x: number; readonly y: n
 // The paths of the element under a point and of everything around it.
 function ancestorPaths(at: { readonly x: number; readonly y: number }): Set<string> {
   const paths = new Set<string>();
-  let element: Element | undefined = document.elementFromPoint(at.x, at.y) ?? undefined;
-  for (let depth = 0; element && depth < 64; depth++) {
-    for (const path of pathsOf(element)) {
-      paths.add(path);
+  for (const start of elementsAt(at.x, at.y)) {
+    let element: Element | undefined = start;
+    for (let depth = 0; element && depth < 64; depth++) {
+      for (const path of pathsOf(element)) {
+        paths.add(path);
+      }
+      element = element.parentElement ?? undefined;
     }
-    element = element.parentElement ?? undefined;
   }
   return paths;
 }

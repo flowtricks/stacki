@@ -27,14 +27,15 @@ Every cell, by selection and pointer:
 | text A | on the owner's body | A selected | `body-hover` (solid outline, same tag) |
 | text A | elsewhere | A selected | `resting` |
 
-Every tag of these states is an opaque chip: the hovered text's is the solid green one (`.hover.text-mark`), the owner's is `#7ddc94`.
+Tags follow the one convention of the canvas: a **hover** tag is unfilled (the icon and label in green, `.node-outline.hover .node-outline-tag`, nothing behind it); a **selected** tag is the solid green fill (`.node-outline.component .node-outline-tag`); the owner's resting tag while its text is selected is the light-green fill (`#7ddc94`, dark words). Nothing is grey or translucent, and no text state has a tag rule of its own beyond the owner's.
 
 Clicks: one click on hovered words selects the owner and picks the words in the same step (the frame keeps the pick until the
 app's selection arrives); a double click enters editing as before. Components that are only their words (a `Heading` or
 `Paragraph` written in the page) are their own owner: the component's hover is the hover.
 
-Words a component draws that no target covers (a label computed from a variant table, a footer's links, an option) hover
-**muted** (`refused`) so the canvas says nothing edits there instead of staying silent.
+Words a component draws that no target covers, or that a binding keeps from being written, hover exactly like editable words:
+the same green outline and solid green tag. Nothing on the canvas is grey or translucent. The reason is given when the person
+tries to edit them (the named refusal chip), not by a different look.
 
 Tests: `test/renderer/preview/closedComponentTextTable.test.js` drives every text-bearing element of the real example page
 (real component sources and captured preview markup, `test/fixtures/lumos-card/`) through every state and fails on any

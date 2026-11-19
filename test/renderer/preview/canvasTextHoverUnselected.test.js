@@ -51,6 +51,10 @@ document.elementFromPoint = (x, y) => {
   return inside.at(-1) ?? undefined;
 };
 
+const containsPoint = (element, x, y) => {
+  const [left, top, width, height] = element.getAttribute('data-box').split(',').map(Number);
+  return x >= left && x <= left + width && y >= top && y < top + height;
+};
 const target = (extra) => ({ kind: 'component', label: 'Edit text', nested: false, siblings: [], from: 'prop', scope: '0.1', ...extra });
 const CATALOG = {
   type: 'avb:text-catalog',
@@ -74,7 +78,7 @@ const CATALOG = {
 let focus = new Set();
 const posted = [];
 // The region map and the marks share one bundle, as they share module state in a frame.
-const { installTextMarks, regions } = loadRenderer('test/helpers/frameTextEntry.js');
+const { installTextMarks, regions, findTextHit } = loadRenderer('test/helpers/frameTextEntry.js');
 regions.set('Card.astro|0.0.2', [[document.querySelector('p').firstChild]]);
 installTextMarks({
   catalog: () => CATALOG,
@@ -172,4 +176,32 @@ test('one click on hovered prop text picks it at once, whatever is selected, and
     assert.equal(posted.at(-1).picked, undefined);
   }
   focus = new Set();
+});
+
+test('words under a link stretched over the whole component are still the ones hovered and double clicked', () => {
+  // A card whose link covers it (`::after` over the card): the topmost element at every point is the link, never the words beneath.
+  const link = document.createElement('a');
+  link.setAttribute('data-avb-p', 'Button.astro|0 0.1.9');
+  link.setAttribute('data-box', '0,0,600,300');
+  const innermost = document.elementFromPoint;
+  document.body.append(link);
+  // The hit test as it was before the link was added: the words are in the stack beneath it.
+  const beneath = (x, y) =>
+    [...document.body.querySelectorAll('[data-box]')]
+      .filter((element) => element !== link && innermost.call(document, x, y) !== undefined && containsPoint(element, x, y))
+      .reverse();
+  const stack = (x, y) => [link, ...beneath(x, y)];
+  document.elementsFromPoint = stack;
+  window.Range.prototype.getBoundingClientRect = () => ({ left: 0, top: 0, right: 2000, bottom: 2000, width: 2000, height: 2000, x: 0, y: 0 });
+  try {
+    move(500, 250);
+    move(40, 40);
+    assert.equal(posted.at(-1).hover?.label, 'Heading', 'hover finds the heading beneath the link');
+    const hit = findTextHit(CATALOG, { target: link, clientX: 40, clientY: 40 });
+    assert.ok(hit, 'a double click on the stretched link resolves a text');
+    assert.equal(hit.target.key, CATALOG.targets[0].key, 'and it is the words under the pointer, not the link text or the nearest one');
+  } finally {
+    delete document.elementsFromPoint;
+    link.remove();
+  }
 });

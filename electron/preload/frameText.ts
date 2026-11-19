@@ -1,7 +1,7 @@
 import type { CanvasTextTarget, CanvasTextCatalog } from '../../shared/properties/canvasText';
 import { pathsOf, canvasTextSourceMatches, runsOf } from './frameRegions';
 import { canvasDragged } from './frameInteraction';
-import { matchCanvasText, canvasTextRect } from './frameTextMatch';
+import { matchCanvasText, canvasTextRect, elementsAt } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
 import { installTextMarks } from './frameTextMarks';
 import { inlineTextRuns } from './inlineText';
@@ -114,16 +114,20 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
   // The paths of the innermost tagged element clicked: only its own text is
   // near enough to take a click that missed the words.
   let innermost: ReadonlySet<string> | undefined;
-  let element: Element | undefined = event.target;
-  for (let depth = 0; element && depth < 32; depth++) {
-    const paths = pathsOf(element);
-    for (const path of paths) {
-      ancestors.add(path);
+  // Everything stacked at the point counts, so words beneath a stretched link are found; only the clicked element decides which text is nearest.
+  const stack = elementsAt(event.clientX, event.clientY, event.target);
+  for (const [position, start] of stack.entries()) {
+    let element: Element | undefined = start;
+    for (let depth = 0; element && depth < 32; depth++) {
+      const paths = pathsOf(element);
+      for (const path of paths) {
+        ancestors.add(path);
+      }
+      if (position === 0 && !innermost && paths.length) {
+        innermost = new Set(paths);
+      }
+      element = element.parentElement ?? undefined;
     }
-    if (!innermost && paths.length) {
-      innermost = new Set(paths);
-    }
-    element = element.parentElement ?? undefined;
   }
   // A double-click inside the element that holds the text but beside its
   // words — the empty width of a centred heading — still means "edit this
@@ -136,7 +140,8 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
     if (target.scope !== undefined && !ancestors.has(target.scope)) {
       continue;
     }
-    const match = matchCanvasText(target, event.target);
+    // The words are found from whichever stacked element lies inside their component: the clicked one first.
+    const match = stack.reduce<ReturnType<typeof matchCanvasText>>((found, candidate) => found ?? matchCanvasText(target, candidate), undefined);
     const box = match && canvasTextRect(match);
     if (!box || !match) {
       continue;
