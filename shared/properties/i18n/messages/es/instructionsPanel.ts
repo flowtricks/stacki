@@ -38,6 +38,8 @@ export const messages = {
   'instructionsPanel.rules.new': 'Nueva regla',
   'instructionsPanel.rules.newFolder': 'Nueva carpeta de reglas',
   'instructionsPanel.rules.title': 'Reglas',
+  'instructionsPanel.search.noMatch': 'Ninguna instrucción coincide',
+  'instructionsPanel.search.placeholder': 'Buscar instrucciones',
   'instructionsPanel.skills.empty': 'Aún no hay skills. Crea tu primera skill para dar a la IA el contexto que necesita para trabajar mejor.',
   'instructionsPanel.skills.new': 'Nueva skill',
   'instructionsPanel.skills.title': 'Skills', // same

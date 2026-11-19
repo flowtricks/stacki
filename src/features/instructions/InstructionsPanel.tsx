@@ -47,7 +47,21 @@ import {
   revealInstruction,
   writeInstructionSettings,
 } from './instructionsBridge';
-import { countFiles, folderOf, folderPaths, ruleHomes, rulePath, sectionsOf, skillHome, skillPath, type SkillRow, type TreeNode } from './instructionsModel';
+import {
+  countFiles,
+  filterSections,
+  folderOf,
+  folderPaths,
+  ruleHomes,
+  rulePath,
+  sectionsOf,
+  skillHome,
+  skillPath,
+  type SkillRow,
+  type TreeNode,
+} from './instructionsModel';
+import { PanelSearch } from '../../ui/PanelSearch';
+import { isSearching } from '../../lib/searchText';
 import { selectInstruction, useInstructionSelection } from './instructionSelection';
 import './instructions.css';
 
@@ -71,9 +85,18 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
   const [creating, setCreating] = useState<Creating>({ kind: 'none' });
   const [closedSections, setClosedSections] = useState<ReadonlySet<SectionId>>(new Set());
   const [openFolders, setOpenFolders] = useState<ReadonlySet<string>>(new Set());
+  // The search text is this panel's alone and is never remembered.
+  const [query, setQuery] = useState('');
   const report = useCallback((message: string) => showToast?.(message, 'error'), [showToast]);
-  const sections = useMemo(() => (listing.state.kind === 'ready' ? sectionsOf(listing.state.listing) : undefined), [listing.state]);
-  const allFolders = useMemo(() => (sections === undefined ? [] : [...folderPaths(sections.rules), ...folderPaths(sections.docs)]), [sections]);
+  const allSections = useMemo(() => (listing.state.kind === 'ready' ? sectionsOf(listing.state.listing) : undefined), [listing.state]);
+  const searching = isSearching(query);
+  // Searched, only the matches are drawn, every section and folder with one open; what the person folded is kept and returns when the search clears.
+  const sections = useMemo(() => (allSections !== undefined && searching ? filterSections(allSections, query) : allSections), [allSections, searching, query]);
+  const shownFolders = useMemo(
+    () => (sections === undefined || !searching ? undefined : new Set([...folderPaths(sections.rules), ...folderPaths(sections.docs)])),
+    [sections, searching],
+  );
+  const allFolders = useMemo(() => (allSections === undefined ? [] : [...folderPaths(allSections.rules), ...folderPaths(allSections.docs)]), [allSections]);
   const expanded = closedSections.size === 0 && allFolders.every((folder) => openFolders.has(folder));
 
   const open = (file: string): void => selectInstruction({ projectPath, file });
@@ -139,6 +162,8 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
     setClosedSections(new Set(['skills', 'rules', 'docs']));
   };
   const startCreating = (next: Exclude<Creating, { readonly kind: 'none' }>, section: SectionId): void => {
+    // A new file's form lives in its section, which a search may be hiding.
+    setQuery('');
     setCreating(next);
     setClosedSections((current) => new Set([...current].filter((each) => each !== section)));
   };
@@ -169,6 +194,7 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
           />
         </div>
       </div>
+      <PanelSearch value={query} placeholder={translate('instructionsPanel.search.placeholder')} onChange={setQuery} />
       <div className="panel-body instructions-body">
         {listing.state.kind === 'loading' && <div className="props-empty">{translate('instructionsPanel.reading')}</div>}
         {listing.state.kind === 'error' && (
@@ -180,9 +206,10 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
           <>
             <Section
               id="skills"
+              hidden={searching && sections.skills.length === 0}
               title={translate('instructionsPanel.skills.title')}
               count={sections.skills.length}
-              open={!closedSections.has('skills')}
+              open={searching || !closedSections.has('skills')}
               onToggle={toggleSection}
               actions={
                 editable && (
@@ -204,9 +231,10 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
             </Section>
             <Section
               id="rules"
+              hidden={searching && countFiles(sections.rules) === 0}
               title={translate('instructionsPanel.rules.title')}
               count={countFiles(sections.rules)}
-              open={!closedSections.has('rules')}
+              open={searching || !closedSections.has('rules')}
               onToggle={toggleSection}
               actions={
                 editable && (
@@ -231,13 +259,22 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
               {sections.rules.length === 0 && creating.kind !== 'rule' && creating.kind !== 'rule-folder' && (
                 <div className="instructions-empty">{translate('instructionsPanel.rules.empty')}</div>
               )}
-              <Tree nodes={sections.rules} depth={0} openFolders={openFolders} selected={selected} onToggle={toggleFolder} onOpen={open} menuFor={menuFor} />
+              <Tree
+                nodes={sections.rules}
+                depth={0}
+                openFolders={shownFolders ?? openFolders}
+                selected={selected}
+                onToggle={toggleFolder}
+                onOpen={open}
+                menuFor={menuFor}
+              />
             </Section>
             <Section
               id="docs"
+              hidden={searching && countFiles(sections.docs) === 0}
               title={translate('instructionsPanel.docs.title')}
               count={countFiles(sections.docs)}
-              open={!closedSections.has('docs')}
+              open={searching || !closedSections.has('docs')}
               onToggle={toggleSection}
               actions={
                 editable && (
@@ -251,8 +288,19 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
             >
               {creating.kind === 'doc' && <DocumentForm projectPath={projectPath} onDone={created} onError={report} />}
               {sections.docs.length === 0 && creating.kind !== 'doc' && <div className="instructions-empty">{translate('instructionsPanel.docs.empty')}</div>}
-              <Tree nodes={sections.docs} depth={0} openFolders={openFolders} selected={selected} onToggle={toggleFolder} onOpen={open} menuFor={menuFor} />
+              <Tree
+                nodes={sections.docs}
+                depth={0}
+                openFolders={shownFolders ?? openFolders}
+                selected={selected}
+                onToggle={toggleFolder}
+                onOpen={open}
+                menuFor={menuFor}
+              />
             </Section>
+            {searching && sections.skills.length === 0 && countFiles(sections.rules) === 0 && countFiles(sections.docs) === 0 && (
+              <div className="props-empty">{translate('instructionsPanel.search.noMatch')}</div>
+            )}
             {listing.state.listing.truncated && <div className="instructions-empty">{translate('instructionsPanel.truncated')}</div>}
           </>
         )}
@@ -308,6 +356,8 @@ function keptListing(projectPath: string): Listing {
 
 function Section(props: {
   readonly id: SectionId;
+  /** Left out of the panel altogether: a section with no match while a search is on. */
+  readonly hidden: boolean;
   readonly title: string;
   readonly count: number;
   readonly open: boolean;
@@ -315,6 +365,9 @@ function Section(props: {
   readonly onToggle: (id: SectionId) => void;
   readonly children: ReactNode;
 }) {
+  if (props.hidden) {
+    return undefined;
+  }
   return (
     <section className="instructions-section" aria-label={props.title}>
       <div className="instructions-section-head">

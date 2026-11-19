@@ -39,6 +39,8 @@ export const messages = {
   'instructionsPanel.rules.new': 'Neue Regel',
   'instructionsPanel.rules.newFolder': 'Neuer Regelordner',
   'instructionsPanel.rules.title': 'Regeln',
+  'instructionsPanel.search.noMatch': 'Keine Anweisungen passen zur Suche',
+  'instructionsPanel.search.placeholder': 'Anweisungen suchen',
   'instructionsPanel.skills.empty': 'Noch keine Skills. Erstelle deine erste Skill, damit die KI den Kontext hat, den sie für gute Arbeit braucht.',
   'instructionsPanel.skills.new': 'Neue Skill',
   'instructionsPanel.skills.title': 'Skills', // same

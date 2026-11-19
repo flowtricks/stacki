@@ -38,6 +38,8 @@ export const messages = {
   'instructionsPanel.rules.new': 'New rule',
   'instructionsPanel.rules.newFolder': 'New rule folder',
   'instructionsPanel.rules.title': 'Rules',
+  'instructionsPanel.search.noMatch': 'No instructions match',
+  'instructionsPanel.search.placeholder': 'Search instructions',
   'instructionsPanel.skills.empty': 'No skills yet. Create your first skill to give AI the context it needs to do its best work.',
   'instructionsPanel.skills.new': 'New skill',
   'instructionsPanel.skills.title': 'Skills',

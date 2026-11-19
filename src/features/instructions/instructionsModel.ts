@@ -4,6 +4,7 @@
 // values. A chain of folders with one child each is drawn as one row
 // (`.claude/rules`), as editors do, so a deep dot folder costs one line.
 import { assert } from '../../../shared/core/assert';
+import { foldSearchText, holdsEveryWord, queryWords } from '../../lib/searchText';
 import {
   DEFAULT_RULE_FOLDER,
   INSTRUCTION_LIMITS,
@@ -185,4 +186,38 @@ export function skillPath(home: string, name: string): string {
 export function folderOf(path: string): string | undefined {
   const slash = path.lastIndexOf('/');
   return slash < 0 ? undefined : path.slice(0, slash);
+}
+
+/**
+ * The sections reduced to what a query finds, for the panel's search: a skill by its name, its
+ * description and its path; a rule or a doc by its path, which holds its folders and its name. A
+ * folder stays only when something under it does. A section with no match is empty, and the panel
+ * hides an empty section while a search is on. A query with no word keeps nothing.
+ */
+export function filterSections(sections: InstructionSections, query: string): InstructionSections {
+  const words = queryWords(query);
+  const skills = sections.skills.filter((skill) => holdsEveryWord(foldSearchText(`${skill.name} ${skill.description} ${skill.path}`), words));
+  const result = { skills, rules: filterTree(sections.rules, words, 0), docs: filterTree(sections.docs, words, 0) };
+  assert(skills.length <= sections.skills.length, 'A search never finds more skills than there are');
+  assert(countFiles(result.rules) <= countFiles(sections.rules), 'A search never finds more rules than there are');
+  return result;
+}
+
+// Depth is the walker's, so this recursion is bounded as `nodesOf` is.
+function filterTree(nodes: readonly TreeNode[], words: readonly string[], depth: number): readonly TreeNode[] {
+  assert(depth <= INSTRUCTION_LIMITS.depthMax, 'A tree is no deeper than the walk');
+  const kept: TreeNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === 'file') {
+      if (holdsEveryWord(foldSearchText(node.path), words)) {
+        kept.push(node);
+      }
+    } else {
+      const children = filterTree(node.children, words, depth + 1);
+      if (children.length > 0) {
+        kept.push({ ...node, children });
+      }
+    }
+  }
+  return kept;
 }
