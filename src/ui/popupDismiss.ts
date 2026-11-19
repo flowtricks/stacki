@@ -1,4 +1,4 @@
-import { inOwnedPopup, isTopPopupLayer } from './popupOwnership';
+import { inOwnedPopup, isTopPopupLayer, ownsTopPopupLayer } from './popupOwnership';
 import { useEffect, useRef, type RefObject } from 'react';
 import type { PopupProps, PopupActions } from './Popup';
 import { toRecord } from '../../shared/core/record';
@@ -48,7 +48,7 @@ export function usePopupDismiss(surface: RefObject<HTMLDivElement>, options: Dis
       !within?.contains(target);
     const down = (event: MouseEvent): void => {
       outsidePress = outside(event.target);
-      if (mode === 'popover' && outsidePress && popupIsTop(surface.current)) {
+      if (mode === 'popover' && outsidePress && popupTakesOutsidePress(surface.current)) {
         // Anchored menus dismiss on press; native dialogs wait for a complete backdrop click.
         if (!takesTypedText(event.target)) {
           event.preventDefault();
@@ -100,6 +100,12 @@ export function popupIsTop(surface: RefObject<HTMLDivElement>['current']): boole
   return isTopPopupLayer(surface ?? undefined);
 }
 
+// An outside press or a scroll of the anchor reaches the top popup and every popup beneath it that opened
+// it, so one press closes a menu and its submenu together. Unrelated popups still answer one at a time.
+function popupTakesOutsidePress(surface: RefObject<HTMLDivElement>['current']): boolean {
+  return isTopPopupLayer(surface ?? undefined) || ownsTopPopupLayer(surface ?? undefined);
+}
+
 // Canvas focus and viewport movement can happen outside this document's click stream.
 //
 // A scroll closes a popover only when what it sits on moved. Closing on every scroll
@@ -134,7 +140,7 @@ function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: Dismis
       if (reference !== undefined && origin !== undefined && !movedOnScreen(origin, screenPosition(reference))) {
         return;
       }
-      if (popupIsTop(surface.current)) {
+      if (popupTakesOutsidePress(surface.current)) {
         close();
       }
     };

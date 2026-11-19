@@ -7,6 +7,9 @@
 // native-dialog and reduced-motion hooks come from test/helpers/popupDom.js), then driven
 // with DOM keyboard and mouse events. jsdom has no layout, so placement is covered by the
 // pure tests in menuModel.test.js and by the Electron render probe, not here.
+// Dismissal: one press outside the whole stack closes the menu and its submenu together (a first
+// press used to close only the submenu, a second the menu); a press inside the menu but outside the
+// submenu closes just the submenu.
 const assert = require('node:assert/strict');
 const { test, afterEach } = require('node:test');
 const fs = require('node:fs');
@@ -265,4 +268,68 @@ test('a duplicate id is refused when the menu draws', async () => {
       { kind: 'item', id: 'x', label: 'b', onSelect: () => log.push(2) },
     ]);
   await assert.rejects(failing, /duplicate entry id x/);
+});
+
+// One real press: pointerdown, mousedown, pointerup, mouseup, click, as a browser sends them.
+async function pressOn(view, target) {
+  await view.act(async () => {
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      const Constructor = type.startsWith('pointer') && view.dom.window.PointerEvent ? view.dom.window.PointerEvent : view.dom.window.MouseEvent;
+      target.dispatchEvent(new Constructor(type, { bubbles: true, cancelable: true }));
+    }
+  });
+  await view.settle(20);
+}
+
+async function openSubmenu(view) {
+  await view.open();
+  await view.key(view.focused(), { key: 'ArrowDown' });
+  await view.key(view.focused(), { key: 'ArrowRight' });
+  await view.settle();
+  assert.equal(view.names().length, 2);
+}
+
+test('one outside press closes the submenu and the menu together, even after toggling', async () => {
+  const view = await mount(model);
+  await openSubmenu(view);
+  for (let flips = 0; flips < 3; flips += 1) {
+    await view.key(view.focused(), { key: 'End' });
+    await view.key(view.focused(), { key: ' ' });
+  }
+  assert.equal(view.names().length, 2, 'toggling leaves both open');
+  await pressOn(view, view.body);
+  assert.equal(view.names().length, 0, 'a single press closed the whole stack');
+});
+
+test('a toggle flipped by click, then one outside press, closes the whole stack', async () => {
+  const view = await mount(model);
+  await openSubmenu(view);
+  await view.act(async () => view.all('[role="menuitemcheckbox"]')[0].click());
+  assert.equal(view.names().length, 2);
+  await pressOn(view, view.body);
+  assert.equal(view.names().length, 0);
+});
+
+test('an outside press with no submenu open closes the menu', async () => {
+  const view = await mount(model);
+  await view.open();
+  assert.equal(view.names().length, 1);
+  await pressOn(view, view.body);
+  assert.equal(view.names().length, 0);
+});
+
+test('a press inside the menu but outside the submenu closes just the submenu', async () => {
+  const view = await mount(model);
+  await openSubmenu(view);
+  const menus = view.all('[role="menu"]');
+  await pressOn(view, menus[0]);
+  assert.deepEqual(view.names(), ['Test menu'], 'the menu stays, the submenu closed');
+});
+
+test('an outside press on the canvas message closes the whole stack in one go', async () => {
+  const view = await mount(model);
+  await openSubmenu(view);
+  await view.act(async () => view.dom.window.dispatchEvent(new view.dom.window.MessageEvent('message', { data: { type: 'avb:click-node' } })));
+  await view.settle(20);
+  assert.equal(view.names().length, 0);
 });
