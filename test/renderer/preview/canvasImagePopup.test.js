@@ -28,6 +28,8 @@ const gallery = [{ photo: "/popup-one.svg" }];
   <Section>
     <Card id="card-one" variant="stacked" heading="First card" image="/popup-one.svg" imageAlt="First picture" />
     <Card id="card-bound" variant="stacked" heading="Bound card" image={gallery[0].photo} imageAlt="Bound picture" />
+    <Card id="card-cover" variant="cover" heading="Cover card" buttonHref="/about" buttonLabel="Button Text" image="/popup-one.svg" imageAlt="Cover picture" />
+    <Card id="card-link" variant="stacked" heading="Linked card" buttonHref="/about" buttonLabel="Button Text" image="/popup-one.svg" imageAlt="Linked picture" />
     <img id="native" src="/popup-one.svg" alt="Native picture" width="160" height="100" />
   </Section>
 </Layout>
@@ -149,6 +151,48 @@ async function runInElectron({ window, project, options }) {
     );
     report.notes.push(`fields: ${JSON.stringify(fields)}`);
     check('the picture and its alt text are the fields', fields.length === 2, JSON.stringify(fields));
+    // 1b. The header is a handle: the popup follows the pointer, stays inside the window, and the page beneath sees none of it.
+    const rect = () =>
+      driver.evaluate(
+        `(() => { const r = document.querySelector('.canvas-image-popup').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width }; })()`,
+      );
+    const header = await driver.panelPoint(`document.querySelector('.canvas-image-head strong') || undefined`, { scroll: false });
+    const home = await rect();
+    if (header === undefined) {
+      report.failures.push('no popup header to drag');
+    } else {
+      await driver.drag(header, { x: header.x + 60, y: header.y - 40 }, { label: 'drag the popup header' });
+      await driver.sleep(300);
+      const dragged = await rect();
+      check(
+        'dragging the header moves the popup with the pointer',
+        Math.abs(dragged.left - (home.left + 60)) <= 2 && Math.abs(dragged.top - (home.top - 40)) <= 2,
+        JSON.stringify([home, dragged]),
+      );
+      check('a drag does not close the popup or select anything', await popupOpen());
+      const grabbed = { x: header.x + 60, y: header.y - 40 };
+      await driver.drag(grabbed, { x: -2000, y: -2000 }, { label: 'drag the popup far outside the window', steps: 12 });
+      await driver.sleep(300);
+      const clamped = await rect();
+      check(
+        'the popup cannot leave the window: its header stays partly in view',
+        clamped.top >= 0 && clamped.left + clamped.width >= 60,
+        JSON.stringify(clamped),
+      );
+      check('the popup is still open after being dragged to an edge', await popupOpen());
+      await shot('1b-dragged');
+      // Only the header's right end is left in view: that is where it is grabbed again.
+      const handle = { x: Math.round(clamped.left + clamped.width - 50), y: Math.round(clamped.top + 15) };
+      await driver.drag(handle, { x: handle.x + (home.left - clamped.left), y: handle.y + (home.top - clamped.top) }, { label: 'drag the popup back' });
+      await driver.sleep(300);
+      const back = await rect();
+      check(
+        'the popup can be grabbed again at the edge and dragged back',
+        Math.abs(back.left - home.left) <= 2 && Math.abs(back.top - home.top) <= 2,
+        JSON.stringify([home, back]),
+      );
+      await driver.sleep(300);
+    }
     // 2. Alt text: the prop that feeds it, though it is called imageAlt and Img calls it alt.
     const altInput = `document.querySelectorAll('.canvas-image-popup .props-field')[1] && (document.querySelectorAll('.canvas-image-popup .props-field')[1].querySelector('input, textarea') || undefined)`;
     if (await click(altInput, 'focus the alt field')) {
@@ -166,7 +210,14 @@ async function runInElectron({ window, project, options }) {
       check('selecting another element closes the popup', !(await popupOpen()));
       await driver.key('z', { modifiers: ['meta'] });
       await driver.sleep(1500);
-      check('one undo restores the bytes', read() === original, read().slice(0, 300));
+      check(
+        'one undo restores the bytes',
+        read() === original,
+        read()
+          .split('\n')
+          .filter((line) => line.includes('card-one'))
+          .join(' | '),
+      );
     }
     // 3. The picture: choose another image from the project's own assets.
     await doubleClick('#card-one .card_visual img', 're-open on the Card image');
@@ -195,6 +246,20 @@ async function runInElectron({ window, project, options }) {
         await shot('4-picture-changed');
       }
     }
+    // 3b. A Card with a link stretches the link over the whole card, and a cover Card's picture takes no pointer: the
+    // double click lands on something else and still means the image.
+    await driver.key('Escape');
+    await driver.sleep(300);
+    await doubleClick('#card-cover .card_visual', 'double click the cover Card image');
+    check('a double click over the cover overlay opens the popup', (await until('the cover popup', popupOpen)) === true);
+    await shot('3b-cover-popup');
+    await driver.key('Escape');
+    await driver.sleep(300);
+    await doubleClick('#card-link .card_visual', 'double click the linked Card image');
+    await shot('3c-linked');
+    check('a double click on a linked Card image opens the popup', (await until('the linked popup', popupOpen)) === true);
+    await driver.key('Escape');
+    await driver.sleep(300);
     // 4. Escape closes it.
     await driver.key('Escape');
     await driver.sleep(500);
@@ -222,8 +287,9 @@ async function runInElectron({ window, project, options }) {
     // 7. A click outside closes it, and single click still only selects.
     await doubleClick('#card-one .card_visual img', 'reopen');
     await until('the popup reopens', popupOpen);
-    await driver.pointerPress(await driver.canvasPoint('#card-one h5, #card-one .card_content'), { label: 'click elsewhere on the canvas' });
+    await driver.pointerPress(await driver.canvasPoint('#card-bound .card_content'), { label: 'click elsewhere on the canvas' });
     await driver.settle();
+    await driver.sleep(800);
     check('a click elsewhere closes the popup', !(await popupOpen()));
   } catch (error) {
     report.failures.push(`the run threw: ${String(error && error.stack ? error.stack : error)}`);

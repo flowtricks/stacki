@@ -26,6 +26,9 @@ if (location.protocol === 'stacki-app:') {
   // Nothing to install.
 } else if (!process.isMainFrame) {
   const post = (message: unknown) => window.parent.postMessage(message, '*');
+  // Registered first, so a double click on an image is heard before text editing (which takes the nearest words of a
+  // stretched link) and before the one that opens a component.
+  installCanvasImage(post, canvasSelects);
   // Opening text selects what holds it. Prop text is already selected by the
   // two clicks before the double click: its element lives in the component's
   // file, where a page path would name some other node on the page.
@@ -41,8 +44,6 @@ if (location.protocol === 'stacki-app:') {
       token: renderToken,
     });
   });
-  // Registered before the outline listeners start, so a double click on an image is heard before the one that opens a component.
-  installCanvasImage(post, canvasSelects);
   markFrameMode();
   rememberScrollAcrossRecovery();
   reportErrorOverlay(post);
