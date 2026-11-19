@@ -208,6 +208,9 @@ interface TreeState {
   /** What the search box holds; never remembered. */
   readonly query: string;
   readonly setQuery: React.Dispatch<React.SetStateAction<string>>;
+  /** Counts the searches a selection ended, so the selected row is scrolled into view in the tree that comes back. */
+  readonly searchRevealTick: number;
+  readonly setSearchRevealTick: React.Dispatch<React.SetStateAction<number>>;
   readonly allExpanded: boolean;
   readonly setAllExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   readonly contextMenu: ContextPosition | undefined;
@@ -229,6 +232,7 @@ function useTreeState(props: EditableProps): TreeState {
   );
   const [allExpanded, setAllExpanded] = useState(false);
   const [query, setQuery] = useState('');
+  const [searchRevealTick, setSearchRevealTick] = useState(0);
   const [contextMenu, setContextMenu] = useState<ContextPosition | undefined>(undefined);
   const bodyRef = useRef<HTMLDivElement>(null);
   const tooltip = useHeaderTooltip();
@@ -239,7 +243,7 @@ function useTreeState(props: EditableProps): TreeState {
   });
   useArrowNavigation(props, toggled, setToggled, { searching: isSearching(query) });
   useSelectionExpansion(props, setToggled);
-  useRevealRow(bodyRef, props.revealTick ?? 0, props.selectedId, props.selectedPseudo);
+  useRevealRow(bodyRef, (props.revealTick ?? 0) + searchRevealTick, props.selectedId, props.selectedPseudo);
   return {
     dropNote,
     setDropNote,
@@ -249,6 +253,8 @@ function useTreeState(props: EditableProps): TreeState {
     setToggled,
     query,
     setQuery,
+    searchRevealTick,
+    setSearchRevealTick,
     allExpanded,
     setAllExpanded,
     contextMenu,
@@ -464,6 +470,7 @@ function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: Navig
     onSelect: (id) => {
       if (canEditNode(props, id)) {
         props.onSelect(id);
+        endSearch(props, state, id);
       }
     },
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
@@ -481,6 +488,16 @@ function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: Navig
       state.setContextMenu({ left, top, nodeId });
     },
   };
+}
+
+// Choosing a row ends the search: the box empties, the whole page comes back with the chosen row's ancestors
+// open (the opening stays; every other fold is the person's own, untouched), and the row is scrolled into view.
+function endSearch(props: EditableProps, state: TreeState, selectedId: string): void {
+  if (isSearching(state.query)) {
+    state.setToggled((previous) => selectionExpanded(previous, props.pageState.model.nodes, selectedId, undefined));
+    state.setQuery('');
+    state.setSearchRevealTick((tick) => tick + 1);
+  }
 }
 
 function isDndPayload(event: React.DragEvent<HTMLElement>): boolean {
@@ -622,6 +639,7 @@ function NavigatorBody({
   const [bodyDrag, setBodyDrag] = useState<BodyDrag>('idle');
   const search = useNavigatorSearch(nodes, state.query, { idle: canvasDrag === undefined && bodyDrag === 'idle' });
   // Searched, the tree is a copy holding the matches, drawn open so no match hides in a folded row; the user's own folds are untouched.
+  useClearWhenSelectionHidden(props.selectedId, search, state);
   const context = search.filtering ? { ...treeContext, isCollapsed: () => false, highlightWords: search.words } : treeContext;
   return (
     <div
@@ -653,6 +671,23 @@ function NavigatorBody({
       {canvasDrag === undefined ? <DropNoteChip note={state.dropNote} /> : <CanvasDropNote view={canvasDrag} />}
     </div>
   );
+}
+
+// A selection that arrives from elsewhere (the canvas) and lands on a row the filter hides ends the search, so the
+// selected row is never out of sight. Only a change of selection counts: typing a query that leaves the current
+// selection out of the results does not clear it.
+function useClearWhenSelectionHidden(selectedId: string | undefined, search: NavigatorSearch, state: TreeState): void {
+  const lastSelected = useRef(selectedId);
+  useEffect(() => {
+    if (lastSelected.current === selectedId) {
+      return;
+    }
+    lastSelected.current = selectedId;
+    if (search.filtering && selectedId !== undefined && selectedId !== 'frontmatter' && findNavigatorNode(search.nodes, selectedId) === undefined) {
+      state.setQuery('');
+      state.setSearchRevealTick((tick) => tick + 1);
+    }
+  }, [selectedId, search, state]);
 }
 
 interface NavigatorSearch {
