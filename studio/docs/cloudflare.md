@@ -9,7 +9,7 @@ source distribution does not create resources or claim that an account is config
 ### Cost controls
 
 - Website dependencies are installed into the deployment image and reused when the repository lockfile matches. Changed lockfiles use a cached install fallback. Ordinary cold starts restore drafts and start Astro without reinstalling packages.
-- One shared standard-2 Container (1 vCPU, 6 GiB RAM, 12 GB disk); three-minute sleep timeout after connections close.
+- One shared standard-2 Container (1 vCPU, 6 GiB RAM, 12 GB disk); ten-minute sleep timeout after connections close (a return within ten minutes finds it warm; see [startup timing](../../docs/studio-startup-timing.md)).
 - The editor pauses when its tab is hidden, or after five minutes without interaction,
   once saves and requests finish. Pausing removes preview iframes and closes collaboration
   connections before background tabs can freeze their timers. Resume reconnects the draft
@@ -83,9 +83,9 @@ Edit `cloudflare/wrangler.jsonc`:
 - For a manually managed studio allowlist instead, omit `EDITOR_ACCESS` and set `EDITOR_GITHUB_IDS` to comma-separated numeric GitHub IDs.
 - Choose a private R2 bucket name and create it. This bucket stores shared draft state and draft assets; it is not the default published-content database.
 - Route `example.com/studio*` to this Worker while retaining the existing website's normal routing. Route the preview hostname to this Worker for all paths. Configure these routes/custom domains in your Cloudflare zone according to the website's existing Pages/Workers hosting setup.
-- Keep one Container instance for the shared project. The supplied `standard-2` instance and three-minute sleep timeout are starting values to measure with your site's dependencies.
-- Opening the authenticated Studio page starts preview restoration and homepage compilation while the editor assets download. Drafts and uploaded assets restore in batches of four. The canvas shows a loading state and retry control while waiting, then appears when its editing bridge is ready without waiting for every image. Sleeping containers still incur a cold start.
-- Studio startup shows an animated progress bar, the current loading stage, and elapsed time after ten seconds. Workspace requests retry up to three times with a twenty-second limit per attempt; a visible Retry control recovers from stalled or failed startup without reloading the whole site.
+- Keep one Container instance for the shared project. The supplied `standard-2` instance and ten-minute sleep timeout (`CONTAINER_SLEEP_AFTER` in `src/cloudflare/worker.ts`) are starting values to measure with your site's dependencies.
+- Opening the authenticated Studio page starts preview restoration while the editor assets download; once Astro answers, the container reads the project catalog and compiles the home page before the editor asks for either. Drafts and uploaded assets restore in batches of four. The canvas shows a loading state and retry control while waiting, then appears when its editing bridge is ready without waiting for every image. Sleeping containers still incur a cold start.
+- Studio startup shows an animated progress bar, the container's real stage (starting, repository, drafts, dependencies, preview server, first page) with a step count, and elapsed time after twenty seconds. The stage comes from `/studio/api/startup`, which the Worker answers without waiting for the container. Retry appears after ninety seconds. Workspace requests retry up to three times with a twenty-second limit per attempt; a visible Retry control recovers from stalled or failed startup without reloading the whole site.
 
 ## GitHub App and secrets
 
