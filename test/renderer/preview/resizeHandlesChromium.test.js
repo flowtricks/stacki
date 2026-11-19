@@ -99,9 +99,15 @@ app.whenReady().then(async () => {
       await win.loadURL('http://127.0.0.1:' + server.address().port + '/?mode=' + mode);
       for (let spin = 0; spin < 200 && !(await host('window.harness !== undefined && document.querySelector(".frame-sized") !== null')); spin += 1) { await sleep(20); }
       await sleep(400);
-      // The pointer over the stage shows the handles (they fade in on hover).
-      mouse('mouseMove', 40, 40);
-      await sleep(300);
+      // The pointer over the stage shows the handles (they fade in on hover). Wait, bounded, for the
+      // fade to finish instead of a fixed pause: on the macOS runner the first mode was read while
+      // its handles were still at opacity 0 (Check on a428bc5a). The move is repeated, since a hover
+      // can be missed while the page is still settling; one that never arrives fails at the bound.
+      const shown = 'Array.from(document.querySelectorAll(".frame-sized .rz-w, .frame-sized .rz-e, .frame-sized .rz-s")).every((handle) => getComputedStyle(handle).opacity === "1")';
+      for (let spin = 0; spin < 100 && !(await host(shown)); spin += 1) {
+        if (spin % 10 === 0) { mouse('mouseMove', 40 + (spin % 20), 40); }
+        await sleep(30);
+      }
       output.modes[mode] = await host(READ);
       const image = await win.webContents.capturePage();
       fs.writeFileSync(path.join(DIRECTORY, mode + '.png'), image.toPNG());
