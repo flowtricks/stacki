@@ -1,5 +1,6 @@
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
-import { useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { handshakeWait, HANDSHAKE_LIMITS, type HandshakeWait } from './previewHandshake';
 import { STARTUP_LIMITS, type StartupView } from '../startup/startupStages';
 import { STARTUP_STAGE_KEYS } from '../startup/startupText';
 import { useElapsed } from '../startup/useElapsed';
@@ -15,14 +16,14 @@ const READY_PATH_CHARS_MAX = 4000;
 
 export function usePreviewLoading(url: string | undefined, container: React.RefObject<HTMLElement>, canvas: boolean, refresh: () => void) {
   const [ready, setReady] = useState<{ readonly session: string; readonly path: string }>();
-  const [slowKey, setSlowKey] = useState('');
+  const [slow, setSlow] = useState(false);
+  const [wait, setWait] = useState<HandshakeWait>({ kind: 'address' });
   const [attempt, setAttempt] = useState(0);
   const session = `${canvas}:${attempt}`;
   const key = `${url ?? ''}:${session}`;
   // Attach before yielding to the browser so a cached frame cannot announce
   // readiness before the parent starts listening.
   useLayoutEffect(() => {
-    const timer = setTimeout(() => setSlowKey(key), 15000);
     const receive = (event: MessageEvent) => {
       if (!url || event.origin !== new URL(url, location.href).origin) {
         return;
@@ -42,15 +43,31 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
     };
     window.addEventListener('message', receive);
     return () => {
-      clearTimeout(timer);
       window.removeEventListener('message', receive);
     };
   }, [url, container, key, session]);
   const shown = url !== undefined && ready !== undefined && ready.session === session && ready.path === pagePath(url);
+  // The long-wait clock runs from when the loader appeared, not from the last URL change: an address
+  // that keeps being replaced must not keep postponing the message that says what is missing.
+  useEffect(() => {
+    if (shown) {
+      setSlow(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      const frames = [...(container.current?.querySelectorAll('iframe') ?? [])];
+      // An iframe's load event does not bubble, so the document it holds is the evidence a page loaded.
+      const loaded = frames.filter((frame) => frame.contentDocument === null || frame.contentDocument.readyState === 'complete').length;
+      setWait(handshakeWait({ url, frames: frames.length, framesLoaded: loaded }));
+      setSlow(true);
+    }, HANDSHAKE_LIMITS.slowAfterMs);
+    return () => clearTimeout(timer);
+  }, [shown, session, url, container]);
   return {
     ready: shown,
     // A frame that has shown its page is never "slow" for a URL it is already showing.
-    slow: !shown && slowKey === key,
+    slow: !shown && slow,
+    wait,
     attempt,
     retry: () => {
       setAttempt((value) => value + 1);
@@ -75,7 +92,23 @@ function readyPath(input: unknown): string | undefined {
   return input.startsWith('/') ? input : undefined;
 }
 
-export function PreviewLoading({ slow, retry, startup }: { readonly slow: boolean; readonly retry: () => void; readonly startup: StartupView | undefined }) {
+const WAIT_KEYS = {
+  address: 'preview.studio.waitAddress',
+  frame: 'preview.studio.waitFrame',
+  script: 'preview.studio.waitScript',
+} as const satisfies Record<HandshakeWait['kind'], string>;
+
+export function PreviewLoading({
+  slow,
+  wait,
+  retry,
+  startup,
+}: {
+  readonly slow: boolean;
+  readonly wait: HandshakeWait;
+  readonly retry: () => void;
+  readonly startup: StartupView | undefined;
+}) {
   const translate = useTranslate();
   // While the container itself is still starting, the page cannot load and Retry cannot help:
   // say which stage it is in, and offer Retry only after the stated limit.
@@ -92,6 +125,7 @@ export function PreviewLoading({ slow, retry, startup }: { readonly slow: boolea
     <div className="studio-preview-loading" role="status">
       <span className="studio-preview-spinner" aria-hidden="true" />
       <p>{message}</p>
+      {slow && !cold && <p className="studio-preview-wait">{translate(WAIT_KEYS[wait.kind])}</p>}
       {showRetry && <button onClick={retry}>{translate('preview.studio.retry')}</button>}
     </div>
   );

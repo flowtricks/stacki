@@ -187,7 +187,7 @@ function PreviewSurface({
         ) : (
           <DesignFrame key={loading.attempt} interactive={interactive ?? false} props={props} sizing={sizing} shownGuide={shownGuide} />
         ))}
-      {!loading.ready && <PreviewLoading slow={loading.slow} retry={loading.retry} startup={startup} />}
+      {!loading.ready && <PreviewLoading slow={loading.slow} wait={loading.wait} retry={loading.retry} startup={startup} />}
     </div>
   );
 }
