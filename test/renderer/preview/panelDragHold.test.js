@@ -17,6 +17,7 @@ const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 const directory = repoPath('node_modules/.stacki-test/panel-drag-hold');
 fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'hold.cjs');
@@ -109,9 +110,14 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
     assert.equal(renders.length, dragStart, 'A fluid frame follows by CSS: no preview render mid-drag');
     await act(() => hold.setPanelDragPhase('idle'));
     assert.equal(last().width, 2100, 'Release measures once, with the final width');
-    assert.ok(renders.length - dragStart <= 3, 'Release renders the preview a fixed few times, not once per step');
+    // Counted among the release frames (settling): the transition's own end is a timer that a loaded
+    // runner can fire inside this act, and it is one more render whatever the number of steps.
+    const releaseRenders = renders.slice(dragStart).filter((render) => render.settling);
+    assert.ok(releaseRenders.length <= 3, `Release renders the preview a fixed few times, not once per step: ${JSON.stringify(renders.slice(dragStart))}`);
     assert.equal(last().settling, true, 'The release frame also skips the width transition');
-    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    await act(() =>
+      waitFor({ what: 'the frame settled after release', read: () => last().settling, until: (settling) => settling === false }).catch(() => undefined),
+    );
     assert.equal(last().settling, false, 'The transition returns the frame after release');
     await resize(1700);
     assert.equal(last().width, 1700, 'Without a drag the canvas follows its container');

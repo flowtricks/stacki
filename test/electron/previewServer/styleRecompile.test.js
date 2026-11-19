@@ -21,6 +21,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { waitFor } = require('../../helpers/waitFor.js');
+
+// AVB_RECOMPILE_MS_MAX in electron/preview/markerConfig.ts: a compile that outruns it is given up on.
+// An edit that waited behind a hung one would take at least this long, whatever the machine.
+const RECOMPILE_BOUND_MS = 3000;
 
 const PAGE = (color, heading = 'Home') => `<main><h1>${heading}</h1></main>\n<style>.box { color: ${color}; }</style>\n`;
 
@@ -181,7 +186,7 @@ test('a compile that outruns the bound gives way, and is not trusted', async () 
     const started = Date.now();
     assert.equal(await hotUpdate(morph, page, next.server), undefined, 'the next one passes');
     assert.deepEqual(next.log, ['start ssr /src/pages/index.astro', 'end ssr'], 'and compiles');
-    assert.ok(Date.now() - started < 1000, 'without waiting out the bound again');
+    assert.ok(Date.now() - started < RECOMPILE_BOUND_MS, 'without waiting out the bound again');
   } finally {
     globalThis.setTimeout = realSetTimeout;
     dispose();
@@ -198,10 +203,11 @@ test('two quick edits compile in order', async () => {
     const first = hotUpdate(morph, page, held.server, held.log);
     file('index.astro', PAGE('green'));
     const second = hotUpdate(morph, page, held.server, held.log);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Each transform is settled by hand, once it has started: no timer decides the order.
+    await waitFor({ what: 'the first compile started', read: () => held.pending.length, until: (count) => count === 1 });
     assert.deepEqual(held.log, ['start ssr /src/pages/index.astro'], 'the second waits');
     held.pending.shift()();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await waitFor({ what: 'the second compile started after the first ended', read: () => held.pending.length, until: (count) => count === 1 });
     held.pending.shift()();
     await Promise.all([first, second]);
     const starts = held.log.flatMap((entry, index) => (entry.startsWith('start') ? [index] : []));

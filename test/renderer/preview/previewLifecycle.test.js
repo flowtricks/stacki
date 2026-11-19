@@ -8,6 +8,7 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const directory = repoPath('node_modules/.stacki-test/preview-lifecycle');
 fs.mkdirSync(directory, { recursive: true });
@@ -1134,7 +1135,14 @@ test('toolbar tooltips wait for hover and dismiss without native titles', async 
       ),
     );
     assert.equal(document.querySelector('[role="tooltip"]') ?? undefined, undefined);
-    await React.act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
+    // The tooltip shows after its hover delay: waited for, bounded, not paused for.
+    await React.act(async () => {
+      await waitFor({
+        what: 'the canvas tooltip shown',
+        read: () => document.querySelector('[role="tooltip"]')?.textContent ?? '',
+        until: (text) => text.length > 0,
+      }).catch(() => undefined);
+    });
     assert.match(document.querySelector('[role="tooltip"]').textContent, /Interact with canvas/);
     assert.ok(button.getAttribute('aria-describedby'));
     await React.act(async () =>

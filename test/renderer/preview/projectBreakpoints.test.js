@@ -21,6 +21,7 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const directory = repoPath('node_modules/.stacki-test/project-breakpoints');
 fs.mkdirSync(directory, { recursive: true });
@@ -101,6 +102,15 @@ function setup() {
 }
 
 const settle = (ms = 20) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
+// The app's confirm dialog, once it is drawn: waited for, bounded (test/helpers/waitFor.js).
+const dialogShown = () =>
+  act(() =>
+    waitFor({
+      what: 'the confirm dialog shown',
+      read: () => document.querySelector('.confirm-dialog') ?? undefined,
+      until: (open) => open !== undefined,
+    }).catch(() => undefined),
+  );
 const bar = () => [...document.querySelectorAll('.device-btns button')].map((button) => button.getAttribute('aria-label'));
 const fieldFor = (label) => document.querySelector(`input[aria-label="${label} width in pixels"]`);
 const desktopField = () => document.querySelector('input[aria-label="Desktop width in pixels"]');
@@ -609,20 +619,24 @@ test('removing one whose synced queries are remembered asks first; cancelling ke
   };
   const { root, storage } = await mount('fixture-remove-ask', undefined);
   await click(card('Tablet').querySelector('.breakpoints-remove'));
-  await settle(80);
+  await dialogShown();
   const dialog = document.querySelector('.confirm-dialog');
   assert.ok(dialog, 'the app dialog asks');
   assert.match(dialog.textContent, /Remove Tablet\?/);
   assert.match(dialog.textContent, /1 media query was synced with this breakpoint\. It stays as it is\./);
   const cancel = [...dialog.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Cancel');
   await click(cancel);
-  await settle(300);
+  await act(() =>
+    waitFor({ what: 'the dialog closed', read: () => document.querySelector('.confirm-dialog') ?? undefined, until: (open) => open === undefined }).catch(
+      () => undefined,
+    ),
+  );
   assert.equal(storage.state.writes.length, 0);
   assert.ok(fieldFor('Tablet'), 'it is still there');
   await click(card('Tablet').querySelector('.breakpoints-remove'));
-  await settle(80);
+  await dialogShown();
   await click([...document.querySelectorAll('.confirm-dialog button')].find((button) => button.textContent.trim() === 'Remove'));
-  await settle(300);
+  await act(() => waitFor({ what: 'the removal saved', read: () => storage.state.writes.length, until: (count) => count > 0 }).catch(() => undefined));
   assert.deepEqual(
     saved(storage).map((entry) => entry.id),
     ['laptop', 'phone'],

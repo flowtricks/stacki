@@ -21,6 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const { repoPath, stubSources } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const failures = [];
 let checked = 0;
@@ -175,8 +176,13 @@ const SEG = (TRACK - PAD * 2) / 4;
   // --- the transition ----------------------------------------------------------
   // The class arrives a frame after the first placement, so that the pill
   // doesn't fly in from the left on mount; jsdom runs those frames on a timer.
+  // Waited for, bounded, rather than paused for: a loaded runner runs those frames later.
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    await waitFor({
+      what: 'the pill animated once placed',
+      read: () => pill()?.className ?? '',
+      until: (className) => className.includes('is-animated'),
+    }).catch(() => undefined);
   });
   check('the pill can be animated once placed', pill()?.className.includes('is-animated'), pill()?.className);
 

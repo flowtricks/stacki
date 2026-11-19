@@ -13,6 +13,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { scanStyleBlocks, type StyleBlockScan } from '#dist/electron/previewServer/styleBlockScan.js';
+import { measureSpeedFactor } from '../../helpers/scaleFixtures.ts';
 
 interface Fixture {
   readonly name: string;
@@ -211,6 +212,39 @@ function generated(sizeChars: number): { readonly source: string; readonly units
   return { source: `---\nconst items = [1, 2];\n---\n${UNIT.repeat(units)}`, units };
 }
 
+// The string methods the scan reads its text with (styleBlockScan.ts), each call counted while
+// one scan runs. Restored before returning, whatever happens.
+const COUNTED_METHODS = ['charAt', 'indexOf', 'startsWith', 'slice', 'includes'] as const;
+
+function countedScanCalls(source: string): number {
+  // Reflect.apply takes any function, so the originals keep the type `typeof` narrows them to.
+  const originals: Array<readonly [string, Parameters<typeof Reflect.apply>[0]]> = [];
+  for (const name of COUNTED_METHODS) {
+    const original: unknown = Reflect.get(String.prototype, name);
+    if (typeof original !== 'function') {
+      throw new Error(`Assertion failed: String.prototype.${name} exists`);
+    }
+    originals.push([name, original]);
+  }
+  let calls = 0;
+  for (const [name, original] of originals) {
+    Reflect.set(String.prototype, name, function counted(this: string, ...parameters: unknown[]): unknown {
+      calls += 1;
+      const result: unknown = Reflect.apply(original, this, parameters);
+      return result;
+    });
+  }
+  try {
+    scanStyleBlocks(source);
+  } finally {
+    for (const [name, original] of originals) {
+      Reflect.set(String.prototype, name, original);
+    }
+  }
+  assert.ok(calls > 0, 'the scan was counted');
+  return calls;
+}
+
 function timedMs(source: string): number {
   const started = performance.now();
   scanStyleBlocks(source);
@@ -224,13 +258,21 @@ test('a 1 MB file is counted whole, in time linear in its size', async () => {
   assert.ok(scan.kind === 'certain');
   assert.equal(scan.count, large.units, 'one block a unit');
   assert.equal(scan.count, (await astroCompile())(large.source).count, "and Astro's count");
-  // The best of three runs, so one slow moment on a shared machine is not read as quadratic cost.
-  const quarter = generated(256 * 1024).source;
-  const quarterMs = Math.min(timedMs(quarter), timedMs(quarter), timedMs(quarter));
+  // Linear, in operations: the scan reads the text through a handful of string methods, and
+  // every call is counted. Four times the text must cost about four times the calls; a quadratic
+  // scan would be sixteen. Timing the two sizes against each other read 16x beside 20 CPU burners
+  // and 5x on an idle Mac, so a clock ratio proves nothing either way.
+  const quarterCalls = countedScanCalls(generated(256 * 1024).source);
+  const wholeCalls = countedScanCalls(large.source);
+  assert.ok(quarterCalls > 256 * 1024, `the scan reads every character: ${quarterCalls} calls for 256 KB`);
+  const growth = wholeCalls / quarterCalls;
+  assert.ok(growth > 3.6, `the scan reads all of the bigger text: ${growth.toFixed(3)}x`);
+  assert.ok(growth < 4.4, `4x the text took ${growth.toFixed(3)}x the calls (${wholeCalls} against ${quarterCalls})`);
+  // Within a bound, on this machine's clock: the best of three runs against 2 s on the reference
+  // machine, scaled by this process's speed on a fixed calibration workload (1x to 4x).
   const wholeMs = Math.min(timedMs(large.source), timedMs(large.source), timedMs(large.source));
-  assert.ok(wholeMs < 2000, `1 MB scanned in ${Math.round(wholeMs)} ms`);
-  // Four times the text: linear is about 4x; quadratic would be 16x.
-  assert.ok(wholeMs <= Math.max(quarterMs, 1) * 10, `4x the text took ${Math.round(wholeMs)} ms against ${Math.round(quarterMs)} ms`);
+  const wholeMsMax = 2000 * measureSpeedFactor();
+  assert.ok(wholeMs < wholeMsMax, `1 MB scanned in ${Math.round(wholeMs)} ms (bound ${Math.round(wholeMsMax)} ms here)`);
 });
 
 test('a file past the scan bound is uncertain, not partly read', () => {

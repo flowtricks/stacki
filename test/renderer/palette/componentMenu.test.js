@@ -13,6 +13,7 @@ const test = require('node:test');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const directory = repoPath('node_modules/.stacki-test');
 fs.mkdirSync(directory, { recursive: true });
@@ -283,7 +284,10 @@ test('Rename and Move to folder… sit between Roles and Duplicate, and the dial
   await type('Contact Card');
   assert.equal(status(), 'Available');
   assert.match(dialog().textContent, /src\/components\/ContactCard\.astro/, 'the resulting path is previewed');
-  await view.act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+  // The rename's plan arrives after its debounce: waited for, bounded, not paused for.
+  await view.act(() =>
+    waitFor({ what: 'the rename plan shown', read: () => dialog().textContent, until: (text) => /2 files will be updated/.test(text) }).catch(() => undefined),
+  );
   assert.match(dialog().textContent, /2 files will be updated/);
   assert.match(dialog().textContent, /Not changed/);
   assert.equal(primary().disabled, false);
