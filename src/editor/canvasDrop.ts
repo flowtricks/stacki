@@ -108,6 +108,8 @@ export interface DropQuery {
   readonly draggedId: string | undefined;
   readonly point: DropPoint;
   readonly levels: readonly DropLevel[];
+  /** Containers to treat as taking nothing inside, so their middle drops beside them: the ones the view found cannot take this node. */
+  readonly beside?: ReadonlySet<string> | undefined;
 }
 
 /** The edge band of a container, in which a drop goes beside it rather than into it. */
@@ -192,8 +194,9 @@ export function decideCanvasDrop(query: DropQuery): DropDecision {
   }
   const band = parent === undefined ? 0 : edgeBand(hit.box, parent.flow);
   const inMiddle = parent === undefined || withinMiddle(hit.box, point, parent.flow, band);
+  const hosting = query.beside?.has(node.id) === true || holdsOnlyText(hit, node) ? 'beside' : node.hosting;
   if (inMiddle) {
-    switch (node.hosting) {
+    switch (hosting) {
       case 'children':
         return intoLevel(tree, draggedId, hit, point);
       case 'no-slot':
@@ -201,7 +204,7 @@ export function decideCanvasDrop(query: DropQuery): DropDecision {
       case 'beside':
         break;
       default: {
-        const exhaustive: never = node.hosting;
+        const exhaustive: never = hosting;
         return exhaustive;
       }
     }
@@ -229,6 +232,16 @@ export function guideForPlace(levels: readonly DropLevel[], place: { readonly pa
   }
   assert(after !== undefined, 'guideForPlace: a level with children has one before or after any index');
   return lineFor(level, after, 'after', children);
+}
+
+// A container whose children the frame could not box (a heading's or a paragraph's words): its middle is the
+// words themselves, and a drop there goes beside it, as on a void element. Drawing an empty container's
+// placeholder over a heading said "empty, drop here" about something full.
+function holdsOnlyText(level: DropLevel, node: DropTreeNode): boolean {
+  if (node.childCount === 0) {
+    return false;
+  }
+  return level.children !== undefined && level.children.length === 0;
 }
 
 // A drop into a measured container: before the nearest child along its flow, or after the last; into an

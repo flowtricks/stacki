@@ -17,6 +17,7 @@ import { CanvasDropOverlay } from '../../src/features/preview/CanvasDropOverlay'
 import StructurePanel from '../../src/features/structure/StructurePanel';
 import { useCanvasDrag, type CanvasDragHost } from '../../src/app/state/appCanvasDrag';
 import { moveGesture } from '../../src/editor/editGestures';
+import { setDrag } from '../../src/editor/dragState';
 import type { EditorModel } from '../../src/editor/pageView';
 import type { LeftTab } from '../../src/app/appTypes';
 import type { OverlayInfo } from '../../src/features/preview/PreviewOverlays';
@@ -85,7 +86,10 @@ if (!(uiElement instanceof HTMLElement)) {
 const canvas = canvasElement;
 const STAGE_LEFT_PX = 300;
 
+// Fields the outline grows over time (a muted hover over host content) are spread in, so the fixture states only what it means.
+const outlineExtras = { hostContent: false };
 const overlayInfo = (path: string): OverlayInfo | undefined => ({
+  ...outlineExtras,
   label: path === '0.0' ? 'Container' : path,
   kind: 'element',
   tag: 'div',
@@ -150,6 +154,8 @@ function Host() {
   // The test opens the Navigator itself for the drags that must find it already open.
   useEffect(() => {
     Reflect.set(window, 'canvasDragHostOpenNavigator', () => setLeftTab('navigator'));
+    // What a Navigator row's dragstart records (StructureTree.tsx), for a drag the test starts inside the frame.
+    Reflect.set(window, 'canvasDragHostSetDrag', (id: string) => setDrag({ kind: 'node', id, nodeKind: 'element' }));
   }, []);
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>): void => {

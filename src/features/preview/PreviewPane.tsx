@@ -1,6 +1,7 @@
 import { useCanvasText, type CanvasTextDocument } from './useCanvasText';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
-import React from 'react';
+import React, { useSyncExternalStore } from 'react';
+import { canvasDragActive, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
@@ -228,6 +229,9 @@ function DesignPreview({
   const translate = useTranslate();
   const width = sizing.width;
   const scale = sizing.viewport.scale;
+  // While a drag is over the canvas the drop's own outline names the target: a hover outline beside it was a second,
+  // different name jumping from element to element under the pointer.
+  const dragging = useSyncExternalStore(subscribeCanvasDrag, canvasDragActive);
   return (
     <>
       <SizedFrame sizing={sizing}>
@@ -255,6 +259,7 @@ function DesignPreview({
         {shownGuide && <GuideOverlay {...shownGuide} scale={scale} />}
         <PreviewOverlays
           {...measuredOutlines(runtime)}
+          {...(dragging ? { hoverPath: undefined } : {})}
           scale={scale}
           viewport={{ w: sizing.viewport.width, h: sizing.viewport.height }}
           {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}

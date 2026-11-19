@@ -21,9 +21,16 @@ import {
 } from './structureModel';
 import CodeEditor from '../../ui/CodeEditor';
 import { NodeList, scrollRowIntoScroller } from './StructureTree';
-import { canvasDragView, dropReasonText, subscribeCanvasDrag, type CanvasDragView } from '../../editor/canvasDragSession';
+import {
+  dropReasonText,
+  selfRefusal,
+  navigatorDragView,
+  publishNavigatorDrop,
+  subscribeCanvasDrag,
+  type NavigatorDragView,
+} from '../../editor/canvasDragSession';
 import { clearDrag } from '../../editor/dragState';
-import { parseNavigatorDrop } from './navigatorDrop';
+import { navigatorDropOf, parseNavigatorDrop } from './navigatorDrop';
 import { dropPlacement, type DropPlacement } from './dropPlacement';
 import { documentOfPath, type PlacementEnvironment, type PlacementInsertable } from '../../editor/placementCheck';
 import { getDrag } from '../../editor/dragState';
@@ -166,8 +173,9 @@ type EditableProps = StructurePanelProps & {
 function EditableStructurePanel(props: EditableProps) {
   const state = useTreeState(props);
   // A drag on the canvas is drawn here too, from the same decision, in the same commit (canvasDragSession.ts).
-  const canvasDrag = useSyncExternalStore(subscribeCanvasDrag, canvasDragView);
+  const canvasDrag = useSyncExternalStore(subscribeCanvasDrag, navigatorDragView);
   useCanvasDragReveal(state.bodyRef, canvasDrag?.revealId);
+  usePublishNavigatorDrop(props.pageState.model.nodes, canvasDrag === undefined ? state.dropTarget : undefined);
   const treeContext = treeContextOf(props, state, canvasDrag);
   return (
     <div className="panel-section grow navigator">
@@ -333,7 +341,9 @@ function parseArrowKey(event: KeyboardEvent): ArrowKey | undefined {
 }
 
 function useSelectionExpansion(props: EditableProps, setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>): void {
-  useEffect(() => {
+  // Before paint: a canvas drop ends the drag's opened rows and selects the moved node in one task, and with a
+  // passive effect the tree was painted folded for a few frames between the two (seen in the running app).
+  useLayoutEffect(() => {
     setToggled((previous) => selectionExpanded(previous, props.pageState.model.nodes, props.selectedId, props.selectedPseudo));
   }, [props.pageState.model.nodes, props.selectedId, props.selectedPseudo, setToggled]);
 }
@@ -413,7 +423,7 @@ function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string, 
   bodyElement.scrollTop += rowBounds.top - bodyBounds.top - (bodyBounds.height - rowBounds.height) / 2;
 }
 
-function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: CanvasDragView | undefined): StructureTreeContext {
+function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: NavigatorDragView | undefined): StructureTreeContext {
   // A canvas drag opens the rows its mark sits in for as long as it lasts, without touching what the person
   // opened or closed: when the drag ends the set is empty and every row is as it was.
   const isCollapsed = (node: NavigatorNode): boolean => (canvasDrag?.expand.has(node.id) === true ? false : collapsedState(node, state.toggled));
@@ -511,7 +521,8 @@ function noteOf(placement: DropPlacement, previous: DropNote | undefined): DropN
   let next: DropNote | undefined = undefined;
   switch (placement.kind) {
     case 'refused':
-      next = { tone: 'refused', reason: placement.reason };
+      // A row over itself or its own rows: no mark, the not-allowed cursor, and no words (they only state the obvious).
+      next = placement.reason.reason === 'self-drop' ? undefined : { tone: 'refused', reason: placement.reason };
       break;
     case 'snap':
       next = { tone: 'snapped', reason: placement.reason };
@@ -583,7 +594,7 @@ function NavigatorBody({
   readonly props: EditableProps;
   readonly state: TreeState;
   readonly treeContext: StructureTreeContext;
-  readonly canvasDrag: CanvasDragView | undefined;
+  readonly canvasDrag: NavigatorDragView | undefined;
 }) {
   const nodes = props.pageState.model.nodes;
   // Drop gaps overlap the row edges instead of taking room between rows, so
@@ -621,9 +632,10 @@ function NavigatorBody({
 }
 
 // The canvas drag's note, in the words the canvas shows beside the pointer.
-function CanvasDropNote({ view }: { readonly view: CanvasDragView }) {
+function CanvasDropNote({ view }: { readonly view: NavigatorDragView }) {
   const translate = useTranslate();
-  const text = dropReasonText(view, translate);
+  // Over itself the drop is obviously nowhere: the Navigator shows no mark and says nothing (the canvas chip still does).
+  const text = selfRefusal(view.verdict) ? undefined : dropReasonText(view, translate);
   if (text === undefined) {
     return undefined;
   }
@@ -632,6 +644,15 @@ function CanvasDropNote({ view }: { readonly view: CanvasDragView }) {
       {text}
     </div>
   );
+}
+
+// A drag over the Navigator tells the canvas where its mark is, so the canvas draws the same line
+// (CanvasDropOverlay.tsx NavigatorDropLine). Published before paint, with the mark itself.
+function usePublishNavigatorDrop(nodes: readonly NavigatorNode[], target: DropTarget | undefined): void {
+  useLayoutEffect(() => {
+    publishNavigatorDrop(target === undefined ? undefined : navigatorDropOf(nodes, target));
+  }, [nodes, target]);
+  useEffect(() => () => publishNavigatorDrop(undefined), []);
 }
 
 // Keeps the row a canvas drag points at in view, before the frame paints: the mark moves and the tree follows.

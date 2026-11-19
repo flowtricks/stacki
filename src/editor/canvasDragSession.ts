@@ -36,6 +36,17 @@ export type CanvasDropVerdict =
 export type CanvasDropReason =
   { readonly kind: 'placement'; readonly message: PlacementMessage } | { readonly kind: 'self' } | { readonly kind: 'no-slot'; readonly name: string };
 
+/** Whether a verdict refuses the node over itself or over something inside it: the Navigator stays silent about it. */
+export function selfRefusal(verdict: CanvasDropVerdict): boolean {
+  if (verdict.kind !== 'refused') {
+    return false;
+  }
+  if (verdict.reason.kind === 'self') {
+    return true;
+  }
+  return verdict.reason.kind === 'placement' && verdict.reason.message.reason === 'self-drop';
+}
+
 /** Where the drop lands, as the Navigator draws it: a gap between rows, or the row of an empty container. */
 export type NavigatorDropMark =
   { readonly kind: 'gap'; readonly parentId: string | undefined; readonly index: number } | { readonly kind: 'into'; readonly intoId: string };
@@ -68,11 +79,94 @@ export function canvasDragView(): CanvasDragView | undefined {
   return current;
 }
 
+/** Whether a drag is over the canvas: a primitive, so a subscriber that only needs this re-renders twice per drag. */
+export function canvasDragActive(): boolean {
+  return current !== undefined;
+}
+
+/**
+ * What the Navigator reads of the drag: the same object until its mark, the rows it opens, the row to reveal, the
+ * moving row or the verdict change. The canvas follows the pointer every probe; the Navigator re-renders only when
+ * what it draws changes, so a large tree costs nothing while the pointer moves within one place.
+ */
+export type NavigatorDragView = Pick<CanvasDragView, 'subject' | 'navigator' | 'expand' | 'revealId' | 'verdict' | 'decision'>;
+
+let navigatorSlice: NavigatorDragView | undefined;
+
+export function navigatorDragView(): NavigatorDragView | undefined {
+  return navigatorSlice;
+}
+
+function navigatorKey(view: NavigatorDragView): string {
+  const mark =
+    view.navigator === undefined
+      ? ''
+      : view.navigator.kind === 'into'
+        ? `into:${view.navigator.intoId}`
+        : `gap:${view.navigator.parentId ?? ''}:${view.navigator.index}`;
+  const subject = view.subject.kind === 'new' ? `new:${view.subject.label}` : view.subject.id;
+  const reason =
+    view.verdict.kind === 'refused'
+      ? JSON.stringify(view.verdict.reason)
+      : view.verdict.kind === 'snap'
+        ? view.verdict.reason.reason
+        : view.verdict.kind === 'valid'
+          ? (view.verdict.warning?.reason ?? '')
+          : '';
+  const loop = view.decision.kind === 'place' && view.decision.loop ? 'loop' : '';
+  return [mark, [...view.expand].join(','), view.revealId ?? '', subject, view.verdict.kind, reason, loop].join('\u0000');
+}
+
 export function publishCanvasDrag(next: CanvasDragView | undefined): void {
   if (next === current) {
     return;
   }
   current = next;
+  if (next === undefined) {
+    navigatorSlice = undefined;
+  } else if (navigatorSlice === undefined || navigatorKey(navigatorSlice) !== navigatorKey(next)) {
+    navigatorSlice = {
+      subject: next.subject,
+      navigator: next.navigator,
+      expand: next.expand,
+      revealId: next.revealId,
+      verdict: next.verdict,
+      decision: next.decision,
+    };
+  }
+  for (const listener of [...listeners]) {
+    listener();
+  }
+}
+
+/**
+ * A drag over the Navigator (a row, or a component from the palette), drawn on the canvas too: the parent the
+ * Navigator's mark lands in, the index, and the two siblings either side of it, which are all the canvas needs to
+ * draw the line where the model would (canvasDrop.ts guideForPlace).
+ */
+export interface NavigatorDropShown {
+  readonly parentId: string | undefined;
+  readonly index: number;
+  /** The siblings at index - 1 and index, when there are: the line stands between them. */
+  readonly neighbours: readonly { readonly id: string; readonly index: number }[];
+}
+
+let navigatorDrop: NavigatorDropShown | undefined;
+
+export function navigatorDropShown(): NavigatorDropShown | undefined {
+  return navigatorDrop;
+}
+
+export function publishNavigatorDrop(next: NavigatorDropShown | undefined): void {
+  if (next === navigatorDrop) {
+    return;
+  }
+  if (next !== undefined && navigatorDrop !== undefined) {
+    if (next.parentId === navigatorDrop.parentId && next.index === navigatorDrop.index) {
+      return; // The same place: nothing to draw again.
+    }
+  }
+  navigatorDrop = next;
   for (const listener of [...listeners]) {
     listener();
   }

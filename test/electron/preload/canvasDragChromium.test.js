@@ -124,7 +124,7 @@ app.whenReady().then(async () => {
     await host('window.__downs = 0; window.addEventListener("pointerdown", () => { window.__downs += 1; }, true); 1');
     out.inputReady = await poll(async () => { await mouse('mouseMoved', 100, 600); await mouse('mousePressed', 100, 600); await mouse('mouseReleased', 100, 600); return host('window.__downs > 0'); }, 200);
     const box = (selector) => frame('(() => { const r = document.querySelector(' + JSON.stringify(selector) + ').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()');
-    const boxes = { logo: await box('.logo'), heading: await box('h1'), badge: await box('.badge'), link: await box('.row a'), empty: await box('.empty'), tag: await box('.tag'), container: await box('.container') };
+    const boxes = { logo: await box('.logo'), heading: await box('h1'), badge: await box('.badge'), row: await box('.row'), link: await box('.row a'), empty: await box('.empty'), tag: await box('.tag'), container: await box('.container') };
     out.boxes = boxes;
     const at = (b, fx, fy) => ({ x: STAGE_LEFT + b.x + b.w * fx, y: b.y + b.h * fy });
     // A move counts once the editor has heard the frame's probe for that very point.
@@ -160,8 +160,10 @@ app.whenReady().then(async () => {
     out.steps.empty = await settled((seen) => seen.sample && seen.sample.empty);
     await shot('canvas-drag-into-container');
     out.frames = await host('({ samples: window.canvasDragHost.samples.slice(), mutations: window.canvasDragHost.mutationFrames })');
-    // D: the middle of the slotless instance.
-    await moveTo(at(boxes.tag, 0.5, 0.5));
+    // D: the middle of the slotless instance takes the drop beside it; over the heading itself the drop is refused.
+    await moveTo(at(boxes.tag, 0.5, 0.4));
+    out.steps.slotless = await settled((seen) => seen.verdict === 'valid' && seen.sample && seen.sample.gap && seen.sample.gap.parent === out.ids.section);
+    await moveTo(at(boxes.heading, 0.5, 0.5));
     out.steps.refused = await settled((seen) => seen.verdict === 'refused');
     out.steps.refusedCursor = await poll(async () => { const text = await cursor(); return text.includes('not-allowed') ? text : undefined; }, 100);
     await shot('canvas-drag-invalid');
@@ -186,6 +188,17 @@ app.whenReady().then(async () => {
     await key('Escape', 'Escape');
     out.steps.closed = await settled((seen) => seen.verdict === undefined);
     await mouse('mouseReleased', 10, 10);
+    // T: a hand trembling on the logo's midline, 2px either side, settles on one place instead of flipping.
+    await startDrag(at(boxes.heading, 0.5, 0.5));
+    const midline = at(boxes.logo, 0.5, 0.5);
+    await moveTo({ x: midline.x, y: midline.y - 6 });
+    await settled((seen) => seen.sample && seen.sample.gap);
+    await host('window.canvasDragHost.samples.length = 0; 1');
+    for (let wobble = 0; wobble < 24; wobble++) { await moveTo({ x: midline.x, y: midline.y + (wobble % 2 === 0 ? 2 : -2) }); }
+    out.tremor = await host('window.canvasDragHost.samples.map((sample) => sample.gap ? sample.gap.parent + ":" + sample.gap.index : "none")');
+    await key('Escape', 'Escape');
+    await settled((seen) => seen.verdict === undefined);
+    await mouse('mouseReleased', 10, 10);
     // H: a release where the heading already stands (just after the logo) writes nothing.
     await startDrag(at(boxes.heading, 0.5, 0.5));
     await moveTo(at(boxes.logo, 0.5, 0.95));
@@ -199,6 +212,14 @@ app.whenReady().then(async () => {
     await mouse('mouseReleased', at(boxes.logo, 0.5, 0.05).x, at(boxes.logo, 0.5, 0.05).y);
     out.steps.dropped = await settled((seen) => seen.verdict === undefined && seen.moves.length > 0);
     out.reveals = await host('window.canvasDragHost.reveals');
+    // N: a Navigator row dragged onto the canvas (a native drag: the frame sees dragover and drop) takes the same path.
+    await host('window.canvasDragHostSetDrag(' + JSON.stringify(out.ids.empty) + '); 1');
+    const nativeAt = { x: boxes.row.x + boxes.row.w / 2, y: boxes.row.y + 2 };
+    const native = (type) => frame('(() => { const transfer = new DataTransfer(); transfer.setData("avb/node", ' + JSON.stringify(out.ids.empty) + '); const target = document.elementFromPoint(' + nativeAt.x + ', ' + nativeAt.y + '); target.dispatchEvent(new DragEvent(' + JSON.stringify(type) + ', { bubbles: true, cancelable: true, clientX: ' + nativeAt.x + ', clientY: ' + nativeAt.y + ', dataTransfer: transfer })); return true; })()');
+    await native('dragover');
+    out.steps.native = await settled((seen) => seen.verdict !== undefined && seen.sample && seen.sample.gap);
+    await native('drop');
+    out.steps.nativeDropped = await settled((seen) => seen.verdict === undefined && seen.moves.length > 1);
     await shot('canvas-drag-after-drop');
   } catch (error) { out.error = String((error && error.stack) || error); }
   console.log('RESULT ' + JSON.stringify(out));
@@ -353,8 +374,9 @@ function idsOf(model) {
   );
   // D: refused.
   const refused = steps.refused;
-  check('D: the slotless instance refuses, with its reason beside the pointer', refused?.reason?.includes('has no slot') === true, show(refused));
-  check('D: the Navigator says why too', refused?.note?.includes('has no slot') === true, show(refused));
+  check('D: the middle of a slotless instance drops before it in its parent, no red', steps.slotless?.sample?.gap?.index === 1, show(steps.slotless));
+  check('D: over itself the drop is refused, with the reason beside the pointer', refused?.reason?.includes('inside itself') === true, show(refused));
+  check('D: over itself the Navigator shows no mark and says nothing', refused?.note === undefined && refused?.sample?.gap === undefined, show(refused));
   check('D: the frame shows the not-allowed cursor', typeof steps.refusedCursor === 'string', show(steps.refusedCursor));
   // E: Escape.
   check('E: Escape takes the drag away and gives Pages back', steps.escaped?.tab === 'pages' && steps.escaped.verdict === undefined, show(steps.escaped));
@@ -379,6 +401,14 @@ function idsOf(model) {
     steps.closed !== undefined && !steps.closed.rows.includes(out.ids.logo) && steps.closed.tab === 'navigator',
     show(steps.closed),
   );
+  // T: tremor.
+  const marks = out.tremor ?? [];
+  const changes = marks.filter((mark, at) => at > 0 && mark !== marks[at - 1]).length;
+  check(
+    'T: a pointer trembling on a midline settles: the mark changes at most once',
+    marks.length > 0 && changes <= 1,
+    show({ changes, marks: [...new Set(marks)] }),
+  );
   // H: no-op.
   check('H: just after the logo is where the heading stands: the line shows it', steps.noopOver?.sample?.line !== undefined, show(steps.noopOver));
   check('H: releasing there writes nothing', steps.noop?.moves?.length === 0, show(steps.noop));
@@ -395,6 +425,18 @@ function idsOf(model) {
     show({ selected: dropped?.selected, reveals: out.reveals }),
   );
   check('I: the Navigator, open before the drag, stays open', dropped?.tab === 'navigator', show(dropped));
+  // N: native.
+  check(
+    'N: a row dragged onto the canvas shows the same line and mark, before the row',
+    steps.native?.sample?.line?.orientation === 'horizontal' && steps.native.sample.gap?.parent === out.ids.container,
+    show(steps.native),
+  );
+  const nativeMove = steps.nativeDropped?.moves?.[1];
+  check(
+    'N: its drop asks for one move to the place shown',
+    nativeMove?.id === out.ids.empty && nativeMove.parentId === out.ids.container && nativeMove.index === 2,
+    show(steps.nativeDropped?.moves),
+  );
   report();
 })();
 

@@ -13,7 +13,17 @@ import { useCallback, useEffect, useRef } from 'react';
 import { canPanel } from '../../lib/roleAccess';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { publishCanvasDrag, type CanvasDragView } from '../../editor/canvasDragSession';
-import { dropActionOf, dropView, levelsOfPaths, startDropSession, subjectOf, type DropInsertable, type DropSession } from '../../editor/canvasDropView';
+import {
+  dropActionOf,
+  dropView,
+  levelsOfPaths,
+  stickyView,
+  type ShownDrop,
+  startDropSession,
+  subjectOf,
+  type DropInsertable,
+  type DropSession,
+} from '../../editor/canvasDropView';
 import { getDrag } from '../../editor/dragState';
 import { documentOfPath } from '../../editor/placementCheck';
 import { nodeAtPath } from '../../editor/editorTree';
@@ -30,6 +40,8 @@ interface Active {
   readonly source: 'pointer' | 'native';
   /** The left panel to give back when the drag ends; `keep` when the Navigator was already showing. */
   readonly restore: { readonly kind: 'keep' } | { readonly kind: 'tab'; readonly tab: LeftTab };
+  /** The place on screen: the drop writes exactly what it shows (stickyView may hold it near a boundary). */
+  shown: ShownDrop | undefined;
   view: CanvasDragView | undefined;
   allowed: boolean | undefined;
 }
@@ -106,9 +118,11 @@ export function useCanvasDrag(app: CanvasDragHost): CanvasDragHandler {
             return;
           }
           const levels = levelsOfPaths(drag.levels, current.session.tree, (path) => nodeIdOfPath(app, path));
-          const view = dropView(current.session, { levels, pointer: { x: drag.x, y: drag.y }, dragged: drag.dragged, outside: drag.outside }, (id) =>
+          const next = dropView(current.session, { levels, pointer: { x: drag.x, y: drag.y }, dragged: drag.dragged, outside: drag.outside }, (id) =>
             app.pathFor(id),
           );
+          current.shown = stickyView(current.shown, next);
+          const view = current.shown.view;
           current.view = view;
           publishCanvasDrag(view);
           const allowed = view.verdict.kind === 'valid' || view.verdict.kind === 'snap' || view.verdict.kind === 'noop';
@@ -156,7 +170,7 @@ function startPointerDrag(context: { readonly app: CanvasDragHost; readonly role
     return undefined;
   }
   const session = startDropSession(state.model.nodes, subjectOf(node, node.name ?? node.kind), environmentOf(app));
-  return { session, source: 'pointer', restore: openNavigator(context), view: undefined, allowed: undefined };
+  return { session, source: 'pointer', restore: openNavigator(context), shown: undefined, view: undefined, allowed: undefined };
 }
 
 function startNativeDrag(context: { readonly app: CanvasDragHost; readonly role: ReturnType<typeof useCurrentRole> }): Active | undefined {
@@ -173,7 +187,7 @@ function startNativeDrag(context: { readonly app: CanvasDragHost; readonly role:
         { kind: 'new', label: native.name, ...(native.path === undefined ? {} : { path: native.path }) },
         environmentOf(app),
       );
-      return { session, source: 'native', restore: openNavigator(context), view: undefined, allowed: undefined };
+      return { session, source: 'native', restore: openNavigator(context), shown: undefined, view: undefined, allowed: undefined };
     }
     case 'node': {
       const node = findEditorNodeById(state.model.nodes, native.id);
@@ -182,7 +196,7 @@ function startNativeDrag(context: { readonly app: CanvasDragHost; readonly role:
       }
       // Dragged from the Navigator: it is already showing, so nothing to open or give back.
       const session = startDropSession(state.model.nodes, subjectOf(node, node.name ?? node.kind), environmentOf(app));
-      return { session, source: 'native', restore: { kind: 'keep' }, view: undefined, allowed: undefined };
+      return { session, source: 'native', restore: { kind: 'keep' }, shown: undefined, view: undefined, allowed: undefined };
     }
     default: {
       const exhaustive: never = native;

@@ -2,7 +2,7 @@ import { useFormat, useTranslate, useTranslateRich } from '../../lib/i18n/useTra
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { desktopCanvasText } from './desktopCanvasText';
 import { RemoteCmsView } from '../../features/cms/RemoteCmsView';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type React from 'react';
 import { pageComponentFiles } from '../model/componentReference';
 import { COMPONENT_SOURCES_MAX } from '../../features/style/model/componentSourceCache';
@@ -55,6 +55,8 @@ import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { selectedPseudo } from '../model/selectionStructure';
 import { appOverlayLayer, useAppOverlayPaths } from './DesktopApps';
 import { useCanvasDrag } from '../state/appCanvasDrag';
+import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/CanvasDropOverlay';
+import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 
 // One function for the life of the app: the Style panel publishes its host on every render, and a
 // new arrow each time would wake every host subscriber (StylePanel.tsx useStableList says why).
@@ -66,11 +68,22 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const context = useCanvasContextMenu(app);
   const appOverlayPaths = useAppOverlayPaths(app);
   const onCanvasDrag = useCanvasDrag(app);
+  // A drag over the Navigator is drawn on the canvas too: the frame measures the mark's parent and neighbours.
+  const navigatorDrop = useSyncExternalStore(subscribeCanvasDrag, navigatorDropShown);
+  const dropPaths = navigatorDropPaths(navigatorDrop, (id) => app.pathFor(id));
+  const dropKey = dropPaths.join('\n');
+  const trackPaths = useMemo(() => [...appOverlayPaths, ...(dropKey === '' ? [] : dropKey.split('\n'))], [appOverlayPaths, dropKey]);
+  const appOverlays = appOverlayLayer(app);
   return (
     <>
       <PreviewPane
-        extraTrackPaths={appOverlayPaths}
-        overlayLayer={appOverlayLayer(app)}
+        extraTrackPaths={trackPaths}
+        overlayLayer={(frame) => (
+          <>
+            <NavigatorDropLine rects={frame.rects} scale={frame.scale} pathOf={(id) => app.pathFor(id)} />
+            {appOverlays(frame)}
+          </>
+        )}
         textDocument={desktopCanvasText(app, translate)}
         spacingHover={app.spacingHover}
         devUrl={app.devUrl}

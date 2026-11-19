@@ -14,7 +14,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { decideCanvasDrop, indexDropTree, lineFor, guideForPlace, edgeBand } = load('src/editor/canvasDrop.ts');
-const { dropView, dropActionOf, startDropSession, hostingOf, levelsOfPaths, landing } = load('src/editor/canvasDropView.ts');
+const { dropView, dropActionOf, startDropSession, hostingOf, levelsOfPaths, landing, stickyView, DROP_STICKY_PX, DROP_HOLD_PROBES_MAX } =
+  load('src/editor/canvasDropView.ts');
+const { publishCanvasDrag, navigatorDragView, selfRefusal } = load('src/editor/canvasDragSession.ts');
 
 const element = (id, name, children = []) => ({ id, kind: 'element', name, children });
 const component = (id, name, children = []) => ({ id, kind: 'component', name, children });
@@ -302,19 +304,31 @@ test('an empty container: the Navigator lights the row itself', () => {
   assert.ok(result.expand.has('empty'));
 });
 
-test('a place the HTML rules refuse with a neighbour: the drop snaps there, and says why', () => {
-  // A <div> inside a <p> is reparented by the browser: the rule moves the drop beside the paragraph.
+test('a container that cannot take the node takes the drop beside it, by halves, with no snap and no red', () => {
+  // A <div> inside an <h1> is reparented by the browser: in the heading's middle the drop goes before or after it.
+  const headingLevel = {
+    id: 'heading',
+    box: boxes.heading,
+    content: boxes.heading,
+    flow: 'block',
+    children: [{ id: 'heading-text', index: 0, box: rect(250, 120, 400, 74) }],
+  };
+  const upper = view(moving('empty'), { x: 450, y: 150 }, [headingLevel, containerLevel, sectionLevel, rootLevel]);
+  assert.equal(upper.verdict.kind, 'valid');
+  assert.equal(upper.decision.mode, 'before');
+  assert.deepEqual(upper.navigator, { kind: 'gap', parentId: 'container', index: 1 });
+  const lower = view(moving('empty'), { x: 450, y: 170 }, [headingLevel, containerLevel, sectionLevel, rootLevel]);
+  assert.equal(lower.decision.mode, 'after');
+  assert.deepEqual(lower.navigator, { kind: 'gap', parentId: 'container', index: 2 });
+});
+
+test('a container holding only words the frame could not box takes the drop beside it, never an empty placeholder', () => {
   const boxLevel = { id: 'boxed', box: boxes.boxed, content: boxes.boxed, flow: 'block', children: [] };
-  const result = view(moving('empty'), { x: 200, y: 720 }, [
-    boxLevel,
-    { id: 'box', box: boxes.box, content: boxes.box, flow: 'block', children: [child('boxed', 0)] },
-    sectionLevel,
-    rootLevel,
-  ]);
-  assert.equal(result.verdict.kind, 'snap');
-  assert.equal(result.verdict.reason.reason, 'content-model');
-  assert.notEqual(result.verdict.to.parentId, 'boxed');
-  assert.deepEqual(result.navigator, { kind: 'gap', ...result.verdict.to });
+  const boxParent = { id: 'box', box: boxes.box, content: boxes.box, flow: 'block', children: [child('boxed', 0)] };
+  const result = view(moving('empty'), { x: 200, y: 710 }, [boxLevel, boxParent, sectionLevel, rootLevel]);
+  assert.equal(result.verdict.kind, 'valid');
+  assert.notEqual(result.guide.kind, 'empty');
+  assert.deepEqual(result.navigator, { kind: 'gap', parentId: 'box', index: 0 });
 });
 
 test('the dragged node over itself is refused with the self reason; outside the frame is nothing', () => {
@@ -327,9 +341,10 @@ test('the dragged node over itself is refused with the self reason; outside the 
   assert.equal(landing(outside.decision, outside.verdict), undefined);
 });
 
-test('a slotless instance is refused by name; the drop where the node stands is a no-op that writes nothing', () => {
-  const refused = view(moving('logo'), { x: 140, y: 630 }, [leaf('instance'), sectionLevel, rootLevel]);
-  assert.deepEqual(refused.verdict, { kind: 'refused', reason: { kind: 'no-slot', name: 'Badge' } });
+test('a slotless instance takes the drop beside it; the drop where the node stands is a no-op that writes nothing', () => {
+  const beside = view(moving('logo'), { x: 140, y: 620 }, [leaf('instance'), sectionLevel, rootLevel]);
+  assert.equal(beside.verdict.kind, 'valid');
+  assert.deepEqual(beside.navigator, { kind: 'gap', parentId: 'section', index: 2 });
   const noop = view(moving('heading'), { x: 450, y: 94 }, [leaf('logo'), containerLevel, sectionLevel, rootLevel]);
   assert.deepEqual(noop.verdict, { kind: 'noop' });
 });
@@ -367,13 +382,62 @@ test('the release: a move, an insert, or nothing for a no-op, a refusal and a re
   assert.deepEqual(dropActionOf(moving('empty'), valid), { kind: 'move', id: 'empty', place: { parentId: 'container', index: 1 } });
   const noop = view(moving('heading'), { x: 450, y: 94 }, [leaf('logo'), containerLevel, sectionLevel, rootLevel]);
   assert.deepEqual(dropActionOf(moving('heading'), noop), { kind: 'none' });
-  const refused = view(moving('logo'), { x: 140, y: 630 }, [leaf('instance'), sectionLevel, rootLevel]);
-  assert.deepEqual(dropActionOf(moving('logo'), refused), { kind: 'none' });
+  const refused = view(moving('row'), { x: 400, y: 230 }, [leaf('row', 'row'), containerLevel, sectionLevel, rootLevel]);
+  assert.deepEqual(dropActionOf(moving('row'), refused), { kind: 'none' });
   const outside = view(moving('logo'), { x: -1, y: 0 }, [], true);
   assert.deepEqual(dropActionOf(moving('logo'), outside), { kind: 'none' });
   const fresh = { kind: 'new', label: 'Box', path: '/p/src/components/Box.astro' };
   const inserted = view(fresh, { x: 450, y: 292 }, [leaf('empty'), containerLevel, sectionLevel, rootLevel]);
   assert.deepEqual(dropActionOf(fresh, inserted), { kind: 'insert', component: '/p/src/components/Box.astro', place: { parentId: 'empty', index: 0 } });
+});
+
+test('near a boundary the shown place holds until the pointer travels past the sticky distance', () => {
+  const levels = [leaf('logo'), containerLevel, sectionLevel, rootLevel];
+  const above = view(moving('empty'), { x: 450, y: 74 }, levels); // before the logo, index 0
+  const below = view(moving('empty'), { x: 450, y: 78 }, levels); // after the logo, index 1
+  assert.notDeepEqual(landing(above.decision, above.verdict), landing(below.decision, below.verdict));
+  const shown = stickyView(undefined, above);
+  const held = stickyView(shown, below);
+  assert.equal(held.view.decision, above.decision, 'a 4px move across the midline keeps the place');
+  assert.deepEqual(held.view.pointer, below.pointer, 'the reason chip still follows the pointer');
+  const far = view(moving('empty'), { x: 450, y: 74 + DROP_STICKY_PX + 1 }, levels);
+  assert.equal(stickyView(held, far).view.decision, far.decision, 'past the distance it switches');
+});
+
+test('a held place gives way after its bound of probes, and to a scroll under a still pointer', () => {
+  const levels = [leaf('logo'), containerLevel, sectionLevel, rootLevel];
+  const above = view(moving('empty'), { x: 450, y: 74 }, levels);
+  const below = view(moving('empty'), { x: 450, y: 78 }, levels);
+  let shown = stickyView(undefined, above);
+  for (let probe = 0; probe < DROP_HOLD_PROBES_MAX; probe++) {
+    shown = stickyView(shown, below);
+    assert.equal(shown.view.decision, above.decision);
+  }
+  assert.equal(stickyView(shown, below).view.decision, below.decision);
+  const before = { ...above, dragged: [rect(0, 100, 10, 10)] };
+  const scrolled = { ...below, dragged: [rect(0, 80, 10, 10)] };
+  assert.equal(stickyView(stickyView(undefined, before), scrolled).view.decision, below.decision);
+});
+
+test('the Navigator’s slice of the drag is the same object while only the pointer moves', () => {
+  const levels = [leaf('heading'), containerLevel, sectionLevel, rootLevel];
+  publishCanvasDrag(view(moving('empty'), { x: 450, y: 122 }, levels));
+  const first = navigatorDragView();
+  publishCanvasDrag(view(moving('empty'), { x: 452, y: 123 }, levels));
+  assert.equal(navigatorDragView(), first);
+  publishCanvasDrag(view(moving('empty'), { x: 450, y: 192 }, levels));
+  assert.notEqual(navigatorDragView(), first);
+  publishCanvasDrag(undefined);
+  assert.equal(navigatorDragView(), undefined);
+});
+
+test('a refusal over the node itself is the one the Navigator keeps quiet about', () => {
+  const self = view(moving('row'), { x: 400, y: 230 }, [leaf('row', 'row'), containerLevel, sectionLevel, rootLevel]);
+  assert.equal(selfRefusal(self.verdict), true);
+  const message = { reason: 'self-drop', messageKey: 'structure.placement.selfDrop', params: {} };
+  assert.equal(selfRefusal({ kind: 'refused', reason: { kind: 'placement', message } }), true);
+  assert.equal(selfRefusal({ kind: 'refused', reason: { kind: 'placement', message: { ...message, reason: 'content-model' } } }), false);
+  assert.equal(selfRefusal({ kind: 'noop' }), false);
 });
 
 // --- Cost: the same moves over a small page and an 8,000-node page --------------------------------------------

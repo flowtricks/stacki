@@ -6,7 +6,15 @@
 // Coordinates are the frame's CSS pixels, scaled as the outlines are (PreviewOverlays.tsx boxStyle).
 
 import React, { useSyncExternalStore } from 'react';
-import { canvasDragView, dropReasonText, subscribeCanvasDrag, type CanvasDragSubject } from '../../editor/canvasDragSession';
+import {
+  canvasDragView,
+  dropReasonText,
+  navigatorDropShown,
+  subscribeCanvasDrag,
+  type CanvasDragSubject,
+  type NavigatorDropShown,
+} from '../../editor/canvasDragSession';
+import { guideForPlace, type DropFlow, type DropLevel } from '../../editor/canvasDrop';
 import type { DropGuide, DropRect } from '../../editor/canvasDrop';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
@@ -64,6 +72,68 @@ export function CanvasDropOverlay({
       )}
     </div>
   );
+}
+
+/** The canvas paths a Navigator drag needs measured: its target parent and the siblings either side of the mark. */
+export function navigatorDropPaths(shown: NavigatorDropShown | undefined, pathOf: (id: string) => string | undefined): readonly string[] {
+  if (shown === undefined) {
+    return [];
+  }
+  const ids = [...(shown.parentId === undefined ? [] : [shown.parentId]), ...shown.neighbours.map((neighbour) => neighbour.id)];
+  return ids.flatMap((id) => {
+    const path = pathOf(id);
+    return path === undefined ? [] : [path];
+  });
+}
+
+/**
+ * A drag over the Navigator, drawn on the canvas: the same model's line (canvasDrop.ts guideForPlace) at the
+ * Navigator's mark, from the boxes the frame measured for the parent and the two siblings beside the mark. The
+ * frame was not asked for the parent's flow, so it is read from the siblings: side by side is a row.
+ */
+export function NavigatorDropLine({
+  rects,
+  scale,
+  pathOf,
+}: {
+  readonly rects: Readonly<Record<string, readonly DropRect[] | undefined>>;
+  readonly scale: number;
+  readonly pathOf: (id: string) => string | undefined;
+}) {
+  const shown = useSyncExternalStore(subscribeCanvasDrag, navigatorDropShown);
+  const canvasDrag = useSyncExternalStore(subscribeCanvasDrag, canvasDragView);
+  if (shown === undefined || canvasDrag !== undefined) {
+    return undefined;
+  }
+  const boxOf = (id: string): DropRect | undefined => {
+    const path = pathOf(id);
+    return path === undefined ? undefined : rects[path]?.[0];
+  };
+  const children = shown.neighbours.flatMap((neighbour) => {
+    const box = boxOf(neighbour.id);
+    return box === undefined ? [] : [{ id: neighbour.id, index: neighbour.index, box }];
+  });
+  const parentBox = shown.parentId === undefined ? undefined : boxOf(shown.parentId);
+  const frameBox = parentBox ?? children[0]?.box;
+  if (frameBox === undefined) {
+    return undefined;
+  }
+  const level: DropLevel = { id: shown.parentId, box: frameBox, content: frameBox, flow: flowOfSiblings(children), children };
+  const guide = guideForPlace([level], { parentId: shown.parentId, index: shown.index });
+  return (
+    <div className="canvas-drop" data-testid="navigator-drop">
+      {parentBox !== undefined && <div className="canvas-drop-parent" style={boxStyle(parentBox, scale)} />}
+      {guide !== undefined && <Guide guide={guide} scale={scale} refused={false} />}
+    </div>
+  );
+}
+
+function flowOfSiblings(children: readonly { readonly box: DropRect }[]): DropFlow {
+  const [first, second] = children;
+  if (first === undefined || second === undefined) {
+    return 'column';
+  }
+  return first.box.y < second.box.y + second.box.h && second.box.y < first.box.y + first.box.h ? 'row' : 'column';
 }
 
 function Guide({ guide, scale, refused }: { readonly guide: DropGuide; readonly scale: number; readonly refused: boolean }) {

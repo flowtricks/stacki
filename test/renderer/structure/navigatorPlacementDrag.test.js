@@ -1,5 +1,6 @@
 // Goal: dragging over the Navigator never offers a drop that would break the page. A place the
-// placement rule refuses shows no drop indicator, gets the not-allowed effect, and says why; a
+// placement rule refuses shows no drop indicator, gets the not-allowed effect, and says why (except
+// over the dragged row itself, where it says nothing); a
 // place it refuses but a valid neighbour exists for (a doctype over a component) shows the
 // indicator at that neighbour and the drop lands there; a valid place behaves as it always did;
 // and a drop on a refused place reaches no handler, so nothing is written.
@@ -138,13 +139,14 @@ test('a list item over a page with no list shows no indicator, the not-allowed e
   view.cleanup();
 });
 
-test('a node over itself or its own subtree is refused', async () => {
+test('a node over itself or its own subtree is refused silently: no mark, not-allowed, and no note', async () => {
   const view = await mount();
   await view.start('list');
   const over = await view.fire(view.gap('list', 0), 'dragover');
   assert.equal(over.defaultPrevented, false);
   assert.deepEqual(view.lit(), []);
-  assert.match(view.note() ?? '', /inside itself/i);
+  // The owner asked for no words here: they only state the obvious.
+  assert.equal(view.note(), undefined);
   view.cleanup();
 });
 

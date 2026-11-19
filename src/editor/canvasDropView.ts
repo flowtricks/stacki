@@ -148,11 +148,7 @@ export function dropView(
   input: { readonly levels: readonly DropLevel[]; readonly pointer: DropPoint; readonly dragged: readonly DropRect[]; readonly outside: boolean },
   pathOf: (id: string) => string | undefined,
 ): CanvasDragView {
-  const draggedId = session.subject.kind === 'new' ? undefined : session.subject.id;
-  const decision: DropDecision = input.outside
-    ? { kind: 'none' }
-    : decideCanvasDrop({ tree: session.tree, draggedId, point: input.pointer, levels: input.levels });
-  const verdict = verdictOf(session, decision);
+  const { decision, verdict } = decideAndJudge(session, input);
   const place = landing(decision, verdict);
   const guide = guideOf(decision, verdict, input.levels);
   const parentBox = place === undefined ? undefined : parentBoxOf(decision, place, input.levels);
@@ -170,6 +166,110 @@ export function dropView(
     dragged: input.dragged,
     pointer: input.pointer,
   };
+}
+
+/** How many containers one pointer position may turn away before the drop settles beside one: the tree's depth. */
+const BESIDE_RETRIES_MAX = LIMITS.treeDepthMax;
+
+// The decision, and the rule's verdict on it. A container the node cannot go into (a component without a slot, a
+// heading or a paragraph that cannot hold the node) takes the drop beside it instead, before or after by halves, as
+// a void element does: in its middle the person meant "here", and a red refusal or a drop moved somewhere else
+// read as the canvas flickering between two answers while crossing it.
+function decideAndJudge(
+  session: DropSession,
+  input: { readonly levels: readonly DropLevel[]; readonly pointer: DropPoint; readonly outside: boolean },
+): { readonly decision: DropDecision; readonly verdict: CanvasDropVerdict } {
+  if (input.outside) {
+    return { decision: { kind: 'none' }, verdict: { kind: 'none' } };
+  }
+  const draggedId = session.subject.kind === 'new' ? undefined : session.subject.id;
+  const beside = new Set<string>();
+  for (let attempt = 0; attempt <= BESIDE_RETRIES_MAX; attempt++) {
+    const decision = decideCanvasDrop({ tree: session.tree, draggedId, point: input.pointer, levels: input.levels, beside });
+    const verdict = verdictOf(session, decision);
+    const turnedAway = intoRefused(decision, verdict);
+    if (turnedAway === undefined || beside.has(turnedAway)) {
+      return { decision, verdict };
+    }
+    beside.add(turnedAway);
+  }
+  assert(false, 'decideAndJudge: a pointer settles within the tree depth');
+}
+
+// The container a drop into was turned away from, when it was.
+function intoRefused(decision: DropDecision, verdict: CanvasDropVerdict): string | undefined {
+  if (decision.kind === 'refused') {
+    return decision.targetId;
+  }
+  if (decision.kind !== 'place' || decision.mode !== 'into' || decision.parentId === undefined) {
+    return undefined;
+  }
+  return verdict.kind === 'snap' || verdict.kind === 'refused' ? decision.parentId : undefined;
+}
+
+/** Pointer travel, in frame pixels, before a new place replaces the one shown. */
+export const DROP_STICKY_PX = 6;
+/** Probes a held place survives at most: a pointer resting on a boundary still settles, a frame or so later. */
+export const DROP_HOLD_PROBES_MAX = 8;
+
+/** The place on screen, where the pointer was when it was taken, and how many probes have held it since. */
+export interface ShownDrop {
+  readonly view: CanvasDragView;
+  readonly at: DropPoint;
+  readonly held: number;
+}
+
+/**
+ * The view to show: `next`, unless it names another place than the one shown while the pointer has moved less than
+ * DROP_STICKY_PX since that place was taken. Near the boundary between two places (a midline, an edge band) the
+ * pointer's own tremor otherwise flips the line between them every frame. A move past the distance switches at
+ * once; so does a scroll under a still pointer (the dragged node's box moved), since the held line would be drawn
+ * where the page no longer is; and no place is held for more than DROP_HOLD_PROBES_MAX probes. A change of verdict at
+ * the same place, or to nothing, is never held back.
+ */
+export function stickyView(shown: ShownDrop | undefined, next: CanvasDragView): ShownDrop {
+  const fresh: ShownDrop = { view: next, at: next.pointer, held: 0 };
+  if (shown === undefined) {
+    return fresh;
+  }
+  const before = placeKey(shown.view);
+  const after = placeKey(next);
+  if (before === after) {
+    return { view: next, at: shown.at, held: 0 };
+  }
+  if (before === undefined || after === undefined) {
+    return fresh;
+  }
+  const travelled = Math.hypot(next.pointer.x - shown.at.x, next.pointer.y - shown.at.y);
+  if (travelled >= DROP_STICKY_PX) {
+    return fresh;
+  }
+  if (shown.held >= DROP_HOLD_PROBES_MAX) {
+    return fresh;
+  }
+  if (scrolledUnder(shown.view, next)) {
+    return fresh;
+  }
+  assert(shown.held < DROP_HOLD_PROBES_MAX, 'stickyView: a held place is inside its bound');
+  return { view: { ...shown.view, pointer: next.pointer }, at: shown.at, held: shown.held + 1 };
+}
+
+// Whether the page moved under the pointer between two probes: the dragged node's box is where the page is.
+function scrolledUnder(before: CanvasDragView, after: CanvasDragView): boolean {
+  const was = before.dragged[0];
+  const now = after.dragged[0];
+  if (was === undefined || now === undefined) {
+    return false;
+  }
+  return Math.abs(was.y - now.y) > 0.5 || Math.abs(was.x - now.x) > 0.5;
+}
+
+function placeKey(view: CanvasDragView): string | undefined {
+  const place = landing(view.decision, view.verdict);
+  if (place === undefined) {
+    return undefined;
+  }
+  return `${place.parentId ?? ''}\u0000${place.index}`;
 }
 
 /** What a release does: nothing (a refused place, nothing under the pointer, the place the node already holds), a move, or an insert. */
