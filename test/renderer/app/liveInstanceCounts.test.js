@@ -7,7 +7,8 @@
 // the same text, so the two can never disagree on load; a table walks one page through delete,
 // undo, redo, cut, paste and move and checks the panel total after every step; the held-file
 // reducer is driven through leave, stale scan and fresh scan; paths are built with both
-// separators to hold the Windows case; an 8,000-node tree pins the cost as linear.
+// separators to hold the Windows case; an 8,000-node tree pins the cost as linear by counting
+// the node reads (operations, not milliseconds) and holds it within a frame scaled to this machine.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule');
@@ -15,6 +16,7 @@ const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { instanceCounts } = require('#dist/electron/properties/componentUsage.js');
 const { HELD_FILES_MAX, fileInstanceCounts, nextHeldFiles, projectFileKey, withLiveInstances } = loadRenderer('src/app/model/liveInstanceCounts.ts');
 const { scanBegin, scanRecord, scanSequenceLatest, scanSequenceOf } = loadRenderer('src/app/model/scanSequence.ts');
+const { measureSpeedFactor } = loadRenderer('test/helpers/scaleFixtures.ts');
 
 const PROJECT = '/project';
 const PAGE = '/project/src/pages/index.astro';
@@ -214,26 +216,57 @@ function bigTree(nodeCount) {
   return { imports: [{ name: 'Div', path: '../components/Div.astro', quote: "'" }], nodes };
 }
 
-function medianMs(run) {
-  const samples = [];
-  for (let attempt = 0; attempt < 7; attempt += 1) {
+// Every property read the counter makes on a node, counted through a proxy: the work done, in
+// operations, which no runner's load changes. A walk that revisits nodes (a quadratic one) reads
+// more per node as the tree grows; a linear walk reads the same few per node at every size.
+function countedTree(nodeCount) {
+  const counter = { reads: 0 };
+  const wrap = (node) =>
+    new Proxy(
+      { ...node, ...(node.children === undefined ? {} : { children: node.children.map(wrap) }) },
+      {
+        get(target, key, receiver) {
+          counter.reads += 1;
+          return Reflect.get(target, key, receiver);
+        },
+      },
+    );
+  const tree = bigTree(nodeCount);
+  return { counter, tree: { imports: tree.imports, nodes: tree.nodes.map(wrap) } };
+}
+
+// Best of a few runs: the least a run took is the closest to the work itself, without the
+// garbage collections and scheduler pauses a shared runner adds (a median of sub-millisecond
+// runs still read 4 ms against 0.46 ms on GitHub's Linux runner, Check on 20293df9).
+function bestMs(run) {
+  let best = Infinity;
+  for (let attempt = 0; attempt < 9; attempt += 1) {
     const start = performance.now();
     run();
-    samples.push(performance.now() - start);
+    best = Math.min(best, performance.now() - start);
   }
-  samples.sort((left, right) => left - right);
-  return samples[3];
+  return best;
 }
 
 test('an 8,000-node page is counted in a frame, and the cost grows linearly', () => {
   const context = { project: PROJECT, path: PAGE, components: COMPONENTS };
-  const small = bigTree(4000);
   const large = bigTree(8000);
   const live = fileInstanceCounts(large, context);
   assert.equal(live.counts.get(DIV.path), 2000);
-  const largeMs = medianMs(() => withLiveInstances([SCANNED_DIV], [fileInstanceCounts(large, context)]));
-  const smallMs = medianMs(() => withLiveInstances([SCANNED_DIV], [fileInstanceCounts(small, context)]));
-  assert.ok(largeMs < 16, `8,000 nodes counted in ${largeMs.toFixed(2)} ms, within one frame`);
-  // Twice the nodes, about twice the time; a quadratic walk would be four times.
-  assert.ok(largeMs < Math.max(smallMs, 0.5) * 3.5, `linear: ${smallMs.toFixed(2)} ms for 4,000, ${largeMs.toFixed(2)} ms for 8,000`);
+  // Linear, in operations: twice the nodes, exactly twice the reads; a quadratic walk would be four times.
+  const small = countedTree(4000);
+  const double = countedTree(8000);
+  fileInstanceCounts(small.tree, context);
+  fileInstanceCounts(double.tree, context);
+  assert.ok(small.counter.reads > 4000, `every node is read: ${small.counter.reads} reads for 4,000 nodes`);
+  const growth = double.counter.reads / small.counter.reads;
+  assert.ok(growth > 1.9, `the walk reads every node of the bigger tree: ${growth.toFixed(3)}x`);
+  assert.ok(growth < 2.1, `linear: ${small.counter.reads} reads for 4,000 nodes, ${double.counter.reads} for 8,000 (${growth.toFixed(3)}x)`);
+  assert.ok(double.counter.reads / 8000 < 16, `a few reads per node: ${(double.counter.reads / 8000).toFixed(1)}`);
+  // Within a frame, on this machine's clock: 16 ms on the reference machine, scaled by how much
+  // slower this process runs a fixed calibration workload (test/helpers/scaleFixtures.ts, clamped
+  // to 1x..4x), so a loaded runner is held to the same standard instead of to the Mac's clock.
+  const frameMs = 16 * measureSpeedFactor();
+  const largeMs = bestMs(() => withLiveInstances([SCANNED_DIV], [fileInstanceCounts(large, context)]));
+  assert.ok(largeMs < frameMs, `8,000 nodes counted in ${largeMs.toFixed(2)} ms, within one frame (${frameMs.toFixed(1)} ms here)`);
 });
