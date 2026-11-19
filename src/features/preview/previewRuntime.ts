@@ -1,4 +1,5 @@
 import { frameContextPoint, type ContextPoint } from './contextPosition';
+import { panelDragPhase, subscribePanelDragPhase } from '../../ui/panelDragPhase';
 import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type React from 'react';
@@ -394,12 +395,31 @@ function useMessageListener(iframeRef: React.RefObject<HTMLIFrameElement>, refs:
         return;
       }
       const message = parsePreviewMessage(event.data);
-      if (message) {
+      if (message === undefined) {
+        return;
+      }
+      // The frame re-measures on every reflow of a drag, and each answer would render the preview and the shell around it:
+      // the drag holds the newest measure (one, never a queue) and the release applies it.
+      if (message.kind === 'rects' && panelDragPhase() === 'dragging') {
+        held = message;
+        return;
+      }
+      applyMessage(message, refs, settersRef.current, iframeRef.current);
+    };
+    let held: PreviewMessage | undefined;
+    const release = (): void => {
+      if (held !== undefined && panelDragPhase() === 'idle' && iframeRef.current) {
+        const message = held;
+        held = undefined;
         applyMessage(message, refs, settersRef.current, iframeRef.current);
       }
     };
     window.addEventListener('message', receive);
-    return () => window.removeEventListener('message', receive);
+    const stopPhase = subscribePanelDragPhase(release);
+    return () => {
+      stopPhase();
+      window.removeEventListener('message', receive);
+    };
   }, [iframeRef, refs]);
 }
 

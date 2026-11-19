@@ -416,7 +416,32 @@ export const queueRects = (pageToo = false) => {
 // several times a second, so a measurement one beat behind is an outline that
 // never catches up.
 let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+// A drag on the canvas's width handle reflows this page every animation frame, and each reflow used to measure every tracked box
+// and walk the page for what rendered: the walk, not the drag, was the frame's cost, and the drag stuttered. While the viewport
+// width is changing, the measurements wait for it to rest and run once. The caller returns at once when this answers true.
+const RESIZE_QUIET_MS = 100;
+let viewportWidthPx = window.innerWidth;
+let resizeQuietTimer: ReturnType<typeof setTimeout> | undefined;
+const holdForResize = (): boolean => {
+  const widthPx = window.innerWidth;
+  if (widthPx === viewportWidthPx && resizeQuietTimer === undefined) {
+    return false;
+  }
+  viewportWidthPx = widthPx;
+  clearTimeout(resizeQuietTimer);
+  resizeQuietTimer = setTimeout(() => {
+    resizeQuietTimer = undefined;
+    // The whole answer, as remeasure gives it: a media query may have hidden a node, so what rendered is back in question too.
+    remeasure();
+  }, RESIZE_QUIET_MS);
+  return true;
+};
+
 export const remeasure = () => {
+  if (holdForResize()) {
+    return;
+  }
   // Something changed the document — which nodes rendered, and what their
   // classes resolved to, are both back in question.
   queueRects(true);
@@ -441,6 +466,9 @@ const readStates = () => {
   sendStates(lastRendered);
 };
 export const remeasureStyles = () => {
+  if (holdForResize()) {
+    return;
+  }
   queueRects();
   clearTimeout(styleSettleTimer);
   styleSettleTimer = setTimeout(() => queueRects(), 120);

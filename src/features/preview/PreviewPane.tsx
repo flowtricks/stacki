@@ -248,10 +248,10 @@ function DesignPreview({
         />
       </SizedFrame>
       <div
-        className={`preview-overlay-layer ${width ? '' : 'full'}`}
+        className={`preview-overlay-layer ${width && sizing.fit === 'framed' ? '' : 'full'}`}
         style={
           width
-            ? { width: sizing.viewport.width * scale, height: sizing.viewport.height * scale, borderRadius: 10 * scale }
+            ? { width: sizing.viewport.width * scale, height: sizing.viewport.height * scale, borderRadius: sizing.fit === 'framed' ? 10 * scale : 0 }
             : { width: '100%', height: '100%', borderRadius: 0 }
         }
       >

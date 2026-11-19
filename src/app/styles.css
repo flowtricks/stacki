@@ -206,6 +206,48 @@ html[data-platform='win32'] .titlebar {
   font-weight: 450;
 }
 
+/* The page loading line along the bottom of the address bar (PageLoadLine.tsx): a fill, not a border, that
+   starts at once, creeps while the canvas loads, runs to the end and fades. Reduced motion gets it static. */
+.titlebar .url-bar .page-load-line {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: left center;
+  pointer-events: none;
+}
+.titlebar .url-bar .page-load-line.is-loading {
+  animation: page-load-creep 12s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
+}
+.titlebar .url-bar .page-load-line.is-finishing {
+  transform: scaleX(1);
+  opacity: 0;
+  transition:
+    transform 150ms ease-out,
+    opacity 300ms ease-out 150ms;
+}
+@keyframes page-load-creep {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .titlebar .url-bar .page-load-line.is-loading {
+    animation: none;
+    transform: scaleX(0.5);
+  }
+  .titlebar .url-bar .page-load-line.is-finishing {
+    transition: none;
+    opacity: 0;
+  }
+}
+
 /* Title-bar page switcher */
 .page-switch-btn {
   display: inline-flex;
@@ -2311,6 +2353,31 @@ html[data-platform='win32'] .titlebar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* A search's words inside a row's label: a background fill, no border, in the accent's soft tone. */
+.search-hit {
+  background: var(--accent-soft);
+  color: inherit;
+  border-radius: 2px;
+}
+/* A search result's folder, under its name in the list views; cut in the middle like a name so both ends stay readable. */
+.asset-path {
+  display: flex;
+  height: 14px;
+  margin-top: 2px;
+  line-height: 14px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.asset-path-head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+.asset-path-tail {
+  flex-shrink: 0;
+  white-space: pre;
 }
 /* In a row the menu sits at its end, over the text, and only while the row is pointed at or focused,
    so the name keeps the row's whole width the rest of the time. */
@@ -5100,6 +5167,12 @@ body > .embed-editor_provenance {
 }
 .frame-sized.resizing {
   transition: none;
+  /* The frame is resized each animation frame from the pointer: its own layer, so the move is a compositor update. */
+  will-change: width, height, transform;
+}
+/* A drag draws the frame by itself; the outlines and bands measured for the old width would trail it, so they wait for release. */
+.frame-sized.dragging ~ .preview-overlay-layer {
+  visibility: hidden;
 }
 .frame-sized.resizing iframe {
   pointer-events: none;
@@ -5109,7 +5182,9 @@ body > .embed-editor_provenance {
   inset: 0;
   overflow: hidden;
   border-radius: inherit;
-  background: white;
+  /* The canvas colour, not white: the clip shows only where the page has not painted yet (a load, a fast resize), and a white
+     flash there reads as a gap at the frame's edges. */
+  background: var(--bg);
 }
 .frame-sized iframe {
   position: absolute;

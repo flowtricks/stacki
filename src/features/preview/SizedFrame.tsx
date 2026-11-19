@@ -21,10 +21,12 @@ export function SizedFrame({ sizing, children }: { readonly sizing: PreviewSizin
   assert(scale > 0, 'The canvas scale is positive');
   assert(scale <= 1, 'The canvas never scales a page up');
   const moving = sizing.resizing || sizing.panelSettling;
+  // A fluid frame and the Desktop device cover the canvas edge to edge (no gutter, radius or shadow): the handles sit inside it.
+  const flush = sizing.width === undefined || sizing.fit === 'flush';
   return (
     <div
       ref={sizing.frameRef}
-      className={`frame-sized ${sizing.width === undefined ? 'full' : ''} ${moving ? 'resizing' : ''}`}
+      className={`frame-sized ${flush ? 'full' : ''} ${moving ? 'resizing' : ''} ${sizing.resizing ? 'dragging' : ''}`}
       // A fluid frame fills the canvas by CSS, so it follows a side-panel drag each frame
       // without a render (usePreviewSizing puts off its measure until release).
       style={

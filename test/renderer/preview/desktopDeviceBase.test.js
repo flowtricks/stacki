@@ -60,7 +60,7 @@ const PANE_WIDTHS_PX = [700, 882, 1100, 1600];
 // The chain the canvas, the toolbar and the style panel run for one device in one pane.
 function canvasAt(device, panePx, contexts) {
   const width = previewFrameWidth(device, undefined, BREAKPOINT_DEFAULTS, panePx, DESKTOP_FRAME_PX);
-  const viewport = previewViewport(width, { width: panePx, height: PANE_HEIGHT_PX }, undefined);
+  const viewport = previewViewport(width, { width: panePx, height: PANE_HEIGHT_PX }, undefined, device === 'desktop' ? 'flush' : 'framed');
   const key = followedContextKey(contexts, viewport.width, ROOT_FONT_SIZE_PX);
   const icon = canvasTriggerIcon(key, { device, widthPx: viewport.width }, BREAKPOINT_DEFAULTS);
   return { width, viewport, key, icon, active: activeDeviceFor(device, viewport.width, BREAKPOINT_DEFAULTS) };
@@ -82,7 +82,7 @@ for (const [fixture, contexts] of Object.entries(FIXTURES)) {
         assert.ok(canvas.viewport.scale <= 1, 'the canvas never scales a page up');
         assert.ok(canvas.viewport.scale > 0);
         if (canvas.width !== undefined) {
-          assert.equal(canvas.viewport.scale, Math.min(1, (panePx - 24) / canvas.width), 'a fixed frame scales to fit the pane');
+          assert.equal(canvas.viewport.scale, Math.min(1, (panePx - (device === 'desktop' ? 0 : 24)) / canvas.width), 'a fixed frame scales to fit the pane');
         }
         assert.equal(canvas.active, device, 'the toolbar presses the device picked');
         assert.equal(canvas.key, expected.key, 'following picks the query in effect at the canvas width');
@@ -165,4 +165,17 @@ test('other devices keep their own widths and a custom width stays custom', () =
   assert.equal(previewFrameWidth('custom', 900, BREAKPOINT_DEFAULTS, 700, DESKTOP_FRAME_PX), 900);
   assert.equal(previewFrameWidth('canvas', undefined, BREAKPOINT_DEFAULTS, 700, DESKTOP_FRAME_PX), undefined);
   assert.equal(previewFrameWidth('laptop', 900, BREAKPOINT_DEFAULTS, 700, DESKTOP_FRAME_PX), 1023, 'a stale custom width is never read on a device');
+});
+
+// Desktop covers the whole canvas: the page keeps its 1440px width for media queries and is scaled to the pane's width, with no
+// gutter reserved for the side handles; a narrower device keeps the framed 24px and 32px gutters.
+test('previewViewport: flush covers the pane, framed leaves its gutter', () => {
+  const pane = { width: 800, height: 600 };
+  const flush = previewViewport(1440, pane, undefined, 'flush');
+  assert.equal(flush.width, 1440);
+  assert.equal(flush.scale, 800 / 1440, 'the pane width is the whole scale');
+  assert.equal(flush.height * flush.scale, 600, 'the page height fills the pane height');
+  const framed = previewViewport(1440, pane, undefined, 'framed');
+  assert.equal(framed.scale, (800 - 24) / 1440);
+  assert.equal(Math.round(framed.height * framed.scale), 600 - 32);
 });

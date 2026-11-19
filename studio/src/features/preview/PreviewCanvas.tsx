@@ -236,11 +236,11 @@ function CanvasOverlays({
     ? {
         width: sizing.viewport.width * sizing.viewport.scale,
         height: sizing.viewport.height * sizing.viewport.scale,
-        borderRadius: 10 * sizing.viewport.scale,
+        borderRadius: sizing.fit === 'framed' ? 10 * sizing.viewport.scale : 0,
       }
     : { width: '100%', height: '100%', borderRadius: 0 };
   return (
-    <div className={`preview-overlay-layer ${sizing.width ? '' : 'full'}`} style={style}>
+    <div className={`preview-overlay-layer ${sizing.width && sizing.fit === 'framed' ? '' : 'full'}`} style={style}>
       {/* First in the layer, so the outlines and spacing bands paint over it. */}
       {shownGuide && <GuideOverlay {...shownGuide} scale={sizing.viewport.scale} />}
       <CollaboratorOutlines

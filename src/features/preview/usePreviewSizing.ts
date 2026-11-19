@@ -5,8 +5,8 @@ import { usePointerDrag } from '../../ui/usePointerDrag';
 import { activeDeviceFor, deviceForShortcut, deviceWidth, type PreviewDevice } from './breakpointDevices';
 import { desktopCanvasWidth } from '../../../shared/properties/breakpointIcon';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
-import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
-import { panelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
+import { PREVIEW_WIDTH_LIMITS, previewViewport, type FrameFit } from './previewViewport';
+import { panelDragPhase, setPanelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
  *  query). `serial` counts the asks, so the same width asked again still applies. */
 export type CanvasWidthRequest = { readonly widthPx: number; readonly serial: number };
@@ -54,7 +54,9 @@ export function usePreviewSizing(
     }
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
-  const viewport = previewViewport(width, available, customHeight);
+  // Desktop covers the whole canvas (scaled to the pane when the pane is narrower than its width); every narrower device is framed.
+  const fit: FrameFit = device === 'desktop' ? 'flush' : 'framed';
+  const viewport = previewViewport(width, available, customHeight, fit);
   const activeDevice = activeDeviceFor(device, viewport.width, breakpoints);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
@@ -69,12 +71,16 @@ export function usePreviewSizing(
     setCustomHeight,
     setResizing,
     scale: viewport.scale,
+    available,
+    customHeight,
+    device,
   });
   return {
     wrapRef,
     frameRef,
     wrapWidth: available.width,
     viewport,
+    fit,
     setWidth,
     customHeight,
     resizing,
@@ -213,6 +219,9 @@ interface ResizeContext {
   readonly setCustomWidth: React.Dispatch<React.SetStateAction<number | undefined>>;
   readonly setCustomHeight: React.Dispatch<React.SetStateAction<number | undefined>>;
   readonly setResizing: React.Dispatch<React.SetStateAction<boolean>>;
+  readonly available: { readonly width: number; readonly height: number };
+  readonly customHeight: number | undefined;
+  readonly device: PreviewDevice;
 }
 
 type ResizeEdge = 'w' | 'e' | 's';
@@ -236,15 +245,96 @@ function useResizeHandler(context: ResizeContext) {
           width: frame.offsetWidth,
           height: frame.offsetHeight,
         };
+        // Pointer capture keeps the move events on the handle, not the page under the pointer, so a fast drag over the
+        // canvas iframe (another process) never loses a move.
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // A synthetic or already-released pointer has nothing to capture: the window listeners still carry the drag.
+        }
+        const live = new LiveResize();
         context.setResizing(true);
+        // The same hold a side-panel drag takes: measures that render React wait for release (panelDragPhase.ts).
+        setPanelDragPhase('dragging');
         context.startDrag(event, {
           cursor: edge === 's' ? 'row-resize' : 'col-resize',
-          onMove: (next) => resizeFrame(edge, start, next, wrap, context),
-          onEnd: () => context.setResizing(false),
+          onMove: (next) => resizeFrame(edge, start, next, wrap, context, live),
+          onEnd: () => {
+            commitResize(context, live);
+            context.setResizing(false);
+            setPanelDragPhase('idle');
+          },
         });
       },
     [context],
   );
+}
+
+// What a drag has drawn so far, in the frame's own DOM. React hears of it when the drag leaves Desktop and at release: a render of the whole preview, toolbar and overlays for every pointer frame was what made a drag jitter.
+class LiveResize {
+  // Whether React has been told the drag left the Desktop device (once, at the first width move).
+  private leftDesktopOnce = false;
+  private widthNow: number | undefined = undefined;
+  private heightNow: number | undefined = undefined;
+
+  get widthPx(): number | undefined {
+    return this.widthNow;
+  }
+
+  get heightPx(): number | undefined {
+    return this.heightNow;
+  }
+
+  setWidth(widthPx: number): void {
+    this.widthNow = widthPx;
+  }
+
+  setHeight(heightPx: number): void {
+    this.heightNow = heightPx;
+  }
+
+  /** True the first time it is asked, false after: the one commit that leaves Desktop's flush look. */
+  takeLeftDesktop(): boolean {
+    const first = !this.leftDesktopOnce;
+    this.leftDesktopOnce = true;
+    return first;
+  }
+}
+
+// Writes the drag's size straight to the frame, once per animation frame (usePointerDrag coalesces moves), so the iframe
+// reflows to the pointer's own position with no React in between.
+function drawFrame(context: ResizeContext, live: LiveResize): void {
+  const frame = context.frameRef.current;
+  if (!frame) {
+    return;
+  }
+  const readout = frame.querySelector('.rz-readout');
+  if (live.widthPx === undefined) {
+    // A height drag: the width, and so the scale, stay the frame's own (a fluid frame keeps filling the canvas).
+    assert(live.heightPx !== undefined, 'A drag with no width is a height drag');
+    frame.style.height = `${live.heightPx}px`;
+    if (readout) {
+      readout.textContent = `${Math.round(frame.offsetWidth)} × ${Math.round(live.heightPx)}`;
+    }
+    return;
+  }
+  const viewport = previewViewport(live.widthPx, context.available, live.heightPx ?? context.customHeight, 'framed');
+  frame.style.width = `${viewport.width}px`;
+  frame.style.height = `${viewport.height}px`;
+  frame.style.transform = `translateX(-50%) scale(${viewport.scale})`;
+  if (readout) {
+    readout.textContent = `${Math.round(viewport.width)} × ${Math.round(viewport.height)}`;
+  }
+}
+
+function commitResize(context: ResizeContext, live: LiveResize): void {
+  if (live.heightPx !== undefined) {
+    context.setCustomHeight(live.heightPx);
+  }
+  if (live.widthPx !== undefined) {
+    context.setCustomWidth(live.widthPx);
+    context.onDevice('custom');
+  }
 }
 
 function resizeFrame(
@@ -258,17 +348,25 @@ function resizeFrame(
   event: PointerEvent,
   wrap: HTMLDivElement,
   context: ResizeContext,
+  live: LiveResize,
 ): void {
   if (edge === 's') {
     const height = Math.round(start.height + (event.clientY - start.y) / context.scale);
     const maximum = Math.max(160, (wrap.clientHeight - 32) / context.scale);
-    context.setCustomHeight(clamp(height, 160, maximum));
+    live.setHeight(clamp(height, 160, maximum));
+    drawFrame(context, live);
     return;
   }
   const direction = edge === 'e' ? 2 : -2;
   const width = Math.round(start.width + (direction * (event.clientX - start.x)) / context.scale);
-  context.setCustomWidth(clamp(width, PREVIEW_WIDTH_LIMITS.minimum, PREVIEW_WIDTH_LIMITS.maximum));
-  context.onDevice('custom');
+  live.setWidth(clamp(width, PREVIEW_WIDTH_LIMITS.minimum, PREVIEW_WIDTH_LIMITS.maximum));
+  drawFrame(context, live);
+  // Desktop is drawn flush and every other width framed, so leaving Desktop is the one change React must draw mid-drag. Every
+  // other pixel stays in the frame; the toolbar, the style panel's followed query and the overlays catch up at release.
+  if (context.device === 'desktop' && live.takeLeftDesktop()) {
+    context.setCustomWidth(live.widthPx ?? width);
+    context.onDevice('custom');
+  }
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

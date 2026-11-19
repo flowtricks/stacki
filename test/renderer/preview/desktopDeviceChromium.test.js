@@ -161,7 +161,7 @@ function check(output) {
   if (!(after.scale < 1)) {
     failures.push(`after: the frame scales down to fit the pane (${after.scale})`);
   }
-  const expectedScale = (PANE.width - 24) / DESKTOP_FRAME_PX;
+  const expectedScale = PANE.width / DESKTOP_FRAME_PX; // Desktop is flush: no gutter.
   if (Math.abs(after.scale - expectedScale) > 1e-9) {
     failures.push(`after: the scale fits the pane, ${expectedScale} (${after.scale})`);
   }
