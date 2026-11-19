@@ -2,7 +2,7 @@
 .ai-markdown {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -28,21 +28,14 @@
   line-height: 1.4;
   color: var(--text);
 }
-/* A heading pulls away from what came before, so a section reads as a section. */
 .ai-markdown > * + h1,
 .ai-markdown > * + h2,
-.ai-markdown > * + h3 {
-  margin-top: 6px;
+.ai-markdown > * + h3,
+.ai-markdown > * + h4 {
+  margin-top: 10px;
 }
-.ai-markdown h1 {
-  font-size: 15px;
-}
-.ai-markdown h2 {
-  font-size: 14px;
-}
-.ai-markdown h3 {
-  font-size: 13px;
-}
+/* One size and weight for every heading: hierarchy comes from space, not from type. */
+.ai-markdown h4,
 .ai-markdown h5,
 .ai-markdown h6 {
   color: var(--text-dim);
@@ -86,15 +79,12 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 14px;
-  height: 14px;
-  margin-top: 3px;
+  width: 13px;
+  height: 13px;
+  margin-top: 4px;
   border-radius: 4px;
-  background: var(--bg-active);
-  color: #fff;
-}
-.ai-md-box.is-checked {
-  background: var(--accent);
+  background: var(--bg-hover);
+  color: var(--text-dim);
 }
 
 /* Quotes and rules */
@@ -102,17 +92,15 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--bg-input);
+  padding-left: 12px;
   color: var(--text-dim);
 }
 .ai-md-rule {
-  height: 2px;
-  margin: 4px 0;
+  height: 1px;
+  margin: 6px 0;
   border: 0;
   border-radius: 1px;
-  background: var(--bg-active);
+  background: var(--bg-hover);
 }
 .ai-md-link {
   color: var(--accent);
@@ -129,8 +117,8 @@
   max-width: 100%;
   overflow-x: auto;
   scrollbar-gutter: stable;
-  border-radius: 8px;
-  background: var(--bg-input);
+  border-radius: 6px;
+  background: var(--bg-hover);
 }
 .ai-md-table-wrap:focus-visible {
   outline: 2px solid var(--accent);
@@ -152,36 +140,35 @@
   vertical-align: top;
 }
 .ai-md-table th {
-  background: var(--bg-active);
-  color: var(--text);
-  font-weight: 600;
+  color: var(--text-dim);
+  font-weight: 500;
   white-space: nowrap;
-}
-.ai-md-table tbody tr:nth-child(even) td {
-  background: var(--bg-hover);
-}
-.ai-md-table th:first-child {
-  border-top-left-radius: 8px;
-}
-.ai-md-table th:last-child {
-  border-top-right-radius: 8px;
 }
 
 /* Fenced code: a language label, and Copy on hover or focus. */
 .ai-md-code {
   position: relative;
   min-width: 0;
-  border-radius: 8px;
-  background: var(--bg-input);
+  border-radius: 6px;
+  background: var(--bg-hover);
 }
+/* The language tag and Copy are quiet until the block is hovered or focused. */
 .ai-md-code-lang {
-  display: block;
-  padding: 5px 10px 0;
+  position: absolute;
+  top: 6px;
+  right: 34px;
   color: var(--text-faint);
   font: 10.5px / 1.3 var(--mono, ui-monospace, monospace);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.ai-md-code:hover .ai-md-code-lang,
+.ai-md-code:focus-within .ai-md-code-lang {
+  opacity: 1;
 }
 .ai-md-code .code-block {
-  padding: 6px 10px 8px;
+  padding: 8px 10px;
   overflow-x: auto;
   scrollbar-gutter: stable;
   font: 11.5px / 1.5 var(--mono, ui-monospace, monospace);
@@ -196,7 +183,7 @@
   height: 24px;
   padding: 0;
   border-radius: 6px;
-  background: var(--bg-active);
+  background: transparent;
   color: var(--text-dim);
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -219,7 +206,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: 0;
   min-width: 0;
 }
 .ai-quick-option {
@@ -227,9 +214,10 @@
   align-items: baseline;
   gap: 8px;
   min-width: 0;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--bg-input);
+  padding: 3px 8px;
+  margin-inline: -8px;
+  border-radius: 6px;
+  background: transparent;
   color: var(--text);
   justify-content: flex-start;
   text-align: left;
@@ -237,10 +225,10 @@
 }
 .ai-quick-option:hover,
 .ai-quick-option:focus-visible {
-  background: var(--bg-active);
+  background: var(--bg-hover);
 }
 .ai-quick-option:active {
-  background: var(--accent-soft);
+  background: var(--bg-active);
 }
 .ai-quick-number {
   flex: none;

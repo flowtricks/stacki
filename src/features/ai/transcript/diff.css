@@ -97,18 +97,16 @@
 .ai-changes-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  background: var(--bg-input);
-  border-radius: 8px;
-  padding: 6px;
+  gap: 0;
   min-width: 0;
 }
 .ai-changes-card-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px 4px;
-  font-size: 12px;
+  padding: 2px 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
 }
 .ai-changes-card-title {
   flex: 1;
@@ -116,7 +114,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-weight: 600;
+  font-weight: 400;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -187,7 +185,8 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
 }
 .ai-file-line {
   display: flex;
@@ -196,7 +195,8 @@
   min-width: 0;
 }
 .ai-file-name {
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: 8ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -204,10 +204,12 @@
 /* The folder is a second, quieter line so two files of one name stay apart without squeezing the name. */
 .ai-file-folder {
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
-  font-size: 10.5px;
-  line-height: 1.3;
+  /* The folder gives way first, so the name stays readable in a narrow panel. */
+  flex: 0 99 auto;
+  min-width: 0;
+  font-size: 11px;
   color: var(--text-faint);
 }
 .ai-file-counts {
@@ -272,4 +274,41 @@
   padding: 4px 8px 8px 24px;
   font-size: 11px;
   color: var(--text-faint);
+}
+
+/* With nothing to decide ("Applied"), the card is flat text: the buttons wait for the pointer or the keyboard. */
+.ai-changes-card-auto .ai-file-actions button,
+.ai-changes-card-auto .ai-changes-bulk button,
+.ai-changes-card-auto .ai-file-open-button {
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ai-changes-card-auto:hover .ai-file-actions button,
+.ai-changes-card-auto:hover .ai-changes-bulk button,
+.ai-changes-card-auto:hover .ai-file-open-button,
+.ai-changes-card-auto:focus-within .ai-file-actions button,
+.ai-changes-card-auto:focus-within .ai-changes-bulk button,
+.ai-changes-card-auto:focus-within .ai-file-open-button {
+  opacity: 1;
+}
+.ai-changes-card-auto .ai-file-actions button:hover,
+.ai-changes-card-auto .ai-changes-bulk button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+@media (hover: none) {
+  .ai-changes-card-auto .ai-file-actions button,
+  .ai-changes-card-auto .ai-changes-bulk button,
+  .ai-changes-card-auto .ai-file-open-button {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-changes-card-auto .ai-file-actions button,
+  .ai-changes-card-auto .ai-changes-bulk button,
+  .ai-changes-card-auto .ai-file-open-button {
+    transition: none;
+  }
 }

@@ -13,7 +13,7 @@
 .ai-transcript-flow {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 .ai-earlier,
@@ -533,4 +533,12 @@
 }
 .ai-untracked-failed {
   color: var(--text-faint);
+}
+
+/* More air between turns than inside one; a finished call's tick is a whisper. */
+.ai-transcript-flow > .ai-msg-user:not(:first-child) {
+  margin-top: 12px;
+}
+.ai-tool-status.ai-status-completed {
+  opacity: 0.45;
 }

@@ -69,7 +69,7 @@ export function ChangesCard({
     }
   };
   return (
-    <div className="ai-changes-card" aria-label={translate('ai.changes.label')}>
+    <div className={`ai-changes-card${reviewMode === 'auto' ? ' ai-changes-card-auto' : ''}`} aria-label={translate('ai.changes.label')}>
       <div className="ai-changes-card-head">
         <span className="ai-changes-card-title">
           <span>{translate('ai.changes.filesChanged', { count: files.length })}</span>

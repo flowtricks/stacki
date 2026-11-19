@@ -11,7 +11,6 @@ import type { ChatId } from '../../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
-import { WarningTriangleIcon } from '../../../ui/Icons';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
 import { currentChoiceName, modeOption, planOption, type ComposerSettings } from './composerSettings';
 import { StatusChip } from './StatusChip';
@@ -125,7 +124,6 @@ export function ModeMenu({ settings }: { readonly settings: ComposerSettings }) 
         }
         onClick={trigger.toggle}
       >
-        {dangerous && <WarningTriangleIcon size={12} />}
         <span className="ai-chip-text">{label}</span>
       </StatusChip>
       <Menu
