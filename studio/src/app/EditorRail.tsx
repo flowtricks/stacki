@@ -28,7 +28,10 @@ const panels = [
   { id: 'history', labelKey: 'rail.history', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
   { id: 'apps', labelKey: 'rail.apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
 ] as const satisfies readonly { readonly id: string; readonly labelKey: MessageKey; readonly shortcut: string; readonly Icon: unknown }[];
-export type Panel = (typeof panels)[number]['id'] | 'ai';
+// The project's Settings sits at the foot above the AI button, as on Desktop (LeftRail.tsx), gated by the
+// same `panel:projectSettings` feature (admin until a role is given it) and never moved into More.
+const SETTINGS_PANEL = { id: 'projectSettings', labelKey: 'rail.settings', shortcut: '⌥S', Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
+export type Panel = (typeof panels)[number]['id'] | 'ai' | typeof SETTINGS_PANEL.id;
 interface Props {
   readonly componentOpen: boolean;
   readonly panel: Panel | undefined;
@@ -43,7 +46,7 @@ export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props)
   const [tip, setTip] = useState<{ label: string; left: number; top: number }>();
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const railRef = useRef<HTMLElement>(null);
-  const anchoredRef = useRef<HTMLButtonElement>(null);
+  const anchoredRef = useRef<HTMLDivElement>(null);
   const hide = () => {
     clearTimeout(timer.current);
     setTip(undefined);
@@ -70,7 +73,8 @@ export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props)
     ...pinned.map((app): RailOverflowItem => ({ id: railAppId(app.manifest.id), group: 'app' })),
   ];
   const ai = canStudioPanel(role, 'ai');
-  const layout = useRailOverflow(railRef, ai ? anchoredRef : undefined, items, activeId);
+  const settings = canStudioPanel(role, SETTINGS_PANEL.id);
+  const layout = useRailOverflow(railRef, ai || settings ? anchoredRef : undefined, items, activeId);
   const shown = new Set(layout.visible);
   const visiblePanels = shownPanels.filter((item) => shown.has(item.id));
   const visibleApps = pinned.filter((app) => shown.has(railAppId(app.manifest.id)));
@@ -140,17 +144,34 @@ export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props)
       })}
       {moreItems.length > 0 && <RailMore items={moreItems} active={activeId} />}
       <div className="rail-spacer" />
-      {ai && (
-        <button
-          ref={anchoredRef}
-          className={`rail-btn ai-icon ${panel === 'ai' ? 'on' : ''}`}
-          aria-label={translate('rail.ai')}
-          aria-pressed={panel === 'ai'}
-          title={translate('rail.ai')}
-          onClick={() => select('ai')}
-        >
-          ✦
-        </button>
+      {(ai || settings) && (
+        // Anchored at the foot like Desktop's: these never move into More (railOverflow.ts measures the pair).
+        <div className="rail-anchor" ref={anchoredRef}>
+          {settings && (
+            <button
+              aria-label={translate(SETTINGS_PANEL.labelKey)}
+              aria-pressed={panel === SETTINGS_PANEL.id}
+              className={`rail-btn ${panel === SETTINGS_PANEL.id ? 'on' : ''}`}
+              onMouseEnter={showSoon(translate('rail.withShortcut', { label: translate(SETTINGS_PANEL.labelKey), shortcut: SETTINGS_PANEL.shortcut }))}
+              onMouseLeave={hide}
+              onBlur={hide}
+              onClick={() => select(SETTINGS_PANEL.id)}
+            >
+              <SETTINGS_PANEL.Icon size={20} />
+            </button>
+          )}
+          {ai && (
+            <button
+              className={`rail-btn ai-icon ${panel === 'ai' ? 'on' : ''}`}
+              aria-label={translate('rail.ai')}
+              aria-pressed={panel === 'ai'}
+              title={translate('rail.ai')}
+              onClick={() => select('ai')}
+            >
+              ✦
+            </button>
+          )}
+        </div>
       )}
       {tip && (
         <div role="tooltip" className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
@@ -184,6 +205,9 @@ function useRailKeys({ panel, toggle, componentOpen }: Props) {
         }
         if (event.code === 'KeyV') {
           next = 'variables';
+        }
+        if (event.code === 'KeyS') {
+          next = 'projectSettings';
         }
       } else if (!event.altKey) {
         const value = event.key.toLowerCase();

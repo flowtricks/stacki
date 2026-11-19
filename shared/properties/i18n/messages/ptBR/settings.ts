@@ -511,6 +511,12 @@ export const messages = {
   'settings.mcp.view.json': 'JSON', // same
   'settings.mcp.view.label': 'Visualização',
   'settings.mcp.view.ui': 'Servidores',
+  'settings.hosted.mcp.info':
+    'Os servidores MCP ficam no .mcp.json do projeto, que os agentes do seu computador leem. O Studio hospedado ainda não pode mostrá-los nem editá-los.',
+  'settings.hosted.mcp.line': 'Ainda indisponível no Studio hospedado. Use o Stacki Desktop.',
+  'settings.hosted.secrets.info':
+    'Os segredos ficam no arquivo .env do projeto, que nunca é commitado, então o Studio hospedado não pode lê-los nem alterá-los.',
+  'settings.hosted.secrets.line': 'Indisponível no Studio hospedado. Use o Stacki Desktop.',
   'settings.title': 'Configurações',
   'settings.folders.loading': 'Carregando pastas…',
   'settings.folders.aria': 'Pastas do projeto',

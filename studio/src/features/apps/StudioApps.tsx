@@ -174,7 +174,8 @@ function appViewportDevice(device: string): AppViewportDevice {
 }
 
 function leftOf(panel: Panel | undefined): AppLeftPanel | undefined {
-  if (panel === undefined || panel === 'ai') {
+  // Apps see neither the AI chat nor the project's Settings, as on Desktop (desktopAppHost.ts).
+  if (panel === undefined || panel === 'ai' || panel === 'projectSettings') {
     return undefined;
   }
   return panel === 'collections' ? 'cms' : panel;
