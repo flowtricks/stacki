@@ -174,6 +174,8 @@ const COMPONENTS = [
     `<!doctype html><meta charset=utf-8><style>body{margin:0;font:20px/1.4 serif}.card_content{width:420px;margin-bottom:20px}h3,p{margin:0}</style><body>${stampComment({ file: PAGE, checksum })}` +
     card(0, 'Lorem ipsum dolor sit amet', 'First body words that sit in a paragraph.') +
     card(1, 'Second heading', 'Second body words.') +
+    // A link stretched over the cards, as a Card with a button draws it (`::after` over the whole card): the topmost element at every point.
+    '<a href="#" data-avb-p="9" style="position:absolute;left:0;top:0;width:420px;height:150px;display:block"></a>' +
     '</body>';
   const catalog = {
     type: 'avb:text-catalog',
@@ -251,7 +253,9 @@ const COMPONENTS = [
            win.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: n });
          }
        };
-       const edit = async (selector, index, typed) => {
+       // The frame point at the left edge of one character of an element's first text node.
+       const charPoint = (selector, index, charIndex) => run('(() => { const el = ' + frame + '.document.querySelectorAll(' + JSON.stringify(selector) + ')[' + index + ']; const node = [...el.childNodes].find((n) => n.nodeType === 3); const r = ' + frame + '.document.createRange(); r.setStart(node, ' + charIndex + '); r.setEnd(node, ' + (charIndex + 1) + '); const b = r.getClientRects()[0]; return { x: Math.round(b.left + 1), y: Math.round(b.top + b.height / 2) }; })()');
+       const edit = async (selector, index, typed, charIndex) => {
          await run('window.posts.length = 0');
          // The frame answers a double click once its session has settled; until it does a click is not heard, so it is repeated while nothing answered.
          let attempts = 0;
@@ -262,7 +266,7 @@ const COMPONENTS = [
              const list = await posts();
              if (!answered(list)) {
                attempts++;
-               await doubleClick(await centre(selector, index));
+               await doubleClick(charIndex === undefined ? await centre(selector, index) : await charPoint(selector, index, charIndex));
              }
              return list;
            },
@@ -272,14 +276,16 @@ const COMPONENTS = [
            throw error;
          });
          out.attempts = (out.attempts || []).concat(attempts);
+         // The caret sits where the double click was: a collapsed selection at that character, not a word.
+         const caret = await run('(() => { const s = ' + frame + '.getSelection(); return { collapsed: s.isCollapsed, offset: s.anchorOffset, text: s.anchorNode && s.anchorNode.data ? s.anchorNode.data.slice(0, 24) : null }; })()');
          win.webContents.focus();
          await win.webContents.insertText(typed);
          await post({ type: 'avb:text-close', session: 'one', action: 'apply' });
          const closed = await waitFor({ what: 'the save was posted', read: posts, until: (list) => list.some((m) => m.type === 'avb:text-save') });
-         return { opened, closed };
+         return { opened, closed, caret };
        };
-       out.heading = await edit('h3', 1, ' ADDED');
-       out.paragraph = await edit('p', 0, ' ADDED');
+       out.heading = await edit('h3', 1, ' ADDED', 7);
+       out.paragraph = await edit('p', 0, ' ADDED', 20);
        console.log('RESULT ' + JSON.stringify(out));
        app.quit();
      });`,
@@ -317,6 +323,16 @@ const COMPONENTS = [
       JSON.stringify(result.hoverGone),
     );
     check('the frame marks the Card heading and paragraph of both Cards as editable words', result.marks === 4, String(result.marks));
+    check(
+      'the heading caret is collapsed at the character double clicked',
+      result.heading.caret.collapsed === true && result.heading.caret.offset === 7,
+      JSON.stringify(result.heading.caret),
+    );
+    check(
+      'the paragraph caret is collapsed at the character double clicked',
+      result.paragraph.caret.collapsed === true && result.paragraph.caret.offset === 20,
+      JSON.stringify(result.paragraph.caret),
+    );
     const saved = (step, edit, what) => {
       const active = step.opened.find((message) => message.type === 'avb:text-active');
       check(`a double click on the ${what} opens its editor`, active?.key === edit.target.key, JSON.stringify(step.opened));

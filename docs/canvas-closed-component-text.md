@@ -30,6 +30,15 @@ Every cell, by selection and pointer:
 
 Tags follow the one convention of the canvas: a **hover** tag is unfilled (the icon and label in green, `.node-outline.hover .node-outline-tag`, nothing behind it); a **selected** tag is the solid green fill (`.node-outline.component .node-outline-tag`); the owner's resting tag while its text is selected is the light-green fill (`#7ddc94`, dark words). Nothing is grey or translucent, and no text state has a tag rule of its own beyond the owner's.
 
+**Editing** the words (a double click into them) is `resting` for the whole session: the owner keeps the faint thick outline and
+the light name tag with the pointer anywhere (`body:has(#stacki-canvas-text-editor) .node-outline.sel.text-owner.owner-tag`). The
+words being typed in count as picked even if the app's selection of the owner has not arrived yet. Ordinary text (not inside a
+component) keeps its own behaviour: its tag goes while it is typed in.
+
+The caret lands at the character under the double click, a collapsed caret, never a word selection. When the browser's hit test
+names another element (a stretched link over the card), it is found from where the characters are drawn
+(`caretByGeometry` in `frameTextSelection.ts`); past the end of a line it goes to the end of that line.
+
 Clicks: one click on hovered words selects the owner and picks the words in the same step (the frame keeps the pick until the
 app's selection arrives); a double click enters editing as before. Components that are only their words (a `Heading` or
 `Paragraph` written in the page) are their own owner: the component's hover is the hover.

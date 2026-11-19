@@ -60,11 +60,15 @@ export function installTextMarks(source: MarkSource): () => void {
     // The text being typed in is the picked one for as long as the editor is
     // open: the app draws it and its parent in their editing look.
     const editing = source.editing();
-    const typing = shown.some(({ target }) => target.key === editing);
+    const typing = shown.some(({ target }) => sameKey(target.key, editing));
     if (awaiting !== undefined && source.focus().has(awaiting.scope)) {
       awaiting = undefined; // The selection arrived: the words are among the instance's marked ones now.
     }
-    picked = typing ? editing : shown.some(({ target }) => target.key === picked) || awaiting?.key === picked ? picked : undefined;
+    picked = typing
+      ? shown.find(({ target }) => sameKey(target.key, editing))?.target.key
+      : shown.some(({ target }) => target.key === picked) || awaiting?.key === picked
+        ? picked
+        : undefined;
     const at = held ? undefined : pointer;
     // The selected instance's marked words first; otherwise any prop text under the pointer, selected or not.
     const hover = at ? (shown.find(({ element }) => holds(element, at)) ?? hoverBeforeSelect(source, at)) : undefined;
@@ -129,13 +133,14 @@ function markedNow(source: MarkSource): TextMatchAt[] {
   // own element rather than by matching what the catalog says it reads.
   const editing = source.editing();
   const element = source.editingElement();
-  const typed = source.catalog()?.targets.find((target) => target.key === editing);
-  const typing = typed && element && marked(typed, focus) ? [{ target: typed, element }] : [];
-  const others = matchesWhere(source.catalog(), (target) => marked(target, focus) && target.key !== editing);
+  const typed = source.catalog()?.targets.find((target) => sameKey(target.key, editing));
+  // Whether its instance is the selection yet or not (the app's selection can arrive after the editor opens), the words being typed in are picked.
+  const typing = typed && element ? [{ target: typed, element }] : [];
+  const others = matchesWhere(source.catalog(), (target) => marked(target, focus) && !sameKey(target.key, editing));
   // Text whose element is the instance's own root — a Heading's words in its
   // <h2> — is the selection itself, not something inside it: no second
   // outline or tag is drawn over the selection's.
-  return [...typing, ...others].filter((match) => !pathsOf(match.element).includes(match.target.scope ?? ''));
+  return [...typing, ...others].filter((match) => !isInstanceRoot(match.element, match.target.scope));
 }
 
 // Prop or slot text under the pointer (a prop's words, or the words the page writes inside the instance), whether or not its instance is selected: the words a double click would edit once the component is
@@ -221,6 +226,29 @@ function ancestorPaths(at: { readonly x: number; readonly y: number }): Set<stri
     }
   }
   return paths;
+}
+
+// The editor's key for the words and the catalog's can differ by the refresh counter a content scan prefixes (`cms:2:`), so a catalog
+// republished while the editor opens still names the words being typed in.
+function sameKey(left: string, right: string | undefined): boolean {
+  const bare = (key: string) => key.replace(/^cms:\d+:/, '');
+  return right !== undefined && bare(left) === bare(right);
+}
+
+// Whether an element is the instance's own root, the outermost element carrying its path. The path can also sit on an element
+// inside it (a Card's stretched link carries the Card's path), and words in that element are still words inside the instance.
+function isInstanceRoot(element: Element, scope: string | undefined): boolean {
+  if (scope === undefined || !pathsOf(element).includes(scope)) {
+    return false;
+  }
+  let ancestor = element.parentElement;
+  for (let depth = 0; ancestor && depth < 64; depth++) {
+    if (pathsOf(ancestor).includes(scope)) {
+      return false;
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return true;
 }
 
 function dashedMark(box: DOMRect): HTMLElement {

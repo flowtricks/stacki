@@ -53,7 +53,7 @@ export function selectRunsOffsets(runs: TextSpace['runs'], offsets: TextOffsets)
 }
 
 export function placeTextCaret(nodes: readonly Text[], event: MouseEvent): void {
-  const offsets = caretOffsetsAt(nodes, event.clientX, event.clientY) ?? caretBesideText(nodes, event);
+  const offsets = caretOffsetsAt(nodes, event.clientX, event.clientY) ?? caretBesideText(nodes, event) ?? caretByGeometry(nodes, event.clientX, event.clientY);
   if (offsets) {
     selectTextOffsets(nodes, offsets);
   }
@@ -62,6 +62,62 @@ export function placeTextCaret(nodes: readonly Text[], event: MouseEvent): void 
 function caretOffsetsAt(nodes: readonly Text[], x: number, y: number) {
   const range = document.caretRangeFromPoint(x, y);
   return range ? textSelection(nodes, range) : undefined;
+}
+
+// The caret position by where the characters are drawn, for a point the browser's hit test answers with something else: an element
+// laid over the words (a card's stretched link) takes the point, so `caretRangeFromPoint` names that element's text and not these.
+// The line nearest the point's height is found from each character's own box, then the character whose box holds the point's x;
+// past either end of the line the caret goes to that end. Characters read are bounded.
+const CARET_CHARS_MAX = 20_000;
+function caretByGeometry(nodes: readonly Text[], x: number, y: number) {
+  const lines: {
+    readonly top: number;
+    readonly bottom: number;
+    readonly first: number;
+    last: number;
+    readonly rects: { readonly left: number; readonly right: number; readonly at: number }[];
+  }[] = [];
+  let total = 0;
+  for (const node of nodes) {
+    for (let index = 0; index < node.length && total < CARET_CHARS_MAX; index++, total++) {
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+      const box = typeof range.getClientRects === 'function' ? range.getClientRects()[0] : undefined;
+      if (!box || box.width === 0) {
+        continue;
+      }
+      const line = lines.find((entry) => Math.abs(entry.top - box.top) < box.height / 2);
+      if (line) {
+        line.rects.push({ left: box.left, right: box.right, at: total });
+        line.last = total;
+      } else {
+        lines.push({ top: box.top, bottom: box.bottom, first: total, last: total, rects: [{ left: box.left, right: box.right, at: total }] });
+      }
+    }
+  }
+  if (lines.length === 0) {
+    return undefined;
+  }
+  let nearest = lines[0];
+  for (const line of lines) {
+    const distance = y < line.top ? line.top - y : y > line.bottom ? y - line.bottom : 0;
+    const best = nearest === undefined ? Infinity : y < nearest.top ? nearest.top - y : y > nearest.bottom ? y - nearest.bottom : 0;
+    if (nearest === undefined || distance < best) {
+      nearest = line;
+    }
+  }
+  if (nearest === undefined) {
+    return undefined;
+  }
+  let offset = nearest.last + 1;
+  for (const rect of nearest.rects) {
+    if (x < rect.left + (rect.right - rect.left) / 2) {
+      offset = rect.at;
+      break;
+    }
+  }
+  return { start: offset, end: offset };
 }
 
 // A double-click beside the words (frameText.ts) puts the caret at the point

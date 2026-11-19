@@ -6510,6 +6510,18 @@ body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent
   outline-offset: -1px;
   opacity: 1;
 }
+/* Editing the words of a closed component: its owner keeps the resting look for the whole session (the faint thick outline and the
+   light name tag), whatever the pointer does. Ordinary text, whose own tag goes while it is typed in, is not an owner. */
+body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent.text-owner {
+  outline-width: 4px;
+  outline-offset: -2px;
+  opacity: 1;
+}
+body:has(#stacki-canvas-text-editor) .node-outline.sel.text-owner.owner-tag .node-outline-tag {
+  display: inline-flex;
+  background: #7ddc94;
+  color: #0e2014;
+}
 /* Shared words are the exception: the tag stays as the warning that the edit
    changes other uses too, with the name left out. */
 body:has(#stacki-canvas-text-editor[data-shared]) .node-outline.sel {

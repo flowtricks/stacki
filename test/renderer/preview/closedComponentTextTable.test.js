@@ -424,3 +424,17 @@ test('no grey, muted or alpha tag or text outline exists in any state, editable 
   assert.match(css, /\.node-outline\.text-owner \{[^}]*outline-color: color-mix\(in srgb, var\(--green\)/);
   assert.doesNotMatch(css.slice(css.indexOf('.node-outline.text-owner {'), css.indexOf('.node-outline.text-owner {') + 900), /grey|gray|#6b6b6b|128 128 128/);
 });
+
+test('editing the words of a closed component keeps the light tag of the owner and faint thick outline for the whole session', () => {
+  const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
+  const rule = (selector) => css.slice(css.indexOf(`\n${selector} {`), css.indexOf('\n}', css.indexOf(`\n${selector} {`)));
+  const tag = rule('body:has(#stacki-canvas-text-editor) .node-outline.sel.text-owner.owner-tag .node-outline-tag');
+  assert.match(tag, /display:\s*inline-flex;/);
+  assert.match(tag, /background:\s*#7ddc94;/, 'the light tag, never the bright selected one or an unfilled one');
+  assert.match(rule('body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent.text-owner'), /outline-width:\s*4px;/);
+  // The editor hides the tag of a selected outline (an ordinary element's own tag); the owner rule must come after that rule to win.
+  assert.ok(
+    css.indexOf('.node-outline.sel.text-owner.owner-tag .node-outline-tag') >
+      css.indexOf('body:has(#stacki-canvas-text-editor) .node-outline.sel .node-outline-tag {'),
+  );
+});
