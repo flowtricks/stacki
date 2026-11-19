@@ -15,12 +15,22 @@ import { CmsUnavailable, cmsForwarded } from '../features/cms/cmsConnectionVault
 import { mediaConnectionRoute } from './mediaConnectionRoutes';
 import { mediaForwarded } from '../features/assets/mediaConnectionVault';
 import { appFileLinkRoute, appFileRedirect } from './appFileRoutes';
+import { StartupLog, type ContainerPhase } from '../features/startup/startupLog';
+import { parseStartupReport, STARTUP_LIMITS } from '../features/startup/startupStages';
+
+// How long a container that no one is using stays up. A cold start restores the repository and
+// compiles the site (tens of seconds), a warm one answers at once, so a person who comes back
+// after a coffee should find it warm. Billing is for the time it is up: ten minutes of one
+// standard instance's memory and disk costs well under a cent. Open editors keep it alive on their own.
+// Not exported: a Worker module's exports must be classes and handlers.
+const CONTAINER_SLEEP_AFTER = '10m';
 
 export class PreviewContainer extends Container<Environment> {
   private readonly loginAttempts = new LoginAttempts((state, expires) => this.ctx.storage.transaction((storage) => claimLoginAttempt(storage, state, expires)));
   private readonly publishIdle = new PublishIdleGuard();
+  private readonly startup = new StartupLog();
   override defaultPort = 4350;
-  override sleepAfter = '3m';
+  override sleepAfter = CONTAINER_SLEEP_AFTER;
   // Port probes only need an HTTP response; the protected API rejects this
   // unauthenticated probe cheaply instead of rendering the Astro homepage.
   override pingEndpoint = 'localhost/studio/api/status';
@@ -30,10 +40,55 @@ export class PreviewContainer extends Container<Environment> {
     if (auth) {
       return auth;
     }
+    // The start report and its readout are answered here, never by waiting for the container: the
+    // boot screen must be able to say what the container is doing while it is not answering yet.
+    const startup = await this.startupRoute(request);
+    if (startup) {
+      return startup;
+    }
     if ((await this.getState()).status !== 'healthy') {
       await this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 600_000 });
     }
     return super.fetch(request);
+  }
+  private async startupRoute(request: Request): Promise<Response | undefined> {
+    const { pathname } = new URL(request.url);
+    if (pathname === '/studio/internal/startup' && request.method === 'POST') {
+      const body = await request.text();
+      if (body.length > STARTUP_LIMITS.reportBytesMax) {
+        return new Response('Report too large', { status: 413 });
+      }
+      let input: unknown;
+      try {
+        input = JSON.parse(body);
+      } catch {
+        return new Response('Invalid report', { status: 400 });
+      }
+      const report = parseStartupReport(input);
+      if (!report.ok) {
+        return new Response(report.error, { status: 400 });
+      }
+      this.startup.record(report.value);
+      return new Response(null, { status: 204 });
+    }
+    if (pathname === '/studio/api/startup' && request.method === 'GET') {
+      const phase = await this.phase();
+      if (phase === 'stopped') {
+        // The editor asking is as good a reason to wake the container as the page load that came first.
+        this.ctx.waitUntil(
+          this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 600_000 }).catch((error: unknown) => console.error('Studio start failed', String(error))),
+        );
+      }
+      return Response.json(this.startup.view(phase), { headers: { 'Cache-Control': 'no-store' } });
+    }
+    return undefined;
+  }
+  private async phase(): Promise<ContainerPhase> {
+    const { status } = await this.getState();
+    if (status === 'healthy') {
+      return 'serving';
+    }
+    return status === 'running' ? 'starting' : 'stopped';
   }
   override async onActivityExpired(): Promise<void> {
     await this.publishIdle.expire({
@@ -53,6 +108,7 @@ export class PreviewContainer extends Container<Environment> {
     console.info('Studio container ready');
   }
   override onStop({ exitCode, reason }: { exitCode: number; reason: string }) {
+    this.startup.reset();
     console.info('Studio container stopped', { exitCode, reason });
   }
   override envVars = {
@@ -141,6 +197,10 @@ async function workerRoute(request: Request, url: URL, environment: Environment,
   }
   if (url.pathname === '/studio/api/preview-url') {
     return previewURL(url, environment, identity);
+  }
+  if (url.pathname === '/studio/api/startup' && request.method === 'GET') {
+    // Answered by the Durable Object itself, so reading it never waits for the container.
+    return environment.PREVIEW.getByName('project').fetch(request);
   }
   const appFile = await appFileRedirect(request, url, environment, identity);
   if (appFile) {

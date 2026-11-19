@@ -15,6 +15,7 @@ const WORKER_ANSWERED = [
   '/studio/api/updates',
   '/studio/api/session',
   '/studio/api/preview-url',
+  '/studio/api/startup',
   '/studio/api/cms-connections',
   '/studio/api/media-connections',
 ];
