@@ -176,7 +176,15 @@ function NodeOutlines(props: PreviewOverlaysProps) {
   const translate = useTranslate();
   // An app's highlight (`canvas.highlight`), in its own slot: the real selection and hover are untouched beside it.
   const highlight = useSyncExternalStore(subscribeCanvasHighlight, canvasHighlight, canvasHighlight);
-  const outlines = outlineTargets(props, highlight);
+  const targets = outlineTargets(props, highlight);
+  // A hovered slot always shows why it cannot be picked, even when it is the selection: its muted hover draws beside the selected outline.
+  const slotHover =
+    highlight === undefined && props.hoverPath && props.hoverPseudo === undefined && !targets.some((target) => target.slot === 'hover')
+      ? props.overlayInfo?.(props.hoverPath)?.hostContent === true
+      : false;
+  const outlines: readonly OutlineTarget[] = slotHover
+    ? [{ path: props.hoverPath ?? '', slot: 'hover', type: 'hover', occ: props.hoverOcc, pseudo: undefined }, ...targets]
+    : targets;
   return outlines.flatMap((outline) => {
     if (outline.pseudo !== undefined) {
       return <PseudoOutline key={`${outline.slot}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} />;
@@ -202,6 +210,7 @@ function NodeOutlines(props: PreviewOverlaysProps) {
           className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${ownerClasses(
             props.textMarks,
             {
+              ownable: info.kind === 'component' && !info.isLayout,
               path: outline.path,
               slot: outline.slot === 'highlight' ? 'highlight' : outline.type === 'sel' ? 'sel' : 'hover',
               pointedAt: props.hoverPath === outline.path,

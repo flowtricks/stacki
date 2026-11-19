@@ -72,3 +72,29 @@ test('a plain element hover and a selected slot keep the ordinary outline', asyn
   assert.doesNotMatch(selected, /host-content/);
   assert.match(selected, />slot</);
 });
+
+test('a slot that is selected and hovered shows both: the selection and the muted reason', async () => {
+  const PreviewOverlays = await overlays();
+  const both = renderToStaticMarkup(createElement(PreviewOverlays, { ...props, selPath: '0', selOcc: 0, overlayInfo: () => info(true) }));
+  assert.match(both, /node-outline sel element/);
+  assert.match(both, /node-outline hover element host-content/);
+  assert.match(both, /Slot: content comes from the page/);
+});
+
+test('hovering a slot while its parent is selected shows the muted reason beside the parent outline', async () => {
+  const PreviewOverlays = await overlays();
+  const parent = { ...info(false), label: 'main' };
+  const html = renderToStaticMarkup(
+    createElement(PreviewOverlays, {
+      ...props,
+      rects: { 0: [{ x: 0, y: 0, w: 900, h: 300 }], 1: [{ x: 0, y: 40, w: 900, h: 200 }] },
+      hoverPath: '1',
+      selPath: '0',
+      selOcc: 0,
+      overlayInfo: (path) => (path === '1' ? info(true) : parent),
+    }),
+  );
+  assert.match(html, /node-outline sel element/);
+  assert.match(html, /host-content/);
+  assert.match(html, />main</);
+});

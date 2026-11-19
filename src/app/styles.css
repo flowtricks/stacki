@@ -49,6 +49,8 @@
      outline, and the "inside a component" back button. */
   --component-green: #79e09c;
   --component-green-soft: rgba(121, 224, 156, 0.16);
+  /* The canvas fill over a hovered <slot>: black at 10%, so the host page's content reads muted. */
+  --slot-host-fill: rgba(0, 0, 0, 0.1);
   /* Pages Astro generates from a collection ([id], [...slug]) read in this
      purple wherever pages are listed. */
   --collection-purple: #c4afff;
@@ -4093,6 +4095,7 @@ body > .embed-editor_provenance {
   color: var(--text);
 }
 .structure-node.is-slot:hover:not(.selected) {
+  background: var(--slot-host-fill);
   color: var(--text-dim);
 }
 .structure-node.selected {
@@ -6567,12 +6570,17 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .node-outline.bound .node-outline-tag {
   background: #8b5cf6;
 }
-/* A hovered <slot>: its content is the host page's, so it reads muted, in a grey fill with no outline, not as something to pick. */
+/* A hovered <slot>: its content is the host page's, so it reads muted, in a black 10% fill with no outline, not as something to pick. */
 .node-outline.hover.host-content {
   outline: none;
-  background: rgb(128 128 128 / 22%);
+  background: var(--slot-host-fill);
 }
+/* The reason sits inside the slot, 22px down: the owner's name tag (a selected parent's, above or inside its box) stays readable.
+   Opaque, so it reads the same over any page. */
 .node-outline.hover.host-content .node-outline-tag {
+  top: 22px;
+  left: 4px;
+  transform: none;
   background: #6b6b6b;
   color: white;
 }
