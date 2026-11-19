@@ -48,13 +48,20 @@ export interface PropTextContext extends PropSiteContext {
   readonly bound?: ((expression: string) => Promise<BoundPropText | undefined>) | undefined;
 }
 
-// Instances considered per page.
-const INSTANCES_MAX = 64;
+// Instances considered per page, and edits kept from them. A real page nests its components deeply
+// (the Lumos example page has hundreds before its first Card), and instances are read in tree order,
+// so a small instance bound hid every component below the first few levels: the cap is on the edits
+// the catalog can hold (CANVAS_TARGET_LIMIT), not on how many instances come first.
+const INSTANCES_MAX = 4_000;
+const EDITS_MAX = 1_000;
 
 export async function canvasPropEdits(document: CanvasTextDocument, context: PropTextContext): Promise<CanvasTextEdit[]> {
   const sites = propSiteReader(context);
   const edits: CanvasTextEdit[] = [];
   for (const instance of pageInstances(context.nodes).slice(0, INSTANCES_MAX)) {
+    if (edits.length >= EDITS_MAX) {
+      break;
+    }
     const component = componentReference({
       name: instance.name,
       project: context.projectPath,
@@ -80,7 +87,7 @@ export async function canvasPropEdits(document: CanvasTextDocument, context: Pro
       edits.push(...(site.kind === 'text' ? [textEdit(shown, site)] : htmlEdits(shown, site)));
     }
   }
-  assert(edits.length <= INSTANCES_MAX * SITES_MAX * 8, 'Prop text stays within its bounds');
+  assert(edits.length <= EDITS_MAX + SITES_MAX * 8, 'Prop text stays within its bounds');
   return edits;
 }
 
@@ -200,7 +207,12 @@ function htmlEdits(shown: ShownProp, site: PropTextSite & { readonly kind: 'html
     if (value.trim() === '') {
       return [];
     }
-    const typedHTML = (typed: string) => nodesToHtml(inlineWithValue(children, trail, typed));
+    // A component that draws the element puts its own template whitespace around the slot (the line breaks of
+    // `<Fragment set:html={content} />` on a line of its own): those are not the prop's words, so the prop keeps the
+    // whitespace it had and only the words change.
+    const own = site.parentKind === 'component' ? { lead: /^\s*/.exec(value)?.[0] ?? '', tail: /\s*$/.exec(value)?.[0] ?? '' } : undefined;
+    const settled = (typed: string) => (own === undefined ? typed : `${own.lead}${typed.trim()}${own.tail}`);
+    const typedHTML = (typed: string) => nodesToHtml(inlineWithValue(children, trail, settled(typed)));
     const path = `${site.parent}#${segment}`;
     const edit: CanvasTextEdit = {
       target: {
