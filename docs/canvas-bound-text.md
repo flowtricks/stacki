@@ -92,6 +92,29 @@ that is not a project script or JSON (`runtime`, `missing`, `unsupported` are ne
 Loop items whose words another item of the same loop repeats get no target, because the canvas finds text by
 its words and could not tell which of the two was meant.
 
+## Text a component renders from a prop
+
+`canvasPropText.ts` offers the words a component prints from a prop (`{heading}`, or `set:html={heading}`) as
+text to edit on the canvas, written to the prop on the instance the person double clicked, or added to it when
+the instance showed the component's default. `canvasPropSites.ts` finds where a component shows each prop.
+
+| Where the component puts the prop | Edited |
+|---|---|
+| `<p>{text}</p>`, `<Button>{label}</Button>` | Yes, as one text |
+| `<p set:html={text} />` | Yes, one target per text run, with the format bar |
+| `<Heading tag={headingTag}><Fragment set:html={heading} /></Heading>` (Lumos Card) | Yes: the component draws the element, so the frame finds the words by position inside it |
+| `<Tag set:html={heading} />` where `Tag` is a variable of the component (a dynamic tag) | Yes, same way |
+| `<Heading set:html={heading} />` where `Heading` is imported | No: an imported component takes `set:html` as its own prop |
+| `<Fragment slot="aside" set:html={heading} />`, or words of the caller beside the fragment | No: the position the frame counts text by would not hold |
+| An instance inside a loop or an expression | No: one attribute would stand for every copy |
+| `heading={title}` on the instance | The source the binding leads to (escaped, when the component prints it as HTML) |
+| A binding that leads to no one string (`a + b`, `cond ? x : y`, a call, data holding markup) | Refused by name, with the file to edit, like any other bound text; never written |
+
+Repeated instances each get their own target (keyed by instance), so typing in one writes that instance only.
+Tests: `test/renderer/preview/canvasPropTextComponents.test.js` (the finder on Card-shaped components) and
+`test/electron/preload/componentPropTextCanvas.test.js` (a real window: double click, type, the page file
+changes only in the prop literal, one Undo restores every byte).
+
 ## The cue
 
 | Moment | Shown | Where |

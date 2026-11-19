@@ -84,13 +84,32 @@ export async function canvasPropEdits(document: CanvasTextDocument, context: Pro
   return edits;
 }
 
-// A prop the page sets to a binding that leads to one string, for a text site.
+// A prop the page sets to a binding: the string it leads to (typing writes there), or why it leads to none (the double click names the file to edit).
 async function followedBinding(instance: InstanceNode, site: PropTextSite, context: PropTextContext): Promise<BoundPropText | undefined> {
   const attr = 'props' in instance ? instance.props?.[site.prop] : undefined;
-  if (attr?.type !== 'expr' || site.kind !== 'text' || context.bound === undefined) {
+  if (attr?.type !== 'expr' || context.bound === undefined) {
     return undefined;
   }
-  return context.bound(attr.value);
+  const followed = await context.bound(attr.value);
+  if (followed === undefined || site.kind !== 'html') {
+    return followed;
+  }
+  // HTML printed from data: a string with no markup of its own is one text run, written back as the words typed
+  // (escaped, as the page prints it as HTML). Markup in the data is the source's to edit, so it is named, never written.
+  const { bound } = followed;
+  if (bound.kind === 'source' && !/[<&]/.test(followed.value)) {
+    return { ...followed, apply: (typed) => followed.apply(escapedHTML(typed)) };
+  }
+  return {
+    value: '',
+    bound: bound.kind === 'source' ? { kind: 'blocked', expression: bound.expression, file: bound.file, reason: 'computed' } : bound,
+    apply: () => Promise.reject(new Error('HTML from data is edited in its source')),
+  };
+}
+
+// Words as the HTML a page prints them as: no tag or entity is typed by accident.
+function escapedHTML(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 // `{prop}` printed from `prop={aiCallout1.body}`: the words belong to the source the binding names, so typing writes there and not to the attribute.
@@ -102,20 +121,23 @@ function boundPropEdit(shown: {
   readonly label: string;
 }): CanvasTextEdit {
   const { instance, site, followed, scope } = shown;
-  assert(site.kind === 'text', 'A followed prop is printed as text');
+  // HTML from data that can be written is its one text run, found by position as an HTML prop's runs are.
+  const run = site.kind === 'html' && followed.bound.kind === 'source';
+  const path = run ? `${site.parent}#0` : site.path;
   return {
     target: {
       kind: site.parentKind,
-      key: `prop:${instance.id}:${site.prop}:${site.path}`,
-      path: site.path,
+      key: `prop:${instance.id}:${site.prop}:${path}`,
+      path,
       parent: site.parent,
       value: followed.value,
       label: shown.label,
       tag: site.tag,
-      siblings: site.siblings,
+      siblings: site.kind === 'text' ? site.siblings : [],
       nested: false,
       scope,
       from: 'prop',
+      ...(run ? { segment: 0 } : {}),
     },
     bound: followed.bound,
     apply: (typed) => followed.apply(typed),
@@ -182,7 +204,7 @@ function htmlEdits(shown: ShownProp, site: PropTextSite & { readonly kind: 'html
     const path = `${site.parent}#${segment}`;
     const edit: CanvasTextEdit = {
       target: {
-        kind: 'element',
+        kind: site.parentKind,
         key: `prop:${instance.id}:${site.prop}:${path}`,
         path,
         parent: site.parent,

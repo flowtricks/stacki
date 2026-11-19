@@ -447,8 +447,12 @@ test('a prop the page binds (`body={aiCallout1.body}`) is followed to the string
   assert.deepEqual(followed.bound, { kind: 'source', expression: 'aiCallout1.body', file: 'src/lib/homepage/content.ts', uses: 1 });
   await followed.apply('From the card');
   assert.equal(writes[0].after.includes("body: 'From the card'"), true);
-  assert.equal(await read('joined'), undefined, 'a joined value leads to no string to write');
-  assert.equal(await read('compute(1)'), undefined);
+  // A binding that leads to no string is refused with its reason, so the double click says why.
+  assert.equal((await read('joined')).bound.kind, 'blocked', 'a joined value leads to no string to write');
+  assert.equal((await read('joined')).bound.reason, 'concatenation');
+  assert.equal((await read('compute(1)')).bound.kind, 'blocked');
+  assert.equal((await read('compute(1)')).bound.reason, 'call');
+  await assert.rejects((await read('compute(1)')).apply('x'), 'a refused binding never writes');
 });
 
 // The shape of a real site: the page destructures its data from an awaited call to a function in another

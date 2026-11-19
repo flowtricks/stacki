@@ -323,7 +323,11 @@ export interface BoundPropText {
   readonly apply: (typed: string) => Promise<void>;
 }
 
-/** Follows a prop the page sets to `expression` to its string, or undefined when it does not lead to one a write could replace. */
+/**
+ * Follows a prop the page sets to `expression` to its string. A binding that leads to no string a write could
+ * replace (a computed expression, a call, a prop, a missing key, a binding to a file the host cannot write) comes
+ * back as a refusal that names why, so the double click on its text says so instead of staying silent.
+ */
 export function boundPropReader(
   document: CanvasTextDocument,
   host: BoundTextHost,
@@ -335,18 +339,37 @@ export function boundPropReader(
   };
   return async (expression) => {
     const path = expression.trim().replace(/^\{\s*([\s\S]*?)\s*\}$/, '$1');
-    const outcome = parseBoundPath(path) === undefined ? undefined : await resolveBoundText(environment, path);
-    if (outcome === undefined || !outcome.ok || !outcome.site.value.trim() || outcome.site.value.length > CANVAS_TEXT_LIMIT) {
-      return undefined;
+    const outcome = await resolveBoundText(environment, path);
+    if (!outcome.ok) {
+      return refusedProp(path, outcome.block);
     }
     const { site } = outcome;
-    if (site.file !== document.file && host.writeModule === undefined) {
+    if (!site.value.trim() || site.value.length > CANVAS_TEXT_LIMIT) {
       return undefined;
+    }
+    if (site.file !== document.file && host.writeModule === undefined) {
+      return refusedProp(path, { reason: 'unsupported', file: site.file, detail: 'The host cannot write this file.' });
     }
     return {
       value: site.value,
       bound: { kind: 'source', expression: path, file: site.file === document.file ? '' : site.file, uses: 1 },
       apply: (typed) => commitSource({ document, host, words, site, expression: path, value: canvasTypedText(site.value, typed) }),
     };
+  };
+}
+
+// A prop's binding that cannot be followed to one string: no words to match, the reason for the double click to give.
+function refusedProp(expression: string, block: BoundTextBlock): BoundPropText {
+  return {
+    value: '',
+    bound: {
+      kind: 'blocked',
+      expression,
+      file: block.file,
+      reason: block.reason,
+      ...(block.line === undefined ? {} : { line: block.line }),
+      ...(block.name === undefined ? {} : { name: block.name }),
+    },
+    apply: () => Promise.reject(new Error(block.detail)),
   };
 }
