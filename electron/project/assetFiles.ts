@@ -291,22 +291,20 @@ export function* assetTreeSliced(root: string, rel: string, options: { readonly 
         if (mediaOnly && !MEDIA_EXT.test(entry.name)) {
           continue;
         }
+        // The one stat a file costs gives its size and its modified time (the panel's Newest and
+        // Oldest sorts); a file gone between the read and the stat lists as empty, with no time.
         let size = 0;
+        let modifiedMs: number | undefined;
         try {
-          size = fs.statSync(full).size;
+          const info = fs.statSync(full);
+          size = info.size;
+          modifiedMs = Math.max(0, Math.floor(info.mtimeMs));
         } catch {
           /* race */
         }
         held = true;
-        entries.push({
-          rel: entryRel,
-          name: entry.name,
-          parent: rel,
-          isDir: false,
-          size,
-          abs: full,
-          root: rootOfRel(rel),
-        });
+        const file = { rel: entryRel, name: entry.name, parent: rel, isDir: false as const, size, abs: full, root: rootOfRel(rel) };
+        entries.push(modifiedMs === undefined ? file : { ...file, modifiedMs });
         // A folder of tens of thousands of files is that many units, each a stat and a push.
         yield;
       }

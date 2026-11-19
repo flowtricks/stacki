@@ -8,7 +8,7 @@ import type { WireAssetEntry } from '../../shared/ipc/ipcResults';
 import type { Result } from '../../shared/core/result';
 
 const entryBase = object({ rel: pathText, name: text, parent: pathText, root: text });
-const entryFile = object({ abs: pathText, size: count });
+const entryFile = object({ abs: pathText, size: count, modifiedMs: optional(count) });
 const entryDirectory = object({ isRoot: optional(boolean) });
 
 export function parseAssetEntry(input: unknown): WireAssetEntry {
@@ -18,7 +18,9 @@ export function parseAssetEntry(input: unknown): WireAssetEntry {
     const { isRoot } = entryDirectory(value);
     return isRoot ? { ...base, isDir: true, isRoot: true } : { ...base, isDir: true };
   }
-  return { ...base, isDir: false, ...entryFile(value) };
+  const { abs, size, modifiedMs } = entryFile(value);
+  // Spread only when known: under exactOptionalPropertyTypes an absent time is no key, not `undefined`.
+  return modifiedMs === undefined ? { ...base, isDir: false, abs, size } : { ...base, isDir: false, abs, size, modifiedMs };
 }
 
 export const parseAssetEntries = object({ entries: list(parseAssetEntry) });

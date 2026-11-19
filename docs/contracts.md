@@ -1194,6 +1194,17 @@ the file through `project:writeMetadata`; `project:pickFolder` opens the system 
 project and answers `picked` (project-relative, links resolved) or `outside`. A saved change, or
 an outside edit of the file, sends `fs:changed`, `assets:changed` and `css:changed`.
 
+An asset listing's file entry (`WireAssetEntry`, from `assets:list`, Studio's `/studio/api/assets` and the demo's
+store) carries `size` and, when the host can tell, `modifiedMs`: the file's `stat.mtimeMs` in whole milliseconds,
+read by the same stat as the size. It is optional (a demo upload restored from browser storage has none) and, when
+present, a non-negative safe integer; `parseAssetEntry` (`src/ipc/assetBridge.ts` and Studio's adapter) rejects
+anything else. The Assets panel's Newest first and Oldest first sorts read it, never a birth time, which many file
+systems do not keep; a file without one sorts after every file with one (`src/features/assets/assetOrder.ts`). The
+panel's view (Grid, List, List - Small) and sort are a person's way of looking, not part of the site: they are kept
+per project in the app's local storage (`stacki.assetsPanel.views`, the 50 most recently changed projects), never in
+a `.stacki/` file. The List view's pixel sizes come from `assets:dimensions` (Studio: an image load), read only for
+rows on screen, four at a time, and cached per path, size and `modifiedMs`.
+
 `project:metadata` and `project:writeMetadata` accept only registered metadata kinds.
 Desktop confines them to the open project and writes through the document actors against
 the supplied base. Studio exposes the same records through `/studio/api/metadata`, its

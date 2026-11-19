@@ -58,6 +58,17 @@ test('asset listing parser rejects malformed paths, relationships, roots, and bo
   }
 });
 
+// The Newest and Oldest sorts read `modifiedMs`: optional (Studio's demo uploads restored from storage
+// have none), and when present whole, non-negative milliseconds; anything else is a contract bug.
+test('asset listing parser keeps a valid modified time and rejects a malformed one', () => {
+  const timed = { ...file, modifiedMs: 1_700_000_000_000 };
+  assert.deepEqual(bridge.parseAssetListing({ entries: [root, timed], missing: false }).entries[1], timed);
+  assert.equal('modifiedMs' in bridge.parseAssetListing({ entries: [root, file], missing: false }).entries[1], false, 'no time is no key');
+  for (const modifiedMs of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 2, '1700000000000', jsonNull, true]) {
+    assert.throws(() => bridge.parseAssetListing({ entries: [root, { ...file, modifiedMs }], missing: false }), String(modifiedMs));
+  }
+});
+
 test('asset operations validate payloads, parse replies, and preserve failures', async () => {
   const calls = [];
   global.window = {

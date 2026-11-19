@@ -24,6 +24,8 @@ export type WireAssetEntry =
       readonly isDir: false;
       readonly size: number;
       readonly abs: string;
+      /** When the file last changed, whole milliseconds since 1970 (`stat.mtimeMs`); absent when the host cannot tell. */
+      readonly modifiedMs?: number;
     });
 
 export type WireCmsFile = {

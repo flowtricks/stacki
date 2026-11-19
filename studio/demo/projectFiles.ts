@@ -20,6 +20,8 @@ export interface AssetEntry {
   readonly root: string;
   readonly isDir: false;
   readonly size: number;
+  /** When it was uploaded in this page; an upload restored from storage has no time, and sorts as such. */
+  readonly modifiedMs?: number;
 }
 
 export type SaveFile = (file: string, value: string | Blob) => void;
@@ -28,6 +30,7 @@ export class DemoFiles {
   private readonly texts: Map<string, string>;
   private readonly blobs: Map<string, Blob>;
   private readonly urls = new Map<string, string>();
+  private readonly uploadedMs = new Map<string, number>();
 
   constructor(
     saved: SavedFiles,
@@ -56,6 +59,7 @@ export class DemoFiles {
     assert(!this.blobs.has(file), 'An upload never replaces another');
     assert(this.blobs.size < UPLOAD_LIMITS.filesMax, 'Uploads stay under their count limit');
     this.blobs.set(file, blob);
+    this.uploadedMs.set(file, Date.now());
     this.save(file, blob);
   }
 
@@ -64,7 +68,7 @@ export class DemoFiles {
   }
 
   uploads(): readonly AssetEntry[] {
-    return [...this.blobs].map(([file, blob]) => uploadEntry(file, blob.size));
+    return [...this.blobs].map(([file, blob]) => uploadEntry(file, blob.size, this.uploadedMs.get(file)));
   }
 
   /** A URL this page can load the upload from, made once per file. */
@@ -83,10 +87,10 @@ export class DemoFiles {
   }
 }
 
-export function uploadEntry(file: string, size: number): AssetEntry {
+export function uploadEntry(file: string, size: number, modifiedMs?: number): AssetEntry {
   const slash = file.lastIndexOf('/');
   assert(slash > 0, 'An upload sits in a folder');
-  return {
+  const entry: AssetEntry = {
     rel: file,
     abs: file,
     name: file.slice(slash + 1),
@@ -95,4 +99,5 @@ export function uploadEntry(file: string, size: number): AssetEntry {
     isDir: false,
     size,
   };
+  return modifiedMs === undefined ? entry : { ...entry, modifiedMs };
 }

@@ -44,6 +44,8 @@ export async function assetCatalog(root: string) {
       root: parts[0] ?? '',
       isDir: false,
       size: info.size,
+      // The panel's Newest and Oldest sorts read the modified time, as Desktop's listing gives it.
+      modifiedMs: Math.max(0, Math.floor(info.mtimeMs)),
     };
   });
   // A configured folder deeper than its root is reached through the folders above it.
