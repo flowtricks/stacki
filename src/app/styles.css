@@ -6591,6 +6591,22 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .node-outline.sel.parent .node-outline-tag {
   background: #7ddc94;
   color: #0e2014;
+} /* The outlines of a closed component around its own words, one rule for each state (pointer, selection):
+   - pointer on the words (text-owner, any selection): the field look of text being typed in, a thick faint outline and no tag;
+   - words selected, pointer on the component's own body: the plain component hover, a solid opaque green outline and a bare green
+     label, not the pale parent look the instance keeps while nothing points at it;
+   - words selected, pointer elsewhere: the pale parent look (`.sel.parent`);
+   - the component selected, the pointer on its body: its ordinary selection outline;
+   - another element selected (a layout): that element keeps its ordinary selection outline and is never tinted, whatever the
+     pointer is on. */
+.node-outline.sel.parent.tinted:not(.text-owner) {
+  outline-color: var(--green);
+  outline-width: 1px;
+}
+.node-outline.sel.parent.tinted:not(.text-owner) .node-outline-tag {
+  background: transparent;
+  color: var(--green);
+  padding-left: 0;
 }
 .node-outline-tag .node-outline-edit {
   align-self: stretch;

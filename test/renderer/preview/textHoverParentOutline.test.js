@@ -108,3 +108,51 @@ test('an ancestor that is selected is not tinted or marked for words that belong
   assert.equal(selected.length, 1);
   assert.doesNotMatch(selected[0], /tinted|text-owner/, selected[0]);
 });
+
+// The matrix of what the owning Card draws: the selection (nothing, the Card, its words, the layout) by the pointer
+// (on the Card's body, on its words). Each cell is one deliberate look.
+function cardLook(selected, picked, pointerOnWords) {
+  const markup = renderToStaticMarkup(
+    React.createElement(PreviewOverlays, {
+      rects: { 0.3: [BUTTON], 0.5: [{ x: 0, y: 400, w: 300, h: 40 }] },
+      spacing: {},
+      scale: 1,
+      selPath: selected,
+      selOcc: 0,
+      hoverPath: '0.3',
+      hoverOcc: 0,
+      focusPath: undefined,
+      focusWhole: false,
+      textMarks: { hover: pointerOnWords ? WORDS : undefined, picked: picked ? WORDS : undefined },
+      overlayInfo: () => INFO,
+    }),
+  );
+  return [...markup.matchAll(/class="(node-outline (?:hover|sel)[^"]*)"/g)].map((match) => match[1]).filter((name) => !name.includes('text-mark'));
+}
+
+test('matrix: pointer on the words, the Card is the field around them whatever is selected', () => {
+  for (const [selected, picked] of [
+    [undefined, false],
+    ['0.3', false],
+    ['0.3', true],
+    ['0.5', false],
+  ]) {
+    const drawn = cardLook(selected, picked, true).filter((name) => name.includes('text-owner'));
+    assert.equal(drawn.length, 1, `selected ${selected} picked ${picked}`);
+  }
+});
+
+test('matrix: words selected, pointer on the Card body, the Card is a plain green hover, not the pale parent look', () => {
+  const drawn = cardLook('0.3', true, false);
+  assert.equal(drawn.length, 1);
+  assert.match(drawn[0], /sel component parent tinted/);
+  assert.doesNotMatch(drawn[0], /text-owner/);
+  const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
+  assert.match(css, /\.node-outline\.sel\.parent\.tinted:not\(\.text-owner\) \{\s*outline-color: var\(--green\);\s*outline-width: 1px;/);
+});
+
+test('matrix: a selected layout and a hovered Card on its body draw the Card hover and nothing owns words', () => {
+  const drawn = cardLook('0.5', false, false);
+  assert.ok(drawn.some((name) => name.startsWith('node-outline hover component')));
+  assert.ok(drawn.every((name) => !name.includes('text-owner') && !name.includes('tinted')));
+});
