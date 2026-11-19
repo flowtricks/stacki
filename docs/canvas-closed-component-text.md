@@ -9,6 +9,7 @@ page path of their owner (`scope`); the overlay (`PreviewOverlays.tsx`) asks `ow
 |---|---|---|---|---|
 | `none` | none of the instance's words hovered or picked | none | its ordinary outline | — |
 | `field` | pointer on the words, none of the owner's words picked | hover outline + tag | faint thick outline, **no name tag**, no fill | `text-owner` |
+| `selected` | the owner is the selection, pointer on its words, none picked | text hover | its selected outline and **its tag, unchanged**; no fill, no second outline | none (plain `sel`) |
 | `resting` | some of the owner's words picked, whatever the pointer is on (the same words, another text of the owner) | solid green outline + tag | faint thick outline **and a light name tag** | `text-owner owner-tag` |
 | `body-hover` | words picked, pointer on the owner's own body | solid green outline + tag | solid green outline (1px, opaque); the **same light name tag as `resting`** | `parent tinted` (`--green`, 1px; the tag is the selected parent's, `#7ddc94`) |
 
@@ -21,7 +22,7 @@ Every cell, by selection and pointer:
 | Selection | Pointer | Text | Owner |
 |---|---|---|---|
 | nothing / a layout / another element | on text | text hover | `field` |
-| the owner | on text | text hover | `field`, selected outline |
+| the owner | on text | text hover (unfilled tag) | `selected`: selected outline and solid tag stay, no fill |
 | text A | on text A | A's selection | `resting` (tag) |
 | text A | on text B of the same owner | A selected, B hover | `resting` (tag stays) |
 | text A | on the owner's body | A selected | `body-hover` (solid outline, same tag) |

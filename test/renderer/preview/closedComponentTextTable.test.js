@@ -201,6 +201,7 @@ function outlines({ scope, selected, hoverPath, marks }) {
     left: Number(match[2]),
   }));
   return {
+    all: found,
     owner: found.find((outline) => outline.left === OWNER_BOX.x && !outline.classes.includes('text-mark'))?.classes,
     layout: found.find((outline) => outline.left === 0)?.classes,
   };
@@ -264,7 +265,13 @@ test('every text-bearing element of the real page follows the state machine', as
     for (const selected of [undefined, 'layout', scope]) {
       const drawn = outlines({ scope, selected, hoverPath: scope, marks: { hover, picked: undefined } });
       const label = `${component} "${element.textContent.trim().slice(0, 20)}" hovered, selected ${selected}`;
-      if (!(drawn.owner?.includes('text-owner') && !drawn.owner.includes('owner-tag'))) {
+      if (selected === scope) {
+        // The owner is selected: its selected outline and tag stay, nothing is filled or tinted, and no second outline is drawn for it.
+        const all = drawn.all.filter((classes) => classes.left === OWNER_BOX.x && !classes.classes.includes('text-mark'));
+        if (!(all.length === 1 && all[0].classes.includes('sel') && !all[0].classes.some((name) => ['tinted', 'text-owner', 'hover'].includes(name)))) {
+          failures.push(`${label}: the selected owner is ${all.map((entry) => entry.classes.join('.'))}`);
+        }
+      } else if (!(drawn.owner?.includes('text-owner') && !drawn.owner.includes('owner-tag'))) {
         failures.push(`${label}: owner is ${drawn.owner}`);
       }
       if (selected === 'layout' && drawn.layout && (drawn.layout.includes('tinted') || drawn.layout.includes('text-owner'))) {

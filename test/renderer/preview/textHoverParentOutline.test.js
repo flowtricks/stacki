@@ -90,7 +90,7 @@ test('hovering the selected component draws no second component outline over its
 });
 
 test('the owning instance reads as the field around its words: thick faint outline, no name tag', () => {
-  for (const selected of [undefined, '0.5', '0.3']) {
+  for (const selected of [undefined, '0.5']) {
     const markup = render(selected);
     const owners = [...markup.matchAll(/class="(node-outline (?:hover|sel)[^"]*text-owner[^"]*)"/g)];
     assert.equal(owners.length, 1, `exactly the instance is drawn as the owner with ${selected} selected`);
@@ -134,10 +134,15 @@ function cardLook(selected, picked, pointerOnWords, hoverPath = '0.3') {
   return [...markup.matchAll(/class="(node-outline (?:hover|sel)[^"]*)"/g)].map((match) => match[1]).filter((name) => !name.includes('text-mark'));
 }
 
+test('matrix: the Card selected, pointer on its words: the selected outline and tag stay, no fill, no second outline', () => {
+  const drawn = cardLook('0.3', false, true);
+  assert.equal(drawn.length, 1, drawn.join(' | '));
+  assert.match(drawn[0], /^node-outline sel component$/);
+});
+
 test('matrix: pointer on the words, the Card is the field around them whatever is selected', () => {
   for (const [selected, picked] of [
     [undefined, false],
-    ['0.3', false],
     ['0.3', true],
     ['0.5', false],
   ]) {

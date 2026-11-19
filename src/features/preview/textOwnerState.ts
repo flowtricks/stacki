@@ -5,7 +5,8 @@
 //
 //   state       when                                                   owner outline
 //   none        no words of this instance hovered or picked            its ordinary outline
-//   field       the pointer is on its words, none of them picked       faint thick outline, no name tag
+//   field       the pointer is on its words, none picked, owner unselected  faint thick outline, no name tag
+//   selected    the same, the owner being the selection                its selected outline and tag, unchanged, no fill
 //   resting     some of its words are picked, whatever the pointer is on  faint thick outline and a light name tag
 //   body-hover  its words are picked, the pointer is on its own body   the plain solid green hover and its tag
 //
@@ -13,7 +14,7 @@
 import { assert } from '../../../shared/core/assert';
 import type { TextMarks } from './previewMessages';
 
-export type OwnerState = 'none' | 'field' | 'resting' | 'body-hover';
+export type OwnerState = 'none' | 'field' | 'selected' | 'resting' | 'body-hover';
 
 export interface OwnerOutline {
   /** Whether the outline is of a component instance that can own words: never a layout or page host, never a plain element. */
@@ -37,7 +38,11 @@ export function ownerState(marks: TextMarks | undefined, outline: OwnerOutline):
   const { hover, picked } = marks;
   if (hover?.scope === outline.path) {
     // The pointer on words of the owner: the field, unless some words of it are already picked (the same or another text), when it rests with its tag.
-    return picked?.scope === outline.path ? 'resting' : 'field';
+    if (picked?.scope === outline.path) {
+      return 'resting';
+    }
+    // The owner is the selection: its selected outline and tag stay exactly as they are, with no fill; the words carry the hover.
+    return outline.slot === 'sel' ? 'selected' : 'field';
   }
   if (picked?.scope === outline.path) {
     return outline.pointedAt && hover === undefined ? 'body-hover' : 'resting';
