@@ -54,6 +54,7 @@ import { propPreviewInstance, useDesktopPropPreview } from './desktopPropPreview
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { selectedPseudo } from '../model/selectionStructure';
 import { appOverlayLayer, useAppOverlayPaths } from './DesktopApps';
+import { useCanvasDrag } from '../state/appCanvasDrag';
 
 // One function for the life of the app: the Style panel publishes its host on every render, and a
 // new arrow each time would wake every host subscriber (StylePanel.tsx useStableList says why).
@@ -64,6 +65,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverPseudo = useLiveValue(app.hoverPseudo);
   const context = useCanvasContextMenu(app);
   const appOverlayPaths = useAppOverlayPaths(app);
+  const onCanvasDrag = useCanvasDrag(app);
   return (
     <>
       <PreviewPane
@@ -115,6 +117,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         onNodeStates={app.setNodeStates}
         onNodeClasses={app.setNodeClasses}
         onOpenPath={(path, occurrence) => openCanvasPath(app, path ?? undefined, occurrence)}
+        onCanvasDrag={onCanvasDrag}
       />
       {context.menu}
     </>

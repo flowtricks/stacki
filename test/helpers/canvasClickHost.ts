@@ -180,7 +180,8 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     case 'query-result':
     case 'point-result':
     case 'text-marks':
-      return; // Measurements and menus: not what this host is about.
+    case 'canvas-drag':
+      return; // Measurements, menus and drags: not what this host is about.
     default: {
       const exhaustive: never = message;
       return exhaustive;

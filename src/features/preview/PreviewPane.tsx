@@ -13,6 +13,7 @@ import type { OverlayInfo, RectMap, SpacingHover } from './PreviewOverlays';
 import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
+import { CanvasDropOverlay } from './CanvasDropOverlay';
 import { PreviewToolbar } from './PreviewToolbar';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
@@ -89,6 +90,8 @@ interface PreviewPaneProps {
   readonly projectPath?: string | undefined;
   /** More paths for the canvas to measure (the elements app overlays anchor to). */
   readonly extraTrackPaths?: readonly string[] | undefined;
+  /** A drag on the canvas, or one crossing into it (src/app/state/appCanvasDrag.ts decides the drop). */
+  readonly onCanvasDrag?: PreviewRuntimeProps['onCanvasDrag'];
   /** Draws over the canvas, above the outlines, from the same measurements (Stacki Apps' overlays). */
   readonly overlayLayer?: ((frame: { readonly rects: RectMap; readonly scale: number }) => React.ReactNode) | undefined;
 }
@@ -264,6 +267,7 @@ function DesignPreview({
           onOpenComponent={props.onOpenPath}
           pathScope={props.pathScope ?? ''}
         />
+        <CanvasDropOverlay scale={scale} overlayInfo={props.overlayInfo} />
         {props.overlayLayer?.({ rects: runtime.rects, scale })}
       </div>
     </>

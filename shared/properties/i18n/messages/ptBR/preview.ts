@@ -19,6 +19,17 @@ export const messages = {
   'preview.device.group': 'Dispositivo de visualização',
   'preview.device.item': '{name} ({width}px) — {key}', // same
   'preview.device.itemNoKey': '{name} ({width}px)', // same
+  'preview.drag.adding': 'Adicionando {name}',
+  'preview.drag.dropHere': 'Solte aqui',
+  'preview.drag.intoLoop': 'Dentro do loop: repete para cada item',
+  'preview.drag.moving.component': 'Movendo o componente inteiro',
+  'preview.drag.moving.element': 'Movendo elemento',
+  'preview.drag.moving.loop': 'Movendo loop',
+  'preview.drag.moving.text': 'Movendo texto',
+  'preview.drag.noSlot': '{name} não tem slot, então nada pode entrar nele. Abra o componente para adicionar elementos.',
+  'preview.drag.outside': 'Solte para cancelar',
+  'preview.drag.page': 'Página',
+  'preview.drag.self': 'Um elemento não pode ficar dentro de si mesmo',
   'preview.frame.loading': 'Carregando página…',
   'preview.frame.previous': '{title} (página anterior)',
   'preview.guide.color': 'Cor',

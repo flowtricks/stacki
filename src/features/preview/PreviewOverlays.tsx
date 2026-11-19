@@ -310,7 +310,7 @@ function PseudoOutline({ outline, rects, scale }: { readonly outline: OutlineTar
   ));
 }
 
-function outlineIcon(info: OverlayInfo): React.ReactNode {
+export function outlineIcon(info: OverlayInfo): React.ReactNode {
   const size = 11;
   if (info.isLayout) {
     return <LayoutIcon size={size} />;

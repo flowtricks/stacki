@@ -3,6 +3,7 @@ import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type React from 'react';
 import type { OverlayInfo, RectMap, SpacingMap } from './PreviewOverlays';
+import type { CanvasDragMessage } from './canvasDragMessages';
 import type { PreviewDevice } from './PreviewToolbar';
 import type { PreviewMessage, PreviewReloadReason, TextMarks } from './previewMessages';
 import { NO_TEXT_MARKS } from './previewMessages';
@@ -72,6 +73,8 @@ export interface PreviewRuntimeProps {
   readonly onPreviewReload?: (reason: PreviewReloadReason) => void;
   /** More paths to measure: the elements app overlays are anchored to (src/features/apps). */
   readonly extraTrackPaths?: readonly string[] | undefined;
+  /** A drag on the canvas, or one crossing into it; `reply` posts the editor's answer back to the frame. */
+  readonly onCanvasDrag?: ((drag: CanvasDragMessage, reply: (message: unknown) => void) => void) | undefined;
 }
 
 /** What a canvas click said besides its path: whether it landed outside the
@@ -474,6 +477,9 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       break;
     case 'text-marks':
       setters.setTextMarks({ hover: message.hover, picked: message.picked });
+      break;
+    case 'canvas-drag':
+      refs.props.current.onCanvasDrag?.(message.drag, (reply) => frame.contentWindow?.postMessage(reply, '*'));
       break;
     case 'open-node':
       noteCanvasOpen(); // A double click: the observed click it began with is no placement.

@@ -19,6 +19,17 @@ export const messages = {
   'preview.device.group': 'Appareil d’aperçu',
   'preview.device.item': '{name} ({width}px) — {key}', // same
   'preview.device.itemNoKey': '{name} ({width}px)', // same
+  'preview.drag.adding': 'Ajout de {name}',
+  'preview.drag.dropHere': 'Déposer ici',
+  'preview.drag.intoLoop': 'Dans la boucle : se répète pour chaque élément',
+  'preview.drag.moving.component': 'Déplacement du composant entier',
+  'preview.drag.moving.element': "Déplacement de l'élément",
+  'preview.drag.moving.loop': 'Déplacement de la boucle',
+  'preview.drag.moving.text': 'Déplacement du texte',
+  'preview.drag.noSlot': "{name} n'a pas de slot : rien ne peut y entrer. Ouvrez le composant pour ajouter des éléments.",
+  'preview.drag.outside': 'Relâchez pour annuler',
+  'preview.drag.page': 'Page',
+  'preview.drag.self': 'Un élément ne peut pas aller dans lui-même',
   'preview.frame.loading': 'Chargement de la page…',
   'preview.frame.previous': '{title} (page précédente)',
   'preview.guide.color': 'Couleur',

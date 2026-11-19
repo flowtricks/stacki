@@ -19,6 +19,17 @@ export const messages = {
   'preview.device.group': 'Vorschaugerät',
   'preview.device.item': '{name} ({width}px) — {key}', // same
   'preview.device.itemNoKey': '{name} ({width}px)', // same
+  'preview.drag.adding': '{name} wird hinzugefügt',
+  'preview.drag.dropHere': 'Hier ablegen',
+  'preview.drag.intoLoop': 'In der Schleife: wiederholt sich für jedes Element',
+  'preview.drag.moving.component': 'Ganze Komponente wird verschoben',
+  'preview.drag.moving.element': 'Element wird verschoben',
+  'preview.drag.moving.loop': 'Schleife wird verschoben',
+  'preview.drag.moving.text': 'Text wird verschoben',
+  'preview.drag.noSlot': '{name} hat keinen Slot, also kann nichts hinein. Öffne die Komponente, um Elemente hinzuzufügen.',
+  'preview.drag.outside': 'Loslassen zum Abbrechen',
+  'preview.drag.page': 'Seite',
+  'preview.drag.self': 'Ein Element kann nicht in sich selbst liegen',
   'preview.frame.loading': 'Seite wird geladen …',
   'preview.frame.previous': '{title} (vorherige Seite)',
   'preview.guide.color': 'Farbe',

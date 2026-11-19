@@ -42,6 +42,7 @@ import {
 import { ownClasses, resetThinCache } from './frameMeasure';
 import { forgetReportedKeys, paintOpened, scrollPathIntoView, sendClasses, sendRects, sendRendered } from './frameReports';
 import { answerClickQuery, enterDesignMode, nodeAtPoint, startOutlines } from './frameTargets';
+import { installCanvasDrag, receiveDragMessage } from './frameDrag';
 
 // Nodes that put nothing on the page: a component that returns null for the
 // props it was given (an <Img> with no src, a grid with no children) still
@@ -129,6 +130,8 @@ export function listenForQueries(): void {
   // A palette pick drawn at once, and reconciled the same way (framePendingInsert.ts).
   listenForCanvasInserts();
   listenForCanvasEdits();
+  // Dragging on the canvas: the frame follows the pointer and the editor decides the drop (frameDrag.ts).
+  installCanvasDrag({ locate: nodeAtPoint, send: (message) => window.parent.postMessage(message, '*') });
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window.parent) {
       return;
@@ -161,6 +164,9 @@ export function listenForQueries(): void {
       return;
     }
     if (receivePointQuery(data, nodeAtPoint, (message) => window.parent.postMessage(message, '*'))) {
+      return;
+    }
+    if (receiveDragMessage(data)) {
       return;
     }
     if (receiveOutlineMode(data)) {

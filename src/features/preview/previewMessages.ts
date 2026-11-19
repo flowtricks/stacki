@@ -13,6 +13,7 @@ import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { GUIDE_LIMITS, parseGuideVariableName, type GuideMetrics } from './guideModel';
+import { parseCanvasDragMessage, type CanvasDragMessage } from './canvasDragMessages';
 
 export type PreviewMessage =
   | {
@@ -83,7 +84,9 @@ export type PreviewMessage =
       readonly kind: 'text-marks';
       readonly hover: TextMarkBox | undefined;
       readonly picked: TextMarkBox | undefined;
-    };
+    }
+  /** A drag on the canvas, or one crossing into it (electron/preload/frameDrag.ts; parsed by canvasDragMessages.ts). */
+  | { readonly kind: 'canvas-drag'; readonly drag: CanvasDragMessage };
 
 /**
  * Text a page hands to the selected component instance, as the canvas frame
@@ -273,6 +276,13 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         hover: optional(parseTextMarkBox)(value['hover']),
         picked: optional(parseTextMarkBox)(value['picked']),
       };
+    case 'avb:drag-start':
+    case 'avb:drag-over':
+    case 'avb:drag-end':
+    case 'avb:drag-cancel': {
+      const drag = parseCanvasDragMessage(value);
+      return drag === undefined ? undefined : { kind: 'canvas-drag', drag };
+    }
     default:
       return undefined;
   }

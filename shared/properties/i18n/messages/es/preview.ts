@@ -19,6 +19,17 @@ export const messages = {
   'preview.device.group': 'Dispositivo de vista previa',
   'preview.device.item': '{name} ({width}px) — {key}', // same
   'preview.device.itemNoKey': '{name} ({width}px)', // same
+  'preview.drag.adding': 'Añadiendo {name}',
+  'preview.drag.dropHere': 'Suelta aquí',
+  'preview.drag.intoLoop': 'Dentro del bucle: se repite para cada elemento',
+  'preview.drag.moving.component': 'Moviendo el componente completo',
+  'preview.drag.moving.element': 'Moviendo elemento',
+  'preview.drag.moving.loop': 'Moviendo bucle',
+  'preview.drag.moving.text': 'Moviendo texto',
+  'preview.drag.noSlot': '{name} no tiene slot, así que no puede contener nada. Abre el componente para añadir elementos.',
+  'preview.drag.outside': 'Suelta para cancelar',
+  'preview.drag.page': 'Página',
+  'preview.drag.self': 'Un elemento no puede ir dentro de sí mismo',
   'preview.frame.loading': 'Cargando página…',
   'preview.frame.previous': '{title} (página anterior)',
   'preview.guide.color': 'Color', // same
