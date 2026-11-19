@@ -447,7 +447,7 @@ function startComponentDrag(event: React.DragEvent<HTMLDivElement>, component: S
   event.dataTransfer.setData('avb/component', component.name);
   event.dataTransfer.setData('avb/component-path', component.path);
   allowDragEffect(event.dataTransfer, 'copy');
-  setDrag({ kind: 'component', name: component.name });
+  setDrag({ kind: 'component', name: component.name, path: component.path });
   if (props.onDragBegin) {
     setTimeout(props.onDragBegin, 0);
   }

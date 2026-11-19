@@ -134,22 +134,53 @@ interface Located {
   readonly owners: readonly TreeView[];
 }
 
-/** Finds a node and its owners; undefined for an id not in the tree. Iterative, bounded by the tree's limits. */
+/** Finds a node and its owners; undefined for an id not in the tree. O(depth) after the tree's index is built. */
 function locate(nodes: readonly TreeView[], id: string): Located | undefined {
-  const stack: { readonly node: TreeView; readonly owners: readonly TreeView[] }[] = nodes.map((node) => ({ node, owners: [] }));
-  for (let visited = 0; visited < stack.length; visited++) {
+  const entry = locateIndex(nodes).get(id);
+  if (entry === undefined) {
+    return undefined;
+  }
+  const owners: TreeView[] = [];
+  for (let owner = entry.parent; owner !== undefined; owner = owner.parent) {
+    assert(owners.length < LIMITS.treeDepthMax, 'The tree stays inside the depth bound');
+    owners.push(owner.node);
+  }
+  owners.reverse();
+  return { node: entry.node, owners };
+}
+
+interface LocateEntry {
+  readonly node: TreeView;
+  readonly parent: LocateEntry | undefined;
+}
+
+// Each tree is indexed once, by the identity of its root list. A drag asks about the same tree on every move
+// (src/editor/canvasDrop.ts, the Navigator's gaps); a walk of the whole tree per question made each move cost
+// the size of the page. The tree is immutable (an edit builds a new root list), so the index never goes stale,
+// and the weak key lets it go with the tree.
+const locateIndexes = new WeakMap<readonly TreeView[], ReadonlyMap<string, LocateEntry>>();
+
+function locateIndex(nodes: readonly TreeView[]): ReadonlyMap<string, LocateEntry> {
+  const known = locateIndexes.get(nodes);
+  if (known !== undefined) {
+    return known;
+  }
+  const index = new Map<string, LocateEntry>();
+  const queue: LocateEntry[] = nodes.map((node) => ({ node, parent: undefined }));
+  for (let visited = 0; visited < queue.length; visited++) {
     assert(visited <= LIMITS.treeNodesMax, 'The tree stays inside the node bound');
-    const entry = stack[visited];
-    assert(entry !== undefined, 'The visit index lies inside the stack');
-    if (entry.node.id === id) {
-      return entry;
+    const entry = queue[visited];
+    assert(entry !== undefined, 'The visit index lies inside the queue');
+    // Breadth first, the first node with an id wins, as the walk this index replaced answered.
+    if (!index.has(entry.node.id)) {
+      index.set(entry.node.id, entry);
     }
-    assert(entry.owners.length <= LIMITS.treeDepthMax, 'The tree stays inside the depth bound');
     for (const child of entry.node.children ?? []) {
-      stack.push({ node: child, owners: [...entry.owners, entry.node] });
+      queue.push({ node: child, parent: entry });
     }
   }
-  return undefined;
+  locateIndexes.set(nodes, index);
+  return index;
 }
 
 function frameOf(owner: TreeView, environment: PlacementEnvironment): PlacementFrame {
@@ -168,10 +199,6 @@ function frameOf(owner: TreeView, environment: PlacementEnvironment): PlacementF
     default:
       return { kind: 'transparent' };
   }
-}
-
-function subtreeHas(node: TreeView, id: string): boolean {
-  return locate([node], id) !== undefined;
 }
 
 /** The verdict for putting `subject` at `target`: the model's, plus the editor's own refusals (the frontmatter, a node into itself). */
@@ -194,6 +221,7 @@ function checkTargetReplacing(
   }
   let list = nodes;
   let owners: readonly TreeView[] = [];
+  let parentOwners: readonly TreeView[] = [];
   if (target.parentId !== undefined) {
     const found = locate(nodes, target.parentId);
     if (found === undefined) {
@@ -201,6 +229,7 @@ function checkTargetReplacing(
     }
     list = found.node.children ?? [];
     owners = [...found.owners, found.node];
+    parentOwners = owners;
   }
   let moving: string | undefined = undefined;
   let node: PlacementNode;
@@ -209,7 +238,8 @@ function checkTargetReplacing(
     if (located === undefined) {
       return selfDropRefusal(); // A node that is gone cannot be placed.
     }
-    if (target.parentId !== undefined && subjectContains(located.node, target.parentId)) {
+    // Into itself, or into anything inside it: the parent's chain of owners (itself included) holds the node.
+    if (parentOwners.some((owner) => owner.id === subject.id)) {
       return selfDropRefusal();
     }
     moving = subject.id;
@@ -234,10 +264,6 @@ function checkTargetReplacing(
     after: cut(after),
     document: environment.document,
   });
-}
-
-function subjectContains(node: TreeView, id: string): boolean {
-  return node.id === id || subtreeHas(node, id);
 }
 
 /** Where a node asked to go, and where it can: the place itself, or the nearest valid one with the reason it moved. */

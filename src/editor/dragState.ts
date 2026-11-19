@@ -7,7 +7,8 @@
 //
 // { kind: 'node' | 'component', tag?: string, nodeKind?: string, id?: string }
 export type Drag =
-  | { readonly kind: 'component'; readonly name: string }
+  /** `path` is the component's file, when the palette knows it: two components can share a name. */
+  | { readonly kind: 'component'; readonly name: string; readonly path?: string }
   | {
       readonly kind: 'node';
       readonly id: string;
