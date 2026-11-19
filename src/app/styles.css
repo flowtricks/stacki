@@ -6420,7 +6420,14 @@ body > .embed-editor_provenance {
 .node-outline.sel {
   outline-width: 2px;
 }
-/* The component whose words are under the pointer: the same thick faint outline and missing name tag as while its text is typed in,
+/* State matrix of the closed component around its own words (selection by pointer). Every cell is deliberate:
+   - nothing or another element selected, pointer on the words: the component is the field (this rule) beside the words' hover;
+   - the component selected, pointer on the words: the same; pointer on its body: its ordinary selection outline;
+   - the words selected, pointer elsewhere (resting): the component is the field (this rule), the words carry the selection;
+   - the words selected, pointer on the component's body: a plain solid green hover (`.sel.parent.tinted`, below);
+   - the words selected, pointer on the words: the field and the words' hover;
+   - a selected layout around it: never tinted or marked for words that are not its own.
+   The component whose words are under the pointer or selected: the same thick faint outline and missing name tag as while its text is typed in,
    selected or only hovered, and no fill (the words carry the hover). */
 .node-outline.text-owner {
   outline-width: 4px;

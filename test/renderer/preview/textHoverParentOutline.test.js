@@ -111,7 +111,7 @@ test('an ancestor that is selected is not tinted or marked for words that belong
 
 // The matrix of what the owning Card draws: the selection (nothing, the Card, its words, the layout) by the pointer
 // (on the Card's body, on its words). Each cell is one deliberate look.
-function cardLook(selected, picked, pointerOnWords) {
+function cardLook(selected, picked, pointerOnWords, hoverPath = '0.3') {
   const markup = renderToStaticMarkup(
     React.createElement(PreviewOverlays, {
       rects: { 0.3: [BUTTON], 0.5: [{ x: 0, y: 400, w: 300, h: 40 }] },
@@ -119,7 +119,7 @@ function cardLook(selected, picked, pointerOnWords) {
       scale: 1,
       selPath: selected,
       selOcc: 0,
-      hoverPath: '0.3',
+      hoverPath,
       hoverOcc: 0,
       focusPath: undefined,
       focusWhole: false,
@@ -155,4 +155,20 @@ test('matrix: a selected layout and a hovered Card on its body draw the Card hov
   const drawn = cardLook('0.5', false, false);
   assert.ok(drawn.some((name) => name.startsWith('node-outline hover component')));
   assert.ok(drawn.every((name) => !name.includes('text-owner') && !name.includes('tinted')));
+});
+
+test('matrix: words selected, pointer on neither the words nor the Card, the Card rests as the faint field', () => {
+  const drawn = cardLook('0.3', true, false, 'none');
+  assert.equal(drawn.length, 1);
+  assert.match(drawn[0], /sel component text-owner parent/);
+});
+
+test('matrix: words selected, pointer on the words, the Card is the field beside the words hover', () => {
+  const drawn = cardLook('0.3', true, true);
+  assert.equal(drawn.filter((name) => name.includes('text-owner')).length, 1);
+});
+
+test('matrix: nothing selected and the Card selected without words picked keep their ordinary outlines', () => {
+  assert.ok(cardLook(undefined, false, false).every((name) => !name.includes('text-owner')));
+  assert.ok(cardLook('0.3', false, false, 'none').every((name) => !name.includes('text-owner')));
 });

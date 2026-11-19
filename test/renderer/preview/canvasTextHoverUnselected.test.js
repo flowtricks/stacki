@@ -15,6 +15,8 @@ const PAGE = [
   '<h3 data-avb-p="Heading.astro|0 Card.astro|0.0.1" data-box="20,20,300,40">Card heading</h3>',
   '<p data-avb-p="Paragraph.astro|0 Card.astro|0.0.2" data-box="20,80,300,40">Computed words</p>',
   '<span data-avb-p="Slot.astro|0 0.1.0" data-box="20,140,300,40">Slot words</span>',
+  '<span data-avb-p="Input.astro|0.0.1" data-box="20,200,300,40">Computed label</span>',
+  '<h2 data-avb-p="Heading.astro|0 0.1.7" data-box="20,260,300,40">Heading is the words</h2>',
   '</div>',
 ].join('');
 
@@ -110,9 +112,24 @@ test('a prop bound to code the editor cannot follow shows the refused look', () 
   assert.equal(hover.y, 80);
 });
 
-test('slot text of an unselected instance is not taken over by the text hover', () => {
+test('words the page writes inside an unselected instance hover too (a Button label as its child text)', () => {
   move(40, 160);
-  assert.equal(posted.at(-1).hover, undefined, 'only prop text hovers before selection');
+  const hover = posted.at(-1).hover;
+  assert.ok(hover, 'slot text hovers before selection');
+  assert.equal(hover.y, 140);
+  assert.equal(hover.scope, '0.1', 'and names the instance it belongs to');
+});
+
+test('words a component draws that no target covers hover muted, as refused', () => {
+  move(40, 230);
+  const hover = posted.at(-1).hover;
+  assert.ok(hover);
+  assert.equal(hover.kind, 'refused');
+});
+
+test("a component's own root that is only its words stays the component's hover, not a second outline", () => {
+  move(40, 270);
+  assert.equal(posted.at(-1).hover, undefined);
 });
 
 test('the words are still hovered with their own component selected, or any other element, after a click moved on', () => {
@@ -136,4 +153,23 @@ test('nothing is hovered while a button is held down: a drag or a resize is in f
   assert.equal(posted.at(-1).hover, undefined);
   move(40, 40);
   assert.ok(posted.at(-1).hover, 'hovered again once the button is up');
+});
+
+test('one click on hovered prop text picks it at once, whatever is selected, and keeps it when the selection arrives', () => {
+  for (const before of [new Set(), new Set(['0.9'])]) {
+    focus = before;
+    move(500, 250);
+    window.dispatchEvent(new window.MouseEvent('click', { clientX: 40, clientY: 40 }));
+    const picked = posted.at(-1).picked;
+    assert.ok(picked, 'the words are picked by the first click, before the app has selected their instance');
+    assert.equal(picked.label, 'Heading');
+    // The app's selection follows a message later: the pick stays.
+    focus = new Set(['0.1']);
+    move(41, 41);
+    assert.ok(posted.at(-1).picked, 'the pick survives the selection');
+    // A click elsewhere drops it.
+    window.dispatchEvent(new window.MouseEvent('click', { clientX: 500, clientY: 250 }));
+    assert.equal(posted.at(-1).picked, undefined);
+  }
+  focus = new Set();
 });

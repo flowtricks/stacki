@@ -125,3 +125,17 @@ test('typing writes the words alone: the whitespace Heading draws around its slo
   await heading.apply('\n    Lorem ipsum dolor sit amet elit Z\n  ');
   assert.deepEqual(writes, [{ prop: 'heading', value: { type: 'string', value: 'Lorem ipsum dolor sit amet elit Z' } }]);
 });
+
+test('words the page writes inside a Button on the real page are slot targets of that instance', async () => {
+  const page = parsed(PAGE);
+  const tree = createTreeIndex(page.nodes);
+  const { canvasTextPlans } = loadRenderer('src/features/preview/canvasTextSource.ts');
+  const plans = canvasTextPlans(PAGE, page.nodes, (id) => tree.path(id));
+  const labels = plans.filter((plan) => plan.target.value.trim() === 'Button Text');
+  assert.ok(labels.length > 0, 'the page has Button Text children');
+  for (const plan of labels) {
+    assert.equal(plan.target.from, 'slot');
+    assert.equal(plan.target.tag, 'Button');
+    assert.ok(plan.target.scope, 'owned by the Button instance');
+  }
+});

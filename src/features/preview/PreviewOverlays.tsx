@@ -198,7 +198,7 @@ function NodeOutlines(props: PreviewOverlaysProps) {
       return (
         <div
           key={`${outline.slot}-${index}`}
-          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${ownsHoveredText(props.textMarks, outline) ? ' text-owner' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${
+          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${ownsText(props.textMarks, { ...outline, pointedAt: props.hoverPath === outline.path }) ? ' text-owner' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${
             outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path, path: outline.path }) : ''
           }`}
           style={boxStyle(box, props.scale)}
@@ -413,13 +413,23 @@ function textMarkState(marks: TextMarks | undefined, pointer: { readonly pointed
 }
 
 /**
- * The instance whose words are under the pointer reads as the field around them, the way a component does while its text is
- * typed in: a thick faint outline and no name tag. Only that instance, selected or hovered; its ancestors and the rest of the
- * page are not drawn for it.
+ * The instance whose words are under the pointer, or whose words are selected while the pointer is off its body, reads as the
+ * field around them, the way a component does while its text is typed in: a thick faint outline and no name tag. Only that
+ * instance, selected or hovered; its ancestors and the rest of the page are not drawn for it. Pointing at its body while its
+ * words are selected is the plain component hover instead (the state matrix is beside `.node-outline.text-owner` in styles.css).
  */
-function ownsHoveredText(marks: TextMarks | undefined, outline: { readonly path: string; readonly slot: 'hover' | 'sel' | 'highlight' }): boolean {
-  const scope = marks?.hover?.scope;
-  return scope !== undefined && outline.slot !== 'highlight' && outline.path === scope;
+function ownsText(
+  marks: TextMarks | undefined,
+  outline: { readonly path: string; readonly slot: 'hover' | 'sel' | 'highlight'; readonly pointedAt: boolean },
+): boolean {
+  if (outline.slot === 'highlight') {
+    return false;
+  }
+  if (marks?.hover?.scope === outline.path) {
+    return true;
+  }
+  const bodyHovered = outline.pointedAt && marks?.hover === undefined;
+  return marks?.picked?.scope === outline.path && !bodyHovered;
 }
 
 function sameBox(left: Box, right: Box | undefined): boolean {
