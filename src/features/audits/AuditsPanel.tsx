@@ -216,26 +216,29 @@ export default function AuditsPanel(props: AuditsPanelProps) {
             storeFilter(props.project.path, value);
           }}
         />
-        <SegmentedTabs<PanelScope>
-          label={translate('auditsUi.scope.label')}
-          className={{ track: 'audits-scope' }}
-          value={state.scope === 'page' ? 'page' : 'site'}
-          tabs={[
-            { value: 'site', label: translate('auditsUi.scope.site') },
-            { value: 'page', label: translate('auditsUi.scope.page') },
-          ]}
-          onPick={(scope) => updateAuditState((current) => ({ ...current, scope }))}
-        />
-        <button
-          className={`audits-pill-toggle ${ignoredView ? 'on' : ''}`}
-          role="switch"
-          aria-checked={ignoredView}
-          onClick={() => setIgnoredView((value) => !value)}
-        >
-          {ignoredView && <CheckIcon size={11} />}
-          {translate('audits.ignored.chip')}
-          {ignoredEntryCount(state.ignores.value) > 0 && <span className="audits-count">{ignoredEntryCount(state.ignores.value)}</span>}
-        </button>
+        {/* Site · This page and Ignored travel together: when the row is too narrow for all three controls the group drops under the menu. */}
+        <div className="audits-filters">
+          <SegmentedTabs<PanelScope>
+            label={translate('auditsUi.scope.label')}
+            className={{ track: 'audits-scope' }}
+            value={state.scope === 'page' ? 'page' : 'site'}
+            tabs={[
+              { value: 'site', label: translate('auditsUi.scope.site') },
+              { value: 'page', label: translate('auditsUi.scope.page') },
+            ]}
+            onPick={(scope) => updateAuditState((current) => ({ ...current, scope }))}
+          />
+          <button
+            className={`audits-pill-toggle ${ignoredView ? 'on' : ''}`}
+            role="switch"
+            aria-checked={ignoredView}
+            onClick={() => setIgnoredView((value) => !value)}
+          >
+            {ignoredView && <CheckIcon size={11} />}
+            {translate('audits.ignored.chip')}
+            {ignoredEntryCount(state.ignores.value) > 0 && <span className="audits-count">{ignoredEntryCount(state.ignores.value)}</span>}
+          </button>
+        </div>
         {searching && <SearchField label={translate('auditsUi.searchFindings')} value={search} onChange={setSearch} />}
       </div>
       {state.running && state.report === undefined && state.progress !== undefined && (
@@ -264,7 +267,9 @@ export default function AuditsPanel(props: AuditsPanelProps) {
         {!ignoredView && filter === 'performance' && <PerformanceBar measure={props.measure} />}
         {!ignoredView && fixes > 0 && (
           <div className="audits-ready">
-            <span>{translate('auditsUi.fixesReady', { count: fixes })}</span>
+            <span className="audits-ready-text" title={translate('auditsUi.fixesReady', { count: fixes })}>
+              {translate('auditsUi.fixesReady', { count: fixes })}
+            </span>
             <button className="audits-apply" disabled={busy} onClick={() => void actions.fix(view.fixable, translate('auditsUi.fixAllLabel'))}>
               {translate('ui.apply')}
             </button>
@@ -396,8 +401,14 @@ function RuleRow(props: {
         <span className={`icon audits-icon audits-${rule.priority}`}>
           <Icon size={14} />
         </span>
-        <span className="label audits-title">{auditText.checkTitle(rule.check)}</span>
-        {reviewable && <span className="audits-breakdown">{breakdown(rule.findings, translate)}</span>}
+        <span className="label audits-title" title={auditText.checkTitle(rule.check)}>
+          {auditText.checkTitle(rule.check)}
+        </span>
+        {reviewable && (
+          <span className="audits-breakdown" title={breakdown(rule.findings, translate)}>
+            {breakdown(rule.findings, translate)}
+          </span>
+        )}
         {reviewable && props.open && (
           <button
             className="audits-review-button"
@@ -491,7 +502,9 @@ function FileGroup(props: {
           <ChevronRightIcon size={10} />
         </span>
         <FileKindIcon file={props.file} kind={first?.fileKind} />
-        <span className="label audits-title">{first === undefined ? props.file : occurrenceName(first)}</span>
+        <span className="label audits-title" title={props.file}>
+          {first === undefined ? props.file : occurrenceName(first)}
+        </span>
         <span className="audits-count">{props.findings.length}</span>
         <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
           <MoreMenu
@@ -594,7 +607,9 @@ function ElementGroup(props: {
           <ChevronRightIcon size={10} />
         </span>
         {view.icon}
-        <span className="label audits-title">{view.label}</span>
+        <span className="label audits-title" title={view.label}>
+          {view.label}
+        </span>
         <span className="audits-count">{props.findings.length}</span>
       </div>
       {open && (
@@ -759,8 +774,14 @@ function Occurrence(props: {
       >
         {view.icon}
         <span className="audits-occurrence-text">
-          <span className="label audits-title">{view.label}</span>
-          {note !== undefined && <span className="audits-note-line">{note}</span>}
+          <span className="label audits-title" title={view.label}>
+            {view.label}
+          </span>
+          {note !== undefined && (
+            <span className="audits-note-line" title={note}>
+              {note}
+            </span>
+          )}
         </span>
         {finding.measure !== undefined && <span className="audits-tag">{auditText.measure(finding)}</span>}
         <span className="audits-hover-actions" onClick={(event) => event.stopPropagation()}>
