@@ -28,8 +28,10 @@ export const messages = {
   'auditsUi.filter.tokens': 'Tokens de design',
   'auditsUi.find.find': 'Rechercher',
   'auditsUi.find.includeCode': 'Inclure le code',
+  'auditsUi.find.inFiles': { one: 'dans {count} fichier', other: 'dans {count} fichiers' },
   'auditsUi.find.matchCase': 'Respecter la casse',
   'auditsUi.find.matches': { one: '{count} résultat', other: '{count} résultats' },
+  'auditsUi.find.none': 'Aucun résultat',
   'auditsUi.find.onlyCode': 'Seul du code correspond ; le code est trouvé, pas réécrit.',
   'auditsUi.find.placeCode': 'code', // same
   'auditsUi.find.placeText': 'texte',
@@ -41,6 +43,7 @@ export const messages = {
   'auditsUi.find.replacedCmsFiles': { one: 'Remplacé dans {count} fichier du CMS.', other: 'Remplacé dans {count} fichiers du CMS.' },
   'auditsUi.find.replacedFiles': { one: 'Remplacé dans {count} fichier.', other: 'Remplacé dans {count} fichiers.' },
   'auditsUi.find.searching': 'Recherche…',
+  'auditsUi.find.title': 'Rechercher et remplacer',
   'auditsUi.find.where': 'Où',
   'auditsUi.find.wholeWord': 'Mot entier',
   'auditsUi.fix': 'Corriger',

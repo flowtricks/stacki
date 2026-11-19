@@ -2,6 +2,7 @@ import { centralIcon, centralIconSize } from './central/CentralIcon';
 import {
   add as centralAdd,
   arrowDown as centralArrowDown,
+  arrowLeftRight as centralArrowLeftRight,
   arrowRotateClockwise as centralArrowRotateClockwise,
   asterisk as centralAsterisk,
   audio as centralAudio,
@@ -466,6 +467,8 @@ export const UnlinkIcon = centralIcon(centralUnlink);
 export const TerminalIcon = centralIcon(centralTerminal);
 
 export const ArrowDownIcon = centralIcon(centralArrowDown);
+/** Replace: Central's arrow-left-right (Figma 5579:2309), the file's swap glyph; it has no dedicated replace icon. */
+export const ReplaceIcon = centralIcon(centralArrowLeftRight);
 
 const AstroImageIcon = centralIcon(centralImage);
 const AstroPictureIcon = centralIcon(centralLayers);

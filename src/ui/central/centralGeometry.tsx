@@ -196,6 +196,50 @@ export const arrowLeft = {
   ),
 };
 
+export const arrowLeftRight = {
+  name: 'arrowLeftRight',
+  // Figma variant 5579:2359.
+  compact: (
+    <>
+      <path
+        d="M7.24985 20.75L3.95696 17.4571C3.56643 17.0666 3.56643 16.4334 3.95696 16.0429L7.24985 12.75"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M16.75 11.25L20.0429 7.95711C20.4334 7.56658 20.4334 6.93342 20.0429 6.54289L16.75 3.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M5 16.75H20.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.75 7.25H19.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // Figma variant 5579:2389.
+  standard: (
+    <>
+      <path
+        d="M6.99985 20.5L3.70696 17.2071C3.31643 16.8166 3.31643 16.1834 3.70696 15.7929L6.99985 12.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 11.5L20.2929 8.20711C20.6834 7.81658 20.6834 7.18342 20.2929 6.79289L17 3.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M4 16.5H20.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.5 7.5H20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
 export const arrowRight = {
   name: 'arrowRight',
   // Figma variant 9278:27179.

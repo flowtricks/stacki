@@ -271,7 +271,10 @@
   animation: audits-spin 0.9s linear infinite;
 }
 
-/* Find & replace: two fields, a row of options, results grouped by file. */
+/* Find & replace: a compact card on the panel's fills, no borders. A header with a close button, two single-line
+   fields of one style (Find carries its option toggles inside its right side), the scope switch, then a status
+   line with the secondary Find and the primary Replace all. Everything wraps or truncates inside the card, so it
+   holds at the panel's 260px minimum. */
 .audits-find {
   display: flex;
   flex-direction: column;
@@ -281,24 +284,107 @@
   border-radius: 8px;
   background: var(--bg-input);
 }
-.audits-find-options {
+.audits-find-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 8px;
+}
+.audits-find-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-find-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg);
+}
+.audits-find-icon {
+  position: absolute;
+  left: 8px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.audits-find-field input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px 0 28px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.audits-find-toggles {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding-right: 3px;
 }
 .audits-toggle {
-  min-width: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
   height: 22px;
-  padding: 0 6px;
+  padding: 0 4px;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text-faint);
   font-size: 11px;
   font-weight: 600;
 }
-.audits-toggle.on {
+.audits-toggle:hover:not(.on) {
   background: var(--bg-hover);
   color: var(--text);
+}
+/* Pressed reads as a filled chip in the accent's soft tint, not a colour change alone. */
+.audits-toggle.on {
+  background: var(--accent-soft, var(--bg-hover));
+  color: var(--accent);
+}
+.audits-find-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.audits-find-status {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-find-status:empty {
+  display: none;
+}
+.audits-secondary {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.audits-secondary:disabled {
+  opacity: 0.5;
 }
 .audits-find-name {
   padding: 6px 8px 2px;

@@ -2,7 +2,9 @@
 // language: nothing is drawn past the panel's right edge, nothing scrolls sideways, the category
 // menu, the Site / This page switch and the Ignored pill are all whole and as tall as before, a
 // rule's count stays visible at the row's right, the secondary text is the first thing cut, and text
-// that is cut carries its full wording as a tooltip.
+// that is cut carries its full wording as a tooltip. The same holds with the Find & replace card open (menu, then
+// Find & replace): two single-line fields of one height and fill, three labelled option toggles inside the Find
+// field that change fill when pressed, a whole close button, Find and Replace all at 24px, a status line, and Escape closing it.
 //
 //   node test/renderer/audits/auditsNarrowChromium.test.js
 //
@@ -149,6 +151,61 @@ window.steps = (() => {
       await window.until(() => document.getAnimations().every((animation) => animation.playState !== 'running'));
       return { drawn: true };
     },
+    // Opens Find & replace from the panel's menu, types a query, searches and presses the three option toggles.
+    async openFind() {
+      document.querySelector('.audits-header-tools > :last-child button, .audits-header-tools > button:last-child').click();
+      const items = await window.until(() => { const found = document.querySelectorAll('[role="menuitem"]'); return found.length > 1 && found; });
+      if (!items) { return { opened: false }; }
+      items[1].click();
+      const card = await window.until(() => document.querySelector('.audits-find'));
+      if (!card) { return { opened: false }; }
+      const input = card.querySelector('.audits-find-field input');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, 'the');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await window.until(() => card.querySelector('.audits-secondary').disabled === false);
+      card.querySelector('.audits-secondary').click();
+      await window.until(() => card.querySelector('.audits-find-status').textContent.length > 0);
+      const toggles = [...card.querySelectorAll('.audits-toggle')];
+      const before = toggles.map((toggle) => getComputedStyle(toggle).backgroundColor);
+      toggles.forEach((toggle) => toggle.click());
+      await window.until(() => toggles.every((toggle) => toggle.getAttribute('aria-pressed') === 'true'));
+      const after = toggles.map((toggle) => getComputedStyle(toggle).backgroundColor);
+      return { opened: true, focused: document.activeElement === input || card.contains(document.activeElement), pressedChangesFill: before.every((fill, index) => fill !== after[index]), toggleCount: toggles.length };
+    },
+    measureFind() {
+      const card = document.querySelector('.audits-find');
+      const panel = document.querySelector('.audits-panel');
+      const fields = [...card.querySelectorAll('.audits-find-field')];
+      const toggles = [...card.querySelectorAll('.audits-toggle')];
+      const find = fields[0];
+      const close = card.querySelector('.audits-find-header button');
+      const primary = card.querySelector('.audits-apply');
+      const secondary = card.querySelector('.audits-secondary');
+      const inside = (element, within) => box(element).width > 0 && box(element).right <= box(within).right + ${EDGE_TOLERANCE_PX} && box(element).left >= box(within).left - ${EDGE_TOLERANCE_PX};
+      return {
+        fieldCount: fields.length,
+        fieldHeights: fields.map((field) => Math.round(box(field).height)),
+        fieldFills: new Set(fields.map((field) => getComputedStyle(field).backgroundColor)).size,
+        inputsSingleLine: fields.every((field) => field.querySelector('input') !== null && field.querySelector('textarea') === null),
+        togglesInsideFind: toggles.length === 3 && toggles.every((toggle) => inside(toggle, find)),
+        toggleLabelled: toggles.every((toggle) => (toggle.getAttribute('title') || '').length > 0 && toggle.getAttribute('aria-label') === toggle.getAttribute('title')),
+        closeShown: inside(close, card) && close.getAttribute('aria-label').length > 0,
+        buttonsInside: inside(primary, card) && inside(secondary, card),
+        primaryHeight: Math.round(box(primary).height),
+        secondaryHeight: Math.round(box(secondary).height),
+        cardInsidePanel: inside(card, panel),
+        status: card.querySelector('.audits-find-status').textContent,
+        scopeEqual: card.querySelector('.ui-tabs').classList.contains('is-equal'),
+        queryInputWidth: Math.round(box(find.querySelector('input')).width),
+      };
+    },
+    // Escape in a field closes the card.
+    async escape() {
+      const input = document.querySelector('.audits-find-field input');
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      return window.until(() => document.querySelector('.audits-find') === null, 120);
+    },
     measure() {
       const panel = document.querySelector('.audits-panel');
       const edge = box(panel).right;
@@ -164,11 +221,11 @@ window.steps = (() => {
         const count = row.querySelector(':scope > .audits-count');
         return { title: row.querySelector('.audits-title').textContent, countShown: count !== null && box(count).width > 0 && box(count).right <= box(row).right + ${EDGE_TOLERANCE_PX}, countAtEdge: count !== null && box(row).right - box(count).right <= 12 };
       });
-      const cutText = [...panel.querySelectorAll('.audits-title, .audits-breakdown, .audits-note-line, .audits-ready-text')].filter(cut);
+      const cutText = [...panel.querySelectorAll('.audits-title, .audits-breakdown, .audits-note-line, .audits-ready-text, .audits-find-title, .audits-find-status')].filter(cut);
       const trigger = document.querySelector('.audits-category');
       const scope = document.querySelector('.audits-scope');
       const pill = document.querySelector('.audits-pill-toggle');
-      const apply = document.querySelector('.audits-apply');
+      const apply = document.querySelector('.audits-ready .audits-apply');
       const toolbar = document.querySelector('.audits-toolbar');
       const label = trigger.querySelector('.dd-label');
       return {
@@ -227,7 +284,15 @@ app.whenReady().then(async () => {
         const measured = ready.drawn ? await host('window.steps.measure()') : undefined;
         const image = await win.webContents.capturePage({ x: 0, y: 0, width, height: ${PANE_HEIGHT_PX} });
         fs.writeFileSync(path.join(DIRECTORY, 'audits-' + locale + '-' + width + '.png'), image.toPNG());
-        output.cases.push({ locale, width, ready, measured });
+        const found = ready.drawn ? await host('window.steps.openFind()') : undefined;
+        const measuredFind = found && found.opened ? await host('window.steps.measure()') : undefined;
+        const findCard = found && found.opened ? await host('window.steps.measureFind()') : undefined;
+        if (found && found.opened) {
+          const image = await win.webContents.capturePage({ x: 0, y: 0, width, height: ${PANE_HEIGHT_PX} });
+          fs.writeFileSync(path.join(DIRECTORY, 'audits-find-' + locale + '-' + width + '.png'), image.toPNG());
+        }
+        const escaped = found && found.opened ? await host('window.steps.escape()') : undefined;
+        output.cases.push({ locale, width, ready, measured, found, measuredFind, findCard, escaped });
       }
     }
   } catch (error) { output.error = String((error && error.stack) || error); }
@@ -235,6 +300,30 @@ app.whenReady().then(async () => {
   win.destroy(); server.close(); app.quit();
 });
 `;
+
+// The checks every drawing of the panel must pass, with Find & replace closed or open.
+function checkMeasured(expect, where, width, measured) {
+  expect(`${where}: no element is drawn past the panel's edges`, measured.past.length === 0, measured.past);
+  expect(`${where}: the panel does not scroll sideways`, measured.panelScroll[0] <= measured.panelScroll[1], measured.panelScroll);
+  expect(`${where}: the list does not scroll sideways`, measured.listScroll[0] <= measured.listScroll[1], measured.listScroll);
+  expect(`${where}: the toolbar does not scroll sideways`, measured.toolbarScroll[0] <= measured.toolbarScroll[1], measured.toolbarScroll);
+  expect(`${where}: the menu, the switch and Ignored are inside the toolbar`, measured.controlsInside === true);
+  expect(`${where}: the category label is whole`, measured.categoryLabelCut === false, measured.categoryLabel);
+  expect(`${where}: both scope tabs are whole`, measured.scopeTabsWhole === true);
+  expect(`${where}: Ignored is whole`, measured.pillWhole === true);
+  expect(`${where}: Apply is whole and inside the panel`, measured.applyWhole === true);
+  expect(`${where}: Review buttons are whole and inside the panel`, measured.reviewShown === true);
+  expect(`${where}: tap targets keep their height`, JSON.stringify(measured.heights) === JSON.stringify(HEIGHTS_PX), measured.heights);
+  expect(
+    `${where}: every rule's count is visible at the row's right`,
+    measured.rows.every((row) => row.countShown && row.countAtEdge),
+    measured.rows,
+  );
+  expect(`${where}: every cut text has its full wording as a tooltip`, measured.untitledCut.length === 0, measured.untitledCut);
+  if (width === 260) {
+    expect(`${where}: the narrowest panel reflows the toolbar to at least two rows`, measured.toolbarRows >= 2, measured.toolbarRows);
+  }
+}
 
 function check(output) {
   const failures = [];
@@ -244,32 +333,39 @@ function check(output) {
     }
   };
   expect('every locale and width was drawn', output.cases.length === LOCALES.length * WIDTHS_PX.length, output.cases.length);
-  for (const { locale, width, ready, measured } of output.cases) {
+  for (const { locale, width, ready, measured, found, measuredFind, findCard, escaped } of output.cases) {
     const where = `${locale} at ${width}px`;
     expect(`${where}: the panel drew its rules`, ready.drawn === true);
-    if (measured === undefined) {
+    if (measured !== undefined) {
+      checkMeasured(expect, where, width, measured);
+    }
+    expect(`${where}: Find & replace opens from the menu`, found !== undefined && found.opened === true, found);
+    if (measuredFind === undefined || findCard === undefined) {
       continue;
     }
-    expect(`${where}: no element is drawn past the panel's edges`, measured.past.length === 0, measured.past);
-    expect(`${where}: the panel does not scroll sideways`, measured.panelScroll[0] <= measured.panelScroll[1], measured.panelScroll);
-    expect(`${where}: the list does not scroll sideways`, measured.listScroll[0] <= measured.listScroll[1], measured.listScroll);
-    expect(`${where}: the toolbar does not scroll sideways`, measured.toolbarScroll[0] <= measured.toolbarScroll[1], measured.toolbarScroll);
-    expect(`${where}: the menu, the switch and Ignored are inside the toolbar`, measured.controlsInside === true);
-    expect(`${where}: the category label is whole`, measured.categoryLabelCut === false, measured.categoryLabel);
-    expect(`${where}: both scope tabs are whole`, measured.scopeTabsWhole === true);
-    expect(`${where}: Ignored is whole`, measured.pillWhole === true);
-    expect(`${where}: Apply is whole and inside the panel`, measured.applyWhole === true);
-    expect(`${where}: Review buttons are whole and inside the panel`, measured.reviewShown === true);
-    expect(`${where}: tap targets keep their height`, JSON.stringify(measured.heights) === JSON.stringify(HEIGHTS_PX), measured.heights);
+    checkMeasured(expect, `${where} with Find & replace open`, width, measuredFind);
+    expect(`${where}: the card has a Find and a Replace field`, findCard.fieldCount === 2, findCard.fieldCount);
     expect(
-      `${where}: every rule's count is visible at the row's right`,
-      measured.rows.every((row) => row.countShown && row.countAtEdge),
-      measured.rows,
+      `${where}: both fields are single lines of one height`,
+      findCard.inputsSingleLine && findCard.fieldHeights.every((height) => height === 28),
+      findCard.fieldHeights,
     );
-    expect(`${where}: every cut text has its full wording as a tooltip`, measured.untitledCut.length === 0, measured.untitledCut);
-    if (width === 260) {
-      expect(`${where}: the narrowest panel reflows the toolbar to at least two rows`, measured.toolbarRows >= 2, measured.toolbarRows);
-    }
+    expect(`${where}: both fields share one fill`, findCard.fieldFills === 1, findCard.fieldFills);
+    expect(`${where}: the three option toggles sit inside the Find field`, findCard.togglesInsideFind === true);
+    expect(`${where}: each toggle has a tooltip and a name`, findCard.toggleLabelled === true);
+    expect(`${where}: a pressed toggle changes its fill`, found.pressedChangesFill === true && found.toggleCount === 3, found);
+    expect(`${where}: the Find field keeps room to type`, findCard.queryInputWidth >= 60, findCard.queryInputWidth);
+    expect(`${where}: the close button is whole and named`, findCard.closeShown === true);
+    expect(`${where}: Find and Replace all are whole and inside the card`, findCard.buttonsInside === true);
+    expect(
+      `${where}: the card's buttons are 24px tall`,
+      findCard.primaryHeight === HEIGHTS_PX.apply && findCard.secondaryHeight === HEIGHTS_PX.apply,
+      findCard,
+    );
+    expect(`${where}: the card is inside the panel`, findCard.cardInsidePanel === true);
+    expect(`${where}: the scope switch fills the card`, findCard.scopeEqual === true);
+    expect(`${where}: a search with no hits says so`, findCard.status.length > 0, findCard.status);
+    expect(`${where}: Escape closes the card`, escaped === true);
   }
   return failures;
 }

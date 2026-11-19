@@ -5,7 +5,7 @@
 // undo step, through the same edit path as the audit's fixes. Code (expressions,
 // scripts, style blocks, frontmatter) is found only when asked and never rewritten,
 // and nothing outside the project's own pages, components and CMS data is read.
-import { useState } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { readPage } from '../../ipc/bridge';
 import { cmsTransport } from '../../ipc/editorEnvironment';
@@ -13,7 +13,7 @@ import { record } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { toArray, toRecord } from '../../../shared/core/record';
 import { CodeBlock } from '../../ui/CodeBlock';
-import { SearchField } from '../../ui/SearchField';
+import { BracesIcon, CloseIcon, ReplaceIcon, SearchIcon } from '../../ui/Icons';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
 import { applyFixes } from './auditFixes';
 import type { AuditsPanelProps } from './AuditsPanel';
@@ -121,65 +121,96 @@ export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' 
   const count =
     (results?.files ?? []).reduce((total, file) => total + file.matches.reduce((sum, match) => sum + match.count, 0), 0) +
     (results?.data ?? []).reduce((total, entry) => total + entry.matches.length, 0);
+  const fileCount = (results?.files.length ?? 0) + (results?.data.length ?? 0);
+  const status = busy
+    ? translate('auditsUi.find.searching')
+    : results === undefined
+      ? ''
+      : count === 0
+        ? translate('auditsUi.find.none')
+        : `${translate('auditsUi.find.matches', { count })} ${translate('auditsUi.find.inFiles', { count: fileCount })}`;
+  // Enter finds from either field; Escape closes the card, as it closes every other panel's search.
+  const onFieldKey = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void search();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      props.onClose();
+    }
+  };
+  const toggle = (name: keyof Omit<FindOptions, 'query'>) => (): void => setOptions((current) => ({ ...current, [name]: !current[name] }));
   return (
     <div className="audits-find">
-      <SearchField label={translate('auditsUi.find.find')} value={query} onChange={setQuery} />
-      <input
-        className="audits-reason"
-        aria-label={translate('auditsUi.find.replaceWith')}
-        placeholder={translate('auditsUi.find.replaceWith')}
-        value={replacement}
-        onChange={(event) => setReplacement(event.currentTarget.value)}
-        onKeyDown={(event) => event.key === 'Enter' && void search()}
-      />
-      <div className="audits-find-options">
-        <SegmentedTabs<Scope>
-          label={translate('auditsUi.find.where')}
-          value={scope}
-          tabs={[
-            { value: 'current', label: translate('auditsUi.scope.page') },
-            { value: 'site', label: translate('auditsUi.scope.site') },
-          ]}
-          onPick={setScope}
-        />
-        <Toggle
-          label="Aa" // i18n-ignore: the match-case glyph, the same in every language.
-          title={translate('auditsUi.find.matchCase')}
-          on={options.caseSensitive}
-          onToggle={() => setOptions((current) => ({ ...current, caseSensitive: !current.caseSensitive }))}
-        />
-        <Toggle
-          label="W"
-          title={translate('auditsUi.find.wholeWord')}
-          on={options.wholeWord}
-          onToggle={() => setOptions((current) => ({ ...current, wholeWord: !current.wholeWord }))}
-        />
-        <Toggle
-          label="{ }"
-          title={translate('auditsUi.find.includeCode')}
-          on={options.includeCode}
-          onToggle={() => setOptions((current) => ({ ...current, includeCode: !current.includeCode }))}
-        />
+      <div className="audits-find-header">
+        <h3 className="audits-find-title">{translate('auditsUi.find.title')}</h3>
+        <button className="ghost audits-icon-button" aria-label={translate('ui.close')} title={translate('ui.close')} onClick={props.onClose}>
+          <CloseIcon size={14} />
+        </button>
       </div>
-      <div className="audits-ready">
-        <span>{busy ? translate('auditsUi.find.searching') : results === undefined ? '' : translate('auditsUi.find.matches', { count })}</span>
-        <span>
-          <button className="audits-link" disabled={pattern === undefined || busy} onClick={() => void search()}>
-            {translate('auditsUi.find.find')}
-          </button>
-          {results !== undefined && count > 0 && (
-            <button
-              className="audits-link"
-              disabled={busy}
-              onClick={() => void replaceFiles(results.files, translate('auditsUi.find.replaceLabel', { query })).then(() => replaceData(results.data))}
-            >
-              {translate('auditsUi.find.replaceAll')}
-            </button>
-          )}
-          <button className="audits-link muted" onClick={props.onClose}>
-            {translate('ui.close')}
-          </button>
+      <label className="audits-find-field">
+        <SearchIcon size={14} className="audits-find-icon" />
+        <input
+          type="text"
+          aria-label={translate('auditsUi.find.find')}
+          placeholder={translate('auditsUi.find.find')}
+          value={query}
+          spellCheck={false}
+          autoFocus
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          onKeyDown={onFieldKey}
+        />
+        <span className="audits-find-toggles">
+          <Toggle title={translate('auditsUi.find.matchCase')} on={options.caseSensitive} onToggle={toggle('caseSensitive')}>
+            <span aria-hidden="true">Aa</span>
+          </Toggle>
+          <Toggle title={translate('auditsUi.find.wholeWord')} on={options.wholeWord} onToggle={toggle('wholeWord')}>
+            <span aria-hidden="true">W</span>
+          </Toggle>
+          <Toggle title={translate('auditsUi.find.includeCode')} on={options.includeCode} onToggle={toggle('includeCode')}>
+            <BracesIcon size={14} />
+          </Toggle>
         </span>
+      </label>
+      <label className="audits-find-field">
+        <ReplaceIcon size={14} className="audits-find-icon" />
+        <input
+          type="text"
+          aria-label={translate('auditsUi.find.replaceWith')}
+          placeholder={translate('auditsUi.find.replaceWith')}
+          value={replacement}
+          spellCheck={false}
+          onChange={(event) => setReplacement(event.currentTarget.value)}
+          onKeyDown={onFieldKey}
+        />
+      </label>
+      <SegmentedTabs<Scope>
+        label={translate('auditsUi.find.where')}
+        layout="equal"
+        value={scope}
+        tabs={[
+          { value: 'current', label: translate('auditsUi.scope.page') },
+          { value: 'site', label: translate('auditsUi.scope.site') },
+        ]}
+        onPick={setScope}
+      />
+      <div className="audits-find-foot">
+        <span className="audits-find-status" role="status" title={status}>
+          {status}
+        </span>
+        <button className="audits-secondary" disabled={pattern === undefined || busy} onClick={() => void search()}>
+          {translate('auditsUi.find.find')}
+        </button>
+        <button
+          className="audits-apply"
+          disabled={busy || results === undefined || count === 0}
+          onClick={() =>
+            results !== undefined && void replaceFiles(results.files, translate('auditsUi.find.replaceLabel', { query })).then(() => replaceData(results.data))
+          }
+        >
+          {translate('auditsUi.find.replaceAll')}
+        </button>
       </div>
       {results?.files.map((result) => (
         <div key={result.file} className="audits-find-file">
@@ -259,10 +290,17 @@ export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' 
   );
 }
 
-function Toggle(props: { readonly label: string; readonly title: string; readonly on: boolean; readonly onToggle: () => void }) {
+function Toggle(props: { readonly title: string; readonly on: boolean; readonly onToggle: () => void; readonly children: ReactNode }) {
   return (
-    <button className={`audits-toggle ${props.on ? 'on' : ''}`} aria-pressed={props.on} title={props.title} onClick={props.onToggle}>
-      {props.label}
+    <button
+      type="button"
+      className={`audits-toggle ${props.on ? 'on' : ''}`}
+      aria-pressed={props.on}
+      aria-label={props.title}
+      title={props.title}
+      onClick={props.onToggle}
+    >
+      {props.children}
     </button>
   );
 }
