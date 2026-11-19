@@ -16,6 +16,8 @@ export const IMAGE_PATHS_MAX = 128;
 // How many of the page's images are measured against a double click.
 export const IMAGES_MAX = 500;
 const OWN_NODES_MAX = 200;
+// How many elements under the pointer are searched for words.
+const STACK_MAX = 24;
 
 /** The `<img>` a double click landed on (itself, or the image inside a `<picture>`), or undefined for anything else. */
 export function imageOf(target: EventTarget | undefined): HTMLImageElement | undefined {
@@ -53,7 +55,7 @@ export function imageAtPoint(event: Pick<MouseEvent, 'target' | 'clientX' | 'cli
   // Words keep their double click (text editing, frameText.ts): an element with text of its own is the words' to
   // claim. A control keeps it over its own box; beyond that, where its hit area is only stretched, it is the picture's.
   const control = target.closest(CONTROL_SELECTOR);
-  if (control === null ? hasOwnText(target) : holds(control.getBoundingClientRect(), event)) {
+  if (wordsAt(event) || (control !== null && holds(control.getBoundingClientRect(), event))) {
     return undefined;
   }
   let best: { readonly image: HTMLImageElement; readonly area: number } | undefined;
@@ -70,11 +72,23 @@ export function imageAtPoint(event: Pick<MouseEvent, 'target' | 'clientX' | 'cli
   return best?.image;
 }
 
-// Whether the element holds words of its own, as opposed to only other elements.
-function hasOwnText(element: Element): boolean {
-  return Array.from(element.childNodes)
-    .slice(0, OWN_NODES_MAX)
-    .some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '');
+// Whether the pointer is on words: on a text node's own box, in any element under it, however a stretched link or
+// an overlay covers them. Words keep the double click for text editing, whatever picture lies beneath.
+function wordsAt(point: Pick<MouseEvent, 'clientX' | 'clientY'>): boolean {
+  for (const element of document.elementsFromPoint(point.clientX, point.clientY).slice(0, STACK_MAX)) {
+    const children = Array.from(element.childNodes).slice(0, OWN_NODES_MAX);
+    for (const node of children) {
+      if (node.nodeType !== Node.TEXT_NODE || (node.textContent ?? '').trim() === '') {
+        continue;
+      }
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      if (Array.from(range.getClientRects()).some((box) => holds(box, point))) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function holds(box: DOMRect, point: Pick<MouseEvent, 'clientX' | 'clientY'>): boolean {

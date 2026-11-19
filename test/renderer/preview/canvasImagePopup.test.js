@@ -260,6 +260,21 @@ async function runInElectron({ window, project, options }) {
     check('a double click on a linked Card image opens the popup', (await until('the linked popup', popupOpen)) === true);
     await driver.key('Escape');
     await driver.sleep(300);
+    // 3d. Words win: on a cover Card the heading sits over the picture. A double click on the words is text editing,
+    // and only the picture area no words cover opens the popup.
+    await doubleClick('#card-cover .card_content :is(h1,h2,h3,h4,h5,h6)', 'double click the words over the cover picture');
+    await driver.sleep(600);
+    check('a double click on words over the picture opens no image popup', !(await popupOpen()));
+    const editing = await driver.canvasEvaluate(
+      `!!document.querySelector('[contenteditable="true"], [contenteditable=""], [data-avb-text-editing]') || (document.activeElement && document.activeElement.isContentEditable) === true`,
+    );
+    check('and it starts text editing', editing === true);
+    await driver.key('Escape');
+    await driver.sleep(300);
+    await doubleClick('#card-cover .card_visual', 'double click the picture area of the cover Card');
+    check('a double click on bare picture area still opens the popup', (await until('the picture popup', popupOpen)) === true);
+    await driver.key('Escape');
+    await driver.sleep(300);
     // 4. Escape closes it.
     await driver.key('Escape');
     await driver.sleep(500);
