@@ -85,6 +85,8 @@ export const messages = {
   'pages.settings.error.templateChanged': 'The template changed since the dialog read it. Close settings and open them again.',
   'pages.settings.error.undoGone': 'This step can no longer be undone.',
   'pages.settings.error.unparsable': '{file} does not parse after the change, so nothing was changed. Fix the file and try again.',
+  'pages.settings.folder': 'Folder',
+  'pages.settings.folder.root': 'Pages (root)',
   'pages.settings.home.current': 'The current homepage is {name}.',
   'pages.settings.home.isHome': 'This page is the homepage, served at /.',
   'pages.settings.home.make': 'Make this page the homepage',

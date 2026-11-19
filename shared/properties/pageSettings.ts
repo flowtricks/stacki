@@ -142,10 +142,11 @@ export type UrlNameCheck =
   { readonly kind: 'unchanged' } | { readonly kind: 'valid'; readonly change: PageRename } | { readonly kind: 'invalid'; readonly problem: Described };
 
 /**
- * What a typed URL name means for `page`: unchanged, a valid rename, or why not. The same checks main makes
- * (parsePageRename, pageRenameConflicts), plus the one only a person needs explained: `index` beside the homepage.
+ * What a typed URL name, in a chosen folder, means for `page`: unchanged, a valid rename or move, or why not. The
+ * same checks main makes (parsePageRename, pageRenameConflicts), plus the one only a person needs explained: `index`
+ * beside the homepage. `folder` is a page folder relative to src/pages, '' for the root; absent keeps the page's own.
  */
-export function checkUrlName(page: string, typed: string, inventory: RenameInventory): UrlNameCheck {
+export function checkUrlName(page: string, typed: string, inventory: RenameInventory, options: { readonly folder?: string } = {}): UrlNameCheck {
   assert(PAGE_EXTENSION.test(page), 'A URL name belongs to a page file');
   const name = typed.trim().replace(PAGE_EXTENSION, '');
   if (name.length === 0) {
@@ -160,8 +161,11 @@ export function checkUrlName(page: string, typed: string, inventory: RenameInven
   if (name === '.' || name === '..') {
     return { kind: 'invalid', problem: described('pages.rename.error.outsidePages') };
   }
-  const slash = page.lastIndexOf('/');
-  const directory = page.slice(0, slash + 1);
+  const folder = options.folder ?? folderOf(page);
+  if (folder !== '' && !inventory.folders.includes(folder)) {
+    return { kind: 'invalid', problem: described('pages.rename.error.missing') };
+  }
+  const directory = folder === '' ? '' : folder + '/';
   if (directory === '') {
     if (name.toLowerCase() === 'index') {
       return { kind: 'invalid', problem: described('pages.settings.slug.reservedIndex') };
@@ -180,6 +184,12 @@ export function checkUrlName(page: string, typed: string, inventory: RenameInven
   }
   const conflict = pageRenameConflicts(change, inventory);
   return conflict.ok ? { kind: 'valid', change } : { kind: 'invalid', problem: conflict.error };
+}
+
+/** The folder a page sits in, relative to src/pages: '' at the root. */
+export function folderOf(page: string): string {
+  const slash = page.lastIndexOf('/');
+  return slash < 0 ? '' : page.slice(0, slash);
 }
 
 /** A page's URL name as the dialog's field shows it: the file name without its extension. */

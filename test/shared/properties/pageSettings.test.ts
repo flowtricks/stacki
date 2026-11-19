@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   checkUrlName,
+  folderOf,
   homePagesOf,
   homeSwapPlan,
   homeSwapRefusalText,
@@ -189,4 +190,23 @@ test('a template reading parses each kind and refuses malformed replies', () => 
   for (const input of bad) {
     assert.throws(() => parseTemplateReading(input), JSON.stringify(input));
   }
+});
+
+test('a URL name in another folder is a move, checked against that folder', () => {
+  const inventory = { pages: ['index.astro', 'about.astro', 'blog/post.astro', 'blog/about.md'], folders: ['blog', 'empty'] };
+  const table: readonly (readonly [string, string, string, string])[] = [
+    ['about.astro', 'about', 'empty', 'empty/about.astro'],
+    ['blog/post.astro', 'post', '', 'post.astro'],
+    ['blog/post.astro', 'post', 'blog', 'unchanged'],
+    ['about.astro', 'about', 'blog', 'The URL /blog/about is already used by another page or folder.'],
+    ['blog/post.astro', 'index', '', '“index” is the homepage’s file name. Use “Make this page the homepage” instead.'],
+    ['about.astro', 'about', 'missing', 'This page or folder no longer exists. Refresh the list.'],
+  ];
+  for (const [page, typed, folder, expected] of table) {
+    const check = checkUrlName(page, typed, inventory, { folder });
+    const answer = check.kind === 'invalid' ? check.problem.message : check.kind === 'valid' ? check.change.to : check.kind;
+    assert.equal(answer, expected, `${page} → ${folder}/${typed}`);
+  }
+  assert.equal(folderOf('blog/post.astro'), 'blog');
+  assert.equal(folderOf('about.astro'), '');
 });

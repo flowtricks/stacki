@@ -87,6 +87,10 @@
 .page-settings-row button {
   flex: 0 0 auto;
 }
+.page-settings-folder {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .page-settings-address {
   align-self: flex-start;
   max-width: 100%;

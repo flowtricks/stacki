@@ -458,3 +458,26 @@ test('a template changed by hand reads as custom and is never rewritten', () => 
     site.close();
   }
 });
+
+test('moving a page into a folder from the dialog rewrites its imports and links, and undoes in one step', () => {
+  const site = project({
+    'src/layouts/Base.astro': '<slot />',
+    'src/pages/index.astro': '<a href="/about">About</a>',
+    'src/pages/about.astro': "---\nimport Base from '../layouts/Base.astro';\n---\n<Base>About</Base>",
+    'src/pages/company/team.astro': 'Team',
+  });
+  try {
+    const before = site.snapshot();
+    const plan = applied(site.root, { kind: 'rename', from: 'about.astro', to: 'company/about.astro' });
+    assert.equal(plan.page, 'company/about.astro');
+    assert.equal(site.read('src/pages/company/about.astro'), "---\nimport Base from '../../layouts/Base.astro';\n---\n<Base>About</Base>");
+    assert.equal(site.read('src/pages/index.astro'), '<a href="/company/about">About</a>');
+    assert.equal(site.exists('src/pages/about.astro'), false);
+    assert.ok(applyRelocationStep(inverseStep(plan.step), desktopRenameWriter()).ok);
+    assert.deepEqual(site.snapshot(), before);
+    const taken = planRelocation(site.root, { kind: 'rename', from: 'about.astro', to: 'company/Team.astro' });
+    assert.equal(taken.ok ? '' : taken.error.message, 'The URL /company/Team is already used by another page or folder.');
+  } finally {
+    site.close();
+  }
+});

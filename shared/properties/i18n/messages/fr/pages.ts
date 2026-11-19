@@ -88,6 +88,8 @@ export const messages = {
   'pages.settings.error.templateChanged': 'Le modèle a changé depuis que la fenêtre l’a lu. Fermez les réglages et rouvrez-les.',
   'pages.settings.error.undoGone': 'Cette étape ne peut plus être annulée.',
   'pages.settings.error.unparsable': '{file} ne se lit plus après la modification, donc rien n’a changé. Corrigez le fichier et réessayez.',
+  'pages.settings.folder': 'Dossier',
+  'pages.settings.folder.root': 'Pages (racine)',
   'pages.settings.home.current': 'La page d’accueil actuelle est {name}.',
   'pages.settings.home.isHome': 'Cette page est la page d’accueil, servie à /.',
   'pages.settings.home.make': 'Faire de cette page la page d’accueil',

@@ -284,3 +284,32 @@ test('a layout prop edited in the dialog is the edit the Properties panel makes'
   assert.ok(results[0].length > 0, 'the Properties panel wrote the title');
   assert.deepEqual(results[1], results[0]);
 });
+
+test('the Folder dropdown moves a page into a folder or out of it, and refuses a taken name there', async (context) => {
+  const setup = fixture(context);
+  const pick = async (label) => {
+    await setup.click(document.querySelector('.page-settings-folder'));
+    const option = [...document.querySelectorAll('.dd-option')].find((entry) => entry.querySelector('.dd-option-label')?.textContent === label);
+    assert.ok(option, label);
+    await setup.click(option);
+  };
+  await setup.show('about.astro');
+  assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, 'Pages (root)');
+  await pick('/blog');
+  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /blog/about');
+  await setup.click(button('Change address'));
+  assert.deepEqual(setup.planned.at(-1), { kind: 'rename', from: 'about.astro', to: 'blog/about.astro' });
+  await setup.click(button('Cancel'));
+  // Back to the root under a name the root already has: refused with the reason, nothing planned.
+  await setup.show('blog/[slug].astro');
+  assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, '/blog');
+  await pick('Pages (root)');
+  assert.equal(button('Change address').disabled, false);
+  await setup.show('contact.md');
+  await setup.type('about');
+  assert.equal(document.querySelector('.page-rename-error').textContent, 'The URL /about is already used by another page or folder.');
+  assert.equal(button('Change address').disabled, true);
+  // The homepage has no folder control.
+  await setup.show('index.astro');
+  assert.equal(document.querySelector('.page-settings-folder') ?? undefined, undefined);
+});

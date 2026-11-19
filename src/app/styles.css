@@ -2964,8 +2964,15 @@ html[data-platform='win32'] .titlebar {
   color: var(--red);
   background: var(--bg-hover);
 }
-.list-item .row-action.rename-action:hover {
+/* Red is the delete's colour alone: rename and the settings gear stay neutral, a fill only, hovered, focused or pressed. */
+.list-item .row-action.rename-action:hover,
+.list-item .row-action.settings-action:hover,
+.list-item .row-action.settings-action:focus-visible {
   color: var(--text);
+}
+.list-item .row-action.settings-action:active {
+  color: var(--text);
+  background: var(--bg-active);
 }
 .list-item:focus-within .row-action {
   opacity: 1;
@@ -4017,6 +4024,9 @@ body > .embed-editor_provenance {
 .structure-node:hover {
   background: var(--bg-hover);
   color: var(--text);
+}
+.structure-node.is-slot:hover:not(.selected) {
+  color: var(--text-dim);
 }
 .structure-node.selected {
   background: var(--accent-soft);
@@ -6455,6 +6465,15 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .node-outline.map .node-outline-tag,
 .node-outline.bound .node-outline-tag {
   background: #8b5cf6;
+}
+/* A hovered <slot>: its content is the host page's, so it reads muted, in a grey fill with no outline, not as something to pick. */
+.node-outline.hover.host-content {
+  outline: none;
+  background: rgb(128 128 128 / 22%);
+}
+.node-outline.hover.host-content .node-outline-tag {
+  background: #6b6b6b;
+  color: white;
 }
 .node-outline-tag.inside {
   transform: none;

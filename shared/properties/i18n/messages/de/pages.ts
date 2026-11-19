@@ -89,6 +89,8 @@ export const messages = {
   'pages.settings.error.undoGone': 'Dieser Schritt kann nicht mehr rückgängig gemacht werden.',
   'pages.settings.error.unparsable':
     '{file} lässt sich nach der Änderung nicht lesen, deshalb wurde nichts geändert. Korrigiere die Datei und versuche es erneut.',
+  'pages.settings.folder': 'Ordner',
+  'pages.settings.folder.root': 'Seiten (oberste Ebene)',
   'pages.settings.home.current': 'Die aktuelle Startseite ist {name}.',
   'pages.settings.home.isHome': 'Diese Seite ist die Startseite unter /.',
   'pages.settings.home.make': 'Diese Seite zur Startseite machen',

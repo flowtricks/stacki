@@ -88,6 +88,8 @@ export const messages = {
   'pages.settings.error.templateChanged': 'O modelo mudou desde que a janela o leu. Feche as configurações e abra de novo.',
   'pages.settings.error.undoGone': 'Esta etapa não pode mais ser desfeita.',
   'pages.settings.error.unparsable': '{file} não pode ser lido depois da mudança, então nada foi alterado. Corrija o arquivo e tente de novo.',
+  'pages.settings.folder': 'Pasta',
+  'pages.settings.folder.root': 'Páginas (raiz)',
   'pages.settings.home.current': 'A página inicial atual é {name}.',
   'pages.settings.home.isHome': 'Esta página é a inicial, servida em /.',
   'pages.settings.home.make': 'Tornar esta página a inicial',

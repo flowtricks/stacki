@@ -89,6 +89,8 @@ export const messages = {
   'pages.settings.error.templateChanged': 'La plantilla cambió desde que el diálogo la leyó. Cierra los ajustes y ábrelos de nuevo.',
   'pages.settings.error.undoGone': 'Este paso ya no se puede deshacer.',
   'pages.settings.error.unparsable': '{file} no se puede leer después del cambio, así que no se cambió nada. Corrige el archivo e inténtalo de nuevo.',
+  'pages.settings.folder': 'Carpeta',
+  'pages.settings.folder.root': 'Páginas (raíz)',
   'pages.settings.home.current': 'La página de inicio actual es {name}.',
   'pages.settings.home.isHome': 'Esta página es la de inicio, servida en /.',
   'pages.settings.home.make': 'Convertir esta página en la de inicio',

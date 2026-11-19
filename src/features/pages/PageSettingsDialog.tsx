@@ -11,6 +11,7 @@ import type { Described } from '../../../shared/properties/i18n/messageRef';
 import { pageURLPath } from '../../../shared/properties/pageRename';
 import {
   checkUrlName,
+  folderOf,
   homeSwapPlan,
   homeSwapRefusalText,
   isHomePage,
@@ -25,6 +26,7 @@ import { pageDisplayLabel } from '../../lib/pageName';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import { CopyIcon, HomeIcon, TrashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
+import Dropdown from '../../ui/Dropdown';
 import { SkeletonRows } from '../../ui/Skeleton';
 import './pageSettings.css';
 
@@ -247,7 +249,7 @@ function SettingsSections({ model, props }: { readonly model: Model; readonly pr
     <>
       <section className="page-settings-section">
         <h3>{translate('pages.settings.section.general')}</h3>
-        {home ? <HomeBadge /> : <UrlNameField model={model} props={props} />}
+        {home ? <HomeBadge /> : <UrlNameField key={props.page.name} model={model} props={props} />}
       </section>
       {/* A template answers many addresses; the homepage is one, so the section is not offered at all (main refuses too). */}
       {!home && !props.page.name.includes('[') && (
@@ -285,25 +287,21 @@ function HomeBadge() {
   );
 }
 
+// The URL name and the folder, one place to change the page's address: a rename, a move, or both in one step. A
+// dynamic route's name is its pattern, so only its folder changes here.
 function UrlNameField({ model, props }: { readonly model: Model; readonly props: PageSettingsDialogProps }) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
   const id = useId();
   const original = urlNameOf(props.page.name);
+  const dynamic = props.page.name.includes('[');
   const [name, setName] = useState(original);
-  if (props.page.name.includes('[')) {
-    return (
-      <div className="page-settings-field">
-        <label htmlFor={id}>{translate('pages.rename.urlName')}</label>
-        <input id={id} value={original} readOnly spellCheck={false} />
-        <div className="page-settings-note">{translate('pages.settings.slug.dynamic')}</div>
-      </div>
-    );
-  }
+  const [folder, setFolder] = useState(folderOf(props.page.name));
   const inventory = { pages: props.pages.map((page) => page.name), folders: props.folders };
-  const check = checkUrlName(props.page.name, name, inventory);
+  const check = checkUrlName(props.page.name, dynamic ? original : name, inventory, { folder });
   const address = check.kind === 'valid' ? pageURLPath(check.change.to) : props.page.route;
   const canApply = props.allowed.rename && check.kind === 'valid' && !model.busy;
+  const folders = [...props.folders].sort((left, right) => left.localeCompare(right));
   return (
     <form
       className="page-settings-field"
@@ -315,16 +313,27 @@ function UrlNameField({ model, props }: { readonly model: Model; readonly props:
       }}
     >
       <label htmlFor={id}>{translate('pages.rename.urlName')}</label>
+      <input
+        id={id}
+        value={dynamic ? original : name}
+        readOnly={dynamic}
+        maxLength={200}
+        spellCheck={false}
+        disabled={!props.allowed.rename || model.busy}
+        aria-invalid={check.kind === 'invalid'}
+        aria-describedby={id + '-status'}
+        onChange={(event) => setName(event.currentTarget.value)}
+      />
+      {dynamic && <div className="page-settings-note">{translate('pages.settings.slug.dynamic')}</div>}
+      <label>{translate('pages.settings.folder')}</label>
       <div className="page-settings-row">
-        <input
-          id={id}
-          value={name}
-          maxLength={200}
-          spellCheck={false}
+        <Dropdown
+          className="page-settings-folder"
+          ariaLabel={translate('pages.settings.folder')}
+          value={folder}
           disabled={!props.allowed.rename || model.busy}
-          aria-invalid={check.kind === 'invalid'}
-          aria-describedby={id + '-status'}
-          onChange={(event) => setName(event.currentTarget.value)}
+          options={[{ value: '', label: translate('pages.settings.folder.root') }, ...folders.map((entry) => ({ value: entry, label: '/' + entry }))]}
+          onChange={setFolder}
         />
         <button type="submit" className="primary" disabled={!canApply}>
           {translate('pages.settings.slug.apply')}
