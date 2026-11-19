@@ -1,0 +1,73 @@
+/* The popup a double click on a canvas image opens (CanvasImagePopup.tsx). Surfaces are fills, never borders. */
+.canvas-image-popup {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 16px);
+  border-radius: 10px;
+  background: var(--bg-panel-2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.canvas-image-popup:focus {
+  outline: none;
+}
+.canvas-image-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  background: var(--bg-panel);
+}
+.canvas-image-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.canvas-image-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border-radius: 6px;
+  line-height: 0;
+  background: transparent;
+}
+.canvas-image-head button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.canvas-image-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.canvas-image-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.canvas-image-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--bg-panel);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim, inherit);
+  overflow-wrap: anywhere;
+}
+/* While the asset chooser is open over the page the popup steps aside, still mounted so it is there when the pick is made. */
+body:has(.asset-pick-overlay) .canvas-image-popup {
+  visibility: hidden;
+}

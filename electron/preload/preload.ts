@@ -12,6 +12,7 @@ import { renderToken } from './frameRegions';
 // everything a frame does starts from the calls below, so the app's window
 // runs none of the frame half and a preview frame none of the bridge.
 import { installCanvasText } from './frameText';
+import { installCanvasImage } from './frameImage';
 import { canvasSelects } from './frameInteraction';
 import { exposeBridge } from './preloadBridge';
 import { listenForDesign, markFrameMode } from './frameDesign';
@@ -40,6 +41,8 @@ if (location.protocol === 'stacki-app:') {
       token: renderToken,
     });
   });
+  // Registered before the outline listeners start, so a double click on an image is heard before the one that opens a component.
+  installCanvasImage(post, canvasSelects);
   markFrameMode();
   rememberScrollAcrossRecovery();
   reportErrorOverlay(post);

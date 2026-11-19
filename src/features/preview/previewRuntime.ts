@@ -54,6 +54,10 @@ export interface PreviewRuntimeProps {
     },
   ) => void;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
+  /** A double click on an image: the marker paths it carries and where, in the editor's viewport, its bottom-left corner is. */
+  readonly onEditImage?: ((request: { readonly paths: readonly string[]; readonly point: ContextPoint }) => void) | undefined;
+  /** The canvas moved under the image popup (scrolled or resized): it is no longer beside its image. */
+  readonly onCloseImage?: (() => void) | undefined;
   readonly onSelectedClasses?: (classes: readonly string[]) => void;
   readonly onRenderedPaths?: (paths: readonly string[]) => void;
   readonly onNodeStates?: (states: {
@@ -508,6 +512,18 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       }
       gateEvent(message.token, refs, { kind: 'open' }, () => refs.props.current.onOpenPath?.(message.path ?? undefined, message.occurrence));
       break;
+    case 'image-close':
+      refs.props.current.onCloseImage?.();
+      break;
+    case 'image-edit': {
+      noteCanvasOpen(); // A double click, as above.
+      if (canvasClicksCaptured()) {
+        break;
+      }
+      const point = frameContextPoint(frame, message);
+      gateEvent(message.token, refs, { kind: 'open' }, () => refs.props.current.onEditImage?.({ paths: message.paths, point }));
+      break;
+    }
   }
 }
 

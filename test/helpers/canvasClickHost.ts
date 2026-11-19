@@ -172,6 +172,8 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     case 'node-states':
     case 'modifiers':
     case 'open-node':
+    case 'image-edit':
+    case 'image-close':
     case 'context-node':
     case 'canvas-ready':
     case 'guide':

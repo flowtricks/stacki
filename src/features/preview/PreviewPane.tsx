@@ -58,6 +58,8 @@ interface PreviewPaneProps {
   readonly onSelectPath?: (path: string | undefined, info: CanvasSelectInfo) => void;
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
+  readonly onEditImage?: PreviewRuntimeProps['onEditImage'];
+  readonly onCloseImage?: PreviewRuntimeProps['onCloseImage'];
   readonly judgeEvent: JudgeCanvasEvent;
   /** A click the canvas could not recover by itself, or its recovery (canvasClickRetry.ts). */
   readonly onCanvasNotice: (event: CanvasNoticeEvent) => void;

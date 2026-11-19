@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { AssetPickPresentationContext } from './assetPickPresentation';
 import { ElementImageIcon } from './Icons';
 import { listAssetEntries, onAssetEntriesChanged } from '../ipc/assetBridge';
 import type { WireAssetEntry } from '../../shared/ipc/ipcResults';
@@ -181,10 +182,13 @@ function useAssetField({
   srcRel: sourceRel,
   baseDir: baseDirectory,
   onCurrentDimensions,
-  pickPresentation,
+  pickPresentation: ownPresentation,
   pickTarget,
   onPickWithAlt,
 }: AssetFieldProps) {
+  // A field beside a provider's wish (the canvas image popup) answers where it asks, unless the field names its own.
+  const inherited = useContext(AssetPickPresentationContext);
+  const pickPresentation = ownPresentation ?? inherited;
   // Preview the effective asset without writing the component's fallback into the page.
   // An explicit empty string still overrides the fallback, just as it does in Astro.
   const current = value ?? fallbackValue ?? '';

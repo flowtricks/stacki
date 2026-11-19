@@ -61,6 +61,10 @@ export type PreviewMessage =
       readonly iterations: readonly PreviewIteration[] | undefined;
     } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
+  /** A double click on an image: the marker paths it carries (its own node and each instance that drew it) and its bottom-left corner. */
+  /** The canvas scrolled or resized under an open image popup, which sits at the image's old place. */
+  | { readonly kind: 'image-close' }
+  | ({ readonly kind: 'image-edit'; readonly paths: readonly string[]; readonly token: Digest | undefined } & ContextPoint)
   | ({ readonly kind: 'context-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent & ContextPoint)
   | { readonly kind: 'canvas-ready' }
   /** What the column guide is drawn from (electron/preload/frameGuide.ts). */
@@ -254,6 +258,10 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
       };
     case 'avb:open-node':
       return { kind: 'open-node', ...parseLocatedMessage(value) };
+    case 'avb:image-close':
+      return { kind: 'image-close' };
+    case 'avb:image-edit':
+      return { kind: 'image-edit', paths: parseImagePaths(value['paths']), token: optional(digest)(value['token']), ...parseContextPoint(value) };
     case 'avb:canvas-ready':
       return { kind: 'canvas-ready' };
     case 'avb:guide':
@@ -382,6 +390,16 @@ function parseReloadReason(input: unknown): PreviewReloadReason {
     throw new Error('Preview reload: unknown reason');
   }
   return found;
+}
+
+// The marker paths an image carries: each a path the frame wrote, a bounded number of them (electron/preload/frameImage.ts).
+const IMAGE_PATHS_MAX = 128;
+function parseImagePaths(input: unknown): readonly string[] {
+  const paths = list(pathText)(input);
+  if (paths.length > IMAGE_PATHS_MAX) {
+    throw new Error('Preview image: too many marker paths');
+  }
+  return paths;
 }
 
 function parseLocatedMessage(value: Readonly<Record<string, unknown>>): LocatedEvent {

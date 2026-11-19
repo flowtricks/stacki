@@ -55,6 +55,8 @@ import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { selectedPseudo } from '../model/selectionStructure';
 import { appOverlayLayer, useAppOverlayPaths } from './DesktopApps';
 import { useCanvasDrag } from '../state/appCanvasDrag';
+import { useCanvasImagePopup } from './desktopCanvasImage';
+import { ImagePropFields } from '../../features/props/ImagePropFields';
 import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/CanvasDropOverlay';
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 
@@ -66,6 +68,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);
   const hoverPseudo = useLiveValue(app.hoverPseudo);
   const context = useCanvasContextMenu(app);
+  const image = useCanvasImagePopup(app, (fieldNames) => <CanvasImageFields app={app} fieldNames={fieldNames} />);
   const appOverlayPaths = useAppOverlayPaths(app);
   const onCanvasDrag = useCanvasDrag(app);
   // A drag over the Navigator is drawn on the canvas too: the frame measures the mark's parent and neighbours.
@@ -130,11 +133,24 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         onNodeStates={app.setNodeStates}
         onNodeClasses={app.setNodeClasses}
         onOpenPath={(path, occurrence) => openCanvasPath(app, path ?? undefined, occurrence)}
+        onEditImage={image.open}
+        onCloseImage={image.close}
         onCanvasDrag={onCanvasDrag}
       />
       {context.menu}
+      {image.popup}
     </>
   );
+}
+
+// The image popup's fields: the Properties panel's own editors for the selected node, only the ones named.
+function CanvasImageFields({ app, fieldNames }: { readonly app: ShellView; readonly fieldNames: readonly string[] }) {
+  const translate = useTranslate();
+  const node = app.selectedNode;
+  if (node?.kind !== 'element' && node?.kind !== 'component') {
+    return undefined;
+  }
+  return <ImagePropFields {...settingsValues(app)} {...settingsHandlers(app, translate)} node={node} fieldNames={fieldNames} />;
 }
 
 // Where a right-click on the canvas landed, and the ::before or ::after it landed on.
