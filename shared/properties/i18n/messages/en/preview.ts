@@ -92,7 +92,6 @@ export const messages = {
   'preview.offline.usingNode': 'Using Node {version} — {path}',
   'preview.overlay.editComponent': 'Edit {name} component',
   'preview.overlay.editTip': 'Edit component',
-  'preview.overlay.slotHost': 'Slot: content comes from the page',
   'preview.pane.empty': 'Nothing selected to preview. Pick a page on the left.',
   'preview.pane.starting': 'Starting Astro dev server…',
   'preview.pane.title': 'Site preview',

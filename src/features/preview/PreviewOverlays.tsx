@@ -173,11 +173,10 @@ function collapseKey(partner: CollapsePartner) {
 }
 
 function NodeOutlines(props: PreviewOverlaysProps) {
-  const translate = useTranslate();
   // An app's highlight (`canvas.highlight`), in its own slot: the real selection and hover are untouched beside it.
   const highlight = useSyncExternalStore(subscribeCanvasHighlight, canvasHighlight, canvasHighlight);
   const targets = outlineTargets(props, highlight);
-  // A hovered slot always shows why it cannot be picked, even when it is the selection: its muted hover draws beside the selected outline.
+  // A hovered slot always reads muted, even when it is the selection: its muted hover draws beside the selected outline.
   const slotHover =
     highlight === undefined && props.hoverPath && props.hoverPseudo === undefined && !targets.some((target) => target.slot === 'hover')
       ? props.overlayInfo?.(props.hoverPath)?.hostContent === true
@@ -200,14 +199,14 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     // A loop is every copy; anything else is the copy it names (copiesToDraw).
     const loop = info.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
     const boxes = loop !== undefined ? [loop] : copiesToDraw(all, outline.occ);
-    // Hovering a slot says why nothing inside it can be picked: a muted fill and its reason, not the accent. Picking the slot itself stays as it was.
+    // Hovering a slot says nothing inside it can be picked: a muted fill, not the accent. Picking the slot itself stays as it was.
     const muted = info.hostContent && outline.type === 'hover';
     return boxes.map((box, index) => {
       const collapse = collapseKind(box);
       return (
         <div
           key={`${outline.slot}-${index}`}
-          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ' host-content' : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${ownerClasses(
+          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ` host-content${props.selPath === outline.path ? ' is-selected' : ''}` : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${ownerClasses(
             props.textMarks,
             {
               ownable: info.kind === 'component' && !info.isLayout,
@@ -220,7 +219,7 @@ function NodeOutlines(props: PreviewOverlaysProps) {
         >
           <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
             {outlineIcon(info)}
-            {muted ? translate('preview.overlay.slotHost') : info.label}
+            {info.label}
             {outline.slot === 'sel' && <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(box)} onOpen={props.onOpenComponent} />}
             {/* A highlight shows the selected chip's component icon, but opens nothing: it is display only. */}
             {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (
@@ -373,7 +372,7 @@ function TextMarkOutlines({ marks, instances, scale }: { readonly marks: TextMar
     ...(marks.picked ? [['sel', marks.picked] as const] : []),
   ];
   return drawn.map(([type, box]) => (
-    <div key={type} className={`node-outline ${type} component text-mark${box.kind === 'refused' ? ' refused' : ''}`} style={boxStyle(box, scale)}>
+    <div key={type} className={`node-outline ${type} component text-mark`} style={boxStyle(box, scale)}>
       {!instances.some((instance) => tagsCollide(instance, box, scale)) && (
         <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
           {box.kind === 'component' ? <ElementComponentIcon size={11} /> : <TextIcon size={11} />}

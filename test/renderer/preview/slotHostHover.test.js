@@ -1,6 +1,6 @@
 // Goal: hovering a <slot> inside a component reads as muted, not as something to pick.
 // A slot renders the host page's content, which the open component cannot select, so its hover is
-// a grey fill with the reason in its tag ("Slot: content comes from the page"), never the blue accent.
+// a black 20% fill with no outline, never the blue accent, and no explanatory text. Its tag follows the hover convention.
 // Selecting the slot itself (a Navigator click) stays the ordinary selection outline.
 // Method: the real PreviewOverlays rendered to static markup with a slot's overlay info, comparing the
 // classes and label of the hover and of the selection, and an ordinary element for contrast.
@@ -53,12 +53,12 @@ const props = {
   pathScope: '',
 };
 
-test('a hovered slot is muted and says its content comes from the page', async () => {
+test('a hovered slot is muted and keeps its ordinary name tag', async () => {
   const PreviewOverlays = await overlays();
   const html = renderToStaticMarkup(createElement(PreviewOverlays, { ...props, overlayInfo: () => info(true) }));
   assert.match(html, /node-outline hover element host-content/);
-  assert.match(html, /Slot: content comes from the page/);
-  assert.doesNotMatch(html, />slot</, 'the tag gives the reason instead of the bare name');
+  assert.doesNotMatch(html, /Slot: content comes/, 'no reason text');
+  assert.match(html, />slot</, 'the tag keeps the slot name');
 });
 
 test('a plain element hover and a selected slot keep the ordinary outline', async () => {
@@ -73,15 +73,16 @@ test('a plain element hover and a selected slot keep the ordinary outline', asyn
   assert.match(selected, />slot</);
 });
 
-test('a slot that is selected and hovered shows both: the selection and the muted reason', async () => {
+test('a slot that is selected and hovered shows both: the selection and the muted fill', async () => {
   const PreviewOverlays = await overlays();
   const both = renderToStaticMarkup(createElement(PreviewOverlays, { ...props, selPath: '0', selOcc: 0, overlayInfo: () => info(true) }));
   assert.match(both, /node-outline sel element/);
   assert.match(both, /node-outline hover element host-content/);
-  assert.match(both, /Slot: content comes from the page/);
+  assert.match(both, /host-content is-selected/);
+  assert.doesNotMatch(both, /Slot: content comes/);
 });
 
-test('hovering a slot while its parent is selected shows the muted reason beside the parent outline', async () => {
+test('hovering a slot while its parent is selected shows the muted fill beside the parent outline', async () => {
   const PreviewOverlays = await overlays();
   const parent = { ...info(false), label: 'main' };
   const html = renderToStaticMarkup(

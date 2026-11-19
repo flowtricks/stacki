@@ -93,7 +93,6 @@ export const messages = {
   'preview.offline.usingNode': 'Usando Node {version} — {path}',
   'preview.overlay.editComponent': 'Editar el componente {name}',
   'preview.overlay.editTip': 'Editar componente',
-  'preview.overlay.slotHost': 'Slot: el contenido viene de la página',
   'preview.pane.empty': 'No hay nada seleccionado para previsualizar. Elige una página a la izquierda.',
   'preview.pane.starting': 'Iniciando el servidor de desarrollo de Astro…',
   'preview.pane.title': 'Vista previa del sitio',

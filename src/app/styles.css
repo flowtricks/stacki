@@ -49,8 +49,8 @@
      outline, and the "inside a component" back button. */
   --component-green: #79e09c;
   --component-green-soft: rgba(121, 224, 156, 0.16);
-  /* The canvas fill over a hovered <slot>: black at 10%, so the host page's content reads muted. */
-  --slot-host-fill: rgba(0, 0, 0, 0.1);
+  /* The canvas fill over a hovered <slot>: black at 20%, so the host page's content reads muted. */
+  --slot-host-fill: rgba(0, 0, 0, 0.2);
   /* Pages Astro generates from a collection ([id], [...slug]) read in this
      purple wherever pages are listed. */
   --collection-purple: #c4afff;
@@ -6570,26 +6570,14 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .node-outline.bound .node-outline-tag {
   background: #8b5cf6;
 }
-/* A hovered <slot>: its content is the host page's, so it reads muted, in a black 10% fill with no outline, not as something to pick. */
+/* A hovered <slot>: its content is the host page's, so it reads muted, in a muted fill with no outline, not as something to pick. */
 .node-outline.hover.host-content {
   outline: none;
   background: var(--slot-host-fill);
 }
-/* The reason sits inside the slot, 22px down: the owner's name tag (a selected parent's, above or inside its box) stays readable.
-   Opaque, so it reads the same over any page. */
-.node-outline.hover.host-content .node-outline-tag {
-  top: 22px;
-  left: 4px;
-  transform: none;
-  background: #6b6b6b;
-  color: white;
-}
-.node-outline.hover.text-mark.refused {
-  outline: 1px dashed #6b6b6b;
-  background: rgb(128 128 128 / 14%);
-}
-.node-outline.hover.text-mark.refused .node-outline-tag {
-  background: #6b6b6b;
+/* Its tag is the ordinary unfilled hover tag; once the slot is selected the selection's solid tag is the one shown. */
+.node-outline.hover.host-content.is-selected .node-outline-tag {
+  display: none;
 }
 .node-outline-tag.inside {
   transform: none;
@@ -6652,17 +6640,6 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .node-outline.hover.component .node-outline-tag {
   color: var(--green);
-}
-/* A hovered text's tag is a solid chip like every other text tag: the bare label of an element hover lets the page show through,
-   and over a selected text's neighbours that read as a grey fill. */
-.node-outline.hover.text-mark .node-outline-tag {
-  background: var(--green);
-  color: white;
-  padding-left: 6px;
-}
-.node-outline.hover.text-mark.refused .node-outline-tag {
-  background: #6b6b6b;
-  color: white;
 }
 .node-outline.hover.map .node-outline-tag,
 .node-outline.hover.bound .node-outline-tag {
