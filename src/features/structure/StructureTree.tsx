@@ -17,6 +17,7 @@ import { labelsNode } from '../../../shared/page/leadingNote';
 import { assertPseudoLayerHost } from '../../../shared/page/pseudoElements';
 import { describeNode, truncate, type NodeDescription } from '../../ui/navigatorLabel';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { highlightSegments } from '../../lib/searchText';
 
 export interface StructureTreeContext {
   readonly clientMode?: boolean;
@@ -33,6 +34,8 @@ export interface StructureTreeContext {
   readonly onSelectPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly liveClassesById?: ReadonlyMap<string, readonly string[]>;
   readonly currentLayoutName: string;
+  /** The search's folded words: rows draw them marked in their label. Absent when nothing is searched. */
+  readonly highlightWords?: readonly string[];
   readonly dropTarget: DropTarget | undefined;
   readonly setDropTarget: React.Dispatch<React.SetStateAction<DropTarget | undefined>>;
   /** The node a canvas drag is moving: its row is muted while the drag lasts (src/editor/canvasDragSession.ts). */
@@ -288,6 +291,7 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     ...(props.onSelectPseudo === undefined ? {} : { onSelectPseudo: props.onSelectPseudo }),
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
     currentLayoutName: props.currentLayoutName,
+    ...(props.highlightWords === undefined ? {} : { highlightWords: props.highlightWords }),
     dropTarget: props.dropTarget,
     setDropTarget: props.setDropTarget,
     movingId: props.movingId,
@@ -387,6 +391,7 @@ function TreeRow(props: TreeRowProps) {
       <RowLabel
         node={node}
         label={description.label}
+        highlightWords={props.highlightWords}
         note={props.note}
         {...(description.title === undefined ? {} : { title: description.title })}
         {...(bindingPath === undefined ? {} : { bindingPath })}
@@ -499,9 +504,11 @@ function RowLabel({
   note,
   bindingPath,
   title,
+  highlightWords,
 }: {
   readonly node: NavigatorNode;
   readonly label: string;
+  readonly highlightWords: readonly string[] | undefined;
   readonly title?: string;
   readonly note: NavigatorNode | undefined;
   readonly bindingPath?: string;
@@ -509,7 +516,7 @@ function RowLabel({
   const noteValue = note?.kind === 'comment' ? note.value : undefined;
   return (
     <span className="label" title={title} style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
-      {bindingPath === undefined ? label : <DataChip path={bindingPath} />}
+      {bindingPath === undefined ? <MarkedLabel label={label} words={highlightWords} /> : <DataChip path={bindingPath} />}
       {noteValue !== undefined && (
         <span className="node-note" title={noteValue.trim()}>
           {' / '}
@@ -517,6 +524,26 @@ function RowLabel({
         </span>
       )}
     </span>
+  );
+}
+
+// The row's label with the search's words marked; without a search it is the plain text, as before.
+function MarkedLabel({ label, words }: { readonly label: string; readonly words: readonly string[] | undefined }) {
+  if (words === undefined) {
+    return <>{label}</>;
+  }
+  return (
+    <>
+      {highlightSegments(label, words).map((segment, position) =>
+        segment.hit ? (
+          <mark key={position} className="search-hit">
+            {segment.text}
+          </mark>
+        ) : (
+          <React.Fragment key={position}>{segment.text}</React.Fragment>
+        ),
+      )}
+    </>
   );
 }
 

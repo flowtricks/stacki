@@ -1,6 +1,9 @@
 import { TreeDragRow, useTreeDragCleanup } from '../../ui/TreeDragDrop';
 import { ErrorToast } from '../../ui/ErrorToast';
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { PanelSearch } from '../../ui/PanelSearch';
+import { isSearching, queryWords } from '../../lib/searchText';
+import { buildNavigatorIndex, searchNavigator } from './navigatorSearch';
 import type { NavigatorNode, StructurePageState, StructureProjection, DropLocation, DropTarget } from './structureModel';
 import type { PseudoKind, PseudoNodeIds, StructureTreeContext } from './StructureTree';
 import type { ContextPosition } from './StructureContextMenu';
@@ -178,7 +181,8 @@ function EditableStructurePanel(props: EditableProps) {
   usePublishNavigatorDrop(props.pageState.model.nodes, canvasDrag === undefined ? state.dropTarget : undefined);
   const treeContext = treeContextOf(props, state, canvasDrag);
   return (
-    <div className="panel-section grow navigator">
+    // A drag that starts in the tree ends the search first: the drop is a position in the page's own lists, which the filtered copy does not share.
+    <div className="panel-section grow navigator" onDragStartCapture={() => state.setQuery('')}>
       <NavigatorHeader state={state} nodes={props.pageState.model.nodes} />
       <NavigatorBody props={props} state={state} treeContext={treeContext} canvasDrag={canvasDrag} />
       {state.contextMenu && (
@@ -201,6 +205,9 @@ interface TreeState {
   readonly setDropTarget: React.Dispatch<React.SetStateAction<DropTarget | undefined>>;
   readonly toggled: ReadonlyMap<string, boolean>;
   readonly setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>;
+  /** What the search box holds; never remembered. */
+  readonly query: string;
+  readonly setQuery: React.Dispatch<React.SetStateAction<string>>;
   readonly allExpanded: boolean;
   readonly setAllExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   readonly contextMenu: ContextPosition | undefined;
@@ -221,6 +228,7 @@ function useTreeState(props: EditableProps): TreeState {
     selectionExpanded(initialCollapseMap(props.pageState.model.nodes), props.pageState.model.nodes, props.selectedId, props.selectedPseudo),
   );
   const [allExpanded, setAllExpanded] = useState(false);
+  const [query, setQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextPosition | undefined>(undefined);
   const bodyRef = useRef<HTMLDivElement>(null);
   const tooltip = useHeaderTooltip();
@@ -229,7 +237,7 @@ function useTreeState(props: EditableProps): TreeState {
     setDropTarget(undefined);
     setDropNote(undefined);
   });
-  useArrowNavigation(props, toggled, setToggled);
+  useArrowNavigation(props, toggled, setToggled, { searching: isSearching(query) });
   useSelectionExpansion(props, setToggled);
   useRevealRow(bodyRef, props.revealTick ?? 0, props.selectedId, props.selectedPseudo);
   return {
@@ -239,6 +247,8 @@ function useTreeState(props: EditableProps): TreeState {
     setDropTarget,
     toggled,
     setToggled,
+    query,
+    setQuery,
     allExpanded,
     setAllExpanded,
     contextMenu,
@@ -268,11 +278,13 @@ function useArrowNavigation(
   props: EditableProps,
   toggled: ReadonlyMap<string, boolean>,
   setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>,
+  { searching }: { readonly searching: boolean },
 ): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       const key = parseArrowKey(event);
-      if (!key || !props.selectedId) {
+      // The arrows walk the page's rows, which a search leaves out of sight.
+      if (!key || !props.selectedId || searching) {
         return;
       }
       const found = findVisibleNode(props.pageState.model.nodes, props.selectedId);
@@ -299,7 +311,7 @@ function useArrowNavigation(
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [props, setToggled, toggled]);
+  }, [props, searching, setToggled, toggled]);
 }
 
 // The children a node lists as rows: none where the tree folds them into it.
@@ -581,6 +593,7 @@ function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly
           {state.allExpanded ? translate('structure.collapseAll') : translate('structure.expandAll')}
         </div>
       )}
+      <PanelSearch value={state.query} placeholder={translate('structure.search.placeholder')} onChange={state.setQuery} />
     </>
   );
 }
@@ -596,11 +609,15 @@ function NavigatorBody({
   readonly treeContext: StructureTreeContext;
   readonly canvasDrag: NavigatorDragView | undefined;
 }) {
+  const translate = useTranslate();
   const nodes = props.pageState.model.nodes;
   // Drop gaps overlap the row edges instead of taking room between rows, so
   // they catch the pointer only while a drag is over the navigator. Otherwise
   // a click on a row's edge would land on a gap and select nothing.
   const [bodyDrag, setBodyDrag] = useState<BodyDrag>('idle');
+  const search = useNavigatorSearch(nodes, state.query, { idle: canvasDrag === undefined && bodyDrag === 'idle' });
+  // Searched, the tree is a copy holding the matches, drawn open so no match hides in a folded row; the user's own folds are untouched.
+  const context = search.filtering ? { ...treeContext, isCollapsed: () => false, highlightWords: search.words } : treeContext;
   return (
     <div
       className={bodyDrag === 'dragging' ? 'panel-body is-drag-over' : 'panel-body'}
@@ -622,13 +639,40 @@ function NavigatorBody({
       {/* One box as wide as the widest row: every row, and the tinted block under a selected one, fill it, so a
           selected row and its subtree share both edges however long a label runs (styles.css, .structure-tree). */}
       <div className="structure-tree">
-        {!props.clientMode && !props.editRootId && <FrontmatterRow props={props} />}
-        <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
+        {!props.clientMode && !props.editRootId && !search.filtering && <FrontmatterRow props={props} />}
+        <NodeList nodes={search.filtering ? search.nodes : nodes} parentId={undefined} depth={0} {...context} />
       </div>
       {!props.clientMode && nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
+      {search.filtering && search.nodes.length === 0 && <div className="props-empty">{translate('structure.search.noMatch')}</div>}
+      {search.filtering && search.capped && <div className="props-empty">{translate('structure.search.capped', { count: search.matchCount })}</div>}
       {canvasDrag === undefined ? <DropNoteChip note={state.dropNote} /> : <CanvasDropNote view={canvasDrag} />}
     </div>
   );
+}
+
+interface NavigatorSearch {
+  /** True when the tree drawn is the search's copy: a query is typed and nothing is being dragged. */
+  readonly filtering: boolean;
+  readonly nodes: readonly NavigatorNode[];
+  readonly words: readonly string[];
+  readonly matchCount: number;
+  readonly capped: boolean;
+}
+
+// The index is built once per tree and only once a query exists; each keystroke is then one walk of it.
+function useNavigatorSearch(nodes: readonly NavigatorNode[], query: string, { idle }: { readonly idle: boolean }): NavigatorSearch {
+  const searching = isSearching(query);
+  const index = useMemo(() => (searching ? buildNavigatorIndex(nodes) : undefined), [nodes, searching]);
+  const filtering = searching && idle;
+  const result = useMemo(() => (filtering && index !== undefined ? searchNavigator(nodes, index, query) : undefined), [filtering, index, nodes, query]);
+  const words = useMemo(() => queryWords(query), [query]);
+  return {
+    filtering: filtering && result !== undefined,
+    nodes: result?.nodes ?? [],
+    words,
+    matchCount: result?.matchCount ?? 0,
+    capped: result?.capped ?? false,
+  };
 }
 
 // The canvas drag's note, in the words the canvas shows beside the pointer.

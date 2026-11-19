@@ -1237,6 +1237,7 @@
     "src/features/structure/dropPlacement.ts",
     "src/features/structure/navigatorArrows.ts",
     "src/features/structure/navigatorDrop.ts",
+    "src/features/structure/navigatorSearch.ts",
     "src/features/structure/structureModel.ts",
     "src/features/style/AlignControl.tsx",
     "src/features/style/AspectRatioField.tsx",
