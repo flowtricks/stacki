@@ -30,6 +30,7 @@ const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
 const load = require('../../helpers/rendererModule');
+const { runElectronProbe } = require('../../helpers/electronProbe.js');
 
 const failures = [];
 let checked = 0;
@@ -347,20 +348,30 @@ const check = (what, condition, detail) => {
          await pollUntil({ what: 'the typed change heard', read: lastEvent, until: (event) => event === 'change:pin' });
          // The gate runs several Electron suites at once on one virtual display (the Linux runner),
          // and another suite's window can take page focus between our focus() and the key: Blink then
-         // drops the Escape (1.4.7: the events stopped at "change:pin"). So the page and the field are
-         // focused again right before each press, and a press that was not heard is repeated, bounded.
-         // A repeated Escape on a cleared field changes nothing, so it cannot add events.
+         // drops the Escape (1.4.7: the events stopped at "change:pin"). So each press waits for the
+         // state a key needs, observed rather than assumed: the search field is the active element.
+         // A press that was not heard is repeated only when the field lost focus meanwhile (another
+         // window took it); a focused field that heard nothing is a real failure and is reported with
+         // what was seen. A repeated Escape on a cleared field changes nothing, so it adds no events.
+         const focusState = "({ field: document.activeElement === document.querySelector('#search input'), page: document.hasFocus() })";
+         const presses = [];
          for (let press = 1; press <= 5; press += 1) {
            win.webContents.focus();
            await js("document.querySelector('#search input').focus()");
+           const ready = await pollUntil({ what: 'the search field focused', read: () => js(focusState), until: (seen) => seen.field === true, pollCountMax: 40 });
            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-           const heard = await pollUntil({ what: 'the clearing change heard', read: lastEvent, until: (event) => event === 'change:', pollCountMax: 20 });
+           const heard = await pollUntil({ what: 'the clearing change heard', read: lastEvent, until: (event) => event === 'change:', pollCountMax: 40 });
+           const after = await js(focusState);
+           presses.push({ press, before: ready.value, heard: heard.kind, after });
            if (heard.kind === 'reached') {
              break;
            }
+           if (after.field === true) {
+             break;
+           }
          }
-         const search = await js(\`({ events: window.searchEvents, value: document.getElementById('search').value, field: document.querySelector('#search input').value })\`);
+         const search = { ...(await js(\`({ events: window.searchEvents, value: document.getElementById('search').value, field: document.querySelector('#search input').value })\`)), presses };
          win.destroy();
          console.log(JSON.stringify({ rest, changes, search }));
        } catch (error) {
@@ -369,8 +380,8 @@ const check = (what, condition, detail) => {
        app.quit();
      });`,
   );
-  const { spawnSync } = require('child_process');
-  const run = spawnSync(electronPath, [probe], { encoding: 'utf8', timeout: 120000 });
+  // A launch that never reached the display is tried again, bounded; nothing else is (electronProbe.js).
+  const run = runElectronProbe(electronPath, [probe]);
   const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('{'));
   if (!line) {
     check('the browser probe ran', false, (run.stderr || run.stdout || '').slice(0, 500));
@@ -471,7 +482,7 @@ const check = (what, condition, detail) => {
       JSON.stringify(typed) === JSON.stringify(expected.slice(0, 6)) || JSON.stringify(search.events.slice(0, 2)) === '["input:pin","change:pin"]',
       JSON.stringify(search.events),
     );
-    check('clearing with Escape fires input and change', JSON.stringify(search.events.slice(-2)) === '["input:","change:"]', JSON.stringify(search.events));
+    check('clearing with Escape fires input and change', JSON.stringify(search.events.slice(-2)) === '["input:","change:"]', JSON.stringify(search));
     check(
       'and no event is heard twice',
       search.events.filter((event) => event.startsWith('input')).length === search.events.filter((event) => event.startsWith('change')).length,
