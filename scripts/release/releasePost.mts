@@ -162,6 +162,11 @@ export async function publishNpm(version: string, sha: string, dependencies: Pos
   return ok(`Publish create-stacki succeeded: ${finished.value.url}`);
 }
 
+// The final verify always checks the site, through public HTTP (verifyRelease.mts needs no token
+// for it). 1.4.7 and 1.4.8 passed their verify with the site rows left out while stacki.build still
+// served the old version: a deploy that was skipped or built too early must fail the verify loudly.
+export const POST_VERIFY_GROUPS = 'release,npm,site';
+
 export type SiteOutcome = { readonly kind: 'skipped'; readonly reason: string } | { readonly kind: 'deployed'; readonly url: string } | { readonly kind: 'failed'; readonly reason: string };
 
 /** Dispatch the site deploy after npm has the version, so the demo bakes the new package. */
@@ -170,8 +175,8 @@ export async function deploySite(tokenPresent: 'yes' | 'no', dependencies: PostD
     return {
       kind: 'skipped',
       reason:
-        'RELEASE_DISPATCH_TOKEN is not set, so the site deploy was not dispatched. stacki.build picks the version up on its own ' +
-        '(release.yml asks for a rebuild, and the site checks daily at 06:17 UTC). The site checks are left out of the final verify.',
+        'No token that can dispatch the stacki.build deploy (RELEASE_DISPATCH_TOKEN or GH_TOKEN) is set, so the deploy was not ' +
+        'dispatched. The final verify still checks the site and fails until it serves this version (the site rebuilds daily at 06:17 UTC).',
     };
   }
   const since = new Date(dependencies.now() - POST_LIMITS.dispatchSkewMs).toISOString();
@@ -351,17 +356,17 @@ async function runStage(parsed: PostArguments, dependencies: PostDependencies, e
       switch (site.kind) {
         case 'skipped':
           reporter.warning(site.reason);
-          reporter.output('verify_groups', 'release,npm');
+          reporter.output('verify_groups', POST_VERIFY_GROUPS);
           reporter.summary(`## stacki.build: deploy not dispatched\n\n${site.reason}`);
           return 0;
         case 'deployed':
-          reporter.output('verify_groups', 'release,npm,site');
+          reporter.output('verify_groups', POST_VERIFY_GROUPS);
           reporter.summary(`## stacki.build deployed\n\n${site.url}`);
           return 0;
         case 'failed':
           // The desktop release and npm are already public; the final verify reports the site.
           reporter.warning(site.reason);
-          reporter.output('verify_groups', 'release,npm,site');
+          reporter.output('verify_groups', POST_VERIFY_GROUPS);
           reporter.summary(`## stacki.build: deploy failed\n\n${site.reason}`);
           return 0;
         default: {

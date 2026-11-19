@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { recordingReporter } from '../../../scripts/release/actionsReport.mts';
 import type { CommandRequest } from '../../../scripts/release/releaseCommands.mts';
-import { applyRerunPolicy, classifyRun, deploySite, parsePostArguments, publishNpm, renderFinalSummary, type PostDependencies } from '../../../scripts/release/releasePost.mts';
+import { applyRerunPolicy, classifyRun, deploySite, parsePostArguments, publishNpm, renderFinalSummary, type PostDependencies, POST_VERIFY_GROUPS } from '../../../scripts/release/releasePost.mts';
 import { fail, ok, type Result } from '../../../scripts/release/releaseResult.mts';
 import type { WorkflowRun } from '../../../scripts/release/releaseRuns.mts';
 import type { WriteRequest } from '../../../scripts/release/releaseWrite.mts';
@@ -146,9 +146,11 @@ test('a failed publish is reported with the trusted-publisher hint', async () =>
   assert.match(result.error.message, /trusted publisher/);
 });
 
-test('the site deploy is skipped with a warning without its token, and never fails the release', async () => {
+test('the site deploy is skipped with a warning without its token, and the final verify still checks the site', async () => {
   const skipped = await deploySite('no', dependencies({ writes: [], answer: () => fail('command-failed', 'unused') }));
   assert.equal(skipped.kind, 'skipped');
+  assert.ok(skipped.kind === 'skipped' && skipped.reason.includes('still checks the site'));
+  assert.deepEqual(POST_VERIFY_GROUPS.split(','), ['release', 'npm', 'site'], 'the site rows are never left out (1.4.7, 1.4.8)');
   const broken = await deploySite('yes', dependencies({ writes: [], answer: () => fail('command-failed', 'HTTP 403') }));
   assert.equal(broken.kind, 'failed');
 });

@@ -147,6 +147,12 @@ test('release.yml: proves the candidate first, rebuilds and retests nothing, and
   for (const step of publish.filter((candidate) => /gh release (upload|edit|create)|gh workflow run/.test(String(candidate['run'] ?? '')))) {
     assert.equal(step['if'], "steps.target.outputs.dry_run == 'false'", `${String(step['name'])} is skipped in a dry run`);
   }
+  assert.ok(
+    !commands.some((command) => command.includes('deploy.yml')),
+    'no site deploy at promote time: npm does not have the version yet (Release post deploys it after wait-npm)',
+  );
+  const post = jobs(workflow('release-post.yml'));
+  assert.deepEqual(asNode(post['deploy-site'], 'deploy-site')['needs'], ['resolve', 'wait-npm'], 'the site deploys after npm shows the version');
   const target = String(publish.find((step) => step['id'] === 'target')?.['run']);
   assert.match(target, /if \[ "\$EVENT" = push \]/, 'only a tag push is a real promotion');
 });

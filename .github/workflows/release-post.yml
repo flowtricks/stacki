@@ -109,8 +109,10 @@ jobs:
       - id: deploy
         run: node --experimental-strip-types scripts/release/releasePost.mts --stage=deploy-site --version="$VERSION"
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN || github.token }}
-          RELEASE_DISPATCH_TOKEN_PRESENT: ${{ secrets.RELEASE_DISPATCH_TOKEN != '' }}
+          # The site deploy runs here, after wait-npm, so stacki.build bakes the new package. GH_TOKEN
+          # is the token release.yml always used for this dispatch; RELEASE_DISPATCH_TOKEN wins if set.
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN || secrets.GH_TOKEN || github.token }}
+          RELEASE_DISPATCH_TOKEN_PRESENT: ${{ secrets.RELEASE_DISPATCH_TOKEN != '' || secrets.GH_TOKEN != '' }}
           VERSION: ${{ needs.resolve.outputs.version }}
 
   verify:
