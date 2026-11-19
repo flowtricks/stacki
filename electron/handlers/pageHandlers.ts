@@ -29,6 +29,7 @@ import { registerEmDashInstallHandlers } from './emdashInstall';
 import { parsePageSource, pageEditError, resolvePagesDirectory, fillRoute } from '../documents/pageRequests';
 import { translateMain, translateMainDescribed } from '../lib/mainLocale';
 import { DescribedError } from '../../shared/properties/describedError';
+import { registerPageSettingsHandlers } from './pageSettingsHandlers';
 
 /** The project's running preview, which adding EmDash restarts and whose address the EmDash admin button opens. */
 export interface PagePreviews {
@@ -40,6 +41,7 @@ export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain
   registerPageReadHandlers(host);
   registerEmDashInstallHandlers(host, previews);
   registerPageMoveHandlers(host);
+  registerPageSettingsHandlers(host);
   registerProjectInjectedRoutesHandlers(host);
 }
 

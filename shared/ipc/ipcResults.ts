@@ -34,6 +34,8 @@ import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
 import type { ComponentOpError } from '../properties/componentOps';
 import type { ComponentRenameSummary } from '../properties/componentRename';
+import type { PageSettingsApplied, PageSettingsSummary } from '../properties/pageSettings';
+import type { WireTemplateReading } from '../properties/pageTemplateReading';
 import type { ComponentRemovalPreview } from '../properties/componentRemoval';
 import type { MetadataFile } from '../properties/projectMetadata';
 import type { InstructionListing, InstructionWriteResult } from '../properties/instructions';
@@ -737,6 +739,11 @@ export interface IpcResults extends AiResults {
     readonly relative: string;
     readonly srcRelative: undefined | string;
   };
+  readonly 'page:planSettings': Result<PageSettingsSummary>;
+  readonly 'page:applySettings': Result<PageSettingsApplied>;
+  readonly 'page:revertSettings': Result<{ readonly files: number }>;
+  readonly 'page:readTemplate': WireTemplateReading;
+  readonly 'page:retargetTemplate': Result<PageSettingsApplied>;
   readonly 'page:move': {
     readonly newPath: string;
   };

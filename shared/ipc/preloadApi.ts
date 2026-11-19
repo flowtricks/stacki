@@ -102,6 +102,11 @@ interface InvokeChannels {
   readonly applyMcpCodexChange: 'mcp:applyCodex';
   readonly deletePage: 'page:delete';
   readonly movePage: 'page:move';
+  readonly planPageSettings: 'page:planSettings';
+  readonly applyPageSettings: 'page:applySettings';
+  readonly revertPageSettings: 'page:revertSettings';
+  readonly readPageTemplate: 'page:readTemplate';
+  readonly retargetPageTemplate: 'page:retargetTemplate';
   readonly createPageFolder: 'pagefolder:create';
   readonly renamePageFolder: 'pagefolder:rename';
   readonly deletePageFolder: 'pagefolder:delete';

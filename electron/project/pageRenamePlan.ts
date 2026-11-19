@@ -109,7 +109,7 @@ function renameOrder(source: string, change: PageRename): string {
 }
 
 // The site origins a rename must treat as internal: only the config files name them.
-function renameOrigins(root: string, files: readonly string[]): readonly string[] {
+export function renameOrigins(root: string, files: readonly string[]): readonly string[] {
   const origins = new Set<string>();
   for (const file of files) {
     if (/^astro\.config\./.test(file) || file === '.stacki/publish.json') {

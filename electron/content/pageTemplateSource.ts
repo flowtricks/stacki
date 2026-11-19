@@ -170,6 +170,22 @@ function contentPageText(input: TemplatePageInput, source: ContentSource, facts:
   return pageText(input, frontmatter, [...heading, ...(rendered ? ['<Content />'] : [])]);
 }
 
+/**
+ * The two pieces of a content template that its settings choose, exactly as `contentPageText` writes them: the
+ * `getStaticPaths` function and the `CollectionEntry<…>` type of its entry. Page settings (pageTemplateRead.ts)
+ * recognises a template by writing these again and finding them byte for byte, and changes one by replacing them.
+ */
+export function contentTemplatePieces(
+  route: RouteParts,
+  source: Pick<ContentSource, 'collection' | 'slug'>,
+  api: CollectionFacts['api'],
+): { readonly paths: string; readonly entryType: string } {
+  const name = quoted(source.collection);
+  const idField = api === 'legacy' ? 'entry.slug' : 'entry.id';
+  const paths = ['export async function getStaticPaths() {', ...contentPathLines(route.param, source.slug, { name, idField }), '}'].join('\n');
+  return { paths, entryType: `CollectionEntry<${name}>` };
+}
+
 function contentPathLines(param: string, slug: ContentSlug, names: { readonly name: string; readonly idField: string }): readonly string[] {
   const entries = `\tconst entries = await getCollection(${names.name});`;
   if (slug.kind === 'entry-id') {

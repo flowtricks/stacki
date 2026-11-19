@@ -453,6 +453,16 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'component:planRename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/forms/Button.astro' } },
   'component:rename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/ContactButton.astro' } },
   'component:revertRename': { token: 'component-rename-1', direction: 'undo' },
+  // Page settings: a step planned and applied by its kind, its undo, and a template page's settings read and changed.
+  'page:planSettings': { projectPath: '/site', request: { kind: 'home', page: 'about.astro' } },
+  'page:applySettings': { projectPath: '/site', request: { kind: 'rename', from: 'about.astro', to: 'company.astro' } },
+  'page:revertSettings': { token: 'page-settings-1', direction: 'redo' },
+  'page:readTemplate': { projectPath: '/site', page: 'blog/[slug].astro' },
+  'page:retargetTemplate': {
+    projectPath: '/site',
+    page: 'blog/[slug].astro',
+    source: { kind: 'content-collection', collection: 'posts', origin: 'existing', slug: { kind: 'entry-id' } },
+  },
   'component:previewPropertyRemoval': { projectPath: '/site', file: '/site/src/components/Button.astro', name: 'direction' },
   'breakpointSync:restore': { projectPath: '/site', journalId: 'journal-1', direction: 'undo' },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
@@ -740,4 +750,26 @@ test('component operation payloads refuse paths that climb, other kinds, and nam
   rename({ from: 'src/components/A.astro', to: '../A.astro' });
   rename({ from: 'src/components/A.astro', to: 'src/components/Fragment.astro' });
   assert.throws(() => parseIpcPayload('component:revertRename', { token: 'x', direction: 'sideways' }));
+});
+
+test('page settings payloads refuse paths that leave the pages folder, unknown kinds and directions', () => {
+  const plan = (request: unknown) => parseIpcPayload('page:planSettings', { projectPath: '/site', request });
+  for (const request of [
+    { kind: 'home', page: '../secret.astro' },
+    { kind: 'home', page: 'about.exe' },
+    { kind: 'home', page: '/abs.astro' },
+    { kind: 'remove', page: 'a//b.astro' },
+    { kind: 'duplicate', page: 'a?b.astro' },
+    { kind: 'rename', from: 'about.astro', to: 'about.txt' },
+    { kind: 'rename', from: 'blog/[slug].astro', to: 'blog/[id].astro' },
+    { kind: 'swap', page: 'about.astro' },
+    { kind: 'home' },
+  ]) {
+    assert.throws(() => plan(request), JSON.stringify(request));
+  }
+  assert.throws(() => parseIpcPayload('page:revertSettings', { token: 'page-settings-1', direction: 'sideways' }));
+  assert.throws(() => parseIpcPayload('page:readTemplate', { projectPath: '/site', page: '../x.astro' }));
+  assert.throws(() =>
+    parseIpcPayload('page:retargetTemplate', { projectPath: '/site', page: 'blog/[slug].astro', source: { kind: 'content-collection', collection: 'posts' } }),
+  );
 });

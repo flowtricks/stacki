@@ -43,7 +43,16 @@ import {
 } from '../properties/mediaHosting';
 import { parseSecretReadIndex, parseSecretsChange, parseSecretsFileName, parseSecretsIgnorableFile, parseSecretsRevision } from '../properties/secrets';
 import { parseMcpChange, parseMcpCodexChange, parseMcpRevision, parseMcpServerName, parseMcpTextInput } from '../properties/mcp';
-import { parseConnectionKeyCopy, parseDataSampleRequest, parseEnvPayloadName, parsePageTemplateDraft, parseSecretValue } from '../properties/pageTemplate';
+import {
+  parseConnectionKeyCopy,
+  parseDataSampleRequest,
+  parseDataSource,
+  parseEnvPayloadName,
+  parsePageTemplateDraft,
+  parseSecretValue,
+} from '../properties/pageTemplate';
+import { parsePageSettingsDirection, parsePageSettingsRequest } from '../properties/pageSettings';
+import { renamePath } from '../properties/pageRename';
 import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
@@ -666,6 +675,14 @@ export const IPC_PAYLOADS = {
     projectPath: maybePath,
   }),
   'page:move': object({ ...project, from: pathText, to: pathText }),
+  // The Page settings dialog (pageSettings.ts): the plan its confirm step shows, the step itself (rename, homepage swap,
+  // duplicate, delete: all files or none, one undo token), its undo and redo, and a template page's settings read back
+  // and changed. Pages are named relative to src/pages.
+  'page:planSettings': object({ ...project, request: parsePageSettingsRequest }),
+  'page:applySettings': object({ ...project, request: parsePageSettingsRequest }),
+  'page:revertSettings': object({ token: text, direction: parsePageSettingsDirection }),
+  'page:readTemplate': object({ ...project, page: renamePath }),
+  'page:retargetTemplate': object({ ...project, page: renamePath, source: parseDataSource }),
   'page:parse': object({ pagePath: pathText, source: text }),
   // An edit request planned against `source` (the bytes at authoredChecksum)
   // and never written: reviewing an .astro page's unsaved gestures in code.

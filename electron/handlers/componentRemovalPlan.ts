@@ -889,7 +889,7 @@ export function applyEdits(source: string, edits: readonly Edit[]): string {
 }
 
 // The post-edit check: what would be written must parse as cleanly as the file did.
-function reparses(file: string, after: string): boolean {
+export function reparses(file: string, after: string): boolean {
   if (file.endsWith('.astro')) {
     const fence = ASTRO_FENCE.exec(after);
     return parseAstroTemplate(after).ok && transpiles(fence?.[2] ?? '', 'source.ts');

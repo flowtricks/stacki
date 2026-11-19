@@ -411,7 +411,7 @@ function parseTreatment(input: unknown): SlugTreatment {
   throw new Error('Page template: unknown slug treatment');
 }
 
-function parseContentSlug(input: unknown): ContentSlug {
+export function parseContentSlug(input: unknown): ContentSlug {
   const value = record(input);
   if (value['kind'] === 'entry-id') {
     return { kind: 'entry-id' };
