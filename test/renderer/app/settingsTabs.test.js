@@ -1,5 +1,5 @@
 // Goal: the Settings dialog is a set of tabs (Editor settings, Folders, CMS connections,
-// Stacki Studio, Instructions, Audits, Breakpoints, Style tags, Roles) that show the right panel, move with the arrow keys, remember
+// Stacki Studio, Instructions, Audits, Breakpoints, New style locations, Roles) that show the right panel, move with the arrow keys, remember
 // the last tab, open on CMS connections when the CMS rail asks for it, and leave out
 // the tabs the project's role hides.
 // Method: bundle the real Settings component with esbuild, stub the Folders, CMS and
@@ -34,7 +34,7 @@ const stubs = {
     build.onLoad({ filter: /.*/, namespace: 'stub' }, (args) => ({
       loader: 'jsx',
       contents: args.path.includes('StyleTagSettings')
-        ? 'export function StyleTagSettingsPage() { return <section aria-label="New style tags">Style tags stub</section>; }'
+        ? 'export function StyleTagSettingsPage() { return <section aria-label="New style locations">New style locations stub</section>; }'
         : args.path.includes('BreakpointsSettings')
           ? 'export function BreakpointsSettings() { return <section aria-label="Breakpoints">Breakpoints stub</section>; }'
           : args.path.includes('AuditsSettings')
@@ -143,7 +143,7 @@ test('the tabs show their own panel and carry tab semantics', async () => {
   assert.ok(document.querySelector('.app-settings footer') === null, 'nothing is unsaved, so no action bar');
   assert.deepEqual(
     tabs().map((item) => item.textContent.trim()),
-    ['Editor settings', 'Folders', 'CMS connections', 'Stacki Studio', 'Instructions', 'Audits', 'Breakpoints', 'Style tags', 'Roles'],
+    ['Editor settings', 'Folders', 'CMS connections', 'Stacki Studio', 'Instructions', 'Audits', 'Breakpoints', 'New style locations', 'Roles'],
   );
   assert.equal(document.querySelector('[role="tablist"]').getAttribute('aria-orientation'), 'vertical');
   for (const item of tabs()) {
@@ -168,8 +168,8 @@ test('the tabs show their own panel and carry tab semantics', async () => {
   assert.equal(visiblePanel()[0].textContent, 'Studio stub');
   // Its own tab, so it is found where it is looked for; the Style panel's source list opens it too.
   await act(async () => settings.openAppSettings('styles'));
-  assert.equal(selectedTab().textContent.trim(), 'Style tags');
-  assert.equal(visiblePanel()[0].textContent, 'Style tags stub');
+  assert.equal(selectedTab().textContent.trim(), 'New style locations');
+  assert.equal(visiblePanel()[0].textContent, 'New style locations stub');
   await act(async () => tab('Stacki Studio').click());
   assert.equal(tabs().filter((item) => item.tabIndex === 0).length, 1, 'only the selected tab is in the tab order');
   assert.equal(tab('Stacki Studio').tabIndex, 0);
@@ -209,7 +209,7 @@ test('the arrow keys move between tabs and wrap', async () => {
   await pressKey(document.activeElement, 'ArrowDown');
   assert.equal(selectedTab().textContent.trim(), 'Breakpoints');
   await pressKey(document.activeElement, 'ArrowDown');
-  assert.equal(selectedTab().textContent.trim(), 'Style tags');
+  assert.equal(selectedTab().textContent.trim(), 'New style locations');
   await pressKey(document.activeElement, 'ArrowDown');
   assert.equal(selectedTab().textContent.trim(), 'Roles');
   await pressKey(document.activeElement, 'ArrowDown');

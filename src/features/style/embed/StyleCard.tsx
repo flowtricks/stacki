@@ -489,8 +489,8 @@ export function SourcePickerRow({ card }: { card: StyleCardProps }) {
 // is a file path or `node:` key, nor the virtual Create <style> entry.
 const STYLE_TAG_DEFAULTS = '\u0000style-tag-defaults';
 
-// The sources, and last, pinned below them, "Style tag defaults…": where what a new `<style>` holds
-// is set (Settings → Style tags). Only where the host has those settings (Desktop); Studio has none.
+// The sources, and last, pinned below them, "New style locations…": where what a new `<style>` holds
+// is set (Settings → New style locations). Only where the host has those settings (Desktop); Studio has none.
 function sourceOptionsWithDefaults(options: readonly SourceOption[], label: string): SelectOption<string>[] {
   const rows: SelectOption<string>[] = options.map(sourceSelectOption);
   if (getHost().openStyleTagSettings === undefined) {

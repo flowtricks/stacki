@@ -9,6 +9,11 @@ import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { useTranslate } from '../lib/i18n/useTranslate';
 
+/** Text as a search compares it: lower case with accents removed, so "cafe" finds "Café". */
+export function foldForSearch(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
 export const POPUP_GAP = 4;
 const POPUP_EDGE = 8;
 const POPUP_MIN = 120;
@@ -197,12 +202,12 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
   const searchRef = useRef<HTMLInputElement>(null);
   const committed = useRef(props.value);
   const previewed = useRef<{ readonly value: T } | undefined>(undefined);
-  const queryText = query.trim().toLowerCase();
+  const queryText = foldForSearch(query.trim());
   const matches =
     props.searchable && queryText
       ? props.options.filter(
           (option) =>
-            option.pinned === true || `${option.label} ${option.hint || ''} ${option.group || ''} ${option.keywords || ''}`.toLowerCase().includes(queryText),
+            option.pinned === true || foldForSearch(`${option.label} ${option.hint || ''} ${option.group || ''} ${option.keywords || ''}`).includes(queryText),
         )
       : props.options;
   // A caller's cap draws at least one row; without one every match is drawn, and a list with no

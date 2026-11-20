@@ -975,8 +975,7 @@ Opening a project without saved guide preferences uses defaults in memory. It do
 Desktop frame in the side-by-side (all breakpoints) view, the narrowest width the single canvas's Desktop button draws the page
 at, and the line that decides on which side of Desktop a breakpoint is. The Desktop button fills a pane at least that wide (below
 the narrowest `up` canvas) and otherwise draws that width scaled to fit (`desktopCanvasWidth` in `shared/properties/breakpointIcon.ts`),
-so no breakpoint query applies under it: Base in a desktop-first component, the widest `width >= X` in a mobile-first one. A
-breakpoint has no stored direction: it is DERIVED from its
+so no breakpoint query applies under it: Base in a desktop-first component, the widest `width >= X` in a mobile-first one. A breakpoint has no stored direction: it is DERIVED from its
 number against Desktop's (`directionOf`). Wider than Desktop it is `up`, the query `width >= X` (mobile first), and its canvas is
 exactly X (100rem is 1600px); narrower it is `down`, `width < X`, canvas X less 1px (64rem is 1023px); equal to Desktop is refused.
 The defaults, with no file, are the Lumos 64rem, 48rem and 30rem breakpoints (ids `laptop`, `tablet`, `phone`, names read in the
@@ -1086,11 +1085,30 @@ parser and by the Settings page, which never saves it. A tag follows the templat
 already holds the wrapper chain (same at-rule names and parameters, whitespace-insensitive): new rules
 go inside the innermost wrapper after the rules there; a one-line wrapper (`@layer components {}`) is
 opened onto its own lines when its first rule goes in; any other tag is written exactly as before.
-Stacki never wraps or moves rules a person wrote. Settings > Style tags edits it as one code block holding
-the whole tag (`src/app/settings/StyleTagSettings.tsx`): the attributes and the content are editable,
-`<style`, the opening `>` and `</style>` are locked (`styleTagEditor.ts`), and attributes that do not
-parse mark the block invalid and are not saved. The Style panel's "Add custom styles in" list links to it
-(Style tag defaults…). The CLI reaches it as `newStyleTag.attributes` and `newStyleTag.content`
+Stacki never wraps or moves rules a person wrote. Settings > New style locations edits it, once per scope
+(below), as one code block holding the whole tag (`src/app/settings/StyleTagSettings.tsx`): the attributes
+and the content are editable, `<style`, the opening `>` and `</style>` are locked (`styleTagEditor.ts`), and
+attributes that do not parse mark the block invalid and are not saved. The Style panel's "Add custom styles
+in" list links to it (New style locations…).
+
+**New style locations** (`shared/properties/newStyleLocations.ts`, the `newStyleLocations` section of
+`.stacki/styles.json`). Two scopes, `page` (a style created while a page is open) and `component` (while a
+component is open, and the tag a component made by Create component starts with). Each is
+`{ use: "tag" | "file", file?, tag }`: `tag` is a `<style>` tag in the open file, started from the scope's own
+`tag` (the `newStyleTag` shape above); `file` is an existing stylesheet of the project, a project-relative
+path with a `.css`/`.scss`/`.sass`/`.less` extension, no `..`, at most 512 characters and 32 steps. The scope's
+`tag` is kept beside a file, because it is what a switch back starts from and what is used while the file is
+missing: a chosen file that is not among the project's stylesheets is never written to; the panel writes
+the tag and the Settings tab shows a warning chip. A project that holds only the older `newStyleTag` reads it
+as both scopes, so nothing changes until a person changes a setting; the first save writes the new section and
+mirrors the page's tag into `newStyleTag` for an older Stacki. A new rule goes into the chosen file by these
+rules (`fileRuleWrappers`): where a `/* stacki:rules */` marker in the file sits; else inside the file's LAST
+top-level `@layer` block, after what it holds; else at the top level. A file that ends in `@media` or
+`@supports` gets the rule at the top level, because a base rule written inside would become conditional. Only
+the file the scope chose is placed this way; every other stylesheet is written as ever. The scope is the open
+file's kind (`openStyleScope`); "Add custom styles in" defaults to the chosen file, and Create component's
+moved styles use the `component` scope's tag. The CLI reaches the section as `newStyleLocations.page.use`,
+`newStyleLocations.page.file`, `newStyleLocations.component.tag.content` and so on. The CLI reaches it as `newStyleTag.attributes` and `newStyleTag.content`
 (`stacki config set styles newStyleTag.attributes 'is:global lang="scss"'`).
 
 **The first tag is created once** (`model/firstTagLane.ts`, driven by `embed/useEditorResolution.ts`).

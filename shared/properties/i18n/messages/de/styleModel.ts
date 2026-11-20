@@ -166,7 +166,7 @@ export const messages = {
   'styleModel.embed.card.noElement': 'Kein Element ausgewählt',
   'styleModel.embed.card.searchEmbeds': 'Einbettungen suchen …',
   'styleModel.embed.card.source': 'Stilquelle: die Webflow-Klasse oder Einbettung, in die Änderungen geschrieben werden',
-  'styleModel.embed.card.styleTagDefaults': 'Style-Tag-Vorgaben…',
+  'styleModel.embed.card.styleTagDefaults': 'Neue Style-Speicherorte…',
   'styleModel.embed.card.unsaved': 'Nicht gespeichert',
   'styleModel.embed.card.unsavedTip': 'Noch nicht gespeichert – wird beim Verlassen der Komponente angewendet',
   'styleModel.embed.chip.clear': 'Inline-Stile löschen',

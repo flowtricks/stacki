@@ -167,7 +167,7 @@ export const messages = {
   'styleModel.embed.card.noElement': 'Nenhum elemento selecionado',
   'styleModel.embed.card.searchEmbeds': 'Pesquisar embeds…',
   'styleModel.embed.card.source': 'Origem do estilo: a classe do Webflow ou o embed que recebe as edições',
-  'styleModel.embed.card.styleTagDefaults': 'Padrões das tags style…',
+  'styleModel.embed.card.styleTagDefaults': 'Locais dos novos estilos…',
   'styleModel.embed.card.unsaved': 'Não salvo',
   'styleModel.embed.card.unsavedTip': 'Ainda não salvo: é aplicado ao sair do componente',
   'styleModel.embed.chip.clear': 'Limpar estilos inline',

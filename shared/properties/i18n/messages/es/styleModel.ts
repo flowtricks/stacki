@@ -167,7 +167,7 @@ export const messages = {
   'styleModel.embed.card.noElement': 'Ningún elemento seleccionado',
   'styleModel.embed.card.searchEmbeds': 'Buscar incrustaciones…',
   'styleModel.embed.card.source': 'Origen del estilo: la clase de Webflow o la incrustación donde van las ediciones',
-  'styleModel.embed.card.styleTagDefaults': 'Valores predeterminados de etiquetas style…',
+  'styleModel.embed.card.styleTagDefaults': 'Ubicaciones de nuevos estilos…',
   'styleModel.embed.card.unsaved': 'Sin guardar',
   'styleModel.embed.card.unsavedTip': 'Aún sin guardar: se aplica al salir del componente',
   'styleModel.embed.chip.clear': 'Borrar estilos en línea',

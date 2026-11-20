@@ -703,9 +703,9 @@ test('the "Add custom styles in" list ends with a link to the style tag defaults
   assert.ok(trigger, 'the source picker is drawn');
   trigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   const link = await waitFor({
-    what: 'the "Style tag defaults…" footer row',
+    what: 'the "New style locations…" footer row',
     read: () =>
-      [...document.querySelectorAll('.u-select-footer [role="option"], .u-select-footer *')].find((element) => element.textContent === 'Style tag defaults…'),
+      [...document.querySelectorAll('.u-select-footer [role="option"], .u-select-footer *')].find((element) => element.textContent === 'New style locations…'),
     until: (element) => element !== undefined,
   });
   link.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
@@ -722,7 +722,7 @@ test('the "Add custom styles in" list ends with a link to the style tag defaults
   studio.container.querySelector('.embed-editor_source-picker button').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await pickerListOpen('the source list open, without settings to link to');
   assert.ok(
-    ![...document.querySelectorAll('.u-select-footer *')].some((element) => element.textContent === 'Style tag defaults…'),
+    ![...document.querySelectorAll('.u-select-footer *')].some((element) => element.textContent === 'New style locations…'),
     'no link without settings to open',
   );
 });

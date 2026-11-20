@@ -166,7 +166,7 @@ export const messages = {
   'styleModel.embed.card.noElement': 'No element selected',
   'styleModel.embed.card.searchEmbeds': 'Search embeds…',
   'styleModel.embed.card.source': 'Style source — the Webflow class or embed edits go to',
-  'styleModel.embed.card.styleTagDefaults': 'Style tag defaults…',
+  'styleModel.embed.card.styleTagDefaults': 'New style locations…',
   'styleModel.embed.card.unsaved': 'Unsaved',
   'styleModel.embed.card.unsavedTip': 'Not yet saved — applies when you exit the component',
   'styleModel.embed.chip.clear': 'Clear inline styles',

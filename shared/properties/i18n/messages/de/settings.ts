@@ -176,7 +176,7 @@ export const messages = {
   'settings.empty.folders': 'Öffne ein Projekt, um seine Ordner auszuwählen.',
   'settings.empty.instructions': 'Öffne ein Projekt, um auszuwählen, was das Anweisungen-Panel ausblendet.',
   'settings.empty.roles': 'Öffne ein Projekt, um seine Rollen festzulegen.',
-  'settings.empty.styles': 'Öffne ein Projekt, um festzulegen, womit seine neuen Style-Tags beginnen.',
+  'settings.empty.styles': 'Öffne ein Projekt, um festzulegen, wohin seine neuen Styles kommen.',
   'settings.empty.studio': 'Öffne ein Projekt, um Stacki Studio hinzuzufügen.',
   'settings.folders.cms.info': 'Sammlungen und Datendateien, die das CMS-Panel auflistet.',
   'settings.folders.collections.info': 'Aus Astros Content-Konfiguration gelesen.',
@@ -277,6 +277,16 @@ export const messages = {
   'settings.roles.viewAs.label': 'Ansicht als',
   'settings.saved': 'Gespeichert',
   'settings.saving': 'Wird gespeichert …',
+  'settings.newStyles.component.info':
+    'Wohin neue Styles in einer Komponente kommen: eine CSS-Datei des Projekts oder ein Style-Tag. Regeln kommen in den letzten @layer- oder @media-Block oder an /* stacki:rules */.', // review
+  'settings.newStyles.component.title': 'In einer Komponente erstellte Styles', // review
+  'settings.newStyles.createTag': 'Style-Tag erstellen', // review
+  'settings.newStyles.location.label': 'Neue Styles kommen in', // review
+  'settings.newStyles.missing': '{path} wurde nicht gefunden. Neue Styles verwenden ein Style-Tag, bis du eine andere Datei wählst.', // review
+  'settings.newStyles.missingHint': 'Nicht gefunden', // review
+  'settings.newStyles.page.info':
+    'Wohin neue Styles in einer Seite kommen: eine CSS-Datei des Projekts oder ein Style-Tag. Regeln kommen in den letzten @layer- oder @media-Block oder an /* stacki:rules */.', // review
+  'settings.newStyles.page.title': 'In einer Seite erstellte Styles', // review
   'settings.secrets.empty.noFileBody': 'Noch keine {file}-Datei. Ein Secret anzulegen erstellt sie.', // review
   'settings.secrets.error.tooLarge': 'Die {file}-Datei ist zu groß, um sie hier zu bearbeiten.',
   'settings.secrets.error.notText': 'Kein gültiges UTF-8, daher lässt Stacki {file} unberührt.',
@@ -330,11 +340,7 @@ export const messages = {
   'settings.studio.info':
     'Bearbeiten und Zusammenarbeiten im Browser für dieses Projekt. Die Einrichtung installiert Studio lokal und führt durch das Cloud-Deployment.',
   'settings.styleTags.error.save': 'Die Einstellungen für Style-Tags konnten nicht gespeichert werden. {message}',
-  'settings.styleTags.hint': 'Regeln kommen in den letzten @layer- oder @media-Block oder dorthin, wo du {token} schreibst.',
-  'settings.styleTags.info':
-    'Womit ein neuer Style-Tag beginnt, wenn das Style-Panel einen anlegt: seine Attribute und sein Inhalt. Mit dem Projekt in .stacki/styles.json gespeichert.',
   'settings.styleTags.invalid': 'Ungültig',
-  'settings.styleTags.title': 'Neue Style-Tags',
   'settings.tab.audits': 'Audits', // same
   'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'CMS-Verbindungen',
@@ -342,7 +348,7 @@ export const messages = {
   'settings.tab.folders': 'Ordner',
   'settings.tab.instructions': 'Anweisungen',
   'settings.tab.roles': 'Rollen',
-  'settings.tab.styles': 'Style-Tags',
+  'settings.tab.styles': 'Neue Style-Speicherorte',
   'settings.tab.studio': 'Stacki Studio', // same
   'settings.mcp.add.docs': 'Einrichtungsanleitung für {name}',
   'settings.mcp.add.name': 'Servername',

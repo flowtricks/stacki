@@ -145,7 +145,7 @@ export type HostState = {
    *  one undo step. The CSS is the block's whole text, rule included. Resolves once the edit
    *  reached disk or was refused; a refusal says why. Absent where the host cannot add a node. */
   addStyleBlock: ((request: StyleBlockRequest) => Promise<ClassOutcome>) | undefined;
-  /** Open the project's settings for new `<style>` tags (Desktop's Settings → Style tags), from the
+  /** Open the project's settings for new `<style>` tags (Desktop's Settings → New style locations), from the
    *  "Add custom styles in" list. Absent where the host has no such settings: the list then has no link. */
   openStyleTagSettings: (() => void) | undefined;
   /** Take a class, or an attribute, off the selected element: a chip selected in

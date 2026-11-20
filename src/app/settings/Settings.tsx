@@ -103,7 +103,7 @@ function TabIcon(props: { readonly tab: SettingsTab }) {
   return <SettingsTabIcon tab={props.tab} size={14} />;
 }
 
-// Style tags are the project's style setup, as its breakpoints are, so the tab is governed by the
+// New style locations are the project's style setup, as its breakpoints are, so the tab is governed by the
 // breakpoints permission: a role that could edit them under Breakpoints still can, and no existing
 // roles file has to learn a new feature. Its icon is the code braces of the template it edits.
 function accessTabOf(tab: SettingsTab): Exclude<SettingsTab, 'styles'> {

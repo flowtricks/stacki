@@ -1,4 +1,4 @@
-// The one code block of Settings → Style tags: a whole `<style ...>` tag, as a new tag will be
+// The one code block of Settings → New style locations: a whole `<style ...>` tag, as a new tag will be
 // written, that the person edits in place.
 //
 // What can change is what a project may choose: the attributes on the opening tag (add

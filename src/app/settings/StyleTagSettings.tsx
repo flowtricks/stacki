@@ -1,30 +1,42 @@
-// Settings → Style tags → New style tags: what a `<style>` tag starts with when the Style panel creates one.
-// Its own tab, so it is found where it is looked for; the Style panel's "Add custom styles in" list links
-// here ("Style tag defaults…").
+// Settings → New style locations: where a style goes when the Style panel creates one, for a page and for a
+// component. Its own tab, so it is found where it is looked for; the Style panel's "Add custom styles in" list
+// links here ("New style locations…").
 //
-// The whole setting is one highlighted code block holding the tag itself, `<style is:global>` … `</style>`:
-// the block is its own preview. The person edits the opening tag's attributes and the content between the
-// tags; the tag cannot become anything else (styleTagEditor.ts locks `<style`, the opening `>` and
-// `</style>`). Each change is checked as it is typed: attributes that do not parse (newStyleTag.ts
-// parseStyleTagAttributes) or a template that cannot place rules turn the block red with one word and are
-// not saved; a valid one is saved after a pause to the `newStyleTag` section of `.stacki/styles.json`,
-// through src/ipc/newStyleTagBridge.ts, which leaves the rest of the file alone. Reading never writes.
+// Each scope (a page, a component) chooses ONE place: "Create a style tag" in the open file, or an existing CSS
+// file of the project, picked from a dropdown of the project's stylesheets by path (never a native select). With
+// a style tag chosen, one highlighted code block shows the tag itself, `<style is:global>` … `</style>`: the
+// block is its own preview. The person edits the opening tag's attributes and the content between the tags; the
+// tag cannot become anything else (styleTagEditor.ts locks `<style`, the opening `>` and `</style>`). Each change
+// is checked as it is typed: attributes that do not parse (newStyleTag.ts parseStyleTagAttributes) or a template
+// that cannot place rules turn the block red with one word and are not saved. A chosen file that is no longer in
+// the project shows a warning chip, and the panel writes the scope's style tag until it is picked again, so
+// nothing is ever written to a path that was not found (newStyleLocations.ts effectiveLocation).
+//
+// A choice applies at once: the panel's store (model/newStyleTagSettings.ts) is updated as it is made, and the
+// `newStyleLocations` section of `.stacki/styles.json` is written behind it, in order, through
+// src/ipc/newStyleTagBridge.ts, which leaves the rest of the file alone. Reading never writes.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import {
-  DEFAULT_NEW_STYLE_TAG,
-  NEW_STYLE_TAG_RULES_TOKEN,
-  parseStyleTagAttributes,
-  templateFrame,
-  type NewStyleTagSettings,
-} from '../../../shared/properties/newStyleTag';
-import { readNewStyleTag, writeNewStyleTag } from '../../ipc/newStyleTagBridge';
-import { publishNewStyleTagSettings } from '../../features/style/model/newStyleTagSettings';
+  locationHealth,
+  stylesheetChoices,
+  withFile,
+  withTag,
+  withTagSettings,
+  type NewStyleLocation,
+  type NewStyleLocations,
+  type NewStyleScope,
+} from '../../../shared/properties/newStyleLocations';
+import { parseStyleTagAttributes, templateFrame, type NewStyleTagSettings } from '../../../shared/properties/newStyleTag';
+import { readNewStyleLocations, writeNewStyleLocations } from '../../ipc/newStyleTagBridge';
+import { readStyleFiles } from '../../features/style/stylePanelBridge';
+import { publishNewStyleLocations } from '../../features/style/model/newStyleTagSettings';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
-import { CodeInline } from '../../ui/CodeBlock';
+import { CodeIcon, FileIcon } from '../../ui/Icons';
+import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { Skeleton } from '../../ui/Skeleton';
-import { SettingsNotice, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
+import { SettingsNotice, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { can } from '../../../shared/properties/projectRoles';
 import { styleTagLock, styleTagParts, styleTagText } from './styleTagEditor';
@@ -33,10 +45,20 @@ import './styleTagSettings.css';
 /** How long typing pauses before the block is saved: one save per thought, not per key. */
 const SAVE_DELAY_MS = 600;
 
+/** The dropdown's value for "Create a style tag". Not a stylesheet path (those end in an extension), so no file collides with it. */
+/** The menu gets a search box once it lists more options than this; a short list stays clean. */
+export const SEARCH_OPTIONS_MIN = 6;
+
+/** Rows the menu draws at once; the search narrows a longer list before it is counted. */
+const LIST_ROWS_MAX = 500;
+
+export const CREATE_TAG_CHOICE = '__create-style-tag__';
+
 /**
- * The Style tags tab: the section, its save indicator, and the permission that governs it. Style
- * tags are part of the project's style setup, so the breakpoints permission decides who edits them
- * (Settings.tsx accessTabOf), as it did while the section lived under Breakpoints.
+ * The New style locations tab: its two sections, the save indicator, and the permission that
+ * governs them. Where styles go is part of the project's style setup, so the breakpoints
+ * permission decides who edits it (Settings.tsx accessTabOf), as it did while the section lived
+ * under Breakpoints.
  */
 export function StyleTagSettingsPage(props: { readonly projectPath: string }) {
   const translate = useTranslate();
@@ -50,8 +72,6 @@ export function StyleTagSettingsPage(props: { readonly projectPath: string }) {
     </section>
   );
 }
-
-type Loaded = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly saved: NewStyleTagSettings };
 
 /** The settings a block's text says, or undefined when its attributes or its template cannot be saved. */
 export function styleTagSettingsOf(text: string): NewStyleTagSettings | undefined {
@@ -83,93 +103,176 @@ function dedented(content: string): string {
 export function StyleTagSettings(props: { readonly projectPath: string; readonly editable: boolean; readonly track: <T>(save: Promise<T>) => Promise<T> }) {
   const { projectPath, editable, track } = props;
   const translate = useTranslate();
-  const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
-  const [text, setText] = useState(() => styleTagText(DEFAULT_NEW_STYLE_TAG));
-  const [invalid, setInvalid] = useState(false);
+  const [locations, setLocations] = useState<NewStyleLocations>();
+  // The project's stylesheets, project-relative; undefined until listed (the dropdown shows skeleton rows meanwhile).
+  const [stylesheets, setStylesheets] = useState<readonly string[]>();
   const [problem, setProblem] = useState<string>();
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // Made once: the editor reads its extensions when it is made, and the lock never changes.
-  const lock = useMemo(() => styleTagLock(), []);
+  // The latest locations, so a debounced editor save composes with a dropdown change made since.
+  const latest = useRef<NewStyleLocations | undefined>(undefined);
+  // Writes run one after another, each carrying the whole latest value, so the file ends at what was chosen last.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
     let live = true;
-    const show = (saved: NewStyleTagSettings): void => {
-      setLoaded({ kind: 'ready', saved });
-      setText(styleTagText(saved));
+    const failed = (failure: unknown): void => {
+      if (live) {
+        setProblem(translate('settings.styleTags.error.save', { message: failure instanceof Error ? failure.message : String(failure) }));
+      }
     };
-    readNewStyleTag(projectPath).then(
-      (saved) => {
-        if (live) {
-          show(saved);
-        }
-      },
-      (failure: unknown) => {
-        if (live) {
-          show(DEFAULT_NEW_STYLE_TAG);
-          setProblem(translate('settings.styleTags.error.save', { message: failure instanceof Error ? failure.message : String(failure) }));
-        }
-      },
-    );
+    readNewStyleLocations(projectPath).then((saved) => {
+      if (live) {
+        latest.current = saved;
+        setLocations(saved);
+      }
+    }, failed);
+    readStyleFiles(projectPath).then((listed) => {
+      if (live) {
+        setStylesheets(listed.ok ? stylesheetChoices(listed.value.map((file) => file.rel)) : []);
+      }
+    }, failed);
     return () => {
       live = false;
-      clearTimeout(timer.current);
     };
   }, [projectPath, translate]);
 
-  const save = (next: NewStyleTagSettings): void => {
-    track(writeNewStyleTag(projectPath, next)).then(
-      (written) => {
-        setProblem(undefined);
-        setLoaded({ kind: 'ready', saved: written });
-        // The Style panel's next write already uses it.
-        publishNewStyleTagSettings(written);
-      },
+  // The scope's location changes: shown and applied at once, written behind it.
+  const change = (scope: NewStyleScope, update: (location: NewStyleLocation) => NewStyleLocation): void => {
+    const base = latest.current;
+    assert(base !== undefined, 'StyleTagSettings: a change is made after the locations are read');
+    const next: NewStyleLocations = { ...base, [scope]: update(base[scope]) };
+    latest.current = next;
+    setLocations(next);
+    publishNewStyleLocations(next);
+    const written = queue.current.then(() => writeNewStyleLocations(projectPath, next));
+    queue.current = written.catch(() => undefined);
+    track(written).then(
+      () => setProblem(undefined),
       (failure: unknown) => setProblem(translate('settings.styleTags.error.save', { message: failure instanceof Error ? failure.message : String(failure) })),
     );
   };
-  const change = (next: string): void => {
+
+  if (locations === undefined) {
+    return (
+      <SettingsSection title={translate('settings.newStyles.page.title')}>
+        <Skeleton height="96px" radius="12px" />
+      </SettingsSection>
+    );
+  }
+  return (
+    <>
+      {problem !== undefined && <SettingsNotice message={problem} />}
+      <ScopeSection
+        key={`page:${projectPath}`}
+        scope="page"
+        location={locations.page}
+        stylesheets={stylesheets}
+        editable={editable}
+        onChange={(update) => change('page', update)}
+      />
+      <ScopeSection
+        key={`component:${projectPath}`}
+        scope="component"
+        location={locations.component}
+        stylesheets={stylesheets}
+        editable={editable}
+        onChange={(update) => change('component', update)}
+      />
+    </>
+  );
+}
+
+/** The dropdown's options: "Create a style tag", then the project's stylesheets by path; a chosen file that is gone stays listed, dimmed, so the trigger names it. */
+export function locationOptions(
+  location: NewStyleLocation,
+  stylesheets: readonly string[],
+  labels: { readonly createTag: string; readonly missing: string },
+): readonly DropdownOption[] {
+  const options: DropdownOption[] = [{ value: CREATE_TAG_CHOICE, label: labels.createTag, pinned: true, icon: <CodeIcon size={14} /> }];
+  for (const rel of stylesheets) {
+    options.push({ value: rel, label: rel, icon: <FileIcon size={14} /> });
+  }
+  if (location.kind === 'file' && !stylesheets.includes(location.path)) {
+    options.push({ value: location.path, label: location.path, hint: labels.missing, dim: true, icon: <FileIcon size={14} /> });
+  }
+  assert(options.length >= 1, 'locationOptions: "Create a style tag" is always offered');
+  return options;
+}
+
+function ScopeSection(props: {
+  readonly scope: NewStyleScope;
+  readonly location: NewStyleLocation;
+  readonly stylesheets: readonly string[] | undefined;
+  readonly editable: boolean;
+  readonly onChange: (update: (location: NewStyleLocation) => NewStyleLocation) => void;
+}) {
+  const { scope, location, stylesheets, editable, onChange } = props;
+  const translate = useTranslate();
+  const health = stylesheets === undefined ? ({ kind: 'ready' } as const) : locationHealth(location, stylesheets);
+  const options = locationOptions(location, stylesheets ?? [], {
+    createTag: translate('settings.newStyles.createTag'),
+    missing: translate('settings.newStyles.missingHint'),
+  });
+  const value = location.kind === 'file' ? location.path : CREATE_TAG_CHOICE;
+  const title = translate(scope === 'page' ? 'settings.newStyles.page.title' : 'settings.newStyles.component.title');
+  const info = translate(scope === 'page' ? 'settings.newStyles.page.info' : 'settings.newStyles.component.info');
+  return (
+    <SettingsSection title={title} info={info}>
+      <div className="style-tags-cards" data-scope={scope}>
+        <SettingsRow label={translate('settings.newStyles.location.label')}>
+          <Dropdown
+            ariaLabel={`${title}: ${translate('settings.newStyles.location.label')}`}
+            value={value}
+            options={options}
+            disabled={!editable}
+            searchable={options.length > SEARCH_OPTIONS_MIN}
+            rowsMax={LIST_ROWS_MAX}
+            loading={stylesheets === undefined}
+            menuWidthMin={320}
+            onChange={(choice) => onChange((previous) => (choice === CREATE_TAG_CHOICE ? withTag(previous) : withFile(previous, choice)))}
+          />
+        </SettingsRow>
+        {health.kind === 'missing' && (
+          <span className="style-tags-chip" role="status">
+            {translate('settings.newStyles.missing', { path: health.path })}
+          </span>
+        )}
+        {/* A missing file leaves the tag in charge (the panel writes it), so its editor stays beneath the chip. */}
+        {(location.kind === 'tag' || health.kind === 'missing') && (
+          <TagEditor tag={location.tag} editable={editable} onChange={(tag) => onChange((previous) => withTagSettings(previous, tag))} />
+        )}
+      </div>
+    </SettingsSection>
+  );
+}
+
+// The scope's one code block: a whole `<style>` tag, as a new tag will be written, with the caption on where rules go.
+function TagEditor(props: { readonly tag: NewStyleTagSettings; readonly editable: boolean; readonly onChange: (tag: NewStyleTagSettings) => void }) {
+  const { tag, editable, onChange } = props;
+  const translate = useTranslate();
+  const [text, setText] = useState(() => styleTagText(tag));
+  const [invalid, setInvalid] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Made once: the editor reads its extensions when it is made, and the lock never changes.
+  const lock = useMemo(() => styleTagLock(), []);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const edit = (next: string): void => {
     setText(next);
     clearTimeout(timer.current);
     const settings = styleTagSettingsOf(next);
     setInvalid(settings === undefined);
     if (settings !== undefined) {
-      timer.current = setTimeout(() => save(settings), SAVE_DELAY_MS);
+      timer.current = setTimeout(() => onChange(settings), SAVE_DELAY_MS);
     }
   };
-
-  if (loaded.kind === 'loading') {
-    return (
-      <SettingsSection title={translate('settings.styleTags.title')}>
-        <Skeleton height="96px" radius="12px" />
-      </SettingsSection>
-    );
-  }
-  const hint = translate('settings.styleTags.hint', { token: '\u0000' }).split('\u0000');
   return (
-    <SettingsSection title={translate('settings.styleTags.title')} info={translate('settings.styleTags.info')}>
-      <div className="style-tags-cards">
-        {problem !== undefined && <SettingsNotice message={problem} />}
-        <div className="style-tags-editor" data-readonly={editable ? undefined : ''} data-invalid={invalid ? '' : undefined}>
-          <CodeEditor
-            key={projectPath}
-            language="html"
-            indentation="spaces"
-            chrome="minimal"
-            value={text}
-            extensions={lock}
-            onChange={editable ? change : undefined}
-          />
-          {invalid && (
-            <span className="style-tags-invalid" role="alert">
-              {translate('settings.styleTags.invalid')}
-            </span>
-          )}
-        </div>
-        <p className="style-tags-caption">
-          {hint[0]}
-          <CodeInline text={NEW_STYLE_TAG_RULES_TOKEN} language="css" />
-          {hint[1]}
-        </p>
+    <>
+      <div className="style-tags-editor" data-readonly={editable ? undefined : ''} data-invalid={invalid ? '' : undefined}>
+        <CodeEditor language="html" indentation="spaces" chrome="minimal" value={text} extensions={lock} onChange={editable ? edit : undefined} />
+        {invalid && (
+          <span className="style-tags-invalid" role="alert">
+            {translate('settings.styleTags.invalid')}
+          </span>
+        )}
       </div>
-    </SettingsSection>
+    </>
   );
 }

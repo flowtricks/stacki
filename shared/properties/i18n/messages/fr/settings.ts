@@ -175,7 +175,7 @@ export const messages = {
   'settings.empty.folders': 'Ouvrez un projet pour choisir ses dossiers.',
   'settings.empty.instructions': 'Ouvrez un projet pour choisir ce que le panneau Instructions masque.',
   'settings.empty.roles': 'Ouvrez un projet pour définir ses rôles.',
-  'settings.empty.styles': 'Ouvrez un projet pour définir le contenu de départ de ses nouvelles balises style.',
+  'settings.empty.styles': 'Ouvrez un projet pour définir où vont ses nouveaux styles.',
   'settings.empty.studio': 'Ouvrez un projet pour ajouter Stacki Studio.',
   'settings.folders.cms.info': 'Collections et fichiers de données listés par le panneau CMS.',
   'settings.folders.collections.info': 'Lues depuis la configuration de contenu d’Astro.',
@@ -276,6 +276,16 @@ export const messages = {
   'settings.roles.viewAs.label': 'Voir en tant que',
   'settings.saved': 'Enregistré',
   'settings.saving': 'Enregistrement…',
+  'settings.newStyles.component.info':
+    'Où vont les nouveaux styles dans un composant : un fichier CSS du projet ou une balise style. Les règles vont dans le dernier bloc @layer ou @media, ou à /* stacki:rules */.', // review
+  'settings.newStyles.component.title': 'Styles créés dans un composant', // review
+  'settings.newStyles.createTag': 'Créer une balise style', // review
+  'settings.newStyles.location.label': 'Les nouveaux styles vont dans', // review
+  'settings.newStyles.missing': "{path} est introuvable. Les nouveaux styles utilisent une balise style jusqu'à ce que vous choisissiez un autre fichier.", // review
+  'settings.newStyles.missingHint': 'Introuvable', // review
+  'settings.newStyles.page.info':
+    'Où vont les nouveaux styles dans une page : un fichier CSS du projet ou une balise style. Les règles vont dans le dernier bloc @layer ou @media, ou à /* stacki:rules */.', // review
+  'settings.newStyles.page.title': 'Styles créés dans une page', // review
   'settings.secrets.empty.noFileBody': 'Pas encore de fichier {file}. Ajouter un secret le crée.', // review
   'settings.secrets.error.tooLarge': 'Le fichier {file} est trop volumineux pour être modifié ici.',
   'settings.secrets.error.notText': 'UTF-8 invalide : Stacki ne touche pas à {file}.',
@@ -329,11 +339,7 @@ export const messages = {
   'settings.studio.info':
     'Édition et collaboration dans le navigateur pour ce projet. La configuration installe Studio en local, puis guide le déploiement cloud.',
   'settings.styleTags.error.save': "Les réglages des balises style n'ont pas pu être enregistrés. {message}",
-  'settings.styleTags.hint': 'Les règles vont dans le dernier bloc @layer ou @media, ou là où vous écrivez {token}.',
-  'settings.styleTags.info':
-    'Ce que contient une nouvelle balise style quand le panneau Style en crée une : ses attributs et son contenu. Enregistré avec le projet dans .stacki/styles.json.',
   'settings.styleTags.invalid': 'Invalide',
-  'settings.styleTags.title': 'Nouvelles balises style',
   'settings.tab.audits': 'Audits', // same
   'settings.tab.breakpoints': 'Points d’arrêt',
   'settings.tab.cms': 'Connexions CMS',
@@ -341,7 +347,7 @@ export const messages = {
   'settings.tab.folders': 'Dossiers',
   'settings.tab.instructions': 'Instructions', // same
   'settings.tab.roles': 'Rôles',
-  'settings.tab.styles': 'Balises style',
+  'settings.tab.styles': 'Emplacements des nouveaux styles',
   'settings.tab.studio': 'Stacki Studio', // same
   'settings.mcp.add.docs': 'Guide de configuration de {name}',
   'settings.mcp.add.name': 'Nom du serveur',

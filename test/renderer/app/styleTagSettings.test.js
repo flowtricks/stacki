@@ -1,13 +1,17 @@
-// Goal: Settings > Style tags > New style tags (src/app/settings/StyleTagSettings.tsx) is one code block
-// holding the whole new tag: it shows the project's `newStyleTag` setting as `<style ...>` … `</style>` (a
-// project without the section shows `<style is:global>`, Stacki's default), saves a valid change of the
-// attributes or the content to `.stacki/styles.json` as version 2 keeping the rest of the file, refuses
-// to save attributes that do not parse (the block turns red with one word), keeps the tag a style tag
-// (typing over `<style`, the opening `>` or `</style>` is refused; a pasted whole tag becomes its content),
-// is read-only for a role that may not edit breakpoints' settings, and shows a failed write.
+// Goal: Settings > New style locations (src/app/settings/StyleTagSettings.tsx) has one section per scope, a
+// page and a component. Each shows a dropdown (the shared custom Dropdown, never a native select) that picks
+// "Create a style tag" or one of the project's stylesheets by path. With a style tag chosen, the section shows
+// one code block holding the whole new tag, `<style ...>` … `</style>`, the scope's default content; a
+// project that only holds the older `newStyleTag` section shows it in BOTH scopes (migration). A valid change
+// is saved to `.stacki/styles.json` as the `newStyleLocations` section, keeping the rest of the file, with the
+// page's tag mirrored into the older `newStyleTag`; attributes that do not parse turn the block red and are not
+// saved; the tag stays a style tag (delimiters cannot be edited); a chosen stylesheet that is not in the project
+// shows a warning chip and keeps the tag editor beneath it; a role that may not edit sees everything read-only;
+// a failed write is shown.
 // Method: the real component bundled for jsdom over an in-memory styles file behind a stubbed `window.avb`
-// (projectMetadata / writeProjectMetadata, the calls the bridge makes). Edits are dispatched into the real
-// CodeMirror view as the person's own (a user event), so the lock sees them as it sees typing.
+// (projectMetadata / writeProjectMetadata / listStyleFiles, the calls the bridges make). Edits are dispatched
+// into the real CodeMirror view as the person's own (a user event), so the lock sees them as it sees typing;
+// the dropdown is driven through its real trigger and rows.
 const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
@@ -44,6 +48,7 @@ async function load() {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   const globals = {
     window: dom.window,
+    Window: dom.window.Window,
     document: dom.window.document,
     navigator: dom.window.navigator,
     Element: dom.window.Element,
@@ -74,11 +79,12 @@ async function load() {
   return environment;
 }
 
-async function mount({ source, editable = true, failWrite = false }) {
+async function mount({ source, editable = true, failWrite = false, stylesheets = ['src/styles/global.css', 'src/styles/components.css'] }) {
   const { dom, React, createRoot, StyleTagSettings } = await load();
   const file = { source };
   const writes = [];
   dom.window.avb = {
+    listStyleFiles: async () => ({ files: stylesheets.map((rel) => ({ rel, name: rel.split('/').pop(), path: `/p/${rel}`, size: 10 })) }),
     projectMetadata: async () => ({ ok: true, value: { source: file.source } }),
     writeProjectMetadata: async (input) => {
       if (failWrite) {
@@ -98,55 +104,82 @@ async function mount({ source, editable = true, failWrite = false }) {
   return { container, writes, file, unmount: () => (root.unmount(), container.remove()) };
 }
 
-// The block's CodeMirror view, and what it holds.
-const viewOf = (container) => {
-  const editor = container.querySelector('.cm-editor');
+// The scope's section, its CodeMirror view, and what it holds.
+const sectionOf = (container, scope) => {
+  const section = container.querySelector(`[data-scope="${scope}"]`);
+  assert.ok(section, `the ${scope} section is shown`);
+  return section;
+};
+const viewOf = (container, scope = 'page') => {
+  const editor = sectionOf(container, scope).querySelector('.cm-editor');
   assert.ok(editor, 'the block is a code editor');
   const view = environment.EditorView.findFromDOM(editor);
   assert.ok(view, 'the editor has a view');
   return view;
 };
-const shown = (container) => viewOf(container).state.doc.toString();
+const shown = (container, scope = 'page') => viewOf(container, scope).state.doc.toString();
 // A person's edit: insert `insert` over `from`..`to`, as typing (or pasting) does.
-const type = (container, from, to, insert, userEvent = 'input.type') => {
-  viewOf(container).dispatch({ changes: { from, to, insert }, userEvent });
+const type = (container, from, to, insert, userEvent = 'input.type', scope = 'page') => {
+  viewOf(container, scope).dispatch({ changes: { from, to, insert }, userEvent });
 };
+// Opens a scope's dropdown and picks the row whose text includes `label`.
+const pick = async (container, scope, label) => {
+  sectionOf(container, scope).querySelector('.dd-trigger').click();
+  await wait(50);
+  const row = [...document.querySelectorAll('.dd-option')].find((option) => option.textContent.includes(label));
+  assert.ok(row, `the dropdown lists ${label}`);
+  row.click();
+  await wait(100);
+};
+const lastWrite = (view) => JSON.parse(view.writes[view.writes.length - 1]);
 
-test('a project without the section shows <style is:global>, and reading writes nothing', async (context) => {
+const PAGE_TAG = { version: 2, attributes: 'is:global' };
+
+test('a project without the section shows <style is:global> in both scopes, and reading writes nothing', async (context) => {
   const view = await mount({ source: JSON.stringify({ version: 1, keep: ['is-*'] }) });
   context.after(view.unmount);
-  assert.equal(shown(view.container), '<style is:global>\n</style>');
+  assert.equal(shown(view.container, 'page'), '<style is:global>\n</style>');
+  assert.equal(shown(view.container, 'component'), '<style is:global>\n</style>');
   assert.deepEqual(view.writes, []);
-  assert.ok(!view.container.querySelector('[role="switch"]'), 'no separate switch: the block says it');
-  assert.equal(view.container.querySelector('h4').textContent, 'New style tags');
+  assert.deepEqual(
+    [...view.container.querySelectorAll('h4')].map((heading) => heading.textContent),
+    ['Styles created in a page', 'Styles created in a component'],
+  );
+  assert.equal(view.container.querySelectorAll('select').length, 0, 'never a native select');
+  assert.equal(sectionOf(view.container, 'page').querySelector('.dd-trigger').textContent, 'Create a style tag');
   // A code field, not a code window: no line numbers, no fold gutter, no active-line band.
   assert.ok(!view.container.querySelector('.cm-gutters'), 'no gutter');
   assert.ok(!view.container.querySelector('.cm-activeLine'), 'no active-line band');
 });
 
-test('an older plain <style> choice is shown as it was chosen', async (context) => {
+test('the older single template is shown in both scopes, as it was chosen', async (context) => {
   const view = await mount({ source: JSON.stringify({ version: 1, keep: [], newStyleTag: { version: 1, isGlobal: false, content: '@layer a {}' } }) });
   context.after(view.unmount);
-  assert.equal(shown(view.container), '<style>\n@layer a {}\n</style>');
+  assert.equal(shown(view.container, 'page'), '<style>\n@layer a {}\n</style>');
+  assert.equal(shown(view.container, 'component'), '<style>\n@layer a {}\n</style>');
+  assert.deepEqual(view.writes, [], 'migrating on read writes nothing');
 });
 
-test('content typed between the tags is saved as version 2, keeping the rest of the file', async (context) => {
+test('content typed between the tags saves into its scope only, keeping the rest of the file', async (context) => {
   const view = await mount({ source: JSON.stringify({ version: 1, keep: ['is-*'], lockedStylesheets: ['src/styles/vendor/'] }) });
   context.after(view.unmount);
-  const at = shown(view.container).indexOf('</style>');
-  type(view.container, at, at, '@layer components {\n}\n');
+  const at = shown(view.container, 'component').indexOf('</style>');
+  type(view.container, at, at, '@layer components {\n}\n', 'input.type', 'component');
   await wait(900);
   assert.equal(view.writes.length, 1, 'one save after the pause');
-  const written = JSON.parse(view.writes[0]);
+  const written = lastWrite(view);
   assert.deepEqual(written.keep, ['is-*']);
   assert.deepEqual(written.lockedStylesheets, ['src/styles/vendor/']);
-  assert.deepEqual(written.newStyleTag, { version: 2, attributes: 'is:global', content: '@layer components {\n}' });
+  assert.deepEqual(written.newStyleLocations.component, { use: 'tag', tag: { ...PAGE_TAG, content: '@layer components {\n}' } });
+  assert.deepEqual(written.newStyleLocations.page, { use: 'tag', tag: PAGE_TAG }, 'the page scope keeps its own default');
+  assert.deepEqual(written.newStyleTag, PAGE_TAG, 'the page tag is mirrored for an older Stacki');
+  assert.equal(shown(view.container, 'page'), '<style is:global>\n</style>');
   // Typed indented, as the editor indents inside the tag: saved without the shared indentation.
-  const inner = shown(view.container).indexOf('@layer');
-  const end = shown(view.container).indexOf('</style>');
-  type(view.container, inner, end, '  @layer base {\n    .a {}\n  }\n');
+  const inner = shown(view.container, 'component').indexOf('@layer');
+  const end = shown(view.container, 'component').indexOf('</style>');
+  type(view.container, inner, end, '  @layer base {\n    .a {}\n  }\n', 'input.type', 'component');
   await wait(900);
-  assert.equal(JSON.parse(view.writes[view.writes.length - 1]).newStyleTag.content, '@layer base {\n  .a {}\n}');
+  assert.equal(lastWrite(view).newStyleLocations.component.tag.content, '@layer base {\n  .a {}\n}');
 });
 
 test('attributes are edited on the opening tag; ones that do not parse turn the block red and are not saved', async (context) => {
@@ -155,9 +188,9 @@ test('attributes are edited on the opening tag; ones that do not parse turn the 
   const end = shown(view.container).indexOf('>');
   type(view.container, end, end, ' lang=scss');
   await wait(900);
-  const editor = view.container.querySelector('.style-tags-editor');
+  const editor = sectionOf(view.container, 'page').querySelector('.style-tags-editor');
   assert.ok(editor.hasAttribute('data-invalid'), 'the block is marked');
-  assert.equal(view.container.querySelector('.style-tags-invalid').textContent, 'Invalid');
+  assert.equal(sectionOf(view.container, 'page').querySelector('.style-tags-invalid').textContent, 'Invalid');
   assert.deepEqual(view.writes, [], 'nothing invalid is saved');
   // Fixed: the quotes go in, the mark goes, and it saves.
   const fixed = shown(view.container).indexOf('scss');
@@ -165,13 +198,13 @@ test('attributes are edited on the opening tag; ones that do not parse turn the 
   await wait(900);
   assert.ok(!editor.hasAttribute('data-invalid'));
   assert.equal(view.writes.length, 1);
-  assert.equal(JSON.parse(view.writes[0]).newStyleTag.attributes, 'is:global lang="scss"');
+  assert.equal(lastWrite(view).newStyleLocations.page.tag.attributes, 'is:global lang="scss"');
   // Taking is:global off saves a plain <style>.
   const global = shown(view.container).indexOf(' is:global');
   type(view.container, global, global + ' is:global'.length, '', 'delete.backward');
   await wait(900);
   assert.equal(shown(view.container), '<style lang="scss">\n</style>');
-  assert.equal(JSON.parse(view.writes[view.writes.length - 1]).newStyleTag.attributes, 'lang="scss"');
+  assert.equal(lastWrite(view).newStyleLocations.page.tag.attributes, 'lang="scss"');
 });
 
 test('the tag stays a style tag: its delimiters cannot be typed over, deleted or renamed', async (context) => {
@@ -207,13 +240,55 @@ test('a whole style tag pasted into the content becomes its content', async (con
   type(view.container, close, close, '<style lang="scss">\n@layer base {}\n</style>', 'input.paste');
   assert.equal(shown(view.container), '<style is:global>\n@layer base {}</style>');
   await wait(900);
-  assert.equal(JSON.parse(view.writes[0]).newStyleTag.content, '@layer base {}');
+  assert.equal(lastWrite(view).newStyleLocations.page.tag.content, '@layer base {}');
 });
 
-test('a role that may not edit sees the block read-only, and a failed write is shown', async (context) => {
+test('the dropdown lists the style tag first, then the project stylesheets by path, and a pick is saved for its scope', async (context) => {
+  const view = await mount({ source: JSON.stringify({ version: 1, keep: [] }) });
+  context.after(view.unmount);
+  sectionOf(view.container, 'component').querySelector('.dd-trigger').click();
+  await wait(50);
+  assert.deepEqual(
+    [...document.querySelectorAll('.dd-option')].map((option) => option.textContent.replace(/\s+$/, '')),
+    ['Create a style tag', 'src/styles/global.css', 'src/styles/components.css'],
+  );
+  document.querySelectorAll('.dd-option')[2].click();
+  await wait(100);
+  assert.equal(sectionOf(view.container, 'component').querySelector('.dd-trigger').textContent, 'src/styles/components.css');
+  assert.ok(!sectionOf(view.container, 'component').querySelector('.cm-editor'), 'a file needs no tag editor');
+  assert.ok(sectionOf(view.container, 'page').querySelector('.cm-editor'), 'the page scope is unchanged');
+  assert.deepEqual(lastWrite(view).newStyleLocations.component, { use: 'file', file: 'src/styles/components.css', tag: PAGE_TAG });
+  assert.equal(lastWrite(view).newStyleLocations.page.use, 'tag');
+  // Back to a style tag: the tag default is still there, and the file is gone from the section.
+  await pick(view.container, 'component', 'Create a style tag');
+  assert.ok(sectionOf(view.container, 'component').querySelector('.cm-editor'));
+  assert.deepEqual(lastWrite(view).newStyleLocations.component, { use: 'tag', tag: PAGE_TAG });
+});
+
+test('a chosen stylesheet that is not in the project shows a warning chip, keeps the tag editor, and is never rewritten by reading', async (context) => {
+  const source = JSON.stringify({
+    version: 1,
+    keep: [],
+    newStyleLocations: { version: 1, page: { use: 'file', file: 'src/styles/gone.css', tag: PAGE_TAG }, component: { use: 'tag', tag: PAGE_TAG } },
+  });
+  const view = await mount({ source });
+  context.after(view.unmount);
+  const chip = sectionOf(view.container, 'page').querySelector('.style-tags-chip');
+  assert.ok(chip, 'the warning chip is shown');
+  assert.match(chip.textContent, /src\/styles\/gone\.css was not found/);
+  assert.ok(!sectionOf(view.container, 'component').querySelector('.style-tags-chip'), 'only the scope with the missing file warns');
+  assert.ok(sectionOf(view.container, 'page').querySelector('.cm-editor'), 'the tag that is used meanwhile stays editable');
+  assert.deepEqual(view.writes, []);
+  // Picking an existing file clears the chip.
+  await pick(view.container, 'page', 'src/styles/global.css');
+  assert.ok(!sectionOf(view.container, 'page').querySelector('.style-tags-chip'));
+});
+
+test('a role that may not edit sees everything read-only, and a failed write is shown', async (context) => {
   const readOnly = await mount({ source: JSON.stringify({ version: 1, keep: [] }), editable: false });
   context.after(readOnly.unmount);
   assert.ok(readOnly.container.querySelector('.style-tags-editor').hasAttribute('data-readonly'));
+  assert.ok(sectionOf(readOnly.container, 'page').querySelector('.dd-trigger').disabled);
   readOnly.unmount();
   const failing = await mount({ source: JSON.stringify({ version: 1, keep: [] }), failWrite: true });
   context.after(failing.unmount);
@@ -221,4 +296,64 @@ test('a role that may not edit sees the block read-only, and a failed write is s
   type(failing.container, at, at, '@layer a {}\n');
   await wait(900);
   assert.match(failing.container.querySelector('[role="alert"]').textContent, /disk full/);
+});
+
+test('every row and the closed trigger carry an icon; a short list has no search', async (context) => {
+  const view = await mount({ source: JSON.stringify({ version: 1, keep: [] }) });
+  context.after(view.unmount);
+  const trigger = sectionOf(view.container, 'page').querySelector('.dd-trigger');
+  assert.ok(trigger.querySelector('.dd-icon svg'), 'the closed dropdown shows the icon of its value');
+  trigger.click();
+  await wait(50);
+  const rows = [...document.querySelectorAll('.dd-option')];
+  assert.equal(rows.length, 3);
+  assert.ok(
+    rows.every((row) => row.querySelector('.dd-icon svg')),
+    'icon at the start of each row',
+  );
+  assert.ok(!document.querySelector('.dd-search'), 'three options need no search');
+});
+
+test('a long list is searchable: substring, any case, accents ignored, and an empty result says so', async (context) => {
+  const stylesheets = [
+    'src/styles/base.css',
+    'src/styles/global.css',
+    'src/styles/patterns.css',
+    'src/styles/utilities.css',
+    'src/styles/café.css',
+    'src/styles/Print.css',
+  ];
+  const view = await mount({ source: JSON.stringify({ version: 1, keep: [] }), stylesheets });
+  context.after(view.unmount);
+  sectionOf(view.container, 'page').querySelector('.dd-trigger').click();
+  await wait(50);
+  const search = document.querySelector('.dd-search');
+  assert.ok(search, 'seven options show the search');
+  const labels = () => [...document.querySelectorAll('.dd-option')].map((row) => row.textContent);
+  const setQuery = async (value) => {
+    const setter = Object.getOwnPropertyDescriptor(environment.dom.window.HTMLInputElement.prototype, 'value').set;
+    setter.call(search, value);
+    search.dispatchEvent(new environment.dom.window.Event('input', { bubbles: true }));
+    await wait(50);
+  };
+  await setQuery('CAFE');
+  assert.deepEqual(
+    labels().filter((label) => label.includes('.css')),
+    ['src/styles/café.css'],
+  );
+  assert.ok(
+    labels().some((label) => label.includes('Create a style tag')),
+    'the way back to a tag is never filtered away',
+  );
+  await setQuery('PRINT');
+  assert.deepEqual(
+    labels().filter((label) => label.includes('.css')),
+    ['src/styles/Print.css'],
+  );
+  await setQuery('zzz');
+  assert.deepEqual(
+    labels().filter((label) => label.includes('.css')),
+    [],
+  );
+  assert.ok(document.querySelector('.dd-empty'), 'No matches');
 });
