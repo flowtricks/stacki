@@ -120,6 +120,9 @@ test('opening focuses the checked row; rows are real buttons with names, descrip
   assert.equal(rows[0].getAttribute('aria-checked'), 'false');
   assert.equal(rows[1].querySelectorAll('.menu-check svg').length, 1, 'the check is drawn on the chosen row only');
   assert.equal(rows[0].querySelectorAll('.menu-check svg').length, 0);
+  assert.equal(rows[0].querySelectorAll('.menu-check').length, 0, 'an unchecked row reserves no empty check column, so its key ends at the row edge');
+  assert.equal(rows[0].querySelector('.menu-end').lastElementChild.className, 'menu-key', 'the key is the last thing in an unchecked row');
+  assert.equal(rows[1].querySelector('.menu-end').lastElementChild.className, 'menu-check', 'a check is the last thing in a checked row');
   assert.match(rows[0].textContent, /Most capable/);
   assert.match(rows[1].textContent, /Recommended/);
   assert.equal(rows[0].querySelector('.menu-key').textContent, '1');

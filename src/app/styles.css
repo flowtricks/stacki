@@ -4812,8 +4812,12 @@ body > .embed-editor_provenance {
   width: 180px;
 }
 .ctx-shortcut {
+  flex: none;
   color: var(--text-faint);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
 .ctx-divider {
   height: 1px;
@@ -8439,10 +8443,21 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 /* A key that does the same as the row, muted at its end. */
 .more-menu-shortcut {
+  flex: none;
   margin-left: auto;
   padding-left: 16px;
   color: var(--text-faint);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+/* A label gives way to its key: it is cut with an ellipsis, never run under the hint. */
+.more-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* Each row owns its grid: labels stay fixed, while value tracks share the same
    width bounds so headings and cells resize together. */

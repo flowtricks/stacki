@@ -106,8 +106,9 @@
   line-height: 15px;
 }
 
-/* The end of the row: info mark, key or value, then the check, so a column of
-   checks lines up down the right edge and the icons stay on the left. */
+/* The end of the row: info mark, key or value, then the check, always flush with the row's right padding edge:
+   a hint, a value with its chevron, a check or a switch each end at the same x in every row, and a row with
+   nothing to show draws nothing there (no reserved column that would push hints inward). */
 .menu-end {
   display: inline-flex;
   flex: none;
@@ -117,9 +118,12 @@
   color: var(--text-faint, #989898);
 }
 .menu-key {
+  flex: none;
   min-width: 10px;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   text-align: right;
+  white-space: nowrap;
 }
 .menu-value {
   max-width: 120px;

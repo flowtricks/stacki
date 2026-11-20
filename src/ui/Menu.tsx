@@ -228,7 +228,6 @@ function MenuRows({ entries, autoFocus, closeAll, onCloseSelf }: RowsProps) {
   const rowRefs = useRef<(HTMLButtonElement | undefined)[]>([]);
   const [submenu, setSubmenu] = useState<OpenSubmenu | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const hasChecks = entries.some((entry) => entry.kind === 'item' && entry.checked !== undefined);
   const hasIcons = entries.some((entry) => isMenuRow(entry) && entry.icon !== undefined);
   const focusRow = useCallback((index: number | undefined) => {
     if (index !== undefined) {
@@ -346,7 +345,6 @@ function MenuRows({ entries, autoFocus, closeAll, onCloseSelf }: RowsProps) {
           <RowButton
             key={entry.id}
             entry={entry}
-            hasChecks={hasChecks}
             hasIcons={hasIcons}
             expanded={submenu?.index === index}
             buttonRef={(element) => {
@@ -402,7 +400,6 @@ function StaticEntry({ entry }: { readonly entry: Exclude<MenuEntry, MenuRow> })
 
 interface RowButtonProps {
   readonly entry: MenuRow;
-  readonly hasChecks: boolean;
   readonly hasIcons: boolean;
   readonly expanded: boolean;
   readonly buttonRef: RefCallback<HTMLButtonElement>;
@@ -410,7 +407,7 @@ interface RowButtonProps {
   readonly onHover: () => void;
 }
 
-function RowButton({ entry, hasChecks, hasIcons, expanded, buttonRef, onChoose, onHover }: RowButtonProps) {
+function RowButton({ entry, hasIcons, expanded, buttonRef, onChoose, onHover }: RowButtonProps) {
   const classes = ['menu-row'];
   if (entry.kind === 'item' && entry.danger === true) {
     classes.push('is-danger');
@@ -458,7 +455,7 @@ function RowButton({ entry, hasChecks, hasIcons, expanded, buttonRef, onChoose, 
         </span>
         {entry.description !== undefined && <span className="menu-description">{entry.description}</span>}
       </span>
-      <RowEnd entry={entry} hasChecks={hasChecks} onMarkEnter={infoText === undefined ? undefined : tip.show} onMarkLeave={tip.hide} />
+      <RowEnd entry={entry} onMarkEnter={infoText === undefined ? undefined : tip.show} onMarkLeave={tip.hide} />
       {infoText !== undefined && tip.value !== undefined && createPortal(<InfoTip text={infoText} placement={tip.value} />, tooltipHost(rowElement.current))}
     </button>
   );
@@ -510,12 +507,10 @@ function rowSemantics(entry: MenuRow, options: { readonly expanded: boolean }) {
 
 function RowEnd({
   entry,
-  hasChecks,
   onMarkEnter,
   onMarkLeave,
 }: {
   readonly entry: MenuRow;
-  readonly hasChecks: boolean;
   readonly onMarkEnter: ((mark: HTMLElement) => void) | undefined;
   readonly onMarkLeave: () => void;
 }) {
@@ -526,7 +521,11 @@ function RowEnd({
         <span className="menu-end">
           <InfoMark text={entry.info} onEnter={onMarkEnter} onLeave={onMarkLeave} />
           {key !== undefined && <span className="menu-key">{key}</span>}
-          {hasChecks && <span className="menu-check">{entry.checked === true && <CheckIcon size={14} />}</span>}
+          {entry.checked === true && (
+            <span className="menu-check">
+              <CheckIcon size={14} />
+            </span>
+          )}
         </span>
       );
     }

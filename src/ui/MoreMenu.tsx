@@ -159,7 +159,7 @@ export function MenuSurface({ rows, box, width, menuRef, close, open, anchor }: 
             }}
           >
             {item.icon}
-            {item.label}
+            <span className="more-menu-label">{item.label}</span>
             {item.shortcut !== undefined && <span className="more-menu-shortcut">{item.shortcut}</span>}
           </button>
         ))

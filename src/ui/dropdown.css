@@ -76,8 +76,9 @@
   color: var(--text-faint);
 }
 /* The check ends the row, so icons and images align down the left edge (a
-   rule across the app). Its column is kept empty on unchecked rows, so labels
-   never shift; after a hint it follows the hint rather than splitting the gap. */
+   rule across the app). An unchecked row draws no check column at all, so its hint
+   or label ends at the same right edge as a check does; labels do not shift, since
+   they take the rest of the row. After a hint the check follows the hint. */
 .dd-check {
   width: 16px;
   display: flex;
@@ -91,14 +92,19 @@
   margin-left: auto;
   padding-left: 10px;
   font-size: 10px;
+  font-variant-numeric: tabular-nums;
   color: var(--text-faint);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 .dd-option.highlight .dd-hint {
   color: rgba(255, 255, 255, 0.8);
 }
 .dd-hint ~ .dd-check {
   margin-left: 0;
+}
+.dd-check:empty {
+  display: none;
 }
 /* A row that removes something (an app menu's Remove): highlighted, its fill,
    text and icon all turn red together, as the editor's ⋯ menus' danger rows do
