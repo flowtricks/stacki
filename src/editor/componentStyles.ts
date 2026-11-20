@@ -187,7 +187,7 @@ export function layeredRules(rules: readonly string[], templateLayer: string | u
   const open: { run: { readonly layer: string; readonly inners: string[] } | undefined } = { run: undefined };
   const closeRun = (): void => {
     if (open.run !== undefined) {
-      out.push(`@layer ${open.run.layer} {\n${indent(open.run.inners.join('\n\n'))}\n}`);
+      out.push(`@layer ${open.run.layer} {\n${indent(open.run.inners.join('\n'))}\n}`);
       open.run = undefined;
     }
   };

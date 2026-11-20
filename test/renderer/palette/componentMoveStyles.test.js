@@ -279,3 +279,49 @@ test('writing the layers again changes nothing, and the sources lose exactly wha
   assert.deepEqual(layeredRules(layeredRules(plan.carried.rules, 'components'), 'components'), layeredRules(plan.carried.rules, 'components'));
   assert.equal(squash(plan.sheets[0].after), '@layer components { .footer { margin: 0; } }');
 });
+
+// No blank line is introduced by the move: the moved rules sit one under another, and a source loses a rule without
+// leaving a doubled or a leading blank line behind.
+const movedTag = (css, content = TEMPLATE) => {
+  const plan = planStyleMove(card, new Set(['card', 'card_title']), [], [sheet('src/styles/base.css', css)]);
+  const rules = tagIndentedRules(layeredRules(plan.carried.rules, templateLayerOf(content)), content === '' ? 0 : 1);
+  const node = carriedStyleNode({ styles: { ...plan.carried, rules } }, { attributes: [], content }, '', '\n');
+  return { plan, tag: node.inner };
+};
+
+test('two moved rules are joined by one newline, whether or not the source had a blank line between them', () => {
+  const tight = movedTag('@layer components {\n  .card { padding: 1rem; }\n  .card_title { margin: 0.5rem; }\n}\n');
+  const spaced = movedTag('@layer components {\n  .card { padding: 1rem; }\n\n  .card_title { margin: 0.5rem; }\n}\n');
+  for (const { tag } of [tight, spaced]) {
+    assert.ok(!/\n[ \t]*\n/.test(tag), JSON.stringify(tag));
+    assert.match(tag, /@layer components \{\n\t\t\.card \{/, 'nothing between the opening and the first rule');
+    assert.match(tag, /\}\n\t\t\.card_title \{/, 'one newline between the rules');
+    assert.match(tag, /\}\n\t\}\s*$/, 'nothing between the last rule and the closing brace');
+  }
+  assert.equal(tight.tag, spaced.tag);
+});
+
+test('rules from different files are joined the same way', () => {
+  const plan = planStyleMove(
+    card,
+    new Set(['card', 'card_title']),
+    [],
+    [sheet('a.css', '.card { color: red; }\n'), sheet('b.css', '.card_title { color: blue; }\n')],
+  );
+  assert.equal(plan.carried.rules.length, 2);
+  const node = carriedStyleNode({ styles: { ...plan.carried, rules: tagIndentedRules(plan.carried.rules, 0) } }, { attributes: [], content: '' }, '', '\n');
+  assert.ok(!/\n[ \t]*\n/.test(node.inner), JSON.stringify(node.inner));
+});
+
+test('a source loses the first, the middle or the last rule without a stray blank line', () => {
+  const sheetAfter = (css, chosen) => planStyleMove(card, new Set(chosen), [], [sheet('s.css', css)]).sheets[0].after;
+  const css = '.card { a: 1; }\n\n.footer { b: 2; }\n\n.card_title { c: 3; }\n';
+  assert.equal(sheetAfter(css, ['card']), '.footer { b: 2; }\n\n.card_title { c: 3; }\n', 'the first');
+  assert.equal(sheetAfter('.footer { b: 2; }\n\n.card { a: 1; }\n\n.x { c: 3; }\n', ['card']), '.footer { b: 2; }\n\n.x { c: 3; }\n', 'the middle');
+  assert.equal(sheetAfter('.footer { b: 2; }\n\n.card_title { c: 3; }\n', ['card_title']), '.footer { b: 2; }\n', 'the last');
+  assert.equal(
+    sheetAfter('@layer components {\n  .card { a: 1; }\n\n  .footer { b: 2; }\n}\n', ['card']),
+    '@layer components {\n  .footer { b: 2; }\n}\n',
+    'inside a layer',
+  );
+});

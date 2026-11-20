@@ -150,7 +150,7 @@ export function withoutCarried(css: string, subject: PasteStyleSubject): string 
 // Removes `rule`, then each wrapping at-rule it leaves with nothing but comments, climbing at most chainDepthMax.
 function removeWithEmptyWrappers(rule: Rule): void {
   let parent: unknown = rule.parent;
-  rule.remove();
+  removeKeepingGap(rule);
   for (let depth = 0; depth < PASTE_STYLE_LIMITS.chainDepthMax; depth++) {
     if (!isAtRule(parent) || !WRAPPING_AT_RULES.has(parent.name.toLowerCase())) {
       return;
@@ -159,8 +159,21 @@ function removeWithEmptyWrappers(rule: Rule): void {
       return;
     }
     const next: unknown = parent.parent;
-    parent.remove();
+    removeKeepingGap(parent);
     parent = next;
+  }
+}
+
+// Removes a node without leaving its gap behind: the node after the first of its container takes the first's spacing,
+// so a blank line that separated them does not become a leading blank line, and the rest stay as they were.
+function removeKeepingGap(node: ChildNode): void {
+  const container = node.parent;
+  const first = container?.first === node;
+  const following = node.next();
+  const before = node.raws.before;
+  node.remove();
+  if (first && following !== undefined && before !== undefined) {
+    following.raws.before = before;
   }
 }
 

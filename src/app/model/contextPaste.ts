@@ -151,11 +151,16 @@ export function withBundleFrontmatter(imports: readonly ImportDecl[], statements
 }
 
 /** The new style tag holding the carried rules, shaped by the project's template, or undefined when there are none. */
-export function carriedStyleNode(bundle: Pick<PasteBundle, 'styles'>, settings: NewStyleTagSettings, source: string): EditorNode | undefined {
+export function carriedStyleNode(
+  bundle: Pick<PasteBundle, 'styles'>,
+  settings: NewStyleTagSettings,
+  source: string,
+  separator: string = '\n\n',
+): EditorNode | undefined {
   if (bundle.styles.rules.length === 0) {
     return undefined;
   }
-  const css = withinTemplate(settings.content, bundle.styles.rules.join('\n\n'));
+  const css = withinTemplate(settings.content, bundle.styles.rules.join(separator));
   const node = styleTagNode(newId(), styleBlockInner(css, fileLayoutOf(source)), settings.attributes);
   if (bundle.styles.defineVars === undefined || node.kind !== 'raw') {
     return node;
