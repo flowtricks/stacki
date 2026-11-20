@@ -5,6 +5,7 @@ import { build, type Plugin } from 'esbuild';
 import path from 'node:path';
 import { stackiFavicon } from '../src/shared/stackiBrand';
 import { prepareSiteCache } from './siteCache';
+import { prepareAuthProvider } from './authProviderSlot';
 import { mkdir, writeFile, copyFile } from 'node:fs/promises';
 
 // esbuild's `alias` refuses a key that looks like an absolute path.
@@ -15,6 +16,8 @@ const staticHot: Plugin = {
   },
 };
 
+// Choose the sign-in provider before anything is bundled; a custom one that does not fit the interface stops the build here.
+console.log(`Sign-in provider: ${await prepareAuthProvider()}`);
 await prepareSiteCache();
 await mkdir('dist', { recursive: true });
 await prepareCloudflareAssets('dist');
