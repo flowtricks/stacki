@@ -251,7 +251,7 @@ export const messages = {
   'settings.roles.components.shownOwn': 'trotz Ordner eingeblendet',
   'settings.roles.components.title': 'Komponenten',
   'settings.roles.detail.back': 'Zurück zu den Rollen',
-  'settings.roles.detail.label': '{section} · {name}',
+  'settings.roles.detail.label': '{section} · {name}', // same
   'settings.roles.detail.noMatch': 'Nichts passt zu „{query}“',
   'settings.roles.detail.search.members': 'Mitglieder suchen',
   'settings.roles.detail.search.pins': 'Apps suchen',

@@ -250,7 +250,7 @@ export const messages = {
   'settings.roles.components.shownOwn': 'affiché malgré son dossier',
   'settings.roles.components.title': 'Composants',
   'settings.roles.detail.back': 'Retour aux rôles',
-  'settings.roles.detail.label': '{section} · {name}',
+  'settings.roles.detail.label': '{section} · {name}', // same
   'settings.roles.detail.noMatch': 'Rien ne correspond à « {query} »',
   'settings.roles.detail.search.members': 'Rechercher des membres',
   'settings.roles.detail.search.pins': 'Rechercher des apps',

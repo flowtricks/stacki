@@ -93,7 +93,7 @@ export const messages = {
   'roles.studio.revoke': 'Revogar convite',
   'roles.studio.pending': 'Convites pendentes',
   'roles.studio.pendingBy': '{handle}, por {name}, expira em {date}',
-  'roles.studio.passkeys': 'Passkeys',
+  'roles.studio.passkeys': 'Passkeys', // same
   'roles.studio.removePasskey': 'Remover passkey',
   'roles.studio.lock': 'Bloquear',
   'roles.studio.lockHint': 'Encerra o acesso desta pessoa em segundos e bloqueia novos convites por 8 horas.',

@@ -248,7 +248,7 @@ export const messages = {
   'settings.roles.components.shownOwn': 'exibido apesar da pasta',
   'settings.roles.components.title': 'Componentes',
   'settings.roles.detail.back': 'Voltar aos papéis',
-  'settings.roles.detail.label': '{section} · {name}',
+  'settings.roles.detail.label': '{section} · {name}', // same
   'settings.roles.detail.noMatch': 'Nada corresponde a “{query}”',
   'settings.roles.detail.search.members': 'Buscar membros',
   'settings.roles.detail.search.pins': 'Buscar apps',

@@ -249,7 +249,7 @@ export const messages = {
   'settings.roles.components.shownOwn': 'visible pese a su carpeta',
   'settings.roles.components.title': 'Componentes',
   'settings.roles.detail.back': 'Volver a los roles',
-  'settings.roles.detail.label': '{section} · {name}',
+  'settings.roles.detail.label': '{section} · {name}', // same
   'settings.roles.detail.noMatch': 'Nada coincide con «{query}»',
   'settings.roles.detail.search.members': 'Buscar miembros',
   'settings.roles.detail.search.pins': 'Buscar apps',
