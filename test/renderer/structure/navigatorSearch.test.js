@@ -8,10 +8,13 @@
 // of work done as repeated searches over a 65-node page, so only a search that stops being linear fails.
 // The selector and markup forms (.class, #id, [attr], <tag>, /* comment) each get a test on the same
 // trees, plus half-typed and malformed queries, which must fall back to plain words and never throw.
+// Content search runs on Lumos-shaped pages (Heading and Paragraph components holding slot text, string props,
+// attributes, set:html), one of them read by the real template parser, with the caps and the timing held too.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const search = load('src/features/structure/navigatorSearch.ts');
+const parser = load('electron/parse/astroTemplate.ts');
 const text = load('src/lib/searchText.ts');
 
 let counter = 0;
@@ -307,4 +310,119 @@ test('5,000 nodes searched with selector queries cost no more than the same work
     });
     assert.ok(largeTime <= smallTime * 6, `${query}: ${largeTime} ns over 5,000 nodes vs ${smallTime} ns over ${passes} walks of 65`);
   }
+});
+
+// ---- Content: slot text, string props, attributes, set:html -----------------------------------------------
+
+const LUMOS = `<main>
+<Heading tag="h1">We build things that help
+    people work smarter</Heading>
+<Paragraph>We build things that help people work smarter, move faster, and grow further.</Paragraph>
+<Button heading="Éclair Menu" label="Open the café">Button Text</Button>
+<img src="/a.png" alt="A team at work" title="Team photo" />
+<div set:html="<p>Raw <b>markup</b> words</p>"></div>
+<p>{"Plain literal"} and {value}</p>
+<p>{computeSomething()}</p>
+</main>`;
+const lumos = () => parser.parseTemplate(LUMOS).nodes;
+const nameOf = (nodes, query) => flatten(run(nodes, query).nodes).map((id) => lookup(nodes, id));
+function lookup(nodes, id) {
+  const stack = [...nodes];
+  for (let step = 0; step < 10_000 && stack.length > 0; step += 1) {
+    const node = stack.pop();
+    if (node.id === id) {
+      return node.kind === 'element' || node.kind === 'component' ? node.name : node.kind;
+    }
+    stack.push(...(node.children ?? []));
+  }
+  return undefined;
+}
+const own = (nodes, query) => [...run(nodes, query).snippets.keys()].map((id) => lookup(nodes, id));
+
+test('slot text of a component is found as a phrase, with whitespace collapsed across lines', () => {
+  const nodes = lumos();
+  assert.deepEqual(own(nodes, 'we build').sort(), ['Heading', 'Paragraph']);
+  assert.deepEqual(own(nodes, 'help people work').sort(), ['Heading', 'Paragraph']);
+  assert.deepEqual(own(nodes, 'smarter move faster'), ['Paragraph'], 'words in any order inside one row');
+  assert.deepEqual(own(nodes, 'WE   BUILD'), own(nodes, 'we build'));
+  assert.deepEqual(own(nodes, 'button text'), ['Button']);
+});
+
+test('string props and attributes are searchable, case- and accent-blind', () => {
+  const nodes = lumos();
+  assert.deepEqual(own(nodes, 'eclair menu'), ['Button']);
+  assert.deepEqual(own(nodes, 'open the cafe'), ['Button']);
+  assert.deepEqual(own(nodes, 'team at work'), ['img']);
+  assert.deepEqual(own(nodes, 'team photo'), ['img']);
+});
+
+test('set:html and {"literal"} count as words, markup stripped, and code expressions do not', () => {
+  const nodes = lumos();
+  assert.deepEqual(own(nodes, 'raw markup words'), ['div']);
+  assert.deepEqual(own(nodes, 'plain literal'), ['p']);
+  assert.deepEqual(own(nodes, 'computesomething'), []);
+});
+
+test('a row that matched by content shows a snippet with the words and a little context', () => {
+  const nodes = lumos();
+  const snippet = [...run(nodes, 'faster').snippets.values()][0];
+  assert.ok(snippet.includes('faster'));
+  assert.ok(snippet.startsWith('…'), snippet);
+  assert.ok(snippet.length <= 'faster'.length + 2 * search.NAVIGATOR_SNIPPET_CONTEXT_CHARS + 2 + 1);
+  assert.deepEqual(own(nodes, 'heading'), [], 'a match on the name has no snippet');
+  assert.equal(run(nodes, '.nothing').snippets.size, 0);
+});
+
+test('matches keep their ancestors, and the instance row is the match for its slot text', () => {
+  const nodes = lumos();
+  const kept = run(nodes, 'button text').nodes;
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].name, 'main');
+  assert.deepEqual(
+    kept[0].children.map((child) => child.name),
+    ['Button'],
+  );
+});
+
+test('caps: huge, encoded and long-URL values are not searchable and content stops growing', () => {
+  const big = (props, children = []) => ({ id: next('big'), kind: 'element', name: 'div', props: attrs(props), children });
+  const blob = 'x'.repeat(search.NAVIGATOR_VALUE_CHARS_MAX + 10);
+  const nodes = [
+    big({ title: blob }),
+    big({ 'data-b64': 'a'.repeat(search.NAVIGATOR_TOKEN_CHARS_MAX + 1) }),
+    big({ href: `https://example.com/${'p'.repeat(search.NAVIGATOR_URL_CHARS_MAX)}` }),
+    big({ src: 'data:image/png;base64,iVBORw0KGgo' }),
+    big(Object.fromEntries(Array.from({ length: 50 }, (_, index) => [`label${index}`, `word${index} ${'ww '.repeat(70)}`]))),
+  ];
+  const index = search.buildNavigatorIndex(nodes);
+  assert.equal(run(nodes, 'xxxxxxxx').matchCount, 0);
+  assert.equal(run(nodes, 'example.com').matchCount, 0);
+  assert.equal(run(nodes, 'iVBORw0KGgo').matchCount, 0);
+  for (const entry of index.values()) {
+    assert.ok(entry.content.length <= search.NAVIGATOR_CONTENT_CHARS_MAX, 'a row holds at most the cap');
+  }
+  assert.ok(run(nodes, 'word0').matchCount > 0, 'what fits under the cap is still found');
+});
+
+test('5,000 content-rich nodes searched by content cost no more than the same work over 65', () => {
+  const rich = (count) =>
+    Array.from({ length: Math.ceil(count / 2) }, (_, index) => ({
+      id: next('rich'),
+      kind: 'component',
+      name: 'Heading',
+      props: attrs({ heading: `Heading number ${index}`, label: 'Some label words here' }),
+      children: [word(`We build things number ${index}`)],
+    }));
+  const large = rich(5_000);
+  const small = rich(65);
+  const largeIndex = search.buildNavigatorIndex(large);
+  const smallIndex = search.buildNavigatorIndex(small);
+  const passes = Math.ceil(large.length / small.length);
+  const largeTime = bestOf(7, () => search.searchNavigator(large, largeIndex, 'qq none words'));
+  const smallTime = bestOf(7, () => {
+    for (let pass = 0; pass < passes; pass += 1) {
+      search.searchNavigator(small, smallIndex, 'qq none words');
+    }
+  });
+  assert.ok(largeTime <= smallTime * 6, `${largeTime} ns vs ${smallTime} ns`);
 });

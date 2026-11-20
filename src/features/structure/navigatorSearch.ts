@@ -18,6 +18,7 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { foldSearchText, holdsEveryWord, queryWords } from '../../lib/searchText';
 import { labelsNode } from '../../../shared/page/leadingNote';
+import { hidesChildRows } from '../../editor/treeSelection';
 import type { NavigatorNode } from './structureModel';
 
 /**
@@ -29,8 +30,12 @@ export const NAVIGATOR_MATCHES_MAX = 500;
 
 /** What a query is held against for one node, folded once when the index is built. */
 export interface NavigatorIndexEntry {
-  /** Name, class, id, text and comment words: what plain words match. */
+  /** Name, class, id, text, comment and content words: what plain words match. */
   readonly text: string;
+  /** Only the name, class and id of the row: a word found here is a name match, not a content match. */
+  readonly names: string;
+  /** The row's own words as written, whitespace collapsed: direct text, string props and attributes. For snippets. */
+  readonly content: string;
   /** Folded tag or component name; empty for a node that is neither. */
   readonly tag: string;
   /** Folded class tokens. */
@@ -46,6 +51,21 @@ export interface NavigatorIndexEntry {
 /** Each node's search entry, by node id. */
 export type NavigatorSearchIndex = ReadonlyMap<string, NavigatorIndexEntry>;
 
+/** One attribute or prop value longer than this is not searchable: it is data, not words (an inlined SVG, a long blob). */
+export const NAVIGATOR_VALUE_CHARS_MAX = 500;
+
+/** A URL-like value longer than this is not searchable. Short ones (`/about`) are. */
+export const NAVIGATOR_URL_CHARS_MAX = 120;
+
+/** A run of text with no space this long is a token or encoded data (base64), not words. */
+export const NAVIGATOR_TOKEN_CHARS_MAX = 100;
+
+/** All the words one row holds as content (its text, string props and attributes) stop growing here. */
+export const NAVIGATOR_CONTENT_CHARS_MAX = 2_000;
+
+/** Characters of context on each side of a content match in a row's snippet. */
+export const NAVIGATOR_SNIPPET_CONTEXT_CHARS = 20;
+
 /** A query longer than this is cut: the parser reads at most this many characters. */
 export const NAVIGATOR_QUERY_LENGTH_MAX = 200;
 
@@ -59,6 +79,8 @@ export interface NavigatorSearchResult {
   readonly matchCount: number;
   /** True when more rows matched than the bound lets through. */
   readonly capped: boolean;
+  /** For rows that matched by their content, the matched words with a little context, by node id. */
+  readonly snippets: ReadonlyMap<string, string>;
 }
 
 /** The index of a tree: one walk, folding each node's text once. */
@@ -87,11 +109,12 @@ export function searchNavigator(nodes: readonly NavigatorNode[], index: Navigato
   const terms = parseNavigatorQuery(query);
   const budget = new MatchBudget();
   if (terms.length === 0) {
-    return { nodes: [], matchCount: 0, capped: false };
+    return { nodes: [], matchCount: 0, capped: false, snippets: new Map() };
   }
-  const kept = keepAll(nodes, { index, terms, budget, labelled: new Set<string>() }, 0);
+  const walk: Walk = { index, terms, budget, labelled: new Set<string>(), snippets: new Map<string, string>() };
+  const kept = keepAll(nodes, walk, 0);
   assert(budget.matches <= NAVIGATOR_MATCHES_MAX, 'Matches stay within the bound');
-  return { nodes: kept, matchCount: budget.matches, capped: budget.capped };
+  return { nodes: kept, matchCount: budget.matches, capped: budget.capped, snippets: walk.snippets };
 }
 
 interface Walk {
@@ -100,6 +123,7 @@ interface Walk {
   readonly budget: MatchBudget;
   /** Rows a matching comment labels: they are kept so the comment folds into them as it does on the page. */
   readonly labelled: Set<string>;
+  readonly snippets: Map<string, string>;
 }
 
 // The count of rows that matched on their own. A class, so the walk's parameter is never assigned to:
@@ -140,6 +164,11 @@ function keepNode(node: NavigatorNode, walk: Walk, depth: number): NavigatorNode
   switch (node.kind) {
     case 'component':
     case 'element': {
+      // Text and simple `{value}` children get no rows (the Content field holds them), so the row itself is
+      // what matches them: its entry carries their words. Its children stay as they are, still unseen.
+      if (node.children !== undefined && hidesChildRows(node, node.children)) {
+        return own ? node : undefined;
+      }
       const children = node.children === undefined ? [] : keepAll(node.children, walk, depth + 1);
       return own || children.length > 0 ? { ...node, children } : undefined;
     }
@@ -199,7 +228,14 @@ function matchesOwn(node: NavigatorNode, walk: Walk): boolean {
   if (entry === undefined || !(walk.labelled.has(node.id) || termsMatch(entry, walk.terms))) {
     return false;
   }
-  return walk.budget.take();
+  if (!walk.budget.take()) {
+    return false;
+  }
+  const snippet = snippetOf(entry, walk.terms);
+  if (snippet !== undefined) {
+    walk.snippets.set(node.id, snippet);
+  }
+  return true;
 }
 
 function childrenOf(node: NavigatorNode): readonly NavigatorNode[] {
@@ -225,7 +261,10 @@ function childrenOf(node: NavigatorNode): readonly NavigatorNode[] {
   }
 }
 
-// What a person can type to find a node: what it is called, its class and id, its words, its comment.
+// What a person can type to find a node: what it is called, its class and id, its words, its comment, and the
+// words its source holds for it: direct text, string props and attributes (alt, title, label, heading="…"),
+// and string literals in set:html or {"…"}. A closed component is searched by what the page holds for it, which
+// is its slot text and its string props: the words of its own file are not part of this page.
 function entryOf(node: NavigatorNode): NavigatorIndexEntry {
   const classes: string[] = [];
   const attributes = new Map<string, string | undefined>();
@@ -248,8 +287,111 @@ function entryOf(node: NavigatorNode): NavigatorIndexEntry {
   if (node.kind === 'comment') {
     comment = foldSearchText(node.value);
   }
-  const text = foldSearchText(nodeText(node, tag)) + ' ' + classes.join(' ') + ' ' + id + (comment === undefined ? '' : ' ' + comment);
-  return { text, tag, classes, id, attributes, comment };
+  const content = contentOf(node);
+  const names = foldSearchText(nodeText(node, tag)) + ' ' + classes.join(' ') + ' ' + id;
+  const text = names + (comment === undefined ? '' : ' ' + comment) + ' ' + foldSearchText(content);
+  return { text, names, content, tag, classes, id, attributes, comment };
+}
+
+// Props that carry no words a person would look for.
+const CONTENT_SKIPPED_PROPS: ReadonlySet<string> = new Set(['class', 'classname', 'id', 'style', 'slot', 'class:list']);
+
+function contentOf(node: NavigatorNode): string {
+  if (node.kind !== 'component' && node.kind !== 'element') {
+    return '';
+  }
+  const parts: string[] = [];
+  let length = 0;
+  const add = (candidate: string | undefined): void => {
+    const value = candidate === undefined ? undefined : searchableValue(candidate);
+    if (value !== undefined && length + value.length + 1 <= NAVIGATOR_CONTENT_CHARS_MAX) {
+      parts.push(value);
+      length += value.length + 1;
+    }
+  };
+  for (const [name, attribute] of Object.entries(node.props ?? {})) {
+    if (!CONTENT_SKIPPED_PROPS.has(name.toLowerCase())) {
+      add(attribute.type === 'string' ? attribute.value : attribute.type === 'expr' ? literalOf(attribute.value) : undefined);
+    }
+  }
+  // Direct children only: text split by a `{value}` or a line break still joins into one run here.
+  for (const child of node.children ?? []) {
+    add(child.kind === 'text' ? child.value : child.kind === 'expr' ? literalOf(child.value) : undefined);
+  }
+  return parts.join(' ');
+}
+
+/** A string literal's text when the expression is only that (`{"Hi"}`, `'Hi'`, a template without `${}`); never code. */
+function literalOf(expression: string): string | undefined {
+  const inner = expression
+    .trim()
+    .replace(/^\{|\}$/gu, '')
+    .trim();
+  const quote = inner.charAt(0);
+  if (inner.length < 2 || inner.charAt(inner.length - 1) !== quote) {
+    return undefined;
+  }
+  if (quote !== '"' && quote !== "'" && quote !== '`') {
+    return undefined;
+  }
+  const body = inner.slice(1, inner.length - 1);
+  return body.includes(quote) || body.includes('${') || body.includes('\\') ? undefined : body;
+}
+
+/** A value as words: markup stripped, whitespace collapsed; undefined for what is not words or is too big. */
+function searchableValue(raw: string): string | undefined {
+  if (raw.length > NAVIGATOR_VALUE_CHARS_MAX * 2) {
+    return undefined;
+  }
+  // A tag is at most 300 characters, so this pattern cannot run away on a stray `<`.
+  const value = raw
+    .replace(/<[^<>]{0,300}>/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (value.length === 0 || value.length > NAVIGATOR_VALUE_CHARS_MAX || !/\p{L}/u.test(value)) {
+    return undefined;
+  }
+  if (value.startsWith('data:')) {
+    return undefined;
+  }
+  if (value.length > NAVIGATOR_URL_CHARS_MAX && /^(?:[a-z]+:\/\/|\/|\.\.?\/)/iu.test(value)) {
+    return undefined;
+  }
+  if (value.split(' ').some((token) => token.length > NAVIGATOR_TOKEN_CHARS_MAX)) {
+    return undefined;
+  }
+  return value;
+}
+
+/**
+ * The matched words of a row's content with a little context either side, when the row matched by what it holds
+ * and not by its name. Folding drops accents, so a position found in the folded text is mapped back to the
+ * character it came from before the cut.
+ */
+export function snippetOf(entry: NavigatorIndexEntry, terms: readonly QueryTerm[]): string | undefined {
+  const words = terms.flatMap((term) => (term.kind === 'word' ? [term.word] : []));
+  if (entry.content.length === 0 || words.length === 0 || words.every((word) => entry.names.includes(word))) {
+    return undefined;
+  }
+  const characters = Array.from(entry.content);
+  let folded = '';
+  const owner: number[] = [];
+  for (const [position, character] of characters.entries()) {
+    const piece = foldSearchText(character);
+    for (let step = 0; step < piece.length; step += 1) {
+      owner.push(position);
+    }
+    folded += piece;
+  }
+  const hits = words.map((word) => folded.indexOf(word)).filter((at) => at >= 0);
+  if (hits.length === 0) {
+    return undefined;
+  }
+  const at = Math.min(...hits);
+  const from = Math.max(0, (owner[at] ?? 0) - NAVIGATOR_SNIPPET_CONTEXT_CHARS);
+  const longest = Math.max(...words.map((word) => word.length));
+  const to = Math.min(characters.length, (owner[Math.min(at + longest, owner.length - 1)] ?? characters.length) + NAVIGATOR_SNIPPET_CONTEXT_CHARS);
+  return `${from > 0 ? '…' : ''}${characters.slice(from, to).join('').trim()}${to < characters.length ? '…' : ''}`;
 }
 
 function nodeText(node: NavigatorNode, foldedTag: string): string {

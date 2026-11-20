@@ -640,7 +640,7 @@ function NavigatorBody({
   const search = useNavigatorSearch(nodes, state.query, { idle: canvasDrag === undefined && bodyDrag === 'idle' });
   // Searched, the tree is a copy holding the matches, drawn open so no match hides in a folded row; the user's own folds are untouched.
   useClearWhenSelectionHidden(props.selectedId, search, state);
-  const context = search.filtering ? { ...treeContext, isCollapsed: () => false, highlightWords: search.words } : treeContext;
+  const context = search.filtering ? { ...treeContext, isCollapsed: () => false, highlightWords: search.words, searchSnippets: search.snippets } : treeContext;
   return (
     <div
       className={bodyDrag === 'dragging' ? 'panel-body is-drag-over' : 'panel-body'}
@@ -697,9 +697,12 @@ interface NavigatorSearch {
   readonly words: readonly string[];
   readonly matchCount: number;
   readonly capped: boolean;
+  readonly snippets: ReadonlyMap<string, string>;
 }
 
 // The index is built once per tree and only once a query exists; each keystroke is then one walk of it.
+const NO_SNIPPETS: ReadonlyMap<string, string> = new Map();
+
 function useNavigatorSearch(nodes: readonly NavigatorNode[], query: string, { idle }: { readonly idle: boolean }): NavigatorSearch {
   const searching = isSearching(query);
   const index = useMemo(() => (searching ? buildNavigatorIndex(nodes) : undefined), [nodes, searching]);
@@ -712,6 +715,7 @@ function useNavigatorSearch(nodes: readonly NavigatorNode[], query: string, { id
     words,
     matchCount: result?.matchCount ?? 0,
     capped: result?.capped ?? false,
+    snippets: result?.snippets ?? NO_SNIPPETS,
   };
 }
 

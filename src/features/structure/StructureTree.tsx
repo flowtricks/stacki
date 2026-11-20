@@ -36,6 +36,8 @@ export interface StructureTreeContext {
   readonly currentLayoutName: string;
   /** The search's folded words: rows draw them marked in their label. Absent when nothing is searched. */
   readonly highlightWords?: readonly string[];
+  /** Rows that matched by their content, each with the matched words and a little context, by node id. */
+  readonly searchSnippets?: ReadonlyMap<string, string>;
   readonly dropTarget: DropTarget | undefined;
   readonly setDropTarget: React.Dispatch<React.SetStateAction<DropTarget | undefined>>;
   /** The node a canvas drag is moving: its row is muted while the drag lasts (src/editor/canvasDragSession.ts). */
@@ -292,6 +294,7 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
     currentLayoutName: props.currentLayoutName,
     ...(props.highlightWords === undefined ? {} : { highlightWords: props.highlightWords }),
+    ...(props.searchSnippets === undefined ? {} : { searchSnippets: props.searchSnippets }),
     dropTarget: props.dropTarget,
     setDropTarget: props.setDropTarget,
     movingId: props.movingId,
@@ -392,6 +395,7 @@ function TreeRow(props: TreeRowProps) {
         node={node}
         label={description.label}
         highlightWords={props.highlightWords}
+        snippet={props.searchSnippets?.get(node.id)}
         note={props.note}
         {...(description.title === undefined ? {} : { title: description.title })}
         {...(bindingPath === undefined ? {} : { bindingPath })}
@@ -505,10 +509,12 @@ function RowLabel({
   bindingPath,
   title,
   highlightWords,
+  snippet,
 }: {
   readonly node: NavigatorNode;
   readonly label: string;
   readonly highlightWords: readonly string[] | undefined;
+  readonly snippet: string | undefined;
   readonly title?: string;
   readonly note: NavigatorNode | undefined;
   readonly bindingPath?: string;
@@ -517,6 +523,12 @@ function RowLabel({
   return (
     <span className="label" title={title} style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
       {bindingPath === undefined ? <MarkedLabel label={label} words={highlightWords} /> : <DataChip path={bindingPath} />}
+      {snippet !== undefined && (
+        <span className="node-note" title={snippet}>
+          {' / '}
+          <MarkedLabel label={snippet} words={highlightWords} />
+        </span>
+      )}
       {noteValue !== undefined && (
         <span className="node-note" title={noteValue.trim()}>
           {' / '}
