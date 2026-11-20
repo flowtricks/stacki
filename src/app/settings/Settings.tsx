@@ -29,6 +29,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { publishReviewMode, reviewModeOf } from '../../features/ai/reviewChanges';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { LanguageSetting } from './LanguageSetting';
+import { RailOrderSetting } from './RailOrderSetting';
 import { SettingsEmpty, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 
 interface Props {
@@ -359,6 +360,7 @@ function Preferences() {
       <SettingsSaveRow saving={saving} />
       <SettingsSection title={translate('settings.editor.section.general')}>
         <LanguageSetting />
+        <RailOrderSetting />
         <PreferenceToggle
           label={translate('settings.editor.sound.label')}
           checked={value?.sound ?? false}

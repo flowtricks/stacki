@@ -27,6 +27,11 @@ export const messages = {
   'rail.resetDone': 'Reihenfolge der Leiste zurückgesetzt',
   'rail.selectors': 'Stil-Selektoren',
   'rail.settings': 'Einstellungen',
+  'rail.settingsOrder.alreadyDefault': 'Bereits Standard',
+  'rail.settingsOrder.description': 'Ziehe die Symbole in der Seitenleiste, um sie umzuordnen. Auf die Standardreihenfolge zurücksetzen.',
+  'rail.settingsOrder.done': 'Seitenleistenreihenfolge zurückgesetzt',
+  'rail.settingsOrder.label': 'Reihenfolge der Seitenleistensymbole',
+  'rail.settingsOrder.reset': 'Auf Standard zurücksetzen',
   'rail.variables': 'Variablen',
   'rail.withShortcut': '{label} ({shortcut})', // same
 } as const satisfies CatalogOf<MessageKey>;

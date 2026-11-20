@@ -6,9 +6,10 @@
 // Best-effort: missing, full, blocked or corrupt storage gives the default order and never stops the rail
 // from drawing. The read is synchronous and happens in the first render, so the rail's first frame is the
 // person's order and never the default flashing into place.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { assert } from '../../shared/core/assert';
 import { isDefaultRailOrder, parseStoredRailOrder, resolveRailOrder, stringifyRailOrder, type RailOrder } from './railOrder';
+import { DEFAULT_RAIL_ORDER } from './railDefaults';
 
 export const RAIL_ORDER_KEY = 'stacki.rail.order';
 
@@ -34,6 +35,59 @@ export function saveRailOrder(defaults: RailOrder, order: RailOrder): void {
   }
 }
 
+// One store for the whole window: the rail and Settings both read it, so a drag or a reset shows in both at once.
+// The snapshot is the stored text (an empty string for none), a stable primitive for useSyncExternalStore.
+// Storage is read each time (a synchronous string read), so another window's change is seen; when storage is
+// blocked, the last text written in this window stands in for it.
+let memoryRaw = '';
+const listeners = new Set<() => void>();
+let watchingStorage = false;
+
+function readRaw(): string {
+  try {
+    return localStorage.getItem(RAIL_ORDER_KEY) ?? '';
+  } catch {
+    return memoryRaw;
+  }
+}
+
+function notify(): void {
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  if (!watchingStorage) {
+    watchingStorage = true;
+    window.addEventListener('storage', (event: StorageEvent) => {
+      // A null key is `localStorage.clear()`; either way the stored order is read again.
+      if (event.key === RAIL_ORDER_KEY || event.key === null) {
+        notify();
+      }
+    });
+  }
+  return () => listeners.delete(listener);
+}
+
+/** Remembers `order` for this window and in storage. */
+export function writeRailOrder(defaults: RailOrder, order: RailOrder): void {
+  saveRailOrder(defaults, order);
+  memoryRaw = isDefaultRailOrder(defaults, order) ? '' : stringifyRailOrder(order);
+  notify();
+}
+
+/** Back to the default order; the same call serves the rail's menu and Settings. */
+export function resetRailOrder(): void {
+  writeRailOrder(DEFAULT_RAIL_ORDER, DEFAULT_RAIL_ORDER);
+}
+
+/** Whether the person's order is the default, live: Settings uses it to enable its reset button. */
+export function useRailOrderIsDefault(): boolean {
+  return isDefaultRailOrder(DEFAULT_RAIL_ORDER, useRailOrder(DEFAULT_RAIL_ORDER).order);
+}
+
 export interface RailOrderControl {
   readonly order: RailOrder;
   /** Replaces the order and remembers it. */
@@ -42,30 +96,17 @@ export interface RailOrderControl {
   readonly reset: () => void;
 }
 
-/** The rail's order, read before the first frame and kept in step with other windows. */
+/** The rail's order, read before the first frame and kept in step with every reader and other windows. */
 export function useRailOrder(defaults: RailOrder): RailOrderControl {
-  const [order, setOrder] = useState<RailOrder>(() => loadRailOrder(defaults));
-  useEffect(() => {
-    const onStorage = (event: StorageEvent): void => {
-      // A null key is `localStorage.clear()`; either way the stored order is read again.
-      if (event.key === RAIL_ORDER_KEY || event.key === null) {
-        setOrder(loadRailOrder(defaults));
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [defaults]);
+  const text = useSyncExternalStore(subscribe, readRaw, readRaw);
+  const order = useMemo(() => resolveRailOrder(defaults, parseStoredRailOrder(text === '' ? undefined : text)), [defaults, text]);
   const change = useCallback(
     (next: RailOrder) => {
       assert(next.top.length + next.bottom.length === defaults.top.length + defaults.bottom.length, 'A change keeps every rail button');
-      saveRailOrder(defaults, next);
-      setOrder(next);
+      writeRailOrder(defaults, next);
     },
     [defaults],
   );
-  const reset = useCallback(() => {
-    saveRailOrder(defaults, defaults);
-    setOrder(defaults);
-  }, [defaults]);
+  const reset = useCallback(() => writeRailOrder(defaults, defaults), [defaults]);
   return { order, change, reset };
 }

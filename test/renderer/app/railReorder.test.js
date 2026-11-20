@@ -23,6 +23,7 @@ esbuild.buildSync({
   stdin: {
     contents: [
       "export { default as LeftRail } from './src/app/LeftRail';",
+      "export { RailOrderSetting } from './src/app/settings/RailOrderSetting';",
       "export { setActualRole } from './src/lib/currentRole';",
       "export { ADMIN_VIEW, roleViewOf, DEFAULT_PROJECT_ROLES } from './shared/properties/projectRoles';",
     ].join('\n'),
@@ -396,5 +397,44 @@ test('mounting with the AI button and the default order commits a few times, qui
   assert.ok(commits.length <= 5, `the rail committed ${commits.length} times`);
   const railElement = container.querySelector('.rail');
   assert.ok(railElement.lastElementChild === container.querySelector('.rail-anchor'), 'the anchored list is the last element');
+  await unmount();
+});
+
+test('Settings shows the Sidebar icon order row: disabled at the default, live after a drag, and a press resets the rail at once', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () =>
+    root.render(
+      React.createElement(
+        React.Fragment,
+        undefined,
+        React.createElement(rail.LeftRail, {
+          projectPath: '/project-a',
+          onSelect: () => {},
+          onOpenSettings: () => {},
+          aiButton: { active: false, onSelect: () => {} },
+        }),
+        React.createElement(rail.RailOrderSetting),
+      ),
+    ),
+  );
+  const resetButton = () => document.querySelector('.rail-order-reset');
+  assert.match(document.body.textContent, /Sidebar icon order/);
+  assert.match(document.body.textContent, /Drag icons in the sidebar to reorder them/);
+  assert.equal(resetButton().disabled, true);
+  assert.equal(resetButton().textContent, 'Already default');
+  await down('pages', 26);
+  await move('pages', 20, 100);
+  await up('pages', 20, 100);
+  assert.equal(resetButton().disabled, false, 'the button enables right after a drag, with the dialog open');
+  assert.equal(resetButton().textContent, 'Reset to default');
+  await act(async () => resetButton().click());
+  assert.deepEqual(ids('top'), DEFAULT_TOP, 'the rail is in the default order at once');
+  assert.deepEqual(ids('bottom'), DEFAULT_BOTTOM);
+  assert.ok(stored() === null, 'the stored order is forgotten');
+  assert.equal(resetButton().disabled, true);
+  assert.equal(document.querySelector('.rail-order-live').textContent, 'Sidebar order reset');
+  assert.deepEqual(apiCalls, [], 'nothing went through the app bridge, so nothing was written to a project');
   await unmount();
 });

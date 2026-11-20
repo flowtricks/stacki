@@ -28,6 +28,7 @@ import {
   type RailOrder,
 } from './railOrder';
 import { useRailOrder } from './railOrderStore';
+import { DEFAULT_RAIL_ORDER } from './railDefaults';
 import { useRailDrag } from './railDrag';
 import { animateRailReflow, readRailRows } from './railReflow';
 
@@ -56,10 +57,6 @@ export type RailTab = (typeof TABS)[number]['id'] | typeof SETTINGS_TAB.id;
 // The order each person arranges by dragging (railOrder.ts): the top list holds most panels, the bottom list
 // holds Style selectors, Audits, the project's Settings and the AI button. The default is the source of truth for which buttons exist.
 const AI_ID = 'ai';
-const DEFAULT_RAIL_ORDER: RailOrder = {
-  top: ['pages', 'navigator', 'assets', 'cms', 'variables', 'history', 'properties', 'components', 'apps', 'code'],
-  bottom: ['selectors', 'audits', SETTINGS_TAB.id, AI_ID],
-};
 
 /** One rail button, whichever list it is in. */
 interface RailEntry {

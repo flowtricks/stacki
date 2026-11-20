@@ -27,6 +27,11 @@ export const messages = {
   'rail.resetDone': 'Ordre de la barre réinitialisé',
   'rail.selectors': 'Sélecteurs de style',
   'rail.settings': 'Réglages',
+  'rail.settingsOrder.alreadyDefault': 'Déjà par défaut',
+  'rail.settingsOrder.description': 'Faites glisser les icônes de la barre latérale pour les réorganiser. Rétablissez l’ordre par défaut.',
+  'rail.settingsOrder.done': 'Ordre de la barre latérale rétabli',
+  'rail.settingsOrder.label': 'Ordre des icônes de la barre latérale',
+  'rail.settingsOrder.reset': 'Rétablir par défaut',
   'rail.variables': 'Variables', // same
   'rail.withShortcut': '{label} ({shortcut})', // same
 } as const satisfies CatalogOf<MessageKey>;
