@@ -80,7 +80,8 @@ test('Settings is the button immediately before AI chat, at the foot of the rail
   assert.match(all.at(-2), /^Settings \(/, 'Settings immediately before AI chat');
   const anchor = document.querySelector('.rail-anchor');
   assert.deepEqual(
-    [...anchor.querySelectorAll('.rail-btn')].map((button) => button.getAttribute('aria-label')?.split(' (')[0]),
+    // The foot's list may also hold panels a person moved or the default order puts there (Style selectors, Audits).
+    [...anchor.querySelectorAll('.rail-btn')].map((button) => button.getAttribute('aria-label')?.split(' (')[0]).slice(-2),
     ['Settings', 'AI chat'],
   );
   await act(async () => root.unmount());

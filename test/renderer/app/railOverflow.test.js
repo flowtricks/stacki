@@ -275,7 +275,7 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   railHeightPx = 1000;
   await mount('code');
   const tall = labels();
-  assert.equal(tall.length, 13, 'twelve panels without Properties, then the pinned app');
+  assert.equal(tall.length, 10, 'nine panels in the top list (Style selectors and Audits start in the foot list, Properties is closed), then the pinned app');
   // Room for four rows: three buttons and More, above the anchored Settings row (36px: its button and the gap, jsdom's fallback).
   // Desktop's rail has 10px of top padding in CSS; jsdom has none.
   await resize(ANCHOR_PX + 4 * 36 - 4);
@@ -285,9 +285,9 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   await act(async () => more.click());
   await settle();
   const rows = [...document.querySelectorAll('.more-menu-item')].map((row) => row.textContent);
-  assert.deepEqual(rows, ['Components⇧A', 'AssetsJ', 'CMS⌥C', 'Variables⌥V', 'Style selectorsG', 'Git⌥H', 'AppsE', 'Instructions⌥I', 'Audits⌥A', 'SSecret']);
+  assert.deepEqual(rows, ['AssetsJ', 'CMS⌥C', 'Variables⌥V', 'Git⌥H', 'Components⇧A', 'AppsE', 'SSecret']);
   assert.ok(document.querySelector('.more-menu-item svg'), 'rows show their icons');
-  await act(async () => [...document.querySelectorAll('.more-menu-item')][1].click());
+  await act(async () => [...document.querySelectorAll('.more-menu-item')][0].click());
   await settle();
   assert.deepEqual(selected, ['assets'], 'a row selects its panel');
   // A hidden panel's shortcut still opens it.
@@ -325,7 +325,8 @@ test('Settings stays outside More and directly precedes the AI item at any heigh
     ),
   );
   await settle();
-  const anchored = () => [...container.querySelectorAll('.rail > .rail-anchor > button')].map((button) => button.getAttribute('aria-label'));
+  // The foot list may also hold panels the default order puts there (Style selectors, Audits); Settings and AI are its last two.
+  const anchored = () => [...container.querySelectorAll('.rail > .rail-anchor > button')].map((button) => button.getAttribute('aria-label')).slice(-2);
   const moreRows = async () => {
     const more = container.querySelector('button.rail-more');
     if (more === null) {
@@ -378,11 +379,16 @@ test('Studio’s rail shows the role’s pins and collapses into More above its 
     ),
   );
   await settle();
-  const studioLabels = () => [...container.querySelectorAll('.rail > button')].map((button) => button.getAttribute('aria-label'));
-  assert.deepEqual(studioLabels().slice(-4), ['Apps', 'Secret', 'SEO', 'AI chat'], 'pins in pin order, AI at the foot');
+  const studioLabels = () =>
+    [...container.querySelectorAll('.rail > button, .rail > .rail-anchor > button')].map((button) => button.getAttribute('aria-label'));
+  assert.deepEqual(studioLabels().slice(-4), ['Secret', 'SEO', 'Settings', 'AI chat'], 'pins in pin order, Settings and AI at the foot');
   // Room for the AI button and four rows: three buttons and More.
   await resize(5 * 36 - 4);
-  assert.deepEqual(studioLabels(), ['Pages', 'Navigator', 'Components', 'More', 'AI chat'], 'the active panel stays, the AI button keeps its place');
+  assert.deepEqual(
+    studioLabels(),
+    ['Pages', 'Navigator', 'Components', 'More', 'Settings', 'AI chat'],
+    'the active panel stays, Settings and the AI button keep their place',
+  );
   await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true })));
   assert.deepEqual(toggled, ['assets'], 'a hidden panel’s shortcut still works');
   await act(async () => studioRoot.unmount());
