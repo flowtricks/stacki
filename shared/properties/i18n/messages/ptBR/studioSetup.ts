@@ -48,7 +48,7 @@ export const messages = {
   'studioSetup.auth.secrets.copied': 'Copiado',
   'studioSetup.auth.secrets.copy': 'Copiar comandos',
   'studioSetup.auth.secrets.copyFailed': 'Não foi possível copiar. Selecione o texto e copie você mesmo.',
-  'studioSetup.auth.secrets.intro': 'Os segredos do cliente nunca passam pelo Stacki. Execute isto no seu projeto; o Wrangler pede o valor.',
+  'studioSetup.auth.secrets.intro': 'Os segredos nunca passam pelo Stacki. Execute isto no seu projeto; o Wrangler pede o valor.',
   'studioSetup.auth.secrets.title': 'Adicione você mesmo após a configuração',
   'studioSetup.auth.steps.access':
     'Sem segredos. No Cloudflare Zero Trust, crie um aplicativo Access cobrindo o nome do host do seu site e o caminho /studio* com uma política que permita sua equipe, e cole acima o tag AUD. As pessoas precisam ser permitidas no Access e constar no painel de Funções.',
@@ -58,7 +58,7 @@ export const messages = {
   'studioSetup.auth.steps.oidc':
     'Crie um aplicativo no seu provedor de identidade, registre o URI de redirecionamento abaixo e adicione você mesmo o segredo do cliente (um cliente PKCE público não tem).',
   'studioSetup.auth.steps.passkey':
-    'Sem segredos. O primeiro administrador registra uma passkey na primeira visita e depois convida outros nas configurações do Studio.',
+    'O primeiro administrador cria a primeira passkey: escolha um código aleatório longo (16 a 200 caracteres) para AUTH_SETUP_CODE e adicione você mesmo, implante e abra uma vez https://<your-site>/studio/auth/passkey/bootstrap. Depois convide as demais pessoas pela visualização de Funções do Studio.',
   'studioSetup.auth.title': 'Como as pessoas devem entrar?',
   'studioSetup.back': 'Voltar',
   'studioSetup.closeLabel': 'Fechar a configuração do Studio',

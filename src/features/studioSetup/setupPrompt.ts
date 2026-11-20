@@ -36,7 +36,9 @@ Use public App registration if collaborators outside the owner account must auth
 front of /studio*; needs ACCESS_TEAM_DOMAIN and the application's ACCESS_AUD tag, no secrets),
 google (GOOGLE_CLIENT_ID, secret GOOGLE_CLIENT_SECRET, redirect URI <origin>/studio/auth/google/callback),
 oidc (OIDC_ISSUER, OIDC_CLIENT_ID, optional OIDC_NAME, secret OIDC_CLIENT_SECRET unless a public PKCE
-client, redirect URI <origin>/studio/auth/oidc/callback) or passkey (nothing to configure). Write only
+client, redirect URI <origin>/studio/auth/oidc/callback) or passkey (AUTH_BOOTSTRAP_ADMIN=passkey:owner, secret AUTH_SETUP_CODE of 16 to 200 characters that I choose and
+set myself; after deploying I open <origin>/studio/auth/passkey/bootstrap once to create the first passkey, then invite
+others from the Roles view). Write only
 the non-secret vars (AUTH_PROVIDER, those above, optional AUTH_ALLOWED_DOMAINS / AUTH_ALLOWED_EMAILS and
 AUTH_BOOTSTRAP_ADMIN such as google:me@example.com) into studio/cloudflare/wrangler.jsonc, never replacing an
 AUTH_PROVIDER that is already there without asking. Tell me to run each secret command myself

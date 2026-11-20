@@ -47,7 +47,7 @@ export const messages = {
   'studioSetup.auth.secrets.copied': 'Copied',
   'studioSetup.auth.secrets.copy': 'Copy commands',
   'studioSetup.auth.secrets.copyFailed': 'Could not copy. Select the text and copy it yourself.',
-  'studioSetup.auth.secrets.intro': 'Client secrets never pass through Stacki. Run these in your project; Wrangler asks for the value.',
+  'studioSetup.auth.secrets.intro': 'Secrets never pass through Stacki. Run these in your project; Wrangler asks for the value.',
   'studioSetup.auth.secrets.title': 'Add these yourself after setup',
   'studioSetup.auth.steps.access':
     'No secrets. In Cloudflare Zero Trust, create an Access application covering your site’s hostname and the path /studio* with a policy that allows your team, then paste its AUD tag above. People must be allowed in Access and listed in the Roles panel.',
@@ -56,7 +56,8 @@ export const messages = {
     'Create an OAuth client (Web application) in the Google Cloud console, register the redirect URI below, then add its secret yourself.',
   'studioSetup.auth.steps.oidc':
     'Create an application at your identity provider, register the redirect URI below, then add its client secret yourself (a public PKCE client has none).',
-  'studioSetup.auth.steps.passkey': 'No secrets. The first administrator registers a passkey on the first visit, then invites others from Studio settings.',
+  'studioSetup.auth.steps.passkey':
+    'The first administrator creates the first passkey: choose a long random code (16 to 200 characters) for AUTH_SETUP_CODE and add it yourself, deploy, then open https://<your-site>/studio/auth/passkey/bootstrap once. Afterwards, invite everyone else from Studio’s Roles view.',
   'studioSetup.auth.title': 'How should people sign in?',
   'studioSetup.back': 'Back',
   'studioSetup.closeLabel': 'Close Studio setup',

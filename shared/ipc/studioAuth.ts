@@ -31,6 +31,8 @@ export const STUDIO_AUTH_LIMITS = {
 export const STUDIO_AUTH_DEFAULT: StudioAuthKind = 'github';
 export const PASSKEY_ADMIN_DEFAULT = 'owner';
 export const OIDC_NAME_DEFAULT = 'SSO';
+export const PASSKEY_BOOTSTRAP_PATH = '/studio/auth/passkey/bootstrap';
+export const SETUP_CODE_CHARS = { min: 16, max: 200 } as const;
 export const ACCESS_DOMAIN_SUFFIX = '.cloudflareaccess.com';
 
 export type StudioAuthField = 'admin' | 'allowedDomains' | 'allowedEmails' | 'aud' | 'clientId' | 'issuer' | 'name' | 'teamDomain';
@@ -397,6 +399,8 @@ export interface StudioAuthGuide {
   readonly secretLines: readonly string[];
   /** The path the identity service must be told to send people back to, after the site's origin. */
   readonly redirectPath: string | undefined;
+  /** Passkeys only: the page, after the site's origin, opened once to create the first passkey. */
+  readonly bootstrapPath: string | undefined;
   /** The secret names, in the order of `secretLines`. */
   readonly secretNames: readonly string[];
 }
@@ -410,8 +414,15 @@ export function studioAuthGuideFor(kind: StudioAuthKind): StudioAuthGuide {
   switch (kind) {
     case 'github':
     case 'access':
+      return { secretLines: [], redirectPath: undefined, bootstrapPath: undefined, secretNames: [] };
     case 'passkey':
-      return { secretLines: [], redirectPath: undefined, secretNames: [] };
+      // The setup code opens the first-admin page once; the owner chooses it, so it is never generated or stored here.
+      return {
+        secretLines: ['cd studio', 'npx wrangler secret put AUTH_SETUP_CODE --config cloudflare/wrangler.jsonc'],
+        redirectPath: undefined,
+        bootstrapPath: PASSKEY_BOOTSTRAP_PATH,
+        secretNames: ['AUTH_SETUP_CODE'],
+      };
     case 'google':
       return guideFor('google', 'GOOGLE_CLIENT_SECRET');
     case 'oidc':
@@ -427,6 +438,7 @@ function guideFor(provider: 'google' | 'oidc', secret: string): StudioAuthGuide 
   return {
     secretLines: ['cd studio', `npx wrangler secret put ${secret} --config cloudflare/wrangler.jsonc`],
     redirectPath: `/studio/auth/${provider}/callback`,
+    bootstrapPath: undefined,
     secretNames: [secret],
   };
 }
@@ -443,15 +455,19 @@ export function studioAuthNextSteps(config: StudioAuthConfig): readonly string[]
     case 'access':
       return [
         `Sign-in: Cloudflare Access. The first administrator is ${config.admin}. There are no secrets to store.`,
+        `Setup recorded ACCESS_TEAM_DOMAIN (${config.teamDomain}) and ACCESS_AUD in cloudflare/wrangler.jsonc.`,
         'In Cloudflare Zero Trust, create an Access application (Self-hosted) that covers your site hostname and the path /studio*',
         '(or turn on Access for the workers.dev route), with a policy that allows your team.',
-        `Copy the application's AUD tag; setup recorded the value you gave (${config.aud.slice(0, 8)}...). Update ACCESS_AUD if it differs.`,
+        `Copy the application's Audience (AUD) tag into ACCESS_AUD (setup recorded the one you gave, ${config.aud.slice(0, 8)}...); update it if it differs.`,
         'People need BOTH: to be allowed by the Access policy AND to be listed in .stacki/roles.json (invite them from the Roles panel).',
       ];
     case 'passkey':
       return [
-        `Sign-in: Passkeys. The first administrator is ${config.admin}; they register a passkey on the first visit.`,
-        'Invite everyone else from Studio settings once you are signed in. Nothing to create at an identity service.',
+        `Sign-in: Passkeys. The first administrator is ${config.admin} (AUTH_BOOTSTRAP_ADMIN).`,
+        `Choose a long random code (${SETUP_CODE_CHARS.min} to ${SETUP_CODE_CHARS.max} characters, no spaces) and store it yourself; Stacki never asks for it or saves it:`,
+        ...guide.secretLines.map((line) => `  ${line}`),
+        `Deploy, then open https://<your-site>${PASSKEY_BOOTSTRAP_PATH} once and enter the code to create the first passkey.`,
+        'After that, create invites for everyone else from the Roles view in Studio.',
       ];
     case 'google':
     case 'oidc': {
@@ -552,4 +568,19 @@ function unqualified(input: unknown, kind: StudioAuthKind): string {
 /** The first administrator's subject, for a form that shows the email or handle without its prefix. */
 export function studioAuthAdminSubject(config: StudioAuthConfig): string {
   return config.kind === 'github' ? '' : config.admin.slice(config.kind.length + 1);
+}
+
+/** A random code the owner may copy for AUTH_SETUP_CODE: 32 random bytes as 43 URL-safe characters. Never stored by Stacki. */
+export function suggestSetupCode(randomBytes: Uint8Array): string {
+  if (randomBytes.length !== 32) {
+    throw new Error('A setup code suggestion needs exactly 32 random bytes');
+  }
+  const code = btoa(String.fromCharCode(...randomBytes))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+  if (code.length < SETUP_CODE_CHARS.min || code.length > SETUP_CODE_CHARS.max) {
+    throw new Error('The suggested setup code is outside its length bounds');
+  }
+  return code;
 }

@@ -4,8 +4,10 @@
 // never through this program and never into a file).
 import { lstat, open, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import {
   STUDIO_AUTH_KINDS,
+  suggestSetupCode,
   buildStudioAuth,
   emptyStudioAuthDraft,
   studioAuthNextSteps,
@@ -231,7 +233,15 @@ export async function configureSignIn(
     const answer = await prompter.ask(`wrangler.jsonc already sets AUTH_PROVIDER to "${provider}". Replace it? [y/N] `);
     return /^(y|yes)$/i.test(answer);
   });
-  return { written, lines: signInSummary(config, written) };
+  const lines = [...signInSummary(config, written)];
+  if (config.kind === 'passkey' && prompter !== undefined) {
+    // Offered, printed once and never written anywhere: the owner pastes it at wrangler's own prompt.
+    const answer = await prompter.ask('Print a random suggestion for AUTH_SETUP_CODE (not saved anywhere)? [y/N] ');
+    if (/^(y|yes)$/i.test(answer)) {
+      lines.push(`Suggested AUTH_SETUP_CODE (copy it now; it is not stored): ${suggestSetupCode(new Uint8Array(randomBytes(32)))}`);
+    }
+  }
+  return { written, lines };
 }
 
 // The words ----------------------------------------------------------------

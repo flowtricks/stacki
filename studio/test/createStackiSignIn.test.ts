@@ -120,7 +120,7 @@ test('an AUTH_PROVIDER already in the file is kept unless the owner says yes', a
   const before = await readFile(file, 'utf8');
   const config = { kind: 'passkey', admin: 'passkey:owner' } as const;
   try {
-    const refused = scripted(['n']);
+    const refused = scripted(['n', 'n']);
     const kept = await configureSignIn(project, config, refused.prompter);
     refused.prompter.close();
     assert.deepEqual(kept.written, { kind: 'kept', provider: 'custom' });
@@ -129,7 +129,7 @@ test('an AUTH_PROVIDER already in the file is kept unless the owner says yes', a
     const unattended = await configureSignIn(project, config, undefined);
     assert.equal(unattended.written.kind, 'kept');
     assert.equal(await readFile(file, 'utf8'), before);
-    const accepted = scripted(['y']);
+    const accepted = scripted(['y', 'n']);
     const replaced = await configureSignIn(project, config, accepted.prompter);
     accepted.prompter.close();
     assert.equal(replaced.written.kind, 'written');
@@ -172,6 +172,7 @@ test('the command documents --auth and prints the sign-in options for an agent',
   assert.match(agent.out, /--auth/);
   assert.match(agent.out, /wrangler secret put GOOGLE_CLIENT_SECRET/);
   assert.match(agent.out, /Never ask me to paste a client secret/);
+  assert.match(agent.out, /AUTH_SETUP_CODE[\s\S]*passkey\/bootstrap/);
   const invalid = await runCli(['--yes', '--auth', 'saml']);
   assert.notEqual(invalid.code, 0);
   assert.match(invalid.errors, /--auth must be one of/);
@@ -215,4 +216,31 @@ test('an Access team domain outside cloudflareaccess.com needs confirmation', as
   asked.prompter.close();
   assert.ok(interactive.ok);
   assert.equal(parseOptions(['--auth', 'access', '--auth-custom-domain']).teamDomainCheck, 'custom');
+});
+
+test('Passkeys print the setup code steps and only suggest a code when asked, never writing it', async () => {
+  const project = await projectWithConfig();
+  const file = path.join(project, 'studio/cloudflare/wrangler.jsonc');
+  try {
+    const declined = scripted(['n']);
+    const first = await configureSignIn(project, { kind: 'passkey', admin: 'passkey:owner' }, declined.prompter);
+    declined.prompter.close();
+    const text = first.lines.join('\n');
+    assert.match(text, /AUTH_BOOTSTRAP_ADMIN|passkey:owner/);
+    assert.match(text, /wrangler secret put AUTH_SETUP_CODE --config cloudflare\/wrangler\.jsonc/);
+    assert.match(text, /long random code \(16 to 200 characters/);
+    assert.match(text, /\/studio\/auth\/passkey\/bootstrap/);
+    assert.doesNotMatch(text, /Suggested AUTH_SETUP_CODE/);
+    const before = await readFile(file, 'utf8');
+    const accepted = scripted(['y', 'y']);
+    const second = await configureSignIn(project, { kind: 'passkey', admin: 'passkey:owner' }, accepted.prompter);
+    accepted.prompter.close();
+    const line = second.lines.find((candidate) => candidate.startsWith('Suggested AUTH_SETUP_CODE'));
+    assert.match(line ?? '', /: [A-Za-z0-9_-]{43}$/);
+    const code = (line ?? '').split(': ').pop() ?? '';
+    assert.ok(!(await readFile(file, 'utf8')).includes(code), 'the suggestion is never written to the config');
+    assert.equal(before.includes('AUTH_SETUP_CODE'), false);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
 });

@@ -43,8 +43,12 @@ Ask me how people should sign in to Studio. The choices are (flag --auth):
            domains/emails, and the first admin's email (--auth-admin).
   oidc     SSO through OpenID Connect. Needs the issuer https URL (--auth-issuer), client ID,
            optional button name, allowed domains/emails, and the first admin's email.
-  passkey  Passkeys. Needs nothing; the first admin handle (--auth-admin, default owner)
-           registers a passkey, then invites people from Studio settings.
+  passkey  Passkeys. The first admin handle (--auth-admin, default owner) becomes
+           AUTH_BOOTSTRAP_ADMIN=passkey:<handle>. I run npx wrangler secret put AUTH_SETUP_CODE
+           --config cloudflare/wrangler.jsonc myself, choosing a long random code of 16 to 200
+           characters (never generated into a file or pasted to you), deploy, then open
+           <origin>/studio/auth/passkey/bootstrap once to create the first passkey; invites for
+           others come from Studio's Roles view.
 Run npm create stacki@latest -- --yes --auth <choice> plus the flags above, or edit the vars in
 studio/cloudflare/wrangler.jsonc (AUTH_PROVIDER, ACCESS_TEAM_DOMAIN, ACCESS_AUD, GOOGLE_CLIENT_ID, OIDC_ISSUER, OIDC_CLIENT_ID,
 OIDC_NAME, AUTH_ALLOWED_DOMAINS, AUTH_ALLOWED_EMAILS, AUTH_BOOTSTRAP_ADMIN) and never overwrite an

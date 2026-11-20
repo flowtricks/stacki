@@ -19,6 +19,7 @@ import {
   studioAuthGuide,
   studioAuthNextSteps,
   studioAuthVariables,
+  suggestSetupCode,
   type StudioAuthConfig,
   type StudioAuthDraft,
 } from '#dist/shared/ipc/studioAuth.js';
@@ -82,7 +83,7 @@ test('Cloudflare Access writes team domain, audience and admin, and holds no sec
   assert.deepEqual(studioAuthGuide(built(access)).secretLines, []);
   const text = studioAuthNextSteps(built(access)).join('\n');
   assert.match(text, /\/studio\*/);
-  assert.match(text, /AUD tag/);
+  assert.match(text, /\(AUD\) tag/);
   assert.match(text, /BOTH[\s\S]*roles\.json/);
   assert.equal(studioAuthAdminSubject(built(access)), 'boss@corp.com');
   const cases: ReadonlyArray<readonly [Partial<StudioAuthDraft>, string, string]> = [
@@ -148,11 +149,27 @@ test('the guide prints the secret command and the redirect path, never a value',
   assert.deepEqual(studioAuthGuide(built(google)), {
     secretLines: ['cd studio', 'npx wrangler secret put GOOGLE_CLIENT_SECRET --config cloudflare/wrangler.jsonc'],
     redirectPath: '/studio/auth/google/callback',
+    bootstrapPath: undefined,
     secretNames: ['GOOGLE_CLIENT_SECRET'],
   });
   assert.equal(studioAuthGuide(built(oidc)).redirectPath, '/studio/auth/oidc/callback');
-  assert.deepEqual(studioAuthGuide(built(emptyStudioAuthDraft('passkey'))).secretLines, []);
+  assert.deepEqual(studioAuthGuide(built(emptyStudioAuthDraft('passkey'))), {
+    secretLines: ['cd studio', 'npx wrangler secret put AUTH_SETUP_CODE --config cloudflare/wrangler.jsonc'],
+    redirectPath: undefined,
+    bootstrapPath: '/studio/auth/passkey/bootstrap',
+    secretNames: ['AUTH_SETUP_CODE'],
+  });
+  const passkey = studioAuthNextSteps(built(emptyStudioAuthDraft('passkey'))).join('\n');
+  assert.match(passkey, /AUTH_BOOTSTRAP_ADMIN/);
+  assert.match(passkey, /long random code \(16 to 200 characters/);
+  assert.match(passkey, /\/studio\/auth\/passkey\/bootstrap/);
+  assert.match(passkey, /Roles view/);
+  assert.match(studioAuthNextSteps(built(access)).join('\n'), /ACCESS_TEAM_DOMAIN[\s\S]*ACCESS_AUD[\s\S]*policy/);
+  const suggestion = suggestSetupCode(new Uint8Array(32).fill(7));
+  assert.match(suggestion, /^[A-Za-z0-9_-]{43}$/);
+  assert.throws(() => suggestSetupCode(new Uint8Array(8)), /32 random bytes/);
   assert.deepEqual(studioAuthGuide({ kind: 'github' }).secretLines, []);
+  assert.equal(studioAuthGuide(built(google)).bootstrapPath, undefined);
   const text = studioAuthNextSteps(built(oidc)).join('\n');
   assert.match(text, /OIDC_CLIENT_SECRET/);
   assert.match(text, /https:\/\/<your-site>\/studio\/auth\/oidc\/callback/);

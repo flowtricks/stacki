@@ -48,7 +48,7 @@ export const messages = {
   'studioSetup.auth.secrets.copied': 'Copié',
   'studioSetup.auth.secrets.copy': 'Copier les commandes',
   'studioSetup.auth.secrets.copyFailed': 'Copie impossible. Sélectionnez le texte et copiez-le vous-même.',
-  'studioSetup.auth.secrets.intro': 'Les secrets client ne passent jamais par Stacki. Exécutez ceci dans votre projet ; Wrangler demande la valeur.',
+  'studioSetup.auth.secrets.intro': 'Les secrets ne passent jamais par Stacki. Exécutez ceci dans votre projet ; Wrangler demande la valeur.',
   'studioSetup.auth.secrets.title': 'À ajouter vous-même après la configuration',
   'studioSetup.auth.steps.access':
     'Aucun secret. Dans Cloudflare Zero Trust, créez une application Access couvrant le nom d’hôte de votre site et le chemin /studio* avec une politique autorisant votre équipe, puis collez sa balise AUD ci-dessus. Les personnes doivent être autorisées dans Access et figurer dans le panneau Rôles.',
@@ -58,7 +58,7 @@ export const messages = {
   'studioSetup.auth.steps.oidc':
     'Créez une application chez votre fournisseur d’identité, enregistrez l’URI de redirection ci-dessous, puis ajoutez vous-même son secret client (un client PKCE public n’en a pas).',
   'studioSetup.auth.steps.passkey':
-    'Aucun secret. Le premier administrateur enregistre une passkey à la première visite, puis invite les autres depuis les réglages de Studio.',
+    'Le premier administrateur crée la première passkey : choisissez un long code aléatoire (16 à 200 caractères) pour AUTH_SETUP_CODE et ajoutez-le vous-même, déployez, puis ouvrez une fois https://<your-site>/studio/auth/passkey/bootstrap. Ensuite, invitez les autres depuis la vue Rôles de Studio.',
   'studioSetup.auth.title': 'Comment les personnes se connectent-elles ?',
   'studioSetup.back': 'Retour',
   'studioSetup.closeLabel': 'Fermer la configuration de Studio',

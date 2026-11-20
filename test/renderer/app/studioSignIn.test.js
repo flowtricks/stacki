@@ -143,8 +143,9 @@ test('SSO validates the issuer; Passkeys ask only for a handle; Access needs a c
     assert.match(document.querySelector('.studio-auth-fields').textContent, /Not valid\./);
     await click(radios()[4]);
     assert.equal(document.querySelectorAll('.studio-auth-field').length, 1);
-    assert.match(document.querySelector('.studio-auth-notes').textContent, /No secrets/);
-    assert.equal(document.querySelector('.studio-auth-copy') ?? undefined, undefined, 'Passkeys have nothing to copy');
+    assert.match(document.querySelector('.studio-auth-notes').textContent, /\/studio\/auth\/passkey\/bootstrap/);
+    assert.match(document.querySelector('.studio-auth-notes').textContent, /wrangler secret put AUTH_SETUP_CODE/);
+    assert.ok(button('Copy commands'), 'Passkeys have the setup code command to copy');
     await click(radios()[1]);
     await type(textField('Access team domain'), 'access.corp.com');
     await type(textField('Application AUD tag'), AUD);

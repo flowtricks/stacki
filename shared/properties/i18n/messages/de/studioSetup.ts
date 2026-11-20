@@ -48,7 +48,7 @@ export const messages = {
   'studioSetup.auth.secrets.copied': 'Kopiert',
   'studioSetup.auth.secrets.copy': 'Befehle kopieren',
   'studioSetup.auth.secrets.copyFailed': 'Kopieren fehlgeschlagen. Markieren Sie den Text und kopieren Sie ihn selbst.',
-  'studioSetup.auth.secrets.intro': 'Client-Secrets laufen nie durch Stacki. Führen Sie dies in Ihrem Projekt aus; Wrangler fragt nach dem Wert.',
+  'studioSetup.auth.secrets.intro': 'Secrets laufen nie durch Stacki. Führen Sie dies in Ihrem Projekt aus; Wrangler fragt nach dem Wert.',
   'studioSetup.auth.secrets.title': 'Fügen Sie diese nach der Einrichtung selbst hinzu',
   'studioSetup.auth.steps.access':
     'Keine Secrets. Erstellen Sie in Cloudflare Zero Trust eine Access-Anwendung für den Hostnamen Ihrer Website und den Pfad /studio* mit einer Richtlinie für Ihr Team und fügen Sie deren AUD-Tag oben ein. Personen müssen in Access erlaubt und im Rollen-Bereich aufgeführt sein.',
@@ -58,7 +58,7 @@ export const messages = {
   'studioSetup.auth.steps.oidc':
     'Erstellen Sie bei Ihrem Identitätsanbieter eine Anwendung, registrieren Sie die Weiterleitungs-URI unten und fügen Sie das Client-Secret selbst hinzu (ein öffentlicher PKCE-Client hat keins).',
   'studioSetup.auth.steps.passkey':
-    'Keine Secrets. Die erste Administration registriert beim ersten Besuch einen Passkey und lädt dann andere in den Studio-Einstellungen ein.',
+    'Die erste Administration erstellt den ersten Passkey: Wählen Sie einen langen Zufallscode (16 bis 200 Zeichen) für AUTH_SETUP_CODE und fügen Sie ihn selbst hinzu, stellen Sie bereit und öffnen Sie dann einmal https://<your-site>/studio/auth/passkey/bootstrap. Danach laden Sie alle anderen in der Rollenansicht von Studio ein.',
   'studioSetup.auth.title': 'Wie sollen sich Personen anmelden?',
   'studioSetup.back': 'Zurück',
   'studioSetup.closeLabel': 'Studio-Einrichtung schließen',
