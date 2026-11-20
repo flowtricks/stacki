@@ -4,6 +4,16 @@
 without breaking the rules the app enforces. `stacki mcp` serves the same commands to AI agents over the Model
 Context Protocol. This page is the design, the safety rules, the command reference and how to extend it.
 
+## Setting up Studio's sign-in (`npm create stacki`)
+
+`npm create stacki@latest` installs Studio and asks "How should people sign in to Studio?": GitHub (default), Cloudflare
+Access, Google, SSO (OpenID Connect) or Passkeys. For scripts and CI, `--auth github|access|google|oidc|passkey` chooses
+without asking, with non-secret value flags: `--auth-client-id`, `--auth-issuer`, `--auth-name`, `--auth-allowed-domains`,
+`--auth-allowed-emails`, `--auth-team-domain`, `--auth-aud`, `--auth-custom-domain` and `--auth-admin` (the first admin's
+email, or a handle for passkeys). `--yes` without `--auth` keeps GitHub. Invalid or missing values fail before any file is
+changed. The command never accepts a client secret: it prints the `wrangler secret put` command instead. See
+`studio/docs/cloudflare.md`, "Choosing a sign-in type".
+
 ## Where it lives and why
 
 | Piece | Path |
