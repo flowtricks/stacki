@@ -2,6 +2,7 @@ import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { Avatar } from '../auth/Avatar';
 import type { ActionableNotice } from '../notifications/notice';
 import './lockedSettings.css';
+import { PanelHeader } from '../../../vendor/stacki/src/ui/PanelHeader';
 
 export function LockedSettings({ notice, report }: { readonly notice: ActionableNotice; readonly report: (error: unknown) => void }) {
   const translate = useTranslate();
@@ -10,9 +11,7 @@ export function LockedSettings({ notice, report }: { readonly notice: Actionable
   const name = person?.name ?? translate('settings.element.anotherEditor');
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        <h2>{translate('settings.title')}</h2>
-      </div>
+      <PanelHeader title={translate('settings.title')} />
       <section className="locked-settings" aria-label={translate('settings.element.lockedAria')}>
         <div className="locked-settings-person">
           <span className="locked-settings-avatar">

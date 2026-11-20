@@ -9,6 +9,7 @@ import { createPanelCache, usePanelData } from '../../../vendor/stacki/src/lib/u
 import { PanelReadStatus } from '../../../vendor/stacki/src/ui/PanelReadStatus';
 import type { IpcResults } from '../../../vendor/stacki/shared/ipc/ipcResults';
 import type { Project } from '../project/projectClient';
+import { PanelHeader } from '../../../vendor/stacki/src/ui/PanelHeader';
 
 const cache = createPanelCache<IpcResults['git:info']>();
 const noPreview = () => {};
@@ -41,10 +42,8 @@ export function GitPanel({
   const incoming = useGitIncoming('studio', info);
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        {/* i18n-ignore: Git is a product name. */}
-        <h2>Git</h2>
-      </div>
+      {/* i18n-ignore: Git is a product name. */}
+      <PanelHeader title="Git" />
       <div className="panel-body history-body">
         <PanelReadStatus state={state} label={translate('history.timeline.label')} layout="history" retry={refresh} />
         {info && (
