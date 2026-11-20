@@ -33,10 +33,31 @@
 /* A few classes as a rule: one plain fill, which also covers the scrollbar's reserved gutter (the value list's
    scroll shadows left it as a darker strip here). The list's 4px and the row's 4px put each checkbox 8px in from
    the box's edge, where the Name and Folder fields above start their text, so the dialog reads as one column. */
+.modal.create-component .move-styles {
+  --move-style-row: 32px;
+  --move-style-gap: 2px;
+  --move-style-pad: 4px;
+}
+/* A long list stops at five and a half rows, so the sixth is cut through its middle and the cut says there is more:
+   the height comes from the row's own height and gap (five rows, their five gaps, the top padding, half a row), so
+   it holds at any zoom and a short list, under that height, simply shows whole with no scroll. The cut row is the
+   cue; the plain fill stays (scroll shadows left a darker strip in the gutter). No snapping: a snap would pull the
+   cut back onto a row boundary. */
 .modal.create-component .move-styles .extract-value-list {
-  padding: 4px;
-  scroll-padding: 4px 0;
+  gap: var(--move-style-gap);
+  padding: var(--move-style-pad);
+  scroll-padding: var(--move-style-pad) 0;
+  scroll-snap-type: none;
+  max-height: calc(var(--move-style-row) * 5.5 + var(--move-style-gap) * 5 + var(--move-style-pad));
   background: var(--extract-list-fill);
+}
+.modal.create-component .move-styles .extract-value {
+  min-height: var(--move-style-row);
+  scroll-snap-align: none;
+}
+/* The class is a label in the dialog's ordinary text colour; the file it is in is the dim one. */
+.modal.create-component .move-styles .move-style-name {
+  color: var(--text);
 }
 /* Each row is a <label>, so a click anywhere on it toggles its checkbox; it undoes the dialog's field-label look
    (.modal-body label: a block of small dim text) the way .modal-body label.check-row does. */
