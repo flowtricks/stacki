@@ -44,7 +44,7 @@ table. That was three minutes.
 | Draft and asset inventories fetched together, and restored together                                         | One R2 round trip fewer, and the two restores overlap                                                                          |
 | Bootstrap reads R2 once, not twice, and in parallel                                                         | Saves one R2 read on every cold start                                                                                          |
 | Image installs production dependencies only and drops source maps                                           | 2.95 GB to 2.11 GB uncompressed (-28 %), 840 MB less to pull; the container still boots and serves (checked)                   |
-| Real stages on screen: container, repository, drafts, dependencies, server, compile                         | The boot screen and the canvas say what is happening, with "Step n of 6"; Retry appears after 90 s, not 10 s                   |
+| Real stages on screen: container, repository, drafts, dependencies, server, compile                         | The boot screen and the canvas say what is happening, with the step counter ("5/6") on the status row; Retry appears after 90 s, not 10 s                   |
 | The container reports each stage with a timestamp; the Durable Object keeps them                            | `/studio/api/startup` answers in milliseconds without waking the container, and polling it also starts a stopped container     |
 
 The container also prints `[start] <stage> at <ms>` lines, and `/studio/api/startup` returns

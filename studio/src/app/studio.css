@@ -327,39 +327,80 @@
   padding: 24px;
   text-align: center;
 }
-.boot-detail {
-  max-width: 420px;
-  font-size: 13px;
-  color: var(--text-muted, #999);
+.boot-title {
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--text);
+}
+/* One column as wide as the bar: the bar, then one row with the stage left and the step counter right. */
+.boot-status {
+  width: min(320px, 86vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .boot-progress {
-  width: min(280px, 75vw);
   height: 4px;
   border-radius: 4px;
   overflow: hidden;
-  background: #2b2b2b;
+  background: var(--bg-active);
 }
 .boot-progress > span {
   display: block;
-  width: 40%;
+  position: relative;
   height: 100%;
   border-radius: inherit;
-  background: #f5f5f5;
-  animation: boot-progress 1.4s ease-in-out infinite;
+  background: var(--text);
+  overflow: hidden;
+  transition: width 0.6s ease;
 }
-@keyframes boot-progress {
+/* A soft sheen moves along the filled part while a long stage runs; the fill itself only ever grows. */
+.boot-progress > span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.28), transparent);
+  animation: boot-sheen 1.8s ease-in-out infinite;
+}
+@keyframes boot-sheen {
   from {
     transform: translateX(-100%);
   }
   to {
-    transform: translateX(350%);
+    transform: translateX(100%);
   }
+}
+.boot-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  font-size: 12px;
+}
+.boot-stage {
+  min-width: 0;
+  color: var(--text-dim);
+}
+.boot-counter {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.boot-note {
+  min-height: 1.4em;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-faint);
+  text-align: left;
 }
 @media (prefers-reduced-motion: reduce) {
   .boot-progress > span {
+    transition: none;
+  }
+  .boot-progress > span::after {
     animation: none;
-    width: 100%;
-    opacity: 0.6;
+    display: none;
   }
 }
 .panel-close {

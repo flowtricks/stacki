@@ -4,9 +4,10 @@
 // report, a restart, and each container phase.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { parseStartupReport, parseStartupView, STARTUP_LIMITS, STARTUP_STAGES } from '../src/features/startup/startupStages';
 import { NEW_PROCESS_MARGIN_MS, StartupLog } from '../src/features/startup/startupLog';
-import { startupStep, STARTUP_STAGE_KEYS } from '../src/features/startup/startupText';
+import { startupFractionHeld, startupRow, startupStep, STARTUP_STAGE_KEYS } from '../src/features/startup/startupText';
 
 test('a report with a known stage and a sane clock is accepted', () => {
   assert.deepEqual(parseStartupReport({ stage: 'drafts', sinceStartMs: 4_200 }), { ok: true, value: { stage: 'drafts', sinceStartMs: 4_200 } });
@@ -91,4 +92,49 @@ test('the view follows the container phase', () => {
   assert.deepEqual(log.view('stopped'), { stage: 'container', history: [] });
   log.reset();
   assert.deepEqual(log.view('starting'), { stage: 'container', history: [] });
+});
+
+test('the status row pairs a step with its total, and the bar counts completed steps', () => {
+  assert.deepEqual(startupRow(5, 6), { counter: '5/6', fraction: 4 / 6, step: 5, total: 6 });
+  assert.equal(startupRow(1, 6)?.fraction, 0);
+  for (const stage of STARTUP_STAGES) {
+    const { step, total } = startupStep(stage);
+    const row = startupRow(step, total);
+    assert.ok(row);
+    assert.ok(row.fraction >= 0);
+    assert.ok(row.fraction < 1, 'a bar is never full before ready');
+  }
+});
+
+test('an untrusted step or total is clamped or refused, never drawn past the bar', () => {
+  assert.equal(startupRow(0, 6)?.counter, '1/6');
+  assert.equal(startupRow(-3, 6)?.counter, '1/6');
+  assert.equal(startupRow(9, 6)?.counter, '6/6');
+  assert.ok((startupRow(9, 6)?.fraction ?? 1) < 1);
+  for (const total of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(startupRow(1, total), undefined, `total ${total}`);
+  }
+  assert.equal(startupRow(Number.NaN, 6), undefined);
+});
+
+test('the bar never goes backwards', () => {
+  assert.equal(startupFractionHeld(0.5, 0.2), 0.5);
+  assert.equal(startupFractionHeld(0.2, 0.5), 0.5);
+});
+
+test('the boot screen reads as one status row, with the counter named for assistive tech', async () => {
+  const source = await readFile(new URL('../src/app/BootScreen.tsx', import.meta.url), 'utf8');
+  assert.equal(source.includes("'studio.boot.stage.step'"), true, 'the counter keeps its spoken name');
+  assert.match(source, /aria-valuenow/);
+  assert.match(source, /aria-valuemax/);
+  assert.equal(source.includes('boot-detail'), false, 'no separate grey step line');
+});
+
+test('motion on the boot bar stops when the person asks for reduced motion', async () => {
+  const css = await readFile(new URL('../src/app/studio.css', import.meta.url), 'utf8');
+  const start = css.indexOf('@media (prefers-reduced-motion: reduce)', css.indexOf('.boot-progress'));
+  assert.ok(start >= 0);
+  const block = css.slice(start, css.indexOf('.panel-close', start));
+  assert.match(block, /transition: none/);
+  assert.match(block, /animation: none/);
 });
