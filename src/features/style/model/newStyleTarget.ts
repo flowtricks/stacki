@@ -33,10 +33,17 @@ export interface DefaultTargetInput {
   readonly preferredScope: StyleTagScope;
   /** Whether the open file can hold a `<style>` tag (an `.astro` file) and the host can add one. */
   readonly fileCanHoldTag: 'yes' | 'no';
+  /**
+   * The key of the stylesheet source the project chose for this scope (Settings → New style
+   * locations), present only when that file exists among the sources the panel lists. It wins over
+   * every `<style>` tag; absent means the scope writes a style tag.
+   */
+  readonly chosenFileKey?: string;
 }
 
 export type DefaultTarget =
   | { readonly kind: 'tag'; readonly key: string }
+  | { readonly kind: 'file'; readonly key: string }
   | { readonly kind: 'create' }
   /** Nothing to point at: the file cannot hold a tag. The caller keeps what it had. */
   | { readonly kind: 'none' };
@@ -49,6 +56,9 @@ export type DefaultTarget =
  * first of those. With no tag: the virtual "Create <style>" entry, if the file can hold one.
  */
 export function defaultStyleTarget(input: DefaultTargetInput): DefaultTarget {
+  if (input.chosenFileKey !== undefined) {
+    return { kind: 'file', key: input.chosenFileKey };
+  }
   const ordered = [...input.tags].sort((left, right) => left.order - right.order);
   assert(ordered.length === input.tags.length, 'defaultStyleTarget: sorting keeps every tag');
   const first = ordered[0];
@@ -61,10 +71,31 @@ export function defaultStyleTarget(input: DefaultTargetInput): DefaultTarget {
   return { kind: 'tag', key: chosen.key };
 }
 
+/** The minimal fact about a listed source that the chosen-file lookup needs. */
+export interface StyleSourceFact {
+  readonly key: string;
+  readonly label: string;
+  readonly originKind: 'file' | 'node' | 'astro';
+}
+
+/**
+ * The key of the stylesheet source the scope chose: the listed `file` source whose label is the
+ * project-relative path. Undefined when the scope writes a style tag, or when the file is not among
+ * the sources (it no longer exists, or the page does not load it): the caller then uses the tag, so
+ * a style never lands where it would have no effect or in a path that was not found.
+ */
+export function chosenFileSourceKey(sources: readonly StyleSourceFact[], chosenPath: string | undefined): string | undefined {
+  if (chosenPath === undefined) {
+    return undefined;
+  }
+  return sources.find((source) => source.originKind === 'file' && source.label === chosenPath)?.key;
+}
+
 /** The source key of a default target, or undefined when there is none. */
 export function defaultTargetKey(target: DefaultTarget): string | undefined {
   switch (target.kind) {
     case 'tag':
+    case 'file':
       return target.key;
     case 'create':
       return CREATE_STYLE_TAG_KEY;

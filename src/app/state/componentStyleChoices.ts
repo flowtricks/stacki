@@ -74,14 +74,14 @@ export async function loadMoveStyleCandidates(read: MoveStyleRead): Promise<read
 /** The move as Create performs it: the plan, read fresh from disk, and the new tag that holds what it carries. */
 export interface MovedStyles {
   readonly plan: StyleMovePlan;
-  /** The component's new `<style>`, shaped by the project's template; undefined when nothing is carried. */
+  /** The component's new `<style>`, shaped by the component scope's default content; undefined when nothing is carried. */
   readonly style: EditorNode | undefined;
 }
 
 /** Plans moving the `chosen` classes' CSS from what is on disk now, not from what the dialog read when it opened. */
 export async function planMovedStyles(read: Omit<MoveStyleRead, 'pagePath'>, chosen: readonly string[]): Promise<MovedStyles> {
   assert(chosen.length > 0, 'planMovedStyles: something is chosen');
-  const [sheets, settings] = await Promise.all([readMovableSheets(read.projectPath), styleSettings(read.projectPath)]);
+  const [sheets, settings] = await Promise.all([readMovableSheets(read.projectPath), styleSettings(read.projectPath, 'component')]);
   const planned = planStyleMove(read.node, new Set(chosen), pageStyleNodes(read.model.nodes, read.node.id), sheets);
   // Each @layer once: the template's wrapper supplies its own, and the rules that sat in the same layer share one block.
   const plan = { ...planned, carried: { ...planned.carried, rules: layeredRules(planned.carried.rules, templateLayerOf(settings.content)) } };
@@ -89,7 +89,7 @@ export async function planMovedStyles(read: Omit<MoveStyleRead, 'pagePath'>, cho
   // the rules re-indented inside the template's wrapper. Only the tag's copy is; the plan's rules stay as read, since
   // they are what the sources give up.
   const rules = tagIndentedRules(plan.carried.rules, templateRulesDepth(settings.content));
-  const style = carriedStyleNode({ styles: { ...plan.carried, rules } }, settings, '');
+  const style = carriedStyleNode({ styles: { ...plan.carried, rules } }, settings, '', '\n');
   assert((style === undefined) === (plan.carried.rules.length === 0), 'planMovedStyles: a tag exactly when rules are carried');
   return { plan, style };
 }

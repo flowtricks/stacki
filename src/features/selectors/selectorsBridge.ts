@@ -16,6 +16,7 @@ import {
   type SelectorRemoval,
   type SelectorReport,
 } from '../../../shared/properties/selectorUsage';
+import { newStyleLocationsDocument } from '../../../shared/properties/newStyleLocations';
 import { newStyleTagDocument } from '../../../shared/properties/newStyleTag';
 import { EMPTY_KEEP_LIST, parseStyleKeepList, serializeStyleKeepList, type StyleKeepList } from '../../../shared/properties/styleKeepList';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
@@ -139,6 +140,7 @@ export function changedKeepList(keepList: StyleKeepList, change: KeepListChange)
     keep,
     lockedStylesheets,
     ...(keepList.newStyleTag === undefined ? {} : { newStyleTag: newStyleTagDocument(keepList.newStyleTag) }),
+    ...(keepList.newStyleLocations === undefined ? {} : { newStyleLocations: newStyleLocationsDocument(keepList.newStyleLocations) }),
   });
   // Postconditions: what was asked to go is gone, whatever else was there stays.
   assert(

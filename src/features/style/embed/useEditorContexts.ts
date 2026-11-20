@@ -51,8 +51,8 @@ import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } fro
 import { getHost, onHostChange } from '../model/host';
 import { instanceSourceKey, type InstanceStyleDocument } from '../model/instanceClasses';
 import { followSource, selectorHomeKey } from '../model/selectorHome';
-import { CREATE_STYLE_TAG_KEY, defaultStyleTarget, defaultTargetKey, type StyleTagFact } from '../model/newStyleTarget';
-import { getNewStyleTagSettings, onNewStyleTagSettings } from '../model/newStyleTagSettings';
+import { CREATE_STYLE_TAG_KEY, chosenFileSourceKey, defaultStyleTarget, defaultTargetKey, type StyleTagFact } from '../model/newStyleTarget';
+import { getNewStyleLocations, newStyleFileOf, onNewStyleLocations, openStyleScope } from '../model/newStyleTagSettings';
 import { styleTagScopeOf } from '../../../../shared/properties/newStyleTag';
 import { styleBlockFileSupported } from '../model/firstStyleBlock';
 import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
@@ -345,7 +345,9 @@ export function useNativeTarget(
   const sourceKeys = useMemo(() => embedList.map((embedDocument) => embedDocument.source.key), [embedList]);
   // The open file's own `<style>` tags decide where a selector with no rules goes (newStyleTarget.ts):
   // the first usable tag, or, with none in the file, the virtual "Create <style>" entry.
-  const newStyleTag = useSyncExternalStore(onNewStyleTagSettings, getNewStyleTagSettings);
+  const locations = useSyncExternalStore(onNewStyleLocations, getNewStyleLocations);
+  const scope = openStyleScope();
+  const newStyleTag = locations[scope].tag;
   const openFile = getHost().openFilePath;
   const canAddTag = styleBlockFileSupported(openFile) && getHost().addStyleBlock !== undefined;
   const styleTags = useMemo(
@@ -358,7 +360,20 @@ export function useNativeTarget(
     [embedList, openFile],
   );
   const fileCanHoldTag = canAddTag ? 'yes' : 'no';
-  const defaultTarget = defaultStyleTarget({ tags: styleTags, preferredScope: styleTagScopeOf(newStyleTag.attributes), fileCanHoldTag });
+  // A scope that chose a stylesheet sends new styles there, while that file is among the project's (Settings → New style locations).
+  const chosenFileKey = chosenFileSourceKey(
+    embedList.map((embedDocument) => ({ key: embedDocument.source.key, label: embedDocument.source.label, originKind: embedDocument.source.origin.kind })),
+    newStyleFileOf(
+      scope,
+      getHost().files.map((file) => file.rel),
+    ),
+  );
+  const defaultTarget = defaultStyleTarget({
+    tags: styleTags,
+    preferredScope: styleTagScopeOf(newStyleTag.attributes),
+    fileCanHoldTag,
+    ...(chosenFileKey === undefined ? {} : { chosenFileKey }),
+  });
   const createOffered = defaultTarget.kind === 'create';
   const defaultKey = defaultTargetKey(defaultTarget);
   // The source dropdown only picks where NEW styles are created — it does not scope
@@ -368,7 +383,7 @@ export function useNativeTarget(
   const picked = sourceSelection === CREATE_STYLE_TAG_KEY ? (createOffered ? sourceSelection : undefined) : sourceSelection;
   const effectiveSourceSelection =
     picked && (picked === CREATE_STYLE_TAG_KEY || sourceKeys.includes(picked)) ? picked : (sourceKeys[0] ?? (createOffered ? CREATE_STYLE_TAG_KEY : ''));
-  return { canNative, creatableClass, createOffered, defaultKey, effectiveSourceSelection, embedList, nativeIndex };
+  return { canNative, chosenFileKey, creatableClass, createOffered, defaultKey, effectiveSourceSelection, embedList, nativeIndex };
 }
 
 // Point the style source at an open component's own embed.
@@ -379,7 +394,7 @@ export function useComponentSource(
 ) {
   const { scan } = scanState;
   const { pageSourceRef, previousInComponentRef, setSourceSelection, sourceSelectionRef, wantCompSourceRef } = nativeState;
-  const { embedList } = nativeTarget;
+  const { chosenFileKey, embedList } = nativeTarget;
 
   // Open a component → point the source at that component's own embed; close it →
   // restore the page pick. The switch is in-memory only (persistence stays the page
@@ -393,7 +408,8 @@ export function useComponentSource(
   const ownKey = embedList.find((embedDocument) => embedDocument.source.fromComponent && embedDocument.source.origin.kind === 'node')?.source.key;
   const inComponentContext = (scan?.inComponentContext ?? false) || ownKey !== undefined;
   useEffect(() => {
-    const componentSourceKey = ownKey ?? embedList.find((embedDocument) => embedDocument.source.fromComponent)?.source.key;
+    // A component that chose a stylesheet keeps new styles there instead of in its own `<style>` tag.
+    const componentSourceKey = chosenFileKey ?? ownKey ?? embedList.find((embedDocument) => embedDocument.source.fromComponent)?.source.key;
     if (inComponentContext !== previousInComponentRef.current) {
       previousInComponentRef.current = inComponentContext;
       if (inComponentContext) {
@@ -410,7 +426,7 @@ export function useComponentSource(
       wantCompSourceRef.current = false;
       setSourceSelection(componentSourceKey);
     }
-  }, [inComponentContext, embedList, ownKey, pageSourceRef, previousInComponentRef, setSourceSelection, sourceSelectionRef, wantCompSourceRef]);
+  }, [inComponentContext, chosenFileKey, embedList, ownKey, pageSourceRef, previousInComponentRef, setSourceSelection, sourceSelectionRef, wantCompSourceRef]);
   return { inComponentContext };
 }
 

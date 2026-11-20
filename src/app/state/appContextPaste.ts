@@ -14,7 +14,9 @@ import type { InsertPlace } from '../../editor/editGestures';
 import { planPaste, type PasteBundle, type PastePlan } from '../../editor/pasteDependencies';
 import { getNewStyleTagSettings } from '../../features/style/model/newStyleTagSettings';
 import { styleBlockFileSupported } from '../../features/style/model/firstStyleBlock';
-import { readNewStyleTag } from '../../ipc/newStyleTagBridge';
+import { readNewStyleLocations } from '../../ipc/newStyleTagBridge';
+import type { NewStyleScope } from '../../../shared/properties/newStyleLocations';
+import type { NewStyleTagSettings } from '../../../shared/properties/newStyleTag';
 import { rebaseProjectImport } from '../../ipc/appBridge';
 import { choiceDialog, confirmDialog } from '../../ui/ConfirmDialog';
 import { reportActionToast } from '../../ui/errorNotices';
@@ -79,7 +81,7 @@ export function useContextPaste(
         resolveImportPath,
         rebase: async (fromPath, spec) => (await rebaseProjectImport(fromPath, targetPath, spec)).path,
       });
-      const settings = await styleSettings(projectRef.current?.path);
+      const settings = await styleSettings(projectRef.current?.path, role);
       // Written against the page as shown now: the lookups above awaited, and edits made meanwhile are part of it.
       const now = pageStateRef.current.pageState;
       if (now === undefined || !now.editable || pageStateRef.current.currentPage?.path !== targetPath) {
@@ -191,14 +193,14 @@ function announce(bundle: PasteBundle, translate: Translator, undo: () => Promis
   ]);
 }
 
-/** The project's setting for new style tags, read fresh; the last value the Style panel read when the file cannot be. */
-export async function styleSettings(projectPath: string | undefined): Promise<ReturnType<typeof getNewStyleTagSettings>> {
+/** The scope's default for new style tags, read fresh; the last value the Style panel read when the file cannot be. */
+export async function styleSettings(projectPath: string | undefined, scope: NewStyleScope): Promise<NewStyleTagSettings> {
   if (projectPath === undefined) {
-    return getNewStyleTagSettings();
+    return getNewStyleTagSettings(scope);
   }
   try {
-    return await readNewStyleTag(projectPath);
+    return (await readNewStyleLocations(projectPath))[scope].tag;
   } catch {
-    return getNewStyleTagSettings();
+    return getNewStyleTagSettings(scope);
   }
 }

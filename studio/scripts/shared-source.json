@@ -665,6 +665,7 @@
     "shared/properties/selectorUsage.ts",
     "shared/properties/studioLocal.ts",
     "shared/properties/studioTelemetry.ts",
+    "shared/properties/newStyleLocations.ts",
     "shared/properties/newStyleTag.ts",
     "shared/properties/styleKeepList.ts",
     "shared/properties/styleMoveJournal.ts",

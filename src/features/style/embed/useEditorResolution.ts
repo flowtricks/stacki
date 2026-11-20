@@ -24,7 +24,7 @@ import {
 import { getHost, walkNodes } from '../model/host';
 import { authoredClassTokens } from '../model/webflowElement';
 import { isCreateStyleTagKey } from '../model/newStyleTarget';
-import { getNewStyleTagSettings, newStyleTagFrame } from '../model/newStyleTagSettings';
+import { getNewStyleTagSettings, newRuleWrappers } from '../model/newStyleTagSettings';
 import { isAutoClassSelector, planFirstStyles, type FirstStylesPlan } from '../model/firstStyleBlock';
 import { FirstTagLane } from '../model/firstTagLane';
 import { assert } from '../../../../shared/core/assert';
@@ -261,8 +261,10 @@ export function useWriteNewRule(
         }
       }
       const nested = takeTypedPath(typedPathsRef.current, fullSelector, embedContext ?? '');
-      // The project's template applies to a `<style>` tag, never to a stylesheet file.
-      const templateWrappers = embedDocument.source.origin.kind === 'node' ? newStyleTagFrame().wrappers : [];
+      // The scope's template applies to a `<style>` tag. A stylesheet gets the same treatment only when it is the file
+      // the scope chose: the rule goes where the file's own layers or marker say (newStyleLocations.ts fileRuleWrappers).
+      // Any other stylesheet is written as ever, at its top level.
+      const templateWrappers = newRuleWrappers(embedDocument.source, embedDocument.code);
       // Every write runs, one after another into the same rule (createRuleForWrite merges by selector).
       const created = writes.map((write) =>
         createRuleForWrite(region, {

@@ -5,6 +5,7 @@
 import { assert } from '../core/assert';
 import { list, record, text } from '../core/boundary';
 import { DEFAULT_NEW_STYLE_TAG, newStyleTagDocument, parseNewStyleTag, sameNewStyleTag, type NewStyleTagSettings } from './newStyleTag';
+import { locationsOfLegacy, newStyleLocationsDocument, parseNewStyleLocations, sameNewStyleLocations, type NewStyleLocations } from './newStyleLocations';
 
 export const STYLE_KEEP_LIMITS = {
   /** Patterns in one keep list. A design system's state classes fit in dozens. */
@@ -34,6 +35,17 @@ export interface StyleKeepList {
    * file never wrote it: the project keeps the behaviour it had, a scoped tag holding just rules.
    */
   readonly newStyleTag?: NewStyleTagSettings;
+  /**
+   * Where a style created from a page and from a component goes: a style tag or a stylesheet
+   * (newStyleLocations.ts). Absent when the file never wrote it; `effectiveNewStyleLocations`
+   * then reads the older `newStyleTag` as both scopes.
+   */
+  readonly newStyleLocations?: NewStyleLocations;
+}
+
+/** The locations a project uses: its own section, else the older single template for both scopes, else Stacki's default. */
+export function effectiveNewStyleLocations(keepList: StyleKeepList): NewStyleLocations {
+  return keepList.newStyleLocations ?? locationsOfLegacy(keepList.newStyleTag ?? DEFAULT_NEW_STYLE_TAG);
 }
 
 export const EMPTY_KEEP_LIST: StyleKeepList = { version: 1, keep: [], lockedStylesheets: [] };
@@ -59,10 +71,15 @@ export function parseStyleKeepList(input: unknown): StyleKeepList {
   // An earlier version also stored `trustedScripts`; scripts no longer affect
   // the check, so a file that still has the key reads the same and loses it on
   // its next save.
-  if (value['newStyleTag'] === undefined) {
-    return { version: 1, keep, lockedStylesheets };
-  }
-  return { version: 1, keep, lockedStylesheets, newStyleTag: parseNewStyleTag(value['newStyleTag']) };
+  const newStyleTag = value['newStyleTag'] === undefined ? undefined : parseNewStyleTag(value['newStyleTag']);
+  const newStyleLocations = value['newStyleLocations'] === undefined ? undefined : parseNewStyleLocations(value['newStyleLocations']);
+  return {
+    version: 1,
+    keep,
+    lockedStylesheets,
+    ...(newStyleTag === undefined ? {} : { newStyleTag }),
+    ...(newStyleLocations === undefined ? {} : { newStyleLocations }),
+  };
 }
 
 /** The keep list as JSON text, in the stable shape a diff reviews easily. */
@@ -73,17 +90,39 @@ export function serializeStyleKeepList(keepList: StyleKeepList): string {
   // locks a stylesheet keeps the file shape it always had.
   const base = lockedStylesheets.length === 0 ? { version: 1, keep } : { version: 1, keep, lockedStylesheets };
   // Likewise the new-style-tag section: written only once somebody set it.
-  const shape = keepList.newStyleTag === undefined ? base : { ...base, newStyleTag: newStyleTagDocument(keepList.newStyleTag) };
+  // The locations section is written once somebody set it, and the page's tag is mirrored into the older section so a
+  // Stacki that does not know the new one still reads a sensible template.
+  const withTag = keepList.newStyleTag === undefined ? base : { ...base, newStyleTag: newStyleTagDocument(keepList.newStyleTag) };
+  const shape =
+    keepList.newStyleLocations === undefined
+      ? withTag
+      : {
+          ...base,
+          newStyleTag: newStyleTagDocument(keepList.newStyleLocations.page.tag),
+          newStyleLocations: newStyleLocationsDocument(keepList.newStyleLocations),
+        };
   const source = JSON.stringify(shape, undefined, 2) + '\n';
   // Pair assertion: what is written must read back as the same list.
   const written: unknown = JSON.parse(source);
   const reread = parseStyleKeepList(written);
   assert(reread.keep.length === keep.length, 'serializeStyleKeepList: keep patterns round-trip');
   assert(reread.lockedStylesheets.length === lockedStylesheets.length, 'serializeStyleKeepList: locked stylesheets round-trip');
-  assert((reread.newStyleTag === undefined) === (keepList.newStyleTag === undefined), 'serializeStyleKeepList: the new style tag section round-trips');
+  // With locations the older section is the page tag's mirror, written even when the list did not hold one.
+  const writtenTag = keepList.newStyleLocations === undefined ? keepList.newStyleTag : keepList.newStyleLocations.page.tag;
+  assert((reread.newStyleTag === undefined) === (writtenTag === undefined), 'serializeStyleKeepList: the new style tag section round-trips');
   assert(
-    reread.newStyleTag === undefined || keepList.newStyleTag === undefined || sameNewStyleTag(reread.newStyleTag, keepList.newStyleTag),
+    reread.newStyleTag === undefined || writtenTag === undefined || sameNewStyleTag(reread.newStyleTag, writtenTag),
     'serializeStyleKeepList: the new style tag attributes and template round-trip',
+  );
+  assert(
+    (reread.newStyleLocations === undefined) === (keepList.newStyleLocations === undefined),
+    'serializeStyleKeepList: the new style locations section round-trips',
+  );
+  assert(
+    reread.newStyleLocations === undefined ||
+      keepList.newStyleLocations === undefined ||
+      sameNewStyleLocations(reread.newStyleLocations, keepList.newStyleLocations),
+    'serializeStyleKeepList: the new style locations read back the same',
   );
   return source;
 }

@@ -1,4 +1,4 @@
-// Reads and writes the `newStyleTag` section of `.stacki/styles.json` (shared/properties/newStyleTag.ts)
+// Reads and writes the `newStyleLocations` section (with the older `newStyleTag` as its fallback) of `.stacki/styles.json` (shared/properties/newStyleLocations.ts)
 // for the Style panel's writers and the Settings page. It lives in the IPC layer because both the
 // Style feature and the Settings page need it and neither may import the other's feature.
 //
@@ -6,8 +6,14 @@
 // so the keep list and locked stylesheets the Selectors panel owns are carried over untouched and an
 // edit made since is refused rather than lost.
 
-import { DEFAULT_NEW_STYLE_TAG, type NewStyleTagSettings } from '../../shared/properties/newStyleTag';
-import { EMPTY_KEEP_LIST, parseStyleKeepList, serializeStyleKeepList, type StyleKeepList } from '../../shared/properties/styleKeepList';
+import type { NewStyleLocations } from '../../shared/properties/newStyleLocations';
+import {
+  EMPTY_KEEP_LIST,
+  effectiveNewStyleLocations,
+  parseStyleKeepList,
+  serializeStyleKeepList,
+  type StyleKeepList,
+} from '../../shared/properties/styleKeepList';
 import { readMetadata, writeMetadata } from './projectMetadataBridge';
 
 interface Stored {
@@ -24,16 +30,16 @@ async function readStored(projectPath: string): Promise<Stored> {
   return { keepList: parseStyleKeepList(input), source: stored.source };
 }
 
-/** The project's setting; Stacki's default (`<style is:global>`) when the file or the section is absent. */
-export async function readNewStyleTag(projectPath: string): Promise<NewStyleTagSettings> {
+/** The project's locations; the older single template for both scopes, or Stacki's default, when the file or the section is absent. */
+export async function readNewStyleLocations(projectPath: string): Promise<NewStyleLocations> {
   const stored = await readStored(projectPath);
-  return stored.keepList.newStyleTag ?? DEFAULT_NEW_STYLE_TAG;
+  return effectiveNewStyleLocations(stored.keepList);
 }
 
-/** Saves the setting, keeping everything else in the file; resolves to what the file now holds. */
-export async function writeNewStyleTag(projectPath: string, settings: NewStyleTagSettings): Promise<NewStyleTagSettings> {
+/** Saves the locations, keeping everything else in the file; resolves to what the file now holds. */
+export async function writeNewStyleLocations(projectPath: string, locations: NewStyleLocations): Promise<NewStyleLocations> {
   const stored = await readStored(projectPath);
-  const source = serializeStyleKeepList({ ...stored.keepList, newStyleTag: settings });
+  const source = serializeStyleKeepList({ ...stored.keepList, newStyleLocations: locations });
   await writeMetadata(projectPath, stored.source === undefined ? { kind: 'styles', source } : { kind: 'styles', source, base: stored.source });
-  return settings;
+  return locations;
 }
