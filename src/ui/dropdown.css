@@ -205,3 +205,47 @@
 .dd-loading {
   padding: 4px 8px;
 }
+
+/* The "New …" row sits after every option, set apart by space rather than a line; picked, it becomes a field in place. */
+.dd-create {
+  margin-top: 4px;
+  color: var(--text-dim);
+}
+.dd-create:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.dd-create-edit {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.dd-create-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  border-radius: 5px;
+  background: var(--bg-input);
+}
+.dd-create-field input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.dd-create-error {
+  padding: 0 8px 2px;
+  font-size: 11px;
+  color: #ff8a8a;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

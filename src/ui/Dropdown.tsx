@@ -1,5 +1,5 @@
 import Popup from './Popup';
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, MutableRefObject, ReactNode, RefObject } from 'react';
 import { endDragNotes, hoverNote } from './sound';
 import { useSoundHere } from './soundScope';
@@ -107,7 +107,27 @@ export interface DropdownProps<T = string> {
   readonly rowsMax?: number;
   /** More options are still arriving: the list ends with skeleton rows, and an empty list is not yet "nothing matches". */
   readonly loading?: boolean;
+  /** A last row that makes a new option from a typed name, in place inside the menu (a new folder). */
+  readonly createRow?: DropdownCreateRow<T>;
 }
+
+/**
+ * The menu's "New …" row. Choosing it turns the row into a text field in place; Enter makes the option when
+ * `validate` has no objection and selects the value `onCreate` answers, Escape (or a press elsewhere) puts the row
+ * back, and a second Escape closes the menu. Shown whatever a search says, after every option.
+ */
+export interface DropdownCreateRow<T> {
+  readonly label: string;
+  readonly icon?: ReactNode;
+  readonly placeholder: string;
+  /** Why the typed text cannot be made, in the language on screen; undefined when it can. */
+  readonly validate: (text: string) => string | undefined;
+  /** Makes the option from text `validate` accepted and answers the value to select. */
+  readonly onCreate: (text: string) => T;
+}
+
+/** The longest name the create row takes: a field, not a document. */
+export const DROPDOWN_CREATE_CHARS_MAX = 200;
 interface Selection<T> {
   readonly open: boolean;
   readonly highlight: number;
@@ -590,10 +610,89 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
         {props.loading !== true && !control.visible.some((option) => option.pinned !== true) && (
           <div className="dd-empty">{translate('ui.dropdown.noMatch')}</div>
         )}
+        {props.createRow !== undefined && <DropdownCreate row={props.createRow} control={control} onChange={props.onChange} />}
       </div>
     </Popup>
   );
 }
+type CreateMode = { readonly kind: 'row' } | { readonly kind: 'editing'; readonly text: string; readonly tried: boolean };
+
+// The create row and its field. The field holds its own keys: arrows, Space and typeahead stay in it, Enter and
+// Escape are answered here and go no further, so neither the search field nor the menu acts on them.
+function DropdownCreate<T>({
+  row,
+  control,
+  onChange,
+}: {
+  readonly row: DropdownCreateRow<T>;
+  readonly control: Controller<T>;
+  readonly onChange: (value: T) => void;
+}) {
+  const [mode, setMode] = useState<CreateMode>({ kind: 'row' });
+  const errorId = useId();
+  if (mode.kind === 'row') {
+    return (
+      <div
+        className="dd-option dd-create"
+        role="option"
+        aria-selected={false}
+        onMouseEnter={() => control.setHighlight(-1)}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setMode({ kind: 'editing', text: '', tried: false })}
+      >
+        {row.icon && <span className="dd-icon">{row.icon}</span>}
+        <span className="dd-option-label">{row.label}</span>
+      </div>
+    );
+  }
+  const problem = row.validate(mode.text);
+  // Nothing typed yet is not a mistake to point out; a refused Enter is.
+  const shown = mode.text.length > 0 || mode.tried ? problem : undefined;
+  return (
+    <div className="dd-create-edit" role="group">
+      <div className="dd-create-field">
+        {row.icon && <span className="dd-icon">{row.icon}</span>}
+        <input
+          autoFocus
+          value={mode.text}
+          maxLength={DROPDOWN_CREATE_CHARS_MAX}
+          placeholder={row.placeholder}
+          aria-label={row.placeholder}
+          aria-invalid={shown !== undefined}
+          aria-describedby={shown === undefined ? undefined : errorId}
+          spellCheck={false}
+          onChange={(event) => setMode({ kind: 'editing', text: event.currentTarget.value, tried: mode.tried })}
+          onBlur={() => setMode({ kind: 'row' })}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setMode({ kind: 'row' });
+              return;
+            }
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              if (problem !== undefined) {
+                setMode({ kind: 'editing', text: mode.text, tried: true });
+                return;
+              }
+              const value = row.onCreate(mode.text);
+              setMode({ kind: 'row' });
+              control.close();
+              onChange(value);
+            }
+          }}
+        />
+      </div>
+      {shown !== undefined && (
+        <div className="dd-create-error" id={errorId} role="alert">
+          {shown}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DropdownRow<T>({ option, index, control }: { readonly option: DropdownOption<T>; readonly index: number; readonly control: Controller<T> }) {
   const highlight = index === control.highlight ? 'highlight' : '';
   const selected = option.value === control.committed.current && control.open ? 'selected' : '';
