@@ -213,7 +213,7 @@ const COMPONENTS = [
      app.disableHardwareAcceleration();
      ipcMain.on('boot:read', (event) => { event.returnValue = undefined; });
      app.on('window-all-closed', () => app.quit());
-     const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+     const { pollUntil, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({
          show: false, width: 900, height: 750,
@@ -284,11 +284,7 @@ const COMPONENTS = [
          // The caret sits where the double click was: a collapsed selection at that character, not a word.
          const readCaret = () => run('(() => { const s = ' + frame + '.getSelection(); return { collapsed: s.isCollapsed, offset: s.anchorOffset, text: s.anchorNode && s.anchorNode.data ? s.anchorNode.data.slice(0, 24) : null }; })()');
          // The editor places the caret after it says it is active; read it once it has, bounded.
-         let caret = await readCaret();
-         for (let poll = 0; poll < 50 && !caret.collapsed; poll++) {
-           await new Promise((resolve) => setTimeout(resolve, 20));
-           caret = await readCaret();
-         }
+         const caret = (await pollUntil({ what: 'the caret collapsed', read: readCaret, until: (seen) => seen.collapsed, pollCountMax: 50 })).value;
          win.webContents.focus();
          await win.webContents.insertText(typed);
          await post({ type: 'avb:text-close', session: 'one', action: 'apply' });
