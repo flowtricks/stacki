@@ -14,10 +14,21 @@
   font-size: 12.5px;
   line-height: 1.5;
 }
+/* One spacing scale for the transcript. Between turns is the largest gap; between a tool row and the prose after it,
+   and between prose paragraphs, list items, headings and tables, the markdown rules below use the same tokens. */
+.ai-transcript {
+  --ai-gap-turn: 1.25rem;
+  --ai-gap-prose: 0.75rem;
+  --ai-gap-tool: 0.5rem;
+  --ai-gap-item: 0.25rem;
+  --ai-gap-heading-above: 1rem;
+  --ai-gap-heading-below: 0.375rem;
+  --ai-gap-table: 0.75rem;
+}
 .ai-transcript-flow {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
   max-width: 100%;
 }
@@ -106,11 +117,18 @@
   align-items: center;
   gap: 4px;
   width: fit-content;
+  justify-content: center;
   margin: 0 auto;
-  background: var(--bg-active);
+  z-index: 2;
+  /* A solid surface, the one menus and popovers use, so nothing scrolling underneath shows through. */
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.3);
   border-radius: 12px;
-  padding: 3px 10px;
-  font-size: 11px;
+  padding: 4px 12px;
+  font-size: 11.5px;
 }
 .ai-retry {
   align-self: flex-start;
@@ -120,26 +138,35 @@
 .ai-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   min-width: 0;
 }
+/* One compact row: its text starts where the prose starts and its duration ends where the prose ends; the hover fill
+   reaches 6px past both, inside the panel's inset. */
 .ai-group-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  margin-inline: -6px;
+  padding: 2px 6px;
   border-radius: 6px;
   background: transparent;
   color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
   text-align: left;
 }
 .ai-group-head:hover {
   background: var(--bg-hover);
 }
+.ai-group-head > svg {
+  flex: none;
+  color: var(--text-faint);
+}
 .ai-group-mark {
   display: inline-flex;
   align-items: center;
-  color: var(--text-faint);
+  color: var(--red);
 }
 .ai-group-title {
   flex: 1;
@@ -165,7 +192,8 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-left: 8px;
+  /* Under the label: the chevron's width and its gap. */
+  padding-left: 18px;
   min-width: 0;
 }
 
@@ -180,17 +208,18 @@
   background: var(--bg-hover);
 }
 .ai-tool-nested {
-  margin-left: 14px;
+  margin-left: 12px;
 }
 .ai-tool-head {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  padding: 2px 6px;
   background: transparent;
   color: var(--text-dim);
   font-size: 12px;
+  line-height: 1.4;
   text-align: left;
 }
 .ai-tool-head > svg {
@@ -540,10 +569,14 @@
   color: var(--text-faint);
 }
 
-/* More air between turns than inside one; a finished call's tick is a whisper. */
-.ai-transcript-flow > .ai-msg-user:not(:first-child) {
-  margin-top: 12px;
+/* Rows of one turn sit a tool-gap apart; a new turn starts a turn-gap lower. */
+.ai-transcript-flow > * + * {
+  margin-top: var(--ai-gap-tool);
 }
+.ai-transcript-flow > .ai-msg-user:not(:first-child) {
+  margin-top: var(--ai-gap-turn);
+}
+/* A finished call shows no mark: success is the default. */
 .ai-tool-status.ai-status-completed {
-  opacity: 0.45;
+  display: none;
 }

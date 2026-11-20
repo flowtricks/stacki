@@ -33,13 +33,15 @@
   display: flex;
   flex-direction: column;
 }
-/* The actions row sits below the message and keeps its height always, so showing it never moves the layout. */
+/* Under each message is a slot of its own, 1.25rem tall: the time and the actions live in it, invisible (not removed)
+   until the message is hovered or holds focus, so showing them never overlaps the next block or moves anything. The
+   gap to the next block is this slot plus the transcript's tool gap, shown or not. */
 .ai-msg-toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 24px;
-  margin-top: 2px;
+  height: 1.25rem;
+  margin: 0;
   color: var(--text-dim);
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -54,7 +56,7 @@
 .ai-msg:focus-within > .ai-msg-toolbar {
   opacity: 1;
 }
-/* Touch has no hover, so the row stays visible there. */
+/* Touch has no hover, so the slot's row stays visible there. */
 @media (hover: none) {
   .ai-msg-toolbar {
     opacity: 1;
@@ -69,8 +71,8 @@
 .ai-msg-action {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 1.25rem;
+  height: 1.25rem;
   padding: 0;
   background: transparent;
   color: inherit;

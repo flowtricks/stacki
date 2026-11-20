@@ -99,6 +99,8 @@
   flex-direction: column;
   gap: 0;
   min-width: 0;
+  /* Its rows pad themselves 6px for their hover fill, so the text lines up with the prose's edge. */
+  margin-inline: -6px;
 }
 .ai-changes-card-head {
   display: flex;

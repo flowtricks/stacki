@@ -3,7 +3,7 @@
 // turn is still working and closes by itself when the turn ends; the person's own click wins over
 // both, and is remembered. A very long run draws its newest calls and offers the earlier ones.
 import { memo, useId, useState } from 'react';
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon, WarningTriangleIcon } from '../../../ui/Icons';
+import { ChevronDownIcon, ChevronRightIcon, WarningTriangleIcon } from '../../../ui/Icons';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { formatDuration } from '../chatStatus';
 import { useChatWords } from '../useChatWords';
@@ -44,8 +44,13 @@ export const ActivityGroup = memo(function ActivityGroup({
     <div className={`ai-group${live ? ' ai-group-live' : ''}`}>
       <button className="ai-group-head" aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={() => change({ open: !open })}>
         {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-        <span className="ai-group-mark">{live ? undefined : summary.failed > 0 ? <WarningTriangleIcon size={12} /> : <CheckIcon size={12} />}</span>
         <span className="ai-group-title">{summary.text}</span>
+        {/* Success is the default and shows no mark; only a failure is marked, in the error colour. */}
+        {!live && summary.failed > 0 && (
+          <span className="ai-group-mark">
+            <WarningTriangleIcon size={12} />
+          </span>
+        )}
         {summary.failed > 0 && <span className="ai-group-failed">{translate('ai.group.failed', { count: summary.failed })}</span>}
         {duration !== undefined && duration >= 1000 && <span className="ai-group-time">{formatDuration(duration, formatNumber)}</span>}
       </button>
