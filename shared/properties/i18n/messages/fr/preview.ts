@@ -28,7 +28,7 @@ export const messages = {
   'preview.drag.moving.text': 'Déplacement du texte',
   'preview.drag.noSlot': "{name} n'a pas de slot : rien ne peut y entrer. Ouvrez le composant pour ajouter des éléments.",
   'preview.drag.outside': 'Relâchez pour annuler',
-  'preview.drag.page': 'Page',
+  'preview.drag.page': 'Page', // same
   'preview.drag.self': 'Un élément ne peut pas aller dans lui-même',
   'preview.frame.previous': '{title} (page précédente)',
   'preview.guide.color': 'Couleur',

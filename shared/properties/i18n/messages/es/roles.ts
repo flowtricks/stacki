@@ -69,7 +69,7 @@ export const messages = {
   'roles.invite.error.handle': 'Usa minúsculas, dígitos, puntos, guiones y guiones bajos (hasta 64)',
   'roles.invite.error.role': 'Elige un rol que exista',
   'roles.invite.error.notMember': 'Esa persona no está en ningún rol',
-  'roles.studio.title': 'Roles',
+  'roles.studio.title': 'Roles', // same
   'roles.studio.readOnly': 'Solo los administradores pueden invitar o cambiar miembros.',
   'roles.studio.empty': 'Aún no hay miembros.',
   'roles.studio.you': 'tú',

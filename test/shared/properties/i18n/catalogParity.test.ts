@@ -155,6 +155,11 @@ function tagsOfKey(catalog: Messages, key: string): readonly string[] {
   return [...tags].sort();
 }
 
+// Plain text that shows markup on purpose. The navigator search hint lists the `<tag>` selector as the person types
+// it and is drawn as a plain tooltip, never through translateRich, so it must keep `<tag>` in every language (the tag
+// comparison below still holds that) but cannot be rich text.
+const PLAIN_TEXT_WITH_MARKUP = new Set(['structure.search.hint']);
+
 test('rich messages keep exactly English’s tags in every language, and parse as rich text', async () => {
   for (const namespace of namespacesOf('en')) {
     const english = await loadNamespace('en', namespace);
@@ -163,7 +168,7 @@ test('rich messages keep exactly English’s tags in every language, and parse a
       for (const key of Object.keys(english)) {
         const tags = tagsOfKey(english, key);
         assert.deepEqual(tagsOfKey(translated, key), tags, `${locale} ${key} tags`);
-        if (tags.length > 0) {
+        if (tags.length > 0 && !PLAIN_TEXT_WITH_MARKUP.has(key)) {
           const message = parseMessage(Object.entries(translated).find(([name]) => name === key)?.[1]);
           assert.ok(message.ok);
           for (const template of templatesOf(message.value)) {
