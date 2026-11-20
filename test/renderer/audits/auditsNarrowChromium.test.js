@@ -19,10 +19,12 @@
 // toolbar controls' boxes and heights, and the cut text's titles. Every wait is for a condition
 // (the document language the provider sets once a catalog arrives), polled once per animation
 // frame and bounded. Screenshots of every case are written to node_modules/.stacki-test/audits-narrow-chromium/.
+// The five locales run in five Electron processes side by side (a probe mostly waits for drawn frames), and each
+// step is logged with the seconds since its probe started, so a probe that runs out of time says where it was.
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { buildSync } = require('esbuild');
+const { runElectronProbesTogether } = require('../../helpers/electronProbe.js');
 const { repoPath } = require('../../helpers/sources.js');
 
 const WIDTHS_PX = [260, 340, 600];
@@ -33,6 +35,8 @@ const EDGE_TOLERANCE_PX = 0.5;
 // The heights the controls had before the layout moved: a tap target is not allowed to shrink.
 const HEIGHTS_PX = { pill: 24, tab: 24, apply: 24 };
 const EXPANDS_MAX = 40;
+// Twice the Fixes list's HOVER_CLOSE_MS (src/features/audits/FixesInfo.tsx): a pinned list must still be open after that.
+const PINNED_SETTLE_MS = 300;
 
 const HARNESS = `
 import ${JSON.stringify(repoPath('src/app/styles.css'))};
@@ -188,8 +192,9 @@ window.steps = (() => {
       const before = toggles.map((toggle) => getComputedStyle(toggle).backgroundColor);
       toggles.forEach((toggle) => toggle.click());
       await window.until(() => toggles.every((toggle) => toggle.getAttribute('aria-pressed') === 'true'));
-      // A button's background fades (controls.css: transition: background 0.1s); read the pressed fill once it has, not its first frame.
-      await window.until(() => toggles.every((toggle) => toggle.getAnimations().every((animation) => animation.playState !== 'running')));
+      // A pressed toggle's fill fades in: read at once, the computed fill is still the old one (the macOS runner
+      // read it so). Wait, bounded, until every fill has left its old colour and its transition has ended.
+      await window.until(() => toggles.every((toggle, index) => getComputedStyle(toggle).backgroundColor !== before[index] && toggle.getAnimations().length === 0));
       const after = toggles.map((toggle) => getComputedStyle(toggle).backgroundColor);
       return { opened: true, focused: document.activeElement === input || card.contains(document.activeElement), pressedChangesFill: before.every((fill, index) => fill !== after[index]), toggleCount: toggles.length };
     },
@@ -237,7 +242,12 @@ window.steps = (() => {
       const pinned = Boolean(await window.until(open, 120));
       await window.until(() => open() && open().getAttribute('data-popup-phase') === 'open', 120);
       info.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
-      await window.until(() => false, 30);
+      // That a pinned list does not close cannot be waited for: it is an absence. What closes a hover list is a timer of
+      // HOVER_CLOSE_MS (150), so the read waits, by the clock, for twice that after the pointer left; any close the
+      // timer would have made has happened by then. The wait used to be 30 drawn frames, which a hidden window on
+      // a CI runner drew slowly enough that 15 cases of them outlasted the probe's bound.
+      const leftAtMs = performance.now();
+      await window.until(() => performance.now() - leftAtMs >= ${PINNED_SETTLE_MS});
       const stillPinned = open() !== null;
       const popup = open();
       const rectangle = popup.getBoundingClientRect();
@@ -333,7 +343,7 @@ const HOST =
   '#host{position:relative}</style></head>' +
   '<body><div id="host"></div><script src="/harness.js"></script><script src="/steps.js"></script></body></html>';
 
-const PROBE = (directory) => `
+const PROBE = (directory, locales) => `
 const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const http = require('http');
@@ -341,6 +351,8 @@ const path = require('path');
 const DIRECTORY = ${JSON.stringify(directory)};
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
 app.on('window-all-closed', () => {});
+// One profile per probe: the locales run side by side, and two Electron processes must not share one.
+app.setPath('userData', path.join(DIRECTORY, 'profile-' + ${JSON.stringify(locales.join('-'))}));
 app.whenReady().then(async () => {
   const server = http.createServer((request, response) => {
     const name = request.url.split('?')[0] === '/' ? 'host.html' : request.url.split('?')[0].slice(1);
@@ -352,11 +364,12 @@ app.whenReady().then(async () => {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const win = new BrowserWindow({ show: false, width: 700, height: ${PANE_HEIGHT_PX}, useContentSize: true, webPreferences: { contextIsolation: false, backgroundThrottling: false } });
   // Each step is logged as it starts, so a probe that runs out of time says where it was.
-  const host = (code) => { console.log('STEP ' + code.slice(0, 80).replace(/\\s+/g, ' ')); return win.webContents.executeJavaScript(code); };
+  const startedAt = Date.now();
+  const host = (code) => { console.log('STEP +' + Math.round((Date.now() - startedAt) / 1000) + 's ' + code.slice(0, 80).replace(/\\s+/g, ' ')); return win.webContents.executeJavaScript(code); };
   const output = { cases: [], error: undefined };
   try {
     await win.loadURL('http://127.0.0.1:' + server.address().port + '/');
-    for (const locale of ${JSON.stringify(LOCALES)}) {
+    for (const locale of ${JSON.stringify(locales)}) {
       for (const width of ${JSON.stringify(WIDTHS_PX)}) {
         await host('window.mount(' + JSON.stringify(locale) + ', ' + width + ')');
         const ready = await host('window.steps.ready(' + JSON.stringify(locale) + ')');
@@ -509,25 +522,37 @@ function check(output) {
   });
   fs.writeFileSync(path.join(directory, 'steps.js'), STEPS);
   fs.writeFileSync(path.join(directory, 'host.html'), HOST);
-  const probe = path.join(directory, 'probe.js');
-  fs.writeFileSync(probe, PROBE(directory));
   const environment = { ...process.env };
   delete environment.ELECTRON_RUN_AS_NODE;
-  const run = spawnSync(electronPath, [probe], { encoding: 'utf8', timeout: 240_000, env: environment, maxBuffer: 64 * 1024 * 1024 });
-  const line = (run.stdout || '').split('\n').find((text) => text.startsWith('RESULT '));
+  // One probe per locale, run side by side. A probe spends its time waiting for a hidden window to draw frames,
+  // which a CI runner draws slowly, so the five in turn outlasted the 240 s bound there (Checks on 010980b8 and
+  // b6a4a679) and side by side each takes a fifth of that. Each keeps the full bound and says where it stopped.
+  const probes = LOCALES.map((locale) => {
+    const probe = path.join(directory, `probe-${locale}.js`);
+    fs.writeFileSync(probe, PROBE(directory, [locale]));
+    return [probe];
+  });
+  const runs = await runElectronProbesTogether(electronPath, probes, { env: environment });
   const failures = [];
-  if (line === undefined) {
-    const steps = (run.stdout || '').split('\n').filter((text) => text.startsWith('STEP '));
-    failures.push(
-      `the browser probe ran (${run.error ? String(run.error.message) : 'exit ' + String(run.status)}; last steps: ${steps.slice(-4).join(' | ')})\n    ${(run.stderr || run.stdout || '').slice(0, 800)}`,
-    );
-  } else {
-    const output = JSON.parse(line.slice('RESULT '.length));
-    if (output.error !== undefined) {
-      failures.push(`the probe ran to the end\n    ${output.error}`);
+  const output = { cases: [], error: undefined };
+  for (const [index, run] of runs.entries()) {
+    const line = (run.stdout || '').split('\n').find((text) => text.startsWith('RESULT '));
+    if (line === undefined) {
+      const steps = (run.stdout || '').split('\n').filter((text) => text.startsWith('STEP '));
+      failures.push(
+        `the ${LOCALES[index]} browser probe ran (${run.error ? String(run.error.message) : 'exit ' + String(run.status)}; last steps: ${steps.slice(-4).join(' | ')})\n    ${(run.stderr || run.stdout || '').slice(0, 800)}`,
+      );
     } else {
-      failures.push(...check(output));
+      const result = JSON.parse(line.slice('RESULT '.length));
+      if (result.error !== undefined) {
+        failures.push(`the ${LOCALES[index]} probe ran to the end\n    ${result.error}`);
+      } else {
+        output.cases.push(...result.cases);
+      }
     }
+  }
+  if (failures.length === 0) {
+    failures.push(...check(output));
   }
   if (failures.length > 0) {
     console.error(`audits-narrow-chromium: ${failures.length} checks failed\n  ${failures.slice(0, 40).join('\n  ')}`);

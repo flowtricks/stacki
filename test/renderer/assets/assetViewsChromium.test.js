@@ -13,15 +13,21 @@
 // frame that follows the click. "Fast" is held as DOM size, never milliseconds: the 5,000-file folder
 // must draw no more nodes than a 60-file one that also fills the pane, at the top and through a full
 // scroll. Screenshots of the three views and both menus are written to
-// node_modules/.stacki-test/asset-views-chromium/.
+// node_modules/.stacki-test/asset-views-chromium/. The probe is cut into five jobs run side by side, one
+// Electron process each (a probe mostly waits for drawn frames): the main run, and the grid's long scroll and List -
+// Small's, each in two consecutive ranges of steps. Each step is logged with the seconds since its job began.
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { buildSync } = require('esbuild');
+const { runElectronProbesTogether } = require('../../helpers/electronProbe.js');
 const { repoPath } = require('../../helpers/sources.js');
 
 const PANE = { width: 260, height: 700 };
 const BIG_COUNT = 5000;
+// The two long scrolls. Grid steps 2,400 px a time; List - Small draws all 5,000 files one per row and steps four
+// times as far (b30d098f). Each scroll is split into SCROLL_PARTS consecutive ranges, one Electron process each.
+const SCROLL_STEP_PX = { grid: 2400, compact: 9600 };
+const SCROLL_PARTS = 2;
 // 65 leaves the same remainder as 5,000 by 7 (the fixture's kinds), so both lists start with the same kinds of tile.
 const BASELINE_COUNT = 65;
 const LONG_NAME = 'lumos-placeholder-landscape-wide.webp';
@@ -206,6 +212,8 @@ window.steps = (() => {
         })(),
       };
     },
+    // Every tile has left its skeleton and every picture drawn has loaded: the resting state of a folder.
+    loaded: () => window.until(() => document.querySelector('.asset-items .ui-skeleton') === null && [...document.querySelectorAll('.asset-items img')].every((image) => image.complete)),
     ellipsis(name) {
       const tile = tiles().find((candidate) => candidate.querySelector('.asset-name').textContent === name);
       if (!tile) { return { found: false }; }
@@ -220,14 +228,23 @@ window.steps = (() => {
       await window.until(() => getComputedStyle(document.querySelector('.asset-items-window')).gridTemplateColumns.split(' ').length !== before);
       return { columns: getComputedStyle(document.querySelector('.asset-items-window')).gridTemplateColumns.split(' ').length, listWidth: document.querySelector('.asset-items').clientWidth };
     },
-    // Scrolls top to bottom in steps, one per frame, and records what each frame drew.
-    async scrollThrough(stepPx) {
+    // Scrolls in steps of stepPx, two frames each, and records what each step drew. Part 'part' of 'parts' covers
+    // that share of the steps, in order; parts 0 to parts - 1 together are the whole scroll from top to bottom.
+    async scrollThrough(stepPx, part, parts) {
       const box = scroller();
       const frames = [];
       box.scrollTop = 0;
       await frame();
-      for (let guard = 0; guard < 2000; guard += 1) {
-        box.scrollTop = Math.min(box.scrollHeight, box.scrollTop + stepPx);
+      // The step at which the original, single scroll stopped: the first whose position reaches the bottom.
+      const stepsTotal = Math.max(1, Math.ceil((box.scrollHeight - box.clientHeight - 1) / stepPx));
+      const firstStep = Math.floor((part * stepsTotal) / parts) + 1;
+      const lastStep = Math.floor(((part + 1) * stepsTotal) / parts);
+      // A bound on the scroll, as on every loop: more steps than this is a layout gone wrong, not a longer list.
+      if (stepsTotal > 2000) { return frames; }
+      box.scrollTop = Math.min(box.scrollHeight, (firstStep - 1) * stepPx);
+      await frame();
+      for (let step = firstStep; step <= lastStep; step += 1) {
+        box.scrollTop = Math.min(box.scrollHeight, step * stepPx);
         await frame();
         await frame();
         const viewportTop = box.getBoundingClientRect().top;
@@ -238,7 +255,6 @@ window.steps = (() => {
         const lastDrawn = drawn.at(-1) ? drawn.at(-1).getBoundingClientRect().bottom : -Infinity;
         const list = document.querySelector('.asset-items').getBoundingClientRect();
         frames.push({ nodes: nodes(), tiles: drawn.length, visible: visible.length, coversTop: firstDrawn <= Math.max(viewportTop, list.top) + 1, coversBottom: lastDrawn >= Math.min(viewportBottom, list.bottom) - 1 - 120 });
-        if (box.scrollTop + box.clientHeight >= box.scrollHeight - 1) { break; }
       }
       box.scrollTop = 0;
       await window.until(() => tiles()[0] && tiles()[0].getAttribute('data-asset-index') === '0');
@@ -319,7 +335,7 @@ const HOST =
   `#root{position:relative;width:${PANE.width}px;height:${PANE.height}px;display:flex;flex-direction:column;overflow:hidden;background:var(--bg-panel)}</style></head>` +
   '<body><div id="root"></div><script src="/harness.js"></script><script src="/steps.js"></script></body></html>';
 
-const PROBE = (directory) => `
+const PROBE = (directory, job) => `
 const { app, BrowserWindow, protocol, session } = require('electron');
 const fs = require('fs');
 const http = require('http');
@@ -350,24 +366,44 @@ app.whenReady().then(async () => {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const win = new BrowserWindow({ show: false, width: 520, height: ${PANE.height}, useContentSize: true, webPreferences: { contextIsolation: false, backgroundThrottling: false, partition } });
   // Each step is logged as it starts, so a probe that runs out of time says where it was.
-  const host = (code) => { console.log('STEP ' + code.slice(0, 80).replace(/\\s+/g, ' ')); return win.webContents.executeJavaScript(code); };
+  const startedAt = Date.now();
+  const host = (code) => { console.log('STEP +' + Math.round((Date.now() - startedAt) / 1000) + 's ' + code.slice(0, 80).replace(/\\s+/g, ' ')); return win.webContents.executeJavaScript(code); };
   const shot = async (name) => fs.writeFileSync(path.join(DIRECTORY, name + '.png'), (await win.webContents.capturePage({ x: 0, y: 0, width: ${PANE.width}, height: ${PANE.height} })).toPNG());
   const open = async (count, project, view) => {
     await win.loadURL('http://127.0.0.1:' + server.address().port + '/?count=' + count + '&project=' + encodeURIComponent(project));
     return host('window.steps.ready(' + JSON.stringify(view) + ')');
   };
   const output = { error: undefined };
+  const job = ${JSON.stringify(job)};
   try {
+    if (job.kind === 'scroll') {
+      // One range of one long scroll, over the 5,000-file folder in the view under test.
+      output.scrollReady = await open(${BIG_COUNT}, '/big', 'grid');
+      await host('window.steps.loaded()');
+      if (job.view === 'compact') {
+        await host('window.steps.openViewMenu()');
+        await host('window.steps.chooseInNextFrame("List - Small")');
+        await host('window.steps.loaded()');
+      }
+      output.scroll = await host('window.steps.scrollThrough(' + job.stepPx + ', ' + job.part + ', ' + job.parts + ')');
+      console.log('RESULT ' + JSON.stringify(output));
+      win.destroy(); server.close(); app.quit();
+      return;
+    }
     output.baselineReady = await open(${BASELINE_COUNT}, '/baseline', 'grid');
+    // Both folders are measured once their pictures have loaded: a tile draws a skeleton until its picture is
+    // ready, and a loaded one has more nodes. The 60-file baseline was read before its pictures had (520 nodes
+    // against the 5,000-file folder's 532, Check on 5893bd58, Windows) while the larger folder was read after;
+    // the wait there only saw the three pictures that had drawn, and was true at once.
+    await host('window.steps.loaded()');
     output.baseline = await host('window.steps.measure()');
-    output.baselineScroll = await host('window.steps.scrollThrough(400)');
+    output.baselineScroll = await host('window.steps.scrollThrough(400, 0, 1)');
     output.bigReady = await open(${BIG_COUNT}, '/big', 'grid');
-    await host('window.until(() => [...document.querySelectorAll(".asset-items img")].every((image) => image.complete))');
+    await host('window.steps.loaded()');
     output.big = await host('window.steps.measure()');
     output.ellipsis = await host('window.steps.ellipsis(${JSON.stringify(LONG_NAME)})');
     output.drag = await host('window.steps.drag()');
     await shot('grid');
-    output.bigScroll = await host('window.steps.scrollThrough(2400)');
     output.keys = { grid: await host('window.steps.keys(' + output.big.columns + ')') };
     output.folder = { grid: await host('window.steps.folderAndBack()') };
     output.select = { grid: await host('window.steps.select()') };
@@ -376,7 +412,7 @@ app.whenReady().then(async () => {
     await shot('view-menu');
     output.toList = await host('window.steps.chooseInNextFrame("List")');
     output.detail = await host('window.steps.detail(${JSON.stringify(LONG_NAME)})');
-    await host('window.until(() => [...document.querySelectorAll(".asset-items img")].every((image) => image.complete))');
+    await host('window.steps.loaded()');
     await shot('list');
     output.keys.list = await host('window.steps.keys(1)');
     output.folder.list = await host('window.steps.folderAndBack()');
@@ -387,12 +423,9 @@ app.whenReady().then(async () => {
     output.toAlphabetical = await host('window.steps.chooseInNextFrame("Alphabetical (A-Z)")');
     await host('window.steps.openViewMenu()');
     output.toCompact = await host('window.steps.chooseInNextFrame("List - Small")');
-    await host('window.until(() => [...document.querySelectorAll(".asset-items img")].every((image) => image.complete))');
+    await host('window.steps.loaded()');
     await shot('compact');
-    // List - Small draws all 5,000 files one per row, the longest scroll of the three views. At 2,400 px a
-    // step, two frames each, a hidden window on the Linux runner (it draws slowly) outlasted the probe's 240 s
-    // bound (Check on b6a4a679). Steps four times longer still check every frame drawn on the way.
-    output.compactScroll = await host('window.steps.scrollThrough(9600)');
+    // The long scrolls of the grid and of List - Small run in their own probes (see JOBS).
     output.keys.compact = await host('window.steps.keys(1)');
     output.folder.compact = await host('window.steps.folderAndBack()');
     output.select.compact = await host('window.steps.select()');
@@ -415,7 +448,7 @@ function check(output, big) {
       failures.push(detail === undefined ? what : `${what} (${typeof detail === 'string' ? detail : JSON.stringify(detail)})`);
     }
   };
-  for (const ready of ['baselineReady', 'bigReady', 'reopenReady', 'otherReady']) {
+  for (const ready of ['baselineReady', 'bigReady', 'reopenReady', 'otherReady', ...Object.keys(output).filter((key) => /ScrollReady\d+$/.test(key))]) {
     expect(`${ready}: the panel drew its files`, output[ready] === true, output[ready]);
   }
   if (output.big === undefined || output.baseline === undefined) {
@@ -569,25 +602,56 @@ function check(output, big) {
   });
   fs.writeFileSync(path.join(directory, 'steps.js'), STEPS);
   fs.writeFileSync(path.join(directory, 'host.html'), HOST);
-  const probe = path.join(directory, 'probe.js');
-  fs.writeFileSync(probe, PROBE(directory));
   const environment = { ...process.env };
   delete environment.ELECTRON_RUN_AS_NODE;
-  const run = spawnSync(electronPath, [probe], { encoding: 'utf8', timeout: 240_000, env: environment, maxBuffer: 64 * 1024 * 1024 });
-  const line = (run.stdout || '').split('\n').find((text) => text.startsWith('RESULT '));
-  const failures = [];
-  if (line === undefined) {
-    const steps = (run.stdout || '').split('\n').filter((text) => text.startsWith('STEP '));
-    failures.push(
-      `the browser probe ran (${run.error ? String(run.error.message) : 'exit ' + String(run.status)}; last steps: ${steps.slice(-4).join(' | ')})\n    ${(run.stderr || run.stdout || '').slice(0, 800)}`,
-    );
-  } else {
-    const output = JSON.parse(line.slice('RESULT '.length));
-    if (output.error !== undefined) {
-      failures.push(`the probe ran to the end\n    ${output.error}`);
-    } else {
-      failures.push(...check(output, big));
+  // The probe is cut into jobs run side by side, one Electron process each: a probe spends its time waiting for a
+  // hidden window to draw frames, which a CI runner draws slowly. In one process the grid's 69 steps and List -
+  // Small's 31, two frames each, outlasted the 240 s bound on the Linux and Windows runners (Checks on b6a4a679
+  // and 5893bd58); cut into ranges, each job takes the longest range, not the sum. Every step of every scroll
+  // still runs and is still checked.
+  const jobs = [{ kind: 'main' }];
+  for (const [view, stepPx] of Object.entries(SCROLL_STEP_PX)) {
+    for (let part = 0; part < SCROLL_PARTS; part += 1) {
+      jobs.push({ kind: 'scroll', view, stepPx, part, parts: SCROLL_PARTS });
     }
+  }
+  const probes = jobs.map((job, index) => {
+    const probe = path.join(directory, `probe-${index}.js`);
+    fs.writeFileSync(probe, PROBE(directory, job));
+    return [probe];
+  });
+  const runs = await runElectronProbesTogether(electronPath, probes, { env: environment });
+  const failures = [];
+  const outputs = [];
+  for (const [index, run] of runs.entries()) {
+    const name = jobs[index].kind === 'main' ? 'main' : `${jobs[index].view} scroll ${jobs[index].part + 1} of ${jobs[index].parts}`;
+    const line = (run.stdout || '').split('\n').find((text) => text.startsWith('RESULT '));
+    if (line === undefined) {
+      const steps = (run.stdout || '').split('\n').filter((text) => text.startsWith('STEP '));
+      failures.push(
+        `the ${name} browser probe ran (${run.error ? String(run.error.message) : 'exit ' + String(run.status)}; last steps: ${steps.slice(-4).join(' | ')})\n    ${(run.stderr || run.stdout || '').slice(0, 800)}`,
+      );
+    } else {
+      const result = JSON.parse(line.slice('RESULT '.length));
+      if (result.error !== undefined) {
+        failures.push(`the ${name} probe ran to the end\n    ${result.error}`);
+      } else {
+        outputs.push({ job: jobs[index], result });
+      }
+    }
+  }
+  if (failures.length === 0) {
+    const output = outputs.find((entry) => entry.job.kind === 'main').result;
+    for (const view of Object.keys(SCROLL_STEP_PX)) {
+      const parts = outputs.filter((entry) => entry.job.kind === 'scroll' && entry.job.view === view);
+      for (const entry of parts) {
+        output[`${entry.job.view}ScrollReady${entry.job.part}`] = entry.result.scrollReady;
+      }
+      output[view === 'grid' ? 'bigScroll' : 'compactScroll'] = parts
+        .sort((left, right) => left.job.part - right.job.part)
+        .flatMap((entry) => entry.result.scroll);
+    }
+    failures.push(...check(output, big));
   }
   if (failures.length > 0) {
     console.error(`asset-views-chromium: ${failures.length} checks failed\n  ${failures.slice(0, 40).join('\n  ')}`);

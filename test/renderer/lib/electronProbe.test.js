@@ -2,12 +2,14 @@
 // that never started, because Chromium could not reach the display, and returns every other
 // outcome at once: a probe that printed anything, failed with another message, or failed after
 // starting is never retried away. Launches are bounded.
+// Side by side (runElectronProbesTogether), the probes run at the same time, come back in the order given,
+// and each is bounded and retried on its own.
 // Method: an injected spawn replays scripted spawnSync results; the outcomes and the number of
 // launches are pinned. Chromium's real stderr lines from the failing Check run are the fixture.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { PROBE_LIMITS, launchNeverStarted, runElectronProbe } = require('../../helpers/electronProbe.js');
+const { PROBE_LIMITS, launchNeverStarted, runElectronProbe, runElectronProbesTogether } = require('../../helpers/electronProbe.js');
 
 const UNREACHABLE = {
   status: 1,
@@ -64,4 +66,65 @@ test('misuse is refused', () => {
   assert.throws(() => runElectronProbe('', ['/probe.js']), /needs the Electron binary path/);
   assert.throws(() => runElectronProbe('/electron', []), /needs the probe script/);
   assert.throws(() => launchNeverStarted(undefined), /takes a spawnSync result/);
+});
+
+test('probes run side by side, results come back in order, and each is retried on its own', async () => {
+  const launched = [];
+  let running = 0;
+  let runningMax = 0;
+  const attempts = new Map();
+  const launch = async (command, argumentsList) => {
+    launched.push({ command, argumentsList });
+    running += 1;
+    runningMax = Math.max(runningMax, running);
+    // Yield, so that probes started together are all running before any ends.
+    await new Promise((resolve) => setImmediate(resolve));
+    running -= 1;
+    const name = argumentsList[0];
+    const attempt = (attempts.get(name) ?? 0) + 1;
+    attempts.set(name, attempt);
+    if (name === '/second.js' && attempt === 1) {
+      return UNREACHABLE;
+    }
+    return { status: 0, stdout: `RESULT ${name}\n`, stderr: '' };
+  };
+  const runs = await runElectronProbesTogether('/electron', [['/first.js'], ['/second.js'], ['/third.js']], { launch });
+  assert.equal(runningMax, 3, 'all three were running at once');
+  assert.deepEqual(
+    runs.map((run) => run.stdout),
+    ['RESULT /first.js\n', 'RESULT /second.js\n', 'RESULT /third.js\n'],
+  );
+  assert.deepEqual(
+    runs.map((run) => run.launchAttempts),
+    [1, 2, 1],
+  );
+  assert.equal(launched.length, 4);
+});
+
+test('side by side: a probe that ran and failed is returned at once, and the others still finish', async () => {
+  const launch = async (command, argumentsList) =>
+    argumentsList[0] === '/bad.js' ? { status: 1, stdout: '', stderr: 'probe failed' } : { status: 0, stdout: 'ok', stderr: '' };
+  const runs = await runElectronProbesTogether('/electron', [['/bad.js'], ['/good.js']], { launch });
+  assert.equal(runs[0].status, 1);
+  assert.equal(runs[0].launchAttempts, 1);
+  assert.equal(runs[1].stdout, 'ok');
+});
+
+test('side by side: misuse and too many probes are refused', async () => {
+  await assert.rejects(runElectronProbesTogether('', [['/p.js']]), /needs the Electron binary path/);
+  await assert.rejects(runElectronProbesTogether('/electron', []), /needs at least one probe/);
+  await assert.rejects(runElectronProbesTogether('/electron', [[]], { launch: async () => RESULT }), /needs its script/);
+  const many = Array.from({ length: PROBE_LIMITS.probesTogetherMax + 1 }, (_, index) => [`/p${index}.js`]);
+  await assert.rejects(runElectronProbesTogether('/electron', many, { launch: async () => RESULT }), /bounded by/);
+});
+
+test('side by side: the real launcher reports a timeout as an error and a missing binary as an error', async () => {
+  const node = process.execPath;
+  const slow = await runElectronProbesTogether(node, [['-e', 'setTimeout(() => {}, 60000)']], { timeoutMs: 300 });
+  assert.match(String(slow[0].error && slow[0].error.message), /ETIMEDOUT/);
+  const missing = await runElectronProbesTogether('/no/such/electron', [['/p.js']], { timeoutMs: 5000 });
+  assert.ok(missing[0].error instanceof Error);
+  const printed = await runElectronProbesTogether(node, [['-e', 'console.log("RESULT {}")']], { timeoutMs: 20000 });
+  assert.equal(printed[0].status, 0);
+  assert.equal(printed[0].stdout.trim(), 'RESULT {}');
 });
