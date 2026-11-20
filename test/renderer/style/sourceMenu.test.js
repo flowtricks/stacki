@@ -68,6 +68,7 @@ const check = (what, condition, detail) => {
       { value: 'file', label: 'src/styles/webflow.css', marked: true, icon: <Icon /> },
       { value: 'group', label: 'ButtonMain', heading: true, icon: <Icon /> },
       { value: 'global', label: '<style is:global>', indent: true, icon: <Icon /> },
+      { value: 'defaults', label: 'Style tag defaults…', icon: <Icon />, footer: true },
     ]
     function Harness() {
       const [value, setValue] = useState('global')
@@ -184,7 +185,8 @@ const check = (what, condition, detail) => {
          return {
            inlineTransform: list.style.transform, inlineTranslate: list.style.translate,
            panel: { left: l.left - p.left, right: p.right - l.right },
-           search: { left: s.left - l.left, right: l.right - s.right, gutter: gutter(search, list) },
+           search: { left: s.left - l.left, right: l.right - s.right, top: s.top - l.top, gutter: gutter(search, list) },
+           footer: list.classList.contains('has-footer'),
            rows, checked: selected ? !!selected.lastElementChild.querySelector('svg') : false,
          };
        })()\`);
@@ -218,6 +220,15 @@ const check = (what, condition, detail) => {
     // bar's room; net of that room, measured on this platform, the insets are equal.
     const netEqual = (inset) => near(inset.left, inset.right - inset.gutter);
     check('the search field has equal insets, net of the scrollbar gutter', netEqual(out.search), JSON.stringify(out.search));
+    // The real menu ends with "Style tag defaults…" pinned below the rows, and a list with a footer drops its own padding:
+    // the search field must get it back, or it runs into the frame's edges and rounded corners.
+    check('the menu has its pinned footer, as in the app', out.footer === true);
+    check(
+      'the search field starts where the rows start',
+      near(out.search.left, out.rows[0]?.left ?? -1),
+      JSON.stringify({ search: out.search, row: out.rows[0] }),
+    );
+    check('and sits inside the frame, below its top edge', out.search.top > 0.5, JSON.stringify(out.search));
     for (const row of out.rows) {
       check('each row has equal insets, net of the scrollbar gutter', netEqual(row), JSON.stringify(row));
       check('each row ends with its check column', row.checkLast === true);
