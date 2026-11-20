@@ -47,6 +47,17 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.10
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.10.
+- **Features**
+  - security: a Content Security Policy for the main window
+- **Fixes**
+  - studio: the preview cookie is allowed in a cross-site frame
+  - style: keep the source menu's search field inside its frame
+  - publish: a stuck temp directory no longer fails a publish
+  - roles: Desktop previews roles and never enforces them
+
 ## 1.4.9
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.9.
