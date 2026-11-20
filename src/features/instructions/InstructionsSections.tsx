@@ -1,12 +1,12 @@
-// The Instructions rail panel: every Markdown file in the project, in three
-// sections — Skills (named by their frontmatter), Rules and Docs (folder trees).
-// Picking a file opens it in the reading view over the canvas
-// (InstructionsView.tsx). "+" creates a skill scaffold, a rule or a doc; Rules
-// also creates folders. A row's menu reveals or copies a file, or hides it or its
-// folder, which writes `.stacki/instructions.json` (Settings → Instructions lists
-// them). The list follows the disk: main's watcher and the app's own saves list
-// it again (instructionsBridge.ts), and so does the window regaining focus.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+// The Instructions sections of the Settings panel: every Markdown file in the project, in three groups, Skills
+// (named by their frontmatter), Rules and Docs (folder trees), drawn as three of the panel's sections through
+// the context the frame hands them (src/lib/settingsSections.ts). Picking a file opens it in the reading view
+// over the canvas (InstructionsView.tsx). "+" creates a skill scaffold, a rule or a doc; Rules also creates
+// folders. A row's menu reveals or copies a file, or hides it or its folder, which writes
+// `.stacki/instructions.json` (Settings → Instructions lists them). The list follows the disk: main's watcher
+// and the app's own saves list it again (instructionsBridge.ts), and so do the window regaining focus and the
+// panel's Refresh. The search, the folded sections and the fold-all requests are the frame's, not this file's.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { can } from '../../../shared/properties/projectRoles';
 import {
@@ -21,22 +21,13 @@ import {
 } from '../../../shared/properties/instructions';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import { SETTINGS_SECTION_TITLE_KEYS, type SettingsSectionId, type SettingsSectionsContext } from '../../lib/settingsSections';
 import { instructionsListingCache } from './instructionsListingCache';
 import Dropdown from '../../ui/Dropdown';
-import MoreMenu, { type MenuItem } from '../../ui/MoreMenu';
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  CollapseVerticalIcon,
-  ExpandVerticalIcon,
-  FileIcon,
-  FolderIcon,
-  FolderOpenIcon,
-  FolderPlusIcon,
-  InstructionsIcon,
-  PlusIcon,
-  SkillIcon,
-} from '../../ui/Icons';
+import { type MenuItem } from '../../ui/MoreMenu';
+import { FileIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, PlusIcon, SkillIcon } from '../../ui/Icons';
+import { PanelRow } from '../../ui/PanelRow';
+import { PanelSection, PanelSectionAction, PanelSectionNote } from '../../ui/PanelSection';
 import {
   announceInstructionsChanged,
   createInstruction,
@@ -60,13 +51,13 @@ import {
   type SkillRow,
   type TreeNode,
 } from './instructionsModel';
-import { PanelSearch } from '../../ui/PanelSearch';
-import { isSearching } from '../../lib/searchText';
+import { useReportMatches } from '../../lib/useReportMatches';
 import { selectInstruction, useInstructionSelection } from './instructionSelection';
 import './instructions.css';
 
 interface Props {
   readonly projectPath: string;
+  readonly context: SettingsSectionsContext;
   readonly showToast?: ((message: string, kind?: 'info' | 'success' | 'warning' | 'error') => void) | undefined;
 }
 
@@ -74,22 +65,18 @@ type Listing =
   { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly listing: InstructionListing };
 type Creating =
   { readonly kind: 'none' } | { readonly kind: 'skill' } | { readonly kind: 'rule' } | { readonly kind: 'rule-folder' } | { readonly kind: 'doc' };
-type SectionId = 'skills' | 'rules' | 'docs';
 
-export default function InstructionsPanel({ projectPath, showToast }: Props) {
+export default function InstructionsSections({ projectPath, context, showToast }: Props) {
   const translate = useTranslate();
   const role = useCurrentRole();
   const editable = can(role, 'instructions:edit');
   const listing = useListing(projectPath);
   const selected = useInstructionSelection(projectPath);
   const [creating, setCreating] = useState<Creating>({ kind: 'none' });
-  const [closedSections, setClosedSections] = useState<ReadonlySet<SectionId>>(new Set());
   const [openFolders, setOpenFolders] = useState<ReadonlySet<string>>(new Set());
-  // The search text is this panel's alone and is never remembered.
-  const [query, setQuery] = useState('');
+  const { query, searching } = context;
   const report = useCallback((message: string) => showToast?.(message, 'error'), [showToast]);
   const allSections = useMemo(() => (listing.state.kind === 'ready' ? sectionsOf(listing.state.listing) : undefined), [listing.state]);
-  const searching = isSearching(query);
   // Searched, only the matches are drawn, every section and folder with one open; what the person folded is kept and returns when the search clears.
   const sections = useMemo(() => (allSections !== undefined && searching ? filterSections(allSections, query) : allSections), [allSections, searching, query]);
   const shownFolders = useMemo(
@@ -97,7 +84,31 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
     [sections, searching],
   );
   const allFolders = useMemo(() => (allSections === undefined ? [] : [...folderPaths(allSections.rules), ...folderPaths(allSections.docs)]), [allSections]);
-  const expanded = closedSections.size === 0 && allFolders.every((folder) => openFolders.has(folder));
+
+  // The frame's fold-all and Refresh reach the folders and the listing, which only this file knows.
+  const folders = useRef(allFolders);
+  folders.current = allFolders;
+  const { bulk, refreshSerial } = context;
+  useEffect(() => {
+    if (bulk.mode === 'expand') {
+      setOpenFolders(new Set(folders.current));
+    } else if (bulk.mode === 'collapse') {
+      setOpenFolders(new Set());
+    }
+  }, [bulk]);
+  const { refresh } = listing;
+  useEffect(() => {
+    if (refreshSerial > 0) {
+      refresh();
+    }
+  }, [refreshSerial, refresh]);
+  const skillCount = sections?.skills.length;
+  const ruleCount = sections === undefined ? undefined : countFiles(sections.rules);
+  const documentCount = sections === undefined ? undefined : countFiles(sections.docs);
+  // What each group holds is told to the frame, which says so when a search finds nothing in any section.
+  useReportMatches(context, 'skills', skillCount);
+  useReportMatches(context, 'rules', ruleCount);
+  useReportMatches(context, 'docs', documentCount);
 
   const open = (file: string): void => selectInstruction({ projectPath, file });
   const hide = async (pattern: string): Promise<void> => {
@@ -136,16 +147,6 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
       }
       return next;
     });
-  const toggleSection = (section: SectionId): void =>
-    setClosedSections((current) => {
-      const next = new Set(current);
-      if (next.has(section)) {
-        next.delete(section);
-      } else {
-        next.add(section);
-      }
-      return next;
-    });
   const created = (file: string | undefined): void => {
     setCreating({ kind: 'none' });
     listing.refresh();
@@ -153,159 +154,124 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
       open(file);
     }
   };
-  const expandAll = (): void => {
-    setOpenFolders(new Set(allFolders));
-    setClosedSections(new Set());
-  };
-  const collapseAll = (): void => {
-    setOpenFolders(new Set());
-    setClosedSections(new Set(['skills', 'rules', 'docs']));
-  };
-  const startCreating = (next: Exclude<Creating, { readonly kind: 'none' }>, section: SectionId): void => {
-    // A new file's form lives in its section, which a search may be hiding.
-    setQuery('');
+  const startCreating = (next: Exclude<Creating, { readonly kind: 'none' }>, section: SettingsSectionId): void => {
+    // A new file's form lives in its section, which a search or a fold may be hiding.
+    context.clearSearch();
     setCreating(next);
-    setClosedSections((current) => new Set([...current].filter((each) => each !== section)));
+    context.open(section);
   };
 
+  if (listing.state.kind === 'error') {
+    return (
+      <div className="props-empty" role="alert">
+        {listing.state.message}
+      </div>
+    );
+  }
+  if (listing.state.kind === 'loading' || sections === undefined) {
+    // Nothing is listed yet: no sections and no word, so the panel does not move when the rows arrive.
+    return undefined;
+  }
+  const { listing: ready } = listing.state;
   return (
-    <div className="panel-section grow instructions-panel">
-      <div className="panel-header">
-        <h2>{translate('instructionsPanel.title')}</h2>
-        <div className="instructions-header-actions">
-          <button
-            type="button"
-            className="ghost"
-            title={expanded ? translate('instructionsPanel.collapseAll') : translate('instructionsPanel.expandAll')}
-            aria-label={expanded ? translate('instructionsPanel.collapseAll') : translate('instructionsPanel.expandAll')}
-            onClick={() => (expanded ? collapseAll() : expandAll())}
-          >
-            {expanded ? <CollapseVerticalIcon size={13} /> : <ExpandVerticalIcon size={13} />}
-          </button>
-          <MoreMenu
-            className="ghost"
-            title={translate('instructionsPanel.options')}
-            width={170}
-            items={[
-              { label: translate('instructionsPanel.expandAll'), onSelect: expandAll },
-              { label: translate('instructionsPanel.collapseAll'), onSelect: collapseAll },
-              { label: translate('instructionsPanel.refresh'), onSelect: listing.refresh },
-            ]}
+    <>
+      {!(searching && sections.skills.length === 0) && (
+        <PanelSection
+          id="skills"
+          title={translate(SETTINGS_SECTION_TITLE_KEYS.skills)}
+          count={sections.skills.length}
+          open={context.isOpen('skills')}
+          onToggle={() => context.toggle('skills')}
+          actions={
+            editable && (
+              <PanelSectionAction
+                label={translate('instructionsPanel.skills.new')}
+                icon={<PlusIcon size={13} />}
+                onClick={() => startCreating({ kind: 'skill' }, 'skills')}
+              />
+            )
+          }
+        >
+          {creating.kind === 'skill' && <SkillForm home={skillHome(ready)} projectPath={projectPath} onDone={created} onError={report} />}
+          {sections.skills.length === 0 && creating.kind !== 'skill' && <PanelSectionNote>{translate('instructionsPanel.skills.empty')}</PanelSectionNote>}
+          {sections.skills.map((skill) => (
+            <SkillItem key={skill.path} skill={skill} selected={selected === skill.path} onOpen={open} menu={menuFor(skill.path, { folder: false })} />
+          ))}
+        </PanelSection>
+      )}
+      {!(searching && countFiles(sections.rules) === 0) && (
+        <PanelSection
+          id="rules"
+          title={translate(SETTINGS_SECTION_TITLE_KEYS.rules)}
+          count={countFiles(sections.rules)}
+          open={context.isOpen('rules')}
+          onToggle={() => context.toggle('rules')}
+          actions={
+            editable && (
+              <>
+                <PanelSectionAction
+                  label={translate('instructionsPanel.rules.newFolder')}
+                  icon={<FolderPlusIcon size={13} />}
+                  onClick={() => startCreating({ kind: 'rule-folder' }, 'rules')}
+                />
+                <PanelSectionAction
+                  label={translate('instructionsPanel.rules.new')}
+                  icon={<PlusIcon size={13} />}
+                  onClick={() => startCreating({ kind: 'rule' }, 'rules')}
+                />
+              </>
+            )
+          }
+        >
+          {(creating.kind === 'rule' || creating.kind === 'rule-folder') && (
+            <RuleForm kind={creating.kind} homes={ruleHomes(ready)} projectPath={projectPath} onDone={created} onError={report} />
+          )}
+          {sections.rules.length === 0 && creating.kind !== 'rule' && creating.kind !== 'rule-folder' && (
+            <PanelSectionNote>{translate('instructionsPanel.rules.empty')}</PanelSectionNote>
+          )}
+          <Tree
+            nodes={sections.rules}
+            depth={0}
+            openFolders={shownFolders ?? openFolders}
+            selected={selected}
+            onToggle={toggleFolder}
+            onOpen={open}
+            menuFor={menuFor}
           />
-        </div>
-      </div>
-      <PanelSearch value={query} placeholder={translate('instructionsPanel.search.placeholder')} onChange={setQuery} />
-      <div className="panel-body instructions-body">
-        {listing.state.kind === 'loading' && <div className="props-empty">{translate('instructionsPanel.reading')}</div>}
-        {listing.state.kind === 'error' && (
-          <div className="props-empty" role="alert">
-            {listing.state.message}
-          </div>
-        )}
-        {listing.state.kind === 'ready' && sections !== undefined && (
-          <>
-            <Section
-              id="skills"
-              hidden={searching && sections.skills.length === 0}
-              title={translate('instructionsPanel.skills.title')}
-              count={sections.skills.length}
-              open={searching || !closedSections.has('skills')}
-              onToggle={toggleSection}
-              actions={
-                editable && (
-                  <IconButton
-                    label={translate('instructionsPanel.skills.new')}
-                    icon={<PlusIcon size={13} />}
-                    onClick={() => startCreating({ kind: 'skill' }, 'skills')}
-                  />
-                )
-              }
-            >
-              {creating.kind === 'skill' && <SkillForm home={skillHome(listing.state.listing)} projectPath={projectPath} onDone={created} onError={report} />}
-              {sections.skills.length === 0 && creating.kind !== 'skill' && (
-                <div className="instructions-empty">{translate('instructionsPanel.skills.empty')}</div>
-              )}
-              {sections.skills.map((skill) => (
-                <SkillItem key={skill.path} skill={skill} selected={selected === skill.path} onOpen={open} menu={menuFor(skill.path, { folder: false })} />
-              ))}
-            </Section>
-            <Section
-              id="rules"
-              hidden={searching && countFiles(sections.rules) === 0}
-              title={translate('instructionsPanel.rules.title')}
-              count={countFiles(sections.rules)}
-              open={searching || !closedSections.has('rules')}
-              onToggle={toggleSection}
-              actions={
-                editable && (
-                  <>
-                    <IconButton
-                      label={translate('instructionsPanel.rules.newFolder')}
-                      icon={<FolderPlusIcon size={13} />}
-                      onClick={() => startCreating({ kind: 'rule-folder' }, 'rules')}
-                    />
-                    <IconButton
-                      label={translate('instructionsPanel.rules.new')}
-                      icon={<PlusIcon size={13} />}
-                      onClick={() => startCreating({ kind: 'rule' }, 'rules')}
-                    />
-                  </>
-                )
-              }
-            >
-              {(creating.kind === 'rule' || creating.kind === 'rule-folder') && (
-                <RuleForm kind={creating.kind} homes={ruleHomes(listing.state.listing)} projectPath={projectPath} onDone={created} onError={report} />
-              )}
-              {sections.rules.length === 0 && creating.kind !== 'rule' && creating.kind !== 'rule-folder' && (
-                <div className="instructions-empty">{translate('instructionsPanel.rules.empty')}</div>
-              )}
-              <Tree
-                nodes={sections.rules}
-                depth={0}
-                openFolders={shownFolders ?? openFolders}
-                selected={selected}
-                onToggle={toggleFolder}
-                onOpen={open}
-                menuFor={menuFor}
+        </PanelSection>
+      )}
+      {!(searching && countFiles(sections.docs) === 0) && (
+        <PanelSection
+          id="docs"
+          title={translate(SETTINGS_SECTION_TITLE_KEYS.docs)}
+          count={countFiles(sections.docs)}
+          open={context.isOpen('docs')}
+          onToggle={() => context.toggle('docs')}
+          actions={
+            editable && (
+              <PanelSectionAction
+                label={translate('instructionsPanel.docs.new')}
+                icon={<PlusIcon size={13} />}
+                onClick={() => startCreating({ kind: 'doc' }, 'docs')}
               />
-            </Section>
-            <Section
-              id="docs"
-              hidden={searching && countFiles(sections.docs) === 0}
-              title={translate('instructionsPanel.docs.title')}
-              count={countFiles(sections.docs)}
-              open={searching || !closedSections.has('docs')}
-              onToggle={toggleSection}
-              actions={
-                editable && (
-                  <IconButton
-                    label={translate('instructionsPanel.docs.new')}
-                    icon={<PlusIcon size={13} />}
-                    onClick={() => startCreating({ kind: 'doc' }, 'docs')}
-                  />
-                )
-              }
-            >
-              {creating.kind === 'doc' && <DocumentForm projectPath={projectPath} onDone={created} onError={report} />}
-              {sections.docs.length === 0 && creating.kind !== 'doc' && <div className="instructions-empty">{translate('instructionsPanel.docs.empty')}</div>}
-              <Tree
-                nodes={sections.docs}
-                depth={0}
-                openFolders={shownFolders ?? openFolders}
-                selected={selected}
-                onToggle={toggleFolder}
-                onOpen={open}
-                menuFor={menuFor}
-              />
-            </Section>
-            {searching && sections.skills.length === 0 && countFiles(sections.rules) === 0 && countFiles(sections.docs) === 0 && (
-              <div className="props-empty">{translate('instructionsPanel.search.noMatch')}</div>
-            )}
-            {listing.state.listing.truncated && <div className="instructions-empty">{translate('instructionsPanel.truncated')}</div>}
-          </>
-        )}
-      </div>
-    </div>
+            )
+          }
+        >
+          {creating.kind === 'doc' && <DocumentForm projectPath={projectPath} onDone={created} onError={report} />}
+          {sections.docs.length === 0 && creating.kind !== 'doc' && <PanelSectionNote>{translate('instructionsPanel.docs.empty')}</PanelSectionNote>}
+          <Tree
+            nodes={sections.docs}
+            depth={0}
+            openFolders={shownFolders ?? openFolders}
+            selected={selected}
+            onToggle={toggleFolder}
+            onOpen={open}
+            menuFor={menuFor}
+          />
+        </PanelSection>
+      )}
+      {ready.truncated && <PanelSectionNote>{translate('instructionsPanel.truncated')}</PanelSectionNote>}
+    </>
   );
 }
 
@@ -354,99 +320,6 @@ function keptListing(projectPath: string): Listing {
 // Rows
 // ---------------------------------------------------------------------------
 
-function Section(props: {
-  readonly id: SectionId;
-  /** Left out of the panel altogether: a section with no match while a search is on. */
-  readonly hidden: boolean;
-  readonly title: string;
-  readonly count: number;
-  readonly open: boolean;
-  readonly actions: ReactNode;
-  readonly onToggle: (id: SectionId) => void;
-  readonly children: ReactNode;
-}) {
-  if (props.hidden) {
-    return undefined;
-  }
-  return (
-    <section className="instructions-section" aria-label={props.title}>
-      <div className="instructions-section-head">
-        <button type="button" className="instructions-section-toggle" aria-expanded={props.open} onClick={() => props.onToggle(props.id)}>
-          <span className="instructions-chevron">{props.open ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}</span>
-          <span className="instructions-section-title">{props.title}</span>
-          {props.count > 0 && <span className="instructions-section-count">{props.count}</span>}
-        </button>
-        <div className="instructions-section-actions">{props.actions}</div>
-      </div>
-      {props.open && (
-        <div className="instructions-section-body" role="tree" aria-label={props.title}>
-          {props.children}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function IconButton(props: { readonly label: string; readonly icon: ReactNode; readonly onClick: () => void }) {
-  return (
-    <button type="button" className="ghost" title={props.label} aria-label={props.label} onClick={props.onClick}>
-      {props.icon}
-    </button>
-  );
-}
-
-/** One row's left inset: the panel's 8px, then 14px per level, as the Pages tree indents. */
-function indentOf(depth: number): { readonly paddingLeft: number } {
-  return { paddingLeft: 8 + depth * 14 };
-}
-
-// The Pages tree's row (`.list-item`): a chevron column (empty for a file) keeps every icon on one line per depth.
-function Row(props: {
-  readonly depth: number;
-  readonly label: string;
-  readonly icon: ReactNode;
-  readonly title: string;
-  readonly selected: boolean;
-  readonly folder: { readonly open: boolean } | undefined;
-  readonly menu: readonly MenuItem[];
-  readonly detail?: ReactNode;
-  readonly onActivate: () => void;
-}) {
-  const translate = useTranslate();
-  return (
-    <div
-      className={`list-item instructions-row ${props.folder === undefined ? '' : 'folder'} ${props.selected ? 'active' : ''}`}
-      style={indentOf(props.depth)}
-      role="treeitem"
-      tabIndex={0}
-      title={props.title}
-      aria-selected={props.selected}
-      aria-expanded={props.folder?.open}
-      onClick={props.onActivate}
-      onKeyDown={(event) => {
-        // Keys on the row's own menu button are the menu's.
-        if (event.target !== event.currentTarget) {
-          return;
-        }
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          props.onActivate();
-        }
-      }}
-    >
-      <span className="instructions-chevron">
-        {props.folder === undefined ? undefined : props.folder.open ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}
-      </span>
-      <span className="icon">{props.icon}</span>
-      <span className="instructions-row-copy">
-        <span className="label instructions-row-label">{props.label}</span>
-        {props.detail}
-      </span>
-      <MoreMenu className="row-action rename-action" title={translate('instructionsPanel.rowOptions', { label: props.label })} items={props.menu} width={170} />
-    </div>
-  );
-}
-
 function SkillItem(props: {
   readonly skill: SkillRow;
   readonly selected: boolean;
@@ -456,7 +329,7 @@ function SkillItem(props: {
   const { skill } = props;
   // The description is the row's tooltip only: the sidebar stays one line per skill.
   return (
-    <Row
+    <PanelRow
       depth={0}
       label={skill.name}
       icon={<SkillIcon size={13} />}
@@ -484,7 +357,7 @@ function Tree(props: {
       {props.nodes.map((node) => {
         if (node.kind === 'file') {
           return (
-            <Row
+            <PanelRow
               key={node.path}
               depth={props.depth}
               label={node.label}
@@ -500,7 +373,7 @@ function Tree(props: {
         const open = props.openFolders.has(node.path);
         return (
           <div key={node.path} role="group">
-            <Row
+            <PanelRow
               depth={props.depth}
               label={node.label}
               icon={open ? <FolderOpenIcon size={13} /> : <FolderIcon size={13} />}
@@ -719,9 +592,4 @@ function CreateForm(props: {
       </div>
     </form>
   );
-}
-
-/** The panel's icon, for hosts that draw it outside the rail. */
-export function InstructionsPanelIcon(props: { readonly size: number }) {
-  return <InstructionsIcon size={props.size} />;
 }

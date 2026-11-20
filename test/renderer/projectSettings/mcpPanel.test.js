@@ -573,7 +573,7 @@ test('a file with a mistake says so and offers the JSON view', async () => {
   await unmount();
 });
 
-test('the panel lists MCP after Secrets', async () => {
+test('the panel root lists MCP after Secrets and opens it', async () => {
   reset({ mcp: '{}', env: '' });
   root = createRoot(document.getElementById('root'));
   await act(async () =>
@@ -581,15 +581,15 @@ test('the panel lists MCP after Secrets', async () => {
       React.createElement(
         React.Fragment,
         {},
-        React.createElement(panel.ProjectSettingsPanel, { projectPath: '/project' }),
+        React.createElement(panel.ProjectSettingsPanel, { projectPath: '/project', views: ['secrets', 'mcp'], renderInstructions: () => undefined }),
         React.createElement(panel.ConfirmHost),
       ),
     ),
   );
   await settleAll();
-  const tabs = [...document.querySelectorAll('.project-settings-tab')].map((tab) => tab.textContent.trim());
-  assert.deepEqual(tabs, ['Secrets', 'MCP']);
-  await click([...document.querySelectorAll('.project-settings-tab')][1]);
+  const links = [...document.querySelectorAll('.settings-link')].map((link) => link.textContent.trim());
+  assert.deepEqual(links, ['Secrets', 'MCP']);
+  await click([...document.querySelectorAll('.settings-link')][1]);
   assert.ok(pageText().includes('MCP servers'));
   await unmount();
 });

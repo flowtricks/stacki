@@ -201,11 +201,9 @@ test('no message is empty, and a translation differs from English unless it is a
     'settings.tab.instructions',
     'settings.editor.section.general',
     'settings.secrets.name',
-    'settings.secrets.tab',
     'settings.secrets.title',
     // Product terms and universal words of the MCP tab.
     'settings.mcp.agent.claude',
-    'settings.mcp.tab',
     'settings.mcp.view.json',
     'settings.mcp.edit.url',
   ]);

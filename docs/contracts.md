@@ -819,9 +819,16 @@ role's UI. It changes only the renderer's active role (`src/lib/currentRole.ts`:
 ## Settings panel and secrets
 
 The Settings rail button (`projectSettings`, access feature `panel:projectSettings`, admin only until a
-role is granted it; shortcut ⌥S) sits directly above the AI button and opens a panel with a typed tab
-registry (`src/features/projectSettings/settingsTabs.ts`). It is the project's settings, apart from the
-app's own Settings screen (`src/app/settings`). Its Secrets tab edits one of the project's dev env files
+role is granted it; shortcut ⌥S) sits directly above the AI button and opens a panel whose root is a short
+list of links (`SETTINGS_VIEW_IDS` in `src/lib/settingsSections.ts`): Secrets, MCP and Instructions. A link
+replaces the panel with that view under a back chevron and the view's title; back, or Escape outside a field,
+returns to the root, and the panel always opens on the root unless something asked for a view
+(`requestSettingsSection`: ⌥I, an app naming the `instructions` panel, a session that left the retired
+Instructions panel open). Which links show follows the role (`settingsViewsOf` in `src/lib/roleAccess.ts`):
+`panel:projectSettings` gives Secrets and MCP, `panel:instructions` gives Instructions, so a role with only
+the second sees Settings with one link. The frame (`ProjectSettingsShell.tsx`) is shared with hosted Studio,
+which lists Secrets and MCP with honest unavailable states and no Instructions. It is the project's settings,
+apart from the app's own Settings screen (`src/app/settings`). Its Secrets view edits one of the project's dev env files
 at a time (`SECRETS_FILE_NAMES`: `.env`, `.env.local`, `.env.development`, `.env.development.local`, the
 dev server's load order), picked in a dropdown that opens on `.env`. `.env.production` is not listed.
 
@@ -1309,7 +1316,9 @@ metadata references too. The installed Studio CLI's
 
 ## Instructions panel
 
-`shared/properties/instructions.ts` is the contract for the Instructions rail panel
+`shared/properties/instructions.ts` is the contract for the Instructions view of the Settings panel, once a
+rail panel of its own (the rail has no Instructions button; ⌥I opens Settings at it; the folded Skills, Rules and
+Docs sections are remembered per project in `src/lib/settingsSections.ts`)
 (`panel:instructions`; writes need `instructions:edit`, the hidden-paths list
 `settings:instructions` or `instructions:edit`).
 

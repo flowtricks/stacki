@@ -26,6 +26,7 @@ fs.mkdirSync(path.dirname(output), { recursive: true });
 esbuild.buildSync({
   stdin: {
     contents: [
+      "export { requestSettingsSection } from './src/lib/settingsSections';",
       "export { default as ProjectSettingsPanel } from './src/features/projectSettings/ProjectSettingsPanel';",
       "export { default as SecretsTab } from './src/features/projectSettings/SecretsTab';",
       "export { secretsCacheKey, secretsListingCache, prewarmSecretsListing } from './src/features/projectSettings/secretsCache';",
@@ -384,19 +385,79 @@ test('an app without the channels says to restart, for a missing method and for 
   await unmount();
 });
 
-test('the Settings panel lists its tabs and opens Secrets', async () => {
+test('the Settings panel opens on a root of links and a link opens its view; back and Escape return to the root', async () => {
   reset('A=1\n');
   root = createRoot(document.getElementById('root'));
-  await act(async () => root.render(React.createElement(panel.ProjectSettingsPanel, { projectPath: '/project' })));
+  const views = ['secrets', 'mcp', 'instructions'];
+  await act(async () =>
+    root.render(React.createElement(panel.ProjectSettingsPanel, { projectPath: '/project', views, renderInstructions: () => 'instructions view' })),
+  );
   await settleAll();
   assert.equal(document.querySelector('.panel-header h2').textContent, 'Settings');
-  const tabs = [...document.querySelectorAll('.project-settings-tab')];
   assert.deepEqual(
-    tabs.map((tab) => tab.textContent.trim()),
-    ['Secrets', 'MCP'],
+    [...document.querySelectorAll('.settings-link')].map((link) => link.textContent.trim()),
+    ['Secrets', 'MCP', 'Instructions'],
   );
-  assert.equal(tabs[0].getAttribute('aria-current'), 'page');
+  assert.equal(document.querySelector('.secrets') ?? undefined, undefined, 'the root draws no view');
+  assert.equal(document.querySelector('input[type="text"]') ?? undefined, undefined, 'and no search box');
+  await act(async () => document.querySelectorAll('.settings-link')[0].click());
+  await settleAll();
+  assert.equal(document.querySelector('.panel-header h2').textContent, 'Secrets');
   assert.ok(document.querySelector('.secrets'));
+  await act(async () => document.querySelector('.settings-panel .panel-header button').click());
+  await settleAll();
+  assert.equal(document.querySelectorAll('.settings-link').length, 3, 'back returns to the root');
+  await act(async () => document.querySelectorAll('.settings-link')[2].click());
+  assert.equal(document.querySelector('.settings-detail, .settings-body').textContent.includes('instructions view'), true);
+  await act(async () => document.querySelector('.settings-panel').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  assert.equal(document.querySelectorAll('.settings-link').length, 3, 'Escape returns to the root');
+  await unmount();
+});
+
+test('a role sees only the links it may open', async () => {
+  reset('A=1\n');
+  root = createRoot(document.getElementById('root'));
+  await act(async () =>
+    root.render(React.createElement(panel.ProjectSettingsPanel, { projectPath: '/project', views: ['instructions'], renderInstructions: () => 'x' })),
+  );
+  await settleAll();
+  assert.deepEqual(
+    [...document.querySelectorAll('.settings-link')].map((link) => link.textContent.trim()),
+    ['Instructions'],
+  );
+  await unmount();
+});
+
+test('a request for Instructions opens that view at once, and a request made before the panel exists waits for it', async () => {
+  reset('A=1\n');
+  panel.requestSettingsSection('instructions');
+  root = createRoot(document.getElementById('root'));
+  await act(async () =>
+    root.render(
+      React.createElement(panel.ProjectSettingsPanel, {
+        projectPath: '/project',
+        views: ['secrets', 'instructions'],
+        renderInstructions: () => 'instructions view',
+      }),
+    ),
+  );
+  await settleAll();
+  assert.equal(document.querySelector('.panel-header h2').textContent, 'Instructions');
+  // Asked again from another view of the open panel: it moves there.
+  await act(async () => document.querySelector('.settings-panel .panel-header button').click());
+  await settleAll();
+  await act(async () => panel.requestSettingsSection('instructions'));
+  await settleAll();
+  assert.equal(document.querySelector('.panel-header h2').textContent, 'Instructions');
+  // A role without the view takes the request and ignores it.
+  await unmount();
+  panel.requestSettingsSection('mcp');
+  root = createRoot(document.getElementById('root'));
+  await act(async () =>
+    root.render(React.createElement(panel.ProjectSettingsPanel, { projectPath: '/project', views: ['instructions'], renderInstructions: () => 'x' })),
+  );
+  await settleAll();
+  assert.equal(document.querySelector('.panel-header h2').textContent, 'Settings');
   await unmount();
 });
 

@@ -43,7 +43,7 @@ import { type LeftTab } from '../appTypes';
 import type { CodeReveal, SourceRange } from '../../features/code/codePanelModel';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
 import type { Translator } from '../../lib/i18n/localeContext';
-import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, InstructionsPanel, ProjectSettingsPanel, preloadPanels } from '../appPanels';
+import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, ProjectSettingsPanel, preloadPanels } from '../appPanels';
 import { canvasPageOf, findEditorNodeById } from '../../editor/pageState';
 import { parsePseudoLayerTarget } from '../../../shared/page/pseudoElements';
 import { projectRelative, type VariablePlace } from '../../editor/variablePlace';
@@ -62,7 +62,8 @@ import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, 
 import { selectedPseudo } from '../model/selectionStructure';
 import type { ShellView } from '../App';
 import { useCurrentRole } from '../../lib/useCurrentRole';
-import { canPanel } from '../../lib/roleAccess';
+import { canRailTab } from '../../lib/roleAccess';
+import { requestSettingsSection } from '../../lib/settingsSections';
 import { can } from '../../../shared/properties/projectRoles';
 import { ViewAsChip } from '../roles/ViewAsChip';
 import { AppsTab, DesktopAppsHost } from './DesktopApps';
@@ -91,7 +92,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
   useEffect(() => (gitTracked ? prefetchTimeline(projectPath, gitBranch, gitHead) : undefined), [projectPath, gitTracked, gitBranch, gitHead]);
   // A panel the role hides closes, including one open when "View as" switched roles.
   const role = useCurrentRole();
-  const leftTab = app.leftTab !== undefined && canPanel(role, app.leftTab) ? app.leftTab : undefined;
+  const leftTab = app.leftTab !== undefined && canRailTab(role, app.leftTab) ? app.leftTab : undefined;
   const aiButton = useAiRailButton(app);
   return (
     <div className="app">
@@ -108,6 +109,11 @@ export function AppShell({ app }: { readonly app: ShellView }) {
           componentOpen={app.componentPropertiesOpen}
           projectPath={projectPath}
           onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))}
+          onOpenSettings={(target) => {
+            // Opens, never toggles: the shortcut for a section must not close Settings that is already showing it.
+            requestSettingsSection(target);
+            app.setLeftTab('projectSettings');
+          }}
           aiButton={aiButton}
         />
         {leftTab && <LeftPanel app={app} tab={leftTab} />}
@@ -497,9 +503,8 @@ function LeftPanelBody({ app, tab }: { readonly app: ShellView; readonly tab: Le
       {tab === 'code' && <CodeTab app={app} />}
       {tab === 'history' && <HistoryTab app={app} />}
       {tab === 'apps' && <AppsTab app={app} />}
-      {tab === 'instructions' && <InstructionsPanel projectPath={app.project.path} showToast={app.showToast} />}
       {tab === 'audits' && <AuditsTab app={app} />}
-      {tab === 'projectSettings' && <ProjectSettingsPanel projectPath={app.project.path} />}
+      {tab === 'projectSettings' && <ProjectSettingsPanel projectPath={app.project.path} showToast={app.showToast} />}
       {tab === 'ai' && <AiTab app={app} />}
       {tab === 'assets' && (
         <AssetsPanel

@@ -331,11 +331,20 @@ export const messages = {
   'settings.secrets.reveal.action': '{name} anzeigen',
   'settings.secrets.revealAll': 'Alle anzeigen',
   'settings.secrets.save': 'Speichern',
-  'settings.secrets.tab': 'Geheimnisse',
   'settings.secrets.title': 'Geheimnisse',
   'settings.secrets.tracked.warning': '{file} ist in Git committet', // review
   'settings.secrets.value': 'Wert',
   'settings.secrets.valueHidden': 'Verborgener Wert',
+  'settings.back': 'Zurück zu den Einstellungen',
+  'settings.collapseAll': 'Alle einklappen',
+  'settings.expandAll': 'Alle ausklappen',
+  'settings.options': 'Einstellungsoptionen',
+  'settings.refresh': 'Aktualisieren',
+  'settings.instructions.search.noMatch': 'Keine Anweisungen passen zur Suche',
+  'settings.instructions.search.placeholder': 'Anweisungen suchen',
+  'settings.section.mcp': 'MCP', // same
+  'settings.section.instructions': 'Anweisungen',
+  'settings.section.secrets': 'Geheimnisse',
   'settings.sections': 'Einstellungsbereiche',
   'settings.studio.info':
     'Bearbeiten und Zusammenarbeiten im Browser für dieses Projekt. Die Einrichtung installiert Studio lokal und führt durch das Cloud-Deployment.',
@@ -513,7 +522,6 @@ export const messages = {
   'settings.mcp.summary.command': 'Führt einen Befehl aus · {command}',
   'settings.mcp.summary.remote': 'Remote-Server · {host}',
   'settings.mcp.summary.remoteSse': 'Remote-Server (SSE) · {host}',
-  'settings.mcp.tab': 'MCP', // same
   'settings.mcp.title': 'MCP-Server',
   'settings.mcp.unavailable': 'Starte Stacki neu, um MCP-Server zu nutzen.',
   'settings.mcp.value.hide': '{name} verbergen',

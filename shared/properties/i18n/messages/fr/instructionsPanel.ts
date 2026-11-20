@@ -3,7 +3,6 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/instructionsPanel';
 
 export const messages = {
-  'instructionsPanel.collapseAll': 'Tout réduire',
   'instructionsPanel.conflict.blocked': 'Les deux ont modifié les mêmes lignes ; choisissez une version.',
   'instructionsPanel.conflict.merge': 'Fusionner les deux',
   'instructionsPanel.conflict.mergeTip': 'Conserver les deux modifications',
@@ -14,7 +13,6 @@ export const messages = {
   'instructionsPanel.docs.empty': 'Aucun autre fichier Markdown dans ce projet.',
   'instructionsPanel.docs.new': 'Nouveau document',
   'instructionsPanel.docs.title': 'Documents',
-  'instructionsPanel.expandAll': 'Tout développer',
   'instructionsPanel.form.create': 'Créer',
   'instructionsPanel.form.docPath': 'Chemin du document',
   'instructionsPanel.form.folder': 'Dossier',
@@ -31,22 +29,16 @@ export const messages = {
   'instructionsPanel.menu.hideFile': 'Masquer le fichier',
   'instructionsPanel.menu.hideFolder': 'Masquer le dossier',
   'instructionsPanel.menu.reveal': 'Afficher dans le Finder',
-  'instructionsPanel.options': 'Options des instructions',
-  'instructionsPanel.reading': 'Lecture du projet…',
-  'instructionsPanel.refresh': 'Actualiser',
   'instructionsPanel.rowOptions': 'Options de {label}',
   'instructionsPanel.rules.empty':
     'Aucune règle pour l’instant. Ajoutez un AGENTS.md ou un fichier de règles pour dire à l’IA comment ce projet est construit.',
   'instructionsPanel.rules.new': 'Nouvelle règle',
   'instructionsPanel.rules.newFolder': 'Nouveau dossier de règles',
   'instructionsPanel.rules.title': 'Règles',
-  'instructionsPanel.search.noMatch': 'Aucune instruction ne correspond',
-  'instructionsPanel.search.placeholder': 'Rechercher des instructions',
   'instructionsPanel.skills.empty':
     'Aucune skill pour l’instant. Créez votre première skill pour donner à l’IA le contexte dont elle a besoin pour bien travailler.',
   'instructionsPanel.skills.new': 'Nouvelle skill',
   'instructionsPanel.skills.title': 'Skills', // same
-  'instructionsPanel.title': 'Instructions', // same
   'instructionsPanel.truncated':
     'Ce projet contient plus de Markdown que le panneau n’en liste. Masquez des dossiers dans Réglages → Instructions pour voir le reste.',
   'instructionsPanel.view.closeFile': 'Fermer le fichier',

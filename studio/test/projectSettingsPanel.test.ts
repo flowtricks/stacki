@@ -1,9 +1,10 @@
 // Goal: hosted Studio offers the project's Settings panel under the same permission Desktop uses
-// (`panel:projectSettings`: admin until a role is given it), draws Desktop's own Settings frame with the same
-// tabs, and says honestly in each tab that hosted Studio cannot read `.env` or `.mcp.json` yet. It never draws
-// a control that could not work and never prints a secret.
+// (`panel:projectSettings`: admin until a role is given it), draws Desktop's own Settings frame with a root of
+// links (Secrets and MCP; Instructions is not ported, so it has no link), and says honestly in each view that
+// hosted Studio cannot read `.env` or `.mcp.json` yet. It never draws a control that could not work and never
+// prints a secret.
 // Method: the role rules are asked directly (canStudioPanel over the real role views). The real frame and
-// notices are bundled with esbuild (stylesheets emptied), rendered to static markup for every tab, and the
+// notices are bundled with esbuild (stylesheets emptied), rendered to static markup for the root and every view, and the
 // rail's source is held to the same gate and anchoring as Desktop's rail, since the rail itself needs a
 // browser. Browser-free, so it runs with the unit tests.
 import assert from 'node:assert/strict';
@@ -14,7 +15,6 @@ import { test } from 'node:test';
 import { build } from 'esbuild';
 import { canStudioPanel } from '../src/features/roles/roleStore';
 import { ADMIN_VIEW, DEFAULT_PROJECT_ROLES, parseProjectRoles, roleViewOf } from '../vendor/stacki/shared/properties/projectRoles';
-import { PROJECT_SETTINGS_TABS } from '../vendor/stacki/src/features/projectSettings/settingsTabs';
 
 const studio = path.resolve(import.meta.dirname, '..');
 // Parsed as the app parses a roles file, so each role carries the defaults the parser gives it.
@@ -47,7 +47,7 @@ test('the rail gates and anchors Settings like Desktop: same feature, above the 
   assert.match(sidebar, /panel === 'projectSettings' && <StudioProjectSettings \/>/);
 });
 
-async function render(tab: string | undefined): Promise<string> {
+async function render(view: string | undefined): Promise<string> {
   const outDir = path.join(studio, 'node_modules/.studio-test');
   mkdirSync(outDir, { recursive: true });
   const outfile = path.join(outDir, 'project-settings-panel.mjs');
@@ -56,9 +56,9 @@ async function render(tab: string | undefined): Promise<string> {
       contents: [
         "import { renderToStaticMarkup } from 'react-dom/server';",
         "import { createElement } from 'react';",
-        "import { HostedTabNotice, StudioProjectSettings } from './src/features/projectSettings/StudioProjectSettings';",
+        "import { HostedViewNotice, StudioProjectSettings } from './src/features/projectSettings/StudioProjectSettings';",
         'export const frame = () => renderToStaticMarkup(createElement(StudioProjectSettings));',
-        'export const notice = (tab) => renderToStaticMarkup(createElement(HostedTabNotice, { tab }));',
+        'export const notice = (view) => renderToStaticMarkup(createElement(HostedViewNotice, { view }));',
       ].join('\n'),
       resolveDir: studio,
       loader: 'tsx',
@@ -78,21 +78,22 @@ async function render(tab: string | undefined): Promise<string> {
   const frame: unknown = Reflect.get(loaded, 'frame');
   const notice: unknown = Reflect.get(loaded, 'notice');
   assert.ok(typeof frame === 'function' && typeof notice === 'function');
-  const html: unknown = tab === undefined ? Reflect.apply(frame, undefined, []) : Reflect.apply(notice, undefined, [tab]);
+  const html: unknown = view === undefined ? Reflect.apply(frame, undefined, []) : Reflect.apply(notice, undefined, [view]);
   assert.ok(typeof html === 'string');
   return html;
 }
 
-test('the frame lists Desktop’s tabs and opens on the first, saying it is not available in hosted Studio', async () => {
+test('the root lists Desktop’s Secrets and MCP as links, and not Instructions', async () => {
   const html = await render(undefined);
-  assert.ok(PROJECT_SETTINGS_TABS.length >= 2, 'Desktop has Secrets and MCP');
-  for (const tab of ['Secrets', 'MCP']) {
-    assert.match(html, new RegExp(`project-settings-tab[^>]*>.*?<span>${tab}</span>`), `${tab} tab`);
+  assert.equal((html.match(/settings-link/g) ?? []).length, 2, 'two links');
+  for (const view of ['Secrets', 'MCP']) {
+    assert.match(html, new RegExp(`settings-link[^>]*>.*?<span class="label">${view}</span>`), `${view} link`);
   }
-  assert.match(html, /Not available in hosted Studio\. Use Stacki Desktop\./);
+  assert.doesNotMatch(html, /Instructions/, 'Instructions is not ported to hosted Studio');
+  assert.doesNotMatch(html, /<input/, 'the root has no search box');
 });
 
-test('each tab states its hosted limit, names no endpoint and draws no form control', async () => {
+test('each view states its hosted limit, names no endpoint and draws no form control', async () => {
   const mcp = await render('mcp');
   assert.match(mcp, /Not available in hosted Studio yet\. Use Stacki Desktop\./);
   assert.match(mcp, /MCP servers/);

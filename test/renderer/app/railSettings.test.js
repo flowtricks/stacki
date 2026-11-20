@@ -1,6 +1,8 @@
 // Goal: the Settings button sits at the rail's foot immediately before the AI chat button, carries the
 // tooltip text "Settings", opens the project Settings panel, is hidden from a role without the panel
-// (the built-in client by default), and stays when there is no AI button.
+// (the built-in client by default), and stays when there is no AI button. The Instructions have no rail button
+// of their own: they are a view inside Settings, so ⌥I opens Settings at them, and a role granted only
+// `panel:instructions` still gets the Settings button.
 // Method: bundle the real LeftRail with the real role store, mount it in jsdom and read the buttons in
 // document order; hover for the tooltip; switch the role and mount again.
 const test = require('node:test');
@@ -18,7 +20,7 @@ esbuild.buildSync({
     contents: [
       "export { default as LeftRail } from './src/app/LeftRail';",
       "export { setActualRole } from './src/lib/currentRole';",
-      "export { ADMIN_VIEW, roleViewOf, DEFAULT_PROJECT_ROLES } from './shared/properties/projectRoles';",
+      "export { ADMIN_VIEW, roleViewOf, DEFAULT_PROJECT_ROLES, parseProjectRoles } from './shared/properties/projectRoles';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'tsx',
@@ -56,7 +58,15 @@ async function mount(withAi) {
   root = createRoot(container);
   const aiButton = withAi ? { active: false, onSelect: () => selected.push('ai') } : undefined;
   await act(async () =>
-    root.render(React.createElement(rail.LeftRail, { projectPath: '/project', onSelect: (tab) => selected.push(tab), componentOpen: false, aiButton })),
+    root.render(
+      React.createElement(rail.LeftRail, {
+        projectPath: '/project',
+        onSelect: (tab) => selected.push(tab),
+        onOpenSettings: (target) => selected.push(`settings:${target}`),
+        componentOpen: false,
+        aiButton,
+      }),
+    ),
   );
   await settle();
 }
@@ -96,5 +106,40 @@ test('without an AI button Settings still anchors the foot; the client role does
   await mount(true);
   assert.ok(!labels().some((label) => label?.startsWith('Settings')));
   assert.equal(labels().at(-1), 'AI chat');
+  await act(async () => root.unmount());
+});
+
+test('the Instructions have no rail button; ⌥I opens Settings at them', async () => {
+  rail.setActualRole(rail.ADMIN_VIEW);
+  selected.length = 0;
+  await mount(true);
+  assert.ok(!labels().some((label) => label?.startsWith('Instructions')), 'no Instructions button');
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyI', altKey: true, bubbles: true })));
+  assert.deepEqual(selected, ['settings:instructions']);
+  await act(async () => root.unmount());
+});
+
+test('a role with only panel:instructions gets the Settings button and the shortcut; one with neither gets neither', async () => {
+  const roles = rail.parseProjectRoles({
+    version: 1,
+    defaultRole: 'client',
+    roles: [
+      { id: 'admin', name: 'Admin', members: ['owner'] },
+      { id: 'client', name: 'Client', members: ['acme'] },
+      { id: 'docs', name: 'Docs', members: ['sam'], access: ['panel:instructions'] },
+    ],
+  });
+  rail.setActualRole(rail.roleViewOf(roles, 'docs'));
+  selected.length = 0;
+  await mount(true);
+  assert.match(labels().at(-2), /^Settings/);
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyI', altKey: true, bubbles: true })));
+  assert.deepEqual(selected, ['settings:instructions']);
+  await act(async () => root.unmount());
+  rail.setActualRole(rail.roleViewOf(roles, 'client'));
+  selected.length = 0;
+  await mount(true);
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyI', altKey: true, bubbles: true })));
+  assert.deepEqual(selected, [], 'no access, no shortcut');
   await act(async () => root.unmount());
 });

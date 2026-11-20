@@ -14,7 +14,6 @@ export const messages = {
   'rail.components': 'Componentes',
   'rail.editorPanels': 'Painéis do editor',
   'rail.history': 'Git', // same
-  'rail.instructions': 'Instruções',
   'rail.more': 'Mais',
   'rail.navigator': 'Navegador',
   'rail.pages': 'Páginas',

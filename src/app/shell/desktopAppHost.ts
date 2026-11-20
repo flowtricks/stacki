@@ -10,6 +10,7 @@
 // The commands read the shell through a ref, so the object handed to the
 // runtime can be built once and still act on the latest editor state.
 import { readAppSettings } from '../../ipc/appPublishBridge';
+import { requestSettingsSection } from '../../lib/settingsSections';
 import type React from 'react';
 import { assert } from '../../../shared/core/assert';
 import {
@@ -107,7 +108,12 @@ export function desktopAppHost(
       // A point scrolls through the frame's app-scroll message, which the dispatcher sends (appRpcHost.ts scrollCanvas).
       return { applied: false, reason: 'A point is scrolled by the canvas itself' };
     }),
-    openPanel: (panel) => app().setLeftTab(leftTabOf(panel)),
+    openPanel: (panel) => {
+      if (panel === 'instructions') {
+        requestSettingsSection('instructions');
+      }
+      app().setLeftTab(leftTabOf(panel));
+    },
     closePanel: () => app().setLeftTab(undefined),
     openRightPanel: (panel) => app().setRightTab(panel),
     panels: () => panelsOf(app()),
@@ -331,11 +337,13 @@ async function insertWith<K extends AppInsert['kind']>(insert: AppHostInsert<K>,
 }
 
 function leftTabOf(panel: AppLeftPanel): NonNullable<LeftTab> {
-  return panel;
+  // The Instructions panel became sections of Settings; apps still name it, and Settings opens at them.
+  return panel === 'instructions' ? 'projectSettings' : panel;
 }
 
 function panelsOf(app: ShellView): AppEventState['panels'] {
-  // The project's Settings panel holds secrets and is not part of the apps' panel vocabulary: apps see it as no panel.
+  // The project's Settings panel holds secrets and is not part of the apps' panel vocabulary: apps see it as no panel
+  // (its Instructions sections are still reachable by naming `instructions`).
   return { left: app.leftTab === 'projectSettings' ? undefined : app.leftTab, right: app.rightTab };
 }
 

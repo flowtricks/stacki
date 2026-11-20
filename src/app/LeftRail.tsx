@@ -2,7 +2,8 @@ import type { MouseEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { AppSummary } from '../../shared/properties/apps';
 import { useCurrentRole } from '../lib/useCurrentRole';
-import { canPanel } from '../lib/roleAccess';
+import { canPanel, canRailTab, canSettingsPanel } from '../lib/roleAccess';
+import type { SettingsFocusTarget } from '../lib/settingsSections';
 import { FEATURE_ICONS } from './featureIcons';
 import { AppsRailBadge } from '../features/apps/appUpdates';
 import { AppTile } from '../features/apps/AppTile';
@@ -27,11 +28,11 @@ const TABS = [
   { id: 'code', titleKey: 'rail.code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
   { id: 'history', titleKey: 'rail.history', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
   { id: 'apps', titleKey: 'rail.apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
-  { id: 'instructions', titleKey: 'rail.instructions', shortcut: '⌥I', Icon: FEATURE_ICONS['panel:instructions'] },
   { id: 'audits', titleKey: 'rail.audits', shortcut: '⌥A', Icon: FEATURE_ICONS['panel:audits'] },
 ] as const satisfies readonly { readonly id: string; readonly titleKey: MessageKey; readonly shortcut: string; readonly Icon: unknown }[];
 // The project's Settings panel (features/projectSettings) sits at the rail's foot, directly above the AI button,
 // and like it never moves into More (railOverflow.ts measures the anchored pair). Not the app's Settings screen.
+// It holds the Instructions too (their own rail button became ⌥I, which opens Settings at them).
 const SETTINGS_TAB = { id: 'projectSettings', shortcut: '⌥S', Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
 export type RailTab = (typeof TABS)[number]['id'] | typeof SETTINGS_TAB.id;
 
@@ -47,6 +48,7 @@ const AiRailIcon = FEATURE_ICONS['panel:ai'];
 export default function LeftRail({
   active,
   onSelect,
+  onOpenSettings,
   componentOpen = false,
   projectPath,
   aiButton,
@@ -56,6 +58,8 @@ export default function LeftRail({
   /** The open project, whose installed apps the role's pins name. */
   readonly projectPath?: string | undefined;
   readonly onSelect: (tab: RailTab) => void;
+  /** Opens Settings at a section and keeps it open when it already is: what ⌥I does for the Instructions. */
+  readonly onOpenSettings: (target: SettingsFocusTarget) => void;
   /** The AI chat button at the rail's foot; absent for a role without the panel. */
   readonly aiButton?: { readonly active: boolean; readonly onSelect: () => void } | undefined;
 }) {
@@ -80,9 +84,14 @@ export default function LeftRail({
 
   // A panel the project's role hides has no button and no shortcut (roles/roleAccess.ts).
   const role = useCurrentRole();
-  useRailKeys({ componentOpen }, (tab) => {
-    if (canPanel(role, tab)) {
-      onSelect(tab);
+  useRailKeys({ componentOpen }, (target) => {
+    if (target === 'instructions') {
+      // The Instructions live in Settings now; a role with their access opens Settings at them.
+      if (canPanel(role, 'instructions')) {
+        onOpenSettings('instructions');
+      }
+    } else if (canRailTab(role, target)) {
+      onSelect(target);
     }
   });
   const tabs = TABS.filter((tab) => tab.id !== 'properties' || componentOpen).filter((tab) => canPanel(role, tab.id));
@@ -96,7 +105,7 @@ export default function LeftRail({
     ...tabs.map((tab): RailOverflowItem => ({ id: tab.id, group: 'panel' })),
     ...pinned.map((app): RailOverflowItem => ({ id: railAppId(app.manifest.id), group: 'app' })),
   ];
-  const showSettings = canPanel(role, SETTINGS_TAB.id);
+  const showSettings = canSettingsPanel(role);
   const layout = useRailOverflow(railRef, aiButton === undefined && !showSettings ? undefined : anchorRef, items, activeId);
   const shown = new Set(layout.visible);
   const shownTabs = tabs.filter((tab) => shown.has(tab.id));
@@ -215,7 +224,7 @@ export default function LeftRail({
   );
 }
 
-function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onSelect: (tab: RailTab) => void): void {
+function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onSelect: (target: RailTab | 'instructions') => void): void {
   // P / Z / ⇧A / J / G / E / ⌥C / ⌥V / ⌥H / ⌥I / ⌥A / ⌥S toggle the panels (ignored while typing in a field).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {

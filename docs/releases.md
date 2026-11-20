@@ -417,7 +417,7 @@ include later changes.
 - Audits panel: accessibility, SEO, launch checks, design tokens, style blocks, placeholders,
   find and replace, and Speed, configured under Settings → Audits and saved in
   `.stacki/audits.json`.
-- Instructions panel: edit the project's `.md` instructions in a CMS-style editor, listed in
+- Instructions (in Settings): edit the project's `.md` instructions in a CMS-style editor, listed in
   `.stacki/instructions.json`.
 - AI panel: chat with Claude or Codex through ACP, with guided install and sign-in, model and
   effort pickers in the composer, and keep or undo for each change.

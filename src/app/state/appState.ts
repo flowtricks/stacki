@@ -16,6 +16,8 @@ import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
 import { usePreviewDimensions, type CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
 import type { VariableSelection } from '../../ipc/variablesBridge';
 import { bootSeed, bootSnapshotFor } from '../../lib/bootSeed';
+import { requestSettingsSection } from '../../lib/settingsSections';
+import { seededLeftTabOf, type SeededLeftTab } from '../model/seededLeftTab';
 import { type CodeWindowState } from '../../features/code/codeWindowTarget';
 import { type CodeReveal } from '../../features/code/codePanelModel';
 import {
@@ -278,23 +280,10 @@ export interface LinkedEntry {
   readonly route: string;
 }
 
-// The panel the last session left open for the project this window opens, when it is one the rail still has.
-const SEEDED_LEFT_TABS: Readonly<Record<string, LeftTab>> = {
-  pages: 'pages',
-  navigator: 'navigator',
-  components: 'components',
-  assets: 'assets',
-  cms: 'cms',
-  variables: 'variables',
-  selectors: 'selectors',
-  code: 'code',
-  history: 'history',
-};
-
-function seededLeftTab(): LeftTab {
+// The panel the last session left open for the project this window opens (model/seededLeftTab.ts).
+function seededLeft(): SeededLeftTab {
   const seeded = bootSeed().project;
-  const remembered = seeded === undefined ? undefined : bootSnapshotFor(seeded.path)?.leftTab;
-  return (remembered === undefined ? undefined : SEEDED_LEFT_TABS[remembered]) ?? 'navigator';
+  return seededLeftTabOf(seeded === undefined ? undefined : bootSnapshotFor(seeded.path)?.leftTab);
 }
 
 // The left panel, the CMS views and the interactive preview.
@@ -302,7 +291,13 @@ export function usePanelState(canvasReportState: ReturnType<typeof useCanvasRepo
   const { setHoverNodeId } = canvasReportState;
   const { currentPage } = projectState;
 
-  const [leftTab, setLeftTab] = useState<LeftTab>(seededLeftTab);
+  const [seededPanel] = useState(seededLeft);
+  const [leftTab, setLeftTab] = useState<LeftTab>(seededPanel.tab);
+  useEffect(() => {
+    if (seededPanel.showInstructions) {
+      requestSettingsSection('instructions');
+    }
+  }, [seededPanel]);
   useEffect(() => {
     if (leftTab !== 'navigator') {
       setHoverNodeId(undefined);

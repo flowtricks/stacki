@@ -86,11 +86,11 @@ export const ACCESS_FEATURES = [
   'panel:history',
   'panel:apps',
   'panel:ai',
-  /** The Instructions panel: the project's Markdown for agents and people, read-only without `instructions:edit`. */
+  /** The Instructions sections of the Settings panel (once their own panel): the project's Markdown for agents and people, read-only without `instructions:edit`. */
   'panel:instructions',
   /** The Audits panel: accessibility and SEO findings, and their fixes. */
   'panel:audits',
-  /** The Settings panel at the rail's foot: the project's secrets (`.env`). Admin only until a role is given it. */
+  /** The Settings panel's Secrets (`.env`) and MCP servers sections, at the rail's foot. Admin only until a role is given it. */
   'panel:projectSettings',
   // Right panels.
   'panel:style',
@@ -109,7 +109,7 @@ export const ACCESS_FEATURES = [
   /** Raw source: the code window, frontmatter, code files and the terminal. */
   'code:edit',
   // Instructions.
-  /** Create, edit and hide the project's skills, rules and docs in the Instructions panel; needs `panel:instructions`. */
+  /** Create, edit and hide the project's skills, rules and docs in the Settings panel's Instructions sections; needs `panel:instructions`. */
   'instructions:edit',
   // Publishing.
   'publish',
@@ -318,9 +318,9 @@ export const ACCESS_GROUPS: readonly {
       { feature: 'panel:history', label: 'Git', labelRef: messageRef('roles.feature.panelHistory') },
       { feature: 'panel:apps', label: 'Apps', labelRef: messageRef('roles.feature.panelApps') },
       { feature: 'panel:ai', label: 'AI chat', labelRef: messageRef('roles.feature.panelAi') },
-      { feature: 'panel:instructions', label: 'Instructions', labelRef: messageRef('roles.feature.panelInstructions') },
+      { feature: 'panel:instructions', label: 'Instructions (in Settings)', labelRef: messageRef('roles.feature.panelInstructions') },
       { feature: 'panel:audits', label: 'Audits', labelRef: messageRef('roles.feature.panelAudits') },
-      { feature: 'panel:projectSettings', label: 'Project settings (secrets)', labelRef: messageRef('roles.feature.panelProjectSettings') },
+      { feature: 'panel:projectSettings', label: 'Project settings (secrets, MCP servers)', labelRef: messageRef('roles.feature.panelProjectSettings') },
       { feature: 'panel:style', label: 'Style panel', labelRef: messageRef('roles.feature.panelStyle') },
       { feature: 'panel:settings', label: 'Settings panel', labelRef: messageRef('roles.feature.panelSettings') },
     ],

@@ -3,7 +3,6 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/instructionsPanel';
 
 export const messages = {
-  'instructionsPanel.collapseAll': 'Recolher tudo',
   'instructionsPanel.conflict.blocked': 'Ambos mudaram as mesmas linhas; escolha uma versão.',
   'instructionsPanel.conflict.merge': 'Mesclar ambos',
   'instructionsPanel.conflict.mergeTip': 'Manter ambas as alterações',
@@ -13,7 +12,6 @@ export const messages = {
   'instructionsPanel.docs.empty': 'Nenhum outro arquivo Markdown neste projeto.',
   'instructionsPanel.docs.new': 'Novo documento',
   'instructionsPanel.docs.title': 'Documentos',
-  'instructionsPanel.expandAll': 'Expandir tudo',
   'instructionsPanel.form.create': 'Criar',
   'instructionsPanel.form.docPath': 'Caminho do documento',
   'instructionsPanel.form.folder': 'Pasta',
@@ -30,20 +28,14 @@ export const messages = {
   'instructionsPanel.menu.hideFile': 'Ocultar arquivo',
   'instructionsPanel.menu.hideFolder': 'Ocultar pasta',
   'instructionsPanel.menu.reveal': 'Mostrar no Finder',
-  'instructionsPanel.options': 'Opções de instruções',
-  'instructionsPanel.reading': 'Lendo o projeto…',
-  'instructionsPanel.refresh': 'Atualizar',
   'instructionsPanel.rowOptions': 'Opções de {label}',
   'instructionsPanel.rules.empty': 'Ainda não há regras. Adicione um AGENTS.md ou um arquivo de regras para dizer à IA como este projeto é construído.',
   'instructionsPanel.rules.new': 'Nova regra',
   'instructionsPanel.rules.newFolder': 'Nova pasta de regras',
   'instructionsPanel.rules.title': 'Regras',
-  'instructionsPanel.search.noMatch': 'Nenhuma instrução corresponde',
-  'instructionsPanel.search.placeholder': 'Buscar instruções',
   'instructionsPanel.skills.empty': 'Ainda não há skills. Crie sua primeira skill para dar à IA o contexto de que ela precisa para trabalhar melhor.',
   'instructionsPanel.skills.new': 'Nova skill',
   'instructionsPanel.skills.title': 'Skills', // same
-  'instructionsPanel.title': 'Instruções',
   'instructionsPanel.truncated': 'Este projeto tem mais Markdown do que o painel lista. Oculte pastas em Configurações → Instruções para ver o resto.',
   'instructionsPanel.view.closeFile': 'Fechar arquivo',
   'instructionsPanel.view.edited': 'Editado',

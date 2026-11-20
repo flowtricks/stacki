@@ -1,36 +1,48 @@
-// Hosted Studio's Settings rail panel: Desktop's frame (ProjectSettingsShell) with the same tabs, each saying
-// honestly what hosted Studio can do with it. Desktop's tabs read `.env` and `.mcp.json` through its main
-// process; the hosted Worker has no such channel and no MCP endpoint, so the tabs state that and point at
-// Desktop instead of drawing controls that cannot work. Nothing here reads, writes or shows a secret.
+// Hosted Studio's Settings rail panel: Desktop's frame (ProjectSettingsShell) with the views a hosted project can
+// show, each saying honestly what hosted Studio can do. Desktop's Secrets and MCP read `.env` and `.mcp.json`
+// through its main process; the hosted Worker has no such channel and no MCP endpoint, so these views state that
+// and point at Desktop instead of drawing controls that cannot work. Desktop's Instructions view is not ported,
+// so its link is not drawn here. Nothing here reads, writes or shows a secret.
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import ProjectSettingsShell from '../../../vendor/stacki/src/features/projectSettings/ProjectSettingsShell';
-import type { ProjectSettingsTabId } from '../../../vendor/stacki/src/features/projectSettings/settingsTabs';
+import type { SettingsViewId } from '../../../vendor/stacki/src/lib/settingsSections';
 import type { MessageKey } from '../../../vendor/stacki/src/lib/i18n/localeContext';
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import InfoHint from '../../../vendor/stacki/src/ui/InfoHint';
 
-interface TabNotice {
+interface ViewNotice {
   readonly titleKey: MessageKey;
   readonly lineKey: MessageKey;
   readonly infoKey: MessageKey;
 }
 
-/** What each Settings tab says in hosted Studio. A new tab in settingsTabs.ts is a compile error here until it has one. */
-export const HOSTED_TAB_NOTICES = {
+/** The views hosted Studio lists, in order. Instructions is not ported. */
+export const HOSTED_VIEWS = ['secrets', 'mcp'] as const satisfies readonly SettingsViewId[];
+export type HostedViewId = (typeof HOSTED_VIEWS)[number];
+
+/** What each hosted view says. A new hosted view is a compile error here until it has one. */
+export const HOSTED_VIEW_NOTICES = {
   secrets: { titleKey: 'settings.secrets.title', lineKey: 'settings.hosted.secrets.line', infoKey: 'settings.hosted.secrets.info' },
   mcp: { titleKey: 'settings.mcp.title', lineKey: 'settings.hosted.mcp.line', infoKey: 'settings.hosted.mcp.info' },
-} as const satisfies Record<ProjectSettingsTabId, TabNotice>;
+} as const satisfies Record<HostedViewId, ViewNotice>;
 
 export function StudioProjectSettings() {
-  return <ProjectSettingsShell renderTab={(tab) => <HostedTabNotice tab={tab} />} />;
+  return (
+    <ProjectSettingsShell
+      projectKey="studio"
+      views={HOSTED_VIEWS}
+      refreshable={false}
+      renderView={(view) => (view === 'secrets' || view === 'mcp' ? <HostedViewNotice view={view} /> : undefined)}
+    />
+  );
 }
 
-export function HostedTabNotice({ tab }: { readonly tab: ProjectSettingsTabId }) {
+export function HostedViewNotice({ view }: { readonly view: HostedViewId }) {
   const translate = useTranslate();
-  const notice: TabNotice = HOSTED_TAB_NOTICES[tab];
-  assert(notice.lineKey.startsWith('settings.hosted.'), 'A hosted tab says it is hosted');
+  const notice: ViewNotice = HOSTED_VIEW_NOTICES[view];
+  assert(notice.lineKey.startsWith('settings.hosted.'), 'A hosted view says it is hosted');
   return (
-    <div className="secrets mcp" data-hosted-tab={tab}>
+    <div className="secrets mcp" data-hosted-view={view}>
       <div className="secrets-head">
         <div className="secrets-heading">
           <h3>

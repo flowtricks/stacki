@@ -3,7 +3,6 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/instructionsPanel';
 
 export const messages = {
-  'instructionsPanel.collapseAll': 'Alle einklappen',
   'instructionsPanel.conflict.blocked': 'Beide haben dieselben Zeilen geändert; wähle eine Version.',
   'instructionsPanel.conflict.merge': 'Beide zusammenführen',
   'instructionsPanel.conflict.mergeTip': 'Beide Änderungen behalten',
@@ -14,7 +13,6 @@ export const messages = {
   'instructionsPanel.docs.empty': 'Keine weiteren Markdown-Dateien in diesem Projekt.',
   'instructionsPanel.docs.new': 'Neues Dokument',
   'instructionsPanel.docs.title': 'Dokumente',
-  'instructionsPanel.expandAll': 'Alle ausklappen',
   'instructionsPanel.form.create': 'Erstellen',
   'instructionsPanel.form.docPath': 'Dokumentpfad',
   'instructionsPanel.form.folder': 'Ordner',
@@ -31,20 +29,14 @@ export const messages = {
   'instructionsPanel.menu.hideFile': 'Datei ausblenden',
   'instructionsPanel.menu.hideFolder': 'Ordner ausblenden',
   'instructionsPanel.menu.reveal': 'Im Finder zeigen',
-  'instructionsPanel.options': 'Optionen für Anweisungen',
-  'instructionsPanel.reading': 'Projekt wird gelesen …',
-  'instructionsPanel.refresh': 'Aktualisieren',
   'instructionsPanel.rowOptions': 'Optionen für {label}',
   'instructionsPanel.rules.empty': 'Noch keine Regeln. Füge eine AGENTS.md oder eine Regeldatei hinzu, damit die KI weiß, wie dieses Projekt aufgebaut ist.',
   'instructionsPanel.rules.new': 'Neue Regel',
   'instructionsPanel.rules.newFolder': 'Neuer Regelordner',
   'instructionsPanel.rules.title': 'Regeln',
-  'instructionsPanel.search.noMatch': 'Keine Anweisungen passen zur Suche',
-  'instructionsPanel.search.placeholder': 'Anweisungen suchen',
   'instructionsPanel.skills.empty': 'Noch keine Skills. Erstelle deine erste Skill, damit die KI den Kontext hat, den sie für gute Arbeit braucht.',
   'instructionsPanel.skills.new': 'Neue Skill',
   'instructionsPanel.skills.title': 'Skills', // same
-  'instructionsPanel.title': 'Anweisungen',
   'instructionsPanel.truncated':
     'Dieses Projekt enthält mehr Markdown, als das Panel auflistet. Blende Ordner unter Einstellungen → Anweisungen aus, um den Rest zu sehen.',
   'instructionsPanel.view.closeFile': 'Datei schließen',

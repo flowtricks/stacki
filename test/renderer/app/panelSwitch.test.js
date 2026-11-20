@@ -148,7 +148,6 @@ test.before(async () => {
         `export { default as VariablesPanel } from './src/features/variables/VariablesPanel';`,
         `export { default as CmsPanel } from './src/features/cms/CmsPanel';`,
         `export { default as PagesPanel } from './src/features/pages/PagesPanel';`,
-        `export { default as InstructionsPanel } from './src/features/instructions/InstructionsPanel';`,
         `export { default as AppsPanel } from './src/features/apps/AppsPanel';`,
         `export { default as CommitAvatar } from './src/features/history/CommitAvatar';`,
         `export { default as StructurePanel } from './src/features/structure/StructurePanel';`,
@@ -216,7 +215,7 @@ function classify(host) {
   if (text.includes('Reading the project')) {
     return 'skeleton';
   }
-  const rows = [...host.querySelectorAll('.cms-collection, .page-row, [data-page], .tree-row, .instructions-row, .history-avatar img')];
+  const rows = [...host.querySelectorAll('.cms-collection, .page-row, [data-page], .tree-row, .panel-row, .history-avatar img')];
   if (text.length === 0) {
     return 'empty';
   }
@@ -313,7 +312,6 @@ function railPanels(state) {
         onRenameFolder: noop,
         onDeleteFolder: noop,
       }),
-    instructions: () => create(modules.InstructionsPanel, { projectPath: PROJECT, showToast: noop }),
     // The selected row sits three levels down, inside rows that start folded.
     navigator: () =>
       create(modules.StructurePanel, {

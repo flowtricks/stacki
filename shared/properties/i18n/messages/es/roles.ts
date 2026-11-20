@@ -30,9 +30,9 @@ export const messages = {
   'roles.feature.panelHistory': 'Git', // same
   'roles.feature.panelApps': 'Apps', // same
   'roles.feature.panelAi': 'Chat de IA',
-  'roles.feature.panelInstructions': 'Instrucciones',
+  'roles.feature.panelInstructions': 'Instrucciones (en Ajustes)',
   'roles.feature.panelAudits': 'Auditorías',
-  'roles.feature.panelProjectSettings': 'Ajustes del proyecto (secretos)',
+  'roles.feature.panelProjectSettings': 'Ajustes del proyecto (secretos, servidores MCP)',
   'roles.feature.panelStyle': 'Panel de estilo',
   'roles.feature.panelSettings': 'Panel de ajustes',
   'roles.feature.pageCreate': 'Crear páginas',

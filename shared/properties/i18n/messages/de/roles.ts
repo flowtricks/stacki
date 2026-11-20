@@ -30,9 +30,9 @@ export const messages = {
   'roles.feature.panelHistory': 'Git', // same
   'roles.feature.panelApps': 'Apps', // same
   'roles.feature.panelAi': 'KI-Chat',
-  'roles.feature.panelInstructions': 'Anweisungen',
+  'roles.feature.panelInstructions': 'Anweisungen (in den Einstellungen)',
   'roles.feature.panelAudits': 'Audits', // same
-  'roles.feature.panelProjectSettings': 'Projekteinstellungen (Secrets)',
+  'roles.feature.panelProjectSettings': 'Projekteinstellungen (Secrets, MCP-Server)',
   'roles.feature.panelStyle': 'Stil-Bereich',
   'roles.feature.panelSettings': 'Einstellungs-Bereich',
   'roles.feature.pageCreate': 'Seiten erstellen',

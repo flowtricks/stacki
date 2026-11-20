@@ -383,7 +383,7 @@ export function CanvasCovers({ app }: { readonly app: ShellView }) {
   );
 }
 
-// The Instructions panel's open file, over the canvas. Hidden, not unmounted, while
+// The open Instructions file of the Settings panel, over the canvas. Hidden, not unmounted, while
 // another panel is shown, so unsaved typing and the caret survive a look elsewhere.
 function InstructionsCover({ app }: { readonly app: ShellView }) {
   const file = useInstructionSelection(app.project.path);
@@ -397,7 +397,7 @@ function InstructionsCover({ app }: { readonly app: ShellView }) {
       projectPath={app.project.path}
       file={file}
       editable={can(role, 'instructions:edit')}
-      hidden={app.leftTab !== 'instructions'}
+      hidden={app.leftTab !== 'projectSettings'}
       onClose={() => selectInstruction(undefined)}
     />
   );

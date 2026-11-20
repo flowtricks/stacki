@@ -54,10 +54,9 @@ const LAZY_PANELS = [
   'VariablesView',
   'SelectorsPanel',
   'CodePanel',
-  'InstructionsPanel',
   'InstructionsDocument',
   'AuditsPanel',
-  'ProjectSettingsPanel',
+  'DesktopSettings',
   'AiPanel',
 ];
 const LAZY_IMPORT = /lazyPanel\(\(\) => import\('([^']+)'\)\)/g;
@@ -97,7 +96,6 @@ test('all optional editors load without hiding the app or replacing its preview'
     await checkCodeWindow(context);
     await checkInstructions(context);
     await checkAudits(context);
-    await checkProjectSettings(context);
     await checkAi(context);
     assert.equal(gates.requested.size, LAZY_PANELS.length, 'Every lazy editor was exercised');
   } finally {
@@ -197,13 +195,13 @@ async function checkCodeWindow(context) {
   context.stable();
 }
 
-// Option+I opens Instructions; a file chosen in it opens over the canvas. The
+// Option+I opens Settings at its Instructions view, and a file chosen there opens over the canvas. The
 // stub panel hands the test the real selection store (see buildApp).
 async function checkInstructions(context) {
   await context.act(() => pressOption('KeyI'));
-  assertPending(context, 'InstructionsPanel');
-  await releasePanel(context, 'InstructionsPanel');
-  assert.equal(__lazyPanels.InstructionsPanel.projectPath, '/project');
+  assertPending(context, 'DesktopSettings');
+  await releasePanel(context, 'DesktopSettings');
+  assert.equal(__lazyPanels.DesktopSettings.projectPath, '/project');
   await context.act(() => globalThis.__selectInstruction({ projectPath: '/project', file: 'AGENTS.md' }));
   assertPending(context, 'InstructionsDocument');
   await releasePanel(context, 'InstructionsDocument');
@@ -216,13 +214,6 @@ async function checkAudits(context) {
   assertPending(context, 'AuditsPanel');
   await releasePanel(context, 'AuditsPanel');
   assert.equal(__lazyPanels.AuditsPanel.project.path, '/project');
-}
-
-async function checkProjectSettings(context) {
-  await context.act(() => pressOption('KeyS'));
-  assertPending(context, 'ProjectSettingsPanel');
-  await releasePanel(context, 'ProjectSettingsPanel');
-  assert.equal(__lazyPanels.ProjectSettingsPanel.projectPath, '/project');
 }
 
 // The AI button sits at the foot of the rail, outside the numbered tabs.
@@ -332,10 +323,6 @@ async function buildApp() {
         }),
         // The newer panels are not among the shared panel stubs; the Instructions
         // stub also exposes the real selection store, which opens its document.
-        'src/features/instructions/InstructionsPanel.tsx': () => ({
-          contents: `import { selectInstruction } from './instructionSelection';\nglobalThis.__selectInstruction = selectInstruction;\n${panelStub('InstructionsPanel')}`,
-          loader: 'tsx',
-        }),
         'src/app/shell/InstructionsDocument.tsx': () => ({
           contents: panelStub('InstructionsDocument'),
           loader: 'tsx',
@@ -344,8 +331,8 @@ async function buildApp() {
           contents: panelStub('AuditsPanel'),
           loader: 'tsx',
         }),
-        'src/features/projectSettings/ProjectSettingsPanel.tsx': () => ({
-          contents: panelStub('ProjectSettingsPanel'),
+        'src/app/shell/DesktopSettings.tsx': () => ({
+          contents: `import { selectInstruction } from '../../features/instructions/instructionSelection';\nglobalThis.__selectInstruction = selectInstruction;\n${panelStub('DesktopSettings')}`,
           loader: 'tsx',
         }),
         'src/features/ai/AiPanel.tsx': () => ({

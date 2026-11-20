@@ -79,7 +79,6 @@ export type LeftTab =
   | 'code'
   | 'history'
   | 'apps'
-  | 'instructions'
   | 'audits'
   | 'projectSettings'
   | 'ai'

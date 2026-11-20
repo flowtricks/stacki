@@ -15,10 +15,10 @@ export const VariablesPanel = lazyPanel(() => import('../features/variables/Vari
 export const VariablesView = lazyPanel(() => import('../features/variables/VariablesView'));
 export const SelectorsPanel = lazyPanel(() => import('../features/selectors/SelectorsPanel'));
 export const CodePanel = lazyPanel(() => import('../features/code/CodePanel'));
-export const InstructionsPanel = lazyPanel(() => import('../features/instructions/InstructionsPanel'));
 export const InstructionsView = lazyPanel(() => import('./shell/InstructionsDocument'));
 export const AuditsPanel = lazyPanel(() => import('../features/audits/AuditsPanel'));
-export const ProjectSettingsPanel = lazyPanel(() => import('../features/projectSettings/ProjectSettingsPanel'));
+// The Settings panel is composed in the app layer, because it draws sections of features that may not import each other.
+export const ProjectSettingsPanel = lazyPanel(() => import('./shell/DesktopSettings'));
 export const AiPanel = lazyPanel(() => import('../features/ai/AiPanel'));
 
 // Every lazy panel, in the order a session usually reaches them: the inspectors
@@ -34,7 +34,6 @@ const LAZY_PANELS = [
   VariablesView,
   CmsView,
   ContentView,
-  InstructionsPanel,
   InstructionsView,
   AuditsPanel,
   ProjectSettingsPanel,

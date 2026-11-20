@@ -1,32 +1,44 @@
-// The Settings rail panel on Desktop: the shell (ProjectSettingsShell.tsx) with the project's own tabs, its
-// secrets and MCP servers, which read and write files through the main process. Not the app's Settings screen
-// (src/app/settings), which opens from the menu. Tabs are registered in settingsTabs.ts. Hosted Studio draws the
-// same shell with its own tab content, because it has no main process to ask.
-import { assert } from '../../../shared/core/assert';
+// The Settings rail panel on Desktop: the shared frame (ProjectSettingsShell.tsx) with the project's own views.
+// Secrets and MCP read and write files through the main process; the Instructions view belongs to another
+// feature, which features may not import, so the app layer hands it in (src/app/shell/DesktopSettings.tsx).
+// Not the app's Settings screen (src/app/settings), which opens from the menu. Hosted Studio draws the same
+// frame with views of its own, because it has no main process to ask.
+import type { ReactNode } from 'react';
+import type { SettingsSectionsContext, SettingsViewId } from '../../lib/settingsSections';
 import McpTab from './McpTab';
 import ProjectSettingsShell from './ProjectSettingsShell';
 import SecretsTab from './SecretsTab';
-import { PROJECT_SETTINGS_TABS, type ProjectSettingsTabId } from './settingsTabs';
 
-export default function ProjectSettingsPanel({ projectPath }: { readonly projectPath: string }) {
-  return <ProjectSettingsShell renderTab={(tab) => <TabContent tab={tab} projectPath={projectPath} />} />;
+export interface ProjectSettingsPanelProps {
+  readonly projectPath: string;
+  /** The views the person's role may open, in the order the root lists them. */
+  readonly views: readonly SettingsViewId[];
+  /** Draws the Instructions view's sections; called only for that view. */
+  readonly renderInstructions: (context: SettingsSectionsContext) => ReactNode;
 }
 
-function TabContent({ tab, projectPath }: { readonly tab: ProjectSettingsTabId; readonly projectPath: string }) {
-  assert(
-    PROJECT_SETTINGS_TABS.some((entry) => entry.id === tab),
-    'The open tab is a registered tab',
+export default function ProjectSettingsPanel({ projectPath, views, renderInstructions }: ProjectSettingsPanelProps) {
+  return (
+    // Keyed by project: switching projects drops every revealed value, unsaved form and search with the panel's state.
+    <ProjectSettingsShell
+      key={projectPath}
+      projectKey={projectPath}
+      views={views}
+      refreshable
+      renderView={(view, context) => {
+        switch (view) {
+          case 'secrets':
+            return <SecretsTab projectPath={projectPath} />;
+          case 'mcp':
+            return <McpTab projectPath={projectPath} />;
+          case 'instructions':
+            return renderInstructions(context);
+          default: {
+            const exhaustive: never = view;
+            return exhaustive;
+          }
+        }
+      }}
+    />
   );
-  switch (tab) {
-    case 'secrets':
-      // Keyed by project: switching projects drops every revealed value with the tab's state.
-      return <SecretsTab key={projectPath} projectPath={projectPath} />;
-    case 'mcp':
-      // Keyed by project: switching projects drops any unsaved form with the tab's state.
-      return <McpTab key={projectPath} projectPath={projectPath} />;
-    default: {
-      const exhaustive: never = tab;
-      return exhaustive;
-    }
-  }
 }

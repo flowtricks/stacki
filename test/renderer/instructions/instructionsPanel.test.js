@@ -22,7 +22,9 @@ fs.mkdirSync(path.dirname(output), { recursive: true });
 esbuild.buildSync({
   stdin: {
     contents: [
-      "export { default as InstructionsPanel } from './src/features/instructions/InstructionsPanel';",
+      "export { default as InstructionsSections } from './src/features/instructions/InstructionsSections';",
+      "export { default as ProjectSettingsShell } from './src/features/projectSettings/ProjectSettingsShell';",
+      "export { requestSettingsSection } from './src/lib/settingsSections';",
       "export { InstructionsSettings } from './src/app/settings/InstructionsSettings';",
       "export { default as InstructionsDocument } from './src/app/shell/InstructionsDocument';",
       "export { selectedInstruction, selectInstruction } from './src/features/instructions/instructionSelection';",
@@ -143,15 +145,36 @@ const submit = async (form) => {
   await settle();
 };
 const section = (name) => document.querySelector(`section[aria-label="${name}"]`);
-const labels = (name) => [...section(name).querySelectorAll('.instructions-row-label')].map((label) => label.textContent);
+const labels = (name) => [...section(name).querySelectorAll('.panel-row-label')].map((label) => label.textContent);
 const byLabel = (label) => document.querySelector(`[aria-label="${label}"]`);
 const formOf = (label) => document.querySelector(`form[aria-label="${label}"]`);
 const menuItem = (text) => [...document.querySelectorAll('.more-menu-item')].find((item) => item.textContent.trim() === text);
+
+// The Instructions view as Settings draws it: the real frame, listing the one view the role may open.
+const panelElement = () =>
+  React.createElement(panel.ProjectSettingsShell, {
+    projectKey: '/project',
+    views: ['instructions'],
+    refreshable: true,
+    renderView: (view, context) => React.createElement(panel.InstructionsSections, { projectPath: '/project', context }),
+  });
+
+// Folders start closed; the options menu's Expand all opens every section and folder (the header button then offers Collapse all).
+async function expandAll() {
+  await click(byLabel('Settings options'));
+  await click(menuItem('Expand all'));
+}
 
 let root;
 async function mount(element) {
   root = createRoot(document.getElementById('root'));
   await act(async () => root.render(element));
+  await settle();
+  // The root lists the view; its link opens it, as a person would.
+  const link = [...document.querySelectorAll('.settings-link')].find((each) => each.textContent.includes('Instructions'));
+  if (link !== undefined) {
+    await act(async () => link.click());
+  }
   await settle();
   await settle();
 }
@@ -174,7 +197,7 @@ function reset(initial) {
 
 test('an empty project shows each section’s empty state', async () => {
   reset({});
-  await mount(React.createElement(panel.InstructionsPanel, { projectPath: '/project' }));
+  await mount(panelElement());
   assert.match(section('Skills').textContent, /No skills yet\. Create your first skill to give AI the context it needs to do its best work\./);
   assert.match(section('Rules').textContent, /No rules yet\./);
   assert.match(section('Docs').textContent, /No other Markdown files/);
@@ -189,21 +212,19 @@ test('skills show their frontmatter; rules and docs show as trees; a click opens
     '.claude/rules/testing.md': '# T\n',
     'docs/guide.md': '# G\n',
   });
-  await mount(React.createElement(panel.InstructionsPanel, { projectPath: '/project' }));
+  await mount(panelElement());
   assert.deepEqual(labels('Skills'), ['broken', 'write-tests']);
-  const skillRow = [...section('Skills').querySelectorAll('.instructions-row')].find((row) => row.textContent.includes('write-tests'));
+  const skillRow = [...section('Skills').querySelectorAll('.panel-row')].find((row) => row.textContent.includes('write-tests'));
   assert.match(skillRow.getAttribute('title'), /^Writes tests\./, 'a skill’s description is its tooltip');
   assert.equal(skillRow.querySelector('.instructions-skill-description') ?? undefined, undefined, 'and never a second line in the sidebar');
-  const broken = [...section('Skills').querySelectorAll('.instructions-row')].find((row) => row.textContent.includes('broken'));
+  const broken = [...section('Skills').querySelectorAll('.panel-row')].find((row) => row.textContent.includes('broken'));
   assert.match(broken.getAttribute('title'), /This skill has no frontmatter/, 'a broken skill says why in its tooltip');
   assert.deepEqual(labels('Rules'), ['.claude/rules', 'AGENTS.md'], 'a single-child folder chain is one row');
-  await click(byLabel('Expand all'));
+  await expandAll();
   assert.deepEqual(labels('Rules'), ['.claude/rules', 'testing.md', 'AGENTS.md']);
   assert.deepEqual(labels('Docs'), ['docs', 'guide.md']);
-  await click(
-    [...section('Rules').querySelectorAll('.instructions-row')].find((row) => row.querySelector('.instructions-row-label').textContent === 'AGENTS.md'),
-  );
-  assert.ok(section('Rules').querySelector('.instructions-row.active'), 'the open file is the selected row');
+  await click([...section('Rules').querySelectorAll('.panel-row')].find((row) => row.querySelector('.panel-row-label').textContent === 'AGENTS.md'));
+  assert.ok(section('Rules').querySelector('.panel-row.active'), 'the open file is the selected row');
   assert.deepEqual(panel.selectedInstruction(), { projectPath: '/project', file: 'AGENTS.md' });
   await click(byLabel('Collapse all'));
   assert.equal(section('Rules').querySelector('.instructions-section-body') ?? undefined, undefined, 'collapse all closes the sections');
@@ -212,7 +233,7 @@ test('skills show their frontmatter; rules and docs show as trees; a click opens
 
 test('creating a skill writes its scaffold and opens it', async () => {
   reset({});
-  await mount(React.createElement(panel.InstructionsPanel, { projectPath: '/project' }));
+  await mount(panelElement());
   await click(byLabel('New skill'));
   const form = formOf('New skill');
   assert.ok(form, 'the form opens');
@@ -238,7 +259,7 @@ test('creating a skill writes its scaffold and opens it', async () => {
 
 test('creating a rule writes a heading file in the chosen folder; an existing one is refused', async () => {
   reset({ 'AGENTS.md': '# A\n' });
-  await mount(React.createElement(panel.InstructionsPanel, { projectPath: '/project' }));
+  await mount(panelElement());
   await click(byLabel('New rule'));
   await type(byLabel('Rule name'), 'testing');
   await submit(formOf('New rule'));
@@ -254,8 +275,8 @@ test('creating a rule writes a heading file in the chosen folder; an existing on
 
 test('the row menu hides a file and a folder through the settings file', async () => {
   reset({ 'AGENTS.md': '# A\n', 'docs/a.md': '# a\n', 'docs/b.md': '# b\n' });
-  await mount(React.createElement(panel.InstructionsPanel, { projectPath: '/project' }));
-  await click(byLabel('Expand all'));
+  await mount(panelElement());
+  await expandAll();
   await click(byLabel('a.md options'));
   await click(menuItem('Hide file'));
   assert.deepEqual(writes, [{ kind: 'instructions', source: '{\n  "version": 1,\n  "hidden": [\n    "docs/a.md"\n  ]\n}\n' }]);
@@ -322,7 +343,7 @@ test('without instructions:edit the files show but nothing creates or hides', as
     pinnedApps: [],
     componentRules: [],
   });
-  await mount(React.createElement(panel.InstructionsPanel, { projectPath: '/project' }));
+  await mount(panelElement());
   assert.deepEqual(labels('Rules'), ['AGENTS.md']);
   assert.equal(byLabel('New skill') ?? undefined, undefined);
   assert.equal(byLabel('New rule') ?? undefined, undefined);
