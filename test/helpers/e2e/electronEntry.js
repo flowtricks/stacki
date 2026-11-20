@@ -13,6 +13,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const electron = require('electron');
 const { repoPath } = require('../sources.js');
+const { installWindowHiding } = require('../hideWindows.js');
 
 const WINDOW_WIDTH_PX = 1440;
 const WINDOW_HEIGHT_PX = 900;
@@ -26,6 +27,8 @@ const scenarioModule = process.env.STACKI_SOAK_SCENARIO ?? '';
 if (project.length === 0 || userData.length === 0 || scenarioModule.length === 0) {
   throw new Error('electronEntry: STACKI_SOAK_PROJECT, STACKI_SOAK_USER_DATA and STACKI_SOAK_SCENARIO are required');
 }
+// Before the app's main module opens its window: the soak must never appear on a person's screen.
+installWindowHiding(electron);
 app.setPath('userData', userData);
 // The run is unattended, so its window must never take the person's screen: the app creates it hidden and shows
 // it on its first frame (electron/app/windowReveal.ts), and these two calls keep it hidden. A hidden window still

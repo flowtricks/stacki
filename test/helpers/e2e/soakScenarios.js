@@ -218,7 +218,7 @@ function compactRecording(step, recorded) {
   };
 }
 
-function createRunner({ driver, electron, window, outDirectory, seed }) {
+function createRunner({ driver, window, outDirectory, seed }) {
   let throttle = 1;
   const results = { segments: 0, violations: [], warnings: [], skipped: [], screenshots: 0, recordings: [], films: [] };
   const screenshotKeys = new Set();
@@ -368,11 +368,9 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
         // The page holds emulated focus (begin), which no other window can take: drop it so the
         // window really blurs, then give it back as a person's return to the window would.
         await driver.setPageFocus('unfocused');
-        const other = new electron.BrowserWindow({ width: 200, height: 120, show: true });
-        other.focus();
+        // No second window is raised: that would take the person's screen. Focus emulation off is what makes the
+        // page lose focus, and the window never held OS focus (hideWindows.js), so the blur is the page's own.
         await driver.sleep(300);
-        other.destroy();
-        window.focus();
         driver.contents.focus();
         await driver.setPageFocus('focused');
         return true;

@@ -27,7 +27,19 @@ function hideDock() {
   electron.app.dock.hide();
 }
 
+// Test windows stay off the person's screen too (hideWindows.js says how); this runs on every platform.
+function hideWindows() {
+  const electron = require('electron');
+  if (typeof electron !== 'object' || electron.app === undefined) {
+    throw new Error('hideDockPreload: the electron built-in is not installed one turn after startup');
+  }
+  require('./hideWindows.js').installWindowHiding(electron);
+}
+
 // Only Electron's main process on macOS has a Dock tile; every other process stops here.
-if (process.versions.electron !== undefined && process.type === 'browser' && process.platform === 'darwin') {
-  setImmediate(hideDock);
+if (process.versions.electron !== undefined && process.type === 'browser') {
+  if (process.platform === 'darwin') {
+    setImmediate(hideDock);
+  }
+  setImmediate(hideWindows);
 }
