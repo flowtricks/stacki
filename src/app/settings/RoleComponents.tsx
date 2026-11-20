@@ -1,4 +1,4 @@
-// One role's "Components" section in Settings → Roles: which components the role may add from the insert
+// One role's "Components" view in Settings → Roles (opened from its card, RoleDetail.tsx): which components the role may add from the insert
 // palette and the Components panel (shared/properties/componentAccess.ts). The project's components show as a
 // tree of folders and components, each with a switch (a folder's is three-state: all visible, some hidden, all
 // hidden). Everything is visible until hidden, so a new component is enabled for every role. A folder switch
@@ -19,7 +19,7 @@ import {
 } from '../../../shared/properties/componentAccess';
 import type { ProjectRole } from '../../../shared/properties/projectRoles';
 import Dropdown from '../../ui/Dropdown';
-import { ChevronRightIcon, CloseIcon, ElementComponentIcon, FolderIcon, SearchIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CloseIcon, ElementComponentIcon, FolderIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { buildComponentTree, flattenRows, initialOpenFolders, type ComponentTreeRow, type FolderState } from './componentTree';
@@ -29,7 +29,7 @@ export const COMPONENT_ROW_HEIGHT = 32;
 /** Rows drawn above and below what shows, so a fast scroll never reveals a gap. */
 const OVERSCAN_ROWS = 6;
 /** The tree's visible height, in rows. */
-const VIEWPORT_ROWS = 10;
+const VIEWPORT_ROWS = 12;
 
 export interface RoleComponentsActions {
   readonly setVisibility: (target: ComponentTarget, state: ComponentState) => void;
@@ -44,12 +44,12 @@ export function RoleComponents(props: {
   readonly files: readonly string[];
   /** The other roles whose choices can be copied. */
   readonly copySources: readonly { readonly id: string; readonly name: string }[];
+  /** The detail view's search text (RoleDetail.tsx owns the field). */
+  readonly query: string;
   readonly actions: RoleComponentsActions;
 }) {
-  const { role, editable, files, actions } = props;
+  const { role, editable, files, query, actions } = props;
   const translate = useTranslate();
-  const [disclosure, setDisclosure] = useState<'open' | 'closed'>('closed');
-  const [query, setQuery] = useState('');
   const tree = useMemo(() => buildComponentTree(files, role.componentRules), [files, role.componentRules]);
   const [open, setOpen] = useState<ReadonlySet<string> | undefined>(undefined);
   const opened = open ?? initialOpenFolders(tree);
@@ -65,48 +65,24 @@ export function RoleComponents(props: {
     setOpen(next);
   };
   return (
-    <div className="app-role-components" data-open={disclosure === 'open' ? 'true' : 'false'}>
-      <button
-        type="button"
-        className="app-role-components-toggle"
-        aria-expanded={disclosure === 'open'}
-        onClick={() => setDisclosure(disclosure === 'open' ? 'closed' : 'open')}
-      >
-        <span className="app-role-permissions-title">{translate('settings.roles.components.title')}</span>
-        <span className="app-role-permissions-count">{translate('settings.roles.components.count', { visible: tree.visible, total: tree.total })}</span>
-        <ChevronRightIcon size={12} />
-      </button>
-      {disclosure === 'open' && (
-        <div className="app-role-components-body">
-          <p className="app-role-components-info">{translate('settings.roles.components.info')}</p>
-          <div className="app-role-components-tools">
-            <label className="app-role-components-search">
-              <SearchIcon size={12} />
-              <input
-                value={query}
-                placeholder={translate('settings.roles.components.search')}
-                aria-label={translate('settings.roles.components.search')}
-                spellCheck={false}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            {editable && props.copySources.length > 0 && (
-              <Dropdown
-                ariaLabel={translate('settings.roles.components.copy')}
-                className="app-roles-dropdown"
-                value=""
-                options={[
-                  { value: '', label: translate('settings.roles.components.copy'), disabled: true },
-                  ...props.copySources.map((source) => ({ value: source.id, label: source.name })),
-                ]}
-                onChange={(id) => (id === '' ? undefined : actions.copyFrom(id))}
-              />
-            )}
-          </div>
-          <ComponentRows rows={rows} editable={editable} empty={tree.total === 0 ? 'none' : 'noMatch'} toggleFolder={toggleFolder} actions={actions} />
-          {missing.length > 0 && <MissingRules rules={missing} editable={editable} remove={actions.removeRule} />}
+    <div className="app-role-components-body">
+      <p className="app-role-components-info">{translate('settings.roles.components.info')}</p>
+      {editable && props.copySources.length > 0 && (
+        <div className="app-role-components-tools">
+          <Dropdown
+            ariaLabel={translate('settings.roles.components.copy')}
+            className="app-roles-dropdown"
+            value=""
+            options={[
+              { value: '', label: translate('settings.roles.components.copy'), disabled: true },
+              ...props.copySources.map((source) => ({ value: source.id, label: source.name })),
+            ]}
+            onChange={(id) => (id === '' ? undefined : actions.copyFrom(id))}
+          />
         </div>
       )}
+      <ComponentRows rows={rows} editable={editable} empty={tree.total === 0 ? 'none' : 'noMatch'} toggleFolder={toggleFolder} actions={actions} />
+      {missing.length > 0 && <MissingRules rules={missing} editable={editable} remove={actions.removeRule} />}
     </div>
   );
 }

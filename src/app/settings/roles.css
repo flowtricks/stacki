@@ -1,7 +1,7 @@
-/* Settings → Roles: one card per role on a soft fill: a header, then MEMBERS, SIDEBAR APPS and the
-   collapsed permissions as sections. Rhythm: 16px card padding, 20px between sections, 8px inside a
-   section, 12px between cards. Cards and rows are separated by space and fills, never lines; a chip
-   is a fill, not an outline. */
+/* Settings → Roles: one compact card per role on a soft fill (a header, then flat summary rows that open a detail
+   view), and the detail views themselves (back + title, search, list) on the dialog's own surface. One level of
+   filled surface: the card, or the add field; rows are transparent with a hover wash. Rhythm: 16px card padding,
+   12px between a card's header and rows, 12px between cards. Space and fills, never lines. */
 .app-roles {
   display: flex;
   flex-direction: column;
@@ -23,7 +23,7 @@
 .app-role {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   padding: 16px;
   border-radius: 8px;
   background: var(--bg-hover);
@@ -53,27 +53,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* A small uppercase dim label opens every section; a count may follow it. */
-.app-role-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-.app-role-section-heading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 16px;
-  color: var(--text-dim);
-}
-.app-role-section-heading h4 {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+
 .app-role-name {
   flex: 1 1 auto;
   min-height: 26px;
@@ -109,27 +89,19 @@
   background: #ffffff14;
   color: var(--text);
 }
+/* The members view: the people as flat rows, then the add field as the one filled row. The custom properties are
+   solid so their text contrast is exact (test/renderer/app/rolesContrast.test.js). */
 .app-role-members {
-  position: relative;
-}
-/* One inset card holds the people as rows and, as its last row, the add field. Three surface steps, no lines:
-   the role card, then this card a clear step darker, then the add row a step lighter than the inset. The custom
-   properties are solid so their text contrast is exact (test/renderer/app/rolesContrast.test.js). Rows are 36px; the list scrolls inside ~6 rows
-   with a soft fade at its foot. */
-.app-role-people {
-  --people-inset: #121212;
-  --people-add: #202020;
-  --people-add-focus: #2b2b2b;
+  --people-add: #262626;
+  --people-add-focus: #303030;
   --people-button-off: #3a3a3a;
   --people-button-on: #006fba;
   --people-button-hover: #0077c7;
   --people-you: #1b4a73;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 10px;
-  background: var(--people-inset);
+  gap: 12px;
 }
 .app-role-people-list {
   display: flex;
@@ -138,13 +110,7 @@
   padding: 0;
   list-style: none;
 }
-.app-role-people-list.is-scrolling {
-  max-height: 216px;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  -webkit-mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
-  mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
-}
+
 .app-role-chip {
   display: flex;
   flex: none;
@@ -310,46 +276,46 @@
 .app-role-members .app-role-add .app-role-add-button:hover:not(:disabled) {
   background: var(--people-button-hover);
 }
-/* The permission grid: one group under another, each a heading over its
-   switches in two even columns, so every group reads the same way down the
-   card instead of groups of different heights packed side by side. */
+/* The permissions view: one group under another, each a header (name, a muted count, the group switch) over its
+   rows, one column, so every group reads the same way down the list. */
 .app-role-access {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
+.app-role-group-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .app-role-group {
-  display: grid;
-  /* Two columns while each is at least 210px wide (the dialog is wide), one at the narrowest. */
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0 24px;
+  display: flex;
+  flex-direction: column;
 }
-.app-role-group > :not(.app-role-toggle) {
-  grid-column: 1 / -1;
-}
-/* The group's heading row: its name, then its "All" switch at the right. */
+/* The group's header: its name in sentence case, a muted count, then its switch at the end. */
 .app-role-group-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 28px;
-  margin-bottom: 4px;
-}
-.app-role-group-all {
-  display: inline-flex;
-  align-items: center;
   gap: 8px;
-  color: var(--text-faint);
-  font-size: 11px;
+  min-height: 32px;
+  padding: 0 8px;
 }
 .app-role-group h4 {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
-  color: var(--text-dim);
-  font-size: 11px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-group-count {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 /* A permission: its feature's icon in a fixed column, the label, then the switch. */
 .app-role-toggle {
@@ -358,7 +324,12 @@
   align-items: center;
   gap: 8px;
   min-height: 32px;
-  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.app-role-toggle:hover {
+  background: var(--bg-hover);
 }
 .app-role-toggle-icon {
   display: grid;
@@ -434,6 +405,9 @@ button.app-role-name-button:hover:not(:disabled) {
   gap: 6px;
 }
 .app-role-pin-list {
+  max-height: min(384px, calc(100dvh - 300px));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -441,21 +415,22 @@ button.app-role-name-button:hover:not(:disabled) {
   padding: 0;
   list-style: none;
 }
+/* A pin is a flat row across the view, transparent at rest with a hover wash, like every other row here. */
 .app-role-pin {
   position: relative;
-  width: fit-content;
-  min-width: 200px;
-  max-width: 100%;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 26px;
-  padding: 0 4px;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
   border-radius: 6px;
-  background: #ffffff10;
-  font-size: 12px;
+  background: transparent;
+  font-size: 13px;
   cursor: grab;
+}
+.app-role-pin:hover {
+  background: var(--bg-hover);
 }
 /* The grip and the remove × show on hover and keyboard focus; at rest a pin reads as its logo and name. */
 .app-role-pin .app-role-pin-grip,
@@ -529,7 +504,7 @@ button.app-role-name-button:hover:not(:disabled) {
   background: #ffffff14;
   color: var(--text);
 }
-/* "+ Add app": a ghost trigger sized to its content, after the pins, not a full-width field. */
+/* "+ Add app": a ghost trigger sized to its content, the first row above the pins. */
 .app-role-pins-add {
   display: flex;
 }
@@ -558,6 +533,7 @@ button.app-role-name-button:hover:not(:disabled) {
 }
 .app-role-pins-empty {
   margin: 0;
+  padding: 0 8px;
   color: var(--text-faint);
   font-size: 12px;
 }
@@ -569,8 +545,8 @@ button.app-role-name-button:hover:not(:disabled) {
   opacity: 0.5;
 }
 
-/* A role's Components section (RoleComponents.tsx): a quiet disclosure like Permissions, then a search row and a
-   windowed tree of 32px rows (COMPONENT_ROW_HEIGHT). Switches are fills; rows sit on a soft fill, never lines. */
+/* A role's Components view (RoleComponents.tsx): a windowed tree of 32px rows (COMPONENT_ROW_HEIGHT) on the view's
+   own surface; a row gets a hover wash. Switches are fills, never lines. */
 .app-role-components-body {
   display: flex;
   flex-direction: column;
@@ -588,32 +564,13 @@ button.app-role-name-button:hover:not(:disabled) {
   align-items: center;
   gap: 8px;
 }
-.app-role-components-search {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 0 8px;
-  border-radius: 6px;
-  background: var(--bg-hover);
-  color: var(--text-faint);
-}
-.app-role-components-search input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 28px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  outline: none;
-}
 .app-role-components-tree {
   overflow-y: auto;
   scrollbar-gutter: stable;
-  border-radius: 6px;
+}
+.app-role-components-row:hover {
   background: var(--bg-hover);
+  border-radius: 6px;
 }
 .app-role-components-row {
   position: absolute;
@@ -624,7 +581,7 @@ button.app-role-name-button:hover:not(:disabled) {
   gap: 6px;
   height: 32px;
   padding-right: 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-role-components-missing-row {
   position: static;
@@ -714,4 +671,160 @@ button.app-role-components-check[data-state='visible']:active:not(:disabled) {
 }
 .app-role-components-check:disabled {
   opacity: 0.5;
+}
+
+/* The card's summary rows: icon and label at the left, a muted summary and a chevron at the right. Transparent at
+   rest, a wash on hover, the same 32px rhythm as every list row. */
+.app-role-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-role-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+button.app-role-row:hover:not(:disabled) {
+  background: #ffffff10;
+}
+.app-role-row-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--text-faint);
+}
+.app-role-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-row-summary {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.app-role-row > svg:last-child {
+  flex: none;
+  color: var(--text-faint);
+}
+
+/* A detail view (RoleDetail.tsx): header, search, then the list, which scrolls inside the view while the header
+   and search stay put. Every scroll container reserves its scrollbar gutter, so rows never shift sideways. */
+.app-role-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.app-role-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.app-role-detail-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.app-role-detail-role {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-detail-count {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.app-role-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+button.app-role-back:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.app-role-detail-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+.app-role-detail-actions button {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.app-role-detail-actions button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.app-role-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-faint);
+}
+.app-role-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.app-role-detail-list {
+  max-height: min(384px, calc(100dvh - 300px));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.app-role-detail-empty {
+  margin: 0;
+  padding: 0 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.app-role-components-tree {
+  max-height: min(384px, calc(100dvh - 300px));
 }

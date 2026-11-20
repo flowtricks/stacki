@@ -21,6 +21,7 @@ import { APP_LIMITS, type AppSummary } from '../../../shared/properties/apps';
 import { APP_ACCESS_ALL, can, configuredAppPermission, roleView, type ProjectRole } from '../../../shared/properties/projectRoles';
 import { Switch } from '../../ui/Switch';
 import { RoleAppIcon, type InstalledApps } from './RoleAppPicker';
+import { appPermissionMatches } from './roleDetailModel';
 
 export type AppPermissionChange = (appId: string, permissionIds: readonly string[], change: 'grant' | 'withdraw') => void;
 export type AppAccessChange = (appId: string, change: 'grant' | 'withdraw') => void;
@@ -29,6 +30,8 @@ export function RoleAppPermissions(props: {
   readonly role: ProjectRole;
   readonly installed: InstalledApps;
   readonly editable: boolean;
+  /** The detail view's search: apps and permissions that do not match are left out. */
+  readonly query: string;
   readonly change: AppPermissionChange;
   readonly access: AppAccessChange;
 }) {
@@ -42,18 +45,25 @@ export function RoleAppPermissions(props: {
   const everyApp = role.access.includes(APP_ACCESS_ALL);
   return (
     <>
-      {installed.apps.map((app) => (
-        <AppGroup
-          key={app.manifest.id}
-          app={app}
-          role={role}
-          usable={can(view, `app:${app.manifest.id}`)}
-          scope={everyApp ? 'every-app' : 'this-app'}
-          editable={props.editable}
-          change={props.change}
-          access={props.access}
-        />
-      ))}
+      {installed.apps.map((app) => {
+        const matches = appPermissionMatches(app, props.query);
+        if (matches === undefined) {
+          return undefined;
+        }
+        return (
+          <AppGroup
+            matches={matches}
+            key={app.manifest.id}
+            app={app}
+            role={role}
+            usable={can(view, `app:${app.manifest.id}`)}
+            scope={everyApp ? 'every-app' : 'this-app'}
+            editable={props.editable}
+            change={props.change}
+            access={props.access}
+          />
+        );
+      })}
     </>
   );
 }
@@ -61,6 +71,8 @@ export function RoleAppPermissions(props: {
 function AppGroup(props: {
   readonly app: AppSummary;
   readonly role: ProjectRole;
+  /** Which of the app's permissions the search keeps: all of them, or only these ids. */
+  readonly matches: 'all' | readonly string[];
   readonly usable: boolean;
   /** `every-app`: the role holds "Every app", which fixes this app's switch on. */
   readonly scope: 'every-app' | 'this-app';
@@ -98,7 +110,7 @@ function AppGroup(props: {
           />
         </span>
       </div>
-      {permissions.length > 1 && (
+      {permissions.length > 1 && props.matches === 'all' && (
         <div className="app-role-toggle app-role-app-permission">
           <span className="app-role-app-permission-text">
             <span className="app-role-toggle-label">{translate('settings.roles.apps.all')}</span>
@@ -119,6 +131,9 @@ function AppGroup(props: {
         </div>
       )}
       {permissions.map((permission, index) => {
+        if (props.matches !== 'all' && !props.matches.includes(permission.id)) {
+          return undefined;
+        }
         const checked = shown[index] === true;
         return (
           <div key={permission.id} className="app-role-toggle app-role-app-permission">

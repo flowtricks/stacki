@@ -1,0 +1,313 @@
+// Goal: a role's card is a compact list of summary rows, and each row opens a detail view with a back button, a
+// search and the list: Members (list, remove, the add form), Sidebar apps, Components (Show all / Hide all) and
+// Permissions (grouped by area, a count in the header, a group switch that reads mixed when some are on). The
+// model's counts, grouping and search are exact; going back and forth keeps each part's search text; Escape and the
+// back button return to the cards; every change still saves through the same write as before.
+// Method: bundle the real roles screen and the pure model through esbuild, mount the screen in jsdom over a fake
+// metadata bridge that records writes (never a real project), drive it with clicks, typing and Escape, and read each
+// write back with the shared parser. The model is also called directly with translators that return English.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const fs = require('node:fs');
+const esbuild = require('esbuild');
+const { JSDOM } = require('jsdom');
+const { repoPath } = require('../../helpers/sources.js');
+
+const output = repoPath('node_modules/.stacki-test/role-detail.cjs');
+fs.mkdirSync(path.dirname(output), { recursive: true });
+esbuild.buildSync({
+  stdin: {
+    contents: [
+      "export { RolesSettings } from './src/app/settings/RolesSettings';",
+      "export * from './src/lib/currentRole';",
+      "export * from './src/app/settings/roleDetailModel';",
+      "export { setAllComponentVisibility } from './src/app/settings/rolesEdits';",
+      "export { parseProjectRolesSource, roleViewOf, ADMIN_VIEW } from './shared/properties/projectRoles';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
+    ].join('\n'),
+    resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
+    loader: 'ts',
+  },
+  outfile: output,
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  jsx: 'automatic',
+  loader: { '.css': 'empty', '.svg': 'empty' },
+  external: ['react', 'react-dom', 'react/jsx-runtime'],
+  logLevel: 'silent',
+});
+
+const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
+global.window = dom.window;
+for (const name of ['document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'KeyboardEvent']) {
+  global[name] = dom.window[name];
+}
+global.IS_REACT_ACT_ENVIRONMENT = true;
+window.HTMLElement.prototype.scrollIntoView = () => undefined;
+
+let stored;
+const writes = [];
+window.avb = {
+  projectMetadata: async () => ({ ok: true, value: stored === undefined ? {} : { source: stored } }),
+  writeProjectMetadata: async (input) => {
+    writes.push(input.write);
+    stored = input.write.source;
+    return { ok: true, value: { source: stored } };
+  },
+  rolesIdentity: async () => ({ login: 'owner' }),
+};
+
+const React = require('react');
+const { act } = React;
+const { createRoot } = require('react-dom/client');
+const roles = require(output);
+
+const FILES = ['src/components/Card.astro', 'src/components/interactive/Modal.astro', 'src/components/ui/Button.astro'];
+const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+let root;
+async function mount() {
+  root = createRoot(document.getElementById('root'));
+  await act(async () => root.render(React.createElement(roles.RolesSettings, { projectPath: '/project', componentFiles: FILES })));
+  await settle();
+}
+async function unmount() {
+  await act(async () => root.unmount());
+}
+async function click(element) {
+  assert.ok(element, 'the control exists');
+  await act(async () => element.click());
+  await settle();
+}
+async function type(input, value) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  await act(async () => {
+    setter.call(input, value);
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+}
+const saved = () => roles.parseProjectRolesSource(stored);
+const roleOf = (id) => saved().roles.find((role) => role.id === id);
+const detail = () => document.querySelector('section.app-role-detail') ?? undefined;
+const row = (name, label) => document.querySelector(`button[aria-label="Open ${label} for ${name}"]`);
+const fresh = (extra = {}) => {
+  writes.length = 0;
+  stored = JSON.stringify({
+    version: 1,
+    roles: [
+      { id: 'admin', members: ['owner', 'sam'] },
+      { id: 'client', ...extra },
+    ],
+  });
+  roles.setActualRole(roles.ADMIN_VIEW);
+};
+const search = () => detail().querySelector('.app-role-search input');
+const labels = (selector) => [...detail().querySelectorAll(selector)].map((element) => element.textContent);
+
+// Model.
+
+const translateDescribed = (described) => described.message;
+
+test('groupState reads off, on or mixed, and refuses counts that cannot be', () => {
+  assert.equal(roles.groupState(0, 4), 'off');
+  assert.equal(roles.groupState(4, 4), 'on');
+  assert.equal(roles.groupState(1, 4), 'mixed');
+  assert.equal(roles.groupState(3, 4), 'mixed');
+  assert.throws(() => roles.groupState(5, 4), /no more on than it lists/);
+  assert.throws(() => roles.groupState(-1, 4), /no negative count/);
+});
+
+test('matchesQuery needs every word, ignores case, and an empty query matches all', () => {
+  assert.equal(roles.matchesQuery('Delete pages', ''), true);
+  assert.equal(roles.matchesQuery('Delete pages', '  '), true);
+  assert.equal(roles.matchesQuery('Delete pages', 'PAGES delete'), true);
+  assert.equal(roles.matchesQuery('Delete pages', 'delete cms'), false);
+});
+
+test('permissionGroups counts and states the whole group, and a search keeps matching rows only', () => {
+  const role = {
+    id: 'client',
+    name: 'Client',
+    members: [],
+    access: ['page:create', 'page:delete', 'app:*'],
+    appPermissions: {},
+    pinnedApps: [],
+    componentRules: [],
+  };
+  const all = roles.permissionGroups(role, '', 'Every app', translateDescribed);
+  const pages = all.find((group) => group.key === 'Pages');
+  assert.equal(pages.on, 2);
+  assert.equal(pages.total, pages.rows.length);
+  assert.equal(pages.state, 'mixed');
+  const apps = all.find((group) => group.key === 'Apps');
+  assert.equal(apps.rows.at(-1).label, 'Every app', 'Every app is listed in the Apps group');
+  assert.equal(apps.rows.at(-1).checked, true);
+  assert.equal(apps.total, apps.rows.length - 1, 'but it is not one of the group switch’s counted switches');
+  assert.ok(!apps.features.includes('app:*'));
+
+  const narrowed = roles.permissionGroups(role, 'delete', 'Every app', translateDescribed);
+  const narrowedPages = narrowed.find((group) => group.key === 'Pages');
+  assert.deepEqual(
+    narrowedPages.rows.map((entry) => entry.label),
+    ['Delete pages'],
+  );
+  assert.equal(narrowedPages.total, pages.total, 'a search never changes a group’s total');
+  assert.equal(narrowedPages.state, 'mixed', 'nor its state');
+  assert.ok(
+    narrowed.every((group) => group.rows.length > 0),
+    'a group with no match is left out',
+  );
+  const byGroupName = roles.permissionGroups(role, 'pages', 'Every app', translateDescribed).find((group) => group.key === 'Pages');
+  assert.equal(byGroupName.rows.length, pages.rows.length, 'a group whose name matches keeps all of its rows');
+  assert.deepEqual(roles.permissionGroups(role, 'zzzz', 'Every app', translateDescribed), []);
+  assert.deepEqual(
+    roles.permissionGroups(role, 'every', 'Every app', translateDescribed).map((group) => group.key),
+    ['Apps'],
+    'Every app is found by its own name',
+  );
+});
+
+test('permissionCounts counts every listed switch and Every app', () => {
+  const none = { id: 'x', name: 'X', members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [] };
+  const counts = roles.permissionCounts(none);
+  assert.equal(counts.granted, 0);
+  assert.equal(roles.permissionCounts({ ...none, access: ['app:*', 'panel:cms'] }).granted, 2);
+  assert.equal(roles.permissionCounts({ ...none, access: ['app:*'] }).total, counts.total);
+});
+
+test('setAllComponentVisibility hides each top folder with the fewest rules, and shows all by dropping them', () => {
+  const base = roles.parseProjectRolesSource(JSON.stringify({ version: 1, roles: [{ id: 'admin', members: ['owner'] }, { id: 'client' }] }));
+  const hidden = roles.setAllComponentVisibility(base, 'client', 'hidden', ['src/a/B.astro', 'src/c/D.astro', 'Top.astro']);
+  assert.deepEqual(hidden.roles[1].componentRules, [
+    { kind: 'folder', path: 'src', effect: 'hide' },
+    { kind: 'component', path: 'Top.astro', effect: 'hide' },
+  ]);
+  assert.deepEqual(roles.setAllComponentVisibility(hidden, 'client', 'visible', []).roles[1].componentRules, []);
+});
+
+// Cards and views.
+
+test('a card is a header and flat summary rows with counts; no switches and no add form on it', async () => {
+  fresh({ access: ['panel:cms'], pinnedApps: [] });
+  await mount();
+  const client = document.querySelector('section[aria-label="Client role"]');
+  const rows = [...client.querySelectorAll('.app-role-row')].map((entry) => entry.textContent);
+  assert.match(rows[0], /^Members0$/);
+  assert.match(rows[1], /^Sidebar apps0$/);
+  assert.match(rows[2], /^Components3 of 3$/);
+  assert.match(rows[3], /^Permissions1 of \d+$/);
+  assert.equal(client.querySelectorAll('[role="switch"], input').length, 0, 'the card holds no controls but its rows and menu');
+  assert.equal(document.querySelector('section[aria-label="Admin role"]').querySelectorAll('.app-role-row').length, 3, 'admin has no Permissions row');
+  await unmount();
+});
+
+test('a row opens its view with a back button; Back and Escape return, and nothing is written', async () => {
+  fresh();
+  await mount();
+  await click(row('Client', 'Permissions'));
+  assert.ok(detail(), 'the view replaces the cards');
+  assert.equal(document.querySelector('section[aria-label="Client role"]') ?? undefined, undefined);
+  assert.equal(detail().querySelector('h3').textContent, 'Permissions');
+  assert.equal(detail().querySelector('.app-role-detail-role').textContent, 'Client');
+  assert.ok(detail().querySelector('.app-role-back'));
+  await click(detail().querySelector('.app-role-back'));
+  assert.equal(detail(), undefined, 'Back returns to the cards');
+  await click(row('Client', 'Members'));
+  await act(async () => search().dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+  assert.equal(detail(), undefined, 'Escape returns to the cards');
+  assert.equal(writes.length, 0, 'looking writes nothing');
+  await unmount();
+});
+
+test('permissions are grouped, searchable, and the group switch reads mixed, on and off', async () => {
+  fresh({ access: ['page:create'] });
+  await mount();
+  await click(row('Client', 'Permissions'));
+  assert.match(detail().querySelector('.app-role-detail-count').textContent, /^On 1 of \d+$/);
+  const headings = labels('.app-role-group h4');
+  assert.ok(headings.includes('Pages') && headings.includes('Panels'), 'grouped by area');
+  const all = () => detail().querySelector('[role="switch"][aria-label="All Pages"]');
+  assert.equal(all().getAttribute('aria-checked'), 'mixed', 'one of several on is mixed');
+  assert.match(detail().querySelector('.app-role-group-count').textContent, /^\d+ of \d+$/);
+  await click(all());
+  assert.deepEqual(
+    roleOf('client').access.filter((feature) => feature.startsWith('page:')),
+    ['page:create', 'page:delete', 'page:rename', 'page:layout'],
+    'mixed switches the whole group on',
+  );
+  assert.equal(all().getAttribute('aria-checked'), 'true');
+  await click(all());
+  assert.deepEqual(roleOf('client').access, [], 'on switches it off');
+  assert.equal(all().getAttribute('aria-checked'), 'false');
+
+  await type(search(), 'delete pages');
+  assert.deepEqual(labels('.app-role-toggle-label'), ['Delete pages'], 'the search filters instantly');
+  assert.deepEqual(labels('.app-role-group h4'), ['Pages']);
+  await type(search(), 'zzzz');
+  assert.match(detail().textContent, /Nothing matches “zzzz”/);
+  await unmount();
+});
+
+test('each part keeps its search text when going back and forth', async () => {
+  fresh();
+  await mount();
+  await click(row('Client', 'Permissions'));
+  await type(search(), 'cms');
+  await click(detail().querySelector('.app-role-back'));
+  await click(row('Client', 'Members'));
+  assert.equal(search().value, '', 'another part starts empty');
+  await type(search(), 'sam');
+  await click(detail().querySelector('.app-role-back'));
+  await click(row('Client', 'Permissions'));
+  assert.equal(search().value, 'cms', 'the permissions search is still there');
+  assert.ok(labels('.app-role-toggle-label').includes('CMS'), 'the filtered list is still shown');
+  await unmount();
+});
+
+test('members: the list filters, remove saves, and the add form for the active provider adds', async () => {
+  stored = JSON.stringify({ version: 1, roles: [{ id: 'admin', members: ['owner', 'sam', 'sara'] }, { id: 'client' }] });
+  writes.length = 0;
+  roles.setActualRole(roles.ADMIN_VIEW);
+  await mount();
+  await click(row('Admin', 'Members'));
+  assert.deepEqual(labels('.app-role-person-name'), ['owner', 'sam', 'sara']);
+  await type(search(), 'sa');
+  assert.deepEqual(labels('.app-role-person-name'), ['sam', 'sara']);
+  await click(detail().querySelector('button[aria-label="Remove sam"]'));
+  assert.deepEqual(roleOf('admin').members, ['owner', 'sara']);
+  assert.ok(detail().querySelector('input[aria-label="Add a GitHub username to Admin"]'), 'the add form sits in the view');
+  await type(search(), 'nobody');
+  assert.match(detail().textContent, /Nothing matches/);
+  await unmount();
+});
+
+test('components: Show all and Hide all change every rule at once, and the header counts what shows', async () => {
+  fresh();
+  await mount();
+  await click(row('Client', 'Components'));
+  assert.equal(detail().querySelector('.app-role-detail-count').textContent, '3 of 3 visible');
+  const action = (name) => [...detail().querySelectorAll('.app-role-detail-actions button')].find((button) => button.textContent === name);
+  await click(action('Hide all'));
+  assert.deepEqual(roleOf('client').componentRules, [{ kind: 'folder', path: 'src', effect: 'hide' }]);
+  assert.equal(detail().querySelector('.app-role-detail-count').textContent, '0 of 3 visible');
+  await click(action('Show all'));
+  assert.deepEqual(roleOf('client').componentRules, []);
+  assert.equal(writes.length, 2, 'one write each');
+  await unmount();
+});
+
+test('a viewer who cannot edit sees the lists with every control disabled', async () => {
+  fresh();
+  roles.setActualRole(roles.roleViewOf(roles.parseProjectRolesSource(stored), 'client'));
+  await mount();
+  await click(row('Client', 'Permissions'));
+  const switches = [...detail().querySelectorAll('[role="switch"]')];
+  assert.ok(switches.length > 0);
+  assert.ok(
+    switches.every((entry) => entry.disabled),
+    'read-only',
+  );
+  await unmount();
+  roles.setActualRole(roles.ADMIN_VIEW);
+});

@@ -1,8 +1,8 @@
-// Goal: the members card on a Settings → Roles card stays readable and keeps three clear surface steps:
-// every text/fill pair is at least 4.5:1 (WCAG AA for small text), and the inset card is visibly darker than
-// the role card while the add row sits a step lighter than the inset.
+// Goal: the members view of a role in Settings → Roles stays readable and keeps one level of filled surface:
+// every text/fill pair is at least 4.5:1 (WCAG AA for small text), and the add row is a clear step lighter than
+// the dialog it sits on, with focus lifting it one more step.
 // Method: read the solid colours from the stylesheets (tokens in styles.css, the card's own custom properties in
-// roles.css), composite the role card's and the row hover's translucent fills the way the browser does, and
+// roles.css), composite the row hover's translucent fill the way the browser does, and
 // compute the WCAG contrast ratio of each pair. Pure arithmetic, no browser.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -30,9 +30,8 @@ const ratio = (first, second) => {
   return (high + 0.05) / (low + 0.05);
 };
 
-const dialog = rgb(hexOf(tokens, '--bg-panel-2'));
-const roleCard = over(dialog, 0.05); // `.app-role` is var(--bg-hover) over the dialog.
-const inset = rgb(hexOf(sheet, '--people-inset'));
+const dialog = rgb('#1b1b1b');
+const inset = dialog; // The members list sits directly on the dialog: no inset card.
 const addRow = rgb(hexOf(sheet, '--people-add'));
 const addRowFocus = rgb(hexOf(sheet, '--people-add-focus'));
 const rowHover = over(inset, 0.05);
@@ -40,7 +39,7 @@ const dim = rgb(hexOf(tokens, '--text-dim'));
 const text = rgb(hexOf(tokens, '--text'));
 const white = rgb('#ffffff');
 const pairs = {
-  'login on the inset card': [text, inset],
+  'login on the dialog': [text, inset],
   'login on a hovered row': [text, rowHover],
   'remove × on a hovered row': [dim, rowHover],
   'placeholder on the add row': [dim, addRow],
@@ -51,7 +50,7 @@ const pairs = {
   'enabled Add label on the accent fill': [white, rgb(hexOf(sheet, '--people-button-on'))],
   'hovered Add label on the hover fill': [white, rgb(hexOf(sheet, '--people-button-hover'))],
   'You tag on its tinted pill': [text, rgb(hexOf(sheet, '--people-you'))],
-  'No members yet on the inset card': [dim, inset],
+  'No members yet on the dialog': [dim, inset],
 };
 
 test('every text/fill pair in the members card keeps 4.5:1', () => {
@@ -65,10 +64,8 @@ test('every text/fill pair in the members card keeps 4.5:1', () => {
   }
 });
 
-test('the surfaces step: role card, a darker inset, an add row a step lighter than the inset', () => {
-  assert.ok(ratio(roleCard, inset) >= 1.2, `inset against the role card: ${ratio(roleCard, inset).toFixed(2)}:1`);
-  assert.ok(luminance(inset) < luminance(roleCard), 'the inset is darker than the role card');
-  assert.ok(luminance(addRow) > luminance(inset), 'the add row is lighter than the inset');
-  assert.ok(ratio(addRow, inset) >= 1.1, `add row against the inset: ${ratio(addRow, inset).toFixed(2)}:1`);
+test('the add row is a step lighter than the dialog, and focus lifts it one more step', () => {
+  assert.ok(luminance(addRow) > luminance(inset), 'the add row is lighter than the dialog');
+  assert.ok(ratio(addRow, inset) >= 1.1, `add row against the dialog: ${ratio(addRow, inset).toFixed(2)}:1`);
   assert.ok(luminance(addRowFocus) > luminance(addRow), 'focus lifts the add row');
 });

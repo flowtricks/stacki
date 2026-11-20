@@ -1,4 +1,4 @@
-// A role card's "Sidebar apps" section: the apps the role sees as their own
+// A role's "Sidebar apps" view (opened from its card, RoleDetail.tsx): the apps the role sees as their own
 // buttons on the left rail (`pinnedApps`, src/app/railApps.tsx), in rail order.
 // Each pin is a row, its app's tile and name, a grip to drag it to another place
 // and a remove button (grip and remove show on hover or focus); Alt+↑ and Alt+↓ move a focused row.
@@ -18,9 +18,10 @@ import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import useListReorder from '../../ui/useListReorder';
 import { DropLine } from '../../ui/DropLine';
 import { Skeleton } from '../../ui/Skeleton';
-import { CloseIcon, DragIcon, PinIcon } from '../../ui/Icons';
+import { CloseIcon, DragIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { RoleAppIcon, type InstalledApps } from './RoleAppPicker';
+import { matchesQuery } from './roleDetailModel';
 import { movedPin } from './rolesEdits';
 
 export type PinnedAppChange = (appId: string, change: 'pin' | 'unpin') => void;
@@ -61,6 +62,8 @@ export function RolePinnedApps(props: {
   readonly role: ProjectRole;
   readonly installed: InstalledApps;
   readonly editable: boolean;
+  /** The detail view's search: only pins whose app name matches are listed, and they are not reordered meanwhile. */
+  readonly query: string;
   readonly change: PinnedAppChange;
   readonly order: PinnedAppOrder;
 }) {
@@ -68,16 +71,20 @@ export function RolePinnedApps(props: {
   const translate = useTranslate();
   return (
     <div className="app-role-pins" role="group" aria-label={translate('settings.roles.pins.group', { name: role.name })}>
-      <div className="app-role-section-heading">
-        <PinIcon size={12} />
-        <h4>{translate('settings.roles.pins.title')}</h4>
-      </div>
       {installed.kind === 'loading' ? (
         <PinsSkeleton />
       ) : (
         <>
-          <PinnedList role={role} rows={pinnedAppRows(role, installed.apps)} editable={props.editable} change={props.change} order={props.order} />
+          {/* "Add app" is the first row, so a long list never pushes it out of reach. */}
           {props.editable && <AddPin role={role} installed={installed.apps} change={props.change} />}
+          <PinnedList
+            role={role}
+            rows={pinnedAppRows(role, installed.apps)}
+            query={props.query}
+            editable={props.editable}
+            change={props.change}
+            order={props.order}
+          />
         </>
       )}
     </div>
@@ -97,13 +104,15 @@ function PinsSkeleton() {
 function PinnedList(props: {
   readonly role: ProjectRole;
   readonly rows: readonly PinnedAppRow[];
+  readonly query: string;
   readonly editable: boolean;
   readonly change: PinnedAppChange;
   readonly order: PinnedAppOrder;
 }) {
-  const { rows } = props;
+  const filtering = props.query.trim() !== '';
+  const rows = filtering ? props.rows.filter((row) => matchesQuery(row.label, props.query)) : props.rows;
   const translate = useTranslate();
-  const pinned = rows.map((row) => row.appId);
+  const pinned = props.rows.map((row) => row.appId);
   const move = (source: number, gap: number) => {
     const next = movedPin(pinned, source, gap);
     // A drop back in its own place changes nothing, so writes nothing.
@@ -112,16 +121,16 @@ function PinnedList(props: {
     }
     props.order(next);
   };
-  const reorder = useListReorder({ count: rows.length, onMove: move, disabled: !props.editable });
+  const reorder = useListReorder({ count: rows.length, onMove: move, disabled: !props.editable || filtering });
   // An empty list draws nothing: the "Add app" dropdown beside it already says what to do.
   if (rows.length === 0) {
-    return undefined;
+    return filtering && props.rows.length > 0 ? <NoPinMatch query={props.query} /> : undefined;
   }
   const ignoredText = (ignored: NonNullable<PinnedAppRow['ignored']>) =>
     translate(ignored === 'not-installed' ? 'settings.roles.pins.ignored.notInstalled' : 'settings.roles.pins.ignored.noAccess');
   // Alt+↑ moves the row up one place, Alt+↓ down one; the gap is measured before removal.
   const onKey = (index: number) => (event: KeyboardEvent<HTMLElement>) => {
-    if (!props.editable || !event.altKey) {
+    if (!props.editable || filtering || !event.altKey) {
       return;
     }
     if (event.key === 'ArrowUp') {
@@ -153,7 +162,7 @@ function PinnedList(props: {
           {/* The Navigator's line, in the gap above this row; after the last row, in the gap below it. */}
           {lineGap === index && <PinGap side="before" />}
           {lineGap === rows.length && index === rows.length - 1 && <PinGap side="after" />}
-          {props.editable && (
+          {props.editable && !filtering && (
             <button
               type="button"
               className="app-role-pin-grip"
@@ -181,6 +190,11 @@ function PinnedList(props: {
       ))}
     </ol>
   );
+}
+
+function NoPinMatch(props: { readonly query: string }) {
+  const translate = useTranslate();
+  return <p className="app-role-detail-empty">{translate('settings.roles.detail.noMatch', { query: props.query.trim() })}</p>;
 }
 
 // A zero-height strip centred in the gap between rows, holding the shared drop line,

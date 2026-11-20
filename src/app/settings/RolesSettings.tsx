@@ -33,6 +33,8 @@ import { readRolesIdentity, readStoredRoles, saveStoredRoles, type StoredRoles }
 import { reloadProjectRoles } from '../roles/useProjectRoles';
 import { useActualRole, useCurrentRole } from '../../lib/useCurrentRole';
 import { RoleCard, type RoleCardActions } from './RoleCard';
+import { RoleDetail } from './RoleDetail';
+import { type RoleSection, type RolesView } from './roleDetailModel';
 import {
   addMember,
   addRole,
@@ -49,6 +51,7 @@ import {
   orderPinnedApps,
   setPinnedApp,
   setComponentVisibility,
+  setAllComponentVisibility,
   copyComponentRules,
   removeComponentRule,
 } from './rolesEdits';
@@ -164,6 +167,9 @@ function RolesEditor(props: {
   // The role Duplicate just made, whose card opens with its name field focused.
   const [naming, setNaming] = useState<string | undefined>(undefined);
   const indicator = useSaveIndicator();
+  // Which part of a role is open, if any, and each part's search text, kept per role and part so going back and forth loses nothing.
+  const [view, setView] = useState<RolesView>({ kind: 'cards' });
+  const [queries, setQueries] = useState<Readonly<Record<string, string>>>({});
   // What is on disk, the text it was written as (the next write's base), and the save waiting to run.
   const saved = useRef<ProjectRoles>(shown);
   const base = useRef<string | undefined>(stored.kind === 'absent' ? undefined : stored.source);
@@ -253,6 +259,36 @@ function RolesEditor(props: {
       />
     );
   };
+  const detailRole = view.kind === 'detail' ? shown.roles.find((item) => item.id === view.roleId) : undefined;
+  const open = (roleId: string, section: RoleSection) => setView({ kind: 'detail', roleId, section });
+  if (view.kind === 'detail' && detailRole !== undefined) {
+    const queryKey = `${view.roleId}:${view.section}`;
+    return (
+      <section className="app-roles" aria-label={translate('settings.roles.screen.label')}>
+        <SettingsSaveRow saving={indicator.state} />
+        <RoleDetail
+          role={detailRole}
+          section={view.section}
+          editable={editable}
+          projectPath={props.projectPath}
+          currentLogin={login}
+          {...(props.componentFiles === undefined ? {} : { componentFiles: props.componentFiles })}
+          copySources={shown.roles.filter((other) => other.id !== detailRole.id).map((other) => ({ id: other.id, name: other.name }))}
+          query={queries[queryKey] ?? ''}
+          setQuery={(query) => setQueries({ ...queries, [queryKey]: query })}
+          back={() => setView({ kind: 'cards' })}
+          notice={noticeFor({ kind: 'role', id: detailRole.id })}
+          actions={cardActions(
+            detailRole.id,
+            translate,
+            (change) => apply({ kind: 'role', id: detailRole.id }, change),
+            (copyId) => setNaming(copyId),
+            () => void removeRole(detailRole.id),
+          )}
+        />
+      </section>
+    );
+  }
   return (
     <section className="app-roles" aria-label={translate('settings.roles.screen.label')}>
       <SettingsSaveRow saving={indicator.state} />
@@ -270,10 +306,8 @@ function RolesEditor(props: {
             key={item.id}
             role={item}
             editable={editable}
-            projectPath={props.projectPath}
-            currentLogin={login}
+            open={(section) => open(item.id, section)}
             {...(props.componentFiles === undefined ? {} : { componentFiles: props.componentFiles })}
-            copySources={shown.roles.filter((other) => other.id !== item.id).map((other) => ({ id: other.id, name: other.name }))}
             notice={noticeFor({ kind: 'role', id: item.id })}
             naming={item.id === naming ? 'rename' : undefined}
             actions={cardActions(
@@ -356,6 +390,7 @@ function cardActions(
     setAppAccess: (appId, change) => void apply((roles) => setAppAccess(roles, id, appId, change)),
     setAppPermissions: (appId, permissionIds, change) => void apply((roles) => setAppPermissions(roles, id, appId, permissionIds, change)),
     setComponentVisibility: (target, state) => void apply((roles) => setComponentVisibility(roles, id, target, state)),
+    setAllComponentVisibility: (state, files) => void apply((roles) => setAllComponentVisibility(roles, id, state, files)),
     copyComponentRules: (fromId) => void apply((roles) => copyComponentRules(roles, id, fromId)),
     removeComponentRule: (rule) => void apply((roles) => removeComponentRule(roles, id, rule)),
     setPinnedApp: (appId, change) => void apply((roles) => setPinnedApp(roles, id, appId, change)),

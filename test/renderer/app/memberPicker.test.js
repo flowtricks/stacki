@@ -1,4 +1,4 @@
-// Goal: a role card's members show their GitHub picture (an initial until it loads), the
+// Goal: a role's members view shows their GitHub picture (an initial until it loads), the
 // username field suggests GitHub users after a pause in typing, and the keyboard drives the
 // list: ArrowDown and ArrowUp move, Enter picks the highlighted user or adds the typed text,
 // Escape closes, a click picks. While a newer search is pending the list stays mounted and
@@ -7,7 +7,7 @@
 // row stays listed. A failed search is one quiet row and Add still works. The
 // apps section offers the project's installed apps in the app's dropdown, or says none are
 // installed.
-// Method: bundle the real RoleCard (with MemberPicker, RoleAppPicker and their bridges)
+// Method: bundle the real RoleDetail and RoleCard (with MemberPicker, RoleAppPicker and their bridges)
 // through esbuild, mount it in jsdom with a fake `window.avb` that records every search and
 // answers from a table (or from promises the test settles by hand, to order replies), and
 // drive it with key events and clicks on real timers. Element identity across renders shows
@@ -24,7 +24,8 @@ const output = repoPath('node_modules/.stacki-test/member-picker.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 esbuild.buildSync({
   stdin: {
-    contents: "export { RoleCard } from './src/app/settings/RoleCard';\nexport { MEMBER_UNAVAILABLE_TEXT } from './src/app/settings/MemberPicker';",
+    contents:
+      "export { RoleCard } from './src/app/settings/RoleCard';\nexport { RoleDetail } from './src/app/settings/RoleDetail';\nexport { MEMBER_UNAVAILABLE_TEXT } from './src/app/settings/MemberPicker';",
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'ts',
   },
@@ -68,7 +69,7 @@ let root;
 let role;
 const added = [];
 const allowed = [];
-async function mount(members = ['flowtricks'], access = []) {
+async function mount(members = ['flowtricks'], access = [], section = 'members') {
   added.length = 0;
   allowed.length = 0;
   role = { id: 'writer', name: 'Writer', members, access, appPermissions: {}, pinnedApps: [], componentRules: [] };
@@ -81,6 +82,7 @@ async function mount(members = ['flowtricks'], access = []) {
     },
     removeMember: () => undefined,
     toggle: () => undefined,
+    toggleGroup: () => undefined,
     setAppAccess: (appId, change) => {
       allowed.push(`${change} ${appId}`);
     },
@@ -90,7 +92,12 @@ async function mount(members = ['flowtricks'], access = []) {
     duplicate: () => undefined,
   };
   root = createRoot(document.getElementById('root'));
-  await act(async () => root.render(React.createElement(card.RoleCard, { role, editable: true, actions, projectPath: '/project' })));
+  // The search text lives in the parent in the app; a small host keeps it here.
+  function Host() {
+    const [query, setQuery] = React.useState('');
+    return React.createElement(card.RoleDetail, { role, section, editable: true, actions, projectPath: '/project', query, setQuery, back: () => undefined });
+  }
+  await act(async () => root.render(React.createElement(Host)));
   await settle(10);
 }
 async function unmount() {
@@ -342,7 +349,7 @@ test('each installed app has its own access switch, with its icon; Every app fix
   });
   const access = (name) => document.querySelector(`[role="switch"][aria-label="Writer can use ${name}"]`);
   installedApps = [app('seo', 'SEO checker'), app('heatmap', 'Heatmap')];
-  await mount(['flowtricks'], ['panel:apps', 'app:seo']);
+  await mount(['flowtricks'], ['panel:apps', 'app:seo'], 'permissions');
   assert.equal(access('SEO checker').getAttribute('aria-checked'), 'true', 'an allowed app reads on');
   assert.equal(access('Heatmap').getAttribute('aria-checked'), 'false', 'a new app is off for a role without Every app');
   assert.equal(document.querySelector('select') ?? undefined, undefined, 'never a native select');
@@ -356,7 +363,7 @@ test('each installed app has its own access switch, with its icon; Every app fix
   assert.deepEqual(allowed, ['grant heatmap', 'withdraw seo']);
   await unmount();
 
-  await mount(['flowtricks'], ['panel:apps', 'app:*']);
+  await mount(['flowtricks'], ['panel:apps', 'app:*'], 'permissions');
   for (const name of ['SEO checker', 'Heatmap']) {
     assert.equal(access(name).getAttribute('aria-checked'), 'true', `Every app covers ${name}, installed now or later`);
     assert.equal(access(name).disabled, true, 'and fixes it until Every app goes off');
@@ -365,20 +372,38 @@ test('each installed app has its own access switch, with its icon; Every app fix
   await unmount();
 });
 
-test('headings carry the roles icon, and permissions start collapsed and remember being opened', async () => {
+test('the card lists flat summary rows that open their parts, and Admin has no Permissions row', async () => {
   installedApps = [];
-  await mount(['flowtricks'], ['panel:pages', 'publish', 'app:*']);
+  const opened = [];
+  role = {
+    id: 'writer',
+    name: 'Writer',
+    members: ['flowtricks'],
+    access: ['panel:pages', 'publish', 'app:*'],
+    appPermissions: {},
+    pinnedApps: ['seo'],
+    componentRules: [],
+  };
+  const actions = new Proxy({}, { get: () => () => undefined });
+  root = createRoot(document.getElementById('root'));
+  await act(async () => root.render(React.createElement(card.RoleCard, { role, editable: true, actions, open: (section) => opened.push(section) })));
   assert.ok(document.querySelector('.app-role-heading .app-role-heading-icon svg'), 'the heading starts with the people icon');
-  const toggle = document.querySelector('.app-role-permissions-toggle');
-  assert.match(toggle.textContent, /^PermissionsOn 3 of \d+$/);
-  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  const body = document.getElementById(toggle.getAttribute('aria-controls'));
-  assert.equal(body.hasAttribute('inert'), true, 'a collapsed grid takes no focus');
-  await act(async () => toggle.click());
-  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.equal(body.hasAttribute('inert'), false);
+  const rows = [...document.querySelectorAll('.app-role-row')];
+  assert.deepEqual(
+    rows.map((row) => row.dataset.section),
+    ['members', 'pins', 'components', 'permissions'],
+  );
+  assert.match(rows[3].textContent, /^Permissions3 of \d+$/);
+  assert.equal(rows[0].textContent, 'Members1');
+  assert.equal(rows[1].textContent, 'Sidebar apps1');
+  assert.equal(document.querySelectorAll('.app-role [role="switch"]').length, 0, 'no switches on the card');
+  await act(async () => rows[3].click());
+  assert.deepEqual(opened, ['permissions']);
   await unmount();
-  await mount(['flowtricks'], ['panel:pages']);
-  assert.equal(document.querySelector('.app-role-permissions-toggle').getAttribute('aria-expanded'), 'true', 'the role stays open for the session');
+
+  role = { ...role, id: 'admin', name: 'Admin' };
+  root = createRoot(document.getElementById('root'));
+  await act(async () => root.render(React.createElement(card.RoleCard, { role, editable: true, actions, open: () => undefined })));
+  assert.equal(document.querySelector('.app-role-row[data-section="permissions"]') ?? undefined, undefined, 'admin access is fixed');
   await unmount();
 });

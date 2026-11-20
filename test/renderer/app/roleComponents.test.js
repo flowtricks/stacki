@@ -88,13 +88,23 @@ async function type(input, value) {
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
   });
 }
-const card = (name) => document.querySelector(`section[aria-label="${name} role"]`);
+// A role's card, or its open detail view (RoleDetail.tsx).
+const card = (name) =>
+  document.querySelector(`section.app-role-detail[aria-label$="· ${name}"]`) ?? document.querySelector(`section[aria-label="${name} role"]`);
+// Opens a role's Components view from its card, going back first when another view is open.
+async function openComponents(name) {
+  const back = document.querySelector('.app-role-back');
+  if (back) {
+    await click(back);
+  }
+  await click(document.querySelector(`button[aria-label="Open Components for ${name}"]`));
+}
+const summary = (name) => document.querySelector(`button[aria-label="Open Components for ${name}"] .app-role-row-summary`)?.textContent;
 const saved = () => roles.parseProjectRolesSource(stored);
 const rulesOf = (id) => saved().roles.find((role) => role.id === id).componentRules;
-const section = (name) => card(name).querySelector('.app-role-components');
-const toggle = (name) => section(name).querySelector('.app-role-components-toggle');
+const section = (name) => card(name).querySelector('.app-role-components-body');
 const check = (name, label) => section(name).querySelector(`[role="checkbox"][aria-label="${label}"]`);
-const count = (name) => toggle(name).querySelector('.app-role-permissions-count').textContent;
+const count = (name) => card(name).querySelector('.app-role-detail-count').textContent;
 const rows = (name) => [...section(name).querySelectorAll('[role="treeitem"]')].map((row) => row.querySelector('.app-role-components-name').textContent);
 const fresh = () => {
   stored = JSON.stringify({ version: 1, roles: [{ id: 'admin', members: ['owner'] }, { id: 'client' }] });
@@ -104,10 +114,10 @@ const fresh = () => {
 test('every role, admin included, has a Components section that counts what is visible and starts with everything on', async () => {
   fresh();
   await mount();
-  assert.ok(section('Admin'), 'admin can be restricted too');
-  assert.ok(section('Client'));
+  assert.equal(summary('Admin'), '4 of 4', 'admin can be restricted too');
+  assert.equal(summary('Client'), '4 of 4', 'the card row counts what is visible');
+  await openComponents('Client');
   assert.equal(count('Client'), '4 of 4 visible');
-  await click(toggle('Client'));
   assert.deepEqual(rows('Client'), ['src', 'components', 'Card.astro', 'interactive', 'ui'], 'the top folders are open');
   assert.equal(check('Client', 'Hide interactive').getAttribute('aria-checked'), 'true');
   await unmount();
@@ -116,22 +126,22 @@ test('every role, admin included, has a Components section that counts what is v
 test('a folder switch hides everything in it, reads mixed when some are hidden, and saves at once', async () => {
   fresh();
   await mount();
-  await click(toggle('Client'));
+  await openComponents('Client');
   await click(check('Client', 'Hide interactive'));
   assert.deepEqual(rulesOf('client'), [{ kind: 'folder', path: 'src/components/interactive', effect: 'hide' }]);
   assert.equal(count('Client'), '2 of 4 visible');
   assert.equal(check('Client', 'Show interactive').getAttribute('aria-checked'), 'false');
   assert.equal(check('Client', 'Show components').getAttribute('aria-checked'), 'mixed', 'the parent folder is mixed');
-  assert.equal(count('Admin'), '4 of 4 visible', 'another role is untouched');
+  assert.deepEqual(rulesOf('admin'), [], 'another role is untouched');
   await unmount();
 });
 
 test('a row says which folder decides it, and its own switch re-shows one component inside a hidden folder', async () => {
   fresh();
   await mount();
-  await click(toggle('Client'));
+  await openComponents('Client');
   await click(check('Client', 'Hide interactive'));
-  await type(section('Client').querySelector('input[aria-label="Search components"]'), 'tabs');
+  await type(card('Client').querySelector('input[aria-label="Search components"]'), 'tabs');
   assert.deepEqual(rows('Client'), ['src', 'components', 'interactive', 'Tabs.astro'], 'the search keeps matches and the folders above them');
   assert.match(section('Client').textContent, /hidden by folder src\/components\/interactive/);
   await click(check('Client', 'Show Tabs.astro'));
@@ -141,7 +151,7 @@ test('a row says which folder decides it, and its own switch re-shows one compon
   ]);
   assert.equal(count('Client'), '3 of 4 visible');
   assert.match(section('Client').textContent, /shown despite its folder/);
-  await type(section('Client').querySelector('input[aria-label="Search components"]'), 'zzz');
+  await type(card('Client').querySelector('input[aria-label="Search components"]'), 'zzz');
   assert.match(section('Client').textContent, /No components match/);
   await unmount();
 });
@@ -149,11 +159,11 @@ test('a row says which folder decides it, and its own switch re-shows one compon
 test("an admin's own components can be hidden, and Copy from role takes another role's choices", async () => {
   fresh();
   await mount();
-  await click(toggle('Admin'));
+  await openComponents('Admin');
   await click(check('Admin', 'Hide ui'));
   assert.deepEqual(rulesOf('admin'), [{ kind: 'folder', path: 'src/components/ui', effect: 'hide' }]);
   assert.ok(card('Admin'), 'the settings screen is still there for the restricted admin');
-  await click(toggle('Client'));
+  await openComponents('Client');
   await click(section('Client').querySelector('button[aria-label="Copy from role"]'));
   const option = [...document.querySelectorAll('.dd-option')].find((entry) => entry.querySelector('.dd-option-label')?.textContent === 'Admin');
   await click(option);
@@ -171,7 +181,7 @@ test('a rule for a path that no longer exists is listed apart and can be removed
   });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
-  await click(toggle('Client'));
+  await openComponents('Client');
   assert.match(section('Client').textContent, /Rules for paths that no longer exist/);
   assert.equal(count('Client'), '4 of 4 visible', 'a missing rule hides nothing');
   await click(section('Client').querySelector('button[aria-label="Remove the rule for src/components/gone"]'));
@@ -189,7 +199,7 @@ test('a project with thousands of components draws a window of rows, and the tre
   assert.equal(all.length, 5000 + tree.folderPaths.length);
   fresh();
   await mount(files);
-  await click(toggle('Client'));
+  await openComponents('Client');
   await click(section('Client').querySelector('button[aria-label="Open or close group0"]'));
   assert.ok(section('Client').querySelectorAll('[role="treeitem"]').length <= 30, 'only a window of the rows is in the page');
   await unmount();

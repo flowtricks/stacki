@@ -97,7 +97,26 @@ async function choose(label, name) {
 async function unmount() {
   await act(async () => root.unmount());
 }
-const card = (name) => document.querySelector(`section[aria-label="${name} role"]`);
+// A role's card, or, while one of its parts is open (RoleDetail.tsx), that view: both are the scope its controls live in.
+const card = (name) =>
+  document.querySelector(`section.app-role-detail[aria-label$="· ${name}"]`) ?? document.querySelector(`section[aria-label="${name} role"]`);
+const SECTION_LABELS = { members: 'Members', pins: 'Sidebar apps', components: 'Components', permissions: 'Permissions' };
+// Opens one part of a role from its card's summary rows, going back first when another part is open.
+async function show(name, section) {
+  const back = document.querySelector('.app-role-back');
+  if (back) {
+    await click(back);
+  }
+  const row = document.querySelector(`button[aria-label="Open ${SECTION_LABELS[section]} for ${name}"]`);
+  assert.ok(row, `${name}'s card has a ${section} row`);
+  await click(row);
+}
+async function showCards() {
+  const back = document.querySelector('.app-role-back');
+  if (back) {
+    await click(back);
+  }
+}
 const button = (scope, label) =>
   [...scope.querySelectorAll('button')].find((item) => item.textContent.trim() === label || item.getAttribute('aria-label') === label);
 async function type(input, value) {
@@ -151,7 +170,9 @@ test('each change saves at once: the first creates the file, and each writes a v
   assert.doesNotMatch(admin.textContent, /Full access/, 'Admin carries no badge');
   assert.equal(admin.querySelectorAll('[role="switch"]').length, 0, 'admin access is not editable');
   assert.ok(admin.querySelector('button[aria-label="Rename Admin"]') === null, 'Admin is always Admin');
-  assert.match(admin.textContent, /owner/, 'a new file names the signed-in person as admin');
+  await show('Admin', 'members');
+  assert.match(card('Admin').textContent, /owner/, 'a new file names the signed-in person as admin');
+  await showCards();
 
   await type(document.querySelector('input[aria-label="New role name"]'), 'Writer');
   await submit(document.querySelector('.app-roles-new'));
@@ -160,11 +181,13 @@ test('each change saves at once: the first creates the file, and each writes a v
   assert.equal(document.querySelector('.app-settings-saved').dataset.state, 'saved', 'a brief "Saved" follows');
   assert.match(document.querySelector('.app-settings-saved').textContent, /Saved/);
 
+  await show('Writer', 'members');
   const writer = card('Writer');
   await type(writer.querySelector('input[aria-label="Add a GitHub username to Writer"]'), 'Sam');
   await submit(writer.querySelector('.app-role-add'));
   assert.equal(writes.length, 2);
   assert.equal(writes[1].base, writes[0].source, 'each save is over the text the last one wrote');
+  await show('Writer', 'permissions');
   assert.ok(permission('Writer', 'CMS').closest('.app-role-toggle').querySelector('.app-role-toggle-icon svg'), 'each permission has its icon');
   await click(permission('Writer', 'CMS'));
   assert.equal(permission('Writer', 'CMS').getAttribute('aria-checked'), 'true');
@@ -188,13 +211,15 @@ test("a group's All switch sets the whole group, and reads on only when all are 
   writes.length = 0;
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
+  await show('Client', 'permissions');
   const all = card('Client').querySelector('[role="switch"][aria-label="All Pages"]');
   assert.equal(all.getAttribute('aria-checked'), 'false');
   await click(all);
   assert.deepEqual(saved().roles[1].access, ['page:create', 'page:delete', 'page:rename', 'page:layout']);
   assert.equal(card('Client').querySelector('[role="switch"][aria-label="All Pages"]').getAttribute('aria-checked'), 'true');
   await click(permission('Client', 'Delete pages'));
-  assert.equal(card('Client').querySelector('[role="switch"][aria-label="All Pages"]').getAttribute('aria-checked'), 'false', 'a mixed group reads as off');
+  const mixed = card('Client').querySelector('[role="switch"][aria-label="All Pages"]');
+  assert.equal(mixed.getAttribute('aria-checked'), 'mixed', 'a partly granted group reads as mixed, not on or off');
   await click(card('Client').querySelector('[role="switch"][aria-label="All Pages"]'));
   assert.equal(saved().roles[1].access.length, 4, 'switching a mixed group on grants all of it');
   await click(card('Client').querySelector('[role="switch"][aria-label="All Pages"]'));
@@ -245,6 +270,7 @@ test('a change that would leave no admin or lock you out is refused before any w
   stored = JSON.stringify({ version: 1, roles: [{ id: 'admin', name: 'Admin', members: ['owner', 'other'] }] });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
+  await show('Client', 'members');
   const client = card('Client');
   await type(client.querySelector('input[aria-label="Add a GitHub username to Client"]'), 'OWNER');
   await submit(client.querySelector('.app-role-add'));
@@ -252,6 +278,7 @@ test('a change that would leave no admin or lock you out is refused before any w
   assert.match(notice(card('Client')), /remove your admin access/, 'the reason shows beside the change');
   assert.doesNotMatch(card('Client').querySelector('.app-role-members ul').textContent, /OWNER/, 'the refused change never shows');
 
+  await show('Admin', 'members');
   await click(card('Admin').querySelector('button[aria-label="Remove other"]'));
   assert.equal(writes.length, 1, 'removing another admin saves');
   await click(card('Admin').querySelector('button[aria-label="Remove owner"]'));
@@ -272,6 +299,7 @@ test('a failed save puts the control back and offers Retry', async () => {
   });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
+  await show('Client', 'permissions');
   failNext = true;
   await click(permission('Client', 'CMS'));
   assert.equal(writes.length, 0);
@@ -299,6 +327,8 @@ test('a non-admin sees roles read-only', async () => {
   assert.match(document.body.textContent, /Only admins can change roles/);
   assert.ok(document.querySelector('input[aria-label="New role name"]') === null, 'no new-role field');
   assert.ok(document.querySelector('.app-role-name-button') === null, 'no rename');
+  await show('Client', 'permissions');
+  assert.ok(document.querySelectorAll('[role="switch"]').length > 0, 'the permissions view lists switches');
   for (const toggle of document.querySelectorAll('[role="switch"]')) {
     assert.equal(toggle.disabled, true);
   }
@@ -369,6 +399,7 @@ test('installed apps’ permissions show as their own groups, save at once, and 
   });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
+  await show('Writer', 'permissions');
   const group = (name) => card(name).querySelector('[role="group"][aria-label="Feedback pins permissions"]');
   assert.ok(group('Writer'), 'the app has its own group');
   const plainGroup = card('Writer').querySelector('[aria-label="Plain permissions"]');
@@ -394,6 +425,7 @@ test('installed apps’ permissions show as their own groups, save at once, and 
   assert.deepEqual(writer().appPermissions['feedback-pins'], { 'delete-any-comment': false, 'resolve-threads': false }, 'All turns every one off');
 
   // Client has the Apps panel but not this app: its switches read off and muted, with no sentence.
+  await show('Client', 'permissions');
   const access = (name) => permission(name, `${name} can use Feedback pins`);
   assert.equal(access('Client').getAttribute('aria-checked'), 'false');
   assert.ok(group('Client').classList.contains('is-off'));
@@ -452,9 +484,8 @@ test('every role pins several apps of its own, in its own order, from "Add app",
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
   for (const name of ['Admin', 'Client', 'Writer']) {
-    const pins = card(name).querySelector('.app-role-pins');
-    assert.ok(pins, `${name} has its own pinned list`);
-    assert.equal(pins.closest('.app-role-permissions') ?? undefined, undefined, `${name}'s pins sit outside the collapsed permissions`);
+    await show(name, 'pins');
+    assert.ok(card(name).querySelector('.app-role-pins'), `${name} has its own pinned list`);
   }
   // A stale pin shows muted with its reason, and can be removed.
   assert.deepEqual(pinNames('Writer'), ['gone']);
@@ -462,6 +493,7 @@ test('every role pins several apps of its own, in its own order, from "Add app",
   assert.ok(pinRows('Writer')[0].classList.contains('is-ignored'));
 
   // Admin pins three apps one after another; each saves at once and goes last.
+  await show('Admin', 'pins');
   await choose('Pin an app to the sidebar for Admin', 'SEO');
   await choose('Pin an app to the sidebar for Admin', 'CRM');
   await choose('Pin an app to the sidebar for Admin', 'Secret');
@@ -470,6 +502,7 @@ test('every role pins several apps of its own, in its own order, from "Add app",
   assert.equal(writes.length, 3, 'each pin saves on its own');
 
   // Client may use SEO and CRM only, and pins them in the other order.
+  await show('Client', 'pins');
   await click(card('Client').querySelector('button[aria-label="Pin an app to the sidebar for Client"]'));
   const offered = [...document.querySelectorAll('.dd-option')].map((option) => option.textContent);
   assert.deepEqual(offered, ['SEO', 'CRM', 'SecretAlso gives Client access'], 'every unpinned app; one without access says pinning grants it');
@@ -479,11 +512,14 @@ test('every role pins several apps of its own, in its own order, from "Add app",
   assert.deepEqual(pinsOf('admin'), ['seo', 'crm', 'secret'], 'roles keep their own pins and orders');
 
   // Remove, and the stale one too.
+  await show('Writer', 'pins');
   await click(card('Writer').querySelector('button[aria-label="Unpin gone"]'));
   assert.deepEqual(pinsOf('writer'), []);
+  await show('Admin', 'pins');
   await click(card('Admin').querySelector('button[aria-label="Unpin CRM"]'));
   assert.deepEqual(pinsOf('admin'), ['seo', 'secret']);
 
+  await showCards();
   // View as Client puts Client's pins, in Client's order, on the active role.
   await choose('View as', 'Client');
   assert.deepEqual(roles.currentRole().pinnedApps, ['crm', 'seo']);
@@ -498,6 +534,7 @@ test('pins reorder by keyboard (Alt+↑/↓ on a row) and by dragging, saving th
   window.avb.listApps = async () => ({ ok: true, value: [pinApp('seo', 'SEO'), pinApp('crm', 'CRM'), pinApp('secret', 'Secret')] });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
+  await show('Admin', 'pins');
   assert.deepEqual(pinNames('Admin'), ['SEO', 'CRM', 'Secret']);
   await pinKey(pinRows('Admin')[2], 'ArrowUp');
   assert.deepEqual(pinsOf('admin'), ['seo', 'secret', 'crm'], 'Alt+↑ moves a row up one place');
@@ -701,6 +738,7 @@ test('"Add app" pins an app the role cannot use in one step, granting it (and th
   window.avb.listApps = async () => ({ ok: true, value: [pinApp('seo', 'SEO'), pinApp('crm', 'CRM')] });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
+  await show('Client', 'pins');
   await click(card('Client').querySelector('button[aria-label="Pin an app to the sidebar for Client"]'));
   const options = [...document.querySelectorAll('.dd-option')];
   assert.deepEqual(
