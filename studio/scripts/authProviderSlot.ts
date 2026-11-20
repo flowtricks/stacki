@@ -103,18 +103,33 @@ export async function prepareAuthProvider(studio: string = fileURLToPath(new URL
   return selection;
 }
 
+// The compiler runs as `node typescript/bin/tsc`, never `node_modules/.bin/tsc`: on Windows that is a
+// shell script spawnSync cannot start (it needs `tsc.cmd` and a shell), so the spawn failed, stdout
+// and stderr were null, and the check crashed with "(result.stdout + result.stderr).trim is not a
+// function" (Check on 010980b8, the Windows Studio job).
+export function typeCheckCommand(studio: string): { readonly command: string; readonly argumentsList: readonly string[] } {
+  return {
+    command: process.execPath,
+    argumentsList: [path.join(studio, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.worker.json', '--noEmit', '--pretty', 'false'],
+  };
+}
+
 function assertSatisfiesInterface(studio: string): void {
-  const compiler = path.join(studio, 'node_modules/.bin/tsc');
-  const result = spawnSync(compiler, ['-p', 'tsconfig.worker.json', '--noEmit', '--pretty', 'false'], {
+  const { command, argumentsList } = typeCheckCommand(studio);
+  const result = spawnSync(command, [...argumentsList], {
     cwd: studio,
     encoding: 'utf8',
     timeout: TYPE_CHECK_TIMEOUT_MS,
+    windowsHide: true,
   });
+  if (result.error !== undefined) {
+    throw new Error(`The AuthProvider type check could not run (${result.error.message}); is studio/node_modules installed?`);
+  }
   if (result.status !== 0) {
     throw new Error(
       `studio/${AUTH_PROVIDER_FILE} does not satisfy the AuthProvider interface (docs/auth-providers.md).\n` +
         'Its default export must be an AuthProviderFactory. Fix these errors, or remove the file to sign in with GitHub:\n' +
-        (result.stdout + result.stderr).trim().slice(0, 4000),
+        `${result.stdout}${result.stderr}`.trim().slice(0, 4000),
     );
   }
 }

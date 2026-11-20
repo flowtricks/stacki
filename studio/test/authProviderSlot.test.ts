@@ -8,7 +8,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AUTH_PROVIDER_FILE, SLOT_FILE, authProviderSlotSource, prepareAuthProvider } from '../scripts/authProviderSlot';
+import { AUTH_PROVIDER_FILE, SLOT_FILE, authProviderSlotSource, prepareAuthProvider, typeCheckCommand } from '../scripts/authProviderSlot';
 
 const studio = fileURLToPath(new URL('../', import.meta.url));
 
@@ -86,4 +86,12 @@ test('a provider file that does not satisfy the interface fails the build with t
   } finally {
     await rm(copy, { recursive: true, force: true });
   }
+});
+
+test('the interface check runs the compiler through Node, so it starts on Windows too', () => {
+  // node_modules/.bin/tsc is a shell script Windows cannot spawn; the 010980b8 Check failed there with a null stdout.
+  const { command, argumentsList } = typeCheckCommand(studio);
+  assert.equal(command, process.execPath);
+  assert.equal(argumentsList[0], path.join(studio, 'node_modules', 'typescript', 'bin', 'tsc'));
+  assert.deepEqual(argumentsList.slice(1), ['-p', 'tsconfig.worker.json', '--noEmit', '--pretty', 'false']);
 });
