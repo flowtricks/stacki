@@ -173,9 +173,20 @@ export function unknownReasons(report: SelectorReport, search: string, held: Rea
     .sort((left, right) => right.entries.length - left.entries.length);
 }
 
-/** The filter a panel opens on: the clean-up when there is one, otherwise everything. */
-export function initialFilter(report: SelectorReport): SelectorFilter {
-  return report.entries.some((entry) => entry.verdict.kind === 'unused') ? 'unused' : 'all';
+/** The tab a project with no remembered one opens on: the clean-up when there is one, else the locked styles, else everything. */
+export function initialFilter(counts: SelectorCounts): SelectorFilter {
+  if (counts.unused > 0) {
+    return 'unused';
+  }
+  if (counts.kept > 0) {
+    return 'kept';
+  }
+  return 'all';
+}
+
+/** Narrows a stored value to a tab; anything else is not one. */
+export function isSelectorFilter(value: unknown): value is SelectorFilter {
+  return SELECTOR_FILTERS.some((filter) => filter === value);
 }
 
 /** A piece of a selector as the panel draws it: `flagged` marks a name the verdict is about. */

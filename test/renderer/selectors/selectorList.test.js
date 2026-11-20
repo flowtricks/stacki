@@ -37,7 +37,7 @@ const report = {
 
 test('lists each selector once per file, skips ones a clean-up never touches, and filters', () => {
   assert.deepEqual(selectorCounts(report), { all: 5, unused: 1, unknown: 2, kept: 1 }, 'h1 is not listed; the second .ghost rule is the same row');
-  assert.equal(initialFilter(report), 'unused');
+  assert.equal(initialFilter(selectorCounts(report)), 'unused');
   assert.deepEqual(
     selectorGroups(report, 'all', '').map((group) => [group.rel, group.entries.length]),
     [

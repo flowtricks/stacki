@@ -1587,6 +1587,7 @@
     "src/lib/packageManifest.ts",
     "src/lib/pageName.ts",
     "src/lib/projectPath.ts",
+    "src/lib/projectPreference.ts",
     "src/lib/roleAccess.ts",
     "src/lib/searchText.ts",
     "src/lib/shortcutLabel.ts",

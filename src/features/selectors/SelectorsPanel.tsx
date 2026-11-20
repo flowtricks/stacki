@@ -21,6 +21,7 @@ import { onPropertyFilesChanged, onVariablesChanged } from '../../ipc/editorEnvi
 import { SearchIcon, TrashIcon } from '../../ui/Icons';
 import { verdictNames, type SelectorEntry, type SelectorReport } from '../../../shared/properties/selectorUsage';
 import { EMPTY_KEEP_LIST, folderLock, keepMatcher, serializeStyleKeepList, stylesheetLock, type StyleKeepList } from '../../../shared/properties/styleKeepList';
+import { loadSelectorTab, saveSelectorTab } from './selectorTabPreference';
 import { lockSheetChange, unlockOneChange, unlockSheetChange, type KeepListChange } from './lockChanges';
 import { LockIcon, SweepIcon } from './SelectorIcons';
 import {
@@ -88,7 +89,16 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
   const { state, refresh } = usePanelData(selectorReportCache, project.path, read, onProjectChanged);
   const early = useEarlyReport(project.path, { loading: state.kind === 'loading' }, translate);
   const keep = useKeepList(project.path, showToast, onRecordUndo, translate, refresh);
-  const [chosen, setFilter] = useState<SelectorFilter | undefined>(undefined);
+  // The remembered tab is read before the first frame (the state's initial value), so the panel never
+  // draws another tab first. A pick is stored for the project and wins on every later open.
+  const [chosen, chooseFilter] = useState<SelectorFilter | undefined>(() => loadSelectorTab(project.path));
+  const setFilter = useCallback(
+    (next: SelectorFilter): void => {
+      chooseFilter(next);
+      saveSelectorTab(project.path, next);
+    },
+    [project.path],
+  );
   const [search, setSearch] = useState('');
   // Long lists draw a page at a time; a new tab or search starts from the top.
   const [limit, setLimit] = useState(LIST_PAGE_ROWS);
@@ -101,14 +111,14 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
   const report = state.kind === 'ready' ? state.value : early;
   const checking = state.kind === 'loading';
   const unused = report === undefined ? [] : unusedEntries(report);
-  // Until the user picks a tab, open on the clean-up when there is one. The opening tab is decided
-  // once, from the first full check, and then held: deriving it live would jump to All the moment
-  // the last unused style is locked, moving the user off the tab they were on.
+  // With no remembered or picked tab, open on the clean-up when there is one, else the locked styles, else
+  // All. The opening tab is decided once, from the first full check, and then held: deriving it live would
+  // jump away the moment the last unused style is locked, moving the user off the tab they were on.
   const [opening, setOpening] = useState<SelectorFilter | undefined>(undefined);
   if (opening === undefined && state.kind === 'ready') {
-    setOpening(initialFilter(state.value));
+    setOpening(initialFilter(selectorCounts(state.value)));
   }
-  const filter = chosen ?? opening ?? (report === undefined ? 'all' : initialFilter(report));
+  const filter = chosen ?? opening ?? (report === undefined ? 'all' : initialFilter(selectorCounts(report)));
 
   const hover = useHoverTip();
   // One path for removing styles, whether all of them or one row: the check
