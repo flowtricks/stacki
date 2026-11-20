@@ -28,6 +28,7 @@ import { isUtilityClassName } from '../../features/style/model/defaultSelector';
 import { readStyleFiles } from '../../features/style/stylePanelBridge';
 import { readClassUsage } from '../../ipc/appBridge';
 import { readText } from '../../ipc/bridge';
+import { projectRelativePath } from '../../lib/projectPath';
 import type { Translator } from '../../lib/i18n/localeContext';
 import type { PageStateSnapshot } from '../../editor/pageState';
 import type { StepFiles } from '../appTypes';
@@ -141,7 +142,13 @@ export async function startMoveJournal(move: {
   };
   const files = (pageAfter: string | undefined): StyleMoveJournal['files'] => [
     { role: 'component', path: move.component.path, rel: move.component.rel, before: undefined, after: move.component.text },
-    { role: 'page', path: move.page.path, rel: projectRelative(move.projectPath, move.page.path), before: move.page.before, after: pageAfter },
+    {
+      role: 'page',
+      path: move.page.path,
+      rel: projectRelativePath(move.projectPath, move.page.path, window.avb.platform),
+      before: move.page.before,
+      after: pageAfter,
+    },
     ...move.sheets.map((sheet) => ({ role: 'sheet' as const, path: sheet.path, rel: sheet.rel, before: sheet.before, after: sheet.after })),
   ];
   await recordStyleMove(move.projectPath, { ...base, files: files(undefined) });
@@ -177,12 +184,6 @@ export async function finishMovedStyles(move: {
     return { kind: 'failed', message: error instanceof Error ? error.message : String(error) };
   }
   return { kind: 'whole' };
-}
-
-// A path inside the project as the words name it.
-function projectRelative(projectPath: string, file: string): string {
-  const prefix = projectPath.endsWith('/') ? projectPath : `${projectPath}/`;
-  return file.startsWith(prefix) ? file.slice(prefix.length) : file;
 }
 
 /** The stylesheet calls of a move: reads through the style transport, writes that main refuses unless the sheet is unchanged. */
