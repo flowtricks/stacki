@@ -28,11 +28,35 @@ export const messages = {
   'shell.component.createdStranded': '{rel} erstellt – es liest Seitendaten und braucht daher Eigenschaften.',
   'shell.component.createdWithOne': '{rel} mit {first} erstellt.',
   'shell.component.createdWithTwo': '{rel} mit {first} und {second} erstellt.',
+  'shell.component.createdWithThree': '{rel} mit {first}, {second} und {third} erstellt.', // review
   'shell.component.deleteBody': 'Sie hat sich seit dem Erstellen geändert. Das Rückgängigmachen hat die Seite in jedem Fall wiederhergestellt.',
   'shell.component.deleteConfirm': 'Datei löschen',
   'shell.component.deleteKeep': 'Datei behalten',
   'shell.component.deleteTitle': '{rel} löschen?',
   'shell.component.movedValues': { one: '{count} verschobener Wert', other: '{count} verschobene Werte' },
+  'shell.component.movedStyles': { one: 'den Styles von {count} Klasse', other: 'den Styles von {count} Klassen' }, // review
+  'shell.component.stylesChanged': 'Die Styles der Seite haben sich inzwischen geändert, daher wurde die Komponente nicht erstellt. Versuche es erneut.', // review
+  'shell.component.sheetsChanged': 'Abgebrochen, weil sich {files} inzwischen geändert hat. Es wurde nichts geändert.', // review
+  'shell.component.movingStyles': 'Styles werden in die Komponente verschoben…', // review
+  'shell.component.movedStylesUnverified': 'Die Styles in {rel} konnten nicht bestätigt werden, daher wurde nichts verschoben.', // review
+  'shell.component.sheetsNotCleaned': 'Die Seite ist noch nicht gespeichert, daher bleiben die verschobenen Styles auch in {files}. Es geht nichts verloren.', // review
+  'shell.styleMove.title': 'Ein Verschieben von Styles wurde unterbrochen', // review
+  'shell.styleMove.interrupted': 'Das Erstellen der Komponente {name} wurde mittendrin unterbrochen. Es ging kein Style verloren.', // review
+  'shell.styleMove.changed':
+    'Das Erstellen der Komponente {name} wurde mittendrin unterbrochen, und einige ihrer Dateien haben sich seitdem geändert, daher kann Stacki es weder genau abschließen noch rückgängig machen. Es wird nichts überschrieben.', // review
+  'shell.styleMove.files': 'Dateien anzeigen', // review
+  'shell.styleMove.left': 'Noch offen:', // review
+  'shell.styleMove.done': 'Erledigt:', // review
+  'shell.styleMove.edited': 'Seitdem geändert:', // review
+  'shell.styleMove.finish': 'Verschieben abschließen', // review
+  'shell.styleMove.finishHint': 'Die Styles stehen nur noch in der Komponente, wie gewünscht.', // review
+  'shell.styleMove.undo': 'Verschieben rückgängig machen', // review
+  'shell.styleMove.undoHint': 'Jede Datei wird genau wie vorher.', // review
+  'shell.styleMove.dismiss': 'Verwerfen', // review
+  'shell.styleMove.dismissHint': 'Dieses Verschieben vergessen. Deine Dateien bleiben, wie sie sind.', // review
+  'shell.styleMove.later': 'Später fragen', // review
+  'shell.styleMove.finished': 'Das Verschieben von {name} ist abgeschlossen.', // review
+  'shell.styleMove.undone': 'Das Verschieben von {name} ist rückgängig gemacht.', // review
   'shell.component.propCount': { one: '{count} Eigenschaft', other: '{count} Eigenschaften' },
   'shell.copy.done': 'Auswahl kopiert – füge sie in deinen KI-Chat ein.',
   'shell.copy.failed': 'Die Auswahl konnte nicht kopiert werden: {message}',

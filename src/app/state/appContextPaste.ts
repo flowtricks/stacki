@@ -191,8 +191,8 @@ function announce(bundle: PasteBundle, translate: Translator, undo: () => Promis
   ]);
 }
 
-// The project's setting for new style tags, read fresh; the last value the Style panel read when the file cannot be.
-async function styleSettings(projectPath: string | undefined): Promise<ReturnType<typeof getNewStyleTagSettings>> {
+/** The project's setting for new style tags, read fresh; the last value the Style panel read when the file cannot be. */
+export async function styleSettings(projectPath: string | undefined): Promise<ReturnType<typeof getNewStyleTagSettings>> {
   if (projectPath === undefined) {
     return getNewStyleTagSettings();
   }

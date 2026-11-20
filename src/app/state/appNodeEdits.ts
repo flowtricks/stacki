@@ -4,6 +4,7 @@
 
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assertCanAddComponent } from '../../features/palette/componentVisibility';
+import type { ComponentCreateOptions } from '../../features/palette/PaletteDialogs';
 import { gatePlacement, placementNotice } from '../model/placementGate';
 import { useCompileFailureNotice } from './appCompileRecovery';
 import { documentOfPath, placementNodeOf, placementNodeOfItem } from '../../editor/placementCheck';
@@ -31,7 +32,11 @@ import { type NodeClipboard } from '../appTypes';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { confirmDialog } from '../../ui/ConfirmDialog';
-import { createdComponentFiles } from '../model/componentCreation';
+import { createdComponentFiles, movedStyleFiles, sequencedFiles } from '../model/componentCreation';
+
+import { finishMovedStyles, heldMovedStyles, planMovedStyles, sheetCalls, startMoveJournal, type MovedStyles, type MoveJournal } from './componentStyleChoices';
+import { windowHeld } from '../../ui/busyLock';
+import { readText } from '../../ipc/bridge';
 import {
   createProjectComponent,
   discardProjectComponent,
@@ -43,7 +48,7 @@ import {
 import { parseShortcutMessage } from '../../features/preview/previewMessages';
 import { namesInSubtree, offerStyleCleanup } from '../../features/selectors/deleteCleanup';
 import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatterOf } from '../model/nodeFactory';
-import { extractionGesture, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
+import { extractionGesture, createdComponentMessage, movedStylesEdit, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { copiedFile, pasteSourceOf } from '../model/contextPaste';
 import { useContextPaste } from './appContextPaste';
@@ -310,7 +315,7 @@ export function useCreateComponent(
   history: ReturnType<typeof useHistory>,
 ) {
   const translate = useTranslate();
-  const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setSelectedId } = coreState;
+  const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setBusy, setSelectedId } = coreState;
   const { extractionFor } = componentQueries;
   const { rescan, showToast } = lifecycle;
   const { commitEdit } = history;
@@ -325,12 +330,15 @@ export function useCreateComponent(
   // a value in as a prop (extractFrontmatter.ts). Its removal from the page is the
   // same gesture's frontmatter write, so the one step below covers it.
   //
-  // The page's CSS is the user's and is never rewritten here: its `<style>`
-  // blocks stay byte for byte as they were. And it is one undo step: ⌘Z
-  // restores the page and the markup, and takes the new file back
+  // The page's CSS is the user's and is rewritten only on the person's own choice:
+  // the rules of the classes checked under "Move styles" leave the page's `<style>`
+  // tags and the unlocked stylesheets for a new tag in the component (planMovedStyles,
+  // componentStyles.ts); with nothing checked, every `<style>` block and stylesheet stays
+  // byte for byte as it was. And it is one undo step: ⌘Z
+  // restores the page and the markup, puts the moved rules back, and takes the new file back
   // (componentCreation.ts).
-  const createComponentFromSelection = useCallback(
-    async (name: string, options: { readonly asProp: readonly string[]; readonly folder: string }) => {
+  const createComponentNow = useCallback(
+    async (name: string, options: ComponentCreateOptions) => {
       const page = pageStateRef.current.currentPage;
       const state = pageStateRef.current.pageState;
       const model = state?.editable ? state.model : undefined;
@@ -342,6 +350,16 @@ export function useCreateComponent(
       }
       const plan = planExtraction(extractionFor(model, node), new Set(options.asProp));
       const { props } = plan;
+      // "Move styles": planned from the sheets as they are now, before anything is written.
+      let moved: MovedStyles | undefined = undefined;
+      if (options.moveStyles.length > 0) {
+        try {
+          moved = await planMovedStyles({ projectPath, model, node }, options.moveStyles);
+        } catch (error: unknown) {
+          showToast(cleanError(error), 'error');
+          return;
+        }
+      }
       const input = {
         projectPath,
         pagePath: page.path,
@@ -351,6 +369,7 @@ export function useCreateComponent(
         props,
         frontmatter: plan.moved,
         folder: options.folder,
+        style: moved?.style,
       };
       let created;
       try {
@@ -362,7 +381,7 @@ export function useCreateComponent(
       const createdPath = created.path;
       // The folders the file's creation made, so Undo takes them back with it once they are empty; Redo may make them again.
       let createdFolders = created.folders;
-      const files = createdComponentFiles(
+      const componentFiles = createdComponentFiles(
         {
           discard: async ({ checksum, force }) =>
             (await discardProjectComponent({ projectPath, path: createdPath, checksum, force, folders: createdFolders })).outcome,
@@ -385,6 +404,44 @@ export function useCreateComponent(
         },
         created.checksum,
       );
+      // Copy first, delete last. The component now holds the moved rules; read it back before anything leaves its source.
+      let journal: MoveJournal | undefined = undefined;
+      if (moved?.style !== undefined) {
+        const componentText = await heldMovedStyles(projectPath, created.rel, moved.plan.carried.rules);
+        if (componentText === undefined) {
+          await componentFiles.undo();
+          showToast(translate('shell.component.movedStylesUnverified', { rel: created.rel }), 'error');
+          return;
+        }
+        // The plan goes on disk before the page or any stylesheet is written: a crash from here on is found and resolved.
+        try {
+          journal = await startMoveJournal({
+            projectPath,
+            name,
+            component: { path: created.path, rel: created.rel, text: componentText },
+            page: { path: page.path, before: await readText(projectPath, page.path) },
+            sheets: moved.plan.sheets,
+          });
+        } catch (error: unknown) {
+          await componentFiles.undo(); // No journal, no move: nothing but the new file was written, and it goes.
+          showToast(cleanError(error), 'error');
+          return;
+        }
+      }
+      // The sheets' half: cleaned only once the page is saved using the component (below), put back before it stops.
+      const sheetFiles = moved === undefined || moved.plan.sheets.length === 0 ? undefined : movedStyleFiles(moved.plan.sheets, sheetCalls(translate));
+      const files = sheetFiles === undefined ? componentFiles : sequencedFiles(componentFiles, sheetFiles);
+      // Taking the move back before the page used the component: the new file goes, and so does the journal of it.
+      const abandon = async (): Promise<void> => {
+        await files.undo();
+        await journal?.clear();
+      };
+      const sheetsChanged = sheetFiles === undefined ? undefined : await sheetFiles.check('redo');
+      if (sheetsChanged !== undefined) {
+        await abandon(); // A sheet changed since the plan read it: nothing moves, and the new file goes.
+        showToast(sheetsChanged, 'error');
+        return;
+      }
       const paths = await findImportPath(projectPath, page.path, created.path);
       const id = newId();
       // Step 9: the instance goes in before the markup, the markup comes out,
@@ -394,33 +451,70 @@ export function useCreateComponent(
       const shown = now?.editable ? now.model : undefined;
       const found = shown ? findWithParent(shown.nodes, node.id) : undefined;
       if (!shown || !found) {
-        await files.undo(); // The page moved on meanwhile: nothing will import the file.
+        await abandon(); // The page moved on meanwhile: nothing will import the file.
         return;
       }
       if (frontmatterOf(shown) !== frontmatterOf(model)) {
         // The plan took code out of a frontmatter that has changed since, and
         // writing it would put the old text back over the new.
-        await files.undo();
+        await abandon();
         showToast(translate('shell.component.codeChanged'), 'error');
+        return;
+      }
+      // The page's `<style>` tags lose the moved rules in the same step, unless they changed since the plan read them.
+      const pageStyles = movedStylesEdit(shown, moved?.plan.pageStyles ?? []);
+      if (pageStyles.kind === 'changed') {
+        await abandon();
+        showToast(translate('shell.component.stylesChanged'), 'error');
         return;
       }
       const place = { parentId: found.parent?.id ?? undefined, index: found.index };
       const extracted = { id, name, props, place, paths, parent: plan.parent };
       const extraction = extractionGesture(shown, node.id, extracted);
-      if (!commitEdit(extraction, { files })) {
-        await files.undo(); // Refused: the page won't import the file, so it doesn't stay.
+      const gesture = pageStyles.kind === 'ready' ? sequence(extraction, pageStyles.gesture) : extraction;
+      if (!commitEdit(gesture, { files })) {
+        await abandon(); // Refused: the page won't import the file, so it doesn't stay.
         return;
       }
       setSelectedId(id);
+      // The sheets give up the moved rules only once the page on disk uses the component: until then both hold them,
+      // so whatever stops this (a crash, a refused save) can leave a rule twice, never nowhere. The journal stays until
+      // the move is whole, so a stop here is found when the project opens again.
+      if (journal !== undefined) {
+        const finished = await finishMovedStyles({ projectPath, pagePath: page.path, journal, sheetFiles, read: () => pageStateRef.current });
+        if (finished.kind === 'unsaved') {
+          showToast(translate('shell.component.sheetsNotCleaned', { files: moved?.plan.sheets.map((sheet) => sheet.rel).join(', ') ?? '' }), 'warning');
+        } else if (finished.kind === 'failed') {
+          showToast(finished.message, 'error');
+        }
+      }
       await rescan(projectPath);
       // Anything left reading the page's scope can't be reconnected on its own:
       // an expression naming something that isn't a value the page holds. The
       // person who just moved it knows what it needs.
       const movedCount = plan.values.filter((value) => value.kind === 'move').length;
       const stranded = usesPageScope(node) && plan.values.length === 0;
-      showToast(createdComponentMessage(created.rel, { props: props.length, moved: movedCount }, { stranded }, translate));
+      const styles = moved === undefined || moved.plan.carried.rules.length === 0 ? 0 : options.moveStyles.length;
+      showToast(createdComponentMessage(created.rel, { props: props.length, moved: movedCount, styles }, { stranded }, translate));
     },
     [commitEdit, extractionFor, rescan, showToast, pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setSelectedId, translate],
+  );
+  // A move of styles writes several files in a set order: the window waits under the busy cover (BusyOverlay) until
+  // it is whole or taken back, so nothing done in Stacki meanwhile (an edit, an undo, another page) can come between.
+  const createComponentFromSelection = useCallback(
+    async (name: string, options: ComponentCreateOptions) => {
+      if (options.moveStyles.length === 0) {
+        await createComponentNow(name, options);
+        return;
+      }
+      setBusy(translate('shell.component.movingStyles'));
+      try {
+        await createComponentNow(name, options);
+      } finally {
+        setBusy(undefined);
+      }
+    },
+    [createComponentNow, setBusy, translate],
   );
   return { createComponentFromSelection };
 }
@@ -796,7 +890,11 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
       }
     };
     // ⌘E from the menu while an app that keeps the palette shortcut has focus is the app's.
+    // Nothing is inserted while a cover holds the window (src/ui/busyLock.ts).
     const offMenu = window.avb.onMenu('insert', () => {
+      if (windowHeld()) {
+        return;
+      }
       if (appShortcutRoute('Mod+E', document.activeElement ?? undefined) !== 'app') {
         openIfEditable();
       }

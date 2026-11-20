@@ -113,7 +113,9 @@ test('the complete channel inventory matches real main and terminal registration
   // :restoreRemoved), renaming or moving a component three (component:planRename, :rename and :revertRename),
   // and deleting a prop across the site one (component:previewPropertyRemoval), 285 in all.
   // Deleting a component with its instances and imports adds its plan (component:planRemove), 286 in all.
-  assert.equal(harness.handlers.size, 286);
+  // Create component's "Move styles" adds five: which files use each class (component:classUsage) and the move's
+  // journal (styleMove:record, :clear, :pending and :resolve), 291 in all.
+  assert.equal(harness.handlers.size, 291);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

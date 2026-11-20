@@ -25,6 +25,7 @@ import { nextReveal, revealNode, type PendingReveal } from './auditReveal';
 import { AUDIT_VALUE_KIT } from './auditValueKit';
 import { selectFromPanel } from './panelSelection';
 import type { ShellView } from '../App';
+import { plainStepFiles } from '../model/componentCreation';
 
 /** The terminal's place among agent-task handlers: below the AI panel's, when there is one. */
 const TERMINAL_HANDLER_PRIORITY = 10;
@@ -132,7 +133,7 @@ function fixDeps(app: ShellView): FixDeps {
     open:
       path === undefined || state?.editable !== true
         ? undefined
-        : { path, model: state.model, commit: (gesture, files) => app.commitEdit(gesture, files === undefined ? {} : { files }) },
+        : { path, model: state.model, commit: (gesture, files) => app.commitEdit(gesture, files === undefined ? {} : { files: plainStepFiles(files) }) },
     readPage,
     send: editProjectPage,
     sendBatch: editProjectPageBatch,

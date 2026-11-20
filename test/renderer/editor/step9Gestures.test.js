@@ -190,7 +190,7 @@ test('paste and extract-to-component insert, remove and import as requests', asy
   });
   await gesture(app, async () => {
     // The create dialog always names the folder the component goes in (c4cb38e9).
-    await __panels.PalettePanel.onCreateComponent('Two', { asProp: [], folder: 'src/components' });
+    await __panels.PalettePanel.onCreateComponent('Two', { asProp: [], folder: 'src/components', moveStyles: [] });
   });
   assert.equal(
     disk(),

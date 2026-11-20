@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
 import type { ComponentUsageFile } from './paletteModel';
-import type { ComponentCreationSource, UsageAnchor, UsagePopup } from './PaletteDialogs';
+import type { ComponentCreateOptions, ComponentCreationSource, UsageAnchor, UsagePopup } from './PaletteDialogs';
 import { cleanError } from '../../lib/cleanError';
 import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { rankInsertItems } from '../../lib/insertRank';
@@ -39,7 +39,7 @@ interface PalettePanelProps {
   readonly onInsert: (name: string) => void;
   readonly onDragBegin?: () => void;
   /** `folder` is below the first component folder, `''` for that folder itself (CreateComponentModal). */
-  readonly onCreateComponent: (name: string, options: { readonly asProp: readonly string[]; readonly folder: string }) => void;
+  readonly onCreateComponent: (name: string, options: ComponentCreateOptions) => void;
   readonly onUsage?: (component: ScanComponent) => Promise<unknown>;
   readonly onOpenUsage?: (file: ComponentUsageFile) => void;
   readonly pageInstances?: (name: string) => readonly { readonly id: string }[];

@@ -21,6 +21,7 @@ import { entrySampleKey, type ImportNeed } from '../../editor/dataSample';
 import { withCollectionQuery, withDataImport } from '../../editor/frontmatterAdditions';
 import type { FieldDefinition } from '../../features/props/propRules';
 import type { ComponentCreationSource } from '../../features/palette/PaletteDialogs';
+import { loadMoveStyleCandidates } from './componentStyleChoices';
 import { planExtraction, type ExtractionRead } from '../../editor/extractFrontmatter';
 import { type FrontmatterSubject } from '../../features/code/codeWindowTarget';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
@@ -517,7 +518,7 @@ export function useCreateFrom(
 ) {
   const translate = useTranslate();
   const { model } = shortcuts;
-  const { classesForRef, classesTick, pseudoPick, selectedId, setSelectedClasses } = coreState;
+  const { classesForRef, classesTick, pageStateRef, projectRef, pseudoPick, selectedId, setSelectedClasses } = coreState;
   const { frontmatterCode, tree } = selectionModel;
   const { extractionFor } = nodeEdits;
 
@@ -571,8 +572,17 @@ export function useCreateFrom(
         read ??= extractionFor(model, node);
         return planExtraction(read, asProp);
       },
+      // Read when the dialog opens, not on every selection: it walks the project's files.
+      styles: () => {
+        const projectPath = projectRef.current?.path;
+        const pagePath = pageStateRef.current.currentPage?.path;
+        if (projectPath === undefined || pagePath === undefined) {
+          return Promise.resolve([]);
+        }
+        return loadMoveStyleCandidates({ projectPath, pagePath, model, node });
+      },
     };
-  }, [pseudoPick, selectedId, tree, model, extractionFor, translate]);
+  }, [pseudoPick, selectedId, tree, model, extractionFor, translate, projectRef, pageStateRef]);
 
   // Rendered classes describe one element, and the canvas can only say what the
   // NEW selection's are a frame or two later. Two ways to spend that gap, and

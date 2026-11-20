@@ -454,6 +454,23 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'component:rename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/ContactButton.astro' } },
   'component:revertRename': { token: 'component-rename-1', direction: 'undo' },
   'component:previewPropertyRemoval': { projectPath: '/site', file: '/site/src/components/Button.astro', name: 'direction' },
+  'component:classUsage': { projectPath: '/site', pagePath: '/site/src/pages/index.astro', classes: ['card', 'card_title'] },
+  'styleMove:record': {
+    projectPath: '/site',
+    journal: {
+      version: 1,
+      id: 'move-1',
+      startedAt: 1,
+      component: 'Card',
+      files: [
+        { role: 'component', path: '/site/src/components/Card.astro', rel: 'src/components/Card.astro', after: 'card' },
+        { role: 'page', path: '/site/src/pages/index.astro', rel: 'src/pages/index.astro', before: 'page' },
+      ],
+    },
+  },
+  'styleMove:clear': { projectPath: '/site', id: 'move-1' },
+  'styleMove:pending': { projectPath: '/site' },
+  'styleMove:resolve': { projectPath: '/site', id: 'move-1', target: 'moved' },
   'breakpointSync:restore': { projectPath: '/site', journalId: 'journal-1', direction: 'undo' },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
   'content:sampleValue': {

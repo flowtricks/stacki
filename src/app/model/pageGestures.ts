@@ -13,7 +13,7 @@ import { ASTRO_ASSETS_MODULE, PLACEHOLDER_PROPS } from '../../features/palette/a
 import { getElementSchema, VOID_TAGS } from '../../editor/elementSchemas';
 import { isInlineOnly } from '../../features/props/RichContent';
 import { type EditGesture } from '../../editor/pageEdits';
-import { type InsertPlace, frontmatterGesture, insertGesture, removalGesture, sequence } from '../../editor/editGestures';
+import { type InsertPlace, frontmatterGesture, insertGesture, nodeGesture, removalGesture, sequence } from '../../editor/editGestures';
 import { ancestorChain } from '../../editor/editorTree';
 import type { NodeId } from '../../../shared/core/brand';
 import { nodeAtPath } from '../../editor/editorTree';
@@ -220,9 +220,36 @@ function withFrontmatterLeft(model: EditorModel, left: Pick<EditorModel, 'import
 }
 
 // What creating a component says it did.
+/** The page's half of "Move styles": nothing to change, a tag that changed since the move was planned, or the gesture. */
+export type MovedStylesEdit = { readonly kind: 'none' } | { readonly kind: 'changed' } | { readonly kind: 'ready'; readonly gesture: EditGesture };
+
+/**
+ * The page's `<style>` tags as a move of their rules leaves them: each rewritten with its rules gone, or removed when
+ * nothing but space is left. A tag missing from `shown`, or holding other CSS than the plan read, means the page
+ * moved on: writing the plan's text would put the old CSS back over the new, so nothing is written.
+ */
+export function movedStylesEdit(
+  shown: EditorModel,
+  edits: readonly { readonly id: string; readonly before: string; readonly inner: string }[],
+): MovedStylesEdit {
+  const urgent = { coalesceKey: undefined, urgency: true };
+  let gesture: EditGesture | undefined = undefined;
+  for (const edit of edits) {
+    const tag = findNodeById(shown.nodes, edit.id);
+    if (tag?.kind !== 'raw' || tag.inner !== edit.before) {
+      return { kind: 'changed' };
+    }
+    assert(edit.inner !== edit.before, 'movedStylesEdit: every listed tag changes');
+    const step = edit.inner.trim() === '' ? removalGesture([edit.id], urgent) : nodeGesture(edit.id, { ...tag, inner: edit.inner }, urgent);
+    gesture = gesture === undefined ? step : sequence(gesture, step);
+  }
+  assert((gesture === undefined) === (edits.length === 0), 'movedStylesEdit: one step per edited tag');
+  return gesture === undefined ? { kind: 'none' } : { kind: 'ready', gesture };
+}
+
 export function createdComponentMessage(
   rel: string,
-  counts: { readonly props: number; readonly moved: number },
+  counts: { readonly props: number; readonly moved: number; readonly styles: number },
   { stranded }: { readonly stranded: boolean },
   translate: Translator,
 ): string {
@@ -232,14 +259,19 @@ export function createdComponentMessage(
   const parts = [
     counts.moved > 0 ? translate('shell.component.movedValues', { count: counts.moved }) : '',
     counts.props > 0 ? translate('shell.component.propCount', { count: counts.props }) : '',
+    counts.styles > 0 ? translate('shell.component.movedStyles', { count: counts.styles }) : '',
   ].filter((part) => part !== '');
-  const [first, second] = parts;
+  assert(parts.length <= 3, 'createdComponentMessage: at most three parts');
+  const [first, second, third] = parts;
   if (first === undefined) {
     return translate('shell.component.created', { rel });
   }
-  return second === undefined
-    ? translate('shell.component.createdWithOne', { rel, first })
-    : translate('shell.component.createdWithTwo', { rel, first, second });
+  if (second === undefined) {
+    return translate('shell.component.createdWithOne', { rel, first });
+  }
+  return third === undefined
+    ? translate('shell.component.createdWithTwo', { rel, first, second })
+    : translate('shell.component.createdWithThree', { rel, first, second, third });
 }
 
 // What a pasted subtree needs from its new page: project components to import from

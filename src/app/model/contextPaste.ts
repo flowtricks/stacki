@@ -69,7 +69,8 @@ function isStyleOrScript(node: EditorNode): boolean {
 }
 
 // Every `<style>` of the file, top level or nested: Astro hoists them all.
-function stylesOf(nodes: readonly EditorNode[]): readonly PasteStyleSource[] {
+/** The file's `<style>` tags, in source order, as the paste rule reads them. */
+export function stylesOf(nodes: readonly EditorNode[]): readonly PasteStyleSource[] {
   const out: PasteStyleSource[] = [];
   const pending = [...nodes];
   while (pending.length > 0) {

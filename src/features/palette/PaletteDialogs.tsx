@@ -8,6 +8,7 @@ import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import type { ExtractionPlan, ExtractionValue } from '../../editor/extractFrontmatter';
+import type { MoveStyleCandidate, StyleHome } from '../../editor/moveStyleTypes';
 import type { ComponentUsageFile } from './paletteModel';
 import { componentNameProblem, toComponentName } from './componentName';
 import { folderInput, type RenameCandidate } from './renameAvailability';
@@ -26,6 +27,8 @@ export type ComponentCreationSource =
       readonly label: string;
       /** What creating would do with these values passed in as props and the rest moved. */
       readonly plan: (asProp: ReadonlySet<string>) => ExtractionPlan;
+      /** The classes whose CSS may move into the component, read when the dialog opens; absent where the host cannot move CSS. */
+      readonly styles?: () => Promise<readonly MoveStyleCandidate[]>;
     }
   | { readonly kind: 'unavailable'; readonly reason: string; readonly reasonRef?: TypedMessageRef | undefined };
 
@@ -57,8 +60,14 @@ interface CreateComponentModalProps {
   /** The components folder a new component goes in (`src/components`, the first configured folder); folders are chosen below it. */
   readonly root: string;
   readonly onClose: () => void;
-  /** `folder` is below `root`, `/`-separated, `''` for the root itself. */
-  readonly onCreate: (name: string, options: { readonly asProp: readonly string[]; readonly folder: string }) => void;
+  /** `folder` is below `root`, `/`-separated, `''` for the root itself; `moveStyles` names the classes whose CSS moves. */
+  readonly onCreate: (name: string, options: ComponentCreateOptions) => void;
+}
+
+export interface ComponentCreateOptions {
+  readonly asProp: readonly string[];
+  readonly folder: string;
+  readonly moveStyles: readonly string[];
 }
 
 /** The folder choice that opens the typed field; NUL cannot be in a path, so it can never be a folder. */
@@ -73,6 +82,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
   const [newFolder, setNewFolder] = useState('');
   const { plan: planFor } = props.source;
   const plan = useMemo(() => planFor(asProp), [planFor, asProp]);
+  const styles = useMoveStyleChoices(props.source.styles);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
@@ -88,7 +98,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
   const shown = text.trim() ? error : undefined;
   const submit = (): void => {
     if (problem === undefined && target.folder !== undefined) {
-      props.onCreate(name, { asProp: [...asProp], folder: target.folder });
+      props.onCreate(name, { asProp: [...asProp], folder: target.folder, moveStyles: [...styles.chosen] });
     }
   };
   return (
@@ -123,6 +133,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
               onClose={close}
             />
             <ValueChoices values={plan.values} asProp={asProp} onChange={setAsProp} />
+            <MoveStyleChoices state={styles.state} chosen={styles.chosen} onChange={styles.setChosen} />
           </div>
           <div className="modal-footer">
             <button onClick={close}>{translate('ui.cancel')}</button>
@@ -134,6 +145,139 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
       )}
     </Popup>
   );
+}
+
+/** The "Move styles" list while it is read: nothing to read here, reading, read, or unreadable. */
+type MoveStyleState =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'ready'; readonly candidates: readonly MoveStyleCandidate[] }
+  | { readonly kind: 'failed' };
+
+// Reads the choices once, when the dialog opens, and starts with the classes nothing else uses checked.
+// Until they arrive nothing is chosen, so creating early moves no CSS.
+function useMoveStyleChoices(load: (() => Promise<readonly MoveStyleCandidate[]>) | undefined) {
+  const [state, setState] = useState<MoveStyleState>(load === undefined ? { kind: 'none' } : { kind: 'loading' });
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    if (load === undefined) {
+      return undefined;
+    }
+    let current = true;
+    load().then(
+      (candidates) => {
+        if (current) {
+          setState({ kind: 'ready', candidates });
+          setChosen(new Set(candidates.filter((candidate) => candidate.checked).map((candidate) => candidate.name)));
+        }
+      },
+      () => current && setState({ kind: 'failed' }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [load]);
+  return { state, chosen, setChosen };
+}
+
+function MoveStyleChoices({
+  state,
+  chosen,
+  onChange,
+}: {
+  readonly state: MoveStyleState;
+  readonly chosen: ReadonlySet<string>;
+  readonly onChange: (chosen: ReadonlySet<string>) => void;
+}) {
+  const translate = useTranslate();
+  if (state.kind === 'none') {
+    return undefined;
+  }
+  if (state.kind === 'ready' && state.candidates.length === 0) {
+    return undefined;
+  }
+  const toggle = (name: string): void => {
+    const next = new Set(chosen);
+    if (next.has(name)) {
+      next.delete(name);
+    } else {
+      next.add(name);
+    }
+    onChange(next);
+  };
+  return (
+    <div className="extract-values move-styles">
+      <div className="extract-values-head">
+        <label>{translate('palette.create.styles.title')}</label>
+      </div>
+      {state.kind === 'ready' ? (
+        <>
+          <div className="extract-value-list">
+            {state.candidates.map((candidate) => (
+              <MoveStyleRow key={candidate.name} candidate={candidate} checked={chosen.has(candidate.name)} onToggle={toggle} />
+            ))}
+          </div>
+          <div className="hint-text extract-values-foot">{translate('palette.create.styles.foot')}</div>
+        </>
+      ) : (
+        <div className="hint-text">{translate(state.kind === 'loading' ? 'palette.create.styles.loading' : 'palette.create.styles.failed')}</div>
+      )}
+    </div>
+  );
+}
+
+function MoveStyleRow({
+  candidate,
+  checked,
+  onToggle,
+}: {
+  readonly candidate: MoveStyleCandidate;
+  readonly checked: boolean;
+  readonly onToggle: (name: string) => void;
+}) {
+  const translate = useTranslate();
+  const homes = candidate.homes.map((home) => homeLabel(home, translate('palette.create.styles.page'))).join(', ');
+  const reach = candidate.reach;
+  return (
+    <label className="extract-value">
+      <input
+        type="checkbox"
+        checked={checked}
+        aria-label={translate('palette.create.styles.checkAria', { name: candidate.name })}
+        onChange={() => onToggle(candidate.name)}
+      />
+      <CodeInline className="extract-value-name" text={`.${candidate.name}`} language="css" />
+      {reach.kind === 'onlyHere' ? undefined : (
+        <span className="extract-value-tag">
+          {translate('palette.create.styles.alsoUsed')}
+          <InfoHint
+            text={
+              reach.kind === 'page'
+                ? translate('palette.create.styles.onPage')
+                : translate('palette.create.styles.inFiles', { files: reach.files.length === 0 ? '…' : reach.files.join(', ') })
+            }
+          />
+        </span>
+      )}
+      <span className="move-style-home" title={homes}>
+        {homes}
+      </span>
+    </label>
+  );
+}
+
+// A stylesheet by its file name, the page by the word for it: the full path is in the tooltip.
+function homeLabel(home: StyleHome, page: string): string {
+  switch (home.kind) {
+    case 'page':
+      return page;
+    case 'stylesheet':
+      return home.rel.split('/').pop() ?? home.rel;
+    default: {
+      const exhaustive: never = home;
+      return exhaustive;
+    }
+  }
 }
 
 /** Where the new component would be written, worked out from what is typed and chosen on every keystroke (no round trip). */

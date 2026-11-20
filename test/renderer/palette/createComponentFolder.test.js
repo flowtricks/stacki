@@ -4,6 +4,8 @@
 // saved as, live; a typed folder that climbs out, starts at the disk, has an empty level or a bad character is refused with its
 // reason on screen and Create disabled; a name is taken only in the chosen folder, and the same name in another folder is a
 // warning, not a refusal. Creating hands the host the folder below the root, `''` for the root.
+// "Move styles" lists the classes whose CSS may go into the component, read when the dialog opens: checked when nothing else uses
+// them, with where their CSS is; absent when there is nothing to read or nothing to move; and Create hands over the checked ones.
 // Method: bundle the real PalettePanel, mount it in jsdom with components in nested folders and a stub management whose rename
 // host names the configured roots, open the dialog with the header button, and drive the real dropdown and inputs with clicks
 // and input events; the host's onCreateComponent records what it is handed.
@@ -58,7 +60,7 @@ global.localStorage = dom.window.localStorage;
 // After the globals: react-dom reads the DOM it runs in once, when it loads.
 const lib = require(output);
 
-async function mount(sourceName) {
+async function mount(sourceName, styles) {
   document.body.innerHTML = '<div id="root"></div>';
   global.IS_REACT_ACT_ENVIRONMENT = true;
   dom.window.cancelAnimationFrame = (handle) => clearTimeout(handle);
@@ -86,6 +88,7 @@ async function mount(sourceName) {
           name: sourceName,
           label: '<div>',
           plan: () => ({ values: [], props: [], moved: { imports: [], code: '' }, parent: { imports: [], extraFrontmatter: '' } }),
+          ...(styles === undefined ? {} : { styles }),
         },
         onInsert() {},
         onCreateComponent: (name, options) => created.push({ name, ...options }),
@@ -134,7 +137,7 @@ test('the folder field is the custom dropdown under Name, on the components root
   assert.equal(view.trigger().textContent.trim(), 'components (root)');
   assert.match(view.hint(), /saved as src\/components\/Div\.astro/);
   await view.act(() => view.createButton().click());
-  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: '' }], 'the root is handed over as an empty folder');
+  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: '', moveStyles: [] }], 'the root is handed over as an empty folder');
   await view.unmount();
 });
 
@@ -150,7 +153,7 @@ test('choosing a nested folder updates the hint and is what Create hands over', 
   await view.pick('Global/Layout');
   assert.match(view.hint(), /saved as src\/components\/Global\/Layout\/Div\.astro/);
   await view.act(() => view.createButton().click());
-  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: 'Global/Layout' }]);
+  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: 'Global/Layout', moveStyles: [] }]);
   await view.unmount();
 });
 
@@ -164,7 +167,7 @@ test('a typed new nested folder is normalized, case folded onto an existing fold
   assert.match(view.hint(), /saved as src\/components\/Global\/HeroCards\/Div\.astro/);
   assert.equal(view.createButton().disabled, false);
   await view.act(() => view.createButton().click());
-  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: 'Global/HeroCards' }]);
+  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: 'Global/HeroCards', moveStyles: [] }]);
   await view.unmount();
 });
 
@@ -203,4 +206,73 @@ test('the dialog forgets the folder: it opens on the root again', async () => {
   await view.act(() => [...document.querySelectorAll('.panel-header button')].pop().click());
   assert.equal(view.trigger().textContent.trim(), 'components (root)');
   await view.unmount();
+});
+
+// "Move styles": the classes whose CSS may go into the component, read when the dialog opens.
+const CANDIDATES = [
+  { name: 'card', homes: [{ kind: 'stylesheet', rel: 'src/styles/base.css' }, { kind: 'page' }], reach: { kind: 'onlyHere' }, checked: true },
+  { name: 'centered', homes: [{ kind: 'stylesheet', rel: 'src/styles/base.css' }], reach: { kind: 'files', files: ['src/pages/about.astro'] }, checked: false },
+];
+const styleRows = () => [...document.querySelectorAll('.modal .move-styles .extract-value')];
+const styleSection = () => document.querySelector('.modal .move-styles') ?? undefined;
+
+test('Move styles: absent where the host cannot move CSS, and when no class of the markup has CSS', async () => {
+  const without = await mount('Div');
+  assert.equal(styleSection(), undefined, 'no loader: no section');
+  await without.unmount();
+  const empty = await mount('Div', async () => []);
+  await empty.act(() => undefined);
+  assert.equal(styleSection(), undefined, 'nothing to move: no section');
+  await empty.unmount();
+});
+
+test('Move styles: a row per class, checked when nothing else uses it, with where its CSS is; Create hands over the checked', async () => {
+  const view = await mount('Div', async () => CANDIDATES);
+  await view.act(() => undefined);
+  const rows = styleRows();
+  assert.deepEqual(
+    rows.map((row) => [
+      row.querySelector('.extract-value-name').textContent,
+      row.querySelector('input').checked,
+      row.querySelector('.move-style-home').textContent,
+    ]),
+    [
+      ['.card', true, 'base.css, This page'],
+      ['.centered', false, 'base.css'],
+    ],
+  );
+  assert.ok(rows[0].querySelector('.extract-value-tag') === null, 'a class only here wears no tag');
+  assert.match(rows[1].querySelector('.extract-value-tag').textContent, /Also used elsewhere/);
+  assert.equal(rows[1].querySelector('input').getAttribute('aria-label'), 'Move the styles of .centered');
+  await view.act(() => view.createButton().click());
+  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: '', moveStyles: ['card'] }]);
+  await view.unmount();
+});
+
+test('Move styles: unchecking and checking change what Create hands over', async () => {
+  const view = await mount('Div', async () => CANDIDATES);
+  await view.act(() => undefined);
+  await view.act(() => styleRows()[0].querySelector('input').click());
+  await view.act(() => styleRows()[1].querySelector('input').click());
+  await view.act(() => view.createButton().click());
+  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: '', moveStyles: ['centered'] }]);
+  await view.unmount();
+});
+
+test('Move styles: says it is looking until the list arrives, and an unreadable list moves nothing', async () => {
+  let arrive;
+  const slow = await mount('Div', () => new Promise((resolve) => (arrive = resolve)));
+  assert.match(styleSection().textContent, /Looking for this markup’s styles/);
+  await slow.act(() => slow.createButton().click());
+  assert.deepEqual(slow.created[0].moveStyles, [], 'creating before the list arrives moves no CSS');
+  await slow.act(() => arrive(CANDIDATES));
+  await slow.unmount();
+  const broken = await mount('Div', async () => {
+    throw new Error('disk');
+  });
+  await broken.act(() => undefined);
+  assert.match(styleSection().textContent, /Couldn’t read the styles, so none will move/);
+  await broken.act(() => broken.createButton().click());
+  assert.deepEqual(broken.created[0].moveStyles, []);
+  await broken.unmount();
 });

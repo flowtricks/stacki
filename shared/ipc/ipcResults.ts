@@ -1,6 +1,8 @@
 import type { MessageRef } from '../core/i18n/messageReference';
 import type { BreakpointSyncApplied, BreakpointSyncScan, BreakpointUsage } from '../properties/breakpointSyncPlan';
 import type { MicrophoneReport } from '../properties/microphone';
+import type { ClassUsageReply } from '../properties/classUsage';
+import type { PendingStyleMove, StyleMoveResolution } from '../properties/styleMoveJournal';
 import type { AiResults } from './aiChat';
 import type { AppFileAnswer } from '../properties/appFiles';
 import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
@@ -272,6 +274,11 @@ export interface IpcResults extends AiResults {
   readonly 'component:discard': {
     readonly outcome: 'deleted' | 'edited' | 'missing';
   };
+  readonly 'component:classUsage': ClassUsageReply;
+  readonly 'styleMove:record': { readonly ok: true };
+  readonly 'styleMove:clear': { readonly ok: true };
+  readonly 'styleMove:pending': { readonly pending: PendingStyleMove | undefined };
+  readonly 'styleMove:resolve': StyleMoveResolution;
   readonly 'component:usage': {
     readonly files: ReadonlyArray<WireUsageFile>;
     readonly total: number;

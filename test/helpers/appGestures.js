@@ -95,6 +95,8 @@ async function mountApp(root, files, build, options = {}) {
   const bridge = new Proxy(
     {
       pendingProject: async () => undefined,
+      // As main answers a project with no "Move styles" journal (styleMove:pending).
+      pendingStyleMove: async () => ({ pending: undefined }),
       scanProject: async () => files.scan,
       projectMetadata: async (input) => require('#dist/electron/project/projectMetadata.js').readProjectMetadata(input.projectPath, input.kind),
       writeProjectMetadata: async (input) => require('#dist/electron/project/projectMetadata.js').writeProjectMetadata(input.projectPath, input.write),

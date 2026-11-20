@@ -43,10 +43,19 @@ export interface EditsEntry {
 /** A step's work on files beside its page writes. Undo runs once the page's
  *  writes are reverted, redo before they are replayed, so the page never
  *  imports a file that is not there. Both are idempotent: a step that undid
- *  only part of its page writes is undone again later, and runs them again. */
+ *  only part of its page writes is undone again later, and runs them again.
+ *
+ *  Copy first, delete last: what must exist while the page still reads it goes
+ *  back before the page is reverted (undoBeforePage) and leaves only after the
+ *  page is replayed (redoAfterPage), so no content is ever missing between two
+ *  writes. `check` is asked before anything moves, either way: a sentence
+ *  refuses the whole step and nothing is written. */
 export interface StepFiles {
+  readonly check: (direction: 'undo' | 'redo') => Promise<string | undefined>;
+  readonly undoBeforePage: () => Promise<void>;
   readonly undo: () => Promise<void>;
   readonly redo: () => Promise<void>;
+  readonly redoAfterPage: () => Promise<void>;
 }
 
 export type HistoryEntry = UndoCommand | EditsEntry;

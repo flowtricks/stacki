@@ -1133,6 +1133,45 @@ writes through the document actors, and returns each file's before and after tex
 `style:restoreSelectors` writes one side back, refusing a file that no longer holds the other.
 `astro-studio check-project` prints the same report.
 
+`component:classUsage` takes `{ projectPath, pagePath, classes }` and answers which files other than
+the page mention each class (`shared/properties/classUsage.ts`, `electron/properties/classMentions.ts`):
+one entry per class, at most `filesPerClassMax` project-relative paths each, `[]` when none does. It
+reads the project as the unused-selector check does: an `.astro` file by its text with its style blocks
+blanked, other texts as they are, stylesheets not at all, since a rule for a class is not a use of it.
+Only files under `src/` count: a README or a framework's notes use class names as plain words.
+Create component asks it before offering to move CSS: a class no file mentions, and no other element of
+the page carries, is offered checked; a utility (`u-`) is never offered, and a stylesheet locked in
+`.stacki/styles.json` keeps its rules, so a project marks its own utilities whatever their convention
+(`src/editor/componentStyles.ts`).
+
+Creating the component then moves the checked classes' rules, read again from disk at that moment: the
+new file gets one `<style>` shaped by `newStyleTag`, written after the markup in the same `component:create`
+nodes, and the rules leave the page's `<style>` tags (in the extraction's gesture; a tag left empty is
+removed) and each unlocked stylesheet (`style:writeFile`). What is carried and what is removed are judged
+by the paste rule, `carriedStyles` and `withoutCarried` (`src/editor/pasteStyles.ts`), so no rule is lost
+or written twice; a selector list keeps its other members, an emptied wrapping at-rule goes, keyframes
+stay. Copy first, delete last: the component is written and read back, the page is saved using it (its save
+state reaches `clean`), and only then do the stylesheets lose the rules, so a crash at any point can leave a
+rule twice, never nowhere. Each stylesheet write carries `expected`, and main's actor refuses it unless the
+file still holds that text. It is one undo step, all or nothing: `StepFiles.check` asks every stylesheet first
+and a sheet edited since refuses the whole step before anything is written; undo puts the rules back in the
+sheets before the page is reverted, then deletes the component, and redo mirrors it. A page `<style>` that
+changed between the plan and the write cancels the creation. With nothing checked, no CSS is touched.
+
+A move is journalled in main (`styleMove:record`, `styleMove:clear`, `styleMove:pending`, `styleMove:resolve`;
+`shared/properties/styleMoveJournal.ts`, `electron/content/styleMoveJournals.ts`): one journal per project in the
+app's `logs/` folder, as `<project>-<8 hex of its path>-style-move.json`, never in the project, written durably (temporary file, `fsync`, rename, folder
+`fsync`). It holds the plan, not the progress: each file with its exact text before and after. It is recorded once
+the component is written and read back, before the page or a stylesheet is; it learns the page's saved text, and
+goes once the stylesheets are clean. Where a move stands is read from the disk against it: a file at its before text
+is left, at its after text done, at neither changed by someone. When a project opens, a journal found untouched or
+done just goes; an interrupted one asks to finish or undo (both exact, written in the copy-first order and the
+reverse, each write refused unless the file holds what was read); one with a changed file writes nothing and names
+it. Undoing is refused for a page whose saved text the journal never learnt, since it cannot be told from later edits;
+finishing is refused (and not offered: `canFinish`) for a page not saved yet, since the stylesheets would lose rules
+the page does not take from the component yet. While a move runs, the busy cover holds the window (`src/ui/busyLock.ts`):
+it takes the pointer and every key, and the menu's edit commands do nothing; it shows only after 300ms.
+
 `.stacki/folders.json` contains `{ version: 1, folders: { components?, layouts?, assets?, styles?, variables? } }`
 (`shared/properties/projectFolders.ts`): for each panel, the project-relative folders it reads.
 A missing file, an invalid one, or a missing key reads that panel's defaults — `src/components`,

@@ -27,6 +27,8 @@ import {
   watchProject,
 } from '../../ipc/appBridge';
 import { componentEntry } from '../model/pageGestures';
+import { offerStyleMoveRecovery } from './styleMoveRecovery';
+import { windowHeld } from '../../ui/busyLock';
 import { savedForNavigation, componentAtPath, componentNamed, stackWith } from '../model/appKeys';
 import {
   useCoreState,
@@ -113,6 +115,8 @@ export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreSt
       void startPreview(projectPath);
       const result = await rescan(projectPath);
       markRenderer('stacki:project-ready');
+      // A "Move styles" this project left part way is offered to finish or undo before anything else is edited.
+      void offerStyleMoveRecovery(projectPath, { translate, showToast, rescan });
 
       const remembered = options.keepLayout === true ? bootSnapshotFor(projectPath)?.pageName : undefined;
       const first =
@@ -160,8 +164,9 @@ export function useProjectMenu(
   const { loadProject } = selectPageScope;
 
   useEffect(() => {
+    // Leaving or switching the project waits while a cover holds the window: the work under it is this project's.
     const offClose = window.avb.onMenu('closeProject', () => {
-      if (projectRef.current) {
+      if (projectRef.current && !windowHeld()) {
         void leaveProject();
       }
     });
@@ -179,7 +184,9 @@ export function useProjectMenu(
       await leaveProject(next);
     };
     const offOpen = window.avb.onMenu('openProject', () => {
-      void openFromMenu().catch(reportFailure);
+      if (!windowHeld()) {
+        void openFromMenu().catch(reportFailure);
+      }
     });
     return () => {
       offClose?.();

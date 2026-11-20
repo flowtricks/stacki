@@ -20,6 +20,10 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   'page:move': ['page:rename'],
   'pagefolder:rename': ['page:rename'],
   'component:create': ['component:create'],
+  // A "Move styles" journal belongs to Create component, and resolving one writes the files it names.
+  'styleMove:record': ['component:create'],
+  'styleMove:clear': ['component:create'],
+  'styleMove:resolve': ['component:create'],
   'component:duplicate': ['component:create'],
   'component:rename': ['component:edit'],
   'component:revertRename': ['component:edit'],
