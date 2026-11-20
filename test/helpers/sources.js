@@ -109,8 +109,28 @@ const PANEL_SOURCES = Object.freeze([
  * or undefined to keep the real component.
  */
 function stubPanels(name, stub) {
-  const stubs = PANEL_SOURCES.map((file) => [file, () => stub(path.basename(file, path.extname(file)))]);
+  const stubs = PANEL_SOURCES.map((file) => [file, () => withNamedExports(file, stub(path.basename(file, path.extname(file))))]);
   return stubSources(name, Object.fromEntries(stubs));
+}
+
+// Panel files that other, unstubbed modules import by name (the page settings dialog mounts
+// InstancePropFields, the drop overlay draws outlineIcon). A stub that only exports its default
+// leaves esbuild with "No matching export", so each such name is exported as a component that
+// renders nothing. Add a name here when a bundle of a real module imports it from a stubbed file.
+const PANEL_NAMED_EXPORTS = Object.freeze({
+  'src/features/preview/PreviewOverlays.tsx': ['outlineIcon'],
+  'src/features/props/PropsPanel.tsx': ['InstancePropFields'],
+  'src/features/props/propBindings.tsx': ['BindField', 'ConditionField', 'FieldDataPicker'],
+  'src/features/props/propNodeEditors.tsx': ['MapEditor'],
+});
+
+function withNamedExports(file, stubbed) {
+  const names = PANEL_NAMED_EXPORTS[file];
+  if (stubbed === undefined || names === undefined) {
+    return stubbed;
+  }
+  const exported = names.map((exportName) => `export const ${exportName} = () => null;`).join(' ');
+  return { ...stubbed, contents: `${stubbed.contents}\n${exported}\n` };
 }
 
 module.exports = { PANEL_SOURCES, ROOT, repoPath, sourceSpecifier, stubPanels, stubSources };
