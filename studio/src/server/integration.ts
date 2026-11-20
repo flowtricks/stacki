@@ -18,6 +18,8 @@ import { reauthorizeConnection } from '../features/collaboration/connectionLease
 import { projectCatalogs } from '../features/project/projectCatalogs';
 import { sourceWatch } from '../features/project/sourceWatch';
 import { parseProfile } from '../features/auth/profile';
+import { requestPerson } from '../features/auth/requestPerson';
+import { GITHUB_PROVIDER_ID, identityProvider } from '../../vendor/stacki/shared/properties/memberIdentity';
 import type { Duplex } from 'node:stream';
 import type { AstroIntegration } from 'astro';
 import { readFile, writeFile, access, mkdir } from 'node:fs/promises';
@@ -337,12 +339,7 @@ function configureStudioServer(
         rooms.sockets.handleUpgrade(request, socket, head, (client) =>
           room.attach(
             client,
-            process.env['STUDIO_CONTAINER_TOKEN']
-              ? parseProfile({
-                  login: request.headers['x-studio-user'],
-                  id: Number(request.headers['x-studio-user-id']),
-                })
-              : undefined,
+            process.env['STUDIO_CONTAINER_TOKEN'] ? presence(request) : undefined,
             reauthorizeConnection(request),
             url.searchParams.get('participant') ?? undefined,
             // Edits over the socket answer to the same roles as the HTTP write routes.
@@ -353,6 +350,16 @@ function configureStudioServer(
       .catch(() => socket.destroy());
   });
   configureProjectWatching(server, options.root, rooms);
+}
+
+// Who a hosted collaboration connection is, for the other editors' presence. A GitHub person keeps their GitHub id (the
+// avatar); another provider's person is shown by name under their provider-qualified identity.
+function presence(request: IncomingMessage) {
+  const person = requestPerson(request);
+  if (identityProvider(person.identity) !== GITHUB_PROVIDER_ID) {
+    return { key: person.identity, login: person.name };
+  }
+  return parseProfile({ login: request.headers['x-studio-user'], id: Number(request.headers['x-studio-user-id']) });
 }
 
 function configureProjectWatching(server: ViteDevServer, root: string, rooms: ReturnType<typeof createRooms>) {

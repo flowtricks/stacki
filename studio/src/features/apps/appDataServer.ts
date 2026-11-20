@@ -24,7 +24,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
-import { parseGitHubLogin } from '../../../vendor/stacki/shared/properties/projectRoles';
+import {
+  GITHUB_PROVIDER_ID,
+  identityKey,
+  identityProvider,
+  identitySubject,
+  parseQualifiedIdentity,
+} from '../../../vendor/stacki/shared/properties/memberIdentity';
+import { requestPerson } from '../auth/requestPerson';
 import { appAccessFeature } from '../../../vendor/stacki/shared/properties/appsRpc';
 import { parseAppId } from '../../../vendor/stacki/shared/properties/apps';
 import {
@@ -67,8 +74,8 @@ export function studioPersonKey(request: Pick<IncomingMessage, 'headers'>): stri
   if (!process.env['STUDIO_CONTAINER_TOKEN']) {
     return LOCAL_PERSON;
   }
-  const header = request.headers['x-studio-user'];
-  return `github:${parseGitHubLogin(typeof header === 'string' ? header : '').toLowerCase()}`;
+  // `github:<login>` as before for a GitHub person; another provider's identity compares exactly (identityKey).
+  return identityKey(requestPerson(request).identity);
 }
 
 /** This person's local app values for the project, in the user's home folder. */
@@ -184,9 +191,10 @@ async function studioPerson(root: string, request: IncomingMessage, person: stri
   if (person === LOCAL_PERSON) {
     return appPerson(projectKey, { ...(await readGitPerson(root)), github: undefined }, `studio:${os.hostname()}`, { hidden: false });
   }
-  const header = request.headers['x-studio-user'];
-  const github = parseGitHubLogin(typeof header === 'string' ? header : '');
-  return appPerson(projectKey, { name: undefined, email: undefined, github }, person, { hidden: false });
+  const who = requestPerson(request);
+  const github = identityProvider(who.identity) === GITHUB_PROVIDER_ID ? identitySubject(who.identity) : undefined;
+  // Another provider's person is answered by the name it gave; its email is never forwarded to the container.
+  return appPerson(projectKey, { name: github === undefined ? who.name : undefined, email: undefined, github }, person, { hidden: false });
 }
 
 // `people.list`: the role members and recent commit authors in full. Hiding details is this browser's
@@ -195,11 +203,25 @@ async function studioPeople(root: string): Promise<readonly AppMember[]> {
   const stored = await readMetadataSource(root, 'roles');
   let roleMembers: readonly string[] = [];
   try {
-    roleMembers = stored.source === undefined ? [] : parseProjectRolesSource(stored.source).roles.flatMap((role) => role.members);
+    roleMembers =
+      stored.source === undefined
+        ? []
+        : parseProjectRolesSource(stored.source)
+            .roles.flatMap((role) => role.members)
+            .flatMap(githubMemberLogin);
   } catch {
     roleMembers = []; // A broken roles file lists no members; the commit authors still answer.
   }
   return appMembers({ roleMembers, authors: await readGitAuthors(root), hidden: false, avatar: githubLoginAvatar });
+}
+
+// The list shows GitHub people (names and avatars come from GitHub); a member from another provider has no GitHub login to show.
+function githubMemberLogin(member: string): readonly string[] {
+  if (!member.includes(':')) {
+    return [member];
+  }
+  const identity = parseQualifiedIdentity(member);
+  return identity.ok && identityProvider(identity.value) === GITHUB_PROVIDER_ID ? [identitySubject(identity.value)] : [];
 }
 
 /** Studio's own version, from its package file: the one `npm run assemble` stamps on the shared source. */

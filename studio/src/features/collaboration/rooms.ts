@@ -30,7 +30,13 @@ import { readSource, preparePath } from '../project/projectServer';
 import { ADMIN_VIEW, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { assertComponentInsertAllowed, assertDocumentActionAllowed, assertDocumentChangeAllowed } from '../roles/documentAccess';
 
-/** Resolves the role a connection edits as; the server derives it from the signed-in GitHub user. */
+/** A person signed in by another authentication provider: presence by name and a provider-qualified key, no GitHub avatar. */
+export interface ProviderPresence {
+  readonly key: string;
+  readonly login: string;
+}
+
+/** Resolves the role a connection edits as; the server derives it from the signed-in person (requestPerson.ts). */
 export type ConnectionRole = () => Promise<RoleView>;
 /** Rooms opened without an identity (tests, a single local editor) edit as admin, as a local Studio does. */
 const ADMIN_CONNECTION: ConnectionRole = () => Promise.resolve(ADMIN_VIEW);
@@ -105,13 +111,23 @@ export class Room {
     // restart can seed identical text with new IDs and duplicate it on reconnection.
     await this.persist();
   }
-  attach(socket: WebSocket, identity?: GitHubProfile, authorize?: () => Promise<boolean>, participant?: string, role: ConnectionRole = ADMIN_CONNECTION) {
+  attach(
+    socket: WebSocket,
+    identity?: GitHubProfile | ProviderPresence,
+    authorize?: () => Promise<boolean>,
+    participant?: string,
+    role: ConnectionRole = ADMIN_CONNECTION,
+  ) {
     if (this.clients.size >= 30) {
       socket.close(1013, 'Room is full');
       return;
     }
     const id = randomUUID();
-    const key = identity ? `github:${identity.id}` : `local:${participant && /^[a-f0-9-]{36}$/i.test(participant) ? participant : id}`;
+    const key = identity
+      ? 'id' in identity
+        ? `github:${identity.id}`
+        : identity.key
+      : `local:${participant && /^[a-f0-9-]{36}$/i.test(participant) ? participant : id}`;
     this.clients.set(socket, {
       id,
       color: this.colors.acquire(key),
@@ -122,7 +138,7 @@ export class Room {
       page: this.file,
       occurrence: 0,
       updatedAt: Date.now(),
-      ...(identity ? { githubId: identity.id } : {}),
+      ...(identity && 'id' in identity ? { githubId: identity.id } : {}),
     });
     this.roles.set(socket, role);
     maintainConnection(socket, identity ? (authorize ?? (async () => false)) : undefined);

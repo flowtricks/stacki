@@ -3,11 +3,11 @@
 // reached by calling its route. Reads stay open: they change nothing.
 //
 // Who sent it: behind the Cloudflare worker (STUDIO_CONTAINER_TOKEN set), the
-// worker has verified the GitHub session and forwards the login as
-// `x-studio-user`, trusted only with the matching `x-studio-token` (checked
-// before this runs). A local Studio has no sign-in: its user is admin, as before.
+// worker has verified the session and forwards who it is (`x-studio-identity`,
+// a provider-qualified identity such as `github:octocat`; requestPerson.ts), trusted
+// only with the matching `x-studio-token` (checked before this runs). A local Studio has no sign-in: its user is admin, as before.
 //
-// Which role: the one naming that login in `.stacki/roles.json`, else the
+// Which role: the one naming that person (a bare login means `github:<login>`) in `.stacki/roles.json`, else the
 // file's default role. No file is admin for everyone (today's behaviour). A file
 // that does not parse fails closed to the built-in client role, so a typo can
 // never widen access; fix it with Git or on Desktop.
@@ -17,7 +17,6 @@ import {
   CLIENT_ROLE_ID,
   DEFAULT_PROJECT_ROLES,
   can,
-  parseGitHubLogin,
   parseProjectRolesSource,
   resolveRole,
   roleViewOf,
@@ -26,6 +25,7 @@ import {
 } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { metadataKind } from '../../../vendor/stacki/shared/properties/projectMetadata';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
+import { requestPerson } from '../auth/requestPerson';
 import { readMetadataSource } from '../settings/projectMetadata';
 import { METADATA_ACCESS, roleRefusal } from './documentAccess';
 
@@ -130,16 +130,15 @@ export async function requestRole(root: string, request: Pick<IncomingMessage, '
     return ADMIN_VIEW;
   }
   // A hosted request without a user (the container token alone, as an app file link
-  // forwards) has no role: parseGitHubLogin throws, so a gated route fails closed,
+  // forwards) has no role: requestPerson throws, so a gated route fails closed,
   // before the roles file is read and whether or not one exists.
-  const header = request.headers['x-studio-user'];
-  const login = parseGitHubLogin(typeof header === 'string' ? header : '');
+  const person = requestPerson(request);
   const stored = await readMetadataSource(root, 'roles');
   if (stored.source === undefined) {
     return ADMIN_VIEW;
   }
   try {
-    return resolveRole(parseProjectRolesSource(stored.source), login, 'default');
+    return resolveRole(parseProjectRolesSource(stored.source), person.identity, 'default', person.aliases);
   } catch {
     return roleViewOf(DEFAULT_PROJECT_ROLES, CLIENT_ROLE_ID);
   }

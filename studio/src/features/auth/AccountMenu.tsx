@@ -1,7 +1,7 @@
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import release from '../../shared/release.json';
 import type { Session } from './useSession';
-import { Avatar } from './Avatar';
+import { AccountAvatar, Avatar } from './Avatar';
 import { StackiLogo } from '../../shared/ui/StackiLogo';
 import { useRef, useState } from 'react';
 import Popup from '../../../vendor/stacki/src/ui/Popup';
@@ -78,6 +78,20 @@ export function AccountMenu(props: AccountMenuProps) {
 
 function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 'session'>) {
   const translate = useTranslate();
+  if (session?.kind === 'account') {
+    return (
+      <div className="account-profile">
+        <span className="account-avatar" aria-hidden="true">
+          <AccountAvatar name={session.name} avatarUrl={session.avatarUrl} />
+        </span>
+        <div className="account-profile-name">
+          <strong title={session.name}>{session.name}</strong>
+          <span title={session.identity}>{session.email ?? session.identity}</span>
+        </div>
+        <SignOut saved={saved} />
+      </div>
+    );
+  }
   if (session?.kind !== 'github') {
     return <span className="local-session">{session?.kind === 'local' ? translate('studio.account.local') : translate('studio.account.loading')}</span>;
   }
@@ -90,16 +104,23 @@ function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 's
         <strong title={`@${session.login}`}>@{session.login}</strong>
         <span>{translate('studio.account.github')}</span>
       </div>
-      <form method="post" action="/studio/auth/logout">
-        <button
-          className="account-sign-out"
-          type="submit"
-          disabled={!saved}
-          title={saved ? translate('studio.account.signOutTitle') : translate('studio.account.signOutWait')}
-        >
-          {translate('studio.account.signOut')}
-        </button>
-      </form>
+      <SignOut saved={saved} />
     </div>
+  );
+}
+
+function SignOut({ saved }: Pick<AccountMenuProps, 'saved'>) {
+  const translate = useTranslate();
+  return (
+    <form method="post" action="/studio/auth/logout">
+      <button
+        className="account-sign-out"
+        type="submit"
+        disabled={!saved}
+        title={saved ? translate('studio.account.signOutTitle') : translate('studio.account.signOutWait')}
+      >
+        {translate('studio.account.signOut')}
+      </button>
+    </form>
   );
 }
