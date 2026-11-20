@@ -120,6 +120,7 @@ export const messages = {
   'pages.settings.folder.new': 'Nouveau dossier…',
   'pages.settings.folder.placeholder': 'Nom du dossier',
   'pages.settings.folder.root': 'Pages (racine)',
+  'pages.settings.home.confirm': 'Définir comme accueil',
   'pages.settings.home.isHome': 'Cette page est la page d’accueil, servie à /.',
   'pages.settings.home.label': 'Convertir en accueil',
   'pages.settings.home.make': 'Faire de cette page la page d’accueil',

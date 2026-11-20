@@ -120,6 +120,7 @@ export const messages = {
   'pages.settings.folder.new': 'Nova pasta…',
   'pages.settings.folder.placeholder': 'Nome da pasta',
   'pages.settings.folder.root': 'Páginas (raiz)',
+  'pages.settings.home.confirm': 'Tornar página inicial',
   'pages.settings.home.isHome': 'Esta página é a inicial, servida em /.',
   'pages.settings.home.label': 'Converter em inicial',
   'pages.settings.home.make': 'Tornar esta página a inicial',

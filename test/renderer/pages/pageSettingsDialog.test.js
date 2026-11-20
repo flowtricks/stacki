@@ -128,28 +128,40 @@ test('another page shows its URL name and, in General, the house button that con
   assert.equal(house.disabled, false);
   await setup.click(house);
   assert.deepEqual(setup.planned, [{ kind: 'home', page: 'about.astro' }]);
-  assert.equal(document.querySelector('.page-settings-confirm-title').textContent, 'Make “about” the homepage?');
-  const lines = [...document.querySelectorAll('.page-settings-bullets li')].map((item) => item.textContent);
+  // The confirm is a popover beside the button; the dialog's sections stay as they were.
+  assert.equal(document.querySelector('.page-settings-move .page-settings-confirm-title').textContent, 'Make “about” the homepage?');
+  assert.equal(document.querySelector('.page-settings .page-settings-confirm') ?? undefined, undefined);
+  assert.ok(button('Make this page the homepage'));
+  const lines = [...document.querySelectorAll('.page-settings-move .page-settings-bullets li')].map((item) => item.textContent);
   assert.deepEqual(lines, [
     'about becomes the homepage, at / (src/pages/index.astro).',
     'Home moves to /about (src/pages/about.astro).',
     '7 links in 3 files are updated.',
     'Nothing else changes, and one Undo puts it all back.',
   ]);
-  assert.match(document.querySelector('.page-settings-review').textContent, /astro\.config\.mjs:4/);
+  assert.match(document.querySelector('.page-settings-move .page-settings-review').textContent, /astro\.config\.mjs:4/);
   assert.equal(setup.applied.length, 0);
-  await setup.click(button('Confirm'));
+  await act(async () =>
+    document.querySelector('.page-settings-move-body').dispatchEvent(new setup.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+  );
   assert.deepEqual(setup.applied, [{ kind: 'home', page: 'about.astro' }]);
   assert.equal(setup.closes(), 1);
 });
 
-test('Cancel in the confirm step returns to the settings and writes nothing', async (context) => {
+test('the homepage popover’s Make homepage button confirms; Cancel and Escape write nothing', async (context) => {
   const setup = fixture(context);
   await setup.show('contact.md');
   await setup.click(button('Make this page the homepage'));
-  await setup.click(button('Cancel'));
+  assert.ok(moveButton('Make homepage'));
+  await setup.click(moveButton('Cancel'));
+  assert.equal(document.querySelector('.page-settings-move') ?? undefined, undefined);
+  await setup.click(button('Make this page the homepage'));
+  await act(async () => document.dispatchEvent(new setup.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  assert.equal(document.querySelector('.page-settings-move') ?? undefined, undefined);
   assert.equal(setup.applied.length, 0);
-  assert.ok(button('Make this page the homepage'));
+  await setup.click(button('Make this page the homepage'));
+  await setup.click(moveButton('Make homepage'));
+  assert.deepEqual(setup.applied, [{ kind: 'home', page: 'contact.md' }]);
 });
 
 test('error pages disable the house button with the reason; templates have no Homepage section', async (context) => {

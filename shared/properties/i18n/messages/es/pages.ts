@@ -121,6 +121,7 @@ export const messages = {
   'pages.settings.folder.new': 'Carpeta nueva…',
   'pages.settings.folder.placeholder': 'Nombre de la carpeta',
   'pages.settings.folder.root': 'Páginas (raíz)',
+  'pages.settings.home.confirm': 'Hacer página de inicio',
   'pages.settings.home.isHome': 'Esta página es la de inicio, servida en /.',
   'pages.settings.home.label': 'Convertir en inicio',
   'pages.settings.home.make': 'Convertir esta página en la de inicio',

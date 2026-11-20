@@ -234,12 +234,17 @@
 /* The move's confirm, a popover beside the fields: the app's raised surface, filled, no border. */
 .page-settings-move {
   width: 320px;
+  display: flex;
+  flex-direction: column;
   max-width: calc(100vw - 32px);
   border-radius: 10px;
   background: var(--panel-raised, #2a2a2a);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 .page-settings-move-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   gap: 8px;

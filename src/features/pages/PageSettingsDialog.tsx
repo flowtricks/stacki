@@ -4,8 +4,9 @@
 // settings, also from the host). The header holds Duplicate, Delete and Close. Every step that writes asks first,
 // inside the dialog, with what will happen (the plan main worked out without writing); nothing here is a native dialog.
 // Host-agnostic: Desktop and Studio pass what they can do, and say why in place of what they cannot.
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { assert } from '../../../shared/core/assert';
 import type { Result } from '../../../shared/core/result';
 import type { Described } from '../../../shared/properties/i18n/messageRef';
 import { pageURLPath } from '../../../shared/properties/pageRename';
@@ -27,7 +28,7 @@ import { pageDisplayLabel } from '../../lib/pageName';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import { CopyIcon, FolderIcon, FolderPlusIcon, HomeIcon, TrashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
-import Dropdown from '../../ui/Dropdown';
+import Dropdown, { popupBox } from '../../ui/Dropdown';
 import { SkeletonRows } from '../../ui/Skeleton';
 import './pageSettings.css';
 
@@ -103,9 +104,9 @@ export function PageSettingsDialog(props: PageSettingsDialogProps) {
 
 type Model = ReturnType<typeof usePageSettings>;
 
-// A rename or move is confirmed in a popover beside the field; the other steps take the dialog's body for theirs.
+// A move and a homepage swap are confirmed in a popover beside their control; a deletion takes the dialog's body.
 function inSections(step: Step): boolean {
-  return step.kind === 'settings' || step.action.kind === 'rename';
+  return step.kind === 'settings' || step.action.kind === 'rename' || step.action.kind === 'home';
 }
 
 function usePageSettings(props: PageSettingsDialogProps) {
@@ -400,18 +401,40 @@ function UrlNameField({ model, props }: { readonly model: Model; readonly props:
         </div>
       )}
       {offered !== undefined && anchor.current !== null && (
-        <MovePopover step={offered} anchor={anchor.current} props={props} confirm={() => void model.confirm()} cancel={revert} />
+        <StepPopover
+          step={offered}
+          anchor={anchor.current}
+          props={props}
+          confirmLabel={translate('pages.settings.move.confirm')}
+          confirm={() => void model.confirm()}
+          cancel={revert}
+        />
       )}
     </div>
   );
 }
 
-// The move's confirm, anchored beside the fields: the old and new address, the links it rewrites and the lines to
-// check by hand. Enter moves the page, Escape or a press outside cancels and puts the fields back.
-function MovePopover(props: {
+// Where a step's popover sits: under its control (above when the window has more room there, the Dropdown's own
+// rule), its left edge on the control's and kept inside the window.
+const STEP_POPOVER_WIDTH_PX = 320;
+const STEP_POPOVER_HEIGHT_PX = 280;
+const STEP_POPOVER_EDGE_PX = 16;
+function stepPopoverPlace(anchor: HTMLElement): CSSProperties {
+  const rect = anchor.getBoundingClientRect();
+  const leftMax = Math.max(STEP_POPOVER_EDGE_PX, window.innerWidth - STEP_POPOVER_WIDTH_PX - STEP_POPOVER_EDGE_PX);
+  const left = Math.min(Math.max(rect.left, STEP_POPOVER_EDGE_PX), leftMax);
+  assert(left >= STEP_POPOVER_EDGE_PX, 'A step popover stays inside the window on the left');
+  return { position: 'fixed', left, ...popupBox(rect, STEP_POPOVER_HEIGHT_PX, window.innerHeight) };
+}
+
+// A step's confirm, anchored beside the control that asked for it (the fields for a move, the button for a homepage
+// swap): what moves where, the links it rewrites and the lines to check by hand, from main's plan. Nothing is written
+// until it is confirmed. Enter confirms; Escape or a press outside cancels.
+function StepPopover(props: {
   readonly step: Exclude<Step, { readonly kind: 'settings' }>;
   readonly anchor: HTMLElement;
   readonly props: PageSettingsDialogProps;
+  readonly confirmLabel: string;
   readonly confirm: () => void;
   readonly cancel: () => void;
 }) {
@@ -426,6 +449,7 @@ function MovePopover(props: {
       dismissible={props.step.kind !== 'applying'}
       className="page-settings-move"
       role="dialog"
+      style={stepPopoverPlace(props.anchor)}
     >
       <div
         className="page-settings-move-body"
@@ -456,7 +480,7 @@ function MovePopover(props: {
             {translate('ui.cancel')}
           </button>
           <button type="button" className="primary" disabled={!ready} onClick={props.confirm}>
-            {translate('pages.settings.move.confirm')}
+            {props.confirmLabel}
           </button>
         </div>
       </div>
@@ -476,6 +500,7 @@ function HomeButton({ model, props }: { readonly model: Model; readonly props: P
   const reason = !swap.ok ? translateDescribed(homeSwapRefusalText(swap.error)) : unavailable === undefined ? undefined : translateDescribed(unavailable);
   const replaces = current === undefined ? undefined : translate('pages.settings.home.replaces', { name: pageDisplayLabel(current, translate) });
   const tip = reason ?? replaces;
+  const offered = model.step.kind !== 'settings' && model.step.action.kind === 'home' ? model.step : undefined;
   return (
     <span ref={host} className="page-settings-tip page-settings-home-button" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
       <button
@@ -491,6 +516,16 @@ function HomeButton({ model, props }: { readonly model: Model; readonly props: P
         <HomeIcon size={12} />
         {translate('pages.settings.home.make')}
       </button>
+      {offered !== undefined && host.current !== null && (
+        <StepPopover
+          step={offered}
+          anchor={host.current}
+          props={props}
+          confirmLabel={translate('pages.settings.home.confirm')}
+          confirm={() => void model.confirm()}
+          cancel={model.cancel}
+        />
+      )}
       {tooltip.value !== undefined &&
         tip !== undefined &&
         createPortal(

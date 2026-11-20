@@ -121,6 +121,7 @@ export const messages = {
   'pages.settings.folder.new': 'Neuer Ordner…',
   'pages.settings.folder.placeholder': 'Ordnername',
   'pages.settings.folder.root': 'Seiten (oberste Ebene)',
+  'pages.settings.home.confirm': 'Zur Startseite machen',
   'pages.settings.home.isHome': 'Diese Seite ist die Startseite unter /.',
   'pages.settings.home.label': 'Zur Startseite machen',
   'pages.settings.home.make': 'Diese Seite zur Startseite machen',

@@ -114,6 +114,7 @@ export const messages = {
   'pages.settings.folder.new': 'New folder…',
   'pages.settings.folder.placeholder': 'Folder name',
   'pages.settings.folder.root': 'Pages (root)',
+  'pages.settings.home.confirm': 'Make homepage',
   'pages.settings.home.isHome': 'This page is the homepage, served at /.',
   'pages.settings.home.label': 'Convert to home',
   'pages.settings.home.make': 'Make this page the homepage',
