@@ -1428,6 +1428,11 @@ body.is-scrubbing * {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+/* The search field of a list with a footer: the frame has no padding of its own there, so the field takes the rows' side
+   inset and the plain list's top inset, and stays inside the rounded frame (the "Add custom styles in" menu). */
+.u-select-list.has-footer > .u-select-search {
+  padding: var(--space-3) var(--space-3) 0;
+}
 /* The Follow canvas size strip heads the list, outside the scrolling rows. */
 .u-select-list.has-footer > .u-select-header {
   flex: 0 0 auto;
