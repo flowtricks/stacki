@@ -220,8 +220,19 @@ export function selectorSegments(selector: string, names: readonly string[]): re
   return segments;
 }
 
-/** Rows drawn at a time; more load as the list scrolls to its end. */
-export const LIST_PAGE_ROWS = 200;
+/** Rows drawn at a time; the next batch is added as the list scrolls near its end, until every row is shown. */
+export const LIST_PAGE_ROWS = 100;
+
+/** How far before the end of the list the next batch loads, as a share of the list's visible height. */
+export const LIST_LOOKAHEAD_VIEWPORTS = 1.5;
+
+/** The row count after one more batch is loaded. Rows past the list's end are never drawn, so it needs no total. */
+export function nextRowLimit(limit: number): number {
+  assert(Number.isSafeInteger(limit), 'nextRowLimit: the limit is a whole number');
+  assert(limit >= LIST_PAGE_ROWS, 'nextRowLimit: a list starts with one batch');
+  assert(limit % LIST_PAGE_ROWS === 0, 'nextRowLimit: rows load a whole batch at a time');
+  return limit + LIST_PAGE_ROWS;
+}
 
 /** The first `limit` rows across groups, the last group cut short, and how many rows there are in all. */
 export function firstRows<G extends { readonly entries: readonly SelectorEntry[] }>(

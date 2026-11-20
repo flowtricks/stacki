@@ -29,9 +29,11 @@ import {
   firstRows,
   folderGroups,
   initialFilter,
+  LIST_LOOKAHEAD_VIEWPORTS,
   LIST_PAGE_ROWS,
   listedEntries,
   matchesFilter,
+  nextRowLimit,
   selectorCounts,
   selectorGroups,
   selectorSegments,
@@ -103,7 +105,7 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
   // Long lists draw a page at a time; a new tab or search starts from the top.
   const [limit, setLimit] = useState(LIST_PAGE_ROWS);
   useEffect(() => setLimit(LIST_PAGE_ROWS), [chosen, search]);
-  const more = useCallback(() => setLimit((current) => current + LIST_PAGE_ROWS), []);
+  const more = useCallback(() => setLimit(nextRowLimit), []);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   // The full check searches installed packages, which takes seconds the first
@@ -635,7 +637,7 @@ function SelectorGroups({
           ))}
         </React.Fragment>
       ))}
-      {limit < total && <MoreRows onMore={onMore} />}
+      {limit < total && <MoreRows key={limit} onMore={onMore} />}
     </>
   );
 }
@@ -769,14 +771,15 @@ function ReasonList({
           </section>
         );
       })}
-      {limit < total && <MoreRows onMore={onMore} />}
+      {limit < total && <MoreRows key={limit} onMore={onMore} />}
     </>
   );
 }
 
-// The end of a page: the next one is drawn as this scrolls near view, a
-// little before the bottom so the list never visibly runs out. Without an
-// IntersectionObserver it is a button.
+// The end of a batch: the next is drawn as this comes within LIST_LOOKAHEAD_VIEWPORTS of the visible
+// area, so the list never visibly runs out. It is keyed by the rows drawn, so each batch observes a fresh
+// marker: one that is still within reach after the batch lands reports again and loads the next, instead
+// of waiting for a scroll. Without an IntersectionObserver it is a button.
 function MoreRows({ onMore }: { readonly onMore: () => void }) {
   const translate = useTranslate();
   const marker = useRef<HTMLDivElement>(null);
@@ -792,7 +795,9 @@ function MoreRows({ onMore }: { readonly onMore: () => void }) {
           onMore();
         }
       },
-      { rootMargin: '0px 0px 300px 0px' },
+      // The scroll box is the root: with no root only the window's edge is widened, and a list clipped by its own box
+      // would load only when its last row was already in view. A percentage margin is a share of the root's height.
+      { root: element.closest('.selectors-body'), rootMargin: `0px 0px ${Math.round(LIST_LOOKAHEAD_VIEWPORTS * 100)}% 0px` },
     );
     observer.observe(element);
     return () => observer.disconnect();
