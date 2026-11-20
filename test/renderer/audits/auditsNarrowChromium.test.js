@@ -122,18 +122,31 @@ window.mount = (locale, widthPx) => {
     ),
   );
 };
+// Bounded by the clock as well as by frames: a hidden window on a CI runner can draw a frame a second
+// or less, and 600 frames then outlasted the probe's 240 s bound (Check on 010980b8, Linux and Windows).
+// A timer ticks beside the frames, so the wait ends within 15 s however slowly the window draws.
 window.until = (condition, framesMax = 600) =>
   new Promise((resolve) => {
+    const deadlineMs = performance.now() + 15000;
     let frames = 0;
-    const tick = () => {
+    let done = false;
+    // Only a drawn frame counts against framesMax (callers time hover delays in frames); the timer
+    // only re-checks the condition and the clock.
+    const check = () => {
       let value;
       try { value = condition(); } catch { value = undefined; }
-      if (value) { resolve(value); return; }
-      frames += 1;
-      if (frames > framesMax) { resolve(false); return; }
-      requestAnimationFrame(tick);
+      if (value) { done = true; resolve(value); return true; }
+      if (performance.now() > deadlineMs) { done = true; resolve(false); return true; }
+      return false;
     };
-    tick();
+    const frame = () => {
+      if (done || check()) { return; }
+      frames += 1;
+      if (frames > framesMax) { done = true; resolve(false); return; }
+      requestAnimationFrame(frame);
+    };
+    const timer = setInterval(() => { if (done) { clearInterval(timer); return; } check(); }, 50);
+    frame();
   });
 `;
 
@@ -336,7 +349,8 @@ app.whenReady().then(async () => {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const win = new BrowserWindow({ show: false, width: 700, height: ${PANE_HEIGHT_PX}, useContentSize: true, webPreferences: { contextIsolation: false, backgroundThrottling: false } });
-  const host = (code) => win.webContents.executeJavaScript(code);
+  // Each step is logged as it starts, so a probe that runs out of time says where it was.
+  const host = (code) => { console.log('STEP ' + code.slice(0, 80).replace(/\\s+/g, ' ')); return win.webContents.executeJavaScript(code); };
   const output = { cases: [], error: undefined };
   try {
     await win.loadURL('http://127.0.0.1:' + server.address().port + '/');
@@ -501,7 +515,10 @@ function check(output) {
   const line = (run.stdout || '').split('\n').find((text) => text.startsWith('RESULT '));
   const failures = [];
   if (line === undefined) {
-    failures.push(`the browser probe ran\n    ${(run.stderr || run.stdout || '').slice(0, 1500)}`);
+    const steps = (run.stdout || '').split('\n').filter((text) => text.startsWith('STEP '));
+    failures.push(
+      `the browser probe ran (${run.error ? String(run.error.message) : 'exit ' + String(run.status)}; last steps: ${steps.slice(-4).join(' | ')})\n    ${(run.stderr || run.stdout || '').slice(0, 800)}`,
+    );
   } else {
     const output = JSON.parse(line.slice('RESULT '.length));
     if (output.error !== undefined) {

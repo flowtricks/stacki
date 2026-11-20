@@ -118,18 +118,31 @@ new MutationObserver(() => {
     window.itemClassesSeen.push(items.className);
   }
 }).observe(document.getElementById('root'), { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+// Bounded by the clock as well as by frames: a hidden window on a CI runner can draw a frame a second
+// or less, and 600 frames then outlasted the probe's 240 s bound (Check on 010980b8, Linux and Windows).
+// A timer ticks beside the frames, so the wait ends within 15 s however slowly the window draws.
 window.until = (condition, framesMax = 600) =>
   new Promise((resolve) => {
+    const deadlineMs = performance.now() + 15000;
     let frames = 0;
-    const tick = () => {
+    let done = false;
+    // Only a drawn frame counts against framesMax (callers time hover delays in frames); the timer
+    // only re-checks the condition and the clock.
+    const check = () => {
       let value;
       try { value = condition(); } catch { value = undefined; }
-      if (value) { resolve(value); return; }
-      frames += 1;
-      if (frames > framesMax) { resolve(false); return; }
-      requestAnimationFrame(tick);
+      if (value) { done = true; resolve(value); return true; }
+      if (performance.now() > deadlineMs) { done = true; resolve(false); return true; }
+      return false;
     };
-    tick();
+    const frame = () => {
+      if (done || check()) { return; }
+      frames += 1;
+      if (frames > framesMax) { done = true; resolve(false); return; }
+      requestAnimationFrame(frame);
+    };
+    const timer = setInterval(() => { if (done) { clearInterval(timer); return; } check(); }, 50);
+    frame();
   });
 createRoot(document.getElementById('root')).render(
   React.createElement(AssetsPanel, { project: { path: project }, showToast: () => {}, onOpenFile: (file) => window.opened.push(file.rel) }),
@@ -238,10 +251,15 @@ window.steps = (() => {
       for (const [name, expected] of [['ArrowRight', 1], ['ArrowDown', 1 + columns], ['ArrowLeft', columns], ['ArrowUp', 0], ['End', ${BIG_COUNT - 1}], ['Home', 0]]) {
         key(document.activeElement, name);
         const landed = await window.until(() => focusedIndex() === expected);
-        const element = document.activeElement;
-        const box = scroller().getBoundingClientRect();
-        const rect = element.getBoundingClientRect();
-        moves.push({ name, expected, landed: Boolean(landed), index: focusedIndex(), inView: rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1, tabbable: tiles().filter((tile) => tile.tabIndex === 0).length });
+        // The list scrolls the focused tile into view a frame or more after the focus moves (Home on the
+        // macOS runner read it before the scroll, Check on 010980b8): wait for it, bounded.
+        const inView = () => {
+          const box = scroller().getBoundingClientRect();
+          const rect = document.activeElement.getBoundingClientRect();
+          return rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1;
+        };
+        await window.until(() => focusedIndex() === expected && inView());
+        moves.push({ name, expected, landed: Boolean(landed), index: focusedIndex(), inView: inView(), tabbable: tiles().filter((tile) => tile.tabIndex === 0).length });
       }
       return moves;
     },
@@ -331,7 +349,8 @@ app.whenReady().then(async () => {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const win = new BrowserWindow({ show: false, width: 520, height: ${PANE.height}, useContentSize: true, webPreferences: { contextIsolation: false, backgroundThrottling: false, partition } });
-  const host = (code) => win.webContents.executeJavaScript(code);
+  // Each step is logged as it starts, so a probe that runs out of time says where it was.
+  const host = (code) => { console.log('STEP ' + code.slice(0, 80).replace(/\\s+/g, ' ')); return win.webContents.executeJavaScript(code); };
   const shot = async (name) => fs.writeFileSync(path.join(DIRECTORY, name + '.png'), (await win.webContents.capturePage({ x: 0, y: 0, width: ${PANE.width}, height: ${PANE.height} })).toPNG());
   const open = async (count, project, view) => {
     await win.loadURL('http://127.0.0.1:' + server.address().port + '/?count=' + count + '&project=' + encodeURIComponent(project));
@@ -555,7 +574,10 @@ function check(output, big) {
   const line = (run.stdout || '').split('\n').find((text) => text.startsWith('RESULT '));
   const failures = [];
   if (line === undefined) {
-    failures.push(`the browser probe ran\n    ${(run.stderr || run.stdout || '').slice(0, 1500)}`);
+    const steps = (run.stdout || '').split('\n').filter((text) => text.startsWith('STEP '));
+    failures.push(
+      `the browser probe ran (${run.error ? String(run.error.message) : 'exit ' + String(run.status)}; last steps: ${steps.slice(-4).join(' | ')})\n    ${(run.stderr || run.stdout || '').slice(0, 800)}`,
+    );
   } else {
     const output = JSON.parse(line.slice('RESULT '.length));
     if (output.error !== undefined) {

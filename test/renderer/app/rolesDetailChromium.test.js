@@ -105,7 +105,9 @@ window.steps = (() => {
       .map((element) => element.className + ' +' + Math.round(box(element).right - edge))
       .slice(0, 6);
   };
-  const sideways = () => [...page().querySelectorAll('*')].filter((element) => !element.className.toString().includes('info-hint') && getComputedStyle(element).overflowX !== 'visible' && element.scrollWidth > element.clientWidth + 1).map((element) => element.className).slice(0, 6);
+  // A line that truncates with an ellipsis is wider than its box by design (Linux's wider fonts
+  // truncated a role name here, Check on 010980b8): it clips, it does not scroll, so it is left out.
+  const sideways = () => [...page().querySelectorAll('*')].filter((element) => !element.className.toString().includes('info-hint') && getComputedStyle(element).overflowX !== 'visible' && getComputedStyle(element).textOverflow !== 'ellipsis' && element.scrollWidth > element.clientWidth + 1).map((element) => element.className).slice(0, 6);
   const scrolls = (element) => ['auto', 'scroll'].includes(getComputedStyle(element).overflowY);
   return {
     async ready() {

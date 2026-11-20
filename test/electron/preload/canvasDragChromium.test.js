@@ -165,6 +165,10 @@ app.whenReady().then(async () => {
     out.steps.slotless = await settled((seen) => seen.verdict === 'valid' && seen.sample && seen.sample.gap && seen.sample.gap.parent === out.ids.section);
     await moveTo(at(boxes.heading, 0.5, 0.5));
     out.steps.refused = await settled((seen) => seen.verdict === 'refused');
+    // The overlay's verdict can be drawn a frame before the Navigator's sample for the same point: on
+    // the CI runners the read caught the slotless step's gap still in the sample (Check on 010980b8).
+    // Wait, bounded, for the Navigator to settle too; a mark that never clears still fails D below.
+    out.steps.refusedNavigator = (await settled((seen) => seen.verdict === 'refused' && seen.sample !== undefined && seen.sample.gap === undefined && seen.note === undefined)) ?? (await picture());
     out.steps.refusedCursor = await poll(async () => { const text = await cursor(); return text.includes('not-allowed') ? text : undefined; }, 100);
     await shot('canvas-drag-invalid');
     // E: Escape cancels and puts everything back; the release that follows does nothing.
@@ -211,6 +215,10 @@ app.whenReady().then(async () => {
     await settled((seen) => seen.sample && seen.sample.gap);
     await mouse('mouseReleased', at(boxes.logo, 0.5, 0.05).x, at(boxes.logo, 0.5, 0.05).y);
     out.steps.dropped = await settled((seen) => seen.verdict === undefined && seen.moves.length > 0);
+    // The selection and the reveal follow the move by a frame or more; wait for them, bounded, rather than
+    // reading at once (the macOS runner read no reveal yet, Check on 010980b8).
+    out.steps.droppedSelection = (await settled((seen) => seen.moves.length > 0 && seen.selected === out.ids.h1)) ?? (await picture());
+    await poll(() => host('window.canvasDragHost.reveals > 0'), 200);
     out.reveals = await host('window.canvasDragHost.reveals');
     // N: a Navigator row dragged onto the canvas (a native drag: the frame sees dragover and drop) takes the same path.
     await host('window.canvasDragHostSetDrag(' + JSON.stringify(out.ids.empty) + '); 1');
@@ -376,7 +384,12 @@ function idsOf(model) {
   const refused = steps.refused;
   check('D: the middle of a slotless instance drops before it in its parent, no red', steps.slotless?.sample?.gap?.index === 1, show(steps.slotless));
   check('D: over itself the drop is refused, with the reason beside the pointer', refused?.reason?.includes('inside itself') === true, show(refused));
-  check('D: over itself the Navigator shows no mark and says nothing', refused?.note === undefined && refused?.sample?.gap === undefined, show(refused));
+  const refusedNavigator = steps.refusedNavigator;
+  check(
+    'D: over itself the Navigator shows no mark and says nothing',
+    refusedNavigator?.note === undefined && refusedNavigator?.sample?.gap === undefined,
+    show(refusedNavigator),
+  );
   check('D: the frame shows the not-allowed cursor', typeof steps.refusedCursor === 'string', show(steps.refusedCursor));
   // E: Escape.
   check('E: Escape takes the drag away and gives Pages back', steps.escaped?.tab === 'pages' && steps.escaped.verdict === undefined, show(steps.escaped));
@@ -421,8 +434,8 @@ function idsOf(model) {
   );
   check(
     'I: the moved heading is the selection, and the Navigator was asked to reveal it',
-    dropped?.selected === out.ids.h1 && out.reveals > 0,
-    show({ selected: dropped?.selected, reveals: out.reveals }),
+    steps.droppedSelection?.selected === out.ids.h1 && out.reveals > 0,
+    show({ selected: steps.droppedSelection?.selected, reveals: out.reveals }),
   );
   check('I: the Navigator, open before the drag, stays open', dropped?.tab === 'navigator', show(dropped));
   // N: native.

@@ -258,14 +258,19 @@ const COMPONENTS = [
        const edit = async (selector, index, typed, charIndex) => {
          await run('window.posts.length = 0');
          // The frame answers a double click once its session has settled; until it does a click is not heard, so it is repeated while nothing answered.
+         // A repeat waits a second for the answer to the one before: on the CI runners the first
+         // double click's answer came after a second one had been sent, and that second double click,
+         // inside the now-open editor, selected a word instead of placing the caret (Check on 010980b8).
          let attempts = 0;
+         let clickedAtMs = 0;
          const answered = (list) => list.some((m) => m.type === 'avb:text-active' || m.type === 'avb:text-refused');
          const opened = await waitFor({
            what: 'the editor opened or refused',
            read: async () => {
              const list = await posts();
-             if (!answered(list)) {
+             if (!answered(list) && Date.now() - clickedAtMs >= 1000) {
                attempts++;
+               clickedAtMs = Date.now();
                await doubleClick(charIndex === undefined ? await centre(selector, index) : await charPoint(selector, index, charIndex));
              }
              return list;
@@ -277,7 +282,13 @@ const COMPONENTS = [
          });
          out.attempts = (out.attempts || []).concat(attempts);
          // The caret sits where the double click was: a collapsed selection at that character, not a word.
-         const caret = await run('(() => { const s = ' + frame + '.getSelection(); return { collapsed: s.isCollapsed, offset: s.anchorOffset, text: s.anchorNode && s.anchorNode.data ? s.anchorNode.data.slice(0, 24) : null }; })()');
+         const readCaret = () => run('(() => { const s = ' + frame + '.getSelection(); return { collapsed: s.isCollapsed, offset: s.anchorOffset, text: s.anchorNode && s.anchorNode.data ? s.anchorNode.data.slice(0, 24) : null }; })()');
+         // The editor places the caret after it says it is active; read it once it has, bounded.
+         let caret = await readCaret();
+         for (let poll = 0; poll < 50 && !caret.collapsed; poll++) {
+           await new Promise((resolve) => setTimeout(resolve, 20));
+           caret = await readCaret();
+         }
          win.webContents.focus();
          await win.webContents.insertText(typed);
          await post({ type: 'avb:text-close', session: 'one', action: 'apply' });
