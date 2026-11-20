@@ -23,6 +23,7 @@ import PanelBoundary from '../../ui/PanelBoundary';
 import GitChip from '../../features/git/GitChip';
 import HistoryPanel from '../../features/history/HistoryPanel';
 import { ConfirmHost, confirmDialog } from '../../ui/ConfirmDialog';
+import { UpdatePopupHost } from '../../features/update/UpdatePopup';
 import LeftRail from '../LeftRail';
 import PageSwitcher from '../../features/pages/PageSwitcher';
 import DynamicPicker from '../DynamicPicker';
@@ -224,6 +225,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       <DesktopAppsHost app={app} />
       <ToastStack notices={app.notices} dismiss={app.dismissToast} />
       <ConfirmHost />
+      <UpdatePopupHost />
     </>
   );
 }

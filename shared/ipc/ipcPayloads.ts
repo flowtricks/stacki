@@ -77,6 +77,7 @@ import { parseCommitAvatarRequest } from './commitAvatars';
 import { parsePreferenceName } from './preferences';
 import { parseStudioSource } from './studioSetup';
 import { parseStudioRequestId } from './studioProgress';
+import { parseUpdateAction } from './updateState';
 import { parsePropertyChange, propertyName, propertySource } from '../properties/propertyEditing';
 import { parseEdit, parseEditBatchRequest, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
@@ -771,6 +772,8 @@ export const IPC_PAYLOADS = {
     rows: terminalDimension,
     autoLaunch: optional(text),
   }),
+  'update:act': parseUpdateAction,
+  'update:read': nothing,
   'watch:start': pathText,
 } as const;
 

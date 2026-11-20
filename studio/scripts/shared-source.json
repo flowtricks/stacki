@@ -307,6 +307,7 @@
     "shared/ipc/studioRelease.ts",
     "shared/ipc/studioSetup.ts",
     "shared/ipc/studioValidation.ts",
+    "shared/ipc/updateState.ts",
     "shared/page/auditContrast.ts",
     "shared/page/auditFindings.ts",
     "shared/page/auditMarkup.ts",

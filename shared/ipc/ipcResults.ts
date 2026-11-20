@@ -50,6 +50,7 @@ import type { CommitAvatarResult } from './commitAvatars';
 import type { GitHubUserSearchResult } from './githubUserSearch';
 import type { StudioStatus, StudioInstallResult, StudioAuthResult } from './studioSetup';
 import type { StudioInstallProgress } from './studioProgress';
+import type { UpdateEvent, UpdateState } from './updateState';
 import type { AppSecretScan } from '../properties/appSecrets';
 import type { SecretsListing, SecretsResult, SecretValue } from '../properties/secrets';
 import type { McpCodexState, McpListing, McpResult, McpText } from '../properties/mcp';
@@ -60,6 +61,8 @@ import type { AppRepositoryStatus, AppShareOutcome, AppVisibilityOutcome, Market
 
 export interface StudioEventResults {
   readonly 'studio:progress': StudioInstallProgress;
+  /** Main to renderer: the update popup's state, parsed by parseUpdateState before use. */
+  readonly 'update:state': UpdateEvent;
 }
 import type { ComponentProperties } from '../properties/propertyEditing';
 import type { PropertyRemovalPreview } from '../properties/propertyRemoval';
@@ -920,6 +923,10 @@ export interface IpcResults extends AiResults {
   readonly 'recents:remove': {
     readonly ok: true;
   };
+  readonly 'update:act': {
+    readonly ok: true;
+  };
+  readonly 'update:read': UpdateState;
   readonly 'selection:copy':
     | {
         readonly ok: false;

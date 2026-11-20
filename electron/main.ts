@@ -142,8 +142,12 @@ const autoUpdates = new AutoUpdates({
   app,
   autoUpdater,
   beforeInstall: () => devServers.stop(),
-  parentWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined),
-  showMessageBox,
+  send: (event) => send('update:state', event),
+});
+ipcMain.handle('update:read', () => autoUpdates.current());
+ipcMain.handle('update:act', (_event, { action }) => {
+  autoUpdates.act(action);
+  return { ok: true as const };
 });
 
 // --- Dev reload ------------------------------------------------------------

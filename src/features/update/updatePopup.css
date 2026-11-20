@@ -1,0 +1,52 @@
+/* The update popup (UpdatePopup.tsx). The bar is a filled track, never an outline; the fill is the accent blue and grows with a
+   short ease so each tick reads as motion, not a jump. Numbers are tabular so the counter does not jitter as digits change. */
+.update-popup {
+  width: min(420px, calc(100vw - 48px));
+}
+.update-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.update-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.update-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.update-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width 240ms ease;
+}
+.update-counters {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.update-percent {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+.update-bytes {
+  color: var(--text-dim);
+}
+.update-error-detail {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  opacity: 0.8;
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-bar-fill {
+    transition: none;
+  }
+}

@@ -486,6 +486,11 @@ function eventBridge() {
       ipcRenderer.on('studio:progress', listener);
       return () => ipcRenderer.removeListener('studio:progress', listener);
     },
+    onUpdateState: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('update:state', listener);
+      return () => ipcRenderer.removeListener('update:state', listener);
+    },
     // Events:
     onPageMaybeChanged: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
@@ -539,6 +544,8 @@ function eventBridge() {
     settings: invoke('settings:get'),
     setPreference: invoke('settings:set'),
     setLocale: invoke('locale:set'),
+    readUpdateState: invoke('update:read'),
+    actOnUpdate: invoke('update:act'),
 
     // Application menu events (macOS menu accelerators never reach the DOM)
     onMenu: (channel: string, callback: (data?: unknown) => void) => {

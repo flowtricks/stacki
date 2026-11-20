@@ -1334,6 +1334,26 @@ metadata references too. The installed Studio CLI's
 `check-project` command validates component references and guide settings for CI/refactors.
 
 
+## Update popup
+
+Auto-update never opens a native dialog. `electron/app/autoUpdate.ts` turns electron-updater's events into
+`UpdateEvent`s (`shared/ipc/updateState.ts`) and sends them on `update:state`; the renderer's popup
+(`src/features/update/`) draws them. A state is `idle`, `downloading` (bytes transferred, total or unknown,
+whole percent), `ready`, `notice` (the File menu's "latest", "development build" or "already checking"
+answers, shown once and never stored) or `error` (a check or a download that failed, with the first line of the
+cause). `reveal` marks news that must open a popup the person hid; progress ticks are not news.
+
+- Progress is untrusted when it arrives from the updater (`NaN` for an unknown length is real). `advanceProgress`
+  keeps bytes and percent monotonic and within 0 to 100, reads a total that is not a positive count as unknown
+  and keeps the last known total; main sends an event only when the popup would look different.
+- `update:read` returns the current state for a window that mounts mid-download; `update:act` carries `install`
+  (restart into a downloaded update; ignored otherwise) or `retry` (check again). Hide, Later and Close are the
+  renderer's alone: the download carries on. Preload exposes `readUpdateState`, `actOnUpdate` and `onUpdateState`;
+  the renderer parses every reply and event (`parseUpdateState`, `parseUpdateEvent`) before use.
+- A window that is not open when a notice is sent does not see it; the next mount reads `update:read`.
+- The popup is a pure view of a state (`UpdatePopup`), so tests and harnesses can show any state; there is no
+  production switch for previewing it. Dev builds skip update checks, as before.
+
 ## Instructions panel
 
 `shared/properties/instructions.ts` is the contract for the Instructions view of the Settings panel, once a

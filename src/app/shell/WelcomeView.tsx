@@ -5,6 +5,7 @@ import type { AppView } from '../App';
 import { ToastStack } from '../../features/notifications/ToastStack';
 import WelcomeScreen from '../../features/welcome/WelcomeScreen';
 import { ConfirmHost } from '../../ui/ConfirmDialog';
+import { UpdatePopupHost } from '../../features/update/UpdatePopup';
 import { GearIcon } from '../../ui/Icons';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -24,6 +25,7 @@ export function WelcomeView({ app }: { readonly app: AppView }) {
       {app.busy && <BusyOverlay message={app.busy} />}
       <ToastStack notices={app.notices} dismiss={app.dismissToast} />
       <ConfirmHost />
+      <UpdatePopupHost />
     </div>
   );
 }

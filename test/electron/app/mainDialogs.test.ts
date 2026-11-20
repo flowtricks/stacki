@@ -1,7 +1,6 @@
-// Goal: the native text of the main process (updater dialogs, the usage notice, file pickers, failure sentences) follows the language the
+// Goal: the native text of the main process (the usage notice, file pickers, failure sentences) follows the language the
 // person chose, falls back to English instead of showing a key, and keeps its placeholders in every language.
-// Method: the real loader and the real shipped catalogs run per locale; the updater is driven with a fake Electron updater and a
-// dialog that records what it is asked to show; the application menu is rebuilt for each locale to prove a language change reaches
+// Method: the real loader and the real shipped catalogs run per locale; the application menu is rebuilt for each locale to prove a language change reaches
 // every item. Negative space: unknown keys, missing parameters and a locale that fails to load.
 import assert from 'node:assert/strict';
 import type { MenuItemConstructorOptions } from 'electron';
@@ -16,8 +15,8 @@ test('every main sentence formats in every locale with the same placeholders', a
   for (const locale of NON_ENGLISH) {
     const loaded = await loadMainLocale(locale);
     assert.equal(loaded.locale, locale);
-    assert.notEqual(loaded.translate('dialog.update.ready.title'), 'Update Ready', `${locale} translates the update dialog`);
-    const withVersion = loaded.translate('dialog.update.ready.message', { version: '9.9.9' });
+    assert.notEqual(loaded.translate('dialog.usage.title'), 'Anonymous Usage Counts', `${locale} translates the usage dialog`);
+    const withVersion = loaded.translate('dialog.update.check.latest', { version: '9.9.9' });
     assert.ok(withVersion.includes('9.9.9'), `${locale} keeps {version}`);
     const failure = loaded.translate('error.documents.saveFailed', { file: 'a.astro', reason: 'disk full' });
     assert.ok(failure.includes('a.astro') && failure.includes('disk full'), `${locale} keeps both parameters`);
@@ -35,7 +34,7 @@ test('a locale that cannot load leaves English dialogs', async () => {
   console.warn = () => undefined;
   try {
     setMainLocale(await loadMainLocale('de', () => Promise.reject(new Error('missing'))));
-    assert.equal(translateMain('dialog.update.ready.title'), 'Update Ready');
+    assert.equal(translateMain('dialog.usage.title'), 'Anonymous Usage Counts');
   } finally {
     console.warn = warn;
     setMainLocale(MAIN_ENGLISH);

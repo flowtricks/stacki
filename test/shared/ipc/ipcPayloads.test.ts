@@ -34,6 +34,7 @@ const noPayload = new Set([
   'project:openDialog',
   'project:parentDialog',
   'dev:stop',
+  'update:read',
 ]);
 const pathPayload = new Set([
   'publish:state',
@@ -432,6 +433,8 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
   // The interface language mirrored to main: a shipped locale or "system".
   'locale:set': { preference: 'de' },
+  // The update popup's two buttons.
+  'update:act': { action: 'install' },
   // Breakpoint sync: the scan and usage name a breakpoint's old and new value; apply and restore carry the scan's own digests and journal.
   'breakpointSync:scan': {
     projectPath: '/site',

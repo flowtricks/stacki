@@ -298,6 +298,8 @@ interface InvokeChannels {
   readonly settings: 'settings:get';
   readonly setPreference: 'settings:set';
   readonly setLocale: 'locale:set';
+  readonly readUpdateState: 'update:read';
+  readonly actOnUpdate: 'update:act';
   readonly microphoneOpenSettings: 'microphone:openSettings';
   readonly microphoneRequest: 'microphone:request';
   readonly microphoneStatus: 'microphone:status';
@@ -343,6 +345,8 @@ export type PreloadBridge = InvokeSurface & {
   readonly onDevExit: (callback: (data: unknown) => void) => () => void;
   readonly onProgress: (callback: (data: unknown) => void) => () => void;
   readonly onStudioProgress: (callback: (data: unknown) => void) => () => void;
+  /** The update popup's state changed (shared/ipc/updateState.ts UpdateState). */
+  readonly onUpdateState: (callback: (data: unknown) => void) => () => void;
   readonly onAppShareProgress: (callback: (data: unknown) => void) => () => void;
   readonly onAppStorageChanged: (callback: (data: unknown) => void) => () => void;
   readonly onAppPersonChanged: (callback: () => void) => () => void;
