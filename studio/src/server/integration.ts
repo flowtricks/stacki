@@ -1,4 +1,5 @@
 // i18n-ignore-file: HTTP API fallback text on the Studio server: it has no language, and the editor shows its own sentence for a failed request.
+import { PREVIEW_ERROR_BEACON } from '../features/preview/previewHandshake';
 import { withGitWorkspaceLease, isGitWorkspaceRead } from '../features/history/gitWorkspaceLease';
 import { createAstroNotifications } from '../features/notifications/astroNotificationServer';
 import { readPackagePreviews } from '../../vendor/stacki/electron/lib/componentSources';
@@ -116,6 +117,7 @@ function previewPlugin(options: PreviewOptions, features: ReturnType<typeof feat
         ? instrumentVariant(marked.code, path.relative(options.root, id).split(path.sep).join('/'), path.join(options.assets, 'variantRuntime.mjs')) +
             (marked.page
               ? `\n<meta name="studio-parent-origin" content="${process.env['STUDIO_PARENT_ORIGIN'] ?? ''}">` +
+                `\n<script is:inline>${PREVIEW_ERROR_BEACON}</script>` +
                 '\n<script is:inline type="module" src="/studio/morph.js"></script>\n<script is:inline type="module" async src="/studio/preview.js"></script>'
               : '')
         : undefined;

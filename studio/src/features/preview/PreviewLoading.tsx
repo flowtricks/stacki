@@ -1,6 +1,6 @@
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { handshakeWait, HANDSHAKE_LIMITS, type HandshakeWait } from './previewHandshake';
+import { handshakeWait, HANDSHAKE_LIMITS, parsePreviewError, type HandshakeWait } from './previewHandshake';
 import { STARTUP_LIMITS, type StartupView } from '../startup/startupStages';
 import { STARTUP_STAGE_KEYS } from '../startup/startupText';
 import { useElapsed } from '../startup/useElapsed';
@@ -18,6 +18,7 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
   const [ready, setReady] = useState<{ readonly session: string; readonly path: string }>();
   const [slow, setSlow] = useState(false);
   const [wait, setWait] = useState<HandshakeWait>({ kind: 'address' });
+  const [frameError, setFrameError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
   const session = `${canvas}:${attempt}`;
   const key = `${url ?? ''}:${session}`;
@@ -35,6 +36,11 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
         return;
       }
       const data: unknown = event.data;
+      const failure = parsePreviewError(data);
+      if (failure !== undefined) {
+        setFrameError(failure);
+        return;
+      }
       if (data && typeof data === 'object' && 'type' in data && data.type === 'studio:preview-ready') {
         // A client from an older bake names no page: it answers for the URL asked for.
         const path = 'path' in data ? readyPath(data.path) : undefined;
@@ -68,6 +74,7 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
     // A frame that has shown its page is never "slow" for a URL it is already showing.
     slow: !shown && slow,
     wait,
+    frameError: shown ? undefined : frameError,
     attempt,
     retry: () => {
       setAttempt((value) => value + 1);
@@ -101,11 +108,13 @@ const WAIT_KEYS = {
 export function PreviewLoading({
   slow,
   wait,
+  frameError,
   retry,
   startup,
 }: {
   readonly slow: boolean;
   readonly wait: HandshakeWait;
+  readonly frameError: string | undefined;
   readonly retry: () => void;
   readonly startup: StartupView | undefined;
 }) {
@@ -126,6 +135,7 @@ export function PreviewLoading({
       <span className="studio-preview-spinner" aria-hidden="true" />
       <p>{message}</p>
       {slow && !cold && <p className="studio-preview-wait">{translate(WAIT_KEYS[wait.kind])}</p>}
+      {frameError !== undefined && <p className="studio-preview-wait">{frameError}</p>}
       {showRetry && <button onClick={retry}>{translate('preview.studio.retry')}</button>}
     </div>
   );
