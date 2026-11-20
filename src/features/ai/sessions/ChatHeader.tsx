@@ -41,12 +41,12 @@ export function ChatHeader({ chat }: { readonly chat: ChatSummary | undefined })
   return (
     <div className="ai-header">
       <button
-        className="ghost"
+        className="ghost panel-header-back"
         aria-label={translate('ai.sessions.allChats')}
         title={translate('ai.sessions.allChats')}
         onClick={() => void openChat(undefined)}
       >
-        <ChevronLeftIcon size={12} />
+        <ChevronLeftIcon size={14} />
       </button>
       <OpenChatTitle chat={chat} />
       {newChatButton}

@@ -6,6 +6,7 @@ import { useWindowRectangle } from './useWindowRectangle';
 import { WindowResizeHandles } from './WindowResizeHandles';
 import type { WindowSize } from './windowGeometry';
 import './popup.css';
+import './panelHeader.css';
 import './dockableWindow.css';
 import { useTranslate } from '../lib/i18n/useTranslate';
 

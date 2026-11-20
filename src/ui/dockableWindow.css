@@ -23,9 +23,11 @@
 .dockable-window-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 0 12px;
+  gap: var(--panel-header-gap);
+  box-sizing: border-box;
+  /* The same row as a panel's heading (panelHeader.css), so the chat's title sits where Navigator's does. */
+  min-height: var(--panel-header-height);
+  padding: var(--panel-header-padding-top) var(--panel-header-padding-end) var(--panel-header-padding-bottom) var(--panel-header-padding-start);
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
 }

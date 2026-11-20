@@ -19,10 +19,10 @@
 .ai-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--panel-header-gap);
   min-width: 0;
+  min-height: var(--panel-header-row-height);
   flex: 1;
-  padding: 0 4px;
   color: var(--text-dim);
 }
 .ai-header h2 {
@@ -31,9 +31,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: var(--panel-header-title-size);
+  font-weight: var(--panel-header-title-weight);
+  line-height: var(--panel-header-title-line-height);
   color: var(--text);
+}
+.ai-header button {
+  box-sizing: border-box;
+  min-width: var(--panel-header-action-size);
+  height: var(--panel-header-action-size);
+  padding: 3px;
+}
+.ai-header .panel-header-back {
+  margin-left: var(--panel-header-back-offset);
 }
 .ai-body {
   display: flex;
