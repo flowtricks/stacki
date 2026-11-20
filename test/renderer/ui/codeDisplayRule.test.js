@@ -53,6 +53,7 @@ const CODE_LABELS_ALLOWED = {
   'src/features/style/embed/ResolvedRows.tsx': 'A property name heading a popup.',
   'studio/src/features/ai/ChatText.tsx': 'Inline Markdown code in a chat message: a word in a sentence, with no language to read. Fences take CodeBlock.',
   'studio/src/features/github/SyncNotice.tsx': 'A file path in a list.',
+  'studio/src/features/roles/RolesView.tsx': 'An invite link to copy, in a row: an address to hand to a person, which is not code to read.',
 };
 
 // Stylesheet rules that look like a code block and are not one.

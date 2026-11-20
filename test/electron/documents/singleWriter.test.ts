@@ -98,6 +98,16 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/handlers/devServers.ts': {
     writeFileSync: { count: 6, reason: 'the generated preview harness in node_modules/.avb, with the component preview recipe' },
   },
+  'electron/project/pageRelocationWrite.ts': {
+    createFileExclusive: {
+      count: 1,
+      reason: 'a page that arrives is first staged whole in the project’s .stacki/io, which the watcher ignores; the edited texts use the host writer',
+    },
+    renameSync: { count: 4, reason: 'a page file leaves for .stacki/io and arrives at its destination, and the same two moves back on a failure or an undo' },
+  },
+  'electron/project/studioAuthFile.ts': {
+    writeFile: { count: 1, reason: 'Studio’s wrangler.jsonc sign-in variables, written to a temporary file and renamed whole; not a website document' },
+  },
   'electron/project/pageRenameWrite.ts': {
     renameSync: { count: 1, reason: 'a page or folder move; text changes use the host writer' },
   },
@@ -308,7 +318,11 @@ test('the write primitives, the actor disk and the host each have one owner', ()
     sources(ROOT)
       .filter((file) => pattern.test(fs.readFileSync(file, 'utf8')))
       .map(repositoryPath);
-  assert.deepEqual(users(/\b(replaceFileAtomic|createFileExclusive)\b/), ['electron/documents/atomicWrite.ts', 'electron/documents/documentDisk.ts']);
+  assert.deepEqual(users(/\b(replaceFileAtomic|createFileExclusive)\b/), [
+    'electron/documents/atomicWrite.ts',
+    'electron/documents/documentDisk.ts',
+    'electron/project/pageRelocationWrite.ts',
+  ]);
   assert.deepEqual(users(/new NodeDocumentDisk\b/), ['electron/documents/documentActors.ts']);
   assert.deepEqual(users(/\bcreateNodeDocumentActors\(/), ['electron/documents/documentActors.ts', 'electron/documents/documentWrites.ts', 'electron/main.ts']);
   assert.deepEqual(users(/\binstallDocumentHost\(/), ['electron/documents/documentWrites.ts', 'electron/main.ts']);

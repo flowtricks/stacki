@@ -146,7 +146,12 @@ const checkRow = (menu, row) => {
   check(`${name}: the route sits inside the row`, row.description.top >= row.row.top && row.description.bottom <= row.row.bottom, detail);
   check(`${name}: the title is above the route`, row.label.bottom <= row.description.top, detail);
   check(`${name}: the title and the route start at one left edge`, Math.abs(row.label.left - row.description.left) < 1, detail);
-  check(`${name}: the check ends the row`, row.check.right <= row.row.right && row.check.left >= row.label.right, detail);
+  // An unchecked row's check is empty and `.dd-check:empty` takes it out of the layout (dropdown.css), so it has no box at all.
+  if (row.checked) {
+    check(`${name}: the check ends the row`, row.check.right <= row.row.right && row.check.left >= row.label.right, detail);
+  } else {
+    check(`${name}: an unchecked row draws no check`, row.check.right === row.check.left && row.check.height === 0, detail);
+  }
   if (row.icon !== undefined) {
     check(`${name}: the icon's top is within the row`, row.icon.top >= row.row.top && row.icon.top <= row.row.bottom, detail);
     check(`${name}: the icon's bottom is within the row`, row.icon.bottom <= row.row.bottom, detail);
