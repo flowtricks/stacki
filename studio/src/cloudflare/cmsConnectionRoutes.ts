@@ -6,8 +6,9 @@
 // SESSION_SECRET makes saved keys unreadable; they must then be added again.
 
 // i18n-ignore-file: HTTP API fallback text on the Studio server: it has no language, and the editor shows its own sentence for a failed request.
-import { canEdit } from '../features/auth/repositoryAccess';
-import type { Identity } from '../features/auth/session';
+import { mayManage } from '../features/auth/authRuntime';
+import { activeAuthRuntime } from './activeAuthRuntime';
+import type { Principal } from '../features/auth/authProvider';
 import { publicList, withConnection, withoutConnection } from '../features/cms/cmsConnectionBook';
 import { keepConnections, sealCmsSecret, storedConnections, type Vault } from '../features/cms/cmsConnectionVault';
 import { parseCmsConnectionDraft, parseConnectionId } from '../../vendor/stacki/shared/properties/cmsConnections';
@@ -22,7 +23,7 @@ export function cmsVault(environment: Environment): Vault {
 }
 
 /** The connection routes; undefined for any other request. */
-export async function cmsConnectionRoute(request: Request, url: URL, environment: Environment, identity: Identity): Promise<Response | undefined> {
+export async function cmsConnectionRoute(request: Request, url: URL, environment: Environment, identity: Principal): Promise<Response | undefined> {
   const path = url.pathname;
   if (!path.startsWith('/studio/api/cms-connections')) {
     return undefined;
@@ -34,7 +35,7 @@ export async function cmsConnectionRoute(request: Request, url: URL, environment
   if (request.method !== 'POST') {
     return studioError(request, 'Unknown CMS connection request', 404);
   }
-  if (!(await canEdit(identity, { ...environment, EDITOR_ACCESS: 'repository' }, true))) {
+  if (!(await mayManage(activeAuthRuntime(environment), identity))) {
     return studioError(request, 'Only Write or Admin collaborators can manage connections.', 403);
   }
   const input = await body(request);

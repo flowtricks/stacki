@@ -1,6 +1,6 @@
 export function routeLogin(request: Request, forward: (request: Request) => Promise<Response>): Promise<Response> | undefined {
   const pathname = new URL(request.url).pathname;
-  if (!['/studio/auth/login', '/studio/auth/callback', '/studio/auth/logout'].includes(pathname)) {
+  if (!['/studio/auth/login', '/studio/auth/callback', '/studio/auth/logout'].includes(pathname) && !pathname.startsWith('/studio/auth/provider/')) {
     return undefined;
   }
   // Service bindings can receive follow-mode requests. OAuth redirects must reach the

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { authorizeConnection } from '../src/features/auth/connectionAuthorization';
+import { authorizeConnection as authorizeWithRuntime } from '../src/features/auth/connectionAuthorization';
+import { createAuthRuntime } from '../src/features/auth/authRuntime';
+import { createGitHubProvider } from '../src/features/auth/githubProvider';
 import { signSession } from '../src/features/auth/session';
 
 const config = {
@@ -12,6 +14,15 @@ const config = {
   GITHUB_REPOSITORY: '',
   GITHUB_BRANCH: '',
 };
+// The route now answers from the installed provider's runtime; these tests run the built-in GitHub one on each configuration.
+function authorizeConnection(incoming: Request, environment: typeof config & { readonly EDITOR_ACCESS?: string }) {
+  const origin = 'https://studio.test';
+  const provider = createGitHubProvider({ ...environment, STUDIO_ORIGIN: origin, GITHUB_CLIENT_ID: '', GITHUB_CLIENT_SECRET: '' });
+  return authorizeWithRuntime(
+    incoming,
+    createAuthRuntime({ provider, installed: 'built-in', origin, secret: environment.SESSION_SECRET, editorAccess: environment.EDITOR_ACCESS }),
+  );
+}
 function request(session: string, audience?: string) {
   return new Request('https://studio.test/studio/internal/authorize', {
     method: 'POST',

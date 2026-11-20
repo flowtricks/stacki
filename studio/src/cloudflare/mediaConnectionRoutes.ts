@@ -8,8 +8,9 @@
 // shows on the panel's first listing instead.
 
 // i18n-ignore-file: HTTP API fallback text on the Studio server: it has no language, and the editor shows its own sentence for a failed request.
-import { canEdit } from '../features/auth/repositoryAccess';
-import type { Identity } from '../features/auth/session';
+import { mayManage } from '../features/auth/authRuntime';
+import { activeAuthRuntime } from './activeAuthRuntime';
+import type { Principal } from '../features/auth/authProvider';
 import { publicMediaList, secretText, withMediaConnection, withoutMediaConnection } from '../features/assets/mediaConnectionBook';
 import { MEDIA_STORE_KEY, storedMediaConnections } from '../features/assets/mediaConnectionVault';
 import { sealCmsSecret, type Vault } from '../features/cms/cmsConnectionVault';
@@ -24,7 +25,7 @@ import type { Environment } from './environment';
 const BODY_CHARS_MAX = 64 * 1024;
 
 /** The media connection routes; undefined for any other request. */
-export async function mediaConnectionRoute(request: Request, url: URL, environment: Environment, identity: Identity): Promise<Response | undefined> {
+export async function mediaConnectionRoute(request: Request, url: URL, environment: Environment, identity: Principal): Promise<Response | undefined> {
   const path = url.pathname;
   if (!path.startsWith('/studio/api/media-connections')) {
     return undefined;
@@ -36,7 +37,7 @@ export async function mediaConnectionRoute(request: Request, url: URL, environme
   if (request.method !== 'POST') {
     return studioError(request, 'Unknown media connection request', 404);
   }
-  if (!(await canEdit(identity, { ...environment, EDITOR_ACCESS: 'repository' }, true))) {
+  if (!(await mayManage(activeAuthRuntime(environment), identity))) {
     return studioError(request, 'Only Write or Admin collaborators can manage connections.', 403);
   }
   const input = await body(request);

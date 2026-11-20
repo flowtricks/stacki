@@ -46,3 +46,14 @@ export const signInMessageKeys: Record<SignInProblem, MessageKey> = {
   email: 'studio.login.problem.email',
   'rate-limit': 'studio.login.problem.rateLimit',
 };
+
+// The same sentences without GitHub's name, for an instance that signs people in with another provider.
+export const signInNeutralMessageKeys: Record<SignInProblem, MessageKey> = {
+  expired: 'studio.login.neutral.expired',
+  cancelled: 'studio.login.neutral.cancelled',
+  configuration: 'studio.login.neutral.configuration',
+  unavailable: 'studio.login.neutral.unavailable',
+  access: 'studio.login.neutral.access',
+  email: 'studio.login.neutral.email',
+  'rate-limit': 'studio.login.neutral.rateLimit',
+};

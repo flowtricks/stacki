@@ -7,7 +7,7 @@
 // `x-stub-preview: reached` proves a request got past the Worker to the container.
 // No network: GitHub is never called, because the allowlist access mode admits the
 // signed numeric id without asking GitHub.
-import { build } from 'esbuild';
+import { build, type Plugin } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { Miniflare, Response as MiniflareResponse, convertV4MiniflareOptions } from 'miniflare';
 import { signSession } from '../src/features/auth/session';
@@ -37,6 +37,9 @@ export class StubPreview extends DurableObject {
       session: request.headers.get('x-studio-session'),
       cookie: request.headers.get('cookie'),
       forwardedProto: request.headers.get('x-forwarded-proto'),
+      identity: request.headers.get('x-studio-identity'),
+      aliases: request.headers.get('x-studio-aliases'),
+      name: request.headers.get('x-studio-name'),
     };
     return Response.json(echo, {
       headers: {
@@ -121,7 +124,30 @@ export interface WorkerRuntime {
   readonly dispose: () => Promise<void>;
 }
 
-export async function startWorkerRuntime(): Promise<WorkerRuntime> {
+/** The Worker bundled with a custom provider in the auth slot, as `npm run build` wires studio/cloudflare/auth-provider.ts. */
+export interface WorkerRuntimeOptions {
+  /** Absolute path of a module whose default export is an AuthProviderFactory. */
+  readonly authProviderModule?: string;
+  /** Extra Worker vars, such as EDITOR_ACCESS or a provider's own settings. */
+  readonly vars?: Readonly<Record<string, string>>;
+}
+
+// Replaces src/cloudflare/authProviderSlot.ts with a re-export of the given provider module, the way the build does.
+function authSlot(module: string): Plugin {
+  return {
+    name: 'auth-provider-slot',
+    setup(context) {
+      context.onResolve({ filter: /\/authProviderSlot$/ }, () => ({ path: 'authProviderSlot', namespace: 'auth-slot' }));
+      context.onLoad({ filter: /.*/, namespace: 'auth-slot' }, () => ({
+        contents: `export { default as customAuthProvider } from ${JSON.stringify(module)};`,
+        loader: 'ts',
+        resolveDir: fileURLToPath(new URL('../src/cloudflare/', import.meta.url)),
+      }));
+    },
+  };
+}
+
+export async function startWorkerRuntime(options: WorkerRuntimeOptions = {}): Promise<WorkerRuntime> {
   const bundled = await build({
     // The shipped Worker behind a test-only wrapper (DIRECT_ENTRY); production bundles worker.ts itself.
     stdin: {
@@ -136,6 +162,7 @@ export async function startWorkerRuntime(): Promise<WorkerRuntime> {
     conditions: ['workerd', 'worker', 'browser'],
     mainFields: ['module', 'main'],
     external: ['cloudflare:*', 'node:*'],
+    plugins: options.authProviderModule === undefined ? [] : [authSlot(options.authProviderModule)],
     write: false,
     logLevel: 'silent',
   });
@@ -180,6 +207,7 @@ export async function startWorkerRuntime(): Promise<WorkerRuntime> {
             GITHUB_CLIENT_SECRET: '',
             EDITOR_ACCESS: 'allowlist',
             EDITOR_GITHUB_IDS: String(WORKER_TEST.editorId),
+            ...options.vars,
           },
         },
         { name: 'stub', modules: true, script: STUB_PREVIEW, durableObjects: { SELF: 'StubPreview' } },

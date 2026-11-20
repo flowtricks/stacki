@@ -7,6 +7,7 @@ import { storageInventory, storageBaseline, removeStoredAsset } from './storageR
 import { GitHubRepository } from '../features/github/github';
 import { sourcePath, filePath, record, string } from '../shared/validation';
 import type { Environment } from './environment';
+import { activeAuthRuntime } from './activeAuthRuntime';
 
 export async function internal(request: Request, environment: Environment): Promise<Response> {
   if (!environment.CONTAINER_TOKEN || request.headers.get('x-studio-token') !== environment.CONTAINER_TOKEN) {
@@ -19,7 +20,7 @@ export async function internal(request: Request, environment: Environment): Prom
 const routes: Readonly<Record<string, (request: Request, environment: Environment, url: URL) => Promise<Response>>> = {
   '/studio/internal/ai/models': async (_request, environment) =>
     Response.json(modelConfiguration(environment.AI_BASE_URL ? environment.AI_MODEL : undefined, environment.AI_BASE_URL ? environment.AI_MODELS : undefined)),
-  '/studio/internal/authorize': authorizeConnection,
+  '/studio/internal/authorize': (request, environment) => authorizeConnection(request, activeAuthRuntime(environment)),
   '/studio/internal/storage': storageInventory,
   '/studio/internal/storage-baseline': storageBaseline,
   '/studio/internal/storage-remove': removeStoredAsset,

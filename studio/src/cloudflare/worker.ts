@@ -1,11 +1,15 @@
 import { PublishIdleGuard } from './publishIdleGuard';
 import { updateRoutes } from './updateRoutes';
 import { isStudioAPI, studioError } from './apiResponse';
-import { canEdit } from '../features/auth/repositoryAccess';
 import { Container } from '@cloudflare/containers';
-import { githubLogin, loginPage } from '../features/auth/githubLogin';
+import { authRoutes, installedProviderName } from '../features/auth/authRoutes';
+import { loginPage } from '../features/auth/loginPage';
+import { mayEdit, mayManage, memberAliases, mintSession, principalFromToken, readPrincipal, SESSION_COOKIES } from '../features/auth/authRuntime';
+import { SESSION_LIFETIME_MS, SESSION_LIFETIME_SECONDS } from '../features/auth/principalSession';
+import type { Principal } from '../features/auth/authProvider';
+import { activeAuthRuntime } from './activeAuthRuntime';
 import { routeLogin } from '../features/auth/loginRoute';
-import { cookie, sessionCookie, signSession, verifySession, type Identity } from '../features/auth/session';
+import { cookie, sessionCookie } from '../features/auth/session';
 import type { Environment } from './environment';
 import { internal } from './internalRoutes';
 import { claimLoginAttempt, LoginAttempts } from '../features/auth/loginAttempts';
@@ -36,7 +40,7 @@ export class PreviewContainer extends Container<Environment> {
   override pingEndpoint = 'localhost/studio/api/status';
   override async fetch(request: Request): Promise<Response> {
     // OAuth coordination uses the existing Durable Object without starting the preview Container.
-    const auth = await githubLogin(request, this.env, this.loginAttempts, (profile, fresh) => canEdit(profile, this.env, fresh));
+    const auth = await authRoutes(request, activeAuthRuntime(this.env), this.loginAttempts);
     if (auth) {
       return auth;
     }
@@ -188,12 +192,12 @@ async function route(request: Request, environment: Environment, context: Execut
 }
 
 // The Studio host's requests the Worker answers itself, without the container.
-async function workerRoute(request: Request, url: URL, environment: Environment, identity: Identity): Promise<Response | undefined> {
+async function workerRoute(request: Request, url: URL, environment: Environment, identity: Principal): Promise<Response | undefined> {
   if (url.pathname === '/studio/api/updates') {
     return authorizedUpdate(request, environment, identity);
   }
   if (url.pathname === '/studio/api/session') {
-    return Response.json({ kind: 'github', id: identity.id, login: identity.login }, { headers: { 'Cache-Control': 'no-store' } });
+    return Response.json(sessionView(identity, memberAliases(activeAuthRuntime(environment), identity)), { headers: { 'Cache-Control': 'no-store' } });
   }
   if (url.pathname === '/studio/api/preview-url') {
     return previewURL(url, environment, identity);
@@ -213,7 +217,7 @@ async function workerRoute(request: Request, url: URL, environment: Environment,
 
 // To the container: never with a client's CMS target, and with ours for a CMS
 // call (cmsConnectionRoutes.ts). A connection that cannot be used is answered here.
-async function forward(request: Request, url: URL, environment: Environment, identity: Identity, previewHost: boolean): Promise<Response> {
+async function forward(request: Request, url: URL, environment: Environment, identity: Principal, previewHost: boolean): Promise<Response> {
   let forwarded: Request;
   try {
     forwarded = await mediaForwarded(await cmsForwarded(request, url, cmsVault(environment)), url, cmsVault(environment));
@@ -226,7 +230,7 @@ async function forward(request: Request, url: URL, environment: Environment, ide
   return proxy(forwarded, environment, identity, previewHost);
 }
 
-function warmPreview(request: Request, environment: Environment, identity: Identity, context: ExecutionContext) {
+function warmPreview(request: Request, environment: Environment, identity: Principal, context: ExecutionContext) {
   const warmup = warmupRequest(request, environment.PREVIEW_ORIGIN);
   if (!warmup) {
     return;
@@ -239,28 +243,31 @@ function warmPreview(request: Request, environment: Environment, identity: Ident
   );
 }
 
-async function studioIdentity(request: Request, environment: Environment, previewHost: boolean): Promise<Identity | Response> {
-  const identity = await verifySession(
-    cookie(request, previewHost ? '__Host-studio-preview' : '__Host-studio'),
-    environment.SESSION_SECRET,
-    previewHost ? 'preview' : 'studio',
-  );
+async function studioIdentity(request: Request, environment: Environment, previewHost: boolean): Promise<Principal | Response> {
+  const runtime = activeAuthRuntime(environment);
+  const identity = await readPrincipal(runtime, request, previewHost ? 'preview' : 'studio');
+  const provider = installedProviderName(runtime);
   if (!identity) {
-    return isStudioAPI(request) || previewHost ? studioError(request, 'Your Studio session expired. Sign in again.', 401) : loginPage();
+    return isStudioAPI(request) || previewHost
+      ? studioError(request, 'Your Studio session expired. Sign in again.', 401)
+      : loginPage(undefined, 200, '', 0, undefined, provider);
   }
-  if (!(await canEdit(identity, environment))) {
-    return isStudioAPI(request) || previewHost ? studioError(request, 'Repository editing access is required.', 403) : loginPage('access', 403);
+  if (!(await mayEdit(runtime, identity, 'cached'))) {
+    return isStudioAPI(request) || previewHost
+      ? studioError(request, 'Repository editing access is required.', 403)
+      : loginPage('access', 403, '', 0, undefined, provider);
   }
   return identity;
 }
 
 async function previewEntry(url: URL, environment: Environment): Promise<Response> {
+  const runtime = activeAuthRuntime(environment);
   const token = url.searchParams.get('token') ?? '';
-  const identity = await verifySession(token, environment.SESSION_SECRET, 'preview');
-  if (!identity || !(await canEdit(identity, environment))) {
+  const identity = await principalFromToken(runtime, token, 'preview');
+  if (!identity || !(await mayEdit(runtime, identity, 'cached'))) {
     return new Response('Preview sign-in expired', { status: 403 });
   }
-  const session = await signSession({ ...identity, expires: Date.now() + 28_800_000 }, environment.SESSION_SECRET);
+  const session = await mintSession(runtime, identity, 'preview', Date.now() + SESSION_LIFETIME_MS);
   const page = url.searchParams.get('page') ?? '/';
   if (!page.startsWith('/') || page.startsWith('//') || page.includes('\\')) {
     return new Response('Invalid preview path', { status: 400 });
@@ -269,19 +276,18 @@ async function previewEntry(url: URL, environment: Environment): Promise<Respons
     status: 302,
     headers: {
       Location: page + (url.searchParams.get('mode') === 'interactive' ? '#avb-preview' : '#avb-design'),
-      'Set-Cookie': sessionCookie('__Host-studio-preview', session, 28_800),
+      'Set-Cookie': sessionCookie(SESSION_COOKIES.preview, session, SESSION_LIFETIME_SECONDS),
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
     },
   });
 }
 
-async function proxy(request: Request, environment: Environment, identity: Identity, previewHost: boolean): Promise<Response> {
+async function proxy(request: Request, environment: Environment, identity: Principal, previewHost: boolean): Promise<Response> {
   const headers = new Headers(request.headers);
   headers.set('x-studio-token', environment.CONTAINER_TOKEN);
-  headers.set('x-studio-user', identity.login);
-  headers.set('x-studio-user-id', String(identity.id));
-  headers.set('x-studio-session', cookie(request, previewHost ? '__Host-studio-preview' : '__Host-studio'));
+  identityHeaders(headers, environment, identity);
+  headers.set('x-studio-session', cookie(request, previewHost ? SESSION_COOKIES.preview : SESSION_COOKIES.studio));
   headers.delete('Cookie');
   const response = await environment.PREVIEW.getByName('project').fetch(new Request(request, { headers }));
   if (response.status === 101) {
@@ -295,8 +301,8 @@ async function proxy(request: Request, environment: Environment, identity: Ident
   return outgoing;
 }
 
-async function previewURL(url: URL, environment: Environment, identity: Identity) {
-  const token = await signSession({ ...identity, audience: 'preview', expires: Date.now() + 30_000 }, environment.SESSION_SECRET);
+async function previewURL(url: URL, environment: Environment, identity: Principal) {
+  const token = await mintSession(activeAuthRuntime(environment), identity, 'preview', Date.now() + 30_000);
   const preview = new URL('/__studio-entry', environment.PREVIEW_ORIGIN);
   preview.searchParams.set('token', token);
   preview.searchParams.set('page', url.searchParams.get('page') ?? '/');
@@ -315,11 +321,48 @@ function studioAsset(request: Request, environment: Environment) {
   return environment.ASSETS.fetch(new Request(asset, request));
 }
 
-async function authorizedUpdate(request: Request, environment: Environment, identity: Identity) {
-  if (!(await canEdit(identity, { ...environment, EDITOR_ACCESS: 'repository' }, true))) {
+async function authorizedUpdate(request: Request, environment: Environment, identity: Principal) {
+  if (!(await mayManage(activeAuthRuntime(environment), identity))) {
     return new Response('Repository write access is required to manage Studio updates', {
       status: 403,
     });
   }
   return updateRoutes(request, environment);
+}
+
+// Who the container is told is asking. Every header here is set by the Worker, never copied from the client: the
+// container trusts them only together with `x-studio-token`. A GitHub person keeps the headers the container has always
+// read; every person also carries `x-studio-identity`, the provider-qualified identity roles.json members are matched on.
+function identityHeaders(headers: Headers, environment: Environment, identity: Principal): void {
+  headers.set('x-studio-identity', identity.identity);
+  headers.set('x-studio-name', encodeURIComponent(identity.name));
+  const aliases = memberAliases(activeAuthRuntime(environment), identity);
+  if (aliases.length > 0) {
+    headers.set('x-studio-aliases', aliases.join(','));
+  } else {
+    headers.delete('x-studio-aliases');
+  }
+  if (identity.github) {
+    headers.set('x-studio-user', identity.github.login);
+    headers.set('x-studio-user-id', String(identity.github.id));
+  } else {
+    // A forged GitHub login must not survive in front of a non-GitHub person.
+    headers.delete('x-studio-user');
+    headers.delete('x-studio-user-id');
+  }
+}
+
+// The editor's view of who is signed in (`/studio/api/session`).
+function sessionView(identity: Principal, aliases: readonly string[]) {
+  if (identity.github) {
+    return { kind: 'github', id: identity.github.id, login: identity.github.login };
+  }
+  return {
+    kind: 'account',
+    identity: identity.identity,
+    aliases,
+    name: identity.name,
+    ...(identity.email === undefined ? {} : { email: identity.email }),
+    ...(identity.avatarUrl === undefined ? {} : { avatarUrl: identity.avatarUrl }),
+  };
 }

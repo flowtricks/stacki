@@ -3,7 +3,7 @@
 // without a session, from the container, for that app's folder only.
 import { appFileContainerPath, mintAppFileLink, parseAppFilePath, verifyAppFileLink } from './appFileLinks';
 import type { Environment } from './environment';
-import type { Identity } from '../features/auth/session';
+import type { Principal } from '../features/auth/authProvider';
 
 const NOT_FOUND_HEADERS = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } as const;
 
@@ -38,7 +38,7 @@ export async function appFileLinkRoute(request: Request, url: URL, environment: 
 }
 
 /** A signed-in GET or HEAD of an app file: redirect into the link prefix. Undefined for any other request. */
-export async function appFileRedirect(request: Request, url: URL, environment: Environment, identity: Identity): Promise<Response | undefined> {
+export async function appFileRedirect(request: Request, url: URL, environment: Environment, identity: Principal): Promise<Response | undefined> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return undefined;
   }

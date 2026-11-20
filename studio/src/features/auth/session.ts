@@ -23,11 +23,17 @@ async function key(secret: string) {
   return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 export async function signSession(identity: Identity, secret: string): Promise<string> {
-  const payload = base64(new TextEncoder().encode(JSON.stringify(identity)));
+  return signClaims(identity, secret);
+}
+// The signed envelope itself, shared by the GitHub sessions above and the provider-neutral ones
+// (principalSession.ts). Only core calls these two: a provider never sees the session secret.
+export async function signClaims(claims: object, secret: string): Promise<string> {
+  const payload = base64(new TextEncoder().encode(JSON.stringify(claims)));
   const signature = await crypto.subtle.sign('HMAC', await key(secret), new TextEncoder().encode(payload));
   return `${payload}.${base64(new Uint8Array(signature))}`;
 }
-export async function verifySession(token: string, secret: string, audience: Identity['audience']): Promise<Identity | undefined> {
+// The payload of a token whose signature verifies, or undefined. Expiry and audience are the caller's to check.
+export async function verifyClaims(token: string, secret: string): Promise<Record<string, unknown> | undefined> {
   if (token.length > 4096) {
     return undefined;
   }
@@ -39,7 +45,17 @@ export async function verifySession(token: string, secret: string, audience: Ide
     if (!(await crypto.subtle.verify('HMAC', await key(secret), decode(signature), new TextEncoder().encode(payload)))) {
       return undefined;
     }
-    const data = record(JSON.parse(new TextDecoder().decode(decode(payload))));
+    return record(JSON.parse(new TextDecoder().decode(decode(payload))));
+  } catch {
+    return undefined;
+  }
+}
+export async function verifySession(token: string, secret: string, audience: Identity['audience']): Promise<Identity | undefined> {
+  const data = await verifyClaims(token, secret);
+  if (!data) {
+    return undefined;
+  }
+  try {
     if (typeof data['id'] !== 'number' || !Number.isSafeInteger(data['id']) || data['id'] < 1) {
       return undefined;
     }
