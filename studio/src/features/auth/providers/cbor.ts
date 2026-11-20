@@ -56,7 +56,7 @@ function readItem(bytes: Uint8Array, offset: number, depth: number): Result<Cbor
         return err('cbor-text');
       }
       try {
-        return ok({ value: new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(end, end + length)), end: end + length });
+        return ok({ value: new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes.subarray(end, end + length)), end: end + length });
       } catch {
         return err('cbor-text');
       }

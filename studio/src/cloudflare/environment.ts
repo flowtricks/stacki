@@ -3,6 +3,8 @@ import type { PreviewContainer } from './worker';
 
 export interface Environment extends AuthConfig {
   readonly EDITOR_ACCESS?: string;
+  /** `github` (default), `access`, `google`, `oidc` or `passkey`; the provider's own variables follow (docs/auth-providers.md). */
+  readonly AUTH_PROVIDER?: string;
   readonly SITE_DEPLOYMENT_URL?: string;
   readonly GITHUB_DEPLOY_WORKER?: string;
   readonly GITHUB_DEPLOY_ACCOUNT?: string;

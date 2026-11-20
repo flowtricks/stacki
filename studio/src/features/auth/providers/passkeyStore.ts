@@ -72,12 +72,14 @@ export interface ChallengeRecord {
 }
 
 /** The slice of Durable Object storage this store uses, so tests can supply a memory version with the same semantics. */
-export interface KeyValueStorage {
+export interface StorageOperations {
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<unknown>;
   list(options: { readonly prefix: string; readonly limit: number }): Promise<ReadonlyMap<string, unknown>>;
-  transaction<T>(closure: (transaction: KeyValueStorage) => Promise<T>): Promise<T>;
+}
+export interface KeyValueStorage extends StorageOperations {
+  transaction<T>(closure: (transaction: StorageOperations) => Promise<T>): Promise<T>;
 }
 
 export type InviteFailure = 'handle-invalid' | 'locked' | 'full';
@@ -127,12 +129,12 @@ const key = {
 };
 
 export function createPasskeyStore(storage: KeyValueStorage): PasskeyStore {
-  const handleOf = async (access: KeyValueStorage, handle: string) => parseOptional(await access.get(key.handle(handle)), parseHandleRecord);
-  const credentialsIn = async (access: KeyValueStorage, handle?: string) => {
+  const handleOf = async (access: StorageOperations, handle: string) => parseOptional(await access.get(key.handle(handle)), parseHandleRecord);
+  const credentialsIn = async (access: StorageOperations, handle?: string) => {
     const all = [...(await access.list({ prefix: 'passkey/credential/', limit: PASSKEY_LIMITS.credentialsMax + 1 })).values()].map(parseCredentialRecord);
     return handle === undefined ? all : all.filter((record) => record.handle === handle);
   };
-  const invitesIn = async (access: KeyValueStorage) =>
+  const invitesIn = async (access: StorageOperations) =>
     [...(await access.list({ prefix: 'passkey/invite/', limit: PASSKEY_LIMITS.invitesMax + 1 })).values()].map(parseInviteRecord);
 
   return {

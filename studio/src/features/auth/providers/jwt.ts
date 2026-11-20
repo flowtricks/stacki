@@ -79,7 +79,7 @@ function jsonSegment(text: string): Record<string, unknown> | undefined {
     return undefined;
   }
   try {
-    const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes));
     return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined;
   } catch {
     return undefined;

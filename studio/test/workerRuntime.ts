@@ -128,6 +128,8 @@ export interface WorkerRuntime {
 export interface WorkerRuntimeOptions {
   /** Absolute path of a module whose default export is an AuthProviderFactory. */
   readonly authProviderModule?: string;
+  /** Bundle a built-in provider into the Worker, as `npm run build` does for `AUTH_PROVIDER` (builtInSlotSource). */
+  readonly builtInProvider?: 'access' | 'google' | 'oidc' | 'passkey';
   /** Extra Worker vars, such as EDITOR_ACCESS or a provider's own settings. */
   readonly vars?: Readonly<Record<string, string>>;
 }
@@ -140,6 +142,28 @@ function authSlot(module: string): Plugin {
       context.onResolve({ filter: /\/authProviderSlot$/ }, () => ({ path: 'authProviderSlot', namespace: 'auth-slot' }));
       context.onLoad({ filter: /.*/, namespace: 'auth-slot' }, () => ({
         contents: `export { default as customAuthProvider } from ${JSON.stringify(module)};`,
+        loader: 'ts',
+        resolveDir: fileURLToPath(new URL('../src/cloudflare/', import.meta.url)),
+      }));
+    },
+  };
+}
+
+const BUILT_IN_FACTORY = {
+  access: 'createAccessProvider',
+  google: 'createGoogleProvider',
+  oidc: 'createOidcProvider',
+  passkey: 'createPasskeyProvider',
+} as const;
+
+// Replaces src/cloudflare/builtInProviderSlot.ts with the chosen built-in provider, the way the build does.
+function builtInSlot(id: keyof typeof BUILT_IN_FACTORY): Plugin {
+  return {
+    name: 'built-in-provider-slot',
+    setup(context) {
+      context.onResolve({ filter: /\/builtInProviderSlot$/ }, () => ({ path: 'builtInProviderSlot', namespace: 'built-in-slot' }));
+      context.onLoad({ filter: /.*/, namespace: 'built-in-slot' }, () => ({
+        contents: `import { ${BUILT_IN_FACTORY[id]} } from '../features/auth/providers/${id}';\nexport const builtInProviderSlot = { id: ${JSON.stringify(id)}, create: ${BUILT_IN_FACTORY[id]} };`,
         loader: 'ts',
         resolveDir: fileURLToPath(new URL('../src/cloudflare/', import.meta.url)),
       }));
@@ -162,7 +186,10 @@ export async function startWorkerRuntime(options: WorkerRuntimeOptions = {}): Pr
     conditions: ['workerd', 'worker', 'browser'],
     mainFields: ['module', 'main'],
     external: ['cloudflare:*', 'node:*'],
-    plugins: options.authProviderModule === undefined ? [] : [authSlot(options.authProviderModule)],
+    plugins: [
+      ...(options.authProviderModule === undefined ? [] : [authSlot(options.authProviderModule)]),
+      ...(options.builtInProvider === undefined ? [] : [builtInSlot(options.builtInProvider)]),
+    ],
     write: false,
     logLevel: 'silent',
   });

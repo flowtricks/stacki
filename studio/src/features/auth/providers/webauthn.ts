@@ -79,7 +79,7 @@ function parseClientData(bytes: Uint8Array): Result<ClientData, WebAuthnFailure>
     return err('client-data');
   }
   try {
-    const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes));
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return err('client-data');
     }

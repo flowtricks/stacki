@@ -84,7 +84,7 @@ async function readBounded(response: Response): Promise<string | undefined> {
     offset += chunk.length;
   }
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(joined);
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(joined);
   } catch {
     return undefined;
   }

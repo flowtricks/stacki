@@ -32,5 +32,9 @@
     "GITHUB_CLIENT_ID": "",
     "EDITOR_ACCESS": "repository",
     "EDITOR_GITHUB_IDS": "",
+    // Sign-in: github (default), access, google, oidc or passkey. Each other provider's variables are listed in
+    // docs/auth-providers.md ("Built-in providers"); `astro-studio check-project` reports what is missing.
+    // Changing it needs a new build (npm run build), which bundles only the chosen provider.
+    "AUTH_PROVIDER": "github",
   },
 }

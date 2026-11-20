@@ -7,7 +7,10 @@ import { loginPage } from '../features/auth/loginPage';
 import { mayEdit, mayManage, memberAliases, mintSession, principalFromToken, readPrincipal, SESSION_COOKIES } from '../features/auth/authRuntime';
 import { SESSION_LIFETIME_MS, SESSION_LIFETIME_SECONDS } from '../features/auth/principalSession';
 import type { Principal } from '../features/auth/authProvider';
-import { activeAuthRuntime } from './activeAuthRuntime';
+import { activeAuthRuntime, passkeyStoreFor } from './activeAuthRuntime';
+import { durableStorage } from './passkeyStorage';
+import { parsePasskeyAdminCommand, runPasskeyAdmin, type PasskeyAdminFailure, type PasskeyAdminResult } from '../features/auth/providers/passkeyAdmin';
+import { passkeyAdminRoute } from './passkeyAdminRoutes';
 import { routeLogin } from '../features/auth/loginRoute';
 import { cookie, sessionCookie } from '../features/auth/session';
 import type { Environment } from './environment';
@@ -33,6 +36,27 @@ export class PreviewContainer extends Container<Environment> {
   private readonly loginAttempts = new LoginAttempts((state, expires) => this.ctx.storage.transaction((storage) => claimLoginAttempt(storage, state, expires)));
   private readonly publishIdle = new PublishIdleGuard();
   private readonly startup = new StartupLog();
+  // The authentication runtime inside the Durable Object: it alone has the storage passkeys live in.
+  private runtime() {
+    return activeAuthRuntime(this.env, { storage: durableStorage(this.ctx.storage) });
+  }
+  /** Worker to Durable Object: whether a passkey handle may still sign in and use Studio (a lock-out takes effect at once). */
+  async passkeyHandleActive(handle: string): Promise<boolean> {
+    return passkeyStoreFor(this.env, durableStorage(this.ctx.storage)).handleActive(handle, Date.now());
+  }
+  /** Worker to Durable Object: an admin command for passkeys. The Worker has already checked the session, origin and `canManage`. */
+  async passkeyAdmin(
+    actor: string,
+    input: unknown,
+  ): Promise<{ readonly ok: true; readonly result: PasskeyAdminResult } | { readonly ok: false; readonly error: PasskeyAdminFailure }> {
+    const command = parsePasskeyAdminCommand(input);
+    if (!command.ok) {
+      return { ok: false, error: command.error };
+    }
+    const store = passkeyStoreFor(this.env, durableStorage(this.ctx.storage));
+    const outcome = await runPasskeyAdmin(store, command.value, { origin: this.env.STUDIO_ORIGIN, actor, nowMs: Date.now() });
+    return outcome.ok ? { ok: true, result: outcome.value } : { ok: false, error: outcome.error };
+  }
   override defaultPort = 4350;
   override sleepAfter = CONTAINER_SLEEP_AFTER;
   // Port probes only need an HTTP response; the protected API rejects this
@@ -40,7 +64,7 @@ export class PreviewContainer extends Container<Environment> {
   override pingEndpoint = 'localhost/studio/api/status';
   override async fetch(request: Request): Promise<Response> {
     // OAuth coordination uses the existing Durable Object without starting the preview Container.
-    const auth = await authRoutes(request, activeAuthRuntime(this.env), this.loginAttempts);
+    const auth = await authRoutes(request, this.runtime(), this.loginAttempts);
     if (auth) {
       return auth;
     }
@@ -198,6 +222,10 @@ async function workerRoute(request: Request, url: URL, environment: Environment,
   }
   if (url.pathname === '/studio/api/session') {
     return Response.json(sessionView(identity, memberAliases(activeAuthRuntime(environment), identity)), { headers: { 'Cache-Control': 'no-store' } });
+  }
+  const authApi = await passkeyAdminRoute(request, url, environment, identity);
+  if (authApi) {
+    return authApi;
   }
   if (url.pathname === '/studio/api/preview-url') {
     return previewURL(url, environment, identity);

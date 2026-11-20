@@ -26,13 +26,16 @@ export function decodeBase64url(text: string, bytesMax: number): Uint8Array<Arra
   if (binary.length > bytesMax) {
     return undefined;
   }
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
   // Canonical form only: leftover bits in the last character must be zero, so one byte string has one text.
   return encodeBase64url(bytes) === text ? bytes : undefined;
 }
 
 export function utf8Bytes(text: string): Uint8Array<ArrayBuffer> {
-  return new TextEncoder().encode(text);
+  return new Uint8Array(new TextEncoder().encode(text));
 }
 
 /** Compares two texts without stopping at the first difference. */

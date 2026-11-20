@@ -226,7 +226,7 @@ export function parseAssertion(text: string | null): Assertion | undefined {
   }
   let value: unknown;
   try {
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    value = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes));
   } catch {
     return undefined;
   }

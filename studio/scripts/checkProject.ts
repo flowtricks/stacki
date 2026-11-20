@@ -1,4 +1,5 @@
 // Check tracked editor metadata before CI or an external component refactor is considered done.
+import { checkAuthProvider } from './checkAuth';
 import { loadInsertionDefaults } from '../src/features/settings/loadDefaults';
 import { readMetadataSource } from '../src/features/settings/projectMetadata';
 import { defaultsIssues } from '../vendor/stacki/shared/properties/componentDefaults';
@@ -38,6 +39,7 @@ export async function checkProject(root: string): Promise<void> {
     throw new Error(issues.join('\n'));
   }
   console.log('Project component defaults, guide, page order, publish, styles and folder settings are valid.');
+  await checkAuthProvider(root);
   await reportUnusedSelectors(root, styles.source, foldersFor('styles', configOf(readProjectFoldersSource(folders.source))));
 }
 
