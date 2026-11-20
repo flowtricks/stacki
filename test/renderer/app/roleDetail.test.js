@@ -66,7 +66,8 @@ const { createRoot } = require('react-dom/client');
 const roles = require(output);
 
 const FILES = ['src/components/Card.astro', 'src/components/interactive/Modal.astro', 'src/components/ui/Button.astro'];
-const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+// One task boundary inside act, so the bridge's resolved reads and the effects they trigger land.
+const settle = () => act(async () => new Promise((resolve) => setImmediate(resolve)));
 let root;
 async function mount() {
   root = createRoot(document.getElementById('root'));

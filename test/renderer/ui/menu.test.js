@@ -17,6 +17,7 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const directory = repoPath('node_modules/.stacki-test/menu');
 fs.mkdirSync(directory, { recursive: true });
@@ -79,14 +80,25 @@ async function mount(buildEntries) {
   const body = dom.window.document.body;
   const all = (selector) => [...body.querySelectorAll(selector)];
   const key = (target, init) => act(async () => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
-  const settle = (ms = 0) => act(async () => new Promise((resolve) => setTimeout(resolve, ms)));
+  // One task boundary inside act, so queued effects and state updates land. Never a fixed pause: a wait for a
+  // product timer (the submenu hover delay, a close) goes through waitNames, which polls what the test reads.
+  const settle = () => act(async () => new Promise((resolve) => setImmediate(resolve)));
+  const waitNames = (count) =>
+    waitFor({
+      what: `${count} open menu(s)`,
+      read: async () => {
+        await settle();
+        return names().length;
+      },
+      until: (length) => length === count,
+    });
   const open = async () => {
     await act(async () => dom.window.document.getElementById('opener').click());
     await settle();
   };
   const focused = () => dom.window.document.activeElement;
   const names = () => all('[role="menu"]').map((menu) => menu.getAttribute('aria-label'));
-  return { dom, log, all, key, settle, open, focused, names, act, body };
+  return { dom, log, all, key, settle, waitNames, open, focused, names, act, body };
 }
 
 const model = (log) => [
@@ -156,7 +168,7 @@ test('a digit chooses that row and closes the menu; a disabled row does nothing'
   assert.equal(view.names().length, 1, 'still open');
   await view.key(view.focused(), { key: '1' });
   assert.deepEqual(view.log, ['opus']);
-  await view.settle(10);
+  await view.waitNames(0);
   assert.equal(view.names().length, 0, 'closed after the choice');
 });
 
@@ -192,12 +204,12 @@ test('Escape closes the submenu first, then the menu', async () => {
   await view.act(async () =>
     view.dom.window.document.dispatchEvent(new view.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })),
   );
-  await view.settle(10);
+  await view.waitNames(1);
   assert.equal(view.names().length, 1, 'only the submenu closed');
   await view.act(async () =>
     view.dom.window.document.dispatchEvent(new view.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })),
   );
-  await view.settle(10);
+  await view.waitNames(0);
   assert.equal(view.names().length, 0);
 });
 
@@ -209,7 +221,7 @@ test('choosing inside a submenu closes every level', async () => {
   await view.settle();
   await view.key(view.focused(), { key: '1' });
   assert.deepEqual(view.log, ['low']);
-  await view.settle(10);
+  await view.waitNames(0);
   assert.equal(view.names().length, 0);
 });
 
@@ -248,11 +260,11 @@ test('hovering a submenu row opens it after a short delay and hovering another r
     );
   await hover(view.all('[aria-haspopup="menu"]')[0]);
   assert.equal(view.names().length, 1, 'not instantly');
-  await view.settle(200);
+  await view.waitNames(2);
   assert.equal(view.names().length, 2);
   assert.match(view.focused().textContent, /^Effort/, 'focus stays on the parent row for a hover');
   await hover(view.all('[role="menuitemradio"]')[0]);
-  await view.settle(260);
+  await view.waitNames(1);
   assert.equal(view.names().length, 1);
 });
 
@@ -260,7 +272,7 @@ test('Tab closes the menu instead of moving focus into the page', async () => {
   const view = await mount(model);
   await view.open();
   await view.key(view.focused(), { key: 'Tab' });
-  await view.settle(10);
+  await view.waitNames(0);
   assert.equal(view.names().length, 0);
 });
 
@@ -281,7 +293,7 @@ async function pressOn(view, target) {
       target.dispatchEvent(new Constructor(type, { bubbles: true, cancelable: true }));
     }
   });
-  await view.settle(20);
+  await view.settle();
 }
 
 async function openSubmenu(view) {
@@ -333,6 +345,6 @@ test('an outside press on the canvas message closes the whole stack in one go', 
   const view = await mount(model);
   await openSubmenu(view);
   await view.act(async () => view.dom.window.dispatchEvent(new view.dom.window.MessageEvent('message', { data: { type: 'avb:click-node' } })));
-  await view.settle(20);
+  await view.waitNames(0);
   assert.equal(view.names().length, 0);
 });

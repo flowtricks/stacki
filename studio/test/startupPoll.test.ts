@@ -118,5 +118,7 @@ test('an aborted poll reads nothing more and shows nothing more', async () => {
 test('the shipped limits cost a bounded number of requests', () => {
   assert.ok(STARTUP_POLL_LIMITS.attemptsMax <= 600);
   assert.ok(STARTUP_POLL_LIMITS.delayMsMin >= 1_000, 'a poll never asks more than once a second');
-  assert.ok(STARTUP_POLL_LIMITS.deadlineMs <= 1_800_000);
+  // The bound is stated in minutes, the unit a person reasons about, so no millisecond literal is compared.
+  const deadlineMinutes = STARTUP_POLL_LIMITS.deadlineMs / (60 * 1000);
+  assert.ok(deadlineMinutes <= 30, 'a poll gives up within half an hour');
 });

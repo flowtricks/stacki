@@ -7,6 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const model = require('../../helpers/rendererModule')('src/features/pages/pageSelection.ts');
 const tree = require('../../helpers/rendererModule')('src/features/pages/pageTree.ts');
+const { measureSpeedFactor } = require('../../helpers/rendererModule')('test/helpers/scaleFixtures.ts');
 
 const page = (name) => ({ path: `/project/src/pages/${name}`, name, route: `/${name}` });
 const EMPTY_ORDER = { entries: [] };
@@ -130,5 +131,7 @@ test('a thousand pages tick at once, and each click is one set operation', () =>
   const elapsedMs = performance.now() - started;
   assert.equal(all.size, 1020, '1000 pages and 20 folders');
   assert.equal(clicked.has('f3/'), false);
-  assert.ok(elapsedMs < 500, `select all and a click on a thousand pages took ${elapsedMs}ms`);
+  // Half a second on the reference machine, scaled by how much slower this runner measured in the same run.
+  const elapsedMsMax = 500 * measureSpeedFactor();
+  assert.ok(elapsedMs < elapsedMsMax, `select all and a click on a thousand pages took ${elapsedMs}ms`);
 });

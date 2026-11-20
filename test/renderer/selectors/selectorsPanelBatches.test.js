@@ -17,10 +17,12 @@ const path = require('node:path');
 const { readProjectMetadata } = require('#dist/electron/project/projectMetadata.js');
 const { repoPath } = require('../../helpers/sources.js');
 const loadRenderer = require('../../helpers/rendererModule.js');
+const { waitFor, waitForSteady } = require('../../helpers/waitFor.js');
 
 const { LIST_PAGE_ROWS, LIST_LOOKAHEAD_VIEWPORTS, nextRowLimit, firstRows } = loadRenderer('src/features/selectors/selectorList.ts');
 
-const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+// One task boundary, so queued promise work and effects land. Waits for the panel go through waitFor instead of a guessed pause.
+const settle = () => new Promise((resolve) => setImmediate(resolve));
 const DIGEST = crypto.createHash('sha256').update('x').digest('hex');
 const FILES = ['src/styles/base.css', 'src/styles/patterns.css', 'src/styles/utilities.css'];
 
@@ -131,11 +133,15 @@ async function harness(counts) {
     const started = performance.now();
     await act(async () => {
       reactRoot.render(React.createElement(SelectorsPanel, { project: { path: root }, showToast: () => {}, onRecordUndo: () => {} }));
-      await settle(30);
     });
-    for (let attempt = 0; attempt < 200 && rows() === 0; attempt += 1) {
-      await act(async () => settle(25));
-    }
+    await waitFor({
+      what: 'the first batch of rows',
+      read: async () => {
+        await act(async () => settle());
+        return rows();
+      },
+      until: (count) => count > 0,
+    });
     return performance.now() - started;
   };
   // The end marker comes within reach: the panel adds one batch.
@@ -149,7 +155,15 @@ async function harness(counts) {
     await act(async () => {
       Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, text);
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-      await settle(20);
+    });
+    // The results are in once the drawn rows stop changing.
+    await waitForSteady({
+      what: 'the search results to stop changing',
+      read: async () => {
+        await act(async () => settle());
+        return rows();
+      },
+      until: () => true,
     });
   };
   const finish = async () => {
@@ -157,7 +171,7 @@ async function harness(counts) {
     delete global.IntersectionObserver;
     dom.window.close();
   };
-  return { open, reach, search, rows, headings, live, container, finish, setReport: (next) => (report = next) };
+  return { flush: () => act(async () => settle()), open, reach, search, rows, headings, live, container, finish, setReport: (next) => (report = next) };
 }
 
 test('the next 100 rows load when the end comes within reach, and not before, until all are shown', async () => {
@@ -170,7 +184,14 @@ test('the next 100 rows load when the end comes within reach, and not before, un
     assert.equal(observer.options.rootMargin, '0px 0px 150% 0px', 'the end is watched 1.5 visible heights ahead');
     assert.ok(observer.options.root.classList.contains('selectors-body'), 'measured against the scroll box, which clips the list');
     // Nothing happens until the marker is reported: no timer and no scroll loads rows by itself.
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await waitForSteady({
+      what: 'the drawn rows to stay at one batch',
+      read: async () => {
+        await panel.flush();
+        return panel.rows();
+      },
+      until: (count) => count === 100,
+    });
     assert.equal(panel.rows(), 100, 'not before the end is near');
     await panel.reach();
     assert.deepEqual(panel.headings(), ['base.css', 'patterns.css'], 'a heading appears with its first rows, in order');

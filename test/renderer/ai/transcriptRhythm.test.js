@@ -129,9 +129,22 @@ app.whenReady().then(async () => {
     const window = new BrowserWindow({ width: width + 40, height: 800, show: false });
     await window.loadURL('file://' + ${JSON.stringify(path.join(directory, 'index.html'))} + '?w=' + width);
     const read = \`(async () => {
-      for (let poll = 0; poll < 100 && !document.querySelector('.ai-md-table-wrap'); poll += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
+      // The page draws on its first frame; a mutation observer resumes the moment the table box exists, with no guessed delay
+      // (the probe's own timeout bounds a table that never appears).
+      await new Promise((resolve) => {
+        const present = () => document.querySelector('.ai-md-table-wrap') !== null;
+        if (present()) {
+          resolve();
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          if (present()) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      });
       const box = (element) => element.getBoundingClientRect();
       const colour = (value) => { const probe = document.createElement('span'); probe.style.color = value; document.body.appendChild(probe); const resolved = getComputedStyle(probe).color; probe.remove(); return resolved; };
       const flow = [...document.querySelector('.ai-transcript-flow').children];
@@ -157,7 +170,8 @@ app.whenReady().then(async () => {
       const hiddenOpacity = getComputedStyle(toolbar).opacity;
       const hiddenVisibility = getComputedStyle(toolbar).visibility;
       copy.focus();
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      // The reveal is a finite CSS transition: wait until every finite animation has finished, not for a guessed time.
+      await Promise.all(document.getAnimations().filter((animation) => animation.effect === null || animation.effect.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => undefined)));
       const shownLayout = layout();
       const slot = box(toolbar);
       const others = [...document.querySelectorAll('.ai-transcript-flow > *')].filter((element) => element !== reply).map(box);

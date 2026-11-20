@@ -13,6 +13,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
+const { measureSpeedFactor } = load('test/helpers/scaleFixtures.ts');
 const search = load('src/features/structure/navigatorSearch.ts');
 const parser = load('electron/parse/astroTemplate.ts');
 const text = load('src/lib/searchText.ts');
@@ -282,7 +283,9 @@ test('the parser is bounded: a long query is cut and the number of terms is capp
   assert.ok(search.parseNavigatorQuery('.a '.repeat(100)).length <= search.NAVIGATOR_TERMS_MAX);
   const started = Date.now();
   search.parseNavigatorQuery('['.repeat(5_000) + '"'.repeat(5_000));
-  assert.ok(Date.now() - started < 1_000, 'adversarial input is read in a pass');
+  // A second on the reference machine, scaled by how much slower this runner measured in the same run.
+  const elapsedMsMax = 1_000 * measureSpeedFactor();
+  assert.ok(Date.now() - started < elapsedMsMax, 'adversarial input is read in a pass');
 });
 
 test('each kind of term gives the words the panel marks', () => {

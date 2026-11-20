@@ -256,8 +256,14 @@ test('another provider’s session round-trips, and no legacy verifier or other 
   assert.equal(await verifyPrincipal(token, secret + 'x', 'studio'), undefined);
   assert.equal(await verifyPrincipal(token + 'x', secret, 'studio'), undefined);
   assert.equal(await verifyPrincipal(token, secret, 'preview'), undefined);
-  const expired = unwrap(await signPrincipal(person, 'studio', Date.now() + 5, secret));
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  const expiresSoon = Date.now() + 5;
+  const expired = unwrap(await signPrincipal(person, 'studio', expiresSoon, secret));
+  // Signing requires a future expiry, so the token can only expire by time passing. Yielding to the event loop until the
+  // clock is past the expiry waits for exactly that, with no guessed duration; the cap is a generous 100 million yields.
+  for (let yields = 0; Date.now() <= expiresSoon && yields < 100_000_000; yields += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.ok(Date.now() > expiresSoon, 'the clock passed the expiry');
   assert.equal(await verifyPrincipal(expired, secret, 'studio'), undefined);
 });
 

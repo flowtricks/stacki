@@ -16,6 +16,8 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const loadRenderer = require('../../helpers/rendererModule.js');
+const { measureSpeedFactor } = loadRenderer('test/helpers/scaleFixtures.ts');
 
 const output = repoPath('node_modules/.stacki-test/rail-reorder.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -191,7 +193,7 @@ test('a press that moves under six pixels is a click: it opens the panel and reo
   await unmount();
 });
 
-test('dragging past the threshold shows a ghost and a line, dims the button, reorders on release and swallows the click', async () => {
+test('dragging past the threshold shows a ghost and a line, dims the button, reorders on release and swallows the click', async (context) => {
   await mount();
   await down('pages', 26);
   await move('pages', 20, 40);
@@ -200,11 +202,14 @@ test('dragging past the threshold shows a ghost and a line, dims the button, reo
   assert.ok(document.querySelector('.rail-drop-line'), 'a line shows the slot');
   assert.equal(button('pages').dataset.dragging, 'true', 'the dragged button keeps its place, dimmed');
   assert.deepEqual(ids('top'), DEFAULT_TOP, 'nothing moves until the drop');
+  // The product clears its swallow-the-click flag with a zero-delay timer; the mocked clock runs it on demand instead of a guessed pause.
+  context.mock.timers.enable({ apis: ['setTimeout'] });
   await upAndClick('pages', 20, 100);
   assert.deepEqual(ids('top').slice(0, 3), ['navigator', 'assets', 'pages']);
   assert.ok(document.querySelector('.rail-ghost') === null);
   assert.deepEqual(selected, [], 'the click that ends a drag does not open the panel');
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  await act(async () => context.mock.timers.tick(0));
+  context.mock.timers.reset();
   await act(async () => button('pages').click());
   assert.deepEqual(selected, ['pages'], 'a later click does');
   assert.ok(stored().includes('"pages"'));
@@ -374,7 +379,9 @@ test('nothing is written to a project: no file API call, and the only storage wr
 test('mounting with the AI button and the default order commits a few times, quickly, and keeps the anchored list last', async () => {
   // A render loop here once froze the process (an assertion printing a whole DOM); the bound makes it a plain failure.
   const commits = [];
-  const startedMs = Date.now();
+  // Two seconds on the reference machine, scaled by how slow this process runs a fixed calibration workload.
+  const mountMsMax = 2000 * measureSpeedFactor();
+  const startedMs = performance.now();
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -393,7 +400,7 @@ test('mounting with the AI button and the default order commits a few times, qui
       ),
     ),
   );
-  assert.ok(Date.now() - startedMs < 2000, 'the mount finishes within two seconds');
+  assert.ok(performance.now() - startedMs < mountMsMax, 'the mount finishes within two seconds, scaled to this machine');
   assert.ok(commits.length <= 5, `the rail committed ${commits.length} times`);
   const railElement = container.querySelector('.rail');
   assert.ok(railElement.lastElementChild === container.querySelector('.rail-anchor'), 'the anchored list is the last element');

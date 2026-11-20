@@ -125,6 +125,7 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const { MOTION_SETTLED_EXPRESSION, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
 const DIRECTORY = ${JSON.stringify(directory)};
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
 app.on('window-all-closed', () => {});
@@ -144,7 +145,9 @@ app.whenReady().then(async () => {
     await win.loadURL('http://127.0.0.1:' + server.address().port + '/');
     await host('window.mount()');
     output.measured = await host('window.steps.measure()');
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // The menu is captured once nothing is animating and two frames have been drawn after the measuring.
+    await waitFor({ what: 'the menu at rest', read: () => host(MOTION_SETTLED_EXPRESSION), until: (settled) => settled === true });
+    await host('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     fs.writeFileSync(path.join(DIRECTORY, 'menu.png'), (await win.webContents.capturePage()).toPNG());
   } catch (error) { output.error = String((error && error.stack) || error); }
   console.log('RESULT ' + JSON.stringify(output));

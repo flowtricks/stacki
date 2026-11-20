@@ -10,7 +10,9 @@
 // a Card whose image is an expression, and a plain <img>. It acts through webContents.sendInputEvent at real
 // window coordinates (soakDriver.js): two presses make the double click, typing goes through real key events.
 // After each action it reads the page file's bytes and compares them with the bytes it expects, which are the
-// old bytes with exactly one literal replaced. Screenshots go to the output directory.
+// old bytes with exactly one literal replaced. Screenshots go to the output directory. No step sleeps: each waits
+// on the state it expects (the popup open or closed, the file's bytes, a position at rest) through test/helpers/waitFor.js,
+// so a slow runner gets the time it needs and a fast one moves on at once.
 // The suite skips (and says why) where the fixture's Astro install or the built main process is missing. It needs
 // a display (CI on Linux runs it under xvfb).
 // Run it by hand with `node test/renderer/preview/canvasImagePopup.test.js`.
@@ -86,6 +88,7 @@ async function orchestrate() {
 async function runInElectron({ window, project, options }) {
   const { createDriver } = require('../../helpers/e2e/soakDriver.js');
   const { installRecorder } = require('../../helpers/e2e/panelRecorder.js');
+  const { pollUntil, waitForSteady } = require('../../helpers/waitFor.js');
   const driver = createDriver(window, project);
   const report = { checked: 0, failures: [], notes: [] };
   const check = (what, condition, detail) => {
@@ -103,28 +106,44 @@ async function runInElectron({ window, project, options }) {
   await driver.waitForApp();
   await driver.setPageFocus('focused');
   await installRecorder(driver.contents);
-  await driver.sleep(800);
+  await pollUntil({
+    what: 'the Card image decoded on the canvas',
+    read: () =>
+      driver.canvasEvaluate(
+        `(() => { const image = document.querySelector('#card-one .card_visual img'); return !!image && image.complete && image.naturalWidth > 0; })()`,
+      ),
+    until: (decoded) => decoded === true,
+    pollIntervalMs: 100,
+    pollCountMax: WAIT_MS_MAX / 100,
+  });
   await driver.settle();
   const shot = (name) => driver.screenshot(path.join(options.outDirectory, `${name}.png`));
+  // Polls `probe` until it is truthy, for WAIT_MS_MAX at most; the last value read comes back either way.
+  const becomes = async (what, probe) => {
+    const outcome = await pollUntil({ what, read: probe, until: (value) => Boolean(value), pollIntervalMs: 100, pollCountMax: WAIT_MS_MAX / 100 });
+    return outcome;
+  };
   const until = async (what, probe) => {
-    for (let waitedMs = 0; waitedMs < WAIT_MS_MAX; waitedMs += 100) {
-      const value = await probe();
-      if (value) {
-        return value;
-      }
-      await driver.sleep(100);
+    const outcome = await becomes(what, probe);
+    if (outcome.kind === 'reached') {
+      return outcome.value;
     }
     report.failures.push(`never happened: ${what}`);
     return undefined;
   };
   const popupText = () => driver.evaluate(`(document.querySelector('.canvas-image-popup') || {}).innerText || ''`);
   const popupOpen = async () => (await driver.evaluate(`!!document.querySelector('.canvas-image-popup')`)) === true;
+  // The second press carries clickCount 2, so no pause between the presses is needed to make the double click.
   const doubleClick = async (selector, label) => {
     const point = await driver.canvasPoint(selector);
     await driver.pointerPress(point, { label: `${label} (click)` });
-    await driver.sleep(60);
     await driver.pointerPress(point, { label: `${label} (second click)`, clickCount: 2 });
-    await driver.sleep(60);
+  };
+  const popupClosed = async () => (await popupOpen()) === false;
+  // Escape, then the popup is gone: the next step starts from a closed popup.
+  const escapeAndClose = async (what) => {
+    await driver.key('Escape');
+    return (await becomes(what, popupClosed)).kind === 'reached';
   };
   const click = async (finder, label) => {
     const point = await driver.panelPoint(finder, { scroll: false });
@@ -162,8 +181,13 @@ async function runInElectron({ window, project, options }) {
       report.failures.push('no popup header to drag');
     } else {
       await driver.drag(header, { x: header.x + 60, y: header.y - 40 }, { label: 'drag the popup header' });
-      await driver.sleep(300);
-      const dragged = await rect();
+      const dragged =
+        (
+          await becomes('the dragged popup at its new place', async () => {
+            const at = await rect();
+            return Math.abs(at.left - (home.left + 60)) <= 2 && Math.abs(at.top - (home.top - 40)) <= 2 ? at : undefined;
+          })
+        ).value ?? (await rect());
       check(
         'dragging the header moves the popup with the pointer',
         Math.abs(dragged.left - (home.left + 60)) <= 2 && Math.abs(dragged.top - (home.top - 40)) <= 2,
@@ -172,8 +196,8 @@ async function runInElectron({ window, project, options }) {
       check('a drag does not close the popup or select anything', await popupOpen());
       const grabbed = { x: header.x + 60, y: header.y - 40 };
       await driver.drag(grabbed, { x: -2000, y: -2000 }, { label: 'drag the popup far outside the window', steps: 12 });
-      await driver.sleep(300);
-      const clamped = await rect();
+      // At rest: the clamp has been applied and the position no longer changes.
+      const clamped = await waitForSteady({ what: 'the clamped popup at rest', read: rect, until: () => true });
       check(
         'the popup cannot leave the window: its header stays partly in view',
         clamped.top >= 0 && clamped.left + clamped.width >= 60,
@@ -184,21 +208,26 @@ async function runInElectron({ window, project, options }) {
       // Only the header's right end is left in view: that is where it is grabbed again.
       const handle = { x: Math.round(clamped.left + clamped.width - 50), y: Math.round(clamped.top + 15) };
       await driver.drag(handle, { x: handle.x + (home.left - clamped.left), y: handle.y + (home.top - clamped.top) }, { label: 'drag the popup back' });
-      await driver.sleep(300);
-      const back = await rect();
+      const back =
+        (
+          await becomes('the popup back home', async () => {
+            const at = await rect();
+            return Math.abs(at.left - home.left) <= 2 && Math.abs(at.top - home.top) <= 2 ? at : undefined;
+          })
+        ).value ?? (await rect());
       check(
         'the popup can be grabbed again at the edge and dragged back',
         Math.abs(back.left - home.left) <= 2 && Math.abs(back.top - home.top) <= 2,
         JSON.stringify([home, back]),
       );
-      await driver.sleep(300);
     }
     // 2. Alt text: the prop that feeds it, though it is called imageAlt and Img calls it alt.
     const altInput = `document.querySelectorAll('.canvas-image-popup .props-field')[1] && (document.querySelectorAll('.canvas-image-popup .props-field')[1].querySelector('input, textarea') || undefined)`;
     if (await click(altInput, 'focus the alt field')) {
       await driver.evaluate(`document.activeElement && document.activeElement.select && document.activeElement.select()`);
       await driver.typeText('A tidy alt');
-      await driver.sleep(1500);
+      // The panel saves behind its own debounce: wait for the bytes, not for a guessed time.
+      await becomes('the alt text written to the page', () => read().includes('imageAlt="A tidy alt"'));
       await driver.settle();
       const edited = read();
       check('the alt prop literal changed', edited === original.replace('imageAlt="First picture"', 'imageAlt="A tidy alt"'), edited.slice(0, 400));
@@ -209,7 +238,7 @@ async function runInElectron({ window, project, options }) {
       await driver.settle();
       check('selecting another element closes the popup', !(await popupOpen()));
       await driver.key('z', { modifiers: ['meta'] });
-      await driver.sleep(1500);
+      await becomes('the undo written to the page', () => read() === original);
       check(
         'one undo restores the bytes',
         read() === original,
@@ -224,10 +253,9 @@ async function runInElectron({ window, project, options }) {
     await until('the popup reopens', popupOpen);
     const chooseButton = `[...document.querySelectorAll('.canvas-image-popup button')].find((b) => /Choose|Replace/i.test(b.textContent || '')) || undefined`;
     if (await click(chooseButton, 'Choose Image')) {
-      await driver.sleep(1200);
+      const overlay = (await becomes('the asset chooser', () => driver.evaluate(`!!document.querySelector('.asset-pick-overlay')`))).value;
       await driver.settle();
       await shot('3-asset-overlay');
-      const overlay = await driver.evaluate(`!!document.querySelector('.asset-pick-overlay')`);
       check('the asset chooser opens over the page', overlay === true);
       check('the popup stays while the chooser is open', await popupOpen());
       report.notes.push(
@@ -235,7 +263,7 @@ async function runInElectron({ window, project, options }) {
       );
       const tile = `[...document.querySelectorAll('.asset-pick-overlay [title="popup-two.svg"]')].find((e) => e.getClientRects().length > 0) || undefined`;
       if (await click(tile, 'pick popup-two.svg')) {
-        await driver.sleep(1500);
+        await becomes('the picked picture written to the page', () => read().includes('image="/popup-two.svg"'));
         await driver.settle();
         const picked = read();
         check(
@@ -248,37 +276,36 @@ async function runInElectron({ window, project, options }) {
     }
     // 3b. A Card with a link stretches the link over the whole card, and a cover Card's picture takes no pointer: the
     // double click lands on something else and still means the image.
-    await driver.key('Escape');
-    await driver.sleep(300);
+    await escapeAndClose('the popup closes before the cover Card');
     await doubleClick('#card-cover .card_visual', 'double click the cover Card image');
     check('a double click over the cover overlay opens the popup', (await until('the cover popup', popupOpen)) === true);
     await shot('3b-cover-popup');
-    await driver.key('Escape');
-    await driver.sleep(300);
+    await escapeAndClose('the cover popup closes');
     await doubleClick('#card-link .card_visual', 'double click the linked Card image');
     await shot('3c-linked');
     check('a double click on a linked Card image opens the popup', (await until('the linked popup', popupOpen)) === true);
-    await driver.key('Escape');
-    await driver.sleep(300);
+    await escapeAndClose('the linked popup closes');
     // 3d. Words win: on a cover Card the heading sits over the picture. A double click on the words is text editing,
     // and only the picture area no words cover opens the popup.
     await doubleClick('#card-cover .card_content :is(h1,h2,h3,h4,h5,h6)', 'double click the words over the cover picture');
-    await driver.sleep(600);
+    // The double click has run its course once text editing has started; only then can "no popup" be read, with no guess at how long to wait.
+    const editing = (
+      await becomes('text editing started', () =>
+        driver.canvasEvaluate(
+          `!!document.querySelector('[contenteditable="true"], [contenteditable=""], [data-avb-text-editing]') || (document.activeElement && document.activeElement.isContentEditable) === true`,
+        ),
+      )
+    ).value;
+    await driver.settle();
     check('a double click on words over the picture opens no image popup', !(await popupOpen()));
-    const editing = await driver.canvasEvaluate(
-      `!!document.querySelector('[contenteditable="true"], [contenteditable=""], [data-avb-text-editing]') || (document.activeElement && document.activeElement.isContentEditable) === true`,
-    );
     check('and it starts text editing', editing === true);
     await driver.key('Escape');
-    await driver.sleep(300);
+    await driver.settle();
     await doubleClick('#card-cover .card_visual', 'double click the picture area of the cover Card');
     check('a double click on bare picture area still opens the popup', (await until('the picture popup', popupOpen)) === true);
-    await driver.key('Escape');
-    await driver.sleep(300);
+    await escapeAndClose('the picture popup closes');
     // 4. Escape closes it.
-    await driver.key('Escape');
-    await driver.sleep(500);
-    check('Escape closes the popup', !(await popupOpen()));
+    check('Escape closes the popup', await escapeAndClose('Escape closes the popup'));
     // 5. A picture that comes from code is refused, and nothing is written.
     const beforeBound = read();
     await doubleClick('#card-bound .card_visual img', 'double click the bound Card image');
@@ -297,15 +324,13 @@ async function runInElectron({ window, project, options }) {
     await until('the native image popup', popupOpen);
     check('the native image opens the popup too', await popupOpen());
     await shot('6-native');
-    await driver.key('Escape');
-    await driver.sleep(300);
+    await escapeAndClose('the native popup closes');
     // 7. A click outside closes it, and single click still only selects.
     await doubleClick('#card-one .card_visual img', 'reopen');
     await until('the popup reopens', popupOpen);
     await driver.pointerPress(await driver.canvasPoint('#card-bound .card_content'), { label: 'click elsewhere on the canvas' });
     await driver.settle();
-    await driver.sleep(800);
-    check('a click elsewhere closes the popup', !(await popupOpen()));
+    check('a click elsewhere closes the popup', (await becomes('the popup closes after a click elsewhere', popupClosed)).kind === 'reached');
   } catch (error) {
     report.failures.push(`the run threw: ${String(error && error.stack ? error.stack : error)}`);
   }

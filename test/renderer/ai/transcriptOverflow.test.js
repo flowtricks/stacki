@@ -108,9 +108,22 @@ app.whenReady().then(async () => {
     await window.loadURL('file://' + ${JSON.stringify(path.join(directory, 'index.html'))} + '?w=' + width);
     // The page draws on its first frame; the table box exists once React has rendered.
     const read = \`(async () => {
-      for (let poll = 0; poll < 100 && !document.querySelector('.ai-md-table-wrap'); poll += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
+      // The page draws on its first frame; a mutation observer resumes the moment the table box exists, with no guessed delay
+      // (the probe's own timeout bounds a table that never appears).
+      await new Promise((resolve) => {
+        const present = () => document.querySelector('.ai-md-table-wrap') !== null;
+        if (present()) {
+          resolve();
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          if (present()) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      });
       const scroller = document.querySelector('.ai-transcript');
       const edge = scroller.getBoundingClientRect().right;
       const body = document.querySelector('.ai-body').getBoundingClientRect();

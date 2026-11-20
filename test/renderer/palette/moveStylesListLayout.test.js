@@ -11,6 +11,9 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { ROOT, repoPath, sourceSpecifier } = require('../../helpers/sources.js');
+const loadRenderer = require('../../helpers/rendererModule');
+
+const { measureSpeedFactor } = loadRenderer('test/helpers/scaleFixtures.ts');
 
 const failures = [];
 let checked = 0;
@@ -89,7 +92,7 @@ const check = (what, condition, detail) => {
     `const { app, BrowserWindow } = require('electron');
      const path = require('path');
      app.disableHardwareAcceleration();
-     const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+     const { MOTION_SETTLED_EXPRESSION, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      const MEASURE = \`(() => {
        const list = document.querySelector('.move-styles .extract-value-list');
        const row = list.querySelector('.extract-value');
@@ -123,7 +126,8 @@ const check = (what, condition, detail) => {
        for (const count of [3, 40]) {
          await run('window.renderDialog(' + count + ')');
          await waitFor({ what: 'the list', read: () => run("document.querySelectorAll('.move-styles .extract-value').length"), until: (shown) => shown === count });
-         await new Promise((resolve) => setTimeout(resolve, 400));
+         // The dialog scales open: measure once no popup is opening and no finite animation is running.
+         await waitFor({ what: 'the dialog finished opening', read: () => run(MOTION_SETTLED_EXPRESSION), until: (settled) => settled === true });
          results['rows' + count] = await run(MEASURE);
          require('fs').writeFileSync(path.join(screens, 'rows-' + count + '.png'), (await win.webContents.capturePage()).toPNG());
        }
@@ -142,7 +146,7 @@ const check = (what, condition, detail) => {
          const inside = box.getBoundingClientRect(); const frame = list.getBoundingClientRect();
          return { scrollTop: list.scrollTop, inView: inside.top >= frame.top && inside.bottom <= frame.bottom };
        })()\`);
-       await new Promise((resolve) => setTimeout(resolve, 200));
+       await waitFor({ what: 'the scrolled list at rest', read: () => run(MOTION_SETTLED_EXPRESSION), until: (settled) => settled === true });
        require('fs').writeFileSync(path.join(screens, 'rows-40-scrolled.png'), (await win.webContents.capturePage()).toPNG());
        console.log(JSON.stringify(results));
        app.quit();
@@ -175,7 +179,9 @@ const check = (what, condition, detail) => {
     check('no highlighted token inside a class name', long.coloured.length === 0, JSON.stringify(long.coloured));
     check('a class stays monospace', /mono|Mono|Consolas|monospace/.test(long.nameFont), long.nameFont);
     check('its source is the dimmer colour', long.homeColour !== long.nameColour, JSON.stringify([long.homeColour, long.nameColour]));
-    check('400 rows mount quickly', results.longMs < 1500, String(results.longMs));
+    // The bound is a second and a half on the reference machine, scaled by how slow this one runs a fixed workload.
+    const longMsBound = 1500 * measureSpeedFactor();
+    check('400 rows mount quickly', results.longMs < longMsBound, `${results.longMs} ms against ${Math.round(longMsBound)} ms`);
     check('tabbing to a far row scrolls it into view', results.focus.inView && results.focus.scrollTop > 0, JSON.stringify(results.focus));
   }
   if (failures.length > 0) {

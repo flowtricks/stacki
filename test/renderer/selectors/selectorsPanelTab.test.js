@@ -14,8 +14,10 @@ const { checkSelectorUsage } = require('#dist/electron/properties/selectorRemova
 const { readProjectMetadata, writeProjectMetadata } = require('#dist/electron/project/projectMetadata.js');
 const { EMPTY_KEEP_LIST, parseStyleKeepList, serializeStyleKeepList } = require('#dist/shared/properties/styleKeepList.js');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor, waitForSteady } = require('../../helpers/waitFor.js');
 
-const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+// One task boundary, so queued promise work and effects land. Waits for the panel go through waitFor instead of a guessed pause.
+const settle = () => new Promise((resolve) => setImmediate(resolve));
 const TAB_KEY = 'stacki.selectorsPanel.tabs';
 
 const FILES = {
@@ -95,20 +97,31 @@ async function harness(roots) {
     seen.clear();
     await act(async () => {
       reactRoot.render(React.createElement(SelectorsPanel, { project: { path: root }, showToast: () => {}, onRecordUndo: () => {} }));
-      await settle(60);
     });
-    // The full check lands; wait for the tabs, within a bound.
-    for (let attempt = 0; attempt < 100 && selected().length === 0; attempt += 1) {
-      await act(async () => settle(40));
-    }
-    await act(async () => settle(120));
+    // The full check lands; wait for the tabs, then for the picture to stop changing, so a late flash of another tab is still seen.
+    await waitForSteady({
+      what: 'a selected tab that stays put',
+      read: async () => {
+        await act(async () => settle());
+        return [...seen];
+      },
+      until: () => selected().length > 0,
+    });
     return [...seen];
   };
-  const pick = async (name) =>
-    act(async () => {
+  const pick = async (name) => {
+    await act(async () => {
       container.querySelector(`[data-tab="${name}"]`).click();
-      await settle(60);
     });
+    await waitFor({
+      what: `the ${name} tab selected`,
+      read: async () => {
+        await act(async () => settle());
+        return selected();
+      },
+      until: (names) => names.includes(name),
+    });
+  };
   const finish = async () => {
     observer.disconnect();
     await act(async () => reactRoot.unmount());
