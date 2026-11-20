@@ -4,7 +4,7 @@
 // running it, take keyboard focus from the app they are typing in, or leave a tile in Mission Control.
 //
 // Method: `installWindowHiding(electron)` patches the main process once. Every BrowserWindow is made
-// fully transparent and click-through the moment it exists, and `show`, `showInactive` and `focus`
+// fully transparent and click-through when it is shown, and `show`, `showInactive` and `focus`
 // are redirected so a window opened visibly is moved beyond the display (x = y = -32000) and shown
 // without activation. Transparent plus off-screen keeps Chromium painting (the soak records real
 // frames), while the window is nowhere a person could see, click or type into. Pages still get real
@@ -54,10 +54,13 @@ function installWindowHiding(electron) {
   };
   // A window that never takes OS focus cannot pull the person out of the app they are typing in.
   BrowserWindow.prototype.focus = function focus() {};
+  // Only a window that is already visible is touched here: a hidden one (show: false) is left exactly as the
+  // test made it, because a fully transparent window is treated as occluded on macOS and Chromium then
+  // stops the visibility signals a test reads (the asset grid's tiles reported none visible on CI). A hidden
+  // window is made invisible at the moment it is shown, by the patched `show` above.
   app.on('browser-window-created', (_event, window) => {
-    hideWindow(window);
     if (window.isVisible()) {
-      window.setPosition(OFFSCREEN_PX, OFFSCREEN_PX);
+      moveOffscreen(window);
     }
   });
   return true;

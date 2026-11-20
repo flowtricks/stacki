@@ -174,12 +174,17 @@ test('installWindowHiding hides, parks and never activates a window', () => {
   assert.equal(created.length, 1);
   const window = new FakeBrowserWindow();
   created[0]?.({}, window);
+  assert.equal(window.state.opacity, undefined, 'a window that was never shown is left as the test made it');
+  window.show();
   assert.equal(window.state.opacity, 0);
   assert.equal(window.state.clickThrough, true);
-  window.show();
   assert.equal(window.state.visible, true);
   assert.deepEqual(window.state.position, [OFFSCREEN_PX, OFFSCREEN_PX]);
   window.focus();
   assert.equal(window.state.activated, false, 'neither show nor focus activates the window');
+  const created2 = new FakeBrowserWindow();
+  created2.state.visible = true;
+  created[0]?.({}, created2);
+  assert.equal(created2.state.opacity, 0, 'a window created already visible is hidden at once');
   assert.throws(() => installWindowHiding(undefined), /Assertion failed/);
 });
