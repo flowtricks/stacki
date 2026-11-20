@@ -188,6 +188,8 @@ window.steps = (() => {
       const before = toggles.map((toggle) => getComputedStyle(toggle).backgroundColor);
       toggles.forEach((toggle) => toggle.click());
       await window.until(() => toggles.every((toggle) => toggle.getAttribute('aria-pressed') === 'true'));
+      // A button's background fades (controls.css: transition: background 0.1s); read the pressed fill once it has, not its first frame.
+      await window.until(() => toggles.every((toggle) => toggle.getAnimations().every((animation) => animation.playState !== 'running')));
       const after = toggles.map((toggle) => getComputedStyle(toggle).backgroundColor);
       return { opened: true, focused: document.activeElement === input || card.contains(document.activeElement), pressedChangesFill: before.every((fill, index) => fill !== after[index]), toggleCount: toggles.length };
     },
