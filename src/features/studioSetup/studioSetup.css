@@ -120,9 +120,8 @@
   padding: 12px;
   overflow: auto;
   scrollbar-gutter: stable;
-  border: 1px solid #343434;
   border-radius: 8px;
-  background: #111;
+  background: #0a0a0a;
   color: #d2d2d2;
   font:
     11px/1.6 ui-monospace,
@@ -133,6 +132,16 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+}
+/* A command takes the log's own size and line height, so a coloured line sits level with its neighbours. */
+.studio-install-output .code-inline {
+  font-size: inherit;
+  line-height: inherit;
+}
+/* npm's `> name@version script` line names the step: muted, so the command under it is what reads. */
+.studio-install-output-header,
+.studio-install-output-prefix {
+  color: #777;
 }
 @keyframes studio-install-pulse {
   from {
@@ -230,9 +239,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px 8px 14px;
-  border: 1px solid #343434;
   border-radius: 8px;
-  background: #111;
+  background: #0a0a0a;
 }
 .studio-launch-code {
   flex: 1;

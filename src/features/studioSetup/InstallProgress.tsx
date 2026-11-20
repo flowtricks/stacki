@@ -1,5 +1,7 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
+import { CodeInline } from '../../ui/CodeBlock';
+import { classifyInstallOutput, type InstallOutputLine } from './installOutputLines';
 import { STUDIO_INSTALL_STAGES, studioCompletedStages, type StudioInstallStage } from '../../../shared/ipc/studioProgress';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { StudioActivity } from './useStudioSetup';
@@ -24,6 +26,7 @@ export default function InstallProgress({ activity }: { readonly activity: Studi
       log.current.scrollTop = log.current.scrollHeight;
     }
   }, [progress?.output]);
+  const lines = useMemo(() => classifyInstallOutput(progress?.output ?? ''), [progress?.output]);
   if (!progress) {
     return undefined;
   }
@@ -50,9 +53,35 @@ export default function InstallProgress({ activity }: { readonly activity: Studi
           followOutput.current = element.scrollHeight - element.scrollTop - element.clientHeight < 32;
         }}
       >
-        {progress.output || translate('studioSetup.progress.preparing')}
+        {progress.output ? lines.map((line, index) => <OutputLine key={index} line={line} />) : translate('studioSetup.progress.preparing')}
       </pre>
       {activity.kind === 'busy' && <p className="studio-setup-note">{translate('studioSetup.progress.keepOpen')}</p>}
     </div>
   );
 }
+
+// Only a command is coloured; every other line is plain text. Memoised so the lines already
+// on screen do not redraw when a new one arrives, which keeps thousands of lines instant.
+// Each row ends in a newline inside the <pre>, so copying the log gives back its lines.
+const OutputLine = memo(function OutputLine({ line }: { readonly line: InstallOutputLine }) {
+  switch (line.kind) {
+    case 'command':
+      return (
+        <>
+          <span className="studio-install-output-prefix">{line.prefix}</span>
+          <CodeInline text={line.text} language="shell" />
+          {'\n'}
+        </>
+      );
+    case 'header':
+      return <span className="studio-install-output-header">{line.text + '\n'}</span>;
+    case 'log':
+      return <>{line.text + '\n'}</>;
+    case 'empty':
+      return <>{'\n'}</>;
+    default: {
+      const exhaustive: never = line;
+      return exhaustive;
+    }
+  }
+});

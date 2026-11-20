@@ -170,6 +170,35 @@ test('reviewing a blocked project never attempts installation', async () => {
   }
 });
 
+test('only command lines in the installation output are syntax highlighted', async () => {
+  const state = await fixture();
+  try {
+    await addStudio();
+    await state.progress({
+      stage: 'check',
+      output: '> @stacki/studio@1.4.10 check\n> tsc --noEmit && tsc -p tsconfig.worker.json\nnpm warn deprecated thing\n$ npm ci\n',
+    });
+    const log = document.querySelector('[role="log"]');
+    const commands = [...log.querySelectorAll('code.code-inline')];
+    assert.deepEqual(
+      commands.map((item) => item.textContent),
+      ['tsc --noEmit && tsc -p tsconfig.worker.json', 'npm ci'],
+    );
+    for (const command of commands) {
+      assert.ok(command.querySelector('.code-token') !== null, 'A command line carries coloured tokens');
+    }
+    assert.equal(log.querySelector('.studio-install-output-header').textContent, '> @stacki/studio@1.4.10 check\n');
+    assert.ok(log.textContent.includes('npm warn deprecated thing'));
+    // Plain log text has no spans of its own: the warning is a bare text node.
+    assert.equal(
+      [...log.querySelectorAll('span')].some((span) => span.textContent.includes('npm warn')),
+      false,
+    );
+  } finally {
+    await state.close();
+  }
+});
+
 test('live stages and output stay scoped to the attempt and survive failure', async () => {
   const state = await fixture();
   try {

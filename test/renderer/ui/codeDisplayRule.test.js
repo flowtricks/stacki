@@ -26,7 +26,8 @@ const PRE_ALLOWED = {
   'src/ui/LogBlock.tsx': 'Log: a dev server’s output or a crash record, shown for a person to read, which is not code.',
   'src/features/ai/SignInCard.tsx': 'Log: the agent’s own words about a failed sign-in, behind Details, which are not code.',
   'src/features/ai/transcript/ErrorRow.tsx': 'Log: the agent’s own error message for a reply that did not finish, behind Details, which is not code.',
-  'src/features/studioSetup/InstallProgress.tsx': 'Log: the output of the Studio installer, which is not code.',
+  'src/features/studioSetup/InstallProgress.tsx':
+    'Log: the output of the Studio installer; only its shell command lines are code, and those go through CodeInline.',
   'src/features/style/embed/QueryForms.tsx': 'Highlighted already: CssCodePreview colours its lines with cssTokens and marks overridden ones.',
   'src/features/welcome/WelcomeWizards.tsx': 'Log: the output of a project being created, which is not code.',
 };
@@ -62,7 +63,7 @@ const STYLE_ALLOWED = {
   '.create-log': 'Log: the <pre> of a project being created.',
   '.embed-editor_css-code-preview': 'Highlighted already: the element CssCodePreview draws.',
   '.html-content pre': 'Rich text: a block in the content being written, drawn as that content.',
-  '.studio-install-output': 'Log: the <pre> of the Studio installer.',
+  '.studio-install-output': 'Log: the <pre> of the Studio installer, whose command lines are coloured by CodeInline.',
   '.studio-setup-details textarea': 'Prose: instructions for an agent, to read and copy, not code.',
 };
 
