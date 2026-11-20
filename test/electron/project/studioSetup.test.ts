@@ -70,6 +70,7 @@ test('fresh setup activates validated files and refuses a second install', async
       kind: 'installed',
       desktopVersion: '2.0.0',
       version: '1.2.3',
+      signIn: 'github',
     });
     await assert.rejects(
       installNewRelease(path.join(root, 'studio'), release(), async () => {

@@ -149,6 +149,7 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   'publish:start': ['publish'],
   'publish:repository': ['publish'],
   'studio:install': ['settings:studio'],
+  'studio:setAuth': ['settings:studio'],
   // A read, but it spends the publishing account's GitHub budget; only those who edit roles need it.
   'github:searchUsers': ['settings:roles'],
   // Installing, updating and removing apps is an admin's: `settings:roles` is the

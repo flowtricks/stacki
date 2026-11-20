@@ -48,7 +48,7 @@ import type { ConversionResult } from './assetConversion';
 import type { CommitDiffResult } from './gitCommitDiff';
 import type { CommitAvatarResult } from './commitAvatars';
 import type { GitHubUserSearchResult } from './githubUserSearch';
-import type { StudioStatus, StudioInstallResult } from './studioSetup';
+import type { StudioStatus, StudioInstallResult, StudioAuthResult } from './studioSetup';
 import type { StudioInstallProgress } from './studioProgress';
 import type { AppSecretScan } from '../properties/appSecrets';
 import type { SecretsListing, SecretsResult, SecretValue } from '../properties/secrets';
@@ -169,6 +169,7 @@ export interface IpcResults extends AiResults {
   readonly 'github:searchUsers': GitHubUserSearchResult;
   readonly 'studio:status': StudioStatus;
   readonly 'studio:install': StudioInstallResult;
+  readonly 'studio:setAuth': StudioAuthResult;
   readonly 'component:properties': Result<ComponentProperties>;
   readonly 'component:editProperties': Result<ComponentProperties & { readonly undo: string }>;
   readonly 'component:revertProperties': Result<{ readonly undo: string }>;

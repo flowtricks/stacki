@@ -3,7 +3,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { StudioStatus } from '../../../shared/ipc/studioSetup';
 import type { StudioInstallProgress } from '../../../shared/ipc/studioProgress';
 import { cleanError } from '../../lib/cleanError';
-import { addStudio, onStudioProgress, readStudioStatus } from './studioBridge';
+import type { StudioAuthConfig } from '../../../shared/ipc/studioAuth';
+import { addStudio, changeStudioSignIn, onStudioProgress, readStudioStatus } from './studioBridge';
 
 export type StudioActivity =
   | { readonly kind: 'idle' }
@@ -27,7 +28,11 @@ export function useStudioSetup(projectPath: string, revision: number) {
     },
     [projectPath],
   );
-  const install = async () => {
+  // Retry after a failure reuses the sign-in the person chose.
+  const lastAuth = useRef<StudioAuthConfig>();
+  const install = async (chosen?: StudioAuthConfig) => {
+    const auth: StudioAuthConfig = chosen ?? lastAuth.current ?? { kind: 'github' };
+    lastAuth.current = auth;
     if (status?.kind !== 'missing' || activeRequest.current !== undefined) {
       return;
     }
@@ -48,7 +53,7 @@ export function useStudioSetup(projectPath: string, revision: number) {
     });
     subscription.current = unsubscribe;
     try {
-      const result = await addStudio(projectPath, requestId);
+      const result = await addStudio(projectPath, requestId, auth);
       if (activeRequest.current !== requestId) {
         return;
       }
@@ -60,6 +65,7 @@ export function useStudioSetup(projectPath: string, revision: number) {
             kind: 'installed',
             desktopVersion: status.desktopVersion,
             version: result.version,
+            signIn: auth.kind,
           });
         }
         setActivity({ kind: 'idle' });
@@ -76,7 +82,23 @@ export function useStudioSetup(projectPath: string, revision: number) {
       }
     }
   };
-  return { status, activity, install };
+  // Edits only the sign-in variables of an installed Studio. Returns the failure sentence, or undefined on success.
+  const changeSignIn = async (auth: StudioAuthConfig): Promise<string | undefined> => {
+    if (status?.kind !== 'installed') {
+      return undefined;
+    }
+    try {
+      const result = await changeStudioSignIn(projectPath, auth);
+      if (result.kind === 'error') {
+        return result.message;
+      }
+      setStatus({ ...status, signIn: result.signIn });
+      return undefined;
+    } catch (error: unknown) {
+      return cleanError(error);
+    }
+  };
+  return { status, activity, install, changeSignIn };
 }
 
 function studioFailure(previous: StudioActivity, message: string): StudioActivity {

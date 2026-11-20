@@ -402,7 +402,12 @@ export interface StudioAuthGuide {
 }
 
 export function studioAuthGuide(config: StudioAuthConfig): StudioAuthGuide {
-  switch (config.kind) {
+  return studioAuthGuideFor(config.kind);
+}
+
+/** The guide depends only on the kind, so a form can show it before the values are valid. */
+export function studioAuthGuideFor(kind: StudioAuthKind): StudioAuthGuide {
+  switch (kind) {
     case 'github':
     case 'access':
     case 'passkey':
@@ -412,7 +417,7 @@ export function studioAuthGuide(config: StudioAuthConfig): StudioAuthGuide {
     case 'oidc':
       return guideFor('oidc', 'OIDC_CLIENT_SECRET');
     default: {
-      const exhaustive: never = config;
+      const exhaustive: never = kind;
       return exhaustive;
     }
   }

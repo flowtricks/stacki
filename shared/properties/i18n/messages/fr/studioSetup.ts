@@ -3,6 +3,63 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/studioSetup';
 
 export const messages = {
+  'studioSetup.auth.add': 'Ajouter Studio',
+  'studioSetup.auth.change': 'Modifier',
+  'studioSetup.auth.change.saved': 'Enregistré. Déployez Studio pour l’appliquer.',
+  'studioSetup.auth.change.title': 'Modifier le type de connexion',
+  'studioSetup.auth.change.warning':
+    'Après le changement, les personnes ont besoin de nouveaux identifiants ou invitations, et les sessions existantes cessent de fonctionner au prochain déploiement.',
+  'studioSetup.auth.current': 'Connexion : {type}',
+  'studioSetup.auth.currentCustom': 'Fournisseur personnalisé',
+  'studioSetup.auth.dialogLabel': 'Type de connexion pour Studio',
+  'studioSetup.auth.field.adminEmail': 'E-mail du premier administrateur',
+  'studioSetup.auth.field.adminHandle': 'Nom du premier administrateur',
+  'studioSetup.auth.field.allowedDomains': 'Domaines e-mail autorisés (facultatif)',
+  'studioSetup.auth.field.allowedEmails': 'E-mails autorisés (facultatif)',
+  'studioSetup.auth.field.aud': 'Balise AUD de l’application',
+  'studioSetup.auth.field.clientId': 'ID client',
+  'studioSetup.auth.field.customDomain': 'Utiliser ce domaine même s’il ne se termine pas par .cloudflareaccess.com',
+  'studioSetup.auth.field.issuer': 'URL de l’émetteur',
+  'studioSetup.auth.field.listHint': 'Séparez-en plusieurs par des virgules.',
+  'studioSetup.auth.field.name': 'Nom du bouton',
+  'studioSetup.auth.field.teamDomain': 'Domaine d’équipe Access',
+  'studioSetup.auth.groupLabel': 'Type de connexion',
+  'studioSetup.auth.intro': 'Choisissez comment les personnes se connectent au Studio hébergé. Vous pourrez le modifier plus tard dans les réglages.',
+  'studioSetup.auth.kind.access.hint': 'Placer Studio derrière Cloudflare Zero Trust Access',
+  'studioSetup.auth.kind.access.label': 'Cloudflare Access', // same
+  'studioSetup.auth.kind.github.hint': 'Les personnes se connectent avec leur compte GitHub. Par défaut.',
+  'studioSetup.auth.kind.github.label': 'GitHub', // same
+  'studioSetup.auth.kind.google.hint': 'Comptes Google. Limitez l’accès par e-mail ou domaine.',
+  'studioSetup.auth.kind.google.label': 'Google', // same
+  'studioSetup.auth.kind.oidc.hint': 'Okta, Entra ID, Auth0, Keycloak et d’autres fournisseurs d’identité.',
+  'studioSetup.auth.kind.oidc.label': 'SSO (OpenID Connect)', // same
+  'studioSetup.auth.kind.passkey.hint': 'Aucun compte à connecter. Le premier administrateur invite les personnes.',
+  'studioSetup.auth.kind.passkey.label': 'Passkeys', // same
+  'studioSetup.auth.problem.customDomain': 'Ce n’est pas un domaine cloudflareaccess.com. Cochez la case ci-dessous pour l’utiliser quand même.',
+  'studioSetup.auth.problem.invalid': 'Non valide.',
+  'studioSetup.auth.problem.required': 'Obligatoire.',
+  'studioSetup.auth.problem.tooLong': 'Trop long.',
+  'studioSetup.auth.problem.tooMany': 'Trop d’entrées.',
+  'studioSetup.auth.problem.tooShort': 'Trop court.',
+  'studioSetup.auth.redirect.copy': 'Copier l’URI',
+  'studioSetup.auth.redirect.note': 'Enregistrez-la auprès de votre service d’identité, avec l’adresse réelle de votre site à la place du texte indiqué.',
+  'studioSetup.auth.redirect.title': 'URI de redirection à enregistrer',
+  'studioSetup.auth.save': 'Enregistrer le type de connexion',
+  'studioSetup.auth.secrets.copied': 'Copié',
+  'studioSetup.auth.secrets.copy': 'Copier les commandes',
+  'studioSetup.auth.secrets.copyFailed': 'Copie impossible. Sélectionnez le texte et copiez-le vous-même.',
+  'studioSetup.auth.secrets.intro': 'Les secrets client ne passent jamais par Stacki. Exécutez ceci dans votre projet ; Wrangler demande la valeur.',
+  'studioSetup.auth.secrets.title': 'À ajouter vous-même après la configuration',
+  'studioSetup.auth.steps.access':
+    'Aucun secret. Dans Cloudflare Zero Trust, créez une application Access couvrant le nom d’hôte de votre site et le chemin /studio* avec une politique autorisant votre équipe, puis collez sa balise AUD ci-dessus. Les personnes doivent être autorisées dans Access et figurer dans le panneau Rôles.',
+  'studioSetup.auth.steps.github': 'Utilise l’application GitHub de l’étape cloud. Rien d’autre à choisir.',
+  'studioSetup.auth.steps.google':
+    'Créez un client OAuth (application Web) dans la console Google Cloud, enregistrez l’URI de redirection ci-dessous, puis ajoutez vous-même son secret.',
+  'studioSetup.auth.steps.oidc':
+    'Créez une application chez votre fournisseur d’identité, enregistrez l’URI de redirection ci-dessous, puis ajoutez vous-même son secret client (un client PKCE public n’en a pas).',
+  'studioSetup.auth.steps.passkey':
+    'Aucun secret. Le premier administrateur enregistre une passkey à la première visite, puis invite les autres depuis les réglages de Studio.',
+  'studioSetup.auth.title': 'Comment les personnes se connectent-elles ?',
   'studioSetup.back': 'Retour',
   'studioSetup.closeLabel': 'Fermer la configuration de Studio',
   'studioSetup.cloud.agentIntro': 'Collez ces instructions dans votre agent de code, dans ce projet.',

@@ -118,7 +118,8 @@ test('the complete channel inventory matches real main and terminal registration
   // The Pages panel's Select mode adds two (page:planRemoveMany and page:removeMany), 298 in all.
   // Create component's "Move styles" adds five: which files use each class (component:classUsage) and the move's
   // journal (styleMove:record, :clear, :pending and :resolve), 296 in all.
-  assert.equal(harness.handlers.size, 298);
+  // Changing an installed Studio's sign-in type adds one (studio:setAuth), 299 in all.
+  assert.equal(harness.handlers.size, 299);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
@@ -476,6 +477,39 @@ test('Studio setup accepts the open project root and refuses outside projects', 
     }),
     { kind: 'error', message: 'Studio already exists. Setup does not replace existing files.' },
   );
+});
+
+test('changing the sign-in type edits only the sign-in variables and reports the new type', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  await harness.invoke('project:scan', harness.root);
+  const studio = path.join(harness.root, 'studio');
+  const config = path.join(studio, 'cloudflare/wrangler.jsonc');
+  const original = '{\n  // Keep me.\n  "name": "studio",\n  "vars": {\n    "STUDIO_ORIGIN": "https://studio.example.com",\n  },\n}\n';
+  const payload = (auth: unknown) => ({ projectPath: harness.root, auth });
+  assert.deepEqual(await harness.invoke('studio:setAuth', payload({ kind: 'github' })), {
+    kind: 'error',
+    message: 'Studio is not installed in this project.',
+  });
+  fs.mkdirSync(path.join(studio, 'cloudflare'), { recursive: true });
+  fs.mkdirSync(path.join(studio, 'src/shared'), { recursive: true });
+  fs.writeFileSync(path.join(studio, 'package.json'), '{"name":"@stacki/studio"}');
+  fs.writeFileSync(path.join(studio, 'src/shared/release.json'), '{"version":"1.4.8"}');
+  fs.writeFileSync(config, original);
+  assert.equal(toRecord(await harness.invoke('studio:status', harness.root))?.['signIn'], 'github');
+  const google = { kind: 'google', clientId: 'abc.apps.googleusercontent.com', allowedDomains: [], allowedEmails: [], admin: 'google:me@example.com' };
+  assert.deepEqual(await harness.invoke('studio:setAuth', payload(google)), { kind: 'saved', signIn: 'google' });
+  const written = fs.readFileSync(config, 'utf8');
+  assert.match(written, /\/\/ Keep me\./);
+  assert.match(written, /"AUTH_PROVIDER": "google"/);
+  assert.match(written, /"GOOGLE_CLIENT_ID": "abc\.apps\.googleusercontent\.com"/);
+  assert.match(written, /"AUTH_BOOTSTRAP_ADMIN": "google:me@example\.com"/);
+  assert.doesNotMatch(written, /_SECRET/);
+  assert.equal(toRecord(await harness.invoke('studio:status', harness.root))?.['signIn'], 'google');
+  assert.deepEqual(await harness.invoke('studio:setAuth', payload({ kind: 'github' })), { kind: 'saved', signIn: 'github' });
+  assert.equal(fs.readFileSync(config, 'utf8'), original, 'switching back to GitHub restores the file exactly');
+  await assert.rejects(harness.invoke('studio:setAuth', payload({ ...google, clientSecret: 'x' })));
+  await assert.rejects(harness.invoke('studio:setAuth', { projectPath: path.dirname(harness.root), auth: { kind: 'github' } }), /outside/);
 });
 
 test('popup preferences persist independently and reject invalid changes', async (context) => {

@@ -12,6 +12,8 @@ import { isWin } from '../lib/mainHelpers';
 import type { StudioInstallUpdate } from '../../shared/ipc/studioProgress';
 import { runStudioCommand } from './studioCommand';
 import { translateMain } from '../lib/mainLocale';
+import type { StudioAuthConfig } from '../../shared/ipc/studioAuth';
+import { readStudioSignInFile, writeStudioSignInFile } from './studioAuthFile';
 
 export type StudioReleaseEnvironment = { readonly kind: 'packaged' } | { readonly kind: 'development'; readonly appPath: string };
 
@@ -61,6 +63,7 @@ export async function studioStatus(project: string, desktopVersion: string): Pro
         kind: 'installed',
         desktopVersion,
         version: releaseVersion(record(metadata)['version']),
+        signIn: await readStudioSignInFile(directory),
       };
     } catch {
       // An unrelated studio directory must never be treated as replaceable.
@@ -82,9 +85,22 @@ export async function readStudioRelease(file: string): Promise<StudioRelease> {
   return parseRelease(value);
 }
 
-export async function installStudio(project: string, release: StudioRelease, onProgress: (update: StudioInstallUpdate) => void = () => {}): Promise<string> {
+export async function installStudio(
+  project: string,
+  release: StudioRelease,
+  auth: StudioAuthConfig,
+  onProgress: (update: StudioInstallUpdate) => void = () => {},
+): Promise<string> {
   onProgress({ kind: 'stage', stage: 'files' });
   await installNewRelease(path.join(project, 'studio'), release, async (directory, projectRoot) => {
+    // The sign-in variables go into the staged copy, so a failed install leaves no half-configured Studio behind.
+    // GitHub is the default and writes nothing.
+    if (auth.kind !== 'github') {
+      const written = await writeStudioSignInFile(directory, auth, 'refuse');
+      if (!written.ok) {
+        throw new Error(translateMain('error.studio.authWrite'));
+      }
+    }
     await validateStudio(directory, projectRoot, onProgress);
     onProgress({ kind: 'stage', stage: 'activate' });
   });

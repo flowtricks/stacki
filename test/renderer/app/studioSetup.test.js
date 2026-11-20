@@ -39,6 +39,10 @@ const { createRoot } = require('react-dom/client');
 const StudioSetup = require(output).default;
 const click = (element) => act(async () => element.click());
 const button = (label) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === label);
+const addStudio = async () => {
+  await click(button('Add to project'));
+  await click(button('Add Studio'));
+};
 const currentStep = () => document.querySelector('[aria-current="step"]').textContent;
 const missing = { kind: 'missing', desktopVersion: '0.1.48' };
 
@@ -90,7 +94,7 @@ test('Add to project installs once, shows progress, and advances to local previe
   const state = await fixture();
   try {
     assert.equal(state.calls.length, 0);
-    await click(button('Add to project'));
+    await addStudio();
     assert.equal(state.calls[0].projectPath, '/project');
     assert.equal(state.calls[0].source, 'published');
     assert.match(state.calls[0].requestId, /^[a-zA-Z0-9-]+$/);
@@ -124,7 +128,7 @@ test('Add to project installs once, shows progress, and advances to local previe
 test('failed installation stays on Install and supports an explicit retry', async () => {
   const state = await fixture();
   try {
-    await click(button('Add to project'));
+    await addStudio();
     await state.finish({ kind: 'error', message: 'Download failed' });
     assert.match(currentStep(), /Install/);
     assert.match(toastMessages(), /Download failed/);
@@ -140,7 +144,7 @@ test('failed installation stays on Install and supports an explicit retry', asyn
 });
 
 test('managing an installed project starts at local preview without reinstalling', async () => {
-  const state = await fixture({ ...missing, kind: 'installed', version: '0.1.48' });
+  const state = await fixture({ ...missing, kind: 'installed', version: '0.1.48', signIn: 'github' });
   try {
     await click(button('Manage Stacki Studio'));
     assert.match(currentStep(), /Local preview/);
@@ -169,7 +173,7 @@ test('reviewing a blocked project never attempts installation', async () => {
 test('live stages and output stay scoped to the attempt and survive failure', async () => {
   const state = await fixture();
   try {
-    await click(button('Add to project'));
+    await addStudio();
     assert.equal(state.listeners.size, 1);
     assert.equal(document.querySelector('progress').value, 0);
     await state.progress({ stage: 'dependencies', output: '$ npm ci\nDownloading packages\n' });
@@ -204,7 +208,7 @@ test('live stages and output stay scoped to the attempt and survive failure', as
 
 test('unmount removes the progress listener while installation is pending', async () => {
   const state = await fixture();
-  await click(button('Add to project'));
+  await addStudio();
   assert.equal(state.listeners.size, 1);
   await state.close();
   assert.equal(state.listeners.size, 0);
@@ -213,7 +217,7 @@ test('unmount removes the progress listener while installation is pending', asyn
 
 test('Studio cannot open missing, malformed or remote website preview addresses', async () => {
   for (const url of ['', 'invalid', 'https://example.com', 'http://user:secret@localhost:4321']) {
-    const state = await fixture({ kind: 'installed', desktopVersion: '0.1.48', version: '0.1.48' }, url);
+    const state = await fixture({ kind: 'installed', desktopVersion: '0.1.48', version: '0.1.48', signIn: 'github' }, url);
     try {
       await click(button('Manage Stacki Studio'));
       assert.equal(button('Open Studio').disabled, true);

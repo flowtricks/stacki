@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BOUNDARY_LIMITS } from '#dist/shared/core/boundary.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
-import { parseStudioStatus, parseStudioInstallResult } from '#dist/shared/ipc/studioSetup.js';
+import { parseStudioStatus, parseStudioInstallResult, parseStudioAuthResult } from '#dist/shared/ipc/studioSetup.js';
 import { parseStudioInstallProgress, STUDIO_INSTALL_STAGES, STUDIO_LOG_CHARS_MAX, studioCompletedStages } from '#dist/shared/ipc/studioProgress.js';
 
 test('Studio progress validates every stage, identity and output bound', () => {
@@ -89,7 +89,8 @@ test('Studio setup payloads constrain source and project path', () => {
 test('Studio status and installation results are validated', () => {
   for (const value of [
     { kind: 'missing', desktopVersion: '1.2.3' },
-    { kind: 'installed', desktopVersion: '1.2.3', version: '1.0.0' },
+    { kind: 'installed', desktopVersion: '1.2.3', version: '1.0.0', signIn: 'github' },
+    { kind: 'installed', desktopVersion: '1.2.3', version: '1.0.0', signIn: 'custom' },
     { kind: 'blocked', desktopVersion: '1.2.3', message: 'Existing folder' },
   ]) {
     assert.deepEqual(parseStudioStatus(value), value);
@@ -100,5 +101,49 @@ test('Studio status and installation results are validated', () => {
   for (const value of [undefined, 1, {}, { kind: 'installed' }, { kind: 'error', message: 7 }]) {
     assert.throws(() => parseStudioStatus(value));
     assert.throws(() => parseStudioInstallResult(value));
+  }
+});
+
+test('the sign-in choice rides the install and setAuth payloads, bounded and without secrets', () => {
+  const base = { projectPath: '/site', source: 'published', requestId: 'test-install' };
+  const google = {
+    kind: 'google',
+    clientId: 'abc.apps.googleusercontent.com',
+    allowedDomains: ['example.com'],
+    allowedEmails: [],
+    admin: 'google:me@example.com',
+  };
+  assert.deepEqual(parseIpcPayload('studio:install', { ...base, auth: google }).auth, google);
+  assert.equal(parseIpcPayload('studio:install', base).auth, undefined, 'absent means GitHub');
+  assert.deepEqual(parseIpcPayload('studio:setAuth', { projectPath: '/site', auth: { kind: 'github' } }), { projectPath: '/site', auth: { kind: 'github' } });
+  const bad: readonly unknown[] = [
+    { ...google, clientSecret: 'shh' },
+    { ...google, clientId: '' },
+    { ...google, admin: 'oidc:me@example.com' },
+    { ...google, allowedDomains: Array.from({ length: 51 }, (_, index) => `d${index}.example.com`) },
+    { kind: 'oidc', issuer: 'http://insecure.test', clientId: 'a', allowedDomains: [], allowedEmails: [], admin: 'oidc:a@b.co' },
+    { kind: 'access', teamDomain: 'x.cloudflareaccess.com', aud: 'short', admin: 'access:a@b.co' },
+    { kind: 'saml' },
+    'google',
+    undefined,
+  ];
+  for (const auth of bad) {
+    assert.throws(() => parseIpcPayload('studio:install', { ...base, auth: auth === undefined ? 'nope' : auth }));
+    assert.throws(() => parseIpcPayload('studio:setAuth', { projectPath: '/site', auth }));
+  }
+  assert.throws(() => parseIpcPayload('studio:setAuth', { projectPath: '/site' }));
+});
+
+test('Studio status carries the sign-in type and the setAuth result is validated', () => {
+  const installed = { kind: 'installed', desktopVersion: '1.2.3', version: '1.0.0' };
+  assert.throws(() => parseStudioStatus(installed), 'a status without its sign-in is refused');
+  assert.throws(() => parseStudioStatus({ ...installed, signIn: 'saml' }));
+  for (const signIn of ['github', 'access', 'google', 'oidc', 'passkey', 'custom']) {
+    assert.equal(parseStudioStatus({ ...installed, signIn }).kind, 'installed');
+  }
+  assert.deepEqual(parseStudioAuthResult({ kind: 'saved', signIn: 'oidc' }), { kind: 'saved', signIn: 'oidc' });
+  assert.deepEqual(parseStudioAuthResult({ kind: 'error', message: 'No' }), { kind: 'error', message: 'No' });
+  for (const value of [undefined, {}, { kind: 'saved' }, { kind: 'saved', signIn: 'x' }, { kind: 'error', message: 1 }]) {
+    assert.throws(() => parseStudioAuthResult(value));
   }
 });

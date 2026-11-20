@@ -55,6 +55,7 @@ import { parsePageSettingsDirection, parsePageSettingsRequest } from '../propert
 import { parsePageBulkRemoveRequest } from '../properties/pageBulkRemove';
 import { renamePath } from '../properties/pageRename';
 import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
+import { parseStudioAuth } from './studioAuth';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
@@ -321,7 +322,10 @@ export const IPC_PAYLOADS = {
     ...project,
     source: parseStudioSource,
     requestId: parseStudioRequestId,
+    // Absent means GitHub, Studio's default sign-in.
+    auth: optional(parseStudioAuth),
   }),
+  'studio:setAuth': object({ ...project, auth: parseStudioAuth }),
   'assets:delete': object({ ...relative }),
   'assets:dimensions': object({ ...relative }),
   'assets:list': pathText,

@@ -182,7 +182,7 @@ test('the wire parser accepts a checked choice and refuses everything else', () 
     { kind: 'passkey', admin: 'passkey:Has Space' },
   ];
   for (const value of refused) {
-    assert.throws(() => parseStudioAuth(value), undefined, JSON.stringify(value));
+    assert.throws(() => parseStudioAuth(value), Error, JSON.stringify(value));
   }
 });
 

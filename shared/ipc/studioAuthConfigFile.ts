@@ -39,7 +39,8 @@ interface Vars {
 export function readStudioSignIn(text: string): Result<StudioSignIn, StudioAuthEditProblem> {
   const vars = findVars(text);
   if (!vars.ok) {
-    return vars;
+    // A file without `vars` sets no AUTH_PROVIDER either, so Studio's default applies.
+    return vars.error.kind === 'noVars' ? ok('github') : vars;
   }
   const member = vars.value.members.find((candidate) => candidate.key === 'AUTH_PROVIDER');
   if (member === undefined) {

@@ -499,13 +499,15 @@ for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
       metadataSamples[channel] ??
       (channel === 'assets:convert'
         ? { projectPath: '/site', rel: 'public/hero.png', format: 'webp' }
-        : channel === 'studio:install'
-          ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
-          : noPayload.has(channel)
-            ? undefined
-            : pathPayload.has(channel)
-              ? '/site'
-              : fields);
+        : channel === 'studio:setAuth'
+          ? { projectPath: '/site', auth: { kind: 'github' } }
+          : channel === 'studio:install'
+            ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
+            : noPayload.has(channel)
+              ? undefined
+              : pathPayload.has(channel)
+                ? '/site'
+                : fields);
     assert.doesNotThrow(() => parse(sample));
     assert.throws(() => parse(Symbol('invalid')), /Expected/);
     if (!noPayload.has(channel)) {

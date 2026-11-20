@@ -3,6 +3,63 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/studioSetup';
 
 export const messages = {
+  'studioSetup.auth.add': 'Añadir Studio',
+  'studioSetup.auth.change': 'Cambiar',
+  'studioSetup.auth.change.saved': 'Guardado. Despliega Studio para aplicarlo.',
+  'studioSetup.auth.change.title': 'Cambiar el tipo de inicio de sesión',
+  'studioSetup.auth.change.warning':
+    'Tras el cambio, las personas necesitan nuevas credenciales o invitaciones y las sesiones existentes dejan de funcionar en el próximo despliegue.',
+  'studioSetup.auth.current': 'Inicio de sesión: {type}',
+  'studioSetup.auth.currentCustom': 'Proveedor personalizado',
+  'studioSetup.auth.dialogLabel': 'Tipo de inicio de sesión de Studio',
+  'studioSetup.auth.field.adminEmail': 'Correo del primer administrador',
+  'studioSetup.auth.field.adminHandle': 'Nombre del primer administrador',
+  'studioSetup.auth.field.allowedDomains': 'Dominios de correo permitidos (opcional)',
+  'studioSetup.auth.field.allowedEmails': 'Correos permitidos (opcional)',
+  'studioSetup.auth.field.aud': 'Etiqueta AUD de la aplicación',
+  'studioSetup.auth.field.clientId': 'ID de cliente',
+  'studioSetup.auth.field.customDomain': 'Usar este dominio aunque no termine en .cloudflareaccess.com',
+  'studioSetup.auth.field.issuer': 'URL del emisor',
+  'studioSetup.auth.field.listHint': 'Separa varios con comas.',
+  'studioSetup.auth.field.name': 'Nombre del botón',
+  'studioSetup.auth.field.teamDomain': 'Dominio del equipo de Access',
+  'studioSetup.auth.groupLabel': 'Tipo de inicio de sesión',
+  'studioSetup.auth.intro': 'Elige cómo inician sesión las personas en el Studio alojado. Puedes cambiarlo más tarde en Ajustes.',
+  'studioSetup.auth.kind.access.hint': 'Pon Studio detrás de Cloudflare Zero Trust Access',
+  'studioSetup.auth.kind.access.label': 'Cloudflare Access', // same
+  'studioSetup.auth.kind.github.hint': 'Las personas inician sesión con su cuenta de GitHub. Es la opción predeterminada.',
+  'studioSetup.auth.kind.github.label': 'GitHub', // same
+  'studioSetup.auth.kind.google.hint': 'Cuentas de Google. Limita el acceso por correo o dominio.',
+  'studioSetup.auth.kind.google.label': 'Google', // same
+  'studioSetup.auth.kind.oidc.hint': 'Okta, Entra ID, Auth0, Keycloak y otros proveedores de identidad.',
+  'studioSetup.auth.kind.oidc.label': 'SSO (OpenID Connect)', // same
+  'studioSetup.auth.kind.passkey.hint': 'Sin cuentas que conectar. El primer administrador invita a las personas.',
+  'studioSetup.auth.kind.passkey.label': 'Passkeys', // same
+  'studioSetup.auth.problem.customDomain': 'No es un dominio de cloudflareaccess.com. Marca la casilla de abajo para usarlo igualmente.',
+  'studioSetup.auth.problem.invalid': 'No válido.',
+  'studioSetup.auth.problem.required': 'Obligatorio.',
+  'studioSetup.auth.problem.tooLong': 'Demasiado largo.',
+  'studioSetup.auth.problem.tooMany': 'Demasiadas entradas.',
+  'studioSetup.auth.problem.tooShort': 'Demasiado corto.',
+  'studioSetup.auth.redirect.copy': 'Copiar URI',
+  'studioSetup.auth.redirect.note': 'Regístrala en tu servicio de identidad, con la dirección real de tu sitio en lugar del marcador.',
+  'studioSetup.auth.redirect.title': 'URI de redirección que registrar',
+  'studioSetup.auth.save': 'Guardar tipo de inicio de sesión',
+  'studioSetup.auth.secrets.copied': 'Copiado',
+  'studioSetup.auth.secrets.copy': 'Copiar comandos',
+  'studioSetup.auth.secrets.copyFailed': 'No se pudo copiar. Selecciona el texto y cópialo tú mismo.',
+  'studioSetup.auth.secrets.intro': 'Los secretos de cliente nunca pasan por Stacki. Ejecuta esto en tu proyecto; Wrangler pide el valor.',
+  'studioSetup.auth.secrets.title': 'Añade esto tú mismo tras la configuración',
+  'studioSetup.auth.steps.access':
+    'Sin secretos. En Cloudflare Zero Trust, crea una aplicación de Access que cubra el nombre de host de tu sitio y la ruta /studio* con una política que permita a tu equipo, y pega arriba su etiqueta AUD. Las personas deben estar permitidas en Access y figurar en el panel de Roles.',
+  'studioSetup.auth.steps.github': 'Usa la app de GitHub del paso de la nube. No hay nada más que elegir.',
+  'studioSetup.auth.steps.google':
+    'Crea un cliente OAuth (aplicación web) en la consola de Google Cloud, registra la URI de redirección de abajo y añade tú mismo su secreto.',
+  'studioSetup.auth.steps.oidc':
+    'Crea una aplicación en tu proveedor de identidad, registra la URI de redirección de abajo y añade tú mismo su secreto de cliente (un cliente PKCE público no tiene).',
+  'studioSetup.auth.steps.passkey':
+    'Sin secretos. El primer administrador registra una passkey en la primera visita y luego invita a otros desde los ajustes de Studio.',
+  'studioSetup.auth.title': '¿Cómo deben iniciar sesión las personas?',
   'studioSetup.back': 'Atrás',
   'studioSetup.closeLabel': 'Cerrar la configuración de Studio',
   'studioSetup.cloud.agentIntro': 'Pega estas instrucciones en tu agente de código, en este proyecto.',

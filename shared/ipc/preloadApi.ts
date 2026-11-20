@@ -18,6 +18,7 @@ interface InvokeChannels {
   readonly githubSearchUsers: 'github:searchUsers';
   readonly studioStatus: 'studio:status';
   readonly installStudio: 'studio:install';
+  readonly setStudioAuth: 'studio:setAuth';
   readonly openProjectDialog: 'project:openDialog';
   readonly createAstroProject: 'project:createAstro';
   readonly parentDialog: 'project:parentDialog';

@@ -115,6 +115,8 @@ export const messages = {
   'error.publish.sourceFileLimit': 'Git inspection exceeds the 100,000-file limit.',
   'error.publish.sourceSizeLimit': 'Git inspection exceeds the 8 GiB source limit.',
   'error.selectors.stylesInvalid': '.stacki/styles.json is invalid: {reason}',
+  'error.studio.authNotInstalled': 'Studio is not installed in this project.',
+  'error.studio.authWrite': 'The sign-in settings could not be written to studio/cloudflare/wrangler.jsonc.',
   'error.studio.devBundleMissing': 'Build the development Studio bundle with npm run studio:release, then retry.',
   'error.studio.devVersionMismatch': 'Development Studio version does not match Stacki. Run npm run studio:release.',
   'error.studio.downloadFailed':

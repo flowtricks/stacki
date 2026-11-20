@@ -145,6 +145,7 @@ function projectBridge() {
     githubSearchUsers: invoke('github:searchUsers'),
     studioStatus: invoke('studio:status'),
     installStudio: invoke('studio:install'),
+    setStudioAuth: invoke('studio:setAuth'),
 
     // Project:
     openProjectDialog: invoke('project:openDialog'),

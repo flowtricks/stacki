@@ -32,6 +32,17 @@ Consult current official Cloudflare and GitHub docs before provisioning.
 Contents read/write and Metadata read. Set the OAuth callback to the Studio origin plus
 /studio/auth/callback. Configure app/client/installation IDs and repository access controls.
 Use public App registration if collaborators outside the owner account must authorize it.
+3b. Ask me how people sign in to Studio: github (default), access (Cloudflare Zero Trust Access in
+front of /studio*; needs ACCESS_TEAM_DOMAIN and the application's ACCESS_AUD tag, no secrets),
+google (GOOGLE_CLIENT_ID, secret GOOGLE_CLIENT_SECRET, redirect URI <origin>/studio/auth/google/callback),
+oidc (OIDC_ISSUER, OIDC_CLIENT_ID, optional OIDC_NAME, secret OIDC_CLIENT_SECRET unless a public PKCE
+client, redirect URI <origin>/studio/auth/oidc/callback) or passkey (nothing to configure). Write only
+the non-secret vars (AUTH_PROVIDER, those above, optional AUTH_ALLOWED_DOMAINS / AUTH_ALLOWED_EMAILS and
+AUTH_BOOTSTRAP_ADMIN such as google:me@example.com) into studio/cloudflare/wrangler.jsonc, never replacing an
+AUTH_PROVIDER that is already there without asking. Tell me to run each secret command myself
+(npx wrangler secret put GOOGLE_CLIENT_SECRET --config cloudflare/wrangler.jsonc); never ask me to
+paste a client secret to you. For access, remind me people must be allowed in the Access policy and
+listed in .stacki/roles.json. The GitHub App credentials stay required in every mode for publishing.
 4. Configure studio/cloudflare from the included templates. Create distinct resource names,
 a private R2 bucket, the container/Worker bindings, Studio routing and the isolated authenticated
 preview origin. Integrate the public site gateway and deployment revision endpoint according to

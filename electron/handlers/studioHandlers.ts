@@ -7,6 +7,8 @@ import type { MainHost } from './mainHost';
 import { translateMain } from '../lib/mainLocale';
 import type { StudioInstallResult } from '../../shared/ipc/studioSetup';
 import { createStudioProgress } from '../project/studioProgress';
+import { writeStudioSignInFile } from '../project/studioAuthFile';
+import type { StudioAuthResult } from '../../shared/ipc/studioSetup';
 
 export function registerStudioHandlers(
   host: Pick<MainHost, 'ipcMain' | 'assertInProject' | 'showOpenDialog' | 'send'>,
@@ -14,6 +16,14 @@ export function registerStudioHandlers(
   desktopVersion: () => string,
 ): void {
   host.ipcMain.handle('studio:status', (_event, project) => studioStatus(path.dirname(host.assertInProject(path.join(project, 'studio'))), desktopVersion()));
+  host.ipcMain.handle('studio:setAuth', async (_event, options): Promise<StudioAuthResult> => {
+    const project = path.dirname(host.assertInProject(path.join(options.projectPath, 'studio')));
+    try {
+      return await setStudioAuth(project, options.auth, desktopVersion());
+    } catch (error: unknown) {
+      return { kind: 'error', message: errorMessage(error) };
+    }
+  });
   host.ipcMain.handle('studio:install', async (_event, options): Promise<StudioInstallResult> => {
     const project = path.dirname(host.assertInProject(path.join(options.projectPath, 'studio')));
     const progress = createStudioProgress({ projectPath: options.projectPath, requestId: options.requestId }, (value) => host.send('studio:progress', value));
@@ -32,7 +42,7 @@ export function registerStudioHandlers(
       }
       return {
         kind: 'installed',
-        version: await installStudio(project, release, progress.update),
+        version: await installStudio(project, release, options.auth ?? { kind: 'github' }, progress.update),
       };
     } catch (error: unknown) {
       return { kind: 'error', message: errorMessage(error) };
@@ -40,6 +50,18 @@ export function registerStudioHandlers(
       progress.close();
     }
   });
+}
+
+async function setStudioAuth(project: string, auth: Parameters<typeof writeStudioSignInFile>[1], desktopVersion: string): Promise<StudioAuthResult> {
+  const status = await studioStatus(project, desktopVersion);
+  if (status.kind !== 'installed') {
+    return { kind: 'error', message: translateMain('error.studio.authNotInstalled') };
+  }
+  const written = await writeStudioSignInFile(path.join(project, 'studio'), auth, 'replace');
+  if (written.ok) {
+    return { kind: 'saved', signIn: written.value };
+  }
+  return { kind: 'error', message: translateMain('error.studio.authWrite') };
 }
 
 async function selectRelease(host: Pick<MainHost, 'showOpenDialog'>, source: 'published' | 'file', version: string, environment: StudioReleaseEnvironment) {
