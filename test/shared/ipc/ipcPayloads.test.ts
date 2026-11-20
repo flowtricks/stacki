@@ -457,6 +457,8 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'page:planSettings': { projectPath: '/site', request: { kind: 'home', page: 'about.astro' } },
   'page:applySettings': { projectPath: '/site', request: { kind: 'rename', from: 'about.astro', to: 'company.astro' } },
   'page:revertSettings': { token: 'page-settings-1', direction: 'redo' },
+  'page:planRemoveMany': { projectPath: '/site', request: { pages: ['about.astro', 'blog/post.md'], folders: ['old'] } },
+  'page:removeMany': { projectPath: '/site', request: { pages: ['about.astro'], folders: [] } },
   'page:readTemplate': { projectPath: '/site', page: 'blog/[slug].astro' },
   'page:retargetTemplate': {
     projectPath: '/site',

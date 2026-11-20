@@ -283,6 +283,8 @@ function pageBridge() {
     planPageSettings: invoke('page:planSettings'),
     applyPageSettings: invoke('page:applySettings'),
     revertPageSettings: invoke('page:revertSettings'),
+    planRemovePages: invoke('page:planRemoveMany'),
+    removePages: invoke('page:removeMany'),
     readPageTemplate: invoke('page:readTemplate'),
     retargetPageTemplate: invoke('page:retargetTemplate'),
     createPageFolder: invoke('pagefolder:create'),

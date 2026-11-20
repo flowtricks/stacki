@@ -1735,6 +1735,14 @@ rename rules plus `index` reserved beside the homepage) and the wire parsers of 
   homepage files or none, a route another file also answers, and any changed text that would not parse.
 - Duplicate copies beside the page as `<name>-copy` (then `-copy-2` …), so relative imports still resolve; deleting
   lists every link that would break by file and line and refuses the homepage.
+- `page:planRemoveMany` and `page:removeMany` are the Pages panel's Select mode (`shared/properties/pageBulkRemove.ts`,
+  `electron/handlers/pageBulkRemovePlan.ts`): several pages and folders deleted as ONE step. The request names pages and
+  folders relative to `src/pages`, at most 500 pages (a folder's own pages count) and 100 folders (its subfolders count),
+  no duplicates, never empty. The plan is the single deletion's (the homepage is refused, every page must be UTF-8 text,
+  broken links are listed) read once for all pages; a folder that holds anything but pages (Finder's `.DS_Store`
+  aside) is refused whole, because Undo restores only what the plan read. `page:removeMany` plans again from disk and
+  writes through the same writer (all pages or none), answering one undo token that `page:revertSettings` takes back
+  byte for byte, folders included, as one Cmd+Z step. Role gate: `page:delete`.
 - `page:readTemplate` reads a CMS template page back into the Create page template dialog's settings
   (`electron/content/pageTemplateRead.ts`): only by writing its pieces again and finding them byte for byte, so a
   template changed by hand reads as `custom` and is shown as code, never rewritten. `page:retargetTemplate` replaces

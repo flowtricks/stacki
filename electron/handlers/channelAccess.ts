@@ -21,6 +21,7 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   // A settings step is a rename, a swap (two renames), a copy (a creation) or a deletion: any page right allows asking.
   'page:applySettings': ['page:rename', 'page:create', 'page:delete'],
   'page:revertSettings': ['page:rename', 'page:create', 'page:delete'],
+  'page:removeMany': ['page:delete'],
   'page:retargetTemplate': ['page:rename'],
   'pagefolder:rename': ['page:rename'],
   'component:create': ['component:create'],

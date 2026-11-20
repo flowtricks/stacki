@@ -285,16 +285,6 @@ export function renameProjectPageFolder(projectPath: string, from: string, to: s
   return window.avb.renamePageFolder(payload).then((input) => void parseOkResult(input));
 }
 
-export function deleteProjectPageFolder(projectPath: string, directory: string): Promise<void> {
-  const payload = parseIpcPayload('pagefolder:delete', { projectPath, dir: directory });
-  return window.avb.deletePageFolder(payload).then((input) => void parseOkResult(input));
-}
-
-export function deleteProjectPage(path: string): Promise<void> {
-  const payload = parseIpcPayload('page:delete', path);
-  return window.avb.deletePage(payload).then((input) => void parseOkResult(input));
-}
-
 export function readProjectAsset(projectPath: string, rel: string): Promise<string> {
   const payload = parseIpcPayload('assets:readText', { projectPath, rel });
   return window.avb.readAssetText(payload).then((input) => text(record(input)['text']));

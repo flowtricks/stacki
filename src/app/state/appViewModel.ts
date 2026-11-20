@@ -29,7 +29,6 @@ import {
   usePageCreation,
   usePageMoves,
   useRenamePageFolder,
-  useDeletePageFolder,
   useSelectionModel,
   useCreateFrom,
   useSelectedSchema,
@@ -49,7 +48,6 @@ export function usePageOps(
   const pageCreation = usePageCreation(coreState, lifecycle, navigation);
   const pageMoves = usePageMoves(coreState, lifecycle, navigation);
   const renamePageFolderScope = useRenamePageFolder(coreState, lifecycle, navigation);
-  const deletePageFolderScope = useDeletePageFolder(coreState, lifecycle, navigation);
   const selectionModel = useSelectionModel(shortcuts, coreState, history);
   const createFromScope = useCreateFrom(shortcuts, coreState, selectionModel, nodeEdits);
   const selectedSchemaScope = useSelectedSchema(selectionModel, layoutChange, shortcuts, coreState, createFromScope);
@@ -58,7 +56,6 @@ export function usePageOps(
     ...pageCreation,
     ...pageMoves,
     ...renamePageFolderScope,
-    ...deletePageFolderScope,
     ...selectionModel,
     ...createFromScope,
     ...selectedSchemaScope,

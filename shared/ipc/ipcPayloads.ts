@@ -52,6 +52,7 @@ import {
   parseSecretValue,
 } from '../properties/pageTemplate';
 import { parsePageSettingsDirection, parsePageSettingsRequest } from '../properties/pageSettings';
+import { parsePageBulkRemoveRequest } from '../properties/pageBulkRemove';
 import { renamePath } from '../properties/pageRename';
 import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
@@ -690,6 +691,9 @@ export const IPC_PAYLOADS = {
   'page:planSettings': object({ ...project, request: parsePageSettingsRequest }),
   'page:applySettings': object({ ...project, request: parsePageSettingsRequest }),
   'page:revertSettings': object({ token: text, direction: parsePageSettingsDirection }),
+  // The Pages panel's Select mode (pageBulkRemove.ts): the plan its confirm shows and the deletion itself, several pages and folders as one step with one undo token.
+  'page:planRemoveMany': object({ ...project, request: parsePageBulkRemoveRequest }),
+  'page:removeMany': object({ ...project, request: parsePageBulkRemoveRequest }),
   'page:readTemplate': object({ ...project, page: renamePath }),
   'page:retargetTemplate': object({ ...project, page: renamePath, source: parseDataSource }),
   'page:parse': object({ pagePath: pathText, source: text }),

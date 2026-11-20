@@ -105,6 +105,8 @@ interface InvokeChannels {
   readonly planPageSettings: 'page:planSettings';
   readonly applyPageSettings: 'page:applySettings';
   readonly revertPageSettings: 'page:revertSettings';
+  readonly planRemovePages: 'page:planRemoveMany';
+  readonly removePages: 'page:removeMany';
   readonly readPageTemplate: 'page:readTemplate';
   readonly retargetPageTemplate: 'page:retargetTemplate';
   readonly createPageFolder: 'pagefolder:create';

@@ -115,10 +115,8 @@ function useUiActions(scope: AppScope) {
   const onSelectPage = useVoidAction(report, scope.selectPage);
   const onSelectRoute = useVoidAction(report, scope.selectRoute);
   const onCreatePage = useVoidAction(report, scope.createPage);
-  const onDeletePage = useVoidAction(report, scope.deletePage);
   const onMovePage = useVoidAction(report, scope.movePageTo);
   const onRenamePageFolder = useVoidAction(report, scope.renamePageFolder);
-  const onDeletePageFolder = useVoidAction(report, scope.deletePageFolder);
   const onChangeLayout = useVoidAction(report, scope.changeLayout);
   const onDropComponent = useVoidAction(report, scope.addComponent);
   const onPasteNode = useVoidAction(report, scope.pasteNode);
@@ -133,10 +131,8 @@ function useUiActions(scope: AppScope) {
     onSelectPage,
     onSelectRoute,
     onCreatePage,
-    onDeletePage,
     onMovePage,
     onRenamePageFolder,
-    onDeletePageFolder,
     onChangeLayout,
     onDropComponent,
     onPasteNode,
