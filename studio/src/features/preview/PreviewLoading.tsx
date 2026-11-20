@@ -1,5 +1,5 @@
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { handshakeWait, HANDSHAKE_LIMITS, parsePreviewError, type HandshakeWait } from './previewHandshake';
 import { STARTUP_LIMITS, type StartupView } from '../startup/startupStages';
 import { STARTUP_STAGE_KEYS } from '../startup/startupText';
@@ -19,7 +19,10 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
   const [slow, setSlow] = useState(false);
   const [wait, setWait] = useState<HandshakeWait>({ kind: 'address' });
   const [frameError, setFrameError] = useState<string>();
+  const errorRef = useRef<string>();
   const [attempt, setAttempt] = useState(0);
+  // Frames that fired a load event. A cross-origin frame's document cannot be read, so the event is the evidence.
+  const loads = useRef(new Set<EventTarget>());
   const session = `${canvas}:${attempt}`;
   const key = `${url ?? ''}:${session}`;
   // Attach before yielding to the browser so a cached frame cannot announce
@@ -38,6 +41,7 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
       const data: unknown = event.data;
       const failure = parsePreviewError(data);
       if (failure !== undefined) {
+        errorRef.current = failure;
         setFrameError(failure);
         return;
       }
@@ -47,8 +51,18 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
         setReady({ session, path: path ?? pagePath(url) });
       }
     };
+    // A load event does not bubble, so the listener captures on the container.
+    const element = container.current;
+    const loaded = (event: Event) => {
+      if (event.target instanceof HTMLIFrameElement) {
+        loads.current.add(event.target);
+      }
+    };
+    loads.current.clear();
+    element?.addEventListener('load', loaded, true);
     window.addEventListener('message', receive);
     return () => {
+      element?.removeEventListener('load', loaded, true);
       window.removeEventListener('message', receive);
     };
   }, [url, container, key, session]);
@@ -62,10 +76,17 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
     }
     const timer = setTimeout(() => {
       const frames = [...(container.current?.querySelectorAll('iframe') ?? [])];
-      // An iframe's load event does not bubble, so the document it holds is the evidence a page loaded.
-      const loaded = frames.filter((frame) => frame.contentDocument === null || frame.contentDocument.readyState === 'complete').length;
-      setWait(handshakeWait({ url, frames: frames.length, framesLoaded: loaded }));
+      const loaded = frames.filter((frame) => loads.current.has(frame)).length;
+      const waiting = handshakeWait({ url, frames: frames.length, framesLoaded: loaded });
+      setWait(waiting);
       setSlow(true);
+      reportWait({
+        stage: waiting.kind,
+        frames: frames.length,
+        framesLoaded: loaded,
+        frameError: errorRef.current ?? '',
+        page: url === undefined ? '' : pagePath(url),
+      });
     }, HANDSHAKE_LIMITS.slowAfterMs);
     return () => clearTimeout(timer);
   }, [shown, session, url, container]);
@@ -81,6 +102,22 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
       refresh();
     },
   };
+}
+
+// Tells the Worker the canvas has waited too long (clientDiagnostics.ts), so a stuck canvas can be
+// read from `wrangler tail` without the person's console. A failure to report is not worth a second one.
+function reportWait(report: {
+  readonly stage: HandshakeWait['kind'];
+  readonly frames: number;
+  readonly framesLoaded: number;
+  readonly frameError: string;
+  readonly page: string;
+}) {
+  void fetch('/studio/api/client-diagnostics', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...report, startupStage: '', userAgent: navigator.userAgent.slice(0, 200) }),
+  }).catch(() => undefined);
 }
 
 /** The page a URL names: its path and query, without the editor's fragment. */
