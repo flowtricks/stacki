@@ -305,8 +305,10 @@ test('5,000 nodes searched with selector queries cost no more than the same work
   const smallIndex = search.buildNavigatorIndex(small);
   const passes = Math.ceil(5_000 / 65);
   for (const query of ['.qq-none', '[data-qq=none]', '<qqnone>', '/* qq none']) {
-    const largeTime = bestOf(7, () => search.searchNavigator(large, largeIndex, query));
-    const smallTime = bestOf(7, () => {
+    // The best of 21 samples rather than 7: each walk of 65 takes microseconds, so one scheduling hiccup
+    // on a shared runner moved the ratio past its bound (6.05 against 6 on Linux, Check on 01fd65b9).
+    const largeTime = bestOf(21, () => search.searchNavigator(large, largeIndex, query));
+    const smallTime = bestOf(21, () => {
       for (let pass = 0; pass < passes; pass += 1) {
         search.searchNavigator(small, smallIndex, query);
       }
