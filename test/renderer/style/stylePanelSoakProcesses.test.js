@@ -15,6 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { after, test } = require('node:test');
 const soak = require('../../helpers/e2e/soakProcesses.js');
+const { repoPath } = require('../../helpers/sources.js');
 
 const WAIT_MS_MAX = 10000;
 // This suite's own folder for fake runs: the reaper is pointed at it, never at the temp folder
@@ -156,7 +157,7 @@ test('the reaper removes a stale run directory and keeps a live one', REAL_PROCE
 test('the soak runner keeps the app window hidden: it never takes the screen', () => {
   // The run shows no window by design of the harness, not of the app, so the entry file must stub both ways of showing one
   // before the app's main module is loaded (the app itself shows its window on the first frame).
-  const entry = fs.readFileSync(path.join(__dirname, '../../helpers/e2e/electronEntry.js'), 'utf8');
+  const entry = fs.readFileSync(repoPath('test/helpers/e2e/electronEntry.js'), 'utf8');
   const stubs = entry.indexOf('BrowserWindow.prototype.show = ');
   const inactive = entry.indexOf('BrowserWindow.prototype.showInactive = ');
   const loadsApp = entry.indexOf("require(repoPath('dist/electron/main.js'))");
