@@ -33,6 +33,8 @@ export type { ProviderId, QualifiedIdentity, SignInProblem };
 
 // The bounds live beside the parsers that enforce them (AGENTS.md §10).
 export const AUTH_LIMITS = {
+  /** The hint shown in the Roles panel's invite form for a custom provider's identifier field. */
+  inviteHintCharsMax: 80,
   /** The sentence a person reads on the sign-in button: "Continue with <name>". */
   displayNameCharsMax: 40,
   /** A signed-in person's name in the account menu and presence. */
@@ -137,6 +139,17 @@ export interface AuthProvider {
    * `email:` identity and the stable `google:<sub>` one). Core drops any alias outside the provider's namespace.
    */
   readonly memberKeys?: (principal: Principal) => readonly string[];
+  /**
+   * Optional, for the Roles panel's "Invite member" form of a CUSTOM provider: a short hint for the identifier field
+   * ("work email", "employee number"). Plain text, at most 80 characters. Without it the form says "Identifier".
+   */
+  readonly inviteHint?: string;
+  /**
+   * Optional: turn what an admin typed into this provider's subject (lowercase an email, strip a prefix), or undefined when
+   * it is not one. Core adds `<id>:<subject>` to roles.json only if the result parses as an identity in your namespace.
+   * Without it the typed text is used as the subject after the same bounds every identity has.
+   */
+  readonly parseInviteIdentifier?: (input: string) => string | undefined;
 }
 
 /** What core gives a provider factory at startup. `environment` holds Worker vars and secrets minus core's own credentials. */
@@ -201,11 +214,15 @@ export function validateAuthProvider(input: unknown, origin: 'built-in' | 'custo
       return err(`provider.${required} must be a function`);
     }
   }
-  for (const optional of ['handle', 'canEdit', 'canManage', 'memberKeys']) {
+  for (const optional of ['handle', 'canEdit', 'canManage', 'memberKeys', 'parseInviteIdentifier']) {
     const value = field(input, optional);
     if (value !== undefined && typeof value !== 'function') {
       return err(`provider.${optional} must be a function when present`);
     }
+  }
+  const hint = field(input, 'inviteHint');
+  if (hint !== undefined && (typeof hint !== 'string' || hint.length > AUTH_LIMITS.inviteHintCharsMax || CONTROL_CHARACTERS.test(hint))) {
+    return err(`provider.inviteHint: at most ${AUTH_LIMITS.inviteHintCharsMax} printable characters`);
   }
   // The checks above prove each member's type; the interface is structural, so the checked object is the provider.
   return ok(input as AuthProvider);

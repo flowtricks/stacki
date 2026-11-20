@@ -2,7 +2,7 @@
 
 > **Experimental.** This interface may change in minor versions. Pin your Studio version, read the release notes before updating, and re-run your provider's conformance test after each update.
 
-Hosted Studio signs people in with **GitHub** and that stays the default: with no extra files, nothing here changes. This page is for an instance owner or fork who wants Google, email one-time codes, SSO/OIDC or passkeys instead, **without editing Studio core**. Stacki does not ship any other provider and does not promise to; this is the seam to build one on.
+Hosted Studio signs people in with **GitHub** and that stays the default: with no extra files and no `AUTH_PROVIDER`, nothing here changes. Studio also ships four other built-in options, chosen with one variable (see [Built-in providers](#built-in-providers)): **Cloudflare Access**, **Google**, **SSO (OpenID Connect)** and **passkeys**. Beyond those, this page is for an instance owner or fork who wants any other method **without editing Studio core**: the interface below is the seam the built-in providers are built on.
 
 ## What a provider does, and what core keeps
 
@@ -29,6 +29,8 @@ export interface AuthProvider {
   canEdit?(principal: Principal, freshness: 'cached' | 'fresh'): Promise<boolean>;
   canManage?(principal: Principal): Promise<boolean>;
   memberKeys?(principal: Principal): readonly string[];
+  inviteHint?: string; // Roles panel invite form: a hint for the identifier field (custom providers).
+  parseInviteIdentifier?(input: string): string | undefined; // ...and how to turn what an admin typed into your subject.
 }
 export type AuthProviderFactory = (setup: { origin: string; environment: Readonly<Record<string, unknown>> }) => AuthProvider;
 ```
@@ -76,7 +78,96 @@ For a form that emails a code, or a passkey challenge. Core calls `handle` for a
 
 `canEdit` answers "may this person use this Studio at all". Without it nobody can edit, unless you set `EDITOR_ACCESS` to **`authenticated`** (any person your provider verifies). `github` and `repository` mean GitHub's rules and do nothing for another provider. `canManage` answers who may connect a CMS or media host and manage Studio updates; without it nobody can (the built-in provider uses GitHub repository Write or Admin).
 
-Publishing uses the GitHub App's installation token on the server, so signed-in people who have no GitHub account can still publish. Their identity is **not** attached to the Git commit author.
+Publishing uses the GitHub App's installation token on the server, so signed-in people who have no GitHub account can still publish. Commits are authored by the app; for a person who is not a GitHub person the commit message gains a footer line, `Edited by google:a@b.com via Stacki Studio` (a parsed identity, printable ASCII, one line, so it cannot forge a trailer).
+
+## Built-in providers
+
+Order everywhere: **GitHub (default)**, Cloudflare Access, Google, SSO (OIDC), passkeys. GitHub is untouched: no `AUTH_PROVIDER`, or `AUTH_PROVIDER=github`, is today's behaviour.
+
+### The config contract
+
+Set in `studio/cloudflare/wrangler.jsonc` `vars` (secrets with `wrangler secret put`). The build reads `AUTH_PROVIDER` and bundles only that provider; changing it needs `npm run build`. An unknown value stops the build and answers 503 at runtime, naming the allowed values; a build made for one provider run with another id also answers 503. Nothing ever falls back to GitHub. `astro-studio check-project` reports missing or invalid variables per provider and lists the secrets to set.
+
+| Variable                                                              | `access`                           | `google`                               | `oidc`                                                                                                                              | `passkey`          |
+| --------------------------------------------------------------------- | ---------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `AUTH_PROVIDER`                                                       | `access`                           | `google`                               | `oidc`                                                                                                                              | `passkey`          |
+| Provider vars                                                         | `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | `GOOGLE_CLIENT_ID`                     | `OIDC_ISSUER`, `OIDC_CLIENT_ID`; optional `OIDC_SCOPES` (default `openid email profile`), `OIDC_NAME` (button label, default `SSO`) | none               |
+| Secrets                                                               | none                               | `GOOGLE_CLIENT_SECRET`                 | `OIDC_CLIENT_SECRET` (absent: public client, PKCE only)                                                                             | none               |
+| `AUTH_BOOTSTRAP_ADMIN` (required)                                     | `access:me@example.com`            | `google:me@example.com`                | `oidc:me@example.com`                                                                                                               | `passkey:owner`    |
+| `AUTH_ALLOWED_EMAILS`, `AUTH_ALLOWED_DOMAINS` (optional, comma lists) | yes                                | yes                                    | yes                                                                                                                                 | not used           |
+| Identity                                                              | `access:<lowercased email>`        | `google:<verified lowercased email>`   | `oidc:<verified email, else sub>`                                                                                                   | `passkey:<handle>` |
+| Redirect URI to register                                              | none                               | `<origin>/studio/auth/google/callback` | `<origin>/studio/auth/oidc/callback`                                                                                                | none               |
+
+GitHub App credentials (`GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`, `GITHUB_PRIVATE_KEY`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`) stay **required in every mode**: non-GitHub editors publish through the app, and the Worker reads `.stacki/roles.json` from the repository with it.
+
+### Who may edit and manage (the same for all four)
+
+1. **`.stacki/roles.json` is the authority.** A member of any role (written as the qualified identity, `google:a@b.com`) may edit; a member of the **admin** role may manage (CMS and media connections, Studio updates, passkey invites). The file is read from the published branch and cached for a minute.
+2. **Allow-lists add default-role editors.** A person in no role whose verified email is in `AUTH_ALLOWED_EMAILS`, or whose domain is in `AUTH_ALLOWED_DOMAINS`, may edit and gets the file's `defaultRole`. They never manage. `EDITOR_ACCESS=roles` switches the allow-lists off.
+3. `EDITOR_ACCESS=authenticated` admits every person the provider verified. Not recommended for Google or SSO.
+4. **Bootstrap.** `AUTH_BOOTSTRAP_ADMIN` is admin and editor only while no valid roles file exists, so a new site has an owner. The moment the file lists admins it takes over completely: add the bootstrap identity to it, or it stops being special. A roles file that does not parse grants nobody anything; the bootstrap admin can still fix it. Without a roles file, the container treats every editor as admin, as it always has.
+
+Spellings: identities of these providers compare exactly, so write them lowercase in `roles.json`.
+
+### Cloudflare Access
+
+Cloudflare Access sits in front of the Worker and forwards a signed JWT in `Cf-Access-Jwt-Assertion`. Studio has no login of its own in this mode: it verifies that JWT (RS256 only, signature against `https://<team>/cdn-cgi/access/certs`, `iss` `https://<team>`, `aud` your application's tag, expiry) and never reads headers such as `Cf-Access-Authenticated-User-Email`, which any client can send when Access is not in front.
+
+Dashboard steps, in prose:
+
+1. In the Cloudflare dashboard open **Zero Trust**, then **Access**, then **Applications**, and choose **Add an application**, type **Self-hosted**.
+2. Name it (for example "Stacki Studio"). Under **Application domain** add the Studio hostname with the path `/studio*`. For a workers.dev Studio use the Worker's **Access** toggle (Workers & Pages, your Worker, Settings, Domains & Routes) which creates the application for you; for a custom domain add the hostname yourself.
+3. Add a policy: **Allow**, and include the emails, email domains or identity-provider groups that may sign in. Access is the first gate; `roles.json` still decides what each person may do.
+4. Save, then open the application and copy its **Application Audience (AUD) Tag**. Your **team domain** is shown under Zero Trust, Settings, Custom Pages (it looks like `myteam.cloudflareaccess.com`).
+5. Set `AUTH_PROVIDER=access`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `AUTH_BOOTSTRAP_ADMIN=access:you@example.com`, then build and deploy.
+
+Notes: do **not** put Access in front of the preview hostname (`PREVIEW_ORIGIN`); the preview uses Studio's own preview tokens, and an Access login there would break the editor's canvas. When Access protects only `/studio*`, requests the Worker answers elsewhere are unaffected; Studio verifies the JWT itself, so it also refuses requests that reach the Worker without passing Access. If a request arrives without a valid JWT (Access not in front of this hostname or path) Studio shows an explanation instead of a sign-in button. A service token (no email) signs in as `access:service-<client id>`, may edit only if `roles.json` lists it, and manages only if it is an admin member. Sign out of Access itself at `https://<team>/cdn-cgi/access/logout`.
+
+### Google
+
+Authorization Code with PKCE. In Google Cloud Console create an OAuth client of type **Web application** and add the redirect URI `<STUDIO_ORIGIN>/studio/auth/google/callback`. The ID token is verified (signature against Google's published keys, `iss`, `aud`, `exp`, `nonce`) and only `email_verified: true` is accepted. With `AUTH_ALLOWED_DOMAINS`, an address on a listed domain must also carry the matching `hd` (Workspace) claim, because the same address registered at a consumer Google account is not controlled by your domain; an `hd` that disagrees with the address is always refused. The identity is the email, which Google can in principle reassign: removing someone from your Workspace should also remove them from `roles.json`.
+
+### SSO (OpenID Connect)
+
+Any standards-compliant provider (Okta, Entra ID, Auth0, Keycloak, Google Workspace through OIDC). Register the redirect URI `<STUDIO_ORIGIN>/studio/auth/oidc/callback`. Endpoints come from `<OIDC_ISSUER>/.well-known/openid-configuration` (https only, cached an hour, stale for a day); the document's `issuer` must equal `OIDC_ISSUER` exactly. ID tokens must be RS256 or ES256 (`none` and everything else refused), with exact `iss`, `aud` (with `azp` for several), `exp`/`nbf` with 60 seconds of skew, `nonce`, and `at_hash` when both are present. Identity rule: **`oidc:<verified lowercased email>` when the ID token has `email` with `email_verified` true, else `oidc:<sub>`**; a `sub` that looks like an email, or has spaces or commas, is refused as a fallback so an opaque id can never pose as someone else's address. Include `email` in the ID token (scope `email`, or a claim mapping) to name people by email. The token endpoint uses `client_secret_basic` when offered, else `client_secret_post`; with no secret the client is public and PKCE alone protects the exchange.
+
+### Passkeys
+
+No external service: WebAuthn on Web Crypto in the Worker, with a hand-written bounded CBOR reader (no new dependency; AGENTS.md section 17). Supported: attestation `none` and `packed` self attestation; ES256, RS256 and EdDSA. Attestation is not trust-checked: Studio asks "is this the same key as last time", not "which device".
+
+- **Storage.** Handles, passkeys (id, public key, counter, label), invites and challenges live in the instance's Durable Object storage, never in Git. Invite codes are stored only as hashes.
+- **Enrolment by invite.** An admin (`canManage`) creates an invite for a handle (`client-acme`: lowercase letters, digits, `.`, `_`, `-`, up to 64) with an optional display name. It returns a one-time link, `<origin>/studio/auth/login?invite=<code>`, **valid seven days, single use**. The invitee opens it and creates a passkey on their device; the invite is spent in the same transaction that stores the passkey. List `passkey:<handle>` as a member in `roles.json`.
+- **Sign-in.** The page offers "Sign in with a passkey" (discoverable credentials; conditional UI where the browser supports it). A challenge is single use, expires in five minutes, and is bound to the browser flow that asked for it.
+- **Recovery.** An admin can remove one passkey, issue a new invite for the same handle (a new device), or **lock the handle out**: its passkeys and invites are deleted, its live sessions stop working within seconds, and no new invite for that handle is accepted for eight hours (the longest session), so no old session can come back to life. Use a new handle if you need access sooner.
+- **RP ID and origin.** The relying-party ID is the Studio hostname and the origin check is exact. A passkey made on `studio.example.com` does not work on a workers.dev hostname or on another domain: **decide the final hostname before inviting people**, and re-invite everyone if it changes.
+- **Checks.** `rpIdHash`, the user-present flag, the signature, and a signature counter that must advance (a counter that goes back is refused as a cloned authenticator; authenticators that always send zero are allowed). User verification is requested as `preferred`.
+- **Administration API** (managers only, same-origin): `GET /studio/api/auth/passkeys` lists handles, passkeys and pending invites (never codes); `POST` takes `{action: "invite", handle, displayName?}`, `revokeInvite {hash}`, `removeCredential {id}`, `lock {handle}`. `GET /studio/api/auth/info` tells the Roles panel which provider the site uses and whether the person may manage.
+
+### Inviting people from the Roles panel
+
+The invite form adapts to the site's sign-in method (`GET /studio/api/auth/info` says which) and never offers one the site is not configured for. Source: `src/features/roles/memberInvite.ts`.
+
+| Site uses         | Admin enters                                                              | Written to `roles.json`                                                    | The person is told                                                                                 |
+| ----------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| GitHub            | a username                                                                | the bare login (every existing file's form)                                | sign in at `<origin>/studio` with that GitHub account                                              |
+| Cloudflare Access | an email                                                                  | `access:<email>`                                                           | the same, and a reminder that Zero Trust must also allow them (Stacki cannot edit Access policies) |
+| Google            | an email                                                                  | `google:<email>`                                                           | sign in at `<origin>/studio` with that Google account                                              |
+| SSO               | an email                                                                  | `oidc:<email>`                                                             | the same with your SSO                                                                             |
+| Passkeys          | a handle and optional name                                                | `passkey:<handle>`, plus a one-time invite link from the passkey admin API | open the link (valid seven days, single use)                                                       |
+| Custom provider   | an identifier (hint from `inviteHint`, shaped by `parseInviteIdentifier`) | `<id>:<subject>`                                                           | sign in with `displayName`                                                                         |
+
+No email is sent: Stacki has no email sender, so the admin copies the link and sends it. Every change is recorded in the commit message of the `roles.json` change (`Invite google:a@b.com as Editor`). Only admins may invite (the roles file write needs the admin role, and passkey invites need `canManage`, both checked on the server). A person belongs to one role, so inviting someone who is already listed moves them; the last admin cannot be removed or moved.
+
+### Rate limits and logging
+
+Every public route has a bounded in-memory limiter (per connecting address): 20 sign-in starts or callbacks per minute, 30 passkey ceremony steps per minute, up to 2,048 addresses tracked. Responses from identity services are read with a ten-second timeout, no redirects and a 64 KiB cap. Tokens, codes, secrets and upstream response bodies are never logged; refusals log a reason code only.
+
+### Security decisions
+
+- The PKCE verifier and nonce are derived (HMAC) from core's one-time `state` and the session secret, so nothing is stored between the redirect and the callback, and a Durable Object restart cannot break a sign-in.
+- Algorithms come from an allow-list and the key must match: an RS256 header never verifies with an EC key, and `none` or HS256 are refused before any key is read.
+- JWKS refetch happens at most once a minute for an unknown `kid`; a stale key set serves for a day during an outage.
+- Core still owns the session, `state`, headers and the callback path; the built-in providers only say who someone is. The per-provider callback `/studio/auth/<id>/callback` is handled by core exactly like `/studio/auth/callback`.
 
 ## Install a provider
 
@@ -86,7 +177,7 @@ Publishing uses the GitHub App's installation token on the server, so signed-in 
 4. `npm run build`. The build picks the file up, type-checks it against the interface, and **fails with the compiler's errors** when it does not fit. Remove the file and build again to return to GitHub sign-in.
 5. Deploy. The sign-in page now says "Continue with `<displayName>`" in the visitor's language and no longer shows GitHub's name or mark.
 
-A Worker cannot choose a module at runtime, so there is no `AUTH_PROVIDER` variable: the choice is made by the build, which writes `src/cloudflare/authProviderSlot.ts`. Never edit that file; the build regenerates it (committing the regenerated file is fine). If the provider throws at startup the instance answers 503 and logs it; it never falls back to GitHub, so a misconfigured provider cannot silently open the door another way.
+A custom provider file overrides `AUTH_PROVIDER` when present. A Worker cannot choose a module at runtime, so the choice is made by the build, which writes `src/cloudflare/authProviderSlot.ts` (custom provider) and `src/cloudflare/builtInProviderSlot.ts` (built-in provider). Never edit that file; the build regenerates it (committing the regenerated file is fine). If the provider throws at startup the instance answers 503 and logs it; it never falls back to GitHub, so a misconfigured provider cannot silently open the door another way.
 
 A provider is trusted code running inside your Worker. Core limits what it is handed and checks everything it returns; it is not a sandbox.
 
@@ -150,6 +241,6 @@ runAuthProviderConformance({
 
 ## What stays in core
 
-GitHub as the only built-in provider and the default. The session, the cookie and its flags, preview sessions, sign-out, `state`/CSRF, rate-limit cooldown, the sign-in page and its translations (English, German, Spanish, French, Brazilian Portuguese), `roles.json` resolution, the publishing credentials, and the container's trust in the Worker. Other providers are not implemented in core.
+GitHub as the default provider. The session, the cookie and its flags, preview sessions, sign-out, `state`/CSRF, rate-limit cooldown, the sign-in page and its translations (English, German, Spanish, French, Brazilian Portuguese), `roles.json` resolution, the publishing credentials, and the container's trust in the Worker. The built-in non-GitHub providers live beside the seam (`src/features/auth/providers/`) and use only what a custom provider could use, plus the session secret to derive per-sign-in values (never to sign a session).
 
-Not covered by providers today: Git commit authorship for non-GitHub people, GitHub-avatar presence for them (they appear by name), and the Desktop app (it has no sign-in).
+Not covered by providers today: GitHub-avatar presence for non-GitHub people (they appear by name), the Desktop app (it has no sign-in), and Git commit authorship (the app is the author; the editor is named in the message).

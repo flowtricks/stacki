@@ -21,6 +21,7 @@ export async function passkeyAdminRoute(request: Request, url: URL, environment:
         displayName: runtime.provider.displayName,
         // `custom` providers get a generic identifier field; the built-in ones have a form of their own.
         kind: runtime.installed,
+        ...(runtime.installed === 'custom' && runtime.provider.inviteHint !== undefined ? { inviteHint: runtime.provider.inviteHint } : {}),
         canManage: await mayManage(runtime, identity).catch(() => false),
         origin: environment.STUDIO_ORIGIN,
       },
