@@ -24,6 +24,8 @@ export async function passkeyAdminRoute(request: Request, url: URL, environment:
         ...(runtime.installed === 'custom' && runtime.provider.inviteHint !== undefined ? { inviteHint: runtime.provider.inviteHint } : {}),
         canManage: await mayManage(runtime, identity).catch(() => false),
         origin: environment.STUDIO_ORIGIN,
+        // Who is asking, as roles.json names them: a GitHub person by bare login (as every existing file does), others qualified.
+        me: identity.github === undefined ? identity.identity : identity.github.login,
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );

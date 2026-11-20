@@ -83,10 +83,10 @@ async function render(view: string | undefined): Promise<string> {
   return html;
 }
 
-test('the root lists Desktop’s Secrets and MCP as links, and not Instructions', async () => {
+test('the root lists Secrets, MCP and Roles as links, and not Instructions', async () => {
   const html = await render(undefined);
-  assert.equal((html.match(/settings-link/g) ?? []).length, 2, 'two links');
-  for (const view of ['Secrets', 'MCP']) {
+  assert.equal((html.match(/settings-link/g) ?? []).length, 3, 'Secrets, MCP and Roles');
+  for (const view of ['Secrets', 'MCP', 'Roles']) {
     assert.match(html, new RegExp(`settings-link[^>]*>.*?<span class="label">${view}</span>`), `${view} link`);
   }
   assert.doesNotMatch(html, /Instructions/, 'Instructions is not ported to hosted Studio');
