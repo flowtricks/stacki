@@ -74,7 +74,16 @@ export const messages = {
   'studio.inspector.close': 'Einstellungen schließen',
   'studio.inspector.label': 'Element-Inspektor',
   'studio.login.button': 'Mit GitHub anmelden',
+  'studio.login.buttonProvider': 'Weiter mit {provider}',
   'studio.login.failedHeading': 'Anmeldung nicht möglich',
+  'studio.login.neutral.access': 'Dein Konto darf diese Website nicht bearbeiten. Bitte den Website-Inhaber um Zugriff und melde dich dann erneut an.',
+  'studio.login.neutral.cancelled': 'Die Anmeldung wurde abgebrochen. Versuche es unten erneut.',
+  'studio.login.neutral.configuration': 'Die Anmeldung erfordert Aufmerksamkeit des Website-Inhabers. Bitte ihn, die Anmelde-Konfiguration zu prüfen.',
+  'studio.login.neutral.email': 'Deine E-Mail-Adresse konnte nicht bestätigt werden. Bestätige sie bei deinem Anmeldeanbieter und versuche es erneut.',
+  'studio.login.neutral.expired': 'Dieser Anmeldelink ist abgelaufen oder wurde bereits verwendet. Starte unten eine neue Anmeldung.',
+  'studio.login.neutral.rateLimit': 'Die Anmeldung ist vorübergehend begrenzt. Bitte warte, bevor du es erneut versuchst.',
+  'studio.login.neutral.unavailable':
+    'Die Anmeldung ist vorübergehend nicht verfügbar. Versuche es unten erneut. Falls es weiterhin nicht klappt, wende dich an den Website-Inhaber.',
   'studio.login.problem.access': 'Dein GitHub-Konto benötigt Schreibzugriff auf dieses Repository. Nimm die Einladung an und melde dich dann erneut an.',
   'studio.login.problem.cancelled': 'Die GitHub-Autorisierung wurde abgebrochen. Versuche es erneut und autorisiere Stacki Studio.',
   'studio.login.problem.configuration':

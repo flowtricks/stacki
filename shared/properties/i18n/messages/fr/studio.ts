@@ -73,7 +73,16 @@ export const messages = {
   'studio.inspector.close': 'Fermer les réglages',
   'studio.inspector.label': 'Inspecteur d’élément',
   'studio.login.button': 'Se connecter avec GitHub',
+  'studio.login.buttonProvider': 'Continuer avec {provider}',
   'studio.login.failedHeading': 'Connexion impossible',
+  'studio.login.neutral.access': 'Votre compte n’est pas autorisé à modifier ce site. Demandez l’accès au propriétaire du site, puis reconnectez-vous.',
+  'studio.login.neutral.cancelled': 'La connexion a été annulée. Réessayez ci-dessous.',
+  'studio.login.neutral.configuration': 'La connexion nécessite l’attention du propriétaire du site. Demandez-lui de vérifier la configuration de connexion.',
+  'studio.login.neutral.email': 'Votre adresse e-mail n’a pas pu être vérifiée. Vérifiez-la auprès de votre fournisseur de connexion, puis réessayez.',
+  'studio.login.neutral.expired': 'Ce lien de connexion a expiré ou a déjà été utilisé. Lancez une nouvelle connexion ci-dessous.',
+  'studio.login.neutral.rateLimit': 'La connexion est temporairement limitée. Patientez avant de réessayer.',
+  'studio.login.neutral.unavailable':
+    'La connexion est temporairement indisponible. Réessayez ci-dessous. Si le problème persiste, contactez le propriétaire du site.',
   'studio.login.problem.access': 'Votre compte GitHub a besoin d’un accès en écriture à ce dépôt. Acceptez son invitation, puis reconnectez-vous.',
   'studio.login.problem.cancelled': 'L’autorisation GitHub a été annulée. Réessayez et autorisez Stacki Studio.',
   'studio.login.problem.configuration':

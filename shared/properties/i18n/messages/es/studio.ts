@@ -72,7 +72,16 @@ export const messages = {
   'studio.inspector.close': 'Cerrar ajustes',
   'studio.inspector.label': 'Inspector de elementos',
   'studio.login.button': 'Iniciar sesión con GitHub',
+  'studio.login.buttonProvider': 'Continuar con {provider}',
   'studio.login.failedHeading': 'No se pudo iniciar sesión',
+  'studio.login.neutral.access': 'Tu cuenta no tiene permiso para editar este sitio web. Pide acceso al propietario del sitio y vuelve a iniciar sesión.',
+  'studio.login.neutral.cancelled': 'Se canceló el inicio de sesión. Inténtalo de nuevo abajo.',
+  'studio.login.neutral.configuration': 'El inicio de sesión necesita atención del propietario del sitio. Pídele que revise la configuración de acceso.',
+  'studio.login.neutral.email': 'No se pudo verificar tu correo electrónico. Verifícalo con tu proveedor de inicio de sesión e inténtalo de nuevo.',
+  'studio.login.neutral.expired': 'Este enlace de acceso caducó o ya se usó. Inicia un nuevo acceso abajo.',
+  'studio.login.neutral.rateLimit': 'El inicio de sesión está limitado temporalmente. Espera antes de volver a intentarlo.',
+  'studio.login.neutral.unavailable':
+    'El inicio de sesión no está disponible temporalmente. Inténtalo de nuevo abajo. Si continúa, contacta con el propietario del sitio.',
   'studio.login.problem.access': 'Tu cuenta de GitHub necesita acceso de escritura a este repositorio. Acepta su invitación y vuelve a iniciar sesión.',
   'studio.login.problem.cancelled': 'Se canceló la autorización de GitHub. Inténtalo de nuevo y autoriza Stacki Studio.',
   'studio.login.problem.configuration':

@@ -72,7 +72,16 @@ export const messages = {
   'studio.inspector.close': 'Fechar configurações',
   'studio.inspector.label': 'Inspetor de elementos',
   'studio.login.button': 'Entrar com o GitHub',
+  'studio.login.buttonProvider': 'Continuar com {provider}',
   'studio.login.failedHeading': 'Não foi possível entrar',
+  'studio.login.neutral.access': 'Sua conta não tem permissão para editar este site. Peça acesso ao proprietário do site e entre novamente.',
+  'studio.login.neutral.cancelled': 'O login foi cancelado. Tente novamente abaixo.',
+  'studio.login.neutral.configuration': 'O login precisa da atenção do proprietário do site. Peça que ele confira a configuração de login.',
+  'studio.login.neutral.email': 'Não foi possível verificar seu e-mail. Verifique-o com seu provedor de login e tente novamente.',
+  'studio.login.neutral.expired': 'Este link de login expirou ou já foi usado. Inicie um novo login abaixo.',
+  'studio.login.neutral.rateLimit': 'O login está temporariamente limitado. Aguarde antes de tentar novamente.',
+  'studio.login.neutral.unavailable':
+    'O login está temporariamente indisponível. Tente novamente abaixo. Se continuar, entre em contato com o proprietário do site.',
   'studio.login.problem.access': 'Sua conta do GitHub precisa de acesso de escrita a este repositório. Aceite o convite e entre de novo.',
   'studio.login.problem.cancelled': 'A autorização do GitHub foi cancelada. Tente de novo e autorize o Stacki Studio.',
   'studio.login.problem.configuration':
