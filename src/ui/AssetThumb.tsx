@@ -3,6 +3,8 @@ import React, { useRef, useState } from 'react';
 import { assert } from '../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { FileIcon, CodeIcon } from './Icons';
+import { Skeleton } from './Skeleton';
+import { THUMBNAIL_EXT, useThumbnail } from './assetThumbnails';
 import { FONT_PREVIEW_EXTENSIONS, acquireFontPreview, releaseFontPreview, useFontPreview } from './fontPreview';
 import type { WireAssetEntry } from '../../shared/ipc/ipcResults';
 
@@ -103,9 +105,20 @@ interface AssetThumbProps {
   readonly className?: string;
   readonly onImageLoad?: ((dimensions: AssetDimensions) => void) | undefined;
   readonly onClick?: React.MouseEventHandler<HTMLDivElement>;
+  /**
+   * Draw a large raster picture from a small copy (assetThumbnails.ts), cached under `key`, which must
+   * change when the file does. While the copy is made the box shows a skeleton, never a half-painted
+   * picture. `onImageLoad` then reports the copy's size, so a caller that needs the file's own size
+   * reads it elsewhere (the Assets panel reads headers).
+   */
+  readonly downscale?: { readonly key: string } | undefined;
 }
-export default function AssetThumb({ file, className = '', onImageLoad, onClick }: AssetThumbProps) {
-  const { videoRef, source, failed, nextSource, isText, isVideo, isImage, isFont, fontFamily } = useAssetPreview(file);
+export default function AssetThumb({ file, className = '', onImageLoad, onClick, downscale }: AssetThumbProps) {
+  const { videoRef, source, failed, nextSource, isText, isVideo, isImage, isFont, fontFamily, sourceIndex } = useAssetPreview(file);
+  // Only the first source is fetched for a copy; a fallback source is drawn as it is.
+  const thumbnail = useThumbnail(downscale?.key ?? file.abs, source, {
+    wanted: downscale !== undefined && isImage && !failed && sourceIndex === 0 && THUMBNAIL_EXT.test(file.name),
+  });
   return (
     <div
       className={`asset-thumb ${isFont && fontFamily ? 'is-font' : ''} ${className}`}
@@ -113,10 +126,12 @@ export default function AssetThumb({ file, className = '', onImageLoad, onClick 
       onMouseEnter={isVideo ? () => assetHoverPlay(videoRef) : undefined}
       onMouseLeave={isVideo ? () => assetHoverStop(videoRef) : undefined}
     >
-      {isImage && !failed ? (
+      {isImage && !failed && thumbnail.kind === 'pending' ? (
+        <Skeleton width="100%" height="100%" radius="0" />
+      ) : isImage && !failed ? (
         <img
-          key={source}
-          src={source}
+          key={thumbnail.kind === 'ready' ? thumbnail.url : source}
+          src={thumbnail.kind === 'ready' ? thumbnail.url : source}
           alt=""
           // Off-screen tiles wait, and a large picture decodes beside the frame instead of in it.
           loading="lazy"
@@ -187,6 +202,7 @@ function useAssetPreview(file: AssetThumbProps['file']) {
     isImage,
     isFont,
     fontFamily,
+    sourceIndex,
   };
 }
 

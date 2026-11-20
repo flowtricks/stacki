@@ -36,7 +36,7 @@ import { VIEW_METRICS } from './assetLayout';
 import { useAssetViewChoice } from './assetViewPreferences';
 import { AssetFooter } from './AssetFooter';
 import { AssetItems, type ItemSlot } from './AssetItems';
-import { AssetDetail, AssetName, AssetPath, dimensionCacheFor, videoSizeRecorder } from './AssetItemParts';
+import { AssetDetail, AssetName, AssetPath, dimensionCacheFor, thumbnailKey, videoSizeRecorder } from './AssetItemParts';
 import { PanelSearch } from '../../ui/PanelSearch';
 import { buildAssetIndex, isSearching, searchAssets } from './assetSearch';
 import type { DimensionCache } from './assetDimensionCache';
@@ -808,6 +808,7 @@ function AssetTile({
         file={file}
         className={editable && !props.pick ? 'editable' : ''}
         onImageLoad={videoSizeRecorder(file, dimensions)}
+        downscale={{ key: thumbnailKey(file) }}
         onClick={() => {
           if (!props.pick && editable) {
             props.onOpenFile?.({ rel: file.rel, name: file.name });

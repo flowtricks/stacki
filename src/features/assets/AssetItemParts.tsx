@@ -122,6 +122,11 @@ export function videoSizeRecorder(file: AssetFile, cache: DimensionCache): ((siz
   };
 }
 
+/** What a thumbnail's small copy is kept under: a new size or modified time makes a new copy. */
+export function thumbnailKey(file: AssetFile): string {
+  return `${file.abs}\u0000${file.size}\u0000${file.modifiedMs ?? ''}`;
+}
+
 // One cache per project, made on first use and kept for the session: reopening the panel finds its
 // answers, and a project's answers never show for another's file of the same path.
 const caches = new Map<string, DimensionCache>();

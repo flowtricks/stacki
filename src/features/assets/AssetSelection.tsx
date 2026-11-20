@@ -13,7 +13,7 @@ import type { AssetView } from './assetOrder';
 import { VIEW_METRICS } from './assetLayout';
 import type { ItemSlot } from './AssetItems';
 import type { DimensionCache } from './assetDimensionCache';
-import { AssetDetail, AssetName, AssetPath, videoSizeRecorder } from './AssetItemParts';
+import { AssetDetail, AssetName, AssetPath, videoSizeRecorder, thumbnailKey } from './AssetItemParts';
 
 export function AssetSelectionToolbar({ batch, files }: { readonly batch: AssetBatch; readonly files: readonly AssetFile[] }) {
   const translate = useTranslate();
@@ -136,7 +136,7 @@ export function SelectableAssetTile({
         disabled={busy}
         onChange={() => batch.toggle(file.rel)}
       />
-      <AssetThumb file={file} onImageLoad={videoSizeRecorder(file, dimensions)} />
+      <AssetThumb file={file} onImageLoad={videoSizeRecorder(file, dimensions)} downscale={{ key: thumbnailKey(file) }} />
       <div className="asset-tile-text">
         <AssetName name={file.name} tailChars={VIEW_METRICS[view].nameTailChars} />
         {showPath && view !== 'grid' && <AssetPath file={file} />}

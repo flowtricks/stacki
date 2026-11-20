@@ -1598,6 +1598,8 @@
     "src/ui/AssetField.tsx",
     "src/ui/AssetPickOverlay.tsx",
     "src/ui/AssetThumb.tsx",
+    "src/lib/projectPreference.ts",
+    "src/ui/assetThumbnails.ts",
     "src/ui/AutoTextarea.tsx",
     "src/ui/CodeAccess.tsx",
     "src/ui/CodeBlock.tsx",

@@ -2296,6 +2296,28 @@ html[data-platform='win32'] .titlebar {
 .asset-items-grid .asset-thumb {
   aspect-ratio: 1 / 1;
 }
+/* A thumbnail is a fixed box whatever it holds: plain fill, the picture centred and fitted inside it
+   at its own proportions, and the checkerboard (the sign of transparency) only behind the picture
+   itself, never across the box. Absolute positioning sizes the picture against the box, so a tall
+   picture can never stretch the box past its row (assetGridLayoutChromium.test.js). */
+.asset-items .asset-thumb {
+  min-height: 0;
+  background: #202020;
+}
+.asset-items .asset-thumb img {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.05) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
+}
+.asset-items .asset-thumb .ui-skeleton {
+  display: block;
+}
 .asset-items-grid .asset-tile-text {
   margin-top: 4px;
 }
