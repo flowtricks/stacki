@@ -206,8 +206,6 @@ export const messages = {
   'publish.site.hint': 'Opcional. Usado pela seta de abrir o site, mesmo quando a detecção da hospedagem não está disponível.',
   'publish.site.label': 'URL do site publicado',
   'publish.site.saveFailed': 'Não foi possível salvar o link do site publicado. Reabra as opções de publicação para tentar novamente.',
-  'publish.status.cleanupFailed': 'Não foi possível remover os arquivos temporários de publicação.',
-  'publish.status.cleanupFailedAfter': '{message} Não foi possível remover os arquivos temporários de publicação.',
   'publish.status.close': 'Fechar',
   'publish.status.githubDone': 'Alterações enviadas ao GitHub',
   'publish.status.hostingDone': 'Publicação na hospedagem concluída',

@@ -31,6 +31,18 @@ export const MAIN_LIMITS = {
   /** Output one command (git, the package manager, astro) may print before it
    * is killed. Node's own default, stated so no call relies on it. */
   commandOutputBytesMax: 1024 * 1024,
+  /**
+   * Removal attempts for one publish temporary directory. Windows reports EBUSY
+   * or EPERM while git, antivirus or the search indexer still holds a file such
+   * as index.lock; the hold ends within moments, so a few spaced attempts clear it.
+   */
+  publishCleanupAttemptsMax: 6,
+  /** The pause before the second attempt; each later pause grows by this much (linear back-off). */
+  publishCleanupRetryDelayMs: 200,
+  /** Leftover publish directories one sweep inspects, so a crowded temp folder cannot stall a publish. */
+  publishSweepEntriesMax: 64,
+  /** A leftover this old belongs to no running publish (a job lasts minutes), so the sweep may remove it. */
+  publishSweepStaleAgeMs: 24 * 60 * 60 * 1000,
 } as const;
 
 export function readSource(file: string): string {

@@ -14,6 +14,7 @@ import { readPublishAvailability } from '#dist/electron/project/publishAvailabil
 import commands from '#dist/electron/project/publishCommands.js';
 import github from '#dist/electron/project/publishGitHub.js';
 import { DEFAULT_PUBLISH_CONFIG } from '#dist/shared/properties/publishConfig.js';
+import { PUBLISH_TEMPORARY_SEAMS } from '#dist/electron/project/publishTemporary.js';
 import { PUBLISH_GIT_LIMITS } from '#dist/electron/project/publishSize.js';
 
 setToolPathHome(homedir());
@@ -288,3 +289,43 @@ test('capture invariant failures escape the operating error channel', async (con
     /Assertion failed: Publish source carries a valid tree/,
   );
 });
+
+for (const outcome of ['never clears', 'clears after retries'] as const) {
+  test(`a push stays published when the temporary directory's EBUSY ${outcome}`, async (context) => {
+    const { root, remote } = await fixture(context);
+    await writeFile(path.join(root, 'page.txt'), 'Ready');
+    const removals: string[] = [];
+    const logs: string[] = [];
+    let busyRemaining = outcome === 'never clears' ? Number.POSITIVE_INFINITY : 2;
+    const publisher = new DesktopPublisher({
+      ...PUBLISH_TEMPORARY_SEAMS,
+      list: async () => [],
+      wait: async () => undefined,
+      log: (message) => {
+        logs.push(message);
+      },
+      remove: async (directory) => {
+        removals.push(directory);
+        if (busyRemaining > 0) {
+          busyRemaining--;
+          throw Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${path.join(directory, 'index.lock')}'`), { code: 'EBUSY' });
+        }
+        await PUBLISH_TEMPORARY_SEAMS.remove(directory);
+      },
+    });
+    publisher.start(root, 'github', 'Update page');
+    assert.deepEqual(await waitForPublish(publisher, root), { kind: 'done', github: true, hosting: false });
+    assert.equal((await git(remote, ['show', 'main:page.txt'])).stdout, 'Ready');
+    assert.ok(removals.length >= 1);
+    const [directory] = removals;
+    assert.ok(directory !== undefined);
+    if (outcome === 'never clears') {
+      assert.equal(logs.length, 1);
+      assert.match(logs[0] ?? '', /EBUSY/);
+      context.after(() => rm(directory, { recursive: true, force: true }));
+    } else {
+      assert.equal(removals.length, 3);
+      assert.deepEqual(logs, []);
+    }
+  });
+}

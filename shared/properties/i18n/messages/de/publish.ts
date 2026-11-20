@@ -216,8 +216,6 @@ export const messages = {
   'publish.site.label': 'URL der veröffentlichten Website',
   'publish.site.saveFailed':
     'Der Link zur veröffentlichten Website konnte nicht gespeichert werden. Öffne die Veröffentlichungsoptionen erneut, um es noch einmal zu versuchen.',
-  'publish.status.cleanupFailed': 'Die temporären Veröffentlichungsdateien konnten nicht entfernt werden.',
-  'publish.status.cleanupFailedAfter': '{message} Die temporären Veröffentlichungsdateien konnten nicht entfernt werden.',
   'publish.status.close': 'Schließen',
   'publish.status.githubDone': 'Änderungen zu GitHub gepusht',
   'publish.status.hostingDone': 'Hosting-Deployment abgeschlossen',

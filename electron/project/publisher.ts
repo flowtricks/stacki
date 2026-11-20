@@ -1,4 +1,4 @@
-import { rm, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { submitPublishReview } from './publishReview';
 import { assert } from '../../shared/core/assert';
 import { err, ok, type AppError, type Result } from '../../shared/core/result';
@@ -11,6 +11,7 @@ import { deployHosting, runPublishScripts } from './publishCommands';
 import { createPublishSnapshot, createPublishSource, type PublishSource, type PublishSnapshot } from './publishSnapshot';
 import { publishingGitEnvironment, publishingGitRemote, recordPublishedGitHub } from './publishGitHub';
 import { deploymentConfiguration, recordDeployment } from './publishReceipt';
+import { PUBLISH_TEMPORARY_SEAMS, releasePublishTemporary, sweepPublishTemporaries, type PublishTemporarySeams } from './publishTemporary';
 import { publishFilesystemFailure, runPublishGit } from './publishGitCommand';
 import { checkPublishIncoming, commitPublishSource, requirePublishMessage, type PublishRepository } from './publishCommit';
 import { translateMain } from '../lib/mainLocale';
@@ -35,6 +36,9 @@ export class DesktopPublisher {
   private project = '';
   private current: DesktopPublishState = { kind: 'idle' };
 
+  // The seams let a test make directory removal fail the way Windows does, without a real lock.
+  constructor(private readonly temporary: PublishTemporarySeams = PUBLISH_TEMPORARY_SEAMS) {}
+
   state(root: string): DesktopPublishState {
     return this.project === root ? this.current : { kind: 'idle' };
   }
@@ -56,6 +60,8 @@ export class DesktopPublisher {
 
   private async publish(root: string, target: PublishTarget, message: string | undefined): Promise<void> {
     ensureToolPath();
+    // Leftovers from earlier publishes whose cleanup was blocked; bounded and never failing.
+    await sweepPublishTemporaries(this.temporary);
     const prepared = await preparePublishJob(root, target, message);
     if (!prepared.ok) {
       this.fail(prepared.error, { github: false, hosting: false });
@@ -93,17 +99,8 @@ export class DesktopPublisher {
         await this.deploy(job, { ...captured.value, root: captured.value.root });
       }
     } finally {
-      const cleanup = await rm(captured.value.temporary, { recursive: true, force: true }).then(ok, publishFilesystemFailure);
-      if (!cleanup.ok) {
-        const completed = this.current;
-        assert(completed.kind === 'done' || completed.kind === 'failed' || completed.kind === 'review-open', 'Cleanup follows publishing');
-        // The earlier failure's English text travels as a parameter of the cleanup sentence: a composite cannot reuse its reference.
-        const problem =
-          completed.kind === 'failed'
-            ? described('publish.status.cleanupFailedAfter', { message: completed.message })
-            : described('publish.status.cleanupFailed');
-        this.fail(problem, completed.kind === 'review-open' ? { github: false, hosting: false } : completed);
-      }
+      // Housekeeping after the outcome is decided: a directory that will not go is logged and swept, never reported as a failed publish.
+      await releasePublishTemporary(captured.value.temporary, this.temporary);
     }
   }
 

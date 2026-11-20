@@ -208,8 +208,6 @@ export const messages = {
   'publish.site.hint': 'Facultatif. Utilisé par la flèche d’ouverture du site, même si la détection de l’hébergement est indisponible.',
   'publish.site.label': 'URL du site publié',
   'publish.site.saveFailed': 'Impossible d’enregistrer le lien du site publié. Rouvrez les options de publication pour réessayer.',
-  'publish.status.cleanupFailed': 'Les fichiers temporaires de publication n’ont pas pu être supprimés.',
-  'publish.status.cleanupFailedAfter': '{message} Les fichiers temporaires de publication n’ont pas pu être supprimés.',
   'publish.status.close': 'Fermer',
   'publish.status.githubDone': 'Modifications envoyées vers GitHub',
   'publish.status.hostingDone': 'Déploiement sur l’hébergement terminé',

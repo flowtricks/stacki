@@ -204,8 +204,6 @@ export const messages = {
   'publish.site.hint': 'Optional. Used by the open-site arrow, even when hosting discovery is unavailable.',
   'publish.site.label': 'Published site URL',
   'publish.site.saveFailed': 'Could not save the published site link. Reopen Publish options to retry.',
-  'publish.status.cleanupFailed': 'Temporary publish files could not be removed.',
-  'publish.status.cleanupFailedAfter': '{message} Temporary publish files could not be removed.',
   'publish.status.close': 'Close',
   'publish.status.githubDone': 'Changes pushed to GitHub',
   'publish.status.hostingDone': 'Hosting deployment completed',

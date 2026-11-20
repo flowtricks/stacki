@@ -205,8 +205,6 @@ export const messages = {
   'publish.site.hint': 'Opcional. Lo usa la flecha de abrir sitio, incluso si no se puede detectar el alojamiento.',
   'publish.site.label': 'URL del sitio publicado',
   'publish.site.saveFailed': 'No se pudo guardar el enlace del sitio publicado. Vuelve a abrir las opciones de publicación para reintentar.',
-  'publish.status.cleanupFailed': 'No se pudieron eliminar los archivos temporales de publicación.',
-  'publish.status.cleanupFailedAfter': '{message} No se pudieron eliminar los archivos temporales de publicación.',
   'publish.status.close': 'Cerrar',
   'publish.status.githubDone': 'Cambios enviados a GitHub',
   'publish.status.hostingDone': 'Despliegue en el alojamiento completado',

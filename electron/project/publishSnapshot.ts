@@ -1,8 +1,9 @@
-import { mkdtemp, rm, symlink, realpath, mkdir } from 'node:fs/promises';
+import { mkdtemp, symlink, realpath, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ok, type Result } from '../../shared/core/result';
 import { checkPublishTreeSize, checkPublishWorkingSize, type PublishPurpose } from './publishSize';
+import { PUBLISH_TEMPORARY_PREFIX, releasePublishTemporary } from './publishTemporary';
 import { parsePublishObject, publishFilesystemFailure, readPublishHead, runPublishGit } from './publishGitCommand';
 
 export interface PublishSource {
@@ -21,28 +22,29 @@ export async function readPublishTree(root: string): Promise<Result<string>> {
   if (!source.ok) {
     return source;
   }
-  const cleanup = await rm(source.value.temporary, { recursive: true, force: true }).then(ok, publishFilesystemFailure);
-  return cleanup.ok ? ok(source.value.tree) : cleanup;
+  // The tree is already read; a directory that will not go yet is swept later and must not fail the read.
+  await releasePublishTemporary(source.value.temporary);
+  return ok(source.value.tree);
 }
 
 export async function createPublishSource(root: string, purpose: PublishPurpose): Promise<Result<PublishSource>> {
-  const temporary = await mkdtemp(path.join(tmpdir(), 'stacki-publish-')).then(ok, publishFilesystemFailure);
+  const temporary = await mkdtemp(path.join(tmpdir(), PUBLISH_TEMPORARY_PREFIX)).then(ok, publishFilesystemFailure);
   if (!temporary.ok) {
     return temporary;
   }
   // Ownership transfers only on success; failures, including assertions, still clean up the index.
   let retained = false;
   let result: Result<PublishSource>;
-  let cleanup: Result<void> = ok(undefined);
   try {
     result = await capturePublishSource(root, temporary.value, purpose);
     retained = result.ok;
   } finally {
     if (!retained) {
-      cleanup = await rm(temporary.value, { recursive: true, force: true }).then(ok, publishFilesystemFailure);
+      // The capture's own failure is the answer; a stuck directory is logged and swept, never allowed to replace it.
+      await releasePublishTemporary(temporary.value);
     }
   }
-  return cleanup.ok ? result : cleanup;
+  return result;
 }
 
 export async function createPublishSnapshot(root: string): Promise<Result<PublishSnapshot>> {
@@ -52,16 +54,15 @@ export async function createPublishSnapshot(root: string): Promise<Result<Publis
   }
   let retained = false;
   let result: Result<PublishSnapshot>;
-  let cleanup: Result<void> = ok(undefined);
   try {
     result = await materializePublishSource(root, source.value);
     retained = result.ok;
   } finally {
     if (!retained) {
-      cleanup = await rm(source.value.temporary, { recursive: true, force: true }).then(ok, publishFilesystemFailure);
+      await releasePublishTemporary(source.value.temporary);
     }
   }
-  return cleanup.ok ? result : cleanup;
+  return result;
 }
 
 export async function publishTree(root: string, index: string): Promise<Result<string>> {
