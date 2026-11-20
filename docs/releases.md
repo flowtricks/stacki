@@ -47,6 +47,146 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.9
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.9.
+- **Features**
+  - assets: list each asset file's modified time
+  - editor: one drop model for canvas and Navigator drags
+  - canvas: drag elements on the canvas with live drop lines
+  - assets: grid, list and compact views, and a sort, in Assets
+  - navigator: mirror canvas drags live in the Navigator
+  - pages: plan and write page settings steps atomically
+  - pages: a Page settings dialog replaces the rename pencil
+  - pages: move a page between folders from Page settings
+  - canvas: a hovered slot reads muted, with its reason on hover
+  - studio: the save status names why it needs attention
+  - cms: repeaters: a list's items are values or groups of fields
+  - canvas: text a component draws from a prop is editable
+  - ai-panel: render replies as real Markdown, options as buttons, a labelled mode control
+  - ai-panel: AI changes apply at once; "Ask me to keep AI changes" brings Keep back
+  - assets: search bar in the Assets panel, shared with Components
+  - instructions: search bar in the Instructions panel
+  - navigator: search bar in the Navigator
+  - preview: address-bar loading line replaces "Loading page" text
+  - navigator: search reads .class, #id, [attr], <tag>, /* comments
+  - audits: Find & replace is a compact card that holds at 260px
+  - canvas: prop text hovers before its component is selected
+  - navigator: choosing a search result ends the search
+  - studio: boot screen and canvas name the container start stage
+  - canvas: trace an image src and alt text to the props feeding them
+  - canvas: double-click an image to edit picture and alt in a popup
+  - canvas: every closed component's text hovers, picks in one click
+  - canvas: one state machine for text inside closed components
+  - studio: Settings panel in the hosted rail, on Desktop's frame
+  - studio: canvas loader names the handshake step it waits on
+  - ui: the busy cover holds the window while work runs
+  - palette: Create component can move the markup's styles with it
+  - studio: frame reports its own load errors to the loader
+  - palette: Move styles starts with every class unchecked
+  - palette: Move styles list scrolls, cut at five and a half rows
+  - navigator: search finds text content, string props and attributes
+  - roles: provider-qualified identities for roles.json members
+  - i18n: neutral sign-in copy for a non-GitHub provider
+  - studio: authentication-provider interface, GitHub as the default
+  - cms: a group's and a repeater's fields carry the settings a field has
+  - cms: configure a group's fields and a list item's fields with icons
+  - selectors: remember the Style selectors tab per project
+  - studio: container and editor follow the qualified identity
+  - studio: the build installs studio/cloudflare/auth-provider.ts
+  - style: new style locations model, store and writers per scope
+  - settings: New style locations tab with icons and search
+  - ui: a Dropdown row that makes a new option in place
+  - pages: Select mode deletes several pages as one undo step
+  - pages: Page settings moves pages with a confirm beside the field
+  - pages: wire Select mode into the Pages panel and Desktop shell
+  - settings: Settings lists Secrets, MCP and Instructions views
+  - pages: confirm the homepage swap in a popover by its button
+  - rail: drag rail icons into any order, kept per person
+  - studio-auth: built-in provider config, policy, core callback path
+  - studio: shared sign-in choices for Studio setup
+  - create-stacki: ask how people sign in to Studio
+  - studio-auth: Google, SSO (OIDC) and Cloudflare Access providers
+  - ui: shared PanelHeader with one set of header tokens
+  - settings: chords for AI chat, Secrets, MCP; Back closes the file
+  - studio-auth: passkey provider with WebAuthn on Web Crypto
+  - desktop: choose Studio's sign-in type when adding Studio
+  - studio-auth: AUTH_PROVIDER registry, build slot, check-project
+  - studio-auth: name non-GitHub editors in publish commits
+  - roles: detail model, mixed group switch, show/hide all
+  - studio-auth: first-admin setup page for passkey sites
+  - studio: a stuck canvas reports itself to the Worker's log
+  - settings: reset the sidebar icon order from Editor settings
+  - roles: compact role cards that drill into detail views
+  - studio: a real Roles view with provider-aware member invites
+  - documents: edit text that spells entities as its characters
+  - roles: provider-aware member add; Roles in shared Settings list
+  - studio: passkey setup code steps in sign-in setup
+- **Fixes**
+  - release: deploy stacki.build after npm, and always verify it
+  - preview: a self-closing <style /> no longer unstyles the next block
+  - pages: no Homepage section or missing-fields note on templates
+  - studio: treat GitHub 403 limits as waits, spare GitHub on login
+  - canvas: steadier canvas drags; Navigator drags draw on the canvas
+  - style: a commit as the first tag lands is not overwritten
+  - pages: the Page settings body never scrolls sideways
+  - canvas: smooth side-handle resize; Desktop covers the canvas
+  - audits: the panel stays whole at every left-panel width
+  - style: sections keep their controls across a switch, no skeleton
+  - ai-panel: nothing in a reply can widen the message column; Chromium layout test
+  - canvas: Card prop text was cut off by a 64-instance cap
+  - menu: one outside press closes a menu and its submenu together
+  - canvas: text hover survives a click; parent and solid cue
+  - canvas: only the owning component reads as the hovered text's field
+  - canvas: a Card hovered over selected words is a green hover
+  - canvas: image popup opens on linked Card images; compact, draggable
+  - canvas: slot hover shows its reason when selected, black 10% fill
+  - canvas: slot hover is a muted fill only, black 20%
+  - canvas: text under a stretched link is the text hovered and edited
+  - canvas: a selected owner keeps its tag while its text is hovered
+  - canvas: words over a cover image keep their double click
+  - canvas: caret at the click, owner tag kept while editing prop text
+  - canvas: clicks inside edited words move the caret, under a link too
+  - preview: canvas tag icon for Astro assets follows the tag colour
+  - style: list a new component's <style> in "Add custom styles in"
+  - palette: name a style move's page with / on Windows too
+  - palette: Create component writes each moved @layer once
+  - cms: field-type tiles are uniform; List and Group explain in a tooltip
+  - studio: drop RemoteListItems from the shared-source list
+  - assets: draw thumbnails from small copies, never half-painted
+  - palette: Move styles adds no blank line between moved rules
+  - studio: list assetThumbnails once, in order; drop a duplicate
+  - selectors: a locked stylesheet locks every selector in it
+  - pages: show the page's address under Folder without a prefix
+  - rail: keep the anchored list last so a failed assert cannot hang
+  - menu: end every trailing hint, value and check at one right edge
+  - preload: frameReports loads without a window
+  - test: CI-only reds on 010980b8 wait for state, not frames or time
+  - studio: the AuthProvider check starts the compiler on Windows
+  - studio: a refused internal request is read before its 403
+  - studio: the test container stub reads a POST before it answers
+- **Performance**
+  - studio: warm catalog and home page at boot, restore in parallel
+  - selectors: load the list 100 rows at a time, 1.5 screens ahead
+- **Changes under the hood**
+  - panels: every Desktop panel draws its heading with PanelHeader
+  - ai: the chat header follows the panel header row
+  - studio: Studio panels draw their heading with PanelHeader
+  - shared: assert the invariants of Studio sign-in checks
+- **Documentation**
+  - studio: authentication providers, experimental
+  - studio: document choosing a sign-in type
+  - studio-auth: built-in providers, config contract, invites
+  - studio: passkey setup code, setup page and Roles view invites
+- **CI and build**
+  - gate: a test-timing scan with an expiring allowlist
+  - studio: smaller container image, startup timing doc
+- **Maintenance**
+  - ai-panel: quieter replies, flat change rows, neutral mode label
+  - ai-panel: a 1rem inset for the transcript, composer and footer rows
+  - ai-panel: quiet aligned tool rows, one spacing scale, solid jump pill
+  - regenerate the app UI kit bundle
+
 ## 1.4.8
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.8.
