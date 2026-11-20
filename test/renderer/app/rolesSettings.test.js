@@ -1,10 +1,11 @@
 // Goal: Settings → Roles saves every change at once, like every other tab: an
 // admin adds a role, its members and access, renames roles (Client included,
 // by name only), and each accepted change writes a valid `.stacki/roles.json`
-// with a brief "Saved"; a change that would leave no admin, lock the saver out
+// with a brief "Saved"; a change that would leave no admin
 // or reuse a name is refused before any write, never shows, and says why beside
 // its control; a failed write puts the controls back and offers Retry; the
-// group "All" switches set a whole group; a non-admin sees it read-only; and
+// group "All" switches set a whole group; Desktop never restricts the editor (a person named in a Client role, or in no role, still edits, and no
+// read-only banner shows: Desktop previews roles, only Studio enforces them); and
 // "View as" changes the active role without writing anything; and "Pinned to
 // sidebar" pins and unpins a role's apps (admin's too) from a multi-select menu
 // that stays open, saving each choice at once and offering only apps the role may use.
@@ -27,6 +28,7 @@ esbuild.buildSync({
   stdin: {
     contents: [
       "export { RolesSettings } from './src/app/settings/RolesSettings';",
+      "export { desktopRoleOf } from './src/app/roles/useProjectRoles';",
       "export { addRole, duplicateRole, roleNameFor, renameRole } from './src/app/settings/rolesEdits';",
       "export * from './src/lib/currentRole';",
       "export { subscribeErrorToasts } from './src/ui/errorNotices';",
@@ -265,19 +267,11 @@ test('roles are renamed in place, Client included, and a bad name is refused bes
   assert.throws(() => roles.renameRole(parsed, 'admin', 'Boss'), /Assertion failed: Admin keeps its name/);
 });
 
-test('a change that would leave no admin or lock you out is refused before any write', async () => {
+test('a change that would leave no admin is refused before any write', async () => {
   writes.length = 0;
   stored = JSON.stringify({ version: 1, roles: [{ id: 'admin', name: 'Admin', members: ['owner', 'other'] }] });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
-  await show('Client', 'members');
-  const client = card('Client');
-  await type(client.querySelector('input[aria-label="Add a GitHub username to Client"]'), 'OWNER');
-  await submit(client.querySelector('.app-role-add'));
-  assert.equal(writes.length, 0, 'nothing is written');
-  assert.match(notice(card('Client')), /remove your admin access/, 'the reason shows beside the change');
-  assert.doesNotMatch(card('Client').querySelector('.app-role-members ul').textContent, /OWNER/, 'the refused change never shows');
-
   await show('Admin', 'members');
   await click(card('Admin').querySelector('button[aria-label="Remove other"]'));
   assert.equal(writes.length, 1, 'removing another admin saves');
@@ -313,7 +307,7 @@ test('a failed save puts the control back and offers Retry', async () => {
   await unmount();
 });
 
-test('a non-admin sees roles read-only', async () => {
+test('Desktop lets anyone edit roles: a person named in a Client role, or in no role, is never read-only', async () => {
   stored = JSON.stringify({
     version: 1,
     roles: [
@@ -321,20 +315,26 @@ test('a non-admin sees roles read-only', async () => {
       { id: 'client', members: ['acme'] },
     ],
   });
-  login = 'acme';
-  roles.setActualRole(roles.roleViewOf(roles.parseProjectRolesSource(stored), 'client'));
-  await mount();
-  assert.match(document.body.textContent, /Only admins can change roles/);
-  assert.ok(document.querySelector('input[aria-label="New role name"]') === null, 'no new-role field');
-  assert.ok(document.querySelector('.app-role-name-button') === null, 'no rename');
-  await show('Client', 'permissions');
-  assert.ok(document.querySelectorAll('[role="switch"]').length > 0, 'the permissions view lists switches');
-  for (const toggle of document.querySelectorAll('[role="switch"]')) {
-    assert.equal(toggle.disabled, true);
+  for (const who of ['acme', 'stranger', undefined]) {
+    login = who;
+    const parsed = roles.parseProjectRolesSource(stored);
+    roles.setActualRole(roles.desktopRoleOf({ kind: 'ready', roles: parsed, source: stored }));
+    assert.equal(roles.actualRole().isAdmin, true, `${who} acts as admin on Desktop`);
+    await mount();
+    assert.doesNotMatch(document.body.textContent, /Only admins can change roles/, `${who}: no read-only banner`);
+    assert.ok(document.querySelector('input[aria-label="New role name"]'), `${who}: the new-role field shows`);
+    assert.ok(document.querySelector('.app-role-name-button'), `${who}: roles can be renamed`);
+    assert.ok(document.querySelector('button[aria-label="View as"]'), `${who}: View as is offered`);
+    await show('Client', 'permissions');
+    const switches = [...document.querySelectorAll('[role="switch"]')];
+    assert.ok(switches.length > 0, 'the permissions view lists switches');
+    for (const toggle of switches) {
+      assert.equal(toggle.disabled, false, `${who}: every switch is editable`);
+    }
+    await unmount();
   }
-  assert.ok(document.querySelector('[aria-label="View as"]') === null, 'only an admin can view as another role');
-  await unmount();
   login = 'owner';
+  roles.setActualRole(roles.ADMIN_VIEW);
 });
 
 test('"View as" previews a role without writing, and ends with Admin', async () => {
@@ -345,7 +345,8 @@ test('"View as" previews a role without writing, and ends with Admin', async () 
   await choose('View as', 'Client');
   assert.equal(roles.currentRole().id, 'client');
   assert.equal(roles.actualRole().isAdmin, true, 'the resolved role is unchanged');
-  assert.match(document.body.textContent, /Only admins can change roles/, 'the preview shows the client’s read-only tab');
+  assert.doesNotMatch(document.body.textContent, /Only admins can change roles/, 'a preview never turns Desktop read-only');
+  assert.ok(document.querySelector('input[aria-label="New role name"]'), 'the controls stay editable while viewing as Client');
   await choose('View as', 'Admin');
   assert.equal(roles.currentRole().isAdmin, true);
   assert.equal(writes.length, 0, '"View as" never writes the file');

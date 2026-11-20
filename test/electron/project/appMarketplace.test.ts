@@ -23,7 +23,6 @@ import { MARKETPLACE_INDEX_URL } from '#dist/shared/properties/appMarketplace.js
 import { carriedAutoUpdate, createAppService } from '#dist/electron/project/appService.js';
 import { MARKETPLACE_INDEX_URL_VARIABLE, fetchMarketplaceIndex, marketplaceIndexURL } from '#dist/electron/project/appMarketplace.js';
 import { readAppsLock } from '#dist/electron/project/appStore.js';
-import { CHANNEL_ACCESS } from '#dist/electron/handlers/channelAccess.js';
 // The running Stacki these tests stand in for: new enough for every fixture bundle.
 const STACKI_VERSION = '1.1.0';
 
@@ -422,13 +421,4 @@ test('only a development build reads another index, and only over HTTPS or local
   assert.equal(marketplaceIndexURL({ [variable]: 'https://example.test/apps.json' }, 'development'), 'https://example.test/apps.json');
   assert.equal(marketplaceIndexURL({ [variable]: 'http://localhost:4000/apps.json' }, 'development'), 'http://localhost:4000/apps.json');
   assert.throws(() => marketplaceIndexURL({ [variable]: 'http://example.test/apps.json' }, 'development'), /https: address/);
-});
-
-test('main gates the marketplace channels by their role features, and auto-update by admin', () => {
-  assert.deepEqual(CHANNEL_ACCESS['apps:marketplace'], ['marketplace:view']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:installMarketplace'], ['marketplace:install']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:setAutoUpdate'], ['settings:roles']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:applyUpdate'], ['settings:roles']);
-  // The check itself only records updates, or installs one an admin switched on: anyone's editor may run it.
-  assert.equal(CHANNEL_ACCESS['apps:checkUpdates'], undefined);
 });

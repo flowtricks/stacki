@@ -17,7 +17,7 @@ import {
 } from '../../../shared/properties/componentAccess';
 import { DescribedError } from '../../../shared/properties/describedError';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
-import { described, type Described, type Translator } from '../../../shared/properties/i18n/messageRef';
+import { described, type Translator } from '../../../shared/properties/i18n/messageRef';
 import {
   ACCESS_FEATURES,
   ADMIN_ROLE_ID,
@@ -28,7 +28,6 @@ import {
   memberRole,
   parseAppGrantId,
   parseGitHubLogin,
-  resolveRole,
   roleView,
   roleIdFor,
   sameLogin,
@@ -438,16 +437,6 @@ export function setDefaultRole(roles: ProjectRoles, id: string): ProjectRoles {
   const next = { ...roles, defaultRole: id };
   assert(next.roles === roles.roles, 'Choosing the default changes no role');
   return next;
-}
-
-/** Why saving `roles` would lock `login` out of editing roles, or undefined when it would not. */
-export function selfLockout(roles: ProjectRoles, login: string | undefined): Described | undefined {
-  if (login === undefined) {
-    return undefined;
-  }
-  const role = resolveRole(roles, login, 'admin');
-  assert(role.id.length > 0, 'A resolved role has an id');
-  return role.isAdmin ? undefined : described('roles.error.lockout', { login, role: role.name });
 }
 
 function roleOf(roles: ProjectRoles, id: string): ProjectRole {

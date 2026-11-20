@@ -115,7 +115,6 @@ export const messages = {
   'roles.error.pinsMax': { one: 'A role pins at most {count} app', other: 'A role pins at most {count} apps' },
   'roles.error.componentRulesMax': 'A role has at most {count} component rules. Hide whole folders instead of single components.',
   'roles.error.componentHidden': 'Your role ({role}) cannot add {name}. Ask an admin to show it.',
-  'roles.error.lockout': 'This would make you ({login}) {role} and remove your admin access. Keep yourself an admin.',
   'roles.error.loginLength': 'A GitHub username is 1 to {max} characters',
   'roles.error.loginInvalid': '"{login}" is not a GitHub username',
   'roles.menu.yours': 'Your role',

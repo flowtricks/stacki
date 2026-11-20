@@ -281,7 +281,6 @@ export const messages = {
   'settings.roles.pins.rowIgnored': '{app}, {reason}', // same
   'settings.roles.pins.title': 'Apps de la barre latérale',
   'settings.roles.pins.unpin': 'Désépingler {app}',
-  'settings.roles.readOnly': 'Seuls les admins peuvent modifier les rôles.',
   'settings.roles.screen.label': 'Rôles du projet',
   'settings.roles.section.access': 'Accès',
   'settings.roles.section.roles': 'Rôles',

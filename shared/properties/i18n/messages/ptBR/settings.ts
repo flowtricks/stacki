@@ -279,7 +279,6 @@ export const messages = {
   'settings.roles.pins.rowIgnored': '{app}, {reason}', // same
   'settings.roles.pins.title': 'Apps da barra lateral',
   'settings.roles.pins.unpin': 'Desafixar {app}',
-  'settings.roles.readOnly': 'Só admins podem alterar papéis.',
   'settings.roles.screen.label': 'Papéis do projeto',
   'settings.roles.section.access': 'Acesso',
   'settings.roles.section.roles': 'Papéis',

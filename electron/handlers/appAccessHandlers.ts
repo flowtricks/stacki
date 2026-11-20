@@ -8,8 +8,8 @@
 // the renderer which files changed (`fs:changed` and the panel channels the
 // project watcher would use), so open editors and the canvas reload them as
 // they do any change on disk. The watcher does not hear the actors' own writes,
-// which is why this announces them. Main refuses the channel to a role without
-// `code:edit` (channelAccess.ts).
+// which is why this announces them. Desktop does not refuse it by role: it
+// only previews roles, and Studio's server enforces them.
 //
 // Sign-ins (RFC 8252): main opens a loopback listener on 127.0.0.1 and a random
 // port for one flow, opens the authorize URL in the system browser, and closes

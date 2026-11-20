@@ -121,7 +121,6 @@ export const messages = {
   'roles.error.pinsMax': { one: 'Un rol fija como máximo {count} app', other: 'Un rol fija como máximo {count} apps' },
   'roles.error.componentRulesMax': 'Un rol tiene como máximo {count} reglas de componentes. Oculta carpetas enteras en vez de componentes sueltos.',
   'roles.error.componentHidden': 'Tu rol ({role}) no puede añadir {name}. Pide a un admin que lo muestre.',
-  'roles.error.lockout': 'Esto te convertiría ({login}) en {role} y quitaría tu acceso de admin. Sigue siendo admin.',
   'roles.error.loginLength': 'Un usuario de GitHub tiene de 1 a {max} caracteres',
   'roles.error.loginInvalid': '«{login}» no es un usuario de GitHub',
   'roles.menu.yours': 'Tu rol',

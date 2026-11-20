@@ -23,7 +23,7 @@ import { assertClientAction, assertClientSourceChange } from './clientPolicy';
 import { checkComponentImports, checkComponentInsert, type ComponentHiddenError } from './componentAccess';
 import type { ComponentImport } from '../source/imports';
 
-/** What each project settings file needs to be written (Desktop's electron/handlers/channelAccess.ts holds the same). */
+/** What each project settings file needs to be written. */
 export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeature[] | undefined>> = {
   componentSources: ['settings:folders'],
   components: ['component:edit'],

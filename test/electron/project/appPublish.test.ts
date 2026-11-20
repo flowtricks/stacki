@@ -29,7 +29,6 @@ import { createAppPublishService } from '#dist/electron/project/appPublishServic
 import { makeRepositoryPublic } from '#dist/electron/project/appGitHubWrite.js';
 import { listInstalledApps, readAppsLock } from '#dist/electron/project/appStore.js';
 import { readAppSettings, secretVaultFile, writeAppSettings } from '#dist/electron/project/appSettingsStore.js';
-import { CHANNEL_ACCESS } from '#dist/electron/handlers/channelAccess.js';
 // The running Stacki these tests stand in for: new enough for every fixture bundle.
 const STACKI_VERSION = '1.1.0';
 
@@ -467,15 +466,4 @@ test('secret settings are kept in a vault outside the project, never under .stac
   // A host that cannot seal refuses secrets and saves nothing.
   const refusing = { ...vault, seal: { ...vault.seal, refusal: () => 'This computer cannot encrypt secrets.' } };
   assert.throws(() => writeAppSettings(root, refusing, manifest, { 'api-key': 'other' }), /cannot encrypt secrets\. Nothing was saved/);
-});
-
-test('sharing and publishing channels are gated by their role features', () => {
-  assert.deepEqual(CHANNEL_ACCESS['apps:share'], ['apps:share']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:switchSource'], ['apps:share']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:makePublic'], ['marketplace:publish']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:addLicense'], ['marketplace:publish']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:checkMarketplace'], ['marketplace:publish']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:submitMarketplace'], ['marketplace:publish']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:scanSecrets'], ['apps:share', 'marketplace:publish']);
-  assert.deepEqual(CHANNEL_ACCESS['apps:writeSettings'], ['panel:apps']);
 });

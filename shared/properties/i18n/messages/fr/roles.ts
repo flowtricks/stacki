@@ -121,7 +121,6 @@ export const messages = {
   'roles.error.pinsMax': { one: 'Un rôle épingle au plus {count} app', other: 'Un rôle épingle au plus {count} apps' },
   'roles.error.componentRulesMax': 'Un rôle a au plus {count} règles de composants. Masquez des dossiers entiers plutôt que des composants isolés.',
   'roles.error.componentHidden': "Votre rôle ({role}) ne peut pas ajouter {name}. Demandez à un admin de l'afficher.",
-  'roles.error.lockout': 'Cela ferait de vous ({login}) {role} et retirerait votre accès admin. Restez admin.',
   'roles.error.loginLength': 'Un nom d’utilisateur GitHub compte de 1 à {max} caractères',
   'roles.error.loginInvalid': '« {login} » n’est pas un nom d’utilisateur GitHub',
   'roles.menu.yours': 'Votre rôle',

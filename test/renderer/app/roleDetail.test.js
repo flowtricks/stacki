@@ -299,7 +299,7 @@ test('components: Show all and Hide all change every rule at once, and the heade
   await unmount();
 });
 
-test('a viewer who cannot edit sees the lists with every control disabled', async () => {
+test('Desktop keeps every control enabled even if the active role were a client’s', async () => {
   fresh();
   roles.setActualRole(roles.roleViewOf(roles.parseProjectRolesSource(stored), 'client'));
   await mount();
@@ -307,8 +307,8 @@ test('a viewer who cannot edit sees the lists with every control disabled', asyn
   const switches = [...detail().querySelectorAll('[role="switch"]')];
   assert.ok(switches.length > 0);
   assert.ok(
-    switches.every((entry) => entry.disabled),
-    'read-only',
+    switches.every((entry) => !entry.disabled),
+    'Desktop previews roles and never restricts the editor',
   );
   await unmount();
   roles.setActualRole(roles.ADMIN_VIEW);

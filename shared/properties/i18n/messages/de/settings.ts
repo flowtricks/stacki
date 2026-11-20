@@ -282,7 +282,6 @@ export const messages = {
   'settings.roles.pins.rowIgnored': '{app}, {reason}', // same
   'settings.roles.pins.title': 'Seitenleisten-Apps',
   'settings.roles.pins.unpin': '{app} lösen',
-  'settings.roles.readOnly': 'Nur Admins können Rollen ändern.',
   'settings.roles.screen.label': 'Projektrollen',
   'settings.roles.section.access': 'Zugriff',
   'settings.roles.section.roles': 'Rollen',

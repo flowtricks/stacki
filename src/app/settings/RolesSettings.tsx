@@ -1,15 +1,14 @@
 // Settings → Roles: who may use which parts of Stacki in this project
-// (`.stacki/roles.json`, shared/properties/projectRoles.ts). Admins edit; everyone
-// else, and an admin viewing as another role, sees it read-only. A save goes
-// through the metadata transport, which main refuses for a non-admin too.
+// (`.stacki/roles.json`, shared/properties/projectRoles.ts). On Desktop everyone edits,
+// even while viewing as another role: Desktop previews roles and only Studio enforces
+// them (Studio's own Roles view is read-only for a non-admin, enforced by its server).
 //
 // "View as" previews another role's UI without touching the file: it changes
 // the renderer's active role only (src/lib/currentRole.ts), never what
 // main allows. Only someone whose own role is admin can choose it.
 //
 // Every change saves at once, like every other tab. Before it is saved it is
-// checked: the edit itself (rolesEdits.ts: names, members, the last admin), then
-// whether it would remove the saver's own admin access, then the file's own
+// checked: the edit itself (rolesEdits.ts: names, members, the last admin), then the file's own
 // parser. A refused change never shows; its reason appears beside the control.
 // A failed save puts the controls back to what is saved and offers Retry.
 import { useEffect, useRef, useState } from 'react';
@@ -17,7 +16,6 @@ import {
   ADMIN_ROLE_ID,
   DEFAULT_PROJECT_ROLES,
   ROLE_LIMITS,
-  can,
   roleViewOf,
   serializeProjectRoles,
   type ProjectRole,
@@ -43,7 +41,6 @@ import {
   duplicateRole,
   removeMember,
   renameRole,
-  selfLockout,
   setAccess,
   setAppAccess,
   setAppPermissions,
@@ -132,17 +129,16 @@ type RolesNotice =
 /** Saves waiting behind the one under way: only the latest is kept, so this never grows past one. */
 const ROLES_SAVE_ROUNDS_MAX = 64;
 
+/** Every Roles edit is allowed on Desktop, which previews roles; hosted Studio enforces them (studio/src/features/roles). */
+export const DESKTOP_EDITS_ROLES = true;
+
 /** A refusal that carries a reference keeps it; any other failure is shown as its cleaned message. */
 function refusalOf(failure: unknown): Described {
   return failure instanceof DescribedError ? failure.problem : { message: cleanError(failure) };
 }
 
 /** Why `next` cannot be saved, or undefined when it can. */
-export function rolesRefusal(next: ProjectRoles, login: string | undefined): Described | undefined {
-  const lockout = selfLockout(next, login);
-  if (lockout !== undefined) {
-    return lockout;
-  }
+export function rolesRefusal(next: ProjectRoles): Described | undefined {
   try {
     serializeProjectRoles(next);
     return undefined;
@@ -160,8 +156,9 @@ function RolesEditor(props: {
   const { stored, login } = props;
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
-  const role = useCurrentRole();
-  const editable = can(role, 'settings:roles');
+  // Desktop never restricts the person editing: it previews roles and Studio enforces them. So this does not
+  // follow the active role either: while an admin views as Client the controls stay editable.
+  const editable = DESKTOP_EDITS_ROLES;
   const [shown, setShown] = useState<ProjectRoles>(() => initialRoles(stored, login));
   const [notice, setNotice] = useState<RolesNotice>({ kind: 'none' });
   const [newName, setNewName] = useState('');
@@ -210,7 +207,7 @@ function RolesEditor(props: {
       setNotice({ kind: 'refused', scope, problem: refusalOf(failure) });
       return false;
     }
-    const refusal = rolesRefusal(next, login);
+    const refusal = rolesRefusal(next);
     if (refusal !== undefined) {
       setNotice({ kind: 'refused', scope, problem: refusal });
       return false;
@@ -295,7 +292,6 @@ function RolesEditor(props: {
       <SettingsSaveRow saving={indicator.state} />
       {login === undefined && <p className="app-roles-notice">{translate('settings.roles.signedOut')}</p>}
       {stored.kind === 'invalid' && <ErrorToast message={translate('settings.roles.fileUnreadable', { message: stored.message })} />}
-      {!editable && <p className="app-roles-notice">{translate('settings.roles.readOnly')}</p>}
       <SettingsSection title={translate('settings.roles.section.access')}>
         <ViewAs roles={shown} />
         <DefaultRole roles={shown} editable={editable} change={(id) => apply({ kind: 'access' }, (roles) => setDefaultRole(roles, id))} />

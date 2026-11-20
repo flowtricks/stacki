@@ -26,7 +26,6 @@ import { appConnectHosts, networkSummary, parseAppNetwork } from '#dist/shared/p
 import { createAppFileBudget, runAppFileOperation } from '#dist/electron/project/appFilesStore.js';
 import { appTokenFile, createAppSignIns, pkcePair } from '#dist/electron/project/appSignIn.js';
 import { writeAppSettings } from '#dist/electron/project/appSettingsStore.js';
-import { CHANNEL_ACCESS } from '#dist/electron/handlers/channelAccess.js';
 
 const APP = 'analytics';
 const BROKER = 'https://broker.example.test';
@@ -82,8 +81,6 @@ test('app file paths refuse traversal, absolute paths and protected folders, and
   assert.throws(() => parseAppFileOperation({ kind: 'restore', states: [] }, APP), /at least one/);
   assert.throws(() => parseAppFileOperation({ kind: 'write', path: 'a.bin', content: 'not base64!', encoding: 'base64' }, APP), /base64/);
   assert.throws(() => parseAppFileOperation({ kind: 'move', from: 'a.txt', to: 'a.txt' }, APP), /same path/);
-  // Files are code: the channel is gated by code editing.
-  assert.deepEqual(CHANNEL_ACCESS['apps:files'], ['code:edit']);
 });
 
 test('a file change answers before and after states, and restoring them undoes and redoes it', () => {

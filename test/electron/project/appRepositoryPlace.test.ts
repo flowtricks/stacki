@@ -22,7 +22,6 @@ import { parseMarketplaceIndex } from '#dist/shared/properties/appMarketplace.js
 import { createAppRepositoryPlaces } from '#dist/electron/project/appRepositoryPlace.js';
 import { createAppService } from '#dist/electron/project/appService.js';
 import { updateLockEntry } from '#dist/electron/project/appStore.js';
-import { CHANNEL_ACCESS } from '#dist/electron/handlers/channelAccess.js';
 // The running Stacki these tests stand in for: new enough for every fixture bundle.
 const STACKI_VERSION = '1.1.0';
 
@@ -197,5 +196,4 @@ test('an installed app’s place: its repository for GitHub and the marketplace,
 
   const missing = await lookup.place(root, 'not-here');
   assert.equal(missing.ok, false);
-  assert.equal(CHANNEL_ACCESS['apps:repositoryVisibility']?.join(), 'panel:apps');
 });

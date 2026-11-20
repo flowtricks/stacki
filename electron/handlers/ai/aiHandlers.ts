@@ -1,6 +1,5 @@
 // The AI chat panel's IPC channels (shared/ipc/aiChat.ts). Each payload is
-// parsed by the registrar before it gets here and gated on `code:edit` for
-// every write (channelAccess.ts); each project path must be the project the app
+// parsed by the registrar before it gets here; each project path must be the project the app
 // has open, so an agent can never be started anywhere else.
 //
 // The one-way `ai:ack` is registered by main.ts with the native ipcMain, next

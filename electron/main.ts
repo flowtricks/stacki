@@ -103,14 +103,13 @@ import { registerAppPageFilesHandlers } from './handlers/appPageFilesHandlers';
 import { registerSelectorHandlers } from './handlers/selectorHandlers';
 import { registerAuditHandlers } from './handlers/auditHandlers';
 import { registerAiHandlers, registerAiSendChannels } from './handlers/ai/aiHandlers';
-import { createGitHubIdentity, createRoleGate, registerRoleHandlers } from './handlers/roleAccess';
+import { createGitHubIdentity, registerRoleHandlers } from './handlers/roleAccess';
 
 // The facade keeps native Electron registration behind a parsed payload boundary.
-// Project roles (.stacki/roles.json) refuse the write paths a role hides; the gate
-// reads the open project lazily because it is set when a project's watcher starts.
+// Desktop does not enforce project roles (.stacki/roles.json): it previews them, and only Studio enforces
+// them (docs/contracts.md, "Project roles"). So no IPC gate refuses a write here.
 const githubIdentity = createGitHubIdentity();
-const roleGate = createRoleGate({ openRoot: () => openProjectRoot, identity: githubIdentity });
-const ipcMain = { handle: createIpcRegistrar(nativeIpcMain, () => roleGate) };
+const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
 setToolPathHome(app.getPath('home'));
 
 let mainWindow: Window | undefined = undefined;
@@ -762,7 +761,7 @@ app.whenReady().then(
     });
     // Terminals open in the project the app has open — same reach as the asset
     // protocol, which is what `openProjectRoot` already scopes.
-    registerTerminalHandlers({ send, projectRoot: () => openProjectRoot, gate: () => roleGate });
+    registerTerminalHandlers({ send, projectRoot: () => openProjectRoot });
     registerAiSendChannels(nativeIpcMain, aiServices.host);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

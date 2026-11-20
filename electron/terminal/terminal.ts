@@ -1,5 +1,5 @@
 import { ipcMain as nativeIpcMain } from 'electron';
-import { createIpcRegistrar, type IpcGate } from '../lib/ipcRegistrar';
+import { createIpcRegistrar } from '../lib/ipcRegistrar';
 
 import path from 'node:path';
 import os from 'node:os';
@@ -253,19 +253,9 @@ type Send = (channel: string, payload: unknown) => void;
 /**
  * @param send        (channel, payload) => void — posts to the renderer
  * @param projectRoot () => string|undefined — the open project, for the cwd check
- * @param gate        main's role gate (handlers/roleAccess.ts): a shell runs anything in the
- *                    project, so `terminal:start` answers to the same roles as every other write
  */
-function registerTerminalHandlers({
-  send,
-  projectRoot,
-  gate,
-}: {
-  readonly send: Send;
-  readonly projectRoot: () => string | undefined;
-  readonly gate: () => IpcGate | undefined;
-}): void {
-  const ipcMain = { handle: createIpcRegistrar(nativeIpcMain, gate) };
+function registerTerminalHandlers({ send, projectRoot }: { readonly send: Send; readonly projectRoot: () => string | undefined }): void {
+  const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
   ipcMain.handle('terminal:start', (_event: unknown, payload) => startTerminal(payload, { send, root: projectRoot() }));
   // `on`, not `handle`: keystrokes and acks are high-frequency one-way signals
   // that need no reply, so they shouldn't pay for a round trip.

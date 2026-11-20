@@ -1,13 +1,12 @@
 // Keeps the active role in step with the open project: reads `.stacki/roles.json`
-// and the signed-in GitHub login, resolves the role main enforces, and reloads
-// when project files change (the watcher reports `.stacki` edits as fs:changed).
+// and reloads when project files change (the watcher reports `.stacki` edits as fs:changed).
 // The Roles tab saves through rolesBridge.ts and calls `reloadProjectRoles`.
 import { useEffect } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { ADMIN_VIEW, resolveRole } from '../../../shared/properties/projectRoles';
+import { ADMIN_ROLE_ID, ADMIN_VIEW, roleViewOf } from '../../../shared/properties/projectRoles';
 import { setActualRole } from '../../lib/currentRole';
 import { setStoredProjectRoles } from '../../lib/projectRolesStore';
-import { readRolesIdentity, readStoredRoles, type StoredRoles } from './rolesBridge';
+import { readStoredRoles, type StoredRoles } from './rolesBridge';
 
 const reloaders = new Set<() => void>();
 
@@ -32,10 +31,10 @@ export function useProjectRoles(projectPath: string | undefined): void {
     const load = () => {
       generation += 1;
       const mine = generation;
-      void Promise.all([readStoredRoles(projectPath), readRolesIdentity(projectPath).catch(() => undefined)]).then(
-        ([stored, login]) => {
+      void readStoredRoles(projectPath).then(
+        (stored) => {
           if (lifetime === 'active' && mine === generation) {
-            setActualRole(desktopRoleOf(stored, login));
+            setActualRole(desktopRoleOf(stored));
             setStoredProjectRoles(stored.kind === 'ready' ? stored.roles : undefined);
           }
         },
@@ -53,14 +52,23 @@ export function useProjectRoles(projectPath: string | undefined): void {
   }, [projectPath]);
 }
 
-/** Desktop's rule, the same one main enforces (electron/handlers/roleAccess.ts): a broken file is admin so it can be fixed. */
-export function desktopRoleOf(stored: StoredRoles, login: string | undefined) {
+/**
+ * The role Desktop acts as: always the admin, whoever is signed in and whatever the file says.
+ * Why: Desktop previews roles ("View as") and never enforces them; only Studio does, because there
+ * the server is the boundary. Here the person works on their own files, so a role that restricted
+ * them would only lock the owner out of Settings → Roles. A readable file contributes the admin
+ * role's own pins and hidden-component rules, as it does for any admin.
+ */
+export function desktopRoleOf(stored: StoredRoles) {
   switch (stored.kind) {
     case 'absent':
     case 'invalid':
       return ADMIN_VIEW;
-    case 'ready':
-      return resolveRole(stored.roles, login, 'admin');
+    case 'ready': {
+      const view = roleViewOf(stored.roles, ADMIN_ROLE_ID);
+      assert(view.isAdmin, 'Desktop always acts as admin');
+      return view;
+    }
     default: {
       const exhaustive: never = stored;
       return exhaustive;

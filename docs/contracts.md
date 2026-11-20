@@ -799,22 +799,23 @@ transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`)
   rename that does, and until then a moved path shows as missing.
 - No file means everyone is admin, exactly as before. Studio gives a signed-in GitHub user the role
   naming them, else `defaultRole` (admin unless set). A local Studio, with no sign-in, is admin.
-  Desktop resolves the GitHub account it publishes with (the project's `githubAccount` when signed
-  in on this machine, else `gh`'s active account, via `roles:identity`); nobody signed in, or a
-  person named in no role, is admin there, because the local user owns the files anyway.
+  **Desktop never resolves a restricted role**: whoever is signed in, and whatever the file says, the
+  local person acts as admin (`desktopRoleOf` in `src/app/roles/useProjectRoles.ts`).
 
-Enforcement: the renderer hides what `can()` refuses (rail buttons and their shortcuts, right
-tabs, Settings tabs, the publish button, the terminal and code window, page create, rename and
-delete, component creation). Main refuses the matching IPC writes before their handlers run
-(`electron/handlers/channelAccess.ts`, through the registrar's gate in `ipcRegistrar.ts`); a broken
-file is admin on Desktop so it can be fixed. The Studio server refuses write routes the sender's
-role lacks with 403 (`studio/src/features/roles/serverAccess.ts`), trusting the login only from the
-worker's authenticated `x-studio-user`; a broken file fails closed to the client role there.
-Document edits over the collaboration socket stay UI-gated, as Client mode was.
+Enforcement: **Desktop previews roles, Studio enforces them.** On Desktop the person works on their own
+files on disk and can edit `.stacki/roles.json` or the site directly, so a role there would only lock the
+owner out (it did, in 1.4.9: a named non-admin got a read-only Roles tab). So Desktop has no IPC role gate,
+Settings → Roles is always editable, and nothing in main refuses a write for a role. The renderer still
+hides what `can()` refuses, but only for "View as" (below). The Studio server refuses write routes the
+sender's role lacks with 403 (`studio/src/features/roles/serverAccess.ts`), trusting the login only from the
+worker's authenticated `x-studio-user`; a broken file fails closed to the client role there, and Studio's
+Roles view is read-only for a non-admin. Document edits over the collaboration socket stay UI-gated, as
+Client mode was. The CLI and MCP server act as a role only when asked (`--role`, `--login`), a cooperative
+tier for agents (docs/stacki-cli.md).
 
 "View as" (Settings → Roles on Desktop, the account menu in Studio) lets an admin preview another
 role's UI. It changes only the renderer's active role (`src/lib/currentRole.ts`: `currentRole()` and
-`onRoleChange()`), never the file or what main and the server allow. Studio keeps the choice for the tab in sessionStorage (`studio-role`).
+`onRoleChange()`), never the file or what the server allows; Settings → Roles stays editable while previewing. Studio keeps the choice for the tab in sessionStorage (`studio-role`).
 
 ## Settings panel and secrets
 
@@ -1407,8 +1408,8 @@ the rows keep their initials.
 
 `github:searchUsers` (Studio: `GET /studio/api/github/users?q=`) takes a project path and the
 typed start of a GitHub username (`parseGitHubLoginQuery` in `shared/properties/projectRoles.ts`:
-1 to 39 characters, the login rules, a trailing hyphen allowed). Main gates it to `settings:roles`
-(`channelAccess.ts`); the Studio route refuses anyone without it with 403. The reply, parsed by
+1 to 39 characters, the login rules, a trailing hyphen allowed). Desktop does not gate it (it only
+previews roles); the Studio route refuses anyone without it with 403. The reply, parsed by
 `shared/ipc/githubUserSearch.ts`, is `{ users, github }`: at most 8 users, one per login
 (case-insensitive), each `{ login, name?, avatarURL?, source }` with `source` one of
 `collaborator`, `author` or `search` and pictures on the commit-avatar hosts only; `github` is
@@ -2413,7 +2414,7 @@ one install, update and GitHub flow, shared by Desktop's main process and the St
 recorded as available and `apps:applyUpdate` installs only bytes whose SHA-256 equals the checked
 ones. A private repository is read with the publish flow's GitHub account token, sent only to
 `api.github.com`. Installing, updating, removing and reading the account's repositories are
-admin-only in main (`electron/handlers/channelAccess.ts`) and on the Studio server.
+admin-only on the Studio server.
 
 The folder is what is installed (`shared/properties/appFolders.ts`, `electron/project/appScan.ts`):
 every `.stacki/apps/<folder>/` whose files read as a bundle (`appBundle.ts` `bundleFromFiles`, the
