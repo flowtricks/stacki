@@ -30,6 +30,7 @@ import { toArray } from '../core/record';
 import { APP_PERMISSION_LIMITS, parseAppPermissionId, type AppPermissionDeclaration } from './appPermissions';
 import { parseComponentRules, storedComponentRule, type ComponentRule } from './componentAccess';
 import { DescribedError } from './describedError';
+import { identityKey, parseQualifiedIdentity, GITHUB_PROVIDER_ID, identityProvider, identitySubject } from './memberIdentity';
 import { described, messageRef, type TypedMessageRef } from './i18n/messageRef';
 
 /** The tracked project file that holds the roles. */
@@ -44,6 +45,8 @@ export const ROLE_LIMITS = {
   rolesMax: 32,
   /** People named in one role. */
   membersMax: 200,
+  /** Further identities one signed-in person may carry (an authentication provider's aliases). */
+  aliasesMax: 8,
   /** A role id: a slug, `[a-z][a-z0-9-]*`. */
   roleIdCharsMax: 40,
   /** A role's display name. */
@@ -590,10 +593,17 @@ export function sameAppPermissions(left: AppPermissionGrants, right: AppPermissi
   });
 }
 
-/** The role, if any, that names `login` as a member. */
-export function memberRole(roles: ProjectRoles, login: string): ProjectRole | undefined {
+/**
+ * The role, if any, that names `login` as a member. `login` is a bare GitHub login or a qualified identity
+ * (`email:a@b.com`); a member written as a bare login means `github:<login>` (memberIdentity.ts).
+ * `aliases` are further identities of the same person, supplied by the signed-in provider and already
+ * checked by Studio to belong to that provider's own namespace.
+ */
+export function memberRole(roles: ProjectRoles, login: string, aliases: readonly string[] = []): ProjectRole | undefined {
   assert(login.length > 0, 'A member lookup names a login');
-  const found = roles.roles.find((role) => role.members.some((member) => sameLogin(member, login)));
+  assert(aliases.length <= ROLE_LIMITS.aliasesMax, 'A person has a bounded number of aliases');
+  const keys = [login, ...aliases].map(identityKey);
+  const found = roles.roles.find((role) => role.members.some((member) => keys.includes(identityKey(member))));
   assert(found === undefined || found.members.length > 0, 'A matching role has members');
   return found;
 }
@@ -604,7 +614,12 @@ export function memberRole(roles: ProjectRoles, login: string): ProjectRole | un
  * where the local user owns the files) keeps them admin. No file, or no
  * signed-in login, is always admin: today's behaviour exactly.
  */
-export function resolveRole(roles: ProjectRoles | undefined, login: string | undefined, fallback: 'default' | 'admin'): RoleView {
+export function resolveRole(
+  roles: ProjectRoles | undefined,
+  login: string | undefined,
+  fallback: 'default' | 'admin',
+  aliases: readonly string[] = [],
+): RoleView {
   if (roles === undefined) {
     return ADMIN_VIEW;
   }
@@ -612,7 +627,7 @@ export function resolveRole(roles: ProjectRoles | undefined, login: string | und
     // The file's admin role, not the bare admin view, so admin's rail pins apply.
     return roleViewOf(roles, ADMIN_ROLE_ID);
   }
-  const member = memberRole(roles, login);
+  const member = memberRole(roles, login, aliases);
   if (member !== undefined) {
     return roleViewOf(roles, member.id);
   }
@@ -773,18 +788,37 @@ function roleName(input: unknown): string {
   return name;
 }
 
+/**
+ * One member: a bare GitHub login (the original form, meaning `github:<login>`) or a qualified identity
+ * from another authentication provider. A `github:` member must still be a valid GitHub login.
+ */
+function parseMember(input: unknown): string {
+  const member = text(input).trim();
+  if (!member.includes(':')) {
+    return parseGitHubLogin(member);
+  }
+  const identity = parseQualifiedIdentity(member);
+  if (!identity.ok) {
+    throw new Error(`"${member}" is not a member: ${identity.error.message}`);
+  }
+  if (identityProvider(identity.value) === GITHUB_PROVIDER_ID) {
+    parseGitHubLogin(identitySubject(identity.value));
+  }
+  return identity.value;
+}
+
 function parseMembers(input: unknown): readonly string[] {
   if (input === undefined) {
     return [];
   }
   const items = toArray(input);
   if (items === undefined) {
-    throw new Error('Role members must be a list of GitHub usernames');
+    throw new Error('Role members must be a list of GitHub usernames or provider-qualified identities');
   }
   if (items.length > ROLE_LIMITS.membersMax) {
     throw new Error(`A role has at most ${ROLE_LIMITS.membersMax} members`);
   }
-  const members = items.map(parseGitHubLogin);
+  const members = items.map(parseMember);
   assert(members.length === items.length, 'Every member parsed');
   return members;
 }

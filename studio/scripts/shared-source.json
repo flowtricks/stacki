@@ -637,6 +637,7 @@
     "shared/properties/projectBreakpoints.ts",
     "shared/properties/projectFolders.ts",
     "shared/properties/projectMetadata.ts",
+    "shared/properties/memberIdentity.ts",
     "shared/properties/projectRoles.ts",
     "shared/properties/projectScan.ts",
     "shared/properties/propModel.ts",
