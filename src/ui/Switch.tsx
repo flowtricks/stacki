@@ -8,6 +8,8 @@ export interface SwitchProps {
   /** The accessible name; a visible label beside the switch says the same. */
   readonly label: string;
   readonly checked: boolean;
+  /** Some of what the switch covers is on and some is off (a group switch); it reads as neither on nor off. */
+  readonly mixed?: boolean;
   readonly disabled?: boolean;
   /** The id of the text that describes the setting, read after the name. */
   readonly describedBy?: string;
@@ -21,7 +23,7 @@ export function Switch(props: SwitchProps) {
       className="ui-switch"
       role="switch"
       aria-label={props.label}
-      aria-checked={props.checked}
+      aria-checked={props.mixed === true ? 'mixed' : props.checked}
       aria-describedby={props.describedBy}
       disabled={props.disabled ?? false}
       onClick={props.onToggle}

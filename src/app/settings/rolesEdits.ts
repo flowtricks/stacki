@@ -4,6 +4,7 @@
 // through `serializeProjectRoles`, which re-parses, so an edit that slipped past
 // these checks still cannot reach disk.
 import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
 import { APP_PERMISSION_LIMITS } from '../../../shared/properties/appPermissions';
 import {
   COMPONENT_ACCESS_LIMITS,
@@ -365,6 +366,34 @@ export function setComponentVisibility(roles: ProjectRoles, id: string, target: 
       throw failure;
     }
     throw new DescribedError(described('roles.error.componentRulesMax', { count: COMPONENT_ACCESS_LIMITS.rulesMax }));
+  }
+  const next = updateRole(roles, id, (role) => ({ ...role, componentRules: rules }));
+  assert(roleOf(next, id).componentRules.length <= COMPONENT_ACCESS_LIMITS.rulesMax, 'A role keeps its rules within the bound');
+  return next;
+}
+
+/**
+ * Shows every component to the role, or hides every one of `files`: the Components view's "Show all" and
+ * "Hide all". Showing drops every rule, since nothing is hidden without one. Hiding writes one folder rule
+ * per top folder (and one component rule per top-level file), the fewest rules that cover the project.
+ */
+export function setAllComponentVisibility(roles: ProjectRoles, id: string, state: ComponentState, files: readonly string[]): ProjectRoles {
+  assert(files.length <= LIMITS.scanEntriesMax, 'The component files are bounded');
+  let rules: ProjectRole['componentRules'] = [];
+  if (state === 'hidden') {
+    const tops = new Map<string, ComponentTarget['kind']>();
+    for (const file of files) {
+      const slash = file.indexOf('/');
+      if (slash < 0) {
+        tops.set(file, 'component');
+      } else {
+        tops.set(file.slice(0, slash), 'folder');
+      }
+    }
+    if (tops.size > COMPONENT_ACCESS_LIMITS.rulesMax) {
+      throw new DescribedError(described('roles.error.componentRulesMax', { count: COMPONENT_ACCESS_LIMITS.rulesMax }));
+    }
+    rules = [...tops].map(([path, kind]) => ({ kind, path, effect: 'hide' as const }));
   }
   const next = updateRole(roles, id, (role) => ({ ...role, componentRules: rules }));
   assert(roleOf(next, id).componentRules.length <= COMPONENT_ACCESS_LIMITS.rulesMax, 'A role keeps its rules within the bound');
