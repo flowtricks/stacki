@@ -8,7 +8,6 @@ import { useListProps } from './useListProps';
 import { assert } from '../../../shared/core/assert';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ScanPage, ScanComponent } from '../../../shared/properties/projectScan';
-import { confirmDialog } from '../../ui/ConfirmDialog';
 import { astroAsset as astroAssetDef } from '../../features/palette/astroAssets';
 import { getElementSchema } from '../../editor/elementSchemas';
 import { frontmatterGesture, unwrapGesture } from '../../editor/editGestures';
@@ -26,15 +25,7 @@ import { planExtraction, type ExtractionRead } from '../../editor/extractFrontma
 import { type FrontmatterSubject } from '../../features/code/codeWindowTarget';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
-import {
-  createProjectPage,
-  createProjectPageFolder,
-  deleteProjectPage,
-  deleteProjectPageFolder,
-  moveProjectPage,
-  readSampleEntry,
-  renameProjectPageFolder,
-} from '../../ipc/appBridge';
+import { createProjectPage, createProjectPageFolder, moveProjectPage, readSampleEntry, renameProjectPageFolder } from '../../ipc/appBridge';
 import { withPrunedImports, schemaFor, withClassField } from '../model/pageGestures';
 import { markdownLayoutGesture, withImportsGesture, layoutWrapperGesture } from '../model/appKeys';
 import { selectedPseudo, structuralSelection } from '../model/selectionStructure';
@@ -171,7 +162,7 @@ export function usePageCreation(
   navigation: ReturnType<typeof useNavigation>,
 ) {
   const translate = useTranslate();
-  const { currentPage, devStatus, devUrl, projectRef, scan, setCurrentPage, setPageState } = coreState;
+  const { devStatus, devUrl, projectRef, scan } = coreState;
   const { rescan, showToast } = lifecycle;
   const { selectPage } = navigation;
 
@@ -224,40 +215,7 @@ export function usePageCreation(
     },
     [devStatus, devUrl, rescan, selectPage, showToast, projectRef, translate],
   );
-
-  const deletePage = useCallback(
-    async (page: ScanPage) => {
-      if (
-        !(await confirmDialog({
-          title: translate('shell.pages.deleteTitle', { name: page.name }),
-          body: translate('shell.pages.deleteBody'),
-          confirmLabel: translate('shell.pages.deleteConfirm'),
-          danger: true,
-        }))
-      ) {
-        return;
-      }
-      const projectPath = projectRef.current?.path;
-      if (!projectPath) {
-        return;
-      }
-      await deleteProjectPage(page.path);
-      const result = await rescan(projectPath);
-      if (currentPage?.path === page.path) {
-        const next = result.pages[0] || undefined;
-        if (next) {
-          // Opening a page reports its own failures.
-          void selectPage(next);
-        } else {
-          setCurrentPage(undefined);
-          setPageState(undefined);
-        }
-      }
-      showToast(translate('shell.pages.deleted', { name: page.name }), 'success');
-    },
-    [currentPage, rescan, selectPage, showToast, projectRef, setCurrentPage, setPageState, translate],
-  );
-  return { createPage, createTemplate, deletePage };
+  return { createPage, createTemplate };
 }
 
 // Moving pages and creating folders.
@@ -353,56 +311,6 @@ export function useRenamePageFolder(
     [rescan, selectPage, pageStateRef, projectRef, flushSave, translate],
   );
   return { renamePageFolder };
-}
-
-// Deleting a page folder.
-export function useDeletePageFolder(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  navigation: ReturnType<typeof useNavigation>,
-) {
-  const translate = useTranslate();
-  const { pageStateRef, projectRef, setCurrentPage, setPageState } = coreState;
-  const { rescan, showToast } = lifecycle;
-  const { selectPage } = navigation;
-
-  const deletePageFolder = useCallback(
-    async (directory: string, pageCount: number) => {
-      if (
-        !(await confirmDialog({
-          title: translate('shell.pages.deleteFolderTitle', { directory }),
-          body: pageCount ? translate('shell.pages.deleteFolderBodyPages', { count: pageCount }) : translate('shell.pages.deleteFolderBody'),
-          confirmLabel: translate('shell.pages.deleteFolderConfirm'),
-          danger: true,
-        }))
-      ) {
-        return;
-      }
-      const projectPath = projectRef.current?.path;
-      if (!projectPath) {
-        return;
-      }
-      try {
-        await deleteProjectPageFolder(projectPath, directory);
-        const result = await rescan(projectPath);
-        const open = pageStateRef.current.currentPage;
-        if (open && !result.pages.some((candidate) => candidate.path === open.path)) {
-          const next = result.pages[0] || undefined;
-          if (next) {
-            // Opening a page reports its own failures.
-            void selectPage(next);
-          } else {
-            setCurrentPage(undefined);
-            setPageState(undefined);
-          }
-        }
-      } catch (error: unknown) {
-        showToast(cleanError(error), 'error');
-      }
-    },
-    [rescan, selectPage, showToast, pageStateRef, projectRef, setCurrentPage, setPageState, translate],
-  );
-  return { deletePageFolder };
 }
 
 // The page tree, and binding to a collection.

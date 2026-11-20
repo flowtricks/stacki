@@ -621,6 +621,7 @@
     "shared/properties/mediaInputError.ts",
     "shared/properties/microphone.ts",
     "shared/properties/packageManager.ts",
+    "shared/properties/pageBulkRemove.ts",
     "shared/properties/pageMetadata.ts",
     "shared/properties/pageOrder.ts",
     "shared/properties/pageRename.ts",

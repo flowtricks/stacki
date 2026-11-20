@@ -14,6 +14,7 @@ import { ToastStack } from '../../features/notifications/ToastStack';
 import { useComponentManagement } from './useComponentManagement';
 import ComponentPropertiesPanel from '../../features/componentProperties/ComponentPropertiesPanel';
 import PagesPanel from '../../features/pages/PagesPanel';
+import { usePageBulkRemoveHost } from './pageBulkRemoveDesktop';
 import { ConnectSanity } from '../../features/cmsConnections/ConnectSanity';
 import PalettePanel from '../../features/palette/PalettePanel';
 import { useComponentRoleRules } from '../roles/componentRoleRules';
@@ -541,6 +542,7 @@ export function PropertiesTab({ app }: { readonly app: ShellView }) {
 
 export function PagesTab({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
+  const bulkRemove = usePageBulkRemoveHost(app);
   return (
     <PagesPanel
       projectPath={app.project.path}
@@ -552,7 +554,6 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
       onCreate={app.onCreatePage}
       onCreateTemplate={app.createTemplate}
       connectSanity={(input) => <ConnectSanity {...input} />}
-      onDelete={app.onDeletePage}
       onMovePage={app.onMovePage}
       onCreateFolder={app.createPageFolder}
       onRename={async (change) => {
@@ -567,7 +568,7 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
         }
       }}
       onRenameFolder={app.onRenamePageFolder}
-      onDeleteFolder={app.onDeletePageFolder}
+      bulkRemove={bulkRemove}
       renderPageSettings={(page, close) => <DesktopPageSettings app={app} page={page} close={close} />}
     />
   );

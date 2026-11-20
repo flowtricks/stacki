@@ -23,7 +23,12 @@ import { PageTemplateDialog, type ConnectSanity } from './PageTemplateDialog';
 import { EmDashTemplateDialog } from './EmDashTemplateDialog';
 import { EMDASH_HOST, readEmDashProject } from '../../ipc/emdashBridge';
 import { PageSearchPath } from './PageSearchPath';
-import { PageTreeView, type PageEditing, type PageTreeActions } from './PageTreeView';
+import { PageTreeView, type PageEditing, type PageSelectionView, type PageTreeActions } from './PageTreeView';
+import { PageSelectBox, PageSelectionBar } from './PageSelectionBar';
+import { usePageBulkRemoveFlow, type PageBulkRemoveHost } from './PageBulkRemoveFlow';
+import { usePageSelection, type PageSelectionModel } from './usePageSelection';
+import { selectionCount, selectionTargets } from './pageSelection';
+import './pageSelect.css';
 
 interface PagesPanelProps {
   readonly projectPath?: string;
@@ -36,12 +41,12 @@ interface PagesPanelProps {
   /** Creates a page template, answering what went wrong, if anything. */
   readonly onCreateTemplate: (draft: PageTemplateDraft, keyCopy: ConnectionKeyCopy | undefined) => Promise<string | undefined>;
   readonly connectSanity: ConnectSanity;
-  readonly onDelete: (page: ScanPage) => void;
   readonly onMovePage: (page: ScanPage, to: string) => void;
   readonly onCreateFolder: () => Promise<string | undefined>;
   readonly onRename: (change: PageRename) => Promise<void>;
   readonly onRenameFolder: (from: string, to: string) => void;
-  readonly onDeleteFolder: (rel: string, pageCount: number) => void;
+  /** Deletes the ticked pages and folders as one undoable step (Select mode); without it the panel has no Select button. */
+  readonly bulkRemove?: PageBulkRemoveHost;
   /** Draws the Page settings dialog for a page (the gear on its row); without it the row opens the rename dialog. */
   readonly renderPageSettings?: (page: ScanPage, close: () => void) => React.ReactNode;
 }
@@ -74,14 +79,20 @@ export default function PagesPanel(props: PagesPanelProps) {
     actions,
     openFolder,
   } = model;
+  const selection = usePageSelection({ tree, order: ordering.state.order, collapsed, searchResults });
+  const removal = usePageBulkRemoveFlow(props.bulkRemove, selection.stop);
+  const selectionView = useSelectionView(selection);
+  const keys = usePageSelectionKeys(selection);
 
   return (
-    <div className="panel-section grow">
+    <div className={`panel-section grow ${selection.active ? 'pages-select-mode' : ''}`} tabIndex={selection.active ? -1 : undefined} onKeyDown={keys}>
       <PagesHeader
         createFolder={() => void openFolder()}
         createPage={() => setShowNew(true)}
         createTemplate={() => setShowTemplate(true)}
         createEmDashTemplate={emdashPresent ? () => setShowEmDash(true) : undefined}
+        selecting={selection.active}
+        toggleSelecting={props.bulkRemove === undefined ? undefined : selection.active ? selection.stop : selection.start}
       />
       <div style={{ padding: '0 12px 8px' }}>
         <input
@@ -105,8 +116,20 @@ export default function PagesPanel(props: PagesPanelProps) {
         editing={editing}
         dropDirectory={dropDirectory}
         actions={actions}
+        selection={selectionView}
         clearDrop={() => setDropDirectory(undefined)}
       />
+      {selection.active && (
+        <PageSelectionBar
+          count={selectionCount(selection.selected)}
+          allShown={selection.allShown}
+          someShown={selection.selected.size > 0}
+          busy={removal.busy}
+          toggleAll={selection.toggleAll}
+          remove={() => void removal.run(selectionTargets(selection.selected))}
+          cancel={selection.stop}
+        />
+      )}
       {showNew && (
         <NewPageModal
           layouts={props.scan.layouts}
@@ -240,9 +263,7 @@ function usePageTreeActions(
   );
   return {
     select: props.onSelect,
-    removePage: props.onDelete,
     movePage: props.onMovePage,
-    removeFolder: props.onDeleteFolder,
     renameFolder: props.onRenameFolder,
     setEditing,
     toggleFolder,
@@ -278,6 +299,7 @@ interface PageBodyProps extends PagesPanelProps {
   readonly editing: PageEditing;
   readonly dropDirectory: string | undefined;
   readonly actions: PageTreeActions;
+  readonly selection: PageSelectionView | undefined;
   readonly clearDrop: () => void;
 }
 
@@ -295,7 +317,7 @@ function PageBody(props: PageBodyProps) {
       onDrop={(event) => props.searchResults === undefined && props.actions.drop(event, '')}
     >
       {props.searchResults ? (
-        <SearchResults pages={props.searchResults} query={props.query} currentPage={props.currentPage} select={props.onSelect} />
+        <SearchResults pages={props.searchResults} query={props.query} currentPage={props.currentPage} select={props.onSelect} selection={props.selection} />
       ) : (
         <>
           <PageTreeView
@@ -309,6 +331,7 @@ function PageBody(props: PageBodyProps) {
             editing={props.editing}
             dropDirectory={props.dropDirectory}
             actions={props.actions}
+            selection={props.selection}
           />
           {props.scan.pages.length === 0 && props.scan.pageFolders.length === 0 && (props.injectedRoutes?.length ?? 0) === 0 && (
             <div className="props-empty">{translate('pages.panel.empty')}</div>
@@ -325,29 +348,44 @@ function SearchResults({
   query,
   currentPage,
   select,
+  selection,
 }: {
   readonly pages: readonly ScanPage[];
   readonly query: string;
   readonly currentPage: ScanPage | undefined;
   readonly select: (page: ScanPage) => void;
+  readonly selection: PageSelectionView | undefined;
 }) {
   const translate = useTranslate();
   if (pages.length === 0) {
     return <div className="props-empty">{translate('pages.panel.noMatch', { query: query.trim() })}</div>;
   }
-  return pages.map((page) => (
-    <div
-      key={page.path}
-      className={`list-item ${isCollectionRoute(page.name) ? 'collection' : ''} ${currentPage?.path === page.path ? 'active' : ''}`}
-      onClick={() => select(page)}
-    >
-      <span className="icon">{isCollectionRoute(page.name) ? <CmsIcon size={13} /> : <FileIcon size={13} />}</span>
-      <span className="page-list-copy">
-        <span className="label">{pageDisplayLabel(page, translate)}</span>
-        <PageSearchPath path={page.route} query={query} />
-      </span>
-    </div>
-  ));
+  return pages.map((page) => {
+    const refusal = selection?.index.refused.get(page.name);
+    const ticked = selection?.selected.has(page.name) === true;
+    return (
+      <div
+        key={page.path}
+        className={`list-item ${isCollectionRoute(page.name) ? 'collection' : ''} ${selection === undefined && currentPage?.path === page.path ? 'active' : ''} ${selection === undefined ? '' : `page-selecting ${ticked ? 'page-selected' : ''} ${refusal === undefined ? '' : 'page-refused'}`}`}
+        title={refusal === undefined ? undefined : translate('pages.settings.delete.homeRefused')}
+        onClick={(event) => (selection === undefined ? select(page) : selection.click(page.name, event.shiftKey))}
+      >
+        {selection !== undefined && (
+          <PageSelectBox
+            checked={ticked}
+            partial={false}
+            refusal={refusal}
+            label={translate('pages.select.row', { name: pageDisplayLabel(page, translate) })}
+          />
+        )}
+        <span className="icon">{isCollectionRoute(page.name) ? <CmsIcon size={13} /> : <FileIcon size={13} />}</span>
+        <span className="page-list-copy">
+          <span className="label">{pageDisplayLabel(page, translate)}</span>
+          <PageSearchPath path={page.route} query={query} />
+        </span>
+      </div>
+    );
+  });
 }
 
 function InjectedRoutes({
@@ -442,33 +480,84 @@ function PagesHeader({
   createPage,
   createTemplate,
   createEmDashTemplate,
+  selecting,
+  toggleSelecting,
 }: {
   readonly createFolder: () => void;
   readonly createPage: () => void;
   readonly createTemplate: () => void;
   readonly createEmDashTemplate: (() => void) | undefined;
+  readonly selecting: boolean;
+  /** Turns Select mode on or off; absent where the host cannot delete several pages. */
+  readonly toggleSelecting: (() => void) | undefined;
 }) {
-  // Creating pages and folders appears only for a role that may (shared/properties/projectRoles.ts).
+  // Creating and deleting pages appear only for a role that may (shared/properties/projectRoles.ts).
   const translate = useTranslate();
-  const creatable = can(useCurrentRole(), 'page:create');
+  const role = useCurrentRole();
+  const creatable = can(role, 'page:create');
+  const deletable = can(role, 'page:delete') && toggleSelecting !== undefined;
   return (
     <div className="panel-header">
       <h2>{translate('pages.title')}</h2>
-      {creatable && (
+      {(creatable || deletable) && (
         <div style={{ display: 'flex', gap: 2 }}>
-          <button className="ghost" title={translate('pages.folder.new')} onClick={createFolder}>
-            <FolderPlusIcon size={13} />
-          </button>
-          <MoreMenu
-            className="ghost"
-            title={translate('pages.new.button')}
-            icon={<PlusIcon size={13} />}
-            width={190}
-            items={pageCreateMenuItems({ createPage, createTemplate, createEmDashTemplate }, translate)}
-          />
+          {deletable && (
+            <button
+              className="asset-select-link"
+              aria-label={translate(selecting ? 'pages.select.stop' : 'pages.select.start')}
+              aria-pressed={selecting}
+              title={translate(selecting ? 'pages.select.stopTitle' : 'pages.select.startTitle')}
+              onClick={toggleSelecting}
+            >
+              {translate(selecting ? 'pages.select.stop' : 'pages.select.start')}
+            </button>
+          )}
+          {creatable && !selecting && (
+            <>
+              <button className="ghost" title={translate('pages.folder.new')} onClick={createFolder}>
+                <FolderPlusIcon size={13} />
+              </button>
+              <MoreMenu
+                className="ghost"
+                title={translate('pages.new.button')}
+                icon={<PlusIcon size={13} />}
+                width={190}
+                items={pageCreateMenuItems({ createPage, createTemplate, createEmDashTemplate }, translate)}
+              />
+            </>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+// What the rows draw of the mode: nothing at all while it is off, so an ordinary panel does no selection work.
+function useSelectionView(selection: PageSelectionModel): PageSelectionView | undefined {
+  const { active, selected, partial, index, click } = selection;
+  return useMemo(() => (active ? { selected, partial, index, click } : undefined), [active, click, index, partial, selected]);
+}
+
+// Esc leaves the mode; Cmd or Ctrl and A ticks every row shown, unless a text field has the keys (the search box keeps its own select all).
+function usePageSelectionKeys(selection: PageSelectionModel) {
+  const { active, stop, selectAll } = selection;
+  return useCallback(
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      if (!active) {
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        stop();
+        return;
+      }
+      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a' && !typing) {
+        event.preventDefault();
+        selectAll();
+      }
+    },
+    [active, selectAll, stop],
   );
 }
 

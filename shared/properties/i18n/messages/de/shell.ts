@@ -117,18 +117,6 @@ export const messages = {
   'shell.oldVersion.banner': 'Du siehst {subject} – so war die Website {when}. Das ist nur eine Ansicht, hier wird nicht gearbeitet.',
   'shell.oldVersion.frameTitle': 'Eine frühere Version der Website',
   'shell.pages.created': '{name} erstellt',
-  'shell.pages.deleteBody':
-    'Dadurch wird die Datei vom Datenträger entfernt. Sie lässt sich aus dem Verlauf wiederherstellen, falls sie in einer Version gespeichert wurde.',
-  'shell.pages.deleteConfirm': 'Seite löschen',
-  'shell.pages.deleteFolderBody': 'Dadurch wird der Ordner vom Datenträger entfernt.',
-  'shell.pages.deleteFolderBodyPages': {
-    one: 'Dadurch werden die {count} enthaltene Seite und der Ordner vom Datenträger entfernt.',
-    other: 'Dadurch werden die {count} enthaltenen Seiten und der Ordner vom Datenträger entfernt.',
-  },
-  'shell.pages.deleteFolderConfirm': 'Ordner löschen',
-  'shell.pages.deleteFolderTitle': 'Den Ordner „{directory}“ löschen?',
-  'shell.pages.deleteTitle': '{name} löschen?',
-  'shell.pages.deleted': '{name} gelöscht',
   'shell.pages.noLongerExists': 'Diese Seite gibt es nicht mehr.',
   'shell.pages.openProjectFirst': 'Öffne zuerst ein Projekt.',
   'shell.pages.openProjectToRename': 'Öffne ein Projekt, bevor du umbenennst.',

@@ -12,19 +12,27 @@ import { isCollectionRoute } from './pageOrder';
 import { countTreePages } from './pageTree';
 import { pageDisplayLabel, pageFolderDisplayName } from '../../lib/pageName';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { CmsIcon, FileIcon, FolderIcon, FolderOpenIcon, HomeIcon, TrashIcon } from '../../ui/Icons';
+import { CmsIcon, FileIcon, FolderIcon, FolderOpenIcon, HomeIcon } from '../../ui/Icons';
 import { isHomePage } from '../../../shared/properties/pageSettings';
 import { allowDragEffect } from '../../editor/dragState';
 import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
+import { PageSelectBox } from './PageSelectionBar';
+import type { Selection, SelectionIndex } from './pageSelection';
 
 export type PageEditing = { readonly kind: 'page'; readonly key: string } | { readonly kind: 'folder'; readonly key: string } | { readonly kind: 'none' };
 
+/** Select mode as the rows draw it: what is ticked, and the click that ticks. Absent when the mode is off. */
+export interface PageSelectionView {
+  readonly selected: Selection;
+  readonly partial: ReadonlySet<string>;
+  readonly index: SelectionIndex;
+  readonly click: (key: string, extend: boolean) => void;
+}
+
 export interface PageTreeActions {
   readonly select: (page: ScanPage) => void;
-  readonly removePage: (page: ScanPage) => void;
   readonly movePage: (page: ScanPage, to: string) => void;
-  readonly removeFolder: (rel: string, pageCount: number) => void;
   readonly renameFolder: (from: string, to: string) => void;
   readonly setEditing: React.Dispatch<React.SetStateAction<PageEditing>>;
   readonly toggleFolder: (rel: string) => void;
@@ -43,6 +51,7 @@ interface PageTreeViewProps {
   readonly editing: PageEditing;
   readonly dropDirectory: string | undefined;
   readonly actions: PageTreeActions;
+  readonly selection: PageSelectionView | undefined;
 }
 
 export function PageTreeView(props: PageTreeViewProps) {
@@ -68,50 +77,49 @@ export function PageTreeView(props: PageTreeViewProps) {
 function PageRow({ page, props }: { readonly page: PageTreePage; readonly props: PageTreeViewProps }) {
   const editing = props.editing.kind === 'page' && props.editing.key === page.path;
   const collection = isCollectionRoute(page.name);
-  // Rename and delete appear only for a role that may do them (shared/properties/projectRoles.ts).
   const translate = useTranslate();
-  const role = useCurrentRole();
-  const deletable = can(role, 'page:delete');
+  const selection = props.selection;
+  const refusal = selection?.index.refused.get(page.name);
   return (
     <TreeDragRow
-      className={`list-item ${collection ? 'collection' : ''} ${props.currentPage?.path === page.path ? 'active' : ''}`}
+      className={`list-item ${collection ? 'collection' : ''} ${selection === undefined && props.currentPage?.path === page.path ? 'active' : ''} ${selectionClasses(selection, page.name)}`}
       style={{ paddingLeft: 8 + props.depth * 14 }}
       data-order-key={page.name}
-      title={page.route}
-      draggable={!editing && props.reorder.enabled}
+      title={refusal === undefined ? page.route : translate('pages.settings.delete.homeRefused')}
+      draggable={!editing && props.reorder.enabled && selection === undefined}
       onDragStart={(event) => {
         startPageDrag(event, page);
         props.reorder.start(event, page.name);
       }}
       onDragEnd={props.reorder.finish}
-      onClick={() => {
-        if (!editing) {
+      onClick={(event) => {
+        if (selection !== undefined) {
+          selection.click(page.name, event.shiftKey);
+        } else if (!editing) {
           props.actions.select(page);
         }
       }}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        props.actions.setEditing({ kind: 'page', key: page.path });
+        if (selection === undefined) {
+          props.actions.setEditing({ kind: 'page', key: page.path });
+        }
       }}
     >
+      {selection !== undefined && (
+        <PageSelectBox
+          checked={selection.selected.has(page.name)}
+          partial={false}
+          refusal={refusal}
+          label={translate('pages.select.row', { name: pageDisplayLabel(page, translate) })}
+        />
+      )}
       <span className="icon">{pageRowIcon(page.name, { collection })}</span>
       <span className="page-list-copy">
         <span className="label">{pageDisplayLabel(page, translate)}</span>
         <span className="sub">{page.route}</span>
       </span>
-      <PageSettingsButton open={() => props.actions.setEditing({ kind: 'page', key: page.path })} />
-      {deletable && (
-        <button
-          className="row-action"
-          title={translate('pages.delete.page')}
-          onClick={(event) => {
-            event.stopPropagation();
-            props.actions.removePage(page);
-          }}
-        >
-          <TrashIcon size={12} />
-        </button>
-      )}
+      {selection === undefined && <PageSettingsButton open={() => props.actions.setEditing({ kind: 'page', key: page.path })} />}
     </TreeDragRow>
   );
 }
@@ -156,49 +164,80 @@ function FolderRow({
   const translate = useTranslate();
   const role = useCurrentRole();
   const renamable = can(role, 'page:rename');
-  const deletable = can(role, 'page:delete');
+  const selection = props.selection;
+  const key = rel + '/';
   return (
     <TreeDragRow
-      className="list-item folder"
+      className={`list-item folder ${selectionClasses(selection, key)}`}
       style={{ paddingLeft: 8 + props.depth * 14 }}
-      onClick={() => {
-        if (!editing) {
+      onClick={(event) => {
+        if (selection !== undefined) {
+          selection.click(key, event.shiftKey);
+        } else if (!editing) {
           props.actions.toggleFolder(rel);
         }
       }}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        if (renamable) {
+        if (renamable && selection === undefined) {
           props.actions.setEditing({ kind: 'folder', key: rel });
         }
       }}
-      draggable={!editing && props.reorder.enabled}
+      draggable={!editing && props.reorder.enabled && selection === undefined}
       onDragStart={(event) => props.reorder.start(event, rel + '/')}
       onDragEnd={props.reorder.finish}
       data-order-key={rel + '/'}
       dropBehavior={folderDropBehavior(props, rel)}
     >
-      <span className="icon">{collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />}</span>
+      {selection !== undefined && (
+        <PageSelectBox
+          checked={selection.selected.has(key)}
+          partial={selection.partial.has(key)}
+          refusal={undefined}
+          label={translate('pages.select.folderRow', { name: pageFolderDisplayName(name) })}
+        />
+      )}
+      <FolderGlyph collapsed={collapsed} toggle={selection === undefined ? undefined : () => props.actions.toggleFolder(rel)} />
       <span className="page-list-copy">
         <span className="label">{pageFolderDisplayName(name)}</span>
         <span className="sub">/{rel}</span>
       </span>
       {collapsed && count > 0 && <span className="sub folder-count">{translate('pages.folder.count', { count })}</span>}
-      {renamable && <PageRenameButton kind="folder" rename={() => props.actions.setEditing({ kind: 'folder', key: rel })} />}
-      {deletable && (
-        <button
-          className="row-action"
-          title={translate('pages.delete.folder')}
-          onClick={(event) => {
-            event.stopPropagation();
-            props.actions.removeFolder(rel, count);
-          }}
-        >
-          <TrashIcon size={12} />
-        </button>
-      )}
+      {renamable && selection === undefined && <PageRenameButton kind="folder" rename={() => props.actions.setEditing({ kind: 'folder', key: rel })} />}
     </TreeDragRow>
   );
+}
+
+// In Select mode a click on the row ticks the folder, so showing or hiding its pages moves to its own icon.
+function FolderGlyph({ collapsed, toggle }: { readonly collapsed: boolean; readonly toggle: (() => void) | undefined }) {
+  const translate = useTranslate();
+  const glyph = collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />;
+  if (toggle === undefined) {
+    return <span className="icon">{glyph}</span>;
+  }
+  return (
+    <span
+      className="icon page-select-folder-toggle"
+      role="button"
+      title={translate('pages.select.folderToggle')}
+      aria-label={translate('pages.select.folderToggle')}
+      aria-expanded={!collapsed}
+      onClick={(event) => {
+        event.stopPropagation();
+        toggle();
+      }}
+    >
+      {glyph}
+    </span>
+  );
+}
+
+function selectionClasses(selection: PageSelectionView | undefined, key: string): string {
+  if (selection === undefined) {
+    return '';
+  }
+  const refused = selection.index.refused.has(key) ? 'page-refused' : '';
+  return `page-selecting ${selection.selected.has(key) ? 'page-selected' : ''} ${refused}`;
 }
 
 // The homepage's row carries the house, the icon Page settings shows on its Homepage badge.
