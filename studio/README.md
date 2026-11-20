@@ -85,6 +85,10 @@ The runner supports `astro.config.ts`, `.mts`, `.cts`, `.js`, `.mjs`, or `.cjs`,
 - Codex-style AI panel with saved parallel chats, per-chat model selection, browser dictation, image upload/paste/drop, and stop controls. Configurable OpenAI-compatible service with bounded context, reviewable replacements, stale-edit checks, and an explicit apply action. See [AI chat configuration](docs/ai-chat.md).
 - Cloudflare Worker/GitHub login, repository collaborator access, verified GitHub profile pictures, an account/sign-out menu, an isolated preview host, a single shared Container, and R2 persistence for draft recovery.
 
+## Sign-in providers
+
+Hosted Studio signs people in with GitHub, and that stays the default. An instance owner or fork can swap in their own provider (Google, email one-time codes, SSO/OIDC, passkeys) without touching Studio core: add `studio/cloudflare/auth-provider.ts`, which updates preserve, and rebuild. Core keeps the session, CSRF state, roles and permission checks; the provider only says who someone is. Stacki does not ship other providers. The interface is **experimental and may change in minor versions**: see [docs/auth-providers.md](docs/auth-providers.md).
+
 ## Privacy
 
 Studio sends no usage tracking. It has no analytics, no usage counter and no background
