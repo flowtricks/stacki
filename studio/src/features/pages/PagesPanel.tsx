@@ -17,7 +17,6 @@ import { CodeInline } from '../../../vendor/stacki/src/ui/CodeBlock';
 import { PlusIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request, type Project } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
-import { PanelHeader } from '../../../vendor/stacki/src/ui/PanelHeader';
 
 interface Props {
   readonly flushSave?: (() => Promise<void>) | undefined;
@@ -134,14 +133,14 @@ function useCreateFile(
 function PagesHeader({ collection, create }: { readonly collection: boolean; readonly create: () => void }) {
   const translate = useTranslate();
   return (
-    <PanelHeader
-      title={collection ? translate('pages.studio.collections') : translate('pages.title')}
-      actions={
+    <div className="panel-header">
+      <h2>{collection ? translate('pages.studio.collections') : translate('pages.title')}</h2>
+      <div className="studio-panel-actions">
         <button className="ghost" aria-label={collection ? translate('pages.studio.createItem') : translate('pages.create.page')} onClick={create}>
           <PlusIcon size={16} />
         </button>
-      }
-    />
+      </div>
+    </div>
   );
 }
 

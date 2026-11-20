@@ -467,8 +467,8 @@
     top: 0;
     min-width: 100%;
   }
-  :root {
-    --panel-header-height: 48px;
+  .panel-header {
+    min-height: 48px;
   }
   /* A 48px header centres its row 3px lower than the 12px top padding does. */
   .studio-app[data-editor-layout='collapsed'] .studio-left > .panel-close {

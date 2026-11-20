@@ -3,7 +3,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AppSummary } from '../../shared/properties/apps';
 import { useCurrentRole } from '../lib/useCurrentRole';
 import { canPanel, canRailTab, canSettingsPanel } from '../lib/roleAccess';
-import type { SettingsFocusTarget } from '../lib/settingsSections';
+import { shownSettingsView, type SettingsFocusTarget } from '../lib/settingsSections';
+import { shortcutOf, railActionOf, type RailAction } from './railShortcuts';
 import { FEATURE_ICONS, type FeatureIconComponent } from './featureIcons';
 import { AppsRailBadge } from '../features/apps/appUpdates';
 import { AppTile } from '../features/apps/AppTile';
@@ -33,23 +34,23 @@ import { animateRailReflow, readRailRows } from './railReflow';
 // Each button draws its access feature's icon (featureIcons.tsx), the same one the
 // Roles permission grid shows, so the two cannot drift apart.
 const TABS = [
-  { id: 'pages', titleKey: 'rail.pages', shortcut: 'P', Icon: FEATURE_ICONS['panel:pages'] },
-  { id: 'navigator', titleKey: 'rail.navigator', shortcut: 'Z', Icon: FEATURE_ICONS['panel:navigator'] },
-  { id: 'properties', titleKey: 'rail.properties', shortcut: 'K', Icon: FEATURE_ICONS['panel:properties'] },
-  { id: 'components', titleKey: 'rail.components', shortcut: '⇧A', Icon: FEATURE_ICONS['panel:components'] },
-  { id: 'assets', titleKey: 'rail.assets', shortcut: 'J', Icon: FEATURE_ICONS['panel:assets'] },
-  { id: 'cms', titleKey: 'rail.cms', shortcut: '⌥C', Icon: FEATURE_ICONS['panel:cms'] },
-  { id: 'variables', titleKey: 'rail.variables', shortcut: '⌥V', Icon: FEATURE_ICONS['panel:variables'] },
-  { id: 'selectors', titleKey: 'rail.selectors', shortcut: 'G', Icon: FEATURE_ICONS['panel:selectors'] },
-  { id: 'code', titleKey: 'rail.code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
-  { id: 'history', titleKey: 'rail.history', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
-  { id: 'apps', titleKey: 'rail.apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
-  { id: 'audits', titleKey: 'rail.audits', shortcut: '⌥A', Icon: FEATURE_ICONS['panel:audits'] },
+  { id: 'pages', titleKey: 'rail.pages', shortcut: shortcutOf('pages'), Icon: FEATURE_ICONS['panel:pages'] },
+  { id: 'navigator', titleKey: 'rail.navigator', shortcut: shortcutOf('navigator'), Icon: FEATURE_ICONS['panel:navigator'] },
+  { id: 'properties', titleKey: 'rail.properties', shortcut: shortcutOf('properties'), Icon: FEATURE_ICONS['panel:properties'] },
+  { id: 'components', titleKey: 'rail.components', shortcut: shortcutOf('components'), Icon: FEATURE_ICONS['panel:components'] },
+  { id: 'assets', titleKey: 'rail.assets', shortcut: shortcutOf('assets'), Icon: FEATURE_ICONS['panel:assets'] },
+  { id: 'cms', titleKey: 'rail.cms', shortcut: shortcutOf('cms'), Icon: FEATURE_ICONS['panel:cms'] },
+  { id: 'variables', titleKey: 'rail.variables', shortcut: shortcutOf('variables'), Icon: FEATURE_ICONS['panel:variables'] },
+  { id: 'selectors', titleKey: 'rail.selectors', shortcut: shortcutOf('selectors'), Icon: FEATURE_ICONS['panel:selectors'] },
+  { id: 'code', titleKey: 'rail.code', shortcut: shortcutOf('code'), Icon: FEATURE_ICONS['panel:code'] },
+  { id: 'history', titleKey: 'rail.history', shortcut: shortcutOf('history'), Icon: FEATURE_ICONS['panel:history'] },
+  { id: 'apps', titleKey: 'rail.apps', shortcut: shortcutOf('apps'), Icon: FEATURE_ICONS['panel:apps'] },
+  { id: 'audits', titleKey: 'rail.audits', shortcut: shortcutOf('audits'), Icon: FEATURE_ICONS['panel:audits'] },
 ] as const satisfies readonly { readonly id: string; readonly titleKey: MessageKey; readonly shortcut: string; readonly Icon: unknown }[];
 // The project's Settings panel (features/projectSettings) sits at the rail's foot, directly above the AI button,
 // and like it never moves into More (railOverflow.ts measures the anchored pair). Not the app's Settings screen.
 // It holds the Instructions too (their own rail button became ⌥I, which opens Settings at them).
-const SETTINGS_TAB = { id: 'projectSettings', shortcut: '⌥S', Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
+const SETTINGS_TAB = { id: 'projectSettings', shortcut: shortcutOf('projectSettings'), Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
 export type RailTab = (typeof TABS)[number]['id'] | typeof SETTINGS_TAB.id;
 
 // The order each person arranges by dragging (railOrder.ts): the top list holds most panels, the bottom list
@@ -129,14 +130,22 @@ export default function LeftRail({
 
   // A panel the project's role hides has no button and no shortcut (roles/roleAccess.ts).
   const role = useCurrentRole();
-  useRailKeys({ componentOpen }, (target) => {
-    if (target === 'instructions') {
-      // The Instructions live in Settings now; a role with their access opens Settings at them.
-      if (canPanel(role, 'instructions')) {
-        onOpenSettings('instructions');
+  useRailKeys({ componentOpen }, (action) => {
+    if (action === 'ai') {
+      // The AI chat toggles like a panel; a role without it has no button, so no key.
+      aiButton?.onSelect();
+    } else if (action === 'secrets' || action === 'mcp' || action === 'instructions') {
+      // A view of Settings: opens Settings at it, or, when that view is already showing, toggles the panel closed.
+      const access = action === 'instructions' ? canPanel(role, 'instructions') : canPanel(role, 'projectSettings');
+      if (access) {
+        if (active === 'projectSettings' && shownSettingsView() === action) {
+          onSelect('projectSettings');
+        } else {
+          onOpenSettings(action);
+        }
       }
-    } else if (canRailTab(role, target)) {
-      onSelect(target);
+    } else if (canRailTab(role, action)) {
+      onSelect(action);
     }
   });
   const tabs = TABS.filter((tab) => tab.id !== 'properties' || componentOpen).filter((tab) => canPanel(role, tab.id));
@@ -168,7 +177,7 @@ export default function LeftRail({
       label: translate('rail.settings'),
       shortcut: SETTINGS_TAB.shortcut,
       Icon: SETTINGS_TAB.Icon,
-      tooltip: translate('rail.settings'),
+      tooltip: translate('rail.withShortcut', { label: translate('rail.settings'), shortcut: SETTINGS_TAB.shortcut }),
       pressed: active === SETTINGS_TAB.id,
       select: () => onSelect(SETTINGS_TAB.id),
       badge: undefined,
@@ -178,9 +187,9 @@ export default function LeftRail({
     entries.set(AI_ID, {
       id: AI_ID,
       label: translate('rail.ai'),
-      shortcut: undefined,
+      shortcut: shortcutOf('ai'),
       Icon: AiRailIcon,
-      tooltip: translate('rail.ai'),
+      tooltip: translate('rail.withShortcut', { label: translate('rail.ai'), shortcut: shortcutOf('ai') }),
       pressed: aiButton.active,
       select: aiButton.onSelect,
       badge: undefined,
@@ -428,13 +437,10 @@ export default function LeftRail({
   );
 }
 
-function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onSelect: (target: RailTab | 'instructions') => void): void {
-  // P / Z / ⇧A / J / G / E / ⌥C / ⌥V / ⌥H / ⌥I / ⌥A / ⌥S toggle the panels (ignored while typing in a field).
+function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onAction: (action: RailAction) => void): void {
+  // The chords are the table's (railShortcuts.ts); they are ignored while typing in a field.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.metaKey || event.ctrlKey) {
-        return;
-      }
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -442,56 +448,15 @@ function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onS
       ) {
         return;
       }
-      if (event.altKey) {
-        // Matched on the physical key: Option rewrites e.key ("ç" for C,
-        // "˙" for H), so e.key would never equal the letter.
-        if (event.code === 'KeyC') {
-          event.preventDefault();
-          onSelect('cms');
-        } else if (event.code === 'KeyV') {
-          event.preventDefault();
-          onSelect('variables');
-        } else if (event.code === 'KeyH') {
-          event.preventDefault();
-          onSelect('history');
-        } else if (event.code === 'KeyI') {
-          event.preventDefault();
-          onSelect('instructions');
-        } else if (event.code === 'KeyA') {
-          event.preventDefault();
-          onSelect('audits');
-        } else if (event.code === 'KeyS') {
-          event.preventDefault();
-          onSelect('projectSettings');
-        }
+      const shortcut = railActionOf(event);
+      // Properties has a button, and so a key, only while a component is open.
+      if (shortcut === undefined || (shortcut.action === 'properties' && !componentOpen)) {
         return;
       }
-      const key = event.key.toLowerCase();
-      let id: RailTab | undefined;
-      if (key === 'p' && !event.shiftKey) {
-        id = 'pages';
-      } else if (key === 'z' && !event.shiftKey) {
-        id = 'navigator';
-      } else if (key === 'a' && event.shiftKey) {
-        id = 'components';
-      } else if (key === 'k' && !event.shiftKey && componentOpen) {
-        id = 'properties';
-      } else if (key === 'j' && !event.shiftKey) {
-        id = 'assets';
-      } else if (key === 'c' && !event.shiftKey) {
-        id = 'code';
-      } else if (key === 'g' && !event.shiftKey) {
-        id = 'selectors';
-      } else if (key === 'e' && !event.shiftKey) {
-        // E alone: ⌘E is the insert palette's (appKeys.ts) and is skipped above.
-        id = 'apps';
-      }
-      if (id) {
-        event.preventDefault();
-        onSelect(id);
-      }
+      event.preventDefault();
+      onAction(shortcut.action);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onSelect, componentOpen]);
+  }, [onAction, componentOpen]);
 }

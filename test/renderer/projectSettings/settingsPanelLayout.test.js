@@ -59,6 +59,7 @@ function Page() {
       <ProjectSettingsPanel
         projectPath="/project"
         views={['secrets', 'mcp', 'instructions']}
+        shortcuts={{ secrets: '⌥E', mcp: '⌥M', instructions: '⌥I' }}
         renderInstructions={(context) => <InstructionsSections projectPath="/project" context={context} />}
       />
     </div>
@@ -105,6 +106,7 @@ app.whenReady().then(async () => {
         gapIconLabel: box(label).left - box(icon).right, chevronGap: box(link).right - box(chevron).right,
         labelsAfterIcon: [...document.querySelectorAll('.settings-link')].every((l) => Math.abs(l.querySelector('.label').getBoundingClientRect().left - l.querySelector('.icon').getBoundingClientRect().right - 8) < 1.5),
         titleLeft: box(title).left, iconLeft: box(icon).left, rows: document.querySelectorAll('.settings-link').length,
+        hintBeforeChevron: [...document.querySelectorAll('.settings-link')].every((l) => { const k = l.querySelector('.settings-link-key'); return k !== null && k.getBoundingClientRect().right <= l.lastElementChild.getBoundingClientRect().left && k.getBoundingClientRect().left > l.querySelector('.label').getBoundingClientRect().left; }),
         chevronColor: getComputedStyle(chevron).color, labelColor: getComputedStyle(label).color,
       };
     })()\`);
@@ -190,6 +192,7 @@ const check = (what, condition, detail) => {
       check(`${at}: the label follows its icon by the list gap`, root.labelsAfterIcon === true, detail);
       check(`${at}: the row is the list's height`, root.height >= 28 && root.height <= 34, detail);
       check(`${at}: the chevron ends the row`, root.chevronGap >= 4 && root.chevronGap <= 14, detail);
+      check(`${at}: each row shows its chord, muted, before the chevron`, root.hintBeforeChevron === true, detail);
       check(`${at}: the chevron is muted against the label`, root.chevronColor !== root.labelColor, detail);
       check(`${at}: icons sit within the title's row inset`, Math.abs(root.iconLeft - root.titleLeft) <= 12, detail);
       check(`${at}: the root does not scroll sideways`, rootOverflow.body <= 0 && rootOverflow.host <= 0, JSON.stringify(rootOverflow));

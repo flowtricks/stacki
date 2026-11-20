@@ -5,7 +5,6 @@ import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
 import { parsePage } from '../source/source';
 import type { SharedDocument } from '../collaboration/useDocument';
-import { PanelHeader } from '../../../vendor/stacki/src/ui/PanelHeader';
 
 interface Props {
   readonly document: SharedDocument | undefined;
@@ -41,7 +40,10 @@ export function CodePanel({ document, selected, select, openComponent }: Props) 
         />
       ) : (
         <>
-          <PanelHeader title={translate('workspace.code.title')} actions={<span className="muted">{document.file.split('/').at(-1)}</span>} />
+          <div className="panel-header">
+            <h2>{translate('workspace.code.title')}</h2>
+            <span className="muted">{document.file.split('/').at(-1)}</span>
+          </div>
           <div className="code-panel-editor">
             <CodeEditor
               language={document.file.endsWith('.css') ? 'css' : /\.mdx?$/.test(document.file) ? 'markdown' : 'javascript'}

@@ -827,7 +827,15 @@ returns to the root, and the panel always opens on the root unless something ask
 Instructions panel open). Which links show follows the role (`settingsViewsOf` in `src/lib/roleAccess.ts`):
 `panel:projectSettings` gives Secrets and MCP, `panel:instructions` gives Instructions, so a role with only
 the second sees Settings with one link. The frame (`ProjectSettingsShell.tsx`) is shared with hosted Studio,
-which lists Secrets and MCP with honest unavailable states and no Instructions. It is the project's settings,
+which lists Secrets and MCP with honest unavailable states and no Instructions. Back or Escape from the
+Instructions view also closes the instruction file opened from its list (its edits are saved as the reading
+view unmounts, as with its own close button).
+
+Rail chords live in one table, `src/app/railShortcuts.ts`, which the keys, the tooltips and the Settings root
+rows all read (a test holds it free of duplicates): letters alone P Z ⇧A K J C G E, and ⌥C CMS, ⌥V Variables,
+⌥H Git, ⌥A Audits, ⌥S Settings, ⌥I Instructions, ⌥L AI chat, ⌥E Secrets, ⌥M MCP. ⌥P is the interactive
+preview. ⌥I, ⌥E and ⌥M open Settings at their view, and toggle the panel closed when that view is showing;
+⌥L toggles the AI chat. Each follows the role (no access, no key) and is ignored while typing in a field. It is the project's settings,
 apart from the app's own Settings screen (`src/app/settings`). Its Secrets view edits one of the project's dev env files
 at a time (`SECRETS_FILE_NAMES`: `.env`, `.env.local`, `.env.development`, `.env.development.local`, the
 dev server's load order), picked in a dropdown that opens on `.env`. `.env.production` is not listed.
@@ -919,6 +927,17 @@ validates results; `shared/ipc/studioRelease.ts` validates the release itself.
 The installer stages dependencies, type checks and a build before activation,
 uses the same lock as CLI updates, and refuses an existing Studio directory.
 Cloud authorization and deployment remain an explicit agent-assisted handoff.
+
+The install payload may carry a bounded `auth` choice and `studio:setAuth` changes it later
+(`github`, `access`, `google`, `oidc` or `passkey`). `shared/ipc/studioAuth.ts` is the one parser:
+unknown keys are refused, so a client secret has no field to ride in; every value is checked with the
+same rules `npm create stacki` uses (https issuer, bounded lists, email and domain shapes). Absent
+`auth` means GitHub. Main writes only the sign-in variables into `studio/cloudflare/wrangler.jsonc`
+(`shared/ipc/studioAuthConfigFile.ts`, a surgical edit that keeps comments and every other member):
+into the staged copy on install, into the installed file on `studio:setAuth`, which needs the
+`settings:studio` feature. `studio:status` reports the file's current type as `signIn`
+(`custom` when `AUTH_PROVIDER` is something Stacki did not write). Secrets are never written
+anywhere; the dialog only shows the `wrangler secret put` commands to copy.
 
 Each installation carries a bounded `requestId`. The `studio:progress` event echoes
 that ID and the requested project path alongside the current stage and a bounded

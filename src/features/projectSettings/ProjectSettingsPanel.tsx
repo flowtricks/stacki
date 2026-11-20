@@ -13,11 +13,15 @@ export interface ProjectSettingsPanelProps {
   readonly projectPath: string;
   /** The views the person's role may open, in the order the root lists them. */
   readonly views: readonly SettingsViewId[];
+  /** Closes what a view opened in the main area when the person leaves it by Back or Escape. */
+  readonly onLeaveView?: ((view: SettingsViewId) => void) | undefined;
+  /** The chord that opens each view, shown on its root row. */
+  readonly shortcuts?: Readonly<Partial<Record<SettingsViewId, string>>> | undefined;
   /** Draws the Instructions view's sections; called only for that view. */
   readonly renderInstructions: (context: SettingsSectionsContext) => ReactNode;
 }
 
-export default function ProjectSettingsPanel({ projectPath, views, renderInstructions }: ProjectSettingsPanelProps) {
+export default function ProjectSettingsPanel({ projectPath, views, renderInstructions, onLeaveView, shortcuts }: ProjectSettingsPanelProps) {
   return (
     // Keyed by project: switching projects drops every revealed value, unsaved form and search with the panel's state.
     <ProjectSettingsShell
@@ -25,6 +29,8 @@ export default function ProjectSettingsPanel({ projectPath, views, renderInstruc
       projectKey={projectPath}
       views={views}
       refreshable
+      onLeaveView={onLeaveView}
+      shortcuts={shortcuts}
       renderView={(view, context) => {
         switch (view) {
           case 'secrets':

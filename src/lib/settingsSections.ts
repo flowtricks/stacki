@@ -179,3 +179,18 @@ export function subscribeSettingsRequests(listener: () => void): () => void {
     focusListeners.delete(listener);
   };
 }
+
+// ---------------------------------------------------------------------------
+// The view Settings shows
+// ---------------------------------------------------------------------------
+
+let shownView: SettingsViewId | undefined;
+
+/** The panel publishes the view it shows (undefined: the root, or closed), so a shortcut can tell "open" from "toggle". */
+export function publishSettingsView(view: SettingsViewId | undefined): void {
+  shownView = view;
+}
+
+export function shownSettingsView(): SettingsViewId | undefined {
+  return shownView;
+}

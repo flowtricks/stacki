@@ -340,7 +340,7 @@ test('Settings stays outside More and directly precedes the AI item at any heigh
   };
   for (const heightPx of [1000, 400, ANCHOR_PX + 3 * 36, ANCHOR_PX, 20]) {
     await resize(heightPx);
-    assert.deepEqual(anchored(), ['Settings (⌥S)', 'AI chat'], `${heightPx}px: Settings directly precedes AI, both anchored`);
+    assert.deepEqual(anchored(), ['Settings (⌥S)', 'AI chat (⌥L)'], `${heightPx}px: Settings directly precedes AI, both anchored`);
     assert.ok(
       (await moreRows()).every((row) => !row.startsWith('Settings')),
       `${heightPx}px: Settings is never in More`,

@@ -25,6 +25,8 @@ esbuild.buildSync({
       "export { default as InstructionsSections } from './src/features/instructions/InstructionsSections';",
       "export { default as ProjectSettingsShell } from './src/features/projectSettings/ProjectSettingsShell';",
       "export { requestSettingsSection } from './src/lib/settingsSections';",
+      "export { default as DesktopSettings } from './src/app/shell/DesktopSettings';",
+      "export { useInstructionSelection } from './src/features/instructions/instructionSelection';",
       "export { InstructionsSettings } from './src/app/settings/InstructionsSettings';",
       "export { default as InstructionsDocument } from './src/app/shell/InstructionsDocument';",
       "export { selectedInstruction, selectInstruction } from './src/features/instructions/instructionSelection';",
@@ -379,5 +381,61 @@ test('the open file is a CMS entry: its frontmatter as CMS fields and its body a
   await act(async () => new Promise((resolve) => setTimeout(resolve, 700)));
   await settle();
   assert.deepEqual(saves, ['---\nname: write-tests\ndescription: Shorter.\n---\n\n# A\n'], 'only the edited line changes');
+  await unmount();
+});
+
+// The Settings panel as the app draws it, with the reading view over the canvas that the open file selects (AppPanes' cover).
+function Cover() {
+  const file = panel.useInstructionSelection('/project');
+  return file === undefined
+    ? undefined
+    : React.createElement(panel.InstructionsDocument, {
+        key: file,
+        projectPath: '/project',
+        file,
+        editable: true,
+        onClose: () => panel.selectInstruction(undefined),
+      });
+}
+const settingsWithCover = () =>
+  React.createElement(
+    React.Fragment,
+    {},
+    React.createElement(panel.DesktopSettings, { projectPath: '/project', showToast: () => {} }),
+    React.createElement(Cover),
+  );
+
+test('Back closes the instruction opened from the list, and keeps its unsaved edit', async () => {
+  reset({ '.claude/skills/a/SKILL.md': '---\nname: write-tests\ndescription: Old.\n---\n\n# A\n' });
+  const saves = [];
+  window.avb.readInstruction = async ({ file }) => ({ ok: true, value: { source: files.get(file) } });
+  window.avb.writeInstruction = async ({ file, source }) => {
+    saves.push(source);
+    files.set(file, source);
+    return { ok: true, value: { source } };
+  };
+  await mount(settingsWithCover());
+  await click([...document.querySelectorAll('.panel-row')].find((row) => row.textContent.includes('write-tests')));
+  assert.equal(panel.selectedInstruction()?.file, '.claude/skills/a/SKILL.md', 'the file is open over the canvas');
+  assert.ok(document.querySelector('.cms-detail-head'), 'the reading view is drawn');
+  const description = document.querySelector('.remote-cms-fields textarea');
+  await type(description, 'Edited.');
+  // Back before the autosave delay: the close must not lose the edit.
+  await click(document.querySelector('.settings-panel .panel-header button[aria-label="Back to settings"], .settings-panel .panel-header button'));
+  assert.equal(panel.selectedInstruction(), undefined, 'Back closed the instruction');
+  assert.equal(document.querySelector('.cms-detail-head') ?? undefined, undefined, 'the main area is back to what was there');
+  assert.equal(document.querySelectorAll('.settings-link').length >= 1, true, 'and Settings is at its root');
+  assert.deepEqual(saves, ['---\nname: write-tests\ndescription: Edited.\n---\n\n# A\n'], 'the edit was saved as the view closed');
+  await unmount();
+});
+
+test('Escape in the Instructions view closes its open instruction too; Secrets and MCP leave nothing open', async () => {
+  reset({ 'AGENTS.md': '# A\n' });
+  window.avb.readInstruction = async ({ file }) => ({ ok: true, value: { source: files.get(file) } });
+  await mount(settingsWithCover());
+  await click([...document.querySelectorAll('.panel-row')].find((row) => row.textContent.includes('AGENTS.md')));
+  assert.equal(panel.selectedInstruction()?.file, 'AGENTS.md');
+  await act(async () => document.querySelector('.settings-panel').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  assert.equal(panel.selectedInstruction(), undefined);
   await unmount();
 });
