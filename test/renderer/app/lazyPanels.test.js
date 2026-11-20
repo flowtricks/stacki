@@ -216,10 +216,9 @@ async function checkAudits(context) {
   assert.equal(__lazyPanels.AuditsPanel.project.path, '/project');
 }
 
-// The AI button sits at the foot of the rail, outside the numbered tabs.
+// The AI button sits at the foot of the rail, outside the numbered tabs. Its label carries its shortcut, so it is found by id.
 async function checkAi(context) {
-  const button = document.querySelector('.rail-btn[aria-label="AI chat"]');
-  assert.ok(button, 'The AI chat button is on the rail');
+  const button = railButton('ai');
   await context.act(() => button.click());
   assertPending(context, 'AiPanel');
   await releasePanel(context, 'AiPanel');
