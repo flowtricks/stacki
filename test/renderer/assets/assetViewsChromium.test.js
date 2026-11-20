@@ -389,7 +389,10 @@ app.whenReady().then(async () => {
     output.toCompact = await host('window.steps.chooseInNextFrame("List - Small")');
     await host('window.until(() => [...document.querySelectorAll(".asset-items img")].every((image) => image.complete))');
     await shot('compact');
-    output.compactScroll = await host('window.steps.scrollThrough(2400)');
+    // List - Small draws all 5,000 files one per row, the longest scroll of the three views. At 2,400 px a
+    // step, two frames each, a hidden window on the Linux runner (it draws slowly) outlasted the probe's 240 s
+    // bound (Check on b6a4a679). Steps four times longer still check every frame drawn on the way.
+    output.compactScroll = await host('window.steps.scrollThrough(9600)');
     output.keys.compact = await host('window.steps.keys(1)');
     output.folder.compact = await host('window.steps.folderAndBack()');
     output.select.compact = await host('window.steps.select()');
