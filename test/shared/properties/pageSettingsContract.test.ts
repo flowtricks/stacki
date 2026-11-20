@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  checkNewFolder,
   checkUrlName,
   folderOf,
   homePagesOf,
@@ -209,4 +210,26 @@ test('a URL name in another folder is a move, checked against that folder', () =
   }
   assert.equal(folderOf('blog/post.astro'), 'blog');
   assert.equal(folderOf('about.astro'), '');
+});
+
+test('a new folder name is checked as a page path, unique in any case and not an address a page answers', () => {
+  const inventory = { pages: ['index.astro', 'about.astro'], folders: ['blog', 'blog/archive'] };
+  const table: readonly (readonly [string, string])[] = [
+    ['company', 'company'],
+    ['company/', 'company'],
+    ['blog/2024', 'blog/2024'],
+    ['', 'Enter a folder name.'],
+    ['   ', 'Enter a folder name.'],
+    ['Blog', 'A folder named Blog already exists.'],
+    ['BLOG/ARCHIVE', 'A folder named BLOG/ARCHIVE already exists.'],
+    ['About', 'The URL /About is already used by another page or folder.'],
+    ['../outside', 'Page paths must stay inside the pages folder.'],
+    ['a?b', 'Enter a valid page or folder path.'],
+    ['a*b', 'Use letters, numbers, spaces or dashes in page paths.'],
+    ['x'.repeat(501), 'Enter a valid page or folder path.'],
+  ];
+  for (const [typed, expected] of table) {
+    const check = checkNewFolder(typed, inventory);
+    assert.equal(check.kind === 'valid' ? check.folder : check.problem.message, expected, typed.slice(0, 40));
+  }
 });

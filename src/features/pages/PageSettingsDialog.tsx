@@ -10,6 +10,7 @@ import type { Result } from '../../../shared/core/result';
 import type { Described } from '../../../shared/properties/i18n/messageRef';
 import { pageURLPath } from '../../../shared/properties/pageRename';
 import {
+  checkNewFolder,
   checkUrlName,
   folderOf,
   homeSwapPlan,
@@ -24,7 +25,7 @@ import type { ScanPage } from '../../../shared/properties/projectScan';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { pageDisplayLabel } from '../../lib/pageName';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
-import { CopyIcon, HomeIcon, TrashIcon } from '../../ui/Icons';
+import { CopyIcon, FolderIcon, FolderPlusIcon, HomeIcon, TrashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import Dropdown from '../../ui/Dropdown';
 import { SkeletonRows } from '../../ui/Skeleton';
@@ -87,7 +88,7 @@ export function PageSettingsDialog(props: PageSettingsDialogProps) {
             </button>
           </div>
           <div className="page-settings-body">
-            {model.step.kind === 'settings' ? <SettingsSections model={model} props={props} /> : <ConfirmStep model={model} props={props} />}
+            {inSections(model.step) ? <SettingsSections model={model} props={props} /> : <ConfirmStep model={model} props={props} />}
             {model.problem !== undefined && (
               <div className="page-settings-problem" role="alert">
                 {model.problem}
@@ -101,6 +102,11 @@ export function PageSettingsDialog(props: PageSettingsDialogProps) {
 }
 
 type Model = ReturnType<typeof usePageSettings>;
+
+// A rename or move is confirmed in a popover beside the field; the other steps take the dialog's body for theirs.
+function inSections(step: Step): boolean {
+  return step.kind === 'settings' || step.action.kind === 'rename';
+}
 
 function usePageSettings(props: PageSettingsDialogProps) {
   const translateDescribed = useTranslateDescribed();
@@ -251,13 +257,6 @@ function SettingsSections({ model, props }: { readonly model: Model; readonly pr
         <h3>{translate('pages.settings.section.general')}</h3>
         {home ? <HomeBadge /> : <UrlNameField key={props.page.name} model={model} props={props} />}
       </section>
-      {/* A template answers many addresses; the homepage is one, so the section is not offered at all (main refuses too). */}
-      {!home && !props.page.name.includes('[') && (
-        <section className="page-settings-section">
-          <h3>{translate('pages.settings.section.homepage')}</h3>
-          <HomeSection model={model} props={props} />
-        </section>
-      )}
       {props.layoutProps !== undefined && (
         <section className="page-settings-section page-settings-layout">
           <h3>{translate('pages.settings.section.layout')}</h3>
@@ -287,112 +286,214 @@ function HomeBadge() {
   );
 }
 
-// The URL name and the folder, one place to change the page's address: a rename, a move, or both in one step. A
-// dynamic route's name is its pattern, so only its folder changes here.
+// The URL name and the folder: changing either (the name committed by Enter or by leaving the field, a folder
+// picked or made in the dropdown) offers the move in a popover beside the field, with what it rewrites. Cancel puts
+// both back. The address chip shows where the page is until the move is confirmed. A dynamic route's name is its
+// pattern, so only its folder changes here. The homepage button follows, for every page that is not a template.
 function UrlNameField({ model, props }: { readonly model: Model; readonly props: PageSettingsDialogProps }) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
   const id = useId();
   const original = urlNameOf(props.page.name);
+  const originalFolder = folderOf(props.page.name);
   const dynamic = props.page.name.includes('[');
   const [name, setName] = useState(original);
-  const [folder, setFolder] = useState(folderOf(props.page.name));
-  const inventory = { pages: props.pages.map((page) => page.name), folders: props.folders };
-  const check = checkUrlName(props.page.name, dynamic ? original : name, inventory, { folder });
-  const address = check.kind === 'valid' ? pageURLPath(check.change.to) : props.page.route;
-  const canApply = props.allowed.rename && check.kind === 'valid' && !model.busy;
-  const folders = [...props.folders].sort((left, right) => left.localeCompare(right));
+  const [folder, setFolder] = useState(originalFolder);
+  // A folder made in the dropdown exists only here until a page moves into it: cancelling leaves nothing on disk.
+  const [made, setMade] = useState<string | undefined>(undefined);
+  const anchor = useRef<HTMLDivElement>(null);
+  const justMade = useRef<string | undefined>(undefined);
+  const known = made === undefined ? props.folders : [...props.folders, made];
+  const inventory = { pages: props.pages.map((page) => page.name), folders: known };
+  // A folder made in this same gesture is not in `known` until the next render: it is checked as known already.
+  const check = (typed: string, chosen: string) => {
+    const folders = inventory.folders.includes(chosen) || chosen !== justMade.current ? inventory.folders : [...inventory.folders, chosen];
+    return checkUrlName(props.page.name, dynamic ? original : typed, { ...inventory, folders }, { folder: chosen });
+  };
+  const current = check(name, folder);
+  const offer = (typed: string, chosen: string) => {
+    const next = check(typed, chosen);
+    if (next.kind === 'valid' && props.allowed.rename && !model.busy) {
+      void model.begin({ kind: 'rename', to: next.change.to });
+    }
+  };
+  const revert = () => {
+    setName(original);
+    setFolder(originalFolder);
+    model.cancel();
+  };
+  const offered = model.step.kind !== 'settings' && model.step.action.kind === 'rename' ? model.step : undefined;
+  const folders = [...known].sort((left, right) => left.localeCompare(right));
+  const options = [
+    { value: '', label: translate('pages.settings.folder.root'), icon: <FolderIcon size={13} /> },
+    ...folders.map((entry) => ({ value: entry, label: '/' + entry, icon: <FolderIcon size={13} /> })),
+  ];
   return (
-    <form
-      className="page-settings-field"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (canApply) {
-          void model.begin({ kind: 'rename', to: check.change.to });
-        }
-      }}
-    >
-      <label htmlFor={id}>{translate('pages.rename.urlName')}</label>
-      <input
-        id={id}
-        value={dynamic ? original : name}
-        readOnly={dynamic}
-        maxLength={200}
-        spellCheck={false}
-        disabled={!props.allowed.rename || model.busy}
-        aria-invalid={check.kind === 'invalid'}
-        aria-describedby={id + '-status'}
-        onChange={(event) => setName(event.currentTarget.value)}
-      />
-      {dynamic && <div className="page-settings-note">{translate('pages.settings.slug.dynamic')}</div>}
-      <label>{translate('pages.settings.folder')}</label>
-      <div className="page-settings-row">
+    // Each group is a `props-field`, the Layout props' own field: one label style and one rhythm for both cards.
+    <div className="page-settings-general" ref={anchor}>
+      <div className="props-field">
+        <label htmlFor={id}>{translate('pages.rename.urlName')}</label>
+        <input
+          id={id}
+          value={dynamic ? original : name}
+          readOnly={dynamic}
+          maxLength={200}
+          spellCheck={false}
+          disabled={!props.allowed.rename || model.busy}
+          aria-invalid={current.kind === 'invalid'}
+          aria-describedby={id + '-status'}
+          onChange={(event) => setName(event.currentTarget.value)}
+          onBlur={() => offer(name, folder)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              offer(name, folder);
+            }
+          }}
+        />
+        {dynamic && <div className="page-settings-note">{translate('pages.settings.slug.dynamic')}</div>}
+        {current.kind === 'invalid' && (
+          <div id={id + '-status'} className="page-rename-error" role="status">
+            {translateDescribed(current.problem)}
+          </div>
+        )}
+      </div>
+      <div className="props-field">
+        <label>{translate('pages.settings.folder')}</label>
         <Dropdown
           className="page-settings-folder"
           ariaLabel={translate('pages.settings.folder')}
           value={folder}
           disabled={!props.allowed.rename || model.busy}
-          options={[{ value: '', label: translate('pages.settings.folder.root') }, ...folders.map((entry) => ({ value: entry, label: '/' + entry }))]}
-          onChange={setFolder}
+          options={options}
+          createRow={{
+            label: translate('pages.settings.folder.new'),
+            icon: <FolderPlusIcon size={13} />,
+            placeholder: translate('pages.settings.folder.placeholder'),
+            validate: (text) => {
+              const typed = checkNewFolder(text, inventory);
+              return typed.kind === 'valid' ? undefined : translateDescribed(typed.problem);
+            },
+            onCreate: (text) => {
+              const typed = checkNewFolder(text, inventory);
+              const created = typed.kind === 'valid' ? typed.folder : text.trim();
+              justMade.current = created;
+              setMade(created);
+              return created;
+            },
+          }}
+          onChange={(chosen) => {
+            setFolder(chosen);
+            if (chosen !== folder) {
+              offer(name, chosen);
+            }
+          }}
         />
-        <button type="submit" className="primary" disabled={!canApply}>
-          {translate('pages.settings.slug.apply')}
-        </button>
+        <div className="page-settings-address">{translate('pages.settings.slug.address', { url: props.page.route })}</div>
       </div>
-      <div className="page-settings-address">{translate('pages.settings.slug.address', { url: address })}</div>
-      <div id={id + '-status'} className={check.kind === 'invalid' ? 'page-rename-error' : 'page-settings-note'} role="status">
-        {check.kind === 'invalid'
-          ? translateDescribed(check.problem)
-          : check.kind === 'valid'
-            ? translate('pages.settings.slug.available', { url: address })
-            : ''}
-      </div>
-    </form>
+      {!dynamic && (
+        <div className="props-field">
+          <label>{translate('pages.settings.home.label')}</label>
+          <HomeButton model={model} props={props} />
+        </div>
+      )}
+      {offered !== undefined && anchor.current !== null && (
+        <MovePopover step={offered} anchor={anchor.current} props={props} confirm={() => void model.confirm()} cancel={revert} />
+      )}
+    </div>
   );
 }
 
-function HomeSection({ model, props }: { readonly model: Model; readonly props: PageSettingsDialogProps }) {
+// The move's confirm, anchored beside the fields: the old and new address, the links it rewrites and the lines to
+// check by hand. Enter moves the page, Escape or a press outside cancels and puts the fields back.
+function MovePopover(props: {
+  readonly step: Exclude<Step, { readonly kind: 'settings' }>;
+  readonly anchor: HTMLElement;
+  readonly props: PageSettingsDialogProps;
+  readonly confirm: () => void;
+  readonly cancel: () => void;
+}) {
+  const translate = useTranslate();
+  const summary = props.step.kind === 'confirm' ? props.step.summary : undefined;
+  const ready = props.step.kind === 'confirm';
+  return (
+    <Popup
+      mode="popover"
+      anchor={props.anchor}
+      onClose={props.cancel}
+      dismissible={props.step.kind !== 'applying'}
+      className="page-settings-move"
+      role="dialog"
+    >
+      <div
+        className="page-settings-move-body"
+        tabIndex={-1}
+        ref={(element) => element?.focus()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && ready) {
+            event.preventDefault();
+            props.confirm();
+          }
+        }}
+      >
+        <div className="page-settings-confirm-title">{confirmTitle(props.step.action, props.props, translate)}</div>
+        {summary === undefined ? (
+          <SkeletonRows count={2} />
+        ) : (
+          <>
+            <ul className="page-settings-bullets">
+              {confirmLines(props.step.action, summary, props.props, translate).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <ReviewList summary={summary} />
+          </>
+        )}
+        <div className="page-settings-confirm-buttons">
+          <button type="button" disabled={props.step.kind === 'applying'} onClick={props.cancel}>
+            {translate('ui.cancel')}
+          </button>
+          <button type="button" className="primary" disabled={!ready} onClick={props.confirm}>
+            {translate('pages.settings.move.confirm')}
+          </button>
+        </div>
+      </div>
+    </Popup>
+  );
+}
+
+// "Make this page the homepage": a compact button in General; what it replaces, or why it cannot, is its tooltip.
+function HomeButton({ model, props }: { readonly model: Model; readonly props: PageSettingsDialogProps }) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
+  const tooltip = useDelayedTooltip();
+  const host = useRef<HTMLSpanElement>(null);
   const swap = homeSwapPlan(props.page.name, { pages: props.pages.map((page) => page.name), locales: props.locales ?? [] });
   const current = props.pages.find((page) => isHomePage(page.name));
   const unavailable = props.host.unavailable;
   const reason = !swap.ok ? translateDescribed(homeSwapRefusalText(swap.error)) : unavailable === undefined ? undefined : translateDescribed(unavailable);
-  const allowed = props.allowed.rename;
+  const replaces = current === undefined ? undefined : translate('pages.settings.home.replaces', { name: pageDisplayLabel(current, translate) });
+  const tip = reason ?? replaces;
   return (
-    <div className="page-settings-field">
-      {current !== undefined && (
-        <div className="page-settings-note">{translate('pages.settings.home.current', { name: pageDisplayLabel(current, translate) })}</div>
-      )}
-      <HomeButton
-        reason={reason}
-        disabled={model.busy || !allowed}
+    <span ref={host} className="page-settings-tip page-settings-home-button" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
+      <button
+        type="button"
+        aria-description={tip}
+        disabled={model.busy || !props.allowed.rename || reason !== undefined}
         onClick={() => {
           if (swap.ok) {
             void model.begin({ kind: 'home', moves: swap.value });
           }
         }}
-      />
-      {reason !== undefined && <div className="page-settings-note page-settings-reason">{reason}</div>}
-    </div>
-  );
-}
-
-function HomeButton(props: { readonly reason: string | undefined; readonly disabled: boolean; readonly onClick: () => void }) {
-  const translate = useTranslate();
-  const tooltip = useDelayedTooltip();
-  const host = useRef<HTMLSpanElement>(null);
-  return (
-    <span ref={host} className="page-settings-tip page-settings-home-button" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
-      <button type="button" disabled={props.disabled || props.reason !== undefined} onClick={props.onClick}>
-        <HomeIcon size={13} />
+      >
+        <HomeIcon size={12} />
         {translate('pages.settings.home.make')}
       </button>
       {tooltip.value !== undefined &&
-        props.reason !== undefined &&
+        tip !== undefined &&
         createPortal(
           <div className="rail-tooltip below" role="tooltip" style={tooltip.value}>
-            {props.reason}
+            {tip}
           </div>,
           tooltipHost(host.current ?? undefined),
         )}

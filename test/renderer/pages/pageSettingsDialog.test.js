@@ -89,7 +89,7 @@ function fixture(context) {
     );
   const type = (value) =>
     act(async () => {
-      const input = document.querySelector('.page-settings form input');
+      const input = document.querySelector('.page-settings-general input');
       Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, value);
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
@@ -99,11 +99,13 @@ function fixture(context) {
 const button = (text) => [...document.querySelectorAll('.page-settings button')].find((element) => element.textContent.includes(text));
 const byLabel = (label) => document.querySelector(`.page-settings [aria-label^="${label}"]`);
 const text = () => document.querySelector('.page-settings').textContent;
+const moveButton = (label) => [...document.querySelectorAll('.page-settings-move button')].find((element) => element.textContent === label);
+const homeTip = () => button('Make this page the homepage').getAttribute('aria-description');
 
 test('the homepage hides its URL name and shows the Homepage badge, and cannot be deleted', async (context) => {
   const setup = fixture(context);
   await setup.show('index.astro');
-  assert.equal(document.querySelector('.page-settings form input') ?? undefined, undefined);
+  assert.equal(document.querySelector('.page-settings-general input') ?? undefined, undefined);
   assert.equal(document.querySelector('.page-settings-badge').textContent, 'Homepage');
   assert.equal(text().includes('index'), false);
   assert.equal(button('Make this page the homepage'), undefined);
@@ -113,11 +115,15 @@ test('the homepage hides its URL name and shows the Homepage badge, and cannot b
   assert.equal(byLabel('Duplicate this page').disabled, false);
 });
 
-test('another page shows its URL name, the current homepage and the house button, and confirms the swap', async (context) => {
+test('another page shows its URL name and, in General, the house button that confirms the swap', async (context) => {
   const setup = fixture(context);
   await setup.show('about.astro');
-  assert.equal(document.querySelector('.page-settings form input').value, 'about');
-  assert.match(text(), /The current homepage is Home\./);
+  assert.equal(document.querySelector('.page-settings-general input').value, 'about');
+  // No Homepage card: the button sits in General, and what it replaces is its tooltip.
+  assert.equal(document.querySelectorAll('.page-settings-section').length, 1);
+  assert.equal(button('Make this page the homepage').closest('.page-settings-section').querySelector('h3').textContent, 'General');
+  assert.equal(homeTip(), 'Replaces Home as the homepage');
+  assert.equal(text().includes('The current homepage'), false);
   const house = button('Make this page the homepage');
   assert.equal(house.disabled, false);
   await setup.click(house);
@@ -150,20 +156,21 @@ test('error pages disable the house button with the reason; templates have no Ho
   const setup = fixture(context);
   await setup.show('404.astro');
   assert.equal(button('Make this page the homepage').disabled, true);
-  assert.equal(document.querySelector('.page-settings-reason').textContent, 'Error pages (404, 500) can’t be the homepage.');
+  assert.equal(homeTip(), 'Error pages (404, 500) can’t be the homepage.');
   // A CMS template has no Homepage section at all, and its route pattern is shown, never edited.
   await setup.show('blog/[slug].astro');
   assert.equal(button('Make this page the homepage'), undefined);
   assert.equal(text().includes('Homepage'), false);
-  assert.equal(document.querySelector('.page-settings-field input').readOnly, true);
+  assert.equal(document.querySelector('.page-settings-general input').readOnly, true);
   assert.equal(setup.planned.length, 0);
 });
 
-test('the URL name field validates live and confirms a rename with its link count', async (context) => {
+test('the URL name is offered on Enter or blur in a popover beside it; invalid names never are; Cancel puts it back', async (context) => {
   const setup = fixture(context);
   await setup.show('about.astro');
-  const apply = () => button('Change address');
-  assert.equal(apply().disabled, true);
+  assert.equal(button('Change address'), undefined);
+  const field = () => document.querySelector('.page-settings-general input');
+  const enter = () => act(async () => field().dispatchEvent(new setup.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
   const table = [
     ['index', '“index” is the homepage’s file name. Use “Make this page the homepage” instead.'],
     ['', 'Enter a URL name.'],
@@ -172,17 +179,33 @@ test('the URL name field validates live and confirms a rename with its link coun
   ];
   for (const [typed, problem] of table) {
     await setup.type(typed);
-    assert.equal(apply().disabled, true, typed);
+    await enter();
     assert.equal(document.querySelector('.page-rename-error').textContent, problem);
+    assert.equal(document.querySelector('.page-settings-move') ?? undefined, undefined, typed);
   }
+  assert.equal(setup.planned.length, 0);
   await setup.type('company');
-  assert.equal(apply().disabled, false);
-  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /company');
-  await setup.click(apply());
+  // The chip keeps the current address until the move is confirmed.
+  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /about');
+  await enter();
   assert.deepEqual(setup.planned, [{ kind: 'rename', from: 'about.astro', to: 'company.astro' }]);
-  assert.equal(document.querySelector('.page-settings-confirm-title').textContent, 'Change the address to /company?');
-  await setup.click(button('Confirm'));
+  assert.equal(document.querySelector('.page-settings-move .page-settings-confirm-title').textContent, 'Change the address to /company?');
+  assert.match(document.querySelector('.page-settings-move').textContent, /\/about becomes \/company\./);
+  assert.match(document.querySelector('.page-settings-move').textContent, /7 links in 3 files are updated\./);
+  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /about');
+  await setup.click(moveButton('Cancel'));
+  assert.equal(field().value, 'about');
+  assert.equal(document.querySelector('.page-settings-move') ?? undefined, undefined);
+  assert.equal(setup.applied.length, 0);
+  // Blur offers it too; Enter in the popover moves the page.
+  await setup.type('company');
+  await act(async () => field().dispatchEvent(new setup.dom.window.FocusEvent('focusout', { bubbles: true })));
+  assert.equal(setup.planned.length, 2);
+  await act(async () =>
+    document.querySelector('.page-settings-move-body').dispatchEvent(new setup.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+  );
   assert.deepEqual(setup.applied, [{ kind: 'rename', from: 'about.astro', to: 'company.astro' }]);
+  assert.equal(moveButton('Move page') ?? undefined, undefined);
 });
 
 test('duplicate applies at once; delete confirms with what breaks; a host that cannot says why', async (context) => {
@@ -200,7 +223,7 @@ test('duplicate applies at once; delete confirms with what breaks; a host that c
   const studio = { ...setup.host, plan: undefined, unavailable: { message: 'Available in Stacki Desktop.' } };
   await setup.show('about.astro', { host: studio });
   assert.equal(button('Make this page the homepage').disabled, true);
-  assert.equal(document.querySelector('.page-settings-reason').textContent, 'Available in Stacki Desktop.');
+  assert.equal(homeTip(), 'Available in Stacki Desktop.');
   assert.equal(byLabel('Duplicate this page').disabled, true);
 });
 
@@ -285,7 +308,7 @@ test('a layout prop edited in the dialog is the edit the Properties panel makes'
   assert.deepEqual(results[1], results[0]);
 });
 
-test('the Folder dropdown moves a page into a folder or out of it, and refuses a taken name there', async (context) => {
+test('picking another folder offers the move at once; Cancel puts the folder back; a taken name is refused inline', async (context) => {
   const setup = fixture(context);
   const pick = async (label) => {
     await setup.click(document.querySelector('.page-settings-folder'));
@@ -296,20 +319,73 @@ test('the Folder dropdown moves a page into a folder or out of it, and refuses a
   await setup.show('about.astro');
   assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, 'Pages (root)');
   await pick('/blog');
-  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /blog/about');
-  await setup.click(button('Change address'));
   assert.deepEqual(setup.planned.at(-1), { kind: 'rename', from: 'about.astro', to: 'blog/about.astro' });
-  await setup.click(button('Cancel'));
-  // Back to the root under a name the root already has: refused with the reason, nothing planned.
+  assert.match(document.querySelector('.page-settings-move').textContent, /\/about becomes \/blog\/about\./);
+  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /about');
+  await setup.click(moveButton('Cancel'));
+  assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, 'Pages (root)');
+  await pick('/blog');
+  await setup.click(moveButton('Move page'));
+  assert.deepEqual(setup.applied.at(-1), { kind: 'rename', from: 'about.astro', to: 'blog/about.astro' });
+  // A template moves out of its folder; only the folder changes.
   await setup.show('blog/[slug].astro');
   assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, '/blog');
   await pick('Pages (root)');
-  assert.equal(button('Change address').disabled, false);
+  assert.deepEqual(setup.planned.at(-1), { kind: 'rename', from: 'blog/[slug].astro', to: '[slug].astro' });
+  await setup.click(moveButton('Cancel'));
   await setup.show('contact.md');
   await setup.type('about');
   assert.equal(document.querySelector('.page-rename-error').textContent, 'The URL /about is already used by another page or folder.');
-  assert.equal(button('Change address').disabled, true);
   // The homepage has no folder control.
   await setup.show('index.astro');
   assert.equal(document.querySelector('.page-settings-folder') ?? undefined, undefined);
+});
+
+test('the Folder dropdown shows a folder icon on every row and makes a new folder inside the menu', async (context) => {
+  const setup = fixture(context);
+  await setup.show('about.astro');
+  await setup.click(document.querySelector('.page-settings-folder'));
+  const rows = [...document.querySelectorAll('.dd-option')];
+  assert.deepEqual(
+    rows.map((row) => row.querySelector('.dd-option-label').textContent),
+    ['Pages (root)', '/blog', 'New folder…'],
+  );
+  for (const row of rows) {
+    assert.ok(row.querySelector('.dd-icon svg'), 'every row starts with its icon');
+    assert.equal(row.firstElementChild.classList.contains('dd-icon'), true, 'the icon leads the row');
+  }
+  await setup.click(rows.at(-1));
+  const field = () => document.querySelector('.dd-create-field input');
+  assert.equal(field().placeholder, 'Folder name');
+  assert.equal(document.activeElement, field());
+  assert.ok(document.querySelector('.dd-create-field .dd-icon svg'));
+  assert.equal(document.querySelector('.page-settings-new-folder') ?? undefined, undefined);
+  const typeFolder = (value) =>
+    act(async () => {
+      Object.getOwnPropertyDescriptor(setup.dom.window.HTMLInputElement.prototype, 'value').set.call(field(), value);
+      field().dispatchEvent(new setup.dom.window.Event('input', { bubbles: true }));
+    });
+  const press = (key) => act(async () => field().dispatchEvent(new setup.dom.window.KeyboardEvent('keydown', { key, bubbles: true })));
+  const table = [
+    ['BLOG', 'A folder named BLOG already exists.'],
+    ['Contact', 'The URL /Contact is already used by another page or folder.'],
+    ['a/../b', 'Page paths must stay inside the pages folder.'],
+    ['bad*name', 'Use letters, numbers, spaces or dashes in page paths.'],
+  ];
+  for (const [typed, problem] of table) {
+    await typeFolder(typed);
+    await press('Enter');
+    assert.equal(document.querySelector('.dd-create-error').textContent, problem, typed);
+    assert.ok(field(), 'an invalid name keeps the field open');
+  }
+  assert.equal(setup.planned.length, 0);
+  await typeFolder('company');
+  await press('Enter');
+  assert.equal(document.querySelector('.dd-popup') ?? undefined, undefined);
+  assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, '/company');
+  assert.deepEqual(setup.planned.at(-1), { kind: 'rename', from: 'about.astro', to: 'company/about.astro' });
+  await setup.click(moveButton('Cancel'));
+  // Cancelled: the folder is gone back to the page's own, and nothing was written.
+  assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, 'Pages (root)');
+  assert.equal(setup.applied.length, 0);
 });

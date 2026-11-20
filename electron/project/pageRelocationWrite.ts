@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
 import { err, ok, type AppError, type Result } from '../../shared/core/result';
 import { described } from '../../shared/properties/i18n/messageRef';
+import { PAGE_BULK_REMOVE_LIMITS } from '../../shared/properties/pageBulkRemove';
 import { PAGE_SETTINGS_LIMITS } from '../../shared/properties/pageSettings';
 import { createFileExclusive } from '../documents/atomicWrite';
 import { prepareAtomicDirectory } from '../documents/atomicDirectory';
@@ -32,12 +33,21 @@ export interface RelocationStep {
   /** Files edited in place, at paths no change moves. */
   readonly texts: readonly RenameText[];
   readonly files: readonly FileChange[];
+  /**
+   * Folders under the project root the step makes (a page moved into a folder that did not exist; made by the move
+   * itself) and the folders it takes away when they are left empty (the inverse of a made folder), deepest first.
+   */
+  readonly folders: { readonly made: readonly string[]; readonly removed: readonly string[] };
 }
+
+/** A step that makes or removes no folder. */
+export const NO_FOLDERS: RelocationStep['folders'] = { made: [], removed: [] };
 
 /** The step run backwards: every text swaps before and after, every file goes back where it came from. */
 export function inverseStep(step: RelocationStep): RelocationStep {
   return {
     root: step.root,
+    folders: { made: step.folders.removed, removed: step.folders.made },
     texts: step.texts.map((entry) => ({ file: entry.file, before: entry.after, after: entry.before })),
     files: step.files.map((change): FileChange => {
       switch (change.kind) {
@@ -58,8 +68,13 @@ export function inverseStep(step: RelocationStep): RelocationStep {
 
 export function applyRelocationStep(step: RelocationStep, writer: RenameWriter): Result<void> {
   assert(path.isAbsolute(step.root), 'A page settings step writes under an absolute project root');
-  assert(step.files.length + step.texts.length > 0, 'A page settings step changes something');
-  assert(step.files.length <= PAGE_SETTINGS_LIMITS.movesMax, 'A page settings step moves at most two files');
+  // An empty folder deleted on its own (Select mode) changes nothing but the folder, and so does its undo.
+  assert(step.files.length + step.texts.length + step.folders.made.length + step.folders.removed.length > 0, 'A page settings step changes something');
+  // A rename moves one file and a homepage swap two; deleting several pages at once (Select mode) removes up to its own bound.
+  assert(
+    step.files.length <= Math.max(PAGE_SETTINGS_LIMITS.movesMax, PAGE_BULK_REMOVE_LIMITS.pagesMax),
+    'A page settings step changes a bounded number of files',
+  );
   const checked = checkBefore(step, writer);
   if (!checked.ok) {
     return checked;
@@ -129,7 +144,36 @@ function writeLeased(step: RelocationStep, texts: readonly RenameText[], writer:
       assert(fs.existsSync(absolute(step.root, change.to)), 'Every arriving file is at its destination');
     }
   }
+  // Folders the step's inverse brings back: a deleted folder that held no page leaves no arriving file to make it.
+  makeFolders(step.root, step.folders.made);
+  removeEmptyFolders(step.root, step.folders.removed);
   return ok(undefined);
+}
+
+function makeFolders(root: string, folders: readonly string[]): void {
+  assert(folders.length <= PAGE_BULK_REMOVE_LIMITS.foldersMax, 'A step makes a bounded number of folders');
+  for (const folder of folders) {
+    assert(!folder.startsWith('/'), 'A made folder is relative to the project');
+    assert(!folder.split('/').includes('..'), 'A made folder stays inside the project');
+    fs.mkdirSync(absolute(root, folder), { recursive: true });
+  }
+}
+
+// A folder the step made goes when the step is undone, only while it is empty: anything put there since stays.
+function removeEmptyFolders(root: string, folders: readonly string[]): void {
+  assert(folders.length <= PAGE_BULK_REMOVE_LIMITS.foldersMax, 'A step removes a bounded number of folders');
+  for (const folder of folders) {
+    assert(!folder.startsWith('/'), 'A removed folder is relative to the project');
+    assert(!folder.split('/').includes('..'), 'A removed folder stays inside the project');
+    const full = absolute(root, folder);
+    try {
+      if (fs.readdirSync(full).length === 0) {
+        fs.rmdirSync(full);
+      }
+    } catch {
+      // Already gone, or not readable: there is nothing of this step's left to take back.
+    }
+  }
 }
 
 function stageArrivals(step: RelocationStep): Result<readonly Staged[]> {

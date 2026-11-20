@@ -481,3 +481,35 @@ test('moving a page into a folder from the dialog rewrites its imports and links
     site.close();
   }
 });
+
+test('moving a page into a folder that does not exist yet makes it, and one undo takes the folder away too', () => {
+  const site = project({
+    'src/layouts/Base.astro': '<slot />',
+    'src/components/Nav.astro': '<a href="/about">About</a>',
+    'src/pages/index.astro': '<a href="/about/">About</a>',
+    'src/pages/about.astro': "---\nimport Base from '../layouts/Base.astro';\n---\n<Base>About</Base>",
+  });
+  try {
+    const before = site.snapshot();
+    const planned = planRelocation(site.root, { kind: 'rename', from: 'about.astro', to: 'company/team/about.astro' });
+    assert.ok(planned.ok);
+    assert.deepEqual(planned.value.step.folders, { made: ['src/pages/company/team', 'src/pages/company'], removed: [] });
+    // Planning writes nothing: a cancelled move leaves no folder behind.
+    assert.equal(site.exists('src/pages/company'), false);
+    assert.ok(applyRelocationStep(planned.value.step, desktopRenameWriter()).ok);
+    assert.equal(site.read('src/pages/company/team/about.astro'), "---\nimport Base from '../../../layouts/Base.astro';\n---\n<Base>About</Base>");
+    assert.equal(site.read('src/components/Nav.astro'), '<a href="/company/team/about">About</a>');
+    assert.equal(site.read('src/pages/index.astro'), '<a href="/company/team/about/">About</a>');
+    assert.ok(applyRelocationStep(inverseStep(planned.value.step), desktopRenameWriter()).ok);
+    assert.equal(site.exists('src/pages/company'), false);
+    assert.deepEqual(site.snapshot(), before);
+    // Redo makes the folders again; a file put in one since keeps it on undo.
+    assert.ok(applyRelocationStep(planned.value.step, desktopRenameWriter()).ok);
+    fs.writeFileSync(path.join(site.root, 'src', 'pages', 'company', 'notes.md'), '# Notes');
+    assert.ok(applyRelocationStep(inverseStep(planned.value.step), desktopRenameWriter()).ok);
+    assert.equal(site.exists('src/pages/company/notes.md'), true);
+    assert.equal(site.exists('src/pages/company/team'), false);
+  } finally {
+    site.close();
+  }
+});

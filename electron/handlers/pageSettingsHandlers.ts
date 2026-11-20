@@ -13,12 +13,15 @@ import { projectAliases } from '../properties/importPaths';
 import { readPageTemplate, retargetPageTemplate } from '../content/pageTemplateRead';
 import { desktopRenameWriter } from '../project/pageRenameDesktop';
 import { readRenameText } from '../project/pageRenameInventory';
-import { applyRelocationStep, inverseStep, RelocationStore, type RelocationStep } from '../project/pageRelocationWrite';
+import { applyRelocationStep, inverseStep, NO_FOLDERS, RelocationStore, type RelocationStep } from '../project/pageRelocationWrite';
 import { planRelocationSliced } from './pageSettingsPlan';
+import { registerPageBulkRemoveHandlers } from './pageBulkRemoveHandlers';
 import type { MainHost } from './mainHost';
 
 export function registerPageSettingsHandlers({ ipcMain, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'noteAppWrite'>): void {
   const store = new RelocationStore();
+  // Select mode's deletion of several pages shares this store, so its Undo is `page:revertSettings` too.
+  registerPageBulkRemoveHandlers({ ipcMain, noteAppWrite }, store);
 
   ipcMain.handle('page:planSettings', async (_event, { projectPath, request }) => {
     const refused = refuseMovedPagesFolder(projectPath);
@@ -92,7 +95,7 @@ export function retargetStep(projectPath: string, page: string, source: DataSour
   if (!next.ok) {
     return next;
   }
-  return ok({ root: projectPath, texts: next.value === read.source ? [] : [{ file, before: read.source, after: next.value }], files: [] });
+  return ok({ root: projectPath, texts: next.value === read.source ? [] : [{ file, before: read.source, after: next.value }], files: [], folders: NO_FOLDERS });
 }
 
 // Steps name files by their src/pages paths, so a project whose astro.config moves the pages folder is refused with the reason.

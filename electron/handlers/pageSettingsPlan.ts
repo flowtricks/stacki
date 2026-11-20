@@ -25,7 +25,7 @@ import { isRenameTextCandidate, pageRenameInventoryWork, readRenameText, type Pa
 import { planPageRenameWork, renameOrigins, type RenameText } from '../project/pageRenamePlan';
 import { renamePageImports, renamePageLinks } from '../project/pageRenameLinks';
 import { swapPageLinks, type SwapRoutes } from '../project/pageSwapLinks';
-import type { FileChange, RelocationStep } from '../project/pageRelocationWrite';
+import { NO_FOLDERS, type FileChange, type RelocationStep } from '../project/pageRelocationWrite';
 
 export interface RelocationPlan {
   readonly step: RelocationStep;
@@ -91,7 +91,7 @@ function* planRename(root: string, change: PageRename, aliases: Aliases): Sliced
   const before = pageURLPath(change.from);
   const links = texts.reduce((sum, entry) => sum + Math.max(0, routeMentions(entry.before, before) - routeMentions(entry.after, before)), 0);
   const summary = summaryOf({ texts, files, links, reviews: [] });
-  return ok({ step: { root, texts, files }, summary, page: change.to });
+  return ok({ step: { root, texts, files, folders: { made: missingFolders(root, change.to), removed: [] } }, summary, page: change.to });
 }
 
 function* planHomeSwap(root: string, page: string, aliases: Aliases): SlicedWork<Result<RelocationPlan>> {
@@ -152,7 +152,7 @@ function* planHomeSwap(root: string, page: string, aliases: Aliases): SlicedWork
     return err({ code: 'parse', ...described('pages.settings.error.unparsable', { file: unparsable }) });
   }
   assert(files.length === 2, 'A swap moves exactly two files');
-  return ok({ step: { root, texts, files }, summary: summaryOf({ texts, files, links, reviews }), page: moving.to });
+  return ok({ step: { root, texts, files, folders: NO_FOLDERS }, summary: summaryOf({ texts, files, links, reviews }), page: moving.to });
 }
 
 interface SwapFileContext {
@@ -248,7 +248,7 @@ function* planDuplicate(root: string, page: string): SlicedWork<Result<Relocatio
   // Beside the original, so every relative import still resolves without a rewrite.
   assert(path.posix.dirname(copy) === path.posix.dirname(page), 'A copy sits beside its page');
   const files: readonly FileChange[] = [{ kind: 'create', to: 'src/pages/' + copy, after: read.source }];
-  return ok({ step: { root, texts: [], files }, summary: summaryOf({ texts: [], files, links: 0, reviews: [] }), page: copy });
+  return ok({ step: { root, texts: [], files, folders: NO_FOLDERS }, summary: summaryOf({ texts: [], files, links: 0, reviews: [] }), page: copy });
 }
 
 function copyName(page: string, inventory: PageRenameInventory): string | undefined {
@@ -307,7 +307,23 @@ function* planRemove(root: string, page: string): SlicedWork<Result<RelocationPl
     yield;
   }
   const files: readonly FileChange[] = [{ kind: 'delete', from, before: read.source }];
-  return ok({ step: { root, texts: [], files }, summary: summaryOf({ texts: [], files, links, reviews }), page });
+  return ok({ step: { root, texts: [], files, folders: NO_FOLDERS }, summary: summaryOf({ texts: [], files, links, reviews }), page });
+}
+
+// The folders a page moved to `page` (relative to src/pages) lands in that do not exist yet, deepest first: the move
+// makes them, and its undo takes them away again while they are empty.
+function missingFolders(root: string, page: string): readonly string[] {
+  const parts = page.split('/').slice(0, -1);
+  const missing: string[] = [];
+  for (let depth = parts.length; depth > 0; depth--) {
+    const folder = 'src/pages/' + parts.slice(0, depth).join('/');
+    if (fs.existsSync(path.join(root, ...folder.split('/')))) {
+      break;
+    }
+    missing.push(folder);
+  }
+  assert(missing.length <= parts.length, 'Only the page’s own folders are made');
+  return missing;
 }
 
 function requirePage(page: string, inventory: PageRenameInventory): Result<never> | undefined {
@@ -378,7 +394,7 @@ function bracketed(source: string, opening: RegExp): string | undefined {
   return undefined;
 }
 
-function isConfigFile(file: string): boolean {
+export function isConfigFile(file: string): boolean {
   return /^astro\.config\.[cm]?[jt]s$/.test(file) || file === '.stacki/publish.json';
 }
 
@@ -391,7 +407,7 @@ function firstUnparsable(texts: readonly RenameText[], files: readonly FileChang
   return file === undefined || file.kind === 'delete' ? undefined : file.to;
 }
 
-function summaryOf(input: {
+export function summaryOf(input: {
   readonly texts: readonly RenameText[];
   readonly files: readonly FileChange[];
   readonly links: number;
@@ -404,7 +420,7 @@ function summaryOf(input: {
 }
 
 // How often a route appears as a whole path in a text: `/about` in "/about", "/about/", "/about#x", not "/about-us".
-function routeMentions(source: string, route: string): number {
+export function routeMentions(source: string, route: string): number {
   if (route === '/') {
     return 0;
   }
@@ -429,7 +445,7 @@ function reviewLines(file: string, source: string, wanted: (line: string) => boo
   return found;
 }
 
-function changedLines(file: string, before: string, after: string): readonly PageSettingsReview[] {
+export function changedLines(file: string, before: string, after: string): readonly PageSettingsReview[] {
   const left = before.split(/\r?\n/);
   const right = after.split(/\r?\n/);
   assert(left.length === right.length, 'A link probe changes no line count');

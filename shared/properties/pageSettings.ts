@@ -186,6 +186,35 @@ export function checkUrlName(page: string, typed: string, inventory: RenameInven
   return conflict.ok ? { kind: 'valid', change } : { kind: 'invalid', problem: conflict.error };
 }
 
+export type NewFolderCheck = { readonly kind: 'valid'; readonly folder: string } | { readonly kind: 'invalid'; readonly problem: Described };
+
+/**
+ * A folder typed in the Folder dropdown's "New folder…" row: a path below src/pages under the page rename's own
+ * rules (renamePath: no climbing, no empty level, slug-safe characters, bounded), not one that exists already in
+ * any case, and not an address a page already answers. It is made on disk only when a page moves into it.
+ */
+export function checkNewFolder(typed: string, inventory: RenameInventory): NewFolderCheck {
+  const folder = typed.trim().replace(/\/+$/, '');
+  if (folder.length === 0) {
+    return { kind: 'invalid', problem: described('pages.settings.folder.empty') };
+  }
+  try {
+    renamePath(folder);
+  } catch (problem: unknown) {
+    return { kind: 'invalid', problem: problemOf(problem) };
+  }
+  const key = folder.toLowerCase();
+  if (inventory.folders.some((existing) => existing.toLowerCase() === key)) {
+    return { kind: 'invalid', problem: described('pages.settings.folder.exists', { name: folder }) };
+  }
+  const route = '/' + key;
+  if (inventory.pages.some((page) => pageURLPath(page).toLowerCase() === route)) {
+    return { kind: 'invalid', problem: described('pages.rename.error.conflictUrl', { url: '/' + folder }) };
+  }
+  assert(folder.length <= 500, 'A checked folder path is bounded');
+  return { kind: 'valid', folder };
+}
+
 /** The folder a page sits in, relative to src/pages: '' at the root. */
 export function folderOf(page: string): string {
   const slash = page.lastIndexOf('/');

@@ -80,7 +80,42 @@ const MEASURE = \`new Promise((resolve) => {
         .filter((element) => element.getBoundingClientRect().right > limit + 0.5)
         .slice(0, 10)
         .map((element) => element.tagName.toLowerCase() + '.' + String(element.className).split(' ').join('.'));
-      resolve({ scrollWidth: body.scrollWidth, clientWidth: body.clientWidth, gutter: getComputedStyle(body).scrollbarGutter, wide });
+      const box = (element) => element.getBoundingClientRect();
+      const sections = [...body.querySelectorAll('.page-settings-section')];
+      const layout = sections.map((section) => {
+        const heading = box(section.querySelector('h3'));
+        const fields = [...section.querySelectorAll('.props-field')].filter((field) => field.parentElement.closest('.props-field') === null);
+        const controls = fields.flatMap((field) =>
+          [...field.querySelectorAll(':scope > input, :scope > textarea, :scope > .dd-trigger, .bool-seg, .asset-field, .asset-card')].map(box),
+        );
+        return {
+          headingLeft: heading.left,
+          contentRight: box(section).right - parseFloat(getComputedStyle(section).paddingRight),
+          labelLefts: fields.map((field) => box(field.querySelector('label')).left),
+          controlLefts: controls.map((rect) => rect.left),
+          controlRights: controls.map((rect) => rect.right),
+          gaps: fields.slice(1).map((field, index) => box(field).top - box(fields[index]).bottom),
+          labelGaps: fields.map((field) => {
+            const label = field.querySelector(':scope > label');
+            const next = label?.nextElementSibling;
+            return label && next ? box(next).top - box(label).bottom : undefined;
+          }).filter((gap) => gap !== undefined),
+        };
+      });
+      const address = body.querySelector('.page-settings-address');
+      const addressStyle = getComputedStyle(address);
+      const title = box(document.querySelector('.page-settings-title'));
+      const route = box(document.querySelector('.page-settings-route'));
+      resolve({
+        scrollWidth: body.scrollWidth,
+        clientWidth: body.clientWidth,
+        gutter: getComputedStyle(body).scrollbarGutter,
+        wide,
+        layout,
+        address: { background: addressStyle.backgroundColor, paddingLeft: addressStyle.paddingLeft, left: box(address).left, fieldLeft: box(address.parentElement.querySelector('.dd-trigger')).left },
+        headerGap: route.top - title.bottom,
+        homeLabel: [...body.querySelectorAll('.props-field > label')].map((label) => label.textContent),
+      });
       return;
     }
     last = shape;
@@ -111,6 +146,51 @@ app.whenReady().then(async () => {
   app.exit(0);
 });
 `;
+
+// Every heading, label and control starts at one x; controls end at the card's inner edge; groups are one gap apart
+// in both cards (the props-field rhythm), the address is plain text on the field's edge, and the header breathes.
+function alignment(result) {
+  const failures = [];
+  const near = (left, right) => Math.abs(left - right) <= 1;
+  const [general, layout] = result.layout;
+  const origin = general.headingLeft;
+  for (const [name, section] of [
+    ['General', general],
+    ['Layout props', layout],
+  ]) {
+    if (!near(section.headingLeft, origin)) {
+      failures.push(`${result.width}px: ${name} heading starts at ${section.headingLeft}, not ${origin}`);
+    }
+    for (const left of [...section.labelLefts, ...section.controlLefts]) {
+      if (!near(left, origin)) {
+        failures.push(`${result.width}px: ${name} has a label or control at x=${left}, not ${origin}`);
+      }
+    }
+    for (const right of section.controlRights) {
+      if (!near(right, section.contentRight)) {
+        failures.push(`${result.width}px: ${name} has a control ending at ${right}, not the card's inner edge ${section.contentRight}`);
+      }
+    }
+  }
+  const gaps = [...general.gaps, ...layout.gaps];
+  if (gaps.length < 4 || gaps.some((gap) => !near(gap, gaps[0]))) {
+    failures.push(`${result.width}px: field groups are not one gap apart: ${gaps.map(Math.round).join(', ')}`);
+  }
+  const labelGaps = [...general.labelGaps, ...layout.labelGaps];
+  if (labelGaps.some((gap) => !near(gap, labelGaps[0]))) {
+    failures.push(`${result.width}px: label-to-field gaps differ: ${labelGaps.map(Math.round).join(', ')}`);
+  }
+  if (result.address.background !== 'rgba(0, 0, 0, 0)' || result.address.paddingLeft !== '0px' || !near(result.address.left, result.address.fieldLeft)) {
+    failures.push(`${result.width}px: the address is a chip, not plain text on the field's edge (${JSON.stringify(result.address)})`);
+  }
+  if (result.headerGap < 3.5) {
+    failures.push(`${result.width}px: the title and the route are ${result.headerGap}px apart, less than 4px`);
+  }
+  if (!result.homeLabel.includes('Convert to home')) {
+    failures.push(`${result.width}px: the homepage button has no "Convert to home" label (${result.homeLabel.join(', ')})`);
+  }
+  return failures;
+}
 
 (async () => {
   let electronPath;
@@ -166,6 +246,7 @@ app.whenReady().then(async () => {
         if (result.gutter !== 'stable') {
           failures.push(`${result.width}px: the body keeps scrollbar-gutter: stable (it is ${result.gutter})`);
         }
+        failures.push(...alignment(result));
       }
     }
   }
