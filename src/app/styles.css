@@ -2673,8 +2673,12 @@ html[data-platform='win32'] .titlebar {
   align-items: center;
   gap: 4px;
   padding-top: 10px;
+  /* The drop line and the live region position against the rail; a drag never selects its labels. */
+  position: relative;
+  user-select: none;
 }
 .rail-btn {
+  touch-action: none;
   width: 32px;
   height: 32px;
   flex: none;
@@ -2703,6 +2707,70 @@ html[data-platform='win32'] .titlebar {
   align-items: center;
   /* Settings above the AI button: the rail's own spacing between buttons. */
   gap: 4px;
+}
+/* Reordering (railOrder.ts, railDrag.ts). The dragged button keeps its place, dimmed, while a lifted copy follows
+   the pointer; a thin accent line shows the slot a drop lands in. The bottom list never grows past the window,
+   so the top list keeps room for a button and More; its bar is hidden, and focus or the wheel still reach every row. */
+.rail-anchor {
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  scrollbar-gutter: stable;
+}
+.rail-btn[data-dragging='true'] {
+  opacity: 0.35;
+}
+.rail[data-dragging='true'],
+.rail[data-dragging='true'] .rail-btn {
+  cursor: grabbing;
+}
+.rail-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 700;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-active);
+  color: var(--text);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.rail-ghost[data-outside='true'] {
+  opacity: 0.5;
+}
+.rail-drop-line {
+  position: absolute;
+  left: 6px;
+  width: 32px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+/* The empty bottom list's place to drop, drawn only while dragging. */
+.rail-slot-empty {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.rail-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-btn[data-dragging='true'] {
+    transition: none;
+  }
 }
 /* A pinned app's own tile, centred in its button. */
 .rail-btn.rail-app {

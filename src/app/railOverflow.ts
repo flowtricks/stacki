@@ -98,6 +98,11 @@ export function useRailOverflow(
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
+    // The anchored list grows when a button is moved into it (railOrder.ts), without the rail's own box changing.
+    const anchoredElement = anchored?.current ?? undefined;
+    if (anchoredElement !== undefined) {
+      observer.observe(anchoredElement);
+    }
     return () => observer.disconnect();
   }, [rail, anchored]);
   if (room === undefined) {

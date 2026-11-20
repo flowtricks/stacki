@@ -15,9 +15,16 @@ export const messages = {
   'rail.editorPanels': 'Paneles del editor',
   'rail.history': 'Git', // same
   'rail.more': 'Más',
+  'rail.moveToBottom': 'Mover al grupo inferior',
+  'rail.moveToTop': 'Mover al grupo superior',
+  'rail.movedBottom': '{label}: grupo inferior, posición {position} de {count}',
+  'rail.movedTop': '{label}: grupo superior, posición {position} de {count}',
   'rail.navigator': 'Navegador',
+  'rail.orderMenu': 'Orden de la barra',
   'rail.pages': 'Páginas',
   'rail.properties': 'Propiedades',
+  'rail.reset': 'Restablecer el orden de la barra',
+  'rail.resetDone': 'Orden de la barra restablecido',
   'rail.selectors': 'Selectores de estilo',
   'rail.settings': 'Ajustes',
   'rail.variables': 'Variables', // same

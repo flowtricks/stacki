@@ -1,10 +1,10 @@
-import type { MouseEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AppSummary } from '../../shared/properties/apps';
 import { useCurrentRole } from '../lib/useCurrentRole';
 import { canPanel, canRailTab, canSettingsPanel } from '../lib/roleAccess';
 import type { SettingsFocusTarget } from '../lib/settingsSections';
-import { FEATURE_ICONS } from './featureIcons';
+import { FEATURE_ICONS, type FeatureIconComponent } from './featureIcons';
 import { AppsRailBadge } from '../features/apps/appUpdates';
 import { AppTile } from '../features/apps/AppTile';
 import { RailAppFace, openPinnedApp, railAppId, usePinnedRailApps, useShownPinnedApp } from './railApps';
@@ -13,6 +13,22 @@ import { RailMore, type RailMoreItem } from './RailMore';
 import { useRailOverflow, type RailOverflowItem } from './railOverflow';
 import { useTranslate } from '../lib/i18n/useTranslate';
 import type { MessageKey } from '../lib/i18n/localeContext';
+import Menu, { type MenuEntry } from '../ui/Menu';
+import {
+  crossRailItem,
+  isDefaultRailOrder,
+  placeRailItem,
+  railPlaceOf,
+  railPosition,
+  sameRailOrder,
+  shiftRailItem,
+  visibleRailOrder,
+  type RailGroup,
+  type RailOrder,
+} from './railOrder';
+import { useRailOrder } from './railOrderStore';
+import { useRailDrag } from './railDrag';
+import { animateRailReflow, readRailRows } from './railReflow';
 
 // Each button draws its access feature's icon (featureIcons.tsx), the same one the
 // Roles permission grid shows, so the two cannot drift apart.
@@ -36,6 +52,27 @@ const TABS = [
 const SETTINGS_TAB = { id: 'projectSettings', shortcut: '⌥S', Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
 export type RailTab = (typeof TABS)[number]['id'] | typeof SETTINGS_TAB.id;
 
+// The order each person arranges by dragging (railOrder.ts): the top list holds most panels, the bottom list
+// holds Style selectors, Audits, the project's Settings and the AI button. The default is the source of truth for which buttons exist.
+const AI_ID = 'ai';
+const DEFAULT_RAIL_ORDER: RailOrder = {
+  top: ['pages', 'navigator', 'assets', 'cms', 'variables', 'history', 'properties', 'components', 'apps', 'code'],
+  bottom: ['selectors', 'audits', SETTINGS_TAB.id, AI_ID],
+};
+
+/** One rail button, whichever list it is in. */
+interface RailEntry {
+  readonly id: string;
+  readonly label: string;
+  readonly shortcut: string | undefined;
+  readonly Icon: FeatureIconComponent;
+  /** The tooltip's text after a pause on the button. */
+  readonly tooltip: string;
+  readonly pressed: boolean;
+  readonly select: () => void;
+  readonly badge: ReactNode;
+}
+
 const TOOLTIP_DELAY = 500;
 const AiRailIcon = FEATURE_ICONS['panel:ai'];
 
@@ -45,6 +82,9 @@ const AiRailIcon = FEATURE_ICONS['panel:ai'];
 // Buttons a short window has no room for move into a More menu at the foot
 // (railOverflow.ts); their shortcuts keep working, because the keys never ask
 // what is drawn.
+// Each person arranges the buttons (railOrder.ts): drag one to reorder it or to move it between the top
+// list and the bottom list at the foot, or use Alt+arrows on a focused button. The order is kept per
+// person for every project (railOrderStore.ts); right-clicking the rail offers to move a button or reset.
 export default function LeftRail({
   active,
   onSelect,
@@ -64,10 +104,15 @@ export default function LeftRail({
   readonly aiButton?: { readonly active: boolean; readonly onSelect: () => void } | undefined;
 }) {
   const [tip, setTip] = useState<{ readonly label: string; readonly left: number; readonly top: number } | undefined>(undefined);
+  const [menu, setMenu] = useState<{ readonly anchor: HTMLElement; readonly id: string | undefined } | undefined>(undefined);
+  const [announcement, setAnnouncement] = useState('');
   const translate = useTranslate();
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const railRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
+  const reflowRef = useRef<ReadonlyMap<string, number> | undefined>(undefined);
+  const focusAfterRef = useRef<string | undefined>(undefined);
+  const { order, change, reset } = useRailOrder(DEFAULT_RAIL_ORDER);
 
   const showSoon = (label: string) => (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -101,15 +146,135 @@ export default function LeftRail({
   const activeApp = pinned.find((app) => app.manifest.id === shownApp);
   const openApps = useAppsRuntime().running;
   const activeId = activeApp === undefined ? active : railAppId(activeApp.manifest.id);
+  const showSettings = canSettingsPanel(role);
+
+  // Every button this role has, by id; the order only arranges them.
+  const entries = new Map<string, RailEntry>();
+  for (const { id, titleKey, shortcut, Icon } of tabs) {
+    entries.set(id, {
+      id,
+      label: translate(titleKey),
+      shortcut,
+      Icon,
+      tooltip: translate('rail.withShortcut', { label: translate(titleKey), shortcut }),
+      pressed: activeId === id,
+      select: () => onSelect(id),
+      badge: id === 'apps' ? <AppsRailBadge admin={role.isAdmin} /> : undefined,
+    });
+  }
+  if (showSettings) {
+    entries.set(SETTINGS_TAB.id, {
+      id: SETTINGS_TAB.id,
+      label: translate('rail.settings'),
+      shortcut: SETTINGS_TAB.shortcut,
+      Icon: SETTINGS_TAB.Icon,
+      tooltip: translate('rail.settings'),
+      pressed: active === SETTINGS_TAB.id,
+      select: () => onSelect(SETTINGS_TAB.id),
+      badge: undefined,
+    });
+  }
+  if (aiButton !== undefined) {
+    entries.set(AI_ID, {
+      id: AI_ID,
+      label: translate('rail.ai'),
+      shortcut: undefined,
+      Icon: AiRailIcon,
+      tooltip: translate('rail.ai'),
+      pressed: aiButton.active,
+      select: aiButton.onSelect,
+      badge: undefined,
+    });
+  }
+  const shownIds = new Set(entries.keys());
+  const visible = visibleRailOrder(order, shownIds);
+  const entryOf = (id: string): RailEntry | undefined => entries.get(id);
+  const topEntries = visible.top.map(entryOf).filter((entry): entry is RailEntry => entry !== undefined);
+  const bottomEntries = visible.bottom.map(entryOf).filter((entry): entry is RailEntry => entry !== undefined);
+
   const items: readonly RailOverflowItem[] = [
-    ...tabs.map((tab): RailOverflowItem => ({ id: tab.id, group: 'panel' })),
+    ...topEntries.map((entry): RailOverflowItem => ({ id: entry.id, group: 'panel' })),
     ...pinned.map((app): RailOverflowItem => ({ id: railAppId(app.manifest.id), group: 'app' })),
   ];
-  const showSettings = canSettingsPanel(role);
-  const layout = useRailOverflow(railRef, aiButton === undefined && !showSettings ? undefined : anchorRef, items, activeId);
+  const overflowActive = aiButton?.active === true ? AI_ID : activeId;
+  const layout = useRailOverflow(railRef, bottomEntries.length === 0 ? undefined : anchorRef, items, overflowActive);
   const shown = new Set(layout.visible);
-  const shownTabs = tabs.filter((tab) => shown.has(tab.id));
+  const shownTopEntries = topEntries.filter((entry) => shown.has(entry.id));
   const shownApps = pinned.filter((app) => shown.has(railAppId(app.manifest.id)));
+
+  // A new order is committed here: the rows are read first so the layout effect below can slide the buttons.
+  const commitOrder = (next: RailOrder, id: string, focusAfter: 'focus' | 'none') => {
+    if (!sameRailOrder(next, order)) {
+      reflowRef.current = readRailRows(railRef.current ?? undefined);
+      if (focusAfter === 'focus') {
+        focusAfterRef.current = id;
+      }
+      change(next);
+      const place = railPosition(next, shownIds, id);
+      const label = entries.get(id)?.label;
+      if (place !== undefined && label !== undefined) {
+        setAnnouncement(translate(place.group === 'top' ? 'rail.movedTop' : 'rail.movedBottom', { label, position: place.position, count: place.count }));
+      }
+    }
+  };
+  const resetOrder = () => {
+    if (!isDefaultRailOrder(DEFAULT_RAIL_ORDER, order)) {
+      reflowRef.current = readRailRows(railRef.current ?? undefined);
+      reset();
+      setAnnouncement(translate('rail.resetDone'));
+    }
+  };
+  useLayoutEffect(() => {
+    const before = reflowRef.current;
+    reflowRef.current = undefined;
+    if (before !== undefined) {
+      animateRailReflow(railRef.current ?? undefined, before);
+    }
+    const focusId = focusAfterRef.current;
+    focusAfterRef.current = undefined;
+    if (focusId !== undefined) {
+      for (const button of railRef.current?.querySelectorAll<HTMLElement>('[data-rail-id]') ?? []) {
+        if (button.dataset['railId'] === focusId) {
+          button.focus();
+        }
+      }
+    }
+  }, [order]);
+
+  const drag = useRailDrag({
+    railRef,
+    onStart: hide,
+    onDrop: (id, slot) => commitOrder(placeRailItem(order, id, slot.group, slot.beforeId), id, 'none'),
+  });
+  const dragView = drag.view;
+  const dragEntry = dragView === undefined ? undefined : entries.get(dragView.id);
+  // The line shows only where a drop would change what is drawn.
+  const slot = dragView?.slot;
+  const dropChanges =
+    dragView !== undefined &&
+    slot !== undefined &&
+    !sameRailOrder(visibleRailOrder(placeRailItem(order, dragView.id, slot.group, slot.beforeId), shownIds), visible);
+
+  const moveByKey = (event: ReactKeyboardEvent<HTMLButtonElement>, id: string) => {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      return;
+    }
+    let next: RailOrder | undefined;
+    if (event.key === 'ArrowUp') {
+      next = shiftRailItem(order, shownIds, id, 'up');
+    } else if (event.key === 'ArrowDown') {
+      next = shiftRailItem(order, shownIds, id, 'down');
+    } else if (event.key === 'ArrowLeft') {
+      next = crossRailItem(order, id, 'top');
+    } else if (event.key === 'ArrowRight') {
+      next = crossRailItem(order, id, 'bottom');
+    }
+    if (next !== undefined) {
+      event.preventDefault();
+      hide();
+      commitOrder(next, id, 'focus');
+    }
+  };
 
   const selectApp = (app: AppSummary) => {
     hide();
@@ -121,14 +286,14 @@ export default function LeftRail({
     }
   };
   const moreItems: readonly RailMoreItem[] = [
-    ...tabs
-      .filter((tab) => !shown.has(tab.id))
-      .map(({ id, titleKey, shortcut, Icon }): RailMoreItem => ({
-        id,
-        label: translate(titleKey),
-        icon: <Icon size={16} />,
-        shortcut,
-        select: () => onSelect(id),
+    ...topEntries
+      .filter((entry) => !shown.has(entry.id))
+      .map((entry): RailMoreItem => ({
+        id: entry.id,
+        label: entry.label,
+        icon: <entry.Icon size={16} />,
+        shortcut: entry.shortcut,
+        select: entry.select,
       })),
     ...pinned
       .filter((app) => !shown.has(railAppId(app.manifest.id)))
@@ -141,26 +306,68 @@ export default function LeftRail({
       })),
   ];
 
+  const openMenu = (event: MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    hide();
+    const target = event.target instanceof Element ? (event.target.closest<HTMLElement>('[data-rail-id]') ?? undefined) : undefined;
+    const anchor = target ?? railRef.current ?? undefined;
+    if (anchor !== undefined) {
+      setMenu({ anchor, id: target?.dataset['railId'] });
+    }
+  };
+  const menuEntries = (id: string | undefined): readonly MenuEntry[] => {
+    const place = id === undefined ? undefined : railPlaceOf(order, id);
+    const rows: MenuEntry[] = [];
+    if (id !== undefined && place !== undefined) {
+      const target: RailGroup = place.group === 'top' ? 'bottom' : 'top';
+      rows.push({
+        kind: 'item',
+        id: 'move',
+        label: translate(target === 'bottom' ? 'rail.moveToBottom' : 'rail.moveToTop'),
+        onSelect: () => commitOrder(crossRailItem(order, id, target), id, 'focus'),
+      });
+    }
+    rows.push({ kind: 'item', id: 'reset', label: translate('rail.reset'), disabled: isDefaultRailOrder(DEFAULT_RAIL_ORDER, order), onSelect: resetOrder });
+    return rows;
+  };
+
+  const renderButton = (entry: RailEntry, group: RailGroup) => {
+    const dragged = dragView?.id === entry.id;
+    return (
+      <button
+        key={entry.id}
+        aria-label={entry.shortcut === undefined ? entry.label : translate('rail.withShortcut', { label: entry.label, shortcut: entry.shortcut })}
+        aria-pressed={entry.pressed}
+        className={`rail-btn ${entry.pressed ? 'on' : ''}`}
+        data-rail-id={entry.id}
+        data-rail-group={group}
+        data-dragging={dragged ? 'true' : undefined}
+        onMouseEnter={showSoon(entry.tooltip)}
+        onMouseLeave={hide}
+        onClickCapture={(event) => {
+          // The click that ends a drag is not a choice of the panel.
+          if (drag.takeSuppressedClick()) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onClick={() => {
+          hide();
+          entry.select();
+        }}
+        onKeyDown={(event) => moveByKey(event, entry.id)}
+        {...drag.handlersFor(entry.id)}
+      >
+        <entry.Icon size={20} />
+        {entry.badge}
+      </button>
+    );
+  };
+
   return (
-    <div className="rail" ref={railRef}>
-      {shownTabs.map(({ id, Icon, titleKey, shortcut }) => (
-        <button
-          key={id}
-          aria-label={translate('rail.withShortcut', { label: translate(titleKey), shortcut })}
-          aria-pressed={activeId === id}
-          className={`rail-btn ${activeId === id ? 'on' : ''}`}
-          onMouseEnter={showSoon(translate('rail.withShortcut', { label: translate(titleKey), shortcut }))}
-          onMouseLeave={hide}
-          onClick={() => {
-            hide();
-            onSelect(id);
-          }}
-        >
-          <Icon size={20} />
-          {id === 'apps' && <AppsRailBadge admin={role.isAdmin} />}
-        </button>
-      ))}
-      {shownTabs.length > 0 && shownApps.length > 0 && <div className="rail-separator" role="separator" />}
+    <div className="rail" ref={railRef} data-dragging={dragView === undefined ? undefined : 'true'} onContextMenu={openMenu}>
+      {shownTopEntries.map((entry) => renderButton(entry, 'top'))}
+      {shownTopEntries.length > 0 && shownApps.length > 0 && <div className="rail-separator" role="separator" />}
       {shownApps.map((app) => {
         const id = railAppId(app.manifest.id);
         return (
@@ -178,48 +385,45 @@ export default function LeftRail({
           </button>
         );
       })}
-      {moreItems.length > 0 && <RailMore items={moreItems} active={activeId} />}
-      {(aiButton !== undefined || showSettings) && (
+      {moreItems.length > 0 && <RailMore items={moreItems} active={overflowActive} />}
+      {bottomEntries.length > 0 ? (
         // Anchored at the foot like Studio's AI button: these never move into More (railOverflow.ts).
-        // Settings comes first, so it sits directly above the AI button.
+        // The default order puts Settings first, so it sits directly above the AI button.
         <div className="rail-anchor" ref={anchorRef}>
-          {showSettings && (
-            <button
-              aria-label={translate('rail.withShortcut', { label: translate('rail.settings'), shortcut: SETTINGS_TAB.shortcut })}
-              aria-pressed={active === SETTINGS_TAB.id}
-              className={`rail-btn ${active === SETTINGS_TAB.id ? 'on' : ''}`}
-              onMouseEnter={showSoon(translate('rail.settings'))}
-              onMouseLeave={hide}
-              onClick={() => {
-                hide();
-                onSelect(SETTINGS_TAB.id);
-              }}
-            >
-              <SETTINGS_TAB.Icon size={20} />
-            </button>
-          )}
-          {aiButton !== undefined && (
-            <button
-              aria-label={translate('rail.ai')}
-              aria-pressed={aiButton.active}
-              className={`rail-btn ${aiButton.active ? 'on' : ''}`}
-              onMouseEnter={showSoon(translate('rail.ai'))}
-              onMouseLeave={hide}
-              onClick={() => {
-                hide();
-                aiButton.onSelect();
-              }}
-            >
-              <AiRailIcon size={20} />
-            </button>
-          )}
+          {bottomEntries.map((entry) => renderButton(entry, 'bottom'))}
+        </div>
+      ) : (
+        // While a button is dragged, an empty bottom list is still somewhere to drop it.
+        dragView !== undefined && (
+          <div className="rail-anchor rail-drop-zone">
+            <div className="rail-slot-empty" />
+          </div>
+        )
+      )}
+      {dragView !== undefined && dragEntry !== undefined && (
+        <div className="rail-ghost" ref={drag.ghostRef} aria-hidden="true" data-rail-float="true" data-outside={slot === undefined ? 'true' : undefined}>
+          <dragEntry.Icon size={20} />
         </div>
       )}
+      {dragView !== undefined && slot !== undefined && dropChanges && (
+        <div className="rail-drop-line" aria-hidden="true" data-rail-float="true" style={{ top: slot.lineY - dragView.railTop - 1 }} />
+      )}
+      <div className="rail-live" role="status" aria-live="polite" data-rail-float="true">
+        {announcement}
+      </div>
       {tip && (
         <div className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
           {tip.label}
         </div>
       )}
+      <Menu
+        open={menu !== undefined}
+        anchor={menu?.anchor}
+        entries={menuEntries(menu?.id)}
+        label={translate('rail.orderMenu')}
+        placement="right-start"
+        onClose={() => setMenu(undefined)}
+      />
     </div>
   );
 }
