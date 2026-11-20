@@ -1,0 +1,15 @@
+/* The recovery dialog's files (StyleMoveFiles.tsx). The toggle and the box are the breakpoint usage ones; these rules only
+   stack the sentence over the toggle and cap the box at eight lines, its scrolling and gutter coming from .breakpoints-usage-files. */
+.style-move-files {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.style-move-files .breakpoints-usage-list {
+  justify-self: stretch;
+}
+.style-move-files-rows {
+  /* Eight lines and the seven gaps between them (.breakpoints-usage-files sets a 4px gap). */
+  max-height: calc(8lh + 7 * 4px);
+  overflow-wrap: anywhere;
+}

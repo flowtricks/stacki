@@ -32,6 +32,10 @@ export function createdComponentFiles(calls: ComponentFileCalls, checksum: Diges
   // each change follows what main answered, so it can't drift from the disk.
   const file: { onDisk: boolean; checksum: Digest } = { onDisk: true, checksum };
   return {
+    // The file itself asks the person when it was edited since (confirmDelete), so it never refuses a step up front.
+    check: async () => undefined,
+    undoBeforePage: async () => undefined,
+    redoAfterPage: async () => undefined,
     undo: async () => {
       if (!file.onDisk) {
         return; // Already taken back by an earlier, partial undo.
@@ -59,6 +63,99 @@ export function createdComponentFiles(calls: ComponentFileCalls, checksum: Diges
   };
 }
 
+/** Files work that only undoes and redoes around the page (an audit fix): it never refuses a step, and has nothing to do before or after the page. */
+export function plainStepFiles(work: Pick<StepFiles, 'undo' | 'redo'>): StepFiles {
+  return { check: async () => undefined, undoBeforePage: async () => undefined, undo: work.undo, redo: work.redo, redoAfterPage: async () => undefined };
+}
+
+/** What the stylesheet half of a move needs: a sheet's text as it is now, a write, and the words for sheets changed since. */
+export interface StyleSheetCalls {
+  readonly read: (path: string) => Promise<string>;
+  /** Writes `css` only while the sheet holds exactly `expected`, and throws otherwise (main's actor checks, style:writeFile). */
+  readonly write: (path: string, css: string, expected: string) => Promise<void>;
+  /** The sentence for sheets that changed since the move (or since its undo), which refuses the step. */
+  readonly changed: (rels: readonly string[]) => string;
+}
+
+/** One stylesheet a move edits, with its text before and after the move. */
+export interface MovedSheet {
+  readonly path: string;
+  readonly rel: string;
+  readonly before: string;
+  readonly after: string;
+}
+
+/**
+ * The stylesheets "Move styles" edited, as a step's files. All or nothing: a step goes ahead only while every sheet
+ * holds exactly the text it expects (`check`), and each write is refused by main unless the sheet still does. Copy
+ * first, delete last: undo puts the rules back before the page stops using the component (undoBeforePage), and redo
+ * takes them out only after the page uses it again (redoAfterPage), so no rule is ever missing between two writes;
+ * at worst a crash leaves one written twice. The first move's own clean-up is `redoAfterPage`.
+ */
+export function movedStyleFiles(sheets: readonly MovedSheet[], calls: StyleSheetCalls): StepFiles {
+  assert(sheets.length > 0, 'movedStyleFiles: a move edits at least one sheet');
+  assert(
+    sheets.every((sheet) => sheet.before !== sheet.after),
+    'movedStyleFiles: every sheet the move lists changed',
+  );
+  // A sheet holding neither of its two texts was edited by someone: that is what refuses a step. One already at
+  // the step's target is left alone, so a step run again after a partial one (see StepFiles) writes nothing twice.
+  const changedSheets = async (): Promise<readonly string[]> => {
+    const changed: string[] = [];
+    for (const sheet of sheets) {
+      const now = await calls.read(sheet.path);
+      if (now !== sheet.before && now !== sheet.after) {
+        changed.push(sheet.rel);
+      }
+    }
+    return changed;
+  };
+  const swap = async (from: 'before' | 'after', to: 'before' | 'after'): Promise<void> => {
+    for (const sheet of sheets) {
+      if ((await calls.read(sheet.path)) !== sheet[to]) {
+        await calls.write(sheet.path, sheet[to], sheet[from]);
+      }
+    }
+  };
+  return {
+    check: async () => {
+      const changed = await changedSheets();
+      assert(changed.length <= sheets.length, 'movedStyleFiles: only listed sheets can have changed');
+      return changed.length === 0 ? undefined : calls.changed(changed);
+    },
+    undoBeforePage: () => swap('after', 'before'),
+    undo: async () => undefined,
+    redo: async () => undefined,
+    redoAfterPage: () => swap('before', 'after'),
+  };
+}
+
+/**
+ * Two files halves as one step: `first` is made before `second` and taken back after it. Each half keeps its own
+ * order around the page; the checks run both, the first refusal winning.
+ */
+export function sequencedFiles(first: StepFiles, second: StepFiles): StepFiles {
+  return {
+    check: async (direction) => (await first.check(direction)) ?? (await second.check(direction)),
+    undoBeforePage: async () => {
+      await second.undoBeforePage();
+      await first.undoBeforePage();
+    },
+    undo: async () => {
+      await second.undo();
+      await first.undo();
+    },
+    redo: async () => {
+      await first.redo();
+      await second.redo();
+    },
+    redoAfterPage: async () => {
+      await first.redoAfterPage();
+      await second.redoAfterPage();
+    },
+  };
+}
+
 /** How much of a step's page writes one undo or redo reverted. */
 export type PageStep = 'whole' | 'part' | 'none';
 
@@ -79,6 +176,11 @@ export async function stepWithFiles(direction: 'undo' | 'redo', files: StepFiles
   if (files === undefined) {
     return { tag: 'stepped', page: await revert() };
   }
+  // All or nothing: a file that cannot follow refuses the whole step before anything is written.
+  const problem = await files.check(direction);
+  if (problem !== undefined) {
+    return { tag: 'refused', message: problem };
+  }
   if (direction === 'redo') {
     try {
       await files.redo();
@@ -90,7 +192,14 @@ export async function stepWithFiles(direction: 'undo' | 'redo', files: StepFiles
       // The page refused to replay: the file it would have imported goes again.
       return settled(page, files.undo);
     }
-    return { tag: 'stepped', page };
+    // Only once the page reads the files again do they give up what it now reads from them.
+    return settled(page, files.redoAfterPage);
+  }
+  try {
+    // What the page will read again once reverted comes back first, so it is never missing.
+    await files.undoBeforePage();
+  } catch (error: unknown) {
+    return { tag: 'refused', message: messageOf(error) };
   }
   const page = await revert();
   if (page === 'whole') {

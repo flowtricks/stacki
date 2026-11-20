@@ -27,11 +27,35 @@ export const messages = {
   'shell.component.createdStranded': 'Se creó {rel}: lee datos de la página, así que necesitará propiedades.',
   'shell.component.createdWithOne': 'Se creó {rel} con {first}.',
   'shell.component.createdWithTwo': 'Se creó {rel} con {first} y {second}.',
+  'shell.component.createdWithThree': 'Se creó {rel} con {first}, {second} y {third}.', // review
   'shell.component.deleteBody': 'Ha cambiado desde que se creó. Deshacer ha restaurado la página de todos modos.',
   'shell.component.deleteConfirm': 'Eliminar archivo',
   'shell.component.deleteKeep': 'Conservar archivo',
   'shell.component.deleteTitle': '¿Eliminar {rel}?',
   'shell.component.movedValues': { one: '{count} valor movido', other: '{count} valores movidos' },
+  'shell.component.movedStyles': { one: 'los estilos de {count} clase', other: 'los estilos de {count} clases' }, // review
+  'shell.component.stylesChanged': 'Los estilos de la página cambiaron mientras tanto, así que no se creó el componente. Vuelve a intentarlo.', // review
+  'shell.component.sheetsChanged': 'Se detuvo porque {files} cambió mientras tanto. No se modificó nada.', // review
+  'shell.component.movingStyles': 'Moviendo los estilos al componente…', // review
+  'shell.component.movedStylesUnverified': 'No se pudieron confirmar los estilos en {rel}, así que no se movió nada.', // review
+  'shell.component.sheetsNotCleaned': 'La página aún no está guardada, así que los estilos movidos siguen también en {files}. No se pierde nada.', // review
+  'shell.styleMove.title': 'Se interrumpió un traslado de estilos', // review
+  'shell.styleMove.interrupted': 'La creación del componente {name} se detuvo a medias. No se perdió ningún estilo.', // review
+  'shell.styleMove.changed':
+    'La creación del componente {name} se detuvo a medias y algunos de sus archivos cambiaron después, así que Stacki no puede terminarla ni deshacerla con exactitud. No se sobrescribirá nada.', // review
+  'shell.styleMove.files': 'Ver los archivos', // review
+  'shell.styleMove.left': 'Aún sin hacer:', // review
+  'shell.styleMove.done': 'Hecho:', // review
+  'shell.styleMove.edited': 'Cambiado después:', // review
+  'shell.styleMove.finish': 'Terminar el traslado', // review
+  'shell.styleMove.finishHint': 'Los estilos quedan solo en el componente, como pediste.', // review
+  'shell.styleMove.undo': 'Deshacer el traslado', // review
+  'shell.styleMove.undoHint': 'Cada archivo vuelve exactamente a como estaba.', // review
+  'shell.styleMove.dismiss': 'Descartar', // review
+  'shell.styleMove.dismissHint': 'Olvidar este traslado. Tus archivos se quedan como están.', // review
+  'shell.styleMove.later': 'Preguntarme más tarde', // review
+  'shell.styleMove.finished': 'El traslado de {name} está terminado.', // review
+  'shell.styleMove.undone': 'El traslado de {name} se deshizo.', // review
   'shell.component.propCount': { one: '{count} propiedad', other: '{count} propiedades' },
   'shell.copy.done': 'Selección copiada: pégala en tu chat de IA.',
   'shell.copy.failed': 'No se pudo copiar la selección: {message}',

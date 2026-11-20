@@ -27,11 +27,35 @@ export const messages = {
   'shell.component.createdStranded': '{rel} créé : il lit des données de la page, il lui faudra donc des propriétés.',
   'shell.component.createdWithOne': '{rel} créé avec {first}.',
   'shell.component.createdWithTwo': '{rel} créé avec {first} et {second}.',
+  'shell.component.createdWithThree': '{rel} créé avec {first}, {second} et {third}.', // review
   'shell.component.deleteBody': 'Il a changé depuis sa création. L’annulation a de toute façon restauré la page.',
   'shell.component.deleteConfirm': 'Supprimer le fichier',
   'shell.component.deleteKeep': 'Conserver le fichier',
   'shell.component.deleteTitle': 'Supprimer {rel} ?',
   'shell.component.movedValues': { one: '{count} valeur déplacée', other: '{count} valeurs déplacées' },
+  'shell.component.movedStyles': { one: 'les styles de {count} classe', other: 'les styles de {count} classes' }, // review
+  'shell.component.stylesChanged': 'Les styles de la page ont changé entre-temps, le composant n’a donc pas été créé. Réessayez.', // review
+  'shell.component.sheetsChanged': 'Arrêté, car {files} a changé entre-temps. Rien n’a été modifié.', // review
+  'shell.component.movingStyles': 'Déplacement des styles dans le composant…', // review
+  'shell.component.movedStylesUnverified': 'Impossible de confirmer les styles dans {rel}, donc rien n’a été déplacé.', // review
+  'shell.component.sheetsNotCleaned': 'La page n’est pas encore enregistrée, les styles déplacés restent donc aussi dans {files}. Rien n’est perdu.', // review
+  'shell.styleMove.title': 'Un déplacement de styles a été interrompu', // review
+  'shell.styleMove.interrupted': 'La création du composant {name} s’est arrêtée en cours. Aucun style n’a été perdu.', // review
+  'shell.styleMove.changed':
+    'La création du composant {name} s’est arrêtée en cours, et certains de ses fichiers ont changé depuis, donc Stacki ne peut pas la terminer ni l’annuler exactement. Rien ne sera écrasé.', // review
+  'shell.styleMove.files': 'Voir les fichiers', // review
+  'shell.styleMove.left': 'Pas encore fait :', // review
+  'shell.styleMove.done': 'Fait :', // review
+  'shell.styleMove.edited': 'Modifié depuis :', // review
+  'shell.styleMove.finish': 'Terminer le déplacement', // review
+  'shell.styleMove.finishHint': 'Les styles ne restent que dans le composant, comme demandé.', // review
+  'shell.styleMove.undo': 'Annuler le déplacement', // review
+  'shell.styleMove.undoHint': 'Chaque fichier revient exactement comme avant.', // review
+  'shell.styleMove.dismiss': 'Ignorer', // review
+  'shell.styleMove.dismissHint': 'Oublier ce déplacement. Vos fichiers restent tels quels.', // review
+  'shell.styleMove.later': 'Me demander plus tard', // review
+  'shell.styleMove.finished': 'Le déplacement de {name} est terminé.', // review
+  'shell.styleMove.undone': 'Le déplacement de {name} est annulé.', // review
   'shell.component.propCount': { one: '{count} propriété', other: '{count} propriétés' },
   'shell.copy.done': 'Sélection copiée : collez-la dans votre chat IA.',
   'shell.copy.failed': 'Impossible de copier la sélection : {message}',

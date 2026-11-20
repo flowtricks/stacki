@@ -10,6 +10,15 @@ import { COMPONENT_ACCESS_LIMITS } from '../../shared/properties/componentAccess
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { parseScopeSamples } from '../../shared/page/previewScope';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
+import { parseClassUsageReply, type ClassUsageReply } from '../../shared/properties/classUsage';
+import {
+  parsePendingStyleMove,
+  parseStyleMoveResolution,
+  type PendingStyleMove,
+  type StyleMoveJournal,
+  type StyleMoveResolution,
+  type StyleMoveTarget,
+} from '../../shared/properties/styleMoveJournal';
 import type { EditBatchRequest, EditRequest } from '../../shared/engine/editRequest';
 import { parsePageEditResult, type PageEditError, type PageEdited } from '../../shared/ipc/pageSave';
 import { parsePreviewVerdict, type PreviewRender, type PreviewVerdict } from '../../shared/page/previewToken';
@@ -55,6 +64,8 @@ interface CreateComponentInput {
   readonly frontmatter: { readonly imports: readonly CreateComponentImport[]; readonly code: string };
   /** Below the first component folder, `/`-separated; `''` is that folder itself. */
   readonly folder: string;
+  /** The `<style>` node holding the CSS that moves in with the markup ("Move styles"), written after it; absent when none does. */
+  readonly style: unknown;
 }
 
 export function diagnoseProject(projectPath: string): Promise<IpcResults['dev:diagnose']> {
@@ -316,7 +327,7 @@ export function createProjectComponent(input: CreateComponentInput): Promise<Ipc
     projectPath: input.projectPath,
     pagePath: input.pagePath,
     name: input.name,
-    nodes: [data(input.nodes)],
+    nodes: input.style === undefined ? [data(input.nodes)] : [data(input.nodes), data(input.style)],
     imports: input.imports,
     props: input.props.map(data),
     frontmatter: input.frontmatter,
@@ -374,6 +385,36 @@ export function readComponentUsage(projectPath: string, name: string, exclude: s
       total: count(value['total']),
     };
   });
+}
+
+/** Which files other than `pagePath` mention each of `classes` (shared/properties/classUsage.ts). */
+export function readClassUsage(projectPath: string, pagePath: string, classes: readonly string[]): Promise<ClassUsageReply> {
+  const payload = parseIpcPayload('component:classUsage', { projectPath, pagePath, classes });
+  return window.avb.componentClassUsage(payload).then(parseClassUsageReply);
+}
+
+/** Records a "Move styles" plan in main's journal, replacing the project's last one (shared/properties/styleMoveJournal.ts). */
+export async function recordStyleMove(projectPath: string, journal: StyleMoveJournal): Promise<void> {
+  const payload = parseIpcPayload('styleMove:record', { projectPath, journal });
+  parseOkResult(await window.avb.recordStyleMove(payload));
+}
+
+/** Clears the project's journal when it is still the move named `id`. */
+export async function clearStyleMove(projectPath: string, id: string): Promise<void> {
+  const payload = parseIpcPayload('styleMove:clear', { projectPath, id });
+  parseOkResult(await window.avb.clearStyleMove(payload));
+}
+
+/** A move left part way in this project, with where it stands on disk, or undefined. */
+export async function pendingStyleMove(projectPath: string): Promise<PendingStyleMove | undefined> {
+  const payload = parseIpcPayload('styleMove:pending', { projectPath });
+  return parsePendingStyleMove(await window.avb.pendingStyleMove(payload));
+}
+
+/** Finishes the journalled move, or puts every file back as before it; refused, writing nothing, when a file changed. */
+export async function resolveStyleMove(projectPath: string, id: string, target: StyleMoveTarget): Promise<StyleMoveResolution> {
+  const payload = parseIpcPayload('styleMove:resolve', { projectPath, id, target });
+  return parseStyleMoveResolution(await window.avb.resolveStyleMove(payload));
 }
 
 export function previewProjectCommit(projectPath: string, reference: string): Promise<IpcResults['preview:atCommit']> {

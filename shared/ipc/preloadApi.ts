@@ -121,6 +121,11 @@ interface InvokeChannels {
   readonly revertComponentProperties: 'component:revertProperties';
   readonly previewPropertyRemoval: 'component:previewPropertyRemoval';
   readonly componentUsage: 'component:usage';
+  readonly componentClassUsage: 'component:classUsage';
+  readonly recordStyleMove: 'styleMove:record';
+  readonly clearStyleMove: 'styleMove:clear';
+  readonly pendingStyleMove: 'styleMove:pending';
+  readonly resolveStyleMove: 'styleMove:resolve';
   readonly dynamicPaths: 'page:dynamicPaths';
   readonly emDashProject: 'emdash:project';
   readonly emDashInstallPlan: 'emdash:installPlan';

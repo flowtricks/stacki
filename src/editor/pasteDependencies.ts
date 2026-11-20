@@ -563,7 +563,8 @@ function withoutSlots(node: EditorNode, role: PasteFileRole, changes: PasteChang
   return out;
 }
 
-function subjectOf(node: EditorNode): ReturnType<typeof styleSubjectOf> {
+/** The classes and ids written on `node` and every node inside it: what a selector can name of that markup. */
+export function subjectOf(node: EditorNode): ReturnType<typeof styleSubjectOf> {
   const classes: string[] = [];
   const ids: string[] = [];
   const pending: EditorNode[] = [node];

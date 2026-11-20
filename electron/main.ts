@@ -85,6 +85,9 @@ import { removeLegacyComponentShots } from './project/legacyComponentShots';
 import { registerAssetHandlers } from './handlers/assetHandlers';
 import { registerCmsHandlers } from './handlers/cmsHandlers';
 import { registerComponentHandlers } from './handlers/componentHandlers';
+import { registerStyleMoveHandlers } from './handlers/styleMoveHandlers';
+import { StyleMoveJournals } from './content/styleMoveJournals';
+import { projectFoldersFor } from './lib/projectFolders';
 import { registerContentHandlers } from './handlers/contentHandlers';
 import { registerCssVariableHandlers } from './handlers/cssVariableHandlers';
 import { registerBreakpointSyncHandlers } from './handlers/breakpointSyncHandlers';
@@ -1221,6 +1224,13 @@ const aiServices = registerAiHandlers(host, {
 registerAuditHandlers(host, { openMeasureWindow: (options) => new BrowserWindow(options) });
 registerCmsHandlers(host);
 registerComponentHandlers(host);
+registerStyleMoveHandlers(
+  host,
+  new StyleMoveJournals(
+    () => app.getPath('userData'),
+    (projectRoot) => projectFoldersFor(projectRoot, 'components'),
+  ),
+);
 registerContentHandlers(host, { restartForNewContentConfig: (devUrl) => devServers.restartForNewContentConfig(devUrl) });
 registerCssVariableHandlers(host);
 registerBreakpointSyncHandlers(host);

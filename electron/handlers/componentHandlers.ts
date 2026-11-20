@@ -20,6 +20,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { componentFile, discardComponentFile } from '../documents/componentFile';
 import { componentUsage } from '../properties/componentUsage';
+import { findClassMentions } from '../properties/classMentions';
 import { toPosix } from '../lib/mainHelpers';
 import { selectionTrail } from '../documents/pageRequests';
 import type { MainHost } from './mainHost';
@@ -141,6 +142,16 @@ function registerComponentCreateHandlers({
 
   // Which files hold instances of a component — the palette’s instance count.
   ipcMain.handle('component:usage', async (_event, { projectPath, name, exclude }) => componentUsage(definedFields({ projectPath, name, exclude })));
+
+  // Which files other than the page mention each class: Create component offers to move only the CSS of the classes none does.
+  ipcMain.handle('component:classUsage', async (_event, { projectPath, pagePath, classes }) => {
+    const pageRel = toPosix(path.relative(projectPath, pagePath));
+    assert(pageRel !== '', 'component:classUsage: the page is a file, not the project folder');
+    assert(!pageRel.startsWith('..'), 'component:classUsage: the page is inside the project');
+    assert(!path.isAbsolute(pageRel), 'component:classUsage: the page is on the project drive');
+    const found = await findClassMentions(projectPath, classes, pageRel, projectFoldersFor(projectPath, 'styles'));
+    return { classes: classes.map((name) => ({ name, files: found.get(name) ?? [] })) };
+  });
 
   ipcMain.handle('page:importPathFor', async (_event, { pagePath, targetPath, projectPath }) =>
     componentImportPaths({ pagePath, targetPath, projectPath: projectPath ?? undefined }),
