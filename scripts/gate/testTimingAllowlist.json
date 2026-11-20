@@ -1283,7 +1283,7 @@
     {
       "file": "test/renderer/history/popup.test.js",
       "rule": "fixed-pause",
-      "count": 9,
+      "count": 7,
       "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
       "added": "2026-11-19",
       "expires": "2027-05-18"

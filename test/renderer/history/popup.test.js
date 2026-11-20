@@ -9,6 +9,7 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath, sourceSpecifier } = require('../../helpers/sources');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 test('shared popup motion, dismissal and nested focus', async () => {
   const directory = repoPath('node_modules/.stacki-test/popup');
@@ -63,6 +64,18 @@ test('shared popup motion, dismissal and nested focus', async () => {
       ),
     );
   const tick = (ms) => act(async () => new Promise((resolve) => setTimeout(resolve, ms)));
+  // The opening motion ends on a timer; a loaded Windows runner ran it past a fixed 50 ms (Check on
+  // 9e0c1a7b read 'opening'). Wait for the phase itself, bounded (test/helpers/waitFor.js).
+  // Each poll flushes React inside act, then reads; the wait itself stays outside act, which would hold the update.
+  const phaseReaches = (read, phase) =>
+    waitFor({
+      what: `the popup phase ${phase}`,
+      read: async () => {
+        await act(async () => {});
+        return read();
+      },
+      until: (seen) => seen === phase,
+    });
   const gesture = (start, end) =>
     act(async () => {
       start.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true }));
@@ -74,7 +87,7 @@ test('shared popup motion, dismissal and nested focus', async () => {
     trigger.focus();
     await render();
     assert.equal(document.querySelector('.popup-surface').dataset.popupPhase, 'opening');
-    await tick(50);
+    await phaseReaches(() => document.querySelector('.popup-surface').dataset.popupPhase, 'open');
     assert.equal(document.querySelector('.popup-surface').dataset.popupPhase, 'open');
     const input = document.querySelector('input');
     await gesture(input, document.body);
@@ -162,7 +175,7 @@ test('shared popup motion, dismissal and nested focus', async () => {
         ),
       ),
     );
-    await tick(50);
+    await phaseReaches(() => menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'open');
     assert.equal(menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'open');
     await escape();
     assert.equal(menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'closing');
