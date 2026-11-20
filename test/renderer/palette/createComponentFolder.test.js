@@ -4,8 +4,8 @@
 // saved as, live; a typed folder that climbs out, starts at the disk, has an empty level or a bad character is refused with its
 // reason on screen and Create disabled; a name is taken only in the chosen folder, and the same name in another folder is a
 // warning, not a refusal. Creating hands the host the folder below the root, `''` for the root.
-// "Move styles" lists the classes whose CSS may go into the component, read when the dialog opens: checked when nothing else uses
-// them, with where their CSS is; absent when there is nothing to read or nothing to move; and Create hands over the checked ones.
+// "Move styles" lists the classes whose CSS may go into the component, read when the dialog opens, none checked to begin
+// with, each with where its CSS is; absent when there is nothing to read or nothing to move; and Create hands over the checked ones.
 // Method: bundle the real PalettePanel, mount it in jsdom with components in nested folders and a stub management whose rename
 // host names the configured roots, open the dialog with the header button, and drive the real dropdown and inputs with clicks
 // and input events; the host's onCreateComponent records what it is handed.
@@ -210,8 +210,8 @@ test('the dialog forgets the folder: it opens on the root again', async () => {
 
 // "Move styles": the classes whose CSS may go into the component, read when the dialog opens.
 const CANDIDATES = [
-  { name: 'card', homes: [{ kind: 'stylesheet', rel: 'src/styles/base.css' }, { kind: 'page' }], reach: { kind: 'onlyHere' }, checked: true },
-  { name: 'centered', homes: [{ kind: 'stylesheet', rel: 'src/styles/base.css' }], reach: { kind: 'files', files: ['src/pages/about.astro'] }, checked: false },
+  { name: 'card', homes: [{ kind: 'stylesheet', rel: 'src/styles/base.css' }, { kind: 'page' }], reach: { kind: 'onlyHere' } },
+  { name: 'centered', homes: [{ kind: 'stylesheet', rel: 'src/styles/base.css' }], reach: { kind: 'files', files: ['src/pages/about.astro'] } },
 ];
 const styleRows = () => [...document.querySelectorAll('.modal .move-styles .extract-value')];
 const styleSection = () => document.querySelector('.modal .move-styles') ?? undefined;
@@ -226,7 +226,7 @@ test('Move styles: absent where the host cannot move CSS, and when no class of t
   await empty.unmount();
 });
 
-test('Move styles: a row per class, checked when nothing else uses it, with where its CSS is; Create hands over the checked', async () => {
+test('Move styles: a row per class, none checked, with where its CSS is; Create with none checked moves nothing', async () => {
   const view = await mount('Div', async () => CANDIDATES);
   await view.act(() => undefined);
   const rows = styleRows();
@@ -237,23 +237,25 @@ test('Move styles: a row per class, checked when nothing else uses it, with wher
       row.querySelector('.move-style-home').textContent,
     ]),
     [
-      ['.card', true, 'base.css, This page'],
+      ['.card', false, 'base.css, This page'],
       ['.centered', false, 'base.css'],
     ],
   );
   assert.ok(rows[0].querySelector('.extract-value-tag') === null, 'a class only here wears no tag');
   assert.match(rows[1].querySelector('.extract-value-tag').textContent, /Also used elsewhere/);
   assert.equal(rows[1].querySelector('input').getAttribute('aria-label'), 'Move the styles of .centered');
+  assert.equal(view.createButton().disabled, false, 'Create works with nothing checked');
   await view.act(() => view.createButton().click());
-  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: '', moveStyles: ['card'] }]);
+  assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: '', moveStyles: [] }]);
   await view.unmount();
 });
 
-test('Move styles: unchecking and checking change what Create hands over', async () => {
+test('Move styles: checking and unchecking change what Create hands over', async () => {
   const view = await mount('Div', async () => CANDIDATES);
   await view.act(() => undefined);
   await view.act(() => styleRows()[0].querySelector('input').click());
   await view.act(() => styleRows()[1].querySelector('input').click());
+  await view.act(() => styleRows()[0].querySelector('input').click());
   await view.act(() => view.createButton().click());
   assert.deepEqual(view.created, [{ name: 'Div', asProp: [], folder: '', moveStyles: ['centered'] }]);
   await view.unmount();

@@ -154,8 +154,8 @@ type MoveStyleState =
   | { readonly kind: 'ready'; readonly candidates: readonly MoveStyleCandidate[] }
   | { readonly kind: 'failed' };
 
-// Reads the choices once, when the dialog opens, and starts with the classes nothing else uses checked.
-// Until they arrive nothing is chosen, so creating early moves no CSS.
+// Reads the choices once, when the dialog opens. Nothing starts checked: moving a rule out of a stylesheet is the
+// person's decision, row by row, so Create with nothing checked makes the component and moves no CSS.
 function useMoveStyleChoices(load: (() => Promise<readonly MoveStyleCandidate[]>) | undefined) {
   const [state, setState] = useState<MoveStyleState>(load === undefined ? { kind: 'none' } : { kind: 'loading' });
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
@@ -168,7 +168,6 @@ function useMoveStyleChoices(load: (() => Promise<readonly MoveStyleCandidate[]>
       (candidates) => {
         if (current) {
           setState({ kind: 'ready', candidates });
-          setChosen(new Set(candidates.filter((candidate) => candidate.checked).map((candidate) => candidate.name)));
         }
       },
       () => current && setState({ kind: 'failed' }),
@@ -246,7 +245,7 @@ function MoveStyleRow({
         aria-label={translate('palette.create.styles.checkAria', { name: candidate.name })}
         onChange={() => onToggle(candidate.name)}
       />
-      <CodeInline className="extract-value-name" text={`.${candidate.name}`} language="css" />
+      <CodeInline className="extract-value-name move-style-name" text={`.${candidate.name}`} />
       {reach.kind === 'onlyHere' ? undefined : (
         <span className="extract-value-tag">
           {translate('palette.create.styles.alsoUsed')}

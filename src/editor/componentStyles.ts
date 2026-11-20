@@ -1,9 +1,9 @@
 // The "Move styles" choices of Create component: the classes of the extracted markup that have CSS,
 // where that CSS is, and whether anything else uses them.
 //
-// A class used only by the markup that becomes the component is offered checked: its rules can go with
-// it. A class used elsewhere, on the rest of the page or in another file, is offered unchecked: moving
-// its rules would take them from the other uses. Utilities are never offered: a framework's utilities
+// Every class is offered unchecked: moving rules out of a stylesheet is the person's call. `reach` says who else
+// uses a class, on the rest of the page or in another file, so they can see that moving its rules would take
+// them from the other uses. Utilities are never offered: a framework's utilities
 // have no rule in the project's CSS to move, the project's own sit in a stylesheet it locks
 // (movableSheets), and the Style panel's rule (`u-`, defaultSelector.ts) knows Lumos's without any
 // setting. Which rules style the markup is the paste rule (pasteStyles.ts): a selector counts when
@@ -60,7 +60,7 @@ export function moveStyleCandidates(
     .sort(([left], [right]) => (left < right ? -1 : 1))
     .map(([name, where]): MoveStyleCandidate => {
       const reach = reachOf(name, outside, files.get(name));
-      return { name, homes: where, reach, checked: reach.kind === 'onlyHere' };
+      return { name, homes: where, reach };
     });
   assert(
     candidates.every((candidate) => subject.classes.has(candidate.name)),

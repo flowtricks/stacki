@@ -13,6 +13,4 @@ export interface MoveStyleCandidate {
   /** Where its rules are, in the order the sources were given. */
   readonly homes: readonly StyleHome[];
   readonly reach: ClassReach;
-  /** Offered checked: only this markup uses the class. */
-  readonly checked: boolean;
 }

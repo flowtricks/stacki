@@ -1,6 +1,6 @@
 // Goal: Create component's "Move styles" lists the classes of the extracted markup that have CSS, says
-// where that CSS is, and offers checked only the classes nothing else uses: a custom class is moved by
-// default, a shared class is offered unchecked, and a utility is never offered.
+// where that CSS is, and offers every class unchecked, with who else uses it (reach): nothing is moved by
+// default, and a utility is never offered.
 // Method: hand-built page nodes and CSS sources (a stylesheet and the page's own <style>), run through
 // the real paste rule, with the Style panel's utility rule (`u-`). The negative space: a utility used only
 // here, a rule that also needs a class outside the markup, a rule on bare tags, a class without CSS, a
@@ -30,18 +30,18 @@ const pageStyles = (css) => ({ home: { kind: 'page' }, styles: [{ css, scope: 'g
 const noOtherFiles = (names) => ({ classes: names.map((name) => ({ name, files: [] })) });
 const ALL = ['card', 'card_title', 'centered', 'plain', 'u-gap'];
 
-test('custom classes are offered checked with every place their CSS is; a shared class unchecked', () => {
+test('custom classes are offered with every place their CSS is and who else uses them', () => {
   const sources = [
     stylesheet('src/styles/base.css', '.card { padding: 1rem; } .centered { text-align: center; } h3 { margin: 0; }'),
     pageStyles('.card .card_title { font-weight: 700; } @media (width > 40em) { .card { padding: 2rem; } }'),
   ];
   const candidates = moveStyleCandidates(card, sources, classesOutside(page, 'card'), noOtherFiles(ALL), isUtilityClassName);
   assert.deepEqual(
-    candidates.map((candidate) => [candidate.name, candidate.homes.map((home) => home.rel ?? home.kind), candidate.checked]),
+    candidates.map((candidate) => [candidate.name, candidate.homes.map((home) => home.rel ?? home.kind), candidate.reach.kind]),
     [
-      ['card', ['src/styles/base.css', 'page'], true],
-      ['card_title', ['page'], true],
-      ['centered', ['src/styles/base.css'], false],
+      ['card', ['src/styles/base.css', 'page'], 'onlyHere'],
+      ['card_title', ['page'], 'onlyHere'],
+      ['centered', ['src/styles/base.css'], 'page'],
     ],
   );
   assert.deepEqual(candidates[2].reach, { kind: 'page' }, 'centered is also on the page header');
@@ -92,10 +92,13 @@ test('a class another file names is offered unchecked, with those files; an unan
     name: 'card',
     homes: [{ kind: 'stylesheet', rel: 'src/styles/base.css' }],
     reach: { kind: 'files', files: ['src/pages/about.astro'] },
-    checked: false,
   });
   assert.equal(candidates[1].name, 'card_title');
-  assert.equal(candidates[1].checked, false, 'a class main did not answer for stays where it is');
+  assert.equal(candidates[1].reach.kind, 'files', 'a class main did not answer for counts as used elsewhere');
+  assert.ok(
+    candidates.every((candidate) => !('checked' in candidate)),
+    'no row is offered checked',
+  );
 });
 
 test('no candidate for a class without CSS, a rule that needs an outside class, or a rule on bare tags', () => {

@@ -50,7 +50,7 @@ export interface MoveStyleRead {
   readonly node: EditorNode;
 }
 
-/** The classes of the markup whose CSS may move with it, each checked when nothing else uses it. */
+/** The classes of the markup whose CSS may move with it, each with where it is used. */
 export async function loadMoveStyleCandidates(read: MoveStyleRead): Promise<readonly MoveStyleCandidate[]> {
   const sheets = await readMovableSheets(read.projectPath);
   const sources: readonly StyleHomeSource[] = [
