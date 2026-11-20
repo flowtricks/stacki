@@ -59,7 +59,8 @@ function site(): Site {
 }
 
 function journalOf(target: Site, pageAfter: string | undefined): StyleMoveJournal {
-  const rel = (file: string): string => path.relative(target.root, file);
+  // Named with `/` on every system, as the renderer names the files it journals (projectRelativePath).
+  const rel = (file: string): string => path.relative(target.root, file).split(path.sep).join('/');
   return {
     version: 1,
     id: 'move-1',
