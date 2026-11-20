@@ -142,7 +142,6 @@ export const messages = {
   'pages.settings.section.general': 'General', // same
   'pages.settings.section.layout': 'Propiedades del layout',
   'pages.settings.section.template': 'Plantilla',
-  'pages.settings.slug.address': 'Dirección: {url}',
   'pages.settings.slug.dynamic': 'El patrón de dirección de esta plantilla sale del nombre del archivo. Renombra su carpeta para moverla.',
   'pages.settings.slug.empty': 'Escribe un nombre de URL.',
   'pages.settings.slug.reservedIndex': '«index» es el nombre de archivo de la página de inicio. Usa «Convertir esta página en la de inicio».',

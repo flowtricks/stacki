@@ -141,7 +141,6 @@ export const messages = {
   'pages.settings.section.general': 'Général',
   'pages.settings.section.layout': 'Propriétés de la mise en page',
   'pages.settings.section.template': 'Modèle',
-  'pages.settings.slug.address': 'Adresse : {url}',
   'pages.settings.slug.dynamic': 'Le motif d’adresse de ce modèle vient du nom du fichier. Renommez son dossier pour le déplacer.',
   'pages.settings.slug.empty': 'Saisissez un nom d’URL.',
   'pages.settings.slug.reservedIndex': '« index » est le nom de fichier de la page d’accueil. Utilisez plutôt « Faire de cette page la page d’accueil ».',

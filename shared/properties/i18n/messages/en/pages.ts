@@ -135,7 +135,6 @@ export const messages = {
   'pages.settings.section.general': 'General',
   'pages.settings.section.layout': 'Layout props',
   'pages.settings.section.template': 'Template',
-  'pages.settings.slug.address': 'Address: {url}',
   'pages.settings.slug.dynamic': 'This template’s address pattern comes from its file name. Rename its folder to move it.',
   'pages.settings.slug.empty': 'Enter a URL name.',
   'pages.settings.slug.reservedIndex': '“index” is the homepage’s file name. Use “Make this page the homepage” instead.',

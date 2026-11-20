@@ -141,7 +141,6 @@ export const messages = {
   'pages.settings.section.general': 'Geral',
   'pages.settings.section.layout': 'Propriedades do layout',
   'pages.settings.section.template': 'Modelo',
-  'pages.settings.slug.address': 'Endereço: {url}',
   'pages.settings.slug.dynamic': 'O padrão de endereço deste modelo vem do nome do arquivo. Renomeie a pasta para movê-lo.',
   'pages.settings.slug.empty': 'Digite um nome de URL.',
   'pages.settings.slug.reservedIndex': '“index” é o nome de arquivo da página inicial. Use “Tornar esta página a inicial”.',

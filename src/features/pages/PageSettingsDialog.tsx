@@ -389,7 +389,9 @@ function UrlNameField({ model, props }: { readonly model: Model; readonly props:
             }
           }}
         />
-        <div className="page-settings-address">{translate('pages.settings.slug.address', { url: props.page.route })}</div>
+        <div className="page-settings-address" aria-label={translate('pages.sample.address') + ': ' + props.page.route}>
+          {props.page.route}
+        </div>
       </div>
       {!dynamic && (
         <div className="props-field">

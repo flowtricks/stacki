@@ -186,13 +186,14 @@ test('the URL name is offered on Enter or blur in a popover beside it; invalid n
   assert.equal(setup.planned.length, 0);
   await setup.type('company');
   // The chip keeps the current address until the move is confirmed.
-  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /about');
+  assert.equal(document.querySelector('.page-settings-address').textContent, '/about');
+  assert.equal(document.querySelector('.page-settings-address').getAttribute('aria-label'), 'Web address: /about');
   await enter();
   assert.deepEqual(setup.planned, [{ kind: 'rename', from: 'about.astro', to: 'company.astro' }]);
   assert.equal(document.querySelector('.page-settings-move .page-settings-confirm-title').textContent, 'Change the address to /company?');
   assert.match(document.querySelector('.page-settings-move').textContent, /\/about becomes \/company\./);
   assert.match(document.querySelector('.page-settings-move').textContent, /7 links in 3 files are updated\./);
-  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /about');
+  assert.equal(document.querySelector('.page-settings-address').textContent, '/about');
   await setup.click(moveButton('Cancel'));
   assert.equal(field().value, 'about');
   assert.equal(document.querySelector('.page-settings-move') ?? undefined, undefined);
@@ -321,7 +322,7 @@ test('picking another folder offers the move at once; Cancel puts the folder bac
   await pick('/blog');
   assert.deepEqual(setup.planned.at(-1), { kind: 'rename', from: 'about.astro', to: 'blog/about.astro' });
   assert.match(document.querySelector('.page-settings-move').textContent, /\/about becomes \/blog\/about\./);
-  assert.equal(document.querySelector('.page-settings-address').textContent, 'Address: /about');
+  assert.equal(document.querySelector('.page-settings-address').textContent, '/about');
   await setup.click(moveButton('Cancel'));
   assert.equal(document.querySelector('.page-settings-folder .dd-label').textContent, 'Pages (root)');
   await pick('/blog');

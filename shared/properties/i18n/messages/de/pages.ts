@@ -142,7 +142,6 @@ export const messages = {
   'pages.settings.section.general': 'Allgemein',
   'pages.settings.section.layout': 'Layout-Eigenschaften',
   'pages.settings.section.template': 'Vorlage',
-  'pages.settings.slug.address': 'Adresse: {url}',
   'pages.settings.slug.dynamic': 'Das Adressmuster dieser Vorlage kommt aus ihrem Dateinamen. Benenne ihren Ordner um, um sie zu verschieben.',
   'pages.settings.slug.empty': 'Gib einen URL-Namen ein.',
   'pages.settings.slug.reservedIndex': '„index“ ist der Dateiname der Startseite. Nutze stattdessen „Diese Seite zur Startseite machen“.',
