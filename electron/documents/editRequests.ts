@@ -36,6 +36,7 @@ import { parsePage, serializeNodes, serializePage } from '../parse/astroParser';
 import { indentUnitBelow, indentUnitOf } from '../../shared/core/indent';
 import { frontmatterSlot, pageFormat, placedHunks, resolveRef, shiftedHunks, type Authored } from './editAnchors';
 import { markdownEditDraft, markdownPageNodes } from './markdownEdits';
+import { entityTextHunks } from './textEntities';
 
 /** The intent an edit is. Every edit is built against the snapshot it names,
  * except a frontmatter request after the app's own commits: it states the
@@ -358,7 +359,19 @@ function textDraft(
   assert(projected?.kind === 'text', 'A text page node is a projected text node');
   const own = textOf(authored.snapshot.bytes, projected.span);
   const before = encodeText(previous.value);
-  if (own !== before || own.includes('\n')) {
+  if (own !== before) {
+    // A run that spells characters as entities (`&copy;`) is not the encoding of its own value.
+    // It is edited on its characters, each end of the change moved to a boundary the bytes have.
+    const spelled = entityTextHunks(own, previous.value, next.value);
+    if (spelled === undefined) {
+      return undefined;
+    }
+    if (!spelled.ok) {
+      return spelled;
+    }
+    return ok({ anchor, operation: { tag: 'rewrite-node', hunks: shiftedHunks(spelled.value, projected.span.start) } });
+  }
+  if (own.includes('\n')) {
     return undefined;
   }
   const after = encodeText(next.value);
