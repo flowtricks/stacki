@@ -3,6 +3,8 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/studio';
 
 export const messages = {
+  'studio.access.notInFront':
+    'Cloudflare Access no autenticó esta solicitud. Comprueba que la aplicación de Access cubra este nombre de host y la ruta /studio, y vuelve a intentarlo.',
   'studio.account.cursorChat': 'Chat del cursor',
   'studio.account.cursorChatShortcut': 'Chat del cursor (/)',
   'studio.account.cursorChatUnavailable': 'Disponible en la vista de edición de páginas',

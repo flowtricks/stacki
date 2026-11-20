@@ -54,14 +54,17 @@ export function parseJwt(token: string): Result<ParsedJwt, JwtFailure> {
   const header = jsonSegment(headerText);
   const payload = jsonSegment(payloadText);
   const signature = decodeBase64url(signatureText, JWT_LIMITS.signatureBytesMax);
-  if (header === undefined || payload === undefined || signature === undefined || signature.length === 0) {
+  if (header === undefined || payload === undefined) {
     return err('malformed');
   }
   const algorithm = header['alg'];
   const algorithmAllowed = JWT_ALGORITHMS.find((allowed) => allowed === algorithm);
   if (algorithmAllowed === undefined) {
-    // Includes `none`, HS256 and every algorithm Studio does not verify.
+    // Includes `none`, HS256 and every algorithm Studio does not verify; refused before the signature is even looked at.
     return err('algorithm');
+  }
+  if (signature === undefined || signature.length === 0) {
+    return err('malformed');
   }
   const kid = header['kid'];
   if (kid !== undefined && (typeof kid !== 'string' || kid.length === 0 || kid.length > 200)) {
@@ -108,10 +111,13 @@ export interface IdTokenExpectation {
   /** Exact `iss` values accepted: one for OIDC, two spellings for Google. */
   readonly issuers: readonly string[];
   readonly audience: string;
-  readonly nonce: string;
+  /** The nonce this sign-in sent. Absent only for tokens that carry none (Cloudflare Access). */
+  readonly nonce: string | undefined;
   readonly nowMs: number;
   /** The access token returned with the ID token: when both carry `at_hash`, they must agree. */
   readonly accessToken?: string | undefined;
+  /** Cloudflare Access service tokens carry an empty `sub`. */
+  readonly subjectOptional?: boolean;
 }
 
 export interface IdTokenClaims {
@@ -154,7 +160,7 @@ export async function validateIdTokenClaims(
     }
   }
   const nonce = payload['nonce'];
-  if (typeof nonce !== 'string' || !sameText(nonce, expected.nonce)) {
+  if (expected.nonce !== undefined && (typeof nonce !== 'string' || !sameText(nonce, expected.nonce))) {
     return err('nonce');
   }
   const atHash = payload['at_hash'];
@@ -165,7 +171,8 @@ export async function validateIdTokenClaims(
     }
   }
   const subject = payload['sub'];
-  if (typeof subject !== 'string' || subject.length === 0 || subject.length > JWT_LIMITS.subjectCharsMax) {
+  const subjectEmpty = typeof subject === 'string' && subject.length === 0 && expected.subjectOptional === true;
+  if (typeof subject !== 'string' || (subject.length === 0 && !subjectEmpty) || subject.length > JWT_LIMITS.subjectCharsMax) {
     return err('claims');
   }
   return ok({
@@ -188,7 +195,7 @@ function audienceMatches(payload: Readonly<Record<string, unknown>>, clientId: s
   }
   const values: readonly unknown[] = audience;
   // With several audiences OIDC Core requires `azp` to name this client, so a token minted for another client is refused.
-  return values.includes(clientId) && payload['azp'] === clientId;
+  return values.includes(clientId) && (audience.length === 1 || payload['azp'] === clientId);
 }
 
 function seconds(value: unknown): number | undefined {

@@ -3,6 +3,8 @@
 import type { CatalogOf } from '../../../../core/i18n/catalog';
 
 export const messages = {
+  'studio.access.notInFront':
+    'Cloudflare Access did not authenticate this request. Check that the Access application covers this hostname and the /studio path, then try again.',
   'studio.account.cursorChat': 'Cursor chat',
   'studio.account.cursorChatShortcut': 'Cursor chat (/)',
   'studio.account.cursorChatUnavailable': 'Available in the page editing preview',

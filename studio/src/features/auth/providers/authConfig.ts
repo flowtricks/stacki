@@ -7,7 +7,7 @@
 import { err, ok, type Result } from '../../../../vendor/stacki/shared/core/result';
 import { parseQualifiedIdentity, identityProvider, type QualifiedIdentity } from '../../../../vendor/stacki/shared/properties/memberIdentity';
 
-export const BUILT_IN_PROVIDER_IDS = ['github', 'google', 'oidc', 'passkey'] as const;
+export const BUILT_IN_PROVIDER_IDS = ['github', 'access', 'google', 'oidc', 'passkey'] as const;
 export type BuiltInProviderId = (typeof BUILT_IN_PROVIDER_IDS)[number];
 
 export const AUTH_CONFIG_LIMITS = {
@@ -55,6 +55,12 @@ export interface OidcConfig {
   readonly clientSecret: string | undefined;
   readonly scopes: string;
   readonly buttonName: string;
+  readonly policy: PolicyConfig;
+}
+
+export interface AccessConfig {
+  readonly teamDomain: string;
+  readonly audience: string;
   readonly policy: PolicyConfig;
 }
 
@@ -120,7 +126,7 @@ function bootstrap(environment: AuthEnvironment, provider: BuiltInProviderId, pr
     problems.push(`AUTH_BOOTSTRAP_ADMIN is required: the identity that is admin until .stacki/roles.json names one, such as ${provider}:<identity>.`);
     return undefined;
   }
-  const parsed = parseQualifiedIdentity(provider === 'google' || provider === 'oidc' ? lowerEmailIdentity(raw) : raw);
+  const parsed = parseQualifiedIdentity(provider === 'google' || provider === 'oidc' || provider === 'access' ? lowerEmailIdentity(raw) : raw);
   if (!parsed.ok) {
     problems.push(`AUTH_BOOTSTRAP_ADMIN is not an identity (${parsed.error.message}).`);
     return undefined;
@@ -208,6 +214,28 @@ export function parseOidcConfig(environment: AuthEnvironment): Result<OidcConfig
   return ok({ issuer: issuer.value, clientId, clientSecret: secret === '' ? undefined : secret, scopes, buttonName, policy: parsedPolicy });
 }
 
+const TEAM_DOMAIN_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
+export function parseAccessConfig(environment: AuthEnvironment): Result<AccessConfig, readonly string[]> {
+  const problems: string[] = [];
+  const teamDomain = text(environment, 'ACCESS_TEAM_DOMAIN').toLowerCase();
+  const custom = text(environment, 'ACCESS_ALLOW_CUSTOM_TEAM_DOMAIN') === 'true';
+  if (teamDomain === '' || teamDomain.length > AUTH_CONFIG_LIMITS.domainCharsMax || !TEAM_DOMAIN_PATTERN.test(teamDomain)) {
+    problems.push('ACCESS_TEAM_DOMAIN is required: your Zero Trust team domain, such as myteam.cloudflareaccess.com (no https://, no path).');
+  } else if (!custom && !teamDomain.endsWith('.cloudflareaccess.com')) {
+    problems.push('ACCESS_TEAM_DOMAIN must end with .cloudflareaccess.com (set ACCESS_ALLOW_CUSTOM_TEAM_DOMAIN to "true" to use another domain).');
+  }
+  const audience = text(environment, 'ACCESS_AUD');
+  if (!/^[A-Za-z0-9._-]{16,128}$/.test(audience)) {
+    problems.push('ACCESS_AUD is required: the Application Audience (AUD) tag of your Access application (16 to 128 letters and digits).');
+  }
+  const parsedPolicy = policy(environment, 'access', problems);
+  if (problems.length > 0 || parsedPolicy === undefined) {
+    return err(problems);
+  }
+  return ok({ teamDomain, audience, policy: parsedPolicy });
+}
+
 export function parsePasskeyConfig(environment: AuthEnvironment): Result<PasskeyConfig, readonly string[]> {
   const problems: string[] = [];
   const bootstrapAdmin = bootstrap(environment, 'passkey', problems);
@@ -226,6 +254,10 @@ export function authConfigProblems(environment: AuthEnvironment): readonly strin
   switch (chosen.value) {
     case 'github':
       return [];
+    case 'access': {
+      const config = parseAccessConfig(environment);
+      return config.ok ? [] : config.error;
+    }
     case 'google': {
       const config = parseGoogleConfig(environment);
       return config.ok ? [] : config.error;
