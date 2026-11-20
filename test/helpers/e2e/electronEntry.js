@@ -27,6 +27,12 @@ if (project.length === 0 || userData.length === 0 || scenarioModule.length === 0
   throw new Error('electronEntry: STACKI_SOAK_PROJECT, STACKI_SOAK_USER_DATA and STACKI_SOAK_SCENARIO are required');
 }
 app.setPath('userData', userData);
+// The run is unattended, so its window must never take the person's screen: the app creates it hidden and shows
+// it on its first frame (electron/app/windowReveal.ts), and these two calls keep it hidden. A hidden window still
+// paints and answers capturePage, which is all the scenarios read; the Dock icon is hidden for the same reason.
+BrowserWindow.prototype.show = function show() {};
+BrowserWindow.prototype.showInactive = function showInactive() {};
+app.dock?.hide();
 fs.writeFileSync(path.join(userData, 'dev-reopen.json'), JSON.stringify({ path: project }), 'utf8');
 
 async function mainWindow() {

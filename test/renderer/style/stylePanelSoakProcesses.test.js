@@ -152,3 +152,17 @@ test('the reaper removes a stale run directory and keeps a live one', REAL_PROCE
   assert.equal(fs.existsSync(live), true, 'the live run directory stays');
   fs.rmSync(live, { recursive: true, force: true });
 });
+
+test('the soak runner keeps the app window hidden: it never takes the screen', () => {
+  // The run shows no window by design of the harness, not of the app, so the entry file must stub both ways of showing one
+  // before the app's main module is loaded (the app itself shows its window on the first frame).
+  const entry = fs.readFileSync(path.join(__dirname, '../../helpers/e2e/electronEntry.js'), 'utf8');
+  const stubs = entry.indexOf('BrowserWindow.prototype.show = ');
+  const inactive = entry.indexOf('BrowserWindow.prototype.showInactive = ');
+  const loadsApp = entry.indexOf("require(repoPath('dist/electron/main.js'))");
+  assert.ok(stubs >= 0, 'show is stubbed');
+  assert.ok(inactive >= 0, 'showInactive is stubbed');
+  assert.ok(loadsApp >= 0, 'the app is loaded');
+  assert.ok(stubs < loadsApp && inactive < loadsApp, 'both stubs are in place before the app can create its window');
+  assert.match(entry, /app\.dock\?\.hide\(\)/, 'the Dock icon stays hidden');
+});
