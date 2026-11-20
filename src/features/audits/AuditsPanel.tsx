@@ -45,6 +45,7 @@ import { AUDIT_FILTERS, auditView, type AuditFilter } from './auditView';
 import type { RawValueKit } from './RawValueField';
 import { StyleReview } from './StyleReview';
 import './audits.css';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 type Toast = (message: string, kind?: 'info' | 'success' | 'error') => void;
 
@@ -162,45 +163,50 @@ export default function AuditsPanel(props: AuditsPanelProps) {
   const fixes = view.fixable.length;
   return (
     <div className="panel-section grow audits-panel">
-      <div className="panel-header">
-        <h2 className="audits-heading">
-          {translate('auditsUi.title')}
-          {view.counts.all > 0 && (
-            <span className="audits-pill" title={state.scope === 'page' ? translate('auditsUi.pill.pageTitle') : translate('auditsUi.pill.siteTitle')}>
-              {state.scope === 'page' ? translate('auditsUi.pill.page', { count: view.counts.all }) : view.counts.all}
-            </span>
-          )}
-        </h2>
-        <div className="audits-header-tools">
-          <button
-            className="ghost"
-            aria-label={translate('auditsUi.again')}
-            title={translate('auditsUi.again')}
-            disabled={state.running}
-            onClick={() => updateAuditState((current) => ({ ...current, request: current.request + 1 }))}
-          >
-            <RefreshIcon size={14} className={state.running ? 'audits-spin' : undefined} />
-          </button>
-          <MoreMenu
-            title={translate('auditsUi.options')}
-            width={200}
-            items={[
-              {
-                label: searching ? translate('auditsUi.menu.hideSearch') : translate('auditsUi.searchFindings'),
-                onSelect: () => setSearching((value) => !value),
-              },
-              { label: findOpen ? translate('auditsUi.menu.closeFind') : translate('auditsUi.menu.find'), onSelect: () => setFindOpen((value) => !value) },
-              { label: translate('auditsUi.menu.configure'), onSelect: props.onConfigure },
-              {
-                label: showIgnored ? translate('auditsUi.menu.hideIgnored') : translate('auditsUi.menu.showIgnored', { count: view.ignoredCount }),
-                disabled: view.ignoredCount === 0 && !showIgnored,
-                onSelect: () => setShowIgnored((value) => !value),
-              },
-              open.length > 0 && { label: translate('auditsUi.menu.sendAll'), icon: <SparkleIcon size={12} />, onSelect: () => void actions.handOff(open) },
-            ]}
-          />
-        </div>
-      </div>
+      <PanelHeader
+        titleClassName="audits-heading"
+        title={
+          <>
+            {translate('auditsUi.title')}
+            {view.counts.all > 0 && (
+              <span className="audits-pill" title={state.scope === 'page' ? translate('auditsUi.pill.pageTitle') : translate('auditsUi.pill.siteTitle')}>
+                {state.scope === 'page' ? translate('auditsUi.pill.page', { count: view.counts.all }) : view.counts.all}
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <>
+            <button
+              className="ghost"
+              aria-label={translate('auditsUi.again')}
+              title={translate('auditsUi.again')}
+              disabled={state.running}
+              onClick={() => updateAuditState((current) => ({ ...current, request: current.request + 1 }))}
+            >
+              <RefreshIcon size={14} className={state.running ? 'audits-spin' : undefined} />
+            </button>
+            <MoreMenu
+              title={translate('auditsUi.options')}
+              width={200}
+              items={[
+                {
+                  label: searching ? translate('auditsUi.menu.hideSearch') : translate('auditsUi.searchFindings'),
+                  onSelect: () => setSearching((value) => !value),
+                },
+                { label: findOpen ? translate('auditsUi.menu.closeFind') : translate('auditsUi.menu.find'), onSelect: () => setFindOpen((value) => !value) },
+                { label: translate('auditsUi.menu.configure'), onSelect: props.onConfigure },
+                {
+                  label: showIgnored ? translate('auditsUi.menu.hideIgnored') : translate('auditsUi.menu.showIgnored', { count: view.ignoredCount }),
+                  disabled: view.ignoredCount === 0 && !showIgnored,
+                  onSelect: () => setShowIgnored((value) => !value),
+                },
+                open.length > 0 && { label: translate('auditsUi.menu.sendAll'), icon: <SparkleIcon size={12} />, onSelect: () => void actions.handOff(open) },
+              ]}
+            />
+          </>
+        }
+      />
       <div className="audits-toolbar">
         <Dropdown<AuditFilter>
           ariaLabel={translate('auditsUi.category')}

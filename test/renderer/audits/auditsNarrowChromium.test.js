@@ -158,7 +158,7 @@ window.steps = (() => {
     },
     // Opens Find & replace from the panel's menu, types a query, searches and presses the three option toggles.
     async openFind() {
-      document.querySelector('.audits-header-tools > :last-child button, .audits-header-tools > button:last-child').click();
+      document.querySelector('.panel-header-actions > :last-child button, .panel-header-actions > button:last-child').click();
       const items = await window.until(() => { const found = document.querySelectorAll('[role="menuitem"]'); return found.length > 1 && found; });
       if (!items) { return { opened: false }; }
       items[1].click();

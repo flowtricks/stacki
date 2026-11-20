@@ -8,7 +8,7 @@ import { collectionHasContent, collectionOf } from './cmsSchema';
 import { createCmsCollection } from './cmsPanelBridge';
 import { cmsCache, keptCmsConnections, readCmsCatalog } from './cmsCatalog';
 import { assert } from '../../../shared/core/assert';
-import { ChevronLeftIcon, ChevronRightIcon, CmsIcon, FileIcon, FolderDefaultIcon, GearIcon, PlusIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CmsIcon, FileIcon, FolderDefaultIcon, GearIcon, PlusIcon } from '../../ui/Icons';
 import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import type { CmsConnection } from '../../../shared/properties/cmsConnections';
 import { ASTRO_CONTENT_ID, ASTRO_CONTENT_SOURCE, type CmsSource } from '../../../shared/properties/astroContent';
@@ -17,6 +17,7 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import { RemoteCmsBrowser } from './RemoteCmsBrowser';
 import { prefetchConnection } from './remoteCmsCache';
 import { ConnectionLogo, type RemoteCmsSelection } from './remoteCmsShared';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 interface CmsPanelProps {
   readonly project: { readonly path: string };
@@ -106,7 +107,13 @@ function LocalCmsPanel(
   const create = useCreateCollection(props, setCreating, setOpenKey, refresh);
   return (
     <div className="panel-section grow">
-      <PanelHeader open={open} openKey={openKey} onBack={() => closeGroup(props, setOpenKey)} onCreate={() => setCreating(true)} onConnect={props.onConnect} />
+      <CmsPanelHeader
+        open={open}
+        openKey={openKey}
+        onBack={() => closeGroup(props, setOpenKey)}
+        onCreate={() => setCreating(true)}
+        onConnect={props.onConnect}
+      />
       <div className="panel-body">
         {creating && <CreateRow onCreate={create} />}
         {!open && (
@@ -385,7 +392,7 @@ function connectionKindLabel(kind: CmsConnection['kind'], translate: Translator)
   }
 }
 
-function PanelHeader({
+function CmsPanelHeader({
   open,
   openKey,
   onBack,
@@ -404,25 +411,22 @@ function PanelHeader({
   // At the top level the + connects a CMS; inside a folder it adds a collection there.
   const connect = openKey === undefined ? onConnect : undefined;
   return (
-    <div className="panel-header">
-      <div className="cms-crumb">
-        {open && (
-          <button className="ghost" title={translate('cms.panel.back')} onClick={onBack}>
-            <ChevronLeftIcon size={14} />
+    <PanelHeader
+      title={title}
+      titleHint={open?.path}
+      back={open ? { label: translate('cms.panel.back'), onBack } : undefined}
+      actions={
+        connect ? (
+          <button className="ghost" title={translate('cms.panel.connect')} onClick={connect}>
+            <PlusIcon size={14} />
           </button>
-        )}
-        <h2 title={open?.path}>{title}</h2>
-      </div>
-      {connect ? (
-        <button className="ghost" title={translate('cms.panel.connect')} onClick={connect}>
-          <PlusIcon size={14} />
-        </button>
-      ) : (
-        <button className="ghost" title={translate('cms.panel.newCollection')} onClick={onCreate}>
-          <PlusIcon size={14} />
-        </button>
-      )}
-    </div>
+        ) : (
+          <button className="ghost" title={translate('cms.panel.newCollection')} onClick={onCreate}>
+            <PlusIcon size={14} />
+          </button>
+        )
+      }
+    />
   );
 }
 

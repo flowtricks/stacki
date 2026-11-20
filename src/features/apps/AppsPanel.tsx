@@ -56,6 +56,7 @@ import type { AppRepositoryRef } from '../../../shared/properties/appPublish';
 import './apps.css';
 import { AppNetworkNote } from './AppConnections';
 import { installedAppsCache, type KeptInstalledApps } from './installedAppsCache';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 export interface AppsPanelProps {
   readonly projectPath: string;
@@ -268,12 +269,7 @@ export default function AppsPanel(props: AppsPanelProps) {
   const hasApps = load.kind === 'ready' && visible.length + broken.length > 0;
   return (
     <div className="apps-panel">
-      <div className="panel-header apps-header">
-        <h2>{translate('apps.panel.title')}</h2>
-        <span className="apps-header-actions">
-          <InstallMenu install={install} />
-        </span>
-      </div>
+      <PanelHeader className="apps-header" title={translate('apps.panel.title')} actions={<InstallMenu install={install} />} />
       {sharing !== undefined && (
         <ShareApp
           projectPath={projectPath}

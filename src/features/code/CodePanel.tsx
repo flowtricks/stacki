@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { EditorModel } from '../../editor/pageView';
 import { componentSourceRanges, sourceLineLabel, sourceNodeAtOffset, sourceRangeForSelection, type SourceRange } from './codePanelModel';
 import CodeEditor from '../../ui/CodeEditor';
-import { CodeIcon } from '../../ui/Icons';
+import { PanelHeader } from '../../ui/PanelHeader';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 
 interface CodePanelProps {
@@ -26,17 +26,18 @@ export default function CodePanel(props: CodePanelProps) {
   const lineLabel = sourceLineLabel(source, activeRange);
   return (
     <section className="code-panel">
-      <header className="code-panel-header">
-        <span className="code-panel-title">
-          <CodeIcon size={14} />
-          {translate('workspace.code.title')}
-        </span>
-        <span className="code-panel-path" title={relativePath}>
-          {/* Cut from the start so the file name stays visible; styles.css says how. */}
-          <bdi dir="ltr">{relativePath}</bdi>
-        </span>
-        {lineLabel && <span className="code-panel-lines">{lineLabel}</span>}
-      </header>
+      <PanelHeader
+        title={translate('workspace.code.title')}
+        actions={
+          <>
+            <span className="code-panel-path" title={relativePath}>
+              {/* Cut from the start so the file name stays visible; styles.css says how. */}
+              <bdi dir="ltr">{relativePath}</bdi>
+            </span>
+            {lineLabel && <span className="code-panel-lines">{lineLabel}</span>}
+          </>
+        }
+      />
       <div className="code-panel-editor">
         <CodeEditor
           language="astro"

@@ -6,10 +6,11 @@ import { readCSSVariables } from '../../ipc/variablesBridge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
 import type { VariableFile, VariableGroup, VariableSelection } from '../../ipc/variablesBridge';
-import { ChevronLeftIcon, ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
+import { ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
 import { VariableScopeBadge } from './VariableScopeBadge';
 import { variableFileListed, type VariablePlace } from '../../editor/variablePlace';
 import { assert } from '../../../shared/core/assert';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 export interface VariablesPanelProps {
   readonly project: { readonly path: string };
@@ -50,23 +51,21 @@ function VariableFilesPanel(props: VariablesPanelProps) {
   const open = openFile ? files.find((file) => file.rel === openFile) : undefined;
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        <div className="cms-crumb">
-          {open && (
-            <button
-              className="ghost"
-              title={translate('variables.panel.allFiles')}
-              onClick={() => {
-                setOpenFile(undefined);
-                onSelect(undefined);
-              }}
-            >
-              <ChevronLeftIcon size={14} />
-            </button>
-          )}
-          <h2 title={open ? open.rel : undefined}>{open ? open.name : translate('variables.title')}</h2>
-        </div>
-      </div>
+      <PanelHeader
+        title={open ? open.name : translate('variables.title')}
+        titleHint={open?.rel}
+        back={
+          open
+            ? {
+                label: translate('variables.panel.allFiles'),
+                onBack: () => {
+                  setOpenFile(undefined);
+                  onSelect(undefined);
+                },
+              }
+            : undefined
+        }
+      />
       <div className="panel-body">
         {!open && files.map((file) => <VariableFileRow key={file.rel} file={file} selected={selected} onOpen={setOpenFile} onSelect={onSelect} />)}
         {open &&

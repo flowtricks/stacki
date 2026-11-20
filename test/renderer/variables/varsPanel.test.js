@@ -152,7 +152,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   // Backing out closes the sheet rather than leaving it on a file nobody is
   // looking at.
   await act(async () => {
-    container.querySelector('.cms-crumb button').click();
+    container.querySelector('.panel-header-back').click();
     await settle(30);
   });
   check('backing out closes the sheet', selected === undefined);

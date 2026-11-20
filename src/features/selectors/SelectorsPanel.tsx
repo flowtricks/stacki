@@ -57,6 +57,7 @@ import {
 import { lockShownClosed, type RowTransition } from './rowTransitions';
 import { useRowTransitions, type RowTransitionActions } from './useRowTransitions';
 import './selectors.css';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 export interface SelectorsPanelProps {
   readonly project: { readonly path: string };
@@ -202,28 +203,28 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
   if (confirming && report !== undefined) {
     return (
       <div className="panel-section grow selectors-panel">
-        <div className="panel-header">
-          <h2>{translate('selectors.cleanup.title')}</h2>
-        </div>
+        <PanelHeader title={translate('selectors.cleanup.title')} />
         <CleanupConfirm entries={unused} busy={busy} onCancel={() => setConfirming(false)} onDelete={() => void cleanUp()} />
       </div>
     );
   }
   return (
     <div className="panel-section grow selectors-panel">
-      <div className="panel-header">
-        <h2>{translate('selectors.title')}</h2>
-        <span className="tip-anchor" title={unused.length === 0 ? translate('selectors.cleanup.none') : translate('selectors.cleanup.action')}>
-          <button
-            className="ghost selectors-clean"
-            aria-label={translate('selectors.cleanup.action')}
-            disabled={unused.length === 0 || checking || busy}
-            onClick={() => setConfirming(true)}
-          >
-            <SweepIcon size={16} />
-          </button>
-        </span>
-      </div>
+      <PanelHeader
+        title={translate('selectors.title')}
+        actions={
+          <span className="tip-anchor" title={unused.length === 0 ? translate('selectors.cleanup.none') : translate('selectors.cleanup.action')}>
+            <button
+              className="ghost selectors-clean"
+              aria-label={translate('selectors.cleanup.action')}
+              disabled={unused.length === 0 || checking || busy}
+              onClick={() => setConfirming(true)}
+            >
+              <SweepIcon size={16} />
+            </button>
+          </span>
+        }
+      />
       {report === undefined ? (
         <div className="panel-body">
           <PanelReadStatus state={state} label={translate('selectors.panelLabel')} retry={refresh} />

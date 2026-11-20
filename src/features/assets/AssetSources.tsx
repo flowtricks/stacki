@@ -184,17 +184,15 @@ function SourcePicker(props: {
     ...(props.canConnect ? [{ value: ADD_CONNECTOR, label: translate('assets.source.addConnector'), icon: <PlusIcon size={12} />, dim: true }] : []),
   ];
   return (
-    <h2 className="asset-source-heading">
-      <Dropdown
-        value={props.current}
-        options={options}
-        ariaLabel={translate('assets.source.switch')}
-        className="asset-source-switch"
-        menuClassName="asset-source-menu"
-        menuWidthMin={200}
-        livePreview={false}
-        onChange={props.onPick}
-      />
-    </h2>
+    <Dropdown
+      value={props.current}
+      options={options}
+      ariaLabel={translate('assets.source.switch')}
+      className="asset-source-switch"
+      menuClassName="asset-source-menu"
+      menuWidthMin={200}
+      livePreview={false}
+      onChange={props.onPick}
+    />
   );
 }

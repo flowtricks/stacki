@@ -40,6 +40,7 @@ import { AssetDetail, AssetName, AssetPath, dimensionCacheFor, thumbnailKey, vid
 import { PanelSearch } from '../../ui/PanelSearch';
 import { buildAssetIndex, isSearching, searchAssets } from './assetSearch';
 import type { DimensionCache } from './assetDimensionCache';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 const FILE_DROP_COUNT_MAX = assetDropLimit;
 type Toast = (message: string, kind: 'error' | 'success') => void;
@@ -513,42 +514,45 @@ function AssetHeader({
 }) {
   const translate = useTranslate();
   return (
-    <div className="panel-header">
-      {source}
-      <div style={{ display: 'flex', gap: 2 }}>
-        {!picking && (
+    <PanelHeader
+      title={source}
+      titleClassName="asset-source-heading"
+      actions={
+        <>
+          {!picking && (
+            <button
+              className="asset-select-link"
+              aria-label={translate('assets.header.select')}
+              title={translate('assets.header.selectTitle')}
+              onClick={() => {
+                state.batch.setSelected(new Set());
+                state.batch.setSelecting(true);
+              }}
+            >
+              {translate('assets.header.select')}
+            </button>
+          )}
           <button
-            className="asset-select-link"
-            aria-label={translate('assets.header.select')}
-            title={translate('assets.header.selectTitle')}
-            onClick={() => {
-              state.batch.setSelected(new Set());
-              state.batch.setSelecting(true);
-            }}
+            className="ghost"
+            title={cwd ? translate('assets.header.newFolder') : translate('assets.header.openFirst')}
+            aria-label={translate('assets.header.newFolder')}
+            disabled={!cwd}
+            onClick={() => state.setNewFolder(true)}
           >
-            {translate('assets.header.select')}
+            <FolderPlusIcon size={14} />
           </button>
-        )}
-        <button
-          className="ghost"
-          title={cwd ? translate('assets.header.newFolder') : translate('assets.header.openFirst')}
-          aria-label={translate('assets.header.newFolder')}
-          disabled={!cwd}
-          onClick={() => state.setNewFolder(true)}
-        >
-          <FolderPlusIcon size={14} />
-        </button>
-        <button
-          className="ghost"
-          title={cwd ? translate('assets.header.upload') : translate('assets.header.openFirst')}
-          aria-label={translate('assets.header.upload')}
-          disabled={!cwd}
-          onClick={() => void actions.pickUpload(cwd)}
-        >
-          <UploadCloudIcon size={14} />
-        </button>
-      </div>
-    </div>
+          <button
+            className="ghost"
+            title={cwd ? translate('assets.header.upload') : translate('assets.header.openFirst')}
+            aria-label={translate('assets.header.upload')}
+            disabled={!cwd}
+            onClick={() => void actions.pickUpload(cwd)}
+          >
+            <UploadCloudIcon size={14} />
+          </button>
+        </>
+      }
+    />
   );
 }
 
@@ -854,7 +858,7 @@ function MissingAssets({ navigation, onUpload }: { readonly navigation: Navigati
   const translateRich = useTranslateRich();
   return (
     <div className="panel-section grow" role="region" aria-label={translate('assets.title')}>
-      <div className="panel-header">{navigation.picker}</div>
+      <PanelHeader title={navigation.picker} titleClassName="asset-source-heading" />
       <div className="props-empty">
         {translateRich('assets.missing.message', { folder: <code>public/</code> })}
         <div style={{ marginTop: 10 }}>

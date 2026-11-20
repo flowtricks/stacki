@@ -4,6 +4,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { HistorySection } from './HistorySections';
 import HistoryTimeline from './HistoryTimeline';
 import type { HistoryPanelProps } from './historyPanelTypes';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 export default function HistoryPanel(props: HistoryPanelProps) {
   const translate = useTranslate();
@@ -17,10 +18,8 @@ export default function HistoryPanel(props: HistoryPanelProps) {
   const userEmail = props.gitInfo?.isRepo ? props.gitInfo.userEmail : undefined;
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        {/* i18n-ignore: Git is a product name. */}
-        <h2>Git</h2>
-      </div>
+      {/* i18n-ignore: Git is a product name. */}
+      <PanelHeader title="Git" />
       <div className="panel-body history-body">
         {props.controls}
         {props.previewRef && (

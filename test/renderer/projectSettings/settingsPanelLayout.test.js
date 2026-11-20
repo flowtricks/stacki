@@ -17,6 +17,7 @@ const SHEETS = [
   'src/app/styles.css',
   'src/ui/controls.css',
   'src/ui/menu.css',
+  'src/ui/panelHeader.css',
   'src/ui/segmentedTabs.css',
   'src/ui/popup.css',
   'src/ui/dropdown.css',

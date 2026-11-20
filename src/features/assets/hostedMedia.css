@@ -1,12 +1,13 @@
 /* The Assets panel's sources (the project and connected media hosts) and a
    host's browser. Background fills, never borders. The heading is the source
    switcher, one shared Dropdown trigger (icon or logo, name, chevron) in the
-   heading's type, pulled left by its padding so its icon sits where the
+   heading's type, pulled left by its padding and border so its icon sits where the
    heading's text did, with a hover and focus fill of its own. */
 .panel-header h2.asset-source-heading {
   display: flex;
   min-width: 0;
-  margin-left: -6px;
+  /* The trigger's 6px padding and 1px transparent border: the icon lands on the header's own left inset. */
+  margin-left: -7px;
 }
 .panel-header .dd-trigger.asset-source-switch {
   width: auto;

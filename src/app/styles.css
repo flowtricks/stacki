@@ -2901,24 +2901,13 @@ html[data-platform='win32'] .titlebar {
   min-height: 0;
   flex-direction: column;
 }
-.code-panel-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 10px 0 12px;
+/* The Code panel's heading is the shared PanelHeader; the file path and line range are its actions. The path is the
+   one thing that gives way when the panel is narrow, so the title and the line range keep their size. */
+.code-panel .panel-header-lead {
   flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-dim);
-  user-select: none;
 }
-.code-panel-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
+.code-panel-lines {
+  margin-left: 6px;
 }
 .code-panel-path {
   min-width: 0;
@@ -2982,22 +2971,7 @@ html[data-platform='win32'] .titlebar {
   flex: 1;
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 12px 8px;
-  flex-shrink: 0;
-}
-.panel-header h2 {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: 0.01em;
-}
-.panel-header button {
-  padding: 3px;
-}
+/* The panel heading row is src/ui/PanelHeader.tsx, styled in src/ui/panelHeader.css. */
 /* Wraps a header button so a hover still registers when it's disabled (a
    disabled button swallows pointer events, tooltip and all). */
 .tip-anchor {
@@ -3013,7 +2987,7 @@ html[data-platform='win32'] .titlebar {
      the fold used to jog sideways as it appeared and vanished — worst while
      typing in a field that grows. The gutter is always there instead. */
   scrollbar-gutter: stable;
-  padding: 2px 8px 12px;
+  padding: var(--panel-content-offset) 8px 12px;
 }
 
 .center {
@@ -8903,7 +8877,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 /* ------------------------------------------------------------------ */
 
 .history-body {
-  padding-top: 0;
+  padding-top: var(--panel-content-offset);
 }
 
 .history-section + .history-section {

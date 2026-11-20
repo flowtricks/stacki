@@ -26,11 +26,6 @@
   line-height: 16px;
   text-align: center;
 }
-.audits-header-tools {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
 .audits-menu-gap {
   display: inline-block;
   width: 12px;

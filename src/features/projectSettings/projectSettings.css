@@ -1,30 +1,13 @@
 /* The Settings rail panel, its Secrets and MCP detail views. Rows and blocks are set apart by background fills, as
    across the app; none draws a border or a divider. */
 
-.settings-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
 .settings-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-/* The view header: a back chevron, then the title, then the view's actions, as the Collections item view has. */
-.settings-panel .panel-header {
-  gap: 4px;
-  justify-content: flex-start;
-}
-.settings-panel .panel-header .settings-header-actions {
-  margin-left: auto;
-}
-.settings-panel .panel-header h2 {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* The panel's heading, including a view's back chevron, is the shared PanelHeader (src/ui/panelHeader.css), as in
+   the Collections item view: nothing here sets its geometry. */
 /* A root link: a row of the Pages list's own look (.list-item), not a button. Transparent at rest, the list's
    hover fill and a pressed fill; icon, then the label left-aligned right after it, the muted chevron at the end.
    The app's base button rule centres and fills, so each is set back here. */
@@ -49,6 +32,12 @@
 }
 .list-item.settings-link .label {
   text-align: left;
+}
+/* The chord that opens the view: muted, at the end of the row, before the chevron. */
+.settings-link-key {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 11px;
 }
 .settings-link > svg {
   flex-shrink: 0;

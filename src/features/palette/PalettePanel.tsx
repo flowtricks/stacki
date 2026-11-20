@@ -27,6 +27,7 @@ import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { currentRole } from '../../lib/currentRole';
 import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
@@ -195,22 +196,24 @@ function PaletteHeader({
   const allowed = can(useCurrentRole(), 'component:create');
   return (
     <>
-      <div className="panel-header">
-        <h2>{translate('palette.panel.title')}</h2>
-        <span hidden={!allowed} className="tip-anchor" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
-          <button
-            className="ghost"
-            aria-label={translate('palette.panel.new')}
-            disabled={!canCreate}
-            onClick={() => {
-              tooltip.hide();
-              setCreating(true);
-            }}
-          >
-            <PlusIcon size={14} />
-          </button>
-        </span>
-      </div>
+      <PanelHeader
+        title={translate('palette.panel.title')}
+        actions={
+          <span hidden={!allowed} className="tip-anchor" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
+            <button
+              className="ghost"
+              aria-label={translate('palette.panel.new')}
+              disabled={!canCreate}
+              onClick={() => {
+                tooltip.hide();
+                setCreating(true);
+              }}
+            >
+              <PlusIcon size={14} />
+            </button>
+          </span>
+        }
+      />
       {tooltip.value && (
         <div className="rail-tooltip below" style={tooltip.value}>
           {canCreate

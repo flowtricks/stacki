@@ -20,6 +20,7 @@ import ExprBindingField from './ExprBindingField';
 import { pureBindingPath } from '../../editor/bindingPath';
 import TextConnectField, { type TextConnectFieldProps } from './TextConnectField';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 // Edits the props of the selected node. Fields come from the component's
 // prop schema (interface Props / Astro.props destructure), plus any props
@@ -102,9 +103,7 @@ export function EmptyPanel(props: PropsPanelProps) {
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%' }}>
-      <div className="panel-header">
-        <h2>{translate('props.sources.settings')}</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.settings')} />
       <div className="props-empty">{translate('props.sources.selectComponent')}</div>
     </div>
   );
@@ -135,9 +134,7 @@ export function ExprPanel(props: NodePanelProps<'expr'>) {
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>{translate('props.sources.expression')}</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.expression')} />
       {pureBindingPath(node.value) === undefined ? (
         <div className="props-field" style={{ marginTop: 8 }}>
           <label onClick={noLabelActivation}>
@@ -158,9 +155,7 @@ export function RawLinePanel(props: NodePanelProps<'raw-line'>) {
   const isDoctype = /^<!doctype/i.test(node.value || '');
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>{isDoctype ? translate('props.sources.doctype') : translate('props.sources.sourceLine')}</h2>
-      </div>
+      <PanelHeader title={isDoctype ? translate('props.sources.doctype') : translate('props.sources.sourceLine')} />
       <div className="props-field" style={{ marginTop: 8 }}>
         <label onClick={noLabelActivation}>
           <span className="prop-label">
@@ -196,9 +191,7 @@ export function MapPanel(props: NodePanelProps<'map'>) {
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>{translate('props.sources.loop')}</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.loop')} />
       <MapEditor
         key={node.id}
         node={node}
@@ -221,9 +214,7 @@ export function CondPanel(props: NodePanelProps<'cond'>) {
   const hasElse = (node.children || []).length > 1;
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>{translate('props.sources.condition')}</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.condition')} />
       <ConditionExpressionField key={node.id} test={node.test} bindContext={bindContext || loopContext} onSetText={onSetText} />
       {/* Otherwise: one switch, Nothing or an Else branch, so what the page shows when the test fails is a state, not a button to find. */}
       <div className="props-field condition-otherwise">
@@ -273,9 +264,7 @@ export function CommentPanel(props: NodePanelProps<'comment'>) {
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>{translate('props.sources.comment')}</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.comment')} />
       <div className="props-field" style={{ marginTop: 8 }}>
         <label onClick={noLabelActivation}>
           <span className="prop-label">
@@ -332,9 +321,7 @@ export function TextPanel(props: Omit<PropsPanelProps, 'node'> & { readonly node
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>{translate('props.sources.text')}</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.text')} />
       <TextConnectField node={node} bindContext={bindContext || loopContext} onSetText={(value) => onSetText(value)} onSetTextPieces={onSetTextPieces} />
     </div>
   );

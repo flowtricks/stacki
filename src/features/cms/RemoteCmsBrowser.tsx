@@ -9,7 +9,7 @@ import { cmsTransport } from '../../ipc/editorEnvironment';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import './remoteCms.css';
-import { AstroIcon, ChevronLeftIcon, ChevronRightIcon, CmsIcon, GearIcon, PlusIcon } from '../../ui/Icons';
+import { AstroIcon, ChevronRightIcon, CmsIcon, GearIcon, PlusIcon } from '../../ui/Icons';
 import { SanityTypeIcon } from './SanityTypeIcon';
 import { createContentCollection, remoteCollections, remoteDocuments } from '../../ipc/remoteSource';
 import { isAstroContent, type CmsSource } from '../../../shared/properties/astroContent';
@@ -17,6 +17,7 @@ import type { RemoteCollection, RemoteStatus } from '../../../shared/properties/
 import { labelize } from './cmsSchema';
 import { ConnectionLogo, Loading, useRemote, type RemoteCmsSelection } from './remoteCmsShared';
 import { COLLECTIONS, DOCUMENT_LISTS, listKey } from './remoteCmsCache';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 interface Props {
   readonly projectPath: string;
@@ -118,23 +119,24 @@ function BrowserHeader(props: {
   const { connection } = props;
   const translate = useTranslate();
   return (
-    <div className="panel-header">
-      <div className="cms-crumb">
-        <button className="ghost" title={translate('cmsRemote.collection.allCollections')} onClick={props.onBack}>
-          <ChevronLeftIcon size={14} />
-        </button>
+    <PanelHeader
+      back={{ label: translate('cmsRemote.collection.allCollections'), onBack: props.onBack }}
+      lead={
         <span className="remote-cms-logo">
           <ConnectionLogo kind={connection.kind} />
         </span>
-        {/* The CMS's name, as its row in the panel shows it; the dataset's is the tooltip. */}
-        <h2 title={connection.label}>{sourceName(connection, translate)}</h2>
-      </div>
-      {props.onCreate && (
-        <button className="ghost" title={translate('cmsRemote.collection.new')} onClick={props.onCreate}>
-          <PlusIcon size={14} />
-        </button>
-      )}
-    </div>
+      }
+      // The CMS's name, as its row in the panel shows it; the dataset's is the tooltip.
+      title={sourceName(connection, translate)}
+      titleHint={connection.label}
+      actions={
+        props.onCreate && (
+          <button className="ghost" title={translate('cmsRemote.collection.new')} onClick={props.onCreate}>
+            <PlusIcon size={14} />
+          </button>
+        )
+      }
+    />
   );
 }
 

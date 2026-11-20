@@ -41,6 +41,7 @@ import type { PlacementMessage } from '../../../shared/page/placement';
 import { type LiveValue } from '../../ui/liveValue';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 interface StructurePanelProps {
   readonly clientMode?: boolean;
@@ -120,9 +121,7 @@ function MissingPage({ currentPage }: Pick<StructurePanelProps, 'currentPage'>) 
   const injected = currentPage?.kind === 'route';
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        <h2>{translate('rail.navigator')}</h2>
-      </div>
+      <PanelHeader title={translate('rail.navigator')} />
       <div className="props-empty">
         {injected
           ? translateRich('structure.missing.injected', {
@@ -147,9 +146,7 @@ function ParseErrorPage({
   const [diagnostic] = projection.diagnostics;
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        <h2>{translate('rail.code')}</h2>
-      </div>
+      <PanelHeader title={translate('rail.code')} />
       <div className="code-editor">
         <ErrorToast
           message={
@@ -590,21 +587,23 @@ function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly
   };
   return (
     <>
-      <div className="panel-header">
-        <h2>{translate('rail.navigator')}</h2>
-        <button
-          className="ghost"
-          aria-label={state.allExpanded ? translate('structure.collapseAll') : translate('structure.expandAll')}
-          onMouseEnter={state.showTooltip}
-          onMouseLeave={state.hideTooltip}
-          onClick={() => {
-            state.hideTooltip();
-            toggleAll();
-          }}
-        >
-          {state.allExpanded ? <CollapseVerticalIcon size={14} /> : <ExpandVerticalIcon size={14} />}
-        </button>
-      </div>
+      <PanelHeader
+        title={translate('rail.navigator')}
+        actions={
+          <button
+            className="ghost"
+            aria-label={state.allExpanded ? translate('structure.collapseAll') : translate('structure.expandAll')}
+            onMouseEnter={state.showTooltip}
+            onMouseLeave={state.hideTooltip}
+            onClick={() => {
+              state.hideTooltip();
+              toggleAll();
+            }}
+          >
+            {state.allExpanded ? <CollapseVerticalIcon size={14} /> : <ExpandVerticalIcon size={14} />}
+          </button>
+        }
+      />
       {state.tooltip && (
         <div className="rail-tooltip below" style={state.tooltip}>
           {state.allExpanded ? translate('structure.collapseAll') : translate('structure.expandAll')}

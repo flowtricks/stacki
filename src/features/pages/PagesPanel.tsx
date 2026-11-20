@@ -29,6 +29,7 @@ import { usePageBulkRemoveFlow, type PageBulkRemoveHost } from './PageBulkRemove
 import { usePageSelection, type PageSelectionModel } from './usePageSelection';
 import { selectionCount, selectionTargets } from './pageSelection';
 import './pageSelect.css';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 interface PagesPanelProps {
   readonly projectPath?: string;
@@ -497,38 +498,40 @@ function PagesHeader({
   const creatable = can(role, 'page:create');
   const deletable = can(role, 'page:delete') && toggleSelecting !== undefined;
   return (
-    <div className="panel-header">
-      <h2>{translate('pages.title')}</h2>
-      {(creatable || deletable) && (
-        <div style={{ display: 'flex', gap: 2 }}>
-          {deletable && (
-            <button
-              className="asset-select-link"
-              aria-label={translate(selecting ? 'pages.select.stop' : 'pages.select.start')}
-              aria-pressed={selecting}
-              title={translate(selecting ? 'pages.select.stopTitle' : 'pages.select.startTitle')}
-              onClick={toggleSelecting}
-            >
-              {translate(selecting ? 'pages.select.stop' : 'pages.select.start')}
-            </button>
-          )}
-          {creatable && !selecting && (
-            <>
-              <button className="ghost" title={translate('pages.folder.new')} onClick={createFolder}>
-                <FolderPlusIcon size={13} />
+    <PanelHeader
+      title={translate('pages.title')}
+      actions={
+        (creatable || deletable) && (
+          <>
+            {deletable && (
+              <button
+                className="asset-select-link"
+                aria-label={translate(selecting ? 'pages.select.stop' : 'pages.select.start')}
+                aria-pressed={selecting}
+                title={translate(selecting ? 'pages.select.stopTitle' : 'pages.select.startTitle')}
+                onClick={toggleSelecting}
+              >
+                {translate(selecting ? 'pages.select.stop' : 'pages.select.start')}
               </button>
-              <MoreMenu
-                className="ghost"
-                title={translate('pages.new.button')}
-                icon={<PlusIcon size={13} />}
-                width={190}
-                items={pageCreateMenuItems({ createPage, createTemplate, createEmDashTemplate }, translate)}
-              />
-            </>
-          )}
-        </div>
-      )}
-    </div>
+            )}
+            {creatable && !selecting && (
+              <>
+                <button className="ghost" title={translate('pages.folder.new')} onClick={createFolder}>
+                  <FolderPlusIcon size={13} />
+                </button>
+                <MoreMenu
+                  className="ghost"
+                  title={translate('pages.new.button')}
+                  icon={<PlusIcon size={13} />}
+                  width={190}
+                  items={pageCreateMenuItems({ createPage, createTemplate, createEmDashTemplate }, translate)}
+                />
+              </>
+            )}
+          </>
+        )
+      }
+    />
   );
 }
 

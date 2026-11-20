@@ -46,6 +46,7 @@ import type { SourceNavigation } from './AssetSources';
 import { hostedCrumbs, hostedKindMatches, movedOrder } from './hostedMediaModel';
 import { copyLink, openLink } from './assetLinks';
 import './hostedMedia.css';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 export type HostedToast = (message: string, kind: 'error' | 'success') => void;
 
@@ -218,38 +219,41 @@ function HostedHeader(props: BrowserProps & { readonly browser: Browser }) {
   const { browser } = props;
   const translate = useTranslate();
   return (
-    <div className="panel-header">
-      {props.navigation.picker}
-      <div style={{ display: 'flex', gap: 2 }}>
-        <button
-          className="ghost"
-          title={translate('assets.header.newFolder')}
-          aria-label={translate('assets.header.newFolder')}
-          disabled={browser.busy}
-          onClick={() => browser.setNewFolder(true)}
-        >
-          <FolderPlusIcon size={14} />
-        </button>
-        <button
-          className="ghost"
-          title={translate('assets.hosted.upload')}
-          aria-label={translate('assets.hosted.upload')}
-          disabled={browser.busy}
-          onClick={browser.upload}
-        >
-          <UploadCloudIcon size={14} />
-        </button>
-        <MoreMenu
-          title={translate('assets.tile.options', { name: props.connection.label })}
-          width={170}
-          items={[
-            { label: translate('assets.hosted.refresh'), icon: <RefreshIcon size={13} />, onSelect: browser.refresh },
-            { label: translate('assets.hosted.edit'), icon: <PencilIcon size={13} />, onSelect: props.onEdit },
-            { label: translate('assets.hosted.remove'), icon: <TrashIcon size={13} />, danger: true, onSelect: props.onRemove },
-          ]}
-        />
-      </div>
-    </div>
+    <PanelHeader
+      title={props.navigation.picker}
+      titleClassName="asset-source-heading"
+      actions={
+        <>
+          <button
+            className="ghost"
+            title={translate('assets.header.newFolder')}
+            aria-label={translate('assets.header.newFolder')}
+            disabled={browser.busy}
+            onClick={() => browser.setNewFolder(true)}
+          >
+            <FolderPlusIcon size={14} />
+          </button>
+          <button
+            className="ghost"
+            title={translate('assets.hosted.upload')}
+            aria-label={translate('assets.hosted.upload')}
+            disabled={browser.busy}
+            onClick={browser.upload}
+          >
+            <UploadCloudIcon size={14} />
+          </button>
+          <MoreMenu
+            title={translate('assets.tile.options', { name: props.connection.label })}
+            width={170}
+            items={[
+              { label: translate('assets.hosted.refresh'), icon: <RefreshIcon size={13} />, onSelect: browser.refresh },
+              { label: translate('assets.hosted.edit'), icon: <PencilIcon size={13} />, onSelect: props.onEdit },
+              { label: translate('assets.hosted.remove'), icon: <TrashIcon size={13} />, danger: true, onSelect: props.onRemove },
+            ]}
+          />
+        </>
+      }
+    />
   );
 }
 
