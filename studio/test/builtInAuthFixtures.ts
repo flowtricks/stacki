@@ -97,7 +97,16 @@ export function contextFor(
   roles: RolesSource = rolesFrom({ kind: 'none' }),
   now = () => Date.now(),
 ): BuiltInContext {
-  return { origin: CONFORMANCE.origin, sessionSecret: CONFORMANCE.secret, environment, roles, fetcher: network.fetcher, now, passkeys: undefined };
+  return {
+    origin: CONFORMANCE.origin,
+    sessionSecret: CONFORMANCE.secret,
+    environment,
+    roles,
+    fetcher: network.fetcher,
+    now,
+    passkeys: undefined,
+    passkeyHandleActive: () => Promise.resolve(false),
+  };
 }
 
 export const nowSeconds = () => Math.floor(Date.now() / 1000);

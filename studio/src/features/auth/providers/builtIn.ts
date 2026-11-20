@@ -15,8 +15,10 @@ export interface BuiltInContext {
   readonly roles: RolesSource;
   readonly fetcher: Fetcher;
   readonly now: () => number;
-  /** Present for the passkey provider: the Durable Object's storage, or a Worker-side view of it. */
+  /** The passkey provider's storage: present inside the Durable Object, where every sign-in step runs; undefined in the Worker. */
   readonly passkeys: PasskeyStore | undefined;
+  /** Whether a passkey handle may still use Studio: a storage read in the Durable Object, a call to it from the Worker. */
+  readonly passkeyHandleActive: (handle: string) => Promise<boolean>;
 }
 
 export type BuiltInFactory = (context: BuiltInContext) => AuthProvider;

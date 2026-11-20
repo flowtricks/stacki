@@ -46,8 +46,8 @@ export function sameText(left: string, right: string): boolean {
   return difference === 0;
 }
 
-export async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+export async function sha256(bytes: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)));
 }
 
 /** A key derived from `secret` for one purpose, so a value made for one use is worthless for another. */
