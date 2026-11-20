@@ -4,6 +4,9 @@
 // the refusal showed the config as it stood). A name with spaces becomes a key, an unfinished form
 // is not sent, a name that cannot be saved is said next to the field and stays, and a refusal from
 // the config keeps every change that did not reach it.
+// The field-type picker's tiles are all one shape (an icon and a name); the kinds that need a word (List, Group)
+// explain themselves in the app's delayed tooltip, which waits for a resting pointer or for focus, and is gone
+// on leaving, clicking, blurring and Escape.
 // Method: the real settings view is mounted over a project held in memory. Requests pass the real
 // renderer boundary, and the host runs the real schema editor on a config text, so each test can
 // read what Save wrote. The test drives the form by clicking and typing, as a person does.
@@ -132,10 +135,7 @@ async function mount(options = {}) {
     ),
   );
   const button = (label) => {
-    const found = [...container.querySelectorAll('button')].find(
-      (each) =>
-        (each.querySelector('.remote-cms-settings-kind-hint') ? each.firstElementChild.nextElementSibling.textContent : each.textContent).trim() === label,
-    );
+    const found = [...container.querySelectorAll('button')].find((each) => each.textContent.trim() === label);
     assert.notEqual(found, undefined, `the ${label} button shows`);
     return found;
   };
@@ -384,5 +384,52 @@ test('a new list says what its items are, and Group of fields makes a repeater w
   await form.click(form.button('Add field'));
   await form.click(form.button('Save collection'));
   assert.match(form.project.config, /Tags: z\.array\(z\.string\(\)\)\.optional\(\),/, 'the list is written as a list of text');
+  await form.close();
+});
+
+test('every field-type tile is an icon and a name; List and Group explain themselves in a delayed tooltip', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const form = await mount();
+  await form.click(form.button('Add field'));
+  const tiles = [...form.container.querySelectorAll('.remote-cms-settings-kind-tile')];
+  assert.ok(tiles.length > 10, 'the grid shows every kind');
+  for (const tile of tiles) {
+    assert.equal(tile.children.length, 2, `${tile.textContent}: an icon and one label, no description`);
+    assert.ok(tile.children[0].matches('svg'), 'the icon comes first');
+    assert.equal(tile.hasAttribute('title'), false, 'no native title attribute');
+  }
+  assert.equal(form.container.querySelector('.remote-cms-settings-kind-hint') === null, true, 'no description text on any tile');
+  const tip = () => document.querySelector('[role="tooltip"]') ?? undefined;
+  const gone = (message) => assert.equal(tip() === undefined, true, message);
+  // React hears a pointer entering and leaving as mouseover and mouseout, and focus as focusin and focusout.
+  const event = (name, target, type = window.MouseEvent) => act(async () => target.dispatchEvent(new type(name, { bubbles: true })));
+  const tick = (ms) => act(async () => context.mock.timers.tick(ms));
+  const list = form.button('List');
+  await event('mouseover', list);
+  await tick(499);
+  gone('nothing before the delay');
+  await tick(2);
+  assert.equal(tip()?.textContent, 'A list of items: plain values, or groups of fields like team members');
+  await event('mouseout', list);
+  gone('leaving dismisses it');
+  const group = form.button('Group');
+  await event('mouseover', group);
+  await tick(600);
+  assert.equal(tip()?.textContent, 'Fields kept together as one object');
+  await act(async () => group.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  gone('Escape dismisses it');
+  await act(async () => list.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true })));
+  gone('focus waits for the same delay');
+  await tick(600);
+  assert.equal(tip() === undefined, false, 'focus shows it after the delay');
+  await act(async () => list.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })));
+  gone('blur dismisses it');
+  await event('mouseover', list);
+  await tick(600);
+  await form.click(list);
+  gone('clicking dismisses it');
+  await event('mouseover', form.button('Plain text'));
+  await tick(1000);
+  gone('a tile with nothing to add has no tooltip');
   await form.close();
 });

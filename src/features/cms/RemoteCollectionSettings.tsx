@@ -5,7 +5,8 @@
 // Save collection (settingsDraft.ts), which takes any field form still open and
 // writes them to the content config, with the entries and code that depend on
 // them (astroCollectionSettings.ts).
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import type { CollectionSettings, NewFieldKind, SettingsChange, SettingsField, SettingsFieldKind } from '../../../shared/properties/collectionSettings';
 import { MEMBER_KINDS, newFieldMembers, newFieldSettings, pointsAtCollection } from '../../../shared/properties/collectionSettings';
 import { useLocale, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -14,6 +15,7 @@ import { confirmDialog } from '../../ui/ConfirmDialog';
 import { SkeletonRows } from '../../ui/Skeleton';
 import Dropdown from '../../ui/Dropdown';
 import { ElementImageIcon, ElementLinkIcon, ElementListDefaultIcon, ElementSelectIcon, ElementVideoIcon } from '../../ui/ElementIcons';
+import { tooltipHost, tooltipPointBelow, useDelayedPlacement, type TooltipPoint } from '../../ui/delayedTooltip';
 import { ErrorToast } from '../../ui/ErrorToast';
 import type { IconProps } from '../../ui/IconBase';
 import {
@@ -429,21 +431,74 @@ function AddField(props: {
           </button>
         </div>
         <div className="remote-cms-settings-kinds">
-          {NEW_KINDS.map((option) => {
-            const Icon = KIND_ICONS[option];
-            return (
-              <button key={option} type="button" className="remote-cms-settings-kind-tile" onClick={() => setKind(option)}>
-                <Icon size={22} />
-                <span>{translate(KIND_LABELS[option])}</span>
-                {KIND_HINTS[option] !== undefined && <span className="remote-cms-settings-kind-hint">{translate(KIND_HINTS[option])}</span>}
-              </button>
-            );
-          })}
+          {NEW_KINDS.map((option) => (
+            <KindTile key={option} kind={option} onPick={() => setKind(option)} />
+          ))}
         </div>
       </div>
     );
   }
   return <NewFieldForm {...props} kind={kind} onBack={() => setKind(undefined)} />;
+}
+
+/** The tooltip's anchor: centred under the tile, as every delayed tooltip in the app is. */
+function placeUnder(element: HTMLElement): TooltipPoint {
+  return tooltipPointBelow(element.getBoundingClientRect());
+}
+
+/**
+ * One tile of the field-type grid: its icon and its name, nothing more, so every tile is the same shape. A kind
+ * that is not obvious from its name explains itself in a tooltip that waits for a resting pointer (or for the same
+ * pause on keyboard focus), and goes on leaving, clicking, blurring or Escape.
+ */
+function KindTile({ kind, onPick }: { readonly kind: NewFieldKind; readonly onPick: () => void }) {
+  const translate = useTranslate();
+  const tooltipId = useId();
+  const tip = useDelayedPlacement(placeUnder);
+  const button = useRef<HTMLButtonElement>(null);
+  const Icon = KIND_ICONS[kind];
+  const hint = KIND_HINTS[kind];
+  const withHint = hint === undefined ? undefined : translate(hint);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        className="remote-cms-settings-kind-tile"
+        aria-describedby={tip.value === undefined ? undefined : tooltipId}
+        onClick={() => {
+          tip.hide();
+          onPick();
+        }}
+        {...(withHint === undefined
+          ? {}
+          : {
+              onMouseEnter: (event: React.MouseEvent<HTMLElement>) => tip.show(event.currentTarget),
+              onMouseLeave: tip.hide,
+              onFocus: (event: React.FocusEvent<HTMLElement>) => tip.show(event.currentTarget),
+              onBlur: tip.hide,
+              onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+                if (event.key === 'Escape' && tip.value !== undefined) {
+                  event.stopPropagation();
+                  tip.hide();
+                }
+              },
+            })}
+      >
+        <Icon size={22} />
+        <span>{translate(KIND_LABELS[kind])}</span>
+      </button>
+      {withHint !== undefined &&
+        tip.value !== undefined &&
+        createPortal(
+          <div className="rail-tooltip below" role="tooltip" id={tooltipId} style={tip.value}>
+            {withHint}
+          </div>,
+          // Inside a modal dialog the tip joins it, or it would be painted under the dialog's top layer.
+          tooltipHost(button.current ?? undefined),
+        )}
+    </>
+  );
 }
 
 function NewFieldForm(props: {
@@ -565,7 +620,7 @@ function moved(fields: readonly SettingsField[], from: number, to: number): read
   return names;
 }
 
-// A word on the kinds that are not obvious from their name: a list holds items of
+// A tooltip on the kinds that are not obvious from their name: a list holds items of
 // its own, among them groups of fields, which is how a repeater is made.
 const KIND_HINTS: { readonly [K in SettingsFieldKind]?: MessageKey } = {
   list: 'cmsRemote.fieldHint.list',

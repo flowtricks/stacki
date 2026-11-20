@@ -1509,8 +1509,3 @@
   color: var(--text-dim);
   font-size: 12.5px;
 }
-.remote-cms-settings-kind-hint {
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.3;
-}
