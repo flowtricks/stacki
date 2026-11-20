@@ -16,7 +16,7 @@ import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate
 import { FeatureIcon } from '../featureIcons';
 import { buildComponentTree, type ComponentTree } from './componentTree';
 import { memberAvatarURL } from './memberAvatars';
-import { MemberPicker } from './MemberPicker';
+import { MemberInvite } from './MemberInvite';
 import { RoleAppPermissions } from './RoleAppPermissions';
 import { useInstalledApps } from './RoleAppPicker';
 import { RoleComponents } from './RoleComponents';
@@ -210,18 +210,9 @@ function MembersView(props: ViewProps & { readonly currentLogin: string | undefi
         {role.members.length === 0 && <li className="app-role-none">{translate('settings.roles.members.none')}</li>}
       </ul>
       {role.members.length > 0 && shown.length === 0 && <NoMatch query={props.query} />}
-      {editable && <MemberInvite role={role} actions={actions} projectPath={props.projectPath} />}
+      {editable && <MemberInvite role={role} projectPath={props.projectPath} addMember={actions.addMember} addInvited={actions.addInvitedMember} />}
     </div>
   );
-}
-
-/**
- * Extension point: how a person is added to the role. Today the one form is the GitHub username field; the form for
- * the project's active sign-in provider (Google, SSO, access link, passkey invite) goes here, beside it or in its place,
- * and calls the same `actions.addMember`, so the list above and its checks stay the same.
- */
-function MemberInvite(props: { readonly role: ProjectRole; readonly actions: RoleCardActions; readonly projectPath: string | undefined }) {
-  return <MemberPicker roleName={props.role.name} members={props.role.members} projectPath={props.projectPath} addMember={props.actions.addMember} />;
 }
 
 function PinsView(props: ViewProps) {

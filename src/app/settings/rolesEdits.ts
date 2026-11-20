@@ -4,6 +4,7 @@
 // through `serializeProjectRoles`, which re-parses, so an edit that slipped past
 // these checks still cannot reach disk.
 import { assert } from '../../../shared/core/assert';
+import { addInvitedMember } from '../../features/roles/memberInvite';
 import { LIMITS } from '../../../shared/core/limits';
 import { APP_PERMISSION_LIMITS } from '../../../shared/properties/appPermissions';
 import {
@@ -182,6 +183,15 @@ export function addMember(roles: ProjectRoles, id: string, input: string): Proje
   const previous = memberRole(roles, login);
   const without = previous === undefined ? roles : removeMember(roles, previous.id, login);
   return updateRole(without, id, (role) => ({ ...role, members: [...role.members, login] }));
+}
+
+/** Adds a member written as a qualified identity (memberInvite.ts) to a role; a refusal is the described error the card shows. */
+export function addInvitedMemberTo(roles: ProjectRoles, id: string, member: string): ProjectRoles {
+  const added = addInvitedMember(roles, id, member);
+  if (!added.ok) {
+    throw new DescribedError(added.error);
+  }
+  return added.value;
 }
 
 /** Removes a GitHub username from a role. The last admin cannot be removed. */

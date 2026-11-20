@@ -30,6 +30,8 @@ export interface RoleCardActions {
   readonly rename: (name: string) => boolean;
   readonly remove: () => void;
   readonly addMember: (login: string) => boolean;
+  /** Adds a member written as the sign-in provider's qualified identity (`google:a@b.com`), from memberInvite.ts. */
+  readonly addInvitedMember: (member: string) => boolean;
   readonly removeMember: (login: string) => void;
   readonly toggle: (feature: AccessFeature, change: 'grant' | 'withdraw') => void;
   readonly toggleGroup: (features: readonly StaticAccessFeature[], change: 'grant' | 'withdraw') => void;

@@ -36,6 +36,7 @@ import { RoleCard, type RoleCardActions } from './RoleCard';
 import { RoleDetail } from './RoleDetail';
 import { type RoleSection, type RolesView } from './roleDetailModel';
 import {
+  addInvitedMemberTo,
   addMember,
   addRole,
   deleteRole,
@@ -384,6 +385,7 @@ function cardActions(
     rename: (name) => apply((roles) => renameRole(roles, id, name)),
     remove,
     addMember: (login) => apply((roles) => addMember(roles, id, login)),
+    addInvitedMember: (member) => apply((roles) => addInvitedMemberTo(roles, id, member)),
     removeMember: (login) => void apply((roles) => removeMember(roles, id, login)),
     toggle: (feature, change) => void apply((roles) => setAccess(roles, id, feature, change)),
     toggleGroup: (features, change) => void apply((roles) => setGroupAccess(roles, id, features, change)),

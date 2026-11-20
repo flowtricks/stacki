@@ -85,7 +85,8 @@ async function render(view: string | undefined): Promise<string> {
 
 test('the root lists Secrets, MCP and Roles as links, and not Instructions', async () => {
   const html = await render(undefined);
-  assert.equal((html.match(/settings-link/g) ?? []).length, 3, 'Secrets, MCP and Roles');
+  assert.equal((html.match(/settings-link/g) ?? []).length, 3, 'Secrets, MCP and Roles, all in the shared frame');
+  assert.doesNotMatch(html, /data-hosted-roles-link/, 'no extra row below the list');
   for (const view of ['Secrets', 'MCP', 'Roles']) {
     assert.match(html, new RegExp(`settings-link[^>]*>.*?<span class="label">${view}</span>`), `${view} link`);
   }

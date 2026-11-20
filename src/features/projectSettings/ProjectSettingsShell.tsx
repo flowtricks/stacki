@@ -28,6 +28,8 @@ import {
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ChevronRightIcon, CollapseVerticalIcon, ExpandVerticalIcon, InstructionsIcon, LockIcon, PlugIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { roles as centralRoles } from '../../ui/central/centralGeometry';
 import { PanelSearch } from '../../ui/PanelSearch';
 import './projectSettings.css';
 import { PanelHeader } from '../../ui/PanelHeader';
@@ -47,7 +49,11 @@ export interface ProjectSettingsShellProps {
   readonly refreshable: boolean;
 }
 
-const LINK_ICONS = { secrets: LockIcon, mcp: PlugIcon, instructions: InstructionsIcon } as const satisfies Record<SettingsViewId, typeof LockIcon>;
+const RolesIcon = centralIcon(centralRoles);
+const LINK_ICONS = { secrets: LockIcon, mcp: PlugIcon, instructions: InstructionsIcon, roles: RolesIcon } as const satisfies Record<
+  SettingsViewId,
+  typeof LockIcon
+>;
 
 const NO_REPORTS: Readonly<Partial<Record<SettingsSectionId, number | undefined>>> = {};
 

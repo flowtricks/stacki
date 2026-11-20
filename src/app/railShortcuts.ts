@@ -21,7 +21,8 @@ export type RailAction =
   | 'audits'
   | 'projectSettings'
   | 'ai'
-  | SettingsViewId;
+  // Roles has no chord: only hosted Studio lists it, in its Settings root.
+  | Exclude<SettingsViewId, 'roles'>;
 
 export interface RailShortcut {
   readonly action: RailAction;

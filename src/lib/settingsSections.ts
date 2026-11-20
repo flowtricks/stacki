@@ -13,13 +13,15 @@ import type { MessageKey } from './i18n/localeContext';
 import { loadProjectPreference, saveProjectPreference, type PreferenceStorage, type ProjectPreferenceSpec } from './projectPreference';
 
 /** The Settings panel's root is a short list of these; each opens its own view in place of the list. */
-export const SETTINGS_VIEW_IDS = ['secrets', 'mcp', 'instructions'] as const;
+/** `roles` is listed only by a host that passes a Roles view (hosted Studio); Desktop's Roles live in its Settings dialog. */
+export const SETTINGS_VIEW_IDS = ['secrets', 'mcp', 'instructions', 'roles'] as const;
 export type SettingsViewId = (typeof SETTINGS_VIEW_IDS)[number];
 
 export const SETTINGS_VIEW_TITLE_KEYS: Readonly<Record<SettingsViewId, MessageKey>> = {
   secrets: 'settings.section.secrets',
   mcp: 'settings.section.mcp',
   instructions: 'settings.section.instructions',
+  roles: 'roles.studio.title',
 };
 
 /** The foldable sections of the Instructions view, in the order they are drawn. */
@@ -51,7 +53,7 @@ export function viewOfTarget(target: SettingsFocusTarget): {
   readonly open: readonly SettingsSectionId[];
   readonly scrollTo: SettingsSectionId | undefined;
 } {
-  if (target === 'secrets' || target === 'mcp') {
+  if (target === 'secrets' || target === 'mcp' || target === 'roles') {
     return { view: target, open: [], scrollTo: undefined };
   }
   if (target === 'instructions') {

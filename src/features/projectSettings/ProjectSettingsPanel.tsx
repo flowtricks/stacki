@@ -39,6 +39,9 @@ export default function ProjectSettingsPanel({ projectPath, views, renderInstruc
             return <McpTab projectPath={projectPath} />;
           case 'instructions':
             return renderInstructions(context);
+          case 'roles':
+            // Desktop's Roles are in its Settings dialog; its root never lists this view.
+            return undefined;
           default: {
             const exhaustive: never = view;
             return exhaustive;

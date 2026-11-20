@@ -23,6 +23,7 @@ esbuild.buildSync({
       "export * from './src/lib/currentRole';",
       "export * from './src/app/settings/roleDetailModel';",
       "export { setAllComponentVisibility } from './src/app/settings/rolesEdits';",
+      "export { authProviderOf } from './src/app/settings/authProvider';",
       "export { parseProjectRolesSource, roleViewOf, ADMIN_VIEW } from './shared/properties/projectRoles';",
       "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
     ].join('\n'),
@@ -310,4 +311,69 @@ test('a viewer who cannot edit sees the lists with every control disabled', asyn
   );
   await unmount();
   roles.setActualRole(roles.ADMIN_VIEW);
+});
+
+// The sign-in method decides the Members view's add form.
+
+const wrangler = (provider) => `{ "vars": { // comment\n "AUTH_PROVIDER": "${provider}" } }`;
+async function withWrangler(text, run) {
+  window.avb.readSourceText = async () => {
+    if (text === undefined) {
+      throw new Error('no such file');
+    }
+    return { text };
+  };
+  try {
+    await run();
+  } finally {
+    delete window.avb.readSourceText;
+  }
+}
+
+test('authProviderOf reads AUTH_PROVIDER, and anything else is github', () => {
+  assert.equal(roles.authProviderOf(wrangler('passkey')), 'passkey');
+  assert.equal(roles.authProviderOf(wrangler('google')), 'google');
+  assert.equal(roles.authProviderOf('{}'), 'github');
+  assert.equal(roles.authProviderOf(wrangler('Not A Provider')), 'github');
+  assert.equal(roles.authProviderOf('x'.repeat(300000)), 'github');
+});
+
+test('a passkey project hides the GitHub field and says invites are created in Studio', async () => {
+  fresh();
+  await withWrangler(wrangler('passkey'), async () => {
+    await mount();
+    await click(row('Client', 'Members'));
+    assert.equal(detail().querySelector('input[aria-label="Add a GitHub username to Client"]') ?? undefined, undefined);
+    assert.match(detail().textContent, /Passkey invites are created in Studio/);
+    await unmount();
+  });
+});
+
+test('a google project adds a member by email as google:<email>, and refuses a bad address inline', async () => {
+  fresh();
+  await withWrangler(wrangler('google'), async () => {
+    await mount();
+    await click(row('Client', 'Members'));
+    const field = detail().querySelector('input[aria-label="Add an email address to Client"]');
+    assert.ok(field, 'the email field replaces the GitHub one');
+    await type(field, 'not an email');
+    await act(async () => field.form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
+    assert.match(detail().textContent, /Enter an email address/);
+    assert.equal(writes.length, 0);
+    await type(field, 'Ana@Example.com');
+    await act(async () => field.form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
+    await settle();
+    assert.deepEqual(roleOf('client').members, ['google:ana@example.com']);
+    await unmount();
+  });
+});
+
+test('a project without Studio keeps the GitHub field', async () => {
+  fresh();
+  await withWrangler(undefined, async () => {
+    await mount();
+    await click(row('Client', 'Members'));
+    assert.ok(detail().querySelector('input[aria-label="Add a GitHub username to Client"]'));
+    await unmount();
+  });
 });
