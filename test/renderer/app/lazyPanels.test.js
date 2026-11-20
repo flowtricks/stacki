@@ -108,14 +108,14 @@ test('all optional editors load without hiding the app or replacing its preview'
 });
 
 async function checkSelectors(context) {
-  await context.act(() => railButton(6).click());
+  await context.act(() => railButton('selectors').click());
   assertPending(context, 'SelectorsPanel');
   await releasePanel(context, 'SelectorsPanel');
   assert.equal(__lazyPanels.SelectorsPanel.project.path, '/project');
 }
 
 async function checkVariables(context) {
-  await context.act(() => railButton(5).click());
+  await context.act(() => railButton('variables').click());
   assertPending(context, 'VariablesPanel');
   await releasePanel(context, 'VariablesPanel');
   await context.act(() =>
@@ -130,7 +130,7 @@ async function checkVariables(context) {
 }
 
 async function checkCodePanel(context) {
-  await context.act(() => railButton(7).click());
+  await context.act(() => railButton('code').click());
   assertPending(context, 'CodePanel');
   await releasePanel(context, 'CodePanel');
   assert.equal(__lazyPanels.CodePanel.relativePath, 'src/pages/index.astro');
@@ -170,7 +170,7 @@ async function checkCodePanel(context) {
 }
 
 async function checkCMS(context) {
-  await context.act(() => railButton(4).click());
+  await context.act(() => railButton('cms').click());
   assertPending(context, 'CmsPanel');
   await releasePanel(context, 'CmsPanel');
   await context.act(() => __lazyPanels.CmsPanel.onSelect('src/data/services.json'));
@@ -185,7 +185,7 @@ async function checkCMS(context) {
 }
 
 async function checkCodeWindow(context) {
-  await context.act(() => railButton(1).click());
+  await context.act(() => railButton('navigator').click());
   await context.act(() => __lazyPanels.StructurePanel.onSelect('frontmatter'));
   await context.act(() => __lazyPanels.PropsPanel.onOpenCode());
   assertPending(context, 'CodeWindow');
@@ -242,9 +242,10 @@ async function releasePanel(context, name) {
   context.stable();
 }
 
-function railButton(index) {
-  const button = document.querySelectorAll('.rail-btn')[index];
-  assert.ok(button, `Rail button ${index} exists`);
+// A rail button by its panel id, never by position: the rail's order is the person's to change and has grown by a button before.
+function railButton(id) {
+  const button = document.querySelector(`.rail-btn[data-rail-id="${id}"]`);
+  assert.ok(button, `Rail button ${id} exists`);
   return button;
 }
 

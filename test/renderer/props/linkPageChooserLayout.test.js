@@ -251,9 +251,10 @@ const checkRow = (menu, row) => {
       check(`plain menu "${row.labelText}": the label starts at the row's padding`, row.label.left - row.row.left <= 9, plainDetail);
     }
     const hinted = plain.rows.find((row) => row.hint !== undefined);
+    // With no check drawn (an unchecked row) the hint is the last thing in the row; with one it ends before the check.
     check(
       'plain menu: the hint sits between the text and the check',
-      hinted !== undefined && hinted.hint.left >= hinted.label.right && hinted.hint.right <= hinted.check.left,
+      hinted !== undefined && hinted.hint.left >= hinted.label.right && hinted.hint.right <= (hinted.checked ? hinted.check.left : hinted.row.right),
       plainDetail,
     );
   }
