@@ -317,8 +317,10 @@ export default function LeftRail({
     hide();
     const target = event.target instanceof Element ? (event.target.closest<HTMLElement>('[data-rail-id]') ?? undefined) : undefined;
     const anchor = target ?? railRef.current ?? undefined;
-    if (anchor !== undefined) {
-      setMenu({ anchor, id: target?.dataset['railId'] });
+    // Right-clicking the bare rail in the default order has no row to offer, so no empty menu opens.
+    const railId = target?.dataset['railId'];
+    if (anchor !== undefined && menuEntries(railId).length > 0) {
+      setMenu({ anchor, id: railId });
     }
   };
   const menuEntries = (id: string | undefined): readonly MenuEntry[] => {
@@ -333,7 +335,10 @@ export default function LeftRail({
         onSelect: () => commitOrder(crossRailItem(order, id, target), id, 'focus'),
       });
     }
-    rows.push({ kind: 'item', id: 'reset', label: translate('rail.reset'), disabled: isDefaultRailOrder(DEFAULT_RAIL_ORDER, order), onSelect: resetOrder });
+    // Reset is offered only when there is something to reset: a greyed row for a no-op is noise.
+    if (!isDefaultRailOrder(DEFAULT_RAIL_ORDER, order)) {
+      rows.push({ kind: 'item', id: 'reset', label: translate('rail.reset'), onSelect: resetOrder });
+    }
     return rows;
   };
 

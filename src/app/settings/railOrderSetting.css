@@ -1,4 +1,4 @@
-/* The Sidebar icon order row's button: a quiet fill, never a border; muted while there is nothing to reset. */
+/* The Sidebar icon order row's button: a quiet fill, never a border. */
 .rail-order-reset {
   flex: none;
   padding: 6px 12px;
@@ -8,13 +8,8 @@
   font-size: 13px;
   white-space: nowrap;
 }
-.rail-order-reset:hover:not(:disabled) {
+.rail-order-reset:hover {
   background: var(--bg-active);
-}
-.rail-order-reset:disabled {
-  background: transparent;
-  color: var(--text-dim);
-  cursor: default;
 }
 .rail-order-live {
   position: absolute;

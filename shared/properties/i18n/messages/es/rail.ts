@@ -27,7 +27,6 @@ export const messages = {
   'rail.resetDone': 'Orden de la barra restablecido',
   'rail.selectors': 'Selectores de estilo',
   'rail.settings': 'Ajustes',
-  'rail.settingsOrder.alreadyDefault': 'Ya es el predeterminado',
   'rail.settingsOrder.description': 'Arrastra los iconos de la barra lateral para reordenarlos. Restablece el orden predeterminado.',
   'rail.settingsOrder.done': 'Orden de la barra lateral restablecido',
   'rail.settingsOrder.label': 'Orden de los iconos de la barra lateral',

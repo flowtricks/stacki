@@ -27,7 +27,6 @@ export const messages = {
   'rail.resetDone': 'Rail order reset',
   'rail.selectors': 'Style selectors',
   'rail.settings': 'Settings',
-  'rail.settingsOrder.alreadyDefault': 'Already default',
   'rail.settingsOrder.description': 'Drag icons in the sidebar to reorder them. Reset to the default order.',
   'rail.settingsOrder.done': 'Sidebar order reset',
   'rail.settingsOrder.label': 'Sidebar icon order',
