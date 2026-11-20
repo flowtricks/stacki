@@ -421,7 +421,8 @@ let settleTimer: ReturnType<typeof setTimeout> | undefined;
 // and walk the page for what rendered: the walk, not the drag, was the frame's cost, and the drag stuttered. While the viewport
 // width is changing, the measurements wait for it to rest and run once. The caller returns at once when this answers true.
 const RESIZE_QUIET_MS = 100;
-let viewportWidthPx = window.innerWidth;
+// A unit test loads this module before it has a window, to reach the pure classifiers; the page always has one.
+let viewportWidthPx = typeof window === 'undefined' ? 0 : window.innerWidth;
 let resizeQuietTimer: ReturnType<typeof setTimeout> | undefined;
 const holdForResize = (): boolean => {
   const widthPx = window.innerWidth;
