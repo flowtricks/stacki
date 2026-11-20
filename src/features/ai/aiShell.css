@@ -55,7 +55,12 @@
   max-width: 100%;
   gap: 6px;
   /* The same 10px inset from the window's bottom edge as the rail's AI button (.rail-anchor). */
-  padding: 0 8px 10px;
+  padding: 0 0 12px;
+}
+/* One comfortable inset (1rem) for everything in the panel body: the transcript pads itself so its scrollbar stays at the
+   edge, and every other row (plan, cards, composer, account and status rows) keeps the same margins. */
+.ai-body > :not(.ai-transcript) {
+  margin-inline: 1rem;
 }
 .ai-empty {
   color: var(--text-faint);

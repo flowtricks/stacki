@@ -1,6 +1,8 @@
 // Goal: the AI panel's message scroller never scrolls sideways, at any panel width. A markdown table wider than
 // the column, a code line with no spaces, a long URL and a long inline code span are all drawn inside the column:
 // the table and the code block scroll in their own boxes, and the URL and the inline code wrap.
+// The panel's content keeps a 16px inset on both sides: the transcript's rows and tables, the composer card and the footer
+// rows are measured against the panel body's edges.
 // Method: bundle the real ChatText and the panel's real stylesheets with esbuild into one page, put them in the
 // real transcript structure inside a column of each width (260, 340 and 600 px), load it in Electron's Chromium
 // and read the layout back: the scroller's scrollWidth must not exceed its clientWidth, no element outside a table
@@ -72,6 +74,8 @@ createRoot(document.getElementById('root')!).render(
           </div>
         </div>
       </div>
+      <div className="ai-composer" id="composer-card">A composer card</div>
+      <div className="ai-status-line" id="footer-row">A footer row</div>
     </div>
   </LocaleProvider>,
 );
@@ -109,6 +113,8 @@ app.whenReady().then(async () => {
       }
       const scroller = document.querySelector('.ai-transcript');
       const edge = scroller.getBoundingClientRect().right;
+      const body = document.querySelector('.ai-body').getBoundingClientRect();
+      const insets = (element) => { const box = element.getBoundingClientRect(); return [Math.round(box.left - body.left), Math.round(body.right - box.right)]; };
       const box = document.querySelector('.ai-md-table-wrap');
       const escaped = [...scroller.querySelectorAll('*')]
         .filter((element) => !element.closest('.ai-md-table-wrap') && !element.closest('pre'))
@@ -123,6 +129,10 @@ app.whenReady().then(async () => {
         tableBoxInside: box ? box.getBoundingClientRect().right <= edge + 1 : false,
         codeScrolls: [...document.querySelectorAll('pre')].some((pre) => pre.scrollWidth > pre.clientWidth),
         escaped,
+        rowInsets: insets(document.querySelector('.ai-markdown')),
+        composerInsets: insets(document.querySelector('#composer-card')),
+        footerInsets: insets(document.querySelector('#footer-row')),
+        tableInsets: box ? insets(box) : [],
       };
     })()\`;
     seen.push(await window.webContents.executeJavaScript(read));
@@ -144,6 +154,11 @@ app.whenReady().then(async () => {
     assert.deepEqual(result.escaped, [], `nothing outside a table or code box passes the column at ${result.width}px: ${detail}`);
     assert.ok(result.tableBoxInside, `the table box stays inside the column at ${result.width}px: ${detail}`);
     assert.ok(result.tableBoxScrolls, `the wide table scrolls in its own box at ${result.width}px: ${detail}`);
+    for (const [name, [left, right]] of Object.entries({ row: result.rowInsets, composer: result.composerInsets, footer: result.footerInsets })) {
+      // The scrollbar gutter is inside the transcript's right padding, so its content may sit a gutter further in, never nearer.
+      assert.ok(left >= 16 && right >= 16, `the ${name} keeps a 16px inset at ${result.width}px: ${detail}`);
+    }
+    assert.ok(result.tableInsets[0] >= 16 && result.tableInsets[1] >= 16, `the table stays inside the padded column at ${result.width}px: ${detail}`);
     assert.ok(result.codeScrolls, `the long code line scrolls in its own block at ${result.width}px: ${detail}`);
   }
 });
