@@ -8,7 +8,7 @@
 // GitHub provider runs through exactly this flow, which is why its behaviour did not change.
 import type { AuthRuntime } from './authRuntime';
 import { mayEdit, mintSession, principalFromToken, SESSION_COOKIES } from './authRuntime';
-import { field, parsePerson, parseRefusal, type SignInFlow, type SignInRefusal } from './authProvider';
+import { field, GITHUB_PROVIDER_ID, parsePerson, parseRefusal, type SignInFlow, type SignInRefusal } from './authProvider';
 import { loginPage } from './loginPage';
 import { loginWait, waitCookie } from './loginCooldown';
 import { loginLifetimeMs, type LoginAttempts } from './loginAttempts';
@@ -26,9 +26,17 @@ const STATE_COOKIE = '__Host-studio-state';
 const STATE_COOKIE_SECONDS = 600;
 const PROVIDER_PATH_CHARS_MAX = 200;
 
-/** The page-facing name of an installed provider; undefined for the built-in one, which keeps the GitHub page. */
+/** The page-facing name of a provider that is not GitHub (custom, or built-in Google, SSO, passkey); undefined keeps the GitHub page. */
 export function installedProviderName(runtime: AuthRuntime): string | undefined {
-  return runtime.installed === 'custom' ? runtime.provider.displayName : undefined;
+  return runtime.providerId === GITHUB_PROVIDER_ID && runtime.installed === 'built-in' ? undefined : runtime.provider.displayName;
+}
+
+/**
+ * Where a built-in provider other than GitHub receives its callback: `/studio/auth/<id>/callback`, the address the owner
+ * registers with Google or the SSO provider. Core handles it exactly like `/studio/auth/callback` (state, claim, session).
+ */
+export function providerCallbackPath(runtime: AuthRuntime): string | undefined {
+  return runtime.installed === 'built-in' && runtime.providerId !== GITHUB_PROVIDER_ID ? `/studio/auth/${runtime.providerId}/callback` : undefined;
 }
 
 export async function authRoutes(request: Request, runtime: AuthRuntime, attempts: LoginAttempts): Promise<Response | undefined> {
@@ -39,7 +47,8 @@ export async function authRoutes(request: Request, runtime: AuthRuntime, attempt
   if (url.pathname.startsWith(AUTH_PATHS.providerPrefix)) {
     return providerRoute(request, url, runtime);
   }
-  if (url.pathname !== AUTH_PATHS.login && url.pathname !== AUTH_PATHS.callback) {
+  const callback = url.pathname === AUTH_PATHS.callback || url.pathname === providerCallbackPath(runtime);
+  if (url.pathname !== AUTH_PATHS.login && !callback) {
     return undefined;
   }
   if (request.method !== 'GET') {
@@ -50,7 +59,7 @@ export async function authRoutes(request: Request, runtime: AuthRuntime, attempt
   }
   const existing = await reuseSession(request, runtime);
   if (existing) {
-    return url.pathname === AUTH_PATHS.callback ? completeAttempt(existing) : existing;
+    return callback ? completeAttempt(existing) : existing;
   }
   const languages = request.headers.get('Accept-Language');
   const until = await loginWait(request, runtime.secret);
@@ -193,7 +202,7 @@ async function completeSignIn(request: Request, runtime: AuthRuntime, state: str
 
 function flowFor(runtime: AuthRuntime, state: string, request: Request): SignInFlow {
   return {
-    callbackUrl: `${runtime.origin}${AUTH_PATHS.callback}`,
+    callbackUrl: `${runtime.origin}${providerCallbackPath(runtime) ?? AUTH_PATHS.callback}`,
     state,
     languages: request.headers.get('Accept-Language') ?? undefined,
   };

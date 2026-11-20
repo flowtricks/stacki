@@ -73,6 +73,7 @@ export const messages = {
   'studio.inspector.close': 'Fermer les réglages',
   'studio.inspector.label': 'Inspecteur d’élément',
   'studio.login.button': 'Se connecter avec GitHub',
+  'studio.login.buttonPasskey': 'Se connecter avec une passkey',
   'studio.login.buttonProvider': 'Continuer avec {provider}',
   'studio.login.failedHeading': 'Connexion impossible',
   'studio.login.neutral.access': 'Votre compte n’est pas autorisé à modifier ce site. Demandez l’accès au propriétaire du site, puis reconnectez-vous.',
@@ -101,6 +102,20 @@ export const messages = {
   'studio.login.waitOne': 'Attendez au moins 1 seconde, puis lancez une nouvelle connexion ci-dessous.',
   'studio.login.welcomeHeading': 'Bienvenue dans votre studio',
   'studio.panel.close': 'Fermer le panneau',
+  'studio.passkey.enrol.button': 'Créer la passkey',
+  'studio.passkey.enrol.continue': 'Continuer vers la connexion',
+  'studio.passkey.enrol.done': 'Passkey enregistrée. Vous pouvez vous connecter.',
+  'studio.passkey.enrol.failed': 'La passkey n’a pas pu être créée. Réessayez ou demandez une nouvelle invitation.',
+  'studio.passkey.enrol.heading': 'Créez votre passkey',
+  'studio.passkey.enrol.invalid': 'Cette invitation a expiré ou a déjà été utilisée. Demandez-en une nouvelle au propriétaire du site.',
+  'studio.passkey.enrol.prompt':
+    'Une passkey remplace un mot de passe. Votre appareil vous demandera de confirmer avec votre empreinte, votre visage ou le verrouillage de l’écran.',
+  'studio.passkey.signIn.button': 'Utiliser ma passkey',
+  'studio.passkey.signIn.failed': 'La passkey n’a pas été acceptée. Réessayez ou demandez une nouvelle invitation au propriétaire du site.',
+  'studio.passkey.signIn.prompt':
+    'Utilisez votre passkey pour vous connecter. Votre appareil vous demandera de confirmer avec votre empreinte, votre visage ou le verrouillage de l’écran.',
+  'studio.passkey.signIn.unsupported':
+    'Ce navigateur ne prend pas en charge les passkeys. Ouvrez Studio dans une version récente de Chrome, Safari, Edge ou Firefox.',
   'studio.paused.body': 'Votre brouillon enregistré est en sécurité.',
   'studio.paused.resume': 'Reprendre la modification',
   'studio.paused.title': 'Studio a été mis en pause pour économiser les coûts d’hébergement.',

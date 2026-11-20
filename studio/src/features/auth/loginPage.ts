@@ -4,6 +4,9 @@ import { signInMessageKeys, signInNeutralMessageKeys, type SignInProblem } from 
 import { translatorForLanguages } from '../../shared/requestTranslate';
 import { loginCountdown } from './loginCountdown';
 
+// The built-in passkey provider's display name: its button reads "Sign in with a passkey" rather than "Continue with ...".
+export const PASSKEY_BUTTON_PROVIDER = 'Passkey';
+
 // `provider` is the display name of an installed custom provider: with it the page speaks neutrally (no GitHub name or
 // mark) and the button reads "Continue with <provider>". Without it the page is the GitHub sign-in page, unchanged.
 export function loginPage(problem?: SignInProblem, status = 200, reference = '', seconds = 0, languages?: string | null, provider?: string): Response {
@@ -23,7 +26,12 @@ export function loginPage(problem?: SignInProblem, status = 200, reference = '',
   const detail = reference
     ? `<p>${escapeHtml(translate('studio.login.reference', { reference: reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) }))}</p>`
     : '';
-  const buttonLabel = provider === undefined ? translate('studio.login.button') : translate('studio.login.buttonProvider', { provider });
+  const buttonLabel =
+    provider === undefined
+      ? translate('studio.login.button')
+      : provider === PASSKEY_BUTTON_PROVIDER
+        ? translate('studio.login.buttonPasskey')
+        : translate('studio.login.buttonProvider', { provider });
   const providerMark =
     provider === undefined
       ? `
