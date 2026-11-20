@@ -2,6 +2,7 @@ import type { PublishConnection } from '../../shared/publishConnection';
 import type { PublishSource } from '../publishing/publishSource';
 import { published } from '../publishing/publishFailure';
 import { publishGit } from '../publishing/publishGit';
+import { publishCommitMessage } from '../publishing/publishAttribution';
 import { overlayPublishSource } from '../github/nativePublish';
 import { gitWorkspaceBranch, gitRevision, gitWorkspaceLimits, type GitWorkspaceManifest } from './gitWorkspaceContract';
 import assert from 'node:assert/strict';
@@ -29,7 +30,7 @@ export async function publishGitWorkspace(
   await verifyPublishAncestry(git, expected, branch.head);
   const tree = published(await overlayPublishSource(git, source, branch.head));
   const original = await run(['rev-parse', branch.head + '^{tree}']);
-  const head = tree === original ? branch.head : await gitWorkspaceCommit(run, tree, [branch.head], 'Publish website from Stacki Studio');
+  const head = tree === original ? branch.head : await gitWorkspaceCommit(run, tree, [branch.head], publishCommitMessage(source.editor));
   if (head !== expected) {
     await run(['push', '--quiet', '--force-with-lease=refs/heads/' + manifest.branch + ':' + expected, remote, head + ':refs/heads/' + manifest.branch]);
   }

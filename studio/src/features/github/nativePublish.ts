@@ -1,3 +1,4 @@
+import { publishCommitMessage } from '../publishing/publishAttribution';
 import assert from 'node:assert/strict';
 import { publishGit, publishObject, type PublishGit } from '../publishing/publishGit';
 import type { PublishSource } from '../publishing/publishSource';
@@ -28,7 +29,7 @@ export async function nativePublish(source: PublishSource, expectedHead: string,
       url: `https://github.com/${connection.repository}/commit/${expectedHead}`,
     });
   }
-  const committed = await publishGit(git, ['commit-tree', tree.value, '-p', expectedHead, '-m', 'Publish website from Stacki Studio']);
+  const committed = await publishGit(git, ['commit-tree', tree.value, '-p', expectedHead, '-m', publishCommitMessage(source.editor)]);
   if (!committed.ok) {
     return committed;
   }

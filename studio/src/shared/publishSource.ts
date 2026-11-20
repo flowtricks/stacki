@@ -17,6 +17,8 @@ export interface PublishSource {
   readonly tree: string;
   readonly files: readonly PublishedFile[];
   readonly deleted: readonly string[];
+  /** The signed-in person's qualified identity, when they are not a GitHub person: named in the commit message. */
+  readonly editor?: string | undefined;
 }
 
 export interface PublishReceipt {

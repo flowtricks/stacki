@@ -72,13 +72,16 @@ export class Publisher {
     readonly persistDraft?: () => Promise<void>,
     readonly managedHosting = managedHostingFromEnvironment(),
   ) {}
-  start(target: PublishTarget = 'all'): PublishState {
+  /** Who asked for the running publish, when they are not a GitHub person: named in its commit message (publishAttribution.ts). */
+  private editor: string | undefined;
+  start(target: PublishTarget = 'all', editor?: string): PublishState {
     if (!this.github && target !== 'hosting') {
       throw new Error('Configure the GitHub App and repository before publishing.');
     }
     if (!this.running) {
       // Respond before building. The browser polls this job instead of holding
       // one request open through a build, GitHub commit, and storage cleanup.
+      this.editor = editor;
       void this.publish(target).catch((error: unknown) => {
         queueMicrotask(() => {
           throw error;
@@ -235,7 +238,8 @@ export class Publisher {
           published(await createHostingSnapshot(this.root, snapshot));
         }
         const sourceRoot = target !== 'github' && config.hosting.provider !== 'none' ? snapshot : this.root;
-        const source = published(await capturePublishSource(sourceRoot, path.dirname(snapshot), { assetRoot: this.root }));
+        const captured = published(await capturePublishSource(sourceRoot, path.dirname(snapshot), { assetRoot: this.root }));
+        const source = { ...captured, editor: this.editor };
         return { source, expectedHead };
       });
       if (target !== 'github' && config.hosting.provider !== 'none') {
