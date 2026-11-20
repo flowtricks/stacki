@@ -301,6 +301,20 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
     input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await wait(settleMs);
   };
+  // Type and commit each value in turn, with no pause between them: React handles a typed value and its Enter at once,
+  // so the whole burst takes a few milliseconds even on a loaded runner. A paced burst could not promise that: 300 ms into
+  // a save the panel disables its fields (useEditorFoundation.ts useBusyState), and Enter on a disabled field does nothing.
+  const commitOpacities = (values) => {
+    const input = [...container.querySelectorAll('input')].find((candidate) => candidate.getAttribute('aria-label') === 'Opacity');
+    assert.ok(input, 'the Opacity field is drawn');
+    input.focus();
+    for (const value of values) {
+      assert.equal(input.disabled, false, `the Opacity field takes ${value}`);
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, value);
+      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    }
+  };
   // Drag the padding-top number down by `distancePx` and let go. Shift held on release writes all
   // four sides and Alt the opposite one too: one setProp per side, back to back in one event,
   // before the panel has seen any of them land (SpacingFill.tsx useSideDrag).
@@ -330,6 +344,7 @@ async function mountPanel({ nodes, files = [], disk = '', openFilePath = PAGE, r
     container,
     state,
     typeOpacity,
+    commitOpacities,
     dragPadding,
     selectorTexts,
     select,
@@ -523,9 +538,15 @@ test('drags that arrive while the first tag is saving land in that tag: one rule
 test('commits made while the first tag is saving: the last value wins', async (context) => {
   const panel = await mountPanel({ nodes: [div('n1', 'my-class')], files: [STYLESHEET], disk: '', blockDelayMs: 400 });
   context.after(panel.unmount);
-  for (const value of ['0.1', '0.2', '0.3', '0.4', '0.5']) {
-    await panel.typeOpacity(value, 0);
+  // The first value starts the tag's 400 ms save; the others are committed once that save is under way, in one burst, so
+  // they all arrive while it runs and well before the panel's 300 ms busy lock, even on a loaded runner.
+  panel.commitOpacities(['0.1']);
+  for (let poll = 0; poll < 200 && blockCalls(panel.calls).length === 0; poll += 1) {
+    await wait(5);
   }
+  assert.equal(blockCalls(panel.calls).length, 1, 'the first tag is being saved');
+  assert.match(blockCalls(panel.calls)[0][1].css, /opacity: 0\.1;/, 'the tag is created with the first value alone');
+  panel.commitOpacities(['0.2', '0.3', '0.4', '0.5']);
   // Wait, bounded, for the last value to land rather than a fixed pause: on the Linux runner the
   // queued commits behind the 400 ms first save finished after 1.5 s and the check read 0.4 (Check
   // on a428bc5a). A last value that never lands still fails here, at the bound.
