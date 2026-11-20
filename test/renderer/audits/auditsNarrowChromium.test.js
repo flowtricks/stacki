@@ -77,9 +77,14 @@ const findings = [
     }),
   ),
   finding('style-global', 'src/components/Hero.astro', { detail: 'A style block that is not global' }),
+  // Nine more fixes, so ten are ready: the (i) list shows eight and says "+ 2 more".
+  ...Array.from({ length: 9 }, (_, index) =>
+    finding('img-alt', 'src/pages/index.astro', { detail: 'src="/more-' + index + '.png"', fix: { ...fix, before: '<img src="/more-' + index + '.png">', after: '<img src="/more-' + index + '.png" alt="">' } }),
+  ),
   finding('perf-image-size', longPage, { detail: 'src="/images/hero.png"', measure: '1.2 MB' }),
 ];
 const ignores = { ...EMPTY_AUDIT_IGNORES, ignored: [{ id: 'gone:1', reason: 'Kept on purpose' }, { id: 'gone:2', reason: 'Kept on purpose' }] };
+window.revealed = [];
 window.mount = (locale, widthPx) => {
   updateAuditState(() => ({
     scope: 'site',
@@ -105,7 +110,7 @@ window.mount = (locale, widthPx) => {
       React.createElement(AuditsPanel, {
         project: { path: '/fixture', name: 'fixture' },
         fixDeps: () => ({}),
-        onReveal: () => {},
+        onReveal: (file) => window.revealed.push(file),
         onHover: () => {},
         onCreatePage: () => {},
         routes: [],
@@ -200,6 +205,64 @@ window.steps = (() => {
         queryInputWidth: Math.round(box(find.querySelector('input')).width),
       };
     },
+    // The (i) beside the fixes-ready line. Hover waits, then opens; leaving closes a hover list; a click pins it.
+    async fixesOpen() {
+      const info = document.querySelector('.audits-ready .audits-info');
+      if (info === null) { return { present: false }; }
+      const open = () => document.querySelector('.audits-fixes');
+      const gone = () => window.until(() => open() === null, 120);
+      info.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      const openedAtOnce = open() !== null;
+      const startedAt = performance.now();
+      const hoverShown = Boolean(await window.until(open, 200));
+      const hoverDelayMs = performance.now() - startedAt;
+      info.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
+      const hoverCloses = await gone();
+      info.click();
+      const pinned = Boolean(await window.until(open, 120));
+      await window.until(() => open() && open().getAttribute('data-popup-phase') === 'open', 120);
+      info.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
+      await window.until(() => false, 30);
+      const stillPinned = open() !== null;
+      const popup = open();
+      const rectangle = popup.getBoundingClientRect();
+      const items = [...popup.querySelectorAll('.audits-fix-item')];
+      const cutTexts = [...popup.querySelectorAll('.audits-fix-name, .audits-fix-change, .audits-fix-where')].filter(cut);
+      return {
+        present: true,
+        openedAtOnce, hoverShown, hoverDelayMs, hoverCloses, pinned, stillPinned,
+        expanded: info.getAttribute('aria-expanded'),
+        itemCount: items.length,
+        more: popup.querySelector('.audits-fix-more') === null ? '' : popup.querySelector('.audits-fix-more').textContent,
+        title: popup.querySelector('.audits-fixes-title').textContent,
+        insideWindow: rectangle.left >= 0 && rectangle.right <= window.innerWidth && rectangle.top >= 0 && rectangle.bottom <= window.innerHeight,
+        sidewaysScroll: popup.scrollWidth > popup.clientWidth + 1,
+        untitledCut: cutTexts.filter((element) => !(element.getAttribute('title') || '').trim()).length,
+        itemsHaveThreeLines: items.every((item) => item.querySelectorAll('.audits-fix-name, .audits-fix-change, .audits-fix-where').length === 3),
+        changeHasArrow: items.every((item) => item.querySelector('.audits-fix-change').textContent.includes('→')),
+        infoInsideReady: box(info).right <= box(document.querySelector('.audits-ready')).right + ${EDGE_TOLERANCE_PX} && box(info).width > 0,
+        infoBesideText: box(info).left >= box(document.querySelector('.audits-ready-text')).right - 1,
+        infoSize: [Math.round(box(info).width), Math.round(box(info).height)],
+      };
+    },
+    // Escape closes the pinned list; a row goes to its element and closes it; "+ N more" goes to the first hidden fix.
+    async fixesClose() {
+      const open = () => document.querySelector('.audits-fixes');
+      const info = document.querySelector('.audits-ready .audits-info');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      const escapeCloses = await window.until(() => open() === null, 120);
+      window.revealed.length = 0;
+      info.click();
+      await window.until(() => open() && open().getAttribute('data-popup-phase') === 'open', 120);
+      open().querySelector('.audits-fix-item').click();
+      const rowCloses = await window.until(() => open() === null, 120);
+      const rowRevealed = window.revealed.length === 1;
+      info.click();
+      await window.until(() => open() && open().getAttribute('data-popup-phase') === 'open', 120);
+      open().querySelector('.audits-fix-more').click();
+      const moreCloses = await window.until(() => open() === null, 120);
+      return { escapeCloses, rowCloses, rowRevealed, moreRevealed: window.revealed.length === 2, moreCloses };
+    },
     // Escape in a field closes the card.
     async escape() {
       const input = document.querySelector('.audits-find-field input');
@@ -284,6 +347,12 @@ app.whenReady().then(async () => {
         const measured = ready.drawn ? await host('window.steps.measure()') : undefined;
         const image = await win.webContents.capturePage({ x: 0, y: 0, width, height: ${PANE_HEIGHT_PX} });
         fs.writeFileSync(path.join(DIRECTORY, 'audits-' + locale + '-' + width + '.png'), image.toPNG());
+        const fixes = ready.drawn ? await host('window.steps.fixesOpen()') : undefined;
+        if (fixes && fixes.present) {
+          const image = await win.webContents.capturePage({ x: 0, y: 0, width: width + 320, height: ${PANE_HEIGHT_PX} });
+          fs.writeFileSync(path.join(DIRECTORY, 'audits-fixes-' + locale + '-' + width + '.png'), image.toPNG());
+        }
+        const fixesClosed = fixes && fixes.present ? await host('window.steps.fixesClose()') : undefined;
         const found = ready.drawn ? await host('window.steps.openFind()') : undefined;
         const measuredFind = found && found.opened ? await host('window.steps.measure()') : undefined;
         const findCard = found && found.opened ? await host('window.steps.measureFind()') : undefined;
@@ -292,7 +361,7 @@ app.whenReady().then(async () => {
           fs.writeFileSync(path.join(DIRECTORY, 'audits-find-' + locale + '-' + width + '.png'), image.toPNG());
         }
         const escaped = found && found.opened ? await host('window.steps.escape()') : undefined;
-        output.cases.push({ locale, width, ready, measured, found, measuredFind, findCard, escaped });
+        output.cases.push({ locale, width, ready, measured, fixes, fixesClosed, found, measuredFind, findCard, escaped });
       }
     }
   } catch (error) { output.error = String((error && error.stack) || error); }
@@ -333,11 +402,39 @@ function check(output) {
     }
   };
   expect('every locale and width was drawn', output.cases.length === LOCALES.length * WIDTHS_PX.length, output.cases.length);
-  for (const { locale, width, ready, measured, found, measuredFind, findCard, escaped } of output.cases) {
+  for (const { locale, width, ready, measured, fixes, fixesClosed, found, measuredFind, findCard, escaped } of output.cases) {
     const where = `${locale} at ${width}px`;
     expect(`${where}: the panel drew its rules`, ready.drawn === true);
     if (measured !== undefined) {
       checkMeasured(expect, where, width, measured);
+    }
+    expect(`${where}: the fixes-ready line has an (i)`, fixes !== undefined && fixes.present === true, fixes);
+    if (fixes !== undefined && fixes.present) {
+      expect(`${where}: hover opens the list only after a wait`, fixes.openedAtOnce === false && fixes.hoverShown === true && fixes.hoverDelayMs >= 300, fixes);
+      expect(`${where}: leaving closes a hover list`, fixes.hoverCloses === true);
+      expect(
+        `${where}: a click pins the list, and leaving does not close it`,
+        fixes.pinned === true && fixes.stillPinned === true && fixes.expanded === 'true',
+        fixes,
+      );
+      expect(`${where}: the list shows the cap and says how many more`, fixes.itemCount === 8 && /2/.test(fixes.more), [fixes.itemCount, fixes.more]);
+      expect(`${where}: the list has a title with the count`, /10/.test(fixes.title), fixes.title);
+      expect(`${where}: the list stays inside the window`, fixes.insideWindow === true);
+      expect(`${where}: the list does not scroll sideways`, fixes.sidewaysScroll === false);
+      expect(`${where}: every row has a name, a change and a place`, fixes.itemsHaveThreeLines === true && fixes.changeHasArrow === true);
+      expect(`${where}: cut list text has a tooltip`, fixes.untitledCut === 0, fixes.untitledCut);
+      expect(`${where}: the (i) sits beside the text inside the row`, fixes.infoInsideReady === true && fixes.infoBesideText === true, fixes);
+      expect(`${where}: Escape closes the pinned list`, fixesClosed !== undefined && fixesClosed.escapeCloses === true, fixesClosed);
+      expect(
+        `${where}: a row goes to its element and closes the list`,
+        fixesClosed !== undefined && fixesClosed.rowCloses === true && fixesClosed.rowRevealed === true,
+        fixesClosed,
+      );
+      expect(
+        `${where}: "+ N more" goes to the first hidden fix and closes the list`,
+        fixesClosed !== undefined && fixesClosed.moreCloses === true && fixesClosed.moreRevealed === true,
+        fixesClosed,
+      );
     }
     expect(`${where}: Find & replace opens from the menu`, found !== undefined && found.opened === true, found);
     if (measuredFind === undefined || findCard === undefined) {

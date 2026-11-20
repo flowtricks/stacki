@@ -61,6 +61,10 @@ export const messages = {
   'auditsUi.fixed.many': { one: '{fixed} in {count} Datei behoben.', other: '{fixed} in {count} Dateien behoben.' },
   'auditsUi.fixed.one': 'Behoben.',
   'auditsUi.fixesReady': { one: '{count} Korrektur bereit', other: '{count} Korrekturen bereit' },
+  'auditsUi.fixes.info': 'Was Anwenden ändert',
+  'auditsUi.fixes.line': 'Zeile {line}',
+  'auditsUi.fixes.more': { one: '+ {count} weitere', other: '+ {count} weitere' },
+  'auditsUi.fixes.title': { one: 'Anwenden nimmt {count} Änderung vor', other: 'Anwenden nimmt {count} Änderungen vor' },
   'auditsUi.group.colour': 'Farbe',
   'auditsUi.group.radius': 'Radius', // same
   'auditsUi.group.size': 'Größe',

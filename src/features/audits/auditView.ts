@@ -13,6 +13,7 @@ import {
   type AuditPriority,
   type AuditRuleGroup,
 } from '../../../shared/page/auditFindings';
+import { planFixes, type FixPlan } from './fixPlan';
 
 export const AUDIT_FILTERS = ['all', 'accessibility', 'seo', 'content', 'tokens', 'performance'] as const;
 export type AuditFilter = (typeof AUDIT_FILTERS)[number];
@@ -35,6 +36,8 @@ export interface AuditView {
   readonly groups: readonly { readonly priority: AuditPriority; readonly rules: readonly AuditRuleGroup[]; readonly count: number }[];
   /** The shown findings with a deterministic fix. */
   readonly fixable: readonly AuditFinding[];
+  /** What Apply does to `fixable`: the same findings, described; the panel's list and its Apply both read it. */
+  readonly fixPlan: FixPlan;
   readonly shown: readonly AuditFinding[];
   readonly ignoredCount: number;
 }
@@ -74,11 +77,13 @@ export function auditView(input: AuditViewInput): AuditView {
     const inPriority = shown.filter((finding) => findingPriority(finding) === priority);
     return { priority, rules: findingsByRule(inPriority), count: inPriority.length };
   }).filter((group) => group.count > 0);
+  const fixable = shown.filter((finding) => finding.fix !== undefined && !input.ignored.has(finding.id));
   return {
     counts,
     priorities,
     groups,
-    fixable: shown.filter((finding) => finding.fix !== undefined && !input.ignored.has(finding.id)),
+    fixable,
+    fixPlan: planFixes(fixable),
     shown,
     ignoredCount: input.findings.length - open.length,
   };

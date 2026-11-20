@@ -39,6 +39,7 @@ import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTransl
 import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 import { IgnoredList } from './IgnoredList';
 import { FindReplace } from './FindReplace';
+import { FixesInfo } from './FixesInfo';
 import { PerformanceBar } from './PerformanceBar';
 import { AUDIT_FILTERS, auditView, type AuditFilter } from './auditView';
 import type { RawValueKit } from './RawValueField';
@@ -267,8 +268,11 @@ export default function AuditsPanel(props: AuditsPanelProps) {
         {!ignoredView && filter === 'performance' && <PerformanceBar measure={props.measure} />}
         {!ignoredView && fixes > 0 && (
           <div className="audits-ready">
-            <span className="audits-ready-text" title={translate('auditsUi.fixesReady', { count: fixes })}>
-              {translate('auditsUi.fixesReady', { count: fixes })}
+            <span className="audits-ready-lead">
+              <span className="audits-ready-text" title={translate('auditsUi.fixesReady', { count: fixes })}>
+                {translate('auditsUi.fixesReady', { count: fixes })}
+              </span>
+              <FixesInfo plan={view.fixPlan} onGo={(finding) => props.onReveal(finding.file, finding.element?.path ?? fixTarget(finding), finding.prop)} />
             </span>
             <button className="audits-apply" disabled={busy} onClick={() => void actions.fix(view.fixable, translate('auditsUi.fixAllLabel'))}>
               {translate('ui.apply')}
