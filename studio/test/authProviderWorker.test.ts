@@ -108,6 +108,12 @@ test(
     assert.equal(entry.status, 302);
     const previewCookie = (entry.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
     assert.ok(previewCookie.startsWith('__Host-studio-preview='));
+    // The preview is a cross-site frame on workers.dev: a Lax cookie is refused there and the editor script never runs.
+    const attributes = (entry.headers.get('set-cookie') ?? '').split(';').map((part) => part.trim());
+    assert.ok(attributes.includes('SameSite=None'), 'the preview cookie is allowed in a cross-site frame');
+    assert.ok(attributes.includes('Partitioned'), 'the preview cookie is partitioned to the editor site');
+    assert.ok(attributes.includes('Secure'));
+    assert.ok(!attributes.includes('SameSite=Lax'));
     const reached = await runtime.fetch(WORKER_TEST.previewOrigin + '/', { headers: { cookie: previewCookie } });
     assert.equal(reached.headers.get('x-stub-preview'), 'reached');
     const echoed: unknown = JSON.parse(await reached.text());

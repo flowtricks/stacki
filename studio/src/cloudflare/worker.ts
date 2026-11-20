@@ -12,7 +12,7 @@ import { durableStorage } from './passkeyStorage';
 import { parsePasskeyAdminCommand, runPasskeyAdmin, type PasskeyAdminFailure, type PasskeyAdminResult } from '../features/auth/providers/passkeyAdmin';
 import { passkeyAdminRoute } from './passkeyAdminRoutes';
 import { routeLogin } from '../features/auth/loginRoute';
-import { cookie, sessionCookie } from '../features/auth/session';
+import { cookie, previewSessionCookie } from '../features/auth/session';
 import type { Environment } from './environment';
 import { internal } from './internalRoutes';
 import { claimLoginAttempt, LoginAttempts } from '../features/auth/loginAttempts';
@@ -304,7 +304,7 @@ async function previewEntry(url: URL, environment: Environment): Promise<Respons
     status: 302,
     headers: {
       Location: page + (url.searchParams.get('mode') === 'interactive' ? '#avb-preview' : '#avb-design'),
-      'Set-Cookie': sessionCookie(SESSION_COOKIES.preview, session, SESSION_LIFETIME_SECONDS),
+      'Set-Cookie': previewSessionCookie(SESSION_COOKIES.preview, session, SESSION_LIFETIME_SECONDS),
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
     },

@@ -79,3 +79,14 @@ export function cookie(request: Request, name: string): string {
 export function sessionCookie(name: string, token: string, seconds: number) {
   return `${name}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${seconds}`;
 }
+
+// The preview host's cookie. The preview is a frame inside the editor, and on a platform domain such as
+// workers.dev the two hosts are different sites, so the frame's cookie is a third-party one. A browser
+// refuses to set a `SameSite=Lax` cookie from a cross-site frame's response: the entry redirect then set
+// nothing, the page request carried no session, the frame loaded an error document, and the editor script
+// never ran (the loader's "has not answered"). `SameSite=None` allows the cross-site context; `Partitioned`
+// keys the cookie to the editor's site, so it is sent only inside this editor's frame and survives the
+// browser's third-party cookie blocking.
+export function previewSessionCookie(name: string, token: string, seconds: number) {
+  return `${name}=${token}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${seconds}`;
+}
