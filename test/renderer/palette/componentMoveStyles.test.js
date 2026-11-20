@@ -12,7 +12,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
-const { planStyleMove, pageStyleNodes } = load('src/editor/componentStyles.ts');
+const { planStyleMove, pageStyleNodes, layeredRules, templateLayerOf, tagIndentedRules } = load('src/editor/componentStyles.ts');
+const { carriedStyleNode } = load('src/app/model/contextPaste.ts');
 const { withoutCarried } = load('src/editor/pasteStyles.ts');
 const { movedStyleFiles, sequencedFiles, stepWithFiles } = load('src/app/model/componentCreation.ts');
 const { movedStylesEdit, createdComponentMessage } = load('src/app/model/pageGestures.ts');
@@ -223,4 +224,58 @@ test('the toast names the moved styles, alone or with values and props', () => {
     createdComponentMessage('src/components/Card.astro', { props: 0, moved: 0, styles: 0 }, { stranded: false }, translate),
     /^shell\.component\.created\{/,
   );
+});
+
+// One @layer around the moved block, whatever the sources wrapped their rules in. The paste rule gives each carried rule
+// its own copy of the layer it sat in; Create component writes each layer once, and the template's own layer is not
+// written a second time.
+const layered = (css, templateContent) => {
+  const plan = planStyleMove(card, new Set(['card', 'card_title']), [], [sheet('src/styles/base.css', css)]);
+  return { plan, written: layeredRules(plan.carried.rules, templateLayerOf(templateContent)) };
+};
+const TEMPLATE = '@layer components {\n}';
+
+test('two rules from one layer, in a template that has that layer, are written bare once inside it', () => {
+  const { written } = layered('@layer components {\n  .card { padding: 1rem; }\n  .card_title { margin: 0.5rem; }\n}\n', TEMPLATE);
+  assert.deepEqual(written.map(squash), ['.card { padding: 1rem; }', '.card_title { margin: 0.5rem; }']);
+  const node = carriedStyleNode(
+    { styles: { rules: tagIndentedRules(written, 1), selectors: [], leftBehind: [], defineVars: undefined } },
+    { attributes: [], content: TEMPLATE },
+    '',
+  );
+  const text = node.inner;
+  assert.equal(text.match(/@layer/g).length, 1, text);
+  assert.ok(text.indexOf('.card {') < text.indexOf('.card_title {'), 'original order');
+  assert.match(text, /rem/, 'values untouched');
+});
+
+test('without a template layer the rules share one block of the layer they came from', () => {
+  const { written } = layered('@layer components {\n  .card { padding: 1rem; }\n  .card_title { margin: 0.5rem; }\n}\n', '');
+  assert.equal(written.length, 1);
+  assert.equal(squash(written[0]), '@layer components { .card { padding: 1rem; } .card_title { margin: 0.5rem; } }');
+});
+
+test('rules from two layers stay in their own layers, in order', () => {
+  const { written } = layered('@layer base {\n  .card { padding: 1rem; }\n}\n@layer components {\n  .card_title { margin: 0.5rem; }\n}\n', TEMPLATE);
+  assert.deepEqual(written.map(squash), ['@layer base { .card { padding: 1rem; } }', '.card_title { margin: 0.5rem; }']);
+});
+
+test('unlayered and layered rules keep their relative order and unlayered stay unlayered', () => {
+  const { written } = layered('.card { padding: 1rem; }\n@layer components {\n  .card_title { margin: 0.5rem; }\n}\n', '');
+  assert.deepEqual(written.map(squash), ['.card { padding: 1rem; }', '@layer components { .card_title { margin: 0.5rem; } }']);
+});
+
+test('an @media inside a layer is not wrapped twice', () => {
+  const { written } = layered('@layer components {\n  @media (width > 40em) {\n    .card { padding: 2rem; }\n  }\n}\n', TEMPLATE);
+  assert.deepEqual(written.map(squash), ['@media (width > 40em) { .card { padding: 2rem; } }']);
+  const grouped = layered('@layer components {\n  @media (width > 40em) {\n    .card { padding: 2rem; }\n  }\n}\n', '').written;
+  assert.equal(squash(grouped[0]).match(/@layer/g).length, 1);
+});
+
+test('writing the layers again changes nothing, and the sources lose exactly what moved', () => {
+  const css = '@layer components {\n  .card { padding: 1rem; }\n  .footer { margin: 0; }\n  .card_title { margin: 0.5rem; }\n}\n';
+  const { plan, written } = layered(css, '');
+  assert.deepEqual(layeredRules(written, undefined), written);
+  assert.deepEqual(layeredRules(layeredRules(plan.carried.rules, 'components'), 'components'), layeredRules(plan.carried.rules, 'components'));
+  assert.equal(squash(plan.sheets[0].after), '@layer components { .footer { margin: 0; } }');
 });

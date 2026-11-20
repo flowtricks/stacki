@@ -14,7 +14,9 @@ import {
   moveStyleCandidates,
   pageStyleNodes,
   planStyleMove,
+  layeredRules,
   tagIndentedRules,
+  templateLayerOf,
   templateRulesDepth,
   type MovableSheet,
   type StyleMovePlan,
@@ -80,7 +82,9 @@ export interface MovedStyles {
 export async function planMovedStyles(read: Omit<MoveStyleRead, 'pagePath'>, chosen: readonly string[]): Promise<MovedStyles> {
   assert(chosen.length > 0, 'planMovedStyles: something is chosen');
   const [sheets, settings] = await Promise.all([readMovableSheets(read.projectPath), styleSettings(read.projectPath)]);
-  const plan = planStyleMove(read.node, new Set(chosen), pageStyleNodes(read.model.nodes, read.node.id), sheets);
+  const planned = planStyleMove(read.node, new Set(chosen), pageStyleNodes(read.model.nodes, read.node.id), sheets);
+  // Each @layer once: the template's wrapper supplies its own, and the rules that sat in the same layer share one block.
+  const plan = { ...planned, carried: { ...planned.carried, rules: layeredRules(planned.carried.rules, templateLayerOf(settings.content)) } };
   // A new file has no layout of its own to follow yet, so the tag is laid out as the Style panel lays out a first one:
   // the rules re-indented inside the template's wrapper. Only the tag's copy is; the plan's rules stay as read, since
   // they are what the sources give up.

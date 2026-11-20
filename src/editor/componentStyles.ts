@@ -9,6 +9,7 @@
 // setting. Which rules style the markup is the paste rule (pasteStyles.ts): a selector counts when
 // every class and id it names is on the markup.
 
+import postcss from 'postcss';
 import selectorParser from 'postcss-selector-parser';
 import { assert } from '../../shared/core/assert';
 import { leadingIndent, measuredIndent } from '../../shared/core/indent';
@@ -167,6 +168,95 @@ export function tagIndentedRules(rules: readonly string[], depth: number): reado
   });
   assert(indented.length === rules.length, 'tagIndentedRules: one rule out for each rule in');
   return indented;
+}
+
+/**
+ * The carried rules as the component's tag should hold them, with each `@layer` written once. The paste rule keeps the
+ * layer a rule sat in around that rule alone, so rules that came from one `@layer components { … }` arrive each in a
+ * copy of it, and the template's own `@layer components` wrapper would wrap them again. Here a rule whose layer is the
+ * template's (`templateLayer`) is written bare, since the template supplies that layer; the others are grouped, one
+ * `@layer name { … }` per run of rules from the same layer, in their original order. A rule in no layer, or inside an
+ * `@media` that is itself outside any layer, is left as it was. Only the wrapper is removed or shared, never a line of
+ * a rule's text beyond its indentation, and running it over its own output changes nothing.
+ */
+export function layeredRules(rules: readonly string[], templateLayer: string | undefined): readonly string[] {
+  assert(rules.length <= LIMITS.scanEntriesMax, 'layeredRules: rules within limit');
+  const parts = rules.map(layerOfRule);
+  const out: string[] = [];
+  // The open run of rules from one layer; in an object so the helper below can close it.
+  const open: { run: { readonly layer: string; readonly inners: string[] } | undefined } = { run: undefined };
+  const closeRun = (): void => {
+    if (open.run !== undefined) {
+      out.push(`@layer ${open.run.layer} {\n${indent(open.run.inners.join('\n\n'))}\n}`);
+      open.run = undefined;
+    }
+  };
+  for (const part of parts) {
+    if (part.layer === undefined) {
+      closeRun();
+      out.push(part.text);
+    } else if (part.layer === templateLayer) {
+      closeRun();
+      out.push(part.text);
+    } else if (open.run !== undefined && open.run.layer === part.layer) {
+      open.run.inners.push(part.text);
+    } else {
+      closeRun();
+      open.run = { layer: part.layer, inners: [part.text] };
+    }
+  }
+  closeRun();
+  assert(
+    out.every((text) => text.trim().length > 0),
+    'layeredRules: no empty rule is written',
+  );
+  assert(rules.length === 0 || out.length > 0, 'layeredRules: rules in, rules out');
+  return out;
+}
+
+// A rule that is one `@layer name { … }` block: the layer's name and what is inside, without the layer's indent.
+// Anything else is no layer here, whole.
+function layerOfRule(rule: string): { readonly layer: string | undefined; readonly text: string } {
+  let root: postcss.Root;
+  try {
+    root = postcss.parse(rule);
+  } catch {
+    return { layer: undefined, text: rule };
+  }
+  const only = root.nodes.length === 1 ? root.nodes[0] : undefined;
+  if (only === undefined || only.type !== 'atrule' || only.name.toLowerCase() !== 'layer' || only.nodes === undefined) {
+    return { layer: undefined, text: rule };
+  }
+  const layer = only.params.replace(/\s+/g, ' ').trim();
+  if (layer === '' || layer.includes(',')) {
+    return { layer: undefined, text: rule };
+  }
+  const inside = rule
+    .slice(rule.indexOf('{') + 1, rule.lastIndexOf('}'))
+    .replace(/^\s*\n/, '')
+    .replace(/\s+$/, '');
+  if (inside.trim() === '') {
+    return { layer: undefined, text: rule };
+  }
+  const text = inside
+    .split('\n')
+    .map((line) => (line.startsWith('  ') ? line.slice(2) : line))
+    .join('\n');
+  return { layer, text };
+}
+
+function indent(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (line === '' ? line : `  ${line}`))
+    .join('\n');
+}
+
+/** The `@layer` the project's new-tag template wraps rules in, or undefined when it has none. */
+export function templateLayerOf(content: string): string | undefined {
+  const frame = templateFrame(content);
+  const wrapper = frame.ok ? frame.frame.wrappers[frame.frame.wrappers.length - 1] : undefined;
+  return wrapper !== undefined && wrapper.name === 'layer' ? wrapper.params : undefined;
 }
 
 /** How many wrapping at-rules of a new tag's template the rules go inside: as deep as withinTemplate puts them. */
