@@ -5,7 +5,7 @@
 // Save collection (settingsDraft.ts), which takes any field form still open and
 // writes them to the content config, with the entries and code that depend on
 // them (astroCollectionSettings.ts).
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CollectionSettings, NewFieldKind, SettingsChange, SettingsField, SettingsFieldKind } from '../../../shared/properties/collectionSettings';
 import { MEMBER_KINDS, newFieldMembers, newFieldSettings, pointsAtCollection } from '../../../shared/properties/collectionSettings';
@@ -14,29 +14,9 @@ import type { DescribedTranslator, MessageKey, Translator } from '../../lib/i18n
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { SkeletonRows } from '../../ui/Skeleton';
 import Dropdown from '../../ui/Dropdown';
-import { ElementImageIcon, ElementLinkIcon, ElementListDefaultIcon, ElementSelectIcon, ElementVideoIcon } from '../../ui/ElementIcons';
 import { tooltipHost, tooltipPointBelow, useDelayedPlacement, type TooltipPoint } from '../../ui/delayedTooltip';
 import { ErrorToast } from '../../ui/ErrorToast';
-import type { IconProps } from '../../ui/IconBase';
-import {
-  BracesIcon,
-  CalendarIcon,
-  ChevronLeftIcon,
-  CollectionIcon,
-  CopyIcon,
-  DragIcon,
-  DropletIcon,
-  FieldNumberIcon,
-  FieldSwitchIcon,
-  MailIcon,
-  ParagraphIcon,
-  PaperclipIcon,
-  PhoneIcon,
-  PlusIcon,
-  TagIcon,
-  TextIcon,
-  TrashIcon,
-} from '../../ui/Icons';
+import { ChevronLeftIcon, CopyIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
 import { labelize } from './cmsSchema';
 import { nameInSentence } from './remoteFieldTypes';
@@ -45,6 +25,7 @@ import { changeCollectionSettings, collectionSettings, remoteCollections } from 
 import { applyDrafts, plainItemKind, fieldSettingsOf, newFieldFormState, openFieldFormState, replayDrafts, type FieldFormState } from './settingsDraft';
 import { FieldInputs } from './RemoteFieldSettings';
 import { KIND_LABELS } from './settingsKindLabels';
+import { KIND_ICONS, KindIcon } from './settingsKindIcons';
 
 // Stages changes together, or none of them, and says whether it did.
 type Change = (changes: readonly SettingsChange[]) => boolean;
@@ -650,38 +631,3 @@ const NEW_KINDS: readonly NewFieldKind[] = [
   'constant',
   'any',
 ];
-
-const KIND_ICONS: Readonly<Record<SettingsFieldKind, (props: IconProps) => ReactElement>> = {
-  text: TextIcon,
-  richText: ParagraphIcon,
-  image: ElementImageIcon,
-  multiImage: ElementImageIcon,
-  videoLink: ElementVideoIcon,
-  link: ElementLinkIcon,
-  email: MailIcon,
-  phone: PhoneIcon,
-  number: FieldNumberIcon,
-  date: CalendarIcon,
-  switch: FieldSwitchIcon,
-  color: DropletIcon,
-  option: ElementSelectIcon,
-  file: PaperclipIcon,
-  reference: CollectionIcon,
-  multiReference: CollectionIcon,
-  list: ElementListDefaultIcon,
-  repeater: ElementListDefaultIcon,
-  group: BracesIcon,
-  keyValue: ElementListDefaultIcon,
-  constant: TagIcon,
-  any: BracesIcon,
-  other: BracesIcon,
-};
-
-function KindIcon(props: { readonly kind: SettingsFieldKind }) {
-  const Icon = KIND_ICONS[props.kind];
-  return (
-    <span className="remote-cms-settings-icon">
-      <Icon size={12} />
-    </span>
-  );
-}

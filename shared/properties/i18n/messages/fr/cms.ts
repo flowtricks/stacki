@@ -50,6 +50,7 @@ export const messages = {
   'cms.draft.fieldsChanged': 'Les champs ont changé depuis leur affichage.',
   'cms.draft.fieldsMax': 'Une collection contient au plus {count} champs.',
   'cms.draft.memberExists': 'Deux champs s’appellent « {name} ».',
+  'cms.draft.membersDepth': 'Les groupes s’imbriquent sur {count} niveaux au plus.',
   'cms.draft.membersEmpty': 'Donnez à chaque élément au moins un champ.',
   'cms.draft.membersMax': 'Un groupe contient au plus {count} champs.',
   'cms.draft.nameField': 'Nommez le champ.',

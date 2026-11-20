@@ -50,6 +50,7 @@ export const messages = {
   'cms.draft.fieldsChanged': 'Los campos cambiaron desde que se mostraron.',
   'cms.draft.fieldsMax': 'Una colección admite como máximo {count} campos.',
   'cms.draft.memberExists': 'Dos campos se llaman «{name}».',
+  'cms.draft.membersDepth': 'Los grupos se anidan como máximo {count} niveles.',
   'cms.draft.membersEmpty': 'Da a cada elemento al menos un campo.',
   'cms.draft.membersMax': 'Un grupo contiene como máximo {count} campos.',
   'cms.draft.nameField': 'Ponle nombre al campo.',

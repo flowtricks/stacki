@@ -103,12 +103,15 @@ export const messages = {
   'cmsRemote.fieldType.slug': 'Slug', // same
   'cmsRemote.fieldType.switch': 'Interruptor',
   'cmsRemote.fieldType.videoLink': 'Enlace de vídeo',
+  'cmsRemote.group.fields': 'Campos',
   'cmsRemote.item.backToList': 'Volver a la lista',
   'cmsRemote.item.duplicate': 'Duplicar',
   'cmsRemote.item.edited': 'Editado {time}',
   'cmsRemote.item.publishedAt': 'Publicado {time}',
   'cmsRemote.items.byHand': 'Escrito a mano en la configuración de contenido',
   'cmsRemote.items.fieldName': 'Nombre del campo',
+  'cmsRemote.items.fieldSettings': 'Ajustes del campo',
+  'cmsRemote.items.fieldType': 'Tipo de campo',
   'cmsRemote.items.fields': 'Campos de cada elemento',
   'cmsRemote.items.group': 'Grupo de campos',
   'cmsRemote.items.hint':

@@ -7,6 +7,8 @@
 // The field-type picker's tiles are all one shape (an icon and a name); the kinds that need a word (List, Group)
 // explain themselves in the app's delayed tooltip, which waits for a resting pointer or for focus, and is gone
 // on leaving, clicking, blurring and Escape.
+// A group is configured like a collection: its fields are added, named, given a type (with the type's icon), help text
+// and checks, and written to the config as z.object({ … }); a list of groups does the same for each item.
 // Method: the real settings view is mounted over a project held in memory. Requests pass the real
 // renderer boundary, and the host runs the real schema editor on a config text, so each test can
 // read what Save wrote. The test drives the form by clicking and typing, as a person does.
@@ -433,3 +435,92 @@ test('every field-type tile is an icon and a name; List and Group explain themse
   gone('a tile with nothing to add has no tooltip');
   await form.close();
 });
+
+// A dropdown's highlighted row has nothing to scroll in a window that draws no layout.
+dom.window.HTMLElement.prototype.scrollIntoView = function () {};
+
+const typeInto = (element, value) =>
+  act(async () => {
+    const prototype = element instanceof window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
+    element.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+
+test('a new group lists its fields, each with its type icon, and a field opens to the form a collection field has', async () => {
+  const form = await mount();
+  await form.openForm('Group');
+  const fields = () => form.container.querySelector('.list-items-fields');
+  assert.ok(fields(), 'a group field has a Fields section');
+  assert.equal(fields().querySelectorAll('.list-items-row').length, 1, 'it starts with a title field');
+  assert.ok(fields().querySelector('.list-items-row .remote-cms-settings-icon svg'), 'the row shows the type icon');
+  await form.click(fields().querySelector('.remote-cms-settings-add'));
+  const rows = () => [...fields().querySelectorAll('.list-items-row')];
+  assert.equal(rows().length, 2);
+  await typeInto(rows()[1].querySelector('input[type="text"], input:not([type])'), 'Street');
+  // The new field's type is chosen from a dropdown whose rows carry icons.
+  const trigger = rows()[1].querySelector('.dd-trigger');
+  assert.ok(trigger, 'a new field has a type dropdown');
+  await form.click(trigger);
+  const listed = [...document.querySelectorAll('.dd-option')];
+  assert.ok(listed.length >= MEMBER_KIND_COUNT, 'the dropdown lists the group-capable kinds');
+  assert.ok(
+    listed.every((option) => option.querySelector('.dd-icon svg')),
+    'every option has its icon first',
+  );
+  assert.ok(
+    listed.some((option) => option.textContent.includes('Number')),
+    'Number is offered',
+  );
+  await form.click(listed.find((option) => option.textContent.includes('Number')));
+  assert.ok(rows()[1].querySelector('.remote-cms-settings-icon svg'), 'the row shows the number icon');
+  // Opening the field shows the same form a collection's field has.
+  await form.click(rows()[1].querySelector('[aria-label="Field settings"]'));
+  const opened = fields().querySelector('.list-items-member-settings');
+  assert.ok(opened, 'the field opens');
+  assert.ok(opened.querySelector('textarea'), 'it has help text');
+  await typeInto(opened.querySelector('textarea'), 'Number of the street');
+  await typeInto(form.container.querySelector('.field-settings input'), 'address');
+  await form.click(
+    [...form.container.querySelectorAll('button')].find((each) => each.textContent.trim() === 'Add field' && !each.matches('.remote-cms-settings-add')),
+  );
+  await form.click(form.button('Save collection'));
+  assert.match(
+    form.project.config,
+    /address: z\.object\(\{ title: z\.string\(\)\.optional\(\), Street: z\.number\(\)\.describe\("Number of the street"\)\.optional\(\) \}\)\.optional\(\)/,
+  );
+  await form.close();
+});
+
+test('a new list of groups gives each item several fields, and the item dropdown shows icons', async () => {
+  const form = await mount();
+  await form.openForm('List');
+  const items = () => form.container.querySelector('.list-items');
+  await form.click(items().querySelector('.dd-trigger'));
+  const listed = [...document.querySelectorAll('.dd-option')];
+  assert.ok(listed.length >= 7, 'every item kind is listed');
+  assert.ok(
+    listed.every((option) => option.querySelector('.dd-icon svg')),
+    'every item kind has its icon first',
+  );
+  await form.click(listed.find((option) => option.textContent.includes('Group of fields')));
+  assert.ok(items().querySelector('.list-items-fields'), 'a list of groups has its item fields');
+  await form.click(items().querySelector('.remote-cms-settings-add'));
+  await form.click(items().querySelector('.remote-cms-settings-add'));
+  const rows = [...items().querySelectorAll('.list-items-row')];
+  assert.equal(rows.length, 3, 'a title and two more');
+  await typeInto(rows[1].querySelector('input'), 'name');
+  await typeInto(rows[2].querySelector('input'), 'role');
+  await typeInto(form.container.querySelector('.field-settings input'), 'team');
+  await form.click(
+    [...form.container.querySelectorAll('button')].find((each) => each.textContent.trim() === 'Add field' && !each.matches('.remote-cms-settings-add')),
+  );
+  await form.click(form.button('Save collection'));
+  assert.match(
+    form.project.config,
+    /team: z\.array\(z\.object\(\{ title: z\.string\(\)\.optional\(\), name: z\.string\(\)\.optional\(\), role: z\.string\(\)\.optional\(\) \}\)\)\.optional\(\)/,
+  );
+  await form.close();
+});
+
+// The kinds a group's field may be, as MEMBER_KINDS lists them, less the repeater (a list of groups is made from a list).
+const MEMBER_KIND_COUNT = 18;

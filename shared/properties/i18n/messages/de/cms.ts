@@ -50,6 +50,7 @@ export const messages = {
   'cms.draft.fieldsChanged': 'Die Felder haben sich seit der Anzeige geändert.',
   'cms.draft.fieldsMax': 'Eine Collection enthält höchstens {count} Felder.',
   'cms.draft.memberExists': 'Zwei Felder heißen „{name}“.',
+  'cms.draft.membersDepth': 'Gruppen lassen sich höchstens {count} Ebenen tief verschachteln.',
   'cms.draft.membersEmpty': 'Gib jedem Eintrag mindestens ein Feld.',
   'cms.draft.membersMax': 'Eine Gruppe enthält höchstens {count} Felder.',
   'cms.draft.nameField': 'Gib dem Feld einen Namen.',

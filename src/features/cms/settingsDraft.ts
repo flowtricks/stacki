@@ -124,9 +124,13 @@ export function openFieldFormState(settings: CollectionSettings, field: Settings
  */
 export function resolvedMembers(
   draft: Pick<SettingsField, 'kind' | 'members'>,
+  depth = 0,
 ): { readonly ok: true; readonly value: readonly SettingsMember[] | undefined } | ({ readonly ok: false } & Described) {
   if (!holdsMembers(draft.kind) || draft.members === undefined) {
     return { ok: true, value: undefined };
+  }
+  if (depth >= COLLECTION_SETTINGS_LIMITS.memberDepthMax) {
+    return { ok: false, ...described('cms.draft.membersDepth', { count: COLLECTION_SETTINGS_LIMITS.memberDepthMax }) };
   }
   if (draft.members.length === 0) {
     return { ok: false, ...described('cms.draft.membersEmpty') };
@@ -142,12 +146,18 @@ export function resolvedMembers(
         return { ok: false, ...described('cms.draft.nameField') };
       case 'invalid':
         return { ok: false, message: typed.message, messageRef: typed.messageRef };
-      case 'key':
+      case 'key': {
         if (resolved.some((each) => each.name === typed.key)) {
           return { ok: false, ...described('cms.draft.memberExists', { name: typed.key }) };
         }
-        resolved.push({ ...member, name: typed.key });
+        // A group inside the group is resolved the same way, one level down.
+        const inner = resolvedMembers(member, depth + 1);
+        if (!inner.ok) {
+          return inner;
+        }
+        resolved.push({ ...member, name: typed.key, members: inner.value });
         break;
+      }
       default: {
         const exhaustive: never = typed;
         return exhaustive;
@@ -303,10 +313,19 @@ function newField(change: Extract<SettingsChange, { readonly kind: 'addField' }>
 function updated(field: SettingsField, update: Extract<SettingsChange, { readonly kind: 'updateField' }>['update']): SettingsField {
   const kind = update.itemKind !== undefined && holdsItems(field.kind) ? listKindOf(update.itemKind) : field.kind;
   const itemKind = kind === 'list' ? (update.itemKind ?? field.itemKind) : undefined;
-  return { ...field, ...update, kind, itemKind, members: keptMembers(kind === 'repeater' ? (update.members ?? newFieldMembers(kind)) : undefined) };
+  return {
+    ...field,
+    ...update,
+    kind,
+    itemKind,
+    members: keptMembers(holdsMembers(kind) ? (update.members ?? field.members ?? newFieldMembers(kind)) : undefined),
+  };
 }
 
 // A group's fields once saved: each is now in the config under the name it has.
-function keptMembers(members: readonly SettingsMember[] | undefined): readonly SettingsMember[] | undefined {
-  return members?.map((member) => ({ ...member, from: member.name }));
+function keptMembers(members: readonly SettingsMember[] | undefined, depth = 0): readonly SettingsMember[] | undefined {
+  if (depth > COLLECTION_SETTINGS_LIMITS.memberDepthMax) {
+    return members;
+  }
+  return members?.map((member) => ({ ...member, from: member.name, members: keptMembers(member.members, depth + 1) }));
 }

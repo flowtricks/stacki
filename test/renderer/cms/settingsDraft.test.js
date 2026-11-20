@@ -20,7 +20,7 @@ buildSync({
   format: 'cjs',
   logLevel: 'silent',
 });
-const { applyDraft, applyDrafts, newFieldFormState, openFieldFormState, replayDrafts } = require(output);
+const { applyDraft, applyDrafts, newFieldFormState, openFieldFormState, replayDrafts, resolvedMembers } = require(output);
 
 const field = (name, kind = 'text') => ({
   name,
@@ -183,4 +183,51 @@ test('an open field form changes only what changed, renaming first', () => {
   assert.match(openFieldFormState(settings, title, { ...title, name: '' }).message, /Name the field/);
   const fixed = { ...title, editable: false };
   assert.deepEqual(openFieldFormState(settings, fixed, { ...fixed, required: true }).changes, [], 'a field written as a method keeps its settings');
+});
+
+const member = (name, kind = 'text', extra = {}) => ({ name, kind, required: false, from: undefined, editable: true, ...extra });
+
+test('a group’s fields resolve to keys at every level, and a repeated or blank name, an empty group or too deep a group is refused', () => {
+  const group = (members) => ({ kind: 'group', members });
+  const ok = resolvedMembers(group([member('My Field'), member('geo', 'group', { members: [member('Lat Itude', 'number')] })]));
+  assert.equal(ok.ok, true);
+  assert.deepEqual([ok.value[0].name, ok.value[1].members[0].name], ['my-field', 'lat-itude'], 'a nested field is saved under its key too');
+  assert.equal(resolvedMembers(group([member('a'), member('a')])).ok, false, 'repeated at one level');
+  assert.equal(resolvedMembers(group([member('a', 'group', { members: [member('b'), member('b')] })])).ok, false, 'repeated inside a nested group');
+  assert.equal(resolvedMembers(group([member('')])).ok, false, 'blank');
+  assert.equal(resolvedMembers(group([member('a', 'group', { members: [] })])).ok, false, 'an empty nested group');
+  const deep = group([member('a', 'group', { members: [member('b', 'group', { members: [member('c', 'group', { members: [member('d')] })] })] })]);
+  assert.equal(resolvedMembers(deep).ok, false, 'a group four levels down');
+});
+
+test('saving a group keeps its fields and their settings in the staged copy, nested fields included', () => {
+  const settings = { name: 'blog', source: undefined, fields: [] };
+  const members = [member('street', 'text', { description: 'Street', checks: { max: 80 } }), member('geo', 'group', { members: [member('lat', 'number')] })];
+  const added = applyDraft(settings, {
+    kind: 'addField',
+    name: 'address',
+    fieldKind: 'group',
+    target: undefined,
+    settings: { description: undefined, required: false, checks: {}, options: undefined, defaultValue: undefined },
+    members,
+  });
+  assert.equal(added.ok, true);
+  const address = added.value.fields[0];
+  assert.deepEqual(
+    address.members.map((each) => [each.name, each.from, each.description]),
+    [
+      ['street', 'street', 'Street'],
+      ['geo', 'geo', undefined],
+    ],
+  );
+  assert.equal(address.members[1].members[0].from, 'lat', 'a nested field is in the config under its name once saved');
+  const updated = applyDraft(added.value, {
+    kind: 'updateField',
+    update: { name: 'address', description: undefined, required: false, checks: {}, options: undefined, defaultValue: undefined, members: [member('zip')] },
+  });
+  assert.deepEqual(
+    updated.value.fields[0].members.map((each) => each.name),
+    ['zip'],
+    'a group keeps the fields an update leaves it with',
+  );
 });

@@ -1475,8 +1475,8 @@
   line-height: 1.5;
 }
 
-/* A list's items (RemoteListItems.tsx): the kind of item, and a group's fields as
-   rows on a filled background, one to a line. */
+/* What a list and a group hold (RemoteFieldSettings.tsx): the kind of item, and a group's fields as
+   rows on a filled background, one to a line, each opening to the field form a collection's fields have. */
 .list-items {
   display: grid;
   gap: 10px;
@@ -1487,9 +1487,9 @@
 }
 .list-items-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(90px, 1.2fr) minmax(130px, 1fr) auto auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 6px 8px;
   border-radius: 8px;
   background: var(--bg-input);
@@ -1506,6 +1506,20 @@
   font-size: 13px;
 }
 .list-items-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-dim);
   font-size: 12.5px;
+}
+.list-items-member {
+  display: grid;
+  gap: 6px;
+}
+/* An opened field of a group: its form sits on its own fill, indented under the row. */
+.list-items-member-settings {
+  padding: 10px 12px;
+  margin-left: 20px;
+  border-radius: 8px;
+  background: var(--bg-panel-2);
 }

@@ -2,15 +2,33 @@
 // and help text, the checks its kind is most often given, the rest of them
 // under Advanced validation, and whether it is required. Values are drafts:
 // RemoteCollectionSettings.tsx saves them with the field.
-import { useState } from 'react';
-import { typedFieldName, type SettingsField } from '../../../shared/properties/collectionSettings';
+import { useMemo, useState } from 'react';
+import {
+  COLLECTION_SETTINGS_LIMITS,
+  fieldAsMember,
+  ITEM_KINDS,
+  itemKindOf,
+  listKindOf,
+  MEMBER_KINDS,
+  memberAsField,
+  newFieldMembers,
+  newFieldSettings,
+  typedFieldName,
+  type ItemKind,
+  type SettingsField,
+  type SettingsFieldKind,
+  type SettingsMember,
+} from '../../../shared/properties/collectionSettings';
 import { checksFor, FIELD_CHECKS, type FieldCheckKey, type FieldChecks } from '../../../shared/properties/fieldChecks';
-import { useTranslate } from '../../lib/i18n/useTranslate';
-import type { Translator } from '../../lib/i18n/localeContext';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import Dropdown from '../../ui/Dropdown';
-import { ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
-import { ListItems } from './RemoteListItems';
+import { ChevronDownIcon, ChevronRightIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import useListReorder from '../../ui/useListReorder';
 import { checkLabel, choicesFor, typedValue, withCheck } from './fieldCheckInputs';
+import { resolvedMembers } from './settingsDraft';
+import { KIND_ICONS, KindIcon, kindOptions } from './settingsKindIcons';
+import { KIND_LABELS } from './settingsKindLabels';
 
 type Draft = (draft: SettingsField) => void;
 
@@ -22,21 +40,29 @@ export function FieldInputs(props: {
   /** Why the name cannot be saved, said under it. The text stays as typed. */
   readonly nameProblem: string | undefined;
   readonly onDraft: Draft;
+  /**
+   * The form of one field of a group, opened in its row: the row has the name and the required box, so the form
+   * leaves them out. `depth` counts the groups above the field, which bounds how deep groups nest.
+   */
+  readonly member?: { readonly depth: number; readonly itemsLocked: boolean } | undefined;
 }) {
   const { draft, onDraft, nameProblem } = props;
   const translate = useTranslate();
+  const depth = props.member?.depth ?? 0;
   return (
     <div className="field-settings">
       <div className="field-settings-grid">
-        <Labelled label={translate('cmsRemote.fieldSettings.name')} wide>
-          <input
-            autoFocus={props.autoFocusName === true}
-            aria-invalid={nameProblem !== undefined}
-            value={draft.name}
-            onChange={(event) => onDraft({ ...draft, name: event.target.value })}
-          />
-          {nameProblem === undefined ? <SavedKey typed={draft.name} /> : <span className="remote-cms-problem">{nameProblem}</span>}
-        </Labelled>
+        {props.member === undefined && (
+          <Labelled label={translate('cmsRemote.fieldSettings.name')} wide>
+            <input
+              autoFocus={props.autoFocusName === true}
+              aria-invalid={nameProblem !== undefined}
+              value={draft.name}
+              onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+            />
+            {nameProblem === undefined ? <SavedKey typed={draft.name} /> : <span className="remote-cms-problem">{nameProblem}</span>}
+          </Labelled>
+        )}
         {props.field.editable && (
           <Labelled label={translate('cmsRemote.fieldSettings.helpText')} wide>
             <textarea
@@ -49,9 +75,10 @@ export function FieldInputs(props: {
         )}
         {props.field.editable && draft.kind === 'option' && <OptionValues draft={draft} onDraft={onDraft} />}
       </div>
-      {props.field.editable && <ListItems draft={draft} onDraft={onDraft} />}
+      {props.field.editable && draft.kind === 'group' && <MembersEditor draft={draft} onDraft={onDraft} depth={depth} title="cmsRemote.group.fields" />}
+      {props.field.editable && <ListItems draft={draft} onDraft={onDraft} depth={depth} locked={props.member?.itemsLocked === true} />}
       {props.field.editable ? (
-        <FieldRules draft={draft} onDraft={onDraft} />
+        <FieldRules draft={draft} onDraft={onDraft} requiredBox={props.member === undefined} />
       ) : (
         <p className="field-settings-note">{translate('cmsRemote.fieldSettings.methodNote')}</p>
       )}
@@ -70,7 +97,7 @@ function SavedKey(props: { readonly typed: string }) {
 }
 
 // The kind's common checks, the others behind a disclosure, then Required.
-function FieldRules(props: { readonly draft: SettingsField; readonly onDraft: Draft }) {
+function FieldRules(props: { readonly draft: SettingsField; readonly onDraft: Draft; readonly requiredBox: boolean }) {
   const { draft, onDraft } = props;
   const translate = useTranslate();
   const [advanced, setAdvanced] = useState(false);
@@ -93,10 +120,12 @@ function FieldRules(props: { readonly draft: SettingsField; readonly onDraft: Dr
           </div>
         </div>
       )}
-      <label className="field-settings-required">
-        <input type="checkbox" checked={draft.required} onChange={(event) => onDraft({ ...draft, required: event.target.checked })} />
-        <span>{translate('cmsRemote.fieldSettings.required')}</span>
-      </label>
+      {props.requiredBox && (
+        <label className="field-settings-required">
+          <input type="checkbox" checked={draft.required} onChange={(event) => onDraft({ ...draft, required: event.target.checked })} />
+          <span>{translate('cmsRemote.fieldSettings.required')}</span>
+        </label>
+      )}
     </>
   );
 }
@@ -271,4 +300,245 @@ function Labelled(props: { readonly label: string; readonly wide?: boolean; read
       {props.children}
     </label>
   );
+}
+
+// --- What a group and a list hold -------------------------------------------------------------------------
+
+const ITEM_LABELS: Readonly<Record<ItemKind, MessageKey>> = {
+  text: 'cmsRemote.fieldType.plainText',
+  number: 'cmsRemote.fieldType.number',
+  link: 'cmsRemote.fieldType.link',
+  email: 'cmsRemote.fieldType.email',
+  switch: 'cmsRemote.fieldType.switch',
+  date: 'cmsRemote.fieldType.dateTime',
+  group: 'cmsRemote.items.group',
+};
+
+// A list item's kind as the field kind whose icon it wears.
+const ITEM_ICON_KINDS: Readonly<Record<ItemKind, SettingsFieldKind>> = {
+  text: 'text',
+  number: 'number',
+  link: 'link',
+  email: 'email',
+  switch: 'switch',
+  date: 'date',
+  group: 'group',
+};
+
+/**
+ * What a list field holds: the kind of each item (plain text by default, or a group of fields for a repeater such
+ * as team members), and, for a group, the fields of each item, edited with the editor a group field uses.
+ * `locked` shows the kind without a choice: an item kind that is already in a group's saved field is not rewritten
+ * from here.
+ */
+export function ListItems(props: { readonly draft: SettingsField; readonly onDraft: Draft; readonly depth: number; readonly locked: boolean }) {
+  const { draft, onDraft } = props;
+  const translate = useTranslate();
+  const item = itemKindOf(draft);
+  if (item === undefined) {
+    return undefined;
+  }
+  const kinds = ITEM_KINDS.filter((kind) => kind !== 'group' || props.depth < COLLECTION_SETTINGS_LIMITS.memberDepthMax);
+  // Another kind of item rewrites the list's items; a group starts with a title field.
+  const choose = (next: ItemKind) =>
+    onDraft({
+      ...draft,
+      kind: listKindOf(next),
+      itemKind: next === 'group' ? undefined : next,
+      members: next === 'group' ? (draft.members ?? newFieldMembers('repeater')) : undefined,
+    });
+  return (
+    <section className="list-items">
+      <span className="field-settings-label">{translate('cmsRemote.items.title')}</span>
+      <p className="field-settings-note">{translate('cmsRemote.items.hint')}</p>
+      {item === 'other' ? (
+        <p className="field-settings-note">{translate('cmsRemote.items.byHand')}</p>
+      ) : props.locked ? (
+        <span className="list-items-kind">
+          <KindIcon kind={ITEM_ICON_KINDS[item]} /> {translate(ITEM_LABELS[item])}
+        </span>
+      ) : (
+        <Dropdown
+          value={item}
+          livePreview={false}
+          ariaLabel={translate('cmsRemote.items.title')}
+          options={kinds.map((kind) => {
+            const Icon = KIND_ICONS[ITEM_ICON_KINDS[kind]];
+            return { value: kind, label: translate(ITEM_LABELS[kind]), icon: <Icon size={14} /> };
+          })}
+          onChange={(next) => {
+            const kind = ITEM_KINDS.find((candidate) => candidate === next);
+            if (kind !== undefined) {
+              choose(kind);
+            }
+          }}
+        />
+      )}
+      {item === 'group' && <MembersEditor draft={draft} onDraft={onDraft} depth={props.depth} title="cmsRemote.items.fields" />}
+    </section>
+  );
+}
+
+// The kinds a field of a group may be chosen as: no repeater (a list of groups is made from a list), and no group
+// where the next level would nest past the bound.
+function memberKinds(depth: number): readonly SettingsFieldKind[] {
+  const nests = depth + 1 < COLLECTION_SETTINGS_LIMITS.memberDepthMax;
+  return MEMBER_KINDS.filter((kind) => kind !== 'repeater' && (nests || kind !== 'group'));
+}
+
+/**
+ * A group's fields (a group field's own, or each item's of a list of groups): added, named, typed from the same
+ * kinds and icons as a collection's field picker, made required, dragged to reorder, removed, and opened to the
+ * very form a collection's fields have (help text, checks, options, a default, and the fields of a group inside).
+ * A kept field's checks stay as the content config has them until its form changes them (astroSchemaEdit.ts).
+ * Values are drafts: RemoteCollectionSettings.tsx saves them with the field.
+ */
+export function MembersEditor(props: { readonly draft: SettingsField; readonly onDraft: Draft; readonly depth: number; readonly title: MessageKey }) {
+  const { draft, onDraft, depth } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const members = useMemo(() => draft.members ?? [], [draft.members]);
+  const problem = resolvedMembers(draft, depth);
+  const set = (next: readonly SettingsMember[]) => onDraft({ ...draft, members: next });
+  const change = (index: number, next: SettingsMember) => set(members.map((each, position) => (position === index ? next : each)));
+  const reorder = useListReorder({
+    count: members.length,
+    onMove: (from, to) => set(moved(members, from, to)),
+  });
+  const full = members.length >= COLLECTION_SETTINGS_LIMITS.membersMax;
+  const kinds = memberKinds(depth);
+  return (
+    <div className="list-items-fields">
+      <span className="field-settings-label">{translate(props.title)}</span>
+      {members.map((member, index) => (
+        <MemberRow
+          key={member.from ?? `new-${index}`}
+          member={member}
+          kinds={kinds}
+          depth={depth}
+          rowClass={reorder.rowClass(index)}
+          rowProps={reorder.rowProps(index)}
+          onChange={(next) => change(index, next)}
+          onRemove={() => set(members.filter((_, position) => position !== index))}
+        />
+      ))}
+      {!problem.ok && <span className="remote-cms-problem">{translateDescribed(problem)}</span>}
+      <button
+        type="button"
+        className="remote-cms-settings-add"
+        disabled={full}
+        onClick={() => set([...members, { name: '', kind: 'text', required: false, from: undefined, editable: true }])}
+      >
+        <PlusIcon size={12} /> {translate('cmsRemote.settings.addField')}
+      </button>
+    </div>
+  );
+}
+
+type RowProps = ReturnType<ReturnType<typeof useListReorder>['rowProps']>;
+
+function MemberRow(props: {
+  readonly member: SettingsMember;
+  readonly kinds: readonly SettingsFieldKind[];
+  readonly depth: number;
+  readonly rowClass: string;
+  readonly rowProps: RowProps;
+  readonly onChange: (member: SettingsMember) => void;
+  readonly onRemove: () => void;
+}) {
+  const { member, onChange } = props;
+  const translate = useTranslate();
+  const [open, setOpen] = useState(false);
+  const fresh = member.from === undefined;
+  // A new field's kind is chosen here, and starts from that kind's own settings.
+  const pickKind = (kind: SettingsFieldKind) => {
+    const starting = newFieldSettings(kind === 'other' ? 'any' : kind);
+    onChange({
+      ...member,
+      kind,
+      checks: starting.checks,
+      options: starting.options,
+      defaultValue: undefined,
+      members: newFieldMembers(kind),
+      itemKind: kind === 'list' ? 'text' : undefined,
+    });
+  };
+  const configurable = member.editable && member.kind !== 'other';
+  return (
+    <div className="list-items-member">
+      <div className={`list-items-row ${props.rowClass}`} {...props.rowProps}>
+        <span className="remote-cms-grip">
+          <DragIcon size={12} />
+        </span>
+        <KindIcon kind={member.kind} />
+        <input
+          aria-label={translate('cmsRemote.items.fieldName')}
+          placeholder={translate('cmsRemote.items.fieldName')}
+          disabled={!member.editable}
+          value={member.name}
+          onChange={(event) => onChange({ ...member, name: event.target.value })}
+        />
+        {fresh ? (
+          <Dropdown
+            value={member.kind}
+            livePreview={false}
+            ariaLabel={translate('cmsRemote.items.fieldType')}
+            options={kindOptions(props.kinds, translate)}
+            onChange={(next) => {
+              const kind = props.kinds.find((candidate) => candidate === next);
+              if (kind !== undefined) {
+                pickKind(kind);
+              }
+            }}
+          />
+        ) : (
+          <span className="list-items-kind">{translate(KIND_LABELS[member.kind])}</span>
+        )}
+        <label className="field-settings-flag">
+          <input
+            type="checkbox"
+            disabled={!member.editable}
+            checked={member.required}
+            onChange={(event) => onChange({ ...member, required: event.target.checked })}
+          />
+          <span>{translate('cmsRemote.settings.required')}</span>
+        </label>
+        <button
+          type="button"
+          className="ghost remote-cms-settings-tool"
+          aria-expanded={open}
+          aria-label={translate('cmsRemote.items.fieldSettings')}
+          title={translate('cmsRemote.items.fieldSettings')}
+          disabled={!configurable}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+        </button>
+        <button type="button" className="ghost remote-cms-settings-tool" title={translate('cmsRemote.items.removeField')} onClick={props.onRemove}>
+          <TrashIcon size={13} />
+        </button>
+      </div>
+      {open && configurable && (
+        <div className="list-items-member-settings">
+          <FieldInputs
+            field={memberAsField(member)}
+            draft={memberAsField(member)}
+            nameProblem={undefined}
+            member={{ depth: props.depth + 1, itemsLocked: !fresh }}
+            onDraft={(next) => onChange(fieldAsMember({ ...next, name: member.name, required: member.required }, member))}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The fields after a drag: `from` lands before the row at `to`.
+function moved(members: readonly SettingsMember[], from: number, to: number): readonly SettingsMember[] {
+  const next = [...members];
+  const [member] = next.splice(from, 1);
+  if (member !== undefined) {
+    next.splice(to > from ? to - 1 : to, 0, member);
+  }
+  return next;
 }
