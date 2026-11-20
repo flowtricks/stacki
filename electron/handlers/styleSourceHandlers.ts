@@ -35,9 +35,11 @@ function registerStyleListFilesHandlers({ ipcMain, assertInProject, send }: Pick
     return { css: readSource(abs) };
   });
 
-  ipcMain.handle('style:writeFile', async (_event, { filePath, css, announce }) => {
+  ipcMain.handle('style:writeFile', async (_event, { filePath, css, announce, expected }) => {
     const abs = assertInProject(filePath);
-    writeProjectText(abs, css); // notes the write, so the watcher does not see it as external
+    // Notes the write, so the watcher does not see it as external. With `expected`, the file's actor writes only while
+    // the file holds those bytes, in the same step as the write, and refuses otherwise: no read-then-write gap.
+    writeProjectText(abs, css, expected ?? undefined);
     if (announce === true) {
       announceVariableWrite(send, [abs]);
     }

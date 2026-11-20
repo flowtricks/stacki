@@ -63,6 +63,8 @@ import { parseInstructionFilePath, parseInstructionPath } from '../properties/in
 import { parseComponentOpTarget, parseComponentUses } from '../properties/componentOps';
 import { parseComponentRenameRequest, parseRenameDirection } from '../properties/componentRename';
 import { parseComponentSubfolder } from '../properties/componentNaming';
+import { parseClassUsageNames } from '../properties/classUsage';
+import { parseStyleMoveJournal, parseStyleMoveTarget } from '../properties/styleMoveJournal';
 import { parseGitHubLoginQuery } from '../properties/projectRoles';
 import { parseSelectorFileChanges, parseSelectorFileDigests, parseSelectorIds } from '../properties/selectorUsage';
 import { parseCreatePackageManager } from '../properties/packageManager';
@@ -375,6 +377,13 @@ export const IPC_PAYLOADS = {
   // What deleting a prop would do across the site, for its confirmation; the deletion itself is `component:editProperties`.
   'component:previewPropertyRemoval': object({ ...project, file: pathText, name: propertyName }),
   'component:usage': object({ ...named, exclude: optional(text) }),
+  // Create component's "Move styles": which files other than the page mention each class (shared/properties/classUsage.ts).
+  'component:classUsage': object({ ...project, pagePath: pathText, classes: parseClassUsageNames }),
+  // The "Move styles" journal: its plan recorded before the move writes, cleared once whole, and a stopped one resolved.
+  'styleMove:record': object({ ...project, journal: parseStyleMoveJournal }),
+  'styleMove:clear': object({ ...project, id: text }),
+  'styleMove:pending': object({ ...project }),
+  'styleMove:resolve': object({ ...project, id: text, target: parseStyleMoveTarget }),
   'content:collections': pathText,
   'content:config': object({ ...project, force: maybeFlag }),
   'content:entries': object({ ...named }),
@@ -739,7 +748,8 @@ export const IPC_PAYLOADS = {
   'style:listAstroStyles': pathText,
   'style:listFiles': pathText,
   'style:readFile': pathText,
-  'style:writeFile': object({ filePath: pathText, css: text, announce: maybeFlag }),
+  // `expected`: write only while the file still holds exactly this text (Create component's "Move styles"), checked by its actor.
+  'style:writeFile': object({ filePath: pathText, css: text, announce: maybeFlag, expected: optional(text) }),
   'style:selectorUsage': object({ ...project, packages: optional(packageSearch) }),
   'style:removeSelectors': object({ ...project, ids: parseSelectorIds, files: parseSelectorFileDigests, reach: optional(removalReach) }),
   'style:restoreSelectors': object({ ...project, changes: parseSelectorFileChanges, to: restoreDirection }),

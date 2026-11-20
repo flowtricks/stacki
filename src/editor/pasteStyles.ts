@@ -108,6 +108,62 @@ export function carriedStyles(sources: readonly PasteStyleSource[], subject: Pas
   return { rules, selectors: [...new Set(selectors)], leftBehind: [...new Set(leftBehind)], defineVars };
 }
 
+/**
+ * `css` without what `carriedStyles` would carry from it for `subject`: the move's other half (Create component's
+ * "Move styles"), judged by the same rule so the two can never disagree. A selector list loses only its members
+ * that style the subject (`.card, .footer` keeps `.footer`); a rule left with none goes, and so does a wrapping
+ * at-rule left empty. Keyframes stay: another rule may still name them. CSS that does not parse is returned as it
+ * was, as carriedStyles carries nothing from it.
+ */
+export function withoutCarried(css: string, subject: PasteStyleSubject): string {
+  const root = parsed(css);
+  if (root === undefined) {
+    return css;
+  }
+  // Collected first and changed after the walk, so the walk never visits a tree it is cutting.
+  const changes: { readonly rule: Rule; readonly rest: readonly string[] }[] = [];
+  root.walkRules((rule) => {
+    assert(changes.length < PASTE_STYLE_LIMITS.rulesPerSourceMax, 'withoutCarried: rules per source within limit');
+    if (insideKeyframes(rule)) {
+      return;
+    }
+    const kept = new Set(judgedSelectors(rule.selector, subject).kept);
+    if (kept.size > 0) {
+      changes.push({ rule, rest: rule.selectors.filter((selector) => !kept.has(selector.trim())) });
+    }
+  });
+  if (changes.length === 0) {
+    return css;
+  }
+  for (const { rule, rest } of changes) {
+    if (rest.length > 0) {
+      rule.selectors = [...rest];
+    } else {
+      removeWithEmptyWrappers(rule);
+    }
+  }
+  const out = root.toString();
+  assert(out !== css, 'withoutCarried: a carried rule changes the text');
+  return out;
+}
+
+// Removes `rule`, then each wrapping at-rule it leaves with nothing but comments, climbing at most chainDepthMax.
+function removeWithEmptyWrappers(rule: Rule): void {
+  let parent: unknown = rule.parent;
+  rule.remove();
+  for (let depth = 0; depth < PASTE_STYLE_LIMITS.chainDepthMax; depth++) {
+    if (!isAtRule(parent) || !WRAPPING_AT_RULES.has(parent.name.toLowerCase())) {
+      return;
+    }
+    if (parent.nodes?.some((node) => node.type !== 'comment') === true) {
+      return;
+    }
+    const next: unknown = parent.parent;
+    parent.remove();
+    parent = next;
+  }
+}
+
 /** The classes and ids of a copied subtree's static attributes and `class:list` strings. */
 export function styleSubjectOf(classValues: readonly string[], idValues: readonly string[]): PasteStyleSubject {
   const classes = new Set<string>();

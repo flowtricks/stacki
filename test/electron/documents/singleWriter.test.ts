@@ -63,6 +63,10 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 1, reason: 'encrypted CMS connection keys in userData, never a page' },
     renameSync: { count: 1, reason: 'puts that connection file in place whole (atomic save)' },
   },
+  'electron/content/styleMoveJournals.ts': {
+    writeFileSync: { count: 1, reason: 'the temporary copy of a "Move styles" journal in userData/logs, the app’s memory of a move and never a page' },
+    renameSync: { count: 1, reason: 'puts that journal in place whole (durable save, flushed before and after)' },
+  },
   'electron/content/mcpFiles.ts': {
     writeFileSync: { count: 1, reason: 'the project MCP config (.mcp.json or Codex config), a settings file and never a page' },
     renameSync: { count: 1, reason: 'puts that config file in place whole (atomic save)' },

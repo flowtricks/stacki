@@ -15,6 +15,16 @@ export const messages = {
   'palette.create.taken': '{file} gibt es schon.',
   'palette.create.hint': '{label} wird zu {tag}, gespeichert als {file}',
   'palette.create.name': 'Name', // same
+  'palette.create.styles.alsoUsed': 'Auch anderswo verwendet', // review
+  'palette.create.styles.checkAria': 'Die Styles von .{name} verschieben', // review
+  'palette.create.styles.failed': 'Die Styles konnten nicht gelesen werden, daher wird keiner verschoben.', // review
+  'palette.create.styles.foot':
+    'Markierte Styles kommen in ein neues style-Tag der Komponente. Bearbeite diese Dateien nicht in einer anderen App, bis es fertig ist.', // review
+  'palette.create.styles.inFiles': 'Auch verwendet in {files}.', // review
+  'palette.create.styles.loading': 'Styles dieses Markups werden gesucht…', // review
+  'palette.create.styles.onPage': 'Ein anderes Element dieser Seite verwendet sie.', // review
+  'palette.create.styles.page': 'Diese Seite', // review
+  'palette.create.styles.title': 'Styles verschieben', // review
   'palette.create.submit': 'Erstellen',
   'palette.create.title': 'Komponente erstellen',
   'palette.create.value.alsoUsed': 'Auch hier verwendet',

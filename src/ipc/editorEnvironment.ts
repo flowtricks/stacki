@@ -34,8 +34,14 @@ export const styleTransport = {
   readStyleFile: (payload: Parameters<PreloadBridge['readStyleFile']>[0]) => window.avb.readStyleFile(payload),
   listAstroStyleFiles: (payload: Parameters<PreloadBridge['listAstroStyleFiles']>[0]) => window.avb.listAstroStyleFiles(payload),
   listStyleFiles: (payload: Parameters<PreloadBridge['listStyleFiles']>[0]) => window.avb.listStyleFiles(payload),
-  writeStyleFile: (input: { readonly filePath: string; readonly css: string; readonly base?: string; readonly announce?: boolean }) =>
-    window.avb.writeStyleFile(parseIpcPayload('style:writeFile', input)),
+  writeStyleFile: (input: {
+    readonly filePath: string;
+    readonly css: string;
+    readonly base?: string;
+    readonly announce?: boolean;
+    /** Write only while the file still holds exactly this text; refused (thrown) otherwise. */
+    readonly expected?: string;
+  }) => window.avb.writeStyleFile(parseIpcPayload('style:writeFile', input)),
 };
 export const assetDropLimit = 1_000;
 export const assetDeletionMessage = 'The file moves to your Bin.';

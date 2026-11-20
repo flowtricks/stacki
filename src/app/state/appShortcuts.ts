@@ -47,6 +47,7 @@ import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
 import { useWrapNode } from './appWrapNode';
+import { windowHeld } from '../../ui/busyLock';
 import {
   useHistory,
   useAddComponent,
@@ -333,7 +334,11 @@ export function useMenuShortcuts(
       // field in the app undoes its own typing, an app that keeps the shortcut
       // hears `shortcut.press`, and otherwise this is Stacki's undo, once: the
       // frame never saw the key, so its SDK forwarded nothing.
+      // Commands that change the project do nothing while a cover holds the window (src/ui/busyLock.ts); copying does.
       window.avb.onMenu('undo', () => {
+        if (windowHeld()) {
+          return;
+        }
         const route = appShortcutRoute('Mod+Z', document.activeElement ?? undefined);
         if (route === 'app') {
           return;
@@ -351,6 +356,9 @@ export function useMenuShortcuts(
         void undo();
       }),
       window.avb.onMenu('redo', () => {
+        if (windowHeld()) {
+          return;
+        }
         const route = appShortcutRoute('Mod+Shift+Z', document.activeElement ?? undefined);
         if (route === 'app') {
           return;
@@ -368,7 +376,11 @@ export function useMenuShortcuts(
         void redo();
       }),
       window.avb.onMenu('copy', () => menuCopy(menu)),
-      window.avb.onMenu('paste', () => menuPaste(menu)),
+      window.avb.onMenu('paste', () => {
+        if (!windowHeld()) {
+          menuPaste(menu);
+        }
+      }),
       // ⇧⌘C — the selection's file:line trail, for pasting into an AI chat.
       // Copies markup coordinates, not markup: ⌘C already does the node.
       window.avb.onMenu('copySelection', () => {

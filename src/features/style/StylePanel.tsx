@@ -74,7 +74,12 @@ export default function StylePanel(rawProps: StylePanelProps) {
   const props = withStyleableNode(rawProps);
   const files = useStyleFiles(props.project?.path, undefined, readStyleFiles);
   const translate = useTranslate();
-  const astroFiles = useStyleFiles(props.project?.path, props.openFilePath, readAstroStyleFiles);
+  const pageComponentPaths = props.pageComponentPaths ?? NO_PATHS;
+  // The `.astro` files with a `<style>` are listed again when the page's components change, not only with the open
+  // file: Create component puts a new one on the page, possibly with a `<style>` of its own ("Move styles"), and undo
+  // takes it off. Without it, the new component's tag stays out of the list until the window next gets focus.
+  const astroFilesKey = [props.openFilePath ?? '', ...pageComponentPaths].join('\u0000');
+  const astroFiles = useStyleFiles(props.project?.path, astroFilesKey, readAstroStyleFiles);
   const lengthUnit = useStableLengthUnit(props.lengthUnit ?? PX_LENGTHS);
   const renderedClasses = useStableList(props.renderedClasses ?? NO_PATHS);
   const projectClasses = useStableList(props.projectClasses ?? NO_PATHS);
@@ -89,7 +94,6 @@ export default function StylePanel(rawProps: StylePanelProps) {
   setHost(host);
   useEffect(() => setHost(host), [host]);
   // Read with the page, not on the first instance picked: that pick then draws its settled colours.
-  const pageComponentPaths = props.pageComponentPaths ?? NO_PATHS;
   useEffect(() => prefetchComponentSources(pageComponentPaths), [pageComponentPaths]);
   const hostRef = useRef<HTMLDivElement>(null);
   useSwitchScrollAnchor(hostRef, selection.props.node?.id);
