@@ -22,6 +22,7 @@ import { softAuthenticator } from './softAuthenticator';
 const origin = CONFORMANCE.origin;
 const rpId = new URL(origin).hostname;
 const DAY = 86_400_000;
+const SETUP_CODE = 'setup-code-that-is-long-enough-1234';
 
 /** Memory storage with Durable Object semantics: operations inside `transaction` run one at a time. */
 function memoryStorage(): { readonly storage: KeyValueStorage; readonly data: Map<string, unknown> } {
@@ -64,7 +65,12 @@ function world(options: { environment?: Record<string, unknown>; now?: { value: 
   const { storage, data } = memoryStorage();
   const store = createPasskeyStore(storage);
   const context = {
-    ...contextFor({ AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', ...options.environment }, fakeNetwork(), rolesFrom(rolesFile), () => clock.value),
+    ...contextFor(
+      { AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', AUTH_SETUP_CODE: SETUP_CODE, ...options.environment },
+      fakeNetwork(),
+      rolesFrom(rolesFile),
+      () => clock.value,
+    ),
     passkeys: store,
     passkeyHandleActive: (handle: string) => store.handleActive(handle, clock.value),
   };
@@ -439,7 +445,11 @@ runAuthProviderConformance({
     const real = createPasskeyStore(storage);
     const store: PasskeyStore = { ...real, takeChallenge: (challenge) => Promise.resolve(challenge === conformanceChallenge) };
     return createPasskeyProvider({
-      ...contextFor({ AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', EDITOR_ACCESS: 'authenticated' }, fakeNetwork(), rolesFrom(rolesFile)),
+      ...contextFor(
+        { AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', AUTH_SETUP_CODE: SETUP_CODE, EDITOR_ACCESS: 'authenticated' },
+        fakeNetwork(),
+        rolesFrom(rolesFile),
+      ),
       passkeys: store,
       passkeyHandleActive: (handle) => real.handleActive(handle, Date.now()),
     });
@@ -447,4 +457,114 @@ runAuthProviderConformance({
   acceptedCallback: (state, callbackUrl) => new Request(`${callbackUrl}?state=${state}&assertion=${conformanceAssertion}`),
   refusedCallback: (state, callbackUrl) => new Request(`${callbackUrl}?state=${state}&assertion=AAAA`),
   expectedIdentity: 'passkey:client-acme',
+});
+
+// ---- First-admin setup ----------------------------------------------------------------------------------------------
+
+async function setupFlow(w: World, headers: Record<string, string> = {}) {
+  const response = await authRoutes(new Request(`${origin}/studio/auth/passkey/bootstrap`, { headers }), w.runtime, w.attempts);
+  assert.ok(response);
+  const cookie =
+    response.headers
+      .getSetCookie()
+      .find((value) => value.startsWith('__Host-studio-state='))
+      ?.split(';')[0] ?? '';
+  return { response, cookie, html: await response.clone().text() };
+}
+
+async function setupEnrol(w: World, device: Awaited<ReturnType<typeof softAuthenticator>>, code: string, headers: Record<string, string> = {}) {
+  const flow = await setupFlow(w, headers);
+  const optionsResponse = await post(w, 'register-options', { setup: code }, flow.cookie, headers);
+  if (optionsResponse?.status !== 200) {
+    return { flow, status: optionsResponse?.status ?? 0 };
+  }
+  const options = (await optionsResponse.json()) as { challenge: string; user: { name: string } };
+  assert.equal(options.user.name, 'owner', 'the bootstrap handle, nobody else');
+  const made = await device.create(options.challenge);
+  const registered = await post(
+    w,
+    'register',
+    { setup: code, clientDataJSON: encodeBase64url(made.clientDataJSON), attestationObject: encodeBase64url(made.attestationObject) },
+    flow.cookie,
+    headers,
+  );
+  return { flow, status: registered?.status ?? 0 };
+}
+
+test('first-admin setup: the right code enrols the bootstrap handle once, then the page closes', async () => {
+  const w = world();
+  const page = await setupFlow(w);
+  assert.equal(page.response.status, 200);
+  assert.match(page.html, /First admin setup/);
+  assert.match(page.html, /type="password"/);
+  const device = await softAuthenticator({ origin, rpId });
+  assert.equal((await setupEnrol(w, device, SETUP_CODE)).status, 200);
+  assert.equal((await w.store.credentialsOf('owner')).length, 1);
+  const signedIn = await signIn(w, device);
+  assert.equal(signedIn.response.status, 302);
+  const principal = await sessionOf(signedIn.response);
+  assert.equal(principal?.identity, 'passkey:owner');
+  assert.ok(principal && (await mayManage(w.runtime, principal)), 'the bootstrap admin manages');
+  // Closed: the page is gone and the code opens nothing, whoever has it.
+  assert.equal((await setupFlow(w)).response.status, 400);
+  assert.notEqual((await setupEnrol(w, await softAuthenticator({ origin, rpId }), SETUP_CODE)).status, 200);
+  assert.equal((await w.store.credentialsOf('owner')).length, 1);
+});
+
+test('first-admin setup refuses a wrong, missing or oversized code, and a locked handle, and limits attempts', async () => {
+  const w = world();
+  const device = await softAuthenticator({ origin, rpId });
+  for (const code of ['wrong-code-that-is-long-enough-12', '', 'x'.repeat(201), SETUP_CODE.toUpperCase(), `${SETUP_CODE} `]) {
+    const result = await setupEnrol(w, device, code, { 'CF-Connecting-IP': '198.51.100.1' });
+    assert.equal(result.status, 403, JSON.stringify(code).slice(0, 20));
+  }
+  assert.equal((await w.store.credentialsOf('owner')).length, 0);
+  // After five refusals this address is limited even with the right code; another address is not.
+  assert.equal((await setupEnrol(w, device, SETUP_CODE, { 'CF-Connecting-IP': '198.51.100.1' })).status, 403);
+  assert.equal((await setupEnrol(w, device, SETUP_CODE, { 'CF-Connecting-IP': '198.51.100.2' })).status, 200);
+  const locked = world();
+  await locked.store.createInvite({ handle: 'owner', displayName: undefined, createdBy: 'x', nowMs: locked.clock.value });
+  await locked.store.lockHandle('owner', locked.clock.value);
+  assert.equal((await setupEnrol(locked, await softAuthenticator({ origin, rpId }), SETUP_CODE)).status, 403);
+  assert.equal((await setupFlow(locked)).response.status, 400, 'a locked handle shows no setup page');
+});
+
+test('first-admin setup: a state-less POST, a foreign origin and the setup path on other methods are refused', async () => {
+  const w = world();
+  const noState = await authRoutes(
+    new Request(`${origin}/studio/auth/provider/passkey/register-options`, {
+      method: 'POST',
+      headers: { Origin: origin },
+      body: JSON.stringify({ setup: SETUP_CODE }),
+    }),
+    w.runtime,
+    w.attempts,
+  );
+  assert.equal(noState?.status, 403);
+  const flow = await setupFlow(w);
+  const foreign = await authRoutes(
+    new Request(`${origin}/studio/auth/provider/passkey/register-options`, {
+      method: 'POST',
+      headers: { Origin: 'https://evil.test', Cookie: flow.cookie },
+      body: JSON.stringify({ setup: SETUP_CODE }),
+    }),
+    w.runtime,
+    w.attempts,
+  );
+  assert.equal(foreign?.status, 403);
+  const post405 = await authRoutes(
+    new Request(`${origin}/studio/auth/passkey/bootstrap`, { method: 'POST', headers: { Origin: origin } }),
+    w.runtime,
+    w.attempts,
+  );
+  assert.equal(post405?.status, 405);
+  assert.equal((await w.store.credentialsOf('owner')).length, 0);
+});
+
+test('two simultaneous setups create exactly one first passkey', async () => {
+  const w = world();
+  const devices = await Promise.all([softAuthenticator({ origin, rpId }), softAuthenticator({ origin, rpId })]);
+  const results = await Promise.all(devices.map((device) => setupEnrol(w, device, SETUP_CODE)));
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 400]);
+  assert.equal((await w.store.credentialsOf('owner')).length, 1);
 });

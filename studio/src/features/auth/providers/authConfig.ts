@@ -66,6 +66,10 @@ export interface AccessConfig {
 
 export interface PasskeyConfig {
   readonly bootstrapAdmin: QualifiedIdentity;
+  /** The handle part of `bootstrapAdmin`: the person the first-admin setup page enrols. */
+  readonly bootstrapHandle: string;
+  /** `AUTH_SETUP_CODE`, a secret: the one-time code the first-admin setup page asks for. */
+  readonly setupCode: string;
   readonly editorAccess: string | undefined;
 }
 
@@ -239,10 +243,20 @@ export function parseAccessConfig(environment: AuthEnvironment): Result<AccessCo
 export function parsePasskeyConfig(environment: AuthEnvironment): Result<PasskeyConfig, readonly string[]> {
   const problems: string[] = [];
   const bootstrapAdmin = bootstrap(environment, 'passkey', problems);
-  if (bootstrapAdmin === undefined) {
+  const handle = bootstrapAdmin === undefined ? undefined : bootstrapAdmin.slice('passkey:'.length);
+  if (handle !== undefined && !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(handle)) {
+    problems.push('AUTH_BOOTSTRAP_ADMIN must be passkey:<handle> with a lowercase handle of letters, digits, dots, hyphens or underscores (up to 64).');
+  }
+  const setupCode = text(environment, 'AUTH_SETUP_CODE');
+  if (setupCode.length < 16 || setupCode.length > 200 || /\s/u.test(setupCode)) {
+    problems.push(
+      'AUTH_SETUP_CODE is required: a secret of 16 to 200 characters, no spaces. Set it with `wrangler secret put AUTH_SETUP_CODE`; it opens the first-admin setup page once.',
+    );
+  }
+  if (bootstrapAdmin === undefined || handle === undefined || problems.length > 0) {
     return err(problems);
   }
-  return ok({ bootstrapAdmin, editorAccess: editorAccess(environment) });
+  return ok({ bootstrapAdmin, bootstrapHandle: handle, setupCode, editorAccess: editorAccess(environment) });
 }
 
 /** Every configuration problem of the chosen provider, as sentences. Empty means the configuration is valid. */

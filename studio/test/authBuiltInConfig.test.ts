@@ -95,10 +95,16 @@ test('oidc configuration: https issuer, scopes include openid, public clients al
 });
 
 test('passkey configuration needs only a bootstrap admin in its own namespace', () => {
-  assert.ok(parsePasskeyConfig({ AUTH_BOOTSTRAP_ADMIN: 'passkey:owner' }).ok);
-  assert.equal(parsePasskeyConfig({}).ok, false);
-  assert.equal(parsePasskeyConfig({ AUTH_BOOTSTRAP_ADMIN: 'google:me@example.com' }).ok, false);
-  assert.deepEqual(authConfigProblems({ AUTH_PROVIDER: 'passkey', AUTH_BOOTSTRAP_ADMIN: 'passkey:owner' }), []);
+  const code = 'a-setup-code-of-sixteen-plus';
+  assert.ok(parsePasskeyConfig({ AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', AUTH_SETUP_CODE: code }).ok);
+  assert.equal(parsePasskeyConfig({ AUTH_BOOTSTRAP_ADMIN: 'passkey:owner' }).ok, false, 'the setup code is required');
+  for (const bad of ['short', 'has a space 123456789', 'x'.repeat(201)]) {
+    assert.equal(parsePasskeyConfig({ AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', AUTH_SETUP_CODE: bad }).ok, false, bad.slice(0, 10));
+  }
+  assert.equal(parsePasskeyConfig({ AUTH_BOOTSTRAP_ADMIN: 'passkey:Not Valid', AUTH_SETUP_CODE: code }).ok, false);
+  assert.equal(parsePasskeyConfig({ AUTH_SETUP_CODE: code }).ok, false);
+  assert.equal(parsePasskeyConfig({ AUTH_BOOTSTRAP_ADMIN: 'google:me@example.com', AUTH_SETUP_CODE: code }).ok, false);
+  assert.deepEqual(authConfigProblems({ AUTH_PROVIDER: 'passkey', AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', AUTH_SETUP_CODE: code }), []);
   assert.ok(authConfigProblems({ AUTH_PROVIDER: 'google' }).length >= 3, 'every missing google variable is reported');
 });
 

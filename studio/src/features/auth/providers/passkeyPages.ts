@@ -40,7 +40,8 @@ const SCRIPT = `
   }
   function enrol() {
     var label = (document.getElementById('passkey-label') || {}).value || '';
-    return post('register-options', { invite: data.invite, label: label }).then(function (options) {
+    var credentialBody = data.mode === 'setup' ? { setup: (document.getElementById('passkey-setup-code') || {}).value || '' } : { invite: data.invite };
+    return post('register-options', Object.assign({ label: label }, credentialBody)).then(function (options) {
       return navigator.credentials.create({ publicKey: {
         challenge: fromB64(options.challenge), rp: options.rp, user: { id: fromB64(options.user.id), name: options.user.name, displayName: options.user.displayName },
         pubKeyCredParams: options.pubKeyCredParams, timeout: options.timeout, attestation: 'none',
@@ -49,13 +50,13 @@ const SCRIPT = `
       } });
     }).then(function (credential) {
       var r = credential.response;
-      return post('register', { invite: data.invite, id: credential.id, clientDataJSON: toB64(r.clientDataJSON), attestationObject: toB64(r.attestationObject), label: label });
+      return post('register', Object.assign({ id: credential.id, clientDataJSON: toB64(r.clientDataJSON), attestationObject: toB64(r.attestationObject), label: label }, credentialBody));
     }).then(function () { say(data.done); button.hidden = true; document.getElementById('passkey-continue').hidden = false; });
   }
-  function fail() { say(data.mode === 'enrol' ? data.enrolFailed : data.failed); button.disabled = false; }
+  function fail() { say(data.mode === 'signin' ? data.failed : data.enrolFailed); button.disabled = false; }
   button.addEventListener('click', function () {
     button.disabled = true; say('');
-    (data.mode === 'enrol' ? enrol() : signIn()).catch(fail);
+    (data.mode === 'enrol' || data.mode === 'setup' ? enrol() : signIn()).catch(fail);
   });
   if (data.mode === 'signin' && PublicKeyCredential.isConditionalMediationAvailable) {
     PublicKeyCredential.isConditionalMediationAvailable().then(function (available) {
@@ -85,6 +86,7 @@ export type PasskeyPage =
       readonly handle: string;
       readonly displayName: string | undefined;
     }
+  | { readonly mode: 'setup'; readonly state: string; readonly callbackPath: string; readonly handle: string }
   | { readonly mode: 'invalid' };
 
 export async function passkeyPage(page: PasskeyPage, languages: string | null): Promise<Response> {
@@ -116,6 +118,12 @@ export async function passkeyPage(page: PasskeyPage, languages: string | null): 
     buttonText = translate('studio.passkey.enrol.button');
     data = { ...data, invite: page.invite };
     extra = `<a id="passkey-continue" hidden href="/studio/auth/login">${escapeHtml(translate('studio.passkey.enrol.continue'))}</a>`;
+  } else if (page.mode === 'setup') {
+    heading = translate('studio.passkey.setup.heading');
+    message = `${escapeHtml(page.handle)}: ${translate('studio.passkey.setup.prompt')}`;
+    buttonText = translate('studio.passkey.enrol.button');
+    data = { ...data, state: page.state };
+    extra = `<a id="passkey-continue" hidden href="/studio/auth/login">${escapeHtml(translate('studio.passkey.enrol.continue'))}</a>`;
   } else {
     heading = translate('studio.login.failedHeading');
     message = translate('studio.passkey.enrol.invalid');
@@ -128,8 +136,9 @@ export async function passkeyPage(page: PasskeyPage, languages: string | null): 
 <style>body{background:#111;color:#eee;font:14px system-ui;display:grid;place-items:center;min-height:100dvh;margin:0}main{text-align:center;max-width:32rem;padding:24px}.studio-logo{display:block;margin:0 auto 24px}p{color:#999;line-height:1.6}button,a{display:inline-flex;align-items:center;justify-content:center;background:#eee;color:#111;border:0;border-radius:8px;padding:12px 20px;margin:20px 0;font:inherit;cursor:pointer;text-decoration:none}button:disabled{opacity:.6;cursor:default}</style></head>
 <body><main id="passkey" ${attributes(data)}>
 <svg class="studio-logo" width="48" height="48" viewBox="0 0 458 458" role="img" aria-label="Stacki"><path d="${stackiMarkPath}" fill="currentColor"/></svg>
-<h1>${escapeHtml(heading)}</h1><p>${page.mode === 'enrol' ? message : escapeHtml(message)}</p>
-${page.mode === 'enrol' ? `<p><input id="passkey-label" maxlength="60" style="padding:8px;border-radius:6px;border:0" aria-label="${escapeHtml(translate('studio.passkey.enrol.button'))}"></p>` : ''}
+<h1>${escapeHtml(heading)}</h1><p>${page.mode === 'enrol' || page.mode === 'setup' ? message : escapeHtml(message)}</p>
+${page.mode === 'setup' ? `<p><input id="passkey-setup-code" type="password" autocomplete="off" maxlength="200" style="padding:8px;border-radius:6px;border:0" aria-label="${escapeHtml(translate('studio.passkey.setup.code'))}" placeholder="${escapeHtml(translate('studio.passkey.setup.code'))}"></p>` : ''}
+${page.mode === 'enrol' || page.mode === 'setup' ? `<p><input id="passkey-label" maxlength="60" style="padding:8px;border-radius:6px;border:0" aria-label="${escapeHtml(translate('studio.passkey.enrol.button'))}"></p>` : ''}
 ${control}<p id="passkey-status" role="status"></p></main></body></html>`;
   return new Response(body, {
     status: page.mode === 'invalid' ? 400 : 200,

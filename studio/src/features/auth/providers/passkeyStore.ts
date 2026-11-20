@@ -84,6 +84,7 @@ export interface KeyValueStorage extends StorageOperations {
 
 export type InviteFailure = 'handle-invalid' | 'locked' | 'full';
 export type EnrolFailure = 'invite-invalid' | 'locked' | 'credential-exists' | 'too-many';
+export type SetupFailure = 'locked' | 'closed' | 'credential-exists';
 export type CounterFailure = 'missing' | 'rollback';
 
 export interface PasskeyStore {
@@ -108,6 +109,17 @@ export interface PasskeyStore {
     readonly label: string;
     readonly nowMs: number;
   }) => Promise<Result<HandleRecord, EnrolFailure>>;
+  /** First-admin setup: store the handle's FIRST passkey, only while it has none. Fails `closed` once any passkey exists. */
+  readonly enrolFirst: (input: {
+    readonly handle: string;
+    readonly credentialId: string;
+    readonly key: StoredKey;
+    readonly signCount: number;
+    readonly label: string;
+    readonly nowMs: number;
+  }) => Promise<Result<HandleRecord, SetupFailure>>;
+  /** Whether the handle still has no passkey and is not locked: the only time the setup page works. */
+  readonly setupOpen: (handle: string, nowMs: number) => Promise<boolean>;
   readonly credential: (id: string) => Promise<CredentialRecord | undefined>;
   readonly handle: (handle: string) => Promise<HandleRecord | undefined>;
   readonly credentialsOf: (handle: string) => Promise<readonly CredentialRecord[]>;
@@ -228,6 +240,36 @@ export function createPasskeyStore(storage: KeyValueStorage): PasskeyStore {
         await access.put(key.credential(input.credentialId), {
           id: input.credentialId,
           handle: handle.handle,
+          label: input.label,
+          createdAt: input.nowMs,
+          lastUsedAt: undefined,
+          key: input.key,
+          signCount: input.signCount,
+        });
+        return ok(handle);
+      }),
+    setupOpen: async (handle, nowMs) => {
+      const record = await handleOf(storage, handle);
+      return (record === undefined || record.lockedUntil <= nowMs) && (await credentialsIn(storage, handle)).length === 0;
+    },
+    enrolFirst: (input) =>
+      storage.transaction(async (access) => {
+        const existing = await handleOf(access, input.handle);
+        if (existing !== undefined && existing.lockedUntil > input.nowMs) {
+          return err('locked');
+        }
+        // Checked inside the transaction: two simultaneous setups cannot both create a first passkey.
+        if ((await credentialsIn(access, input.handle)).length > 0) {
+          return err('closed');
+        }
+        if ((await access.get(key.credential(input.credentialId))) !== undefined) {
+          return err('credential-exists');
+        }
+        const handle: HandleRecord = existing ?? { handle: input.handle, displayName: undefined, createdAt: input.nowMs, createdBy: 'setup', lockedUntil: 0 };
+        await access.put(key.handle(input.handle), handle);
+        await access.put(key.credential(input.credentialId), {
+          id: input.credentialId,
+          handle: input.handle,
           label: input.label,
           createdAt: input.nowMs,
           lastUsedAt: undefined,

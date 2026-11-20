@@ -12,7 +12,7 @@ const REQUIRED_SECRETS: Readonly<Record<string, readonly string[]>> = {
   access: [],
   google: ['GOOGLE_CLIENT_SECRET'],
   oidc: ['OIDC_CLIENT_SECRET (omit for a public client)'],
-  passkey: [],
+  passkey: ['AUTH_SETUP_CODE (for the first-admin setup page)'],
 };
 
 export async function checkAuthProvider(root: string): Promise<void> {

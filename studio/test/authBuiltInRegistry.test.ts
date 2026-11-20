@@ -109,7 +109,7 @@ test('check-project reports missing and invalid sign-in variables per provider',
     await run({});
     await run({ AUTH_PROVIDER: 'github' });
     await run({ AUTH_PROVIDER: 'google', GOOGLE_CLIENT_ID: 'id', AUTH_BOOTSTRAP_ADMIN: 'google:me@example.com' });
-    await run({ AUTH_PROVIDER: 'passkey', AUTH_BOOTSTRAP_ADMIN: 'passkey:owner' });
+    await run({ AUTH_PROVIDER: 'passkey', AUTH_BOOTSTRAP_ADMIN: 'passkey:owner', AUTH_SETUP_CODE: 'a-setup-code-of-sixteen-plus' });
     await run({
       AUTH_PROVIDER: 'access',
       ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com',

@@ -2,7 +2,7 @@ export function routeLogin(request: Request, forward: (request: Request) => Prom
   const pathname = new URL(request.url).pathname;
   const providerCallback = /^\/studio\/auth\/[a-z][a-z0-9-]{0,31}\/callback$/.test(pathname);
   if (
-    !['/studio/auth/login', '/studio/auth/callback', '/studio/auth/logout'].includes(pathname) &&
+    !['/studio/auth/login', '/studio/auth/callback', '/studio/auth/logout', '/studio/auth/passkey/bootstrap'].includes(pathname) &&
     !providerCallback &&
     !pathname.startsWith('/studio/auth/provider/')
   ) {

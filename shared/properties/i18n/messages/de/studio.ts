@@ -118,6 +118,10 @@ export const messages = {
   'studio.passkey.signIn.prompt': 'Melde dich mit deinem Passkey an. Dein Gerät bittet dich, mit Fingerabdruck, Gesicht oder Bildschirmsperre zu bestätigen.',
   'studio.passkey.signIn.unsupported':
     'Dieser Browser unterstützt keine Passkeys. Öffne das Studio in einer aktuellen Version von Chrome, Safari, Edge oder Firefox.',
+  'studio.passkey.setup.code': 'Einrichtungscode',
+  'studio.passkey.setup.heading': 'Einrichtung des ersten Admins',
+  'studio.passkey.setup.prompt':
+    'Erstelle den ersten Passkey für die Inhaberin oder den Inhaber dieser Website. Gib den Einrichtungscode ein, den du mit wrangler secret put AUTH_SETUP_CODE gesetzt hast.',
   'studio.paused.body': 'Dein gespeicherter Entwurf ist sicher.',
   'studio.paused.resume': 'Bearbeitung fortsetzen',
   'studio.paused.title': 'Studio wurde pausiert, um Hosting-Kosten zu sparen.',

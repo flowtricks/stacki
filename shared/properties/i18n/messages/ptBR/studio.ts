@@ -113,6 +113,10 @@ export const messages = {
   'studio.passkey.signIn.failed': 'A passkey não foi aceita. Tente novamente ou peça um novo convite a quem administra o site.',
   'studio.passkey.signIn.prompt': 'Use sua passkey para entrar. Seu dispositivo pedirá confirmação com sua digital, seu rosto ou o bloqueio de tela.',
   'studio.passkey.signIn.unsupported': 'Este navegador não oferece suporte a passkeys. Abra o Studio em uma versão recente do Chrome, Safari, Edge ou Firefox.',
+  'studio.passkey.setup.code': 'Código de configuração',
+  'studio.passkey.setup.heading': 'Configuração do primeiro administrador',
+  'studio.passkey.setup.prompt':
+    'Crie a primeira passkey de quem administra este site. Informe o código de configuração definido com wrangler secret put AUTH_SETUP_CODE.',
   'studio.paused.body': 'Seu rascunho salvo está seguro.',
   'studio.paused.resume': 'Retomar a edição',
   'studio.paused.title': 'O Studio foi pausado para economizar custos de hospedagem.',

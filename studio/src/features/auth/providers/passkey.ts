@@ -10,9 +10,10 @@
 import { err, ok, type Result } from '../../../../vendor/stacki/shared/core/result';
 import type { AuthProvider, ProviderPerson, SignInFlow, SignInRefusal } from '../authProvider';
 import { parsePasskeyConfig } from './authConfig';
-import { decodeBase64url, encodeBase64url, randomToken, utf8Bytes } from './base64url';
+import { decodeBase64url, encodeBase64url, randomToken, sameText, utf8Bytes } from './base64url';
 import type { BuiltInContext } from './builtIn';
 import { createEditorPolicy } from './editorPolicy';
+import { PASSKEY_SETUP_PATH } from '../authRoutes';
 import { passkeyPage } from './passkeyPages';
 import { PASSKEY_LIMITS, parseDisplayName, type PasskeyStore } from './passkeyStore';
 import { limitedRefusal, limitedStart, signInLimiter } from './providerCommon';
@@ -36,6 +37,10 @@ export function createPasskeyProvider(context: BuiltInContext): AuthProvider {
     throw new Error(`Studio AUTH_PROVIDER=passkey is misconfigured: ${parsed.error.join(' ')}`);
   }
   const rpId = new URL(context.origin).hostname;
+  const { bootstrapHandle, setupCode } = parsed.value;
+  // Setup attempts are limited harder than other steps, per address and across all addresses together.
+  const setupLimiter = createRateLimiter({ attemptsMax: RATE_LIMITS.setupAttemptsMax });
+  const setupGlobalLimiter = createRateLimiter({ attemptsMax: RATE_LIMITS.setupAttemptsGlobalMax });
   const policy = createEditorPolicy({
     policy: parsed.value,
     roles: context.roles,
@@ -62,6 +67,12 @@ export function createPasskeyProvider(context: BuiltInContext): AuthProvider {
       }
       const languages = request.headers.get('Accept-Language');
       const callbackPath = new URL(flow.callbackUrl).pathname;
+      if (new URL(request.url).pathname === PASSKEY_SETUP_PATH) {
+        // The setup page exists only while the bootstrap handle has no passkey; afterwards it is as good as absent.
+        return (await store().setupOpen(bootstrapHandle, context.now()))
+          ? passkeyPage({ mode: 'setup', state: flow.state, callbackPath, handle: bootstrapHandle }, languages)
+          : passkeyPage({ mode: 'invalid' }, languages);
+      }
       const code = new URL(request.url).searchParams.get('invite');
       if (code === null) {
         return passkeyPage({ mode: 'signin', state: flow.state, callbackPath }, languages);
@@ -101,14 +112,29 @@ export function createPasskeyProvider(context: BuiltInContext): AuthProvider {
         case 'options':
           return authenticationOptions(flow);
         case 'register-options':
-          return registrationOptions(body, flow);
+          return registrationOptions(body, flow, request);
         default:
-          return register(body, flow);
+          return register(body, flow, request);
       }
     },
     canEdit: policy.canEdit,
     canManage: policy.canManage,
   };
+
+  // 'setup' when the request is a valid first-admin setup (right code, handle has no passkey), 'refused' when it tried and
+  // failed, undefined when it is not a setup request at all. The code is compared in constant time, attempts are limited per
+  // address and overall, and nothing here says whether the code or the handle's state was the reason.
+  async function setupTarget(body: Record<string, unknown>, request: Request): Promise<'setup' | 'refused' | undefined> {
+    const code = body['setup'];
+    if (code === undefined) {
+      return undefined;
+    }
+    if (setupLimiter.take(clientKey(request)) > 0 || setupGlobalLimiter.take('all') > 0) {
+      return 'refused';
+    }
+    const matches = typeof code === 'string' && code.length <= 200 && sameText(code, setupCode);
+    return matches && (await store().setupOpen(bootstrapHandle, context.now())) ? 'setup' : 'refused';
+  }
 
   async function authenticationOptions(flow: SignInFlow): Promise<Response> {
     const challenge = randomToken(WEBAUTHN_LIMITS.challengeBytes);
@@ -116,33 +142,42 @@ export function createPasskeyProvider(context: BuiltInContext): AuthProvider {
     return stored.ok ? json({ challenge, rpId, timeout: PASSKEY_REQUEST_LIMITS.timeoutMs }) : json({ error: 'busy' }, 503);
   }
 
-  async function registrationOptions(body: Record<string, unknown>, flow: SignInFlow): Promise<Response> {
+  async function registrationOptions(body: Record<string, unknown>, flow: SignInFlow, request: Request): Promise<Response> {
+    const setup = await setupTarget(body, request);
     const code = body['invite'];
-    const invite = typeof code === 'string' && code.length <= 100 ? await store().peekInvite(code, context.now()) : undefined;
-    if (invite === undefined) {
+    const invite = setup !== undefined ? undefined : typeof code === 'string' && code.length <= 100 ? await store().peekInvite(code, context.now()) : undefined;
+    if (setup === 'refused') {
+      return json({ error: 'setup' }, 403);
+    }
+    if (invite === undefined && setup === undefined) {
       return json({ error: 'invite' }, 400);
     }
+    const target = invite ?? { handle: bootstrapHandle, displayName: undefined };
     const challenge = randomToken(WEBAUTHN_LIMITS.challengeBytes);
     const stored = await store().putChallenge(challenge, { kind: 'create', state: flow.state }, context.now());
     if (!stored.ok) {
       return json({ error: 'busy' }, 503);
     }
-    const existing = await store().credentialsOf(invite.handle);
+    const existing = await store().credentialsOf(target.handle);
     return json({
       challenge,
       rp: { id: rpId, name: 'Stacki Studio' },
-      user: { id: encodeBase64url(utf8Bytes(invite.handle)), name: invite.handle, displayName: invite.displayName ?? invite.handle },
+      user: { id: encodeBase64url(utf8Bytes(target.handle)), name: target.handle, displayName: target.displayName ?? target.handle },
       pubKeyCredParams: [-7, -8, -257].map((alg) => ({ type: 'public-key', alg })),
       timeout: PASSKEY_REQUEST_LIMITS.timeoutMs,
       excludeCredentials: existing.map((credential) => credential.id),
     });
   }
 
-  async function register(body: Record<string, unknown>, flow: SignInFlow): Promise<Response> {
+  async function register(body: Record<string, unknown>, flow: SignInFlow, request: Request): Promise<Response> {
+    const setup = await setupTarget(body, request);
+    if (setup === 'refused') {
+      return json({ error: 'setup' }, 403);
+    }
     const code = body['invite'];
     const clientData = decode(body['clientDataJSON'], WEBAUTHN_LIMITS.clientDataBytesMax);
     const attestation = decode(body['attestationObject'], WEBAUTHN_LIMITS.attestationBytesMax);
-    if (typeof code !== 'string' || code.length > 100 || clientData === undefined || attestation === undefined) {
+    if ((setup === undefined && (typeof code !== 'string' || code.length > 100)) || clientData === undefined || attestation === undefined) {
       return json({ error: 'body' }, 400);
     }
     const challenge = challengeOf(clientData);
@@ -156,8 +191,19 @@ export function createPasskeyProvider(context: BuiltInContext): AuthProvider {
       return json({ error: 'verification', reason: verified.error }, 400);
     }
     const label = parseDisplayName(body['label'])?.slice(0, PASSKEY_LIMITS.labelCharsMax) ?? 'Passkey';
+    if (setup !== undefined) {
+      const first = await store().enrolFirst({
+        handle: bootstrapHandle,
+        credentialId: verified.value.credentialId,
+        key: verified.value.key,
+        signCount: verified.value.signCount,
+        label,
+        nowMs: context.now(),
+      });
+      return first.ok ? json({ ok: true }) : json({ error: first.error }, 400);
+    }
     const enrolled = await store().enrol({
-      code,
+      code: String(code),
       credentialId: verified.value.credentialId,
       key: verified.value.key,
       signCount: verified.value.signCount,

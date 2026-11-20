@@ -22,6 +22,8 @@ export const AUTH_PATHS = {
   logout: '/studio/auth/logout',
   providerPrefix: '/studio/auth/provider/',
 } as const;
+/** The built-in passkey provider's first-admin setup page (docs/auth-providers.md, Passkeys). */
+export const PASSKEY_SETUP_PATH = '/studio/auth/passkey/bootstrap';
 const STATE_COOKIE = '__Host-studio-state';
 const STATE_COOKIE_SECONDS = 600;
 const PROVIDER_PATH_CHARS_MAX = 200;
@@ -43,6 +45,12 @@ export async function authRoutes(request: Request, runtime: AuthRuntime, attempt
   const url = new URL(request.url);
   if (url.pathname === AUTH_PATHS.logout) {
     return logout(request, runtime.origin);
+  }
+  if (url.pathname === PASSKEY_SETUP_PATH && runtime.installed === 'built-in' && runtime.providerId === 'passkey') {
+    // The first-admin setup page: a sign-in step like any other, so it gets core's state cookie and the provider draws the page.
+    return request.method === 'GET'
+      ? beginSignIn(request, runtime)
+      : new Response(null, { status: 405, headers: { Allow: 'GET', 'Cache-Control': 'no-store' } });
   }
   if (url.pathname.startsWith(AUTH_PATHS.providerPrefix)) {
     return providerRoute(request, url, runtime);

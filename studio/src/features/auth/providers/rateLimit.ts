@@ -10,6 +10,9 @@ export const RATE_LIMITS = {
   signInAttemptsMax: 20,
   /** Passkey registration and assertion steps per address per window. */
   passkeyStepsMax: 30,
+  /** First-admin setup attempts per address per window, and across all addresses together: the code is a secret. */
+  setupAttemptsMax: 5,
+  setupAttemptsGlobalMax: 30,
   windowMs: 60_000,
   /** Distinct addresses tracked at once. */
   entriesMax: 2_048,

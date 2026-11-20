@@ -115,6 +115,10 @@ export const messages = {
   'studio.passkey.signIn.failed': 'No se aceptó la passkey. Inténtalo de nuevo o pide una invitación nueva a quien administra el sitio.',
   'studio.passkey.signIn.prompt': 'Usa tu passkey para iniciar sesión. Tu dispositivo te pedirá confirmar con tu huella, tu rostro o el bloqueo de pantalla.',
   'studio.passkey.signIn.unsupported': 'Este navegador no admite passkeys. Abre Studio en una versión reciente de Chrome, Safari, Edge o Firefox.',
+  'studio.passkey.setup.code': 'Código de configuración',
+  'studio.passkey.setup.heading': 'Configuración del primer administrador',
+  'studio.passkey.setup.prompt':
+    'Crea la primera passkey para quien administra este sitio. Introduce el código de configuración que definiste con wrangler secret put AUTH_SETUP_CODE.',
   'studio.paused.body': 'Tu borrador guardado está a salvo.',
   'studio.paused.resume': 'Reanudar la edición',
   'studio.paused.title': 'Studio se pausó para ahorrar costes de alojamiento.',

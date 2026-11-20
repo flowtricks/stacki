@@ -118,6 +118,10 @@ export const messages = {
     'Utilisez votre passkey pour vous connecter. Votre appareil vous demandera de confirmer avec votre empreinte, votre visage ou le verrouillage de l’écran.',
   'studio.passkey.signIn.unsupported':
     'Ce navigateur ne prend pas en charge les passkeys. Ouvrez Studio dans une version récente de Chrome, Safari, Edge ou Firefox.',
+  'studio.passkey.setup.code': 'Code de configuration',
+  'studio.passkey.setup.heading': 'Configuration du premier administrateur',
+  'studio.passkey.setup.prompt':
+    'Créez la première passkey du propriétaire de ce site. Saisissez le code de configuration défini avec wrangler secret put AUTH_SETUP_CODE.',
   'studio.paused.body': 'Votre brouillon enregistré est en sécurité.',
   'studio.paused.resume': 'Reprendre la modification',
   'studio.paused.title': 'Studio a été mis en pause pour économiser les coûts d’hébergement.',
