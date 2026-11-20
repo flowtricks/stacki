@@ -139,10 +139,15 @@ const FRAME_PAGE = `<!doctype html><!--avb-s:${ROOT_PATH}--><html data-avb-p="${
     // scroll the page sees is undone, leaving it 9px down. The reveal must still
     // arrive at the section.
     let halted = false;
+    // The host waits for this before it calls a scroll landed (window.reveal): on the Linux runner the
+    // scroll event that triggers the stall could arrive after the landing was read, and the stall then
+    // undid the next case instead (Checks on bb0881bf and ae2fa836).
+    window.__stallDone = false;
     addEventListener('scroll', () => {
       if (!halted && scrollY > 9) {
         halted = true;
         scrollTo({ top: 9, behavior: 'instant' });
+        window.__stallDone = true;
       }
     });
   </script>
@@ -275,7 +280,9 @@ const HOST_HELPERS = `
         const box = element.getBoundingClientRect();
         const top = box.top + painted.top;
         const height = painted.height === undefined ? box.height : painted.height;
-        if (frame.scrollY !== startY && landed(top, height) && still >= STILL_READINGS_LANDED) { break; }
+        // A page that stalls its first scroll has done so before a landing counts (undefined: no stall here).
+        const stallSettled = frame.__stallDone !== false;
+        if (frame.scrollY !== startY && landed(top, height) && still >= STILL_READINGS_LANDED && stallSettled) { break; }
       }
     }
     const lefts = [];
