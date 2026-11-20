@@ -395,6 +395,18 @@ export default function LeftRail({
         );
       })}
       {moreItems.length > 0 && <RailMore items={moreItems} active={overflowActive} />}
+      {/* Drawn before the anchored list so that list stays the rail's last element. */}
+      {dragView !== undefined && dragEntry !== undefined && (
+        <div className="rail-ghost" ref={drag.ghostRef} aria-hidden="true" data-rail-float="true" data-outside={slot === undefined ? 'true' : undefined}>
+          <dragEntry.Icon size={20} />
+        </div>
+      )}
+      {dragView !== undefined && slot !== undefined && dropChanges && (
+        <div className="rail-drop-line" aria-hidden="true" data-rail-float="true" style={{ top: slot.lineY - dragView.railTop - 1 }} />
+      )}
+      <div className="rail-live" role="status" aria-live="polite" data-rail-float="true">
+        {announcement}
+      </div>
       {bottomEntries.length > 0 ? (
         // Anchored at the foot like Studio's AI button: these never move into More (railOverflow.ts).
         // The default order puts Settings first, so it sits directly above the AI button.
@@ -409,30 +421,21 @@ export default function LeftRail({
           </div>
         )
       )}
-      {dragView !== undefined && dragEntry !== undefined && (
-        <div className="rail-ghost" ref={drag.ghostRef} aria-hidden="true" data-rail-float="true" data-outside={slot === undefined ? 'true' : undefined}>
-          <dragEntry.Icon size={20} />
-        </div>
-      )}
-      {dragView !== undefined && slot !== undefined && dropChanges && (
-        <div className="rail-drop-line" aria-hidden="true" data-rail-float="true" style={{ top: slot.lineY - dragView.railTop - 1 }} />
-      )}
-      <div className="rail-live" role="status" aria-live="polite" data-rail-float="true">
-        {announcement}
-      </div>
       {tip && (
         <div className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
           {tip.label}
         </div>
       )}
-      <Menu
-        open={menu !== undefined}
-        anchor={menu?.anchor}
-        entries={menuEntries(menu?.id)}
-        label={translate('rail.orderMenu')}
-        placement="right-start"
-        onClose={() => setMenu(undefined)}
-      />
+      {menu !== undefined && (
+        <Menu
+          open
+          anchor={menu.anchor}
+          entries={menuEntries(menu.id)}
+          label={translate('rail.orderMenu')}
+          placement="right-start"
+          onClose={() => setMenu(undefined)}
+        />
+      )}
     </div>
   );
 }

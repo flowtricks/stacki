@@ -533,7 +533,7 @@ test('the rail carries the AI button at its foot, and Fix with AI reaches the pa
   assert.ok(anchor, 'anchored at the foot');
   assert.equal(anchor, container.querySelector('.rail').lastElementChild);
   // Settings sits above the AI button in the anchor, so the AI button is found by its label.
-  await click(anchor.querySelector('button[aria-label="AI chat"]'));
+  await click(anchor.querySelector('button[aria-label^="AI chat"]'));
   assert.equal(selected, 1);
   const terminalTasks = [];
   const unregisterTerminal = ai.registerAgentTaskHandler('terminal', 10, async (task) => {

@@ -369,3 +369,32 @@ test('nothing is written to a project: no file API call, and the only storage wr
   assert.ok(!stored().includes('.stacki'));
   await unmount();
 });
+
+test('mounting with the AI button and the default order commits a few times, quickly, and keeps the anchored list last', async () => {
+  // A render loop here once froze the process (an assertion printing a whole DOM); the bound makes it a plain failure.
+  const commits = [];
+  const startedMs = Date.now();
+  const container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () =>
+    root.render(
+      React.createElement(
+        React.Profiler,
+        { id: 'rail', onRender: () => commits.push(1) },
+        React.createElement(rail.LeftRail, {
+          projectPath: '/project-a',
+          onSelect: () => {},
+          onOpenSettings: () => {},
+          componentOpen: false,
+          aiButton: { active: false, onSelect: () => {} },
+        }),
+      ),
+    ),
+  );
+  assert.ok(Date.now() - startedMs < 2000, 'the mount finishes within two seconds');
+  assert.ok(commits.length <= 5, `the rail committed ${commits.length} times`);
+  const railElement = container.querySelector('.rail');
+  assert.ok(railElement.lastElementChild === container.querySelector('.rail-anchor'), 'the anchored list is the last element');
+  await unmount();
+});
