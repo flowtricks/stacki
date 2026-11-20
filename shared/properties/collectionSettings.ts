@@ -17,6 +17,8 @@ export const COLLECTION_SETTINGS_LIMITS = {
   fieldsMax: 200,
   /** The fields one group or repeater holds. */
   membersMax: 50,
+  /** How deep groups nest: a group in a group in a group; the form offers no group deeper than this. */
+  memberDepthMax: 3,
   descriptionCharsMax: 500,
   fieldNameCharsMax: 64,
 } as const;
@@ -80,6 +82,8 @@ export const MEMBER_KINDS = [
   'option',
   'file',
   'list',
+  'repeater',
+  'group',
   'keyValue',
   'constant',
   'any',
@@ -92,10 +96,13 @@ export function holdsMembers(kind: SettingsFieldKind): boolean {
 }
 
 /**
- * One field of a group or repeater. Only its name, its kind (when new) and
- * whether it is required are edited here; every other check it has is read
- * from, and left in, the content config. `from` is the name it has there now,
- * absent for one just added; `editable` is false for one written by hand.
+ * One field of a group or repeater, with the same settings a top-level field has:
+ * help text, checks, options and a default, and (for a group, a repeater or a
+ * list) the fields or item kind inside it, nested down to `memberDepthMax`. The
+ * settings are absent from a member that carries only a name and `required`
+ * (an older caller), and for such a member the content config keeps what it has.
+ * `from` is the name it has in the config now, absent for one just added;
+ * `editable` is false for one written by hand.
  */
 export interface SettingsMember {
   readonly name: string;
@@ -103,6 +110,63 @@ export interface SettingsMember {
   readonly required: boolean;
   readonly from: string | undefined;
   readonly editable: boolean;
+  readonly description?: string | undefined;
+  readonly checks?: FieldChecks | undefined;
+  readonly options?: readonly string[] | undefined;
+  readonly defaultValue?: FieldDefault | undefined;
+  readonly members?: readonly SettingsMember[] | undefined;
+  readonly itemKind?: ItemKind | 'other' | undefined;
+}
+
+/** A member as the field form edits it, so a group's fields are configured with the very form a collection's are. */
+export function memberAsField(member: SettingsMember): SettingsField {
+  const starting = newFieldSettings(newKindOf(member.kind));
+  return {
+    name: member.name,
+    kind: member.kind,
+    description: member.description,
+    required: member.required,
+    checks: member.checks ?? starting.checks,
+    options: member.options ?? starting.options,
+    defaultValue: member.defaultValue,
+    editable: member.editable,
+    members: member.members,
+    itemKind: member.itemKind,
+  };
+}
+
+/** The member a field form leaves behind: its settings are the form's, where it came from is the member's. */
+export function fieldAsMember(field: SettingsField, member: Pick<SettingsMember, 'from' | 'editable'>): SettingsMember {
+  return {
+    name: field.name,
+    kind: field.kind,
+    required: field.required,
+    from: member.from,
+    editable: member.editable,
+    description: field.description,
+    checks: field.checks,
+    options: field.options,
+    defaultValue: field.defaultValue,
+    members: field.members,
+    itemKind: field.itemKind,
+  };
+}
+
+/** A member's settings as the config writes them, a new member's starting ones filling what it leaves out. */
+export function memberSettings(member: SettingsMember): FieldSettings {
+  const starting = newFieldSettings(newKindOf(member.kind));
+  return {
+    description: member.description?.trim() || undefined,
+    required: member.required,
+    checks: member.checks ?? starting.checks,
+    options: member.options ?? starting.options,
+    defaultValue: member.required ? undefined : member.defaultValue,
+  };
+}
+
+// A member's kind as a kind a new field may be; one written by hand has no settings to start from.
+function newKindOf(kind: SettingsFieldKind): NewFieldKind {
+  return kind === 'other' ? 'any' : kind;
 }
 
 /**
@@ -124,6 +188,18 @@ export function itemKindOf(field: Pick<SettingsField, 'kind' | 'itemKind'>): Ite
     return 'group';
   }
   return field.kind === 'list' ? (field.itemKind ?? 'text') : undefined;
+}
+
+/** The deepest nesting a group's fields may have, counted from the field that holds them. */
+export function memberDepthOf(members: readonly SettingsMember[] | undefined, depth = 0): number {
+  if (depth > COLLECTION_SETTINGS_LIMITS.memberDepthMax) {
+    return depth;
+  }
+  let deepest = depth;
+  for (const member of members ?? []) {
+    deepest = Math.max(deepest, memberDepthOf(member.members, depth + 1));
+  }
+  return deepest;
 }
 
 /** A new group's or repeater's fields until the form says otherwise: a title, as the config is written with. */
@@ -342,15 +418,18 @@ function parseItemKind(input: unknown): ItemKind | undefined {
 }
 
 /** A group's or repeater's fields from the wire: bounded, each a key, a known kind, unique names. */
-export function parseMembers(input: unknown): readonly SettingsMember[] | undefined {
+export function parseMembers(input: unknown, depth = 0): readonly SettingsMember[] | undefined {
   if (input === undefined) {
     return undefined;
+  }
+  if (depth >= COLLECTION_SETTINGS_LIMITS.memberDepthMax) {
+    throw new Error('Groups nest at most three deep.');
   }
   if (!Array.isArray(input) || input.length > COLLECTION_SETTINGS_LIMITS.membersMax) {
     throw new Error('Expected the group’s fields.');
   }
   const items: readonly unknown[] = input;
-  const members = items.map(parseMember);
+  const members = items.map((item) => parseMember(item, depth));
   if (new Set(members.map((member) => member.name)).size !== members.length) {
     throw new Error('A group’s fields have different names.');
   }
@@ -358,7 +437,7 @@ export function parseMembers(input: unknown): readonly SettingsMember[] | undefi
   return members;
 }
 
-function parseMember(input: unknown): SettingsMember {
+function parseMember(input: unknown, depth: number): SettingsMember {
   const value = record(input);
   const kind = SETTINGS_FIELD_KINDS.find((candidate) => candidate === value['kind']);
   const required = value['required'];
@@ -371,7 +450,23 @@ function parseMember(input: unknown): SettingsMember {
   if (from === undefined && !MEMBER_KINDS.some((candidate) => candidate === kind)) {
     throw new Error('A new group field is a kind a group can hold.');
   }
-  return { name: parseSettingsFieldName(value['name']), kind, required, from, editable };
+  const description = value['description'] === undefined ? undefined : text(value['description']);
+  if (description !== undefined && description.length > COLLECTION_SETTINGS_LIMITS.descriptionCharsMax) {
+    throw new Error('Help text is at most 500 characters.');
+  }
+  return {
+    name: parseSettingsFieldName(value['name']),
+    kind,
+    required,
+    from,
+    editable,
+    description: description === undefined || description.trim() === '' ? undefined : description,
+    checks: value['checks'] === undefined ? undefined : parseFieldChecks(value['checks']),
+    options: parseFieldOptions(value['options']),
+    defaultValue: parseFieldDefault(value['defaultValue']),
+    members: holdsMembers(kind) ? parseMembers(value['members'], depth + 1) : undefined,
+    itemKind: parseStoredItemKind(value['itemKind']),
+  };
 }
 
 export function parseFieldSettings(input: unknown): FieldSettings {

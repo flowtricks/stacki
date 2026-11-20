@@ -48,7 +48,15 @@ import type {
   SettingsFieldKind,
   SettingsMember,
 } from '../../shared/properties/collectionSettings';
-import { holdsMembers, ITEM_KINDS, newFieldMembers, newFieldSettings, SETTINGS_FIELD_KINDS } from '../../shared/properties/collectionSettings';
+import {
+  COLLECTION_SETTINGS_LIMITS,
+  holdsMembers,
+  ITEM_KINDS,
+  memberSettings,
+  newFieldMembers,
+  newFieldSettings,
+  SETTINGS_FIELD_KINDS,
+} from '../../shared/properties/collectionSettings';
 
 /** What reading a collection found: its fields, and where its glob folder is named. */
 export interface SchemaRead {
@@ -199,12 +207,12 @@ function swappedItems(located: Located, chain: Chain, update: FieldUpdate): Resu
   const item = update.itemKind ?? 'text';
   const members = item === 'group' ? (update.members ?? newFieldMembers('repeater')) : undefined;
   const fresh = (members ?? []).filter((member) => member.kind !== 'other');
-  const texts = fresh.map(newMemberText);
+  const texts = fresh.map((member) => newMemberText(member, 1));
   if (texts.some((text) => text === undefined) || fresh.length !== (members ?? []).length) {
     return err(described('cmsBackend.schema.tooComplex', { name: update.name }));
   }
   const shape = texts.length === 0 ? '{ title: z.string().optional() }' : `{ ${texts.join(', ')} }`;
-  const imaging = fresh.some((member) => member.kind === 'image' || member.kind === 'multiImage');
+  const imaging = usesImage(fresh);
   const scope = imaging ? imageScope(located) : { ok: true as const, value: [] };
   if (!scope.ok) {
     return scope;
@@ -226,9 +234,12 @@ function membersShape(chain: Chain): ts.ObjectLiteralExpression | undefined {
 
 // A group's or repeater's fields as the config states them: a field the form
 // cannot read (a key it cannot name, a spread) is not listed and is kept.
-function readMembers(chain: Chain, file: ts.SourceFile): readonly SettingsMember[] | undefined {
+function readMembers(chain: Chain, file: ts.SourceFile, depth = 0): readonly SettingsMember[] | undefined {
+  if (depth >= COLLECTION_SETTINGS_LIMITS.memberDepthMax) {
+    return undefined; // Deeper than the form nests: kept as written, listed as having no fields.
+  }
   const shape = membersShape(chain);
-  return shape?.properties.flatMap((property) => memberOf(property, file));
+  return shape?.properties.flatMap((property) => memberOf(property, file, depth));
 }
 
 // What a list holds, as its form names it: `other` for items written some other way.
@@ -246,7 +257,7 @@ function readItemKind(chain: Chain, file: ts.SourceFile): ItemKind | 'other' | u
   return found ?? 'other';
 }
 
-function memberOf(property: ts.ObjectLiteralElementLike, file: ts.SourceFile): SettingsMember[] {
+function memberOf(property: ts.ObjectLiteralElementLike, file: ts.SourceFile, depth = 0): SettingsMember[] {
   const name = propertyName(property);
   if (name === undefined || !MEMBER_NAME.test(name)) {
     return [];
@@ -256,7 +267,27 @@ function memberOf(property: ts.ObjectLiteralElementLike, file: ts.SourceFile): S
   if (chain === undefined) {
     return [{ name, kind: 'other', required: false, from: name, editable: false }];
   }
-  return [{ name, kind: chain.kind, required: readChain(chain).required, from: name, editable: true }];
+  return [
+    {
+      name,
+      kind: chain.kind,
+      ...readChain(chain),
+      from: name,
+      editable: true,
+      members: holdsMembers(chain.kind) ? readMembers(chain, file, depth + 1) : undefined,
+      itemKind: readItemKind(chain, file),
+    },
+  ];
+}
+
+// Whether a fresh member, however deep, is an image, which the config's schema function must provide.
+function usesImage(members: readonly SettingsMember[], depth = 0): boolean {
+  if (depth > COLLECTION_SETTINGS_LIMITS.memberDepthMax) {
+    return false;
+  }
+  return members.some(
+    (member) => (member.from === undefined && (member.kind === 'image' || member.kind === 'multiImage')) || usesImage(member.members ?? [], depth + 1),
+  );
 }
 
 const MEMBER_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -271,7 +302,9 @@ function rewrittenMembers(
   located: Located,
   chain: Chain,
   rewrite: { readonly name: string; readonly members: readonly SettingsMember[] },
+  depth = 0,
 ): Result<{ readonly base: string; readonly scope: readonly SpanEdit[] }, Described> {
+  assert(depth <= COLLECTION_SETTINGS_LIMITS.memberDepthMax, 'A group nests within its bound');
   const { file } = located;
   const { members } = rewrite;
   const shape = membersShape(chain);
@@ -281,7 +314,7 @@ function rewrittenMembers(
   const existing = new Map(shape.properties.map((property) => [propertyName(property), property]));
   const written = new Map<SettingsMember, string>();
   for (const member of members) {
-    const text = memberText(member, member.from === undefined ? undefined : existing.get(member.from), file);
+    const text = memberText(member, member.from === undefined ? undefined : existing.get(member.from), { located, depth: depth + 1 });
     if (!text.ok) {
       return text;
     }
@@ -318,8 +351,7 @@ function rewrittenMembers(
   const edit = propertyList(shape, file, texts);
   const baseStart = chain.baseNode.getStart(file);
   const base = chain.base.slice(0, edit.start - baseStart) + edit.text + chain.base.slice(edit.end - baseStart);
-  const imaging = members.some((member) => member.from === undefined && (member.kind === 'image' || member.kind === 'multiImage'));
-  const scope = imaging ? imageScope(located) : { ok: true as const, value: [] };
+  const scope = depth === 0 && usesImage(members) ? imageScope(located) : { ok: true as const, value: [] };
   if (!scope.ok) {
     return scope;
   }
@@ -327,10 +359,15 @@ function rewrittenMembers(
   return { ok: true, value: { base, scope: scope.value } };
 }
 
-// One field of a group, as the config writes it.
-function memberText(member: SettingsMember, property: ts.ObjectLiteralElementLike | undefined, file: ts.SourceFile): Result<string, Described> {
+// One field of a group, as the config writes it: a new one fresh, a kept one with only what the form changed.
+function memberText(
+  member: SettingsMember,
+  property: ts.ObjectLiteralElementLike | undefined,
+  within: { readonly located: Located; readonly depth: number },
+): Result<string, Described> {
+  const { file } = within.located;
   if (member.from === undefined) {
-    const fresh = newMemberText(member);
+    const fresh = newMemberText(member, within.depth);
     return fresh === undefined ? err(described('cmsBackend.schema.tooComplex', { name: member.name })) : { ok: true, value: fresh };
   }
   if (property === undefined || property.name === undefined) {
@@ -343,9 +380,21 @@ function memberText(member: SettingsMember, property: ts.ObjectLiteralElementLik
   let value = schema?.getText(file) ?? '';
   if (chain !== undefined) {
     const settings = readChain(chain);
-    if (settings.required !== member.required) {
-      // A default makes a field optional, so a required one leaves it.
-      value = writeChain(chain, { ...settings, required: member.required, defaultValue: member.required ? undefined : settings.defaultValue });
+    // A member that carries no settings (an older caller) only has its requiredness applied.
+    const next =
+      member.checks === undefined
+        ? { ...settings, required: member.required, defaultValue: member.required ? undefined : settings.defaultValue }
+        : { ...memberSettings(member), options: member.options ?? settings.options };
+    let working = chain;
+    if (holdsMembers(chain.kind) && member.members !== undefined && readMembers(chain, file, within.depth) !== undefined) {
+      const inner = rewrittenMembers(within.located, chain, { name: member.name, members: member.members }, within.depth);
+      if (!inner.ok) {
+        return inner;
+      }
+      working = { ...chain, base: inner.value.base };
+    }
+    if (working !== chain || JSON.stringify(next) !== JSON.stringify(settings)) {
+      value = writeChain(working, next);
     }
   }
   if (key === undefined) {
@@ -355,12 +404,19 @@ function memberText(member: SettingsMember, property: ts.ObjectLiteralElementLik
   return { ok: true, value: `${key}: ${value}` };
 }
 
-function newMemberText(member: SettingsMember): string | undefined {
+// A new field of a group, with its settings and (for a group, a repeater or a list) its fields or items.
+function newMemberText(member: SettingsMember, depth: number): string | undefined {
+  assert(depth <= COLLECTION_SETTINGS_LIMITS.memberDepthMax + 1, 'A group nests within its bound');
   const kind = SETTINGS_FIELD_KIND_NEW.find((candidate) => candidate === member.kind);
   if (kind === undefined || kind === 'reference' || kind === 'multiReference') {
     return undefined;
   }
-  return `${keyText(member.name, { quoted: false })}: ${settledFieldText(kind, '', { ...newFieldSettings(kind), required: member.required })}`;
+  const contents: Contents = {
+    members: holdsMembers(kind) ? member.members : undefined,
+    itemKind: kind === 'list' && member.itemKind !== 'other' ? member.itemKind : undefined,
+    depth,
+  };
+  return `${keyText(member.name, { quoted: false })}: ${settledFieldText(kind, '', memberSettings(member), contents)}`;
 }
 
 const SETTINGS_FIELD_KIND_NEW: readonly NewFieldKind[] = SETTINGS_FIELD_KINDS.filter((kind): kind is NewFieldKind => kind !== 'other');
@@ -400,10 +456,7 @@ function addField(
   const key = keyText(field.name, { quoted: false });
   const added = `${key}: ${settledFieldText(field.fieldKind, target, field.settings, { members: holdsMembers(field.fieldKind) ? field.members : undefined, itemKind: field.itemKind })}`;
   const texts = [...object.properties.map((property) => property.getText(file)), added];
-  const imaging =
-    field.fieldKind === 'image' ||
-    field.fieldKind === 'multiImage' ||
-    (field.members ?? []).some((member) => member.kind === 'image' || member.kind === 'multiImage');
+  const imaging = field.fieldKind === 'image' || field.fieldKind === 'multiImage' || usesImage(field.members ?? []);
   const scope = imaging ? imageScope(located) : { ok: true as const, value: [] };
   if (!scope.ok) {
     return scope;
@@ -430,7 +483,7 @@ export function settledFieldText(kind: NewFieldKind, target: string, settings: F
 /** The schema a new field of `kind` is written as. */
 export function newFieldText(kind: NewFieldKind, target: string, contents: Contents = {}): string {
   const pointed = `reference(${JSON.stringify(target)})`;
-  const shape = membersText(contents.members);
+  const shape = membersText(contents.members, contents.depth ?? 0);
   const schemas: Readonly<Record<NewFieldKind, string>> = {
     text: 'z.string()',
     richText: 'z.string()',
@@ -462,6 +515,8 @@ export function newFieldText(kind: NewFieldKind, target: string, contents: Conte
 export interface Contents {
   readonly members?: readonly SettingsMember[] | undefined;
   readonly itemKind?: ItemKind | undefined;
+  /** How deep the group being written sits, for the bound on nesting. */
+  readonly depth?: number | undefined;
 }
 
 // One list item's schema: a plain value, or a group written with `shape`.
@@ -479,11 +534,11 @@ function itemSchema(item: ItemKind, shape: string): string {
 }
 
 // A new group's fields as the `{ … }` it is written with; with none given, a title.
-function membersText(members: readonly SettingsMember[] | undefined): string {
+function membersText(members: readonly SettingsMember[] | undefined, depth: number): string {
   if (members === undefined) {
     return '{ title: z.string().optional() }';
   }
-  const texts = members.map(newMemberText);
+  const texts = members.map((member) => newMemberText(member, depth + 1));
   assert(
     texts.every((text) => text !== undefined),
     'A new group holds only fields a form can make',
