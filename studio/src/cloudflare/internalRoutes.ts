@@ -8,9 +8,11 @@ import { GitHubRepository } from '../features/github/github';
 import { sourcePath, filePath, record, string } from '../shared/validation';
 import type { Environment } from './environment';
 import { activeAuthRuntime } from './activeAuthRuntime';
+import { discardBody } from './requestBody';
 
 export async function internal(request: Request, environment: Environment): Promise<Response> {
   if (!environment.CONTAINER_TOKEN || request.headers.get('x-studio-token') !== environment.CONTAINER_TOKEN) {
+    await discardBody(request);
     return new Response('Forbidden', { status: 403 });
   }
   const url = new URL(request.url);
