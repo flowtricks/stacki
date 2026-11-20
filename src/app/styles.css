@@ -5925,6 +5925,16 @@ body > .embed-editor_provenance {
   z-index: 200;
   color: var(--text-dim);
   font-size: 12.5px;
+  /* Present (and blocking) from the first frame, seen only after 300ms: work that ends sooner never flickers a cover. */
+  animation: busy-appear 120ms ease-out 300ms both;
+}
+@keyframes busy-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .spinner {
   width: 26px;
