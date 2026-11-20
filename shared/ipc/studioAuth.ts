@@ -7,6 +7,7 @@
 //
 // Secrets never pass through this module. A client secret is entered by its owner into
 // `wrangler secret put`; the guide below only prints that command.
+import { assert } from '../core/assert';
 import { record } from '../core/boundary';
 import { err, ok, type Result } from '../core/result';
 
@@ -103,10 +104,13 @@ export const STUDIO_AUTH_VARIABLES = [
 export type StudioAuthVariable = (typeof STUDIO_AUTH_VARIABLES)[number];
 
 export function emptyStudioAuthDraft(kind: StudioAuthKind): StudioAuthDraft {
+  assert(isStudioAuthKind(kind), 'emptyStudioAuthDraft: the kind is one of the known sign-ins');
+  assert(STUDIO_AUTH_KINDS.includes(STUDIO_AUTH_DEFAULT), 'emptyStudioAuthDraft: the default sign-in is a known kind');
   return { kind, admin: '', allowedDomains: '', allowedEmails: '', clientId: '', issuer: '', name: '', teamDomain: '', aud: '', teamDomainCheck: 'strict' };
 }
 
 export function isStudioAuthKind(input: unknown): input is StudioAuthKind {
+  assert(STUDIO_AUTH_KINDS.length > 0, 'isStudioAuthKind: there is at least one sign-in kind');
   return STUDIO_AUTH_KINDS.some((kind) => kind === input);
 }
 
@@ -116,6 +120,7 @@ export function isStudioAuthKind(input: unknown): input is StudioAuthKind {
 export function buildStudioAuth(draft: StudioAuthDraft): Result<StudioAuthConfig, readonly StudioAuthProblem[]> {
   const problems: StudioAuthProblem[] = [];
   const collect = <T>(field: StudioAuthField, result: Result<T, StudioAuthProblemCode>): T | undefined => {
+    assert(problems.length <= STUDIO_AUTH_FIELDS_MAX, 'buildStudioAuth: at most one problem per field is collected');
     if (result.ok) {
       return result.value;
     }
@@ -123,15 +128,22 @@ export function buildStudioAuth(draft: StudioAuthDraft): Result<StudioAuthConfig
     return undefined;
   };
   const config = buildChecked(draft, collect);
-  if (problems.length > 0 || config === undefined) {
+  if (problems.length > 0) {
     return err(problems);
   }
+  // Pair of the check above: a draft with no problem always built a config, so the next step cannot return an empty failure.
+  assert(config !== undefined, 'buildStudioAuth: a draft with no problems built a config');
+  assert(config.kind === draft.kind, 'buildStudioAuth: the config keeps the draft kind');
   return ok(config);
 }
+
+const STUDIO_AUTH_FIELDS_MAX = 16;
 
 type Collect = <T>(field: StudioAuthField, result: Result<T, StudioAuthProblemCode>) => T | undefined;
 
 function buildChecked(draft: StudioAuthDraft, collect: Collect): StudioAuthConfig | undefined {
+  assert(isStudioAuthKind(draft.kind), 'buildChecked: the draft kind is known');
+  assert(draft.teamDomainCheck === 'strict' || draft.teamDomainCheck === 'custom', 'buildChecked: the team domain check is strict or custom');
   switch (draft.kind) {
     case 'github':
       return { kind: 'github' };
@@ -185,6 +197,7 @@ function buildChecked(draft: StudioAuthDraft, collect: Collect): StudioAuthConfi
 }
 
 function teamDomainOf(input: string, check: StudioAuthDraft['teamDomainCheck']): Result<string, StudioAuthProblemCode> {
+  assert(typeof input === 'string', 'teamDomainOf: the input is text');
   const value = input
     .trim()
     .toLowerCase()
@@ -199,11 +212,13 @@ function teamDomainOf(input: string, check: StudioAuthDraft['teamDomainCheck']):
   if (!DOMAIN_PATTERN.test(value)) {
     return err('invalid');
   }
+  assert(value === value.toLowerCase(), 'teamDomainOf: a checked domain is lower case');
   return check === 'strict' && !value.endsWith(ACCESS_DOMAIN_SUFFIX) ? err('customDomain') : ok(value);
 }
 
 // The application's audience tag: a long hex or base64url-like string.
 function audOf(input: string): Result<string, StudioAuthProblemCode> {
+  assert(STUDIO_AUTH_LIMITS.audCharsMin < STUDIO_AUTH_LIMITS.audCharsMax, 'audOf: the audience bounds are ordered');
   const value = input.trim();
   if (value.length === 0) {
     return err('required');
@@ -214,10 +229,12 @@ function audOf(input: string): Result<string, StudioAuthProblemCode> {
   if (value.length < STUDIO_AUTH_LIMITS.audCharsMin) {
     return err('tooShort');
   }
+  assert(value.length >= STUDIO_AUTH_LIMITS.audCharsMin, 'audOf: a value that reaches the pattern is long enough');
   return /^[A-Za-z0-9_-]+$/.test(value) ? ok(value) : err('invalid');
 }
 
 function clientIdOf(input: string): Result<string, StudioAuthProblemCode> {
+  assert(typeof input === 'string', 'clientIdOf: the input is text');
   const value = input.trim();
   if (value.length === 0) {
     return err('required');
@@ -226,10 +243,12 @@ function clientIdOf(input: string): Result<string, StudioAuthProblemCode> {
     return err('tooLong');
   }
   // Printable characters an OAuth client identifier uses; no whitespace, quote, comma or backslash.
+  assert(value.length <= STUDIO_AUTH_LIMITS.clientIdCharsMax, 'clientIdOf: a value that reaches the pattern is within its bound');
   return /^[A-Za-z0-9._~@:/+=-]+$/.test(value) ? ok(value) : err('invalid');
 }
 
 function issuerOf(input: string): Result<string, StudioAuthProblemCode> {
+  assert(typeof input === 'string', 'issuerOf: the input is text');
   const value = input.trim();
   if (value.length === 0) {
     return err('required');
@@ -251,10 +270,13 @@ function issuerOf(input: string): Result<string, StudioAuthProblemCode> {
   if (parsed.search !== '' || parsed.hash !== '') {
     return err('invalid');
   }
+  assert(parsed.protocol === 'https:', 'issuerOf: an accepted issuer is https');
+  assert(value.length <= STUDIO_AUTH_LIMITS.issuerCharsMax, 'issuerOf: an accepted issuer is within its bound');
   return ok(value);
 }
 
 function nameOf(input: string): Result<string, StudioAuthProblemCode> {
+  assert(OIDC_NAME_DEFAULT.length <= STUDIO_AUTH_LIMITS.nameCharsMax, 'nameOf: the default name fits its own bound');
   const value = input.trim();
   if (value.length === 0) {
     return ok(OIDC_NAME_DEFAULT);
@@ -263,6 +285,7 @@ function nameOf(input: string): Result<string, StudioAuthProblemCode> {
     return err('tooLong');
   }
   // A button label holds no control characters.
+  assert(value.length > 0, 'nameOf: a name that reaches the control-character check is not empty');
   return /[\u0000-\u001f\u007f]/.test(value) ? err('invalid') : ok(value);
 }
 
@@ -270,6 +293,7 @@ const EMAIL_PATTERN = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
 const DOMAIN_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 
 function emailOf(input: string): Result<string, StudioAuthProblemCode> {
+  assert(typeof input === 'string', 'emailOf: the input is text');
   const value = input.trim().toLowerCase();
   if (value.length === 0) {
     return err('required');
@@ -277,19 +301,23 @@ function emailOf(input: string): Result<string, StudioAuthProblemCode> {
   if (value.length > STUDIO_AUTH_LIMITS.emailCharsMax) {
     return err('tooLong');
   }
+  assert(value === value.trim(), 'emailOf: a checked email has no surrounding space');
   return EMAIL_PATTERN.test(value) ? ok(value) : err('invalid');
 }
 
 // An identity is `<provider>:<subject>` and the subject has its own bound (studio/docs/auth-providers.md).
 function adminEmailOf(input: string): Result<string, StudioAuthProblemCode> {
+  assert(STUDIO_AUTH_LIMITS.adminCharsMax <= STUDIO_AUTH_LIMITS.emailCharsMax, 'adminEmailOf: the administrator bound is not wider than an email');
   const email = emailOf(input);
   if (email.ok && email.value.length > STUDIO_AUTH_LIMITS.adminCharsMax) {
     return err('tooLong');
   }
+  assert(!email.ok || email.value.length <= STUDIO_AUTH_LIMITS.adminCharsMax, 'adminEmailOf: an accepted administrator is within its bound');
   return email;
 }
 
 function passkeyHandle(input: string): Result<string, StudioAuthProblemCode> {
+  assert(PASSKEY_ADMIN_DEFAULT.length > 0, 'passkeyHandle: the default handle is not empty');
   const value = input.trim().toLowerCase();
   if (value.length === 0) {
     return ok(PASSKEY_ADMIN_DEFAULT);
@@ -297,14 +325,18 @@ function passkeyHandle(input: string): Result<string, StudioAuthProblemCode> {
   if (value.length > 64) {
     return err('tooLong');
   }
+  assert(value.length <= 64, 'passkeyHandle: a handle that reaches the pattern is within its bound');
   return /^[a-z0-9][a-z0-9._-]*$/.test(value) ? ok(value) : err('invalid');
 }
 
 function splitList(input: string): readonly string[] {
-  return input
+  assert(typeof input === 'string', 'splitList: the input is text');
+  const items = input
     .split(/[\s,;]+/)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+  assert(!items.some((item) => /[\s,;]/.test(item)), 'splitList: no item holds a separator');
+  return items;
 }
 
 function listOf(input: string, one: (item: string) => Result<string, StudioAuthProblemCode>): Result<readonly string[], StudioAuthProblemCode> {
@@ -312,6 +344,7 @@ function listOf(input: string, one: (item: string) => Result<string, StudioAuthP
   if (items.length > STUDIO_AUTH_LIMITS.listItemsMax) {
     return err('tooMany');
   }
+  assert(items.length <= STUDIO_AUTH_LIMITS.listItemsMax, 'listOf: the loop below runs at most listItemsMax times');
   const seen = new Set<string>();
   for (const item of items) {
     const checked = one(item);
@@ -320,20 +353,24 @@ function listOf(input: string, one: (item: string) => Result<string, StudioAuthP
     }
     seen.add(checked.value);
   }
+  assert(seen.size <= items.length, 'listOf: de-duplicating never adds an item');
   return ok([...seen]);
 }
 
 function domainsOf(input: string): Result<readonly string[], StudioAuthProblemCode> {
   return listOf(input, (item) => {
+    assert(item.length > 0, 'domainsOf: a list item is not empty');
     const value = item.replace(/^@/, '').toLowerCase();
     if (value.length > STUDIO_AUTH_LIMITS.domainCharsMax) {
       return err('tooLong');
     }
+    assert(!value.startsWith('@'), 'domainsOf: the leading @ is removed');
     return DOMAIN_PATTERN.test(value) ? ok(value) : err('invalid');
   });
 }
 
 function emailsOf(input: string): Result<readonly string[], StudioAuthProblemCode> {
+  assert(typeof input === 'string', 'emailsOf: the input is text');
   return listOf(input, emailOf);
 }
 
@@ -344,7 +381,10 @@ function emailsOf(input: string): Result<readonly string[], StudioAuthProblemCod
  * that never chose stays exactly as Studio shipped it.
  */
 export function studioAuthVariables(config: StudioAuthConfig): ReadonlyArray<readonly [StudioAuthVariable, string]> {
+  assert(isStudioAuthKind(config.kind), 'studioAuthVariables: the config kind is known');
   const lists = (domains: readonly string[], emails: readonly string[]): ReadonlyArray<readonly [StudioAuthVariable, string]> => {
+    assert(domains.length <= STUDIO_AUTH_LIMITS.listItemsMax, 'studioAuthVariables: the domain list is within its bound');
+    assert(emails.length <= STUDIO_AUTH_LIMITS.listItemsMax, 'studioAuthVariables: the email list is within its bound');
     const rows: Array<readonly [StudioAuthVariable, string]> = [];
     if (domains.length > 0) {
       rows.push(['AUTH_ALLOWED_DOMAINS', domains.join(',')]);
@@ -352,6 +392,7 @@ export function studioAuthVariables(config: StudioAuthConfig): ReadonlyArray<rea
     if (emails.length > 0) {
       rows.push(['AUTH_ALLOWED_EMAILS', emails.join(',')]);
     }
+    assert(rows.length <= 2, 'studioAuthVariables: the lists write at most two variables');
     return rows;
   };
   switch (config.kind) {
@@ -406,11 +447,13 @@ export interface StudioAuthGuide {
 }
 
 export function studioAuthGuide(config: StudioAuthConfig): StudioAuthGuide {
+  assert(isStudioAuthKind(config.kind), 'studioAuthGuide: the config kind is known');
   return studioAuthGuideFor(config.kind);
 }
 
 /** The guide depends only on the kind, so a form can show it before the values are valid. */
 export function studioAuthGuideFor(kind: StudioAuthKind): StudioAuthGuide {
+  assert(isStudioAuthKind(kind), 'studioAuthGuideFor: the kind is known');
   switch (kind) {
     case 'github':
     case 'access':
@@ -435,6 +478,8 @@ export function studioAuthGuideFor(kind: StudioAuthKind): StudioAuthGuide {
 }
 
 function guideFor(provider: 'google' | 'oidc', secret: string): StudioAuthGuide {
+  assert(/^[A-Z][A-Z0-9_]*$/.test(secret), 'guideFor: a secret name is an upper case variable name');
+  assert(provider === 'google' || provider === 'oidc', 'guideFor: the provider has a callback route');
   return {
     secretLines: ['cd studio', `npx wrangler secret put ${secret} --config cloudflare/wrangler.jsonc`],
     redirectPath: `/studio/auth/${provider}/callback`,
@@ -449,6 +494,7 @@ function guideFor(provider: 'google' | 'oidc', secret: string): StudioAuthGuide 
  */
 export function studioAuthNextSteps(config: StudioAuthConfig): readonly string[] {
   const guide = studioAuthGuide(config);
+  assert(guide.secretNames.length === 0 || guide.secretLines.length > 0, 'studioAuthNextSteps: a guide that names a secret also has its command');
   switch (config.kind) {
     case 'github':
       return ['Sign-in: GitHub (the default). Nothing else to choose; the GitHub App steps in studio/docs/cloudflare.md cover it.'];
@@ -495,6 +541,7 @@ export function studioAuthNextSteps(config: StudioAuthConfig): readonly string[]
 
 // Boundary ------------------------------------------------------------------
 
+const WIRE_TEXT_CHARS_MAX = 1024;
 const WIRE_KEYS = ['kind', 'admin', 'allowedDomains', 'allowedEmails', 'aud', 'clientId', 'issuer', 'name', 'teamDomain', 'teamDomainCustom'] as const;
 
 /**
@@ -502,6 +549,7 @@ const WIRE_KEYS = ['kind', 'admin', 'allowedDomains', 'allowedEmails', 'aud', 'c
  * in a field nobody reads; everything else is checked again by `buildStudioAuth`.
  */
 export function parseStudioAuth(input: unknown): StudioAuthConfig {
+  assert(WIRE_KEYS.length > 0, 'parseStudioAuth: the wire has known keys');
   const value = record(input);
   for (const key of Object.keys(value)) {
     if (!WIRE_KEYS.some((allowed) => allowed === key)) {
@@ -529,20 +577,24 @@ export function parseStudioAuth(input: unknown): StudioAuthConfig {
     const first = built.error[0];
     throw new Error(`Studio sign-in ${first?.field ?? 'value'} is ${first?.code ?? 'invalid'}`);
   }
+  assert(built.value.kind === kind, 'parseStudioAuth: the parsed choice keeps the wire kind');
   return built.value;
 }
 
 function wireText(input: unknown): string {
+  assert(WIRE_TEXT_CHARS_MAX > 0, 'wireText: the text bound is positive');
   if (input === undefined) {
     return '';
   }
-  if (typeof input !== 'string' || input.length > 1024) {
+  if (typeof input !== 'string' || input.length > WIRE_TEXT_CHARS_MAX) {
     throw new Error('Studio sign-in field must be a short string');
   }
+  assert(input.length <= WIRE_TEXT_CHARS_MAX, 'wireText: an accepted field is within its bound');
   return input;
 }
 
 function wireList(input: unknown): string {
+  assert(STUDIO_AUTH_LIMITS.listItemsMax > 0, 'wireList: the list bound is positive');
   if (input === undefined) {
     return '';
   }
@@ -554,6 +606,7 @@ function wireList(input: unknown): string {
 
 // The wire carries the qualified identity (`google:me@x.com`); the builder takes the subject.
 function unqualified(input: unknown, kind: StudioAuthKind): string {
+  assert(isStudioAuthKind(kind), 'unqualified: the kind is known');
   const value = wireText(input);
   if (kind === 'github' || value === '') {
     return value;
@@ -562,11 +615,13 @@ function unqualified(input: unknown, kind: StudioAuthKind): string {
   if (!value.startsWith(prefix)) {
     throw new Error(`Studio sign-in admin must start with ${prefix}`);
   }
+  assert(value.length >= prefix.length, 'unqualified: a prefixed value is at least as long as its prefix');
   return value.slice(prefix.length);
 }
 
 /** The first administrator's subject, for a form that shows the email or handle without its prefix. */
 export function studioAuthAdminSubject(config: StudioAuthConfig): string {
+  assert(config.kind === 'github' || config.admin.startsWith(`${config.kind}:`), 'studioAuthAdminSubject: an administrator is qualified by its sign-in kind');
   return config.kind === 'github' ? '' : config.admin.slice(config.kind.length + 1);
 }
 
@@ -575,6 +630,7 @@ export function suggestSetupCode(randomBytes: Uint8Array): string {
   if (randomBytes.length !== 32) {
     throw new Error('A setup code suggestion needs exactly 32 random bytes');
   }
+  assert(SETUP_CODE_CHARS.min < SETUP_CODE_CHARS.max, 'suggestSetupCode: the setup code bounds are ordered');
   const code = btoa(String.fromCharCode(...randomBytes))
     .replaceAll('+', '-')
     .replaceAll('/', '_')
@@ -582,5 +638,6 @@ export function suggestSetupCode(randomBytes: Uint8Array): string {
   if (code.length < SETUP_CODE_CHARS.min || code.length > SETUP_CODE_CHARS.max) {
     throw new Error('The suggested setup code is outside its length bounds');
   }
+  assert(!/[+/=]/.test(code), 'suggestSetupCode: the code is URL-safe');
   return code;
 }
