@@ -28,6 +28,11 @@ const STUB_PREVIEW = `
 import { DurableObject } from 'cloudflare:workers';
 export class StubPreview extends DurableObject {
   async fetch(request) {
+    // Read what was sent before answering. A POST answered with its body unread leaves workerd to close
+    // that connection, and on Windows the client's next POST, reusing it, failed with "fetch failed"
+    // (undici never retries a POST): cloudflareStartup on Studio's Windows job, Checks on 010980b8,
+    // b6a4a679 and 9e0c1a7b.
+    await request.arrayBuffer();
     const echo = {
       url: request.url,
       method: request.method,
