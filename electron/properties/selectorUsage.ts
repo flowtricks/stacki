@@ -111,7 +111,10 @@ export async function analyzeSelectorUsage(input: UsageInput, scanPackages: (int
     const hits = hitsByScope.get(scopeKey) ?? hitsFor(rule.region, sheet, scans, packages);
     hitsByScope.set(scopeKey, hits);
     const unanswered = packages.kind === 'pending' ? packages.unanswered : undefined;
-    const verdict = lockedVerdict(verdictOf(rule, hits, taintFor(rule.region, sheet, taint), unanswered, keep), { locked: locked(rule.region.rel) });
+    const verdict = lockedVerdict(verdictOf(rule, hits, taintFor(rule.region, sheet, taint), unanswered, keep), {
+      locked: locked(rule.region.rel),
+      names: rule.names,
+    });
     const id = selectorEntryId({ rel: rule.region.rel, block: rule.region.block, offset: rule.ruleStart, index: rule.index });
     assert(!selectors.has(id), 'analyzeSelectorUsage: entry ids are unique');
     selectors.set(id, rule);
@@ -189,19 +192,32 @@ function hitsFor(region: StyleRegion, sheet: AstroSheet | undefined, scans: Proj
   return hits;
 }
 
-// An explicit stylesheet lock is the user's decision to retain its selectors.
-// Surface that decision as `kept` even when outside data prevents an unused
-// proof: uncertainty must not hide the lock in the panel. Used and untracked
-// selectors retain their verdicts because they do not need retention protection.
-function lockedVerdict(verdict: SelectorVerdict, sheet: { readonly locked: boolean }): SelectorVerdict {
-  if (sheet.locked) {
-    if (verdict.kind === 'unused' || verdict.kind === 'unknown') {
-      assert(verdict.names.length > 0, 'lockedVerdict: a protected selector names what is missing');
-      return { kind: 'kept', names: verdict.names };
-    }
+// An explicit stylesheet lock is the user's decision to retain its selectors, so a locked stylesheet's
+// selectors are all `kept`, whatever their shape or whether the project uses them: the lock is the
+// authority, not the proof. A selector that was unused or unknown keeps the names it was missing; one in use
+// (or still being checked) is held by the names it requires, and a used one is marked `inUse` so unlocking
+// its stylesheet never has to lock it by name. Selectors with no class or id are not listed at all.
+function lockedVerdict(verdict: SelectorVerdict, sheet: { readonly locked: boolean; readonly names: readonly string[] }): SelectorVerdict {
+  if (!sheet.locked) {
     return verdict;
   }
-  return verdict;
+  switch (verdict.kind) {
+    case 'unused':
+    case 'unknown':
+    case 'checking':
+      assert(verdict.names.length > 0, 'lockedVerdict: a protected selector names what is missing');
+      return { kind: 'kept', names: verdict.names };
+    case 'used':
+      assert(sheet.names.length > 0, 'lockedVerdict: a used selector requires names');
+      return { kind: 'kept', names: sheet.names, inUse: true };
+    case 'kept':
+    case 'untracked':
+      return verdict;
+    default: {
+      const exhaustive: never = verdict;
+      return exhaustive;
+    }
+  }
 }
 
 function verdictOf(

@@ -40,8 +40,12 @@ export type SelectorVerdict =
   | { readonly kind: 'untracked' }
   /** Proven unused: nothing can produce `names`, which the selector requires. */
   | { readonly kind: 'unused'; readonly names: readonly string[] }
-  /** Would be unused, but the keep list protects `names`. */
-  | { readonly kind: 'kept'; readonly names: readonly string[] }
+  /**
+   * Held by the keep list or a stylesheet lock. `inUse` marks a selector the project uses anyway, held only because its
+   * stylesheet is locked: every selector of a locked stylesheet is locked, whatever its shape, but one that needs no
+   * protection is never locked by name when its stylesheet is unlocked (lockChanges.ts) and has no trash.
+   */
+  | { readonly kind: 'kept'; readonly names: readonly string[]; readonly inUse?: true }
   /** `reasonRef` is `reason` as a message reference, for the renderer to word in the person's language; `reason` stays the English fallback and the grouping key. */
   | { readonly kind: 'unknown'; readonly names: readonly string[]; readonly reason: string; readonly reasonRef?: MessageRef | undefined }
   /** Not found in the project; installed packages are still being searched for `names`. */
@@ -216,9 +220,12 @@ function parseVerdict(input: unknown): SelectorVerdict {
     case 'untracked':
       return { kind };
     case 'unused':
-    case 'kept':
     case 'checking':
       return { kind, names: parseNames(value['names']) };
+    case 'kept': {
+      const names = parseNames(value['names']);
+      return value['inUse'] === true ? { kind, names, inUse: true } : { kind, names };
+    }
     case 'unknown': {
       const names = parseNames(value['names']);
       const reason = text(value['reason']);

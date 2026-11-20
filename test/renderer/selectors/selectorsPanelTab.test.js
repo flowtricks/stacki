@@ -154,3 +154,47 @@ test('first open picks Unused, else Locked, else All; a picked tab then wins eve
     await panel.finish();
   }
 });
+
+// A locked file locks every row in it: the rows in use are as blue and locked as the unused ones, the
+// Locked tab counts and lists the same rows the file's heading holds. Unlocking the file is held by the
+// real-project test in selectorsPanel.test.js.
+test('every row of a locked file is locked, and the Locked tab counts and lists the same rows', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-selectors-lockedfile-'));
+  const sheet = '.heading:has(+ .text) { a: b }\n.text { a: b }\n.heading + .text { a: b }\n.section > :where(:not(.container)) { a: b }\n.ghost { a: b }\n';
+  const files = {
+    'src/styles/patterns.css': sheet,
+    'src/pages/index.astro': '---\n---\n<h1 class="heading text section container">Hi</h1>\n',
+    'node_modules/lib/index.js': 'export {};\n',
+  };
+  for (const [rel, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), text);
+  }
+  const written = writeProjectMetadata(root, {
+    kind: 'styles',
+    source: serializeStyleKeepList({ ...EMPTY_KEEP_LIST, lockedStylesheets: ['src/styles/patterns.css'] }),
+  });
+  assert.equal(written.ok, true);
+  const panel = await harness([root]);
+  try {
+    await panel.open(root);
+    const rowStates = () =>
+      [...document.querySelectorAll('.selectors-row')].map(
+        (row) => `${/is-(\w+)/.exec(row.className)[1]}:${row.querySelector('.selectors-lock')?.classList.contains('on')}`,
+      );
+    const count = (tab) => Number(document.querySelector(`[data-tab="${tab}"] .selectors-tab-count`)?.textContent);
+    await panel.pick('all');
+    assert.deepEqual(
+      rowStates(),
+      ['kept:true', 'kept:true', 'kept:true', 'kept:true', 'kept:true'],
+      'every shape, used or not, is locked with its lock closed',
+    );
+    assert.equal(count('all'), 5);
+    assert.equal(count('kept'), 5, 'the Locked count includes them all');
+    await panel.pick('kept');
+    assert.equal(document.querySelectorAll('.selectors-row').length, 5, 'and the Locked list shows them all');
+    assert.equal(count('unused'), 0);
+  } finally {
+    await panel.finish();
+  }
+});

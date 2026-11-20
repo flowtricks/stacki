@@ -61,7 +61,8 @@ export function unlockOneChange(
     if (remaining(entry.rel)) {
       continue;
     }
-    if (entry.verdict.kind === 'kept' || entry.verdict.kind === 'checking') {
+    // A selector the project uses is held only by the sheet's lock: it needs no lock of its own.
+    if ((entry.verdict.kind === 'kept' && entry.verdict.inUse !== true) || entry.verdict.kind === 'checking') {
       for (const name of verdictNames(entry.verdict)) {
         if (!targetNames.has(name) && !kept(name)) {
           add.add(name);

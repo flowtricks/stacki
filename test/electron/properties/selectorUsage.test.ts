@@ -216,12 +216,17 @@ test('explicit stylesheet and folder locks take priority over outside-HTML uncer
   const locked = await checkSelectorUsage(root, locks);
   assert.deepEqual(kinds(locked.report), {
     '.pattern-unused': 'kept',
-    '.pattern-used': 'used',
+    '.pattern-used': 'kept',
     h1: 'untracked',
     '.unlocked-unused': 'unknown',
     '.utility-unused': 'kept',
   });
   assert.deepEqual(verdictOf(locked.report, '.pattern-unused'), { kind: 'kept', names: ['pattern-unused'] });
+  assert.deepEqual(
+    verdictOf(locked.report, '.pattern-used'),
+    { kind: 'kept', names: ['pattern-used'], inUse: true },
+    'a selector in use is held by the lock and marked so',
+  );
   const entry = locked.report.entries.find((candidate) => candidate.selector === '.pattern-unused');
   assert.ok(entry, 'the locked selector exists in the report');
   const refused = await removeUnusedSelectors(root, locks, { ids: [entry.id], files: locked.report.files });
@@ -395,4 +400,54 @@ test('HTML outside the site, like an old export, still counts as a mention', asy
     'src/styles/global.css': '.kept-by-export { a: b }\n.gone { a: b }\n',
   });
   assert.deepEqual(kinds(await report(root)), { '.kept-by-export': 'used', '.gone': 'unused' });
+});
+
+// A locked stylesheet locks every selector it lists, whatever the selector's shape or whether the project uses it:
+// the file-level lock is the authority, so the Locked count and list agree with the stylesheet heading.
+test('every selector of a locked stylesheet is kept, in any shape, and unlocking it restores the real verdicts', async () => {
+  const shapes = [
+    '.flex-horizontal-wrap',
+    '.heading:has(+ .text)',
+    '.text',
+    '.heading + .text',
+    '.section > :where(:not(.container), .field, .field-label)',
+    '.heading-accent strong',
+    '.display-contents',
+    '.card::before',
+    '.a.b.c',
+    '.ghost-one',
+    '#hero',
+  ];
+  const sheet = [
+    ...shapes.map((selector) => `${selector} { color: red }`),
+    '@media (min-width: 40rem) { .in-media { color: red } .in-media:hover { color: blue } }',
+    '@layer base { .in-layer { color: red } .in-layer .child { color: red } }',
+    '@supports (display: grid) { @media print { .deep-block { color: red } } }',
+    '.parent { color: red; &.densities { color: red } & .inner { color: red } }',
+  ].join('\n');
+  const used =
+    '<div class="flex-horizontal-wrap heading text section container field field-label heading-accent display-contents card a b c in-media in-layer child deep-block parent densities inner" id="hero"><strong>x</strong></div>';
+  const root = project({
+    'src/styles/patterns.css': `${sheet}\n`,
+    'src/pages/index.astro': `---\n---\n${used}\n`,
+  });
+  const locks = parseStyleKeepList({ version: 1, keep: [], lockedStylesheets: ['src/styles/patterns.css'] });
+  const locked = (await checkSelectorUsage(root, locks)).report;
+  const listed = locked.entries.filter((entry) => entry.verdict.kind !== 'untracked');
+  assert.ok(listed.length >= shapes.length + 8, 'every shape is listed');
+  assert.deepEqual(
+    listed.filter((entry) => entry.verdict.kind !== 'kept').map((entry) => entry.selector),
+    [],
+    'no listed selector of a locked file is anything but locked',
+  );
+  for (const entry of listed) {
+    assert.ok(entry.verdict.kind === 'kept' && entry.verdict.names.length > 0, `${entry.selector} names what it holds`);
+  }
+  const unlocked = (await checkSelectorUsage(root, parseStyleKeepList({ version: 1, keep: [], lockedStylesheets: [] }))).report;
+  assert.ok(
+    unlocked.entries.every((entry) => entry.verdict.kind !== 'kept'),
+    'unlocking the file locks nothing in it',
+  );
+  assert.equal(verdictOf(unlocked, '.ghost-one').kind, 'unused', 'a selector nothing uses is unused again');
+  assert.equal(verdictOf(unlocked, '.text').kind, 'used');
 });

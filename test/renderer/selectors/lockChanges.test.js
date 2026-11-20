@@ -89,3 +89,21 @@ test('unlocking a sheet takes only its own entry, and a row outside a locked she
   assert.throws(() => unlockOneChange(report, keepList([]), row('.pattern-a')), /in a locked stylesheet/);
   assert.throws(() => unlockOneChange(report, keepList(['src/styles/']), row('.hero')), /only a locked row/);
 });
+
+test('unlocking one row never locks a selector the project uses by name: only the sheet held it', () => {
+  const withUsed = {
+    ...report,
+    entries: [...report.entries, entry('p|0|20|0', 'src/styles/patterns.css', '.in-use', { kind: 'kept', names: ['in-use'], inUse: true })],
+  };
+  const change = unlockOneChange(
+    withUsed,
+    keepList(['src/styles/patterns.css']),
+    withUsed.entries.find((candidate) => candidate.selector === '.pattern-a'),
+  );
+  assert.ok(change.ok);
+  assert.deepEqual(change.value.add, ['pattern-b'], 'the used selector gets no lock of its own');
+  // The used selector itself unlocks too: its sheet lock goes, and the rest stay locked by name.
+  const itself = unlockOneChange(withUsed, keepList(['src/styles/patterns.css']), withUsed.entries.at(-1));
+  assert.ok(itself.ok);
+  assert.deepEqual(itself.value.add.sort(), ['pattern-a', 'pattern-b']);
+});

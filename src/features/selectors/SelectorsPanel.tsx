@@ -870,7 +870,9 @@ function SelectorRow({
   // unlocks it alone (splitting the sheet lock), and its trash deletes it by
   // hand. A row whose own names are also kept has no trash: unlock it first.
   const heldBySheet = sheetLocked === true && locked;
-  const removable = onRemove !== undefined && (verdict.kind === 'unused' || (heldBySheet && nameKept !== true));
+  // A selector the project uses has no trash: deleting it by hand would break the pages that use it.
+  const inUse = verdict.kind === 'kept' && verdict.inUse === true;
+  const removable = onRemove !== undefined && (verdict.kind === 'unused' || (heldBySheet && nameKept !== true && !inUse));
   const unlockable = heldBySheet || (keepList !== undefined && exactPatterns(keepList.keepList, names).length > 0);
   const transition: RowTransition | undefined = transitions?.rows.get(entry.id);
   // While the keep list is written the lock already shows where the click is going.
