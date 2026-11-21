@@ -37,7 +37,7 @@ import { AccountRow, SetupCard } from './SetupCard';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
 import { readSignInFailures } from './signInTranscript';
 import { PlanCard } from './transcript/PlanCard';
-import { Transcript } from './transcript/TranscriptView';
+import { ChatTranscript } from './transcript/SubagentPane';
 import { ChatHeader } from './sessions/ChatHeader';
 import { SessionsView } from './sessions/SessionsView';
 import { EMPTY_CHAT } from './chatReducer';
@@ -132,7 +132,7 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
   return (
     <>
       {view.plan !== undefined && view.plan.entries.length > 0 && <PlanCard plan={view.plan} chat={chatId} />}
-      <Transcript
+      <ChatTranscript
         view={view}
         reading={reading}
         retryHeldByCard={stage !== undefined || moment.shown}

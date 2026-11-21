@@ -12,6 +12,9 @@ import { test } from 'node:test';
 import { parseAcpLine, parseForkResult, parseInitializeResult, parseSessionNotification, parseSteerResult } from '#dist/shared/properties/ai/acpWire.js';
 import { AI_LIMITS } from '#dist/shared/properties/ai/aiLimits.js';
 
+/** JSON's null, as an adapter or a stored file can send it. */
+const jsonNull: unknown = JSON.parse('null');
+
 const fixtures = new Map<string, string>(
   fs
     .readFileSync(path.resolve('test/fixtures/ai/acpTrace.jsonl'), 'utf8')
@@ -129,7 +132,7 @@ test('compaction: summary chunks are acknowledged; unknown and malformed variant
   }
 });
 
-test('tool calls keep the agent’s tool name and only three fields of its input', () => {
+test('tool calls keep the agent’s tool name and only four fields of its input', () => {
   const bash = updateOf({
     sessionUpdate: 'tool_call',
     toolCallId: 't1',
@@ -141,7 +144,7 @@ test('tool calls keep the agent’s tool name and only three fields of its input
   });
   assert.ok(bash.kind === 'tool-call');
   assert.equal(bash.call.toolName, 'Bash');
-  assert.deepEqual(bash.call.rawInput, { command: 'sleep 20; echo done', description: 'Wait', runInBackground: true });
+  assert.deepEqual(bash.call.rawInput, { command: 'sleep 20; echo done', description: 'Wait', runInBackground: true, subagentType: undefined });
   const odd = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't2', rawInput: { command: ['ls'], run_in_background: 'yes', other: 1 } });
   assert.ok(odd.kind === 'tool-call');
   assert.equal(odd.call.rawInput, undefined, 'a command that is not text and a flag that is not boolean are dropped');
@@ -154,6 +157,56 @@ test('tool calls keep the agent’s tool name and only three fields of its input
   const executed = recordedUpdate('codex-tool_call-execute');
   assert.ok(executed.kind === 'tool-call');
   assert.match(executed.call.rawInput?.command ?? '', /^pwd/);
+});
+
+test('subagents: a Task call names its role, and everything the subagent says names the call it runs under', () => {
+  // Shaped as claude-agent-acp 0.105.0 sends them: AgentReporter titles the call with the description and
+  // stampParentToolUseId puts the Task call's id on every chunk and call of the subagent.
+  const task = updateOf({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'toolu_task',
+    title: 'Explore the components',
+    kind: 'think',
+    status: 'pending',
+    rawInput: { description: 'Explore the components', prompt: 'Look around', subagent_type: 'Explore' },
+    _meta: { claudeCode: { toolName: 'Agent' } },
+  });
+  assert.ok(task.kind === 'tool-call');
+  assert.equal(task.call.rawInput?.subagentType, 'Explore');
+  assert.equal(task.call.parent, undefined, 'the subagent call itself runs under nothing');
+  for (const sessionUpdate of ['agent_message_chunk', 'agent_thought_chunk'] as const) {
+    const chunk = updateOf({ sessionUpdate, content: { type: 'text', text: 'hi' }, _meta: { claudeCode: { parentToolUseId: 'toolu_task' } } });
+    assert.ok(chunk.kind === 'message');
+    assert.equal(chunk.parent, 'toolu_task', sessionUpdate);
+  }
+  const own = updateOf({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'mine' } });
+  assert.ok(own.kind === 'message');
+  assert.equal(own.parent, undefined, 'the agent’s own words name no parent');
+  // Malformed metadata is display-only: it is dropped or cut, never a refused update.
+  const odd = [
+    { _meta: { claudeCode: { parentToolUseId: 7 } } },
+    { _meta: { claudeCode: 'x' } },
+    { _meta: jsonNull },
+    { _meta: { claudeCode: { parentToolUseId: jsonNull } } },
+  ];
+  for (const extra of odd) {
+    const chunk = updateOf({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'x' }, ...extra });
+    assert.ok(chunk.kind === 'message');
+    assert.equal(chunk.parent, undefined, JSON.stringify(extra));
+  }
+  const long = updateOf({
+    sessionUpdate: 'agent_message_chunk',
+    content: { type: 'text', text: 'x' },
+    _meta: { claudeCode: { parentToolUseId: 'p'.repeat(AI_LIMITS.idCharsMax + 1) } },
+  });
+  assert.ok(long.kind === 'message');
+  assert.equal(long.parent?.length, AI_LIMITS.idCharsMax, 'a parent id past the bound is cut to it');
+  const typed = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't', rawInput: { subagent_type: ['Explore'] } });
+  assert.ok(typed.kind === 'tool-call');
+  assert.equal(typed.call.rawInput, undefined, 'a role that is not text is dropped');
+  const typeLong = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't', rawInput: { subagent_type: 'r'.repeat(AI_LIMITS.idCharsMax + 5) } });
+  assert.ok(typeLong.kind === 'tool-call');
+  assert.equal(typeLong.call.rawInput?.subagentType?.length, AI_LIMITS.idCharsMax);
 });
 
 test('usage is a count within the sanity ceiling', () => {

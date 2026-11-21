@@ -765,6 +765,73 @@ test('whole panel: a running turn shows its tool group, the loader with a timer,
   );
 });
 
+test('whole panel: subagents show in a strip, open into their own transcript drawn by the chat’s renderer, and fold to a summary', async (context) => {
+  ai.resetAiStore();
+  window.localStorage.clear();
+  const { listeners } = fakeMain({ trusted: true });
+  const { container, root } = await mount();
+  context.after(() => act(() => root.unmount()));
+  const now = Date.now();
+  const sub = (over) => ({ ...over, parent: 'toolu_a' });
+  await push(listeners, [
+    { kind: 'turn-start', turn: TURN, at: now - 9000 },
+    { kind: 'user', turn: TURN, text: 'Tidy the hero', attachments: [], at: now - 9000 },
+    { kind: 'text', turn: TURN, role: 'agent', text: 'Starting a helper.', at: now - 8500, until: now - 8500 },
+    tool('toolu_a', 'Tidy Hero.astro', 'think', 'in_progress', { toolName: 'Agent', agentType: 'general-purpose', at: now - 8000 }),
+    { kind: 'text', turn: TURN, role: 'agent', text: 'The hero has a stray margin.', at: now - 7000, until: now - 7000, parent: 'toolu_a' },
+    tool('k1', 'Read Hero.astro', 'read', 'completed', sub({ paths: ['/site/src/components/Hero.astro'], at: now - 6000 })),
+    tool('k2', 'Edit Hero.astro', 'edit', 'in_progress', sub({ paths: ['/site/src/components/Hero.astro'], at: now - 5000 })),
+  ]);
+  assertWholePanel(container, 'subagent running');
+  const strip = container.querySelector('.ai-agents-live');
+  assert.ok(strip, 'a strip while a subagent works');
+  assert.match(strip.querySelector('.ai-agents-head').textContent, /1 agent working/);
+  const row = strip.querySelector('.ai-agent');
+  assert.equal(row.querySelector('.ai-agent-name').textContent, 'Tidy Hero.astro');
+  assert.equal(row.querySelector('.ai-agent-role').textContent, 'general-purpose');
+  assert.equal(row.querySelector('.ai-agent-dot').getAttribute('aria-label'), 'Running');
+  assert.match(row.querySelector('.ai-agent-time').textContent, /^\d[\d.]*s$/, 'its elapsed time');
+  assert.equal(row.querySelector('.ai-agent-doing').textContent, 'Editing Hero.astro');
+  const chat = container.querySelector('.ai-transcript');
+  assert.match(chat.textContent, /Starting a helper/);
+  assert.doesNotMatch(chat.textContent, /stray margin/, 'the subagent’s words are not the chat’s');
+
+  await click(row);
+  assert.equal(container.querySelector('.ai-agents') ?? undefined, undefined, 'the strip gives way to the subagent’s transcript');
+  const head = container.querySelector('.ai-agent-pane-head');
+  assert.match(head.textContent, /Tidy Hero\.astro/);
+  const own = container.querySelector('.ai-transcript');
+  assert.ok(own.querySelector('.ai-message-agent'), 'its words are drawn as the chat draws a reply');
+  assert.match(own.querySelector('.ai-message-agent').textContent, /stray margin/);
+  assert.ok(own.querySelector('.ai-group'), 'its calls fold into the chat’s activity group');
+  assert.doesNotMatch(own.textContent, /Starting a helper|Tidy the hero/, 'nothing of the chat itself');
+  assert.ok(own.querySelector('.ai-turn-status'), 'and the live loader while it works');
+  await push(listeners, [tool('k3', 'npm run build', 'execute', 'in_progress', sub({ command: 'npm run build', at: now - 1000 }))]);
+  assert.equal(
+    container.querySelector('.ai-transcript .ai-group-head').getAttribute('aria-expanded'),
+    'true',
+    'its group is open while it works, as a live turn’s is',
+  );
+  assert.match(container.querySelector('.ai-transcript').textContent, /npm run build/, 'it updates live');
+
+  await push(listeners, [
+    tool('k2', 'Edit Hero.astro', 'edit', 'completed', sub({ at: now - 500 })),
+    tool('k3', 'npm run build', 'execute', 'completed', sub({ at: now - 400 })),
+    tool('toolu_a', 'Tidy Hero.astro', 'think', 'completed', { at: now - 300 }),
+    { kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: now },
+  ]);
+  await click(button(container, 'Back to chat'));
+  assert.equal(container.querySelector('.ai-agent-pane-head') ?? undefined, undefined, 'back on the chat');
+  const summary = container.querySelector('.ai-agents .ai-agents-head');
+  assert.equal(summary.getAttribute('aria-expanded'), 'false', 'a finished run folds to one line');
+  assert.match(summary.textContent, /1 agent finished/);
+  assert.equal(container.querySelector('.ai-agent') ?? undefined, undefined);
+  await click(summary);
+  assert.equal(container.querySelector('.ai-agent .ai-agent-dot').getAttribute('aria-label'), 'Done', 'reopened, with its outcome');
+  assert.equal(container.querySelector('.ai-agent-doing') ?? undefined, undefined, 'a finished agent is doing nothing');
+  assert.equal(container.querySelector('.ai-tasks') ?? undefined, undefined, 'the background tray does not list it a second time');
+});
+
 test('whole panel: a finished turn folds its work, and its changes card loads the diff and opens the file', async (context) => {
   ai.resetAiStore();
   window.localStorage.clear();

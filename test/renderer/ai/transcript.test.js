@@ -767,14 +767,15 @@ test('the background tray lists running work with its elapsed time and last outp
     turnStart(TURN, 1000),
     user(TURN, 'serve', 1000),
     tool(TURN, 'bg', { title: 'npm run dev', toolKind: 'execute', command: 'npm run dev', background: true, output: 'ready on :4321\n', at: 2000 }),
+    tool(TURN, 'open', { title: 'Read notes.md', toolKind: 'read', at: 5000 }),
     tool(TURN, 'sub', { title: 'Explore the repo', toolName: 'Task', at: 5000 }),
     agentText(TURN, 'started', 6000),
     turnEnd(TURN, 7000),
   );
-  assert.equal(view.activeTasks.length, 2, 'the reducer reports both as open work');
+  assert.equal(view.activeTasks.length, 3, 'the reducer reports all three as open work');
   const { container } = await mount(view);
   const head = container.querySelector('.ai-tasks-head');
-  assert.equal(head.textContent, '2 tasks running');
+  assert.equal(head.textContent, '2 tasks running', 'the subagent is listed by the subagent strip, not the tray');
   assert.equal(container.querySelector('.ai-task') ?? undefined, undefined, 'a closed tray lists nothing');
   assert.equal(intervals.size, 0, 'and ticks nothing');
   await click(head);
@@ -792,10 +793,14 @@ test('the background tray lists running work with its elapsed time and last outp
 });
 
 test('a finished background task moves to the tray’s finished list and the tray clears when nothing is left to show', async () => {
-  const running = fold(turnStart(TURN, 1000), user(TURN, 'x', 1000), tool(TURN, 'sub', { title: 'Explore', toolName: 'Task', at: 2000 }));
+  const running = fold(
+    turnStart(TURN, 1000),
+    user(TURN, 'x', 1000),
+    tool(TURN, 'bg', { title: 'npm run dev', toolKind: 'execute', command: 'npm run dev', background: true, at: 2000 }),
+  );
   const { container, render } = await mount(running);
   assert.match(text(container, '.ai-tasks-head'), /1 task running/);
-  const done = ui.reduceChat(running, [tool(TURN, 'sub', { status: 'completed', at: 9000 }), turnEnd(TURN, 9500)]);
+  const done = ui.reduceChat(running, [tool(TURN, 'bg', { status: 'completed', at: 9000 }), turnEnd(TURN, 9500)]);
   await render(done);
   assert.equal(text(container, '.ai-tasks-head'), '1 task finished');
   assert.equal(container.querySelector('.ai-tasks-stop') ?? undefined, undefined, 'nothing is running, nothing to stop');

@@ -46,7 +46,7 @@ export function lastUserMessageId(items: readonly { readonly kind: string; reado
  * (or moved past), so they stay text.
  */
 export function answerableMessageId(
-  items: readonly { readonly kind: string; readonly id: number; readonly role?: string }[],
+  items: readonly { readonly kind: string; readonly id: number; readonly role?: string; readonly parent?: string | undefined }[],
   { running }: { readonly running: boolean },
 ): number | undefined {
   if (running) {
@@ -57,7 +57,8 @@ export function answerableMessageId(
     if (item?.kind === 'user') {
       return undefined;
     }
-    if (item?.kind === 'text' && item.role === 'agent') {
+    // A subagent's report is not the agent's reply: only the agent's own words can be answered.
+    if (item?.kind === 'text' && item.role === 'agent' && item.parent === undefined) {
       return item.id;
     }
   }

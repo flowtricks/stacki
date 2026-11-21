@@ -2027,6 +2027,19 @@ project-relative with no `..`, absolute, backslash or empty segments). New bound
 `transcriptUiEntriesMax`, `contextTokensMax`, `compactionErrorCharsMax` (500), `mentionCacheMs`,
 `mentionCachedProjectsMax`.
 
+**Subagents.** Claude stamps `_meta.claudeCode.parentToolUseId` (the Agent or Task call's id) on
+everything a subagent reports, its message and thought chunks as well as its tool calls. `acpWire.ts`
+reads it as `parent` on `message` updates and tool calls (a non-string is dropped, an over-long one cut
+to `idCharsMax`), and `rawInput.subagent_type` as `subagentType`. The chat model carries them as the
+optional `parent` of a `text` event and `agentType` of a `tool` event (absent in older chats, which
+still read); `coalesceEvents` and the reducer never join two speakers' text. The panel derives the
+run's subagents from these alone (`src/features/ai/subagents.ts`, bounds `SUBAGENTS_SHOWN_MAX` and
+`SUBAGENT_ITEMS_MAX` beside it): the strip above the transcript, and one subagent's transcript, which
+is the chat's `Transcript` given that subagent's re-rooted items. A subagent's words are drawn only
+there. Codex reports a subagent as one call titled "Start subagent …" and forwards none of its work,
+so a Codex subagent has a row but an empty transcript. No adapter Stacki drives can stop one subagent
+(per-subagent sessions are offered only to JetBrains AIR clients), so there is no per-subagent stop.
+
 **Channels.** `ai:agents`, `ai:installAgent`, `ai:trust`, `ai:chats`, `ai:chatCreate`,
 `ai:chatUpdate` (rename, pin), `ai:chatDelete`, `ai:chatRead`, `ai:prompt`, `ai:cancel`,
 `ai:permission`, `ai:setOption` (an agent's session setting: model, mode, effort), `ai:remember` (the composer settings last used: one choice, or a reset for one agent; answers the whole set), `ai:review` (keep,

@@ -54,6 +54,8 @@ export interface ToolItem {
   readonly command: string | undefined;
   /** The call was started in the background (Claude's `run_in_background`). */
   readonly background: boolean;
+  /** The role of the subagent an Agent or Task call starts (Claude's `Explore`), when the agent said. */
+  readonly agentType: string | undefined;
 }
 
 export interface PermissionItem {
@@ -104,6 +106,8 @@ export type TranscriptItem =
       /** First and last chunk's arrival; undefined in chats stored before timings, which show no duration. */
       readonly at: number | undefined;
       readonly until: number | undefined;
+      /** The subagent call that said it; undefined for the agent's own words. Drawn only in that subagent's transcript. */
+      readonly parent: string | undefined;
     }
   | ToolItem
   | PermissionItem
@@ -313,16 +317,45 @@ function mapItems(view: ChatView, change: (item: TranscriptItem) => TranscriptIt
   return { ...view, items: view.items.map(change) };
 }
 
+/**
+ * How far back a chunk looks past other speakers' text and calls for its own message. Why: subagents
+ * stream side by side with the agent, so one speaker's message is interleaved with another's; past this
+ * many items the chunk simply starts a new message, which costs a split paragraph, never a lost word.
+ */
+const TEXT_JOIN_LOOKBACK_MAX = 256;
+
 function appendText(view: ChatView, event: Extract<ChatEvent, { readonly kind: 'text' }>): ChatView {
-  const last = view.items[view.items.length - 1];
   // The last chunk's stamp, else the first's: a chat stored before timings has neither and stays without.
   const stamp = event.until ?? event.at;
-  if (last?.kind === 'text' && last.turn === event.turn && last.role === event.role) {
+  const parent = event.parent;
+  const index = ownLastIndex(view.items, parent);
+  const last = index === -1 ? undefined : view.items[index];
+  if (last?.kind === 'text' && last.turn === event.turn && last.role === event.role && last.parent === parent) {
     const items = [...view.items];
-    items[items.length - 1] = { ...last, text: last.text + event.text, at: last.at ?? event.at, until: stamp ?? last.until };
+    items[index] = { ...last, text: last.text + event.text, at: last.at ?? event.at, until: stamp ?? last.until };
     return { ...view, items };
   }
-  return push(view, (id) => ({ kind: 'text', id, turn: event.turn, role: event.role, text: event.text, at: event.at, until: stamp }));
+  return push(view, (id) => ({ kind: 'text', id, turn: event.turn, role: event.role, text: event.text, at: event.at, until: stamp, parent }));
+}
+
+/**
+ * The newest item a speaker's chunk may join: walking back past text and calls of other speakers (another
+ * subagent, or the agent while a subagent speaks), stopping at anything else. -1 when there is none.
+ */
+function ownLastIndex(items: readonly TranscriptItem[], parent: string | undefined): number {
+  const stop = Math.max(0, items.length - TEXT_JOIN_LOOKBACK_MAX);
+  for (let index = items.length - 1; index >= stop; index -= 1) {
+    const item = items[index];
+    assert(item !== undefined, 'ownLastIndex: an index within the items');
+    if (item.kind === 'text' || item.kind === 'tool') {
+      if (item.parent === parent) {
+        return index;
+      }
+    } else {
+      return -1; // A message, a stop or a request ends every speaker's message.
+    }
+  }
+  return -1;
 }
 
 function isFinished(status: ToolStatusName): boolean {
@@ -355,6 +388,7 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
       toolName: event.toolName,
       command: event.command,
       background: event.background ?? false,
+      agentType: event.agentType,
     }));
   }
   const status = event.status ?? existing.status;
@@ -374,6 +408,7 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
     toolName: event.toolName ?? existing.toolName,
     command: event.command ?? existing.command,
     background: event.background ?? existing.background,
+    agentType: event.agentType ?? existing.agentType,
   };
   const items = [...view.items];
   items[index] = merged;

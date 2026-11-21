@@ -518,6 +518,35 @@ export const messages = {
   'ai.studio.welcome.title': 'Que souhaitez-vous créer ?',
   'ai.studio.working': 'Travail en cours',
   'ai.studio.workspace': 'Espace de travail IA',
+  'ai.subagents.back': 'Retour à la conversation',
+  'ai.subagents.doing.command': 'Exécution de {command}',
+  'ai.subagents.doing.editing': 'Modification de {file}',
+  'ai.subagents.doing.reading': 'Lecture de {file}',
+  'ai.subagents.doing.starting': 'Démarrage',
+  'ai.subagents.doing.thinking': 'Réflexion',
+  'ai.subagents.doing.writing': 'Écriture',
+  'ai.subagents.empty': 'Rien de cet agent pour l’instant.',
+  'ai.subagents.failed': {
+    one: '{count} a échoué',
+    other: '{count} ont échoué',
+  },
+  'ai.subagents.finished': {
+    one: '{count} agent terminé',
+    other: '{count} agents terminés',
+  },
+  'ai.subagents.label': 'Agents', // same
+  'ai.subagents.more': {
+    one: '{count} agent précédent non affiché',
+    other: '{count} agents précédents non affichés',
+  },
+  'ai.subagents.running': {
+    one: '{count} agent au travail',
+    other: '{count} agents au travail',
+  },
+  'ai.subagents.status.done': 'Terminé',
+  'ai.subagents.status.failed': 'Échec',
+  'ai.subagents.status.running': 'En cours',
+  'ai.subagents.status.waiting': 'En attente de votre réponse',
   'ai.tasks.done': 'Terminé',
   'ai.tasks.failed': 'Échec',
   'ai.tasks.finished': {

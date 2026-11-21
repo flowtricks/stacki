@@ -88,6 +88,50 @@ test('streamed text joins with the first start and the last end', () => {
   assert.equal(coalesceEvents([first, agent]).length, 2, 'different roles stay apart');
 });
 
+test('a subagent’s words carry its call, a Task call its role, and two speakers’ chunks never join', () => {
+  const parented = (text: string, parent: string | undefined, at: number) =>
+    checked(
+      eventsForUpdate(
+        updateOf({
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text },
+          ...(parent === undefined ? {} : { _meta: { claudeCode: { parentToolUseId: parent } } }),
+        }),
+        turn,
+        { at },
+      ),
+    )[0];
+  const sub = parented('a', 'toolu_one', 1);
+  assert.deepEqual(sub, { kind: 'text', turn, role: 'agent', text: 'a', at: 1, until: 1, parent: 'toolu_one' });
+  const own = parented('b', undefined, 2);
+  assert.ok(own !== undefined && sub !== undefined);
+  assert.equal('parent' in own, false, 'the agent’s own words store exactly what they did before');
+  const sibling = parented('c', 'toolu_two', 3);
+  const sameAgain = parented('d', 'toolu_one', 4);
+  assert.ok(sibling !== undefined && sameAgain !== undefined);
+  assert.deepEqual(
+    coalesceEvents([sub, sameAgain]).map((event) => (event.kind === 'text' ? event.text : '')),
+    ['ad'],
+    'one subagent’s consecutive chunks join',
+  );
+  assert.equal(coalesceEvents([sub, own]).length, 2, 'a subagent and the agent stay apart');
+  assert.equal(coalesceEvents([sub, sibling]).length, 2, 'two subagents stay apart');
+  const task = updateOf({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'toolu_one',
+    title: 'Explore',
+    kind: 'think',
+    rawInput: { description: 'Explore', subagent_type: 'Explore' },
+    _meta: { claudeCode: { toolName: 'Agent' } },
+  });
+  const [started] = checked(eventsForUpdate(task, turn));
+  assert.ok(started?.kind === 'tool');
+  assert.equal(started.agentType, 'Explore');
+  const [plain] = checked(eventsForUpdate(updateOf({ sessionUpdate: 'tool_call', toolCallId: 'k3', rawInput: { subagent_type: '' } }), turn));
+  assert.ok(plain?.kind === 'tool');
+  assert.equal('agentType' in plain, false, 'an empty role is no role');
+});
+
 test('compaction with the capability becomes one event per update', () => {
   const started = checked(eventsForUpdate(recorded('claude-compaction_update-in-progress'), turn, { at: 100 }));
   const failed = checked(eventsForUpdate(recorded('claude-compaction_update-failed'), turn, { at: 105 }));
