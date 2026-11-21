@@ -148,12 +148,20 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     );
   }
   const loopOf = (count) => Array.from({ length: count }, (_, index) => box((index % 50) * 30, Math.floor(index / 50) * 30, 20, 20));
+  // The fastest of a few runs: one run can absorb a garbage collection or a busy machine's
+  // scheduling (a full gate once timed 1.9 ms then 48 ms), which says nothing about the growth.
+  const TIMED_RUNS = 5;
   const timed = (count) => {
     const boxes = loopOf(count);
     onePerPlace(boxes);
-    const startedMs = performance.now();
-    const kept = onePerPlace(boxes).length;
-    return { kept, elapsedMs: performance.now() - startedMs };
+    let kept = 0;
+    let elapsedMs = Infinity;
+    for (let run = 0; run < TIMED_RUNS; run++) {
+      const startedMs = performance.now();
+      kept = onePerPlace(boxes).length;
+      elapsedMs = Math.min(elapsedMs, performance.now() - startedMs);
+    }
+    return { kept, elapsedMs };
   };
   const small = timed(2000);
   const large = timed(16000);
