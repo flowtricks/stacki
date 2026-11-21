@@ -4,6 +4,8 @@
 // subscriber the hook registered, so no timer or sleep is involved; each assertion reads the DOM after the event has been applied.
 // Negative space: hiding survives progress ticks but not news, an event beating the first read is not overwritten by it, an unknown
 // total shows bytes without a percent, and a bridge that refuses is logged, not thrown into the render.
+// The look of the up-to-date state (icon, headline, version, one primary button, no outline or divider, dialog role with a name,
+// focus on the button, Escape closes) is pinned here; updateLookChromium.test.js reads the real computed styles and Enter.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -174,8 +176,8 @@ test('the File menu answers show as notices, each one again when asked twice', a
   const bridge = fakeBridge();
   const { unmount } = await mount(React.createElement(UpdatePopupHost, { bridge }));
   await act(async () => bridge.emit({ kind: 'notice', notice: 'latest', version: '1.4.9' }));
-  assert.equal(text('.modal-header'), 'Check for Updates');
-  assert.equal(text('.modal-body'), 'Stacki 1.4.9 is the latest version.');
+  assert.equal(text('.modal-header'), 'You’re up to date', 'the answer is the headline');
+  assert.equal(text('.modal-body'), 'Stacki 1.4.9 is the latest version.', 'the version is the secondary line');
   await act(async () => document.querySelector('.popup-surface button').click());
   assert.equal(present('.popup-surface'), false);
   await act(async () => bridge.emit({ kind: 'notice', notice: 'development', version: '1.4.9' }));
@@ -230,4 +232,90 @@ test('the popup is a pure view of a state, so any state can be shown on demand',
   );
   assert.equal(present('.popup-surface'), false);
   await unmount();
+});
+
+const ACTIVE_STATES = [
+  [downloading(12.5, 40), 'downloading'],
+  [{ kind: 'ready', version: '2.0.0' }, 'ready'],
+  [{ kind: 'error', stage: 'download', detail: 'boom' }, 'error'],
+  [{ kind: 'notice', notice: 'latest', version: '1.4.11' }, 'latest'],
+  [{ kind: 'notice', notice: 'development', version: '1.4.11' }, 'development'],
+  [{ kind: 'notice', notice: 'alreadyChecking', version: '1.4.11' }, 'alreadyChecking'],
+];
+
+test('every state wears the same shape: a tinted icon, a headline, and at least one button', async () => {
+  for (const [state, name] of ACTIVE_STATES) {
+    const { unmount } = await mount(React.createElement(UpdatePopup, { state, hidden: false, onHide: () => undefined, onAct: () => undefined }));
+    assert.ok(present('.update-header .update-icon svg[data-central-icon]'), `${name}: the icon comes from the Central set`);
+    assert.ok(text('.update-title').length > 0, `${name}: a headline`);
+    assert.ok(buttons().length >= 1, `${name}: a button`);
+    await unmount();
+  }
+});
+
+test('up to date: a check icon, the headline, the version, and one primary Close button that has focus', async () => {
+  const { unmount } = await mount(
+    React.createElement(UpdatePopup, {
+      state: { kind: 'notice', notice: 'latest', version: '1.4.11' },
+      hidden: false,
+      onHide: () => undefined,
+      onAct: () => undefined,
+    }),
+  );
+  assert.equal(document.querySelector('.update-icon svg').getAttribute('data-central-icon'), 'check');
+  assert.equal(document.querySelector('.update-icon').className.includes('update-icon-accent'), true, 'tinted with the accent, not a grey');
+  assert.equal(text('.update-title'), 'You’re up to date');
+  assert.equal(text('.modal-body'), 'Stacki 1.4.11 is the latest version.');
+  const [only, ...rest] = [...document.querySelectorAll('.popup-surface button')];
+  assert.equal(rest.length, 0, 'one button');
+  assert.equal(only.textContent, 'Close');
+  assert.ok(only.classList.contains('primary'), 'the button is the blue primary');
+  assert.equal(document.activeElement, only, 'focus lands on the button, so Enter presses it');
+  await unmount();
+});
+
+test('the popup is a dialog named by its headline, and an error is red-tinted, not accent', async () => {
+  const { unmount } = await mount(
+    React.createElement(UpdatePopup, {
+      state: { kind: 'notice', notice: 'latest', version: '1.4.11' },
+      hidden: false,
+      onHide: () => undefined,
+      onAct: () => undefined,
+    }),
+  );
+  const dialog = document.querySelector('dialog');
+  assert.equal(dialog.getAttribute('role'), 'dialog');
+  const labelId = dialog.getAttribute('aria-labelledby');
+  assert.ok(labelId && labelId.length > 0, 'the dialog names itself');
+  assert.equal(document.getElementById(labelId).textContent, 'You’re up to date');
+  await unmount();
+  const view = await mount(
+    React.createElement(UpdatePopup, { state: { kind: 'error', stage: 'check', detail: '' }, hidden: false, onHide: () => undefined, onAct: () => undefined }),
+  );
+  assert.ok(document.querySelector('.update-icon').classList.contains('update-icon-danger'));
+  await view.unmount();
+});
+
+test('Escape closes the up-to-date popup without asking main for anything', async () => {
+  const bridge = fakeBridge();
+  const { unmount } = await mount(React.createElement(UpdatePopupHost, { bridge }));
+  await act(async () => bridge.emit({ kind: 'notice', notice: 'latest', version: '1.4.11' }));
+  assert.ok(present('.popup-surface'));
+  await act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+  assert.equal(present('.popup-surface'), false, 'Escape closes it');
+  assert.deepEqual(bridge.actions, []);
+  await unmount();
+});
+
+test('the stylesheet draws no outline round the dialog and no rule above the buttons, and uses logical padding', () => {
+  const css = fs.readFileSync(repoPath('src/features/update/updatePopup.css'), 'utf8');
+  const rule = (selector) => {
+    const start = css.indexOf(`${selector} {`);
+    assert.notEqual(start, -1, `${selector} is styled`);
+    return css.slice(start, css.indexOf('}', start));
+  };
+  assert.match(rule('.modal.update-popup'), /border:\s*none/, 'no outline round the dialog');
+  assert.match(rule('.update-popup .modal-footer'), /border-top:\s*none/, 'no divider above the buttons');
+  assert.doesNotMatch(css, /border(?!-radius)[a-z-]*:\s*(?!none)[^;]*\d/, 'no rule in the sheet draws a border');
+  assert.doesNotMatch(css, /(?:^|[\s;{])(?:margin|padding|border)-(?:left|right)\s*:/m, 'physical sides would break a right-to-left layout');
 });

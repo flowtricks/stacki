@@ -1,7 +1,67 @@
 /* The update popup (UpdatePopup.tsx). The bar is a filled track, never an outline; the fill is the accent blue and grows with a
-   short ease so each tick reads as motion, not a jump. Numbers are tabular so the counter does not jitter as digits change. */
-.update-popup {
-  width: min(420px, calc(100vw - 48px));
+   short ease so each tick reads as motion, not a jump. Numbers are tabular so the counter does not jitter as digits change.
+   The popup has no scroller; if one is ever added it must declare scrollbar-gutter: stable (docs/scroll-gutter.md). */
+.modal.confirm-dialog.update-popup {
+  width: min(380px, calc(100vw - 48px));
+}
+/* Surfaces are told apart by fill alone: no outline round the dialog and no rule above the buttons. The two selectors beat the
+   shared .modal and .modal-footer rules (src/app/styles.css) that draw them. */
+.modal.update-popup {
+  border: none;
+}
+.update-popup .modal-footer {
+  border-top: none;
+}
+/* Icon, headline, secondary text, buttons: one centered column for every state. Logical properties keep the paddings right in a
+   right-to-left language; the text is centered, so it does not depend on the direction. */
+.confirm-dialog.update-popup .modal-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-block: 28px 8px;
+  padding-inline: 24px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.confirm-dialog.update-popup .modal-body {
+  padding-block: 0 8px;
+  padding-inline: 24px;
+  text-align: center;
+}
+.confirm-dialog.update-popup .modal-footer {
+  padding-block: 16px 24px;
+  padding-inline: 24px;
+  gap: 8px;
+}
+.update-popup .modal-footer button {
+  flex: 1 1 0;
+  padding-block: 8px;
+}
+/* The soft tinted circle that carries a state's icon. The tint is the accent at the shared soft strength (red for a failure), so it
+   reads in the dark theme as a glow rather than a hard shape, and the icon takes the solid color. */
+.update-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.update-icon-accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.update-icon-danger {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+  color: var(--red);
+}
+.update-title {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text);
 }
 .update-body {
   display: flex;
@@ -30,6 +90,7 @@
   justify-content: space-between;
   align-items: baseline;
   gap: 12px;
+  text-align: start;
   font-variant-numeric: tabular-nums;
 }
 .update-percent {

@@ -1,7 +1,11 @@
 // The in-app update popup: download progress that moves live, "ready to restart", and the answers to the File menu's check.
 // Main sends states (electron/app/autoUpdate.ts); this only draws them, so tests and the harness can hand it any state.
 // The progress bar is the loading state: it renders at once, at 0%, and only ever grows. Backgrounds, never borders.
+// Every state wears the same shape (a tinted circle with an icon, a headline, secondary text, the buttons), so the popup
+// does not change character as an update moves from available to downloading to ready.
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import Popup from '../../ui/Popup';
+import { ArrowDownIcon, CheckIcon, ClockIcon, CloseIcon, CodeIcon } from '../../ui/Icons';
 import { useFormat, useTranslate } from '../../lib/i18n/useTranslate';
 import { assert } from '../../../shared/core/assert';
 import { megabytesOf, type DownloadProgress, type UpdateAction, type UpdateNotice, type UpdateState } from '../../../shared/ipc/updateState';
@@ -31,14 +35,16 @@ export interface UpdatePopupProps {
 
 /** The popup for one state. Pure of the bridge, so a test or the harness can show any state deterministically. */
 export function UpdatePopup({ state, hidden, onHide, onAct }: UpdatePopupProps) {
+  // The headline names the dialog for assistive technology: one id, read by the dialog and set on the headline.
+  const headingId = useId();
   if (state.kind === 'idle') {
     return undefined;
   }
   return (
-    <Popup className="modal confirm-dialog update-popup" role="alertdialog" open={!hidden} onClose={onHide}>
+    <Popup className="modal confirm-dialog update-popup" role="dialog" labelledBy={headingId} open={!hidden} onClose={onHide}>
       {({ close, finish }) => (
         <>
-          <PopupHeader state={state} />
+          <PopupHeader state={state} headingId={headingId} />
           <PopupBody state={state} />
           <PopupFooter state={state} close={close} finish={finish} onHide={onHide} onAct={onAct} />
         </>
@@ -47,22 +53,31 @@ export function UpdatePopup({ state, hidden, onHide, onAct }: UpdatePopupProps) 
   );
 }
 
-function PopupHeader({ state }: { readonly state: Exclude<UpdateState, { readonly kind: 'idle' }> }) {
-  const translate = useTranslate();
+type ActiveState = Exclude<UpdateState, { readonly kind: 'idle' }>;
+type Tone = 'accent' | 'danger';
+
+/** The icon each state shows, and whether it is good news (the accent) or bad (red). One place, so no state is left without one. */
+function heroOf(state: ActiveState): { readonly icon: ReactNode; readonly tone: Tone } {
   switch (state.kind) {
     case 'downloading':
-      return (
-        <div className="modal-header">
-          {state.version === undefined
-            ? translate('dialog.update.downloading.titleUnnamed')
-            : translate('dialog.update.downloading.title', { version: state.version })}
-        </div>
-      );
+      return { icon: <ArrowDownIcon size={32} />, tone: 'accent' };
     case 'ready':
-      return <div className="modal-header">{translate('dialog.update.ready.heading', { version: state.version })}</div>;
-    case 'notice':
+      return { icon: <CheckIcon size={32} />, tone: 'accent' };
     case 'error':
-      return <div className="modal-header">{translate('dialog.update.check.title')}</div>;
+      return { icon: <CloseIcon size={32} />, tone: 'danger' };
+    case 'notice':
+      switch (state.notice) {
+        case 'latest':
+          return { icon: <CheckIcon size={32} />, tone: 'accent' };
+        case 'development':
+          return { icon: <CodeIcon size={32} />, tone: 'accent' };
+        case 'alreadyChecking':
+          return { icon: <ClockIcon size={32} />, tone: 'accent' };
+        default: {
+          const exhaustive: never = state.notice;
+          return exhaustive;
+        }
+      }
     default: {
       const exhaustive: never = state;
       return exhaustive;
@@ -70,7 +85,42 @@ function PopupHeader({ state }: { readonly state: Exclude<UpdateState, { readonl
   }
 }
 
-function PopupBody({ state }: { readonly state: Exclude<UpdateState, { readonly kind: 'idle' }> }) {
+function PopupHeader({ state, headingId }: { readonly state: ActiveState; readonly headingId: string }) {
+  const translate = useTranslate();
+  const hero = heroOf(state);
+  return (
+    <div className="modal-header update-header">
+      <div className={`update-icon update-icon-${hero.tone}`} data-update-icon={state.kind}>
+        {hero.icon}
+      </div>
+      <div className="update-title" id={headingId}>
+        {headlineOf(state, translate)}
+      </div>
+    </div>
+  );
+}
+
+function headlineOf(state: ActiveState, translate: ReturnType<typeof useTranslate>): string {
+  switch (state.kind) {
+    case 'downloading':
+      return state.version === undefined
+        ? translate('dialog.update.downloading.titleUnnamed')
+        : translate('dialog.update.downloading.title', { version: state.version });
+    case 'ready':
+      return translate('dialog.update.ready.heading', { version: state.version });
+    case 'notice':
+      // The answer "you have the latest" is the headline; the version is the secondary line under it.
+      return state.notice === 'latest' ? translate('dialog.update.upToDate.title') : translate('dialog.update.check.title');
+    case 'error':
+      return translate('dialog.update.check.title');
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
+    }
+  }
+}
+
+function PopupBody({ state }: { readonly state: ActiveState }) {
   const translate = useTranslate();
   switch (state.kind) {
     case 'downloading':
@@ -104,7 +154,7 @@ function PopupBody({ state }: { readonly state: Exclude<UpdateState, { readonly 
 }
 
 interface FooterProps {
-  readonly state: Exclude<UpdateState, { readonly kind: 'idle' }>;
+  readonly state: ActiveState;
   readonly close: () => void;
   readonly finish: (action: () => void) => void;
   readonly onHide: () => void;
@@ -122,35 +172,33 @@ function PopupFooter({ state, close, finish, onHide, onAct }: FooterProps) {
     case 'downloading':
       return (
         <div className="modal-footer">
-          <button autoFocus onClick={close}>
-            {translate('dialog.update.downloading.hide')}
-          </button>
+          <DefaultButton onClick={close}>{translate('dialog.update.downloading.hide')}</DefaultButton>
         </div>
       );
     case 'ready':
       return (
         <div className="modal-footer">
           <button onClick={close}>{translate('dialog.update.ready.later')}</button>
-          <button autoFocus className="primary" onClick={() => act('install')}>
+          <DefaultButton primary onClick={() => act('install')}>
             {translate('dialog.update.ready.restartNow')}
-          </button>
+          </DefaultButton>
         </div>
       );
     case 'notice':
       return (
         <div className="modal-footer">
-          <button autoFocus className="primary" onClick={close}>
+          <DefaultButton primary onClick={close}>
             {translate('ui.close')}
-          </button>
+          </DefaultButton>
         </div>
       );
     case 'error':
       return (
         <div className="modal-footer">
           <button onClick={close}>{translate('ui.close')}</button>
-          <button autoFocus className="primary" onClick={() => act('retry')}>
+          <DefaultButton primary onClick={() => act('retry')}>
             {translate('ui.retry')}
-          </button>
+          </DefaultButton>
         </div>
       );
     default: {
@@ -158,6 +206,23 @@ function PopupFooter({ state, close, finish, onHide, onAct }: FooterProps) {
       return exhaustive;
     }
   }
+}
+
+/**
+ * The button Enter presses: it takes focus once the dialog is open. The `autoFocus` prop is not enough, because React focuses at
+ * mount and the dialog's own showModal() then moves focus to its first button, so "Restart Now" and "Retry" lost it to "Later"
+ * and "Close". An effect runs after the dialog opened, so the focus stays.
+ */
+function DefaultButton({ primary = false, onClick, children }: { readonly primary?: boolean; readonly onClick: () => void; readonly children: ReactNode }) {
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    button.current?.focus();
+  }, []);
+  return (
+    <button ref={button} className={primary ? 'primary' : undefined} onClick={onClick}>
+      {children}
+    </button>
+  );
 }
 
 /** The bar and its two counters: the percent, and "48.2 of 52.4 MB" (just what is in, while the size is unknown). */

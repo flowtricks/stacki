@@ -1351,6 +1351,10 @@ cause). `reveal` marks news that must open a popup the person hid; progress tick
   renderer's alone: the download carries on. Preload exposes `readUpdateState`, `actOnUpdate` and `onUpdateState`;
   the renderer parses every reply and event (`parseUpdateState`, `parseUpdateEvent`) before use.
 - A window that is not open when a notice is sent does not see it; the next mount reads `update:read`.
+- Every state has the same shape: a tinted circle holding a Central icon (check for latest and ready, arrow down while
+  downloading, red close for an error), a headline, secondary text and the buttons. "Latest" is headlined "You're up to
+  date" with the version under it. The dialog has `role="dialog"` named by the headline, no outline and no rule above
+  the buttons (fills only), and the button Enter presses has focus once the dialog is open; Escape hides it.
 - The popup is a pure view of a state (`UpdatePopup`), so tests and harnesses can show any state; there is no
   production switch for previewing it. Dev builds skip update checks, as before.
 
