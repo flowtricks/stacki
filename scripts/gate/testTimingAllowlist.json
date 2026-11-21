@@ -233,6 +233,14 @@
       "expires": "2027-05-18"
     },
     {
+      "file": "studio/test/structuralEdits.bench.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "A manual benchmark, not a gate suite: the fixed delay is the slow server it simulates (a 700 ms component render), and no time is asserted.",
+      "added": "2026-11-21",
+      "expires": "2027-05-20"
+    },
+    {
       "file": "studio/test/structuralLatency.browser.ts",
       "rule": "absolute-ms",
       "count": 2,
