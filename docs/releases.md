@@ -47,6 +47,21 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.11
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.11.
+- **Features**
+  - studio: one status row and a determinate bar on the boot screen
+  - studio-setup: colour shell commands in the install output
+  - rail: show the icon order reset only when the order is not default
+  - update: in-app popup with live download progress
+- **Fixes**
+  - studio: preview frames address the editor by its origin tag
+  - studio: restore the stuck-canvas report and preview-host log
+  - studio: a ready hosted frame clears the loader; Retry starts over
+  - pages: folder management follows the project's srcDir
+  - studio: the page comparison takes its base from the caller
+
 ## 1.4.10
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.10.
