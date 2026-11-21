@@ -22,6 +22,7 @@ import { CmsUnavailable, cmsForwarded } from '../features/cms/cmsConnectionVault
 import { mediaConnectionRoute } from './mediaConnectionRoutes';
 import { mediaForwarded } from '../features/assets/mediaConnectionVault';
 import { appFileLinkRoute, appFileRedirect } from './appFileRoutes';
+import { clientDiagnosticsRoute } from './clientDiagnostics';
 import { StartupLog, type ContainerPhase } from '../features/startup/startupLog';
 import { parseStartupReport, STARTUP_LIMITS } from '../features/startup/startupStages';
 
@@ -156,13 +157,50 @@ export class PreviewContainer extends Container<Environment> {
 export default {
   async fetch(request: Request, environment: Environment, context: ExecutionContext): Promise<Response> {
     try {
-      return await route(request, environment, context);
+      const response = await route(request, environment, context);
+      logPreviewHost(request, environment, response);
+      return response;
     } catch (error) {
       console.error('Studio request failed', error instanceof Error ? error.message : 'Unknown');
       return studioError(request, 'Studio is restarting or temporarily unavailable. Please retry shortly.', 503);
     }
   },
 };
+// `wrangler tail` shows a request as Ok even when the answer is a 401 or 403, so what the preview
+// host answered for its page and entry is logged with its status. Paths only: no query, no token.
+// Each (path, status) is logged at most once per window, so a flood of probes or a retrying page
+// cannot fill the log; the table is bounded because the paths a visitor asks for are not.
+const PREVIEW_LOG_WINDOW_MS = 10_000;
+const PREVIEW_LOG_KEYS_MAX = 64;
+const previewLogged = new Map<string, number>();
+function logPreviewHost(request: Request, environment: Environment, response: Response) {
+  const url = new URL(request.url);
+  if (url.origin !== environment.PREVIEW_ORIGIN) {
+    return;
+  }
+  if (!(response.status >= 400 || url.pathname === '/__studio-entry' || url.pathname === '/' || url.pathname === '/studio/preview.js')) {
+    return;
+  }
+  const key = `${request.method} ${url.pathname} ${response.status}`;
+  const now = Date.now();
+  const last = previewLogged.get(key);
+  if (last !== undefined && now - last < PREVIEW_LOG_WINDOW_MS) {
+    return;
+  }
+  if (previewLogged.size >= PREVIEW_LOG_KEYS_MAX) {
+    previewLogged.clear();
+  }
+  previewLogged.set(key, now);
+  console.log(
+    'preview-host',
+    JSON.stringify({
+      path: url.pathname,
+      status: response.status,
+      method: request.method,
+    }),
+  );
+}
+
 async function route(request: Request, environment: Environment, context: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/studio/internal/')) {
@@ -229,6 +267,9 @@ async function workerRoute(request: Request, url: URL, environment: Environment,
   }
   if (url.pathname === '/studio/api/preview-url') {
     return previewURL(url, environment, identity);
+  }
+  if (url.pathname === '/studio/api/client-diagnostics') {
+    return clientDiagnosticsRoute(request, environment.DRAFTS, () => new Date().toISOString());
   }
   if (url.pathname === '/studio/api/startup' && request.method === 'GET') {
     // Answered by the Durable Object itself, so reading it never waits for the container.
