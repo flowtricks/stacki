@@ -116,7 +116,10 @@ test('the declared capabilities are exactly the open ones: no JetBrains AIR, no 
   context.after(() => setup.host.stopAll());
   await runTurn(setup, setup.chat(), 'tell me the capabilities');
   // The echoed object is followed by the stand-in's usual answer, joined into the same streamed text.
-  const reply = created(ofKind(setup.events(), 'text')[0]).text;
+  // The reply streams in chunks and a loaded machine splits it anywhere (the JSON was cut at the first chunk on a gate run), so every chunk is joined.
+  const reply = ofKind(setup.events(), 'text')
+    .map((event) => event.text)
+    .join('');
   const echoed: unknown = JSON.parse(reply.slice(0, reply.indexOf('Done')));
   assert.deepEqual(echoed, JSON.parse(JSON.stringify(CLIENT_CAPABILITIES)), 'the adapter received exactly the constant');
   assert.deepEqual(echoed, {
