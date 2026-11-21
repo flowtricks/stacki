@@ -71,6 +71,8 @@ const SELECTION_BACKGROUND_SELECTOR = '.cm-selectionBackground, ' + '&.cm-focuse
 const codeEditorTheme = EditorView.theme(
   {
     '&': {
+      // CSS reads left to right whatever the interface language, so the editor never mirrors.
+      direction: 'ltr',
       width: '100%',
       color: 'var(--color-text-primary)',
       backgroundColor: 'var(--color-bg-surface)',
@@ -82,7 +84,7 @@ const codeEditorTheme = EditorView.theme(
       caretColor: 'var(--color-text-primary)',
     },
     '.cm-cursor': {
-      borderLeftColor: 'var(--color-text-primary)',
+      borderLeftColor: 'var(--color-text-primary)', // physical: caret inside LTR code editor
     },
     // Matches the selection used everywhere else; CodeMirror paints its own
     // layer instead of using ::selection.

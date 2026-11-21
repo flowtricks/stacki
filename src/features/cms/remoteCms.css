@@ -40,7 +40,7 @@
 .remote-cms-sync {
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   width: 22px;
   height: 22px;
   display: grid;
@@ -70,7 +70,7 @@
 /* Required by the CMS: an asterisk after the field's own name (not a nested field's). */
 .remote-cms-field.is-required > .props-field > label .prop-label::after {
   content: '*';
-  margin-left: 1px;
+  margin-inline-start: 1px;
   color: inherit;
 }
 .remote-cms-label {
@@ -93,7 +93,7 @@
   white-space: nowrap;
 }
 .remote-cms-required {
-  margin-left: auto;
+  margin-inline-start: auto;
   flex: none;
   font-size: 10.5px;
   font-weight: 400;
@@ -117,8 +117,9 @@
 .remote-cms-group {
   display: grid;
   gap: 14px;
-  padding: 4px 0 2px 12px;
-  border-left: 1px solid var(--border);
+  padding-block: 4px 2px;
+  padding-inline: 12px 0;
+  border-inline-start: 1px solid var(--border);
 }
 .remote-cms-geopoint {
   display: grid;
@@ -153,7 +154,7 @@
 .remote-cms-asset-actions {
   display: flex;
   gap: 4px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* A list of groups, images or references: rows that open in place. Each row
@@ -185,7 +186,8 @@
   align-items: center;
   gap: 10px;
   min-height: 46px;
-  padding: 7px 10px 7px 8px;
+  padding-block: 7px;
+  padding-inline: 8px 10px;
   border-radius: 8px;
   font-size: 13px;
   color: var(--text);
@@ -250,7 +252,7 @@
 .remote-cms-list-inline input,
 .remote-cms-list-inline textarea {
   background: transparent;
-  padding-left: 2px;
+  padding-inline-start: 2px;
 }
 .remote-cms-list-title {
   flex: 1;
@@ -354,7 +356,7 @@
    checkboxes or grips at the start of each row. */
 .remote-cms-table.has-lead .remote-cms-row {
   grid-template-columns: 28px minmax(0, 1fr) 110px 130px;
-  padding-left: 10px;
+  padding-inline-start: 10px;
 }
 .remote-cms-table.has-lead.is-files .remote-cms-row {
   grid-template-columns: 28px minmax(0, 1fr) 130px;
@@ -406,7 +408,7 @@
   background: color-mix(in srgb, var(--green) 14%, transparent);
 }
 .remote-cms-times {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 11px;
   color: var(--text-faint);
   white-space: nowrap;
@@ -473,7 +475,7 @@
 .remote-cms-tile-actions {
   position: absolute;
   top: 6px;
-  right: 6px;
+  inset-inline-end: 6px;
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -625,14 +627,14 @@
   flex: none;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .remote-cms-item-meta .remote-cms-times {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .remote-cms-item-meta .remote-cms-actions {
   flex: none;
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 @container remote-item (max-width: 820px) {
   .remote-cms-item-meta .remote-cms-times {
@@ -648,11 +650,11 @@
   }
   .remote-cms-item-meta {
     flex: 1 1 100%;
-    margin-left: 0;
-    padding-left: 30px;
+    margin-inline-start: 0;
+    padding-inline-start: 30px;
   }
   .remote-cms-item-meta .remote-cms-actions {
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 }
 
@@ -661,7 +663,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: 8px;
+  margin-inline-start: 8px;
 }
 .remote-cms-actions .primary {
   min-width: 84px;
@@ -855,7 +857,7 @@
   }
   .remote-cms-table.has-lead .remote-cms-row {
     grid-template-columns: 28px minmax(200px, 1fr) 100px 110px;
-    padding-left: 8px;
+    padding-inline-start: 8px;
   }
   .remote-cms-table.has-lead.is-files .remote-cms-row {
     grid-template-columns: 28px minmax(200px, 1fr) 110px;
@@ -963,7 +965,7 @@
 }
 .option-image-menu .dd-check {
   order: 1;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* Delete and Duplicate, after the last field, as a CMS's item page ends. */
@@ -1023,7 +1025,7 @@
   background: none;
   color: inherit;
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .remote-cms-sort > span {
@@ -1062,7 +1064,7 @@
   width: 14px;
   display: inline-grid;
   place-items: center;
-  margin-left: auto; /* Checks end the row, as in every menu. */
+  margin-inline-start: auto; /* Checks end the row, as in every menu. */
 }
 /* Through the header row, so the app's button look (a fill on hover, a full
    width, centred text) never reaches a column's name. */
@@ -1141,7 +1143,8 @@
   align-items: center;
   gap: 8px;
   min-height: 40px;
-  padding: 0 12px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 12px;
   border-radius: 8px;
   background: var(--bg-input);
   cursor: pointer;
@@ -1169,7 +1172,7 @@
   font-size: 12px;
 }
 .remote-cms-settings-required {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .remote-cms-settings-editor {
   display: grid;
@@ -1405,7 +1408,7 @@
 .remote-cms-groups-mark {
   position: absolute;
   top: 0;
-  left: 0;
+  inset-inline-start: 0;
   border-radius: 6px;
   background: var(--bg-active);
   transition:
@@ -1519,7 +1522,7 @@
 /* An opened field of a group: its form sits on its own fill, indented under the row. */
 .list-items-member-settings {
   padding: 10px 12px;
-  margin-left: 20px;
+  margin-inline-start: 20px;
   border-radius: 8px;
   background: var(--bg-panel-2);
 }

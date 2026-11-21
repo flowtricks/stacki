@@ -79,7 +79,7 @@ export function DataTreeRow(props: DataTreeRowProps) {
     <div
       ref={props.rowRef}
       className={`dp-row ${props.selected ? 'selected' : ''} ${toneClass}`}
-      style={{ paddingLeft: dataRowIndentPx(depth) }}
+      style={{ paddingInlineStart: dataRowIndentPx(depth) }}
       title={props.title}
       aria-selected={props.selected}
       aria-disabled={tone === 'disabled' ? true : undefined}

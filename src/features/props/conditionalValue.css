@@ -56,7 +56,7 @@
   background: var(--bg-hover);
   color: var(--text-dim);
   font-size: 11px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .conditional-summary:hover:not(:disabled) {
@@ -143,8 +143,7 @@
 /* Where a dragged group would land: the shared drop line, in the gap above or below. */
 .conditional-gap {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   height: 0;
   pointer-events: none;
   z-index: 1;
@@ -162,7 +161,7 @@
   justify-content: center;
   width: 16px;
   height: 18px;
-  margin-left: -4px;
+  margin-inline-start: -4px;
   padding: 0;
   border: none;
   border-radius: 4px;
@@ -192,7 +191,7 @@
   font-size: 11px;
 }
 .conditional-group-head > .loop-settings-remove {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 /* As wide as its word, not the row: the trigger is full width by default (dropdown.css). */
 .dd-trigger.conditional-match {
@@ -226,7 +225,7 @@
   flex: 1 1 160px;
 }
 .conditional-condition > .loop-settings-remove {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .conditional-add,
 .conditional-add-group {
@@ -358,7 +357,7 @@
   opacity: 1;
 }
 .conditional-group-head > .loop-settings-remove {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* The template condition editor (ConditionExpressionEditor.tsx): its value is a field of its own beside the operator. */
@@ -480,7 +479,7 @@
   gap: 6px;
 }
 .conditional-editor > .loop-property-head > .loop-settings-remove {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* Code the conditions cannot read (ComputedField): the same pill as
@@ -498,7 +497,7 @@
 .conditional-computed-toggle {
   position: absolute;
   top: 3px;
-  right: 3px;
+  inset-inline-end: 3px;
 }
 
 /* A fallback (`label ?? named[variant]`): its values in a row, the operator muted between them. */
@@ -531,7 +530,8 @@
   gap: 6px;
   flex: 1 1 160px;
   min-width: 0;
-  padding: 3px 8px 3px 3px;
+  padding-block: 3px;
+  padding-inline: 3px 8px;
   border-radius: 6px;
   background: var(--bg-input);
 }
@@ -560,7 +560,8 @@
   align-items: center;
   gap: 6px;
   min-height: 28px;
-  padding: 2px 4px 2px 8px;
+  padding-block: 2px;
+  padding-inline: 8px 4px;
   border-radius: 6px;
   background: var(--bg-input);
   color: var(--text-dim);
@@ -602,7 +603,7 @@
 }
 .conditional-code-condition > .conditional-code-condition-edit {
   flex: none;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 /* In the narrow Settings column the name and the operator keep their words; the value gives way first. */
 .condition-expression .conditional-condition > .dd-trigger.conditional-value-pick,

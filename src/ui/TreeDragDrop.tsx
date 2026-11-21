@@ -52,7 +52,7 @@ export function TreeDropGap({
       data-drop-parent={parent ?? ''}
       data-drop-index={index}
       style={{
-        marginLeft: `calc(${depth} * var(--navigator-indent, 16px))`,
+        marginInlineStart: `calc(${depth} * var(--navigator-indent, 16px))`,
         // Where subtrees end, overlay gaps of several levels share one edge: the
         // deeper one sits on top, so the pointer's x position picks the level.
         ...(layout === 'overlay' ? { zIndex: 1 + depth } : {}),

@@ -63,7 +63,7 @@
 }
 /* Ignored sits at the group's right edge, whichever row it lands on. */
 .audits-filters .audits-pill-toggle {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 /* The first run's calm progress line, under the toolbar. */
 .audits-progress {
@@ -165,7 +165,7 @@
   border-radius: 5px;
   background: none;
   color: var(--text);
-  text-align: left;
+  text-align: start;
 }
 .audits-fix-item:hover,
 .audits-fix-more:hover {
@@ -195,7 +195,10 @@
   font-size: 12px;
   font-weight: 500;
 }
+/* A change is CSS: isolated left to right inside a mirrored row. */
 .audits-fix-change {
+  direction: ltr;
+  unicode-bidi: isolate;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
 }
@@ -264,7 +267,10 @@
   color: var(--text-dim);
   font-size: 11px;
 }
+/* A tag is a measure or key path: isolated left to right. */
 .audits-tag {
+  direction: ltr;
+  unicode-bidi: isolate;
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 
@@ -276,7 +282,8 @@
   flex-direction: column;
   gap: 1px;
   /* Rows and text line up under the title, past the icon (14px) and its gap (6px). */
-  padding: 0 0 4px 20px;
+  padding-block: 0 4px;
+  padding-inline: 20px 0;
 }
 .audits-occurrence-row {
   height: 26px;
@@ -318,7 +325,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 2px 4px 6px 8px;
+  margin-block: 2px 6px;
+  margin-inline: 8px 4px;
   padding: 6px;
   border-radius: 6px;
   background: var(--bg-input);
@@ -403,7 +411,7 @@
 }
 .audits-find-icon {
   position: absolute;
-  left: 8px;
+  inset-inline-start: 8px;
   color: var(--text-faint);
   pointer-events: none;
 }
@@ -411,7 +419,8 @@
   flex: 1 1 0;
   min-width: 0;
   height: 100%;
-  padding: 0 8px 0 28px;
+  padding-block: 0;
+  padding-inline: 28px 8px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -423,7 +432,7 @@
   flex: none;
   align-items: center;
   gap: 2px;
-  padding-right: 3px;
+  padding-inline-end: 3px;
 }
 .audits-toggle {
   display: inline-flex;
@@ -498,7 +507,7 @@
   flex: none;
   min-width: 26px;
   font-weight: 600;
-  text-align: right;
+  text-align: end;
 }
 .audits-score-value.good {
   color: #4cc38a;
@@ -535,7 +544,7 @@
   padding: 0;
   background: transparent;
   color: var(--text-dim);
-  text-align: left;
+  text-align: start;
 }
 .audits-settings-disclosure:hover:not(:disabled) {
   background: transparent;
@@ -568,7 +577,7 @@
   white-space: nowrap;
 }
 .audits-settings-priority {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   padding: 0 5px;
   border-radius: 4px;
   background: var(--bg-hover);
@@ -713,7 +722,7 @@
   opacity: 0.85;
 }
 .audits-review-row.nested .audits-review-selector {
-  padding-left: 14px;
+  padding-inline-start: 14px;
 }
 .audits-review-columns {
   position: sticky;
@@ -792,7 +801,7 @@
   background: var(--bg-input);
   color: var(--text-dim);
   font-size: 11.5px;
-  text-align: left;
+  text-align: start;
 }
 .audits-review-path {
   flex: 1;
@@ -872,10 +881,10 @@
 }
 /* A rule's count sits at the row's right whether or not a breakdown or Review precedes it. */
 .audits-rule > .audits-row .audits-count {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .audits-review-columns span:nth-child(4) {
-  text-align: right;
+  text-align: end;
 }
 
 /* The Speed card: measuring, measured and failed, on one calm fill. */
@@ -940,7 +949,7 @@
 }
 .audits-progress span {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0 auto 0 0; /* physical: indeterminate bar slides with translateX */
   width: 35%;
   border-radius: 2px;
   background: var(--accent);
@@ -1094,17 +1103,17 @@
   transform: rotate(90deg);
 }
 .audits-group-row {
-  margin-left: -14px;
+  margin-inline-start: -14px;
 }
 /* A file's or element's count sits at the row's right, before its menu, however short the name. */
 .audits-group-row .audits-count {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .audits-file-body {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }
 /* An element row: the Navigator's label, and under it the text the finding is about, muted. */
 .audits-occurrence-text {
@@ -1137,7 +1146,7 @@
   padding: 0;
   background: none;
   color: inherit;
-  text-align: left;
+  text-align: start;
 }
 .audits-review-value-button:hover:not(:disabled) .audits-review-value {
   background: var(--bg-hover);

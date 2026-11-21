@@ -164,7 +164,7 @@
   justify-content: flex-end;
 }
 .studio-setup footer button:first-child {
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .studio-step-layout {
   display: grid;
@@ -238,7 +238,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px 8px 14px;
+  padding-block: 8px;
+  padding-inline: 14px 10px;
   border-radius: 8px;
   background: #0a0a0a;
 }
@@ -431,8 +432,8 @@
   .studio-setup footer,
   .studio-setup nav,
   .studio-setup-content {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-inline-start: 16px;
+    padding-inline-end: 16px;
   }
   .studio-setup nav {
     gap: 6px;
@@ -440,8 +441,8 @@
   .studio-setup nav button {
     justify-content: center;
     gap: 5px;
-    padding-left: 6px;
-    padding-right: 6px;
+    padding-inline-start: 6px;
+    padding-inline-end: 6px;
   }
   .studio-preview-steps li,
   .studio-agent-card {

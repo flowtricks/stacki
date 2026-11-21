@@ -44,7 +44,7 @@ export function SizedFrame({ sizing, children }: { readonly sizing: PreviewSizin
 /** The preview mode's stage: the area below the title bar, the frame centred in it as on the canvas. */
 export function PreviewModeStage({ sizing, children }: { readonly sizing: PreviewSizing; readonly children: ReactNode }) {
   return (
-    <div className="preview-mode preview-mode-stage" ref={sizing.wrapRef}>
+    <div className="preview-mode preview-mode-stage" dir="ltr" ref={sizing.wrapRef}>
       <SizedFrame sizing={sizing}>{children}</SizedFrame>
     </div>
   );

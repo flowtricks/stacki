@@ -5,12 +5,12 @@
 }
 .panel-body .palette-item,
 .panel-body .palette-folder {
-  padding-right: 36px;
+  padding-inline-end: 36px;
 }
 .palette-row-menu {
   position: absolute;
   top: 50%;
-  right: 8px;
+  inset-inline-end: 8px;
   display: grid;
   place-items: center;
   width: 22px;

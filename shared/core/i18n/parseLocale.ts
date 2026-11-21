@@ -3,7 +3,7 @@
 // operating system reports, become a `Locale` here and nowhere else. Nothing is cast.
 import { assert } from '../assert';
 import { err, ok, type Result } from '../result';
-import { LOCALE_DEFAULT, LOCALE_PREFERENCES, LOCALES, type Locale, type LocalePreference } from './locales';
+import { LOCALE_DEFAULT, LOCALE_PREFERENCES, LOCALE_TAG_ALIASES, LOCALES, type Locale, type LocalePreference } from './locales';
 
 /** Characters in a language tag. BCP 47 allows long private-use tags; no shipped language needs more than a few. */
 const LANGUAGE_TAG_CHARS_MAX = 35;
@@ -35,8 +35,8 @@ export function parseLocalePreference(input: unknown): Result<LocalePreference> 
 }
 
 /**
- * The shipped locale that best matches one language tag: an exact match, else the first shipped
- * locale with the same primary language ("pt-PT" and "pt" get "pt-BR"; "es-MX" gets "es").
+ * The shipped locale that best matches one language tag: an exact match, else an alias (`zh-Hant-HK` gets "zh-TW", `iw` gets "he"),
+ * else the first shipped locale with the same primary language ("pt-PT" and "pt" get "pt-BR"; "es-MX" gets "es"; "zh" gets "zh-CN").
  * Undefined when no shipped language fits.
  */
 export function matchLocale(languageTag: string): Locale | undefined {
@@ -49,8 +49,24 @@ export function matchLocale(languageTag: string): Locale | undefined {
   if (exact !== undefined) {
     return exact;
   }
+  const aliased = aliasOf(lower);
+  if (aliased !== undefined) {
+    return aliased;
+  }
   const primary = lower.split('-')[0];
   return LOCALES.find((locale) => locale.toLowerCase().split('-')[0] === primary);
+}
+
+/** The locale an alias names, for a lowercase tag that is the alias or starts with it and a hyphen. */
+function aliasOf(lower: string): Locale | undefined {
+  assert(lower === lower.toLowerCase(), 'aliasOf: the tag is lowercase');
+  for (const [alias, locale] of Object.entries(LOCALE_TAG_ALIASES)) {
+    if (lower === alias || lower.startsWith(`${alias}-`)) {
+      assert(LOCALES.includes(locale), 'aliasOf: an alias names a shipped locale');
+      return locale;
+    }
+  }
+  return undefined;
 }
 
 /** The first of the system's preferred languages that Stacki ships, or English. */

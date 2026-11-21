@@ -18,7 +18,8 @@
   justify-content: space-between;
   gap: 8px;
   height: 30px;
-  padding: 0 4px 0 12px;
+  padding-block: 0;
+  padding-inline: 12px 4px;
   /* The same surface as the body: one solid background, no seam. */
   background: transparent;
 }

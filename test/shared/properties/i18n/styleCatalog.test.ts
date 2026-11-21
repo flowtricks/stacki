@@ -6,9 +6,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { formatMessage, parseMessage } from '#dist/shared/core/i18n/catalog.js';
-import { LOCALES } from '#dist/shared/core/i18n/locales.js';
+import { LOCALE_INFO, LOCALES } from '#dist/shared/core/i18n/locales.js';
 
-const DIRECTORY_OF = { en: 'en', es: 'es', fr: 'fr', de: 'de', 'pt-BR': 'ptBR' } as const satisfies Record<(typeof LOCALES)[number], string>;
 const PLURAL_KEYS = [
   'style.embedEditor.pendingTooltip',
   'style.embedEditor.pendingNote',
@@ -25,7 +24,7 @@ const FLOW_LABEL_KEYS = [
 ] as const;
 
 async function loadStyle(locale: (typeof LOCALES)[number]): Promise<Readonly<Record<string, unknown>>> {
-  const loaded: unknown = await import(`#dist/shared/properties/i18n/messages/${DIRECTORY_OF[locale]}/style.js`);
+  const loaded: unknown = await import(`#dist/shared/properties/i18n/messages/${LOCALE_INFO[locale].directory}/style.js`);
   assert.ok(typeof loaded === 'object' && loaded !== null && 'messages' in loaded, `${locale}/style exports messages`);
   const messages: unknown = loaded.messages;
   assert.ok(typeof messages === 'object' && messages !== null, `${locale}/style messages is an object`);
@@ -38,6 +37,11 @@ function messageValue(messages: Readonly<Record<string, unknown>>, key: string) 
   return parsed.value;
 }
 
+// Arabic and Hebrew write one and two in words ("تغيير واحد", "تغييران": the dual), and their `one` and `two` categories select
+// exactly 1 and 2, so the word is the number. Every other language, including Russian and Polish whose `one` also covers 21 and 31,
+// must show the digit.
+const NUMBER_IN_WORDS = new Set(['ar', 'he']);
+
 test('plural messages fill every placeholder for one item and for several, in every language', async () => {
   for (const locale of LOCALES) {
     const messages = await loadStyle(locale);
@@ -46,7 +50,11 @@ test('plural messages fill every placeholder for one item and for several, in ev
         const formatted = formatMessage(locale, messageValue(messages, key), { count, components: 3, tag: '<style>' });
         assert.ok(formatted.ok, `${locale} ${key} formats for ${count}`);
         assert.ok(!/[{}]/.test(formatted.value), `${locale} ${key} leaves no placeholder open for ${count}: ${formatted.value}`);
-        assert.ok(formatted.value.includes(String(count)), `${locale} ${key} shows the number ${count}`);
+        if (count <= 2 && NUMBER_IN_WORDS.has(locale)) {
+          assert.ok(formatted.value.length > 0, `${locale} ${key} says ${count} in words`);
+        } else {
+          assert.ok(formatted.value.includes(String(count)), `${locale} ${key} shows the number ${count}`);
+        }
       }
     }
   }

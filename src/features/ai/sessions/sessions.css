@@ -36,7 +36,8 @@
   display: flex;
   align-items: center;
   min-height: 26px;
-  padding: 0 4px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
   color: var(--text-faint);
   font-size: 11.5px;
   font-weight: 600;
@@ -49,7 +50,7 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  margin-left: -6px;
+  margin-inline-start: -6px;
   padding: 3px 6px;
   border-radius: 6px;
   background: transparent;
@@ -68,7 +69,7 @@
   white-space: nowrap;
 }
 .ai-section-head .ai-row-more {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .ai-section-head:hover .ai-row-more,
 .ai-section-head:focus-within .ai-row-more,
@@ -79,11 +80,13 @@
   height: 30px;
 }
 .ai-section-rename {
-  margin: 0 4px 0 -6px;
+  margin-block: 0;
+  margin-inline: -6px 4px;
 }
 .ai-section-empty {
   list-style: none;
-  padding: 4px 8px 4px 26px;
+  padding-block: 4px;
+  padding-inline: 26px 8px;
   color: var(--text-faint);
   font-size: 11.5px;
 }
@@ -115,12 +118,13 @@
   align-items: center;
   gap: 6px;
   height: 30px;
-  padding: 0 8px 0 6px;
+  padding-block: 0;
+  padding-inline: 6px 8px;
   border-radius: 7px;
   background: transparent;
   color: var(--text);
   font-size: 12.5px;
-  text-align: left;
+  text-align: start;
 }
 .ai-list-open:focus-visible {
   background: var(--bg-input);
@@ -189,7 +193,7 @@
 }
 .ai-list-row .ai-row-more {
   position: absolute;
-  right: 4px;
+  inset-inline-end: 4px;
   top: 50%;
   transform: translateY(-50%);
 }
@@ -213,11 +217,11 @@
   font-size: 11px;
 }
 .ai-list-row.is-archived .ai-row-more {
-  right: 4px;
+  inset-inline-end: 4px;
 }
 .ai-list-row.is-renaming {
   height: 30px;
-  padding-left: 6px;
+  padding-inline-start: 6px;
 }
 /* A field is exactly as tall as the line it replaces, so renaming moves nothing below it. */
 .ai-rename {
@@ -225,7 +229,8 @@
   min-width: 0;
   box-sizing: border-box;
   height: 26px;
-  margin: 0 4px 0 0;
+  margin-block: 0;
+  margin-inline: 0 4px;
 }
 
 /* Where a dragged row would land: zero height, so showing it moves nothing. */

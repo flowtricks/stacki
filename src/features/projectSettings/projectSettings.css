@@ -21,7 +21,7 @@
   background: transparent;
   color: var(--text-dim);
   font: inherit;
-  text-align: left;
+  text-align: start;
 }
 .list-item.settings-link:hover {
   background: var(--bg-hover);
@@ -31,7 +31,7 @@
   background: var(--bg-active);
 }
 .list-item.settings-link .label {
-  text-align: left;
+  text-align: start;
 }
 /* The chord that opens the view: muted, at the end of the row, before the chevron. */
 .settings-link-key {
@@ -165,7 +165,8 @@
   grid-template-columns: minmax(80px, 0.9fr) minmax(0, 1.4fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 4px 4px 4px 8px;
+  padding-block: 4px;
+  padding-inline: 8px 4px;
   border-radius: var(--radius);
   background: var(--bg-hover);
 }
@@ -198,7 +199,7 @@
   border-radius: var(--radius);
   background: transparent;
   color: var(--text-dim);
-  text-align: left;
+  text-align: start;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

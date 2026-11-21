@@ -103,6 +103,9 @@
   padding: 6px 8px;
   font-family: var(--mono);
   font-size: 11px;
+  /* A link reads left to right in every language: a right-to-left interface never mirrors it. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 .roles-view-reminder {
   background: var(--accent-soft);

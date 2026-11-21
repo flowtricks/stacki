@@ -8,8 +8,7 @@
 .ai-commands {
   position: absolute;
   bottom: 100%;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   margin-bottom: 4px;
   background: var(--bg-panel);
   border-radius: 8px;
@@ -25,7 +24,7 @@
   align-items: flex-start;
   padding: 4px 8px;
   background: transparent;
-  text-align: left;
+  text-align: start;
 }
 .ai-commands button.on {
   background: var(--bg-active);
@@ -191,7 +190,8 @@
   gap: 6px;
   background: var(--bg-input);
   border-radius: 8px;
-  padding: 6px 6px 6px 10px;
+  padding-block: 6px;
+  padding-inline: 10px 6px;
 }
 .ai-dictation-notice-text {
   flex: 1;
@@ -228,7 +228,8 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 3px 4px 3px 10px;
+  padding-block: 3px;
+  padding-inline: 10px 4px;
   border-radius: 10px;
   background: var(--bg-input);
   font-size: 11.5px;
@@ -257,7 +258,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 0 4px 0 10px;
+  padding-block: 0;
+  padding-inline: 10px 4px;
   font-size: 11px;
   color: var(--amber);
 }

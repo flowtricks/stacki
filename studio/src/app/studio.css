@@ -57,14 +57,14 @@
 }
 .collaborators {
   display: flex;
-  padding-left: 6px;
+  padding-inline-start: 6px;
 }
 .collaborators > button {
   border: 2px solid var(--bg-panel);
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  margin-left: -6px;
+  margin-inline-start: -6px;
   display: grid;
   place-items: center;
   font-size: 9px;
@@ -159,7 +159,7 @@
   width: 260px;
   min-width: 210px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   background: var(--bg-panel);
   overflow: visible;
   position: relative;
@@ -167,17 +167,17 @@
 .studio-right {
   width: 322px;
   flex-shrink: 0;
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
   background: var(--bg-panel);
   overflow: visible;
   position: relative;
 }
 /* Desktop's shared resize handle straddles the panel edge, as on .panel.left and .panel.right. */
 .studio-left > .panel-resize {
-  right: -4px;
+  inset-inline-end: -4px;
 }
 .studio-right > .panel-resize {
-  left: -4px;
+  inset-inline-start: -4px;
 }
 
 .muted {
@@ -266,8 +266,7 @@
 .class-suggestions {
   position: absolute;
   top: 100%;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   z-index: 30;
   background: #252525;
   border: 1px solid var(--border-strong);
@@ -280,12 +279,15 @@
 .class-suggestions button {
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;
   border-radius: 0;
   background: transparent;
   padding: 7px 10px;
   font-family: var(--mono);
   font-size: 10px;
+  /* A class name is code, which reads left to right in every language. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 .collection-editor {
   overflow: auto;
@@ -375,7 +377,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  text-align: left;
+  text-align: start;
   font-size: 12px;
 }
 .boot-stage {
@@ -392,7 +394,7 @@
   font-size: 12px;
   line-height: 1.4;
   color: var(--text-faint);
-  text-align: left;
+  text-align: start;
 }
 @media (prefers-reduced-motion: reduce) {
   .boot-progress > span {
@@ -425,10 +427,10 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 44px;
+  inset-inline-start: 44px;
   max-width: calc(100% - 44px);
   z-index: 40;
-  border-right: 0;
+  border-inline-end: 0;
   overflow: hidden;
   box-shadow: 0 12px 40px #0005;
 }
@@ -443,11 +445,11 @@
   display: flex;
   position: absolute;
   top: 44px;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 0;
   max-width: 100%;
   z-index: 45;
-  border-left: 0;
+  border-inline-start: 0;
   overflow: hidden;
   box-shadow: 0 12px 40px #0005;
 }
@@ -465,18 +467,19 @@
 .studio-app[data-editor-layout='collapsed'] .studio-left > .panel-close {
   position: absolute;
   top: 12px;
-  right: 12px;
+  inset-inline-end: 12px;
   z-index: 2;
 }
 .studio-app[data-editor-layout='collapsed'] .studio-left .panel-header {
-  padding-right: 38px;
+  padding-inline-end: 38px;
 }
 /* In the tab row: the tabs' height and top and bottom insets, and the 12px right inset of the
    panel's content below (and of the Navigator header's close button). */
 .studio-app[data-editor-layout='collapsed'] .studio-inspector-head > .panel-close {
   width: 26px;
   height: auto;
-  margin: 8px 12px 4px 0;
+  margin-block: 8px 4px;
+  margin-inline: 0 12px;
 }
 @media (max-width: 1000px) {
   .project-name {
@@ -626,7 +629,7 @@
   display: grid;
   gap: 0.5rem;
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 36px;
   z-index: 100;
   min-width: 150px;
@@ -728,14 +731,14 @@
 .collaborator-outline-tag {
   position: absolute;
   bottom: 100%;
-  left: 0;
+  left: 0; /* physical: canvas overlay, page coordinates */
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 6px 3px 3px;
+  padding: 3px 6px 3px 3px; /* physical: canvas overlay, page coordinates */
   background: #009dff;
   color: white;
-  border-radius: 4px 4px 4px 0;
+  border-radius: 4px 4px 4px 0; /* physical: canvas overlay, page coordinates */
   white-space: nowrap;
   font-size: 10.5px;
   font-weight: 600;
@@ -774,8 +777,8 @@
   white-space: nowrap;
 }
 .page-presence {
-  margin-left: auto;
-  padding-left: 5px;
+  margin-inline-start: auto;
+  padding-inline-start: 5px;
   display: inline-flex;
   flex-shrink: 0;
 }
@@ -784,7 +787,7 @@
   place-items: center;
   width: 23px;
   height: 23px;
-  margin-left: -5px;
+  margin-inline-start: -5px;
   border: 2px solid var(--bg-panel);
   border-radius: 50%;
   overflow: hidden;
@@ -822,7 +825,7 @@
 }
 .studio-page-list .list-item {
   width: 100%;
-  text-align: left;
+  text-align: start;
   font-weight: 400;
 }
 .studio-file-dialog {

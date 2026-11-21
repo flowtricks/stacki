@@ -173,8 +173,10 @@ function PreviewSurface({
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectName);
   // A page that is already ready costs no request: the first read waits long enough for it to arrive.
   const startup = useStartupView(!loading.ready, 1500);
+  // `dir="ltr"`: the canvas shows the person's own site and the overlays drawn over it in page coordinates, so it never mirrors
+  // when Stacki's own interface is in Arabic or Hebrew.
   return (
-    <div className="preview-frame-wrap" ref={sizing.wrapRef} data-preview-loading={!loading.ready} aria-busy={!loading.ready}>
+    <div dir="ltr" className="preview-frame-wrap" ref={sizing.wrapRef} data-preview-loading={!loading.ready} aria-busy={!loading.ready}>
       {props.preview.url &&
         (props.device === 'canvas' ? (
           <CanvasView
@@ -251,8 +253,9 @@ function CanvasOverlays({
         borderRadius: sizing.fit === 'framed' ? 10 * sizing.viewport.scale : 0,
       }
     : { width: '100%', height: '100%', borderRadius: 0 };
+  // The overlays are drawn in the page's own coordinates over the user's site, which never mirrors, so they stay left to right.
   return (
-    <div className={`preview-overlay-layer ${sizing.width && sizing.fit === 'framed' ? '' : 'full'}`} style={style}>
+    <div dir="ltr" className={`preview-overlay-layer ${sizing.width && sizing.fit === 'framed' ? '' : 'full'}`} style={style}>
       {/* First in the layer, so the outlines and spacing bands paint over it. */}
       {shownGuide && <GuideOverlay {...shownGuide} scale={sizing.viewport.scale} />}
       <CollaboratorOutlines

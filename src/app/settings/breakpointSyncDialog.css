@@ -55,7 +55,8 @@
   align-items: center;
   gap: 8px;
   min-height: 36px;
-  padding: 0 10px 0 4px;
+  padding-block: 0;
+  padding-inline: 4px 10px;
 }
 .breakpoint-sync-open {
   /* Fixed width: a long path squeezes flex items by their size, and the icon column then shifts by a pixel or two on some fonts. */
@@ -106,7 +107,8 @@
   flex-direction: column;
   gap: 2px;
   margin: 0;
-  padding: 0 10px 8px 38px;
+  padding-block: 0 8px;
+  padding-inline: 38px 10px;
   list-style: none;
 }
 .breakpoint-sync-place {

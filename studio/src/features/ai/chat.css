@@ -86,7 +86,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    text-align: left;
+    text-align: start;
     background: var(--bg-input);
     border: 0;
     border-radius: 0.75rem;
@@ -121,7 +121,7 @@
   }
   ul,
   ol {
-    padding-left: 1.25rem;
+    padding-inline-start: 1.25rem;
     margin: 0 0 0.75rem;
     white-space: normal;
   }
@@ -229,5 +229,5 @@
 }
 /* Floating (collapsed) layout: the panel's close button sits in the header's row, so the header leaves it room, as the other panel headers do. */
 .studio-app[data-editor-layout='collapsed'] .studio-left .chat-header {
-  padding-right: 38px;
+  padding-inline-end: 38px;
 }

@@ -6,7 +6,7 @@
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  text-align: left;
+  text-align: start;
   font-size: 12px;
   font-weight: 400;
   color: var(--text);
@@ -57,7 +57,8 @@
   align-items: center;
   gap: 6px;
   height: 26px;
-  padding: 0 4px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
@@ -85,12 +86,12 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 /* A row's hint (a key, a count), muted at the end of the row before its check. */
 .dd-option .dd-hint {
-  margin-left: auto;
-  padding-left: 10px;
+  margin-inline-start: auto;
+  padding-inline-start: 10px;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
@@ -101,7 +102,7 @@
   color: rgba(255, 255, 255, 0.8);
 }
 .dd-hint ~ .dd-check {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .dd-check:empty {
   display: none;
@@ -233,7 +234,8 @@
   align-items: center;
   gap: 6px;
   height: 26px;
-  padding: 0 4px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
   border-radius: 5px;
   background: var(--bg-input);
 }

@@ -2,7 +2,7 @@
 .demo-bar {
   position: fixed;
   z-index: 2147483000;
-  left: 50%;
+  left: 50%; /* physical: centred by translateX(-50%) */
   transform: translateX(-50%);
   margin: 0;
   border-radius: 8px;
@@ -21,7 +21,8 @@
   box-sizing: border-box;
   width: max-content;
   max-width: calc(100vw - 32px);
-  padding: 6px 6px 6px 12px;
+  padding-block: 6px;
+  padding-inline: 12px 6px;
 }
 .demo-bar[hidden] {
   display: none;

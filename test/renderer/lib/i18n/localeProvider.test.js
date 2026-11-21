@@ -1,7 +1,8 @@
 // Goal: the provider (src/lib/i18n/LocaleProvider.tsx) never blocks the first render. English is on
 // screen immediately; when the person's language is another one, the text swaps once its catalog
 // arrives; a failed or late load leaves English; the document language follows what is on screen;
-// and choosing another language in Settings (the locale store) loads that language.
+// and choosing another language in Settings (the locale store) loads that language. The root's `dir`
+// comes from the locale list: right to left for Arabic and Hebrew, left to right for every other language.
 // Method: the real provider is bundled and mounted with React under jsdom, with a loader the test
 // resolves by hand, so the order of events (first paint, then arrival) is observable.
 const assert = require('node:assert/strict');
@@ -23,6 +24,7 @@ buildSync({
     contents: `export { LocaleProvider } from './src/lib/i18n/LocaleProvider.tsx';
       export { useTranslate, useLocale } from './src/lib/i18n/useTranslate.ts';
       export { writeLocalePreference } from './src/lib/i18n/localeStore.ts';
+      export { LOCALES } from './shared/core/i18n/locales.ts';
       export { messages as spanish } from './shared/properties/i18n/messages/es/index.ts';
       export { messages as french } from './shared/properties/i18n/messages/fr/index.ts';`,
     resolveDir: ROOT,
@@ -34,7 +36,7 @@ buildSync({
   logLevel: 'silent',
   external: ['react', 'react-dom', 'react/jsx-runtime'],
 });
-const { LocaleProvider, useTranslate, useLocale, writeLocalePreference, spanish, french } = require(output);
+const { LocaleProvider, useTranslate, useLocale, writeLocalePreference, spanish, french, LOCALES } = require(output);
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { pretendToBeVisual: true, url: 'http://localhost/' });
 Object.assign(global, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
@@ -131,6 +133,44 @@ test('a stored value that is not a shipped language is ignored', async () => {
   assert.equal(requests.length, 0);
   localStorage.clear();
   await act(async () => root.unmount());
+});
+
+test('the document root takes each language’s tag and direction: rtl for Arabic and Hebrew, ltr for the rest', async () => {
+  localStorage.clear();
+  const { loader, requests } = controlledLoader();
+  const root = await mount({ loader, languageTags: ['en'] });
+  assert.equal(document.documentElement.dir, 'ltr');
+  assert.ok(LOCALES.length >= 18, 'every shipped language is checked');
+  const seen = [];
+  for (const locale of LOCALES.filter((candidate) => candidate !== 'en')) {
+    await act(async () => writeLocalePreference(locale));
+    const request = requests.at(-1);
+    assert.equal(request.locale, locale);
+    // Until the catalog arrives the screen is English, so the root still says English and left to right.
+    assert.equal(document.documentElement.lang, seen.length === 0 ? 'en' : seen.at(-1));
+    await act(async () => request.resolve({ ok: true, value: spanish }));
+    assert.equal(document.documentElement.lang, locale);
+    assert.equal(document.documentElement.dir, locale === 'ar' || locale === 'he' ? 'rtl' : 'ltr', locale);
+    seen.push(locale);
+  }
+  await act(async () => writeLocalePreference('system'));
+  assert.equal(document.documentElement.dir, 'ltr');
+  assert.equal(document.documentElement.lang, 'en');
+  localStorage.clear();
+  await act(async () => root.unmount());
+});
+
+test('a stored tag that only resembles a shipped one (case, region, script) is ignored, never guessed', async () => {
+  for (const stored of ['AR', 'zh', 'zh-hant', 'he-IL', 'ja-JP', 'pt-br']) {
+    localStorage.setItem('stacki.locale', stored);
+    const { loader, requests } = controlledLoader();
+    const root = await mount({ loader, languageTags: ['en'] });
+    assert.equal(requests.length, 0, stored);
+    assert.equal(document.documentElement.dir, 'ltr', stored);
+    assert.equal(text().startsWith('en|Settings'), true, stored);
+    await act(async () => root.unmount());
+  }
+  localStorage.clear();
 });
 
 test('without a provider the context is English', async () => {

@@ -1,0 +1,51 @@
+// Dutch `dialog` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/dialog';
+
+export const messages = {
+  'dialog.open.apps.button': 'Kiezen',
+  'dialog.open.apps.filter': 'Stacki-app',
+  'dialog.open.apps.title': 'Een app installeren',
+  'dialog.open.assets.title': 'Assets uploaden',
+  'dialog.open.cmsFile.title': 'Een bestand kiezen',
+  'dialog.open.cmsImage.filter': 'Afbeeldingen',
+  'dialog.open.cmsImage.title': 'Een afbeelding kiezen',
+  'dialog.open.mediaUpload.title': 'Media uploaden',
+  'dialog.open.project.title': 'Een Astro-project openen',
+  'dialog.open.projectFile.title': 'Een bestand in dit project kiezen',
+  'dialog.open.projectFolder.title': 'Een map in dit project kiezen',
+  'dialog.open.replace.title': '{name} vervangen',
+  'dialog.open.repositoryTarget.title': 'Kies waar de repository wordt gedownload',
+  'dialog.open.siteTarget.title': 'Kies waar de site naartoe moet',
+  'dialog.open.studioRelease.filter': 'Studio-release',
+  'dialog.open.studioRelease.title': 'Kies een vertrouwd Stacki Studio-releasebundel',
+  'dialog.privacy.notSaved.detail': 'De wijziging geldt voor deze sessie. Controleer de beschikbare schijfruimte en probeer het opnieuw.',
+  'dialog.privacy.notSaved.message': 'Stacki kon je voorkeur voor gebruikstellingen niet opslaan.',
+  'dialog.privacy.notSaved.title': 'Privacyinstelling niet opgeslagen',
+  'dialog.update.available.detail': 'Je krijgt de vraag of je wilt herstarten zodra het klaar is.',
+  'dialog.update.check.alreadyChecking': 'Er wordt al op updates gecontroleerd.',
+  'dialog.update.check.failed': 'Stacki kon niet op updates controleren.',
+  'dialog.update.check.latest': 'Stacki {version} is de nieuwste versie.',
+  'dialog.update.check.title': 'Op updates controleren',
+  'dialog.update.development.detail': 'Dit is een ontwikkelbuild ({version}), die wordt bijgewerkt wanneer je hem opnieuw bouwt.',
+  'dialog.update.development.message': 'Updates worden alleen gecontroleerd in de geïnstalleerde app.',
+  'dialog.update.download.failed': 'De Stacki-update kon niet worden gedownload.',
+  'dialog.update.downloading.counter': '{transferred} van {total} MB',
+  'dialog.update.downloading.counterUnknown': '{transferred} MB gedownload',
+  'dialog.update.downloading.hide': 'Verbergen',
+  'dialog.update.downloading.percent': '{percent}%', // same
+  'dialog.update.downloading.progressLabel': 'Downloadvoortgang',
+  'dialog.update.downloading.title': 'Stacki {version} downloaden',
+  'dialog.update.downloading.titleUnnamed': 'De Stacki-update downloaden',
+  'dialog.update.ready.detail': 'Herstart Stacki om de update te installeren.',
+  'dialog.update.ready.heading': 'Stacki {version} is klaar',
+  'dialog.update.ready.later': 'Later', // same
+  'dialog.update.ready.restartNow': 'Nu herstarten',
+  'dialog.update.upToDate.title': 'Je bent up-to-date',
+  'dialog.usage.continue': 'Doorgaan',
+  'dialog.usage.detail':
+    'Stacki verstuurt één telling op dagen dat je een project opent. Er worden geen projectnamen, bestandsinhoud, apparaat-id of activiteitsgeschiedenis verstuurd. Dagtotalen worden maximaal 366 dagen bewaard bij Cloudflare; het netwerk ziet het IP-adres van de verbinding, maar de gebruiksdatabase slaat het niet op. Je kunt dit op elk moment uitzetten via Bestand → Instellingen.',
+  'dialog.usage.message': 'Help ons te begrijpen hoeveel Stacki-installaties actief zijn.',
+  'dialog.usage.optOut': 'Anonieme gebruikstellingen uitzetten',
+  'dialog.usage.title': 'Anonieme gebruikstellingen',
+} as const satisfies CatalogOf<MessageKey>;

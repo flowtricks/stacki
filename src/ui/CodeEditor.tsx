@@ -44,8 +44,8 @@ export const appTheme = EditorView.theme(
       lineHeight: '1.55',
     },
     '.cm-content': { caretColor: 'var(--accent)', padding: '8px 0' },
-    '.cm-line': { paddingRight: '16px' },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
+    '.cm-line': { paddingRight: '16px' }, // physical: code is forced left to right
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' }, // physical: CodeMirror draws its caret as a left border
     '&.cm-focused': { outline: 'none' },
     // The same selection as the rest of the app. CodeMirror paints its own
     // layer rather than using ::selection, so it has to be told separately or

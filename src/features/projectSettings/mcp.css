@@ -154,7 +154,7 @@
   min-width: 0;
 }
 .mcp-form-head .mcp-docs {
-  margin-left: auto;
+  margin-inline-start: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

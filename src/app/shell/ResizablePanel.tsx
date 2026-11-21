@@ -73,6 +73,7 @@ export function usePanelResize(kind: PanelKind): PanelResize {
     assert(panel instanceof HTMLElement, 'Resize handle must belong to a panel');
     const startWidth = panel.getBoundingClientRect().width;
     const startX = event.clientX;
+    const mirror = screenDirection(handle);
     let nextWidth = startWidth;
     // The width is written straight to the panel's style: the drag's own local DOM work.
     const showDragWidth = (shown: number): void => {
@@ -86,7 +87,7 @@ export function usePanelResize(kind: PanelKind): PanelResize {
     startDrag(event, {
       cursor: 'col-resize',
       onMove: (move) => {
-        nextWidth = dragPanelWidth(kind, startWidth, move.clientX - startX);
+        nextWidth = dragPanelWidth(kind, startWidth, (move.clientX - startX) * mirror);
         showDragWidth(nextWidth);
       },
       onEnd: () => {
@@ -186,6 +187,15 @@ function clampWidth(width: number, kind: PanelKind): number {
   return next;
 }
 
+// A right-to-left interface lays the panels out mirrored, so the left panel sits on the
+// screen's right and grows when the pointer moves left: the screen delta is mirrored too.
+function screenDirection(handle: HTMLElement): 1 | -1 {
+  // The dir attribute, not the computed style: LocaleProvider sets it on the root, and a
+  // test DOM without a cascade still reads it.
+  const direction = handle.closest('[dir]')?.getAttribute('dir') ?? 'ltr';
+  return direction === 'rtl' ? -1 : 1;
+}
+
 function keyboardWidth(event: KeyboardEvent<HTMLDivElement>, kind: PanelKind, width: number): number | undefined {
   switch (event.key) {
     case 'Home':
@@ -195,7 +205,7 @@ function keyboardWidth(event: KeyboardEvent<HTMLDivElement>, kind: PanelKind, wi
     case 'ArrowLeft':
     case 'ArrowRight': {
       const direction = event.key === 'ArrowRight' ? 1 : -1;
-      return dragPanelWidth(kind, width, direction * WIDTH_PX_STEP);
+      return dragPanelWidth(kind, width, direction * screenDirection(event.currentTarget) * WIDTH_PX_STEP);
     }
     default:
       return undefined;

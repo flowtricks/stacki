@@ -971,7 +971,10 @@ in the same popup when a project is open.
 
 ## Interface language in the main process
 
-`locale:set` takes `{ preference }` (`"system"` or a shipped locale; anything else is refused) and returns `{ saved }`. The renderer sends its stored
+`locale:set` takes `{ preference }` (`"system"` or a shipped locale; anything else is refused) and returns `{ saved }`. The shipped locales are
+`LOCALES` in `shared/core/i18n/locales.ts`: `en` (source), `es`, `fr`, `de`, `pt-BR`, `it`, `nl`, `pl`, `tr`, `ru`, `id`, `hi`, `ar`, `he`, `ja`, `ko`, `zh-CN`, `zh-TW`; each has a row in `LOCALE_INFO` (native name, catalog directory, text direction),
+and a stored value that is not exactly one of them (`zh`, `AR`, `he-IL`) is ignored, never guessed. `ar` and `he` are right to left: the renderer
+sets `dir="rtl"` on the document root, main sets it on the recovery page. The renderer sends its stored
 choice at startup and on every change; main keeps it as `localePreference` in `settings.json` (absent means `"system"`), rebuilds the application
 menu, and translates native dialogs with the same catalogs (`menu`, `dialog`, `error` namespaces). A failed disk write applies for the session only.
 Failure results may carry an optional `messageRef` (`{ key, params? }`, `parseMessageRef`) next to their English `message`; readers that do not know the key show the message.

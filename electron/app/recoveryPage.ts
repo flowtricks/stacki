@@ -8,6 +8,8 @@
 // It follows the app's design language by hand (the panel colour, backgrounds instead of borders, a blue button that
 // stays blue on hover) because it cannot load the app's stylesheet.
 import { assert } from '../../shared/core/assert';
+import { localeDirection } from '../../shared/core/i18n/locales';
+import { parseLocale } from '../../shared/core/i18n/parseLocale';
 import type { MainMessageKey } from '../lib/mainLocale';
 import type { RecoveryCause, RecoveryReason } from './windowHealth';
 
@@ -73,8 +75,11 @@ export function renderRecoveryPage(view: RecoveryView, translate: Translate): st
   assert(RECOVERY_PAGE_LIMITS.detailsCharsMax > 0, 'The recovery page has room for details');
   const details = view.details.slice(0, RECOVERY_PAGE_LIMITS.detailsCharsMax);
   const action = (name: RecoveryAction): string => `${RECOVERY_SCHEME}//${name}`;
+  // Arabic and Hebrew read right to left; a tag that is not a shipped locale (it cannot be today) reads left to right.
+  const parsed = parseLocale(view.lang);
+  const direction = parsed.ok ? localeDirection(parsed.value) : 'ltr';
   return `<!doctype html>
-<html lang="${escapeHtml(view.lang)}">
+<html lang="${escapeHtml(view.lang)}" dir="${direction}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
@@ -92,7 +97,7 @@ export function renderRecoveryPage(view: RecoveryView, translate: Translate): st
   a.primary { background: #0099ff; color: #ffffff; }
   a.primary:hover { background: #26a7ff; }
   a.primary:active { background: #0080d6; }
-  pre { margin: 0; padding: 12px; max-height: 240px; overflow: auto; border-radius: 8px; background: rgba(255, 255, 255, 0.06); color: #b8b8b8; font: 12px/1.5 'SF Mono', 'Cascadia Code', Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+  pre { margin: 0; padding: 12px; max-height: 240px; overflow: auto; border-radius: 8px; background: rgba(255, 255, 255, 0.06); color: #b8b8b8; font: 12px/1.5 'SF Mono', 'Cascadia Code', Consolas, monospace; white-space: pre-wrap; word-break: break-word; direction: ltr; text-align: start; }
   h2 { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: #989898; }
 </style>
 </head>

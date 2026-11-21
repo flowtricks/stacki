@@ -24,7 +24,7 @@
 .app-overlay-cluster-list {
   position: absolute;
   top: 14px;
-  left: -10px;
+  left: -10px; /* physical: canvas overlay in page coordinates */
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -50,7 +50,7 @@ button.app-overlay-cluster-member {
 .app-capture-chip {
   position: absolute;
   top: 8px;
-  left: 50%;
+  left: 50%; /* physical: canvas overlay centered with translateX */
   transform: translateX(-50%);
   padding: 3px 10px;
   border-radius: 12px;
@@ -94,7 +94,7 @@ button.app-overlay-cluster-member {
   content: '';
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: 50%; /* physical: canvas overlay centered with translateX */
   width: max(100%, 24px);
   height: max(100%, 24px);
   transform: translate(-50%, -50%);
@@ -183,7 +183,7 @@ button.app-overlay-cluster-member {
 .app-overlay-pin-badge {
   position: absolute;
   bottom: 0;
-  left: 0;
+  left: 0; /* physical: canvas overlay in page coordinates */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -191,7 +191,7 @@ button.app-overlay-cluster-member {
   min-width: 24px;
   height: 24px;
   padding: 0 4px;
-  border-radius: 12px 12px 12px 0;
+  border-radius: 12px 12px 12px 0; /* physical: canvas overlay pin tail corner */
   background: var(--app-pin-tone);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   color: #fff;

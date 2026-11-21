@@ -14,11 +14,14 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { parseCatalog, parseMessage, placeholderSet, templatesOf } from '#dist/shared/core/i18n/catalog.js';
 import { parseRichTemplate } from '#dist/shared/core/i18n/richText.js';
-import { LOCALES } from '#dist/shared/core/i18n/locales.js';
+import { LOCALE_INFO, LOCALES } from '#dist/shared/core/i18n/locales.js';
 
 type Messages = Readonly<Record<string, unknown>>;
 
-const DIRECTORY_OF = { en: 'en', es: 'es', fr: 'fr', de: 'de', 'pt-BR': 'ptBR' } as const satisfies Record<(typeof LOCALES)[number], string>;
+// The catalog directory of each locale comes from the locale list itself, so a new language is held to English the moment it is listed.
+function directoryOf(locale: (typeof LOCALES)[number]): string {
+  return LOCALE_INFO[locale].directory;
+}
 const SOURCE_ROOT = path.resolve(process.cwd(), 'shared/properties/i18n/messages');
 const NAMESPACE_PATTERN = /^[a-z][A-Za-z0-9]*$/;
 
@@ -31,7 +34,7 @@ function namespacesOf(directory: string): readonly string[] {
 }
 
 async function loadNamespace(locale: (typeof LOCALES)[number], namespace: string): Promise<Messages> {
-  const loaded: unknown = await import(`#dist/shared/properties/i18n/messages/${DIRECTORY_OF[locale]}/${namespace}.js`);
+  const loaded: unknown = await import(`#dist/shared/properties/i18n/messages/${directoryOf(locale)}/${namespace}.js`);
   assert.ok(typeof loaded === 'object' && loaded !== null && 'messages' in loaded, `${locale}/${namespace} exports messages`);
   const messages: unknown = loaded.messages;
   assert.ok(typeof messages === 'object' && messages !== null, `${locale}/${namespace} messages is an object`);
@@ -39,7 +42,7 @@ async function loadNamespace(locale: (typeof LOCALES)[number], namespace: string
 }
 
 async function loadIndex(locale: (typeof LOCALES)[number]): Promise<Messages> {
-  const loaded: unknown = await import(`#dist/shared/properties/i18n/messages/${DIRECTORY_OF[locale]}/index.js`);
+  const loaded: unknown = await import(`#dist/shared/properties/i18n/messages/${directoryOf(locale)}/index.js`);
   assert.ok(typeof loaded === 'object' && loaded !== null && 'messages' in loaded, `${locale} index exports messages`);
   const messages: unknown = loaded.messages;
   assert.ok(typeof messages === 'object' && messages !== null, `${locale} index messages is an object`);
@@ -47,7 +50,7 @@ async function loadIndex(locale: (typeof LOCALES)[number]): Promise<Messages> {
 }
 
 function placeholdersOfKey(catalog: Messages, key: string): readonly string[] {
-  const value = Object.entries(catalog).find(([name]) => name === key)?.[1];
+  const value = Object.hasOwn(catalog, key) ? catalog[key] : undefined;
   assert.ok(value !== undefined, `${key} exists`);
   const message = parseMessage(value);
   assert.ok(message.ok, `${key} parses`);
@@ -56,8 +59,17 @@ function placeholdersOfKey(catalog: Messages, key: string): readonly string[] {
   return set.value;
 }
 
-test('every shipped locale has a directory in this test', () => {
-  assert.deepEqual(Object.keys(DIRECTORY_OF).sort(), [...LOCALES].sort());
+test('every listed locale has a catalog directory, and every catalog directory is a listed locale', () => {
+  assert.deepEqual(Object.keys(LOCALE_INFO).sort(), [...LOCALES].sort());
+  const directories = fs
+    .readdirSync(SOURCE_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual(directories, LOCALES.map(directoryOf).sort(), 'a catalog directory without a locale, or a locale without a directory');
+  for (const locale of LOCALES) {
+    assert.match(directoryOf(locale), NAMESPACE_PATTERN, `${locale} directory is a plain identifier`);
+  }
 });
 
 test('namespace names are plain lowerCamel words, and English has at least one', () => {
@@ -71,7 +83,7 @@ test('namespace names are plain lowerCamel words, and English has at least one',
 test('every locale has exactly English’s namespace files', () => {
   const expected = namespacesOf('en');
   for (const locale of LOCALES) {
-    assert.deepEqual(namespacesOf(DIRECTORY_OF[locale]), expected, `${locale} namespace files`);
+    assert.deepEqual(namespacesOf(directoryOf(locale)), expected, `${locale} namespace files`);
   }
 });
 
@@ -118,7 +130,7 @@ test('every namespace file has exactly English’s keys', async () => {
 test('each locale index merges exactly the keys of its namespace files, and passes the boundary parser', async () => {
   for (const locale of LOCALES) {
     const merged: string[] = [];
-    for (const namespace of namespacesOf(DIRECTORY_OF[locale])) {
+    for (const namespace of namespacesOf(directoryOf(locale))) {
       merged.push(...Object.keys(await loadNamespace(locale, namespace)));
     }
     const index = await loadIndex(locale);
@@ -143,7 +155,7 @@ test('every translation uses exactly the placeholders of its English message', a
 const TAG_PATTERN = /<\/?[a-z][A-Za-z0-9]*>/g;
 
 function tagsOfKey(catalog: Messages, key: string): readonly string[] {
-  const value = Object.entries(catalog).find(([name]) => name === key)?.[1];
+  const value = Object.hasOwn(catalog, key) ? catalog[key] : undefined;
   const message = parseMessage(value);
   assert.ok(message.ok, `${key} parses`);
   const tags = new Set<string>();
@@ -169,7 +181,7 @@ test('rich messages keep exactly English’s tags in every language, and parse a
         const tags = tagsOfKey(english, key);
         assert.deepEqual(tagsOfKey(translated, key), tags, `${locale} ${key} tags`);
         if (tags.length > 0 && !PLAIN_TEXT_WITH_MARKUP.has(key)) {
-          const message = parseMessage(Object.entries(translated).find(([name]) => name === key)?.[1]);
+          const message = parseMessage(Object.hasOwn(translated, key) ? translated[key] : undefined);
           assert.ok(message.ok);
           for (const template of templatesOf(message.value)) {
             assert.ok(parseRichTemplate(template).ok, `${locale} ${key} is well formed rich text`);
@@ -180,10 +192,24 @@ test('rich messages keep exactly English’s tags in every language, and parse a
   }
 });
 
+// Each namespace file is read once: with eighteen languages, reading it again for every key was most of this suite's time.
+const SOURCE_LINES = new Map<string, readonly string[]>();
+
+function sourceLinesOf(locale: (typeof LOCALES)[number], namespace: string): readonly string[] {
+  const file = path.join(SOURCE_ROOT, directoryOf(locale), `${namespace}.ts`);
+  const cached = SOURCE_LINES.get(file);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  SOURCE_LINES.set(file, lines);
+  return lines;
+}
+
 /** True when the `key` entry in a locale's namespace file carries `// same`, the marker for text that stays English on purpose. */
 function markedSame(locale: (typeof LOCALES)[number], key: string): boolean {
   const namespace = key.slice(0, key.indexOf('.'));
-  const lines = fs.readFileSync(path.join(SOURCE_ROOT, DIRECTORY_OF[locale], `${namespace}.ts`), 'utf8').split('\n');
+  const lines = sourceLinesOf(locale, namespace);
   const start = lines.findIndex((line) => line.startsWith(`  '${key}':`) || line.startsWith(`  "${key}":`));
   assert.ok(start >= 0, `${locale}/${namespace}.ts has ${key}`);
   for (let index = start; index < lines.length; index += 1) {
@@ -221,12 +247,42 @@ test('no message is empty, and a translation differs from English unless it is a
         continue;
       }
       assert.ok(value.trim().length > 0, `${locale} ${key} is non-empty text`);
-      const source = Object.entries(english).find(([name]) => name === key)?.[1];
+      const source = Object.hasOwn(english, key) ? english[key] : undefined;
       if (locale !== 'en' && value === source) {
         assert.ok(
           sameAsEnglishAllowed.has(key) || markedSame(locale, key),
           `${locale} ${key} is untranslated (add a trailing // same comment if it is a product term)`,
         );
+      }
+    }
+  }
+});
+
+// Plural forms follow the language, not English: Russian and Polish need one, few and many; Arabic needs all six; Japanese, Korean,
+// Chinese and Indonesian have only `other`. A form the language never selects is dead text, and a missing one falls back to `other`,
+// which reads wrong ("5 файла"). `many` stays optional where CLDR uses it only for millions in compact notation (es, fr, it, pt).
+const MANY_OPTIONAL = new Set(['es', 'fr', 'it', 'pt']);
+
+test('every plural message has exactly the forms its language selects', async () => {
+  for (const locale of LOCALES) {
+    const categories = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+    const primary = locale.split('-')[0] ?? locale;
+    const required = categories.filter((category) => category !== 'many' || !MANY_OPTIONAL.has(primary));
+    assert.ok(required.includes('other'), `${locale} selects other`);
+    for (const [key, value] of Object.entries(await loadIndex(locale))) {
+      if (typeof value === 'string') {
+        continue;
+      }
+      assert.ok(typeof value === 'object' && value !== null, `${locale} ${key} is plural forms`);
+      const forms = Object.keys(value);
+      for (const form of forms) {
+        assert.ok(
+          categories.some((category) => category === form),
+          `${locale} ${key} has the form "${form}", which ${locale} never selects`,
+        );
+      }
+      for (const form of required) {
+        assert.ok(forms.includes(form), `${locale} ${key} lacks the form "${form}"`);
       }
     }
   }

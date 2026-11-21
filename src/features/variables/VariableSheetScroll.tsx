@@ -59,7 +59,7 @@ export function VariableScrollBar({ scroll }: { readonly scroll: ReturnType<type
   const translate = useTranslate();
   const { metrics, barRef, sync } = scroll;
   return (
-    <div className="vars-scrollbar-row" hidden={metrics.maximum <= 0} style={{ paddingRight: metrics.gutter }}>
+    <div className="vars-scrollbar-row" hidden={metrics.maximum <= 0} style={{ paddingInlineEnd: metrics.gutter }}>
       <div
         className="vars-horizontal-scroll"
         ref={barRef}

@@ -65,16 +65,19 @@ function AlignRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, o
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <SegBar
-        segs={alignOptions}
-        current={aligned}
-        ariaLabel={translate('style.typographySection.textAlign')}
-        prop="text-align"
-        busy={busy}
-        onCommit={(value, important) => setProp('text-align', value, important)}
-        onLiveCommit={(value, important) => liveSetProp('text-align', value, important)}
-        onClear={() => clearProp('text-align')}
-      />
+      {/* The segments edit physical text-align values (left before right), so they keep their order in RTL. */}
+      <div className="embed-editor_physical-order">
+        <SegBar
+          segs={alignOptions}
+          current={aligned}
+          ariaLabel={translate('style.typographySection.textAlign')}
+          prop="text-align"
+          busy={busy}
+          onCommit={(value, important) => setProp('text-align', value, important)}
+          onLiveCommit={(value, important) => liveSetProp('text-align', value, important)}
+          onClear={() => clearProp('text-align')}
+        />
+      </div>
     </div>
   );
 }

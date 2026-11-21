@@ -7,6 +7,9 @@
 }
 
 .class-picker_tag {
+  /* A selector is code: it reads left to right in every interface language. */
+  direction: ltr;
+  unicode-bidi: isolate;
   min-width: 0;
   padding: var(--space-3) var(--space-5);
   border: 0;
@@ -17,7 +20,7 @@
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-tight);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   opacity: 0.5;
   overflow-wrap: anywhere;

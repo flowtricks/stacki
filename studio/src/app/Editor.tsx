@@ -372,7 +372,7 @@ function InspectorTabs({
           <span
             className="right-tabs-indicator"
             style={{
-              left: tab === 'style' ? '10px' : 'calc(50% + 1px)',
+              insetInlineStart: tab === 'style' ? '10px' : 'calc(50% + 1px)',
               width: 'calc(50% - 11px)',
             }}
           />

@@ -25,7 +25,7 @@
   z-index: 0;
   top: var(--ui-tabs-pad);
   bottom: var(--ui-tabs-pad);
-  left: 0;
+  left: 0; /* physical: translateX from offsetLeft */
   width: 0;
   border-radius: 5px;
   background: var(--bg-active);

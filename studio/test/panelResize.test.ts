@@ -30,8 +30,8 @@ test('Studio shell takes both panel widths from the shared Desktop resize hook',
     assert.ok(source.includes('{!mobile && resize.handle}'), `${name} renders the shared handle`);
   }
   const css = await read('src/app/studio.css');
-  assert.ok(css.includes('.studio-left > .panel-resize {\n  right: -4px;'), 'The left handle straddles the edge as on Desktop');
-  assert.ok(css.includes('.studio-right > .panel-resize {\n  left: -4px;'), 'The right handle straddles the edge as on Desktop');
+  assert.ok(css.includes('.studio-left > .panel-resize {\n  inset-inline-end: -4px;'), 'The left handle straddles the edge as on Desktop');
+  assert.ok(css.includes('.studio-right > .panel-resize {\n  inset-inline-start: -4px;'), 'The right handle straddles the edge as on Desktop');
   assert.equal(css.includes('clamp(360px, 34vw'), false, 'No fixed code panel width competes with the stored one');
 });
 

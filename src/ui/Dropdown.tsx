@@ -432,11 +432,13 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly optionH
     const shown = Math.min(wanted, MENU_HEIGHT_MAX);
     const box = popupBox(rectangle, shown, window.innerHeight);
     // A menu wider than its trigger (a compact "Match all") grows to its
-    // minimum and slides left as far as it must to stay inside the window.
+    // minimum and slides as far as it must to stay inside the window.
     const least = searchable ? Math.max(widthPxMin, SEARCHABLE_WIDTH_MIN) : widthPxMin;
     const width = Math.min(Math.max(rectangle.width, least), window.innerWidth - POPUP_EDGE * 2);
+    // The menu hangs from the edge where the trigger's text starts: its right edge in a right-to-left interface.
+    const startLeft = document.documentElement.dir === 'rtl' ? rectangle.right - width : rectangle.left;
     const next = {
-      left: Math.max(POPUP_EDGE, Math.min(rectangle.left, window.innerWidth - POPUP_EDGE - width)),
+      left: Math.max(POPUP_EDGE, Math.min(startLeft, window.innerWidth - POPUP_EDGE - width)),
       width,
       ...box,
       maxHeight: wanted > shown ? Math.min(box.maxHeight ?? shown, shown) : box.maxHeight,

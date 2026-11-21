@@ -161,7 +161,7 @@
 }
 .page-settings-bullets {
   margin: 0;
-  padding-left: 16px;
+  padding-inline-start: 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -255,8 +255,8 @@
 /* Both cards draw their fields as the Properties panel's props-field (label, 5px, control; 12px to the next group),
    flush with the card's heading: the panel's own side margin would inset them from it. */
 .page-settings-section .props-field {
-  margin-left: 0;
-  margin-right: 0;
+  margin-inline-start: 0;
+  margin-inline-end: 0;
 }
 .page-settings-general {
   display: flex;

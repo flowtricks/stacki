@@ -762,7 +762,7 @@ function FrontmatterRow({ props }: { readonly props: EditableProps }) {
   return (
     <div
       className={`structure-node frontmatter-node ${selectedClass}`}
-      style={{ paddingLeft: 6 }}
+      style={{ paddingInlineStart: 6 }}
       onClick={() => props.onSelect('frontmatter')}
       onDoubleClick={() => props.onOpenCode?.('frontmatter')}
     >

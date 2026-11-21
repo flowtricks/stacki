@@ -27,7 +27,8 @@
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
-  padding: var(--panel-header-padding-top) var(--panel-header-padding-end) var(--panel-header-padding-bottom) var(--panel-header-padding-start);
+  padding-block: var(--panel-header-padding-top) var(--panel-header-padding-bottom);
+  padding-inline: var(--panel-header-padding-start) var(--panel-header-padding-end);
   flex-shrink: 0;
 }
 .panel-header-lead {
@@ -63,7 +64,7 @@
   /* Zero minimum, so a long item in the actions (the Code panel's file path) is cut instead of pushing the row wider. */
   min-width: 0;
   gap: var(--panel-header-action-gap);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .panel-header button {
   box-sizing: border-box;
@@ -72,5 +73,5 @@
   padding: 3px;
 }
 .panel-header .panel-header-back {
-  margin-left: var(--panel-header-back-offset);
+  margin-inline-start: var(--panel-header-back-offset);
 }

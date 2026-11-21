@@ -1128,7 +1128,7 @@ test('a values field never grows a line holding only its chevron: chips wrap bef
     return found[2];
   };
   assert.match(rule('.multi-select.has-chevron'), /position: relative;/);
-  assert.match(rule('.multi-select.has-chevron'), /padding-right: 26px;/, 'every line keeps the chevron’s room, so chips wrap before it');
+  assert.match(rule('.multi-select.has-chevron'), /padding-inline-end: 26px;/, 'every line keeps the chevron’s room, so chips wrap before it');
   assert.match(rule('.multi-select.has-chevron > .multi-select-chevron'), /position: absolute;/, 'the chevron is out of the flow of chips');
   assert.match(rule('.multi-select.has-chevron > .multi-select-chevron'), /bottom: 4px;/, 'pinned to the last line');
   assert.match(rule('.multi-select.has-values .multi-select-input'), /min-width: 2px;/, 'after chips the box never wraps onto a line of its own');

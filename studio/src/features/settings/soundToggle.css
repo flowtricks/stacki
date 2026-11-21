@@ -8,7 +8,7 @@
   border: 0;
   border-radius: 0.4375rem;
   background: transparent;
-  text-align: left;
+  text-align: start;
 }
 
 .account-popover .sound-toggle:hover {

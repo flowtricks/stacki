@@ -16,6 +16,19 @@ const SHIPPED_IMPORTERS: CatalogImporters = {
   fr: () => import('../../../shared/properties/i18n/messages/fr/index'),
   de: () => import('../../../shared/properties/i18n/messages/de/index'),
   'pt-BR': () => import('../../../shared/properties/i18n/messages/ptBR/index'),
+  it: () => import('../../../shared/properties/i18n/messages/it/index'),
+  nl: () => import('../../../shared/properties/i18n/messages/nl/index'),
+  pl: () => import('../../../shared/properties/i18n/messages/pl/index'),
+  tr: () => import('../../../shared/properties/i18n/messages/tr/index'),
+  ru: () => import('../../../shared/properties/i18n/messages/ru/index'),
+  id: () => import('../../../shared/properties/i18n/messages/id/index'),
+  hi: () => import('../../../shared/properties/i18n/messages/hi/index'),
+  ar: () => import('../../../shared/properties/i18n/messages/ar/index'),
+  he: () => import('../../../shared/properties/i18n/messages/he/index'),
+  ja: () => import('../../../shared/properties/i18n/messages/ja/index'),
+  ko: () => import('../../../shared/properties/i18n/messages/ko/index'),
+  'zh-CN': () => import('../../../shared/properties/i18n/messages/zhCN/index'),
+  'zh-TW': () => import('../../../shared/properties/i18n/messages/zhTW/index'),
 };
 
 export type CatalogLoader = (locale: Locale) => Promise<Result<Catalog, AppError>>;

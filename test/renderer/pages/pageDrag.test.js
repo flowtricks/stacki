@@ -111,8 +111,8 @@ test('pages and folders share gap ordering and cancel without saving', async () 
   try {
     await act(async () => root.render(React.createElement(App)));
     assert.equal(document.querySelectorAll('.drag-handle').length, 0);
-    assert.equal(row('index.astro').style.paddingLeft, '8px');
-    assert.equal(row('about/index.astro').style.paddingLeft, '22px');
+    assert.equal(row('index.astro').style.paddingInlineStart, '8px');
+    assert.equal(row('about/index.astro').style.paddingInlineStart, '22px');
     assert.equal(gap('', 0).classList.contains('nav-gap-overlay'), true);
     assert.equal(gap('', 0).style.pointerEvents, 'none');
     begin('campus/');

@@ -187,7 +187,7 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   check(
     'the eye is absolute inside the value cell wrapper, out of flow and centred',
     /\.vars-cell-host\s*{[^}]*position:\s*relative;/.test(css) &&
-      /\.vars-cell-tools\s*{[^}]*position:\s*absolute;[^}]*top:\s*50%;[^}]*right:\s*0\.125rem;/.test(css),
+      /\.vars-cell-tools\s*{[^}]*position:\s*absolute;[^}]*top:\s*50%;[^}]*inset-inline-end:\s*0\.125rem;/.test(css),
   );
   check(
     "the value cell reserves the eye's width at its end, always, so the value stops short and nothing shifts",

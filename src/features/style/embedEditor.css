@@ -99,7 +99,7 @@
 .embed-editor_tip {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: var(--z-tooltip);
   width: max-content;
   max-width: 220px;
@@ -110,7 +110,7 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-regular);
   line-height: var(--line-height-normal);
-  text-align: left;
+  text-align: start;
   white-space: normal;
   box-shadow: var(--shadow-md);
   opacity: 0;
@@ -154,7 +154,7 @@
 
 .embed-editor_fallback-dismiss {
   flex: none;
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 0 var(--space-1);
   border: 0;
   background: none;
@@ -364,7 +364,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_section-chevron-btn {
@@ -449,7 +449,7 @@
 /* The Sizing "…" customize panel — Grow / Shrink / Basis inputs, offset to align
    under the segmented bar (past the fixed label column). */
 .embed-editor_flex-custom {
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 
 /* ── Layout section (bespoke, conditional on display) ── */
@@ -463,6 +463,8 @@
 /* ── Spacing section (Webflow-style nested margin / padding box) ── */
 
 .embed-editor_spacing {
+  /* Its left box edits margin-left: the sides map to the site's physical CSS, so it never mirrors. */
+  direction: ltr;
   position: relative; /* anchor for the editor popover */
   padding-top: var(--space-2);
 }
@@ -577,7 +579,7 @@
 .embed-editor_spacing-tag {
   position: absolute;
   top: 4px;
-  left: 7px;
+  left: 7px; /* physical: tag inside LTR spacing box */
   z-index: 2;
   font-size: 9px;
   letter-spacing: var(--letter-spacing-wide);
@@ -745,8 +747,7 @@
    an input row for the side, then the shared Reset item. */
 .embed-editor_spacing-popover {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   top: calc(100% + var(--space-2));
   z-index: var(--z-tooltip);
   display: flex;
@@ -899,7 +900,7 @@
   color: var(--color-info);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   overflow-wrap: anywhere;
   transition: background var(--transition-fast);
@@ -1091,7 +1092,7 @@
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_bg-layer-preview {
   flex: none;
@@ -1195,6 +1196,8 @@
 }
 /* 3×3 position picker. */
 .embed-editor_grad-grid {
+  /* The position grid picks physical left/center/right positions. */
+  direction: ltr;
   flex: none;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1288,6 +1291,8 @@
 }
 /* Stops bar. */
 .embed-editor_grad-bar {
+  /* Stops sit at physical percentages of the gradient, read from pointer x. */
+  direction: ltr;
   position: relative;
   height: 22px;
   border-radius: var(--radius-sm);
@@ -1469,6 +1474,8 @@
   min-width: 0;
 }
 .embed-editor_grad-dial {
+  /* The angle dial draws a CSS angle, which is physical. */
+  direction: ltr;
   position: relative;
   flex: none;
   width: 28px;
@@ -1654,7 +1661,7 @@
    than as the rest of the Ratio answer. */
 .embed-editor_ratio-custom {
   padding-top: var(--space-2);
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 .embed-editor_ratio-pair {
   display: grid;
@@ -1673,7 +1680,7 @@
   width: 100%;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_ratio-caption {
   font-size: var(--font-size-xs);
@@ -1815,13 +1822,13 @@
   min-width: 0;
 }
 .embed-editor_grid-count:not(.is-expression) .u-input {
-  padding-right: 18px;
+  padding-inline-end: 18px;
 }
 /* ▲▼ steppers pinned inside the field. */
 .embed-editor_grid-count-steppers {
   position: absolute;
   top: 2px;
-  right: 2px;
+  inset-inline-end: 2px;
   bottom: 2px;
   display: flex;
   flex-direction: column;
@@ -1887,7 +1894,7 @@
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition: background var(--transition-fast);
 }
@@ -2030,12 +2037,12 @@
    heading sat on the left. Push a trailing control out; never the only thing
    in the row. */
 .embed-editor_grid-section-head > :last-child:not(:first-child) {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 /* …unless the last thing IS a control in the group (the expression toggle,
    with the add hidden while it is open) — then nothing gets pushed out. */
 .embed-editor_grid-section-head > .embed-editor_icon-btn:last-child[aria-pressed] {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 /* GroupLabel (blue/orange/grey) + a greyed track count. */
 .embed-editor_grid-section-title {
@@ -2078,8 +2085,7 @@
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   height: 2px;
   background: var(--color-border-focus);
   z-index: 1;
@@ -2104,7 +2110,7 @@
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_grid-track-glyph {
   flex: none;
@@ -2221,16 +2227,16 @@
   width: 11px;
   height: 11px;
   background: var(--color-bg-surface-raised);
-  border-left: var(--border-width-thin) solid var(--color-border-default);
+  border-left: var(--border-width-thin) solid var(--color-border-default); /* physical: caret placed by measured left */
   border-top: var(--border-width-thin) solid var(--color-border-default);
   transform: translateX(-50%) rotate(45deg);
 }
 .embed-editor_grid-popover.is-above .embed-editor_grid-popover-caret {
   top: auto;
   bottom: -6px;
-  border-left: 0;
+  border-left: 0; /* physical: caret placed by measured left */
   border-top: 0;
-  border-right: var(--border-width-thin) solid var(--color-border-default);
+  border-right: var(--border-width-thin) solid var(--color-border-default); /* physical: caret placed by measured left */
   border-bottom: var(--border-width-thin) solid var(--color-border-default);
 }
 .embed-editor_grid-popover-note {
@@ -2407,6 +2413,8 @@
    the real justify-items (X) / align-items (Y), so it slides to the cell corner and
    fills the axis on Stretch — mirroring Webflow's grid Align widget. */
 .embed-editor_grid-align-preview {
+  /* The preview draws justify-items over physical columns. */
+  direction: ltr;
   position: absolute;
   inset: 0;
   display: grid;
@@ -2446,6 +2454,8 @@
 /* Preview square: a 3×3 click grid beneath a real-flex bar preview. Stretches to
    the height of the two stacked axis dropdowns beside it. */
 .embed-editor_align-box {
+  /* The dots map to physical start/end of the site's flex box. */
+  direction: ltr;
   position: relative;
   flex: 0 0 auto;
   width: 68px;
@@ -2543,7 +2553,7 @@
   min-width: 0;
 }
 .embed-editor_align-axis > .embed-editor_size-label {
-  margin-left: var(--space-2);
+  margin-inline-start: var(--space-2);
 }
 
 /* ── Borders section ── */
@@ -2571,10 +2581,12 @@
    The column gap is wider than the row gap so the left field doesn't run into the
    right pair's corner glyph. */
 .embed-editor_radius-grid {
+  /* Each corner edits a physical corner radius. */
+  direction: ltr;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-2) var(--space-5);
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 /* One corner: its glyph (a clearable label for that corner) + the length field. */
 .embed-editor_radius-corner {
@@ -2634,6 +2646,8 @@
 
 /* The box widget: top edge, [left | all | right], bottom edge. */
 .embed-editor_border-sides {
+  /* Each side edits a physical border side. */
+  direction: ltr;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2717,6 +2731,8 @@
    Its own selected state rather than the display bar's — that one is drawn by a
    sliding pill, and without the pill `is-selected` would only tint the glyph. */
 .embed-editor_inset-presets {
+  /* Each preset pins to physical top/left/right/bottom. */
+  direction: ltr;
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   gap: var(--space-1);
@@ -2724,7 +2740,7 @@
   /* Line up with the controls rather than the labels — the same offset the
      inset box below already uses, so the two read as one stack under the
      position dropdown instead of three things at three different left edges. */
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 .embed-editor_inset-preset {
   display: flex;
@@ -2843,7 +2859,7 @@
   /* Long property names wrap within the column instead of overrunning the value. */
   white-space: normal;
   overflow-wrap: anywhere;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_decl.is-dragging .embed-editor_prop-label .u-field-label {
   cursor: grabbing;
@@ -2882,7 +2898,7 @@
   z-index: 0;
   top: var(--space-1);
   bottom: var(--space-1);
-  left: 0;
+  left: 0; /* physical: indicator moved by measured translateX */
   width: 0;
   border-radius: var(--radius-sm);
   background: var(--surface-control);
@@ -3007,7 +3023,7 @@
   position: absolute;
   z-index: calc(var(--z-modal) + 1);
   top: calc(100% + var(--space-2));
-  right: 0;
+  inset-inline-end: 0;
   min-width: 172px;
   max-width: calc(100vw - var(--space-4));
   display: flex;
@@ -3036,7 +3052,7 @@
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition: background var(--transition-fast);
 }
@@ -3057,7 +3073,7 @@
   position: absolute;
   z-index: calc(var(--z-modal) + 1);
   top: calc(100% + var(--space-2));
-  right: 0;
+  inset-inline-end: 0;
   min-width: 232px;
   display: flex;
   flex-direction: column;
@@ -3097,7 +3113,7 @@
   color: var(--color-text-secondary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition:
     background var(--transition-fast),
@@ -3192,7 +3208,7 @@
 /* Indent the inset box (and its popover) to the control column so it's only as wide
    as the Position dropdown above it — not the full panel like the Spacing box. */
 .embed-editor_position > .embed-editor_spacing {
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 
 .embed-editor_decl.is-add .embed-editor_prop-input,
@@ -3237,7 +3253,7 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-normal);
-  text-align: left;
+  text-align: start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3258,7 +3274,7 @@
      below it, so the footer adds no border or top padding of its own. */
 }
 .embed-editor_rule-foot .embed-editor_source {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .embed-editor_rule-foot > .embed-editor_add-btn {
   margin-top: 0;
@@ -3371,12 +3387,12 @@
   padding-top: var(--space-5);
 }
 .embed-editor_css-code-toggle {
-  padding-right: 0;
+  padding-inline-end: 0;
   padding-bottom: 0;
-  padding-left: 0;
+  padding-inline-start: 0;
   border: 0;
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_css-code-toggle:hover:not(:disabled),
@@ -3393,7 +3409,7 @@
   color: var(--color-text-primary);
 }
 .embed-editor_css-code-source {
-  margin-left: auto;
+  margin-inline-start: auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3525,7 +3541,7 @@
 
 .embed-editor_errors ul {
   margin: var(--space-3) 0 0;
-  padding-left: var(--space-6);
+  padding-inline-start: var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -3565,7 +3581,7 @@
 }
 /* Right-align the source dropdown within the row. */
 .embed-editor_source-link {
-  margin-left: auto;
+  margin-inline-start: auto;
   min-width: 0;
 }
 .embed-editor_source-prefix {
@@ -3754,8 +3770,7 @@
 .embed-editor_head::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   bottom: 100%;
   height: var(--space-5);
   background: var(--bg-panel, var(--color-bg-page));
@@ -3815,7 +3830,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .embed-editor_add-query-note {
   margin: 0;
@@ -4023,11 +4038,14 @@
    ellipsis. CSS rather than measuring, so the text stays whole in the DOM and refits
    at any width. */
 .embed-editor_selector-chip-text {
+  /* A selector is code: it reads left to right in every interface language. */
+  direction: ltr;
+  unicode-bidi: isolate;
   display: block;
   min-width: 0;
   overflow: hidden;
   direction: rtl;
-  text-align: left;
+  text-align: left; /* physical: rtl ellipsis trick on path */
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4241,8 +4259,7 @@
 .embed-editor_selector-suggest {
   position: absolute;
   top: calc(100% + var(--space-1));
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   /* Sit above the sibling Select controls (`.u-select` is always at --z-modal, +1
      when open) so the list clears the Base/source pickers and the sections below. */
   z-index: calc(var(--z-modal) + 2);
@@ -4268,7 +4285,7 @@
   border-radius: var(--radius-sm, 6px);
   background: transparent;
   color: var(--color-text-primary);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_suggest-item.is-active {
@@ -4374,7 +4391,7 @@
   max-width: 96px;
   /* Clip the path from its start so the filename remains identifiable. */
   direction: rtl;
-  text-align: left;
+  text-align: left; /* physical: rtl ellipsis trick on path */
 }
 
 /* Orange property label — set through a selector other than the picked one.
@@ -4392,7 +4409,7 @@
   color: var(--color-prop-orange);
   background: var(--color-prop-orange-bg);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   white-space: normal;
   overflow-wrap: anywhere;
   transition: background var(--transition-fast);
@@ -4497,7 +4514,7 @@
   max-width: 100px;
   font-family: var(--font-family-mono);
   color: var(--color-text-secondary);
-  margin-left: auto;
+  margin-inline-start: auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4514,7 +4531,7 @@
   color: inherit;
   font-family: inherit;
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   transition:
     background var(--transition-fast),
     opacity var(--transition-fast);
@@ -4716,8 +4733,7 @@
    below the row; a solid overlay surface covers the section beneath it. */
 .embed-editor_more-popover {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   top: calc(100% + var(--space-2));
   z-index: var(--z-tooltip);
   display: flex;
@@ -5086,7 +5102,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3) var(--space-2);
 }
 .embed-editor_type-shadow-open {
   flex: 1 1 auto;
@@ -5099,7 +5116,7 @@
   color: var(--color-text-primary);
   cursor: pointer;
   padding: 0;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_type-shadow-label {
   font-size: var(--font-size-xs);
@@ -5144,7 +5161,7 @@
   flex: 0 0 4rem;
   /* The slider's thumb reaches the very end of its track, so the row's own gap left
      it all but touching the field. This is the space between the two controls. */
-  margin-left: var(--space-3);
+  margin-inline-start: var(--space-3);
 }
 
 /* Transform axis label: the Webflow glyph (per axis, per Move/Scale/Rotate/Skew) sits
@@ -5178,7 +5195,7 @@
      which left the icon a few pixels wide beside 34px fields — the one control
      in the row you couldn't see. */
   width: 36px;
-  padding-left: 12px;
+  padding-inline-start: 12px;
 }
 .embed-editor_transform-lock {
   position: relative;
@@ -5195,13 +5212,15 @@
 .embed-editor_transform-lock::before {
   content: '';
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 25%;
   bottom: 25%;
   width: 6px;
   border: 1px solid var(--color-border-default);
-  border-left: none;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-inline-start: none;
+  border-radius: 0;
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
 }
 /* Drawn at the size it was drawn for (the glyphs are 16px artboards). `flex:
    none` because the button is a flex row: without it the icon is a shrinkable
@@ -5283,7 +5302,7 @@
    most carefully. */
 /* The value reads right-aligned against the slider beside it. */
 .embed-editor_trans-duration .u-input {
-  text-align: right;
+  text-align: end;
 }
 .embed-editor_trans-easing {
   flex: 1 1 auto;
@@ -5406,6 +5425,8 @@
   fill: #d4d4d4;
 }
 .embed-editor_ease-curve {
+  /* The curve plots time left to right, as CSS easing does. */
+  direction: ltr;
   width: 100%;
   max-width: 300px;
   height: auto;
@@ -5613,7 +5634,7 @@
   --ee-connect: #7c5cff;
   position: absolute;
   top: -4px;
-  left: -1px;
+  inset-inline-start: -1px;
   z-index: var(--z-style-connect);
   display: inline-flex;
   align-items: center;
@@ -5765,7 +5786,7 @@
 
 /* Chips welded together keep a hairline between them now the chip has no margin of its own. */
 .embed-editor_varconnect-token + .embed-editor_varconnect-token {
-  margin-left: 1px;
+  margin-inline-start: 1px;
 }
 
 /* The gap between two chips (see spaceRun). `pre` so the space keeps its width —
@@ -5821,7 +5842,7 @@
 }
 .embed-editor_varpicker-search-icon {
   position: absolute;
-  left: 0.5rem;
+  inset-inline-start: 0.5rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--color-text-secondary);
@@ -5835,7 +5856,8 @@
   display: block;
   width: 100%;
   height: 1.75rem;
-  padding: 0 0.5rem 0 1.75rem;
+  padding-block: 0;
+  padding-inline: 1.75rem 0.5rem;
   border: 0;
   border-radius: var(--radius-sm);
   /* No fill of its own: it reads as part of the menu surface. */
@@ -5923,7 +5945,7 @@
   padding: 0.5rem 0.625rem 0.375rem;
   border: 0;
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_varpicker-collection-name {
@@ -6005,7 +6027,7 @@
   background: transparent;
   color: var(--color-text-primary);
   font-size: 0.75rem;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_varpicker-item:hover {
@@ -6078,7 +6100,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
+  text-align: start;
   /* Secondary, not tertiary: the value is what tells two variables apart, and the
      tertiary grey on the overlay was 4.6:1, readable but dim. Pinned by
      test/renderer/style/variablePickerContrast.test.js. */
@@ -6184,7 +6206,7 @@
 }
 .embed-editor_field-suffix {
   flex: none;
-  padding-right: var(--space-3);
+  padding-inline-end: var(--space-3);
   font-size: var(--font-size-2xs);
   color: var(--color-text-tertiary);
   text-transform: uppercase; /* DEG / % — Webflow shows the unit uppercase */
@@ -6212,7 +6234,7 @@
 .embed-editor_important-badge {
   position: absolute;
   top: -4px;
-  right: -4px;
+  inset-inline-end: -4px;
   z-index: 1;
   display: inline-flex;
   align-items: center;
@@ -6231,7 +6253,7 @@
 /* Inside a spacing label the mark sits after the number, in the flow. */
 .embed-editor_spacing-label .embed-editor_important-badge {
   position: static;
-  margin-left: 1px;
+  margin-inline-start: 1px;
   background: transparent;
   min-width: 0;
   padding: 0;
@@ -6244,4 +6266,11 @@
 }
 .embed-editor_body.is-held {
   pointer-events: none;
+}
+
+/* A wrapper that adds no box of its own: the control inside keeps left-to-right order because its
+   options are physical CSS values (text-align left, center, right). */
+.embed-editor_physical-order {
+  display: contents;
+  direction: ltr;
 }

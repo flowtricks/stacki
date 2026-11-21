@@ -24,7 +24,7 @@
 .style-tags-invalid {
   position: absolute;
   top: 8px;
-  right: 12px;
+  inset-inline-end: 12px;
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 11px;

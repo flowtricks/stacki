@@ -8,7 +8,8 @@
   gap: 4px;
   min-width: 0;
   min-height: 28px;
-  padding: 3px 4px 3px 6px;
+  padding-block: 3px;
+  padding-inline: 6px 4px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: var(--bg-input);
@@ -19,11 +20,11 @@
    chevron, however many chips there are. */
 .multi-select.has-chevron {
   position: relative;
-  padding-right: 26px;
+  padding-inline-end: 26px;
 }
 .multi-select.has-chevron > .multi-select-chevron {
   position: absolute;
-  right: 4px;
+  inset-inline-end: 4px;
   bottom: 4px;
 }
 .multi-select:focus-within {
@@ -34,7 +35,8 @@
   align-items: center;
   gap: 4px;
   height: 20px;
-  padding: 0 3px 0 7px;
+  padding-block: 0;
+  padding-inline: 7px 3px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.1);
   color: var(--text);

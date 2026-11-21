@@ -135,7 +135,8 @@
 }
 .ai-ask-paths {
   margin: 0;
-  padding: 0 0 0 16px;
+  padding-block: 0;
+  padding-inline: 16px 0;
   font-size: 11.5px;
   color: var(--text-dim);
 }
@@ -238,7 +239,7 @@
 .ai-ask-pin-actions {
   display: flex;
   gap: 4px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .ai-ask-pin-actions button {
   padding: 3px 8px;

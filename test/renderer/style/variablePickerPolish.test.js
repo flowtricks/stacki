@@ -133,7 +133,7 @@ const check = (what, condition, detail) => {
     search,
   );
   check('it has no fill of its own', /background:\s*transparent;/.test(search), search);
-  check('and a small padding', /padding:\s*0 0\.5rem 0 1\.75rem;/.test(search), search);
+  check('and a small padding', /padding-block:\s*0;\s*padding-inline:\s*1\.75rem 0\.5rem;/.test(search), search);
   check('it is not the global .u-input field (whose height and focus frame it would inherit)', !input?.classList.contains('u-input'));
   const ring = block('.embed-editor_varpicker .embed-editor_varpicker-search:focus-visible');
   check('the ring is for keyboard focus only, 0.0625rem on the focus token', /box-shadow:\s*0 0 0 0\.0625rem var\(--color-border-focus\)/.test(ring), ring);

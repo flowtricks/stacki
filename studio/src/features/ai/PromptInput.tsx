@@ -49,7 +49,7 @@ const promptTheme = EditorView.theme({
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: '20px', overflowX: 'hidden' },
   '.cm-content': { minHeight: '52px', padding: '2px', caretColor: 'var(--text)' },
   '.cm-line': { padding: '0' },
-  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--text)' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--text)' }, // physical: CodeMirror draws its caret as a left border
   '.cm-placeholder': { color: 'var(--text-faint)' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--selection)' },
 });

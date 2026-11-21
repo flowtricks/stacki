@@ -115,7 +115,11 @@ export default function LeftRail({
   const showSoon = (label: string) => (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setTip({ label, left: rect.right + 10, top: rect.top + rect.height / 2 }), TOOLTIP_DELAY);
+    // The tip opens on the rail's inner side: its right in a left-to-right interface, its left (and drawn
+    // leftwards from there, see .rail-tooltip in styles.css) when the interface is mirrored.
+    const mirrored = document.documentElement.dir === 'rtl';
+    const left = mirrored ? rect.left - 10 : rect.right + 10;
+    timerRef.current = setTimeout(() => setTip({ label, left, top: rect.top + rect.height / 2 }), TOOLTIP_DELAY);
   };
 
   const hide = () => {

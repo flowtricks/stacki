@@ -83,7 +83,7 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
   return (
     <TreeDragRow
       className={`list-item ${collection ? 'collection' : ''} ${selection === undefined && props.currentPage?.path === page.path ? 'active' : ''} ${selectionClasses(selection, page.name)}`}
-      style={{ paddingLeft: 8 + props.depth * 14 }}
+      style={{ paddingInlineStart: 8 + props.depth * 14 }}
       data-order-key={page.name}
       title={refusal === undefined ? page.route : translate('pages.settings.delete.homeRefused')}
       draggable={!editing && props.reorder.enabled && selection === undefined}
@@ -169,7 +169,7 @@ function FolderRow({
   return (
     <TreeDragRow
       className={`list-item folder ${selectionClasses(selection, key)}`}
-      style={{ paddingLeft: 8 + props.depth * 14 }}
+      style={{ paddingInlineStart: 8 + props.depth * 14 }}
       onClick={(event) => {
         if (selection !== undefined) {
           selection.click(key, event.shiftKey);

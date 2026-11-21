@@ -294,7 +294,7 @@ function FileRow<T extends BrowserFile>({
   return (
     <div
       className={`fb-row ${index === active && searching ? 'active' : ''} ${isOn(file.path) ? 'on' : ''}`}
-      style={{ paddingLeft: 6 + depth * 13 }}
+      style={{ paddingInlineStart: 6 + depth * 13 }}
       onClick={() => (selectable ? toggle([file.path], { remove: isOn(file.path) }) : onOpen?.(file))}
       title={file.path}
     >
@@ -335,7 +335,7 @@ function FileFolder<T extends BrowserFile>({
   const allOn = paths.length > 0 && paths.every(isOn);
   return (
     <>
-      <div className="fb-folder" style={{ paddingLeft: 6 + depth * 13 }}>
+      <div className="fb-folder" style={{ paddingInlineStart: 6 + depth * 13 }}>
         {selectable && (
           <input
             type="checkbox"

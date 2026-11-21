@@ -13,6 +13,7 @@ import { test } from 'node:test';
 import { readCrashLog } from '#dist/electron/app/crashLog.js';
 import { describeError, installProcessGuards, PROCESS_GUARD_LIMITS } from '#dist/electron/app/processGuards.js';
 import { RECOVERY_ACTIONS, recoveryActionOf, recoveryPageUrl, renderRecoveryPage } from '#dist/electron/app/recoveryPage.js';
+import { LOCALES } from '#dist/shared/core/i18n/locales.js';
 import { attachWindowRecovery } from '#dist/electron/app/windowRecovery.js';
 import { WINDOW_HEALTH_LIMITS } from '#dist/electron/app/windowHealth.js';
 import { MAIN_ENGLISH, loadMainLocale } from '#dist/electron/lib/mainLocale.js';
@@ -195,7 +196,7 @@ test('recoveryActionOf names only the three recovery actions', () => {
 });
 
 test('the recovery page is built in every language, escapes what it is given, and carries no script', async () => {
-  for (const locale of ['en', 'de', 'es', 'fr', 'pt-BR'] as const) {
+  for (const locale of LOCALES) {
     const loaded = await loadMainLocale(locale);
     assert.equal(loaded.locale, locale);
     const html = renderRecoveryPage(
@@ -207,6 +208,7 @@ test('the recovery page is built in every language, escapes what it is given, an
     assert.match(html, /&lt;b&gt;&quot;bad&quot;&lt;\/b&gt;/, locale);
     assert.match(html, /&lt;script&gt;alert\(1\)/, locale);
     assert.match(html, /default-src 'none'/);
+    assert.match(html, locale === 'ar' || locale === 'he' ? /<html lang="[^"]+" dir="rtl">/ : /<html lang="[^"]+" dir="ltr">/, locale);
     for (const action of RECOVERY_ACTIONS) {
       assert.match(html, new RegExp(`href="stacki-recovery://${action}"`), `${locale} ${action}`);
     }

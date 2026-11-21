@@ -2,7 +2,7 @@
 .settings-info {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
+  margin-inline-start: 6px;
   min-height: 0;
   padding: 2px;
   border: 0;

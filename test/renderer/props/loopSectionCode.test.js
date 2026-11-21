@@ -608,10 +608,10 @@ test('the code view offers no `--` variables: its text is not CSS', () => {
 test('a heading’s `{}` stands as far from its label as a prop field’s does', () => {
   const css = fs.readFileSync(repoPath('src/features/props/loopSettings.css'), 'utf8');
   const shared = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
-  const margin = shared.match(/\.prop-expr-toggle \{[^}]*margin-left: (\d+px)/)?.[1];
+  const margin = shared.match(/\.prop-expr-toggle \{[^}]*margin-inline-start: (\d+px)/)?.[1];
   const gap = css.match(/\.loop-settings-label \{[^}]*gap: (\d+px)/)?.[1];
   assert.equal(gap, margin, 'the label’s gap stands in for the toggle’s margin');
-  assert.match(css, /\.loop-settings-label > \.prop-expr-toggle \{\s*margin-left: 0;/, 'so the two are not added together');
+  assert.match(css, /\.loop-settings-label > \.prop-expr-toggle \{\s*margin-inline-start: 0;/, 'so the two are not added together');
 });
 
 test('the item rows of Select items stand a token apart, with no margin against their fills', () => {

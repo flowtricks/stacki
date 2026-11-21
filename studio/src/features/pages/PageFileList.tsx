@@ -115,7 +115,7 @@ function FolderBranch({
         className="list-item folder"
         aria-expanded={!collapsed}
         data-order-key={key}
-        style={{ paddingLeft: 8 + depth * 14 }}
+        style={{ paddingInlineStart: 8 + depth * 14 }}
         onClick={() => setCollapsed(!collapsed)}
         draggable={props.reorder.enabled}
         onDragStart={(event) => props.reorder.start(event, key)}
@@ -161,7 +161,7 @@ function FileRow({
       aria-label={page.name}
       aria-current={props.file === page.path ? 'page' : undefined}
       className={`list-item file-row ${collection ? 'collection' : ''} ${props.file === page.path ? 'active' : ''}`}
-      style={{ paddingLeft: 8 + depth * 14 }}
+      style={{ paddingInlineStart: 8 + depth * 14 }}
       title={props.collection ? page.path : page.route}
       onClick={() => props.open(page.path)}
       draggable={reorder.enabled && siblings.length > 0}

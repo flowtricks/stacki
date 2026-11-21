@@ -1,0 +1,48 @@
+// Hindi `welcome` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/welcome';
+
+export const messages = {
+  'welcome.clone.busy': 'डाउनलोड हो रहा है…',
+  'welcome.clone.downloading': 'रिपॉज़िटरी डाउनलोड हो रही है…',
+  'welcome.clone.hint': 'आगे एक फ़ोल्डर चुनें। Stacki उसके Git इतिहास के साथ एक नई लोकल कॉपी डाउनलोड करता है।',
+  'welcome.clone.invalid': 'रिपॉज़िटरी को owner/name के रूप में दर्ज करें।',
+  'welcome.clone.submit': 'फ़ोल्डर चुनें और डाउनलोड करें',
+  'welcome.clone.title': 'GitHub से खोलें',
+  'welcome.creating': 'बनाया जा रहा है…',
+  'welcome.hero.moreOpen': 'प्रोजेक्ट खोलने के और तरीके',
+  'welcome.hero.moreStart': 'प्रोजेक्ट शुरू करने के और तरीके',
+  'welcome.hero.openFolder': 'फ़ोल्डर से खोलें',
+  'welcome.hero.openGitHub': 'GitHub से खोलें',
+  'welcome.hero.startAstro': 'Astro से शुरू करें',
+  'welcome.hero.startLumos': 'Lumos से शुरू करें',
+  'welcome.packageManager': 'पैकेज मैनेजर',
+  'welcome.project.ai': 'AI एजेंट फ़ाइलें जोड़ें',
+  'welcome.project.git': 'नई git रिपॉज़िटरी शुरू करें',
+  'welcome.project.install': 'डिपेंडेंसी इंस्टॉल करें',
+  'welcome.project.question': 'आप अपना नया प्रोजेक्ट कैसे शुरू करना चाहेंगे?',
+  'welcome.project.starting': 'शुरू हो रहा है…',
+  'welcome.project.submit': 'प्रोजेक्ट बनाएँ',
+  'welcome.project.title': 'नया Astro प्रोजेक्ट',
+  'welcome.project.tryAgain': 'फिर से कोशिश करें',
+  'welcome.projectCreated': 'प्रोजेक्ट बन गया',
+  'welcome.recent.remove': 'हाल के प्रोजेक्ट से हटाएँ',
+  'welcome.siteCreated': 'साइट बन गई',
+  'welcome.siteName': 'साइट का नाम',
+  'welcome.starter.note':
+    '{command} चलाता है, फिर अपना अलग git इतिहास शुरू करता है, इसलिए बाद में पब्लिश करने पर आपकी साइट पब्लिश होती है, स्टार्टर का फ़ोर्क नहीं।',
+  'welcome.starter.noteWithManager':
+    '{command} चलाता है, उसे {manager} से इंस्टॉल करता है, फिर अपना अलग git इतिहास शुरू करता है, इसलिए बाद में पब्लिश करने पर आपकी साइट पब्लिश होती है, स्टार्टर का फ़ोर्क नहीं।',
+  'welcome.starter.submit': 'साइट बनाएँ',
+  'welcome.starter.title': 'Lumos से शुरू करें',
+  'welcome.starter.unfinished': 'स्टार्टर पूरा नहीं हुआ।',
+  'welcome.template.basics.hint': 'एक बुनियादी, उपयोगी स्टार्टर प्रोजेक्ट',
+  'welcome.template.basics.label': 'बेसिक',
+  'welcome.template.blog.hint': 'कंटेंट कलेक्शन और पोस्ट रूटिंग',
+  'welcome.template.blog.label': 'ब्लॉग',
+  'welcome.template.minimal.hint': 'सिर्फ़ ज़रूरी चीज़ें',
+  'welcome.template.minimal.label': 'खाली',
+  'welcome.template.starlight.hint': 'Astro की डॉक्यूमेंटेशन थीम',
+  'welcome.template.starlight.label': 'डॉक्स (Starlight)',
+  'welcome.working': 'काम जारी है',
+} as const satisfies CatalogOf<MessageKey>;

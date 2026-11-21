@@ -1,0 +1,81 @@
+// Korean `history` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/history';
+
+export const messages = {
+  'history.backToNow': '현재로 돌아가기',
+  'history.commit.actions': '커밋 작업',
+  'history.commit.merge': '병합 커밋',
+  'history.commit.preview': '미리보기',
+  'history.commit.restoreProject': '프로젝트를 이 커밋으로 복원…',
+  'history.commit.you': '나',
+  'history.day.today': '오늘',
+  'history.day.yesterday': '어제',
+  'history.dialog.close': '변경된 파일 닫기',
+  'history.dialog.title': '변경된 파일({count})',
+  'history.diff.allFiles': '모든 파일',
+  'history.diff.emptyTree': '빈 트리',
+  'history.diff.firstParent': '첫 번째 부모와 비교',
+  'history.diff.label': '파일 diff',
+  'history.diff.loading': 'diff 불러오는 중…',
+  'history.diff.noTextChanges': '이 파일에는 텍스트 변경 사항이 없습니다.',
+  'history.diff.restoreFile': '파일 복원…',
+  'history.error.diffUnreadable': '이 커밋의 diff를 읽을 수 없습니다.',
+  'history.files.added': {
+    other: '파일 {count}개 추가됨',
+  },
+  'history.files.changedLabel': '변경된 파일',
+  'history.files.count': {
+    other: '파일 {count}개',
+  },
+  'history.files.deleted': {
+    other: '파일 {count}개 삭제됨',
+  },
+  'history.files.from': '{path}에서',
+  'history.files.listLabel': '변경된 파일 목록',
+  'history.files.noMatch': '이 필터와 일치하는 파일이 없습니다.',
+  'history.files.none': '변경된 파일이 없습니다.',
+  'history.files.unavailable': '이 커밋의 변경된 파일을 확인할 수 없습니다.',
+  'history.files.updated': {
+    other: '파일 {count}개 업데이트됨',
+  },
+  'history.files.view': '변경된 파일 보기({count})',
+  'history.files.viewDiff': '{path}의 diff 보기',
+  'history.filter.added': '새 파일',
+  'history.filter.all': '전체',
+  'history.filter.deleted': '삭제됨',
+  'history.filter.label': '변경된 파일 필터',
+  'history.filter.updated': '변경됨',
+  'history.scope.all': '모든 브랜치',
+  'history.scope.ariaLabel': '브랜치별 커밋 필터',
+  'history.scope.current': '현재 브랜치',
+  'history.scope.label': '커밋 필터',
+  'history.scope.showing': '{branch}의 커밋 표시 중',
+  'history.sort.ariaLabel': '변경된 파일 정렬',
+  'history.sort.label': '정렬',
+  'history.sort.path': '파일 경로',
+  'history.sort.status': '상태',
+  'history.summary.moreFiles': {
+    other: '{first} 외 파일 {count}개',
+  },
+  'history.summary.morePages': {
+    other: '{first} 외 페이지 {count}개',
+  },
+  'history.summary.none': '변경된 파일 없음',
+  'history.summary.two': '{first}, {second}',
+  'history.time.daysAgo': {
+    other: '{count}일 전',
+  },
+  'history.time.hoursAgo': {
+    other: '{count}시간 전',
+  },
+  'history.time.justNow': '방금',
+  'history.time.minutesAgo': {
+    other: '{count}분 전',
+  },
+  'history.time.yesterday': '어제',
+  'history.timeline.empty': '아직 저장된 것이 없습니다. 첫 버전을 저장하면 여기에 표시되며, 언제든 다시 돌아올 수 있습니다.',
+  'history.timeline.label': 'Git 기록',
+  'history.timeline.showOlder': '이전 항목 보기',
+  'history.versionHistory': '버전 기록',
+} as const satisfies CatalogOf<MessageKey>;

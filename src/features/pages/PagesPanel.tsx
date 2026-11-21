@@ -430,7 +430,7 @@ function InjectedRoutes({
           <div
             key={route.route}
             className={`list-item ${currentPage?.route === route.route ? 'active' : ''}`}
-            style={{ paddingLeft: 22 }}
+            style={{ paddingInlineStart: 22 }}
             title={`${route.route}${route.entrypoint ? `\n${route.entrypoint}` : ''}`}
             onClick={() => select?.(route)}
           >

@@ -90,7 +90,7 @@
   color: var(--text);
 }
 .html-source-toggle {
-  margin-left: auto;
+  margin-inline-start: auto;
   height: 28px;
   padding: 0 10px;
   border: 0;
@@ -133,7 +133,7 @@
   content: attr(data-placeholder);
   position: absolute;
   top: 14px;
-  left: 16px;
+  inset-inline-start: 16px;
   color: var(--text-faint);
   pointer-events: none;
 }
@@ -168,7 +168,7 @@
 }
 .html-content ul,
 .html-content ol {
-  padding-left: 1.5em;
+  padding-inline-start: 1.5em;
 }
 .html-content li + li {
   margin-top: 0.2em;
@@ -337,7 +337,7 @@
   cursor: default;
 }
 .html-format + .html-source-toggle {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .html-script-icon {
   font: 500 13px/1 var(--font, inherit);
