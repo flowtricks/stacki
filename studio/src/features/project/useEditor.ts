@@ -67,13 +67,15 @@ export function useEditor(
   useFollow(followTarget, document?.ready ?? false, preview, select);
   // A delete or a duplicate shows on the canvas at once (electron/preload/framePendingDelete.ts and
   // framePendingInsert.ts); the server's rendering confirms it, and a refused action takes it back.
+  // Each names the source it was planned over (base), so a rendering from before it keeps it shown.
   function action(value: TreeAction) {
+    const base = document?.sourceStamp();
     if (value.kind === 'delete') {
-      preview.send({ type: 'avb:hide-pending', path: pathFor(value.node) });
+      preview.send({ type: 'avb:hide-pending', path: pathFor(value.node), base });
     } else if (value.kind === 'duplicate') {
       const insert = planCanvasClone(nodes, value.node, pathFor);
       if (insert !== undefined) {
-        preview.send({ type: 'avb:optimistic-insert', insert });
+        preview.send({ type: 'avb:optimistic-insert', insert, base });
       }
     }
     void document?.action(value).catch(report);
@@ -83,7 +85,7 @@ export function useEditor(
   // server renders confirms it, and an action that is not sent or is refused takes it back.
   function move(value: TreeAction, canvasMove: CanvasMove | undefined) {
     if (canvasMove !== undefined) {
-      preview.send({ type: 'avb:optimistic-move', move: canvasMove });
+      preview.send({ type: 'avb:optimistic-move', move: canvasMove, base: document?.sourceStamp() });
     }
     const pending = document?.action(value) ?? Promise.resolve(false);
     void pending.then(
@@ -117,7 +119,7 @@ export function useEditor(
     move,
     openComponent: enter,
     insert: (componentFile: string, location?: DropLocation) =>
-      insertComponent(project, file, { parsed, selected, send: preview.send }, action, componentFile, location),
+      insertComponent(project, file, { parsed, selected, send: preview.send, base: document?.sourceStamp() }, action, componentFile, location),
     editable: !!parsed?.editable,
   };
 }
@@ -149,7 +151,12 @@ function usePauseReadiness(saved: boolean, setCanPause: ((safe: boolean) => void
 function insertComponent(
   project: Project,
   file: string,
-  context: { readonly parsed: ReturnType<typeof parsePage> | undefined; readonly selected: string; readonly send: (message: unknown) => void },
+  context: {
+    readonly parsed: ReturnType<typeof parsePage> | undefined;
+    readonly selected: string;
+    readonly send: (message: unknown) => void;
+    readonly base: string | undefined;
+  },
   action: (value: TreeAction) => void,
   componentFile: string,
   location?: DropLocation,
@@ -163,7 +170,7 @@ function insertComponent(
   // A labelled block stands in on the canvas until the component renders (framePendingInsert.ts).
   const standIn = planCanvasInsert(parsed.model.nodes, place, { kind: 'component', name: component.name, props: {} }, pathFor);
   if (standIn !== undefined) {
-    send({ type: 'avb:optimistic-insert', insert: standIn });
+    send({ type: 'avb:optimistic-insert', insert: standIn, base: context.base });
   }
   action({
     kind: 'insert',

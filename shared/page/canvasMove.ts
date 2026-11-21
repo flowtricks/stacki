@@ -338,6 +338,47 @@ function beforeGap(
   return undefined;
 }
 
+/**
+ * One `data-avb-p` token or marker path after the node at `deleted` (a token, scope included) is
+ * deleted: its later siblings, and everything under them, move up one place. Why: a delete shown
+ * ahead of its render (electron/preload/framePendingDelete.ts) must leave the canvas numbered as
+ * the new source is, or the next edit, planned over that source, names the wrong node. The deleted
+ * node's own paths are returned unchanged (its nodes are out of the document), as are other files'.
+ */
+export function renumberedDeletePath(token: string, deleted: string): string {
+  const target = splitCanvasPath(deleted);
+  assert(target !== undefined, 'renumberedDeletePath: the deleted node has a path');
+  assert(target.trail.length > 0, 'renumberedDeletePath: the deleted node has a place in a list');
+  if (!token.startsWith(target.scope)) {
+    return token;
+  }
+  const local = token.slice(target.scope.length);
+  if (!NODE_PATH.test(local)) {
+    return token; // Another file's path, or not a node path at all.
+  }
+  const trail = local.split('.').map(Number);
+  const at = target.trail.length - 1;
+  if (trail.length <= at) {
+    return token; // An ancestor of the deleted node keeps its place.
+  }
+  for (let step = 0; step < at; step++) {
+    if (trail[step] !== target.trail[step]) {
+      return token; // Outside the deleted node's list.
+    }
+  }
+  const index = trail[at] ?? 0;
+  const deletedIndex = target.trail[at] ?? 0;
+  if (index <= deletedIndex) {
+    return token; // Before the deleted node, or the deleted node itself.
+  }
+  const renumbered = [...trail.slice(0, at), index - 1, ...trail.slice(at + 1)];
+  assert(
+    renumbered.every((step) => Number.isSafeInteger(step) && step >= 0),
+    'renumberedDeletePath: indexes stay natural numbers',
+  );
+  return target.scope + renumbered.join('.');
+}
+
 function splitCanvasPath(path: string | undefined): { readonly scope: string; readonly trail: readonly number[] } | undefined {
   if (path === undefined) {
     return undefined;

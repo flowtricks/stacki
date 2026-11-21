@@ -23,7 +23,7 @@
 
 import { assert } from '../../shared/core/assert';
 import { insertedNodeToken, renumberedInsertPath, renumberedWrapPath, type CanvasInsert } from '../../shared/page/canvasInsert';
-import { canvasMovesPending, putBackPaths, renumberPaths, runOf, sourceStamps, type Undo } from './frameMove';
+import { canvasMovesPending, pendingKeptFrom, putBackPaths, renumberPaths, runOf, sourceStamps, type Undo } from './frameMove';
 import { isChildNode, isComment, isElement } from './frameBasics';
 
 export const FRAME_INSERT_LIMITS = {
@@ -43,6 +43,8 @@ interface Shown {
   readonly paths: Pick<Undo, 'attributes' | 'comments'>;
   /** Puts back what the insert moved (a wrap: the wrapped nodes), before the stand-in is removed. */
   readonly release?: () => void;
+  /** The stamp of the source the insert was planned over, when the editor said (pendingKeptFrom). */
+  readonly base?: string | undefined;
 }
 
 let shown: Shown[] = [];
@@ -57,7 +59,7 @@ let stylesheet: CSSStyleSheet | undefined;
  * stands beside is not on the page, or renders as several runs, as a node in a loop does, or a
  * reorder is being shown): the rebuilt page shows it then, as before.
  */
-export function showCanvasInsert(insert: CanvasInsert): boolean {
+export function showCanvasInsert(insert: CanvasInsert, base?: string): boolean {
   assert(insert.anchor.placement === 'inside' || insert.anchor.path.length > 0, 'showCanvasInsert: a sibling anchor has a path');
   if (shown.length >= FRAME_INSERT_LIMITS.pendingMax || canvasMovesPending()) {
     return false;
@@ -68,7 +70,7 @@ export function showCanvasInsert(insert: CanvasInsert): boolean {
     return false;
   }
   installPendingStyle();
-  shown = [...shown, entry];
+  shown = [...shown, { ...entry, base }];
   shownFrom = stamps;
   clearTimeout(holdTimer);
   holdTimer = setTimeout(revertCanvasInserts, FRAME_INSERT_LIMITS.holdMs);
@@ -94,19 +96,25 @@ export function canvasInsertsPending(): boolean {
 
 /** The patcher's two moments (morphClient.ts): before it patches, and after. */
 export function listenForCanvasInserts(): void {
-  let replay: readonly CanvasInsert[] = [];
+  let replay: readonly Pick<Shown, 'insert' | 'base'>[] = [];
   document.addEventListener('avb:before-morph', (event) => {
     if (shown.length === 0) {
       replay = [];
       return;
     }
     const incoming = event instanceof CustomEvent && event.detail instanceof Document ? sourceStamps(event.detail) : undefined;
-    // An old-file rendering is drawn again after the patch; anything newer settles it.
-    const stale = shownFrom !== undefined && shownFrom !== '' && incoming === shownFrom;
-    replay = stale ? shown.map((entry) => entry.insert) : [];
+    // A rendering from before an insert draws it again after the patch; the inserts it includes settle.
+    const from = pendingKeptFrom(
+      shown.map((entry) => entry.base),
+      incoming,
+      shownFrom,
+    );
+    replay = shown.slice(from);
     takeBack();
-    if (!stale) {
+    if (replay.length === 0) {
       forget();
+    } else if (from > 0) {
+      shownFrom = incoming; // The page now shows this rendering; the kept inserts were shown over it.
     }
   });
   document.addEventListener('avb:after-patch', () => {
@@ -118,10 +126,10 @@ export function listenForCanvasInserts(): void {
     // The patch rebuilt what it touched, so each is found and drawn again; one that no
     // longer applies is left to the next rendering.
     const kept: Shown[] = [];
-    for (const insert of inserts) {
+    for (const { insert, base } of inserts) {
       const entry = applyInsert(insert);
       if (entry !== undefined) {
-        kept.push(entry);
+        kept.push({ ...entry, base });
       }
     }
     shown = kept;

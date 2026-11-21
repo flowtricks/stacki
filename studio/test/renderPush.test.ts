@@ -249,3 +249,67 @@ test('a sustained drag bounds the backlog, not the total number of renders', asy
     }
   }
 });
+
+// A render that started before a write renders a file the room has since replaced. Delivered,
+// it showed an older page than the edits the canvas already showed: a second delete came back
+// for a whole render (framePendingDelete.ts). Method: hold the render, write during it, and read
+// what reaches the frame; bounded waits on what was delivered, no fixed pauses.
+async function until(condition: () => boolean, label: string): Promise<void> {
+  const deadline = performance.now() + 5_000;
+  while (!condition()) {
+    assert.ok(performance.now() < deadline, label);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+test('a render outdated by a write never reaches the frame; the write’s invalidation renders the page again', async () => {
+  const waiting: ((html: string) => void)[] = [];
+  const delivered: unknown[] = [];
+  const push = new RenderPush(() => new Promise((resolve) => waiting.push(resolve)), { watcherWaitMsMax: 60_000 });
+  const target = { send: (event: string, data: unknown) => (event === 'studio:render' ? delivered.push(data) : undefined) };
+  try {
+    push.subscribe('/', target);
+    await until(() => waiting.length === 1, 'The subscription starts a render');
+    push.sourceWritten('immediate');
+    waiting[0]?.('<p>before the write</p>');
+    await until(() => !push.busy(), 'The outdated render finishes');
+    assert.deepEqual(delivered, [], 'An outdated render is dropped');
+    push.invalidate();
+    await until(() => waiting.length === 2, 'The invalidation renders again');
+    waiting[1]?.('<p>after the write</p>');
+    await until(() => delivered.length === 1, 'The current render is delivered');
+    assert.deepEqual(delivered, [{ path: '/', html: '<p>after the write</p>' }]);
+  } finally {
+    push.close();
+    for (const resolve of waiting) {
+      resolve('shutdown');
+    }
+  }
+});
+
+test('a dropped render is rendered again after its bound when no invalidation follows the write', async () => {
+  const waiting: ((html: string) => void)[] = [];
+  const delivered: unknown[] = [];
+  const push = new RenderPush(() => new Promise((resolve) => waiting.push(resolve)), { watcherWaitMsMax: 0 });
+  const target = { send: (event: string, data: unknown) => (event === 'studio:render' ? delivered.push(data) : undefined) };
+  try {
+    push.subscribe('/', target);
+    await until(() => waiting.length === 1, 'The subscription starts a render');
+    push.sourceWritten('immediate');
+    waiting[0]?.('<p>dropped</p>');
+    await until(() => waiting.length === 2, 'The page renders again without an invalidation');
+    waiting[1]?.('<p>rendered again</p>');
+    await until(() => delivered.length === 1, 'The repeated render is delivered');
+    assert.deepEqual(delivered, [{ path: '/', html: '<p>rendered again</p>' }]);
+  } finally {
+    push.close();
+    for (const resolve of waiting) {
+      resolve('shutdown');
+    }
+  }
+});
+
+test('the watcher bound is whole, non-negative milliseconds', () => {
+  assert.throws(() => new RenderPush(async () => '', { watcherWaitMsMax: -1 }), /The watcher wait is not negative/);
+  assert.throws(() => new RenderPush(async () => '', { watcherWaitMsMax: 0.5 }), /The watcher wait is whole milliseconds/);
+});

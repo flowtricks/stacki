@@ -73,8 +73,10 @@ test('deleting the first sibling makes the next one :first-child; sibling combin
   const dom = page();
   try {
     pending.hidePendingDelete('0.0');
-    assert.equal(document.querySelector('[data-avb-p="0.1"]').matches(':first-child'), true);
-    assert.equal(document.querySelector('[data-avb-p="0.1"] + p').textContent, 'next');
+    // Renumbered as the new source numbers it: the paragraph that was 0.1 is now 0.0.
+    assert.equal(document.querySelector('[data-avb-p="0.0"]').textContent, 'gone');
+    assert.equal(document.querySelector('[data-avb-p="0.0"]').matches(':first-child'), true);
+    assert.equal(document.querySelector('[data-avb-p="0.0"] + p').textContent, 'next');
     assert.equal(document.querySelector('h2') ?? undefined, undefined);
   } finally {
     pending.clearPendingDeletes();
@@ -135,5 +137,114 @@ test('a node that is not on the page removes nothing', () => {
     assert.equal(document.body.innerHTML, before);
   } finally {
     dom.window.close();
+  }
+});
+
+// The next edit is planned over the new source, where later siblings sit one place earlier.
+test('a delete renumbers the later siblings, so a second delete of the shifted path removes that node', () => {
+  const dom = page();
+  try {
+    pending.hidePendingDelete('0.1');
+    assert.equal(document.querySelector('p').getAttribute('data-avb-p'), '0.1', 'the next paragraph now carries the deleted path');
+    pending.hidePendingDelete('0.1');
+    assert.deepEqual(texts(), ['heading']);
+    assert.equal(pending.pendingDeletesCount(), 2);
+    pending.clearPendingDeletes();
+    assert.deepEqual(texts(), ['heading', 'gone', 'next'], 'a refusal puts both back in order');
+    assert.deepEqual(
+      [...document.querySelectorAll('[data-avb-p]')].map((node) => node.getAttribute('data-avb-p')),
+      ['0', '0.0', '0.1', '0.2'],
+      'and their paths with them',
+    );
+  } finally {
+    pending.clearPendingDeletes();
+    dom.window.close();
+  }
+});
+
+test('a render of the old source replays successive deletes over the numbering each was planned on', () => {
+  const dom = page();
+  try {
+    pending.listenForPendingDeletes();
+    pending.hidePendingDelete('0.1');
+    pending.hidePendingDelete('0.1');
+    patchWith(renderingOf(dom, OLD));
+    assert.deepEqual(texts(), ['heading']);
+    assert.equal(pending.pendingDeletesCount(), 2);
+  } finally {
+    pending.clearPendingDeletes();
+    dom.window.close();
+  }
+});
+
+test('a marked node leaves with its markers, keeps the file stamp inside it, and its later sibling takes its path', () => {
+  const dom = new JSDOM(
+    `<!doctype html><body>${stamped(OLD)}<main data-avb-p="0"><h2 data-avb-p="0.0">heading</h2>` +
+      `<!--avb-s:0.1--><!--avb-d:${'c'.repeat(64)}:src/components/Card.astro--><span>card</span>text<!--avb-e:0.1-->` +
+      '<p data-avb-p="0.2">next</p><!--avb-s:0.3--><b>after</b><!--avb-e:0.3--></main></body>',
+  );
+  global.document = dom.window.document;
+  global.CustomEvent = dom.window.CustomEvent;
+  global.Document = dom.window.Document;
+  global.NodeFilter = dom.window.NodeFilter;
+  pending.clearPendingDeletes();
+  try {
+    const before = document.body.innerHTML;
+    pending.hidePendingDelete('0.1');
+    const main = document.querySelector('main');
+    assert.equal(main.querySelector('span') ?? undefined, undefined, 'the marked element is out');
+    assert.equal(main.textContent.includes('text'), false, 'the text between the markers is out too');
+    assert.equal(main.innerHTML.includes('avb-s:0.1-->'), false, 'its start marker is out');
+    assert.equal(main.innerHTML.includes(`avb-d:${'c'.repeat(64)}`), true, 'the source stamp stays');
+    assert.equal(main.querySelector('p').getAttribute('data-avb-p'), '0.1');
+    assert.equal(main.innerHTML.includes('avb-s:0.2--><b>'), true, 'a later marker pair renumbers');
+    pending.clearPendingDeletes();
+    assert.equal(document.body.innerHTML.replace(/<!--avb-d:c+:[^>]*-->/, ''), before.replace(/<!--avb-d:c+:[^>]*-->/, ''));
+  } finally {
+    pending.clearPendingDeletes();
+    dom.window.close();
+  }
+});
+
+// A slow render arrives after the next delete is shown: it includes the first delete, not the second.
+const MIDDLE = 'd'.repeat(64);
+const baseOf = (checksum) => `avb-d:${checksum}:src/pages/index.astro`;
+
+test('a rendering of the source a later delete was planned over settles the earlier one and keeps the later shown', () => {
+  const dom = page();
+  try {
+    pending.listenForPendingDeletes();
+    pending.hidePendingDelete('0.1', baseOf(OLD));
+    pending.hidePendingDelete('0.1', baseOf(MIDDLE));
+    assert.deepEqual(texts(), ['heading']);
+    // The first delete's rendering: the page as the source after it, carrying the second delete's base.
+    const middle = new dom.window.DOMParser().parseFromString(`<!doctype html><body>${stamped(MIDDLE)}</body>`, 'text/html');
+    document.dispatchEvent(new CustomEvent('avb:before-morph', { detail: middle }));
+    assert.deepEqual(texts(), ['heading', 'gone', 'next'], 'the patch starts from the page it was computed against');
+    // The patch removes the first paragraph, as the rendering of the middle source does.
+    document.querySelector('[data-avb-p="0.1"]').remove();
+    document.querySelector('[data-avb-p="0.2"]').setAttribute('data-avb-p', '0.1');
+    document.dispatchEvent(new CustomEvent('avb:after-patch', { detail: middle }));
+    assert.deepEqual(texts(), ['heading'], 'the second delete is still shown');
+    assert.equal(pending.pendingDeletesCount(), 1, 'the first delete settled');
+    patchWith(renderingOf(dom, NEW));
+    assert.equal(pending.pendingDeletesCount(), 0, 'the rendering after both settles the second');
+  } finally {
+    pending.clearPendingDeletes();
+    dom.window.close();
+  }
+});
+
+test('which pending changes a rendering keeps: its base, the page they were shown over, or none', () => {
+  const frameMove = loadRenderer('electron/preload/frameMove.ts');
+  const bases = [baseOf(OLD), baseOf(MIDDLE), undefined];
+  assert.equal(frameMove.pendingKeptFrom(bases, baseOf(MIDDLE), baseOf(OLD)), 1);
+  assert.equal(frameMove.pendingKeptFrom(bases, baseOf(OLD), baseOf(OLD)), 0, 'the page they were shown over keeps all');
+  assert.equal(frameMove.pendingKeptFrom(bases, baseOf(NEW), baseOf(OLD)), 3, 'a newer rendering settles all');
+  assert.equal(frameMove.pendingKeptFrom(bases, undefined, baseOf(OLD)), 3, 'a rendering past the stamp bound settles all');
+  assert.equal(frameMove.pendingKeptFrom([undefined, undefined], baseOf(MIDDLE), ''), 2, 'changes without a base settle as before');
+  assert.equal(frameMove.parsePendingBase(baseOf(MIDDLE)), baseOf(MIDDLE));
+  for (const bad of [undefined, 42, '', 'avb-d:short:src/pages/index.astro', `avb-d:${MIDDLE}:/etc/passwd`, `avb-d:${MIDDLE}:${'a/'.repeat(1_100)}x.astro`]) {
+    assert.equal(frameMove.parsePendingBase(bad), undefined, `refused: ${String(bad).slice(0, 40)}`);
   }
 });

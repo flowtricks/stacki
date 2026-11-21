@@ -14,6 +14,7 @@ import {
   parseCanvasMove,
   planCanvasMove,
   renumberedCanvasPath,
+  renumberedDeletePath,
   renumberedTrail,
   type CanvasMove,
   type CanvasMoveNode,
@@ -247,4 +248,27 @@ test('the boundary parser accepts a planned move and refuses malformed ones', ()
   for (const input of bad) {
     assert.equal(parseCanvasMove(input), undefined, JSON.stringify(input));
   }
+});
+
+// A delete shown ahead of its render renumbers the page as the new source numbers it.
+test('a delete moves its later siblings, and everything under them, up one place', () => {
+  assert.equal(renumberedDeletePath('0.1.2', '0.1.1'), '0.1.1');
+  assert.equal(renumberedDeletePath('0.1.3.4', '0.1.1'), '0.1.2.4');
+  assert.equal(renumberedDeletePath('0.1.0', '0.1.1'), '0.1.0', 'an earlier sibling keeps its place');
+  assert.equal(renumberedDeletePath('0.1', '0.1.1'), '0.1', 'the parent keeps its place');
+  assert.equal(renumberedDeletePath('0.2.5', '0.1.1'), '0.2.5', 'another list keeps its numbers');
+  assert.equal(renumberedDeletePath('1', '0'), '0', 'the root list renumbers too');
+});
+
+test('a delete leaves its own paths, other files and non-paths alone', () => {
+  assert.equal(renumberedDeletePath('0.1.1', '0.1.1'), '0.1.1');
+  assert.equal(renumberedDeletePath('0.1.1.3', '0.1.1'), '0.1.1.3');
+  assert.equal(renumberedDeletePath('src/components/Card.astro|0.2', '0.1'), 'src/components/Card.astro|0.2');
+  assert.equal(renumberedDeletePath('src/components/Card.astro|0.2', 'src/components/Card.astro|0.1'), 'src/components/Card.astro|0.1');
+  assert.equal(renumberedDeletePath('0.2', 'src/components/Card.astro|0.1'), '0.2', 'the page is not the open component');
+  assert.equal(renumberedDeletePath('layout', '0.1'), 'layout');
+});
+
+test('a delete without a path is a programmer error', () => {
+  assert.throws(() => renumberedDeletePath('0.1', 'not a path'), /renumberedDeletePath: the deleted node has a path/);
 });
