@@ -58,8 +58,7 @@ test('the application menu is built from translate and keeps its shape in every 
       translate: loaded.translate,
       send: (channel) => void sent.push(channel),
       checkForUpdates: () => undefined,
-      reloadAllCode: () => undefined,
-      reloadWindow: () => undefined,
+      reload: () => undefined,
     });
     const labels = template.map((item) => item.label).filter((label) => label !== undefined);
     assert.deepEqual(labels, [
@@ -86,8 +85,7 @@ test('a packaged non-Mac menu spells out the View menu and ends File with Quit',
     translate: MAIN_ENGLISH.translate,
     send: () => undefined,
     checkForUpdates: () => undefined,
-    reloadAllCode: () => undefined,
-    reloadWindow: () => undefined,
+    reload: () => undefined,
   });
   assert.equal(template[0]?.label, 'File');
   assert.equal(template[2]?.label, 'View');

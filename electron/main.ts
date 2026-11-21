@@ -60,7 +60,8 @@ import { createBootStore, type BootStore } from './boot/bootStore';
 import { registerBootChannels } from './boot/bootChannels';
 import { describeStartup, markStartup } from './app/startupTiming';
 import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
-import { buildApplicationMenuTemplate } from './app/applicationMenu';
+import { buildApplicationMenuTemplate, type ReloadCommand } from './app/applicationMenu';
+import { classifyFocusedFrame, routeReload, type FocusedFrame } from './app/reloadRouting';
 import { activeMainLocale, loadMainLocale, setMainLocale, translateMain } from './lib/mainLocale';
 import { openMicrophoneSettings, microphoneStatus, requestMicrophone, type MicrophoneSystem } from './app/microphoneAccess';
 import { LOCALE_PREFERENCE_DEFAULT } from '../shared/core/i18n/locales';
@@ -585,10 +586,51 @@ function buildMenu() {
     translate: translateMain,
     send: (channel) => send(channel),
     checkForUpdates: () => void autoUpdates.checkFromMenu(),
-    reloadAllCode: () => relaunchApp(),
-    reloadWindow: () => mainWindow?.webContents.reload(),
+    reload: (command) => runReload(command),
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// ⌘R and ⇧⌘R: with focus in the canvas they refresh the site, the same function as the toolbar's refresh button (the renderer
+// owns it); anywhere else they are the menu item's own reload. electron/app/reloadRouting.ts holds the decision.
+function runReload(command: ReloadCommand): void {
+  const focus = classifyFocusedFrame(focusedFrameOf(mainWindow), APP_SCHEME);
+  const action = routeReload(command, focus);
+  switch (action) {
+    case 'refreshPreview':
+      send('menu:refreshPreview');
+      return;
+    case 'reloadAllCode':
+      relaunchApp();
+      return;
+    case 'reloadWindow':
+      mainWindow?.webContents.reload();
+      return;
+    case 'forceReloadWindow':
+      mainWindow?.webContents.reloadIgnoringCache();
+      return;
+    default: {
+      const unreachable: never = action;
+      throw new Error(`Assertion failed: unknown reload action ${String(unreachable)}`);
+    }
+  }
+}
+
+// The frame holding keyboard focus, or undefined when there is none. A frame that is torn down while a navigation commits can
+// throw when read; the person then gets the app's own reload, which is what the shortcut did before.
+function focusedFrameOf(window: Window | undefined): FocusedFrame | undefined {
+  if (window === undefined || window.isDestroyed()) {
+    return undefined;
+  }
+  try {
+    const frame = window.webContents.focusedFrame;
+    if (frame === null || frame === undefined) {
+      return undefined;
+    }
+    return { isMainFrame: frame === window.webContents.mainFrame, url: frame.url };
+  } catch {
+    return undefined;
+  }
 }
 
 // The language of the menu and native dialogs: the stored choice (mirrored from the renderer over `locale:set`) or, for

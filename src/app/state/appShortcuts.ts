@@ -292,7 +292,7 @@ export function useMenuShortcuts(
 ) {
   const { flushSave, reportFailure, showToast } = lifecycle;
   const translate = useTranslate();
-  const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, selectionKeysRef } = coreState;
+  const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, selectionKeysRef, setRefreshKey } = coreState;
   const { cmsOpenRef } = insertItemScope;
   const { copyNode, nodeClipboardRef, pasteNode } = nodeEdits;
   const { redo, undo } = history;
@@ -386,10 +386,18 @@ export function useMenuShortcuts(
       window.avb.onMenu('copySelection', () => {
         void copySelection().catch(reportFailure);
       }),
+      // ⌘R and ⇧⌘R with focus in the canvas: the main process sends them here (electron/app/reloadRouting.ts) instead of
+      // reloading Stacki. The same bump as the toolbar's refresh button; with no site loaded it remounts nothing visible.
+      window.avb.onMenu('refreshPreview', () => {
+        if (!windowHeld()) {
+          setRefreshKey((count) => count + 1);
+        }
+      }),
     ];
     return () => offs.forEach((off) => off());
   }, [
     translate,
+    setRefreshKey,
     undo,
     redo,
     copyNode,

@@ -2828,6 +2828,11 @@ html[data-platform='win32'] .titlebar {
   border-radius: 2px;
   background: inherit;
 }
+/* The key that does the same, after the words. */
+.rail-tooltip-shortcut {
+  margin-left: 6px;
+  opacity: 0.6;
+}
 /* Variant shown below its anchor (arrow points up, centered). */
 .rail-tooltip.below {
   transform: translateX(-50%);
