@@ -6,6 +6,9 @@
 import type { MenuItemConstructorOptions } from 'electron';
 import type { MainMessageKey } from '../lib/mainLocale';
 
+/** The three reloads the View menu offers: the dev relaunch, the window, and the window bypassing caches. */
+export type ReloadCommand = 'reloadAllCode' | 'reloadWindow' | 'forceReloadWindow';
+
 export interface ApplicationMenuOptions {
   readonly isMac: boolean;
   readonly isDev: boolean;
@@ -13,14 +16,14 @@ export interface ApplicationMenuOptions {
   /** Forwards a menu command to the renderer, which decides between app-level actions and native ones. */
   readonly send: (channel: string) => void;
   readonly checkForUpdates: () => void;
-  readonly reloadAllCode: () => void;
-  readonly reloadWindow: () => void;
+  /** Runs a reload; `main.ts` first asks `routeReload` (reloadRouting.ts) whether focus in the canvas turns it into a site refresh. */
+  readonly reload: (command: ReloadCommand) => void;
 }
 
 // In dev ⌘R has to mean "restart the process". main.js, astroParser.js and the rest of this side are bound in at require time, so the
 // stock reload repaints the renderer while silently going on running the old code: the failure mode is an edit that appears to do
 // nothing. The plain window reload keeps its usual behaviour one item down. A packaged build has no supervisor to restart it and no
-// source to pick up, so it keeps the stock menu.
+// source to pick up, so it keeps the stock reload items. In both, focus inside the canvas sends the shortcut to the site instead.
 export function buildApplicationMenuTemplate(options: ApplicationMenuOptions): MenuItemConstructorOptions[] {
   const translate = options.translate;
   const send = options.send;
@@ -62,8 +65,8 @@ export function buildApplicationMenuTemplate(options: ApplicationMenuOptions): M
       ? {
           label: translate('menu.view.title'),
           submenu: [
-            { label: translate('menu.view.reloadAllCode'), accelerator: 'CmdOrCtrl+R', click: () => options.reloadAllCode() }, // i18n-ignore: keyboard accelerator.
-            { label: translate('menu.view.reloadWindow'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reloadWindow() }, // i18n-ignore: keyboard accelerator.
+            { label: translate('menu.view.reloadAllCode'), accelerator: 'CmdOrCtrl+R', click: () => options.reload('reloadAllCode') }, // i18n-ignore: keyboard accelerator.
+            { label: translate('menu.view.reloadWindow'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reload('reloadWindow') }, // i18n-ignore: keyboard accelerator.
             { type: 'separator' },
             { role: 'toggleDevTools', label: translate('menu.view.toggleDevTools') },
             { type: 'separator' },
@@ -77,8 +80,9 @@ export function buildApplicationMenuTemplate(options: ApplicationMenuOptions): M
       : {
           label: translate('menu.view.title'),
           submenu: [
-            { role: 'reload', label: translate('menu.view.reload') },
-            { role: 'forceReload', label: translate('menu.view.forceReload') },
+            // Spelled out rather than `role: 'reload'`, which reloads Stacki whatever has focus; the click is routed (reloadRouting.ts).
+            { label: translate('menu.view.reload'), accelerator: 'CmdOrCtrl+R', click: () => options.reload('reloadWindow') }, // i18n-ignore: keyboard accelerator.
+            { label: translate('menu.view.forceReload'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reload('forceReloadWindow') }, // i18n-ignore: keyboard accelerator.
             { role: 'toggleDevTools', label: translate('menu.view.toggleDevTools') },
             { type: 'separator' },
             { role: 'resetZoom', label: translate('menu.view.actualSize') },

@@ -307,15 +307,7 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
           something you type a route into. Focus selects it all, so one
           click and ⌘C gets the whole thing. */}
       <div className="url-bar">
-        <button
-          className="titlebar-btn url-reload"
-          title={translate('preview.reload')}
-          aria-label={translate('preview.reload')}
-          disabled={!liveUrl}
-          onClick={() => app.setRefreshKey((count) => count + 1)}
-        >
-          <RefreshIcon size={13} />
-        </button>
+        <ReloadButton disabled={!liveUrl} onReload={() => app.setRefreshKey((count) => count + 1)} />
         <input
           className="url"
           spellCheck={false}
@@ -377,6 +369,37 @@ function OpenBrowserButton({ liveUrl }: { readonly liveUrl: ShellView['liveUrl']
     >
       <ExternalIcon size={14} />
     </button>
+  );
+}
+
+// The refresh button beside the address. Its tip waits for a resting pointer and names the shortcut that does the same with focus
+// in the canvas, where the menu hands ⌘R to the site (electron/app/reloadRouting.ts). The shortcut is never drawn on the button.
+export function ReloadButton({ disabled, onReload }: { readonly disabled: boolean; readonly onReload: () => void }) {
+  const translate = useTranslate();
+  const tooltip = useDelayedTooltip();
+  const label = translate('preview.reload');
+  const shortcut = shortcutLabel('R', 'primary', currentDesktopPlatform());
+  return (
+    <>
+      <button
+        className="titlebar-btn url-reload"
+        aria-label={label}
+        disabled={disabled}
+        onMouseEnter={tooltip.show}
+        onMouseLeave={tooltip.hide}
+        onClick={() => {
+          tooltip.hide();
+          onReload();
+        }}
+      >
+        <RefreshIcon size={13} />
+      </button>
+      {tooltip.value ? (
+        <div className="rail-tooltip below" style={tooltip.value}>
+          {label} <span className="rail-tooltip-shortcut">{shortcut}</span>
+        </div>
+      ) : undefined}
+    </>
   );
 }
 

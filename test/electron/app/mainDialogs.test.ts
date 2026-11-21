@@ -51,8 +51,7 @@ test('rebuilding the menu after a language change relabels every item and keeps 
       translate: loaded.translate,
       send: (channel) => void sent.push(channel),
       checkForUpdates: () => undefined,
-      reloadAllCode: () => undefined,
-      reloadWindow: () => undefined,
+      reload: () => undefined,
     });
     const labels: string[] = [];
     const pending: MenuItemConstructorOptions[] = [...template];
