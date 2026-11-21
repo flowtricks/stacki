@@ -47,9 +47,49 @@ reads the operation union, checks every named module exists and that nothing is 
 
 Every gesture goes through `commitEdit`, which diffs the model before and after; an added or removed
 node is shown by the action that made it (insert, delete, duplicate, wrap) or, for undo and redo, by
-`showModelChangeOnCanvas`. Studio shares the frame code; its delete, duplicate and component insert
-send the same messages (`studio/src/features/project/useEditor.ts`). Studio's attribute, class and
-text edits are not wired yet.
+`showModelChangeOnCanvas`. Studio shares the frame code; its delete, duplicate, reorder, component
+insert and quick-insert pick (elements too, `studio/src/features/components/quickInsertPlan.ts`) send
+the same messages (`studio/src/features/project/useEditor.ts`). Studio's attribute, class and text
+edits are not wired yet.
+
+## Successive edits over a slow render
+
+A hosted Studio renders in its container and answers over the network, so a rendering can take a
+second or more, and the next edit is often made before it lands. Three rules keep that edit instant:
+
+1. **A delete renumbers the page** (`renumberedDeletePath`, `shared/page/canvasMove.ts`), as a move
+   and an insert already did, and takes its marker comments with it. The next edit is planned over
+   the new source; without this, deleting a paragraph and then the one that moved into its place
+   named a path no element carried, and the second delete showed only with its own render.
+2. **A change names its base** (Studio): the stamp of the source it was planned over
+   (`studio/src/features/collaboration/sourceStamp.ts`). A rendering that carries a change's base was
+   rendered from before it, so that change and every later one stay shown, and only the earlier ones
+   settle (`pendingKeptFrom`, `electron/preload/frameMove.ts`). Desktop sends no base and settles on
+   any newer rendering, as before; its renders land before the next edit.
+3. **A render started before a write is dropped** (`studio/src/features/preview/renderPush.ts`): it
+   renders a file the room has since replaced. The write's own invalidation renders the page again,
+   or a bound (500 ms) does when Vite watches no such file.
+
+Measured with `studio/test/structuralEdits.bench.ts` (in `studio/`: `npm run build`, then
+`npx tsx test/structuralEdits.bench.ts`; it builds a disposable fixture, never a real project): a page
+whose component takes 700 ms to render, every socket message held 100 ms each way (a stand-in for the
+container and the network), first visual change after the key press or drop, in a hidden Chrome. Two
+runs of three each, on a loaded machine (load average 12 to 18), 2026-11-21:
+
+| Action | Before (f3f64372) | After |
+|---|---|---|
+| Quick-insert `<div>` | 943 to 1244 ms (the render) | 4 to 23 ms |
+| Delete | 3 to 19 ms | 3 to 19 ms |
+| Reorder (from the drop) | 4 to 7 ms | 4 to 6 ms |
+| Second delete, made once the Navigator shows the first | 1381 to 1516 ms (its own render) | 6 to 17 ms |
+
+A single delete and a reorder were already shown ahead of the render; what was slow was a pick from
+the quick-insert search and every delete made before the previous one's rendering landed, which in a
+hosted Studio is most successive deletes. Also fixed and checked by the browser test below: a second
+delete made after the first's rendering landed was shown, then came back for a whole render.
+
+`studio/test/structuralInstant.browser.ts` holds each rendering on a gate and checks that every one
+of these shows before any rendering arrives, and that no rendering brings a deleted node back.
 
 ## The write path (every action)
 
