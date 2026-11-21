@@ -106,12 +106,10 @@ async function runInElectron({ window, project, options }) {
   await driver.waitForApp();
   await driver.setPageFocus('focused');
   await installRecorder(driver.contents);
+  const CARD_IMAGE_DECODED = `(() => { const image = document.querySelector('#card-one .card_visual img'); return !!image && image.complete && image.naturalWidth > 0; })()`;
   await pollUntil({
     what: 'the Card image decoded on the canvas',
-    read: () =>
-      driver.canvasEvaluate(
-        `(() => { const image = document.querySelector('#card-one .card_visual img'); return !!image && image.complete && image.naturalWidth > 0; })()`,
-      ),
+    read: () => driver.canvasEvaluate(CARD_IMAGE_DECODED),
     until: (decoded) => decoded === true,
     pollIntervalMs: 100,
     pollCountMax: WAIT_MS_MAX / 100,
@@ -249,6 +247,10 @@ async function runInElectron({ window, project, options }) {
       );
     }
     // 3. The picture: choose another image from the project's own assets.
+    // The undo rewrites the page, so the canvas reloads its frame. A double click aimed at the old frame lands on nothing when the
+    // machine is busy and the reload is slow (the popup then never reopens), so wait for the Card image to be drawn again first.
+    await becomes('the Card image drawn again after the undo', () => driver.canvasEvaluate(CARD_IMAGE_DECODED));
+    await driver.settle();
     await doubleClick('#card-one .card_visual img', 're-open on the Card image');
     await until('the popup reopens', popupOpen);
     const chooseButton = `[...document.querySelectorAll('.canvas-image-popup button')].find((b) => /Choose|Replace/i.test(b.textContent || '')) || undefined`;
