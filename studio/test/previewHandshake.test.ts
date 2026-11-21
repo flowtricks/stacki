@@ -70,14 +70,14 @@ test('Retry is offered a bounded number of times and refuses a corrupt count', (
 
 test('a hosted frame opened at the entry address is ready for the page the entry leads to', () => {
   // The frame reports the page it ended on ("/about?x=1"), never the entry address it was opened at.
-  assert.equal(pagePath('https://preview.example/__studio-entry?token=t&page=%2Fabout%3Fx%3D1'), '/about?x=1');
-  assert.equal(pagePath('https://preview.example/__studio-entry?token=t'), '/');
-  assert.equal(pagePath('https://preview.example/__studio-entry?token=t&page=%2Fa&mode=interactive'), '/a');
+  assert.equal(pagePath('https://preview.example/__studio-entry?token=t&page=%2Fabout%3Fx%3D1', 'https://editor.example/studio'), '/about?x=1');
+  assert.equal(pagePath('https://preview.example/__studio-entry?token=t', 'https://editor.example/studio'), '/');
+  assert.equal(pagePath('https://preview.example/__studio-entry?token=t&page=%2Fa&mode=interactive', 'https://editor.example/studio'), '/a');
 });
 
 test('an entry address cannot name a page off the host, and an ordinary address is its path and query', () => {
-  assert.equal(pagePath('https://preview.example/__studio-entry?page=%2F%2Fevil.example'), '/');
-  assert.equal(pagePath('https://preview.example/__studio-entry?page=https%3A%2F%2Fevil.example'), '/');
-  assert.equal(pagePath('https://preview.example/team?tab=2#avb-design'), '/team?tab=2');
+  assert.equal(pagePath('https://preview.example/__studio-entry?page=%2F%2Fevil.example', 'https://editor.example/studio'), '/');
+  assert.equal(pagePath('https://preview.example/__studio-entry?page=https%3A%2F%2Fevil.example', 'https://editor.example/studio'), '/');
+  assert.equal(pagePath('https://preview.example/team?tab=2#avb-design', 'https://editor.example/studio'), '/team?tab=2');
   assert.equal(pagePath('/relative?x=1', 'https://editor.example/studio'), '/relative?x=1');
 });

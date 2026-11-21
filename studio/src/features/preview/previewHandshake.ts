@@ -74,7 +74,8 @@ export function retryOffered(attempt: number): boolean {
  * stayed behind its loader.
  */
 export const PREVIEW_ENTRY_PATH = '/__studio-entry';
-export function pagePath(url: string, base = 'https://preview.invalid/'): string {
+// `base` is required: a made-up host here would end up in the built bundle (the no-tracking scan rejects unknown hosts).
+export function pagePath(url: string, base: string): string {
   const parsed = new URL(url, base);
   if (parsed.pathname === PREVIEW_ENTRY_PATH) {
     const page = parsed.searchParams.get('page') ?? '/';
