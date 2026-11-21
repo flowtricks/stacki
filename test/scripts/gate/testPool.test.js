@@ -205,13 +205,18 @@ test('a command may carry its own time limit, bounded by the ceiling, and is kil
 });
 
 test('a command whose processes pass its memory bound is killed and says why', { skip: process.platform === 'win32' }, async () => {
+  // The sampler shells out to ps and the script has to fault in 400 MB, both of which stall on a busy machine (a gate run beside
+  // other gates). The time limit is therefore only a backstop far beyond any stall; which bound fired is read from the message,
+  // which only the memory path writes, so the test never races a fixed number of seconds.
+  const MEMORY_KILL_WAIT_MS = 120_000;
   // Touches 400 MB page by page so it is resident, then holds it; the bound is 150 MB.
   const script = 'const block = Buffer.alloc(400 * 1024 * 1024, 1); setInterval(() => block[0]++, 100);';
-  const greedy = { name: 'greedy', command: process.execPath, argumentsList: ['-e', script], rssBytesMax: 150 * 1024 * 1024, timeoutMs: 20_000 };
+  const greedy = { name: 'greedy', command: process.execPath, argumentsList: ['-e', script], rssBytesMax: 150 * 1024 * 1024, timeoutMs: MEMORY_KILL_WAIT_MS };
   const [outcome] = await runTestPool([greedy], options(1), () => {});
   assert.equal(outcome.passed, false);
   assert.match(outcome.output, /Killed: its processes held \d+\.\d GB, past the 0\.1 GB bound\./);
-  assert.ok(outcome.durationMs < 15_000, `killed by the memory bound, not the time limit (${outcome.durationMs} ms)`);
+  assert.doesNotMatch(outcome.output, /without exiting/, 'killed by the memory bound, not the time limit');
+  assert.ok(outcome.durationMs < MEMORY_KILL_WAIT_MS, `killed before the backstop (${outcome.durationMs} ms)`);
   // A modest command under its bound passes untouched.
   const modest = { name: 'modest', command: process.execPath, argumentsList: ['-e', 'Buffer.alloc(8 * 1024 * 1024, 1)'], rssBytesMax: 512 * 1024 * 1024 };
   const [passed] = await runTestPool([modest], options(1), () => {});
