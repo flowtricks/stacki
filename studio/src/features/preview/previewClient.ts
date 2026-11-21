@@ -36,7 +36,7 @@ import { forwardStyleModifiers } from './styleModifiers';
 import { answerPreviewQuery } from './previewQueries';
 import { createHotContext } from '/@vite/client';
 import { createOutlines, type OutlineTarget } from './previewOutlines';
-import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from '../../../vendor/stacki/electron/preload/frameMove';
+import { listenForCanvasMoves, parsePendingBase, revertCanvasMoves, showCanvasMove } from '../../../vendor/stacki/electron/preload/frameMove';
 import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from '../../../vendor/stacki/electron/preload/framePendingInsert';
 import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from '../../../vendor/stacki/electron/preload/framePendingDelete';
 import { parseCanvasInsert } from '../../../vendor/stacki/shared/page/canvasInsert';
@@ -313,8 +313,10 @@ window.addEventListener('message', (event) => {
     selected = undefined;
     hovered = undefined;
   }
+  // Each shown change may name the source it was planned over, so a rendering from before it keeps it (pendingKeptFrom).
+  const base = 'base' in data ? parsePendingBase(data.base) : undefined;
   if (data.type === 'avb:optimistic-move' && 'move' in data) {
-    showMove(data.move);
+    showMove(data.move, base);
   }
   if (data.type === 'avb:move-revert') {
     revertCanvasMoves();
@@ -323,11 +325,11 @@ window.addEventListener('message', (event) => {
   if (data.type === 'avb:optimistic-insert' && 'insert' in data) {
     const insert = parseCanvasInsert(data.insert);
     if (insert !== undefined) {
-      showCanvasInsert(insert);
+      showCanvasInsert(insert, base);
     }
   }
   if (data.type === 'avb:hide-pending' && 'path' in data && typeof data.path === 'string') {
-    hidePendingDelete(data.path);
+    hidePendingDelete(data.path, base);
   }
   if (data.type === 'avb:insert-revert') {
     revertCanvasInserts();
@@ -373,13 +375,13 @@ window.addEventListener('message', (event) => {
 listenForCanvasMoves();
 listenForCanvasInserts();
 listenForPendingDeletes();
-function showMove(input: unknown): void {
+function showMove(input: unknown, base: string | undefined): void {
   const parsed = parseCanvasMove(input);
   if (parsed === undefined) {
     return;
   }
   const move: CanvasMove = { ...parsed, scope };
-  if (!showCanvasMove(move)) {
+  if (!showCanvasMove(move, base)) {
     return;
   }
   const renumbered = (outline: OutlineTarget | undefined): OutlineTarget | undefined =>

@@ -3,15 +3,10 @@ import { useCallback, useEffect, useState } from 'react';
 import InsertSearch, { type InsertItem } from '../../../vendor/stacki/src/features/palette/InsertSearch';
 import { useInsertAppsSource, type InsertAppsNotify } from '../../../vendor/stacki/src/app/shell/insertApps';
 import { useStudioRole } from '../roles/useEditorRole';
-import { insertTargetFor } from '../../../vendor/stacki/src/editor/insertTarget';
-import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
 import type { useEditor } from '../project/useEditor';
 import type { Project } from '../project/projectClient';
-import { parsePage, type TreeAction } from '../source/source';
-import { componentImport } from '../source/imports';
-import { parseInsertContent } from '../source/insertContentContract';
-import { dropTarget } from '../navigator/dropTarget';
 import { resolvePreviewURL } from './ComponentsPanel';
+import { planQuickInsert } from './quickInsertPlan';
 
 export function QuickInsert({
   model,
@@ -97,35 +92,30 @@ function QuickInsertSearch({
   );
 }
 
+// The pick shows on the canvas before the write, as Desktop's palette does (quickInsertPlan.ts), and
+// the stand-in is taken away when the write is not sent or is refused (useEditor.ts).
 async function insertChoice(model: ReturnType<typeof useEditor>, project: Project, item: InsertItem) {
   const document = model.document;
   if (!document?.ready) {
     return;
   }
-  const parsed = parsePage(document.text.toString(), { locs: true });
-  if (!parsed.editable) {
+  const plan = planQuickInsert({ source: document.text.toString(), file: document.file, selected: model.selected, components: project.components, item });
+  if (plan === undefined) {
     return;
   }
-  const location = insertTargetFor(parsePageModel(parsed.model), model.selected, item, project.components);
-  const target = dropTarget(parsed.model.nodes, location);
-  let action: TreeAction;
-  if (item.type === 'component') {
-    const component =
-      project.components.find((component) => component.file === item.path) ?? project.components.find((component) => component.name === item.name);
-    if (!component) {
-      return;
-    }
-    action = {
-      kind: 'insert',
-      ...target,
-      name: component.name,
-      importPath: componentImport(document.file, component),
-      paired: component.slots.includes('default') && component.slotText === true,
-    };
-  } else {
-    action = { kind: 'insert-content', ...target, content: parseInsertContent(item) };
+  const { action, standIn } = plan;
+  if (standIn !== undefined) {
+    model.preview.send({ type: 'avb:optimistic-insert', insert: standIn, base: document.sourceStamp() });
   }
-  await document.action(action);
+  const sent = await document.action(action).catch((error: unknown) => {
+    if (standIn !== undefined) {
+      model.preview.send({ type: 'avb:insert-revert' });
+    }
+    throw error;
+  });
+  if (!sent && standIn !== undefined) {
+    model.preview.send({ type: 'avb:insert-revert' });
+  }
 }
 
 function useInsertShortcut(enabled: boolean, open: () => void) {

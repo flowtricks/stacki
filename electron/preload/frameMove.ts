@@ -25,6 +25,7 @@
 
 import { assert } from '../../shared/core/assert';
 import { canvasMoveNodePath, renumberedCanvasPath, type CanvasMove } from '../../shared/page/canvasMove';
+import { parseStampData, stampData } from '../../shared/page/previewToken';
 import { PRELOAD_LIMITS, isComment, isElement, isText } from './frameBasics';
 
 export const FRAME_MOVE_LIMITS = {
@@ -60,6 +61,8 @@ export interface Undo {
 interface Shown {
   readonly move: CanvasMove;
   readonly undo: Undo;
+  /** The stamp of the source the move was planned over, when the editor said (pendingKeptFrom). */
+  readonly base: string | undefined;
 }
 
 let shown: Shown[] = [];
@@ -75,7 +78,7 @@ let announcing = false;
  * (its elements or its neighbour are not on the page, or it renders as several runs,
  * as a node in a loop does); the rebuilt page shows it then, as before.
  */
-export function showCanvasMove(move: CanvasMove): boolean {
+export function showCanvasMove(move: CanvasMove, base?: string): boolean {
   assert(move.count >= 1, 'showCanvasMove: a move moves at least its node');
   assert(move.from.length > 0, 'showCanvasMove: a moved node has a path');
   if (shown.length >= FRAME_MOVE_LIMITS.pendingMax) {
@@ -86,7 +89,7 @@ export function showCanvasMove(move: CanvasMove): boolean {
   if (undo === undefined) {
     return false;
   }
-  shown = [...shown, { move, undo }];
+  shown = [...shown, { move, undo, base }];
   shownFrom = stamps;
   clearTimeout(holdTimer);
   holdTimer = setTimeout(revertCanvasMoves, FRAME_MOVE_LIMITS.holdMs);
@@ -112,19 +115,25 @@ export function canvasMovesPending(): boolean {
 
 /** The patcher's two moments (morphClient.ts): before it patches, and after. */
 export function listenForCanvasMoves(): void {
-  let replay: readonly CanvasMove[] = [];
+  let replay: readonly Pick<Shown, 'move' | 'base'>[] = [];
   document.addEventListener('avb:before-morph', (event) => {
     if (shown.length === 0) {
       replay = [];
       return;
     }
     const incoming = event instanceof CustomEvent && event.detail instanceof Document ? sourceStamps(event.detail) : undefined;
-    // An old-file rendering is shown again after the patch; anything newer settles it.
-    const stale = shownFrom !== undefined && shownFrom !== '' && incoming === shownFrom;
-    replay = stale ? shown.map((entry) => entry.move) : [];
+    // A rendering from before a move shows that move again after the patch; the moves it includes settle.
+    const from = pendingKeptFrom(
+      shown.map((entry) => entry.base),
+      incoming,
+      shownFrom,
+    );
+    replay = shown.slice(from);
     takeBack();
-    if (!stale) {
+    if (replay.length === 0) {
       forget();
+    } else if (from > 0) {
+      shownFrom = incoming; // The page now shows this rendering; the kept moves were shown over it.
     }
   });
   document.addEventListener('avb:after-patch', () => {
@@ -136,10 +145,10 @@ export function listenForCanvasMoves(): void {
     // The patch rebuilt what it touched, so each move is found and made again; one
     // that no longer applies is left to the next rendering.
     const kept: Shown[] = [];
-    for (const move of moves) {
+    for (const { move, base } of moves) {
       const undo = applyMove(move);
       if (undo !== undefined) {
-        kept.push({ move, undo });
+        kept.push({ move, undo, base });
       }
     }
     shown = kept;
@@ -377,6 +386,40 @@ function commentsWhere(accept: (data: string) => boolean): Comment[] {
     }
   }
   return found;
+}
+
+/**
+ * The first pending change a rendering does not yet include; `bases.length` when it includes them all.
+ *
+ * Each change may name its base: the stamp (`avb-d:<sha256>:<file>`) of the source the editor planned
+ * it over. A rendering that carries a change's base was rendered from before that change, so that
+ * change and every later one stay shown; the earlier ones it settles. Why: with a slow render (a
+ * hosted Studio) a second delete was shown, then the first delete's rendering arrived and the second
+ * node came back for a whole render. A rendering of the source the first change was shown over
+ * (`shownFrom`) predates them all. A change without a base (Desktop) settles on any newer rendering,
+ * as before.
+ */
+export function pendingKeptFrom(bases: readonly (string | undefined)[], incoming: string | undefined, shownFrom: string | undefined): number {
+  assert(bases.length <= FRAME_MOVE_LIMITS.stampedMax, 'pendingKeptFrom: pending changes stay inside their bound');
+  if (incoming === undefined) {
+    return bases.length; // Past the stamp bound: settle rather than keep a change on a guess.
+  }
+  if (shownFrom !== undefined && shownFrom !== '' && incoming === shownFrom) {
+    return 0;
+  }
+  const stamps = new Set(incoming.split('\n'));
+  const index = bases.findIndex((base) => base !== undefined && stamps.has(base));
+  assert(index < bases.length, 'pendingKeptFrom: a found change lies inside the list');
+  return index < 0 ? bases.length : index;
+}
+
+/** The boundary parser for a change's base: one well-formed stamp, or undefined. */
+export function parsePendingBase(input: unknown): string | undefined {
+  if (typeof input !== 'string' || input.length > 2_000) {
+    return undefined;
+  }
+  const stamp = parseStampData(input);
+  return stamp === undefined ? undefined : stampData(stamp);
 }
 
 // Which source a page is rendered from: every file's stamp, as a set. Empty when the

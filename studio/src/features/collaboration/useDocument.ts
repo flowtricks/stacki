@@ -14,6 +14,7 @@ import { occurrenceOf, parsePeer, type Peer } from './presence';
 import { selectionOwner } from './selectionLock';
 import { CursorChannel, participantId } from './cursorChannel';
 import { ActionableNotice } from '../notifications/notice';
+import { SourceStamp } from './sourceStamp';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { useEffect, useState } from 'react';
@@ -90,15 +91,18 @@ export class SharedDocument {
   private readonly selectionIntent = new SelectionIntent();
   private epoch = '';
   private readonly persistence: IndexeddbPersistence;
+  private readonly stamp: SourceStamp;
   private readonly name = sessionStorage.getItem('studio-name') ?? `Editor ${Math.floor(Math.random() * 900 + 100)}`;
   constructor(
     readonly file: string,
     readonly workspaceId?: string,
   ) {
+    this.stamp = new SourceStamp(file);
     this.persistence = new IndexeddbPersistence(documentStorageName(location.origin, file, workspaceId), this.doc);
     sessionStorage.setItem('studio-name', this.name);
     this.doc.on('update', (update: Uint8Array, origin: unknown) => {
       this.revision++;
+      this.stamp.refresh(this.text.toString());
       if (origin === LOCAL || origin === this.undo) {
         this.status = this.socket?.readyState === WebSocket.OPEN ? 'Saving' : 'Offline · edits pending';
         this.send({ type: 'update', epoch: this.epoch, update: encode(update) });
@@ -461,6 +465,10 @@ export class SharedDocument {
       this.text.delete(edit.start + minimal.start, minimal.remove);
       this.text.insert(edit.start + minimal.start, minimal.insert);
     }, LOCAL);
+  }
+  /** The canvas stamp of the source as it is now, for a change shown before its edit is answered (sourceStamp.ts). */
+  sourceStamp(): string | undefined {
+    return this.stamp.of(this.text.toString());
   }
   /** Sends a structural action; false when it was not sent (nothing to edit). */
   async action(action: TreeAction): Promise<boolean> {
