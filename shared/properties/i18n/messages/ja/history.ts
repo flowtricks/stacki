@@ -1,0 +1,81 @@
+// Japanese `history` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/history';
+
+export const messages = {
+  'history.backToNow': '現在に戻る',
+  'history.commit.actions': 'コミットの操作',
+  'history.commit.merge': 'マージコミット',
+  'history.commit.preview': 'プレビュー',
+  'history.commit.restoreProject': 'プロジェクトをこのコミットに復元…',
+  'history.commit.you': 'あなた',
+  'history.day.today': '今日',
+  'history.day.yesterday': '昨日',
+  'history.dialog.close': '変更されたファイルを閉じる',
+  'history.dialog.title': '変更されたファイル（{count}）',
+  'history.diff.allFiles': 'すべてのファイル',
+  'history.diff.emptyTree': '空のツリー',
+  'history.diff.firstParent': '最初の親と比較',
+  'history.diff.label': 'ファイルの差分',
+  'history.diff.loading': '差分を読み込み中…',
+  'history.diff.noTextChanges': 'このファイルにテキストの変更はありません。',
+  'history.diff.restoreFile': 'ファイルを復元…',
+  'history.error.diffUnreadable': 'このコミットの差分を読み込めませんでした。',
+  'history.files.added': {
+    other: '{count} 件のファイルを追加',
+  },
+  'history.files.changedLabel': '変更されたファイル',
+  'history.files.count': {
+    other: '{count} 件のファイル',
+  },
+  'history.files.deleted': {
+    other: '{count} 件のファイルを削除',
+  },
+  'history.files.from': '{path} から',
+  'history.files.listLabel': '変更されたファイルの一覧',
+  'history.files.noMatch': 'このフィルターに一致するファイルはありません。',
+  'history.files.none': '変更されたファイルはありません。',
+  'history.files.unavailable': 'このコミットの変更ファイルは取得できません。',
+  'history.files.updated': {
+    other: '{count} 件のファイルを更新',
+  },
+  'history.files.view': '変更されたファイルを表示（{count}）',
+  'history.files.viewDiff': '{path} の差分を表示',
+  'history.filter.added': '新規',
+  'history.filter.all': 'すべて',
+  'history.filter.deleted': '削除済み',
+  'history.filter.label': '変更されたファイルを絞り込む',
+  'history.filter.updated': '変更済み',
+  'history.scope.all': 'すべてのブランチ',
+  'history.scope.ariaLabel': 'ブランチでコミットを絞り込む',
+  'history.scope.current': '現在のブランチ',
+  'history.scope.label': 'コミットを絞り込む',
+  'history.scope.showing': '{branch} のコミットを表示中',
+  'history.sort.ariaLabel': '変更されたファイルを並べ替え',
+  'history.sort.label': '並べ替え',
+  'history.sort.path': 'ファイルパス',
+  'history.sort.status': 'ステータス',
+  'history.summary.moreFiles': {
+    other: '{first} とその他 {count} 件のファイル',
+  },
+  'history.summary.morePages': {
+    other: '{first} とその他 {count} ページ',
+  },
+  'history.summary.none': '変更されたファイルはありません',
+  'history.summary.two': '{first} と {second}',
+  'history.time.daysAgo': {
+    other: '{count} 日前',
+  },
+  'history.time.hoursAgo': {
+    other: '{count} 時間前',
+  },
+  'history.time.justNow': 'たった今',
+  'history.time.minutesAgo': {
+    other: '{count} 分前',
+  },
+  'history.time.yesterday': '昨日',
+  'history.timeline.empty': 'まだ何も保存されていません。最初のバージョンを保存するとここに表示され、いつでもその時点に戻れます。',
+  'history.timeline.label': 'Git 履歴',
+  'history.timeline.showOlder': '古い履歴を表示',
+  'history.versionHistory': 'バージョン履歴',
+} as const satisfies CatalogOf<MessageKey>;

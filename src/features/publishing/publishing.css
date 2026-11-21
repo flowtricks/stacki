@@ -11,8 +11,8 @@
   line-height: 1;
 }
 .stacki-publish-main > button {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
 }
 .stacki-publish-main {
   display: flex;
@@ -44,16 +44,19 @@
   width: auto;
 }
 .stacki-publish-option:has(> .stacki-publish-repository) > button {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
 }
 .stacki-publish-repository {
   /* The link stays usable independently of whether the publishing action is disabled. */
   display: grid;
   place-items: center;
   flex: 0 0 28px;
-  border-left: 1px solid var(--panel, #242424);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-inline-start: 1px solid var(--panel, #242424);
+  border-start-start-radius: 0;
+  border-start-end-radius: var(--radius);
+  border-end-end-radius: var(--radius);
+  border-end-start-radius: 0;
   background: var(--bg-input);
   color: var(--text-dim);
   cursor: pointer;
@@ -75,9 +78,9 @@
 }
 
 .stacki-publish-split > .stacki-publish-arrow {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-left: 1px solid color-mix(in srgb, var(--accent) 65%, black);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-inline-start: 1px solid color-mix(in srgb, var(--accent) 65%, black);
   width: 20px;
   min-width: 20px;
   padding-inline: 0;
@@ -97,7 +100,7 @@
 }
 .stacki-publish-split[data-state='current'] > .stacki-publish-arrow,
 .stacki-publish-split[data-state='unconfirmed'] > .stacki-publish-arrow {
-  border-left: 0;
+  border-inline-start: 0;
   background: var(--bg-input);
   color: var(--text-dim);
 }
@@ -116,7 +119,7 @@
 .stacki-publish-menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: 100;
   display: grid;
   gap: 4px;
@@ -132,7 +135,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  text-align: left;
+  text-align: start;
 }
 .stacki-publish-menu button > svg {
   width: 16px;
@@ -248,7 +251,7 @@
   height: 18px;
   min-height: 0;
   padding: 0;
-  margin-left: auto;
+  margin-inline-start: auto;
   border: 0;
   border-radius: 999px;
   background: var(--bg-active);
@@ -258,7 +261,7 @@
   content: '';
   position: absolute;
   top: 3px;
-  left: 3px;
+  inset-inline-start: 3px;
   width: 12px;
   height: 12px;
   border-radius: 50%;
@@ -269,6 +272,10 @@
 }
 .publish-target-switch:checked::before {
   transform: translateX(12px);
+}
+/* The knob starts at the inline start, so in a right-to-left layout it slides the other way. */
+:root[dir='rtl'] .publish-target-switch:checked::before {
+  transform: translateX(-12px);
 }
 .publish-settings .publish-target-switch:disabled {
   cursor: default;
@@ -427,7 +434,7 @@
   padding: 12px;
   border-radius: var(--radius);
   background: var(--bg-input);
-  text-align: left;
+  text-align: start;
 }
 .publish-status-results > div > span {
   flex: 1;
@@ -467,7 +474,7 @@
 .publish-settings [data-loading='true'] .dd-trigger::after {
   content: '';
   position: absolute;
-  left: 10px;
+  inset-inline-start: 10px;
   top: 50%;
   width: 56%;
   height: 12px;
@@ -531,7 +538,7 @@
 
 .publish-dropdown .dd-check {
   order: 1;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .publish-field-actions {
@@ -556,7 +563,7 @@
 .publish-settings-loading {
   position: absolute;
   top: 22px;
-  right: 20px;
+  inset-inline-end: 20px;
   visibility: hidden;
   animation: none;
 }
@@ -598,7 +605,7 @@
 
 .publish-dropdown .dd-description {
   flex: 0 0 6ch;
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-dim);
   font-size: 10px;
 }
@@ -607,5 +614,5 @@
 }
 /* The check precedes the description in markup but follows it visually via order. */
 .publish-dropdown .dd-option:has(.dd-description) .dd-check {
-  margin-left: 0;
+  margin-inline-start: 0;
 }

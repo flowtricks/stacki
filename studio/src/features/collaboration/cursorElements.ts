@@ -56,11 +56,11 @@ const cursorStyles = `
 :host([hidden]) { display: none !important; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-.collaborator-cursor { position: absolute; left: 0; top: 0; color: var(--peer-color); pointer-events: none; }
+.collaborator-cursor { position: absolute; left: 0 /* physical: placed at pointer coordinates */; top: 0; color: var(--peer-color); pointer-events: none; }
 .cursor-body { transform: scale(var(--cursor-inverse)); transform-origin: top left; }
 .cursor-body svg { display: block; width: 24px; height: 28px; fill: currentColor; stroke: white; stroke-width: 1.5; filter: drop-shadow(0 1px 2px #0005); }
 .local-cursor svg, .cursor-editor svg { visibility: hidden; }
-.cursor-label { position: absolute; left: 18px; top: 22px; width: max-content; max-width: 240px; color: white; text-align: left; }
+.cursor-label { position: absolute; left: 18px /* physical: beside the top-left arrow */; top: 22px; width: max-content; max-width: 240px; color: white; text-align: left /* physical: beside the top-left arrow */; }
 .cursor-name { background: var(--peer-color); border-radius: 4px; padding: 3px 7px; max-width: 180px; width: max-content; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .cursor-text { position: relative; background: var(--peer-color); border-radius: 0 6px 6px; padding: 6px 9px; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 2px 8px #0003; }
 .cursor-text:empty { display: none; }

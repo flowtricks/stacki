@@ -36,7 +36,8 @@
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  padding: 8px 8px 8px 12px;
+  padding-block: 8px;
+  padding-inline: 12px 8px;
   border-radius: 8px;
   background: var(--bg-hover);
   font-size: 12px;
@@ -65,13 +66,13 @@
   display: flex;
 }
 .cms-connect-split > button:first-child {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
 }
 .cms-connect-split > .cms-connect-arrow {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-left: 1px solid #1b1b1b;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-inline-start: 1px solid #1b1b1b;
   width: 24px;
   min-width: 24px;
   padding-inline: 0;
@@ -83,7 +84,7 @@
 .cms-connect-menu {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
+  inset-inline-start: 0;
   z-index: 100;
   display: grid;
   gap: 4px;
@@ -99,7 +100,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  text-align: left;
+  text-align: start;
 }
 .cms-sanity-sign-in .modal-header {
   display: flex;
@@ -177,7 +178,7 @@
 .cms-connect-status {
   position: absolute;
   top: -3px;
-  right: -3px;
+  inset-inline-end: -3px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -243,7 +244,7 @@
   color: var(--text-dim);
 }
 .emdash-field .emdash-field-kind {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-faint);
 }
 .emdash-guide {
@@ -284,7 +285,7 @@
 }
 .emdash-dialog-header .emdash-dialog-close {
   /* The icon, not its padding, meets the content's right edge. */
-  margin-right: -6px;
+  margin-inline-end: -6px;
 }
 .modal-body.emdash-dialog-body {
   min-height: 0;
@@ -296,7 +297,8 @@
   gap: var(--emdash-gap);
   /* The stable gutter holds the scrollbar's 8px, so the right padding gives that much back: the content keeps the edges
      the header and the cards were laid out on, with or without a bar. */
-  padding: var(--emdash-gap) calc(var(--emdash-pad) - 8px) var(--emdash-pad) var(--emdash-pad);
+  padding-block: var(--emdash-gap) var(--emdash-pad);
+  padding-inline: var(--emdash-pad) calc(var(--emdash-pad) - 8px);
   font-size: 12px;
 }
 .emdash-dialog-body * {
@@ -370,17 +372,20 @@
   margin-top: 0;
 }
 /* Code in a card of its own: the same inner padding on every side, the copy button in a reserved corner. */
+/* Commands and code read left to right in every language. */
 .emdash-code {
+  direction: ltr;
   position: relative;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.25);
 }
 .emdash-code pre {
   margin: 0;
-  padding: var(--emdash-gap-small) 36px var(--emdash-gap-small) var(--emdash-gap);
+  padding-block: var(--emdash-gap-small);
+  padding-inline: var(--emdash-gap) 36px;
   overflow-x: hidden;
   white-space: pre-wrap;
-  text-align: left;
+  text-align: start;
 }
 /* Words: break at spaces, never inside a highlighted token (react-dom, --no-audit stay whole). */
 .emdash-code[data-wrap='words'] pre {
@@ -398,7 +403,7 @@
 .emdash-code .emdash-code-copy {
   position: absolute;
   top: 4px;
-  right: 4px;
+  inset-inline-end: 4px;
 }
 .emdash-install-files,
 .emdash-install-steps {
@@ -440,7 +445,7 @@
 }
 .emdash-install-status > span:not(.progress-ring) {
   flex: 1;
-  text-align: left;
+  text-align: start;
   color: var(--text-dim);
 }
 .emdash-install-status > button {
@@ -457,7 +462,7 @@
   overscroll-behavior: contain;
 }
 .emdash-install-log .emdash-code-copy {
-  right: 12px;
+  inset-inline-end: 12px;
 }
 .emdash-actions {
   display: flex;

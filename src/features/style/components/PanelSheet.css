@@ -4,8 +4,8 @@
 .panel-sheet.panel-sheet {
   position: fixed;
   z-index: var(--z-modal);
-  left: var(--style-panel-left, auto);
-  right: auto;
+  left: var(--style-panel-left, auto); /* physical: panel left measured in JS */
+  right: auto; /* physical: pairs with measured left */
   top: calc(var(--style-panel-top, 0px) + var(--style-panel-height, 100vh) / 2);
   width: var(--style-panel-width, 320px);
   max-width: var(--style-panel-width, 100vw);

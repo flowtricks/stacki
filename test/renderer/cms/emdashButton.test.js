@@ -548,7 +548,13 @@ test('every locale holds the same EmDash keys, and the ones this dialog uses', (
   for (const gone of ['emdash.absent.hint', 'emdash.absent.create', 'emdash.absent.newSite', 'emdash.install.warning.uncommittedChanges']) {
     assert.ok(!english.includes(gone), `${gone} is removed`);
   }
-  for (const locale of ['es', 'fr', 'de', 'ptBR']) {
+  // Every catalog directory; the catalog-parity test ties the directories to the locale list.
+  const directories = fs
+    .readdirSync(repoPath('shared/properties/i18n/messages'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  assert.ok(directories.length >= 18);
+  for (const locale of directories.filter((name) => name !== 'en')) {
     assert.deepEqual(keysOf(locale), english, `${locale} has the same keys as en`);
   }
 });

@@ -41,7 +41,7 @@
 }
 .canvas-drop-tag {
   position: absolute;
-  left: 0;
+  left: 0; /* physical: tag drawn in page coordinates */
   bottom: 100%;
   display: inline-flex;
   align-items: center;
@@ -57,7 +57,7 @@
 .canvas-drop-tag.inside {
   bottom: auto;
   top: 0;
-  border-radius: 0 0 3px 0;
+  border-radius: 0 0 3px 0; /* physical: tag drawn in page coordinates */
 }
 .canvas-drop-parent[data-kind='component'] .canvas-drop-tag {
   background: var(--green);

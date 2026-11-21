@@ -26,9 +26,9 @@ export interface PanelRowProps {
   readonly onActivate: () => void;
 }
 
-/** One row's left inset: the panel's 8px, then 14px per level, as the Pages tree indents. */
-function indentOf(depth: number): { readonly paddingLeft: number } {
-  return { paddingLeft: 8 + depth * 14 };
+/** One row's inset at its start: the panel's 8px, then 14px per level, as the Pages tree indents. */
+function indentOf(depth: number): { readonly paddingInlineStart: number } {
+  return { paddingInlineStart: 8 + depth * 14 };
 }
 
 export function PanelRow(props: PanelRowProps) {

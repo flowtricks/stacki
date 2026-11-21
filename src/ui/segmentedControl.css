@@ -38,7 +38,7 @@
   z-index: 0;
   top: var(--seg-pad);
   bottom: var(--seg-pad);
-  left: 0;
+  left: 0; /* physical: translateX from offsetLeft */
   width: 0;
   border-radius: var(--radius-sm);
   /* Active segment = a lifted control pill. Surface-aware like the dropdown button
@@ -149,7 +149,7 @@
   position: fixed;
 }
 .u-segmented-popup-arrow {
-  left: var(--tip-arrow-left, 50%);
+  left: var(--tip-arrow-left, 50%); /* physical: arrow offset measured on screen */
   transform: translateX(-50%);
 }
 .u-segmented-popup.is-above .u-segmented-popup-arrow {

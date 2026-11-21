@@ -43,7 +43,7 @@
   padding: 3px;
 }
 .ai-header .panel-header-back {
-  margin-left: var(--panel-header-back-offset);
+  margin-inline-start: var(--panel-header-back-offset);
 }
 .ai-body {
   display: flex;
@@ -256,7 +256,9 @@
   cursor: pointer;
   width: fit-content;
 }
+/* Error details are technical output: they read left to right in every language. */
 .ai-details pre {
+  direction: ltr;
   margin: 4px 0 0;
   padding: 6px 8px;
   max-height: 120px;

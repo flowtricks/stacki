@@ -5,55 +5,55 @@
 }
 .window-resize-n {
   top: 0;
-  left: 8px;
-  right: 8px;
+  left: 8px; /* physical: fixed window edge handle */
+  right: 8px; /* physical: fixed window edge handle */
   height: 6px;
   cursor: ns-resize;
 }
 .window-resize-s {
   bottom: 0;
-  left: 8px;
-  right: 8px;
+  left: 8px; /* physical: fixed window edge handle */
+  right: 8px; /* physical: fixed window edge handle */
   height: 6px;
   cursor: ns-resize;
 }
 .window-resize-e {
-  right: 0;
+  right: 0; /* physical: fixed window edge handle */
   top: 8px;
   bottom: 8px;
   width: 6px;
   cursor: ew-resize;
 }
 .window-resize-w {
-  left: 0;
+  left: 0; /* physical: fixed window edge handle */
   top: 8px;
   bottom: 8px;
   width: 6px;
   cursor: ew-resize;
 }
 .window-resize-se {
-  right: 0;
+  right: 0; /* physical: fixed window edge handle */
   bottom: 0;
   width: 16px;
   height: 16px;
   cursor: nwse-resize;
 }
 .window-resize-nw {
-  left: 0;
+  left: 0; /* physical: fixed window edge handle */
   top: 0;
   width: 16px;
   height: 16px;
   cursor: nwse-resize;
 }
 .window-resize-sw {
-  left: 0;
+  left: 0; /* physical: fixed window edge handle */
   bottom: 0;
   width: 16px;
   height: 16px;
   cursor: nesw-resize;
 }
 .window-resize-ne {
-  right: 0;
+  right: 0; /* physical: fixed window edge handle */
   top: 0;
   width: 16px;
   height: 16px;

@@ -64,7 +64,7 @@
   color: var(--text-dim);
   font-size: 13px;
   font-weight: 500;
-  text-align: left;
+  text-align: start;
   white-space: nowrap;
 }
 .app-settings-tabs [role='tab'] svg {
@@ -100,7 +100,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 20px 16px 8px var(--settings-gutter);
+  padding-block: 20px 8px;
+  padding-inline: var(--settings-gutter) 16px;
   border-bottom: 1px solid var(--border);
 }
 .app-settings-header h3 {
@@ -261,7 +262,7 @@
 .app-settings-save-row .app-settings-saved {
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
 }
 .app-settings-saved {
   flex: none;
@@ -294,7 +295,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 8px 8px 12px;
+  padding-block: 8px;
+  padding-inline: 12px 8px;
   border-radius: 6px;
   background: rgba(255, 155, 146, 0.08);
   color: #ff9b92;
@@ -406,13 +408,14 @@
   align-items: center;
   gap: 4px;
   min-height: 24px;
-  padding: 0 4px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
   border-radius: 6px;
   background: #ffffff10;
   font-size: 12px;
 }
 .app-folder-chip:not(:has(button)) {
-  padding-right: 8px;
+  padding-inline-end: 8px;
 }
 .app-folder-chip button {
   display: inline-flex;
@@ -499,7 +502,7 @@
 }
 /* A data file's export, under its file in the data picker list. */
 .app-folder-toggle.is-nested {
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }
 .app-folder-link {
   display: inline;

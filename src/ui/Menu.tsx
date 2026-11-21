@@ -28,7 +28,7 @@ import { centralIcon } from './central/CentralIcon';
 import { info as centralInfo } from './central/centralGeometry';
 import { assertMenuEntries, decideKey, initialIndex, isMenuRow, isNavigable, placeInfoTip, placeMenu } from './menuModel';
 import { tooltipHost, useDelayedPlacement } from './delayedTooltip';
-import type { InfoTipPlacement, MenuEntry, MenuPlacement, MenuPosition, MenuRow } from './menuModel';
+import type { Box, InfoTipPlacement, MenuEntry, MenuPlacement, MenuPosition, MenuRow, Size } from './menuModel';
 import './menu.css';
 
 export type { MenuEntry, MenuItem, MenuSubmenu, MenuToggle, MenuHeading, MenuNote, MenuDivider, MenuPlacement } from './menuModel';
@@ -114,7 +114,12 @@ function MenuLayer(props: LayerProps) {
   useMenuPlacement({ surface, anchor: props.anchor, placement: props.placement, open: props.open, setPosition });
   const widthPx = Math.max(props.widthPxMin, 0);
   if (estimate.current === undefined && props.anchor) {
-    estimate.current = placeMenu(boxOf(props.anchor), { width: widthPx, height: estimateHeightPx(props.entries) }, windowSize(), props.placement);
+    estimate.current = placeMenuInReadingDirection(
+      boxOf(props.anchor),
+      { width: widthPx, height: estimateHeightPx(props.entries) },
+      windowSize(),
+      props.placement,
+    );
   }
   const shown = position ?? estimate.current;
   const style: CSSProperties = {
@@ -169,9 +174,22 @@ function useMenuPlacement({ surface, anchor, placement, open, setPosition }: Pla
     if (rectangle.width > 0 && rectangle.height > 0) {
       // A menu that scrolls was capped to the window: its natural height is its content's.
       const height = Math.max(rectangle.height, surface.scrollHeight);
-      setPosition(placeMenu(boxOf(anchor), { width: rectangle.width, height }, windowSize(), placement));
+      setPosition(placeMenuInReadingDirection(boxOf(anchor), { width: rectangle.width, height }, windowSize(), placement));
     }
   }, [surface, anchor, placement, open, setPosition]);
+}
+
+// A placement names reading-order sides: `below-start` lines the menu up with where its trigger's text starts, and a
+// submenu opens on the side reading continues to. In a right-to-left interface that is the right edge and the left
+// side, so the window is mirrored, the menu placed in the mirror, and the result mirrored back. Left to right is unchanged.
+function placeMenuInReadingDirection(anchor: Box, size: Size, viewport: Size, placement: MenuPlacement): MenuPosition {
+  if (document.documentElement.dir !== 'rtl') {
+    return placeMenu(anchor, size, viewport, placement);
+  }
+  const mirrored = placeMenu({ ...anchor, left: viewport.width - anchor.left - anchor.width }, size, viewport, placement);
+  const left = viewport.width - mirrored.left - size.width;
+  assert(Number.isFinite(left), 'placeMenuInReadingDirection: a mirrored menu has a finite left edge');
+  return { ...mirrored, left };
 }
 
 function boxOf(element: HTMLElement) {

@@ -536,7 +536,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
               <DataRow key={child.path} node={child} depth={depth + 1} showPath={false} root={from} state={state} onPick={onPick} onStepItem={onStepItem} />
             ))}
             {shown.unread && (
-              <div className="dp-loading" style={{ paddingLeft: dataRowIndentPx(depth + 1) }}>
+              <div className="dp-loading" style={{ paddingInlineStart: dataRowIndentPx(depth + 1) }}>
                 {translate('props.dataPicker.reading')}
               </div>
             )}
@@ -546,7 +546,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
             <DataRow key={child.path} node={child} depth={depth + 1} showPath={false} root={from} state={state} onPick={onPick} onStepItem={onStepItem} />
           ))
         ) : node.lazy ? (
-          <div className="dp-loading" style={{ paddingLeft: dataRowIndentPx(depth + 1) }}>
+          <div className="dp-loading" style={{ paddingInlineStart: dataRowIndentPx(depth + 1) }}>
             {translate('props.dataPicker.reading')}
           </div>
         ) : undefined)}

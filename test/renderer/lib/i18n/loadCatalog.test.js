@@ -14,14 +14,14 @@ const directory = repoPath('node_modules/.stacki-test');
 fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'load-catalog.bundle.cjs');
 buildSync({
-  stdin: { contents: `export * from './src/lib/i18n/loadCatalog.ts';`, resolveDir: ROOT },
+  stdin: { contents: `export * from './src/lib/i18n/loadCatalog.ts'; export { LOCALES } from './shared/core/i18n/locales.ts';`, resolveDir: ROOT },
   outfile: output,
   bundle: true,
   platform: 'node',
   format: 'cjs',
   logLevel: 'silent',
 });
-const { createCatalogLoader, loadCatalog } = require(output);
+const { createCatalogLoader, loadCatalog, LOCALES } = require(output);
 
 const good = { 'a.b': 'x' };
 function importers(overrides) {
@@ -30,7 +30,7 @@ function importers(overrides) {
     calls.push(locale);
     return Promise.resolve({ messages: good });
   };
-  const table = { en: make('en'), es: make('es'), fr: make('fr'), de: make('de'), 'pt-BR': make('pt-BR'), ...overrides };
+  const table = { ...Object.fromEntries(LOCALES.map((locale) => [locale, make(locale)])), ...overrides };
   return { table, calls };
 }
 
@@ -76,7 +76,8 @@ test('a corrupt module is refused, not trusted', async () => {
 });
 
 test('every shipped language loads and parses; English is bundled', async () => {
-  for (const locale of ['en', 'es', 'fr', 'de', 'pt-BR']) {
+  assert.ok(LOCALES.length >= 18);
+  for (const locale of LOCALES) {
     const result = await loadCatalog(locale);
     assert.equal(result.ok, true, locale);
     assert.ok(Object.keys(result.value).length > 10);

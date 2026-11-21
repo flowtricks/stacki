@@ -134,7 +134,13 @@ test('the shimmer stops under reduced motion, and the shapes are fills with no b
 });
 
 test('the visually hidden status text is translated in every catalog', () => {
-  for (const locale of ['en', 'es', 'fr', 'de', 'ptBR']) {
+  // Every catalog directory; the catalog-parity test ties the directories to the locale list.
+  const directories = fs
+    .readdirSync(repoPath('shared/properties/i18n/messages'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  assert.ok(directories.length >= 18);
+  for (const locale of directories) {
     const catalog = fs.readFileSync(repoPath(`shared/properties/i18n/messages/${locale}/ui.ts`), 'utf8');
     assert.match(catalog, /'ui\.loading': '[^']+'/, `${locale} has ui.loading`);
   }

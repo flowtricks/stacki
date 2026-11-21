@@ -88,13 +88,13 @@
 }
 
 .u-text-align-left {
-  text-align: left;
+  text-align: left; /* physical: utility named for physical side */
 }
 .u-text-align-center {
   text-align: center;
 }
 .u-text-align-right {
-  text-align: right;
+  text-align: right; /* physical: utility named for physical side */
 }
 
 /* ──────────────────────────── Spacing utilities ──────────────────────────── */
@@ -415,7 +415,7 @@ body.is-scrubbing * {
 .u-field_label::after {
   content: '';
   position: absolute;
-  right: calc(var(--space-5) * -1);
+  inset-inline-end: calc(var(--space-5) * -1);
   top: 50%;
   transform: translateY(-50%);
   width: var(--border-width-default);
@@ -428,7 +428,8 @@ body.is-scrubbing * {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 var(--space-6) 0 var(--space-7);
+  padding-block: 0;
+  padding-inline: var(--space-7) var(--space-6);
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-regular);
@@ -557,12 +558,12 @@ body.is-scrubbing * {
    down-arrow centered on the hovered segment (`--tip-arrow-right`). */
 .u-segmented-tooltip {
   position: absolute;
-  right: 0;
+  right: 0; /* physical: tooltip arrow offset measured in JS */
   bottom: calc(100% + var(--space-3));
 }
 .u-segmented-tooltip-arrow {
   top: 100%;
-  right: var(--tip-arrow-right, 50%);
+  right: var(--tip-arrow-right, 50%); /* physical: tooltip arrow offset measured in JS */
   transform: translateX(50%);
   border-top-color: var(--color-bg-surface-overlay);
 }
@@ -574,6 +575,8 @@ body.is-scrubbing * {
    width / thumb position, --u-slider-ticks = notch count (both set inline). */
 
 .u-slider {
+  /* Pointer math reads x from the left edge, so the track never mirrors. */
+  direction: ltr;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -604,7 +607,7 @@ body.is-scrubbing * {
    select, active tab) sitting on the same surface. */
 .u-slider-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0 auto 0 0; /* physical: fill follows pointer x math */
   width: var(--u-slider-pct, 0%);
   background: var(--surface-control);
   z-index: 0;
@@ -612,8 +615,8 @@ body.is-scrubbing * {
 /* Short tick notches, centered vertically. Revealed on hover/focus. */
 .u-slider-ticks {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 0; /* physical: ticks inside LTR slider track */
+  right: 0; /* physical: ticks inside LTR slider track */
   top: 50%;
   height: 8px;
   transform: translateY(-50%);
@@ -628,7 +631,7 @@ body.is-scrubbing * {
 .u-slider-thumb {
   position: absolute;
   top: 50%;
-  left: var(--u-slider-pct, 0%);
+  left: var(--u-slider-pct, 0%); /* physical: thumb follows pointer x math */
   width: 3px;
   height: 12px;
   border-radius: 1.5px;
@@ -661,7 +664,7 @@ body.is-scrubbing * {
   z-index: 2;
   flex: none;
   min-width: 34px;
-  text-align: right;
+  text-align: end;
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
@@ -671,6 +674,8 @@ body.is-scrubbing * {
 /* A thin, whole-track-draggable bar with a small thumb (text-shadow X/Y/Blur, and
    Opacity). Distinct from .u-slider (which carries an inline label/value). */
 .u-drag-slider {
+  /* Pointer math reads x from the left edge, so the track never mirrors. */
+  direction: ltr;
   position: relative;
   flex: 1 1 auto;
   /* Everything inside it is absolutely positioned, so its content width is 0 —
@@ -691,8 +696,7 @@ body.is-scrubbing * {
 .u-drag-slider::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   height: 3px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-text-primary) 16%, transparent);
@@ -700,7 +704,7 @@ body.is-scrubbing * {
 /* Fill from the left edge to the thumb. */
 .u-drag-slider-fill {
   position: absolute;
-  left: 0;
+  left: 0; /* physical: fill follows pointer x math */
   width: var(--pct, 0%);
   height: 3px;
   border-radius: 999px;
@@ -708,7 +712,7 @@ body.is-scrubbing * {
 }
 .u-drag-slider-thumb {
   position: absolute;
-  left: var(--pct, 0%);
+  left: var(--pct, 0%); /* physical: thumb follows pointer x math */
   transform: translateX(-50%);
   width: 4px;
   height: 16px;
@@ -806,7 +810,7 @@ body.is-scrubbing * {
    stays whole in the DOM and refits at any width. */
 .u-select-label.is-path {
   direction: rtl;
-  text-align: left;
+  text-align: left; /* physical: rtl ellipsis trick on path */
 }
 .u-select-link-tip-code {
   display: block;
@@ -818,8 +822,8 @@ body.is-scrubbing * {
    the clamp's pixel cap is the menu's outer width, padding included. */
 .u-select.is-link .u-select-list {
   box-sizing: border-box;
-  left: 0;
-  right: auto;
+  inset-inline-start: 0;
+  inset-inline-end: auto;
   width: 20rem;
   max-width: calc(100vw - 16px);
 }
@@ -1014,7 +1018,7 @@ body.is-scrubbing * {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--color-text-tertiary);
 }
 .u-select-pin {
@@ -1099,8 +1103,7 @@ body.is-scrubbing * {
   position: absolute;
   z-index: var(--z-modal);
   top: calc(100% + var(--space-2));
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -1247,7 +1250,7 @@ body.is-scrubbing * {
 /* Nested under a group subheader: indented by a checkmark column plus a gap, the
    offset the leading check gave these rows before it moved to the end. */
 .u-select-option.is-indented {
-  padding-left: calc(var(--space-1) + 16px + var(--space-2));
+  padding-inline-start: calc(var(--space-1) + 16px + var(--space-2));
 }
 
 /* Non-selectable group subheader (e.g. a component grouping its embeds). */
@@ -1302,7 +1305,7 @@ body.is-scrubbing * {
    so a short window shrinks it (and the rows scroll) rather than letting it run off the edge. */
 .embed-editor_context-select .u-select-list {
   max-height: min(36rem, 80vh, var(--select-room, 100vh));
-  right: auto;
+  inset-inline-end: auto;
   width: 100%;
   min-width: 17.5rem;
   max-width: 20rem;
@@ -1351,7 +1354,7 @@ body.is-scrubbing * {
 .embed-editor_context-select .u-select-heading .u-select-icon {
   width: 1.25rem;
   justify-content: flex-start;
-  margin-right: -0.125rem;
+  margin-inline-end: -0.125rem;
 }
 .embed-editor_context-select .u-select-heading.has-tag .u-select-heading-label {
   font-family: var(--font-family-mono);
@@ -1401,7 +1404,7 @@ body.is-scrubbing * {
 }
 /* A breakpoint's condition, beside its name, muted. */
 .u-select-detail {
-  margin-left: 0.5rem;
+  margin-inline-start: 0.5rem;
   color: var(--color-text-tertiary);
   font-size: 0.75rem;
   font-weight: var(--font-weight-regular, 400);
@@ -1478,7 +1481,7 @@ body.is-scrubbing * {
 .u-select-action {
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: 50%; /* physical: centred with physical translate */
   translate: -50% -50%;
   display: inline-flex;
   align-items: center;
@@ -1570,7 +1573,7 @@ body.is-scrubbing * {
      can then never pass the label (always inside the panel), so it can't overflow
      the right — the common case for right-hand fields. FieldLabel's shift handles
      the rare left-edge overflow (a margin-based check, not window-dependent). */
-  right: 0;
+  inset-inline-end: 0;
   /* A DEFINITE width (not shrink-to-fit against the tiny label wrap) so the row is
      truly width-bounded and a long selector wraps instead of stretching the menu.
      Clamped on very narrow panels; FieldLabel's shift keeps it in view. */
@@ -1604,7 +1607,7 @@ body.is-scrubbing * {
   cursor: pointer;
   font-family: var(--font-family-sans);
   font-size: var(--font-size-sm);
-  text-align: left;
+  text-align: start;
 }
 .u-field-label-menu-item:hover,
 .u-field-label-menu-item:focus-visible {
@@ -1789,7 +1792,7 @@ body.is-scrubbing * {
    of it sat the `#` on the border. The centred channel fields never showed
    this, because centred text is nowhere near either edge. */
 .u-color-field.is-wide .u-color-field-input {
-  text-align: left;
+  text-align: start;
   padding-inline: var(--space-4);
 }
 /* Label row (matches the input columns above): HEX and A are static labels; the
@@ -1812,7 +1815,7 @@ body.is-scrubbing * {
    quiet until it is the one being written. */
 .u-color-mode.is-hex {
   flex: 1.8;
-  text-align: left;
+  text-align: start;
   padding: 4px var(--space-4);
   border: none;
   border-radius: var(--radius-sm);

@@ -845,7 +845,7 @@ test('a nested object shows indented and collapsible, and choosing its fields is
   await debounced();
   await settled();
   await click(byText('.page-template-trigger', '2 fields · 3 items'));
-  const indent = (label) => Number.parseFloat(row(label).style.paddingLeft);
+  const indent = (label) => Number.parseFloat(row(label).style.paddingInlineStart);
   assert.equal(shownValue('author'), '2 fields', 'an object says how many fields it holds');
   assert.equal(row('name'), undefined, 'an object starts closed');
   await click(row('author').querySelector('.dp-twist'));

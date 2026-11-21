@@ -9,7 +9,7 @@
 /* Keep intrinsic widths measurable without exposing duplicate controls to focus or touch. */
 .preview-toolbar .is-overflow {
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 0;
   visibility: hidden;
   pointer-events: none;

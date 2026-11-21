@@ -141,7 +141,7 @@
 }
 .property-conditions ul {
   margin: 6px 0 0;
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }
 .property-editor .property-flags label {
   flex-direction: row;
@@ -189,7 +189,7 @@
 .property-add {
   position: absolute;
   top: 8px;
-  right: 12px;
+  inset-inline-end: 12px;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -221,12 +221,12 @@
   position: relative;
 }
 .property-field-head > .bind-handle {
-  left: -6px;
+  inset-inline-start: -6px;
   bottom: -12px;
 }
 .property-field-head > .bind-handle:hover:not(:disabled),
 .property-field-head > .bind-handle.on {
-  left: -9px;
+  inset-inline-start: -9px;
   bottom: -15px;
 }
 .property-field:hover > .property-field-head > .bind-handle {
@@ -235,7 +235,7 @@
 }
 /* Unset, the title sits as Kind's does, its {} 4px after the words; set, the blue fill keeps its padding. */
 .property-field-head > .prop-label:not(.set) {
-  padding-right: 0;
+  padding-inline-end: 0;
 }
 .property-type .dd-trigger,
 .property-default .dd-trigger {
@@ -284,8 +284,8 @@
 
 /* A row's kind, after its name: muted, at the row's end. */
 .property-row-kind {
-  margin-left: auto;
-  padding-left: 8px;
+  margin-inline-start: auto;
+  padding-inline-start: 8px;
   color: var(--text-dim);
   font-size: 11px;
   white-space: nowrap;
@@ -300,7 +300,10 @@
   gap: 8px;
   color: var(--text-dim);
 }
+/* The chip names a variable in code: isolated left to right. */
 .property-chip {
+  direction: ltr;
+  unicode-bidi: isolate;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -335,7 +338,7 @@
   gap: 6px;
   padding: 6px 8px;
   border-radius: 5px;
-  text-align: left;
+  text-align: start;
   color: var(--text);
   background: var(--bg-input);
   overflow-wrap: anywhere;
@@ -367,7 +370,7 @@
   color: var(--accent);
   font-size: 11px;
   overflow-wrap: anywhere;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .property-share,
@@ -387,7 +390,7 @@
   color: inherit;
   font-size: 11px;
   line-height: 1.5;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .property-share-files,
@@ -400,5 +403,5 @@
 .property-share ul,
 .property-rename-files {
   margin: 2px 0 0;
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }

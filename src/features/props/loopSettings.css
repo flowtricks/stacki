@@ -67,15 +67,16 @@
 .loop-settings-header-tools {
   display: flex;
   align-items: center;
-  margin-left: auto;
-  margin-right: 4px;
+  margin-inline-start: auto;
+  margin-inline-end: 4px;
 }
 
 /* "Match all": a compact menu beside the add button. */
 .loop-settings-match {
   width: auto;
   height: 24px;
-  padding: 0 6px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 6px;
   font-size: 12px;
 }
 
@@ -107,12 +108,13 @@
   flex: 1 1 auto;
   min-width: 0;
   height: 30px;
-  padding: 0 34px 0 10px;
+  padding-block: 0;
+  padding-inline: 10px 34px;
   background: transparent;
   color: var(--text);
   font-size: 12px;
   line-height: 30px;
-  text-align: left;
+  text-align: start;
 }
 .loop-settings-item-main:hover:not(:disabled) {
   background: transparent;
@@ -144,7 +146,7 @@
 /* Shown on hover (and keyboard focus), so the rows read as text at rest. */
 .loop-settings-item-remove {
   position: absolute;
-  right: 4px;
+  inset-inline-end: 4px;
   top: 50%;
   display: inline-flex;
   align-items: center;
@@ -238,7 +240,8 @@
   align-items: flex-start;
   gap: 6px;
   margin: 4px 12px;
-  padding: 8px 6px 8px 10px;
+  padding-block: 8px;
+  padding-inline: 10px 6px;
   border-radius: 8px;
   background: var(--accent-soft);
   color: var(--text);
@@ -339,8 +342,8 @@
   text-overflow: ellipsis;
 }
 .loop-lineage-detail-inline {
-  margin-left: auto;
-  padding-left: 8px;
+  margin-inline-start: auto;
+  padding-inline-start: 8px;
   color: var(--text-faint);
   font-size: 11px;
   white-space: nowrap;
@@ -355,7 +358,7 @@
   font-weight: 600;
 }
 .loop-lineage-detail {
-  padding-left: 18px;
+  padding-inline-start: 18px;
   color: var(--text-dim);
   font-size: 11px;
   line-height: 1.5;
@@ -395,7 +398,8 @@
    reads as titles. The row itself is what drags. */
 .loop-settings-picked {
   cursor: grab;
-  padding: 0 34px 0 4px;
+  padding-block: 0;
+  padding-inline: 4px 34px;
   min-height: 30px;
 }
 .loop-settings-item-drag {
@@ -412,7 +416,7 @@
 .loop-settings-picked-title {
   flex: 1 1 auto;
   min-width: 0;
-  padding-left: 4px;
+  padding-inline-start: 4px;
   color: var(--text);
   font-size: 12px;
   white-space: nowrap;
@@ -538,7 +542,7 @@
 .loop-settings-picked .loop-settings-thumb {
   width: 20px;
   height: 20px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   border-radius: 3px;
 }
 .loop-settings-thumb img {
@@ -594,7 +598,7 @@
 .loop-settings-editor-control > .loop-bind-dot {
   position: absolute;
   top: -6px;
-  left: -6px;
+  inset-inline-start: -6px;
   z-index: 2;
 }
 .loop-bind-dot:hover:not(:disabled) {
@@ -727,14 +731,15 @@
   width: 100%;
   min-width: 0;
   height: 30px;
-  padding: 0 8px 0 10px;
+  padding-block: 0;
+  padding-inline: 10px 8px;
   border: none;
   border-radius: 6px;
   background: rgba(146, 116, 255, 0.28);
   color: #c9bbff;
   font: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
 }
 .loop-linked-bar:hover:not(:disabled),
 .loop-linked-bar[aria-expanded='true'] {
@@ -773,7 +778,7 @@
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
 }
 .loop-linked-item:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -798,7 +803,7 @@
   font-weight: 600;
 }
 .loop-linked-prop {
-  padding-left: 28px;
+  padding-inline-start: 28px;
 }
 .loop-linked-check {
   flex: 0 0 auto;
@@ -885,7 +890,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  text-align: left;
+  text-align: start;
   justify-content: flex-start;
 }
 .loop-source-extras .dp-row:hover:not(:disabled) {
@@ -903,7 +908,7 @@
   background: transparent;
   color: var(--text-dim);
   font: inherit;
-  text-align: left;
+  text-align: start;
   justify-content: flex-start;
 }
 .loop-field-extras .dp-row:hover:not(:disabled) {
@@ -957,7 +962,7 @@
   color: var(--text-dim);
   font: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
 }
 .loop-quiet-row:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -975,7 +980,7 @@
   justify-content: flex-end;
 }
 .loop-source-extras .dp-preview {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-faint);
 }
 
@@ -997,7 +1002,7 @@
    the space before its label, so the row's text never moves. */
 .loop-settings-item-grip {
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 50%;
   display: flex;
   width: 10px;
@@ -1018,7 +1023,7 @@
 }
 /* The label's flex gap already is the toggle's own 4px margin; both would double it. */
 .loop-settings-label > .prop-expr-toggle {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .loop-settings-section > .prop-field-note {
   margin: 0;
@@ -1150,7 +1155,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-left: 12px;
+  margin-inline-start: 12px;
   padding: 8px;
   border-radius: 6px;
   background: var(--bg-hover);
@@ -1171,10 +1176,10 @@
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
 }
 .list-item-nested-count {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-dim);
 }
 .list-item-nested-body {
@@ -1182,7 +1187,7 @@
   flex-direction: column;
   gap: 6px;
   margin-top: 6px;
-  padding-left: 10px;
+  padding-inline-start: 10px;
 }
 .new-prop-note {
   color: var(--text-dim);
@@ -1209,14 +1214,15 @@
   gap: 8px;
   width: 100%;
   height: 28px;
-  padding: 0 8px 0 6px;
+  padding-block: 0;
+  padding-inline: 6px 8px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: #b9a6ff;
   font: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
 }
 .dp-new-prop:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -1225,14 +1231,15 @@
   color: var(--text-dim);
 }
 .dp-new-prop-reason {
-  padding: 0 8px 6px 28px;
+  padding-block: 0 6px;
+  padding-inline: 28px 8px;
   color: var(--text-dim);
   font-size: 11px;
 }
 .dp-kind-icon {
   display: inline-flex;
   flex: 0 0 auto;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   color: var(--text-dim);
 }
 /* Advice under an attribute's Name: muted words in a filled box. */
@@ -1301,7 +1308,7 @@
 .property-code-heading .prop-expr-toggle,
 .property-options-heading .prop-expr-toggle,
 .property-type-heading .prop-expr-toggle {
-  margin-left: 2px;
+  margin-inline-start: 2px;
 }
 .property-options:hover .prop-expr-toggle:not(.on),
 .new-prop-code-type:hover .prop-expr-toggle:not(.on) {
@@ -1328,8 +1335,7 @@
    a long type would widen the line and bring a scrollbar with it. */
 .expr-input.property-code .cm-placeholder {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  inset-inline: 8px;
   overflow: hidden;
   font-family: var(--mono);
   text-overflow: ellipsis;

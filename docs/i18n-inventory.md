@@ -215,7 +215,7 @@ Section headings and control labels sit in the `*Section.tsx` files (`Typography
 shared/properties/i18n/messages/
   en/<namespace>.ts      source of truth for that namespace; keys must start with "<namespace>."
   en/index.ts            merges every namespace; defines MessageKey
-  es/ fr/ de/ ptBR/      the same files, same keys
+  es/ fr/ de/ ptBR/ it/ nl/ pl/ tr/ ru/ id/ hi/ ar/ he/ ja/ ko/ zhCN/ zhTW/      the same files, same keys
 ```
 
 The namespace is the key's first segment: `style.typography.fontSize.label` lives in `en/style.ts`. One agent owns one or more
@@ -224,12 +224,12 @@ namespaces, so catalogs never conflict. See docs/i18n.md for how loading works.
 ### Steps
 
 1. Pick your namespace(s). Reuse `ui.*` for shared words; add to `ui` only words used across areas (`ui` is shared: append keys in your own run, do not reorder).
-2. **Add the key to `en/<ns>.ts` and to all four other locales' `<ns>.ts`**, in the same alphabetical position. A new namespace also needs its `index.ts` import and spread in all five locales (the parity test fails until it is there) and its files added to `studio/scripts/shared-source.json`.
+2. **Add the key to `en/<ns>.ts` and to every other locale's `<ns>.ts`** (17 languages, `LOCALES`), in the same alphabetical position. A new namespace also needs its `index.ts` import and spread in every locale (the parity test fails until it is there) and its files added to `studio/scripts/shared-source.json`.
 3. In the component: `const translate = useTranslate();` then `translate('style.size.width.label')`. Pass values as params: `translate('git.branch.delete', { branch })`.
 4. Never concatenate a translated fragment with a value or another fragment. One whole sentence per key.
 5. Plurals: a message may be `{ one: '{count} file', other: '{count} files' }`, called with `{ count }`. Check each language needs its categories.
 6. Rich text (a sentence with a `<code>` or a link inside): never translate around the markup by splitting a sentence over several keys. Ask A1 to add one small helper in `src/lib/i18n/` (proposed: `translateRich(key, { file: <code>…</code> })`, which splits the translated string on `{file}` and returns React nodes); until it exists, keep the markup at the start or end of the sentence and use two keys (`...before`, `...after`), and leave a `// review` comment.
-7. Translate to es, fr, de, pt-BR yourself, in the register already used (informal "du" in German). Mark doubtful lines `// review`. Keep product terms and placeholders identical.
+7. Translate to every shipped language yourself, in the register already used (informal "du" in German, "vous" in French, formal "вы" in Russian, です/ます in Japanese, 합니다 in Korean, "Anda" in Indonesian, "आप" in Hindi, neutral Modern Standard Arabic, gender-neutral infinitives in Hebrew). Plural messages carry exactly the forms each language selects (Russian and Polish one/few/many/other, Arabic all six, Japanese, Korean, Chinese and Indonesian `other` only); the parity test holds this. Mark doubtful lines `// review`. Keep product terms and placeholders identical.
 8. Do not change wording of existing English text while migrating. If a string is wrong, fix it in a separate change.
 9. Do not translate: see "Must stay English".
 10. aria-labels and tooltips count as UI text. Alt text for user content does not.

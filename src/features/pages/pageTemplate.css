@@ -133,7 +133,7 @@
   font-size: 11px;
 }
 .page-template-code-toggle {
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .page-template-code-toggle.is-on {
   background: rgba(255, 255, 255, 0.12);

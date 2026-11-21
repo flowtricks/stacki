@@ -228,8 +228,17 @@ export const GuideIcon = centralIcon(centralGuide);
 
 export const LayoutIcon = centralIcon(centralLayout);
 
-// A window with its right-hand column marked: the Style and Settings panel.
-export const PanelRightIcon = centralIcon(centralPanelRight);
+// The class `:root[dir='rtl'] .icon-mirror-rtl` (controls.css) flips: a chevron that means back, next or "opens to this side"
+// points the other way in a right-to-left language, where reading runs from right to left. The drawing itself never changes.
+function mirroredInRightToLeft(Icon: ReturnType<typeof centralIcon>): ReturnType<typeof centralIcon> {
+  return function MirroredIcon(props: IconProps & { readonly title?: string }) {
+    const className = props.className === undefined ? 'icon-mirror-rtl' : `icon-mirror-rtl ${props.className}`;
+    return <Icon {...props} className={className} />;
+  };
+}
+
+// A window with its right-hand column marked: the Style and Settings panel. It toggles the inspector, which sits at the inline end: on the left in a right-to-left language.
+export const PanelRightIcon = mirroredInRightToLeft(centralIcon(centralPanelRight));
 
 export const TextIcon = centralIcon(centralText);
 
@@ -248,9 +257,9 @@ export const PencilIcon = centralIcon(centralEdit);
 
 export const TagIcon = centralIcon(centralCode);
 
-export const ChevronLeftIcon = centralIcon(centralChevronLeft);
+export const ChevronLeftIcon = mirroredInRightToLeft(centralIcon(centralChevronLeft));
 
-export const ChevronRightIcon = centralIcon(centralChevronRight);
+export const ChevronRightIcon = mirroredInRightToLeft(centralIcon(centralChevronRight));
 
 /** A pushpin: what a table pins as its columns. */
 export const PinIcon = centralIcon(centralPin);

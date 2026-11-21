@@ -214,7 +214,7 @@ function TreeNode(props: TreeNodeProps) {
         // selection reads as one container. The tint follows the row's own colour.
         <div className={subtreeClassName({ rowSelected, family: navigatorFamily(node, { componentRow: view.component }) })}>
           {/* The guide drops from the parent's chevron; CSS shows it while the pointer is over the tree. */}
-          <span className="structure-guide" aria-hidden="true" style={{ left: navigatorGuideLeft(depth) }} />
+          <span className="structure-guide" aria-hidden="true" style={{ insetInlineStart: navigatorGuideLeft(depth) }} />
           {pseudoRow('before')}
           {listsChildren && <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />}
           {pseudoRow('after')}
@@ -262,7 +262,7 @@ function PseudoRow(props: {
       data-pseudo-of={props.nodeId}
       data-pseudo={props.pseudo}
       data-depth={props.depth}
-      style={{ paddingLeft: navigatorIndent(props.depth) }}
+      style={{ paddingInlineStart: navigatorIndent(props.depth) }}
       onMouseEnter={() => props.onHover(props.nodeId, props.pseudo)}
       onMouseLeave={props.onLeave}
       onClick={(event) => {
@@ -378,7 +378,7 @@ function TreeRow(props: TreeRowProps) {
       title={props.fragment ? fragmentTitle : undefined}
       className={rowClassName(props)}
       data-depth={props.depth}
-      style={{ paddingLeft: navigatorIndent(props.depth) }}
+      style={{ paddingInlineStart: navigatorIndent(props.depth) }}
       dropBehavior={treeRowDropBehavior(props)}
       draggable={
         props.canEdit(node.id) &&

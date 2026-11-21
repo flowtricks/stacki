@@ -116,10 +116,10 @@ body {
    92px, not 80: the back button's hover fill reaches 6px left of its icon
    (.project-back's margin), and at 80 the button sat against the green light. */
 html[data-platform='darwin'] .titlebar {
-  padding-left: calc(92px / var(--window-zoom, 1));
+  padding-left: calc(92px / var(--window-zoom, 1)); /* physical: macOS traffic lights stay top-left */
 }
 html[data-platform='win32'] .titlebar {
-  padding-right: 148px;
+  padding-right: 148px; /* physical: Windows caption buttons stay top-right */
 }
 .titlebar > * {
   -webkit-app-region: no-drag;
@@ -140,7 +140,7 @@ html[data-platform='win32'] .titlebar {
   min-width: 0;
   max-width: 260px;
   padding: 4px 6px;
-  margin-left: -6px;
+  margin-inline-start: -6px;
   background: transparent;
   -webkit-app-region: no-drag;
 }
@@ -188,12 +188,14 @@ html[data-platform='win32'] .titlebar {
   border-radius: 6px;
 }
 .titlebar .url-bar .url-reload {
-  left: 2px;
+  inset-inline-start: 2px;
 }
 .titlebar .url-bar .url-open {
-  right: 2px;
+  inset-inline-end: 2px;
 }
 .titlebar .url {
+  /* An address is code: it reads left to right whatever the interface language. */
+  direction: ltr;
   flex: 1;
   min-width: 0;
   font-size: 11px;
@@ -204,7 +206,7 @@ html[data-platform='win32'] .titlebar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
+  text-align: start;
   font-weight: 450;
 }
 
@@ -212,14 +214,17 @@ html[data-platform='win32'] .titlebar {
    starts at once, creeps while the canvas loads, runs to the end and fades. Reduced motion gets it static. */
 .titlebar .url-bar .page-load-line {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  inset-inline: 8px;
   bottom: 0;
   height: 2px;
   border-radius: 2px;
   background: var(--accent);
   transform-origin: left center;
   pointer-events: none;
+}
+/* The line grows from the start of the address bar, so it grows from the right in a right-to-left interface. */
+:root[dir='rtl'] .titlebar .url-bar .page-load-line {
+  transform-origin: right center; /* physical: mirrors the left origin above */
 }
 .titlebar .url-bar .page-load-line.is-loading {
   animation: page-load-creep 12s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
@@ -367,7 +372,7 @@ html[data-platform='win32'] .titlebar {
 }
 .page-menu-route {
   flex: 1;
-  text-align: right;
+  text-align: end;
   color: var(--text-faint);
   font-size: 10.5px;
   overflow: hidden;
@@ -564,7 +569,7 @@ html[data-platform='win32'] .titlebar {
   flex: 1;
 }
 .conflict-files {
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   overflow-y: auto;
   scrollbar-gutter: stable;
   padding: 12px 8px;
@@ -579,7 +584,7 @@ html[data-platform='win32'] .titlebar {
   grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 10px;
   border: none;
   border-radius: 6px;
@@ -729,7 +734,7 @@ html[data-platform='win32'] .titlebar {
 }
 .merge-source-option > button {
   width: 100%;
-  text-align: left;
+  text-align: start;
   border-radius: 0;
 }
 .merge-choice {
@@ -826,7 +831,7 @@ html[data-platform='win32'] .titlebar {
     display: flex;
     gap: 6px;
     padding: 6px;
-    border-right: none;
+    border-inline-end: none;
     border-bottom: 1px solid var(--border);
     max-height: 90px;
   }
@@ -1116,7 +1121,8 @@ html[data-platform='win32'] .titlebar {
   align-items: center;
   gap: 4px;
   height: 30px;
-  padding: 0 6px 0 4px;
+  padding-block: 0;
+  padding-inline: 4px 6px;
   font-size: 12px;
   min-width: 0;
   /* The line a drop would land on is drawn on the row itself, so a list that
@@ -1164,7 +1170,7 @@ html[data-platform='win32'] .titlebar {
   align-items: center;
   justify-content: center;
   width: 14px;
-  margin-right: 8px;
+  margin-inline-end: 8px;
   vertical-align: middle;
   color: var(--text-dim);
 }
@@ -1179,7 +1185,7 @@ html[data-platform='win32'] .titlebar {
   padding: 0 4px;
   height: 100%;
   justify-content: flex-start;
-  text-align: left;
+  text-align: start;
   color: var(--text);
   font-size: 12px;
   overflow: hidden;
@@ -1261,7 +1267,7 @@ html[data-platform='win32'] .titlebar {
   border-top: 1px solid var(--border);
   color: var(--text-dim);
   font-size: 12px;
-  text-align: left;
+  text-align: start;
 }
 .list-field-row:first-child + .list-field-add,
 .list-field-empty + .list-field-add {
@@ -1301,9 +1307,9 @@ html[data-platform='win32'] .titlebar {
 .list-field-items.is-scrolling + .list-field-add::before {
   content: '';
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 100%;
-  left: 0;
+  inset-inline-start: 0;
   height: 14px;
   background: linear-gradient(to bottom, transparent, var(--list-field-bg));
   pointer-events: none;
@@ -1337,7 +1343,8 @@ html[data-platform='win32'] .titlebar {
 }
 .attr-asset .af-mode {
   position: static;
-  margin: 0 0 6px auto;
+  margin-block: 0 6px;
+  margin-inline: auto 0;
   width: fit-content;
 }
 
@@ -1366,8 +1373,10 @@ html[data-platform='win32'] .titlebar {
   position: relative;
   flex: 1;
   min-width: 0;
-  padding: 9px 0 0 9px;
-  margin: -9px 0 0 -9px;
+  padding-block: 9px 0;
+  padding-inline: 9px 0;
+  margin-block: -9px 0;
+  margin-inline: -9px 0;
 }
 /* Anchored by its centre and grown with a transform, so hovering it SCALES rather
    than moving it: the shared rule resizes the box and shifts left/bottom to keep it
@@ -1376,7 +1385,7 @@ html[data-platform='win32'] .titlebar {
 .attr-value-field > .bind-handle:hover:not(:disabled),
 .attr-value-field > .bind-handle.on {
   top: 9px;
-  left: 9px;
+  inset-inline-start: 9px;
   bottom: auto;
   width: 12px;
   height: 12px;
@@ -1422,7 +1431,7 @@ html[data-platform='win32'] .titlebar {
   flex-basis: 100%;
 }
 .attr-editor-row:has(> .attr-value-field .cm-editor) > .attr-expand-toggle {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .attr-editor-row > .attr-asset-toggle,
 .attr-editor-row > .attr-expand-toggle {
@@ -1657,7 +1666,7 @@ html[data-platform='win32'] .titlebar {
   z-index: 0;
   top: var(--insert-tabs-pad);
   bottom: var(--insert-tabs-pad);
-  left: 0;
+  left: 0; /* physical: moved by measured physical offsets */
   width: 0;
   border-radius: 7px;
   background: var(--bg-active);
@@ -1839,7 +1848,7 @@ html[data-platform='win32'] .titlebar {
 }
 /* Who made the app, at the row's right end: a small round picture and "by <login>", muted. */
 .insert-app-byline {
-  margin-left: auto;
+  margin-inline-start: auto;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1923,7 +1932,7 @@ html[data-platform='win32'] .titlebar {
 .insert-card-foot .insert-card-folder {
   flex: 0 100000 auto;
   min-width: 0;
-  margin-left: -4px;
+  margin-inline-start: -4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1934,7 +1943,7 @@ html[data-platform='win32'] .titlebar {
   flex-shrink: 0;
 }
 .insert-item-uses {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 11.5px;
   color: var(--text-faint);
 }
@@ -1977,7 +1986,7 @@ html[data-platform='win32'] .titlebar {
 /* A picture: the pointer passes through to the card, which highlights and inserts. */
 .insert-snapshot-frame {
   position: absolute;
-  left: 0;
+  left: 0; /* physical: scaled snapshot from top-left origin */
   top: 0;
   border: none;
   background: transparent;
@@ -2055,7 +2064,8 @@ html[data-platform='win32'] .titlebar {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 0 12px 6px 6px;
+  padding-block: 0 6px;
+  padding-inline: 6px 12px;
   flex-shrink: 0;
   min-width: 0;
   flex-wrap: wrap;
@@ -2072,7 +2082,7 @@ html[data-platform='win32'] .titlebar {
   background: rgba(0, 153, 255, 0.05);
 }
 .panel-body.asset-body {
-  padding-left: 12px;
+  padding-inline-start: 12px;
 }
 .asset-folder {
   display: flex;
@@ -2106,7 +2116,7 @@ html[data-platform='win32'] .titlebar {
   white-space: nowrap;
 }
 .asset-folder .crumb-sep {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .asset-folder input {
   height: 24px;
@@ -2162,7 +2172,7 @@ html[data-platform='win32'] .titlebar {
 .asset-badge {
   position: absolute;
   bottom: 4px;
-  right: 5px;
+  inset-inline-end: 5px;
   font-size: 8px;
   line-height: 1;
   padding: 3px 4px;
@@ -2196,8 +2206,8 @@ html[data-platform='win32'] .titlebar {
    pointer-events:none. More than one can be true at once (a hidden element that
    is also inert), so they sit in a row with a gap rather than one slot. */
 .node-empty {
-  margin-left: auto;
-  padding-left: 6px;
+  margin-inline-start: auto;
+  padding-inline-start: 6px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2262,8 +2272,7 @@ html[data-platform='win32'] .titlebar {
 .asset-items-window {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   display: grid;
 }
 .asset-items .asset-tile {
@@ -2408,7 +2417,7 @@ html[data-platform='win32'] .titlebar {
 .asset-items-list .asset-tile-menu,
 .asset-items-compact .asset-tile-menu {
   top: 50%;
-  right: 6px;
+  inset-inline-end: 6px;
   transform: translateY(-50%);
 }
 .asset-items-list .asset-selectable,
@@ -2418,7 +2427,7 @@ html[data-platform='win32'] .titlebar {
 .asset-items-list .asset-select,
 .asset-items-compact .asset-select {
   top: 8px;
-  left: 8px;
+  inset-inline-start: 8px;
 }
 /* Pinned under the files: the sort on the left, the view on the right, on the panel's raised fill. */
 .asset-footer {
@@ -2427,7 +2436,8 @@ html[data-platform='win32'] .titlebar {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 8px 4px 6px;
+  padding-block: 4px;
+  padding-inline: 6px 8px;
   background: var(--bg-panel-2);
 }
 .asset-footer button {
@@ -2471,12 +2481,12 @@ html[data-platform='win32'] .titlebar {
 }
 .props-field > .asset-field > .af-mode {
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
 }
 .af-mode {
   position: absolute;
   top: -24px;
-  right: 0;
+  inset-inline-end: 0;
   display: flex;
   gap: 1px;
   background: var(--bg-input);
@@ -2583,7 +2593,8 @@ html[data-platform='win32'] .titlebar {
   align-items: center;
   gap: 8px;
   height: 36px;
-  padding: 0 8px 0 12px;
+  padding-block: 0;
+  padding-inline: 12px 8px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   cursor: grab;
@@ -2667,7 +2678,7 @@ html[data-platform='win32'] .titlebar {
   min-height: 0;
   overflow: hidden;
   background: var(--bg-panel);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2726,7 +2737,7 @@ html[data-platform='win32'] .titlebar {
 }
 .rail-ghost {
   position: fixed;
-  left: 0;
+  left: 0; /* physical: follows pointer screen coordinates */
   top: 0;
   z-index: 700;
   width: 32px;
@@ -2745,7 +2756,7 @@ html[data-platform='win32'] .titlebar {
 }
 .rail-drop-line {
   position: absolute;
-  left: 6px;
+  inset-inline-start: 6px;
   width: 32px;
   height: 2px;
   border-radius: 1px;
@@ -2817,10 +2828,14 @@ html[data-platform='win32'] .titlebar {
   white-space: nowrap;
   pointer-events: none;
 }
+/* Mirrored, the tip opens to the rail's left: LeftRail anchors it at the rail's left edge and it is drawn leftwards from there. */
+:root[dir='rtl'] .rail-tooltip:not(.below) {
+  transform: translate(-100%, -50%);
+}
 .rail-tooltip::before {
   content: '';
   position: absolute;
-  left: -4px;
+  inset-inline-start: -4px;
   top: 50%;
   width: 10px;
   height: 10px;
@@ -2838,7 +2853,7 @@ html[data-platform='win32'] .titlebar {
   transform: translateX(-50%);
 }
 .rail-tooltip.below::before {
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   top: -4px;
   transform: translateX(-50%) rotate(45deg);
 }
@@ -2846,7 +2861,7 @@ html[data-platform='win32'] .titlebar {
 .panel {
   position: relative;
   background: var(--bg-panel);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2862,8 +2877,8 @@ html[data-platform='win32'] .titlebar {
 .panel.right {
   width: 322px;
   flex-shrink: 0;
-  border-right: none;
-  border-left: 1px solid var(--border);
+  border-inline-end: none;
+  border-inline-start: 1px solid var(--border);
 }
 
 .panel-resize {
@@ -2877,10 +2892,10 @@ html[data-platform='win32'] .titlebar {
   user-select: none;
 }
 .panel.left > .panel-resize {
-  right: -4px;
+  inset-inline-end: -4px;
 }
 .panel.right > .panel-resize {
-  left: -4px;
+  inset-inline-start: -4px;
 }
 .panel-resize::before {
   content: '';
@@ -2912,11 +2927,11 @@ html[data-platform='win32'] .titlebar {
   flex-shrink: 0;
 }
 .code-panel-lines {
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 .code-panel-path {
   min-width: 0;
-  margin-left: auto;
+  margin-left: auto; /* physical: own direction is rtl */
   overflow: hidden;
   color: var(--text-faint);
   font-family: var(--mono);
@@ -2926,7 +2941,12 @@ html[data-platform='win32'] .titlebar {
   /* Cut from the start so the file name stays visible; the <bdi dir="ltr"> inside keeps
      the path's own order (a leading "/" or "." would otherwise move to the far end). */
   direction: rtl;
-  text-align: left;
+  text-align: left; /* physical: rtl ellipsis trick on path */
+}
+/* The path's own direction is rtl for the front ellipsis, so its push to the row's end is set per interface direction. */
+:root[dir='rtl'] .code-panel-path {
+  margin-left: 0; /* physical: own direction is rtl */
+  margin-right: auto; /* physical: own direction is rtl */
 }
 .code-panel-lines {
   flex-shrink: 0;
@@ -3061,7 +3081,7 @@ html[data-platform='win32'] .titlebar {
 .list-item .page-list-copy {
   flex: 1;
   min-width: 0;
-  text-align: left;
+  text-align: start;
 }
 .list-item .page-list-copy .label,
 .list-item .page-list-copy .sub {
@@ -3134,9 +3154,9 @@ html[data-platform='win32'] .titlebar {
   border-radius: 8px;
 }
 .list-item .folder-count {
-  margin-left: auto;
+  margin-inline-start: auto;
   flex-shrink: 0;
-  padding-right: 2px;
+  padding-inline-end: 2px;
 }
 .rename-input,
 .rename-input:hover,
@@ -3161,9 +3181,9 @@ html[data-platform='win32'] .titlebar {
    of their layout width, so those are widened by 1/0.75 to land back at exactly
    the panel width. Sheets without zoom take the width as-is. */
 body > .embed-editor_bg-modal-backdrop {
-  left: var(--style-panel-left, 0);
+  left: var(--style-panel-left, 0); /* physical: bound to measured panel box */
   top: var(--style-panel-top, 0);
-  right: auto;
+  right: auto; /* physical: bound to measured panel box */
   bottom: auto;
   width: var(--style-panel-width, 100vw);
   height: var(--style-panel-height, 100dvh);
@@ -3186,9 +3206,9 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
    the app's layout with it. Framed popups get the whole window to sit in, and
    place themselves inside it. */
 body > .embed-editor_bg-modal-backdrop.is-framed {
-  left: 0;
+  left: 0; /* physical: framed in window coordinates */
   top: 0;
-  right: 0;
+  right: 0; /* physical: framed in window coordinates */
   bottom: 0;
   width: auto;
   height: auto;
@@ -3454,7 +3474,8 @@ body > .embed-editor_provenance {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 6px 5px 4px;
+  padding-block: 5px;
+  padding-inline: 4px 6px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -3479,8 +3500,8 @@ body > .embed-editor_provenance {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
-  padding-left: 8px;
+  margin-inline-start: auto;
+  padding-inline-start: 8px;
   flex: none;
 }
 .dp-item-nav .dp-step {
@@ -3551,7 +3572,8 @@ body > .embed-editor_provenance {
   align-items: center;
   gap: 4px;
   min-height: 28px;
-  padding: 0 8px 0 6px;
+  padding-block: 0;
+  padding-inline: 6px 8px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 11.5px;
@@ -3569,12 +3591,12 @@ body > .embed-editor_provenance {
   background: rgba(146, 116, 255, 0.12);
 }
 .dp-row.selected:has(+ .dp-row.selected) {
-  border-bottom-right-radius: 0;
-  border-bottom-left-radius: 0;
+  border-end-end-radius: 0;
+  border-end-start-radius: 0;
 }
 .dp-row.selected + .dp-row.selected {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
 }
 .dp-row.selected .dp-key {
   color: var(--collection-purple);
@@ -3613,7 +3635,7 @@ body > .embed-editor_provenance {
   display: inline-flex;
   flex: 0 0 11px;
   justify-content: flex-end;
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 /* A name with a short reason under it: why a choice reads as it does. */
 .dp-key-stack {
@@ -3681,8 +3703,8 @@ body > .embed-editor_provenance {
 /* What the value IS, down the right — the column you actually read to find
    the field you mean. Dim, and the first thing to give up space. */
 .dp-val {
-  margin-left: auto;
-  padding-left: 8px;
+  margin-inline-start: auto;
+  padding-inline-start: 8px;
   min-width: 0;
   flex-shrink: 1;
   overflow: hidden;
@@ -3690,7 +3712,7 @@ body > .embed-editor_provenance {
   white-space: nowrap;
   color: var(--text-dim);
   font-size: 10.5px;
-  text-align: right;
+  text-align: end;
 }
 .dp-val.kind {
   color: var(--text-faint);
@@ -3742,7 +3764,8 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
   width: 20px;
   height: 22px;
-  margin: -4px -2px -4px -4px;
+  margin-block: -4px;
+  margin-inline: -4px -2px;
   border-radius: 4px;
   color: var(--text-faint);
 }
@@ -3800,7 +3823,8 @@ body > .embed-editor_provenance {
 .dp-section-action {
   flex: none;
   height: auto;
-  margin: -2px -4px -2px 0;
+  margin-block: -2px;
+  margin-inline: 0 -4px;
   padding: 2px 4px;
   border-radius: 4px;
   background: transparent;
@@ -3879,7 +3903,8 @@ body > .embed-editor_provenance {
   align-items: center;
   gap: 8px;
   margin: 0 12px 6px;
-  padding: 6px 8px 6px 10px;
+  padding-block: 6px;
+  padding-inline: 10px 8px;
   border-radius: 6px;
   background: var(--accent-soft);
   border: 1px solid rgba(0, 153, 255, 0.35);
@@ -3996,7 +4021,8 @@ body > .embed-editor_provenance {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 8px 10px 12px;
+  padding-block: 10px;
+  padding-inline: 12px 8px;
   background: #1d1d1d;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
@@ -4028,7 +4054,7 @@ body > .embed-editor_provenance {
   font-size: 12px;
   font-weight: 500;
   color: var(--text);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .instances-row:hover {
@@ -4174,8 +4200,8 @@ body > .embed-editor_provenance {
 /* The selected row is a capsule. With an open subtree it becomes the head of a
    block: its bottom corners square off and the subtree below rounds them. */
 .structure-node.selected:has(+ .structure-subtree) {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
 }
 /* Tint strength of the subtree block: raise the percentage for a stronger
    background, lower it for a more transparent one. */
@@ -4234,7 +4260,8 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
   width: 18px;
   align-self: stretch;
-  margin: 0 -2px 0 -4px;
+  margin-block: 0;
+  margin-inline: -4px -2px;
   border-radius: 4px;
   cursor: grab;
   color: var(--text-faint);
@@ -4246,7 +4273,8 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
   width: 18px;
   align-self: stretch;
-  margin: 0 -2px 0 -4px;
+  margin-block: 0;
+  margin-inline: -4px -2px;
   pointer-events: none;
 }
 /* Hierarchy guides, as in Webflow: a thin line from each open parent's
@@ -4507,7 +4535,7 @@ body > .embed-editor_provenance {
 .dd-stacked .dd-icon {
   grid-area: 1 / 1 / 3 / 2;
   align-self: center;
-  margin-right: 8px;
+  margin-inline-end: 8px;
 }
 .dd-stacked .dd-hint {
   grid-area: 1 / 3 / 3 / 4;
@@ -4535,7 +4563,7 @@ body > .embed-editor_provenance {
   grid-area: 1 / 4 / 3 / 5;
   align-self: center;
   justify-self: end;
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -4571,10 +4599,10 @@ body > .embed-editor_provenance {
   font-size: 10px;
   color: var(--text-faint);
   font-weight: 400;
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 .prop-deprecated {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   padding: 0 5px;
   border-radius: 4px;
   font-size: 9.5px;
@@ -4591,7 +4619,7 @@ body > .embed-editor_provenance {
   display: inline-block;
   width: 5px;
   height: 5px;
-  margin-left: 2px;
+  margin-inline-start: 2px;
   border-radius: 50%;
   background: var(--text-faint);
 }
@@ -4652,7 +4680,7 @@ body > .embed-editor_provenance {
 .prop-expr-toggle {
   display: inline-flex;
   vertical-align: middle;
-  margin-left: 4px;
+  margin-inline-start: 4px;
   padding: 2px;
   border-radius: 4px;
   background: transparent;
@@ -4687,7 +4715,7 @@ body > .embed-editor_provenance {
 }
 .bind-handle {
   position: absolute;
-  left: -6px;
+  inset-inline-start: -6px;
   /* Centred on the control's top-left corner: the label's own bottom margin
      is 5px, so half a 12px dot below that lands on the corner itself. */
   bottom: -11px;
@@ -4706,7 +4734,7 @@ body > .embed-editor_provenance {
   transition:
     width 0.1s ease,
     height 0.1s ease,
-    left 0.1s ease,
+    inset-inline-start 0.1s ease,
     bottom 0.1s ease,
     opacity 0.12s ease;
 }
@@ -4724,7 +4752,7 @@ body > .embed-editor_provenance {
   background: #9274ff;
   width: 18px;
   height: 18px;
-  left: -9px;
+  inset-inline-start: -9px;
   bottom: -14px;
 }
 .bind-dot {
@@ -4754,7 +4782,7 @@ body > .embed-editor_provenance {
    field isn't shown at all; this marks the one case that survives, a value
    already in the markup that the component will ignore. */
 .prop-inert {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   padding: 0 5px;
   border-radius: 4px;
   font-size: 9.5px;
@@ -4797,7 +4825,7 @@ body > .embed-editor_provenance {
   width: 100%;
   border: 0;
   background: transparent;
-  text-align: left;
+  text-align: start;
   font-family: inherit;
   font-weight: 400;
 }
@@ -4821,7 +4849,7 @@ body > .embed-editor_provenance {
   color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }
 .ctx-divider {
@@ -4905,7 +4933,7 @@ body > .embed-editor_provenance {
 .rich-format-glide {
   position: absolute;
   top: 0;
-  left: 0;
+  left: 0; /* physical: moved by measured physical offsets */
   height: 100%;
   border-radius: 5px;
   background: var(--bg-active);
@@ -4995,7 +5023,7 @@ body > .embed-editor_provenance {
   font-size: 10px;
   color: var(--text-faint);
   font-weight: 400;
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 .props-code .cm-host {
   flex: 1;
@@ -5182,7 +5210,7 @@ body > .embed-editor_provenance {
   color: var(--text-dim);
   white-space: pre-wrap;
   user-select: text;
-  text-align: left;
+  text-align: start;
 }
 
 .device-btns {
@@ -5225,7 +5253,7 @@ body > .embed-editor_provenance {
   position: absolute;
   top: 16px;
   bottom: 16px;
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   transform: translateX(-50%);
   border-radius: 10px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
@@ -5283,7 +5311,7 @@ body > .embed-editor_provenance {
 }
 .canvas-world {
   position: absolute;
-  left: 0;
+  left: 0; /* physical: canvas frame in preview coordinates */
   top: 0;
   width: 0;
   height: 0;
@@ -5310,7 +5338,7 @@ body > .embed-editor_provenance {
 .canvas-frame-label {
   position: absolute;
   bottom: 100%;
-  left: 0;
+  left: 0; /* physical: canvas frame in preview coordinates */
   color: var(--text-dim);
   font-weight: 500;
   white-space: nowrap;
@@ -5318,7 +5346,7 @@ body > .embed-editor_provenance {
 .canvas-controls {
   position: absolute;
   bottom: 14px;
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   transform: translateX(-50%);
   display: flex;
   gap: 2px;
@@ -5368,7 +5396,7 @@ body > .embed-editor_provenance {
   opacity: 1;
 }
 .rz-w {
-  left: -12px;
+  left: -12px; /* physical: canvas frame in preview coordinates */
   top: 50%;
   transform: translateY(-50%);
   width: 5px;
@@ -5376,7 +5404,7 @@ body > .embed-editor_provenance {
   cursor: col-resize;
 }
 .rz-e {
-  right: -12px;
+  right: -12px; /* physical: canvas frame in preview coordinates */
   top: 50%;
   transform: translateY(-50%);
   width: 5px;
@@ -5385,7 +5413,7 @@ body > .embed-editor_provenance {
 }
 .rz-s {
   bottom: -12px;
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   transform: translateX(-50%);
   height: 5px;
   width: 56px;
@@ -5393,10 +5421,10 @@ body > .embed-editor_provenance {
 }
 /* In Fill mode the frame touches the canvas edges, so keep the handles inside. */
 .frame-sized.full .rz-w {
-  left: 5px;
+  left: 5px; /* physical: canvas frame in preview coordinates */
 }
 .frame-sized.full .rz-e {
-  right: 5px;
+  right: 5px; /* physical: canvas frame in preview coordinates */
 }
 .frame-sized.full .rz-s {
   bottom: 5px;
@@ -5405,7 +5433,7 @@ body > .embed-editor_provenance {
 .rz-readout {
   position: absolute;
   bottom: 10px;
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   transform: translateX(-50%);
   z-index: 6;
   background: #232323;
@@ -5555,7 +5583,8 @@ body > .embed-editor_provenance {
   gap: 8px;
   flex: 0 0 auto;
   min-height: 32px;
-  padding: 0 4px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
   border-radius: 6px;
   scroll-snap-align: start;
 }
@@ -5574,7 +5603,8 @@ body > .embed-editor_provenance {
   align-items: center;
   gap: 2px;
   flex: 0 0 auto;
-  padding: 1px 4px 1px 6px;
+  padding-block: 1px;
+  padding-inline: 6px 4px;
   border-radius: 4px;
   background: var(--bg-input);
   color: var(--text-dim);
@@ -5584,7 +5614,7 @@ body > .embed-editor_provenance {
 }
 .extract-value-choice {
   flex: 0 0 168px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .ui-tabs.extract-bulk {
   flex: 0 0 auto;
@@ -5594,7 +5624,7 @@ body > .embed-editor_provenance {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 11.5px;
   color: var(--text-dim);
 }
@@ -5686,7 +5716,7 @@ body > .embed-editor_provenance {
 .dropdown {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  inset-inline-end: 0;
   min-width: 264px;
   background: #1d1d1d;
   border: 1px solid var(--border-strong);
@@ -5736,7 +5766,7 @@ body > .embed-editor_provenance {
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
-  text-align: left;
+  text-align: left; /* physical: rtl ellipsis trick on path */
 }
 .template-list {
   display: grid;
@@ -5829,8 +5859,7 @@ body > .embed-editor_provenance {
 .app.welcome-mode .titlebar {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   z-index: 3;
   background: transparent;
   border-bottom: none;
@@ -5951,15 +5980,21 @@ body > .embed-editor_provenance {
     border-radius 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .welcome .welcome-split-button > button:first-child {
-  border-radius: 10px 0 0 10px;
+  border-start-start-radius: 10px;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  border-end-start-radius: 10px;
 }
 .welcome .welcome-split-button > .welcome-split-arrow {
   padding: 9px 11px;
-  border-radius: 0 10px 10px 0;
-  border-left: 1px solid rgb(255 255 255 / 16%);
+  border-start-start-radius: 0;
+  border-start-end-radius: 10px;
+  border-end-end-radius: 10px;
+  border-end-start-radius: 0;
+  border-inline-start: 1px solid rgb(255 255 255 / 16%);
 }
 .welcome .welcome-split-button > .welcome-split-arrow.primary {
-  border-left-color: rgb(0 0 0 / 14%);
+  border-inline-start-color: rgb(0 0 0 / 14%);
 }
 /* The secondary action sits over the welcome background, which runs from
    near-black to pink-white. A translucent dark grey with the background
@@ -5988,11 +6023,11 @@ body > .embed-editor_provenance {
   background: #f0f0f0;
 }
 .welcome .welcome-split-button:has(> .welcome-split-menu) > .welcome-split-arrow {
-  border-left-color: rgb(0 0 0 / 14%);
+  border-inline-start-color: rgb(0 0 0 / 14%);
 }
 .welcome .welcome-split-button:has(> [data-popup-phase='open']) > button {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
 }
 .welcome-split-button:has(> [data-popup-phase='open']) > .welcome-split-arrow svg {
   transform: rotate(180deg);
@@ -6000,7 +6035,7 @@ body > .embed-editor_provenance {
 .welcome-split-menu.popup-surface {
   position: absolute;
   top: calc(100% - 1px);
-  left: 0;
+  inset-inline-start: 0;
   z-index: 10;
   width: 100%;
   padding: 5px;
@@ -6134,6 +6169,10 @@ body > .embed-editor_provenance {
   mask-position: top, bottom;
   mask-repeat: no-repeat;
 }
+/* The trailing edge is on the left in a right-to-left interface. */
+:root[dir='rtl'] .recent-rail[data-more='end'] {
+  mask-image: linear-gradient(to right, transparent, #000 56px), linear-gradient(#000, #000);
+}
 .recent-rail::-webkit-scrollbar {
   height: var(--recent-rail-scrollbar-height);
 }
@@ -6164,7 +6203,7 @@ body > .embed-editor_provenance {
 .recent-remove {
   position: absolute;
   top: 12px;
-  right: 12px;
+  inset-inline-end: 12px;
   z-index: 2;
   width: 22px;
   height: 22px;
@@ -6225,7 +6264,7 @@ body > .embed-editor_provenance {
   overflow: hidden;
   text-overflow: ellipsis;
   direction: rtl; /* ellipsize the front of the path, keep the tail visible */
-  text-align: left;
+  text-align: left; /* physical: rtl ellipsis trick on path */
 }
 
 .busy-overlay {
@@ -6269,13 +6308,14 @@ body > .embed-editor_provenance {
 .save-conflict {
   position: fixed;
   bottom: 56px;
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 10px;
   max-width: min(760px, 90vw);
-  padding: 8px 10px 8px 16px;
+  padding-block: 8px;
+  padding-inline: 16px 10px;
   background: #232323;
   border: 1px solid var(--red);
   border-radius: 10px;
@@ -6465,7 +6505,7 @@ body > .embed-editor_provenance {
 }
 .spacing-band.is-collapsed .spacing-band-label {
   position: absolute;
-  left: 6px;
+  left: 6px; /* physical: overlay over the preview page */
   top: 4px;
 }
 .spacing-band.is-collapsed.is-bottom .spacing-band-label {
@@ -6554,13 +6594,13 @@ body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel /* A n
   background: var(--accent);
 }
 .node-outline.is-point::before {
-  left: -7px;
+  left: -7px; /* physical: overlay over the preview page */
   top: -0.5px;
   width: 14px;
   height: 1px;
 }
 .node-outline.is-point::after {
-  left: -0.5px;
+  left: -0.5px; /* physical: overlay over the preview page */
   top: -7px;
   width: 1px;
   height: 14px;
@@ -6644,7 +6684,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .node-outline-tag {
   position: absolute;
   top: 0;
-  left: 0;
+  left: 0; /* physical: overlay over the preview page */
   transform: translateY(-100%);
   display: inline-flex;
   align-items: center;
@@ -6681,7 +6721,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
    box; the tag moves out with it so its edge lines up with the border. */
 .node-outline.sel .node-outline-tag {
   top: -1px;
-  left: -1px;
+  left: -1px; /* physical: overlay over the preview page */
 }
 /* A selected component whose text was clicked: the text takes the selection
    look (TextMarkOutlines), and the instance reads as its parent — a light
@@ -6710,11 +6750,15 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin: -3px -6px -4px 2px;
+  margin-block: -3px -4px;
+  margin-inline: 2px -6px;
   padding: 2px 4px;
   border: 0;
-  border-left: 1px solid rgb(255 255 255 / 30%);
-  border-radius: 0 4px 0 0;
+  border-inline-start: 1px solid rgb(255 255 255 / 30%);
+  border-start-start-radius: 0;
+  border-start-end-radius: 4px;
+  border-end-end-radius: 0;
+  border-end-start-radius: 0;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -6731,7 +6775,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .node-outline.hover .node-outline-tag {
   background: transparent;
   color: var(--accent);
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 .node-outline.hover.component .node-outline-tag {
   color: var(--green);
@@ -6758,7 +6802,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   user-select: text;
 }
 .git-error button {
-  margin-left: auto;
+  margin-inline-start: auto;
   flex-shrink: 0;
   color: inherit;
 }
@@ -6802,7 +6846,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   white-space: nowrap;
 }
 .cms-crumb button {
-  margin-left: -4px;
+  margin-inline-start: -4px;
 }
 
 .cms-group + .cms-group {
@@ -6820,7 +6864,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   align-items: center;
   gap: 8px;
   height: 34px;
-  padding: 0 6px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 6px;
   border-radius: 6px;
   cursor: pointer;
   color: var(--text-dim);
@@ -6893,7 +6938,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .cms-items {
   width: 260px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -6903,7 +6948,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 8px 8px 12px;
+  padding-block: 12px 8px;
+  padding-inline: 12px 8px;
   flex-shrink: 0;
 }
 .cms-items-title {
@@ -7002,7 +7048,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   font-weight: 600;
 }
 .cms-detail-path {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 10.5px;
   color: var(--text-faint);
   font-family: var(--mono);
@@ -7064,7 +7110,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .cms-field > .asset-field > .af-mode {
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
 }
 .cms-field-head {
   display: flex;
@@ -7120,7 +7166,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .cms-toggle-knob {
   position: absolute;
-  left: 4px;
+  inset-inline-start: 4px;
   top: 50%;
   width: 12px;
   height: 12px;
@@ -7128,12 +7174,12 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   border-radius: 50%;
   background: var(--text-dim);
   transition:
-    left 0.12s,
+    inset-inline-start 0.12s,
     background 0.12s;
   pointer-events: none;
 }
 .cms-toggle.on .cms-toggle-knob {
-  left: 17px;
+  inset-inline-start: 17px;
   background: #fff;
 }
 .cms-toggle-label {
@@ -7194,7 +7240,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   align-items: center;
   gap: 8px;
   min-height: 36px;
-  padding: 0 8px 0 10px;
+  padding-block: 0;
+  padding-inline: 10px 8px;
   border-top: 1px solid transparent;
   color: var(--text);
 }
@@ -7240,7 +7287,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 /* The trash sits at the row's end; the pencil follows the text. */
 .cms-option-trash {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .cms-option-row .cms-option-trash:hover {
   color: var(--red);
@@ -7521,9 +7568,10 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: transparent;
 }
 .cms-schema-nested {
-  margin: 4px 0 4px 26px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
+  margin-block: 4px;
+  margin-inline: 26px 0;
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid var(--border);
 }
 
 .cms-card.cms-danger {
@@ -7557,7 +7605,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: var(--bg-input);
   border: 1px solid transparent;
   border-radius: 8px;
-  text-align: left;
+  text-align: start;
   color: var(--text-dim);
 }
 .cms-type-tile:hover:not(:disabled) {
@@ -7636,7 +7684,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .prop-tip-icon {
   display: inline-flex;
   vertical-align: middle;
-  margin-left: 5px;
+  margin-inline-start: 5px;
   color: var(--text-faint);
   cursor: help;
   border-radius: 50%;
@@ -7674,10 +7722,10 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .prop-tip::after {
   content: '';
   position: absolute;
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   /* Slides with the bubble when it's pushed off an edge, so it keeps
      pointing at the icon rather than at wherever the bubble landed. */
-  margin-left: calc(-5px + var(--tip-arrow, 0px));
+  margin-left: calc(-5px + var(--tip-arrow, 0px)); /* physical: slides with measured bubble offset */
   border: 5px solid transparent;
   border-top-color: #2e2e2e;
   top: 100%;
@@ -7710,7 +7758,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   position: absolute;
   top: 2px;
   bottom: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: calc(50% - 3px);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.16);
@@ -7724,6 +7772,10 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .bool-seg.is-second::before {
   transform: translateX(calc(100% + 2px));
+}
+/* The second half is on the left in a right-to-left interface, so the chip slides the other way. */
+:root[dir='rtl'] .bool-seg.is-second::before {
+  transform: translateX(calc(-100% - 2px));
 }
 
 .bool-seg button,
@@ -7769,11 +7821,11 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .num-field input {
   width: 100%;
-  padding-right: 20px; /* room for the steppers */
+  padding-inline-end: 20px; /* room for the steppers */
 }
 .num-steppers {
   position: absolute;
-  right: 3px;
+  inset-inline-end: 3px;
   top: 3px;
   bottom: 3px;
   display: flex;
@@ -7837,7 +7889,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .props-group-name {
   flex: 1;
-  text-align: left;
+  text-align: start;
 }
 .props-group-count {
   font-size: 10.5px;
@@ -7861,7 +7913,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .titlebar input.url,
 .titlebar input.url:hover {
   border: 1px solid transparent;
-  text-align: left;
+  text-align: start;
   cursor: text;
 }
 .titlebar input.url:hover:not(:read-only) {
@@ -7871,7 +7923,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   outline: none;
   border-color: var(--accent);
   color: var(--text);
-  text-align: left;
+  text-align: start;
 }
 .titlebar input.url::placeholder {
   color: var(--text-faint);
@@ -7933,7 +7985,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   gap: 3px;
   font-size: 10px;
   color: var(--text-faint);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .content-warn {
   font-size: 10.5px;
@@ -8003,7 +8055,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 4px 2px 8px;
+  padding-block: 2px;
+  padding-inline: 8px 4px;
   border-radius: 999px;
   font-size: 11px;
   color: var(--text);
@@ -8171,8 +8224,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
      track carries it, see VariablesView), not on this body: the rows have to
      reach the panel's edges so their rules do, and so the sticky name column
      has an edge to sit against. */
-  padding-left: 0;
-  padding-right: 0;
+  padding-inline-start: 0;
+  padding-inline-end: 0;
   /* Value strips share a position; names remain outside those scrollers. */
   overflow-x: hidden;
 }
@@ -8261,7 +8314,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 /* The rows carry the inset themselves; anything else in the sheet (the
    no-results line) still needs it. */
 .vars-body > .props-empty {
-  padding-left: var(--vars-inset);
+  padding-inline-start: var(--vars-inset);
 }
 .vars-view > .dockable-window-header {
   position: relative;
@@ -8287,11 +8340,11 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   max-width: calc(50% - 140px);
 }
 .vars-view .dockable-window-toggle {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .vars-search {
   position: absolute;
-  left: 50%;
+  left: 50%; /* physical: centred with translateX(-50%) */
   transform: translateX(-50%);
   min-width: 80px;
   height: 24px;
@@ -8334,7 +8387,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   justify-content: center;
   width: 22px;
   height: 20px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   padding: 0;
   border: 0;
   border-radius: 4px;
@@ -8372,7 +8425,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .asset-tile-menu {
   position: absolute;
   top: 6px;
-  right: 6px;
+  inset-inline-end: 6px;
   z-index: 2;
   width: 24px;
   height: 24px;
@@ -8420,7 +8473,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: none;
   color: var(--text);
   font-size: 12px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .vars-menu-item:hover:not(:disabled),
@@ -8449,12 +8502,12 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 /* A key that does the same as the row, muted at its end. */
 .more-menu-shortcut {
   flex: none;
-  margin-left: auto;
-  padding-left: 16px;
+  margin-inline-start: auto;
+  padding-inline-start: 16px;
   color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }
 /* A label gives way to its key: it is cut with an ellipsis, never run under the hint. */
@@ -8498,7 +8551,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
    scroller clips whatever hangs past its edge — which cropped the first
    column's dot in half. 22px clears it at its hovered size. */
 .vars-scroll .vars-row {
-  padding: 2px var(--vars-inset) 2px 22px;
+  padding-block: 2px;
+  padding-inline: 22px var(--vars-inset);
 }
 /* The two rule lines in the sheet: one under the group's name, one under the
    column labels — so the name, the labels and the values each sit in their own
@@ -8528,7 +8582,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-left: var(--vars-inset);
+  padding-inline-start: var(--vars-inset);
   height: 100%;
   color: var(--text-faint);
   cursor: grab;
@@ -8615,7 +8669,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .vars-cell-tools {
   position: absolute;
   top: 50%;
-  right: 0.125rem;
+  inset-inline-end: 0.125rem;
   display: flex;
   width: 1.25rem;
   height: 1.25rem;
@@ -8662,14 +8716,14 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .var-cell.empty {
   color: var(--text-faint);
   font-size: 11px;
-  padding-left: 8px;
+  padding-inline-start: 8px;
 }
 /* The leading box starts where a row's text does — the field's 8px padding —
    so swatches, curves, numbers and chips share one left edge down the column.
    Flush with the cell, the boxes stood out 8px left of every value beside them. */
 .var-cell > .u-color-swatch,
 .var-cell > .var-ease {
-  margin-left: 8px;
+  margin-inline-start: 8px;
 }
 .var-cell .u-color-swatch {
   width: 22px;
@@ -8731,7 +8785,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   width: 100%;
   height: 26px;
   padding: 0 8px;
-  text-align: left;
+  text-align: start;
   font-size: 11.5px;
   font-family: var(--mono, ui-monospace, monospace);
   background: transparent;
@@ -8801,7 +8855,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   align-items: center;
   gap: 6px;
   height: 24px;
-  padding-right: 6px;
+  padding-inline-end: 6px;
   border-radius: 5px;
   font-size: 11.5px;
   color: var(--text-dim);
@@ -8854,7 +8908,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
+  text-align: start;
 }
 .fb-count {
   font-size: 10px;
@@ -8923,7 +8977,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .history-section-title {
   flex: 1;
-  text-align: left;
+  text-align: start;
 }
 .history-section-count {
   font-size: 10px;
@@ -9034,7 +9088,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 .history-commit-head:hover {
   background: var(--bg-hover);
@@ -9160,7 +9214,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 
 .history-commit-body {
   grid-column: 2;
-  padding: 2px 8px 12px 6px;
+  padding-block: 2px 12px;
+  padding-inline: 6px 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -9263,7 +9318,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-dim);
   font-size: 11px;
 }
@@ -9360,7 +9415,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   opacity: 1;
 }
 .history-hash {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 10px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -9441,7 +9496,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   padding: 6px 4px;
   background: none;
   border: none;
-  text-align: left;
+  text-align: start;
   font-size: 11px;
 }
 .history-branch-name {
@@ -9482,7 +9537,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   width: 100%;
   background: none;
   border: none;
-  text-align: left;
+  text-align: start;
 }
 .history-file-open > svg {
   flex-shrink: 0;
@@ -9532,6 +9587,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   font-size: 12px;
 }
 .history-diff-scroll {
+  /* A diff is code: its gutters and lines read left to right whatever the interface language. */
+  direction: ltr;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -9567,8 +9624,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: rgba(255, 69, 58, 0.12);
 }
 .history-diff-number {
-  padding-right: 10px;
-  text-align: right;
+  padding-inline-end: 10px;
+  text-align: end;
   color: var(--text-faint);
   user-select: none;
 }
@@ -9582,7 +9639,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   color: var(--red);
 }
 .history-diff-code {
-  padding-right: 16px;
+  padding-inline-end: 16px;
 }
 
 /* Branch rows keep their actions visible. Hover-revealed icons meant that
@@ -9625,7 +9682,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 
 .branch-parked {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 10px;
   letter-spacing: 0.02em;
   padding: 1px 6px;
@@ -9671,7 +9728,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   font-weight: 400;
   color: var(--text-faint);
   font-family: var(--mono, ui-monospace, monospace);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .var-custom-input {
   width: 100%;
@@ -9731,7 +9788,8 @@ textarea::selection {
      default in this app, which as a grid item put "New variable" in the middle
      of the name column instead of at the start of it. It lines up with the
      glyphs of the variables above it. */
-  padding: 2px 4px 2px 0;
+  padding-block: 2px;
+  padding-inline: 0 4px;
   background: transparent;
   justify-self: start;
   justify-content: flex-start;
@@ -9778,7 +9836,7 @@ textarea::selection {
   background: none;
   color: inherit;
   font: inherit;
-  text-align: left;
+  text-align: start;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9860,7 +9918,7 @@ textarea::selection {
   color: var(--text);
   font-size: 11px;
   line-height: 1.45;
-  text-align: left;
+  text-align: start;
   pointer-events: none;
 }
 .fluid-tip-more {
@@ -9961,7 +10019,8 @@ textarea::selection {
   align-items: center;
   gap: 6px;
   /* Right padding clears the close button, which the panel positions itself. */
-  padding: 8px 40px 8px 8px;
+  padding-block: 8px;
+  padding-inline: 8px 40px;
   font-family: var(--font);
   font-size: 12px;
 }
@@ -9989,7 +10048,7 @@ textarea::selection {
   font-size: 12px;
 }
 .cm-editor .cm-panels .cm-panel.cm-search input[name='search'] {
-  padding-left: 28px;
+  padding-inline-start: 28px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' \
 viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 %3Ccircle cx='7' cy='7' r='4.25'/%3E\
@@ -10073,7 +10132,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 /* The close ×, which the panel pins to its top-right corner. */
 .cm-editor .cm-panels .cm-panel.cm-search [name='close'] {
   top: 8px;
-  right: 8px;
+  right: 8px; /* physical: inside LTR code editor */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -10168,8 +10227,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .term-resize {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   height: 5px;
   z-index: 3;
   cursor: ns-resize;
@@ -10183,7 +10241,8 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px 5px 10px;
+  padding-block: 5px;
+  padding-inline: 10px 8px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
 }
@@ -10280,8 +10339,11 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
    padding on the terminal element itself would be counted as usable columns
    and the last one would be clipped. */
 .term-host {
+  /* Terminal output is code: it reads left to right whatever the interface language. */
+  direction: ltr;
   height: 100%;
-  padding: 6px 4px 6px 10px;
+  padding-block: 6px;
+  padding-inline: 10px 4px;
 }
 .term-host .xterm {
   height: 100%;
@@ -10292,7 +10354,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 
 .term-scroll-btn {
   position: absolute;
-  right: 18px;
+  inset-inline-end: 18px;
   bottom: 12px;
   width: 26px;
   height: 26px;
@@ -10333,7 +10395,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   accent-color: var(--accent);
   position: absolute;
   top: 8px;
-  left: 8px;
+  inset-inline-start: 8px;
   z-index: 2;
 }
 
@@ -10352,7 +10414,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .asset-batch-actions button {
   padding: 5px 7px;
@@ -10422,7 +10484,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 
 .panel-header .asset-select-link {
   padding: 4px 6px;
-  margin-right: 4px;
+  margin-inline-end: 4px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -10489,7 +10551,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 }
 .git-pull-label {
   flex: 1;
-  text-align: left;
+  text-align: start;
 }
 .git-branches {
   padding: 0 4px 4px;
@@ -10735,14 +10797,16 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   position: relative;
   flex: 1;
   min-width: 0;
-  padding: 9px 0 0 9px;
-  margin: -9px 0 0 -9px;
+  padding-block: 9px 0;
+  padding-inline: 9px 0;
+  margin-block: -9px 0;
+  margin-inline: -9px 0;
 }
 .attr-name-field > .bind-handle,
 .attr-name-field > .bind-handle:hover:not(:disabled),
 .attr-name-field > .bind-handle.on {
   top: 9px;
-  left: 9px;
+  inset-inline-start: 9px;
   bottom: auto;
   width: 12px;
   height: 12px;

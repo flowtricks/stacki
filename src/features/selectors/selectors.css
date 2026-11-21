@@ -63,7 +63,7 @@
   position: absolute;
   top: 2px;
   bottom: 2px;
-  left: 0;
+  left: 0; /* physical: indicator moved by measured offsetLeft */
   border-radius: 5px;
   background: var(--bg-active);
   transition:
@@ -217,7 +217,10 @@
 .selectors-row:hover {
   background: var(--bg-hover);
 }
+/* A selector is code: isolated left to right inside a mirrored row. */
 .selectors-selector {
+  direction: ltr;
+  unicode-bidi: isolate;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -236,6 +239,8 @@
   pointer-events: none;
 }
 .selectors-tip-selector {
+  direction: ltr;
+  unicode-bidi: isolate;
   color: #ededed;
   font-family: var(--mono);
   font-size: 11.5px;
@@ -282,16 +287,24 @@
 .selectors-actions {
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 0;
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 0 4px 0 18px;
-  border-radius: 0 5px 5px 0;
+  padding-block: 0;
+  padding-inline: 18px 4px;
+  border-start-start-radius: 0;
+  border-start-end-radius: 5px;
+  border-end-end-radius: 5px;
+  border-end-start-radius: 0;
   background: linear-gradient(90deg, transparent, var(--selectors-row-fill) 14px);
   opacity: 0;
   pointer-events: none;
+}
+/* The fade runs from the selector toward the row's end, which is the left edge in a right-to-left layout. */
+:root[dir='rtl'] .selectors-actions {
+  background: linear-gradient(270deg, transparent, var(--selectors-row-fill) 14px);
 }
 .selectors-row:hover .selectors-actions,
 .selectors-actions:focus-within,

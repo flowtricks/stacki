@@ -15,7 +15,10 @@
   font-size: 11px;
   color: var(--text-dim);
 }
+/* A path is code: it reads left to right in every language. */
 .ai-diffview .ai-diff-path {
+  direction: ltr;
+  unicode-bidi: isolate;
   flex: 1;
   min-width: 0;
   padding: 0;
@@ -33,7 +36,9 @@
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
 }
+/* The lines are code, so the diff never mirrors; its gutters below stay physical for that reason. */
 .ai-diffview-scroll {
+  direction: ltr;
   max-height: 360px;
   overflow: auto;
   scrollbar-gutter: stable;
@@ -54,10 +59,10 @@
   min-height: 18px;
 }
 .ai-diffview .history-diff-number {
-  padding-right: 6px;
+  padding-right: 6px; /* physical: diff gutter inside LTR region */
 }
 .ai-diffview .history-diff-code {
-  padding-right: 12px;
+  padding-right: 12px; /* physical: diff gutter inside LTR region */
 }
 /* The words that changed inside an edited line: a stronger fill of the line's own colour. */
 .ai-diffview .history-diff-line.added .ai-diff-word {
@@ -70,17 +75,17 @@
 }
 .ai-diffview-gap {
   position: sticky;
-  left: 0;
+  left: 0; /* physical: sticky inside LTR diff scroller */
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
   min-height: 22px;
-  padding: 0 8px 0 10px;
+  padding: 0 8px 0 10px; /* physical: gap row inside LTR diff */
   background: var(--accent-soft);
   color: var(--text-dim);
   font: 11px / 22px var(--font, system-ui, sans-serif);
-  text-align: left;
+  text-align: left; /* physical: gap row inside LTR diff */
   border-radius: 0;
 }
 .ai-diffview-gap:hover {
@@ -176,7 +181,7 @@
   padding: 5px 6px;
   background: transparent;
   color: var(--text);
-  text-align: left;
+  text-align: start;
   font-size: 12px;
   border-radius: 6px;
 }
@@ -196,7 +201,10 @@
   gap: 6px;
   min-width: 0;
 }
+/* File names and folders are paths: isolated left to right inside a mirrored row. */
 .ai-file-name {
+  direction: ltr;
+  unicode-bidi: isolate;
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -205,6 +213,8 @@
 }
 /* The folder is a second, quieter line so two files of one name stay apart without squeezing the name. */
 .ai-file-folder {
+  direction: ltr;
+  unicode-bidi: isolate;
   overflow: hidden;
   text-overflow: clip;
   white-space: nowrap;
@@ -242,11 +252,11 @@
   display: flex;
   align-items: center;
   gap: 3px;
-  padding-right: 4px;
+  padding-inline-end: 4px;
 }
 .ai-file .ai-file-done {
   flex: none;
-  padding-right: 6px;
+  padding-inline-end: 6px;
   font-size: 11px;
   color: var(--text-faint);
 }
@@ -273,7 +283,8 @@
 }
 .ai-file-gone {
   margin: 0;
-  padding: 4px 8px 8px 24px;
+  padding-block: 4px 8px;
+  padding-inline: 24px 8px;
   font-size: 11px;
   color: var(--text-faint);
 }

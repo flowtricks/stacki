@@ -9,10 +9,42 @@ import { messages as en, type MessageKey } from '../../vendor/stacki/shared/prop
 import { messages as es } from '../../vendor/stacki/shared/properties/i18n/messages/es/studio';
 import { messages as fr } from '../../vendor/stacki/shared/properties/i18n/messages/fr/studio';
 import { messages as ptBR } from '../../vendor/stacki/shared/properties/i18n/messages/ptBR/studio';
+import { messages as it } from '../../vendor/stacki/shared/properties/i18n/messages/it/studio';
+import { messages as nl } from '../../vendor/stacki/shared/properties/i18n/messages/nl/studio';
+import { messages as pl } from '../../vendor/stacki/shared/properties/i18n/messages/pl/studio';
+import { messages as tr } from '../../vendor/stacki/shared/properties/i18n/messages/tr/studio';
+import { messages as ru } from '../../vendor/stacki/shared/properties/i18n/messages/ru/studio';
+import { messages as id } from '../../vendor/stacki/shared/properties/i18n/messages/id/studio';
+import { messages as hi } from '../../vendor/stacki/shared/properties/i18n/messages/hi/studio';
+import { messages as ar } from '../../vendor/stacki/shared/properties/i18n/messages/ar/studio';
+import { messages as he } from '../../vendor/stacki/shared/properties/i18n/messages/he/studio';
+import { messages as ja } from '../../vendor/stacki/shared/properties/i18n/messages/ja/studio';
+import { messages as ko } from '../../vendor/stacki/shared/properties/i18n/messages/ko/studio';
+import { messages as zhCN } from '../../vendor/stacki/shared/properties/i18n/messages/zhCN/studio';
+import { messages as zhTW } from '../../vendor/stacki/shared/properties/i18n/messages/zhTW/studio';
 
 export type RequestTranslator = { readonly locale: Locale; readonly translate: Translate<MessageKey> };
 
-const CATALOGS: Readonly<Record<Locale, Catalog>> = { en, es, fr, de, 'pt-BR': ptBR };
+const CATALOGS: Readonly<Record<Locale, Catalog>> = {
+  en,
+  es,
+  fr,
+  de,
+  'pt-BR': ptBR,
+  it,
+  nl,
+  pl,
+  tr,
+  ru,
+  id,
+  hi,
+  ar,
+  he,
+  ja,
+  ko,
+  'zh-CN': zhCN,
+  'zh-TW': zhTW,
+};
 const LANGUAGES_MAX = 16;
 const HEADER_CHARS_MAX = 500;
 

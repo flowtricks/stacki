@@ -28,7 +28,7 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 400;
-  text-align: left;
+  text-align: start;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
@@ -68,5 +68,5 @@
   color: var(--text-dim);
   font-size: 11.5px;
   line-height: 1.4;
-  text-align: right;
+  text-align: end;
 }

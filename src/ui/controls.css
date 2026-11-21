@@ -129,3 +129,16 @@ textarea,
 .cm-scroller {
   scrollbar-gutter: stable;
 }
+/* Code reads left to right in every language, so a CodeMirror editor never mirrors when the interface is right to left. */
+.cm-editor {
+  direction: ltr;
+}
+/* The AI prompt is prose the person writes in their own language, so it follows the interface's direction. */
+.ai-editor > .cm-editor {
+  direction: inherit;
+}
+/* A chevron or panel icon that means back, next or "this side" points the other way when reading runs right to left (Icons.tsx).
+   The individual `scale` property composes with any `transform: rotate(...)` a disclosure chevron already has. */
+:root[dir='rtl'] .icon-mirror-rtl {
+  scale: -1 1;
+}

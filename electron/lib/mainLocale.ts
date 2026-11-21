@@ -27,50 +27,167 @@ export interface MainLocale {
 /** Imports one locale's main namespaces, each a module with a `messages` export. Replaced by tests. */
 export type MainCatalogImporter = (locale: Exclude<Locale, 'en'>) => Promise<readonly unknown[]>;
 
-const SHIPPED_IMPORTER: MainCatalogImporter = async (locale) => {
-  switch (locale) {
-    case 'es':
-      return Promise.all([
-        import('../../shared/properties/i18n/messages/es/assets'),
-        import('../../shared/properties/i18n/messages/es/dialog'),
-        import('../../shared/properties/i18n/messages/es/error'),
-        import('../../shared/properties/i18n/messages/es/menu'),
-        import('../../shared/properties/i18n/messages/es/pages'),
-        import('../../shared/properties/i18n/messages/es/recovery'),
-      ]);
-    case 'fr':
-      return Promise.all([
-        import('../../shared/properties/i18n/messages/fr/assets'),
-        import('../../shared/properties/i18n/messages/fr/dialog'),
-        import('../../shared/properties/i18n/messages/fr/error'),
-        import('../../shared/properties/i18n/messages/fr/menu'),
-        import('../../shared/properties/i18n/messages/fr/pages'),
-        import('../../shared/properties/i18n/messages/fr/recovery'),
-      ]);
-    case 'de':
-      return Promise.all([
-        import('../../shared/properties/i18n/messages/de/assets'),
-        import('../../shared/properties/i18n/messages/de/dialog'),
-        import('../../shared/properties/i18n/messages/de/error'),
-        import('../../shared/properties/i18n/messages/de/menu'),
-        import('../../shared/properties/i18n/messages/de/pages'),
-        import('../../shared/properties/i18n/messages/de/recovery'),
-      ]);
-    case 'pt-BR':
-      return Promise.all([
-        import('../../shared/properties/i18n/messages/ptBR/assets'),
-        import('../../shared/properties/i18n/messages/ptBR/dialog'),
-        import('../../shared/properties/i18n/messages/ptBR/error'),
-        import('../../shared/properties/i18n/messages/ptBR/menu'),
-        import('../../shared/properties/i18n/messages/ptBR/pages'),
-        import('../../shared/properties/i18n/messages/ptBR/recovery'),
-      ]);
-    default: {
-      const exhaustive: never = locale;
-      return exhaustive;
-    }
-  }
-};
+/**
+ * One importer per language; the record type makes a language without one a compile error. Each path is spelled out because the bundler
+ * splits a chunk only at an `import()` whose path it can read.
+ */
+const SHIPPED_IMPORTERS = {
+  es: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/es/assets'),
+      import('../../shared/properties/i18n/messages/es/dialog'),
+      import('../../shared/properties/i18n/messages/es/error'),
+      import('../../shared/properties/i18n/messages/es/menu'),
+      import('../../shared/properties/i18n/messages/es/pages'),
+      import('../../shared/properties/i18n/messages/es/recovery'),
+    ]),
+  fr: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/fr/assets'),
+      import('../../shared/properties/i18n/messages/fr/dialog'),
+      import('../../shared/properties/i18n/messages/fr/error'),
+      import('../../shared/properties/i18n/messages/fr/menu'),
+      import('../../shared/properties/i18n/messages/fr/pages'),
+      import('../../shared/properties/i18n/messages/fr/recovery'),
+    ]),
+  de: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/de/assets'),
+      import('../../shared/properties/i18n/messages/de/dialog'),
+      import('../../shared/properties/i18n/messages/de/error'),
+      import('../../shared/properties/i18n/messages/de/menu'),
+      import('../../shared/properties/i18n/messages/de/pages'),
+      import('../../shared/properties/i18n/messages/de/recovery'),
+    ]),
+  'pt-BR': () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/ptBR/assets'),
+      import('../../shared/properties/i18n/messages/ptBR/dialog'),
+      import('../../shared/properties/i18n/messages/ptBR/error'),
+      import('../../shared/properties/i18n/messages/ptBR/menu'),
+      import('../../shared/properties/i18n/messages/ptBR/pages'),
+      import('../../shared/properties/i18n/messages/ptBR/recovery'),
+    ]),
+  it: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/it/assets'),
+      import('../../shared/properties/i18n/messages/it/dialog'),
+      import('../../shared/properties/i18n/messages/it/error'),
+      import('../../shared/properties/i18n/messages/it/menu'),
+      import('../../shared/properties/i18n/messages/it/pages'),
+      import('../../shared/properties/i18n/messages/it/recovery'),
+    ]),
+  nl: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/nl/assets'),
+      import('../../shared/properties/i18n/messages/nl/dialog'),
+      import('../../shared/properties/i18n/messages/nl/error'),
+      import('../../shared/properties/i18n/messages/nl/menu'),
+      import('../../shared/properties/i18n/messages/nl/pages'),
+      import('../../shared/properties/i18n/messages/nl/recovery'),
+    ]),
+  pl: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/pl/assets'),
+      import('../../shared/properties/i18n/messages/pl/dialog'),
+      import('../../shared/properties/i18n/messages/pl/error'),
+      import('../../shared/properties/i18n/messages/pl/menu'),
+      import('../../shared/properties/i18n/messages/pl/pages'),
+      import('../../shared/properties/i18n/messages/pl/recovery'),
+    ]),
+  tr: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/tr/assets'),
+      import('../../shared/properties/i18n/messages/tr/dialog'),
+      import('../../shared/properties/i18n/messages/tr/error'),
+      import('../../shared/properties/i18n/messages/tr/menu'),
+      import('../../shared/properties/i18n/messages/tr/pages'),
+      import('../../shared/properties/i18n/messages/tr/recovery'),
+    ]),
+  ru: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/ru/assets'),
+      import('../../shared/properties/i18n/messages/ru/dialog'),
+      import('../../shared/properties/i18n/messages/ru/error'),
+      import('../../shared/properties/i18n/messages/ru/menu'),
+      import('../../shared/properties/i18n/messages/ru/pages'),
+      import('../../shared/properties/i18n/messages/ru/recovery'),
+    ]),
+  id: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/id/assets'),
+      import('../../shared/properties/i18n/messages/id/dialog'),
+      import('../../shared/properties/i18n/messages/id/error'),
+      import('../../shared/properties/i18n/messages/id/menu'),
+      import('../../shared/properties/i18n/messages/id/pages'),
+      import('../../shared/properties/i18n/messages/id/recovery'),
+    ]),
+  hi: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/hi/assets'),
+      import('../../shared/properties/i18n/messages/hi/dialog'),
+      import('../../shared/properties/i18n/messages/hi/error'),
+      import('../../shared/properties/i18n/messages/hi/menu'),
+      import('../../shared/properties/i18n/messages/hi/pages'),
+      import('../../shared/properties/i18n/messages/hi/recovery'),
+    ]),
+  ar: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/ar/assets'),
+      import('../../shared/properties/i18n/messages/ar/dialog'),
+      import('../../shared/properties/i18n/messages/ar/error'),
+      import('../../shared/properties/i18n/messages/ar/menu'),
+      import('../../shared/properties/i18n/messages/ar/pages'),
+      import('../../shared/properties/i18n/messages/ar/recovery'),
+    ]),
+  he: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/he/assets'),
+      import('../../shared/properties/i18n/messages/he/dialog'),
+      import('../../shared/properties/i18n/messages/he/error'),
+      import('../../shared/properties/i18n/messages/he/menu'),
+      import('../../shared/properties/i18n/messages/he/pages'),
+      import('../../shared/properties/i18n/messages/he/recovery'),
+    ]),
+  ja: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/ja/assets'),
+      import('../../shared/properties/i18n/messages/ja/dialog'),
+      import('../../shared/properties/i18n/messages/ja/error'),
+      import('../../shared/properties/i18n/messages/ja/menu'),
+      import('../../shared/properties/i18n/messages/ja/pages'),
+      import('../../shared/properties/i18n/messages/ja/recovery'),
+    ]),
+  ko: () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/ko/assets'),
+      import('../../shared/properties/i18n/messages/ko/dialog'),
+      import('../../shared/properties/i18n/messages/ko/error'),
+      import('../../shared/properties/i18n/messages/ko/menu'),
+      import('../../shared/properties/i18n/messages/ko/pages'),
+      import('../../shared/properties/i18n/messages/ko/recovery'),
+    ]),
+  'zh-CN': () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/zhCN/assets'),
+      import('../../shared/properties/i18n/messages/zhCN/dialog'),
+      import('../../shared/properties/i18n/messages/zhCN/error'),
+      import('../../shared/properties/i18n/messages/zhCN/menu'),
+      import('../../shared/properties/i18n/messages/zhCN/pages'),
+      import('../../shared/properties/i18n/messages/zhCN/recovery'),
+    ]),
+  'zh-TW': () =>
+    Promise.all([
+      import('../../shared/properties/i18n/messages/zhTW/assets'),
+      import('../../shared/properties/i18n/messages/zhTW/dialog'),
+      import('../../shared/properties/i18n/messages/zhTW/error'),
+      import('../../shared/properties/i18n/messages/zhTW/menu'),
+      import('../../shared/properties/i18n/messages/zhTW/pages'),
+      import('../../shared/properties/i18n/messages/zhTW/recovery'),
+    ]),
+} as const satisfies Record<Exclude<Locale, 'en'>, () => Promise<readonly unknown[]>>;
+
+const SHIPPED_IMPORTER: MainCatalogImporter = (locale) => SHIPPED_IMPORTERS[locale]();
 
 function warnMain(issue: CatalogIssue): void {
   console.warn(`[i18n] ${issue.kind} ${issue.locale} ${issue.key}${issue.kind === 'bad-message' ? `: ${issue.reason}` : ''}`);

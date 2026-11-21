@@ -9,7 +9,9 @@ import { record, text } from '#dist/shared/core/boundary.js';
 
 // The runner starts every suite at the repository root.
 const root = process.cwd();
-const filesMax = 1000;
+// Eighteen interface languages at about forty catalog files each are most of shared/; the bound leaves
+// room for a few more languages while still catching a runaway generator writing into a source folder.
+const filesMax = 2000;
 // Folders esbuild bundles into one file the runtime loads whole
 // (scripts/build/bundleClients.ts): only each one's entry has an output.
 const BUNDLED_ENTRIES: ReadonlyMap<string, string> = new Map([

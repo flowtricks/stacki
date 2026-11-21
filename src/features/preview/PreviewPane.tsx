@@ -150,7 +150,8 @@ export default function PreviewPane(props: PreviewPaneProps) {
         guide={columnGuide.menu}
         interaction={interaction}
       />
-      <div className="preview-frame-wrap" data-canvas-interactive={interaction.active} ref={sizing.wrapRef}>
+      {/* `dir="ltr"`: the person's own site and the overlays drawn over it never mirror when Stacki is in Arabic or Hebrew. */}
+      <div className="preview-frame-wrap" dir="ltr" data-canvas-interactive={interaction.active} ref={sizing.wrapRef}>
         <PreviewContent
           props={props}
           url={props.device === 'canvas' ? url : source.url}

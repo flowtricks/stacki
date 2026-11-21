@@ -10,7 +10,8 @@
   align-items: center;
   flex: 0 0 auto;
   gap: 8px;
-  padding: 2px 4px 2px 8px;
+  padding-block: 2px;
+  padding-inline: 8px 4px;
   border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-dim);
@@ -34,15 +35,15 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  text-align: right;
+  text-align: end;
 }
 .preview-width-field input:focus-visible {
   outline: 1px solid var(--accent);
 }
 .preview-size-controls output {
   min-width: 38px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
+  padding-inline-start: 8px;
+  border-inline-start: 1px solid var(--border);
   text-align: center;
 }
 .preview-size-controls button {
@@ -78,7 +79,7 @@
   --canvas-layer-app: 8;
   position: absolute;
   top: 16px;
-  left: 50%;
+  left: 50%; /* physical: overlay centred over the LTR canvas */
   transform: translateX(-50%);
   isolation: isolate;
   overflow: hidden;

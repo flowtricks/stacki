@@ -149,7 +149,7 @@ export function HoverTooltip({ anchor, children }: { anchor: HTMLElement; childr
   const [style, setStyle] = useState<CSSProperties>({
     position: 'fixed',
     top: 0,
-    left: 0,
+    left: 0, // physical: placed from getBoundingClientRect
     visibility: 'hidden',
   });
   const [arrow, setArrow] = useState<{ left: number; above: boolean }>({ left: 0, above: true });

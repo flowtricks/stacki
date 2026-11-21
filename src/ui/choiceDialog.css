@@ -15,7 +15,7 @@
   gap: 2px;
   width: 100%;
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
   background: var(--bg-input);
 }
 .choice-dialog .choice-dialog-option:hover {

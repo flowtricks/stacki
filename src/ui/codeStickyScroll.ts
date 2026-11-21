@@ -225,7 +225,7 @@ const stickyTheme = EditorView.baseTheme({
   '.cm-sticky-stack': {
     position: 'absolute',
     top: 0,
-    left: 0,
+    left: 0, // physical: code is forced left to right
     width: '100%',
     overflow: 'clip',
     boxShadow: '0 2px 5px rgba(0, 0, 0, 0.3)',
@@ -233,7 +233,7 @@ const stickyTheme = EditorView.baseTheme({
   '.cm-sticky-row': {
     position: 'absolute',
     top: 0,
-    left: 0,
+    left: 0, // physical: code is forced left to right
     display: 'flex',
     width: '100%',
     backgroundColor: 'var(--bg-panel)',
@@ -242,7 +242,7 @@ const stickyTheme = EditorView.baseTheme({
   '.cm-sticky-row:hover .cm-sticky-code': { backgroundColor: 'rgba(255, 255, 255, 0.04)' },
   '.cm-gutters.cm-sticky-gutter': {
     position: 'sticky',
-    left: 0,
+    left: 0, // physical: code is forced left to right
     flex: 'none',
     display: 'block',
   },

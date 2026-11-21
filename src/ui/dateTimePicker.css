@@ -10,7 +10,7 @@
   align-items: center;
   gap: 2px;
   min-height: 38px;
-  padding-left: 5px;
+  padding-inline-start: 5px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   background: var(--bg-input);
@@ -34,7 +34,8 @@
   color: var(--text);
   font: inherit;
   font-variant-numeric: tabular-nums;
-  padding: 0 10px 0 4px;
+  padding-block: 0;
+  padding-inline: 4px 10px;
 }
 .date-time-control input:focus {
   /* The global input focus would draw a second, inner field inside this one. */
@@ -63,7 +64,7 @@
 .date-time-popover {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
+  inset-inline-start: 0;
   z-index: 60;
   width: min(296px, calc(100vw - 32px));
   border-radius: 10px;
@@ -147,7 +148,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 8px 8px 12px;
+  padding-block: 0 8px;
+  padding-inline: 12px 8px;
 }
 .date-time-chosen {
   min-width: 0;

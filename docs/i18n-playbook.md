@@ -1,7 +1,7 @@
 # Translating the interface: the playbook
 
 Rules and recipes for moving every user-visible string behind `translate()`. Read `docs/i18n.md` (layout, formats) first. Goal: when the person
-picks a language in Settings, **all** text changes: Desktop, Studio, menus and dialogs. Languages: `en` (source), `es`, `fr`, `de`, `pt-BR`.
+picks a language in Settings, **all** text changes: Desktop, Studio, menus and dialogs. Languages: `en` (source), `es`, `fr`, `de`, `pt-BR`, `it`, `nl`, `pl`, `tr`, `ru`, `id`, `hi`, `ar`, `he`, `ja`, `ko`, `zh-CN`, `zh-TW` (`LOCALES`, `shared/core/i18n/locales.ts`).
 
 ## 0. The loop
 
@@ -42,8 +42,8 @@ Remove, Retry, Reset, Search…, Choose…, Open, Continue) is used from there: 
 | A11 app shell | `src/app`, `app/model`, `app/roles`, `app/shell`, `app/state`, studio `app`, `auth`, `updates`, `collaboration`, `project`, `server`, `cloudflare` | `shell` |
 | A12 main process | `electron/**` | `menu`, `dialog`, `error` (shared with A1's bridge keys: add, do not rename) |
 
-New namespace checklist (the parity test fails until all of it is true): `en/<ns>.ts` + `es|fr|de|ptBR/<ns>.ts` with identical keys; one `import`
-and one spread in each of the five `index.ts` (alphabetical, a two-line edit with the Edit tool, re-read the file right before); every new file
+New namespace checklist (the parity test fails until all of it is true): `en/<ns>.ts` + the same file in every other locale directory (`LOCALE_INFO[locale].directory`) with identical keys; one `import`
+and one spread in each locale's `index.ts` (alphabetical, a two-line edit with the Edit tool, re-read the file right before); every new file
 added to `studio/scripts/shared-source.json` (then `npm --prefix studio run assemble`, one run at a time, wait if another is running; never edit
 `studio/vendor`). File header comment and `satisfies CatalogOf<...>` exactly as in `en/ui.ts` / `de/ui.ts`. Keys alphabetical in the file.
 Main-process namespaces are also listed in `electron/lib/mainLocale.ts` (section 9).

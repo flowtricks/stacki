@@ -141,7 +141,7 @@ function TreeRow(props: {
       role="treeitem"
       aria-level={row.depth + 1}
       aria-expanded={row.kind === 'folder' ? row.disclosure === 'open' : undefined}
-      style={{ top: props.top, paddingLeft: 8 + row.depth * 16 }}
+      style={{ top: props.top, paddingInlineStart: 8 + row.depth * 16 }}
     >
       {row.kind === 'folder' ? (
         <button

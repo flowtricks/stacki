@@ -6,7 +6,7 @@
   .studio-editor-content > .cms-view:not(.vars-view) > .cms-items {
     width: 100%;
     max-height: 30%;
-    border-right: 0;
+    border-inline-end: 0;
     border-bottom: 1px solid var(--border);
   }
   .studio-editor-content > .cms-view:not(.vars-view) > .cms-detail {

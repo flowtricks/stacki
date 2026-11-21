@@ -13,7 +13,7 @@
   align-items: flex-start;
   gap: 6px;
   padding: 12px 14px;
-  text-align: left;
+  text-align: start;
 }
 .apps-market-state-icon {
   display: inline-flex;
@@ -112,7 +112,7 @@
 }
 .apps-market-version::before {
   content: '·';
-  margin-right: 5px;
+  margin-inline-end: 5px;
 }
 /* A row's name gets the line to itself: it wraps rather than cut to "Feed…". */
 .apps-market-row .apps-row-title {
@@ -148,7 +148,7 @@
 .apps-rail-badge {
   position: absolute;
   top: 5px;
-  right: 5px;
+  inset-inline-end: 5px;
   width: 7px;
   height: 7px;
   border-radius: 50%;

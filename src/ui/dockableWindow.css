@@ -27,7 +27,8 @@
   box-sizing: border-box;
   /* The same row as a panel's heading (panelHeader.css), so the chat's title sits where Navigator's does. */
   min-height: var(--panel-header-height);
-  padding: var(--panel-header-padding-top) var(--panel-header-padding-end) var(--panel-header-padding-bottom) var(--panel-header-padding-start);
+  padding-block: var(--panel-header-padding-top) var(--panel-header-padding-bottom);
+  padding-inline: var(--panel-header-padding-start) var(--panel-header-padding-end);
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
 }
@@ -37,7 +38,7 @@
   touch-action: none;
 }
 .dockable-window-toggle {
-  margin-left: auto;
+  margin-inline-start: auto;
   flex-shrink: 0;
 }
 .dockable-window-body {

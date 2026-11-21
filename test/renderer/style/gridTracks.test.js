@@ -448,7 +448,7 @@ const check = (what, condition, detail) => {
     );
     check(
       'the field is not given the stepper padding',
-      /\.embed-editor_grid-count:not\(\.is-expression\) \.u-input\s*\{\s*padding-right: 18px/.test(
+      /\.embed-editor_grid-count:not\(\.is-expression\) \.u-input\s*\{\s*padding-inline-end: 18px/.test(
         fs.readFileSync(repoPath('src/features/style/embedEditor.css'), 'utf8'),
       ),
     );

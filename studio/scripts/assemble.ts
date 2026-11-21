@@ -10,8 +10,11 @@ const studio = fileURLToPath(new URL('../', import.meta.url));
 const root = path.dirname(studio);
 const inventory = record(JSON.parse(await readFile(path.join(studio, 'scripts/shared-source.json'), 'utf8')));
 
+// Files the inventory may list: about 2,300 today, of which 720 are the 18 interface languages' catalogs (40 files each).
+const INVENTORY_FILES_MAX = 4000;
+
 function paths(value: unknown): readonly string[] {
-  if (!Array.isArray(value) || value.length > 2000) {
+  if (!Array.isArray(value) || value.length > INVENTORY_FILES_MAX) {
     throw new Error('Invalid shared source inventory');
   }
   return value.map((item: unknown) => {

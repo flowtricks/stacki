@@ -30,7 +30,7 @@ export default function PanelSheet(props: {
       mode="popover"
       portal={true}
       className={`panel-sheet ${props.className}`}
-      style={{ ...props.style, marginLeft: drag.offset.x, marginTop: drag.offset.y }}
+      style={{ ...props.style, marginLeft: drag.offset.x, marginTop: drag.offset.y }} // physical: drag offset from pointer x
       role="dialog"
       label={props.label}
       onClose={props.onClose}

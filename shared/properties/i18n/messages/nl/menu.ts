@@ -1,0 +1,43 @@
+// Dutch `menu` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/menu';
+
+export const messages = {
+  'menu.app.about': 'Over Stacki',
+  'menu.app.hide': 'Verberg Stacki',
+  'menu.app.hideOthers': 'Verberg andere',
+  'menu.app.quit': 'Stop Stacki',
+  'menu.app.services': 'Diensten',
+  'menu.app.showAll': 'Toon alles',
+  'menu.edit.copy': 'Kopieer',
+  'menu.edit.copySelection': 'Kopieer selectie',
+  'menu.edit.cut': 'Knip',
+  'menu.edit.insertElement': 'Element invoegen…',
+  'menu.edit.paste': 'Plak',
+  'menu.edit.redo': 'Opnieuw',
+  'menu.edit.selectAll': 'Selecteer alles',
+  'menu.edit.title': 'Wijzig',
+  'menu.edit.undo': 'Ongedaan maken',
+  'menu.file.checkForUpdates': 'Zoek naar updates…',
+  'menu.file.closeProject': 'Sluit project',
+  'menu.file.closeWindow': 'Sluit venster',
+  'menu.file.openProject': 'Open project…',
+  'menu.file.quit': 'Stop',
+  'menu.file.settings': 'Instellingen…',
+  'menu.file.title': 'Archief',
+  'menu.view.actualSize': 'Werkelijke grootte',
+  'menu.view.forceReload': 'Forceer herladen',
+  'menu.view.fullScreen': 'Schakel beeldschermvullend in/uit',
+  'menu.view.reload': 'Herlaad',
+  'menu.view.reloadAllCode': 'Herlaad alle code',
+  'menu.view.reloadWindow': 'Herlaad alleen venster',
+  'menu.view.title': 'Weergave',
+  'menu.view.toggleDevTools': 'Schakel ontwikkelaarstools in/uit',
+  'menu.view.zoomIn': 'Zoom in',
+  'menu.view.zoomOut': 'Zoom uit',
+  'menu.window.bringAllToFront': 'Alles naar voren',
+  'menu.window.close': 'Sluit',
+  'menu.window.minimize': 'Zet in Dock',
+  'menu.window.title': 'Venster',
+  'menu.window.zoom': 'Zoom', // same
+} as const satisfies CatalogOf<MessageKey>;

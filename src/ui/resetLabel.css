@@ -6,12 +6,13 @@
   gap: 3px;
   vertical-align: middle;
   padding: 1px 5px;
-  margin: -1px 0 -1px -5px;
+  margin-block: -1px;
+  margin-inline: -5px 0;
   border-radius: 4px;
 }
 .prop-label .prop-label-icon {
   opacity: 0.85;
-  margin-left: -1px;
+  margin-inline-start: -1px;
 }
 .prop-label.set {
   color: var(--accent);
@@ -43,7 +44,8 @@
   align-items: center;
   gap: 8px;
   height: 26px;
-  padding: 0 10px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 10px;
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;

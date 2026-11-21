@@ -3,7 +3,8 @@
   display: grid;
   gap: 8px;
   margin: 0;
-  padding: 0 0 0 16px;
+  padding-block: 0;
+  padding-inline: 16px 0;
   white-space: normal;
 }
 .property-removal-detail {
@@ -13,7 +14,8 @@
 .property-removal-rows {
   display: grid;
   gap: 2px;
-  margin: 6px 0 0 -16px;
+  margin-block: 6px 0;
+  margin-inline: -16px 0;
   padding: 6px 10px;
   list-style: none;
   border-radius: 6px;
