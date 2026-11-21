@@ -32,11 +32,11 @@ test('only a frame that is neither the window nor an app counts as the canvas', 
   assert.equal(classifyFocusedFrame(undefined, APP_SCHEME), 'app');
 });
 
-function reloadsAskedFor(isDev: boolean): Map<string, ReloadCommand | undefined> {
+function reloadsAskedFor(mode: 'dev' | 'packaged'): Map<string, ReloadCommand | undefined> {
   let asked: ReloadCommand | undefined;
   const template = buildApplicationMenuTemplate({
     isMac: true,
-    isDev,
+    isDev: mode === 'dev',
     translate: MAIN_ENGLISH.translate,
     send: () => undefined,
     checkForUpdates: () => undefined,
@@ -61,13 +61,13 @@ function reloadsAskedFor(isDev: boolean): Map<string, ReloadCommand | undefined>
 }
 
 test('a dev run maps the accelerators to the relaunch and the window reload', () => {
-  const asked = reloadsAskedFor(true);
+  const asked = reloadsAskedFor('dev');
   assert.equal(asked.get('CmdOrCtrl+R'), 'reloadAllCode');
   assert.equal(asked.get('Shift+CmdOrCtrl+R'), 'reloadWindow');
 });
 
 test('a packaged run maps the accelerators to the window reload and the cache-bypassing one', () => {
-  const asked = reloadsAskedFor(false);
+  const asked = reloadsAskedFor('packaged');
   assert.equal(asked.get('CmdOrCtrl+R'), 'reloadWindow');
   assert.equal(asked.get('Shift+CmdOrCtrl+R'), 'forceReloadWindow');
 });
