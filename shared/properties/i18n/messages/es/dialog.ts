@@ -41,6 +41,7 @@ export const messages = {
   'dialog.update.ready.heading': 'Stacki {version} está listo',
   'dialog.update.ready.later': 'Más tarde',
   'dialog.update.ready.restartNow': 'Reiniciar ahora',
+  'dialog.update.upToDate.title': 'Estás al día',
   'dialog.usage.continue': 'Continuar',
   'dialog.usage.detail':
     'Stacki envía un solo recuento los días en que abres un proyecto. No envía nombres de proyectos, contenido de archivos, identificadores del dispositivo ni historial de actividad. Los totales diarios se guardan en Cloudflare hasta 366 días; su red ve la IP de la conexión, pero la base de datos de uso no la almacena. Puedes desactivarlo cuando quieras en Archivo → Ajustes.',
