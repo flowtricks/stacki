@@ -96,8 +96,10 @@ export const messages = {
   'ai.composer.commands': 'Commandes',
   'ai.composer.default': 'Par défaut',
   'ai.composer.dictate': 'Dicter',
+  'ai.composer.dictate.privacy':
+    'La parole est reconnue par le service vocal de votre système, qui peut traiter l’audio en ligne. Stacki ne conserve aucun audio.',
   'ai.composer.dictate.stop': 'Arrêter la dictée',
-  'ai.composer.dictate.title': 'Dicter un message',
+  'ai.composer.dictate.title': 'Cliquez pour dicter, ou maintenez pour parler',
   'ai.composer.dictate.unavailable': 'La saisie vocale n’est pas disponible',
   'ai.composer.effort': 'Effort', // same
   'ai.composer.listening': 'Écoute en cours… cliquez sur le micro pour terminer',
@@ -149,6 +151,8 @@ export const messages = {
   'ai.context.wait': 'Attendez que l’agent ait terminé',
   'ai.dictation.blockedWindow': 'Le micro a été bloqué pour cette fenêtre. Redémarrez Stacki et réessayez.',
   'ai.dictation.failed': 'La saisie vocale a échoué ({error}).',
+  'ai.dictation.language': 'La saisie vocale ne prend pas en charge cette langue ici. Changez la langue de l’interface ou saisissez votre message.',
+  'ai.dictation.network': 'La saisie vocale n’a pas pu joindre le service vocal. Vérifiez votre connexion et réessayez.',
   'ai.dictation.noSpeech': 'Aucune parole détectée. Réessayez.',
   'ai.dictation.notAllowed': 'L’accès au micro n’a pas été autorisé. Appuyez sur le micro pour réessayer.',
   'ai.dictation.off': 'L’accès au micro est désactivé. Autorisez-le dans les Réglages Système, puis réessayez.',
@@ -156,6 +160,7 @@ export const messages = {
   'ai.dictation.openSettings': 'Ouvrir les Réglages Système',
   'ai.dictation.restricted': 'L’accès au micro est restreint sur ce Mac : la saisie vocale ne peut pas démarrer.',
   'ai.dictation.restrictedHint': 'Un profil ou une règle Temps d’écran le bloque ; seul un administrateur peut le modifier.',
+  'ai.dictation.silence': 'Écoute arrêtée après une pause. Appuyez sur le micro pour recommencer.',
   'ai.dictation.startFailed': 'Impossible de démarrer le micro. Réessayez.',
   'ai.dictation.unavailable': 'La saisie vocale n’est pas disponible ici.',
   'ai.diff.binary': 'Fichier binaire, pas d’aperçu.',
@@ -566,4 +571,8 @@ export const messages = {
   'ai.turn.refusal': 'L’agent a refusé cette demande.',
   'ai.turn.signIn': 'Connectez-vous pour continuer.',
   'ai.turn.stopped': 'Arrêté.',
+  'ai.voice.hintHandsFree': 'Mains libres : dites « send », « new line » ou « scratch that », ou appuyez sur le micro pour arrêter.',
+  'ai.voice.hintHandsFreeBasic': 'Mains libres : appuyez sur le micro pour arrêter.',
+  'ai.voice.hintHold': 'Relâchez pour arrêter.',
+  'ai.voice.level': 'Niveau du micro',
 } as const satisfies CatalogOf<MessageKey>;

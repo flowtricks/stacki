@@ -367,3 +367,54 @@
 .ai-ring-compact:disabled {
   opacity: 0.4;
 }
+
+/* Voice input: the waveform and the phrase being spoken sit in one quiet line under the box. */
+.ai-voice-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 20px;
+  padding-inline: 2px;
+}
+.ai-wave {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  block-size: 18px;
+  color: var(--red);
+}
+.ai-wave-bar {
+  inline-size: 2px;
+  block-size: 100%;
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: center;
+  will-change: transform;
+}
+/* Before the microphone is open the bars are a skeleton: a soft pulse, no words. */
+.ai-wave.is-starting .ai-wave-bar {
+  opacity: 0.35;
+  animation: ai-wave-pulse 1s ease-in-out infinite;
+}
+@keyframes ai-wave-pulse {
+  50% {
+    opacity: 0.7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-wave.is-starting .ai-wave-bar {
+    animation: none;
+  }
+}
+.ai-voice-text {
+  min-inline-size: 0;
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-voice-text.is-hint {
+  color: var(--text-faint);
+}

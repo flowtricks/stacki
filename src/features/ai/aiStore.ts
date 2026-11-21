@@ -111,14 +111,35 @@ export function draftWithText(draft: ChatDraft, text: string): ChatDraft {
   return { ...draft, segments: text === '' ? [] : [{ kind: 'text', text }] };
 }
 
-/** The draft with `text` added at the end after a space (dictation); chips stay where they are. */
+/**
+ * The draft with `text` added at the end (dictation); chips stay where they are. A space joins it to
+ * the words before it, unless those end in white space (a line break from "new line") or the added
+ * text itself starts with a line break.
+ */
 export function draftWithAppendedText(draft: ChatDraft, text: string): ChatDraft {
   const last = draft.segments[draft.segments.length - 1];
   if (last?.kind === 'text') {
-    const joined: ComposerSegments[number] = { kind: 'text', text: `${last.text}${last.text === '' ? '' : ' '}${text}` };
+    const joiner = last.text === '' || /\s$/u.test(last.text) || /^\s/u.test(text) ? '' : ' ';
+    const joined: ComposerSegments[number] = { kind: 'text', text: `${last.text}${joiner}${text}` };
     return { ...draft, segments: [...draft.segments.slice(0, -1), joined] };
   }
   return { ...draft, segments: [...draft.segments, { kind: 'text', text }] };
+}
+
+/** The draft with its trailing text segment cut to `text`: what "delete that" leaves. An empty result drops the segment. */
+export function draftWithTrailingText(draft: ChatDraft, text: string): ChatDraft {
+  const last = draft.segments[draft.segments.length - 1];
+  if (last?.kind !== 'text') {
+    return draft;
+  }
+  const rest = draft.segments.slice(0, -1);
+  return { ...draft, segments: text === '' ? rest : [...rest, { kind: 'text', text }] };
+}
+
+/** The text of the draft's last segment when it is text (what dictation appends to), and an empty string when a chip ends the draft. */
+export function draftTrailingText(draft: ChatDraft): string {
+  const last = draft.segments[draft.segments.length - 1];
+  return last?.kind === 'text' ? last.text : '';
 }
 
 /** Whether sending the draft would send nothing: no chip, only space for text, no attachment. */

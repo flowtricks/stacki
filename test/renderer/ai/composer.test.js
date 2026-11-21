@@ -5,7 +5,9 @@
 // offers it); the mode chip opens the Mode menu (descriptions, numbers, Recommended on Auto) and choosing
 // Bypass permissions asks once per chat through the app's dialog; the context ring is neutral, amber and red
 // at 70% and 90%, and its panel says "N tokens of M" and offers Compact only to agents that can, never while
-// a turn runs. No native select is drawn anywhere in the composer.
+// a turn runs. No native select is drawn anywhere in the composer. Voice input: a tap latches hands-free and a hold is push
+// to talk; the waveform and the phrase being spoken show at once; finished phrases are cleaned, written with the project's
+// names, and understood as commands (send, new line, scratch that); a refused microphone says so and opens nothing.
 // Method: bundle the real panel and store with esbuild, mount them in jsdom against a fake preload
 // (window.avb) that records every call, and push events through its listener as main would. Layout and
 // colour are checked in the Electron render probe, not here: jsdom has no layout.
@@ -30,6 +32,7 @@ esbuild.buildSync({
       "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
       "export { formattersFor } from './shared/core/i18n/format';",
       "export { agentBadge } from './src/features/ai/agentSwitch';",
+      "export { VoiceEnvironmentContext } from './src/features/ai/voice/voiceEnvironment';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'tsx',
@@ -90,6 +93,7 @@ const PROJECT = '/site';
 const CHAT = `c${'b'.repeat(24)}`;
 const TURN = `t${'2'.repeat(16)}`;
 
+const GRANTED = { status: 'granted', appName: 'Stacki', settingsAvailable: true };
 const choice = (value, name, description) => ({ value, name, description });
 const CLAUDE_OPTIONS = [
   {
@@ -151,7 +155,7 @@ const CODEX_OPTIONS = [
   { id: 'model', name: 'Model', category: 'model', currentValue: 'gpt', choices: [choice('gpt', 'GPT 5')] },
 ];
 
-function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { claude: [], codex: [] } } = {}) {
+function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { claude: [], codex: [] }, microphone = GRANTED } = {}) {
   const calls = [];
   const listeners = { events: undefined };
   const summary = { id: CHAT, agent, title: 'New chat', pinned: false, createdAt: 1, updatedAt: 1, rank: 0, unread: false };
@@ -201,6 +205,11 @@ function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { c
     },
     onAiAgentStatus: () => () => undefined,
     getFilePath: () => undefined,
+    // The system's answer for the microphone, and the project's files for the dictionary.
+    microphoneRequest: record('microphoneRequest', () => microphone),
+    microphoneStatus: record('microphoneStatus', () => microphone),
+    microphoneOpenSettings: record('microphoneOpenSettings', { ok: true }),
+    aiMentions: record('aiMentions', () => ({ ok: true, value: [{ kind: 'file', path: 'src/components/HeroSection.astro', name: 'HeroSection.astro' }] })),
     platform: 'darwin',
   };
   return { calls, listeners };
@@ -229,13 +238,18 @@ async function mount(context, over) {
       React.createElement(
         React.Fragment,
         undefined,
-        React.createElement(ai.AiPanel, {
-          projectPath: PROJECT,
-          onOpenTerminal: () => undefined,
-          onMerge: () => undefined,
-          onOpenExternal: () => undefined,
-          renderFrame: (header, body) => React.createElement('div', undefined, header, body),
-        }),
+        React.createElement(
+          ai.VoiceEnvironmentContext.Provider,
+          // Tests never open a real microphone or recognizer: the fake environment is the only one the composer sees.
+          { value: over?.voice ?? fakeVoice().environment },
+          React.createElement(ai.AiPanel, {
+            projectPath: PROJECT,
+            onOpenTerminal: () => undefined,
+            onMerge: () => undefined,
+            onOpenExternal: () => undefined,
+            renderFrame: (header, body) => React.createElement('div', undefined, header, body),
+          }),
+        ),
         React.createElement(ai.ConfirmHost),
       ),
     );
@@ -736,4 +750,221 @@ test('the plus menu offers images and commands; choosing commands puts a slash i
   assert.equal(inputText(), '/');
   await click(byLabel('Add to message'));
   assert.equal(rowNamed('Commands and skills').disabled, true, 'a command can only start an empty box');
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Voice input. The recognizer, the audio meter and the clock are fakes; no test opens a microphone.
+
+function fakeVoice() {
+  const state = { recognizers: [], meters: [], nowMs: 1000 };
+  const environment = {
+    isSupported: () => true,
+    createRecognition: () => {
+      const recognizer = {
+        continuous: false,
+        interimResults: false,
+        lang: '',
+        started: 0,
+        stopped: 0,
+        onresult: () => undefined,
+        onerror: () => undefined,
+        onend: () => undefined,
+        start() {
+          this.started += 1;
+        },
+        stop() {
+          this.stopped += 1;
+        },
+        abort() {},
+      };
+      state.recognizers.push(recognizer);
+      return recognizer;
+    },
+    audioLevels: {
+      start: async (barCount, onBars) => {
+        const meter = { barCount, onBars, stopped: false };
+        state.meters.push(meter);
+        return { ok: true, value: () => (meter.stopped = true) };
+      },
+    },
+    nowMs: () => state.nowMs,
+  };
+  return { environment, state, current: () => state.recognizers.at(-1) };
+}
+
+const pointer = async (type) => {
+  await act(async () => {
+    byLabelStartingWith('Dictate', 'Stop dictation').dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true }));
+  });
+  await settle();
+};
+const byLabelStartingWith = (...labels) => labels.map(byLabel).find(Boolean);
+const speak = async (recognizer, results, resultIndex = 0) => {
+  await act(async () => {
+    recognizer.onresult({ resultIndex, results: results.map(([transcript, isFinal]) => ({ isFinal, 0: { transcript } })) });
+  });
+  await settle();
+};
+const voiceText = () => document.querySelector('.ai-voice-text')?.textContent;
+
+test('a tap latches hands-free: the line and waveform show at once, spoken phrases are cleaned and land in the box', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  assert.ok(document.querySelector('.ai-voice-line'), 'the voice line is there');
+  assert.equal(document.querySelectorAll('.ai-wave-bar').length, 28);
+  assert.equal(voice.current().continuous, true, 'hands-free keeps listening across pauses');
+  assert.equal(voice.current().interimResults, true);
+  assert.equal(voice.current().lang, 'en-US', 'the recognizer listens for the interface language');
+  assert.match(voiceText(), /Hands-free/, 'the hint says how to stop and which commands exist');
+  await speak(voice.current(), [['um hello there', false]]);
+  assert.equal(voiceText(), 'Hello there', 'the phrase being spoken shows cleaned');
+  await speak(voice.current(), [['um fix the the header comma please', true]]);
+  assert.equal(inputText(), 'Fix the header, please');
+  await speak(
+    voice.current(),
+    [
+      ['Fix the header comma please', true],
+      ['new line add a test', true],
+    ],
+    1,
+  );
+  assert.equal(inputText(), 'Fix the header, please\nAdd a test');
+  assert.equal(voice.state.meters.length, 1, 'one meter for the session');
+  voice.state.meters[0].onBars(Array.from({ length: 28 }, () => 0.5));
+  await settle();
+  assert.equal(document.querySelector('.ai-wave-bar').style.transform, 'scaleY(0.5)', 'the waveform follows the meter');
+  await pointer('pointerdown');
+  assert.equal(voice.current().stopped, 1, 'the next press ends a hands-free session');
+  await act(async () => voice.current().onend());
+  await settle();
+  assert.ok(document.querySelector('.ai-voice-line') === null, 'the line goes with the session');
+  assert.equal(voice.state.meters[0].stopped, true, 'the meter closes with the session');
+});
+
+test('holding the button is push to talk: letting go stops, and the last phrase still lands', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  await pointer('pointerdown');
+  assert.ok(document.querySelector('.ai-voice-line'), 'instant: the line is there on the press');
+  voice.state.nowMs += 800;
+  await pointer('pointerup');
+  assert.equal(voice.current().stopped, 1);
+  await speak(voice.current(), [['ship it today', true]]);
+  assert.equal(inputText(), 'Ship it today');
+  await act(async () => voice.current().onend());
+  await settle();
+  assert.ok(document.querySelector('.ai-voice-line') === null);
+  assert.equal(voice.state.recognizers.length, 1, 'a stopped session does not restart');
+});
+
+test('the recognizer ending by itself in a hands-free session listens again', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await act(async () => voice.current().onend());
+  await settle();
+  assert.equal(voice.state.recognizers.length, 2, 'a second recognizer took over');
+  assert.equal(voice.current().started, 1);
+  assert.ok(document.querySelector('.ai-voice-line'), 'still listening');
+});
+
+test('"send" alone sends the box by voice and ends the session; the same word in a sentence is text', async (context) => {
+  const voice = fakeVoice();
+  const { calls } = await mount(context, { voice: voice.environment });
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await speak(voice.current(), [['please send it to the server', true]]);
+  assert.equal(inputText(), 'Please send it to the server');
+  assert.equal(callsNamed(calls, 'aiPrompt').length, 0, 'a sentence with send in it sends nothing');
+  await speak(
+    voice.current(),
+    [
+      ['please send it to the server', true],
+      ['send', true],
+    ],
+    1,
+  );
+  assert.equal(callsNamed(calls, 'aiPrompt').length, 1);
+  assert.equal(callsNamed(calls, 'aiPrompt')[0].payload.text, 'Please send it to the server');
+  assert.equal(voice.current().stopped, 1, 'sending ends the session');
+});
+
+test('"scratch that" takes back the last dictated piece and never what was typed', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  await setText('Typed by hand.');
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await speak(voice.current(), [['and this too', true]]);
+  assert.equal(inputText(), 'Typed by hand. And this too');
+  await speak(
+    voice.current(),
+    [
+      ['and this too', true],
+      ['scratch that', true],
+    ],
+    1,
+  );
+  assert.equal(inputText(), 'Typed by hand.');
+  await speak(
+    voice.current(),
+    [
+      ['and this too', true],
+      ['scratch that', true],
+      ['scratch that', true],
+    ],
+    2,
+  );
+  assert.equal(inputText(), 'Typed by hand.', 'nothing dictated is left to take back, so typing stays');
+});
+
+test("the dictionary writes the project's file names the way the project spells them", async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await settle();
+  await speak(voice.current(), [['open the hero section dot astro file', true]]);
+  assert.equal(inputText(), 'Open the HeroSection.astro file');
+});
+
+test('a microphone the system keeps off opens nothing and says what to switch on', async (context) => {
+  const voice = fakeVoice();
+  const { calls } = await mount(context, { voice: voice.environment, microphone: { status: 'denied', appName: 'Stacki', settingsAvailable: true } });
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  assert.equal(voice.state.recognizers.length, 0, 'no recognizer, no meter');
+  assert.equal(voice.state.meters.length, 0);
+  assert.match(document.querySelector('.ai-dictation-notice').textContent, /Microphone access is off/);
+  assert.ok(document.querySelector('.ai-voice-line') === null);
+  await click(document.querySelector('.ai-dictation-settings'));
+  assert.equal(callsNamed(calls, 'microphoneOpenSettings').length, 1);
+});
+
+test('a recognizer error stops the session and names the cause', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await act(async () => voice.current().onerror({ error: 'network' }));
+  await settle();
+  assert.match(document.querySelector('.ai-dictation-notice').textContent, /could not reach the speech service/);
+  assert.equal(voice.current().stopped, 1);
+});
+
+test('the microphone shows its privacy note', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  assert.match(byLabel('Dictate').title, /Stacki stores no audio/);
+});
+
+test('a platform with no recognizer says voice input is unavailable', async (context) => {
+  const none = { ...fakeVoice().environment, isSupported: () => false, createRecognition: () => undefined };
+  await mount(context, { voice: none });
+  assert.equal(byLabel('Dictate').title, 'Voice input is not available');
+  await pointer('pointerdown');
+  assert.match(document.querySelector('.ai-dictation-notice').textContent, /not available here/);
 });
