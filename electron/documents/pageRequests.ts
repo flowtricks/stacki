@@ -12,6 +12,7 @@ import * as path from 'path';
 import { parsePage, locateSelection, resolveChunks } from '../parse/astroParser';
 import { parseMarkdownPage } from '../parse/markdownParser';
 import { toPosix } from '../lib/mainHelpers';
+import { pagesDirectoryOf } from '../lib/astroConfig';
 import { translateMain } from '../lib/mainLocale';
 
 // The page formats Astro routes from a file: .astro, plus markdown when the
@@ -83,7 +84,7 @@ export function pageEditError(file: string, report: Exclude<EditReport, { readon
 // Folder management under src/pages. Renames are same-parent only (from the
 // UI), so contained files keep their relative-import depth.
 export const resolvePagesDirectory = (projectPath: string, rel: string) => {
-  const pagesDirectory = path.join(projectPath, 'src', 'pages');
+  const pagesDirectory = pagesDirectoryOf(projectPath);
   const full = path.resolve(pagesDirectory, rel);
   if (!isPathWithin(pagesDirectory, full)) {
     throw new Error('Invalid folder.');
