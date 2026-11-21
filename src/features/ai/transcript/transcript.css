@@ -580,3 +580,145 @@
 .ai-tool-status.ai-status-completed {
   display: none;
 }
+
+/* Subagents: the strip above the transcript and the header of one subagent's transcript (SubagentStrip.tsx, SubagentPane.tsx). */
+.ai-agents {
+  flex: none;
+  background: var(--bg-input);
+  border-radius: 6px;
+  min-width: 0;
+}
+.ai-agents-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: left;
+}
+button.ai-agents-head:hover {
+  background: var(--bg-hover);
+  border-radius: 6px;
+}
+.ai-agents-failed {
+  color: var(--red);
+  font-size: 11px;
+}
+.ai-agents-list {
+  margin: 0;
+  padding: 0 4px 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* About five rows; a run with more scrolls inside the strip, never pushing the transcript away. */
+  max-height: 10rem;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.ai-agents-more {
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-agent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1px 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.ai-agent:hover {
+  background: var(--bg-hover);
+}
+.ai-agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.ai-agent-dot-running {
+  background: var(--accent);
+}
+.ai-agent-dot-waiting {
+  background: var(--amber);
+}
+.ai-agent-dot-done {
+  background: var(--green);
+}
+.ai-agent-dot-failed {
+  background: var(--red);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ai-agent-dot-running {
+    animation: ai-agent-pulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes ai-agent-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+.ai-agent-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-agent-role {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.ai-agent-time {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-agent-doing {
+  grid-column: 2 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-agent-pane-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 8px 3px 3px;
+  background: var(--bg-input);
+  border-radius: 6px;
+}
+.ai-agent-pane-head .ai-agent-name {
+  flex: 1;
+}
+.ai-agent-back {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.ai-agent-back:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}

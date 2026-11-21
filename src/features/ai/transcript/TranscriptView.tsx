@@ -1,7 +1,10 @@
 // The conversation: the messages, the agent's work folded into activity groups, its plan's state,
 // permission requests, the changes of each turn, compactions, and the quiet rows (notices, stops, a
 // failed reply). Under it, while a turn runs, the loader with what the agent is doing and a live
-// timer; above the composer's edge, the tray of background work.
+// timer; above the composer's edge, the tray of background work. A subagent's own words are not drawn
+// here: they belong to its transcript (SubagentPane.tsx), which is this same view given the
+// subagent's items, so both are drawn by one renderer. Subagents are listed by the strip above, so
+// the tray keeps the commands and other calls left running.
 //
 // Scrolling: the view follows the newest line while the person is at the bottom, stops following the
 // moment they scroll up (wheel, touch, keys or the scrollbar), and offers "Jump to latest" until they
@@ -55,6 +58,7 @@ export function Transcript({
   chatId,
   onReview,
   onOpenFile,
+  empty,
 }: {
   readonly view: ChatView;
   /** What of the transcript is a sign-in problem (the sign-in card draws it, not the transcript). */
@@ -66,6 +70,8 @@ export function Transcript({
   readonly onReview: ReviewHandler;
   /** Shows a changed file in the editor; without it a changes card has no "Open file". */
   readonly onOpenFile?: ((path: string) => void) | undefined;
+  /** What an empty transcript says; the chat's invitation by default. */
+  readonly empty?: string | undefined;
 }) {
   const translate = useTranslate();
   const scroll = useRef<HTMLDivElement>(null);
@@ -91,7 +97,7 @@ export function Transcript({
   const rows = useMemo(() => {
     const positioned: PositionedItem[] = [];
     view.items.forEach((item, index) => {
-      if (!reading.hidden.has(index)) {
+      if (!reading.hidden.has(index) && !isSubagentText(item)) {
         positioned.push({ item, index });
       }
     });
@@ -149,8 +155,12 @@ export function Transcript({
   const answerable = answerableMessageId(view.items, { running: view.running !== undefined });
   const toolsByCall = useMemo(() => toolItemsByCall(view.items), [view.items]);
   const waiting = useMemo(() => waitingPermissions(view), [view]);
-  const lastItem = view.items[view.items.length - 1];
-  const finished = useMemo(() => finishedTasks(view.items, { limit: FINISHED_TASKS_SHOWN, scanMax: FINISHED_TASKS_SCAN_ITEMS }), [view.items]);
+  const lastItem = useMemo(() => lastOwnItem(view.items), [view.items]);
+  const finished = useMemo(
+    () => finishedTasks(view.items, { limit: FINISHED_TASKS_SHOWN, scanMax: FINISHED_TASKS_SCAN_ITEMS }).filter((task) => task.kind !== 'subagent'),
+    [view.items],
+  );
+  const tasks = useMemo(() => view.activeTasks.filter((task) => task.kind !== 'subagent'), [view.activeTasks]);
   const stop = useCallback((): void => void stopChat(chatId), [chatId]);
 
   return (
@@ -187,7 +197,7 @@ export function Transcript({
       }}
     >
       <div className="ai-transcript-flow" ref={flow}>
-        {view.items.length === 0 && <p className="ai-empty">{translate('ai.transcript.empty')}</p>}
+        {view.items.length === 0 && <p className="ai-empty">{empty ?? translate('ai.transcript.empty')}</p>}
         {windowed.hidden > 0 && (
           <button className="ai-earlier" onClick={() => setShown((count) => count + ROWS_SHOWN_MAX)}>
             {translate('ai.transcript.showEarlier', { count: Math.min(windowed.hidden, ROWS_SHOWN_MAX) })}
@@ -212,7 +222,7 @@ export function Transcript({
             />
           ),
         )}
-        <BackgroundTasks tasks={view.activeTasks} finished={finished} chatId={chatId} onStop={stop} />
+        <BackgroundTasks tasks={tasks} finished={finished} chatId={chatId} onStop={stop} />
         <TurnStatus view={view} />
         {standaloneRetry && (
           <button className="ai-retry" onClick={retryLast}>
@@ -240,6 +250,22 @@ export function Transcript({
       )}
     </div>
   );
+}
+
+/** The newest item this transcript draws (a subagent's words streaming after it are drawn elsewhere). */
+function lastOwnItem(items: readonly TranscriptItem[]): TranscriptItem | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item !== undefined && !isSubagentText(item)) {
+      return item;
+    }
+  }
+  return undefined;
+}
+
+/** Words a subagent said: its own transcript draws them, re-rooted, so here they are left out. */
+function isSubagentText(item: TranscriptItem): boolean {
+  return item.kind === 'text' && item.parent !== undefined;
 }
 
 /** The tool calls of a transcript by call id, so a permission request finds the call it asks about. */

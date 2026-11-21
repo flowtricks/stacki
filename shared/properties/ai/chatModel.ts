@@ -166,6 +166,8 @@ export type ChatEvent =
       /** When the first chunk arrived and the last one did; absent in chats stored before timings, which show no duration. */
       readonly at?: number | undefined;
       readonly until?: number | undefined;
+      /** The subagent call that said it (Claude's `parentToolUseId`); absent for the agent's own words and in chats stored before subagents were told apart. */
+      readonly parent?: string | undefined;
     }
   | {
       readonly kind: 'tool';
@@ -188,6 +190,8 @@ export type ChatEvent =
       readonly command?: string | undefined;
       /** The call was started in the background (Claude's `run_in_background`). */
       readonly background?: boolean | undefined;
+      /** The role of the subagent an Agent or Task call starts (Claude's `subagent_type`: `Explore`), when it said. */
+      readonly agentType?: string | undefined;
     }
   | {
       readonly kind: 'compaction';
@@ -424,6 +428,7 @@ function parseChatEventOfKind(kind: unknown, value: Record<string, unknown>): Ch
         text: text(value['text'], AI_LIMITS.textCharsMax, 'text.text'),
         at: optionalCount(value['at'], 'text.at'),
         until: optionalCount(value['until'], 'text.until'),
+        parent: value['parent'] === undefined ? undefined : identifier(value['parent']),
       };
     case 'compaction':
       return {
@@ -554,6 +559,7 @@ function parseToolEvent(value: Record<string, unknown>): ChatEvent {
     toolName: value['toolName'] === undefined ? undefined : identifier(value['toolName']),
     command: value['command'] === undefined ? undefined : text(value['command'], AI_LIMITS.labelCharsMax, 'tool.command'),
     background: value['background'] === undefined ? undefined : flag(value['background'], 'tool.background'),
+    agentType: value['agentType'] === undefined ? undefined : identifier(value['agentType']),
   };
 }
 

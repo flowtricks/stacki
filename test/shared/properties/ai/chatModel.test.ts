@@ -18,6 +18,9 @@ import {
   toSectionId,
 } from '#dist/shared/properties/ai/chatModel.js';
 
+/** JSON's null, as an adapter or a stored file can send it. */
+const jsonNull: unknown = JSON.parse('null');
+
 const chat = `c${'a'.repeat(24)}`;
 const other = `c${'b'.repeat(24)}`;
 const turn = `t${'1'.repeat(16)}`;
@@ -114,6 +117,24 @@ test('events stored before timings still parse; the new fields parse when presen
       parts: Array.from({ length: AI_LIMITS.promptPartsMax + 1 }, () => ({ kind: 'text', text: 'a' })),
     }),
   );
+});
+
+test('a subagent’s words name its call and a Task call names its role; both are optional, non-empty identifiers', () => {
+  const said = parseChatEvent({ kind: 'text', turn, role: 'agent', text: 'found it', parent: 'toolu_task' });
+  assert.ok(said.kind === 'text');
+  assert.equal(said.parent, 'toolu_task');
+  const own = parseChatEvent({ kind: 'text', turn, role: 'agent', text: 'mine' });
+  assert.ok(own.kind === 'text');
+  assert.equal(own.parent, undefined, 'a chat stored before subagents were told apart still reads');
+  const task = parseChatEvent({ kind: 'tool', turn, call: 'toolu_task', toolName: 'Agent', agentType: 'Explore' });
+  assert.ok(task.kind === 'tool');
+  assert.equal(task.agentType, 'Explore');
+  for (const parent of ['', 7, jsonNull, 'p'.repeat(AI_LIMITS.idCharsMax + 1)]) {
+    assert.throws(() => parseChatEvent({ kind: 'text', turn, role: 'agent', text: 'x', parent }), Error, String(parent));
+  }
+  for (const agentType of ['', ['Explore'], 'r'.repeat(AI_LIMITS.idCharsMax + 1)]) {
+    assert.throws(() => parseChatEvent({ kind: 'tool', turn, call: 'k', agentType }), Error, String(agentType));
+  }
 });
 
 test('compaction events: status and id are required, the turn is optional', () => {

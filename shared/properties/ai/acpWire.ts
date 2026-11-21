@@ -88,7 +88,7 @@ export interface AcpToolCall {
   readonly parent: string | undefined;
   /** The agent's own name for the tool (Claude's `_meta.claudeCode.toolName`: `Bash`, `compact`). */
   readonly toolName: string | undefined;
-  /** The three fields of `rawInput` the panel uses; the rest of the input is dropped. */
+  /** The four fields of `rawInput` the panel uses; the rest of the input is dropped. */
   readonly rawInput: AcpRawInput | undefined;
   /** What a Codex subagent call reports in `rawInput.activityKind` (`started`, ...). */
   readonly activityKind: string | undefined;
@@ -99,6 +99,8 @@ export interface AcpRawInput {
   readonly description: string | undefined;
   /** Claude's `run_in_background` on a Bash call. */
   readonly runInBackground: boolean | undefined;
+  /** Claude's `subagent_type` on an Agent or Task call: the role of the subagent it starts (`Explore`, `general-purpose`). */
+  readonly subagentType: string | undefined;
 }
 
 export interface AcpPlanEntry {
@@ -129,7 +131,13 @@ export interface AcpConfigOption {
 }
 
 export type AcpUpdate =
-  | { readonly kind: 'message'; readonly role: 'agent' | 'thought' | 'user'; readonly content: AcpContent }
+  | {
+      readonly kind: 'message';
+      readonly role: 'agent' | 'thought' | 'user';
+      readonly content: AcpContent;
+      /** The subagent call the words come from (Claude's `_meta.claudeCode.parentToolUseId`); undefined for the agent itself. */
+      readonly parent: string | undefined;
+    }
   | { readonly kind: 'tool-call'; readonly call: AcpToolCall }
   | { readonly kind: 'tool-call-update'; readonly call: AcpToolCall }
   | { readonly kind: 'plan'; readonly entries: readonly AcpPlanEntry[] }
@@ -422,11 +430,11 @@ function parseUpdate(update: Record<string, unknown>): AcpUpdate {
   const kind = requiredText(update['sessionUpdate'], AI_LIMITS.idCharsMax, 'update.sessionUpdate');
   switch (kind) {
     case 'agent_message_chunk':
-      return { kind: 'message', role: 'agent', content: parseContent(update['content']) };
+      return { kind: 'message', role: 'agent', content: parseContent(update['content']), parent: parentOf(update) };
     case 'agent_thought_chunk':
-      return { kind: 'message', role: 'thought', content: parseContent(update['content']) };
+      return { kind: 'message', role: 'thought', content: parseContent(update['content']), parent: parentOf(update) };
     case 'user_message_chunk':
-      return { kind: 'message', role: 'user', content: parseContent(update['content']) };
+      return { kind: 'message', role: 'user', content: parseContent(update['content']), parent: parentOf(update) };
     case 'tool_call':
       return { kind: 'tool-call', call: parseToolCall(update) };
     case 'tool_call_update':
@@ -471,6 +479,12 @@ function parseUpdate(update: Record<string, unknown>): AcpUpdate {
   }
 }
 
+/** The subagent call an update belongs to: Claude stamps `_meta.claudeCode.parentToolUseId` on everything a subagent reports. */
+function parentOf(value: Record<string, unknown>): string | undefined {
+  const claude = toRecord(toRecord(value['_meta'])?.['claudeCode']);
+  return optionalText(claude?.['parentToolUseId'], AI_LIMITS.idCharsMax);
+}
+
 function parseToolCall(value: Record<string, unknown>): AcpToolCall {
   const meta = toRecord(value['_meta']);
   const delta = toRecord(meta?.['terminal_output_delta']);
@@ -488,7 +502,7 @@ function parseToolCall(value: Record<string, unknown>): AcpToolCall {
     locations: locations === undefined || locations === null ? undefined : skipInvalid(locations, AI_LIMITS.locationsMax, parseLocation),
     outputDelta: optionalText(delta?.['data'], AI_LIMITS.toolOutputCharsMax),
     exitCode: typeof exit?.['exit_code'] === 'number' && Number.isSafeInteger(exit['exit_code']) ? exit['exit_code'] : undefined,
-    parent: optionalText(claude?.['parentToolUseId'], AI_LIMITS.idCharsMax),
+    parent: parentOf(value),
     toolName: optionalText(claude?.['toolName'], AI_LIMITS.idCharsMax),
     rawInput: parseRawInput(raw),
     activityKind: optionalText(raw?.['activityKind'], AI_LIMITS.idCharsMax),
@@ -497,7 +511,7 @@ function parseToolCall(value: Record<string, unknown>): AcpToolCall {
   return call;
 }
 
-// Only three fields of a tool's input matter to the panel; the input itself can be a whole file.
+// Only four fields of a tool's input matter to the panel; the input itself can be a whole file.
 function parseRawInput(raw: Record<string, unknown> | undefined): AcpRawInput | undefined {
   if (raw === undefined) {
     return undefined;
@@ -505,10 +519,11 @@ function parseRawInput(raw: Record<string, unknown> | undefined): AcpRawInput | 
   const command = typeof raw['command'] === 'string' ? optionalText(raw['command'], AI_LIMITS.labelCharsMax) : undefined;
   const description = optionalText(raw['description'], AI_LIMITS.labelCharsMax);
   const runInBackground = typeof raw['run_in_background'] === 'boolean' ? raw['run_in_background'] : undefined;
-  if (command === undefined && description === undefined && runInBackground === undefined) {
+  const subagentType = typeof raw['subagent_type'] === 'string' ? optionalText(raw['subagent_type'], AI_LIMITS.idCharsMax) : undefined;
+  if (command === undefined && description === undefined && runInBackground === undefined && subagentType === undefined) {
     return undefined;
   }
-  return { command, description, runInBackground };
+  return { command, description, runInBackground, subagentType };
 }
 
 function parseToolContent(input: unknown): AcpToolContent {

@@ -54,7 +54,19 @@ export function eventsForUpdate(update: AcpUpdate, turn: TurnId | undefined, con
         return []; // The person's own words are recorded when sent; a replay of them is not news.
       }
       const text = contentText(update.content);
-      return text === '' ? [] : [{ kind: 'text', turn, role: update.role, text, ...(at === undefined ? {} : { at, until: at }) }];
+      // A subagent's words carry its call, so the panel can show them in that subagent's own transcript, not the chat's.
+      return text === ''
+        ? []
+        : [
+            {
+              kind: 'text',
+              turn,
+              role: update.role,
+              text,
+              ...(at === undefined ? {} : { at, until: at }),
+              ...(update.parent === undefined ? {} : { parent: update.parent }),
+            },
+          ];
     }
     case 'tool-call':
     case 'tool-call-update':
@@ -196,6 +208,7 @@ function toolEvent(call: AcpToolCall, turn: TurnId, at: number | undefined): Cha
     ...(call.toolName === undefined ? {} : { toolName: call.toolName }),
     ...(call.rawInput?.command === undefined ? {} : { command: call.rawInput.command }),
     ...(call.rawInput?.runInBackground === undefined ? {} : { background: call.rawInput.runInBackground }),
+    ...(call.rawInput?.subagentType === undefined || call.rawInput.subagentType === '' ? {} : { agentType: call.rawInput.subagentType }),
   };
   assert(event.kind === 'tool', 'toolEvent: a tool event');
   return event;
@@ -228,7 +241,7 @@ function noticeSeverity(severity: string): 'info' | 'warning' | 'error' {
 }
 
 /**
- * Consecutive text of one turn and role, joined: what a batch stores and sends
+ * Consecutive text of one turn, role and speaker, joined: what a batch stores and sends
  * instead of one event per streamed token.
  */
 export function coalesceEvents(events: readonly ChatEvent[]): readonly ChatEvent[] {
@@ -240,6 +253,8 @@ export function coalesceEvents(events: readonly ChatEvent[]): readonly ChatEvent
       last?.kind === 'text' &&
       last.turn === event.turn &&
       last.role === event.role &&
+      // Two subagents (or a subagent and the agent) stream side by side: only one speaker's words join.
+      last.parent === event.parent &&
       last.text.length + event.text.length <= AI_LIMITS.textCharsMax
     ) {
       // The first chunk's `at` stays; `until` becomes the last chunk's.
