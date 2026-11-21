@@ -2374,6 +2374,28 @@ round-trip and bounds; ledger keep, undo, drift and snapshots), `test/renderer/a
 unread, drafts), `test/renderer/ai/chatStatus.test.js` and `test/renderer/ai/aiPanel.test.js` (the panel
 in jsdom).
 
+## Voice input
+
+The composer's microphone (`src/features/ai/useDictation.ts`). Audio never crosses IPC: the
+platform's speech recognizer lives in the renderer, and only text and the microphone report
+(`microphone:*`, above) travel. The boundary is the recognizer's transcript: `parseTranscript`
+(`shared/properties/voice/transcript.ts`) returns `Result<string, 'not-text' | 'too-long'>` and
+nothing downstream sees an unparsed phrase. Everything after it is pure and lives in
+`shared/properties/voice/`:
+
+| File | Holds |
+|---|---|
+| `voiceLimits.ts` | Every bound: phrase length, words, dictionary size, history, bars, hold time, silence, restarts, session length |
+| `transcriptCleanup.ts` | Fillers, stutters, spoken corrections, spoken punctuation, capitals; English rules only (`rulesForLanguage`) |
+| `voiceDictionary.ts` | Entries from project file names plus built-in terms; whole-word matching, never a pattern built from a name |
+| `voiceCommands.ts` | `parseVoiceCommands` to a `VoiceAction` union: insert, newline, deleteLast, send, stop |
+| `voiceHistory.ts` | What "scratch that" takes back; never reaches into typed text |
+| `voiceSession.ts` | The session state machine (idle, starting, listening, stopping) and its effects |
+| `waveform.ts` | Samples to bar heights |
+
+Tests inject the recognizer, the audio meter and the clock through `VoiceEnvironmentContext`
+(`src/features/ai/voice/voiceEnvironment.ts`); no test opens a microphone.
+
 ## Audits
 
 `.stacki/audits.json` (`shared/properties/auditIgnores.ts`) is the tracked audit configuration:

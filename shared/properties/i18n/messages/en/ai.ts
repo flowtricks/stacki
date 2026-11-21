@@ -96,8 +96,9 @@ export const messages = {
   'ai.composer.commands': 'Commands',
   'ai.composer.default': 'Default',
   'ai.composer.dictate': 'Dictate',
+  'ai.composer.dictate.privacy': 'Speech is recognized by your system’s speech service, which may process audio online. Stacki stores no audio.',
   'ai.composer.dictate.stop': 'Stop dictation',
-  'ai.composer.dictate.title': 'Dictate a message',
+  'ai.composer.dictate.title': 'Click to dictate, or hold to talk',
   'ai.composer.dictate.unavailable': 'Voice input is not available',
   'ai.composer.effort': 'Effort',
   'ai.composer.listening': 'Listening… click the microphone to finish',
@@ -149,6 +150,8 @@ export const messages = {
   'ai.context.wait': 'Wait for the agent to finish',
   'ai.dictation.blockedWindow': 'The microphone was blocked for this window. Restart Stacki and try again.',
   'ai.dictation.failed': 'Voice input failed ({error}).',
+  'ai.dictation.language': 'Voice input does not support this language here. Switch the interface language or type your message.',
+  'ai.dictation.network': 'Voice input could not reach the speech service. Check your connection and try again.',
   'ai.dictation.noSpeech': 'No speech was heard. Try again.',
   'ai.dictation.notAllowed': 'Microphone access was not allowed. Press the microphone to try again.',
   'ai.dictation.off': 'Microphone access is off. Allow it in System Settings, then try again.',
@@ -156,6 +159,7 @@ export const messages = {
   'ai.dictation.openSettings': 'Open System Settings',
   'ai.dictation.restricted': 'Microphone access is restricted on this Mac, so voice input cannot start.',
   'ai.dictation.restrictedHint': 'A profile or Screen Time rule blocks it; only an administrator can change that.',
+  'ai.dictation.silence': 'Stopped listening after a pause. Press the microphone to start again.',
   'ai.dictation.startFailed': 'Could not start the microphone. Try again.',
   'ai.dictation.unavailable': 'Voice input is not available here.',
   'ai.diff.binary': 'Binary file, no preview.',
@@ -563,6 +567,10 @@ export const messages = {
   'ai.turn.refusal': 'The agent declined this request.',
   'ai.turn.signIn': 'Sign in to continue.',
   'ai.turn.stopped': 'Stopped.',
+  'ai.voice.hintHandsFree': 'Hands-free: say “send”, “new line” or “scratch that”, or press the microphone to stop.',
+  'ai.voice.hintHandsFreeBasic': 'Hands-free: press the microphone to stop.',
+  'ai.voice.hintHold': 'Release to stop.',
+  'ai.voice.level': 'Microphone level',
 } as const satisfies CatalogOf<`ai.${string}`>;
 
 export type MessageKey = keyof typeof messages;

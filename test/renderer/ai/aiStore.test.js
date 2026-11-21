@@ -589,6 +589,15 @@ test('draft helpers: text, emptiness, replacing text and appending dictation', (
   assert.deepEqual(store.draftWithAppendedText(store.draftFromText('hello'), 'world').segments, [textRun('hello world')]);
   assert.deepEqual(store.draftWithAppendedText(draft, 'more').segments.at(-1), textRun('more'), 'after a chip it is a new run');
   assert.deepEqual(store.draftWithAppendedText(store.draftFromText(''), 'first').segments, [textRun('first')]);
+  // A line break from "new line" joins without a space, and so does text that starts with one.
+  assert.deepEqual(store.draftWithAppendedText(store.draftFromText('one\n'), 'two').segments, [textRun('one\ntwo')]);
+  assert.deepEqual(store.draftWithAppendedText(store.draftFromText('one'), '\n').segments, [textRun('one\n')]);
+  // "Delete that" cuts the trailing text; a chip at the end has no trailing text to cut.
+  assert.equal(store.draftTrailingText(store.draftFromText('one two')), 'one two');
+  assert.equal(store.draftTrailingText(draft), '');
+  assert.deepEqual(store.draftWithTrailingText(store.draftFromText('one two'), 'one').segments, [textRun('one')]);
+  assert.deepEqual(store.draftWithTrailingText(store.draftFromText('one two'), '').segments, []);
+  assert.equal(store.draftWithTrailingText(draft, 'x'), draft);
 });
 
 test('drafts are written after typing pauses and restored for chats that exist', async () => {

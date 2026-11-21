@@ -7,17 +7,22 @@
 // Keys, reported by the input as `onSend`: Enter sends; while the agent works Enter steers (the message
 // joins the running turn) and Cmd/Ctrl+Enter queues it until the turn ends; Escape in an empty box stops
 // the turn. The queue and the steering are the store's (aiStore.ts); this file only picks which to call.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentId } from '../../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import type { ChatId } from '../../../../shared/properties/ai/chatModel';
+import type { VoiceAction } from '../../../../shared/properties/voice/voiceCommands';
+import { pushDictated, takeBackLast } from '../../../../shared/properties/voice/voiceHistory';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { microphone as centralMicrophone } from '../../../ui/central/centralGeometry';
 import { ArrowDownIcon, CloseIcon, FileIcon } from '../../../ui/Icons';
 import {
   draftText,
+  draftTrailingText,
   draftWithAppendedText,
+  draftWithTrailingText,
   isDraftEmpty,
+  mentionCandidates,
   queuePrompt,
   sendPrompt,
   setDraft,
@@ -34,8 +39,9 @@ import { DictationNoticeRow } from './DictationNoticeRow';
 import { ComposerInput, type ComposerHandle, type SendKey } from './ComposerInput';
 import { ComposerStatusLine } from './ComposerStatusLine';
 import type { Translator } from '../../../lib/i18n/localeContext';
-import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { useLocale, useTranslate } from '../../../lib/i18n/useTranslate';
 import { PlusMenu } from './PlusMenu';
+import { VoiceLine } from './VoiceLine';
 import { QueuedPrompts } from './QueuedPrompts';
 import './composer.css';
 
@@ -76,7 +82,39 @@ export function ChatComposer({
       input.current?.focus();
     }
   }, [state.composerFocusRequests]);
-  const voice = useDictation((spoken) => setDraft(chat, (current) => draftWithAppendedText(current, spoken)));
+  const { locale } = useLocale();
+  // The newest draft, for the voice callbacks: speech arrives between renders.
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
+  // What each dictated piece added, newest last, so "scratch that" takes back that piece and never typing.
+  const dictated = useRef<readonly string[]>([]);
+  const applyVoice = (action: VoiceAction): void => {
+    if (action.kind === 'insert') {
+      dictated.current = pushDictated(dictated.current, action.text);
+      setDraft(chat, (current) => draftWithAppendedText(current, action.text));
+    } else if (action.kind === 'newline') {
+      setDraft(chat, (current) => draftWithAppendedText(current, '\n'.repeat(action.count)));
+    } else if (action.kind === 'deleteLast') {
+      const taken = takeBackLast(dictated.current, draftTrailingText(draftNow.current));
+      dictated.current = taken.history;
+      if (taken.removed) {
+        setDraft(chat, (current) => draftWithTrailingText(current, taken.text));
+      }
+    } else if (action.kind === 'send') {
+      voice.stop();
+      submit('send');
+    }
+    // A 'stop' action was already handed to the session by the hook.
+  };
+  const voice = useDictation({
+    textBefore: () => draftTrailingText(draftNow.current),
+    onAction: applyVoice,
+    language: recognitionLanguage(locale),
+    loadPaths: useCallback(async () => {
+      const reply = await mentionCandidates('', ['file']);
+      return reply.ok ? reply.value.flatMap((candidate) => (candidate.kind === 'file' ? [candidate.path] : [])) : [];
+    }, []),
+  });
   const running = view.running !== undefined;
   const text = draftText(draft);
   const attach = async (files: readonly File[]): Promise<void> => {
@@ -101,8 +139,8 @@ export function ChatComposer({
   // An empty box has nothing to send, so no Send button takes room from the placeholder; Enter still sends.
   const hasContent = !isDraftEmpty(draft);
   // Enter sends (steers, while the agent works); the queue key sets the message aside until the turn ends.
-  const send = (key: SendKey): void => {
-    if (disabled !== undefined || voice.listening) {
+  const submit = (key: SendKey): void => {
+    if (disabled !== undefined) {
       return;
     }
     if (key === 'queue') {
@@ -111,6 +149,12 @@ export function ChatComposer({
       void steerPrompt(chat);
     } else {
       void sendPrompt(chat);
+    }
+  };
+  // Typing Enter while the microphone is open sends nothing: the phrase being spoken has not landed in the box yet.
+  const send = (key: SendKey): void => {
+    if (!voice.listening) {
+      submit(key);
     }
   };
   const placeholder =
@@ -219,8 +263,28 @@ export function ChatComposer({
               className={`ghost ai-tool-button${voice.listening ? ' is-listening' : ''}`}
               aria-label={voice.listening ? translate('ai.composer.dictate.stop') : translate('ai.composer.dictate')}
               aria-pressed={voice.listening}
-              title={voice.supported ? translate('ai.composer.dictate.title') : translate('ai.composer.dictate.unavailable')}
-              onClick={voice.toggle}
+              title={
+                voice.supported
+                  ? `${translate('ai.composer.dictate.title')}\n${translate('ai.composer.dictate.privacy')}`
+                  : translate('ai.composer.dictate.unavailable')
+              }
+              onPointerDown={(event) => {
+                // Keep the button's own pointer until it comes up, even if the pointer leaves it: that is how a hold ends.
+                if (typeof event.currentTarget.setPointerCapture === 'function' && event.pointerId !== undefined) {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }
+                dictated.current = [];
+                voice.press();
+              }}
+              onPointerUp={voice.release}
+              onPointerCancel={voice.release}
+              onClick={(event) => {
+                // A pointer's press and release already happened; a click with no pointer (Space or Enter on the focused button) toggles.
+                if (event.detail === 0) {
+                  dictated.current = [];
+                  voice.toggle();
+                }
+              }}
             >
               <MicGlyph />
             </button>
@@ -243,7 +307,15 @@ export function ChatComposer({
       {problem === undefined && voice.notice !== undefined && (
         <DictationNoticeRow notice={voice.notice} onDismiss={voice.dismiss} onOpenSettings={voice.openSettings} />
       )}
-      {voice.listening && <div className="ai-compose-hint">{voice.interim || translate('ai.composer.listening')}</div>}
+      {voice.listening && (
+        <VoiceLine
+          feed={voice.feed}
+          starting={voice.starting}
+          latch={voice.state.kind === 'idle' || voice.state.kind === 'stopping' ? 'pending' : voice.state.latch}
+          interim={voice.interim}
+          commands={voice.commands}
+        />
+      )}
     </div>
   );
 }
@@ -261,3 +333,8 @@ async function attachmentFor(file: File, projectPath: string, translate: Transla
 }
 
 const MicGlyph = centralIcon(centralMicrophone);
+
+/** The tag the recognizer listens for: the interface language, English as the United States'. */
+function recognitionLanguage(locale: string): string {
+  return locale === 'en' ? 'en-US' : locale;
+}
