@@ -5,6 +5,7 @@
 // morph.js's pull of the current page goes to the parent window, which holds the
 // current rendering; and the parent's style-only updates land the way Vite's CSS
 // hot update does. Everything else in previewClient.ts runs as it always does.
+import { parentOrigin } from '../preview/parentOrigin';
 import { BAKE_MESSAGES, BAKE_SECTION_ATTRIBUTE } from './bakeProtocol';
 import { bakedLinkPath } from './bakeLinks';
 import { applySectionUpdates, parseSectionUpdates } from './bakeStyleUpdate';
@@ -40,7 +41,7 @@ function requestRendering(): Promise<string | undefined> {
       pending.delete(id);
       resolve(html);
     });
-    window.parent.postMessage({ type: BAKE_MESSAGES.renderRequest, id, path: location.pathname }, location.origin);
+    window.parent.postMessage({ type: BAKE_MESSAGES.renderRequest, id, path: location.pathname }, parentOrigin(document, location.origin));
   });
 }
 
@@ -60,12 +61,15 @@ function sendHot(event: string, data: unknown): void {
     return;
   }
   if (event === 'studio:variants-prepare') {
-    window.parent.postMessage({ type: BAKE_MESSAGES.variantRequest, data }, location.origin);
+    window.parent.postMessage({ type: BAKE_MESSAGES.variantRequest, data }, parentOrigin(document, location.origin));
   } else if (event === 'studio:variants-prioritize') {
     const message = record(data);
-    window.parent.postMessage({ type: BAKE_MESSAGES.variantPriority, request: message['request'], value: message['value'] }, location.origin);
+    window.parent.postMessage(
+      { type: BAKE_MESSAGES.variantPriority, request: message['request'], value: message['value'] },
+      parentOrigin(document, location.origin),
+    );
   } else if (event === 'studio:variants-cancel') {
-    window.parent.postMessage({ type: BAKE_MESSAGES.variantCancel }, location.origin);
+    window.parent.postMessage({ type: BAKE_MESSAGES.variantCancel }, parentOrigin(document, location.origin));
   }
 }
 
@@ -82,7 +86,7 @@ function receiveVariant(data: Record<string, unknown>): boolean {
 }
 
 function receiveParentMessage(event: MessageEvent<unknown>): void {
-  if (event.source !== window.parent || event.origin !== location.origin) {
+  if (event.source !== window.parent || event.origin !== parentOrigin(document, location.origin)) {
     return;
   }
   try {

@@ -1,5 +1,6 @@
 // First: the preview's link listeners go on before any other module's (previewLinks.ts).
 import './previewLinks';
+import { parentOrigin } from './parentOrigin';
 import { receiveLiveVariables } from '../../../vendor/stacki/electron/preload/frameLiveVariables';
 import { receiveLiveRules } from '../../../vendor/stacki/electron/preload/frameLiveRules';
 import { receiveAppCursor } from '../../../vendor/stacki/electron/preload/frameAppCursor';
@@ -40,7 +41,7 @@ import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from '.
 import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from '../../../vendor/stacki/electron/preload/framePendingDelete';
 import { parseCanvasInsert } from '../../../vendor/stacki/shared/page/canvasInsert';
 import { parseCanvasMove, renumberedCanvasPath, type CanvasMove } from '../../../vendor/stacki/shared/page/canvasMove';
-const studioOrigin = document.querySelector<HTMLMetaElement>('meta[name=studio-parent-origin]')?.content || location.origin;
+const studioOrigin = parentOrigin(document, location.origin);
 const post = (message: unknown) => window.parent.postMessage(message, studioOrigin);
 const cursorPresence = installCursorPresence(post);
 const columnGuide = startGuide(post);
