@@ -247,14 +247,22 @@ window.steps = (() => {
         box.scrollTop = Math.min(box.scrollHeight, step * stepPx);
         await frame();
         await frame();
-        const viewportTop = box.getBoundingClientRect().top;
-        const viewportBottom = viewportTop + box.clientHeight;
-        const drawn = tiles();
-        const visible = drawn.filter((tile) => { const r = tile.getBoundingClientRect(); return r.bottom > viewportTop && r.top < viewportBottom; });
-        const firstDrawn = drawn[0] ? drawn[0].getBoundingClientRect().top : Infinity;
-        const lastDrawn = drawn.at(-1) ? drawn.at(-1).getBoundingClientRect().bottom : -Infinity;
-        const list = document.querySelector('.asset-items').getBoundingClientRect();
-        frames.push({ nodes: nodes(), tiles: drawn.length, visible: visible.length, coversTop: firstDrawn <= Math.max(viewportTop, list.top) + 1, coversBottom: lastDrawn >= Math.min(viewportBottom, list.bottom) - 1 - 120 });
+        // What a step drew is read once the list has caught up with the scroll: on a slow runner the grid
+        // drew its rows more than two frames after the step (visible 0 at frame 2 and 35 on the macOS runner,
+        // Check on c4f46362 and eee30c85). The wait is bounded (window.until), so a list that never covers the
+        // viewport still fails here.
+        const measure = () => {
+          const viewportTop = box.getBoundingClientRect().top;
+          const viewportBottom = viewportTop + box.clientHeight;
+          const drawn = tiles();
+          const visible = drawn.filter((tile) => { const r = tile.getBoundingClientRect(); return r.bottom > viewportTop && r.top < viewportBottom; });
+          const firstDrawn = drawn[0] ? drawn[0].getBoundingClientRect().top : Infinity;
+          const lastDrawn = drawn.at(-1) ? drawn.at(-1).getBoundingClientRect().bottom : -Infinity;
+          const list = document.querySelector('.asset-items').getBoundingClientRect();
+          return { nodes: nodes(), tiles: drawn.length, visible: visible.length, coversTop: firstDrawn <= Math.max(viewportTop, list.top) + 1, coversBottom: lastDrawn >= Math.min(viewportBottom, list.bottom) - 1 - 120 };
+        };
+        await window.until(() => { const now = measure(); return now.visible > 0 && now.coversTop && now.coversBottom; });
+        frames.push(measure());
       }
       box.scrollTop = 0;
       await window.until(() => tiles()[0] && tiles()[0].getAttribute('data-asset-index') === '0');
