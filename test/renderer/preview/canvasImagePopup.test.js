@@ -38,6 +38,9 @@ const gallery = [{ photo: "/popup-one.svg" }];
 `;
 const svg = (fill) => `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="${fill}"/></svg>\n`;
 const WAIT_MS_MAX = 20000;
+// A reopen double click is tried this many times, each given this long to open the popup (see `reopen`).
+const REOPEN_ATTEMPTS_MAX = 4;
+const REOPEN_WAIT_MS = 4000;
 
 // --- Node side: start the app and read its verdict -----------------------------------------
 
@@ -136,6 +139,28 @@ async function runInElectron({ window, project, options }) {
     const point = await driver.canvasPoint(selector);
     await driver.pointerPress(point, { label: `${label} (click)` });
     await driver.pointerPress(point, { label: `${label} (second click)`, clickCount: 2 });
+  };
+  // After an edit or an undo the canvas may swap its frame at any moment, and a double click that lands on the frame being replaced
+  // opens nothing. Waiting for the image to be decoded cannot tell the old frame from the new one, so the double click itself is
+  // retried: each attempt waits for the image, presses, and gives the popup REOPEN_WAIT_MS to appear, at most REOPEN_ATTEMPTS_MAX times.
+  const reopen = async (selector, label) => {
+    for (let attempt = 1; attempt <= REOPEN_ATTEMPTS_MAX; attempt += 1) {
+      await becomes(`${label}: the image drawn (attempt ${attempt})`, () => driver.canvasEvaluate(CARD_IMAGE_DECODED));
+      await driver.settle();
+      await doubleClick(selector, `${label} (attempt ${attempt})`);
+      const opened = await pollUntil({
+        what: `${label}: the popup (attempt ${attempt})`,
+        read: popupOpen,
+        until: (value) => value === true,
+        pollIntervalMs: 100,
+        pollCountMax: REOPEN_WAIT_MS / 100,
+      });
+      if (opened.kind === 'reached') {
+        return true;
+      }
+    }
+    report.failures.push(`never happened: ${label}`);
+    return false;
   };
   const popupClosed = async () => (await popupOpen()) === false;
   // Escape, then the popup is gone: the next step starts from a closed popup.
@@ -246,13 +271,8 @@ async function runInElectron({ window, project, options }) {
           .join(' | '),
       );
     }
-    // 3. The picture: choose another image from the project's own assets.
-    // The undo rewrites the page, so the canvas reloads its frame. A double click aimed at the old frame lands on nothing when the
-    // machine is busy and the reload is slow (the popup then never reopens), so wait for the Card image to be drawn again first.
-    await becomes('the Card image drawn again after the undo', () => driver.canvasEvaluate(CARD_IMAGE_DECODED));
-    await driver.settle();
-    await doubleClick('#card-one .card_visual img', 're-open on the Card image');
-    await until('the popup reopens', popupOpen);
+    // 3. The picture: choose another image from the project's own assets. The undo rewrote the page, so the frame may be reloading.
+    await reopen('#card-one .card_visual img', 'the popup reopens');
     const chooseButton = `[...document.querySelectorAll('.canvas-image-popup button')].find((b) => /Choose|Replace/i.test(b.textContent || '')) || undefined`;
     if (await click(chooseButton, 'Choose Image')) {
       const overlay = (await becomes('the asset chooser', () => driver.evaluate(`!!document.querySelector('.asset-pick-overlay')`))).value;
@@ -328,8 +348,7 @@ async function runInElectron({ window, project, options }) {
     await shot('6-native');
     await escapeAndClose('the native popup closes');
     // 7. A click outside closes it, and single click still only selects.
-    await doubleClick('#card-one .card_visual img', 'reopen');
-    await until('the popup reopens', popupOpen);
+    await reopen('#card-one .card_visual img', 'the popup reopens');
     await driver.pointerPress(await driver.canvasPoint('#card-bound .card_content'), { label: 'click elsewhere on the canvas' });
     await driver.settle();
     check('a click elsewhere closes the popup', (await becomes('the popup closes after a click elsewhere', popupClosed)).kind === 'reached');
