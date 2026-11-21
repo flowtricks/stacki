@@ -2845,7 +2845,7 @@ html[data-platform='win32'] .titlebar {
 }
 /* The key that does the same, after the words. */
 .rail-tooltip-shortcut {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   opacity: 0.6;
 }
 /* Variant shown below its anchor (arrow points up, centered). */
