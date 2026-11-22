@@ -19,6 +19,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const timers = require('node:timers');
 const { mountStylePanel, press, key, fieldRow, seededRandom } = require('../../helpers/stylePanelHarness.js');
+const { pollUntil } = require('../../helpers/waitFor.js');
 
 const CSS = [
   ':root { --display-font-family: "Inter", sans-serif; --display-font-weight: 600; --text-size: 3rem; --tracking: 0.02em; --brand: #0059ff; }',
@@ -62,13 +63,11 @@ async function panelEvents(panel, { seed }) {
   panel.bridge.mode = 'immediate';
   await panel.data('the page adds a class that moves the default pick', () => panel.setPageClasses('n2', ['is-ready', 'heading']));
   // The rematch lands when it lands: a loaded runner took longer than the 100 ms once waited here (1.4.12, macOS),
-  // so poll the active chip, at most 100 times 50 ms, and read it after.
+  // so wait on the active chip (a bounded poll, test/helpers/waitFor.js) and read it after.
   const activeChips = () => [...panel.container.querySelectorAll('.embed-editor_selector-chip.is-active')].map((chip) => chip.textContent);
-  await panel.data('the rematch is answered', async () => {
-    for (let poll = 0; poll < 100 && activeChips().join(',') !== '.is-ready'; poll += 1) {
-      await wait(50);
-    }
-  });
+  await panel.data('the rematch is answered', () =>
+    pollUntil({ what: 'the default pick to move to .is-ready', read: () => activeChips().join(','), until: (active) => active === '.is-ready' }),
+  );
   const picked = activeChips();
   assert.deepEqual(picked, ['.is-ready'], 'the default pick moved, with no one pressing anything');
   await panel.data('a scroll that moves nothing', () => panel.container.dispatchEvent(new panel.window.Event('scroll')));
