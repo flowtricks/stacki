@@ -36,7 +36,6 @@ import {
   document as centralDocument,
   file as centralFile,
   form as centralForm,
-  gauge as centralGauge,
   globe as centralGlobe,
   heading as centralHeading,
   highlight as centralHighlight,
@@ -51,10 +50,12 @@ import {
   number as centralNumber,
   numberList as centralNumberList,
   panelRight as centralPanelRight,
+  pieChartOne as centralPieChartOne,
   pointerHand as centralPointerHand,
   quote as centralQuote,
   rewrite as centralRewrite,
   sectionRows as centralSectionRows,
+  spinner as centralSpinner,
   strike as centralStrike,
   styles as centralStyles,
   subscript as centralSubscript,
@@ -181,10 +182,14 @@ const LayersIcon = centralIcon(centralLayers);
 const LineBreakIcon = centralIcon(centralLinebreak);
 const LocationIcon = centralIcon(centralMapPin);
 const MenuIcon = centralIcon(centralListMenu);
-const MeterIcon = centralIcon(centralGauge);
+// A filled share of a circle: a meter shows where a value sits in its range. Not the gauge, which is the Audits
+// panel's icon in the rail, so the tile does not read as that panel.
+const MeterIcon = centralIcon(centralPieChartOne);
 const NumberedListIcon = centralIcon(centralNumberList);
 const OutputIcon = centralIcon(centralTerminal);
 const PictureIcon = centralIcon(centralLayers);
+// The loader: a progress bar tells how far a task has run.
+const ProgressIcon = centralIcon(centralSpinner);
 const QuoteIcon = centralIcon(centralQuote);
 const RowIcon = centralIcon(centralSectionRows);
 const StrikeIcon = centralIcon(centralStrike);
@@ -275,7 +280,7 @@ const HTML_ICONS = {
   p: TextIcon,
   picture: PictureIcon,
   pre: TextBlockIcon,
-  progress: MeterIcon,
+  progress: ProgressIcon,
   q: QuoteIcon,
   ruby: TextSizeIcon,
   s: StrikeIcon,
@@ -346,6 +351,11 @@ const EXTRA_ICONS = {
 
 const TAG_ICONS: ReadonlyMap<string, ElementIcon> = new Map([...Object.entries(HTML_ICONS), ...Object.entries(EXTRA_ICONS)]);
 const TAG_NAME_LENGTH_MAX = 32;
+
+/** Whether `tag` has an icon of its own rather than the generic custom-element one (the Add elements catalog's test asks). */
+export function hasElementIcon(tag: string): boolean {
+  return TAG_ICONS.has(tag.toLowerCase());
+}
 
 export function elementIcon(tag: unknown, size = 12, className?: string) {
   const name = typeof tag === 'string' ? tag.slice(0, TAG_NAME_LENGTH_MAX + 1).toLowerCase() : '';

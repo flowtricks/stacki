@@ -212,6 +212,38 @@
   font-size: 13px;
   font-weight: 500;
 }
+.app-settings-row-label-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-end: 6px;
+  color: var(--text-faint);
+}
+/* A round flag in the dropdown's 16px icon column; the artwork carries its own colour, so no tile or border behind it. */
+.app-locale-flag {
+  display: flex;
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+}
+.ui-flag {
+  display: block;
+  border-radius: 50%;
+}
+/* The fallback when a flag has no artwork: fills the dropdown's 16px icon column; a background tile, never a border. */
+.app-locale-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  direction: ltr;
+}
 .app-settings-row-description {
   margin: 0;
   color: var(--text-faint);
@@ -500,28 +532,85 @@
   min-height: 30px;
   font-size: 12px;
 }
+/* A collection row: its CMS icon in a fixed 16px column (as the Roles and Audits rows), the name, then the switch. */
+.app-folder-collection {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.app-folder-collection-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+/* "Open content config" and "Open astro.config" share this: a plain button like Change on the Stacki Studio page: the base button fills, hover,
+   pressed and focus states apply; this only sizes the icon gap and keeps it from stretching across the card. */
+.app-folder-config-button {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+}
+/* A data file in the data picker list: collapsed by default, a chevron, the file icon and the name at the start, its switch at the end.
+   Its own class, not the Roles group header's (which pads 8px a side): no side padding, so its switch sits in the same column as
+   its exports' and the collections' switches. */
+.app-folder-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  min-height: 30px;
+}
+.app-folder-group .app-folder-group-disclosure {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: start;
+}
+.app-folder-group-disclosure:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.app-folder-group-disclosure > svg {
+  flex: none;
+  transition: transform 0.15s;
+}
+/* The file or collection icon: one 16px column for every top-level row of the picker list. */
+.app-folder-row-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  color: var(--text-faint);
+}
+.app-folder-group[data-open='true'] .app-folder-group-disclosure > svg {
+  transform: rotate(90deg);
+}
+.app-folder-group-summary {
+  color: var(--text-faint, var(--text-dim));
+  font-size: 11px;
+}
 /* A data file's export, under its file in the data picker list. */
 .app-folder-toggle.is-nested {
-  padding-inline-start: 16px;
+  padding-inline-start: 44px;
 }
-.app-folder-link {
-  display: inline;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font: inherit;
-  cursor: pointer;
+/* A top-level row of the picker list starts where a file's icon does (past its 12px chevron and the 8px gap). */
+.app-folder-toggle.is-top-level {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-inline-start: 20px;
 }
-.app-folder-link:hover {
-  text-decoration: underline;
+.app-folder-toggle.is-top-level > :last-child {
+  margin-inline-start: auto;
 }
-.app-folder-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
 /* The "…" (MoreMenu) on a Settings card (an audit check's priority, an MCP server, a role) is a ghost button:
    no fill at rest, the icon dim; the fill appears on hover, keyboard focus and while its menu is open. The base
    button rule fills every button, so this restates the rest state for the one shared class. */

@@ -3,7 +3,7 @@
 // popup and rows, dropdown.css), opened from a button the way MoreMenu.tsx opens
 // its menu: anchored to the button, above it when there is no room below, closed
 // by Escape or a click outside. Each row is an icon on the left, the label, its
-// shortcut as a muted hint, and a check at the end, so icons line up down the
+// shortcut told in a tooltip after a rest (never printed in the row), and a check at the end, so icons line up down the
 // left edge whether or not a row is checked; a separator is a 1px line between
 // runs of rows. Rows are the element's data (kitElements.tsx); this component only
 // draws them and says which was chosen.
@@ -12,6 +12,7 @@ import { assert } from '../../../../shared/core/assert';
 import { popupBox } from '../../../ui/Dropdown';
 import { CheckIcon, MoreIcon } from '../../../ui/Icons';
 import Popup from '../../../ui/Popup';
+import { useShortcutTip } from '../../../ui/shortcutTip';
 
 /** One row of a kit menu, or a line between rows. */
 export type KitMenuEntry =
@@ -124,20 +125,32 @@ export function KitMenu(props: {
 function MenuRow({ item, choose }: { readonly item: KitMenuItem; readonly choose: (item: KitMenuItem) => void }) {
   // The row with focus (the pointer's or the keyboard's) is the dropdown's highlighted row, drawn by dropdown.css.
   const [highlighted, setHighlighted] = useState(false);
+  const { props: tipProps, tip } = useShortcutTip(item.label, item.shortcut);
   return (
     <div
+      {...tipProps}
       className={`dd-option${item.disabled ? ' disabled dim' : ''}${item.danger ? ' is-danger' : ''}${highlighted && !item.disabled ? ' highlight' : ''}`}
-      onFocus={() => setHighlighted(true)}
-      onBlur={() => setHighlighted(false)}
+      onFocus={(event) => {
+        setHighlighted(true);
+        tipProps.onFocus(event);
+      }}
+      onBlur={() => {
+        setHighlighted(false);
+        tipProps.onBlur();
+      }}
       role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
       aria-checked={item.checked}
       aria-disabled={item.disabled ? true : undefined}
       tabIndex={-1}
       onMouseEnter={(event) => {
         setHighlighted(true);
+        tipProps.onMouseEnter(event);
         event.currentTarget.focus();
       }}
-      onMouseLeave={(event) => setHighlighted(document.activeElement === event.currentTarget)}
+      onMouseLeave={(event) => {
+        setHighlighted(document.activeElement === event.currentTarget);
+        tipProps.onMouseLeave();
+      }}
       onClick={() => choose(item)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -148,8 +161,8 @@ function MenuRow({ item, choose }: { readonly item: KitMenuItem; readonly choose
     >
       {item.icon !== undefined && <span className="dd-icon">{item.icon}</span>}
       <span className="dd-option-label">{item.label}</span>
-      {item.shortcut !== undefined && <span className="dd-hint">{item.shortcut}</span>}
       <span className="dd-check">{item.checked === true ? <CheckIcon size={11} /> : undefined}</span>
+      {tip}
     </div>
   );
 }

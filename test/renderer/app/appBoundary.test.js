@@ -131,7 +131,8 @@ const check = (what, condition, detail) => {
   const shell = source('src/app/shell/AppShell.tsx');
   check('the canvas sits in a boundary', /<PanelBoundary name="The canvas"[^>]*>\s*<CanvasPane/.test(shell));
   check('the canvas covers sit in a boundary', /<PanelBoundary name="The canvas cover"[^>]*>\s*<CanvasCovers/.test(shell));
-  check('the left panels sit in a boundary', /<PanelBoundary name="The left panel"[^>]*>\s*<LeftPanelBody/.test(shell));
+  // The panel body may be wrapped in context providers (SettingsBackScope) that render no UI of their own.
+  check('the left panels sit in a boundary', /<PanelBoundary name="The left panel"[^>]*>(?:(?!<\/PanelBoundary>)[\s\S])*<LeftPanelBody/.test(shell));
   check('the right panel sits in a boundary', /<PanelBoundary name="The right panel"[^>]*>\s*<RightPanel/.test(shell));
   check('the code window sits in a boundary', /<PanelBoundary name="The code window"[^>]*>\s*<CodeWindowHost/.test(shell));
   check('the interface sits in the top-level boundary', /<AppBoundary>[\s\S]*<App \/>[\s\S]*<\/AppBoundary>/.test(source('src/main.tsx')));

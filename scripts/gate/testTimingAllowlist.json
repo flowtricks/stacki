@@ -1073,14 +1073,6 @@
       "expires": "2027-05-18"
     },
     {
-      "file": "test/renderer/app/styleTagSettings.test.js",
-      "rule": "fixed-pause",
-      "count": 10,
-      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
-      "added": "2026-11-19",
-      "expires": "2027-05-18"
-    },
-    {
       "file": "test/renderer/apps/appFolderSettle.test.js",
       "rule": "fixed-pause",
       "count": 2,
@@ -2341,14 +2333,6 @@
       "rule": "fixed-pause",
       "count": 1,
       "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
-      "added": "2026-11-19",
-      "expires": "2027-05-18"
-    },
-    {
-      "file": "test/scripts/gate/testPool.test.js",
-      "rule": "absolute-ms",
-      "count": 1,
-      "reason": "Pins a stated pool limit, not a measured duration; review on expiry.",
       "added": "2026-11-19",
       "expires": "2027-05-18"
     },

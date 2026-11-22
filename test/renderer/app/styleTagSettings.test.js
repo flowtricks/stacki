@@ -109,6 +109,8 @@ async function mount({ source, editable = true, failWrite = false, stylesheets =
   const writes = [];
   let listed = false;
   dom.window.avb = {
+    // The editor's variable chips subscribe to stylesheet changes; nothing changes here.
+    onCssChanged: () => () => undefined,
     listStyleFiles: async () => ((listed = true), { files: stylesheets.map((rel) => ({ rel, name: rel.split('/').pop(), path: `/p/${rel}`, size: 10 })) }),
     projectMetadata: async () => ({ ok: true, value: { source: file.source } }),
     writeProjectMetadata: async (input) => {

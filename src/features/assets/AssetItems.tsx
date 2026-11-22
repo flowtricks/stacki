@@ -25,8 +25,13 @@ interface AssetItemsProps<Item extends { readonly rel: string }> {
   readonly view: AssetView;
   readonly items: readonly Item[];
   readonly label: string;
-  /** The element that scrolls the list (the panel body); its scroll position picks the window. */
-  readonly scrollerRef: React.RefObject<HTMLElement>;
+  /**
+   * The element that scrolls the list (the panel body); its scroll position picks the window. An element, not a ref:
+   * the body is this list's ancestor, and React attaches an ancestor's ref only after its children's layout effects
+   * have run, so on a mount that draws both at once (a remembered listing, as when the Assets tab is reopened) a ref
+   * read here is still null. The element arrives as a prop one render later and re-runs the measuring effect.
+   */
+  readonly scroller: HTMLElement | undefined;
   /** Handles a key on the focused item; true when it did something, so the event stops there. */
   readonly onItemKey: (item: Item, event: React.KeyboardEvent<HTMLElement>) => boolean;
   readonly renderItem: (item: Item, slot: ItemSlot) => React.ReactNode;
@@ -38,10 +43,10 @@ interface Layout {
 }
 
 export function AssetItems<Item extends { readonly rel: string }>(props: AssetItemsProps<Item>) {
-  const { view, items, scrollerRef } = props;
+  const { view, items, scroller } = props;
   const listRef = useRef<HTMLDivElement>(null);
-  const layout = useItemLayout(view, items.length, listRef, scrollerRef);
-  const focus = useRovingFocus(items.length, { listRef, scrollerRef }, layout);
+  const layout = useItemLayout(view, items.length, listRef, scroller);
+  const focus = useRovingFocus(items.length, { listRef, scroller }, layout);
   const { geometry, window } = layout;
   const gapPx = VIEW_METRICS[view].gapPx;
   const rowHeightPx = geometry.rowPitchPx - gapPx;
@@ -113,7 +118,7 @@ const UNMEASURED: Measure = { widthPx: 0, viewportTopPx: 0, viewportHeightPx: 0 
 // layout is worked out from it in render, so a new view or a new list never draws one frame with the
 // old one's layout; the measurement is kept only when it changes the layout, so a scroll inside one
 // window re-renders nothing.
-function useItemLayout(view: AssetView, itemCount: number, listRef: React.RefObject<HTMLElement>, scrollerRef: React.RefObject<HTMLElement>): Layout {
+function useItemLayout(view: AssetView, itemCount: number, listRef: React.RefObject<HTMLElement>, scroller: HTMLElement | undefined): Layout {
   const compute = useCallback(
     (input: Measure): Layout => {
       const geometry = itemGeometry(view, input.widthPx);
@@ -125,20 +130,18 @@ function useItemLayout(view: AssetView, itemCount: number, listRef: React.RefObj
   const layout = useMemo(() => compute(measure), [compute, measure]);
   const update = useCallback(() => {
     const list = listRef.current;
-    const scroller = scrollerRef.current;
-    if (list === null || scroller === null) {
+    if (list === null || scroller === undefined) {
       return;
     }
     const listTopPx = list.getBoundingClientRect().top;
     const scrollerTopPx = scroller.getBoundingClientRect().top;
     const next: Measure = { widthPx: list.clientWidth, viewportTopPx: scrollerTopPx - listTopPx, viewportHeightPx: scroller.clientHeight };
     setMeasure((previous) => (sameLayout(compute(previous), compute(next)) ? previous : next));
-  }, [compute, listRef, scrollerRef]);
+  }, [compute, listRef, scroller]);
   useLayoutEffect(() => {
     update();
-    const scroller = scrollerRef.current;
     const list = listRef.current;
-    if (scroller === null || list === null) {
+    if (scroller === undefined || list === null) {
       return undefined;
     }
     scroller.addEventListener('scroll', update, { passive: true });
@@ -150,7 +153,7 @@ function useItemLayout(view: AssetView, itemCount: number, listRef: React.RefObj
       scroller.removeEventListener('scroll', update);
       observer?.disconnect();
     };
-  }, [update, scrollerRef, listRef]);
+  }, [update, scroller, listRef]);
   return layout;
 }
 
@@ -169,7 +172,7 @@ function sameLayout(left: Layout, right: Layout): boolean {
 // focuses it once it is, without letting the browser scroll a second time.
 function useRovingFocus(
   itemCount: number,
-  { listRef, scrollerRef }: { readonly listRef: React.RefObject<HTMLElement>; readonly scrollerRef: React.RefObject<HTMLElement> },
+  { listRef, scroller }: { readonly listRef: React.RefObject<HTMLElement>; readonly scroller: HTMLElement | undefined },
   { geometry, window }: Layout,
 ) {
   const [active, setActive] = useState(0);
@@ -188,7 +191,7 @@ function useRovingFocus(
   const moveTo = (index: number): void => {
     assert(index >= 0, 'A focus index is not negative');
     assert(index < itemCount, 'A focus index names an item');
-    scrollRowIntoView(Math.floor(index / geometry.columnCount), geometry.rowPitchPx, listRef.current ?? undefined, scrollerRef.current ?? undefined);
+    scrollRowIntoView(Math.floor(index / geometry.columnCount), geometry.rowPitchPx, listRef.current ?? undefined, scroller);
     setActive(index);
     setPending(index);
   };

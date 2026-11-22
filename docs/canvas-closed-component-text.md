@@ -43,9 +43,25 @@ Clicks: one click on hovered words selects the owner and picks the words in the 
 app's selection arrives); a double click enters editing as before. Components that are only their words (a `Heading` or
 `Paragraph` written in the page) are their own owner: the component's hover is the hover.
 
-Words a component draws that no target covers, or that a binding keeps from being written, hover exactly like editable words:
-the same green outline and solid green tag. Nothing on the canvas is grey or translucent. The reason is given when the person
-tries to edit them (the named refusal chip), not by a different look.
+A component whose root **frames** the words is not only its words: a Button's `<a class="button"><slot /></a>` with padding
+or a border on any side around `<Button>Start your free flight</Button>`. Its slot words are hovered, marked and picked like
+any other words, and their outline is the words' own box (the range of their text), never the button's; the pointer on the
+padding is the component's own hover. A root with neither padding nor a border is its words, as above (`framesWords` in
+`electron/preload/frameTextMarks.ts`; `test/renderer/preview/slotTextFramedRoot.test.js` and the real-window
+`test/electron/preload/slotTextHoverCanvas.test.js`).
+
+**Only what this instance decides is offered.** One rule, `isEditableThroughProps` in
+`shared/properties/closedComponentReach.ts`, decides for the hover, the text editor and the image popup alike: words or a picture
+inside a closed component are hovered, labelled, typed in or opened only when a prop or the slot of this instance reaches them.
+Words the component writes itself (hardcoded, or computed from its own code, so no catalog target covers them) get no text
+outline, no label and no double click: the pointer on them is the component's own hover. A double click on a picture the
+component writes, computes or cannot be read for opens nothing, not even an explanation (`imageDecision` in
+`canvasImageTrace.ts`); a picture a prop decides opens the popup on that prop. The decision is made from the catalog and the
+trace the canvas already holds: before the catalog arrives nothing is offered, so nothing shows and then disappears.
+
+Prop text a binding keeps from being written (`body={entry.body}` printed as HTML) is reached by a prop, so it hovers exactly
+like editable words: the same green outline and solid green tag. Nothing on the canvas is grey or translucent. The reason is
+given when the person tries to edit it (the named refusal chip), not by a different look.
 
 Tests: `test/renderer/preview/closedComponentTextTable.test.js` drives every text-bearing element of the real example page
 (real component sources and captured preview markup, `test/fixtures/lumos-card/`) through every state and fails on any

@@ -252,7 +252,7 @@ test('on a page: the CMS data as before, and no new property', async (context) =
   await act(async () => root.unmount());
 });
 
-test('an attributes prop: the header dot makes it, the element spreads it after its defaults, and the chip shows it', async (context) => {
+test('an attributes prop: the header’s purple + makes it in one press, the element spreads it after its defaults, and the chip shows it', async (context) => {
   const { harness, file } = await project(context);
   const read = parsePageDiskRead(await harness.invoke('page:read', file));
   installDom();
@@ -290,13 +290,11 @@ test('an attributes prop: the header dot makes it, the element spreads it after 
       ),
     );
   await draw(anchor, undefined);
-  await click(container.querySelector('.props-label-row .bind-handle'));
-  await click(byText('New Attributes property'));
-  assert.equal(document.querySelector('.new-prop-form input[aria-label="Name"]').value, 'rest', 'named as Astro names it');
-  await click(byText('Add attribute'));
-  await type(document.querySelector('.new-prop-form input[aria-label="Attribute name"]'), 'data-testing');
-  await type(document.querySelector('.new-prop-form input[aria-label="Attribute value"]'), '1');
-  await click(byText('Create'));
+  const connect = container.querySelector('.props-label-row .attrs-connect');
+  assert.ok(connect, 'the purple + is in the Attributes header');
+  assert.equal(connect.getAttribute('aria-label'), 'Connect attributes to a prop');
+  assert.equal(connect.previousElementSibling.className, 'prop-label', 'right after the label');
+  await click(connect);
 
   assert.equal(held.local, 'rest');
   const frontmatter = held.gesture.apply(model);
@@ -308,7 +306,11 @@ test('an attributes prop: the header dot makes it, the element spreads it after 
     'the type is imported once',
   );
   assert.equal(replaced.length, 1);
-  assert.deepEqual(Object.keys(replaced[0]), ['data-testing', '...rest', 'class', 'data-label'], 'defaults before the spread, the element’s own after');
+  assert.deepEqual(
+    Object.keys(replaced[0]),
+    ['data-label', '...rest', 'class'],
+    'the attributes before the spread, an instance overriding them; the class after it',
+  );
 
   // Written as the app writes it: the held declaration and the node rewrite, one gesture.
   const rewrite = modules.nodeGesture(anchor.id, modules.withAttributes(anchor, replaced[0]), { coalesceKey: undefined, urgency: true });
@@ -325,26 +327,22 @@ test('an attributes prop: the header dot makes it, the element spreads it after 
   const written = fs.readFileSync(file, 'utf8');
   // The printer spells a type-only named import inline; TypeScript reads both spellings alike.
   assert.match(written, /import (type \{ HTMLAttributes \}|\{ type HTMLAttributes \}) from "astro\/types";/);
-  assert.match(written, /<a data-testing="1" \{\.\.\.rest\} class="button" data-label="Click me">\{title\}<\/a>/);
+  assert.match(written, /<a data-label="Click me" \{\.\.\.rest\} class="button">\{title\}<\/a>/);
   assert.ok(written.includes('<style>\n  .button { color: red; }\n</style>'), 'the CSS is untouched');
   const reread = parsePageDiskRead(await harness.invoke('page:read', file));
   assert.equal(modules.readRestBinding(reread.model.extraFrontmatter).local, 'rest', 'the rest binding parses back');
-  assert.deepEqual(
-    Object.keys(anchorOf(reread.model.nodes).props),
-    ['data-testing', '...rest', 'class', 'data-label'],
-    'and so does the order around the spread',
-  );
+  assert.deepEqual(Object.keys(anchorOf(reread.model.nodes).props), ['data-label', '...rest', 'class'], 'and so does the order around the spread');
 
-  // Drawn connected: the chip in the dot's place, the spread as its code where
-  // it sits, then the element's own rows; the defaults are the prop's.
+  // Drawn connected: the chip in the +'s place, the attributes as rows in
+  // source order, and the spread last as "+ items in {} rest".
   await draw({ ...anchor, props: replaced[0] }, 'rest');
   assert.equal(container.querySelector('.attrs-bound-chip').textContent.trim(), 'rest');
   const rows = [...container.querySelectorAll('.attr-row .attr-name')].map((row) => row.textContent);
-  assert.deepEqual(rows, ['{...rest}', 'data-label'], 'the spread is a row of its own, its defaults are the prop’s');
-  assert.ok(container.querySelector('.attr-row.spread code'), 'the spread is drawn as code');
+  assert.deepEqual(rows, ['data-label'], 'every attribute is a row');
+  assert.match(container.querySelector('.attrs-list > .attr-row:last-child').textContent, /items in\s*rest/, 'the spread is the last row');
   await click(container.querySelector('.attrs-bound-chip'));
   await click(byText('Disconnect'));
-  assert.deepEqual(replaced[1], { class: anchor.props.class, 'data-label': anchor.props['data-label'] }, 'disconnecting leaves the element’s own attributes');
+  assert.deepEqual(Object.keys(replaced[1]), ['data-label', 'class'], 'disconnecting takes out the spread alone');
   await act(async () => root.unmount());
 });
 

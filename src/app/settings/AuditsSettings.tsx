@@ -316,7 +316,7 @@ function ChipList(props: {
   return (
     <div className="audits-chips">
       {props.items.map((item) => (
-        <span key={item} className="app-role-chip audits-chip-item">
+        <span key={item} className="audits-chip-item">
           {item}
           {!props.disabled && (
             <button

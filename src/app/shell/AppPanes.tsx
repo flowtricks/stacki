@@ -42,6 +42,7 @@ import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
 import { openAppSettings } from '../settings/LazySettings';
 import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView, InstructionsView } from '../appPanels';
+import CmsFileFields from '../../features/cms/CmsFileFields';
 import { selectInstruction, useInstructionSelection } from '../../features/instructions/instructionSelection';
 import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
 import type { ShellView } from '../App';
@@ -59,6 +60,7 @@ import { useCanvasImagePopup } from './desktopCanvasImage';
 import { ImagePropFields } from '../../features/props/ImagePropFields';
 import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/CanvasDropOverlay';
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
+import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
 
 // One function for the life of the app: the Style panel publishes its host on every render, and a
 // new arrow each time would wake every host subscriber (StylePanel.tsx useStableList says why).
@@ -370,6 +372,19 @@ export function CanvasCovers({ app }: { readonly app: ShellView }) {
           onClose={() => app.setCmsRel(undefined)}
         />
       )}
+      {app.cmsFileSettings && (
+        <CmsFileFields
+          key={app.cmsFileSettings.fileRel}
+          projectPath={app.project.path}
+          fileRel={app.cmsFileSettings.fileRel}
+          label={app.cmsFileSettings.label}
+          hidden={app.leftTab !== 'cms'}
+          currentPage={app.openFileSourceRel}
+          onClose={() => app.setCmsFileSettings(undefined)}
+          onRecordUndo={app.pushCommand}
+          showToast={app.showToast}
+        />
+      )}
       {app.cmsRemote && (
         <RemoteCmsView
           key={`${app.cmsRemote.connection.id}:${app.cmsRemote.collection}`}
@@ -660,6 +675,8 @@ export function settingsValues(app: ShellView) {
       // even though it has no component file behind it.
       (selectedNode !== undefined && selectedNode.kind !== 'frontmatter' && !!selectedNode.dynamicTag) ||
       !!component?.hasRest,
+    // An instance's attributes are checked against the tag its component passes them to.
+    attributesTag: selectedNode?.kind === 'component' ? component?.extendsTag : undefined,
     comment: noteText(commentAbove(app.model, selectedId)?.value),
     tagOptions: app.tagOptions,
     frontmatterSource: app.frontmatterCode,
@@ -775,6 +792,8 @@ export function CodeWindowHost({ app }: { readonly app: ShellView }) {
   const { codeWin, codeWinValue, isFileWin } = app;
   // Raw source is code editing: a role without it never sees the code window.
   const canCode = can(useCurrentRole(), 'code:edit');
+  // A stylesheet or a `<style>` node draws CSS chips throughout, a page in its `<style>` blocks, a script none.
+  const codeChips = useCodeChips(codeChipTextOf(codeWin?.language));
   if (!codeWin || codeWinValue === undefined || !canCode) {
     return undefined;
   }
@@ -787,6 +806,8 @@ export function CodeWindowHost({ app }: { readonly app: ShellView }) {
       value={codeWinValue}
       editorKey={isFileWin ? `file:${codeWin.rel}` : targetId}
       revealLine={codeWin.revealLine}
+      extensions={codeChips.extension}
+      overlay={codeChips.overlay}
       onChange={(value) => {
         if (isFileWin) {
           app.setAssetFileText(value);

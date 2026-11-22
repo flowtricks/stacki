@@ -1,0 +1,49 @@
+/* The shared empty-state card. A background fill, no border; the icon is the dim text colour in a neutral
+   fill disc. Logical properties only, so it mirrors in right-to-left languages. */
+.ui-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  margin-inline: 0;
+  padding: 28px 20px;
+  border-radius: 16px;
+  background: var(--bg-input);
+  text-align: center;
+}
+.ui-empty-state-start {
+  margin-block: 0;
+}
+/* Centred in whatever column it sits in. */
+.ui-empty-state-center {
+  margin-block: auto;
+}
+.ui-empty-state-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-block-end: 6px;
+  border-radius: 50%;
+  background: var(--bg-active);
+  color: var(--text-dim);
+}
+.ui-empty-state-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.ui-empty-state-description {
+  margin: 0;
+  max-inline-size: 28ch;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 17px;
+}
+.ui-empty-state-action {
+  display: flex;
+  justify-content: center;
+  margin-block-start: 10px;
+}

@@ -108,6 +108,19 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/project/studioAuthFile.ts': {
     writeFile: { count: 1, reason: 'Studio’s wrangler.jsonc sign-in variables, written to a temporary file and renamed whole; not a website document' },
   },
+  'electron/project/studioUpgrade.ts': {
+    writeFile: {
+      count: 1,
+      reason:
+        'the last Studio upgrade’s record (.stacki/studio/updates/last-upgrade.json) for the restore button: app metadata, never a page, chunk or stylesheet',
+    },
+  },
+  'electron/git/gitSnapshot.ts': {
+    writeFile: {
+      count: 1,
+      reason: 'a NUL-separated pathspec list in a fresh OS temporary folder for git --pathspec-from-file, removed after the command; outside the project',
+    },
+  },
   'electron/project/pageRenameWrite.ts': {
     renameSync: { count: 1, reason: 'a page or folder move; text changes use the host writer' },
   },
@@ -237,6 +250,12 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
       reason: 'the temporary copy of the bounded crash log in the directory main passes (userData), written for recovery diagnostics',
     },
     renameSync: { count: 1, reason: 'puts that crash log in place whole (atomic save)' },
+  },
+  'electron/app/dictationDownload.ts': {
+    writeFile: {
+      count: 1,
+      reason: 'the verified-files marker of a downloaded dictation model in userData, written to a temporary file and renamed whole; never a project file',
+    },
   },
   'electron/app/windowStateStore.ts': {
     writeFileSync: { count: 1, reason: "the temporary copy of the window's saved bounds in userData" },

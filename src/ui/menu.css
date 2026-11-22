@@ -106,7 +106,7 @@
   line-height: 15px;
 }
 
-/* The end of the row: info mark, key or value, then the check, always flush with the row's right padding edge:
+/* The end of the row: info mark, value, then the check, always flush with the row's right padding edge:
    a hint, a value with its chevron, a check or a switch each end at the same x in every row, and a row with
    nothing to show draws nothing there (no reserved column that would push hints inward). */
 .menu-end {
@@ -116,14 +116,6 @@
   gap: 8px;
   margin-inline-start: auto;
   color: var(--text-faint, #989898);
-}
-.menu-key {
-  flex: none;
-  min-width: 10px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  text-align: end;
-  white-space: nowrap;
 }
 .menu-value {
   max-width: 120px;
@@ -212,20 +204,7 @@
 .rail-tooltip.menu-info-tip {
   z-index: 10001;
   max-width: 240px;
-  transform: translateY(-50%);
   font-weight: 400;
   line-height: 1.45;
   white-space: normal;
-}
-.rail-tooltip.menu-info-tip.is-left {
-  transform: translate(-100%, -50%);
-}
-/* Which side the tip sits on is measured in screen coordinates (menuModel.ts), so its arrow is placed physically too. */
-.rail-tooltip.menu-info-tip::before {
-  left: -4px; /* physical: side measured on screen */
-  right: auto; /* physical: side measured on screen */
-}
-.rail-tooltip.menu-info-tip.is-left::before {
-  left: auto; /* physical: side measured on screen */
-  right: -4px; /* physical: side measured on screen */
 }

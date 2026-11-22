@@ -2,7 +2,7 @@
 // even when the image sits inside a component that is not open. The edit lands on the prop of the one Card the
 // person double-clicked, in the page file, byte for byte nowhere else; one Undo writes the old bytes back; and
 // selecting anything else closes the popup. An image whose picture comes from code (an expression) is refused
-// in the popup, and nothing is written.
+// in the popup, and nothing is written. A picture a closed component computes or writes itself opens nothing.
 //
 // Method: the soak harness (test/helpers/e2e/soakLaunch.js) starts the real desktop app on a copy of the Lumos
 // fixture site (never a person's project). The scenario replaces the copy's home page with a page of Lumos Cards:
@@ -24,6 +24,7 @@ const PAGE = `---
 import Layout from "@/layouts/BaseLayout.astro";
 import Section from "@/components/wrapper/Section.astro";
 import Card from "@/components/item/Card.astro";
+import ClosedPicture from "@/components/ClosedPicture.astro";
 const gallery = [{ photo: "/popup-one.svg" }];
 ---
 <Layout theme="dark">
@@ -33,8 +34,20 @@ const gallery = [{ photo: "/popup-one.svg" }];
     <Card id="card-cover" variant="cover" heading="Cover card" buttonHref="/about" buttonLabel="Button Text" image="/popup-one.svg" imageAlt="Cover picture" />
     <Card id="card-link" variant="stacked" heading="Linked card" buttonHref="/about" buttonLabel="Button Text" image="/popup-one.svg" imageAlt="Linked picture" />
     <img id="native" src="/popup-one.svg" alt="Native picture" width="160" height="100" />
+    <ClosedPicture />
   </Section>
 </Layout>
+`;
+// A closed component that draws its pictures itself: one computed in its frontmatter, one written in its template. No prop of
+// the instance decides either, so a double click on them opens nothing (closedComponentReach.ts).
+const CLOSED_PICTURE = `---
+const parts = ["/popup", "one.svg"];
+const picture = parts.join("-");
+---
+<div class="closed-picture">
+  <img id="closed-computed" src={picture} alt="Computed picture" width="160" height="100" />
+  <img id="closed-fixed" src="/popup-one.svg" alt="Fixed picture" width="160" height="100" />
+</div>
 `;
 const svg = (fill) => `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="${fill}"/></svg>\n`;
 const WAIT_MS_MAX = 20000;
@@ -105,6 +118,7 @@ async function runInElectron({ window, project, options }) {
   fs.mkdirSync(path.join(project, 'public'), { recursive: true });
   fs.writeFileSync(path.join(project, 'public', 'popup-one.svg'), svg('#c1352b'));
   fs.writeFileSync(path.join(project, 'public', 'popup-two.svg'), svg('#2b6ac1'));
+  fs.writeFileSync(path.join(project, 'src', 'components', 'ClosedPicture.astro'), CLOSED_PICTURE);
   fs.writeFileSync(pagePath, PAGE);
   await driver.waitForApp();
   await driver.setPageFocus('focused');
@@ -347,6 +361,21 @@ async function runInElectron({ window, project, options }) {
     check('the native image opens the popup too', await popupOpen());
     await shot('6-native');
     await escapeAndClose('the native popup closes');
+    // 6b. A picture a closed component computes or writes itself: nothing on the instance changes it, so the double click opens
+    // nothing at all, not even an explanation. The panel settling (nothing new painted for a quiet spell) is the end of the double click.
+    for (const selector of ['#closed-computed', '#closed-fixed']) {
+      // The picture is drawn first, so a popup that stays shut is the decision, not a double click on nothing.
+      const drawn = await until(`${selector} drawn`, () =>
+        driver.canvasEvaluate(`(() => { const image = document.querySelector('${selector}'); return !!image && image.complete && image.naturalWidth > 0; })()`),
+      );
+      check(`${selector} is drawn on the canvas`, drawn === true);
+      const beforeClosed = read();
+      await doubleClick(selector, `double click ${selector}`);
+      await driver.settle();
+      check(`a double click on ${selector} opens no popup`, !(await popupOpen()));
+      check(`and it writes nothing (${selector})`, read() === beforeClosed);
+    }
+    await shot('6b-closed-picture');
     // 7. A click outside closes it, and single click still only selects.
     await reopen('#card-one .card_visual img', 'the popup reopens');
     await driver.pointerPress(await driver.canvasPoint('#card-bound .card_content'), { label: 'click elsewhere on the canvas' });

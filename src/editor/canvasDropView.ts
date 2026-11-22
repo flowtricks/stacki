@@ -20,6 +20,7 @@ import {
 } from './canvasDrop';
 import type { CanvasDragSubject, CanvasDragView, CanvasDropVerdict, NavigatorDropMark } from './canvasDragSession';
 import { VOID_TAGS } from './elementSchemas';
+import type { InsertDragChoice } from './insertDragData';
 import { placementNodeOfItem, resolveTarget, type PlacementEnvironment, type PlacementSubject } from './placementCheck';
 import type { TreeView } from './treeView';
 
@@ -102,7 +103,8 @@ export function startDropSession(
   });
   let placement: PlacementSubject | undefined;
   if (subject.kind === 'new') {
-    const node = placementNodeOfItem({ type: 'component', name: subject.label }, environment);
+    // A tile from the Add elements panel names its own node; a palette component is known by its name.
+    const node = placementNodeOfItem(subject.choice ?? { type: 'component', name: subject.label }, environment);
     placement = node === undefined ? undefined : { kind: 'new', node };
   } else {
     assert(byId.has(subject.id), 'startDropSession: the dragged node is in the tree');
@@ -276,7 +278,8 @@ function placeKey(view: CanvasDragView): string | undefined {
 export type DropAction =
   | { readonly kind: 'none' }
   | { readonly kind: 'move'; readonly id: string; readonly place: { readonly parentId: string | undefined; readonly index: number } }
-  | { readonly kind: 'insert'; readonly component: string; readonly place: { readonly parentId: string | undefined; readonly index: number } };
+  | { readonly kind: 'insert'; readonly component: string; readonly place: { readonly parentId: string | undefined; readonly index: number } }
+  | { readonly kind: 'insertChoice'; readonly choice: InsertDragChoice; readonly place: { readonly parentId: string | undefined; readonly index: number } };
 
 export function dropActionOf(subject: CanvasDragSubject, view: Pick<CanvasDragView, 'decision' | 'verdict'>): DropAction {
   if (view.verdict.kind === 'noop') {
@@ -287,6 +290,9 @@ export function dropActionOf(subject: CanvasDragSubject, view: Pick<CanvasDragVi
     return { kind: 'none' };
   }
   if (subject.kind === 'new') {
+    if (subject.choice !== undefined) {
+      return { kind: 'insertChoice', choice: subject.choice, place };
+    }
     return { kind: 'insert', component: subject.path ?? subject.label, place };
   }
   return { kind: 'move', id: subject.id, place };

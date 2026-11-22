@@ -1,12 +1,14 @@
 // Keeps the active role in step with the open project: reads `.stacki/roles.json`
 // and reloads when project files change (the watcher reports `.stacki` edits as fs:changed).
-// The Roles tab saves through rolesBridge.ts and calls `reloadProjectRoles`.
+// The Roles tab saves through rolesBridge.ts and calls `reloadProjectRoles`. Every read also lands in
+// rolesCache.ts, so Settings → Roles opens on the file as last read instead of reading it first.
 import { useEffect } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { ADMIN_ROLE_ID, ADMIN_VIEW, roleViewOf } from '../../../shared/properties/projectRoles';
 import { setActualRole } from '../../lib/currentRole';
 import { setStoredProjectRoles } from '../../lib/projectRolesStore';
-import { readStoredRoles, type StoredRoles } from './rolesBridge';
+import { type StoredRoles } from './rolesBridge';
+import { rolesCache } from './rolesCache';
 
 const reloaders = new Set<() => void>();
 
@@ -31,7 +33,7 @@ export function useProjectRoles(projectPath: string | undefined): void {
     const load = () => {
       generation += 1;
       const mine = generation;
-      void readStoredRoles(projectPath).then(
+      void rolesCache.refreshStoredRoles(projectPath).then(
         (stored) => {
           if (lifetime === 'active' && mine === generation) {
             setActualRole(desktopRoleOf(stored));

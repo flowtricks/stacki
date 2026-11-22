@@ -201,12 +201,62 @@ test('an image default that names no image says why', () => {
     assert.equal(out.ok, false);
     return out.error;
   };
-  assert.equal(problem(''), 'Choose a default image.');
+  assert.equal(imageDefault.imageDefaultOf('').error, 'Choose a default image.', 'a default asked for by name must name an image');
   assert.equal(problem('../assets/brochure.pdf'), 'Only an image file can be imported as an image.');
   assert.equal(problem('hero.png'), 'Choose an image from the project, or enter its URL.');
   assert.equal(problem('/a".png'), 'That is not an image address.');
   assert.ok(imageDefault.isImageType('ImageMetadata | string'));
   assert.ok(!imageDefault.isImageType('string'));
+});
+
+// ── Connecting an image field: the default is the image it shows now ────────
+
+test('defaultForConnectedValue starts an image from the file or URL the field holds', () => {
+  const start = model.defaultForConnectedValue;
+  const imports = 'import hero from "../assets/hero.png";\nimport brochure from "../assets/brochure.pdf";\n';
+  assert.equal(start({ type: 'string', value: '/images/cover.webp' }, 'image'), '/images/cover.webp', 'a public/ file');
+  assert.equal(start({ type: 'string', value: 'https://cdn.example.com/a.jpg' }, 'image'), 'https://cdn.example.com/a.jpg', 'a URL');
+  assert.equal(start({ type: 'expr', value: 'hero' }, 'image', imports), '../assets/hero.png', 'an imported file, read by its import');
+  assert.equal(start({ type: 'expr', value: 'hero.src' }, 'image', imports), '../assets/hero.png', 'an imported file read through .src');
+  assert.equal(start(undefined, 'image', imports), '', 'an empty field has no default');
+  assert.equal(start({ type: 'bare' }, 'image', imports), '');
+  assert.equal(start({ type: 'string', value: '' }, 'image'), '');
+  assert.equal(start({ type: 'expr', value: 'brochure' }, 'image', imports), '', 'a file that is no image');
+  assert.equal(start({ type: 'expr', value: 'missing' }, 'image', imports), '', 'a name nothing imports');
+  assert.equal(start({ type: 'expr', value: 'a + b' }, 'image', imports), '', 'code is no file');
+  assert.equal(start({ type: 'string', value: 'Hello' }, 'text'), 'Hello', 'other kinds start from their literal');
+  assert.equal(start({ type: 'expr', value: 'true' }, 'boolean'), 'true');
+});
+
+test('an image prop with no default is a string with nothing after its name, and Required makes it non-optional', () => {
+  const none = declared('', { key: 'image', kind: 'image', image: '' });
+  assert.ok(none.ok, none.error);
+  assert.equal(none.value.frontmatter, 'interface Props {\n\timage?: string;\n}\nconst { image } = Astro.props;\n');
+  assert.deepEqual(none.value.imports, [], 'no file, no import');
+  const required = declared('', { key: 'image', kind: 'image', image: '', typing: { required: true, readonly: false, codeType: '' } });
+  assert.ok(required.ok, required.error);
+  assert.equal(required.value.frontmatter, 'interface Props {\n\timage: string;\n}\nconst { image } = Astro.props;\n');
+  const spaces = declared('', { key: 'image', kind: 'image', image: '   ' });
+  assert.ok(spaces.ok, 'only spaces is empty too');
+});
+
+test('the default of an image prop is written for each starting value, and still refuses an address that is no image', () => {
+  const asset = declared('', {
+    key: 'image',
+    kind: 'image',
+    image: model.defaultForConnectedValue({ type: 'expr', value: 'hero.src' }, 'image', 'import hero from "../assets/hero.png";'),
+  });
+  assert.ok(asset.ok, asset.error);
+  assert.equal(asset.value.frontmatter, 'interface Props {\n\timage?: ImageMetadata;\n}\nconst { image = hero } = Astro.props;\n');
+  assert.deepEqual(asset.value.imports, [
+    { name: 'ImageMetadata', path: 'astro', named: true, typeOnly: true },
+    { name: 'hero', path: '../assets/hero.png', named: false, typeOnly: false },
+  ]);
+  const url = declared('', { key: 'image', kind: 'image', image: model.defaultForConnectedValue({ type: 'string', value: '/hero.png' }, 'image') });
+  assert.ok(url.ok, url.error);
+  assert.equal(url.value.frontmatter, 'interface Props {\n\timage?: string;\n}\nconst { image = "/hero.png" } = Astro.props;\n');
+  const bad = declared('', { key: 'image', kind: 'image', image: 'hero.png' });
+  assert.equal(bad.ok, false, 'a typed address that is no image is still refused');
 });
 
 // ── Read back by main, and looped over ────────────────────────────────────────

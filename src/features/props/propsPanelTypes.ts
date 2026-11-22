@@ -38,6 +38,8 @@ export interface PropsPanelProps {
   readonly tagOptions?: readonly TagOption[];
   readonly projectClasses?: readonly string[];
   readonly allowAttrs?: boolean;
+  /** For an instance: the tag its component types passed attributes by (`Props extends HTMLAttributes<"img">`). */
+  readonly attributesTag?: string | undefined;
   readonly comment?: string;
   readonly onSetComment?: (value: string) => void;
   readonly loopContext?: RichContext | undefined;

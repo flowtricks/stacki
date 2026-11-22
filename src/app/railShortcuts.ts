@@ -7,6 +7,7 @@ import type { SettingsViewId } from '../lib/settingsSections';
 
 /** What a chord does: toggles a panel, opens Settings at a view, or toggles the AI chat. */
 export type RailAction =
+  | 'elements'
   | 'pages'
   | 'navigator'
   | 'properties'
@@ -21,8 +22,8 @@ export type RailAction =
   | 'audits'
   | 'projectSettings'
   | 'ai'
-  // Roles has no chord: only hosted Studio lists it, in its Settings root.
-  | Exclude<SettingsViewId, 'roles'>;
+  // Roles has no chord: only hosted Studio lists it, in its Settings root. Agents has none either: it opens from its row.
+  | Exclude<SettingsViewId, 'roles' | 'agents'>;
 
 export interface RailShortcut {
   readonly action: RailAction;
@@ -33,6 +34,7 @@ export interface RailShortcut {
 }
 
 export const RAIL_SHORTCUTS: readonly RailShortcut[] = [
+  { action: 'elements', letter: 'a', alt: false, shift: false },
   { action: 'pages', letter: 'p', alt: false, shift: false },
   { action: 'navigator', letter: 'z', alt: false, shift: false },
   { action: 'components', letter: 'a', alt: false, shift: true },

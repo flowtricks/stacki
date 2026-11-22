@@ -1,4 +1,5 @@
 import type { CanvasTextTarget, CanvasTextCatalog } from '../../shared/properties/canvasText';
+import { isEditableThroughProps, textReach } from '../../shared/properties/closedComponentReach';
 import { pathsOf, canvasTextSourceMatches, runsOf } from './frameRegions';
 import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect, elementsAt } from './frameTextMatch';
@@ -138,6 +139,11 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
       continue;
     }
     if (target.scope !== undefined && !ancestors.has(target.scope)) {
+      continue;
+    }
+    // Words inside a closed component are typed in only when a prop or the slot of this instance decides them, the same
+    // rule the hover follows (closedComponentReach.ts), so a double click never opens an editor the hover did not offer.
+    if (target.scope !== undefined && !isEditableThroughProps(textReach({ loaded: true, covering: target }))) {
       continue;
     }
     // The words are found from whichever stacked element lies inside their component: the clicked one first.

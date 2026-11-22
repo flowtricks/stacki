@@ -68,6 +68,7 @@ export interface AppHistory {
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 export type LeftTab =
+  | 'elements'
   | 'pages'
   | 'navigator'
   | 'properties'

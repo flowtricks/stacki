@@ -36,7 +36,8 @@ export function canSettingsTab(role: RoleView, tab: string): boolean {
  */
 export function settingsViewsOf(role: RoleView): readonly SettingsViewId[] {
   const project: readonly SettingsViewId[] = can(role, 'panel:projectSettings') ? ['secrets', 'mcp'] : [];
-  const instructions: readonly SettingsViewId[] = can(role, 'panel:instructions') ? ['instructions'] : [];
+  // Agent definitions are instruction files, so the Agents view follows the same access.
+  const instructions: readonly SettingsViewId[] = can(role, 'panel:instructions') ? ['instructions', 'agents'] : [];
   return [...project, ...instructions];
 }
 

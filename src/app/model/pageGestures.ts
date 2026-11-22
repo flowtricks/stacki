@@ -20,7 +20,7 @@ import { nodeAtPath } from '../../editor/editorTree';
 import { namesUsedIn, neededFrontmatter, withStatements } from '../../editor/frontmatterMove';
 import type { FieldDefinition } from '../../features/props/propRules';
 import type { AstroAsset } from '../../features/palette/astroAssets';
-import type { InsertItem } from '../../features/palette/InsertSearch';
+import type { InsertChoice } from '../../features/palette/InsertSearch';
 import { type HistoryEntry, type NodeClipboard } from '../appTypes';
 import { findEditorNodeById as findNodeById, findEditorParentList as findParentList, type OpenFile } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
@@ -455,7 +455,7 @@ export function styleTagNode(id: NodeId, inner: string, attributes: readonly Sty
 // A new node for an insert-palette item that needs no import, or undefined for one
 // that is not inserted as a node here. A style block is always global
 // (styleBlockScope.ts).
-export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefined {
+export function insertedNode(item: InsertChoice, id: NodeId): EditorNode | undefined {
   let node: EditorNode | undefined = undefined;
   if (item.type === 'element') {
     const placeholder = defaultText(item.tag);

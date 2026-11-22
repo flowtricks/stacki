@@ -138,6 +138,9 @@ function projectBridge() {
     createInstruction: invoke('instructions:create'),
     createInstructionFolder: invoke('instructions:createFolder'),
     revealInstruction: invoke('instructions:reveal'),
+    listAgents: invoke('agents:list'),
+    saveAgent: invoke('agents:save'),
+    deleteAgent: invoke('agents:delete'),
     projectMetadata: invoke('project:metadata'),
     writeProjectMetadata: invoke('project:writeMetadata'),
     pickProjectFolder: invoke('project:pickFolder'),
@@ -146,6 +149,9 @@ function projectBridge() {
     studioStatus: invoke('studio:status'),
     installStudio: invoke('studio:install'),
     setStudioAuth: invoke('studio:setAuth'),
+    upgradeStudio: invoke('studio:upgrade'),
+    studioUpgradeCheck: invoke('studio:upgradeCheck'),
+    restoreStudio: invoke('studio:restore'),
 
     // Project:
     openProjectDialog: invoke('project:openDialog'),
@@ -206,6 +212,8 @@ function dataBridge() {
     deleteCms: invoke('cms:delete'),
     cmsUsage: invoke('cms:usage'),
     cmsAssetRef: invoke('cms:assetRef'),
+    cmsConstants: invoke('cms:constants'),
+    editCmsConstants: invoke('cms:editConstants'),
     resolveImport: invoke('project:resolveImport'),
     cmsMeta: invoke('cms:meta'),
     contentConfig: invoke('content:config'),
@@ -424,11 +432,15 @@ function aiBridge() {
     aiPrompt: invoke('ai:prompt'),
     aiSteer: invoke('ai:steer'),
     aiCompact: invoke('ai:compact'),
+    aiAutoCompactGet: invoke('ai:autoCompactGet'),
+    aiAutoCompactSet: invoke('ai:autoCompactSet'),
     aiChatFork: invoke('ai:chatFork'),
     aiChatMove: invoke('ai:chatMove'),
     aiSections: invoke('ai:sections'),
     aiDiff: invoke('ai:diff'),
     aiMentions: invoke('ai:mentions'),
+    aiScreenshot: invoke('ai:screenshot'),
+    aiRecord: invoke('ai:record'),
     aiCancel: invoke('ai:cancel'),
     aiPermission: invoke('ai:permission'),
     aiSetOption: invoke('ai:setOption'),
@@ -480,6 +492,11 @@ function eventBridge() {
       const listener = () => callback();
       ipcRenderer.on('apps:personChanged', listener);
       return () => ipcRenderer.removeListener('apps:personChanged', listener);
+    },
+    onDictationProgress: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('dictation:progress', listener);
+      return () => ipcRenderer.removeListener('dictation:progress', listener);
     },
     onStudioProgress: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
@@ -555,6 +572,10 @@ function eventBridge() {
       ipcRenderer.on(`menu:${channel}`, listener);
       return () => ipcRenderer.removeListener(`menu:${channel}`, listener);
     },
+    dictationStatus: invoke('dictation:status'),
+    dictationDownload: invoke('dictation:download'),
+    dictationCancel: invoke('dictation:cancel'),
+    dictationRemove: invoke('dictation:remove'),
     microphoneOpenSettings: invoke('microphone:openSettings'),
     microphoneRequest: invoke('microphone:request'),
     microphoneStatus: invoke('microphone:status'),

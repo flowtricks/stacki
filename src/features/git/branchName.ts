@@ -36,6 +36,7 @@ export function sanitizeBranchName(text: unknown): string {
     .replace(/@\{/g, '') // `@{` is git's reflog syntax, not part of a name
     .replace(/\.{2,}/g, '.') // `..` is a range between two refs
     .replace(/\/{2,}/g, '/') // an empty path component
+    .replace(/\/\./g, '/') // a path component can't open with a dot
     .replace(/^[-./]+/, ''); // a name can't open with a dash, a dot or a slash
 }
 
@@ -60,6 +61,12 @@ export function branchNameError(name: unknown, existing: readonly string[] = [],
   if (trimmed.endsWith('.')) {
     return translate('git.branch.error.endsDot');
   }
+  if (trimmed.toLowerCase() === 'head') {
+    return translate('git.branch.error.head');
+  }
+  if (trimmed.split('/').some((part) => part.startsWith('.') || part.includes('..'))) {
+    return translate('git.branch.error.component');
+  }
   if (trimmed.split('/').some((part) => part.endsWith('.lock'))) {
     return translate('git.branch.error.lock');
   }
@@ -71,6 +78,11 @@ export function branchNameError(name: unknown, existing: readonly string[] = [],
     // Not pedantry: on macOS and Windows these are one file in .git/refs, so
     // git refuses the second one — with a message about a file, not a branch.
     return translate('git.branch.error.existsCase', { branch: clash });
+  }
+  // Git keeps branches as files, so "a" and "a/b" cannot both exist: one would have to be a file and a folder at once.
+  const nested = existing.find((branch) => String(branch).startsWith(`${trimmed}/`) || trimmed.startsWith(`${String(branch)}/`));
+  if (nested !== undefined) {
+    return translate('git.branch.error.conflict', { branch: nested });
   }
   return undefined;
 }

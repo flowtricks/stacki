@@ -14,13 +14,14 @@ import { loadProjectPreference, saveProjectPreference, type PreferenceStorage, t
 
 /** The Settings panel's root is a short list of these; each opens its own view in place of the list. */
 /** `roles` is listed only by a host that passes a Roles view (hosted Studio); Desktop's Roles live in its Settings dialog. */
-export const SETTINGS_VIEW_IDS = ['secrets', 'mcp', 'instructions', 'roles'] as const;
+export const SETTINGS_VIEW_IDS = ['secrets', 'mcp', 'instructions', 'agents', 'roles'] as const;
 export type SettingsViewId = (typeof SETTINGS_VIEW_IDS)[number];
 
 export const SETTINGS_VIEW_TITLE_KEYS: Readonly<Record<SettingsViewId, MessageKey>> = {
   secrets: 'settings.section.secrets',
   mcp: 'settings.section.mcp',
   instructions: 'settings.section.instructions',
+  agents: 'settings.section.agents',
   roles: 'roles.studio.title',
 };
 
@@ -53,7 +54,7 @@ export function viewOfTarget(target: SettingsFocusTarget): {
   readonly open: readonly SettingsSectionId[];
   readonly scrollTo: SettingsSectionId | undefined;
 } {
-  if (target === 'secrets' || target === 'mcp' || target === 'roles') {
+  if (target === 'secrets' || target === 'mcp' || target === 'agents' || target === 'roles') {
     return { view: target, open: [], scrollTo: undefined };
   }
   if (target === 'instructions') {
@@ -187,12 +188,32 @@ export function subscribeSettingsRequests(listener: () => void): () => void {
 // ---------------------------------------------------------------------------
 
 let shownView: SettingsViewId | undefined;
+const shownViewListeners = new Set<() => void>();
+/** The rail is the one listener; a few more for tests and hosts. */
+const SHOWN_VIEW_LISTENERS_MAX = 8;
 
-/** The panel publishes the view it shows (undefined: the root, or closed), so a shortcut can tell "open" from "toggle". */
+/**
+ * The panel publishes the view it shows (undefined: the root, or closed), so a shortcut can tell "open" from
+ * "toggle", and a view moved onto the rail as a button of its own (src/app/railOrder.ts) is drawn pressed while it shows.
+ */
 export function publishSettingsView(view: SettingsViewId | undefined): void {
+  if (shownView === view) {
+    return;
+  }
   shownView = view;
+  for (const listener of shownViewListeners) {
+    listener();
+  }
 }
 
 export function shownSettingsView(): SettingsViewId | undefined {
   return shownView;
+}
+
+export function subscribeShownSettingsView(listener: () => void): () => void {
+  assert(shownViewListeners.size < SHOWN_VIEW_LISTENERS_MAX, 'Shown Settings view listeners are bounded');
+  shownViewListeners.add(listener);
+  return () => {
+    shownViewListeners.delete(listener);
+  };
 }

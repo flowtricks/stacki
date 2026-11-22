@@ -218,6 +218,19 @@ const rolesFile = rail.parseProjectRoles({
 });
 
 let root;
+// A failed assertion skips the test's own unmount; this keeps one failure from leaving a mounted rail for the next test.
+test.afterEach(async () => {
+  if (root !== undefined) {
+    const mounted = root;
+    root = undefined;
+    try {
+      await act(async () => mounted.unmount());
+    } catch {
+      // A test that already unmounted its rail leaves nothing to do.
+    }
+  }
+  document.body.replaceChildren();
+});
 const selected = [];
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
 async function mount(active) {
@@ -243,6 +256,8 @@ const labels = () => [...document.querySelectorAll('.rail > button')].map((butto
 test('the rail draws a role’s pins in pin order, after a line, with their badge, and only what the role may use', async () => {
   rail.setActualRole(rail.roleViewOf(rolesFile, 'writer'));
   await mount('pages');
+  // The writer holds Pages and Apps but no Navigator or page edit permission, so the default grant of `panel:elements`
+  // (shared/properties/projectRoles.ts canElements) does not reach it: no Add elements button. Admin keeps it.
   assert.deepEqual(labels(), ['Pages (P)', 'Apps (E)', 'Feedback', 'SEO'], 'uninstalled and inaccessible pins are skipped');
   assert.ok(document.querySelector('.rail-separator'), 'a line separates panels and apps');
   assert.equal(document.querySelector('.rail-more') ?? undefined, undefined, 'a tall rail has no More button');
@@ -275,19 +290,28 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   railHeightPx = 1000;
   await mount('code');
   const tall = labels();
-  assert.equal(tall.length, 10, 'nine panels in the top list (Style selectors and Audits start in the foot list, Properties is closed), then the pinned app');
+  assert.equal(
+    tall.length,
+    11,
+    'ten panels in the top list, Add elements first (Style selectors and Audits start in the foot list, Properties is closed), then the pinned app',
+  );
   // Room for four rows: three buttons and More, above the anchored Settings row (36px: its button and the gap, jsdom's fallback).
   // Desktop's rail has 10px of top padding in CSS; jsdom has none.
   await resize(ANCHOR_PX + 4 * 36 - 4);
-  assert.deepEqual(labels(), ['Pages (P)', 'Navigator (Z)', 'Code (C)', 'More']);
+  assert.deepEqual(labels(), ['Add elements (A)', 'Pages (P)', 'Code (C)', 'More']);
   const more = document.querySelector('button.rail-more');
   assert.ok(!more.classList.contains('on'), 'the active panel shows, so More is not active');
   await act(async () => more.click());
   await settle();
   const rows = [...document.querySelectorAll('.more-menu-item')].map((row) => row.textContent);
-  assert.deepEqual(rows, ['AssetsJ', 'CMS⌥C', 'Variables⌥V', 'Git⌥H', 'Components⇧A', 'AppsE', 'SSecret']);
+  assert.deepEqual(rows, ['Navigator', 'Assets', 'CMS', 'Variables', 'Git', 'Components', 'Apps', 'SSecret']);
+  // A row's shortcut is told in a tooltip, not printed (src/ui/shortcutTip.tsx); the row carries it for screen readers.
+  assert.deepEqual(
+    [...document.querySelectorAll('.more-menu-item')].map((row) => row.getAttribute('aria-keyshortcuts') ?? ''),
+    ['Z', 'J', 'Alt+C', 'Alt+V', 'Alt+H', 'Shift+A', 'E', ''],
+  );
   assert.ok(document.querySelector('.more-menu-item svg'), 'rows show their icons');
-  await act(async () => [...document.querySelectorAll('.more-menu-item')][0].click());
+  await act(async () => [...document.querySelectorAll('.more-menu-item')].find((row) => row.textContent === 'Assets').click());
   await settle();
   assert.deepEqual(selected, ['assets'], 'a row selects its panel');
   // A hidden panel's shortcut still opens it.

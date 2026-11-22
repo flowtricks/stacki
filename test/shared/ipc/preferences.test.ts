@@ -6,7 +6,15 @@ import { parsePreferenceName, parsePreferences, parsePreferenceResult } from '#d
 
 test('desktop preference replies require boolean values and save status', () => {
   // Main always sends every preference, appsPersonHidden included (electron/main.ts), so none is optional here.
-  const preferences = { sound: true, usageCountsEnabled: false, appsPersonHidden: true, aiAskBeforeTrust: false, aiTrackChanges: true, aiReviewChanges: false };
+  const preferences = {
+    sound: true,
+    usageCountsEnabled: false,
+    appsPersonHidden: true,
+    aiAskBeforeTrust: false,
+    aiTrackChanges: true,
+    aiReviewChanges: false,
+    codeChips: true,
+  };
   assert.deepEqual(parsePreferences(preferences), preferences);
   assert.deepEqual(parsePreferenceResult({ ...preferences, saved: true }), {
     ...preferences,
@@ -23,6 +31,9 @@ test('desktop preference replies require boolean values and save status', () => 
     { sound: true, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: false, aiTrackChanges: 'off' },
     { sound: true, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: false, aiTrackChanges: true },
     { sound: true, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: false, aiTrackChanges: true, aiReviewChanges: 'on' },
+    { sound: true, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: false, aiTrackChanges: true, aiReviewChanges: false },
+    { ...preferences, codeChips: 'on' },
+    { ...preferences, codeChips: 1 },
   ]) {
     assert.throws(() => parsePreferences(value));
   }
@@ -32,7 +43,7 @@ test('desktop preference replies require boolean values and save status', () => 
 });
 
 test('a preference change names a known preference', () => {
-  for (const name of ['sound', 'usageCountsEnabled', 'appsPersonHidden', 'aiAskBeforeTrust', 'aiTrackChanges', 'aiReviewChanges']) {
+  for (const name of ['sound', 'usageCountsEnabled', 'appsPersonHidden', 'aiAskBeforeTrust', 'aiTrackChanges', 'aiReviewChanges', 'codeChips']) {
     assert.equal(parsePreferenceName(name), name);
   }
   for (const name of [undefined, '', 'Sound', 'appsPerson', 17]) {

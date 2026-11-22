@@ -287,7 +287,8 @@ function outsideViewport(x: number, y: number): boolean {
 
 function nativePayload(event: DragEvent): boolean {
   const types = event.dataTransfer?.types ?? [];
-  return types.includes('avb/component') || types.includes('avb/node');
+  // `avb/insert` is a tile from the Add elements panel (src/editor/insertDragData.ts); the preload imports nothing of the renderer, so the name is repeated here.
+  return types.includes('avb/component') || types.includes('avb/node') || types.includes('avb/insert');
 }
 
 function onNativeOver(event: DragEvent): void {

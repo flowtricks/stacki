@@ -3,6 +3,7 @@
 import { boolean, count, data, dictionary, list, nullable, object, optional, pathText, record, text } from '../../shared/core/boundary';
 import type { Data } from '../../shared/core/boundary';
 import type { LocalePreference } from '../../shared/core/i18n/locales';
+import { parseAutoCompactPercent } from '../../shared/properties/ai/autoCompact';
 import { parseLocalePreferenceValue } from '../../shared/ipc/localeChannel';
 import type { ContentCollection } from '../content/contentEntries';
 import type { DynamicEntry } from '../lib/mainTypes';
@@ -22,6 +23,10 @@ export interface AppSettings {
   readonly aiTrackChanges: boolean;
   /** Ask the person to Keep each AI change; off (the default): edits apply at once and show "Applied", with Undo. */
   readonly aiReviewChanges: boolean;
+  /** The share of the context window at which Claude compacts by itself (30 to 95); absent: the agent's own default. */
+  readonly aiAutoCompactPercent?: number;
+  /** Draw CSS values in code editors as chips (variables, easings, shadows, gradients, clip-paths); on unless turned off. */
+  readonly codeChips: boolean;
   /** The interface language the renderer last chose (docs/i18n-playbook.md, "Main process"); "system" follows the operating system. */
   readonly localePreference: LocalePreference;
 }
@@ -36,6 +41,8 @@ export function parseSettings(input: unknown): AppSettings {
     aiAskBeforeTrust: optional(boolean),
     aiTrackChanges: optional(boolean),
     aiReviewChanges: optional(boolean),
+    aiAutoCompactPercent: optional(parseAutoCompactPercent),
+    codeChips: optional(boolean),
     localePreference: optional(parseLocalePreferenceValue),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
@@ -52,8 +59,10 @@ export function parseSettings(input: unknown): AppSettings {
     aiAskBeforeTrust: value.aiAskBeforeTrust ?? false,
     aiTrackChanges: value.aiTrackChanges ?? true,
     aiReviewChanges: value.aiReviewChanges ?? false,
+    codeChips: value.codeChips ?? true,
     localePreference: value.localePreference ?? 'system',
     ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
+    ...(value.aiAutoCompactPercent === undefined ? {} : { aiAutoCompactPercent: value.aiAutoCompactPercent }),
   };
 }
 export const parseRecents = list(object({ path: pathText, name: text, openedAt: count }));

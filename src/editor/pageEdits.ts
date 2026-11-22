@@ -435,10 +435,22 @@ interface GestureSendInput {
 export async function sendGesture(input: GestureSendInput): Promise<GestureSent> {
   const { origin } = input;
   const refOf = (nodeId: string): NodeRef | undefined => nodeRefIn(origin, nodeId);
-  const specialized = input.gesture.request(refOf, origin);
-  if (specialized === undefined || specialized.length === 0) {
+  const requested = input.gesture.request(refOf, origin);
+  if (requested === undefined || requested.length === 0) {
     return sendReplacement(input, refOf);
   }
+  // A request is stated when it is sent, against the origin the last reply left, so
+  // it can restate those bytes exactly: a drag that overshoots a clamped end writes
+  // `100%`, then `99%`, then `100%` again, and the queue replaced the unsent `99%`
+  // with the last value, which is what the first write already put on disk. Main
+  // refuses a rewrite that changes nothing, and that refusal read as an editor
+  // error. Nothing is owed the disk for such a request, so it is settled here.
+  const specialized = requested.filter((edit) => !restatesOrigin(origin, edit));
+  if (specialized.length === 0) {
+    recordNoChange(input.record);
+    return { tag: 'applied', replies: [] };
+  }
+  assert(specialized.length <= requested.length, 'Settling restated requests only removes requests');
   // A gesture of several requests is one change to the page: written apart,
   // the dev server renders the page between them (a loop reading a query not
   // declared yet). Written together when main can; one at a time otherwise.
@@ -570,6 +582,31 @@ async function sendRequests(input: GestureSendInput, requests: readonly Edit[]):
   }
   assert(replies.length === requests.length, 'Every request applied');
   return { tag: 'applied', replies };
+}
+
+/** Whether `edit` restates the origin: a `<style>` or `<script>` node rewritten with
+ * the tag and the contents the origin already holds. Exactly the change main's raw
+ * contents rewrite finds empty (electron/documents/editRequests.ts, rawContentsDraft);
+ * any other request goes to main, which decides it. */
+export function restatesOrigin(origin: PageOrigin, edit: Edit): boolean {
+  if (edit.tag !== 'replace-node') {
+    return false;
+  }
+  const next = edit.node;
+  if (next.kind !== 'raw') {
+    return false;
+  }
+  const previous = nodesById(origin.model.nodes).get(next.id);
+  if (previous?.kind !== 'raw') {
+    return false;
+  }
+  if (previous.inner !== next.inner) {
+    return false;
+  }
+  if (previous.name !== next.name) {
+    return false;
+  }
+  return JSON.stringify([previous.props, previous.attrOrder]) === JSON.stringify([next.props, next.attrOrder]);
 }
 
 /** The smallest stable changed nodes. A changed child suppresses its changed

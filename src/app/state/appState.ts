@@ -5,6 +5,7 @@
 
 import { usePropertySaveGuard } from '../usePropertySaveGuard';
 import type { RemoteCmsSelection } from '../../features/cms/remoteCmsShared';
+import type { CmsFileSettingsTarget } from '../../features/cms/CmsPanel';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
@@ -315,6 +316,8 @@ export function usePanelState(canvasReportState: ReturnType<typeof useCanvasRepo
   const [contentName, setContentName] = useState<string | undefined>(undefined);
   // A connected CMS's document open in the main view; never open beside the two above.
   const [cmsRemote, setCmsRemote] = useState<RemoteCmsSelection | undefined>(undefined);
+  // A data file's settings (its variables) open in the main view; never open beside the three above.
+  const [cmsFileSettings, setCmsFileSettings] = useState<CmsFileSettingsTarget | undefined>(undefined);
   // Which stylesheet group the variables sheet is showing: { file, index }.
   const [varsGroup, setVarsGroup] = useState<VariableSelection | undefined>(undefined);
   const [cmsTick, setCmsTick] = useState(0); // bumped on save, refreshes counts
@@ -330,6 +333,8 @@ export function usePanelState(canvasReportState: ReturnType<typeof useCanvasRepo
     setCodeReveal,
     cmsRemote,
     setCmsRemote,
+    cmsFileSettings,
+    setCmsFileSettings,
     cmsRel,
     cmsSettings,
     cmsTick,

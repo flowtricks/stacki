@@ -21,7 +21,7 @@
 // icon; a menu opens the editor's menu with icons first and checks last, and
 // choosing a row fires `select`. A `pressed` button is a toggle in the
 // editor's pressed fill. A menu opened from a button at the right edge stays in
-// the window, right-aligned, with headings, separators and shortcut hints, from
+// the window, right-aligned, with headings, separators and shortcuts (told in a tooltip, not printed), from
 // children or the `items` property. A popover shows the element's own content
 // in the editor's popover and puts the same nodes back when it closes. The page reports what it saw as JSON, which the test checks.
 // Each read waits, bounded, for the state it reads (test/helpers/waitFor.js in the probe, a
@@ -276,8 +276,8 @@ const check = (what, condition, detail) => {
          edges: [box.left, box.right, trigger.left, trigger.right, window.innerWidth],
          heading: (popup.querySelector('.dd-group-label') || {}).textContent,
          separators: popup.querySelectorAll('[role="separator"]').length,
-         hint: (popup.querySelector('.dd-hint') || {}).textContent,
-         hintBeforeCheck: Boolean(popup.querySelector('.dd-hint + .dd-check')),
+         hint: popup.querySelector('.dd-hint') === null ? undefined : 'inline',
+         keyShortcuts: popup.querySelector('[role^="menuitem"]').getAttribute('aria-keyshortcuts'),
          rows: popup.querySelectorAll('[role^="menuitem"]').length,
        };
        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -429,10 +429,14 @@ const check = (what, condition, detail) => {
     }
     check('a heading row shows', aligned.heading === 'Signed in as ada@example.test', JSON.stringify(aligned));
     check('a separator shows between rows', aligned.separators === 1 && aligned.rows === 2, JSON.stringify(aligned));
-    check('a shortcut shows as a hint before the check', aligned.hint === '⌘R' && aligned.hintBeforeCheck === true, JSON.stringify(aligned));
     check(
-      'rows set as data draw headings, hints, separators and checks',
-      JSON.stringify(asItems) === JSON.stringify(['presentation:Data', 'menuitem:A⌘A', 'separator:', 'menuitemcheckbox:B']),
+      'a shortcut is not printed in the row; the row carries it for screen readers',
+      aligned.hint === undefined && aligned.keyShortcuts === 'Meta+R',
+      JSON.stringify(aligned),
+    );
+    check(
+      'rows set as data draw headings, separators and checks (a shortcut is not text in its row)',
+      JSON.stringify(asItems) === JSON.stringify(['presentation:Data', 'menuitem:A', 'separator:', 'menuitemcheckbox:B']),
       JSON.stringify(asItems),
     );
     check('malformed rows throw', JSON.stringify(badItems) === '["TypeError","TypeError","TypeError"]', JSON.stringify(badItems));

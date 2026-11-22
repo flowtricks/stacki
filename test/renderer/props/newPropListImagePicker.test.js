@@ -309,8 +309,9 @@ test('an astro:assets <Image> binds the metadata itself, and a URL default binds
     const bound = [];
     const root = await render(picker(host, { fit: 'image', label: 'src', value: '', reference }, { onPick() {}, onBindNew: (value) => bound.push(value) }));
     await click(byText('New Image property'));
-    assert.ok(byText('Create').disabled, 'an image prop needs a default');
-    assert.equal(document.querySelector('.new-prop-form .loop-bind-problem').textContent, 'Choose a default image.');
+    // No default is valid (the prop is optional, or each instance supplies it): Create is ready before one is typed.
+    assert.equal(byText('Create').disabled, false, 'an image prop may have no default');
+    assert.ok(document.querySelector('.new-prop-form .loop-bind-problem') === null, 'and no problem is shown for it');
     await type(document.querySelector('.new-prop-form input[aria-label="Default"]'), image);
     await click(byText('Create'));
     assert.deepEqual(bound, [expected]);

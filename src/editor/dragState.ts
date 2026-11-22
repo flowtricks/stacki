@@ -5,10 +5,14 @@
 // moving — which is exactly when an invalid drop needs to be refused. Drags
 // never leave this window, so a module-level record is enough.
 //
-// { kind: 'node' | 'component', tag?: string, nodeKind?: string, id?: string }
+// { kind: 'node' | 'component' | 'insert', tag?: string, nodeKind?: string, id?: string }
+import type { InsertDragChoice } from './insertDragData';
+
 export type Drag =
   /** `path` is the component's file, when the palette knows it: two components can share a name. */
   | { readonly kind: 'component'; readonly name: string; readonly path?: string }
+  /** A new element or node type from the Add elements panel; `label` names it on the canvas's chip. */
+  | { readonly kind: 'insert'; readonly choice: InsertDragChoice; readonly label: string }
   | {
       readonly kind: 'node';
       readonly id: string;

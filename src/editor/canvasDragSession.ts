@@ -13,11 +13,15 @@ import { assert } from '../../shared/core/assert';
 import type { PlacementMessage } from '../../shared/page/placement';
 import type { DropDecision, DropGuide, DropPoint, DropRect } from './canvasDrop';
 import type { Translator } from '../../shared/properties/i18n/messageRef';
+import type { InsertDragChoice } from './insertDragData';
 
-/** What is moving, for the chip that says so: an element, a component instance, a loop, text, or a new component from the palette. */
+/**
+ * What is moving, for the chip that says so: an element, a component instance, a loop, text, or something new.
+ * A new one is a component from the palette, or, with `choice`, a tile from the Add elements panel.
+ */
 export type CanvasDragSubject =
   | { readonly kind: 'element' | 'component' | 'loop' | 'text'; readonly id: string; readonly label: string }
-  | { readonly kind: 'new'; readonly label: string; readonly path?: string };
+  | { readonly kind: 'new'; readonly label: string; readonly path?: string; readonly choice?: InsertDragChoice };
 
 /** What the drop will do where the pointer is. */
 export type CanvasDropVerdict =

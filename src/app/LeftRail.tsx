@@ -1,9 +1,9 @@
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from 'react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { AppSummary } from '../../shared/properties/apps';
 import { useCurrentRole } from '../lib/useCurrentRole';
-import { canPanel, canRailTab, canSettingsPanel } from '../lib/roleAccess';
-import { shownSettingsView, type SettingsFocusTarget } from '../lib/settingsSections';
+import { canPanel, canRailTab, canSettingsPanel, settingsViewsOf } from '../lib/roleAccess';
+import { shownSettingsView, subscribeShownSettingsView, type SettingsFocusTarget } from '../lib/settingsSections';
 import { shortcutOf, railActionOf, type RailAction } from './railShortcuts';
 import { FEATURE_ICONS, type FeatureIconComponent } from './featureIcons';
 import { AppsRailBadge } from '../features/apps/appUpdates';
@@ -13,12 +13,14 @@ import { useAppsRuntime } from '../features/apps/appsRuntime';
 import { RailMore, type RailMoreItem } from './RailMore';
 import { useRailOverflow, type RailOverflowItem } from './railOverflow';
 import { useTranslate } from '../lib/i18n/useTranslate';
-import type { MessageKey } from '../lib/i18n/localeContext';
+import { TOOLTIP_DELAY_MS, tooltipAnchor, type TooltipAnchor } from '../ui/delayedTooltip';
+import FittedTooltip from '../ui/FittedTooltip';
 import Menu, { type MenuEntry } from '../ui/Menu';
 import {
   crossRailItem,
   isDefaultRailOrder,
-  placeRailItem,
+  isRailFixedId,
+  moveIntoSettings,
   railPlaceOf,
   railPosition,
   sameRailOrder,
@@ -30,29 +32,17 @@ import {
 import { useRailOrder } from './railOrderStore';
 import { DEFAULT_RAIL_ORDER } from './railDefaults';
 import { useRailDrag } from './railDrag';
+import { orderAfterDrop } from './railDragModel';
+import { RAIL_PANEL_TABS, RAIL_SETTINGS_VIEWS, movedKey, railItemSpec, type RailPanelId } from './railItems';
 import { animateRailReflow, readRailRows } from './railReflow';
 
-// Each button draws its access feature's icon (featureIcons.tsx), the same one the
-// Roles permission grid shows, so the two cannot drift apart.
-const TABS = [
-  { id: 'pages', titleKey: 'rail.pages', shortcut: shortcutOf('pages'), Icon: FEATURE_ICONS['panel:pages'] },
-  { id: 'navigator', titleKey: 'rail.navigator', shortcut: shortcutOf('navigator'), Icon: FEATURE_ICONS['panel:navigator'] },
-  { id: 'properties', titleKey: 'rail.properties', shortcut: shortcutOf('properties'), Icon: FEATURE_ICONS['panel:properties'] },
-  { id: 'components', titleKey: 'rail.components', shortcut: shortcutOf('components'), Icon: FEATURE_ICONS['panel:components'] },
-  { id: 'assets', titleKey: 'rail.assets', shortcut: shortcutOf('assets'), Icon: FEATURE_ICONS['panel:assets'] },
-  { id: 'cms', titleKey: 'rail.cms', shortcut: shortcutOf('cms'), Icon: FEATURE_ICONS['panel:cms'] },
-  { id: 'variables', titleKey: 'rail.variables', shortcut: shortcutOf('variables'), Icon: FEATURE_ICONS['panel:variables'] },
-  { id: 'selectors', titleKey: 'rail.selectors', shortcut: shortcutOf('selectors'), Icon: FEATURE_ICONS['panel:selectors'] },
-  { id: 'code', titleKey: 'rail.code', shortcut: shortcutOf('code'), Icon: FEATURE_ICONS['panel:code'] },
-  { id: 'history', titleKey: 'rail.history', shortcut: shortcutOf('history'), Icon: FEATURE_ICONS['panel:history'] },
-  { id: 'apps', titleKey: 'rail.apps', shortcut: shortcutOf('apps'), Icon: FEATURE_ICONS['panel:apps'] },
-  { id: 'audits', titleKey: 'rail.audits', shortcut: shortcutOf('audits'), Icon: FEATURE_ICONS['panel:audits'] },
-] as const satisfies readonly { readonly id: string; readonly titleKey: MessageKey; readonly shortcut: string; readonly Icon: unknown }[];
+// Each panel button's label, icon and chord are railItems.ts's, read by the Settings panel's root rows too, so a
+// panel moved into Settings looks the same there.
 // The project's Settings panel (features/projectSettings) sits at the rail's foot, directly above the AI button,
 // and like it never moves into More (railOverflow.ts measures the anchored pair). Not the app's Settings screen.
 // It holds the Instructions too (their own rail button became ⌥I, which opens Settings at them).
 const SETTINGS_TAB = { id: 'projectSettings', shortcut: shortcutOf('projectSettings'), Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
-export type RailTab = (typeof TABS)[number]['id'] | typeof SETTINGS_TAB.id;
+export type RailTab = RailPanelId | typeof SETTINGS_TAB.id;
 
 // The order each person arranges by dragging (railOrder.ts): the top list holds most panels, the bottom list
 // holds Style selectors, Audits, the project's Settings and the AI button. The default is the source of truth for which buttons exist.
@@ -71,7 +61,6 @@ interface RailEntry {
   readonly badge: ReactNode;
 }
 
-const TOOLTIP_DELAY = 500;
 const AiRailIcon = FEATURE_ICONS['panel:ai'];
 
 // Webflow-style icon rail. Clicking the active tab collapses the panel.
@@ -83,6 +72,10 @@ const AiRailIcon = FEATURE_ICONS['panel:ai'];
 // Each person arranges the buttons (railOrder.ts): drag one to reorder it or to move it between the top
 // list and the bottom list at the foot, or use Alt+arrows on a focused button. The order is kept per
 // person for every project (railOrderStore.ts); right-clicking the rail offers to move a button or reset.
+// A button can also go into the Settings panel, as one of its root rows: dropped on the middle of the Settings
+// button, or between the rows once resting there has opened the panel (railDrag.ts), or by the menu's Move into
+// Settings. A Settings view dragged out of that panel (SettingsRailRows.tsx) becomes a button here that opens
+// Settings at the view. Settings and the AI button never go inside Settings.
 export default function LeftRail({
   active,
   onSelect,
@@ -101,7 +94,7 @@ export default function LeftRail({
   /** The AI chat button at the rail's foot; absent for a role without the panel. */
   readonly aiButton?: { readonly active: boolean; readonly onSelect: () => void } | undefined;
 }) {
-  const [tip, setTip] = useState<{ readonly label: string; readonly left: number; readonly top: number } | undefined>(undefined);
+  const [tip, setTip] = useState<{ readonly label: string; readonly anchor: TooltipAnchor } | undefined>(undefined);
   const [menu, setMenu] = useState<{ readonly anchor: HTMLElement; readonly id: string | undefined } | undefined>(undefined);
   const [announcement, setAnnouncement] = useState('');
   const translate = useTranslate();
@@ -115,11 +108,7 @@ export default function LeftRail({
   const showSoon = (label: string) => (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     clearTimeout(timerRef.current);
-    // The tip opens on the rail's inner side: its right in a left-to-right interface, its left (and drawn
-    // leftwards from there, see .rail-tooltip in styles.css) when the interface is mirrored.
-    const mirrored = document.documentElement.dir === 'rtl';
-    const left = mirrored ? rect.left - 10 : rect.right + 10;
-    timerRef.current = setTimeout(() => setTip({ label, left, top: rect.top + rect.height / 2 }), TOOLTIP_DELAY);
+    timerRef.current = setTimeout(() => setTip({ label, anchor: tooltipAnchor(rect) }), TOOLTIP_DELAY_MS);
   };
 
   const hide = () => {
@@ -149,14 +138,14 @@ export default function LeftRail({
       onSelect(action);
     }
   });
-  const tabs = TABS.filter((tab) => tab.id !== 'properties' || componentOpen).filter((tab) => canPanel(role, tab.id));
+  const tabs = RAIL_PANEL_TABS.filter((tab) => tab.id !== 'properties' || componentOpen).filter((tab) => canPanel(role, tab.id));
+  const shownView = useSyncExternalStore(subscribeShownSettingsView, shownSettingsView, shownSettingsView);
   const pinned = usePinnedRailApps(projectPath, role, active);
   // A pinned app the open Apps panel shows is the active button, in place of Apps itself.
   const shownApp = useShownPinnedApp(role, active === 'apps' ? 'open' : 'closed');
   const activeApp = pinned.find((app) => app.manifest.id === shownApp);
   const openApps = useAppsRuntime().running;
   const activeId = activeApp === undefined ? active : railAppId(activeApp.manifest.id);
-  const showSettings = canSettingsPanel(role);
 
   // Every button this role has, by id; the order only arranges them.
   const entries = new Map<string, RailEntry>();
@@ -172,14 +161,42 @@ export default function LeftRail({
       badge: id === 'apps' ? <AppsRailBadge admin={role.isAdmin} /> : undefined,
     });
   }
-  if (showSettings) {
+  // A Settings view moved onto the rail opens Settings at it, and closes the panel when that view already shows.
+  const roleViews = settingsViewsOf(role);
+  for (const view of RAIL_SETTINGS_VIEWS.filter((each) => roleViews.includes(each))) {
+    const spec = railItemSpec(view);
+    if (spec !== undefined) {
+      const label = translate(spec.titleKey);
+      entries.set(view, {
+        id: view,
+        label,
+        shortcut: spec.shortcut,
+        Icon: spec.Icon,
+        tooltip: spec.shortcut === undefined ? label : translate('rail.withShortcut', { label, shortcut: spec.shortcut }),
+        pressed: active === SETTINGS_TAB.id && shownView === view,
+        select: () => {
+          if (active === SETTINGS_TAB.id && shownSettingsView() === view) {
+            onSelect(SETTINGS_TAB.id);
+          } else {
+            onOpenSettings(view);
+          }
+        },
+        badge: undefined,
+      });
+    }
+  }
+  // Settings shows for a role with a view of its own, or with any item a person moved into it.
+  const settingsHolds = order.settings.filter((id) => entries.has(id));
+  const activeInSettings = active !== undefined && active !== SETTINGS_TAB.id && order.settings.includes(active);
+  if (canSettingsPanel(role) || settingsHolds.length > 0) {
     entries.set(SETTINGS_TAB.id, {
       id: SETTINGS_TAB.id,
       label: translate('rail.settings'),
       shortcut: SETTINGS_TAB.shortcut,
       Icon: SETTINGS_TAB.Icon,
       tooltip: translate('rail.withShortcut', { label: translate('rail.settings'), shortcut: SETTINGS_TAB.shortcut }),
-      pressed: active === SETTINGS_TAB.id,
+      // A panel opened from a Settings row lights Settings, the button it was reached from.
+      pressed: active === SETTINGS_TAB.id || activeInSettings,
       select: () => onSelect(SETTINGS_TAB.id),
       badge: undefined,
     });
@@ -223,7 +240,7 @@ export default function LeftRail({
       const place = railPosition(next, shownIds, id);
       const label = entries.get(id)?.label;
       if (place !== undefined && label !== undefined) {
-        setAnnouncement(translate(place.group === 'top' ? 'rail.movedTop' : 'rail.movedBottom', { label, position: place.position, count: place.count }));
+        setAnnouncement(translate(movedKey(place.group), { label, position: place.position, count: place.count }));
       }
     }
   };
@@ -252,18 +269,28 @@ export default function LeftRail({
   }, [order]);
 
   const drag = useRailDrag({
+    origin: 'rail',
     railRef,
+    canEnterSettings: (id) => !isRailFixedId(id),
     onStart: hide,
-    onDrop: (id, slot) => commitOrder(placeRailItem(order, id, slot.group, slot.beforeId), id, 'none'),
+    // Resting on Settings mid-drag opens it, so the button can be dropped between its rows.
+    onSpring: () => {
+      if (active !== SETTINGS_TAB.id) {
+        onSelect(SETTINGS_TAB.id);
+      }
+    },
+    onDrop: (id, dropSlot) => commitOrder(orderAfterDrop(order, id, dropSlot), id, 'none'),
   });
   const dragView = drag.view;
-  const dragEntry = dragView === undefined ? undefined : entries.get(dragView.id);
-  // The line shows only where a drop would change what is drawn.
+  // The ghost is the surface's that started the drag: a Settings row dragged over the rail draws its own.
+  const dragEntry = dragView?.origin === 'rail' ? entries.get(dragView.id) : undefined;
   const slot = dragView?.slot;
+  const railSlot = slot !== undefined && (slot.group === 'top' || slot.group === 'bottom') ? slot : undefined;
+  // The line shows only where a drop would change what is drawn.
   const dropChanges =
-    dragView !== undefined &&
-    slot !== undefined &&
-    !sameRailOrder(visibleRailOrder(placeRailItem(order, dragView.id, slot.group, slot.beforeId), shownIds), visible);
+    dragView !== undefined && railSlot !== undefined && !sameRailOrder(visibleRailOrder(orderAfterDrop(order, dragView.id, railSlot), shownIds), visible);
+  // While a movable item is dragged, Settings is lit as a place to drop it, and lit more while the pointer is on it.
+  const settingsDropReady = dragView !== undefined && !isRailFixedId(dragView.id) && dragView.id !== SETTINGS_TAB.id;
 
   const moveByKey = (event: ReactKeyboardEvent<HTMLButtonElement>, id: string) => {
     if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -338,6 +365,15 @@ export default function LeftRail({
         label: translate(target === 'bottom' ? 'rail.moveToBottom' : 'rail.moveToTop'),
         onSelect: () => commitOrder(crossRailItem(order, id, target), id, 'focus'),
       });
+      // The keyboard's way into Settings too: the menu opens from the context-menu key on a focused button.
+      if (!isRailFixedId(id)) {
+        rows.push({
+          kind: 'item',
+          id: 'settings',
+          label: translate('rail.moveIntoSettings'),
+          onSelect: () => commitOrder(moveIntoSettings(order, id), id, 'none'),
+        });
+      }
     }
     // Reset is offered only when there is something to reset: a greyed row for a no-op is noise.
     if (!isDefaultRailOrder(DEFAULT_RAIL_ORDER, order)) {
@@ -357,6 +393,8 @@ export default function LeftRail({
         data-rail-id={entry.id}
         data-rail-group={group}
         data-dragging={dragged ? 'true' : undefined}
+        data-drop-ready={entry.id === SETTINGS_TAB.id && settingsDropReady ? 'true' : undefined}
+        data-drop-target={entry.id === SETTINGS_TAB.id && slot?.group === 'settingsButton' ? 'true' : undefined}
         onMouseEnter={showSoon(entry.tooltip)}
         onMouseLeave={hide}
         onClickCapture={(event) => {
@@ -380,7 +418,14 @@ export default function LeftRail({
   };
 
   return (
-    <div className="rail" ref={railRef} data-dragging={dragView === undefined ? undefined : 'true'} onContextMenu={openMenu}>
+    <div
+      className="rail"
+      ref={railRef}
+      data-dragging={dragView === undefined ? undefined : 'true'}
+      // A Settings row dragged out lights the rail as the place to drop it.
+      data-drop-ready={dragView?.origin === 'settings' ? 'true' : undefined}
+      onContextMenu={openMenu}
+    >
       {shownTopEntries.map((entry) => renderButton(entry, 'top'))}
       {shownTopEntries.length > 0 && shownApps.length > 0 && <div className="rail-separator" role="separator" />}
       {shownApps.map((app) => {
@@ -407,8 +452,8 @@ export default function LeftRail({
           <dragEntry.Icon size={20} />
         </div>
       )}
-      {dragView !== undefined && slot !== undefined && dropChanges && (
-        <div className="rail-drop-line" aria-hidden="true" data-rail-float="true" style={{ top: slot.lineY - dragView.railTop - 1 }} />
+      {dragView !== undefined && railSlot !== undefined && dropChanges && (
+        <div className="rail-drop-line" aria-hidden="true" data-rail-float="true" style={{ top: railSlot.lineY - dragView.railTop - 1 }} />
       )}
       <div className="rail-live" role="status" aria-live="polite" data-rail-float="true">
         {announcement}
@@ -428,9 +473,11 @@ export default function LeftRail({
         )
       )}
       {tip && (
-        <div className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
+        // The tip opens on the rail's inner side: its right in a left-to-right interface, its left when the interface is
+        // mirrored. FittedTooltip keeps it inside the window, so a button at the foot of the rail never has its tip cut off.
+        <FittedTooltip anchor={tip.anchor} preferred={document.documentElement.dir === 'rtl' ? 'left' : 'right'}>
           {tip.label}
-        </div>
+        </FittedTooltip>
       )}
       {menu !== undefined && (
         <Menu

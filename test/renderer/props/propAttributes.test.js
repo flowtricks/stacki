@@ -2,7 +2,13 @@
 // The object field must preserve rows and reject bounds; the value editor must open
 // from a press and provide enough width to read a JavaScript expression. An app's
 // `data-stacki-key` is never a row, and every edit to the rows around it (value,
-// rename, delete, bulk paste) leaves it on the node with its value.
+// rename, delete, bulk paste) leaves it on the node with its value. An element
+// connected to the component's attributes prop shows the prop's chip in the
+// header and its spread as the last row, "+ items in {} rest"; one that is not
+// shows the purple + right after the label (or none for an instance, a
+// page or a component tag), which spreads an existing rest binding when the
+// component has one; Disconnect releases the prop and
+// takes out the spread alone; an instance names the tag it is checked against.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -161,7 +167,98 @@ const internalAttributeKept = async () => {
     'the rows are every other attribute',
   );
 };
+const connectedRest = async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const section = createRoot(host);
+  const released = [];
+  const replaced = [];
+  const newProp = (restLocal) => ({
+    componentName: 'Card.astro',
+    propKeys: [],
+    restLocal,
+    create: () => ({ ok: true, value: 'rest' }),
+    releaseRest: (local) => released.push(local),
+  });
+  const props = {
+    alt: { type: 'string', value: 'Photo' },
+    'data-plain': { type: 'string', value: 'text' },
+    '...rest': { type: 'spread', value: 'rest' },
+  };
+  const draw = (restLocal, extra = {}) =>
+    act(async () =>
+      section.render(
+        React.createElement(AttributesSection, {
+          node: { id: 'image', props },
+          names: Object.keys(props),
+          tag: 'img',
+          bindContext: { newProp: newProp(restLocal), frontmatter: '' },
+          onSetProp: () => undefined,
+          onRenameProp: () => undefined,
+          onReplaceProps: (next) => replaced.push(next),
+          ...extra,
+        }),
+      ),
+    );
+  await draw('rest');
+  const header = host.querySelector('.attrs-label-row');
+  assert.ok(header.querySelector('.attrs-bound-chip'), 'connected: the chip names the prop');
+  assert.match(header.querySelector('.attrs-bound-chip').textContent, /rest/);
+  assert.ok(header.querySelector('.attrs-connect') === null, 'connected: no purple +, so it is never offered twice');
+  const rows = [...host.querySelectorAll('.attrs-list > .attr-row')];
+  assert.deepEqual(
+    rows.slice(0, 2).map((row) => row.querySelector('.attr-name').textContent),
+    ['alt', 'data-plain'],
+    'the attributes before the spread are rows an instance overrides',
+  );
+  const items = rows.at(-1);
+  assert.ok(items.classList.contains('attrs-items-row'), 'the spread is the last row');
+  assert.match(items.textContent, /items in\s*rest/);
+  assert.equal(items.querySelector('[role="img"]').getAttribute('aria-label'), 'Attributes passed to this component are added here');
+  await act(async () => header.querySelector('.attrs-bound-chip').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  const disconnect = [...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent.includes('Disconnect'));
+  assert.ok(disconnect, 'the chip’s menu offers Disconnect');
+  await act(async () => disconnect.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  assert.deepEqual(released, ['rest'], 'the prop’s removal is held first, for the same undo step');
+  assert.deepEqual(Object.keys(replaced.at(-1)), ['alt', 'data-plain'], 'only the spread is taken out');
+  await draw(undefined);
+  const unbound = host.querySelector('.attrs-label-row');
+  const order = [...unbound.children].map((child) => child.className);
+  assert.ok(order[0].includes('prop-label'), 'the label first');
+  assert.ok(order[1].includes('attrs-connect'), 'not connected: the purple + right after the label');
+  assert.equal(unbound.querySelector('.attrs-connect').getAttribute('aria-label'), 'Connect attributes to a prop');
+  assert.ok(unbound.querySelector('.attrs-connect').classList.contains('bind-handle'), 'the shared bind handle, as every field’s connect dot');
+  assert.ok(unbound.querySelector('.attrs-connect > .bind-dot'), 'a small dot at rest');
+  assert.ok(unbound.querySelector('.attrs-connect > .bind-plus'), 'the + it grows into on hover');
+  // A jsdom document applies no stylesheet, so the reveal is read from the CSS: the field rule (`> label > .bind-handle`) cannot reach this header row.
+  const css = fs.readFileSync(repoPath('src/features/props/loopSettings.css'), 'utf8');
+  const rest = /\.attrs-label-row > \.bind-handle\.attrs-connect \{([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.match(rest, /opacity: 1;/, 'the header dot is shown at rest');
+  assert.match(rest, /pointer-events: auto;/, 'and can be pressed');
+  assert.match(css, /\.attrs-label-row > \.bind-handle\.attrs-connect:focus-visible \{[^}]*width: 18px;/, 'keyboard focus grows it as hover does');
+  assert.ok(unbound.lastElementChild.hasAttribute('data-attribute-editor-trigger'), 'the grey + last');
+  assert.ok(host.querySelector('.attrs-items-row') === null, 'not connected: the spread is a plain spread row');
+  // The component already passes attributes on elsewhere: the + spreads that binding here, declaring nothing.
+  const plain = { alt: { type: 'string', value: 'Photo' }, class: { type: 'string', value: 'card' } };
+  await draw('rest', { node: { id: 'image', props: plain }, names: Object.keys(plain) });
+  const spreadOffer = host.querySelector('.attrs-label-row .attrs-connect');
+  assert.equal(spreadOffer.getAttribute('aria-label'), 'Connect attributes to rest');
+  await act(async () => spreadOffer.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  assert.deepEqual(Object.keys(replaced.at(-1)), ['alt', '...rest', 'class'], 'the spread after the defaults, the class after it');
+  // Not offered where nothing can be typed by a tag: an instance, a page, a custom component name.
+  await draw(undefined, { tag: undefined });
+  assert.equal(host.querySelector('.attrs-connect') ?? undefined, undefined, 'an instance gets no +');
+  await draw(undefined, { bindContext: { frontmatter: '' } });
+  assert.equal(host.querySelector('.attrs-connect') ?? undefined, undefined, 'a page gets no +');
+  await draw(undefined, { tag: 'Card' });
+  assert.equal(host.querySelector('.attrs-connect') ?? undefined, undefined, 'a capitalised tag is a component, not an element');
+  await draw(undefined, { tag: undefined, onReplaceProps: undefined, passedTo: 'img', bindContext: {} });
+  assert.equal(host.querySelector('.attrs-tag-type').textContent, 'img attributes', 'an instance names the tag it is checked against');
+  await act(async () => section.unmount());
+  host.remove();
+};
 (async () => {
+  await connectedRest();
   await render();
   await press(document.querySelector('.attr-row'));
   await paste('data-id="hero"');

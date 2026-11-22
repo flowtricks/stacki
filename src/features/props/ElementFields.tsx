@@ -345,8 +345,22 @@ export function ElementStyle({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementAttributes({ state }: { readonly state: ElementState }) {
-  const { node, allowAttrs, loopContext, bindContext, onSetProp, onSetProps, onRenameProp, projectPath, attrNames, onReplaceProps, onSetFrontmatter, schema } =
-    state;
+  const {
+    node,
+    allowAttrs,
+    loopContext,
+    bindContext,
+    onSetProp,
+    onSetProps,
+    onRenameProp,
+    projectPath,
+    attrNames,
+    onReplaceProps,
+    onSetFrontmatter,
+    onRenameVariable,
+    schema,
+    attributesTag,
+  } = state;
   // An HTML element is checked against its tag and can be connected to the
   // component's attributes prop; an instance's attributes would collide with
   // the props its component declares.
@@ -360,6 +374,8 @@ export function ElementAttributes({ state }: { readonly state: ElementState }) {
           names={attrNames}
           tag={element ? String(node.name) : undefined}
           reservedNames={node.kind === 'component' ? schema.map((field) => field.name) : undefined}
+          passedTo={node.kind === 'component' ? attributesTag : undefined}
+          onRenameVariable={onRenameVariable}
           onReplaceProps={onReplaceProps === undefined || !element ? undefined : (props) => onReplaceProps(node.id, props)}
           onReplaceAttributes={onReplaceProps === undefined ? undefined : (props) => onReplaceProps(node.id, props)}
           onSetFrontmatter={onSetFrontmatter}

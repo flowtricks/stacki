@@ -241,5 +241,10 @@ test('a discriminated union hides what the other branch has', () => {
 test('type Props = HTMLAttributes<tag> & {…} extends that tag', () => {
   assert.equal(parseExtendsTag("---\ntype Props = HTMLAttributes<'button'> & {\n  label: string;\n};\n---\n"), 'button');
   assert.equal(parseExtendsTag("---\ninterface Props extends HTMLAttributes<'a'> {}\n---\n"), 'a');
-  assert.equal(parseExtendsTag("---\ntype Props = { attrs: HTMLAttributes<'div'> };\n---\n"), undefined);
+  assert.equal(parseExtendsTag("---\ntype Props = { attrs: HTMLAttributes<'div'> };\n---\n"), undefined); // As Stacki's attributes prop writes them: anywhere in an extends list, at the end of an alias's intersection.
+  assert.equal(parseExtendsTag('---\ninterface Props extends Base, HTMLAttributes<"img"> {}\n---\n'), 'img');
+  assert.equal(parseExtendsTag('---\ntype Props = ({ a: string } | { b: number }) & HTMLAttributes<"a">;\nconst x = 1;\n---\n'), 'a');
+  assert.equal(parseExtendsTag('---\ntype Props = { title?: string } &\n  HTMLAttributes<"img">;\n---\n'), 'img');
+  assert.equal(parseExtendsTag('---\ninterface Props extends astroHTML.JSX.HTMLAttributes {}\n---\n'), undefined, 'the tag-less type names no tag');
+  assert.equal(parseExtendsTag('---\ntype Props = { a: string };\ntype Other = HTMLAttributes<"div">;\n---\n'), undefined, 'another alias is not Props');
 });

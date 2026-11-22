@@ -167,7 +167,8 @@ function CommitControls({
           value={message}
           onChange={(event) => onMessage(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && dirty && !working && !blocked) {
+            // Enter that confirms an input-method candidate (Japanese, Chinese, Korean) is not a request to commit.
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing && dirty && !working && !blocked) {
               onCommit();
             }
           }}

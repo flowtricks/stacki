@@ -530,8 +530,15 @@
   border-radius: 8px;
   background: var(--bg-input);
 }
-.audits-settings-heading {
+.audits-settings .audits-settings-heading {
   margin-bottom: 0;
+  /* Rows below have no side padding; the heading matches so the All switch sits in the same column as theirs. */
+  padding: 0;
+}
+.audits-settings-heading .app-role-group-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .audits-settings .audits-settings-disclosure {
   display: inline-flex;
@@ -592,10 +599,8 @@
 .audits-settings-subpanel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
+  gap: 8px;
+  margin-top: 12px;
 }
 .audits-settings-subpanel h5 {
   margin: 4px 0 0;
@@ -603,33 +608,64 @@
   font-size: 11px;
   font-weight: 600;
 }
+/* A list as tags: each item is a filled chip, all on one gap, wrapping; the add field follows on the same gap. The fill is a
+   step above the card's (--bg-input) so a chip reads on it; the remove × takes its width at rest and shows on hover and focus. */
 .audits-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 .audits-chip-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  min-height: 24px;
+  padding: 0 2px 0 8px;
+  border-radius: 6px;
+  background: var(--bg-active);
+  color: var(--text);
+  font-size: 12px;
+}
+.audits-chip-item:not(:has(.audits-chip-remove)) {
+  padding-inline-end: 8px;
 }
 .audits-chip-remove {
   display: inline-flex;
-  padding: 1px;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-dim);
+  opacity: 0;
+}
+.audits-chip-item:hover .audits-chip-remove,
+.audits-chip-remove:focus-visible {
+  opacity: 1;
+}
+.audits-chip-remove:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.audits-chip-remove:focus-visible,
+.audits-chip-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .audits-chip-input {
-  flex: 1 1 160px;
-  min-width: 120px;
-  height: 24px;
+  flex: 1 1 100%;
+  min-width: 0;
+  height: 28px;
   padding: 0 8px;
   border: 0;
   border-radius: 6px;
   background: var(--bg);
   color: var(--text);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 /* The review window for raw CSS values: a toolbar, then a table whose columns line up on every row. */

@@ -200,7 +200,8 @@ const accentButtons = rules.filter((rule) => {
 
 test('the guard finds the accent buttons it is meant to hold', () => {
   const found = new Set(accentButtons.map((rule) => rule.selector));
-  for (const expected of ['button.primary', '.ai-primary', '.ai-send', '.audits-card-button', '.apps-button.primary']) {
+  // `.ai-send` left this list when Send became a plain icon button like the microphone (composer.css).
+  for (const expected of ['button.primary', '.ai-primary', '.audits-card-button', '.apps-button.primary']) {
     assert.ok(found.has(expected), `${expected} is recognised as an accent button`);
   }
   assert.ok(accentButtons.length >= 8, 'the scan is not empty');

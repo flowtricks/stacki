@@ -108,6 +108,12 @@
 .selectors-body {
   padding-top: 0;
 }
+/* An empty-state card sits at the top, a normal gap under the search field, its edges in line with the
+   field's (the controls pad 12px, the body 8px, so the card steps in 4px). */
+.selectors-body > .ui-empty-state {
+  margin-block-start: 4px;
+  margin-inline: 4px;
+}
 
 /* What the tab means, and the clean-up where it applies. */
 .selectors-banner {

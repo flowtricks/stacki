@@ -33,12 +33,6 @@
 .list-item.settings-link .label {
   text-align: start;
 }
-/* The chord that opens the view: muted, at the end of the row, before the chevron. */
-.settings-link-key {
-  flex-shrink: 0;
-  color: var(--text-faint);
-  font-size: 11px;
-}
 .settings-link > svg {
   flex-shrink: 0;
   color: var(--text-faint);

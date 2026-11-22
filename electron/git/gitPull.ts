@@ -54,7 +54,13 @@ export async function pullBranch(git: Git, options: { readonly projectPath: stri
 }
 
 async function requireCurrentBranch(git: Git, { projectPath, branch }: { readonly projectPath: string; readonly branch: string }): Promise<void> {
-  const current = (await git(projectPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).stdout.trim();
+  let current: string;
+  try {
+    current = (await git(projectPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).stdout.trim();
+  } catch {
+    // symbolic-ref exits 1 without a word when HEAD is detached.
+    throw new ReferencedError('git.error.detachedHead');
+  }
   if (current !== branch) {
     throw new ReferencedError('git.error.pullBranchChanged');
   }

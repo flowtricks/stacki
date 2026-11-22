@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assert } from '../../../shared/core/assert';
 import { AppsIcon, GitHubIcon, SparkleIcon } from '../../ui/Icons';
+import { useShortcutTip } from '../../ui/shortcutTip';
 import { type PaletteApp, type PaletteAppAuthor, type PaletteAppsAction } from './paletteApps';
 
 // The insert palette's app rows: an app in the plain list (All results and the Apps tab), and what the Apps
@@ -29,14 +30,16 @@ export function InsertAppRow({
 }) {
   const translate = useTranslate();
   const byline = app.author === undefined ? undefined : translate('palette.apps.by', { login: app.author.login });
+  // The app's chord is told in the row's tooltip after a rest, not printed in the row.
+  const { props: tipProps, tip } = useShortcutTip(app.name, app.shortcut);
   return (
-    <div className={`insert-item insert-app ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onOpen}>
+    <div className={`insert-item insert-app ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onOpen} {...tipProps}>
       <span className="insert-item-icon">
         <AppIconTile app={app} />
       </span>
       <span className="insert-item-label">{app.name}</span>
       {app.author !== undefined && byline !== undefined && <AuthorByline author={app.author} byline={byline} />}
-      {app.shortcut !== undefined && <kbd className="insert-item-sub insert-app-shortcut">{app.shortcut}</kbd>}
+      {tip}
     </div>
   );
 }

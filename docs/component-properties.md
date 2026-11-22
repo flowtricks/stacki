@@ -119,6 +119,41 @@ its own; the rest props are safe, since declaring `class` takes it out of them),
 component that already declares `class`, or a value that does not read as one
 expression. Instances then edit the prop with the class field's token editor.
 
+## An attributes prop
+
+In a component, the purple dot right after an element's **Attributes** label connects
+all of the element's other attributes to one prop that spreads them, Astro's rest props
+(`src/editor/propDeclaration.ts`, `src/editor/attributesBinding.ts`). Connected, the
+header shows the prop as a purple `{} rest` chip (its menu: Edit settings, which renames
+the prop across the file and sets its tooltip, and Disconnect), and the list ends with the
+dim row **+ items in `{} rest`**, where an instance's attributes land.
+
+| | Before | After |
+|---|---|---|
+| frontmatter | `interface Props { title?: string }`<br>`const { title } = Astro.props;` | `import type { HTMLAttributes } from "astro/types";`<br>`interface Props extends HTMLAttributes<"img"> { title?: string }`<br>`const { title, ...rest } = Astro.props;` |
+| markup | `<img alt="Photo" class="hero" />` | `<img alt="Photo" {...rest} class="hero" />` |
+
+- **Order is precedence.** Astro lets a later attribute win, so the attributes before the
+  spread are defaults an instance overrides; the ones after it (class, style, directives)
+  stay the element's own. A new attribute added while connected goes before the spread.
+- **Typing.** `HTMLAttributes<"tag">` for a tag astro/types types; a custom element or
+  any other tag (`template`) extends the tag-less global `astroHTML.JSX.HTMLAttributes`,
+  with no import. An existing extends list gains it (`extends Base, HTMLAttributes<"img">`);
+  a `type Props` alias is intersected (`type Props = (A | B) & HTMLAttributes<"img">`). A
+  Props already typed keeps its first tag: an interface cannot extend two.
+- **One per component.** A component passes its other attributes on once; a second
+  element connects to the same rest prop from the picker, and its tag does not change
+  the typing.
+- **Refused, unchanged:** a frontmatter that does not parse, a component tag.
+- **Instances.** A component whose Props takes `HTMLAttributes<"img">` shows "img
+  attributes" in its instances' Attributes header, and a name `<img>` does not take gets
+  an advisory note (never a refusal); `data-*`, `aria-*`, events and global attributes
+  are always fine, and a component with no tag takes any name.
+- **Disconnect** takes out the spread alone. When nothing else reads the prop (no other
+  spread or expression in the markup, nothing in the frontmatter), the rest binding, the
+  HTMLAttributes typing and import and the `@attributes` tooltip go too, in the same undo
+  step; otherwise Props stays as written.
+
 ## Deleting a prop
 
 The trash button (in the prop's settings, or on its row) never deletes at once.

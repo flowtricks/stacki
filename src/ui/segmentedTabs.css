@@ -86,3 +86,12 @@
     transition: none;
   }
 }
+/* A tab's count, after its label (SegmentedTab.badge), and a tab with nothing in it now (dim, still selectable). */
+.ui-tab-badge {
+  margin-inline-start: 4px;
+  color: var(--text-faint, #989898);
+  font-variant-numeric: tabular-nums;
+}
+.ui-tab.is-dim {
+  opacity: 0.55;
+}

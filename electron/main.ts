@@ -18,6 +18,9 @@ import { installProcessGuards } from './app/processGuards';
 import type { CrashRecord } from './app/crashLog';
 import { keepPreviewsOnSite } from './app/previewNavigation';
 import { registerStudioHandlers } from './handlers/studioHandlers';
+import { registerDictationHandlers } from './handlers/dictationHandlers';
+import { MODEL_SCHEME, MODEL_SCHEME_PRIVILEGES, serveModelRequest } from './app/dictationProtocol';
+import { whisperRoot } from './app/dictationStore';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
 import { RUNTIME_PATHS, resourcePath } from './lib/runtimePaths';
 import { readSource } from './lib/mainLimits';
@@ -61,7 +64,7 @@ import { registerBootChannels } from './boot/bootChannels';
 import { describeStartup, markStartup } from './app/startupTiming';
 import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
 import { buildApplicationMenuTemplate, type ReloadCommand } from './app/applicationMenu';
-import { classifyFocusedFrame, routeReload, type FocusedFrame } from './app/reloadRouting';
+import { routeReload } from './app/reloadRouting';
 import { activeMainLocale, loadMainLocale, setMainLocale, translateMain } from './lib/mainLocale';
 import { openMicrophoneSettings, microphoneStatus, requestMicrophone, type MicrophoneSystem } from './app/microphoneAccess';
 import { LOCALE_PREFERENCE_DEFAULT } from '../shared/core/i18n/locales';
@@ -70,6 +73,7 @@ import { registerTerminalHandlers, cleanupTerminals } from './terminal/terminal'
 import { watchProject } from './project/projectWatcher';
 import { watchInstructions } from './project/instructionsWatcher';
 import { registerInstructionHandlers } from './handlers/instructionHandlers';
+import { registerAgentHandlers } from './handlers/agentHandlers';
 import { registerSecretsHandlers } from './handlers/secretsHandlers';
 import { registerMcpHandlers } from './handlers/mcpHandlers';
 import { autoUpdater } from 'electron-updater';
@@ -85,6 +89,7 @@ import { Thumbnails, registerThumbnailHandlers } from './handlers/thumbnails';
 import { removeLegacyComponentShots } from './project/legacyComponentShots';
 import { registerAssetHandlers } from './handlers/assetHandlers';
 import { registerCmsHandlers } from './handlers/cmsHandlers';
+import { registerCmsConstantHandlers } from './handlers/cmsConstantHandlers';
 import { registerComponentHandlers } from './handlers/componentHandlers';
 import { registerStyleMoveHandlers } from './handlers/styleMoveHandlers';
 import { StyleMoveJournals } from './content/styleMoveJournals';
@@ -229,6 +234,12 @@ protocol.registerSchemesAsPrivileged([
     // serveAppRequest answers them with Access-Control-Allow-Origin: *.
     scheme: APP_SCHEME,
     privileges: APP_SCHEME_PRIVILEGES,
+  },
+  {
+    // Dictation's downloaded Whisper model, read by its worker (app/dictationProtocol.ts):
+    // the manifest's files of an installed model only, never any other path.
+    scheme: MODEL_SCHEME,
+    privileges: MODEL_SCHEME_PRIVILEGES,
   },
 ]);
 
@@ -591,45 +602,30 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// ⌘R and ⇧⌘R: with focus in the canvas they refresh the site, the same function as the toolbar's refresh button (the renderer
-// owns it); anywhere else they are the menu item's own reload. electron/app/reloadRouting.ts holds the decision.
+// ⌘R and ⇧⌘R refresh the site, the same function as the toolbar's refresh button (the renderer owns it), wherever focus is and
+// only while a project is open. The View menu's "Reload Stacki" reloads Stacki itself: a relaunch in dev, where the main side is
+// bound in at require time and a window reload would keep running old code, and a window reload in a packaged build.
+// electron/app/reloadRouting.ts holds the refresh decision.
 function runReload(command: ReloadCommand): void {
-  const focus = classifyFocusedFrame(focusedFrameOf(mainWindow), APP_SCHEME);
-  const action = routeReload(command, focus);
-  switch (action) {
-    case 'refreshPreview':
-      send('menu:refreshPreview');
+  switch (command) {
+    case 'refreshSite': {
+      const action = routeReload({ previewOpen: openProjectRoot !== undefined });
+      if (action === 'refreshPreview') {
+        send('menu:refreshPreview');
+      }
       return;
-    case 'reloadAllCode':
-      relaunchApp();
-      return;
-    case 'reloadWindow':
-      mainWindow?.webContents.reload();
-      return;
-    case 'forceReloadWindow':
-      mainWindow?.webContents.reloadIgnoringCache();
+    }
+    case 'reloadStacki':
+      if (isDev) {
+        relaunchApp();
+      } else {
+        mainWindow?.webContents.reload();
+      }
       return;
     default: {
-      const unreachable: never = action;
-      throw new Error(`Assertion failed: unknown reload action ${String(unreachable)}`);
+      const unreachable: never = command;
+      throw new Error(`Assertion failed: unknown reload command ${String(unreachable)}`);
     }
-  }
-}
-
-// The frame holding keyboard focus, or undefined when there is none. A frame that is torn down while a navigation commits can
-// throw when read; the person then gets the app's own reload, which is what the shortcut did before.
-function focusedFrameOf(window: Window | undefined): FocusedFrame | undefined {
-  if (window === undefined || window.isDestroyed()) {
-    return undefined;
-  }
-  try {
-    const frame = window.webContents.focusedFrame;
-    if (frame === null || frame === undefined) {
-      return undefined;
-    }
-    return { isMainFrame: frame === window.webContents.mainFrame, url: frame.url };
-  } catch {
-    return undefined;
   }
 }
 
@@ -752,6 +748,7 @@ app.whenReady().then(
     markStartup('settingsRead');
     registerAssetProtocol();
     protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, openProjectRoot));
+    protocol.handle(MODEL_SCHEME, (request) => serveModelRequest(request.url, request.method, whisperRoot(app.getPath('userData'))));
     refusePrivatePermissions();
     // The canvas frames the project's own dev server; a site's own no-framing rule must not blank it (previewFraming.ts).
     allowLoopbackFraming(session.defaultSession);
@@ -912,6 +909,8 @@ const SETTINGS_DEFAULTS: AppSettings = {
   aiTrackChanges: true,
   // Off: an AI edit is applied the moment it is made and shows "Applied" with Undo; on, the person Keeps or Undoes each file.
   aiReviewChanges: false,
+  // On: CSS in code editors shows variables, easings, shadows, gradients and clip-paths as chips that open their editors.
+  codeChips: true,
   localePreference: LOCALE_PREFERENCE_DEFAULT,
 };
 let settings: AppSettings = { ...SETTINGS_DEFAULTS };
@@ -932,6 +931,12 @@ function readSettings() {
   }
 }
 
+/** The settings with the percentage set, or removed for the agent's default (an exact optional property is absent, never undefined). */
+function withAutoCompactPercent(current: AppSettings, percent: number | undefined): AppSettings {
+  const kept = Object.fromEntries(Object.entries(current).filter(([key]) => key !== 'aiAutoCompactPercent'));
+  return parseSettings(percent === undefined ? kept : { ...kept, aiAutoCompactPercent: percent });
+}
+
 function writeSettings(): boolean {
   try {
     fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), 'utf8');
@@ -949,6 +954,7 @@ const publicSettings = () => ({
   aiAskBeforeTrust: settings.aiAskBeforeTrust,
   aiTrackChanges: settings.aiTrackChanges,
   aiReviewChanges: settings.aiReviewChanges,
+  codeChips: settings.codeChips,
 });
 ipcMain.handle('settings:get', publicSettings);
 ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
@@ -965,6 +971,9 @@ ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
     saved = writeSettings();
   } else if (setting === 'aiReviewChanges') {
     settings = { ...settings, aiReviewChanges: enabled };
+    saved = writeSettings();
+  } else if (setting === 'codeChips') {
+    settings = { ...settings, codeChips: enabled };
     saved = writeSettings();
   } else if (setting === 'appsPersonHidden') {
     settings = { ...settings, appsPersonHidden: enabled };
@@ -1270,10 +1279,18 @@ const aiServices = registerAiHandlers(host, {
   version: () => app.getVersion(),
   askBeforeTrust: () => settings.aiAskBeforeTrust,
   trackChanges: () => settings.aiTrackChanges,
+  autoCompact: {
+    get: () => settings.aiAutoCompactPercent,
+    set: (percent) => {
+      settings = withAutoCompactPercent(settings, percent);
+      return writeSettings();
+    },
+  },
   isForeground: () => mainWindow !== undefined && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized(),
 });
 registerAuditHandlers(host, { openMeasureWindow: (options) => new BrowserWindow(options) });
 registerCmsHandlers(host);
+registerCmsConstantHandlers(host);
 registerComponentHandlers(host);
 registerStyleMoveHandlers(
   host,
@@ -1301,6 +1318,7 @@ registerPreviewHandlers(host);
 registerProjectHandlers(host);
 registerProjectMetadataHandlers(host);
 registerInstructionHandlers(host);
+registerAgentHandlers(host);
 registerSecretsHandlers(host);
 registerMcpHandlers(host);
 registerPublishHandlers(host);
@@ -1336,3 +1354,5 @@ registerAppDataHandlers(host, {
 });
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });
 registerThumbnailHandlers({ ipcMain, thumbnails, userDataPath: () => app.getPath('userData') });
+// Dictation's model lives in the app data folder, never in a project; the download runs only when the person agreed to it.
+registerDictationHandlers(host, { root: () => whisperRoot(app.getPath('userData')), fetch: (url, init) => fetch(url, init) });

@@ -2754,6 +2754,19 @@ html[data-platform='win32'] .titlebar {
 .rail-ghost[data-outside='true'] {
   opacity: 0.5;
 }
+/* Valid drop targets while a drag is on (railDrag.ts), shown by fills, never outlines: the Settings button while a
+   movable button is dragged (stronger while the pointer is on it, where a drop puts the button inside Settings),
+   and the rail's column while a Settings row is dragged out toward it. */
+.rail[data-drop-ready='true'] {
+  background: var(--bg-hover);
+}
+.rail-btn[data-drop-ready='true'] {
+  background: var(--bg-hover);
+}
+.rail-btn[data-drop-target='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .rail-drop-line {
   position: absolute;
   inset-inline-start: 6px;
@@ -2856,6 +2869,42 @@ html[data-platform='win32'] .titlebar {
   left: 50%; /* physical: centred with translateX(-50%) */
   top: -4px;
   transform: translateX(-50%) rotate(45deg);
+}
+
+/* A fitted tip (FittedTooltip) is placed by script at its exact left and top, so no centring transform; its arrow sits on the
+   edge facing the control, at the control's centre (--tip-arrow). Physical sides: the side is measured on screen. */
+.rail-tooltip.rail-tooltip[data-fitted] {
+  transform: none;
+  /* Never wider than the window less the margin kept on both sides (fitTooltip). */
+  max-width: calc(100vw - 16px);
+}
+.rail-tooltip[data-fitted][data-side='below']::before,
+.rail-tooltip[data-fitted][data-side='above']::before {
+  left: var(--tip-arrow, 50%); /* physical: placed by script from measured screen coordinates (FittedTooltip) */
+  right: auto; /* physical: placed by script from measured screen coordinates (FittedTooltip) */
+  transform: translateX(-50%) rotate(45deg);
+}
+.rail-tooltip[data-fitted][data-side='below']::before {
+  top: -4px;
+  bottom: auto;
+}
+.rail-tooltip[data-fitted][data-side='above']::before {
+  top: auto;
+  bottom: -4px;
+}
+.rail-tooltip[data-fitted][data-side='right']::before,
+.rail-tooltip[data-fitted][data-side='left']::before {
+  top: var(--tip-arrow, 50%);
+  bottom: auto;
+  transform: translateY(-50%) rotate(45deg);
+}
+.rail-tooltip[data-fitted][data-side='right']::before {
+  left: -4px; /* physical: placed by script from measured screen coordinates (FittedTooltip) */
+  right: auto; /* physical: placed by script from measured screen coordinates (FittedTooltip) */
+}
+.rail-tooltip[data-fitted][data-side='left']::before {
+  left: auto; /* physical: placed by script from measured screen coordinates (FittedTooltip) */
+  right: -4px; /* physical: placed by script from measured screen coordinates (FittedTooltip) */
 }
 
 .panel {
@@ -4834,23 +4883,12 @@ body > .embed-editor_provenance {
   background: var(--accent);
   color: white;
 }
-.ctx-menu-item:hover:not(:disabled) .ctx-shortcut {
-  color: rgba(255, 255, 255, 0.7);
-}
 .ctx-menu-item:disabled {
   color: var(--text-faint);
   cursor: default;
 }
 .ctx-submenu {
   width: 180px;
-}
-.ctx-shortcut {
-  flex: none;
-  color: var(--text-faint);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: end;
-  white-space: nowrap;
 }
 .ctx-divider {
   height: 1px;
@@ -6912,17 +6950,42 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: var(--surface-2, rgba(255, 255, 255, 0.06));
   white-space: nowrap;
 }
-.cms-collection .row-action {
-  opacity: 0;
-  padding: 2px;
+/* A row's end: the arrow, and on hover or keyboard focus the settings in its
+   place. Both sit in one cell of a slot of fixed width, so the row never
+   changes width; the hidden settings stay focusable, and focus shows them. */
+.cms-collection-end {
+  display: grid;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+}
+.cms-collection-end > * {
+  grid-area: 1 / 1;
+}
+.cms-collection-settings {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  border-radius: 5px;
   color: var(--text-faint);
+  opacity: 0;
+  pointer-events: none;
 }
-.cms-collection:hover .row-action {
+.cms-collection:hover .cms-collection-settings,
+.cms-collection-end:focus-within .cms-collection-settings {
   opacity: 1;
+  pointer-events: auto;
 }
-.cms-collection .row-action:hover {
-  color: var(--red);
-  background: transparent;
+.cms-collection:hover .cms-collection-end:has(.cms-collection-settings) .cms-collection-chevron,
+.cms-collection-end:focus-within .cms-collection-chevron {
+  visibility: hidden;
+}
+.cms-collection-settings:hover {
+  color: var(--text);
+  background: var(--bg-active);
 }
 
 /* The editor itself, covering the canvas while the CMS panel is open. */
@@ -8499,18 +8562,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .more-menu-item.is-current {
   background: var(--bg-active);
 }
-/* A key that does the same as the row, muted at its end. */
-.more-menu-shortcut {
-  flex: none;
-  margin-inline-start: auto;
-  padding-inline-start: 16px;
-  color: var(--text-faint);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: end;
-  white-space: nowrap;
-}
-/* A label gives way to its key: it is cut with an ellipsis, never run under the hint. */
+/* A long label is cut with an ellipsis rather than run under the row's edge. */
 .more-menu-label {
   min-width: 0;
   overflow: hidden;

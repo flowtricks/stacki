@@ -34,7 +34,8 @@ import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { memberTypes, type NewPropKind, type PropDeclaration } from '../../editor/propDeclaration';
 import { readPropsDestructure } from '../../editor/loopProps';
 import { isMediaName } from '../../editor/fieldNames';
-import { isImageType } from '../../editor/imagePropDefault';
+import { imageDefaultOf, isImageType } from '../../editor/imagePropDefault';
+import { findImportOf } from '../../editor/dataSource';
 import type { ItemFieldDeclaration } from '../../editor/itemFields';
 
 /** The kind of field a picker was opened on. */
@@ -51,6 +52,8 @@ export interface NewPropHost {
   readonly propKeys: readonly string[];
   /** The rest binding, when the component already passes its other attributes on. */
   readonly restLocal: string | undefined;
+  /** Holds the attributes prop's removal for the spread's disconnect edit, when nothing else reads it (one undo step). */
+  readonly releaseRest?: ((local: string) => void) | undefined;
   /** Declares the prop and holds it for the field's binding, so both are one undo step; answers the path to bind. */
   readonly create: (declaration: PropDeclaration) => Result<string, string>;
   /** The component's image props, by the name the markup reads them by, and how each is typed. */
@@ -317,6 +320,52 @@ export function suggestedRestName(host: Pick<NewPropHost, 'propKeys' | 'restLoca
 }
 
 /**
+ * What the Attributes header's purple + does for an element, or undefined
+ * when it offers nothing. Only a native element (a lowercase tag) can be typed
+ * by `HTMLAttributes<"tag">`; an instance's attributes are its component's
+ * props. A component passes its other attributes on once (one rest binding),
+ * so with none yet the + declares `rest` typed by this tag; with one already
+ * it spreads that same binding here, and an element already spreading it is
+ * connected: its chip shows instead.
+ */
+export type RestConnectOffer = { readonly kind: 'declare'; readonly declaration: PropDeclaration } | { readonly kind: 'spread'; readonly local: string };
+
+export function restConnectOffer(
+  host: Pick<NewPropHost, 'propKeys' | 'restLocal'> | undefined,
+  element: { readonly tag: string; readonly connected: boolean },
+): RestConnectOffer | undefined {
+  if (host === undefined || element.connected || !/^[a-z][a-z0-9-]*$/.test(element.tag)) {
+    return undefined;
+  }
+  if (host.restLocal !== undefined) {
+    return { kind: 'spread', local: host.restLocal };
+  }
+  const declaration = restDeclaration(host, element.tag);
+  assert(declaration.kind === 'attributes', 'restConnectOffer: an attributes prop is declared');
+  assert(propNameProblem(declaration.key, host) === undefined, 'restConnectOffer: the name is free');
+  return { kind: 'declare', declaration };
+}
+
+/** The attributes prop the + declares: `rest` (or the first free `restN`), typed by `tag`, with no defaults or tooltip. */
+export function restDeclaration(host: Pick<NewPropHost, 'propKeys' | 'restLocal'>, tag: string): PropDeclaration {
+  assert(/^[a-z][a-z0-9-]*$/.test(tag), 'restDeclaration: an HTML tag');
+  assert(host.restLocal === undefined, 'restDeclaration: a component passes its attributes on once');
+  const out: PropDeclaration = {
+    key: suggestedRestName(host),
+    tooltip: '',
+    kind: 'attributes',
+    defaultText: '',
+    options: [],
+    number: { min: undefined, max: undefined, decimals: undefined },
+    attributes: [],
+    tag,
+    list: { fields: [], items: [] },
+    image: '',
+  };
+  return out;
+}
+
+/**
  * The fit of a settings field by its schema type, or undefined for a field a
  * new prop is not offered for (code, style, slot, an object). A field whose
  * name says it holds media (`src`, `poster`, `heroImage`) is an image field,
@@ -365,6 +414,41 @@ export function literalOf(value: { readonly type: string; readonly value?: strin
   }
   const code = (value.value ?? '').trim();
   return /^(true|false|-?\d+(\.\d+)?)$/.test(code) ? code : '';
+}
+
+/**
+ * What a new prop's default starts from, given the value the connected field
+ * holds now. An image field starts from its image: a file or URL typed in
+ * (`"/hero.png"`), or an imported file read by name (`{hero}` or `{hero.src}`,
+ * the import's path). The prop is declared in the file the field is in, so an
+ * import's path already reads from the right folder. '' is no default: an
+ * empty field, or one whose value names no image (the person may also clear a
+ * default in the form). Any other kind starts from its literal (literalOf).
+ *
+ * `frontmatter` is the file's code, where the imports are read from.
+ */
+export function defaultForConnectedValue(
+  current: { readonly type: string; readonly value?: string } | undefined,
+  kind: FieldFit,
+  frontmatter: string = '',
+): string {
+  if (kind !== 'image') {
+    return literalOf(current);
+  }
+  if (current === undefined || current.type === 'bare') {
+    return '';
+  }
+  const text = (current.value ?? '').trim();
+  let candidate = text;
+  if (current.type === 'expr') {
+    const reading = /^([A-Za-z_$][\w$]*)(?:\.src)?$/.exec(text);
+    const name = reading?.[1];
+    candidate = name === undefined ? '' : (findImportOf(frontmatter, name)?.spec ?? '');
+  } else if (current.type !== 'string') {
+    candidate = '';
+  }
+  // An address that is no image (a PDF import, a bare word) is not a default.
+  return imageDefaultOf(candidate).ok ? candidate : '';
 }
 
 /**

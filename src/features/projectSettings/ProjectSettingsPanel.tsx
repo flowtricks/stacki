@@ -19,9 +19,21 @@ export interface ProjectSettingsPanelProps {
   readonly shortcuts?: Readonly<Partial<Record<SettingsViewId, string>>> | undefined;
   /** Draws the Instructions view's sections; called only for that view. */
   readonly renderInstructions: (context: SettingsSectionsContext) => ReactNode;
+  /** Draws the Agents view (Settings > Agents, from the app layer); called only for that view. */
+  readonly renderAgents?: (() => ReactNode) | undefined;
+  /** Draws the root's rows (the app layer's reorderable list); the plain list of `views` when absent. */
+  readonly renderRoot?: ((show: (view: SettingsViewId) => void) => ReactNode) | undefined;
 }
 
-export default function ProjectSettingsPanel({ projectPath, views, renderInstructions, onLeaveView, shortcuts }: ProjectSettingsPanelProps) {
+export default function ProjectSettingsPanel({
+  projectPath,
+  views,
+  renderInstructions,
+  renderAgents,
+  renderRoot,
+  onLeaveView,
+  shortcuts,
+}: ProjectSettingsPanelProps) {
   return (
     // Keyed by project: switching projects drops every revealed value, unsaved form and search with the panel's state.
     <ProjectSettingsShell
@@ -31,6 +43,7 @@ export default function ProjectSettingsPanel({ projectPath, views, renderInstruc
       refreshable
       onLeaveView={onLeaveView}
       shortcuts={shortcuts}
+      renderRoot={renderRoot}
       renderView={(view, context) => {
         switch (view) {
           case 'secrets':
@@ -39,6 +52,8 @@ export default function ProjectSettingsPanel({ projectPath, views, renderInstruc
             return <McpTab projectPath={projectPath} />;
           case 'instructions':
             return renderInstructions(context);
+          case 'agents':
+            return renderAgents?.();
           case 'roles':
             // Desktop's Roles are in its Settings dialog; its root never lists this view.
             return undefined;

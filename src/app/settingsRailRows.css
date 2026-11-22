@@ -1,0 +1,51 @@
+/* The Settings panel's root rows on Desktop (SettingsRailRows.tsx): reorderable like the rail's buttons. The row look
+   is the Settings link's (features/projectSettings/projectSettings.css); this adds the drag's states only. Drop places
+   are shown by fills and an accent line, never borders. */
+.settings-rail-list {
+  position: relative;
+}
+.settings-rail-list[data-drop-ready='true'] {
+  background: var(--bg-hover);
+}
+.settings-rail-list .settings-link {
+  position: relative;
+  touch-action: none;
+}
+.settings-rail-list .settings-link[data-dragging='true'] {
+  opacity: 0.35;
+}
+.settings-rail-list[data-dragging='true'] .settings-link {
+  cursor: grabbing;
+}
+/* The insertion line, the rail's own (styles.css .rail-drop-line), across the row's width. */
+.settings-rail-list .settings-link[data-drop-line]::before {
+  content: '';
+  position: absolute;
+  inset-inline: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.settings-rail-list .settings-link[data-drop-line='before']::before {
+  top: -4px;
+}
+/* Above the first row the body has only its 2px top padding (--panel-content-offset) before its scroll edge, which
+   clips: the line sits on the row's own top edge there, so it is never cut off. */
+.settings-rail-list .settings-link[data-drop-line='before']:first-child::before {
+  top: 0;
+}
+.settings-rail-list .settings-link[data-drop-line='after']::before {
+  bottom: -4px;
+}
+.settings-rail-empty {
+  padding: 12px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  text-align: center;
+}
+.settings-rail-empty[data-drop-ready='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}

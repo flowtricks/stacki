@@ -226,7 +226,8 @@ test('permissions are grouped, searchable, and the group switch reads mixed, on 
   fresh({ access: ['page:create'] });
   await mount();
   await click(row('Client', 'Permissions'));
-  assert.match(detail().querySelector('.app-role-detail-count').textContent, /^On 1 of \d+$/);
+  // page:create is one switch, and a page edit permission gives Add elements by default, so it reads on too (canElements).
+  assert.match(detail().querySelector('.app-role-detail-count').textContent, /^On 2 of \d+$/);
   const headings = labels('.app-role-group h4');
   assert.ok(headings.includes('Pages') && headings.includes('Panels'), 'grouped by area');
   const all = () => detail().querySelector('[role="switch"][aria-label="All Pages"]');

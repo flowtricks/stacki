@@ -184,6 +184,22 @@ export function initialFilter(counts: SelectorCounts): SelectorFilter {
   return 'all';
 }
 
+/**
+ * The tab the panel opens on. A remembered tab always wins, even when it is empty, because the person
+ * picked it. With none (or a stored value that is not a tab), the default follows the counts, and while
+ * they are still loading (`undefined`) there is no answer yet: the panel draws a skeleton instead of a
+ * tab that the counts might overturn a moment later.
+ */
+export function resolveInitialSelectorTab(remembered: unknown, counts: SelectorCounts | undefined): SelectorFilter | undefined {
+  if (isSelectorFilter(remembered)) {
+    return remembered;
+  }
+  if (counts === undefined) {
+    return undefined;
+  }
+  return initialFilter(counts);
+}
+
 /** Narrows a stored value to a tab; anything else is not one. */
 export function isSelectorFilter(value: unknown): value is SelectorFilter {
   return SELECTOR_FILTERS.some((filter) => filter === value);

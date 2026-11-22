@@ -225,3 +225,54 @@ test('the role view carries its pins, and admin resolves to the file admin role 
   }
   assert.equal(resolveRole(undefined, undefined, 'admin'), ADMIN_VIEW, 'no file is the bare admin view');
 });
+
+// Add elements (`panel:elements`): roles files written before the permission existed have no grant for it, so a role that holds a
+// design panel or a page edit permission has it by default; a role without those does not; admin always does; the parser knows the id.
+const elementsRoles = (access: readonly string[]) => roleViewOf(parseProjectRoles(file([admin, { id: 'writer', name: 'Writer', access }])), 'writer');
+
+test('Add elements: a role without design panels does not have it', () => {
+  for (const access of [[], ['cli:read'], ['panel:pages'], ['panel:apps', 'app:*'], ['panel:assets', 'panel:cms', 'publish'], ['settings:editor']]) {
+    assert.equal(can(elementsRoles(access), 'panel:elements'), false, access.join(','));
+  }
+});
+
+test('Add elements: a legacy role with the Navigator or a page edit permission has it by default', () => {
+  for (const access of [
+    ['panel:navigator'],
+    ['page:create'],
+    ['page:delete'],
+    ['page:rename'],
+    ['page:layout'],
+    ['panel:pages', 'panel:navigator', 'publish'],
+  ]) {
+    assert.equal(can(elementsRoles(access), 'panel:elements'), true, access.join(','));
+  }
+});
+
+test('Add elements: an explicit grant alone gives it, and gives nothing else', () => {
+  const view = elementsRoles(['panel:elements']);
+  assert.equal(can(view, 'panel:elements'), true);
+  assert.equal(can(view, 'panel:navigator'), false);
+  assert.equal(can(view, 'page:create'), false);
+});
+
+test('Add elements: admin always has it, and the client default holds it with its design panels', () => {
+  assert.equal(can(ADMIN_VIEW, 'panel:elements'), true);
+  assert.equal(can(roleViewOf(parseProjectRoles(file([{ ...admin, access: [] }])), 'admin'), 'panel:elements'), true);
+  assert.ok(CLIENT_DEFAULT_ACCESS.includes('panel:elements'));
+  assert.ok(CLIENT_DEFAULT_ACCESS.includes('panel:navigator'));
+  assert.equal(can(roleViewOf(DEFAULT_PROJECT_ROLES, 'client'), 'panel:elements'), true);
+});
+
+test('Add elements: the parser accepts the id and still refuses a lookalike, and the grant round-trips', () => {
+  const roles = parseProjectRoles(file([admin, { id: 'writer', name: 'Writer', access: ['panel:elements'] }]));
+  assert.deepEqual(roles.roles[2]?.access, ['panel:elements']);
+  assert.deepEqual(parseProjectRolesSource(serializeProjectRoles(roles)).roles, roles.roles);
+  for (const lookalike of ['panel:element', 'panel:Elements', 'panel:elements ', 'elements', 'panel:add-elements']) {
+    assert.throws(() => parseProjectRoles(file([admin, { id: 'writer', name: 'W', access: [lookalike] }])), /Unknown access feature/, lookalike);
+  }
+  assert.ok(
+    ACCESS_GROUPS[0]?.features.some((item) => item.feature === 'panel:elements' && item.label === 'Add elements'),
+    'the Panels group lists it',
+  );
+});

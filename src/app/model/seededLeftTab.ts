@@ -12,6 +12,7 @@ export interface SeededLeftTab {
 
 /** The panels a session restores. The rest (Apps, Audits, AI, Properties) open on demand, as before. */
 const RESTORED: Readonly<Record<string, NonNullable<LeftTab>>> = {
+  elements: 'elements',
   pages: 'pages',
   navigator: 'navigator',
   components: 'components',

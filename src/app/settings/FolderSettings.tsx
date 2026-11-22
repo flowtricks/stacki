@@ -9,7 +9,7 @@ import { CodeInline } from '../../ui/CodeBlock';
 import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { Described } from '../../../shared/properties/i18n/messageRef';
-import { CloseIcon, LayoutIcon, PlusIcon } from '../../ui/Icons';
+import { BracesIcon, CloseIcon, LayoutIcon, PlusIcon } from '../../ui/Icons';
 import { ResetLabel } from '../../ui/ResetLabel';
 import { FeatureIcon } from '../featureIcons';
 import { cleanError } from '../../lib/cleanError';
@@ -238,16 +238,20 @@ function PagesRow(props: FolderSettingsProps) {
   const configFile = props.pages?.configFile;
   const open = props.onOpenFile;
   return (
-    <FixedRow icon={<FeatureIcon feature="panel:pages" size={14} />} label={translate('settings.folders.pages')} folders={[folder]}>
-      {translateRich('settings.folders.pagesFollow', { srcDir: <CodeInline text="srcDir" /> })}
-      {configFile !== undefined && open !== undefined && (
-        <>
-          {' '}
-          <button type="button" className="app-folder-link" onClick={() => open(configFile)}>
-            {translate('settings.folders.openAstroConfig')}
+    <FixedRow
+      icon={<FeatureIcon feature="panel:pages" size={14} />}
+      label={translate('settings.folders.pages')}
+      folders={[folder]}
+      action={
+        configFile !== undefined && open !== undefined ? (
+          <button type="button" className="app-folder-config-button" onClick={() => open(configFile)}>
+            <BracesIcon size={12} />
+            <span>{translate('settings.folders.openAstroConfig')}</span>
           </button>
-        </>
-      )}
+        ) : undefined
+      }
+    >
+      {translateRich('settings.folders.pagesFollow', { srcDir: <CodeInline text="srcDir" /> })}
     </FixedRow>
   );
 }
@@ -319,7 +323,13 @@ export function FolderTitle(props: { readonly label: string; readonly customized
   );
 }
 
-function FixedRow(props: { readonly icon: ReactNode; readonly label: string; readonly folders: readonly string[]; readonly children: ReactNode }) {
+function FixedRow(props: {
+  readonly icon: ReactNode;
+  readonly label: string;
+  readonly folders: readonly string[];
+  readonly children: ReactNode;
+  readonly action?: ReactNode;
+}) {
   const translate = useTranslate();
   return (
     <div className="app-folder-row" aria-label={translate('settings.folders.rowLabel', { label: props.label })}>
@@ -337,6 +347,7 @@ function FixedRow(props: { readonly icon: ReactNode; readonly label: string; rea
         </ul>
       )}
       <p className="app-folder-fixed">{props.children}</p>
+      {props.action}
     </div>
   );
 }

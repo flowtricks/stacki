@@ -143,6 +143,9 @@ function Host() {
     onDropComponent: () => {
       record.inserts += 1;
     },
+    insertItemAt: () => {
+      record.inserts += 1;
+    },
     setSelectedId,
     setRevealTick,
     leftTab,

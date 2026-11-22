@@ -1,38 +1,29 @@
-// Goal: ⌘R and ⇧⌘R refresh the site when focus is in the canvas, and do what they always did everywhere else.
-// Method: the pure decision (focus x command) and the frame classification are checked directly, including the negative space
-// (no focused frame, the main frame, an app's frame on the app scheme). Then the real menu template is built for a dev and a
-// packaged run, the reload items are found by accelerator and clicked, and each reports the command it asked to run, so the
-// pairing of accelerator and command is pinned for both modes.
+// Goal: ⌘R and ⇧⌘R always refresh the site preview, wherever focus is, and never reload Stacki; Stacki's own reload is a separate
+// View item (⌥⌘R in dev, no accelerator when packaged).
+// Method: the pure decision (preview open or not) is checked directly, including the negative space (no preview: nothing happens).
+// Then the real menu template is built for a dev and a packaged run, the items are found by accelerator or label and clicked, and
+// each reports the command it asked to run, so the pairing of accelerator and command is pinned for both modes.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildApplicationMenuTemplate, type ReloadCommand } from '#dist/electron/app/applicationMenu.js';
-import { classifyFocusedFrame, routeReload } from '#dist/electron/app/reloadRouting.js';
+import { routeReload } from '#dist/electron/app/reloadRouting.js';
 import { MAIN_ENGLISH } from '#dist/electron/lib/mainLocale.js';
 
-const COMMANDS: readonly ReloadCommand[] = ['reloadAllCode', 'reloadWindow', 'forceReloadWindow'];
-const APP_SCHEME = 'stacki-app';
-
-test('focus in the canvas turns every reload command into the site refresh', () => {
-  for (const command of COMMANDS) {
-    assert.equal(routeReload(command, 'canvas'), 'refreshPreview');
-  }
+test('with a preview open the shortcut refreshes the site', () => {
+  assert.equal(routeReload({ previewOpen: true }), 'refreshPreview');
 });
 
-test('focus anywhere else keeps the command it had', () => {
-  for (const command of COMMANDS) {
-    assert.equal(routeReload(command, 'app'), command);
-  }
+test('with no preview open the shortcut does nothing', () => {
+  assert.equal(routeReload({ previewOpen: false }), 'noop');
 });
 
-test('only a frame that is neither the window nor an app counts as the canvas', () => {
-  assert.equal(classifyFocusedFrame({ isMainFrame: false, url: 'http://localhost:4321/#avb-design' }, APP_SCHEME), 'canvas');
-  assert.equal(classifyFocusedFrame({ isMainFrame: false, url: 'https://example.com/' }, APP_SCHEME), 'canvas');
-  assert.equal(classifyFocusedFrame({ isMainFrame: true, url: 'http://localhost:5173/' }, APP_SCHEME), 'app');
-  assert.equal(classifyFocusedFrame({ isMainFrame: false, url: `${APP_SCHEME}://notes/index.html` }, APP_SCHEME), 'app');
-  assert.equal(classifyFocusedFrame(undefined, APP_SCHEME), 'app');
-});
+interface ViewItem {
+  readonly label: string | undefined;
+  readonly accelerator: string | undefined;
+  readonly asked: ReloadCommand | undefined;
+}
 
-function reloadsAskedFor(mode: 'dev' | 'packaged'): Map<string, ReloadCommand | undefined> {
+function viewItems(mode: 'dev' | 'packaged'): ViewItem[] {
   let asked: ReloadCommand | undefined;
   const template = buildApplicationMenuTemplate({
     isMac: true,
@@ -46,28 +37,38 @@ function reloadsAskedFor(mode: 'dev' | 'packaged'): Map<string, ReloadCommand | 
   });
   const view = template.find((item) => item.label === 'View');
   const items = Array.isArray(view?.submenu) ? view.submenu : [];
-  const byAccelerator = new Map<string, ReloadCommand | undefined>();
+  const found: ViewItem[] = [];
   for (const item of items) {
-    const accelerator = typeof item.accelerator === 'string' ? item.accelerator : undefined;
-    if (accelerator === 'CmdOrCtrl+R' || accelerator === 'Shift+CmdOrCtrl+R') {
+    if (typeof item.click === 'function') {
       asked = undefined;
-      assert.equal(typeof item.click, 'function', `${accelerator} runs a handler, not a stock role`);
-      assert.equal(item.role, undefined, `${accelerator} is not a role that reloads Stacki whatever has focus`);
-      Reflect.apply(item.click ?? (() => undefined), undefined, []);
-      byAccelerator.set(accelerator, asked);
+      assert.equal(item.role, undefined, 'a reload item is not a stock role that reloads Stacki whatever has focus');
+      Reflect.apply(item.click, undefined, []);
+      found.push({ label: item.label, accelerator: typeof item.accelerator === 'string' ? item.accelerator : undefined, asked });
     }
   }
-  return byAccelerator;
+  return found;
 }
 
-test('a dev run maps the accelerators to the relaunch and the window reload', () => {
-  const asked = reloadsAskedFor('dev');
-  assert.equal(asked.get('CmdOrCtrl+R'), 'reloadAllCode');
-  assert.equal(asked.get('Shift+CmdOrCtrl+R'), 'reloadWindow');
+for (const mode of ['dev', 'packaged'] as const) {
+  test(`a ${mode} run maps both site accelerators to the site refresh`, () => {
+    const items = viewItems(mode);
+    assert.equal(items.find((item) => item.accelerator === 'CmdOrCtrl+R')?.asked, 'refreshSite');
+    assert.equal(items.find((item) => item.accelerator === 'Shift+CmdOrCtrl+R')?.asked, 'refreshSite');
+  });
+}
+
+test('a dev run reloads Stacki on ⌥⌘R only', () => {
+  const items = viewItems('dev');
+  const reloading = items.filter((item) => item.asked === 'reloadStacki');
+  assert.equal(reloading.length, 1);
+  assert.equal(reloading[0]?.accelerator, 'Alt+CmdOrCtrl+R');
+  assert.equal(reloading[0]?.label, 'Reload Stacki');
 });
 
-test('a packaged run maps the accelerators to the window reload and the cache-bypassing one', () => {
-  const asked = reloadsAskedFor('packaged');
-  assert.equal(asked.get('CmdOrCtrl+R'), 'reloadWindow');
-  assert.equal(asked.get('Shift+CmdOrCtrl+R'), 'forceReloadWindow');
+test('a packaged run offers Reload Stacki by menu only, with no accelerator', () => {
+  const items = viewItems('packaged');
+  const reloading = items.filter((item) => item.asked === 'reloadStacki');
+  assert.equal(reloading.length, 1);
+  assert.equal(reloading[0]?.accelerator, undefined);
+  assert.equal(reloading[0]?.label, 'Reload Stacki');
 });

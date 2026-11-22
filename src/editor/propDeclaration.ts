@@ -18,6 +18,12 @@
 // is connected to, so an instance is offered, and checked against, that tag's
 // attributes. HTMLAttributes takes one tag, and an interface cannot extend two
 // of them when their attributes conflict, so the first element's tag is kept.
+// A tag astro/types does not type (a custom element) would make
+// `HTMLAttributes<"my-card">` a type error, so it extends the tag-less global
+// `astroHTML.JSX.HTMLAttributes`, which needs no import. A `type Props = …`
+// alias is intersected instead (`… & HTMLAttributes<"img">`), in parentheses
+// when it is a union, since `&` binds tighter than `|`. A frontmatter that does
+// not parse is refused: an edit placed by a broken tree could land anywhere.
 // Its tooltip is an `@attributes` tag on the comment above the interface,
 // since the extends clause has no comment of its own. A rest binding cannot
 // have a default in JavaScript, so its defaults are attributes written on the
@@ -30,10 +36,11 @@
 // is typed by its default: an imported file in src/ makes it `ImageMetadata`,
 // read by `import placeholder from "../assets/placeholder.svg"` (both imports
 // are answered to the caller to add), and a URL makes it a `string`
-// (imagePropDefault.ts). An image prop always has a default, since an <img>
-// with nothing to show renders a broken image.
+// (imagePropDefault.ts). An image prop may have no default: it is then a
+// `string` with nothing written after its name, optional unless Required.
 
 import type { SyntaxNode } from '@lezer/common';
+import { parser } from '@lezer/javascript';
 import { assert } from '../../shared/core/assert';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { LIMITS } from '../../shared/core/limits';
@@ -45,7 +52,8 @@ import { destructureEnd, freeLocal, propNamed, propsInterfaceBody, propsInterfac
 import { NUMBER_DECIMALS_MAX, type NumberSettings } from './propDocumentation';
 import type { ItemFieldDeclaration } from './itemFields';
 import { isListType, listDefaultCode, listFieldsOfType, listSettingsProblem, listTypeText, type ListSettings } from './listPropType';
-import { IMAGE_TYPE, imageDefaultOf, imageTypeText, type ImageDefault } from './imagePropDefault';
+import { IMAGE_TYPE, imageDefaultChoice, imageDefaultOf, imageTypeText, type ImageDefault } from './imagePropDefault';
+import { astroTypesTag } from './htmlAttributes';
 
 /** What a new prop holds: words, a number, a switch, one of a list of words, attributes, a list of items or an image. */
 export type NewPropKind = 'string' | 'number' | 'boolean' | 'option' | 'attributes' | 'list' | 'image';
@@ -136,9 +144,12 @@ export const DECLARATION_LIMITS = {
 
 /** The type an attributes prop is declared with, and where it is imported from. */
 export const ATTRIBUTES_TYPE = { name: 'HTMLAttributes', path: 'astro/types' } as const;
+/** The tag-less attributes type for a tag astro/types does not type: a global, so it needs no import. */
+export const GLOBAL_ATTRIBUTES_TYPE = 'astroHTML.JSX.HTMLAttributes';
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 const TAG_NAME = /^[a-z][a-z0-9-]*$/;
+const typescript = parser.configure({ dialect: 'ts' });
 const ATTRIBUTE_NAME = /^[A-Za-z_:@][\w:.@-]*$/;
 // Words a destructure cannot bind as a local; a prop named one is read by an alias (`class: propClass`).
 const RESERVED = new Set([
@@ -205,11 +216,25 @@ export function readRestBinding(frontmatter: string): RestBinding | undefined {
   return undefined;
 }
 
-/** The tag `interface Props` takes its attributes from: `div` for `extends HTMLAttributes<"div">`. */
+/** The tag Props takes its attributes from: `div` for `interface Props extends HTMLAttributes<"div">` or `type Props = … & HTMLAttributes<"div">`. */
 export function attributesTag(frontmatter: string): string | undefined {
-  const head = interfaceHead(frontmatter);
-  const match = head === undefined ? undefined : (/\bHTMLAttributes\s*<\s*["']([a-z][a-z0-9-]*)["']\s*>/.exec(head.text) ?? undefined);
+  const typing = propsTypingText(frontmatter);
+  const match = typing === undefined ? undefined : (/\bHTMLAttributes\s*<\s*["']([a-z][a-z0-9-]*)["']\s*>/.exec(typing) ?? undefined);
   return match?.[1];
+}
+
+/** Whether Props takes element attributes at all: `HTMLAttributes<"div">`, or the tag-less `astroHTML.JSX.HTMLAttributes`. */
+export function attributesTyped(frontmatter: string): boolean {
+  const typing = propsTypingText(frontmatter);
+  return typing !== undefined && /\bHTMLAttributes\b/.test(typing);
+}
+
+/** What an attributes prop on `tag` extends: astro/types' `HTMLAttributes<"tag">` for a tag it types, the global one otherwise. */
+export function attributesBase(tag: string): string {
+  assert(TAG_NAME.test(tag), 'attributesBase: an HTML tag');
+  const out = astroTypesTag(tag) ? `${ATTRIBUTES_TYPE.name}<${JSON.stringify(tag)}>` : GLOBAL_ATTRIBUTES_TYPE;
+  assert(out.endsWith(ATTRIBUTES_TYPE.name) || out.includes(`"${tag}"`), 'attributesBase: the base names the tag or none');
+  return out;
 }
 
 /** The attributes prop's tooltip: the `@attributes` tag above `interface Props`. */
@@ -242,6 +267,90 @@ export function withRestTooltip(frontmatter: string, tooltip: string, translate:
 }
 
 /**
+ * The frontmatter with the attributes prop `local` taken out: `...local` from
+ * the destructure (the whole statement when it destructures nothing else),
+ * HTMLAttributes from the Props typing, and its `@attributes` tooltip. Every
+ * other member, extends entry and line stays as written. Undefined when the
+ * frontmatter reads `local` anywhere else, since taking the binding out would
+ * leave that a dangling reference; the markup's uses are the caller's to rule
+ * out (restUsedElsewhere, attributesBinding.ts).
+ */
+export function restReleased(frontmatter: string, local: string): string | undefined {
+  assert(IDENTIFIER.test(local), 'restReleased: a rest binding is an identifier');
+  const rest = readRestBinding(frontmatter);
+  if (rest?.local !== local || hasSyntaxError(frontmatter)) {
+    return undefined;
+  }
+  const word = new RegExp(`(?<![\\w$])${local.replace(/\$/g, '\\$')}(?![\\w$])`, 'g');
+  const reads = [...frontmatter.matchAll(word)].length;
+  assert(reads >= 1, 'restReleased: the rest binding is read where it is declared');
+  if (reads > 1) {
+    return undefined;
+  }
+  const untyped = withoutAttributesTyping(withoutRestEntry(frontmatter, rest));
+  const tooltip = withRestTooltip(untyped, '');
+  const out = tooltip.ok ? tooltip.value : untyped;
+  assert(readRestBinding(out) === undefined, 'restReleased: the rest binding is gone');
+  assert(!attributesTyped(out), 'restReleased: Props no longer takes HTMLAttributes');
+  return out;
+}
+
+// The destructure without its rest entry, or without the statement when that
+// entry was all it destructured.
+function withoutRestEntry(frontmatter: string, rest: RestBinding): string {
+  const others = readPropsDestructure(frontmatter)?.entries.length ?? 0;
+  const statement = propsPattern(frontmatter)?.parent ?? undefined;
+  if (others === 0 && statement !== undefined) {
+    return `${frontmatter.slice(0, statement.from)}${frontmatter.slice(lineEnd(frontmatter, statement.to))}`;
+  }
+  // With the comma before it, so `{ title, ...rest }` reads `{ title }`.
+  const head = frontmatter.slice(0, rest.span.from).replace(/,\s*$/, '');
+  return `${head}${frontmatter.slice(rest.span.to)}`;
+}
+
+// Props without HTMLAttributes: out of an interface's extends list (the
+// keyword too when it was the only entry), or out of an alias's intersection.
+function withoutAttributesTyping(frontmatter: string): string {
+  const isAttributes = (part: string): boolean => /^(astroHTML\.JSX\.)?HTMLAttributes\b/.test(part.trim());
+  const alias = propsAlias(frontmatter);
+  if (alias !== undefined) {
+    const kept = splitTopLevel(frontmatter.slice(alias.from, alias.to), '&').filter((part) => !isAttributes(part));
+    const text = kept.length === 0 ? '{}' : kept.map((part) => part.trim()).join(' & ');
+    return `${frontmatter.slice(0, alias.from)}${text}${frontmatter.slice(alias.to)}`;
+  }
+  const head = interfaceHead(frontmatter);
+  const list = head === undefined ? undefined : (/^(\s*extends\s+)([\s\S]*?)(\s*)$/.exec(head.text) ?? undefined);
+  if (head === undefined || list === undefined) {
+    return frontmatter;
+  }
+  const kept = splitTopLevel(list[2] ?? '', ',').filter((part) => !isAttributes(part));
+  const text = kept.length === 0 ? ' ' : `${list[1] ?? ' extends '}${kept.map((part) => part.trim()).join(', ')}${list[3] ?? ' '}`;
+  return `${frontmatter.slice(0, head.from)}${text}${frontmatter.slice(head.from + head.text.length)}`;
+}
+
+// A type list split at `separator` outside brackets: `Omit<A, "b">, C` is two entries.
+function splitTopLevel(text: string, separator: ',' | '&'): readonly string[] {
+  assert(text.length <= PROPERTY_LIMITS.sourceCharsMax, 'splitTopLevel: the text is bounded');
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index] ?? '';
+    if ('<([{'.includes(character)) {
+      depth++;
+    } else if ('>)]}'.includes(character) && text[index - 1] !== '=') {
+      depth = Math.max(0, depth - 1);
+    } else if (character === separator && depth === 0) {
+      parts.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  assert(parts.length >= 1, 'splitTopLevel: there is always one part');
+  return parts.filter((part) => part.trim() !== '');
+}
+
+/**
  * The default written for a prop from what was typed, as code, or undefined
  * for no default; an error says why the text cannot be one. A number default
  * has to sit inside the number settings, at their precision.
@@ -262,8 +371,12 @@ export function defaultCode(
     return problem === undefined ? ok(listDefaultCode(declaration.list)) : err(problem);
   }
   if (declaration.kind === 'image') {
-    const image = imageDefaultOf(declaration.image, translate);
-    return image.ok ? ok(imageDefaultCode(image.value, image.value.kind === 'asset' ? image.value.base : '')) : image;
+    const image = imageDefaultChoice(declaration.image, translate);
+    if (!image.ok) {
+      return image;
+    }
+    // No default is valid: the prop is optional, or required of every instance.
+    return ok(image.value === undefined ? undefined : imageDefaultCode(image.value, image.value.kind === 'asset' ? image.value.base : ''));
   }
   const text = declaration.defaultText.trim();
   assert(text.length <= PROPERTY_LIMITS.textCharsMax, 'defaultCode: default text is bounded');
@@ -352,8 +465,12 @@ export function typeText(
       return problem === undefined ? ok(listTypeText(frontmatter, declaration.list.fields)) : err(problem);
     }
     case 'image': {
-      const image = imageDefaultOf(declaration.image, translate);
-      return image.ok ? ok(imageTypeText(image.value)) : image;
+      const image = imageDefaultChoice(declaration.image, translate);
+      if (!image.ok) {
+        return image;
+      }
+      // Without a default there is no file to import, so the prop takes a URL; astro:assets' <Image> takes one too.
+      return ok(image.value === undefined ? 'string' : imageTypeText(image.value));
     }
     default: {
       const exhaustive: never = declaration.kind;
@@ -449,7 +566,7 @@ export function declaredProp(
     return type;
   }
   const local = localOf(declaration, taken);
-  const needed = neededImports(declaration, new Set([...taken, local]), existing);
+  const needed = neededImports(frontmatter, declaration, new Set([...taken, local]), existing);
   const fallback = needed.defaultCode === undefined ? defaultCode(declaration, translate) : ok(needed.defaultCode);
   if (!fallback.ok) {
     return fallback;
@@ -489,12 +606,18 @@ const IMPORT_SUFFIX_MAX = 100;
 // default reads the file by: the import the file already has for it, else the
 // file's own name, numbered when that is taken (`placeholder2`).
 function neededImports(
+  frontmatter: string,
   declaration: PropDeclaration,
   taken: ReadonlySet<string>,
   existing: readonly ExistingImport[],
 ): { readonly imports: readonly PropImport[]; readonly defaultCode: string | undefined } {
   if (declaration.kind === 'attributes') {
-    return { imports: [{ name: ATTRIBUTES_TYPE.name, path: ATTRIBUTES_TYPE.path, named: true, typeOnly: true }], defaultCode: undefined };
+    // The global type needs no import; neither does a Props that is already typed, since nothing new names HTMLAttributes.
+    const imported = astroTypesTag(declaration.tag) && !attributesTyped(frontmatter);
+    return {
+      imports: imported ? [{ name: ATTRIBUTES_TYPE.name, path: ATTRIBUTES_TYPE.path, named: true, typeOnly: true }] : [],
+      defaultCode: undefined,
+    };
   }
   if (declaration.kind !== 'image') {
     return { imports: [], defaultCode: undefined };
@@ -523,8 +646,12 @@ function declarationProblem(frontmatter: string, declaration: PropDeclaration, t
   if (frontmatter.length > PROPERTY_LIMITS.sourceCharsMax) {
     return translate('editor.propDeclaration.frontmatter.tooLong');
   }
-  if (/\btype\s+Props\s*=/.test(frontmatter)) {
+  // An attributes prop intersects a `type Props` alias; a member cannot be added to one in place.
+  if (declaration.kind !== 'attributes' && /\btype\s+Props\s*=/.test(frontmatter)) {
     return translate('editor.propDeclaration.frontmatter.typeProps');
+  }
+  if (declaration.kind === 'attributes' && hasSyntaxError(frontmatter)) {
+    return translate('editor.propDeclaration.attributes.syntaxError');
   }
   const codeType = declaration.typing?.codeType ?? '';
   if (codeType.length > PROPERTY_LIMITS.textCharsMax) {
@@ -561,7 +688,7 @@ function kindSettingsProblem(declaration: PropDeclaration, rest: RestBinding | u
     case 'list':
       return listSettingsProblem(declaration.list, translate);
     case 'image': {
-      const image = imageDefaultOf(declaration.image, translate);
+      const image = imageDefaultChoice(declaration.image, translate);
       return image.ok ? undefined : image.error;
     }
     case 'boolean':
@@ -616,8 +743,9 @@ function destructureEdits(frontmatter: string, entry: string, kind: NewPropKind)
   const destructure = readPropsDestructure(frontmatter);
   const pattern = propsPattern(frontmatter);
   if (destructure === undefined || pattern === undefined) {
-    const body = propsInterfaceBody(frontmatter);
-    const at = body === undefined ? 0 : lineEnd(frontmatter, body.to);
+    // After the Props declaration, interface or alias, as a person would write it.
+    const end = propsInterfaceBody(frontmatter)?.to ?? propsAlias(frontmatter)?.to;
+    const at = end === undefined ? 0 : lineEnd(frontmatter, end);
     const lead = at > 0 && frontmatter.charAt(at - 1) !== '\n' ? '\n' : '';
     return [{ at, text: `${lead}const { ${entry} } = Astro.props;\n`, order: 1 }];
   }
@@ -652,23 +780,74 @@ function interfaceEdits(frontmatter: string, member: string, options: { readonly
 }
 
 // `extends HTMLAttributes<"tag">` on `interface Props`, added to an extends
-// list it already has, or a new interface; the tooltip above it.
+// list it already has, `& HTMLAttributes<"tag">` on a `type Props` alias, or
+// a new interface; the tooltip above it. A Props already typed is kept.
 function attributesEdits(frontmatter: string, declaration: PropDeclaration): readonly TextEdit[] {
   const tooltip = tooltipText(declaration.tooltip);
   const comment = tooltip === '' ? '' : `/** @attributes ${tooltip} */\n`;
-  const base = `${ATTRIBUTES_TYPE.name}<${JSON.stringify(declaration.tag)}>`;
+  const base = attributesBase(declaration.tag);
+  const alias = propsAlias(frontmatter);
+  if (alias !== undefined) {
+    // No tooltip here: restTooltip reads it above `interface Props` only, and one it could not read back would be lost.
+    const edits: TextEdit[] = [];
+    if (attributesTyped(frontmatter)) {
+      return edits;
+    }
+    // `&` binds tighter than `|` (and than a conditional or function type's arrow), so those are wrapped.
+    const wrapped = alias.kind === 'UnionType' || alias.kind === 'ConditionalType' || alias.kind === 'FunctionSignature';
+    return [...edits, ...(wrapped ? [{ at: alias.from, text: '(', order: 0 }] : []), { at: alias.to, text: `${wrapped ? ')' : ''} & ${base}`, order: 0 }];
+  }
   const head = interfaceHead(frontmatter);
   if (head === undefined) {
     const text = `${comment}interface Props extends ${base} {\n${existingMembers(frontmatter).join('')}}\n`;
     return [{ at: 0, text: withIndentUnit(text, indentUnitOf(frontmatter)), order: 0 }];
   }
   const edits: TextEdit[] = comment === '' ? [] : [{ at: head.statement, text: comment, order: 0 }];
-  if (/\bHTMLAttributes\s*</.test(head.text)) {
+  if (/\bHTMLAttributes\b/.test(head.text)) {
     return edits;
   }
   const extended = /\bextends\b/.test(head.text);
   const at = head.from + head.text.trimEnd().length;
   return [...edits, { at, text: extended ? `, ${base}` : ` extends ${base}`, order: 0 }];
+}
+
+// The type a `type Props = …` alias is given, and the statement it is in.
+function propsAlias(frontmatter: string): { readonly statement: number; readonly from: number; readonly to: number; readonly kind: string } | undefined {
+  const tree = typescript.parse(frontmatter);
+  for (let statement = tree.topNode.firstChild, count = 0; statement !== null && count <= frontmatter.length; statement = statement.nextSibling, count++) {
+    const declaration = statement.name === 'ExportDeclaration' ? statement.getChild('TypeAliasDeclaration') : statement;
+    const name = declaration?.name === 'TypeAliasDeclaration' ? (declaration.getChild('TypeDefinition') ?? undefined) : undefined;
+    const type = name === undefined ? undefined : (declaration?.getChild('Equals')?.nextSibling ?? undefined);
+    if (name !== undefined && type !== undefined && frontmatter.slice(name.from, name.to) === 'Props') {
+      assert(type.from < type.to, 'propsAlias: the type has text');
+      return { statement: statement.from, from: type.from, to: type.to, kind: type.name };
+    }
+  }
+  return undefined;
+}
+
+// The text that types Props: an interface's extends list, or an alias's type.
+function propsTypingText(frontmatter: string): string | undefined {
+  const alias = propsAlias(frontmatter);
+  if (alias !== undefined) {
+    return frontmatter.slice(alias.from, alias.to);
+  }
+  return interfaceHead(frontmatter)?.text;
+}
+
+// Whether the frontmatter has a syntax error anywhere. Walks at most every
+// node, and a tree has no more nodes than its text has characters, plus one.
+function hasSyntaxError(frontmatter: string): boolean {
+  const cursor = typescript.parse(frontmatter).cursor();
+  for (let count = 0; count <= frontmatter.length + 1; count++) {
+    if (cursor.type.isError) {
+      return true;
+    }
+    if (!cursor.next()) {
+      return false;
+    }
+  }
+  assert(false, 'hasSyntaxError: the walk ends within the node bound');
 }
 
 // The members a new interface declares for the props already destructured,
@@ -799,7 +978,7 @@ function lineEnd(text: string, from: number): number {
 function assertDeclared(out: string, declaration: PropDeclaration, local: string): void {
   if (declaration.kind === 'attributes') {
     assert(readRestBinding(out)?.local === local, 'declaredProp: the rest binding reads back');
-    assert(attributesTag(out) !== undefined, 'declaredProp: the interface extends HTMLAttributes');
+    assert(attributesTyped(out), 'declaredProp: Props takes HTMLAttributes');
     return;
   }
   const entries = readPropsDestructure(out)?.entries ?? [];

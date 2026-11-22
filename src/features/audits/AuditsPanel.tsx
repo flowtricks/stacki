@@ -145,7 +145,10 @@ export default function AuditsPanel(props: AuditsPanelProps) {
       if (batch === undefined) {
         return;
       }
-      const { message, kind } = agentTaskMessage(await requestAgentTask(agentTask(auditPrompt(batch, props.project.name))), translate);
+      const { message, kind } = agentTaskMessage(
+        await requestAgentTask(agentTask({ ...auditPrompt(batch, props.project.name), surface: 'auditFix' })),
+        translate,
+      );
       const rest = targets.length - batch.length;
       props.showToast(rest > 0 ? translate('auditsUi.handOff.partial', { message, count: AUDIT_PROMPT_FINDINGS_MAX }) : message, kind);
     },

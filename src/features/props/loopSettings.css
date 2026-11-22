@@ -1272,6 +1272,86 @@
 .attrs-bound-chip[aria-expanded='true'] {
   background: rgba(146, 116, 255, 0.38);
 }
+/* The Attributes header's connect handle: the shared .bind-handle (styles.css),
+   its 12px purple dot growing into the 18px + on hover or keyboard focus, with
+   the same transition. Two things differ, because the header has no label
+   element for the field rule to reveal it from: the dot is always shown, and
+   it sits in the row's flow right after the label instead of on a control's
+   corner. Its footprint stays 12px (negative margins while grown) so the row
+   never shifts; logical margins keep it right of the label in left to right
+   and left of it in right to left. */
+.attrs-label-row > .bind-handle.attrs-connect {
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  align-self: center;
+  margin-block: 0;
+  margin-inline: 6px 0;
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    width 0.1s ease,
+    height 0.1s ease,
+    margin 0.1s ease;
+}
+.attrs-label-row > .bind-handle.attrs-connect:hover,
+.attrs-label-row > .bind-handle.attrs-connect:focus-visible {
+  inset: auto;
+  width: 18px;
+  height: 18px;
+  margin-block: -3px;
+  margin-inline: 3px -3px;
+}
+.attrs-label-row > .bind-handle.attrs-connect:focus-visible .bind-dot {
+  opacity: 0;
+}
+.attrs-label-row > .bind-handle.attrs-connect:focus-visible .bind-plus {
+  opacity: 1;
+}
+/* The Attributes header: the label, the connect dot or chip right after it,
+   and the + at the row's end (logical, so it is the start in right to left). */
+.attrs-label-row > [data-attribute-editor-trigger] {
+  margin-inline-start: auto;
+}
+/* An instance's "img attributes": the tag its component passes attributes to. */
+.attrs-tag-type {
+  margin-inline-start: 4px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+/* The connected spread in the list: "+ items in {} rest ?", dim, where an
+   instance's attributes land. Nothing to click but the help mark's tooltip. */
+.attr-row.attrs-items-row {
+  cursor: default;
+  gap: 6px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+}
+.attr-row.attrs-items-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.attrs-items-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: rgba(146, 116, 255, 0.28);
+  color: #c9bbff;
+  font-size: 11px;
+}
+.attrs-items-chip bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attrs-items-help {
+  display: inline-flex;
+  color: var(--text-faint);
+  cursor: help;
+}
 
 /* The sections both places a prop is edited share (PropertySections.tsx): the
    Required and Readonly flags, and the Code type disclosure, the exact type

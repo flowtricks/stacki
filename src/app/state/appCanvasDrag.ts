@@ -34,6 +34,7 @@ import type { LeftTab } from '../appTypes';
 import type React from 'react';
 import type { EditorNode } from '../../editor/pageView';
 import type { InsertTarget } from '../../editor/insertTarget';
+import type { InsertDragChoice } from '../../editor/insertDragData';
 
 interface Active {
   readonly session: DropSession;
@@ -56,6 +57,8 @@ export interface CanvasDragHost {
   readonly currentPage: { readonly path?: string | undefined } | undefined;
   readonly moveNode: (nodeId: string, target: InsertTarget) => void;
   readonly onDropComponent: (name: string, target: InsertTarget) => void;
+  /** Inserts a tile from the Add elements panel at the drop's place (appShortcuts.ts, the click's path too). */
+  readonly insertItemAt: (choice: InsertDragChoice, target: InsertTarget) => void;
   readonly setSelectedId: (id: string | undefined) => void;
   readonly setRevealTick: React.Dispatch<React.SetStateAction<number>>;
   readonly leftTab: LeftTab;
@@ -189,6 +192,12 @@ function startNativeDrag(context: { readonly app: CanvasDragHost; readonly role:
       );
       return { session, source: 'native', restore: openNavigator(context), shown: undefined, view: undefined, allowed: undefined };
     }
+    case 'insert': {
+      // The Add elements panel shows the Navigator over itself for the drag (elementDragNavigator.ts), so the left
+      // panel stays as it is: switching it would take the dragged tile out of the page and lose the drag's end.
+      const session = startDropSession(state.model.nodes, { kind: 'new', label: native.label, choice: native.choice }, environmentOf(app));
+      return { session, source: 'native', restore: { kind: 'keep' }, shown: undefined, view: undefined, allowed: undefined };
+    }
     case 'node': {
       const node = findEditorNodeById(state.model.nodes, native.id);
       if (node === undefined) {
@@ -214,6 +223,9 @@ function drop(app: CanvasDragHost, session: DropSession, view: CanvasDragView): 
       return;
     case 'insert':
       app.onDropComponent(action.component, action.place);
+      return;
+    case 'insertChoice':
+      app.insertItemAt(action.choice, action.place);
       return;
     case 'move':
       app.moveNode(action.id, action.place);

@@ -343,8 +343,10 @@ function leftTabOf(panel: AppLeftPanel): NonNullable<LeftTab> {
 
 function panelsOf(app: ShellView): AppEventState['panels'] {
   // The project's Settings panel holds secrets and is not part of the apps' panel vocabulary: apps see it as no panel
-  // (its Instructions sections are still reachable by naming `instructions`).
-  return { left: app.leftTab === 'projectSettings' ? undefined : app.leftTab, right: app.rightTab };
+  // (its Instructions sections are still reachable by naming `instructions`). Add elements is not in it either yet:
+  // the vocabulary is a published app contract (shared/properties/appsRpc.ts), widened only with its docs.
+  const left = app.leftTab === 'projectSettings' || app.leftTab === 'elements' ? undefined : app.leftTab;
+  return { left, right: app.rightTab };
 }
 
 /**

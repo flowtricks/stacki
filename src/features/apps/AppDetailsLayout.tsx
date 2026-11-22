@@ -21,7 +21,8 @@ import { useId, useRef, useState, type FocusEvent, type MouseEvent, type ReactNo
 import { createPortal } from 'react-dom';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { tooltipHost, tooltipPointBelow, useDelayedTooltip, type TooltipPoint } from '../../ui/delayedTooltip';
+import { tooltipHost, tooltipAnchor, useDelayedTooltip, type TooltipAnchor } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
 import { HelpCircleIcon } from '../../ui/Icons';
 import './appDetails.css';
 
@@ -122,7 +123,7 @@ export function AppDetailsHint({ label, text }: { readonly label: string; readon
   const id = useId();
   const tooltip = useDelayedTooltip();
   const hintButton = useRef<HTMLButtonElement>(null);
-  const [focused, setFocused] = useState<TooltipPoint | undefined>(undefined);
+  const [focused, setFocused] = useState<TooltipAnchor | undefined>(undefined);
   const shown = focused ?? tooltip.value;
   return (
     <>
@@ -134,7 +135,7 @@ export function AppDetailsHint({ label, text }: { readonly label: string; readon
         aria-describedby={id}
         onMouseEnter={(event: MouseEvent<HTMLElement>) => tooltip.show(event)}
         onMouseLeave={tooltip.hide}
-        onFocus={(event: FocusEvent<HTMLElement>) => setFocused(tooltipPointBelow(event.currentTarget.getBoundingClientRect()))}
+        onFocus={(event: FocusEvent<HTMLElement>) => setFocused(tooltipAnchor(event.currentTarget.getBoundingClientRect()))}
         onBlur={() => setFocused(undefined)}
       >
         <HelpCircleIcon size={12} />
@@ -144,9 +145,9 @@ export function AppDetailsHint({ label, text }: { readonly label: string; readon
       </span>
       {shown !== undefined &&
         createPortal(
-          <div className="rail-tooltip below apps-details-tip" role="tooltip" style={shown}>
+          <FittedTooltip className="apps-details-tip" role="tooltip" anchor={shown}>
             {text}
-          </div>,
+          </FittedTooltip>,
           tooltipHost(hintButton.current ?? undefined),
         )}
     </>

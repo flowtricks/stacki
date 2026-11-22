@@ -52,6 +52,8 @@ const RailCodeIcon = centralIcon(centralCodeBrackets, 20);
 
 export const FEATURE_ICONS: Readonly<Record<StaticAccessFeature, FeatureIconComponent>> = {
   // The left rail's buttons (LeftRail.tsx, and Studio's EditorRail.tsx).
+  // The plus the Add elements button draws (railItems.ts).
+  'panel:elements': PlusIcon,
   'panel:pages': PagePanelIcon,
   'panel:navigator': NavigatorIcon,
   'panel:properties': PropertiesIcon,

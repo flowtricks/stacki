@@ -20,6 +20,11 @@ export const cmsTransport = {
   contentRemoteRead: (payload: Parameters<PreloadBridge['contentRemoteRead']>[0]) => window.avb.contentRemoteRead(payload),
   contentRemoteEdit: (payload: Parameters<PreloadBridge['contentRemoteEdit']>[0]) => window.avb.contentRemoteEdit(payload),
   cmsAssetRef: (payload: Parameters<PreloadBridge['cmsAssetRef']>[0]) => window.avb.cmsAssetRef(payload),
+  cmsConstants: (payload: Parameters<PreloadBridge['cmsConstants']>[0]) => window.avb.cmsConstants(payload),
+  editCmsConstants: (payload: Parameters<PreloadBridge['editCmsConstants']>[0]) => window.avb.editCmsConstants(payload),
+  // A window whose preload predates these methods (the app was not restarted since they were added) lacks them.
+  cmsConstantsAvailable: () =>
+    typeof Reflect.get(window.avb, 'cmsConstants') === 'function' && typeof Reflect.get(window.avb, 'editCmsConstants') === 'function',
   deleteCms: (payload: Parameters<PreloadBridge['deleteCms']>[0]) => window.avb.deleteCms(payload),
   cmsUsage: (payload: Parameters<PreloadBridge['cmsUsage']>[0]) => window.avb.cmsUsage(payload),
   setCmsMeta: (payload: Parameters<PreloadBridge['setCmsMeta']>[0]) => window.avb.setCmsMeta(payload),

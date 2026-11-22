@@ -76,7 +76,7 @@ export function useAppInsert(coreState: ReturnType<typeof useCoreState>, history
         return { applied: false, reason: 'The open page cannot be edited' };
       }
       if (item.kind === 'element') {
-        const node = insertedNode({ type: 'element', tag: item.tag, label: item.tag, cat: 'elements', icon: undefined }, newId());
+        const node = insertedNode({ type: 'element', tag: item.tag }, newId());
         assert(node !== undefined, 'An element always makes a node');
         prepared = { node: withStringProps(node, item.attributes), imports: undefined };
       }

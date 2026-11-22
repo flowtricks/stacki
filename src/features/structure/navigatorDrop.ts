@@ -1,5 +1,6 @@
-// What a drop on the Navigator carries: a component from the palette or a node
-// moved within the tree (PalettePanel and StructureTree set these types). Drag
+// What a drop on the Navigator carries: a component from the palette, a new element
+// from the Add elements panel (src/editor/insertDragData.ts), or a node moved within
+// the tree (PalettePanel, AddElementsPanel and StructureTree set these types). Drag
 // data can come from any window, so it is parsed like any other input: a name
 // or id past the page-tree bound is no drop at all.
 import { LIMITS } from '../../../shared/core/limits';
@@ -7,8 +8,12 @@ import { thenBranch } from '../../editor/branches';
 import { findNavigatorNode, type DropTarget, type NavigatorNode } from './structureModel';
 import { assert } from '../../../shared/core/assert';
 import type { NavigatorDropShown } from '../../editor/canvasDragSession';
+import { INSERT_DRAG_TYPE, parseInsertDrag, type InsertDragChoice } from '../../editor/insertDragData';
 
-export type NavigatorDrop = { readonly kind: 'component'; readonly name: string; readonly path?: string } | { readonly kind: 'node'; readonly id: string };
+export type NavigatorDrop =
+  | { readonly kind: 'component'; readonly name: string; readonly path?: string }
+  | { readonly kind: 'insert'; readonly choice: InsertDragChoice }
+  | { readonly kind: 'node'; readonly id: string };
 
 /** `read` is `DataTransfer.getData`: an absent type reads as the empty string. */
 export function parseNavigatorDrop(read: (type: string) => string): NavigatorDrop | undefined {
@@ -19,6 +24,12 @@ export function parseNavigatorDrop(read: (type: string) => string): NavigatorDro
       return undefined;
     }
     return { kind: 'component', name, ...(path === '' ? {} : { path }) };
+  }
+  // A payload under the Add elements type that does not parse is no drop, even beside a node id: it was meant as an insert.
+  const insert = read(INSERT_DRAG_TYPE);
+  if (insert !== '') {
+    const choice = parseInsertDrag(insert);
+    return choice === undefined ? undefined : { kind: 'insert', choice };
   }
   const id = read('avb/node');
   if (id !== '') {

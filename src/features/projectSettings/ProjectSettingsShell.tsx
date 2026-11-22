@@ -26,13 +26,14 @@ import {
   type SettingsViewId,
 } from '../../lib/settingsSections';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { ChevronRightIcon, CollapseVerticalIcon, ExpandVerticalIcon, InstructionsIcon, LockIcon, PlugIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CollapseVerticalIcon, ExpandVerticalIcon, AgentIcon, InstructionsIcon, LockIcon, PlugIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { roles as centralRoles } from '../../ui/central/centralGeometry';
 import { PanelSearch } from '../../ui/PanelSearch';
 import './projectSettings.css';
 import { PanelHeader } from '../../ui/PanelHeader';
+import { useShortcutTip } from '../../ui/shortcutTip';
 
 export interface ProjectSettingsShellProps {
   /** What the folded sections are remembered under: Desktop's project path, Studio's `studio`. */
@@ -43,22 +44,29 @@ export interface ProjectSettingsShellProps {
   readonly renderView: (view: SettingsViewId, context: SettingsSectionsContext) => ReactNode;
   /** Called when the person leaves a view by Back or Escape, so a view that opened something elsewhere can close it. */
   readonly onLeaveView?: ((view: SettingsViewId) => void) | undefined;
-  /** The chord that opens each view, shown muted on its root row; a host with none leaves it out. */
+  /** The chord that opens each view, shown in the tooltip of its root row (never inline); a host with none leaves it out. */
   readonly shortcuts?: Readonly<Partial<Record<SettingsViewId, string>>> | undefined;
   /** Whether the menu offers Refresh: only a host whose views read from disk has anything to read again. */
   readonly refreshable: boolean;
+  /**
+   * Draws the root's rows in place of the plain list of `views`: Desktop's rows can be reordered, dragged out onto
+   * the rail and joined by rail panels (src/app/SettingsRailRows.tsx), which this feature may not import. `views`
+   * still names every view a request may open, wherever its row lives.
+   */
+  readonly renderRoot?: ((show: (view: SettingsViewId) => void) => ReactNode) | undefined;
 }
 
 const RolesIcon = centralIcon(centralRoles);
-const LINK_ICONS = { secrets: LockIcon, mcp: PlugIcon, instructions: InstructionsIcon, roles: RolesIcon } as const satisfies Record<
+const LINK_ICONS = { secrets: LockIcon, mcp: PlugIcon, instructions: InstructionsIcon, agents: AgentIcon, roles: RolesIcon } as const satisfies Record<
   SettingsViewId,
   typeof LockIcon
 >;
 
 const NO_REPORTS: Readonly<Partial<Record<SettingsSectionId, number | undefined>>> = {};
 
-export default function ProjectSettingsShell({ projectKey, views, renderView, refreshable, onLeaveView, shortcuts }: ProjectSettingsShellProps) {
-  assert(views.length > 0, 'The Settings panel lists at least one view');
+export default function ProjectSettingsShell({ projectKey, views, renderView, refreshable, onLeaveView, shortcuts, renderRoot }: ProjectSettingsShellProps) {
+  // A host that draws its own root may have moved every view out onto the rail; one with the plain list has one at least.
+  assert(renderRoot !== undefined || views.length > 0, 'The Settings panel lists at least one view');
   const translate = useTranslate();
   const [view, setView] = useState<SettingsViewId | undefined>(undefined);
   const [query, setQuery] = useState('');
@@ -164,21 +172,15 @@ export default function ProjectSettingsShell({ projectKey, views, renderView, re
     return (
       <div className="panel-section grow settings-panel">
         <PanelHeader title={translate('settings.title')} />
-        <div className="panel-body settings-body" role="list" aria-label={translate('settings.sections')}>
-          {views.map((id) => {
-            const Icon = LINK_ICONS[id];
-            return (
-              <button key={id} type="button" role="listitem" className="list-item settings-link" onClick={() => show(id)}>
-                <span className="icon">
-                  <Icon size={14} />
-                </span>
-                <span className="label">{translate(SETTINGS_VIEW_TITLE_KEYS[id])}</span>
-                {shortcuts?.[id] !== undefined && <span className="settings-link-key">{shortcuts[id]}</span>}
-                <ChevronRightIcon size={12} />
-              </button>
-            );
-          })}
-        </div>
+        {renderRoot === undefined ? (
+          <div className="panel-body settings-body" role="list" aria-label={translate('settings.sections')}>
+            {views.map((id) => (
+              <SettingsLink key={id} id={id} shortcut={shortcuts?.[id]} onShow={show} />
+            ))}
+          </div>
+        ) : (
+          renderRoot(show)
+        )}
       </div>
     );
   }
@@ -230,5 +232,33 @@ export default function ProjectSettingsShell({ projectKey, views, renderView, re
         {noMatch && <div className="props-empty">{translate('settings.instructions.search.noMatch')}</div>}
       </div>
     </div>
+  );
+}
+
+// One root row. Its chord is in the tooltip after a rest, not at the row's end: the list stays a list of names.
+function SettingsLink({
+  id,
+  shortcut,
+  onShow,
+}: {
+  readonly id: SettingsViewId;
+  readonly shortcut: string | undefined;
+  readonly onShow: (id: SettingsViewId) => void;
+}) {
+  const translate = useTranslate();
+  const Icon = LINK_ICONS[id];
+  const label = translate(SETTINGS_VIEW_TITLE_KEYS[id]);
+  const { props, tip } = useShortcutTip(label, shortcut);
+  return (
+    <>
+      <button type="button" role="listitem" className="list-item settings-link" onClick={() => onShow(id)} {...props}>
+        <span className="icon">
+          <Icon size={14} />
+        </span>
+        <span className="label">{label}</span>
+        <ChevronRightIcon size={12} />
+      </button>
+      {tip}
+    </>
   );
 }

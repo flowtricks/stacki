@@ -23,6 +23,7 @@ const noPayload = new Set([
   'microphone:openSettings',
   'microphone:request',
   'microphone:status',
+  'dictation:status',
   'native:copy',
   'native:paste',
   'native:undo',
@@ -41,6 +42,7 @@ const pathPayload = new Set([
   'publish:availability',
   'publish:siteURL',
   'studio:status',
+  'studio:upgradeCheck',
   'project:close',
   'recents:add',
   'recents:remove',
@@ -117,6 +119,8 @@ const fields = {
   authoredChecksum: 'a'.repeat(64),
   checksum: 'a'.repeat(64),
   token: '00000000-0000-4000-8000-000000000000',
+  // Dictation's model channels name the model by id only (shared/properties/voice/dictationModel.ts).
+  modelId: 'base',
   edit: {
     tag: 'remove-node',
     target: { path: [0], kind: 'element', span: { start: 0, end: 5 } },
@@ -168,6 +172,8 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'ai:sections': { projectPath: '/site', action: { kind: 'create', name: 'Launch' } },
   'ai:diff': { ...aiChat, turn: `t${'1'.repeat(16)}`, path: 'src/pages/index.astro' },
   'ai:mentions': { projectPath: '/site', query: 'ind', kinds: ['file', 'skill'] },
+  'ai:screenshot': { projectPath: '/site', rect: { x: 0, y: 0, width: 320, height: 200 } },
+  'ai:record': { projectPath: '/site', action: { kind: 'start', rect: { x: 0, y: 0, width: 320, height: 200 } } },
   'ai:cancel': aiChat,
   'ai:permission': { ...aiChat, request: 'p1', answer: { kind: 'cancel' } },
   'ai:setOption': { ...aiChat, option: 'model', value: 'large' },
@@ -419,6 +425,15 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     projectPath: '/site',
     file: '.stacki/canvas/00000000-0000-4000-8000-000000000000.astro',
   },
+  // Settings > Agents: a paired agent's fields, and a definition or a pair to move to the Trash.
+  'agents:list': { projectPath: '/site' },
+  'agents:save': {
+    projectPath: '/site',
+    fields: { name: 'code-reviewer', description: 'Reviews.', instructions: 'Read.', tools: ['Read'], claudeModel: 'sonnet' },
+    mode: 'create',
+    overwrite: [],
+  },
+  'agents:delete': { projectPath: '/site', target: { kind: 'file', path: '.claude/agents/reviewer.md' } },
   // The Instructions panel: Markdown paths inside the project, and a folder for rules.
   'instructions:create': { projectPath: '/site', file: '.claude/rules/testing.md', source: '# Testing\n' },
   'instructions:createFolder': { projectPath: '/site', folder: '.claude/rules/frontend' },
@@ -487,6 +502,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'styleMove:pending': { projectPath: '/site' },
   'styleMove:resolve': { projectPath: '/site', id: 'move-1', target: 'moved' },
   'breakpointSync:restore': { projectPath: '/site', journalId: 'journal-1', direction: 'undo' },
+  'cms:editConstants': { projectPath: '/site', rel: 'consts.ts', edit: { kind: 'add', field: { name: 'SITE_TAGLINE', value: 'Hello' } } },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
   'content:sampleValue': {
     projectPath: '/site',
@@ -504,13 +520,15 @@ for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
         ? { projectPath: '/site', rel: 'public/hero.png', format: 'webp' }
         : channel === 'studio:setAuth'
           ? { projectPath: '/site', auth: { kind: 'github' } }
-          : channel === 'studio:install'
-            ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
-            : noPayload.has(channel)
-              ? undefined
-              : pathPayload.has(channel)
-                ? '/site'
-                : fields);
+          : channel === 'studio:upgrade'
+            ? { projectPath: '/site', requestId: 'test-upgrade' }
+            : channel === 'studio:install'
+              ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
+              : noPayload.has(channel)
+                ? undefined
+                : pathPayload.has(channel)
+                  ? '/site'
+                  : fields);
     assert.doesNotThrow(() => parse(sample));
     assert.throws(() => parse(Symbol('invalid')), /Expected/);
     if (!noPayload.has(channel)) {

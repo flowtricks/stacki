@@ -9,7 +9,12 @@ export interface GitResult {
   readonly stderr?: string;
 }
 
-export type Git = (projectPath: string, args: readonly string[]) => Promise<GitResult>;
+/** What a caller may ask of one git run: a longer wait (a commit's hooks, a push). Everything else is the runner's decision. */
+export interface GitRunOptions {
+  readonly timeout?: number;
+}
+
+export type Git = (projectPath: string, args: readonly string[], options?: GitRunOptions) => Promise<GitResult>;
 
 const stderrOf = (error: unknown): string | undefined => {
   const stderr = toRecord(error)?.['stderr'];

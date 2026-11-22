@@ -2,7 +2,7 @@ import { useCodeAccess, ManagedValue } from './CodeAccess';
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { basicSetup, EditorView, minimalSetup } from 'codemirror';
 import type { MutableRefObject } from 'react';
-import type { LanguageSupport } from '@codemirror/language';
+import { LanguageSupport } from '@codemirror/language';
 import { assert } from '../../shared/core/assert';
 import { Annotation, EditorState, StateEffect, StateField, Transaction, type Extension } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
@@ -18,6 +18,7 @@ import { codeSourceOffset, codeViewOffset, editCodeView, openCodeView, sourceCod
 import { codeLineClassifier } from './codeLineRoles';
 import { CODE_TOKEN_RULES } from './codeHighlight';
 import { codeStickyScroll } from './codeStickyScroll';
+import { tomlLanguage } from './tomlSyntax';
 
 // CodeMirror 6 wrapper themed to match the app. Controlled-ish: `value` in,
 // `onChange(text)` out; external value changes replace the doc only when
@@ -458,6 +459,9 @@ export function codeEditorLanguage(language: string | undefined): LanguageSuppor
   }
   if (language === 'css') {
     return css();
+  }
+  if (language === 'toml') {
+    return new LanguageSupport(tomlLanguage);
   }
   if (language === 'markdown') {
     // MDX is mostly prose: highlight headings and fences instead of parsing it all as JS.

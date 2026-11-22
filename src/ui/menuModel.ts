@@ -16,9 +16,9 @@ export interface MenuItem {
   /** A muted second line under the label. */
   readonly description?: string;
   readonly icon?: ReactNode;
-  /** Text at the end of the row ("⌘K", "P"). It is display only: `accelerator` and `numberKey` do the work. */
+  /** The row's key ("⌘K", "P"), told in a tooltip after a rest and never printed in the row. It is display only: `accelerator` and `numberKey` do the work. */
   readonly shortcut?: string;
-  /** The digit (1 to 9) that chooses this row while the menu is open; shown at the end when no `shortcut` is. */
+  /** The digit (1 to 9) that chooses this row while the menu is open; told in the tooltip when no `shortcut` is. */
   readonly numberKey?: number;
   /** A single letter that chooses this row while the menu is open. */
   readonly accelerator?: string;
@@ -28,6 +28,8 @@ export interface MenuItem {
   readonly pill?: string;
   /** Explains the row in an info mark at the end of it. */
   readonly info?: string;
+  /** Explains the row in the app's tooltip after a rest on it (hover or keyboard focus); the row stays one line, with no paragraph under it. */
+  readonly tooltip?: string;
   readonly danger?: boolean;
   readonly disabled?: boolean;
   /** Leave the menu open after choosing (a stepper that is chosen repeatedly). */

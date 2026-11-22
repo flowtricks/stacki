@@ -27,13 +27,14 @@ import CodeTextField from './CodeTextField';
 import { attributeLanguage } from '../../ui/attributeLanguage';
 import AssetField from '../../ui/AssetField';
 import Dropdown from '../../ui/Dropdown';
+import { ResetLabel } from '../../ui/ResetLabel';
 import { assert } from '../../../shared/core/assert';
 import ListField from './ListField';
 import { CodeTypeField, ItemFieldsEditor, ListDefaultField, PropertyFlagsFields, type PropertyFlags } from './PropertySections';
 import { arrayItems, arrayText, itemsHoldCode } from './arrayValue';
 import type { ItemFieldDeclaration } from '../../editor/itemFields';
 import { LIST_STARTER_FIELDS, listSettingsProblem } from '../../editor/listPropType';
-import { imageDefaultOf } from '../../editor/imagePropDefault';
+import { imageDefaultChoice, imageDefaultOf } from '../../editor/imagePropDefault';
 import { itemValuesOf } from './listItemShape';
 import {
   attributeDefaultsProblem,
@@ -130,7 +131,7 @@ export default function NewPropForm(props: NewPropFormProps) {
         <ListDefaultField fields={form.listFields} code={form.listItems} projectPath={props.host.projectPath} onChange={form.setListItems} />
       ) : (
         <div className="loop-property-default">
-          <div className="loop-bind-title">{translate('props.newProp.form.defaultKind', { kind: translate(KIND_TITLE_KEYS[kind]) })}</div>
+          <DefaultTitle form={form} label={translate('props.newProp.form.defaultKind', { kind: translate(KIND_TITLE_KEYS[kind]) })} />
           <DefaultEditor form={form} host={props.host} />
         </div>
       )}
@@ -143,6 +144,18 @@ export default function NewPropForm(props: NewPropFormProps) {
           {translate('props.newProp.form.create')}
         </button>
       </div>
+    </div>
+  );
+}
+
+// The title of the default. An image's is a label that clears it once set, as a field's blue label resets its value (ResetLabel).
+function DefaultTitle({ form, label }: { readonly form: FormState; readonly label: string }) {
+  if (form.kind !== 'image') {
+    return <div className="loop-bind-title">{label}</div>;
+  }
+  return (
+    <div className="loop-bind-title">
+      <ResetLabel label={label} active={form.image.trim() !== ''} onReset={() => form.setImage('')} />
     </div>
   );
 }
@@ -292,7 +305,8 @@ function settingsProblem(declaration: PropDeclaration, translate: Translator): s
     case 'list':
       return listSettingsProblem(declaration.list, translate);
     case 'image': {
-      const image = imageDefaultOf(declaration.image, translate);
+      // An empty default is valid: the prop is optional, or required of each instance.
+      const image = imageDefaultChoice(declaration.image, translate);
       return image.ok ? undefined : image.error;
     }
     case 'boolean':

@@ -38,6 +38,7 @@ import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { Skeleton } from '../../ui/Skeleton';
 import { SettingsNotice, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import { useCurrentRole } from '../../lib/useCurrentRole';
+import { useCodeChips } from '../../features/style/codeChips/CodeChips';
 import { can } from '../../../shared/properties/projectRoles';
 import { styleTagLock, styleTagParts, styleTagText } from './styleTagEditor';
 import './styleTagSettings.css';
@@ -252,7 +253,10 @@ function TagEditor(props: { readonly tag: NewStyleTagSettings; readonly editable
   const [invalid, setInvalid] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Made once: the editor reads its extensions when it is made, and the lock never changes.
-  const lock = useMemo(() => styleTagLock(), []);
+  // The block is a `<style>` tag: its CSS draws the same chips as every other style tag editor.
+  const codeChips = useCodeChips('markup');
+  const chipExtension = codeChips.extension;
+  const lock = useMemo(() => [styleTagLock(), chipExtension], [chipExtension]);
   useEffect(() => () => clearTimeout(timer.current), []);
   const edit = (next: string): void => {
     setText(next);
@@ -272,6 +276,7 @@ function TagEditor(props: { readonly tag: NewStyleTagSettings; readonly editable
             {translate('settings.styleTags.invalid')}
           </span>
         )}
+        {codeChips.overlay}
       </div>
     </>
   );
