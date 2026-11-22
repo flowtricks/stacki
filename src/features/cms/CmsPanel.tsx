@@ -35,6 +35,20 @@ interface CmsPanelProps {
   /** Where a host without an app Settings window (Studio) adds a connection. */
   readonly onConnect?: (() => void) | undefined;
   readonly showToast: (message: string, kind: 'error') => void;
+  /**
+   * Opens a data file's settings (its variables, and adding one) in the main
+   * view, as a collection's gear opens its settings. A host that leaves it out
+   * (Studio, for now) shows no gear on file rows.
+   */
+  readonly onOpenFileSettings?: ((file: CmsFileSettingsTarget) => void) | undefined;
+  /** The person moved to another place in the list (a group, a CMS, back): open file settings close. */
+  readonly onNavigate?: (() => void) | undefined;
+}
+
+/** The data file whose settings open: `consts.ts`, `pages/about.astro`, under src/. */
+export interface CmsFileSettingsTarget {
+  readonly fileRel: string;
+  readonly label: string;
 }
 
 interface CollectionGroup {
@@ -81,6 +95,7 @@ function ProjectCmsPanel(props: CmsPanelProps) {
   // Moving to a connected CMS, or to the project's content collections, closes
   // whatever local collection was open beside it.
   const openRemote = (source: CmsSource) => {
+    props.onNavigate?.();
     props.onSelect(undefined);
     props.onSelectContent(undefined);
     setRemote(source);
@@ -105,12 +120,16 @@ function LocalCmsPanel(
   useSelectedGroup(props.selectedRel, openKey, collections, setOpenKey);
   const open = openKey === undefined ? undefined : groups.find((group) => group.key === openKey);
   const create = useCreateCollection(props, setCreating, setOpenKey, refresh);
+  const onOpenFileSettings = props.onOpenFileSettings;
   return (
     <div className="panel-section grow">
       <CmsPanelHeader
         open={open}
         openKey={openKey}
-        onBack={() => closeGroup(props, setOpenKey)}
+        onBack={() => {
+          props.onNavigate?.();
+          closeGroup(props, setOpenKey);
+        }}
         onCreate={() => setCreating(true)}
         onConnect={props.onConnect}
       />
@@ -119,7 +138,23 @@ function LocalCmsPanel(
         {!open && (
           <>
             <ConnectionRows connections={props.connections} content={content} onOpen={props.onOpenRemote} />
-            <GroupList groups={groups} selectedRel={props.selectedRel} onOpen={(key) => openGroup(groups, key, { select: props.onSelect, open: setOpenKey })} />
+            <GroupList
+              groups={groups}
+              selectedRel={props.selectedRel}
+              onOpen={(key) => {
+                props.onNavigate?.();
+                openGroup(groups, key, { select: props.onSelect, open: setOpenKey });
+              }}
+              onSettings={
+                onOpenFileSettings === undefined
+                  ? undefined
+                  : (group) => {
+                      // A file's key is its path under src/.
+                      assert(group.kind === 'file', 'CmsPanel: only a file has file settings');
+                      onOpenFileSettings({ fileRel: group.key, label: group.label });
+                    }
+              }
+            />
           </>
         )}
         {open && <JsonCollectionList collections={open.items} selected={props.selectedRel} onSelect={props.onSelect} onOpenSettings={props.onOpenSettings} />}
@@ -461,10 +496,13 @@ function GroupList({
   groups,
   selectedRel,
   onOpen,
+  onSettings,
 }: {
   readonly groups: readonly CollectionGroup[];
   readonly selectedRel: string | undefined;
   readonly onOpen: (key: string) => void;
+  /** Opens a data file's settings; absent, file rows carry no gear. */
+  readonly onSettings: ((group: CollectionGroup) => void) | undefined;
 }) {
   return (
     <>
@@ -476,6 +514,7 @@ function GroupList({
           badge={group.badge}
           selected={group.items.some((item) => item.rel === selectedRel)}
           onClick={() => onOpen(group.key)}
+          onSettings={group.kind === 'file' && onSettings !== undefined ? () => onSettings(group) : undefined}
           icon={group.kind === 'file' ? <FileIcon size={14} /> : <FolderDefaultIcon size={14} />}
         />
       ))}
@@ -489,6 +528,7 @@ function GroupRow({
   badge,
   selected,
   onClick,
+  onSettings,
   icon,
 }: {
   readonly label: string;
@@ -497,6 +537,8 @@ function GroupRow({
   /** Its collection is the one open: the row reads as the current place. */
   readonly selected?: boolean | undefined;
   readonly onClick: () => void;
+  /** A data file's gear, in the place and look of a collection's (JsonCollectionList). */
+  readonly onSettings?: (() => void) | undefined;
   readonly icon: React.ReactNode;
 }) {
   const translate = useTranslate();
@@ -505,8 +547,24 @@ function GroupRow({
       {icon}
       <span className="cms-collection-name">{label}</span>
       {badge && <span className="badge">{badge === 'this page' ? translate('cms.panel.badgeThisPage') : translate('cms.panel.badgeOpen')}</span>}
-      <span className="cms-collection-chevron">
-        <ChevronRightIcon size={10} />
+      {/* On hover or focus a file's settings take the arrow's place, in a slot of fixed width. */}
+      <span className="cms-collection-end">
+        <span className="cms-collection-chevron">
+          <ChevronRightIcon size={10} />
+        </span>
+        {onSettings !== undefined && (
+          <button
+            type="button"
+            className="ghost cms-collection-settings"
+            title={translate('cms.panel.fileSettings')}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSettings();
+            }}
+          >
+            <GearIcon size={13} />
+          </button>
+        )}
       </span>
     </div>
   );
@@ -537,21 +595,25 @@ function JsonCollectionList({
       <CmsIcon size={14} />
       <span className="cms-collection-name">{collection.label}</span>
       <span className="cms-collection-count">{jsonItemCount(collection, translate)}</span>
-      <button
-        className="ghost row-action"
-        title={translate('cms.panel.collectionSettings')}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (collection.error === undefined) {
-            onOpenSettings(collection.rel);
-          }
-        }}
-        disabled={collection.error !== undefined}
-      >
-        <GearIcon size={13} />
-      </button>
-      <span className="cms-collection-chevron">
-        <ChevronRightIcon size={10} />
+      {/* On hover or focus the settings take the arrow's place, in a slot of fixed width. */}
+      <span className="cms-collection-end">
+        <span className="cms-collection-chevron">
+          <ChevronRightIcon size={10} />
+        </span>
+        <button
+          type="button"
+          className="ghost cms-collection-settings"
+          title={translate('cms.panel.collectionSettings')}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (collection.error === undefined) {
+              onOpenSettings(collection.rel);
+            }
+          }}
+          disabled={collection.error !== undefined}
+        >
+          <GearIcon size={13} />
+        </button>
       </span>
     </div>
   ));

@@ -162,23 +162,25 @@ function CollectionList(props: {
         <span className="cms-collection-name">{labelize(collection.name)}</span>
         <span className="cms-collection-count">{translate('cmsRemote.collection.itemCount', { count: collection.count })}</span>
       </span>
-      <span className="cms-collection-chevron">
-        <ChevronRightIcon size={10} />
+      {/* On hover or focus the arrow gives way to the settings, as a CMS's own list does, in a slot of fixed width. */}
+      <span className="cms-collection-end">
+        <span className="cms-collection-chevron">
+          <ChevronRightIcon size={10} />
+        </span>
+        {props.files && (
+          <button
+            type="button"
+            className="ghost cms-collection-settings"
+            title={translate('cmsRemote.collection.settings')}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onSettings(collection);
+            }}
+          >
+            <GearIcon size={13} />
+          </button>
+        )}
       </span>
-      {/* On hover the arrow gives way to the settings, as a CMS's own list does. */}
-      {props.files && (
-        <button
-          type="button"
-          className="ghost cms-collection-settings"
-          title={translate('cmsRemote.collection.settings')}
-          onClick={(event) => {
-            event.stopPropagation();
-            props.onSettings(collection);
-          }}
-        >
-          <GearIcon size={13} />
-        </button>
-      )}
     </div>
   ));
 }

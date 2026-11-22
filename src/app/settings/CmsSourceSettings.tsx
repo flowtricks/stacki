@@ -7,9 +7,9 @@
 // exports and every collection can also be left out of the binding picker
 // (`cms.pickerExcluded`); that hides it from the picker only, never from the
 // CMS panel.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
-import { BracesIcon, CloseIcon, CmsIcon, PlusIcon } from '../../ui/Icons';
+import { BracesIcon, ChevronRightIcon, CloseIcon, CmsIcon, FileIcon, PlusIcon } from '../../ui/Icons';
 import { cleanError } from '../../lib/cleanError';
 import { assert } from '../../../shared/core/assert';
 import {
@@ -160,7 +160,10 @@ export function CmsSources(props: {
           {sources.collections.map((name) => {
             const shown = !isCollectionHidden(props.config, name);
             return (
-              <li key={name} className="app-folder-toggle">
+              <li key={name} className="app-folder-toggle app-folder-collection">
+                <span className="app-folder-collection-icon">
+                  <CmsIcon size={14} />
+                </span>
                 <CodeInline text={name} />
                 <Switch
                   label={translate('settings.folders.cms.showCollection', { name })}
@@ -172,16 +175,12 @@ export function CmsSources(props: {
             );
           })}
         </ul>
-        <p className="app-folder-fixed">
-          {configPath !== undefined && open !== undefined && (
-            <>
-              {' '}
-              <button type="button" className="app-folder-link" onClick={() => open(configPath)}>
-                {translate('settings.folders.cms.openConfig')}
-              </button>
-            </>
-          )}
-        </p>
+        {configPath !== undefined && open !== undefined && (
+          <button type="button" className="app-folder-config-button" onClick={() => open(configPath)}>
+            <BracesIcon size={12} />
+            <span>{translate('settings.folders.cms.openConfig')}</span>
+          </button>
+        )}
       </div>
       <div className="app-folder-row" aria-label={translate('settings.folders.cms.dataFiles')}>
         <div className="app-folder-heading">
@@ -247,7 +246,7 @@ export function exportsByFile(exports: readonly DataFileExport[]): ReadonlyArray
 // What the binding picker lists beyond the open file's own data: each data
 // file, each of its exports beneath it, and each collection, all shown until
 // switched off. An export of a file that is switched off stays off with it.
-function PickerSources(props: {
+export function PickerSources(props: {
   readonly collections: readonly string[];
   readonly exports: readonly DataFileExport[];
   readonly config: ProjectFolders | undefined;
@@ -279,37 +278,107 @@ function PickerSources(props: {
       <ul className="app-folder-toggles">
         {files.map(([file, names]) => {
           const fileShown = isPickerShown(props.config, { kind: 'file', file });
+          if (names.length === 0) {
+            return (
+              <PickerToggle
+                key={file}
+                text={file}
+                icon={<FileIcon size={14} />}
+                shown={fileShown}
+                busy={props.busy}
+                onToggle={() => toggle({ kind: 'file', file }, { shown: fileShown })}
+              />
+            );
+          }
           return (
-            <React.Fragment key={file}>
-              <PickerToggle text={file} shown={fileShown} busy={props.busy} onToggle={() => toggle({ kind: 'file', file }, { shown: fileShown })} />
-              {names.map((exported) => {
-                const source: PickerExclusion = { kind: 'export', file, exported };
-                const shown = isPickerShown(props.config, source);
-                return (
-                  <PickerToggle
-                    key={`${file}#${exported}`}
-                    text={exported}
-                    nested
-                    shown={shown}
-                    busy={props.busy || !fileShown}
-                    onToggle={() => toggle(source, { shown })}
-                  />
-                );
-              })}
-            </React.Fragment>
+            <PickerFileGroup
+              key={file}
+              file={file}
+              names={names}
+              fileShown={fileShown}
+              busy={props.busy}
+              isExportShown={(exported) => isPickerShown(props.config, { kind: 'export', file, exported })}
+              onToggleFile={() => toggle({ kind: 'file', file }, { shown: fileShown })}
+              onToggleExport={(exported, shown) => toggle({ kind: 'export', file, exported }, { shown })}
+            />
           );
         })}
         {props.collections.map((name) => {
           const shown = isPickerShown(props.config, { kind: 'collection', name });
-          return <PickerToggle key={name} text={name} shown={shown} busy={props.busy} onToggle={() => toggle({ kind: 'collection', name }, { shown })} />;
+          return (
+            <PickerToggle
+              key={name}
+              text={name}
+              icon={<CmsIcon size={14} />}
+              shown={shown}
+              busy={props.busy}
+              onToggle={() => toggle({ kind: 'collection', name }, { shown })}
+            />
+          );
         })}
       </ul>
     </div>
   );
 }
 
+// One data file in the picker list: collapsed until opened, so a long list of
+// files stays scannable. It follows the Audits sections (AuditsSettings.tsx):
+// chevron, file name and a "3 of 5" count in one button, the file's own switch
+// at the end, the exports below. Open state is per-session UI state, like theirs.
+function PickerFileGroup(props: {
+  readonly file: string;
+  readonly names: readonly string[];
+  readonly fileShown: boolean;
+  readonly busy: boolean;
+  readonly isExportShown: (exported: string) => boolean;
+  readonly onToggleFile: () => void;
+  readonly onToggleExport: (exported: string, shown: boolean) => void;
+}) {
+  const translate = useTranslate();
+  const [open, setOpen] = useState(false);
+  // An export of a switched-off file stays off with it, so it does not count.
+  const shownCount = props.fileShown ? props.names.filter((exported) => props.isExportShown(exported)).length : 0;
+  assert(shownCount <= props.names.length, 'PickerFileGroup: the shown count never exceeds the exports');
+  return (
+    <li className="app-folder-group" data-open={open ? 'true' : 'false'}>
+      <div className="app-folder-group-heading">
+        <button type="button" className="app-folder-group-disclosure" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+          <ChevronRightIcon size={12} />
+          <span className="app-folder-row-icon">
+            <FileIcon size={14} />
+          </span>
+          <CodeInline text={props.file} />
+          <span className="app-folder-group-summary">{translate('settings.roles.summary.ofTotal', { count: shownCount, total: props.names.length })}</span>
+        </button>
+        <Switch
+          label={translate('settings.folders.cms.showInPicker', { name: props.file })}
+          checked={props.fileShown}
+          disabled={props.busy}
+          onToggle={props.onToggleFile}
+        />
+      </div>
+      {open && (
+        <ul className="app-folder-toggles app-folder-group-body">
+          {props.names.map((exported) => (
+            <PickerToggle
+              key={`${props.file}#${exported}`}
+              text={exported}
+              nested
+              shown={props.isExportShown(exported)}
+              busy={props.busy || !props.fileShown}
+              onToggle={() => props.onToggleExport(exported, props.isExportShown(exported))}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 function PickerToggle(props: {
   readonly text: string;
+  /** The row's icon, in the same column as a data file's icon; absent for an export, which sits under its file. */
+  readonly icon?: ReactNode;
   readonly nested?: boolean;
   readonly shown: boolean;
   readonly busy: boolean;
@@ -317,7 +386,8 @@ function PickerToggle(props: {
 }) {
   const translate = useTranslate();
   return (
-    <li className={props.nested === true ? 'app-folder-toggle is-nested' : 'app-folder-toggle'}>
+    <li className={props.nested === true ? 'app-folder-toggle is-nested' : 'app-folder-toggle is-top-level'}>
+      {props.icon !== undefined && <span className="app-folder-row-icon">{props.icon}</span>}
       <CodeInline text={props.text} />
       <Switch
         label={translate('settings.folders.cms.showInPicker', { name: props.text })}
