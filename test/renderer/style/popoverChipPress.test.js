@@ -61,8 +61,15 @@ async function panelEvents(panel, { seed }) {
   await panel.data('the canvas answers', () => panel.bridge.release({ order: 'shuffle', seed }));
   panel.bridge.mode = 'immediate';
   await panel.data('the page adds a class that moves the default pick', () => panel.setPageClasses('n2', ['is-ready', 'heading']));
-  await panel.data('the rematch is answered', () => wait(100));
-  const picked = [...panel.container.querySelectorAll('.embed-editor_selector-chip.is-active')].map((chip) => chip.textContent);
+  // The rematch lands when it lands: a loaded runner took longer than the 100 ms once waited here (1.4.12, macOS),
+  // so poll the active chip, at most 100 times 50 ms, and read it after.
+  const activeChips = () => [...panel.container.querySelectorAll('.embed-editor_selector-chip.is-active')].map((chip) => chip.textContent);
+  await panel.data('the rematch is answered', async () => {
+    for (let poll = 0; poll < 100 && activeChips().join(',') !== '.is-ready'; poll += 1) {
+      await wait(50);
+    }
+  });
+  const picked = activeChips();
   assert.deepEqual(picked, ['.is-ready'], 'the default pick moved, with no one pressing anything');
   await panel.data('a scroll that moves nothing', () => panel.container.dispatchEvent(new panel.window.Event('scroll')));
   await panel.data('focus leaves and returns', () => {
