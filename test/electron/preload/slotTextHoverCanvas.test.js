@@ -82,6 +82,16 @@ const PAGE_SOURCE = [
     process.exit(1);
   }
 
+  // The rest drives the real pointer, so like every pointer probe it runs on macOS only (docs/release-runbook.md): a
+  // hidden window on Windows drops the first synthetic mouse move, which reads as a missing hover.
+  if (process.platform !== 'darwin') {
+    if (failures.length) {
+      console.error(`slot-text-hover-canvas: ${failures.length}/${checked} failed\n${failures.join('\n')}`);
+      process.exit(1);
+    }
+    console.log(`slot-text-hover-canvas: ${checked}/${checked} planner checks passed; pointer checks skipped  [macOS only]`);
+    return;
+  }
   // The markup the preview renders. Button: `<a class="button"><slot /></a>` with padding; Heading: `<h2><slot /></h2>` with
   // none; Card: `<div class="card"><span class="card_badge">New</span><slot /></div>`, its badge written by the component.
   const marked = (pathText, inner) => `<!--avb-s:${pathText}-->${inner}<!--avb-e:${pathText}-->`;
