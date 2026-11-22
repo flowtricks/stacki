@@ -47,6 +47,12 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.13
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.13.
+- **Fixes**
+  - studio: keep every demo file within stacki.build's 20 MB bound
+
 ## 1.4.12
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.12.
