@@ -64,13 +64,10 @@ export const messages = {
   'preview.image.alt.none': 'Dit component toont geen alttekst vanuit een property, dus er is hier niets te bewerken.',
   'preview.image.close': 'Sluiten',
   'preview.image.refused.bound': 'Deze afbeelding komt uit code ({expression}), en dat is geen waarde die deze popup kan wijzigen. Bewerk haar in de broncode.',
-  'preview.image.refused.computed': 'Deze afbeelding wordt berekend in {file} ({expression}), dus geen enkele property bepaalt haar. Bewerk haar daar.',
-  'preview.image.refused.fixed': 'Deze afbeelding staat in {file} en is dus voor elke instantie hetzelfde. Open het component om haar te wijzigen.',
   'preview.image.refused.loop':
     'Deze afbeelding wordt bij elke ronde van een loop getekend, dus één wijziging zou voor alle gelden. Bewerk in plaats daarvan de gegevens van de loop.',
   'preview.image.refused.outside': 'Deze afbeelding hoort bij {file}, dat dit bestand alleen insluit. Open dat bestand om haar te wijzigen.',
   'preview.image.refused.unknown': 'De editor kan niet bepalen waar deze afbeelding vandaan komt.',
-  'preview.image.refused.unreadable': 'De editor kan {file} niet lezen en kan dus niet bepalen waar deze afbeelding vandaan komt.',
   'preview.image.title': 'Properties van {name}',
   'preview.image.titleFallback': 'Afbeeldingsproperties',
   'preview.inspector.hide': 'Stijl- en instellingenpaneel verbergen',

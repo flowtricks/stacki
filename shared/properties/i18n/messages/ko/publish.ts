@@ -154,7 +154,7 @@ export const messages = {
   'publish.repositories.error.listFailed': '이 계정의 저장소 목록을 가져올 수 없습니다. 새로 고치거나 계정을 다시 연결하세요.',
   'publish.repositories.error.noWriteAccess': '이 계정에는 해당 저장소에 대한 쓰기 권한이 없습니다.',
   'publish.repositories.error.organizationApproval':
-    '{owner}에 저장소를 만들려면 {owner}이(가) 이 앱을 승인하거나 Single Sign-On을 요구해야 합니다. 소유자에게 요청한 후 다시 시도하세요.',
+    '{owner}이(가) 이 앱을 승인하거나 Single Sign-On을 요구해야 그곳에 저장소를 만들 수 있습니다. 소유자에게 요청한 후 다시 시도하세요.',
   'publish.repositories.error.organizationForbids': '{owner}에서는 저장소를 만들 수 없습니다. 소유자에게 권한을 요청하거나 다른 소유자를 선택하세요.',
   'publish.repositories.find': '저장소 찾기…',
   'publish.repositories.loading': '저장소 불러오는 중…',

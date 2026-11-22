@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': 'تعديل المجلدات',
   'roles.feature.cliComponents': 'إدارة المكوّنات',
   'roles.feature.cliApps': 'إدارة التطبيقات',
+  'roles.feature.panelElements': 'إضافة عناصر',
   'roles.feature.panelPages': 'الصفحات',
   'roles.feature.panelNavigator': 'المستكشف',
   'roles.feature.panelProperties': 'خصائص المكوّن',

@@ -64,13 +64,10 @@ export const messages = {
   'preview.image.alt.none': 'Este componente no imprime texto alternativo desde una propiedad, así que no hay nada que editar aquí.',
   'preview.image.close': 'Cerrar',
   'preview.image.refused.bound': 'Esta imagen viene de código ({expression}), que este cuadro no puede cambiar. Edítala en el código fuente.',
-  'preview.image.refused.computed': 'Esta imagen se calcula en {file} ({expression}), así que ninguna propiedad la decide. Edítala allí.',
-  'preview.image.refused.fixed': 'Esta imagen está escrita en {file}, así que es la misma para cada instancia. Abre el componente para cambiarla.',
   'preview.image.refused.loop':
     'Esta imagen se dibuja una vez por cada vuelta de un bucle, así que un cambio se aplicaría a todas. Edita en su lugar los datos del bucle.',
   'preview.image.refused.outside': 'Esta imagen pertenece a {file}, que este archivo solo incrusta. Abre ese archivo para cambiarla.',
   'preview.image.refused.unknown': 'El editor no puede saber de dónde viene esta imagen.',
-  'preview.image.refused.unreadable': 'El editor no puede leer {file}, así que no sabe de dónde viene esta imagen.',
   'preview.image.title': 'Propiedades de {name}',
   'preview.image.titleFallback': 'Propiedades de la imagen',
   'preview.inspector.hide': 'Ocultar el panel de estilo y ajustes',

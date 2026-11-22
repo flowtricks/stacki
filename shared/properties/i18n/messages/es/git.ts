@@ -44,10 +44,13 @@ export const messages = {
   'git.branch.currentLabel': '{branch}, rama actual',
   'git.branch.delete': 'Eliminar {branch}',
   'git.branch.error.at': '“@” es el nombre que usa git para la rama actual.',
+  'git.branch.error.component': 'Una parte del nombre no puede empezar por “.” ni contener “..”.',
+  'git.branch.error.conflict': '«{branch}» ya es una rama, y un nombre no puede estar dentro de otro ni rodearlo («a» y «a/b»).',
   'git.branch.error.endsDot': 'Un nombre no puede terminar en “.”.',
   'git.branch.error.endsSlash': 'Un nombre no puede terminar en “/”.',
   'git.branch.error.exists': '{branch} ya existe.',
   'git.branch.error.existsCase': '{branch} ya existe, y aquí los nombres que solo difieren en mayúsculas son la misma rama.',
+  'git.branch.error.head': 'git reserva «HEAD».',
   'git.branch.error.lock': 'git reserva “.lock”.',
   'git.branch.heading': 'Ramas',
   'git.branch.indicator.detached': 'HEAD separado',
@@ -136,6 +139,10 @@ export const messages = {
   'git.conflict.yourEdit': 'Tu edición',
   'git.conflict.yourEdits': 'Tus ediciones',
   'git.done': 'Listo',
+  'git.error.authFailed': 'GitHub no aceptó tu inicio de sesión. Inicia sesión de nuevo en los ajustes de Publicar y vuelve a intentarlo.',
+  'git.error.branchExists': 'Ya existe una rama con ese nombre.',
+  'git.error.branchNameConflict': '«{branch}» ya es una rama, y el nombre de una rama no puede estar dentro de otra ni rodearla. Elige otro nombre.',
+  'git.error.branchNameInvalid': 'Ese nombre no es válido para una rama en git. Usa letras, números, “-”, “_”, “.” y “/”, sin espacios.',
   'git.error.cloneNotAstro':
     'Se descargó en {path}, pero su raíz no es un proyecto de Astro. Usa Abrir proyecto para elegir la carpeta de Astro que hay dentro.', // review
   'git.error.commitNothingPicked': 'No se eligió nada para guardar: elige al menos un archivo.',
@@ -143,6 +150,10 @@ export const messages = {
   'git.error.deleteSelf': '«{branch}» es la rama en la que estás: cambia primero a otra.',
   'git.error.deleteTrunk': '«{branch}» es la rama a la que todo vuelve. Eliminarla dejaría el proyecto sin su línea principal de trabajo.',
   'git.error.deleteWorktree': '«{branch}» está activa en otro worktree ({path}). Ciérralo o cámbialo primero.', // review
+  'git.error.detachedHead': 'No estás en una rama, así que no hay nada que enviar ni traer. Cambia primero a una rama.',
+  'git.error.identityMissing': 'Git aún no sabe quién eres. Define tu nombre y correo (git config --global user.name y user.email) y guarda de nuevo.',
+  'git.error.locked':
+    'Otra operación de Git sigue en curso en este proyecto. Espera un momento e inténtalo de nuevo; si nunca termina, cierra otras herramientas de Git.',
   'git.error.mergeBranchChanged': 'La rama actual cambió. Vuelve a abrir la fusión para revisarla de nuevo.',
   'git.error.mergeChangedSinceReview': 'La fusión cambió desde la revisión. Ábrela de nuevo para revisar el nuevo resultado.',
   'git.error.mergeFailed': 'No se pudo fusionar «{branch}» en «{into}».',
@@ -150,14 +161,30 @@ export const messages = {
   'git.error.mergeFilesChanged': 'Los archivos en conflicto cambiaron. Vuelve a abrir la fusión para revisarlos de nuevo.',
   'git.error.mergeFinishFailed': 'No se pudo terminar de fusionar «{branch}».',
   'git.error.mergeSelf': '«{branch}» es la rama en la que estás: no hay nada en lo que fusionar.', // review
+  'git.error.messageTooLong': 'Ese mensaje es demasiado largo. Acórtalo e inténtalo de nuevo.',
+  'git.error.noRemote': 'Este proyecto aún no tiene un repositorio de GitHub conectado. Publícalo primero.',
+  'git.error.notInstalled': 'Git no está instalado o Stacki no puede encontrarlo. Instala Git y vuelve a abrir el proyecto.',
+  'git.error.nothingToCommit': 'No hay nada nuevo que guardar.',
+  'git.error.offline': 'No se pudo conectar con GitHub. Revisa tu conexión a internet e inténtalo de nuevo.',
+  'git.error.operationInProgress':
+    'Hay un {operation} sin terminar en este proyecto. Termínalo o aborta primero (por ejemplo con “git {operation} --abort”) y vuelve a intentarlo.',
   'git.error.originExists': 'Este proyecto ya tiene un remoto origin. No se modificó.',
+  'git.error.outputTooLarge':
+    'Este proyecto tiene más archivos modificados de los que Stacki puede listar. Añade las carpetas generadas (como node_modules) a .gitignore.',
   'git.error.pullBranchChanged': 'La rama actual cambió. Actualiza Git e intenta traer los cambios de nuevo.',
+  'git.error.pushRejected': 'GitHub tiene cambios que este proyecto aún no tiene. Trae los cambios primero y vuelve a enviar: Stacki nunca los sobrescribe.',
+  'git.error.refInvalid': 'No se encontró esa versión.',
   'git.error.restoreMissing': 'Esa versión no tiene este archivo: se añadió después.',
   'git.error.restoreUnsaved': 'Hay cambios sin guardar aquí. Guárdalos primero: volver atrás los sobrescribiría.',
+  'git.error.signingFailed': 'Git no pudo firmar el commit. Revisa tu clave de firma o desactiva la firma con “git config commit.gpgsign false”.',
+  'git.error.statusTooLarge': 'Cambiaron más de {count} archivos. Añade las carpetas generadas (como node_modules) a .gitignore y vuelve a abrir la lista.',
   'git.error.switchFailed': 'No se pudo cambiar a «{branch}».',
+  'git.error.timedOut': 'Git tardó demasiado y se detuvo. Inténtalo de nuevo; si sigue ocurriendo, revisa si la red o un hook de commit van lentos.',
   'git.error.unparkDirty': 'Tu trabajo en «{branch}» sigue guardado aparte porque esta rama tiene cambios locales.',
   'git.error.unparkFailed':
     'Tu trabajo en «{branch}» sigue guardado aparte: no se pudo recuperar automáticamente porque la rama cambió por debajo. Está a salvo: recupéralo con `git stash list` y `git stash pop`.',
+  'git.error.unsafeDirectory':
+    'Git no confía en esta carpeta porque pertenece a otro usuario ({path}). Ejecuta “git config --global --add safe.directory {path}” y vuelve a abrir el proyecto.',
   'git.file.changed': 'Modificado',
   'git.file.changed.inVersion': 'Modificado en esta versión',
   'git.file.changed.why': 'Este archivo tiene cambios que aún no se han guardado',

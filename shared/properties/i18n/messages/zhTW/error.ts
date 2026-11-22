@@ -125,6 +125,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'Studio 需要 Node.js 22.19 或更新版本。請更新 Node.js 後重試。',
   'error.studio.npmFailed': 'Studio 無法完成 npm {command}。請查看上方的輸出。你的專案未被取代。',
   'error.studio.releaseFileTooLarge': '請選擇小於 32 MB 的 Studio 發行 JSON 檔案。',
+  'error.studio.restoreNotReady': '這裡沒有可還原的舊版 Studio。',
+  'error.studio.upgradeNotReady': 'Studio 已無法在這裡升級，沒有更新的版本。請重新開啟設定再檢查一次。',
   'error.terminal.missingId': '缺少終端機 ID。',
   'error.terminal.outsideProject': '終端機只能在目前的專案內開啟。',
   'error.thumbnails.devServerSlow': '開發伺服器未能及時啟動',

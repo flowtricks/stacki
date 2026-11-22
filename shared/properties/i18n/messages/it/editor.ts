@@ -229,6 +229,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Ogni attributo predefinito richiede un nome.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} non è un nome di attributo.',
   'editor.propDeclaration.attributes.restTaken': 'Questo componente passa già i suoi altri attributi come {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'Correggi il codice nel frontmatter di questo componente prima di collegarne gli attributi.',
   'editor.propDeclaration.attributes.tooMany': 'Ci sono troppi attributi.',
   'editor.propDeclaration.attributes.valueTooLong': 'Il valore di {name} è troppo lungo.',
   'editor.propDeclaration.codeType.multiline': 'Scrivi il tipo di codice su una riga, senza punto e virgola.',

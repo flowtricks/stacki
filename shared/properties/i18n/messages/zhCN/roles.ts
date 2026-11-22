@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': '编辑文件夹',
   'roles.feature.cliComponents': '管理组件',
   'roles.feature.cliApps': '管理应用',
+  'roles.feature.panelElements': '添加元素',
   'roles.feature.panelPages': '页面',
   'roles.feature.panelNavigator': '导航器',
   'roles.feature.panelProperties': '组件属性',

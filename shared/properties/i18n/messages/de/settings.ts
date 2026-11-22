@@ -3,6 +3,75 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/settings';
 
 export const messages = {
+  'settings.agents.delete.body': '{file} wird in den Papierkorb verschoben.',
+  'settings.agents.delete.confirm': 'In den Papierkorb',
+  'settings.agents.delete.label': '{name} löschen',
+  'settings.agents.delete.pairedBody':
+    'Beide Dateien von {name}, für Claude und für Codex, und die Felder in .stacki/agents werden in den Papierkorb verschoben.',
+  'settings.agents.delete.title': '{name} löschen?',
+  'settings.agents.empty.hint':
+    'Ein Agent ist ein gespeicherter Helfer für deinen KI-Chat mit eigener Aufgabe. Erstelle einen, der sowohl mit Claude als auch mit Codex funktioniert.',
+  'settings.agents.empty.title': 'Noch keine Agenten',
+  'settings.agents.field.empty': 'Fülle dieses Feld aus.',
+  'settings.agents.field.format': 'Verwende nur Buchstaben, Ziffern und . _ : / -.',
+  'settings.agents.field.nameFormat': 'Verwende Kleinbuchstaben, Ziffern und einzelne Bindestriche, zum Beispiel code-reviewer.',
+  'settings.agents.field.taken': 'Ein Agent mit diesem Namen existiert bereits.',
+  'settings.agents.field.tooLong': 'Das ist zu lang.',
+  'settings.agents.field.tooMany': 'Das sind mehr Werkzeuge, als ein Agent auflisten kann.',
+  'settings.agents.form.cancel': 'Abbrechen',
+  'settings.agents.form.claudeModel': 'Claude-Modell',
+  'settings.agents.form.codexModel': 'Codex-Modell',
+  'settings.agents.form.codexModelHint': 'Eine Codex-Modell-ID. Jede CLI benennt ihre Modelle anders, daher hat jede ein eigenes Feld.',
+  'settings.agents.form.create': 'Agent erstellen',
+  'settings.agents.form.description': 'Wann er genutzt wird',
+  'settings.agents.form.descriptionHint': 'Eine Zeile. Beide CLIs lesen sie, um zu entscheiden, wann sie Arbeit an diesen Agenten übergeben.',
+  'settings.agents.form.editTitle': '{name} bearbeiten',
+  'settings.agents.form.instructions': 'Anweisungen',
+  'settings.agents.form.intro': 'Stacki schreibt aus diesen Feldern eine Datei für Claude und eine für Codex, damit beide Agenten gleich bleiben.',
+  'settings.agents.form.modelDefault': 'Standard',
+  'settings.agents.form.name': 'Name', // same
+  'settings.agents.form.nameHint': 'Auch der Name beider Dateien.',
+  'settings.agents.form.namePlaceholder': 'code-reviewer', // same
+  'settings.agents.form.save': 'Beide Dateien speichern',
+  'settings.agents.form.title': 'Neuer Agent',
+  'settings.agents.form.tools': 'Werkzeuge',
+  'settings.agents.form.toolsHint':
+    'Nur für Claude, durch Kommas getrennt; leer erlaubt jedes Werkzeug. Codex hat keine Werkzeugliste pro Agent, daher behält sein Agent alle Werkzeuge.',
+  'settings.agents.form.toolsPlaceholder': 'Read, Grep, Glob', // same
+  'settings.agents.list.info':
+    'Ein gespeicherter Helfer für deinen KI-Chat mit eigener Aufgabe, zum Beispiel ein Lektor oder ein Prüfer für Barrierefreiheit. Wähle einen aus, wenn du chattest. Gespeichert in .claude/agents und .codex/agents.',
+  'settings.agents.list.title': 'Agenten',
+  'settings.agents.new': 'Neuer Agent',
+  'settings.agents.open': '{file} bearbeiten',
+  'settings.agents.paired.editFields': 'Felder bearbeiten',
+  'settings.agents.paired.edited': '{provider}: bearbeitet',
+  'settings.agents.paired.inSync': '{provider}: synchron',
+  'settings.agents.paired.info':
+    'Agenten, die Stacki für beide CLIs erstellt hat. Eine von Hand bearbeitete Datei stimmt nicht mehr mit ihren Feldern überein; Neu synchronisieren schreibt sie erneut daraus.',
+  'settings.agents.paired.missing': '{provider}: fehlt',
+  'settings.agents.paired.title': 'Für Claude und Codex erstellt',
+  'settings.agents.pairedTag': 'Beide CLIs',
+  'settings.agents.problem.duplicateKey': 'Das Frontmatter setzt {key} zweimal.',
+  'settings.agents.problem.missingField': 'Es hat kein {field}.',
+  'settings.agents.problem.noFrontmatter': 'Es hat kein Frontmatter. Beginne mit --- sowie Name und Beschreibung.',
+  'settings.agents.problem.notAMap': 'Das Frontmatter ist keine Liste aus Schlüsseln und Werten.',
+  'settings.agents.problem.syntax': 'Es kann nicht gelesen werden: {detail}',
+  'settings.agents.problem.syntaxLine': 'Es kann in Zeile {line} nicht gelesen werden: {detail}',
+  'settings.agents.problem.tooLarge': 'Es ist größer als {size} KB.',
+  'settings.agents.problem.tooLong': '{field} ist zu lang.',
+  'settings.agents.problem.unclosedFrontmatter': 'Das Frontmatter wird nie geschlossen. Füge danach eine ---Zeile hinzu.',
+  'settings.agents.problem.wrongType': '{field} ist nicht die richtige Art von Wert.',
+  'settings.agents.resync.body':
+    'Die Datei für {providers} wurde von Hand bearbeitet. Neu synchronisieren ersetzt diese Änderungen durch den Inhalt der Felder.',
+  'settings.agents.resync.confirm': 'Änderungen ersetzen',
+  'settings.agents.resync.label': 'Neu synchronisieren',
+  'settings.agents.resync.tip': 'Beide Dateien erneut aus den Feldern des Agenten schreiben',
+  'settings.agents.resync.title': 'Änderungen an {name} ersetzen?',
+  'settings.agents.template.output': 'Berichte am Ende, was du getan hast und was noch zu tun ist.',
+  'settings.agents.template.role': 'Du bist ein fokussierter Helfer für dieses Projekt. Beschreibe die Aufgabe, die dieser Agent übernimmt.',
+  'settings.agents.template.steps':
+    'Schritte:\n1. Lies die Dateien, die die Aufgabe nennt.\n2. Erledige die Arbeit und halte die Änderungen klein.\n3. Prüfe das Ergebnis.',
+  'settings.agents.truncated': 'Dieses Projekt hat mehr Agenten, als hier aufgelistet sind.',
   'settings.audits.rules.px': 'px außerhalb von Variablen',
   'settings.audits.phrases.info': 'Ein einzelnes Wort zählt nur als gesamter Text; mehrere Wörter dürfen auch nur ein Teil davon sein.',
   'settings.breakpoints.add': 'Breakpoint hinzufügen',
@@ -158,6 +227,9 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Speichert vor und nach jedem KI-Durchgang einen versteckten Schnappschuss, um Änderungen zu zeigen. Fügt keine Commits hinzu. Aus ist schneller bei großen Projekten.',
   'settings.editor.ai.trackChanges.label': 'Snapshot vor und nach jeder KI-Änderung',
+  'settings.editor.code.chips.info':
+    'Variablen, Easings, Schatten, Verläufe und clip-paths in CSS-Code erscheinen als Chips, die ihre Editoren öffnen. Aus: reines CSS.',
+  'settings.editor.code.chips.label': 'CSS-Chips im Code anzeigen',
   'settings.editor.loading': 'Einstellungen werden geladen …',
   'settings.editor.preferences': 'App-Einstellungen',
   'settings.editor.privacy.hideDetails.info': 'Apps sehen nur eine ID pro Projekt, nicht deinen Git-Namen, deine E-Mail oder dein GitHub-Konto.',
@@ -167,6 +239,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Anonyme Nutzungszählung',
   'settings.editor.saveFailed': 'Für diese Sitzung übernommen, konnte aber nicht gespeichert werden. Prüfe den Speicherplatz und versuche es erneut.',
   'settings.editor.section.ai': 'KI',
+  'settings.editor.section.code': 'Code', // same
   'settings.editor.section.general': 'Allgemein',
   'settings.editor.section.privacy': 'Datenschutz',
   'settings.editor.sound.label': 'Oberflächentöne',
@@ -355,6 +428,7 @@ export const messages = {
   'settings.refresh': 'Aktualisieren',
   'settings.instructions.search.noMatch': 'Keine Anweisungen passen zur Suche',
   'settings.instructions.search.placeholder': 'Anweisungen suchen',
+  'settings.section.agents': 'Agenten',
   'settings.section.mcp': 'MCP', // same
   'settings.section.instructions': 'Anweisungen',
   'settings.section.secrets': 'Geheimnisse',

@@ -225,6 +225,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'כל תכונת ברירת מחדל צריכה שם.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} אינו שם תכונה.',
   'editor.propDeclaration.attributes.restTaken': 'הרכיב הזה כבר מעביר את שאר התכונות שלו הלאה בתור {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'יש לתקן את הקוד ב־frontmatter של הרכיב הזה לפני חיבור המאפיינים שלו.',
   'editor.propDeclaration.attributes.tooMany': 'יש יותר מדי תכונות.',
   'editor.propDeclaration.attributes.valueTooLong': 'הערך של {name} ארוך מדי.',
   'editor.propDeclaration.codeType.multiline': 'יש לכתוב את סוג הקוד בשורה אחת, בלי נקודה־פסיק.',

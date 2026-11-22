@@ -284,6 +284,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'تحتاج كل سمة افتراضية إلى اسم.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} ليس اسم سمة.',
   'editor.propDeclaration.attributes.restTaken': 'يمرّر هذا المكوّن بقية سماته بالفعل باسم {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'أصلح الشيفرة في frontmatter هذا المكوّن قبل ربط سماته.',
   'editor.propDeclaration.attributes.tooMany': 'عدد السمات كبير جدًا.',
   'editor.propDeclaration.attributes.valueTooLong': 'قيمة {name} طويلة جدًا.',
   'editor.propDeclaration.codeType.multiline': 'اكتب النوع البرمجي في سطر واحد دون فاصلة منقوطة.',

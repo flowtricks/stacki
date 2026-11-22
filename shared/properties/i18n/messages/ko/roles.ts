@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': '폴더 편집',
   'roles.feature.cliComponents': '컴포넌트 관리',
   'roles.feature.cliApps': '앱 관리',
+  'roles.feature.panelElements': '요소 추가',
   'roles.feature.panelPages': '페이지',
   'roles.feature.panelNavigator': '내비게이터',
   'roles.feature.panelProperties': '컴포넌트 속성',

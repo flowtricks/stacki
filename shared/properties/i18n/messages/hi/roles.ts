@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': 'फ़ोल्डर संपादित करें',
   'roles.feature.cliComponents': 'कंपोनेंट प्रबंधित करें',
   'roles.feature.cliApps': 'ऐप्स प्रबंधित करें',
+  'roles.feature.panelElements': 'एलिमेंट जोड़ें',
   'roles.feature.panelPages': 'पेज',
   'roles.feature.panelNavigator': 'नेविगेटर',
   'roles.feature.panelProperties': 'कंपोनेंट प्रॉपर्टी',

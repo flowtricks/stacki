@@ -127,6 +127,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'Studio, Node.js 22.19 veya daha yenisini gerektirir. Node.js’i güncelleyip yeniden deneyin.',
   'error.studio.npmFailed': 'Studio, npm {command} komutunu tamamlayamadı. Yukarıdaki çıktıya bakın. Projeniz değiştirilmedi.',
   'error.studio.releaseFileTooLarge': '32 MB’tan küçük bir Studio sürüm JSON dosyası seçin.',
+  'error.studio.restoreNotReady': 'Burada geri yüklenecek önceki bir Studio yok.',
+  'error.studio.upgradeNotReady': 'Studio burada artık yükseltilemez. Daha yeni bir sürüm yok. Yeniden denetlemek için Ayarlar’ı yeniden açın.',
   'error.terminal.missingId': 'Terminal kimliği eksik.',
   'error.terminal.outsideProject': 'Terminal yalnızca geçerli proje içinde açılabilir.',
   'error.thumbnails.devServerSlow': 'geliştirme sunucusu zamanında başlamadı',

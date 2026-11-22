@@ -226,6 +226,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': '各デフォルト属性には名前が必要です。',
   'editor.propDeclaration.attributes.nameInvalid': '{name} は属性名ではありません。',
   'editor.propDeclaration.attributes.restTaken': 'このコンポーネントはすでにほかの属性を {name} として渡しています。',
+  'editor.propDeclaration.attributes.syntaxError': '属性を接続する前に、このコンポーネントの frontmatter のコードを修正してください。',
   'editor.propDeclaration.attributes.tooMany': '属性が多すぎます。',
   'editor.propDeclaration.attributes.valueTooLong': '{name} の値が長すぎます。',
   'editor.propDeclaration.codeType.multiline': 'コード型はセミコロンなしで 1 行に記述してください。',

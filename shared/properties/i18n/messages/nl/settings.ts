@@ -3,6 +3,74 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/settings';
 
 export const messages = {
+  'settings.agents.delete.body': '{file} gaat naar de prullenbak.',
+  'settings.agents.delete.confirm': 'Naar prullenbak verplaatsen',
+  'settings.agents.delete.label': '{name} verwijderen',
+  'settings.agents.delete.pairedBody':
+    'Beide bestanden van {name}, voor Claude en voor Codex, en de bijbehorende velden in .stacki/agents gaan naar de prullenbak.',
+  'settings.agents.delete.title': '{name} verwijderen?',
+  'settings.agents.empty.hint': 'Een agent is een opgeslagen helper voor je AI-chat, met een eigen taak. Maak er een die met zowel Claude als Codex werkt.',
+  'settings.agents.empty.title': 'Nog geen agents',
+  'settings.agents.field.empty': 'Vul dit in.',
+  'settings.agents.field.format': 'Gebruik alleen letters, cijfers en . _ : / -.',
+  'settings.agents.field.nameFormat': 'Gebruik kleine letters, cijfers en losse koppeltekens, zoals code-reviewer.',
+  'settings.agents.field.taken': 'Er bestaat al een agent met deze naam.',
+  'settings.agents.field.tooLong': 'Dit is te lang.',
+  'settings.agents.field.tooMany': 'Dat zijn meer tools dan een agent kan opsommen.',
+  'settings.agents.form.cancel': 'Annuleren',
+  'settings.agents.form.claudeModel': 'Claude-model',
+  'settings.agents.form.codexModel': 'Codex-model',
+  'settings.agents.form.codexModelHint': 'Een Codex-model-id. Elke CLI noemt zijn modellen anders, dus elk heeft een eigen veld.',
+  'settings.agents.form.create': 'Agent maken',
+  'settings.agents.form.description': 'Wanneer te gebruiken',
+  'settings.agents.form.descriptionHint': 'Eén regel. Beide CLI’s lezen die om te beslissen wanneer ze werk aan deze agent overdragen.',
+  'settings.agents.form.editTitle': '{name} bewerken',
+  'settings.agents.form.instructions': 'Instructies',
+  'settings.agents.form.intro': 'Stacki schrijft uit deze velden een bestand voor Claude en een voor Codex, zodat beide agents hetzelfde blijven.',
+  'settings.agents.form.modelDefault': 'Standaard',
+  'settings.agents.form.name': 'Naam',
+  'settings.agents.form.nameHint': 'Ook de naam van beide bestanden.',
+  'settings.agents.form.namePlaceholder': 'code-reviewer', // same
+  'settings.agents.form.save': 'Beide bestanden opslaan',
+  'settings.agents.form.title': 'Nieuwe agent',
+  'settings.agents.form.tools': 'Tools', // same
+  'settings.agents.form.toolsHint':
+    'Alleen voor Claude, gescheiden door komma’s; leeg staat elke tool toe. Codex heeft geen toollijst per agent, dus zijn agent houdt elke tool.',
+  'settings.agents.form.toolsPlaceholder': 'Read, Grep, Glob', // same
+  'settings.agents.list.info':
+    'Een opgeslagen helper voor je AI-chat met een eigen taak, zoals een tekstredacteur of een reviewer voor toegankelijkheid. Kies er een als je chat. Opgeslagen in .claude/agents en .codex/agents.',
+  'settings.agents.list.title': 'Agents', // same
+  'settings.agents.new': 'Nieuwe agent',
+  'settings.agents.open': '{file} bewerken',
+  'settings.agents.paired.editFields': 'Velden bewerken',
+  'settings.agents.paired.edited': '{provider}: bewerkt',
+  'settings.agents.paired.inSync': '{provider}: gesynchroniseerd',
+  'settings.agents.paired.info':
+    'Agents die Stacki voor beide CLI’s heeft gemaakt. Een met de hand bewerkt bestand komt niet meer overeen met zijn velden; Opnieuw synchroniseren schrijft het opnieuw vanuit de velden.',
+  'settings.agents.paired.missing': '{provider}: ontbreekt',
+  'settings.agents.paired.title': 'Gemaakt voor Claude en Codex',
+  'settings.agents.pairedTag': 'Beide CLI’s',
+  'settings.agents.problem.duplicateKey': 'De frontmatter stelt {key} twee keer in.',
+  'settings.agents.problem.missingField': 'Er ontbreekt een {field}.',
+  'settings.agents.problem.noFrontmatter': 'Er is geen frontmatter. Begin met --- en een name en description.',
+  'settings.agents.problem.notAMap': 'De frontmatter is geen lijst van sleutels en waarden.',
+  'settings.agents.problem.syntax': 'Kan niet worden gelezen: {detail}',
+  'settings.agents.problem.syntaxLine': 'Kan op regel {line} niet worden gelezen: {detail}',
+  'settings.agents.problem.tooLarge': 'Het is groter dan {size} KB.',
+  'settings.agents.problem.tooLong': '{field} is te lang.',
+  'settings.agents.problem.unclosedFrontmatter': 'De frontmatter wordt nooit gesloten. Voeg er een regel --- achter toe.',
+  'settings.agents.problem.wrongType': '{field} is niet het juiste soort waarde.',
+  'settings.agents.resync.body':
+    'Het bestand van {providers} is met de hand bewerkt. Opnieuw synchroniseren vervangt die bewerkingen door wat de velden zeggen.',
+  'settings.agents.resync.confirm': 'Bewerkingen vervangen',
+  'settings.agents.resync.label': 'Opnieuw synchroniseren',
+  'settings.agents.resync.tip': 'Schrijf beide bestanden opnieuw vanuit de velden van de agent',
+  'settings.agents.resync.title': 'De bewerkingen van {name} vervangen?',
+  'settings.agents.template.output': 'Rapporteer als je klaar bent wat je hebt gedaan en wat er nog te doen is.',
+  'settings.agents.template.role': 'Je bent een gerichte helper voor dit project. Beschrijf het werk dat deze agent doet.',
+  'settings.agents.template.steps':
+    'Stappen:\n1. Lees de bestanden die de taak noemt.\n2. Doe het werk en houd wijzigingen klein.\n3. Controleer het resultaat.',
+  'settings.agents.truncated': 'Dit project heeft meer agents dan hier worden getoond.',
   'settings.audits.rules.px': 'px buiten variabelen',
   'settings.audits.phrases.info': 'Een enkel woord moet de hele tekst zijn om te tellen; meerdere woorden mogen een deel ervan zijn.',
   'settings.breakpoints.add': 'Breakpoint toevoegen',
@@ -156,6 +224,9 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Slaat vóór en na elke AI-beurt een verborgen snapshot op om wijzigingen te tonen. Voegt geen commits toe aan je geschiedenis. Uit is sneller bij grote projecten.',
   'settings.editor.ai.trackChanges.label': 'Snapshot vóór en na elke AI-wijziging',
+  'settings.editor.code.chips.info':
+    'Variabelen, easings, schaduwen, verlopen en clip-paths in CSS-code verschijnen als chips die hun editors openen. Uit: gewone CSS.',
+  'settings.editor.code.chips.label': 'CSS-chips in code tonen',
   'settings.editor.loading': 'Voorkeuren laden…',
   'settings.editor.preferences': 'Appvoorkeuren',
   'settings.editor.privacy.hideDetails.info': 'Apps zien alleen een ID per project, niet je Git-naam, e-mailadres of GitHub-account.',
@@ -165,6 +236,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Anonieme gebruikstellingen',
   'settings.editor.saveFailed': 'Toegepast voor deze sessie, maar opslaan is mislukt. Controleer de schijfruimte en probeer het opnieuw.',
   'settings.editor.section.ai': 'AI', // same
+  'settings.editor.section.code': 'Code', // same
   'settings.editor.section.general': 'Algemeen',
   'settings.editor.section.privacy': 'Privacy', // same
   'settings.editor.sound.label': 'Interfacegeluiden',
@@ -353,6 +425,7 @@ export const messages = {
   'settings.refresh': 'Vernieuwen',
   'settings.instructions.search.noMatch': 'Geen instructies gevonden',
   'settings.instructions.search.placeholder': 'Instructies zoeken',
+  'settings.section.agents': 'Agents', // same
   'settings.section.mcp': 'MCP', // same
   'settings.section.instructions': 'Instructies',
   'settings.section.secrets': 'Secrets', // same

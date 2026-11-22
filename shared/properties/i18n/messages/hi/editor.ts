@@ -224,6 +224,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'हर डिफ़ॉल्ट एट्रिब्यूट को नाम चाहिए।',
   'editor.propDeclaration.attributes.nameInvalid': '{name} एट्रिब्यूट का नाम नहीं है।',
   'editor.propDeclaration.attributes.restTaken': 'यह कंपोनेंट अपने बाकी एट्रिब्यूट पहले से {name} के रूप में आगे भेजता है।',
+  'editor.propDeclaration.attributes.syntaxError': 'एट्रिब्यूट जोड़ने से पहले इस कंपोनेंट के frontmatter का कोड ठीक करें।',
   'editor.propDeclaration.attributes.tooMany': 'एट्रिब्यूट बहुत ज़्यादा हैं।',
   'editor.propDeclaration.attributes.valueTooLong': '{name} का मान बहुत लंबा है।',
   'editor.propDeclaration.codeType.multiline': 'कोड टाइप एक ही लाइन में, बिना सेमीकोलन के लिखें।',

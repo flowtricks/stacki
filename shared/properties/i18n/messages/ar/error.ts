@@ -138,6 +138,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'يحتاج Studio إلى Node.js 22.19 أو أحدث. حدّث Node.js وحاول مرة أخرى.',
   'error.studio.npmFailed': 'تعذّر على Studio إكمال npm {command}. راجع المخرجات أعلاه. لم يتم استبدال مشروعك.',
   'error.studio.releaseFileTooLarge': 'اختر ملف JSON لإصدار Studio أصغر من 32 ميغابايت.',
+  'error.studio.restoreNotReady': 'لا يوجد Studio أقدم لاستعادته هنا.',
+  'error.studio.upgradeNotReady': 'لم يعد بالإمكان ترقية Studio هنا. لا يوجد إصدار أحدث. أعد فتح الإعدادات للتحقق مرة أخرى.',
   'error.terminal.missingId': 'معرّف الطرفية مفقود.',
   'error.terminal.outsideProject': 'لا يمكن فتح الطرفية إلا داخل المشروع الحالي.',
   'error.thumbnails.devServerSlow': 'لم يبدأ خادم التطوير في الوقت المناسب',

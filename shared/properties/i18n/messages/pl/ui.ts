@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': 'Ponów',
   'ui.search': 'Szukaj…',
   'ui.shortcutRecorder.pressKeys': 'Naciśnij klawisze…',
+  'ui.shortcutTip': '{label} ({shortcut})', // same
   'ui.windowResize.e': 'Zmień rozmiar okna (prawo)',
   'ui.windowResize.n': 'Zmień rozmiar okna (góra)',
   'ui.windowResize.ne': 'Zmień rozmiar okna (prawy górny róg)',

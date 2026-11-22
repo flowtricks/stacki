@@ -11,7 +11,7 @@ export const messages = {
   'workspace.notifications.showFewer': '表示を減らす',
   'workspace.terminal.close': 'ターミナルを閉じる',
   'workspace.terminal.custom': 'カスタム…',
-  'workspace.terminal.customPlaceholder': '例ï¼bun run watch',
+  'workspace.terminal.customPlaceholder': '例：bun run watch',
   'workspace.terminal.customTitle': '新しいターミナルごとに1回実行',
   'workspace.terminal.hide': 'ターミナルを隠す（{shortcut}）',
   'workspace.terminal.loading': 'ターミナルを読み込み中',

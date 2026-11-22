@@ -64,13 +64,10 @@ export const messages = {
   'preview.image.alt.none': 'Ce composant n’affiche aucun texte alternatif issu d’une propriété : il n’y a rien à modifier ici.',
   'preview.image.close': 'Fermer',
   'preview.image.refused.bound': 'Cette image vient du code ({expression}), que cette fenêtre ne peut pas modifier. Modifiez-la dans le code source.',
-  'preview.image.refused.computed': 'Cette image est calculée dans {file} ({expression}) : aucune propriété ne la décide. Modifiez-la là.',
-  'preview.image.refused.fixed': 'Cette image est écrite dans {file} : elle est la même pour chaque instance. Ouvrez le composant pour la changer.',
   'preview.image.refused.loop':
     'Cette image est dessinée à chaque passage d’une boucle : un changement s’appliquerait à toutes. Modifiez plutôt les données de la boucle.',
   'preview.image.refused.outside': 'Cette image appartient à {file}, que ce fichier ne fait qu’intégrer. Ouvrez ce fichier pour la changer.',
   'preview.image.refused.unknown': 'L’éditeur ne peut pas savoir d’où vient cette image.',
-  'preview.image.refused.unreadable': 'L’éditeur ne peut pas lire {file} et ne sait donc pas d’où vient cette image.',
   'preview.image.title': 'Propriétés de {name}',
   'preview.image.titleFallback': 'Propriétés de l’image',
   'preview.inspector.hide': 'Masquer le panneau Style et réglages',

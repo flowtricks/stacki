@@ -226,6 +226,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Her varsayılan özniteliğin bir adı olmalı.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} bir öznitelik adı değil.',
   'editor.propDeclaration.attributes.restTaken': 'Bu bileşen diğer özniteliklerini zaten {name} olarak aktarıyor.',
+  'editor.propDeclaration.attributes.syntaxError': 'Öznitelikleri bağlamadan önce bu bileşenin frontmatter içindeki kodu düzeltin.',
   'editor.propDeclaration.attributes.tooMany': 'Çok fazla öznitelik var.',
   'editor.propDeclaration.attributes.valueTooLong': '{name} değeri çok uzun.',
   'editor.propDeclaration.codeType.multiline': 'Kod türünü noktalı virgül olmadan tek satırda yazın.',

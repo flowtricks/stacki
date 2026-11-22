@@ -223,6 +223,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': '각 기본 어트리뷰트에는 이름이 필요합니다.',
   'editor.propDeclaration.attributes.nameInvalid': '{name}은(는) 어트리뷰트 이름이 아닙니다.',
   'editor.propDeclaration.attributes.restTaken': '이 컴포넌트는 이미 나머지 어트리뷰트를 {name}(으)로 전달합니다.',
+  'editor.propDeclaration.attributes.syntaxError': 'frontmatter에 구문 오류가 있습니다. 속성을 연결하기 전에 이 컴포넌트의 frontmatter 코드를 수정하세요.',
   'editor.propDeclaration.attributes.tooMany': '어트리뷰트가 너무 많습니다.',
   'editor.propDeclaration.attributes.valueTooLong': '{name}의 값이 너무 깁니다.',
   'editor.propDeclaration.codeType.multiline': '코드 타입은 세미콜론 없이 한 줄로 작성하세요.',

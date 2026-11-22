@@ -239,6 +239,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Каждому атрибуту по умолчанию нужно имя.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} не является именем атрибута.',
   'editor.propDeclaration.attributes.restTaken': 'Этот компонент уже передаёт остальные атрибуты как {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'Исправьте код во frontmatter этого компонента, прежде чем подключать его атрибуты.',
   'editor.propDeclaration.attributes.tooMany': 'Слишком много атрибутов.',
   'editor.propDeclaration.attributes.valueTooLong': 'Значение {name} слишком длинное.',
   'editor.propDeclaration.codeType.multiline': 'Запишите тип в коде одной строкой, без точки с запятой.',

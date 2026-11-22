@@ -44,11 +44,14 @@ export const messages = {
   'git.branch.currentLabel': '{branch}, aktueller Branch',
   'git.branch.delete': '{branch} löschen',
   'git.branch.error.at': '„@“ ist Gits eigener Name für den aktuellen Branch.',
+  'git.branch.error.component': 'Ein Teil des Namens darf nicht mit „.“ beginnen und kein „..“ enthalten.',
+  'git.branch.error.conflict': '„{branch}“ ist bereits ein Branch, und ein Name darf nicht in einem anderen liegen oder ihn umschließen („a“ und „a/b“).',
   'git.branch.error.endsDot': 'Ein Name darf nicht auf „.“ enden.',
   'git.branch.error.endsSlash': 'Ein Name darf nicht auf „/“ enden.',
   'git.branch.error.exists': '{branch} existiert bereits.',
   'git.branch.error.existsCase':
     '{branch} existiert bereits, und Namen, die sich nur in der Groß- und Kleinschreibung unterscheiden, sind hier derselbe Branch.',
+  'git.branch.error.head': '„HEAD“ ist von Git reserviert.',
   'git.branch.error.lock': '„.lock“ ist von Git reserviert.',
   'git.branch.heading': 'Branches', // same
   'git.branch.indicator.detached': 'Detached HEAD', // same
@@ -137,6 +140,12 @@ export const messages = {
   'git.conflict.yourEdit': 'Deine Änderung',
   'git.conflict.yourEdits': 'Deine Änderungen',
   'git.done': 'Fertig',
+  'git.error.authFailed':
+    'GitHub hat deine Anmeldung nicht akzeptiert. Melde dich in den Veröffentlichungseinstellungen erneut an und versuche es noch einmal.',
+  'git.error.branchExists': 'Ein Branch mit diesem Namen existiert bereits.',
+  'git.error.branchNameConflict':
+    '„{branch}“ ist bereits ein Branch, und ein Branch-Name darf nicht in einem anderen liegen oder ihn umschließen. Wähle einen anderen Namen.',
+  'git.error.branchNameInvalid': 'Git akzeptiert diesen Namen nicht für einen Branch. Verwende Buchstaben, Zahlen, „-“, „_“, „.“ und „/“, ohne Leerzeichen.',
   'git.error.cloneNotAstro':
     'Heruntergeladen nach {path}, aber das Stammverzeichnis ist kein Astro-Projekt. Wähle mit „Projekt öffnen“ den Astro-Ordner darin aus.', // review
   'git.error.commitNothingPicked': 'Es wurde nichts zum Speichern ausgewählt – wähle mindestens eine Datei.',
@@ -144,6 +153,11 @@ export const messages = {
   'git.error.deleteSelf': '„{branch}“ ist der Branch, auf dem du bist – wechsle zuerst zu einem anderen.',
   'git.error.deleteTrunk': '„{branch}“ ist der Branch, zu dem alles zurückkehrt. Würdest du ihn löschen, hätte das Projekt keine Hauptlinie mehr.',
   'git.error.deleteWorktree': '„{branch}“ ist in einem anderen Worktree ({path}) ausgecheckt. Schließe oder wechsle diesen zuerst.', // review
+  'git.error.detachedHead': 'Du bist auf keinem Branch, daher gibt es nichts zu senden oder zu pullen. Wechsle zuerst zu einem Branch.',
+  'git.error.identityMissing':
+    'Git weiß noch nicht, wer du bist. Lege deinen Namen und deine E-Mail-Adresse fest (git config --global user.name und user.email) und speichere dann erneut.',
+  'git.error.locked':
+    'In diesem Projekt läuft noch ein anderer Git-Vorgang. Warte einen Moment und versuche es erneut; falls er nie endet, schließe andere Git-Werkzeuge.',
   'git.error.mergeBranchChanged': 'Der aktuelle Branch hat sich geändert. Öffne den Merge erneut, um ihn noch einmal zu prüfen.',
   'git.error.mergeChangedSinceReview': 'Der Merge hat sich seit der Prüfung geändert. Öffne ihn erneut, um das neue Ergebnis zu prüfen.',
   'git.error.mergeFailed': '„{branch}“ konnte nicht in „{into}“ gemergt werden.',
@@ -151,14 +165,33 @@ export const messages = {
   'git.error.mergeFilesChanged': 'Die Dateien mit Konflikten haben sich geändert. Öffne den Merge erneut, um sie noch einmal zu prüfen.',
   'git.error.mergeFinishFailed': 'Der Merge von „{branch}“ konnte nicht abgeschlossen werden.',
   'git.error.mergeSelf': '„{branch}“ ist der Branch, auf dem du bist – es gibt nichts, womit gemergt werden könnte.', // review
+  'git.error.messageTooLong': 'Diese Nachricht ist zu lang. Kürze sie und versuche es erneut.',
+  'git.error.noRemote': 'Mit diesem Projekt ist noch kein GitHub-Repository verbunden. Veröffentliche es zuerst.',
+  'git.error.notInstalled': 'Git ist nicht installiert oder Stacki findet es nicht. Installiere Git und öffne das Projekt dann erneut.',
+  'git.error.nothingToCommit': 'Es gibt nichts Neues zu speichern.',
+  'git.error.offline': 'GitHub war nicht erreichbar. Prüfe deine Internetverbindung und versuche es erneut.',
+  'git.error.operationInProgress':
+    'In diesem Projekt ist ein {operation} unfertig. Schließe ihn zuerst ab oder brich ihn ab (zum Beispiel mit „git {operation} --abort“) und versuche es dann erneut.',
   'git.error.originExists': 'Dieses Projekt hat bereits ein Remote namens origin. Es wurde nicht geändert.',
+  'git.error.outputTooLarge':
+    'Dieses Projekt hat mehr geänderte Dateien, als Stacki auflisten kann. Füge die generierten Ordner (wie node_modules) zu .gitignore hinzu.',
   'git.error.pullBranchChanged': 'Der aktuelle Branch hat sich geändert. Aktualisiere Git und versuche den Pull erneut.',
+  'git.error.pushRejected': 'GitHub hat Änderungen, die dieses Projekt noch nicht hat. Pulle zuerst und sende dann erneut – Stacki überschreibt sie nie.',
+  'git.error.refInvalid': 'Diese Version wurde nicht gefunden.',
   'git.error.restoreMissing': 'Diese Version enthält die Datei nicht – sie wurde erst später hinzugefügt.',
   'git.error.restoreUnsaved': 'Hier gibt es ungespeicherte Änderungen. Speichere sie zuerst – beim Zurückgehen würden sie überschrieben.',
+  'git.error.signingFailed':
+    'Git konnte den Commit nicht signieren. Prüfe deinen Signaturschlüssel oder schalte das Signieren mit „git config commit.gpgsign false“ aus.',
+  'git.error.statusTooLarge':
+    'Mehr als {count} Dateien haben sich geändert. Füge generierte Ordner (wie node_modules) zu .gitignore hinzu und öffne die Liste dann erneut.',
   'git.error.switchFailed': 'Der Wechsel zu „{branch}“ war nicht möglich.',
+  'git.error.timedOut':
+    'Git hat zu lange gebraucht und wurde gestoppt. Versuche es erneut; falls es wieder passiert, prüfe, ob das Netzwerk oder ein Commit-Hook langsam ist.',
   'git.error.unparkDirty': 'Deine Arbeit auf „{branch}“ bleibt zurückgestellt, weil dieser Branch lokale Änderungen hat.',
   'git.error.unparkFailed':
     'Deine Arbeit auf „{branch}“ bleibt zurückgestellt – sie konnte nicht automatisch zurückgeholt werden, weil sich der Branch inzwischen geändert hat. Sie ist sicher: Hole sie mit `git stash list` und `git stash pop` zurück.',
+  'git.error.unsafeDirectory':
+    'Git vertraut diesem Ordner nicht, weil er einem anderen Benutzer gehört ({path}). Führe „git config --global --add safe.directory {path}“ aus und öffne das Projekt dann erneut.',
   'git.file.changed': 'Geändert',
   'git.file.changed.inVersion': 'Geändert in dieser Version',
   'git.file.changed.why': 'Diese Datei hat Änderungen, die noch nicht gespeichert sind',

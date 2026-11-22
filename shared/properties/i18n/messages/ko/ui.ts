@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': '다시 시도',
   'ui.search': '검색…',
   'ui.shortcutRecorder.pressKeys': '키를 누르세요…',
+  'ui.shortcutTip': '{label} ({shortcut})', // same
   'ui.windowResize.e': '창 크기 조절(오른쪽)',
   'ui.windowResize.n': '창 크기 조절(위쪽)',
   'ui.windowResize.ne': '창 크기 조절(오른쪽 위)',

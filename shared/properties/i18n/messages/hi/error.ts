@@ -128,6 +128,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'Studio को Node.js 22.19 या नया संस्करण चाहिए। Node.js अपडेट करें और फिर कोशिश करें।',
   'error.studio.npmFailed': 'Studio npm {command} पूरा नहीं कर सका। ऊपर का आउटपुट देखें। आपका प्रोजेक्ट बदला नहीं गया।',
   'error.studio.releaseFileTooLarge': '32 MB से छोटी Studio रिलीज़ JSON फ़ाइल चुनें।',
+  'error.studio.restoreNotReady': 'यहाँ रीस्टोर करने के लिए कोई पिछला Studio नहीं है।',
+  'error.studio.upgradeNotReady': 'यहाँ Studio को अब अपग्रेड नहीं किया जा सकता। कोई नया रिलीज़ उपलब्ध नहीं है। दोबारा जाँचने के लिए सेटिंग्स फिर से खोलें।',
   'error.terminal.missingId': 'टर्मिनल आईडी नहीं मिली।',
   'error.terminal.outsideProject': 'टर्मिनल केवल मौजूदा प्रोजेक्ट के भीतर खुल सकता है।',
   'error.thumbnails.devServerSlow': 'डेव सर्वर समय पर शुरू नहीं हुआ',

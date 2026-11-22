@@ -230,6 +230,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Jedes Standardattribut braucht einen Namen.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} ist kein Attributname.',
   'editor.propDeclaration.attributes.restTaken': 'Diese Komponente gibt ihre anderen Attribute bereits als {name} weiter.',
+  'editor.propDeclaration.attributes.syntaxError': 'Behebe den Code im Frontmatter dieser Komponente, bevor du ihre Attribute verbindest.',
   'editor.propDeclaration.attributes.tooMany': 'Das sind zu viele Attribute.',
   'editor.propDeclaration.attributes.valueTooLong': 'Der Wert von {name} ist zu lang.',
   'editor.propDeclaration.codeType.multiline': 'Schreibe den Code-Typ in eine Zeile, ohne Semikolon.',
