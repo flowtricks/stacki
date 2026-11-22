@@ -9,7 +9,7 @@ import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { browserBoundary } from './browserBoundary';
-import { DEMO_ASSETS, DEMO_MANIFEST_ASSET, demoAssetName } from './demoAssets';
+import { DEMO_ASSETS, DEMO_FILE_BYTES_MAX, DEMO_MANIFEST_ASSET, demoAssetName } from './demoAssets';
 import { demoSharedYjs } from '../demo/sharedYjsPlugin';
 import { demoSharedTypeScript } from '../demo/sharedTypeScriptPlugin';
 import { studioClientOptions } from './studioClientBuild';
@@ -67,6 +67,10 @@ await build({
   absWorkingDir: studio,
   outfile: path.join(target, 'studio.js'),
   sourcemap: false,
+  // The interface catalogs of every language travel in this file. esbuild's default escapes each
+  // non-ASCII character as \\uXXXX, six bytes for what UTF-8 writes in two or three, which took the file
+  // past the site's per-file bound (DEMO_FILE_BYTES_MAX). A module script is always read as UTF-8.
+  charset: 'utf8',
   plugins: [demoSharedYjs, demoSharedTypeScript, ...(studioClientOptions.plugins ?? [])],
 });
 await build({
@@ -100,6 +104,8 @@ await mkdir(upload);
 const files = [];
 for (const name of DEMO_ASSETS) {
   const bytes = await readFile(path.join(target, name));
+  // stacki.build refuses the whole manifest for one file over its bound, after the release is public.
+  assert(bytes.length <= DEMO_FILE_BYTES_MAX, `Demo asset ${name} is ${bytes.length} bytes, over the site's ${DEMO_FILE_BYTES_MAX}`);
   const released = demoAssetName(name);
   await writeFile(path.join(upload, released), bytes);
   files.push({ name, asset: released, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
