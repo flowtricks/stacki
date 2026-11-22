@@ -3,6 +3,9 @@
 // The window holds window.avb, which reads and writes the person's files, so a script that was not shipped with
 // Stacki must never run in it. The policy says exactly that: scripts come from the app's own files, plus the inline
 // scripts of index.html by their SHA-256; no plugins; no <base> that would move where relative URLs resolve.
+// 'wasm-unsafe-eval' lets the page (and the dictation worker, which inherits this policy) compile WebAssembly:
+// the ONNX Runtime that runs Whisper on this computer is WebAssembly (docs/voice-engine.md). It permits
+// compiling wasm modules only, never JavaScript eval, and the modules still come from the app's own files.
 //
 // It restricts scripts only, on purpose. Styles, images, fonts and frames stay open: the Insert snapshots are srcdoc
 // frames, which inherit this policy, and draw the person's own site with its stylesheets, fonts and remote images.
@@ -24,7 +27,7 @@ const INLINE_SCRIPT = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
 /** The policy for `html`: the fixed directives, with one SHA-256 source per inline script the page holds. */
 export function rendererContentSecurityPolicy(html: string): string {
   const hashes = inlineScriptHashes(html);
-  const policy = [`script-src 'self'${hashes.map((hash) => ` '${hash}'`).join('')}`, "object-src 'none'", "base-uri 'self'"].join('; ');
+  const policy = [`script-src 'self' 'wasm-unsafe-eval'${hashes.map((hash) => ` '${hash}'`).join('')}`, "object-src 'none'", "base-uri 'self'"].join('; ');
   if (!policy.startsWith("script-src 'self'")) {
     throw new Error('rendererContentSecurityPolicy: scripts come from the app first');
   }
