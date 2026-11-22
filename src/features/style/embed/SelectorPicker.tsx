@@ -79,8 +79,8 @@ export function SelectorPicker({
   return (
     <>
       <div className="embed-editor_selectors">
-        {/* One grey well wraps the selector tags; clicking empty space reveals the add
-          input at its bottom (the input has no chrome of its own). A click in a gap
+        {/* One grey well wraps the selector tags; clicking empty space puts the caret in
+          the add input inline after the last chip (the input has no chrome of its own). A click in a gap
           between two chips is empty space too: the field has no caret between chips,
           because a selector is not a list the person orders (the Settings panel's
           class field is, ClassInput.tsx). */}
@@ -97,7 +97,11 @@ export function SelectorPicker({
               <span className="u-sr-only">{translate('styleModel.embed.picker.finding')}</span>
             </div>
           ) : undefined}
-          {!pending && (removal.visible.length || showInput || inline !== undefined) ? (
+          {/* The add field stays in the chip row whenever the row is drawn, focused or
+            not, so focusing and leaving it never changes the well's height: the panel
+            under the pointer stays put while a press that blurred it lands. Only while
+            the scan runs with nothing to show does the spinner stand alone. */}
+          {!pending && (removal.visible.length || showInput || inline !== undefined || !loading) ? (
             <SelectorChips
               chipsRef={removal.chipsRef}
               entries={removal.visible}
@@ -108,18 +112,17 @@ export function SelectorPicker({
               onDeselect={onDeselect}
               onRemove={removeChip}
             >
-              {showInput ? (
-                <SelectorAddField
-                  add={add}
-                  inputRef={field.inputRef}
-                  listRef={field.listRef}
-                  busy={busy}
-                  onFocus={field.onFocus}
-                  onBlur={field.onBlur}
-                  apply={field.apply}
-                  onCaretKey={field.onCaretKey}
-                />
-              ) : undefined}
+              <SelectorAddField
+                add={add}
+                inputRef={field.inputRef}
+                listRef={field.listRef}
+                busy={busy}
+                inTabOrder={showInput}
+                onFocus={field.onFocus}
+                onBlur={field.onBlur}
+                apply={field.apply}
+                onCaretKey={field.onCaretKey}
+              />
             </SelectorChips>
           ) : undefined}
         </div>
@@ -340,9 +343,9 @@ export function useAddSelectorField({
     return watch.dispose;
   }, []);
 
-  // The add input stays hidden until you click into the well (like Webflow's Style
-  // selector) — including while selectors are still loading, so the empty box shows
-  // as just the black well (with its min-height) rather than an add-selector field.
+  // Whether the well has been opened (clicked into, or ⌘Enter). The input is drawn
+  // either way, with no chrome and its placeholder hidden until focused, so the well
+  // looks the same and holds the same height; this only puts it in the tab order.
   const showInput = inputOpen;
   const filtered = useSelectorSuggestions({ selectors, suggestions, draft });
   const typed = typedDraft(draft, selectedElementTag());
@@ -384,8 +387,9 @@ export function useAddSelectorField({
     if (!wellMouseDown(event, { busy, inputRef }, restoreRef)) {
       return;
     }
-    if (showInput) {
-      inputRef.current?.focus();
+    const input = inputRef.current;
+    if (input) {
+      input.focus();
     } else {
       wantFocus.current = true;
       setInputOpen(true);
@@ -405,6 +409,7 @@ export function useAddSelectorField({
   };
   const onFocus = () => {
     pressWatch.current?.cancel();
+    setInputOpen(true);
     restoreRef.current = activeSelector || undefined;
     onDeselect();
     setOpen(true);
@@ -413,8 +418,9 @@ export function useAddSelectorField({
     setOpen(false);
     setDraft('');
     setHighlight(-1);
-    // Taking the input's row away moves the panel under the pointer, so it waits
-    // for the click that caused this blur to land on what was pressed.
+    // The field keeps its place in the chip row, so this moves nothing; it still
+    // waits for the click that caused this blur, as any change to the panel under
+    // the pointer must (createPressWatch, which also hands a missed click on).
     pressWatch.current?.whenPressEnds(() => setInputOpen(false));
     if (restoreRef.current) {
       onSelect(restoreRef.current);
@@ -643,8 +649,9 @@ function withHits(suggestion: SelectorSuggestion, indexes: readonly number[]): R
   return { ...suggestion, hits: indexes.map((index) => index + offset) };
 }
 
-// The chips, with the add field (children) after the last one, on a row of its
-// own. It never stands between two chips: see SelectorPicker.
+// The chips, with the add field (children) inline after the last one, wrapping to a
+// row of its own only when the last row has no room left. It never stands between
+// two chips: see SelectorPicker.
 export function SelectorChips({
   chipsRef,
   entries,
@@ -860,6 +867,7 @@ export function SelectorAddField({
   inputRef,
   listRef,
   busy,
+  inTabOrder,
   onFocus,
   onBlur,
   apply,
@@ -869,6 +877,8 @@ export function SelectorAddField({
   inputRef: React.RefObject<HTMLInputElement>;
   listRef: React.RefObject<HTMLDivElement>;
   busy: boolean;
+  /** False until the well is opened: Tab passed over the field when it was not drawn yet, and still does. */
+  inTabOrder: boolean;
   onFocus: () => void;
   onBlur: () => void;
   apply: (text: string) => void;
@@ -885,6 +895,7 @@ export function SelectorAddField({
         placeholder={translate('styleModel.embed.picker.addPlaceholder', { example: '.card:hover' })}
         spellCheck={false}
         disabled={busy}
+        tabIndex={inTabOrder ? 0 : -1}
         role="combobox"
         aria-expanded={showList}
         aria-autocomplete="list"
@@ -894,8 +905,8 @@ export function SelectorAddField({
         onFocus={onFocus}
         // On blur the half-typed selector is abandoned: clicking away from it is
         // not a way of adding one (Enter and the suggestion list are), and text
-        // left sitting in a collapsed-looking field reads as applied. Clear it,
-        // collapse the input, and re-select whatever was active before focus.
+        // left sitting in a field without its caret reads as applied. Clear it and
+        // re-select whatever was active before focus.
         onBlur={onBlur}
         onChange={(event) => {
           add.setDraft(event.target.value);

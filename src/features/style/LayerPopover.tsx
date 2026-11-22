@@ -41,7 +41,7 @@ export default function LayerPopover({
   const scrolls = usePopoverOverflow(boxRef);
   // Read once, at mount, so the popover has its real width for the very first
   // layout — the flip decision below measures a height that depends on it.
-  const [span] = useState(() => placedSpan ?? panelSpan(anchorElement));
+  const [span] = useState(() => placedSpan ?? openerSpan(anchorElement) ?? panelSpan(anchorElement));
   const top = usePopoverTop(ref, anchorElement);
   return (
     <Popup
@@ -60,11 +60,26 @@ export default function LayerPopover({
         visibility: top === undefined ? 'hidden' : 'visible',
       }}
     >
-      <div ref={boxRef} className={'embed-editor_layer-popover-box u-surface-surface' + (scrolls ? ' is-scrolling' : '')}>
+      {/* `style-panel-surface` gives everything in here the panel's control reset (styles.css): a
+          popover portals to <body>, past the panel host's reset, and the app's global button rule
+          (centred inline-flex) centred each layer row's icon and label in a code chip's list. */}
+      <div ref={boxRef} className={'embed-editor_layer-popover-box style-panel-surface u-surface-surface' + (scrolls ? ' is-scrolling' : '')}>
         {children}
       </div>
     </Popup>
   );
+}
+
+// The span of the layer popover the anchor sits in, when it sits in one: a row's editor opened from a
+// list that is itself in a popover (a code chip's Transitions list) opens over that list, where the
+// person is looking, rather than over the Style panel's column somewhere else in the window.
+function openerSpan(anchorElement: HTMLElement): { readonly left: number; readonly width: number } | undefined {
+  const opener = anchorElement.closest<HTMLElement>('.embed-editor_layer-popover');
+  if (opener === null) {
+    return undefined;
+  }
+  const bounds = opener.getBoundingClientRect();
+  return bounds.width > 0 ? { left: bounds.left, width: bounds.width } : undefined;
 }
 
 // The popover's top edge: directly below the anchor row, or flipped above it

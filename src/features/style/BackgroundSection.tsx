@@ -157,7 +157,7 @@ function ClippingRow(props: Props) {
   );
 }
 
-const clipOptions = (translate: Translator) => [
+export const clipOptions = (translate: Translator) => [
   { value: 'border-box', label: translate('style.backgroundSection.clipNone') },
   { value: 'padding-box', label: translate('style.backgroundSection.clipPadding') },
   { value: 'content-box', label: translate('style.backgroundSection.clipContent') },
@@ -175,7 +175,7 @@ export function layerSourceProp(read: Props['read']): 'background-image' | 'back
 }
 
 // A row of the layer list: its thumbnail and its label.
-function layerRow(layers: BgLayer[], i: number, translate: Translator) {
+export function layerRow(layers: BgLayer[], i: number, translate: Translator) {
   const layer = layers[i];
   if (layer === undefined) {
     throw new Error(`Background layer ${i} is missing`);

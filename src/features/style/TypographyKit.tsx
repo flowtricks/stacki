@@ -284,7 +284,8 @@ export function SegBar(props: SegBarProps) {
   // lags a beat behind the write (and won't sync into the focused input), so the seed
   // drives the field until the user edits it or picks a segment.
   const [seed, setSeed] = useSelectorState<string | undefined>(undefined);
-  const customMode = forceCustom || !supported.has(current);
+  // No value (a code chip's create chip) is the bar with nothing selected, not the custom field.
+  const customMode = forceCustom || (current !== '' && !supported.has(current));
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);

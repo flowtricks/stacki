@@ -232,7 +232,10 @@ export function TextShadowsRow(props: Props) {
         busy={busy}
         ariaLabel={translate('style.textStrokeShadow.textShadows')}
         onOpen={(i, element) => {
-          setOpenIndex((current) => (current === i ? undefined : i));
+          // A click on the open row closes it; on a row marked open with no editor showing yet (one
+          // just added, whose row had not been drawn to anchor to), it opens, as useLayerRows does.
+          const showing = openIndex === i && anchorElement === element;
+          setOpenIndex(showing ? undefined : i);
           setAnchorElement(element);
         }}
         onReorder={edit.reorder}

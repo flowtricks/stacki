@@ -144,7 +144,7 @@ const check = (what, condition, detail) => {
       openFilePath: '/project/src/pages/about.astro',
       openFileKind: 'page',
     });
-    await loadComponentDocs(() => {});
+    await loadComponentDocs(new Set(), () => {});
     const statsStyle = {
       id: 'n1',
       kind: 'raw',
@@ -153,7 +153,7 @@ const check = (what, condition, detail) => {
       inner: '.stat { font-weight: 800 }',
     };
     setHost({ nodes: [statsStyle], openFilePath: statsPath, openFileKind: 'component' });
-    const { docs } = await loadComponentDocs(() => {});
+    const { docs } = await loadComponentDocs(new Set(), () => {});
     const keys = docs.map((document) => document.source.key);
     check('an opened component lists only its own block', keys.length === 1 && keys[0] === `node:${statsPath}:n1`, JSON.stringify(keys));
     setHost({ nodes: [], astroFiles: [], openFilePath: undefined, openFileKind: undefined });

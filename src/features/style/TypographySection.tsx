@@ -28,7 +28,7 @@ import { StrokeRow, TextShadowsRow } from './TextStrokeShadow';
 
 export { type Props, PropLabel, GroupLabel, LiveInput, StackedField, type Seg, SegBar } from './TypographyKit';
 
-function alignSegments(translate: Translator): readonly Seg[] {
+export function alignSegments(translate: Translator): readonly Seg[] {
   return [
     { value: 'left', icon: <AlignLeftIcon />, label: translate('style.typographySection.alignLeft') },
     { value: 'center', icon: <AlignCenterIcon />, label: translate('style.typographySection.alignCenter') },
@@ -82,7 +82,7 @@ function AlignRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, o
   );
 }
 
-function decorSegments(translate: Translator): readonly Seg[] {
+export function decorSegments(translate: Translator): readonly Seg[] {
   return [
     { value: 'none', icon: <DecorNoneIcon />, label: translate('style.typographySection.decorNone') },
     { value: 'line-through', icon: <DecorStrikeIcon />, label: translate('style.typographySection.decorStrike') },
@@ -151,13 +151,13 @@ function DecorRow(props: Props) {
 
 // ─────────────── Stacked segmented cells (italicize / capitalize / direction) ───────────────
 
-function italicSegments(translate: Translator): readonly Seg[] {
+export function italicSegments(translate: Translator): readonly Seg[] {
   return [
     { value: 'normal', icon: <FontStyleRegularIcon />, label: translate('style.typographySection.styleRegular') },
     { value: 'italic', icon: <FontStyleItalicIcon />, label: translate('style.typographySection.styleItalic') },
   ];
 }
-function transformSegments(translate: Translator): readonly Seg[] {
+export function transformSegments(translate: Translator): readonly Seg[] {
   return [
     { value: 'none', icon: <DecorNoneIcon />, label: translate('style.typographySection.decorNone') },
     { value: 'uppercase', icon: <TransformCapsIcon />, label: translate('style.typographySection.transformUpper') },
@@ -165,7 +165,7 @@ function transformSegments(translate: Translator): readonly Seg[] {
     { value: 'lowercase', icon: <TransformLowercaseIcon />, label: translate('style.typographySection.transformLower') },
   ];
 }
-function directionSegments(translate: Translator): readonly Seg[] {
+export function directionSegments(translate: Translator): readonly Seg[] {
   return [
     { value: 'ltr', icon: <DirectionLTRIcon />, label: translate('style.typographySection.directionLtr') },
     { value: 'rtl', icon: <DirectionRTLIcon />, label: translate('style.typographySection.directionRtl') },

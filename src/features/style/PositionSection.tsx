@@ -211,7 +211,7 @@ function stepLiveFieldKey(event: ReactKeyboardEvent<HTMLInputElement>): string |
 
 // ─────────────────────────── Position dropdown ───────────────────────────
 
-const POSITION_PRESETS: ReadonlyArray<{ value: string; label: string; icon: ReactNode }> = [
+export const POSITION_PRESETS: ReadonlyArray<{ value: string; label: string; icon: ReactNode }> = [
   // The labels are the CSS position keywords, which designers read untranslated.
   { value: 'static', label: 'Static', icon: <CloseIcon /> }, // i18n-ignore: CSS keyword.
   { value: 'relative', label: 'Relative', icon: <RelativeIcon /> }, // i18n-ignore: CSS keyword.

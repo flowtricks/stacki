@@ -48,7 +48,8 @@ export type SegmentedIconControlProps = {
 
 export function SegmentedIconControl({ prop, ariaLabel, segments, current, busy, setProp, liveSetProp, clearProp }: SegmentedIconControlProps) {
   const supported = new Set(segments.map((segment) => segment.value));
-  const customMode = !supported.has(current);
+  // No value (a code chip's create chip) is the bar with nothing selected, not the custom field.
+  const customMode = current !== '' && !supported.has(current);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { inputRef, requestFocus } = useCustomFocus({ customMode, busy });

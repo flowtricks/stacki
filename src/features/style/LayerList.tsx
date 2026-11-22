@@ -1,6 +1,6 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { drag as centralDrag, eye as centralEye, eyeOff as centralEyeOff, trashCanSimple as centralTrashCanSimple } from '../../ui/central/centralGeometry';
-import { useState } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 
@@ -13,6 +13,14 @@ const GripIcon = centralIcon(centralDrag);
 const EyeIcon = centralIcon(centralEye);
 const EyeOffIcon = centralIcon(centralEyeOff);
 const TrashIcon = centralIcon(centralTrashCanSimple);
+
+/**
+ * Whether a list with exactly one row opens that row's editor by itself, as it is drawn: a code chip's
+ * popover (CodeChips.tsx) asks for it, so pressing the chip of a one-layer value shows that layer's
+ * fields at once rather than a one-row list to press again. The Style panel leaves it off: there the
+ * list is always on screen and opening an editor is the person's choice.
+ */
+export const LayerListOpensSingleRow = createContext(false);
 
 export type LayerListProps = {
   /** Number of rows (top layer first). */
@@ -33,6 +41,7 @@ export type LayerListProps = {
 export default function LayerList({ count, busy, ariaLabel, renderRow, onOpen, onReorder, onRemove, isHidden, onToggleHidden }: LayerListProps) {
   const [dragFrom, setDragFrom] = useState<number | undefined>(undefined);
   const [dragOver, setDragOver] = useState<number | undefined>(undefined);
+  const listRef = useSingleRowOpen(count, onOpen);
   if (!count) {
     return undefined;
   }
@@ -41,7 +50,7 @@ export default function LayerList({ count, busy, ariaLabel, renderRow, onOpen, o
     setDragOver(undefined);
   };
   return (
-    <ul className="embed-editor_bg-layers" aria-label={ariaLabel}>
+    <ul ref={listRef} className="embed-editor_bg-layers" aria-label={ariaLabel}>
       {Array.from({ length: count }, (_, index) => {
         const { preview, label } = renderRow(index);
         const hidden = isHidden?.(index) ?? false;
@@ -72,6 +81,27 @@ export default function LayerList({ count, busy, ariaLabel, renderRow, onOpen, o
       })}
     </ul>
   );
+}
+
+// Opens the one row's editor once, the first time the list holds exactly one row (as it is drawn, or
+// as the first layer is added to an empty one), when LayerListOpensSingleRow asks for it. Once per
+// list: closing that editor leaves it closed.
+function useSingleRowOpen(count: number, onOpen: LayerListProps['onOpen']) {
+  const opensSingleRow = useContext(LayerListOpensSingleRow);
+  const listRef = useRef<HTMLUListElement>(null);
+  const opened = useRef(false);
+  useLayoutEffect(() => {
+    if (!opensSingleRow || opened.current || count !== 1) {
+      return;
+    }
+    const row = listRef.current?.querySelector<HTMLElement>(':scope > li');
+    if (row === null || row === undefined) {
+      return;
+    }
+    opened.current = true;
+    onOpen(0, row);
+  }, [opensSingleRow, count, onOpen]);
+  return listRef;
 }
 
 type LayerRowProps = {

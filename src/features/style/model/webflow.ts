@@ -279,6 +279,11 @@ function styleSources(): EmbedSource[] {
 // to cross — opening a component swaps the model, and the sources are read
 // from whatever is open.
 export async function scanPage(): Promise<PageScan> {
+  return scanPageNow();
+}
+
+/** scanPage without the wait: the tree and the sources are read from the model in memory. */
+export function scanPageNow(): PageScan {
   const { parentByKey, childrenByKey, elementByKey } = buildTreeMaps();
   return {
     parentByKey,
@@ -319,6 +324,11 @@ function buildTreeMaps() {
     }
   });
   return { parentByKey, childrenByKey, elementByKey };
+}
+
+/** A source's document parsed from text already in hand, the same way a read parses it. */
+export function documentFromCode(source: EmbedSource, code: string): EmbedDocument {
+  return documentForSource(source, code);
 }
 
 function documentForSource(source: EmbedSource, code: string): EmbedDocument {

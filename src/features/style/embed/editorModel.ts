@@ -107,11 +107,21 @@ export function streamDocs(pageScan: EmbedScan, onPartial: ((content: Content) =
 // page's <style> and a second, disk-read copy of the component after drilling in,
 // so edits went to blocks the open file does not hold (issue #72). Listing is
 // in-memory work; only the reads touch disk, and those always ran.
-export async function loadComponentDocs(onDocument: (embedDocument: EmbedDocument) => void): Promise<{ docs: EmbedDocument[]; errors: Content['errors'] }> {
+//
+// `readKeys` are the sources the page pass is already reading. Both passes list the same
+// sources (webflow.ts scanPage and scanAllComponents), so without it every stylesheet and
+// component was read twice per scan, and the merge then dropped the second copy.
+export async function loadComponentDocs(
+  readKeys: ReadonlySet<string>,
+  onDocument: (embedDocument: EmbedDocument) => void,
+): Promise<{ docs: EmbedDocument[]; errors: Content['errors'] }> {
   const docs: EmbedDocument[] = [];
   const errors: Content['errors'] = [];
   await scanAllComponents(async (embeds) => {
-    const result = await loadEmbedDocs(embeds, onDocument);
+    const result = await loadEmbedDocs(
+      embeds.filter((source) => !readKeys.has(source.key)),
+      onDocument,
+    );
     docs.push(...result.docs);
     errors.push(...result.errors);
   });

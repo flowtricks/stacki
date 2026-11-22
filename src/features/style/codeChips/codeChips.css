@@ -1,0 +1,107 @@
+/* The CSS chips in code editors (codeChipsExtension.ts). A variable is the Style panel's own purple
+   chip (embedEditor.css, .embed-editor_varconnect-token); these are the small previews that sit in
+   front of an easing, a clip-path, a shadow layer, a gradient, a colour or a layered property's list,
+   and the plus where a value is still to be written. A fill, never a border, marks them, as every
+   other control in the app is marked. */
+.code-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Level with the monospace text it sits in, the way the variable chip is. */
+  vertical-align: middle;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  margin-inline-end: 4px;
+  padding: 0;
+  border-radius: var(--radius-sm, 3px);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-secondary, var(--text-dim));
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast, 0.12s);
+}
+.code-chip:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--color-text-primary, var(--text));
+}
+/* A value still to be written: the plus is blue, the colour of every "add" in the panel, and stays
+   blue on hover so it never reads as disabled. */
+.code-chip.is-create {
+  background: color-mix(in srgb, var(--color-info, #4c9aff) 18%, transparent);
+  color: var(--color-info, #4c9aff);
+}
+.code-chip.is-create:hover {
+  background: color-mix(in srgb, var(--color-info, #4c9aff) 28%, transparent);
+  color: var(--color-info, #4c9aff);
+}
+.code-chip-glyph {
+  display: inline-flex;
+}
+/* The easing's own curve and the clip shape's glyph, at chip size. */
+.code-chip svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.code-chip-swatch {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+/* A variable chip in code sits in the line like a word, so it takes the editor's line height. */
+.cm-content .embed-editor_varconnect-token {
+  line-height: 1.2;
+}
+
+/* The clip-path editor in a chip's popover (CodeChips.tsx, ClipPathChipBody): as compact as the Style
+   panel's. Its canvas sits in a 12px band, enough for a 12px handle centred on the square's edge, where
+   the panel's 16% band left empty space above and below; the square is at most 240px; the code box is
+   its content's height; and the whole is at most min(480px, the window less 24px), with only the
+   body scrolling. Two classes each, to outrank the editor's own sheet, which loads after this one. */
+.code-chip-clip {
+  display: flex;
+  flex-direction: column;
+  max-height: min(480px, calc(100vh - 24px - 2 * var(--space-4, 16px)));
+}
+.code-chip-clip .embed-editor_clip-modal-head {
+  padding-block: var(--space-2, 8px);
+  padding-inline: 0;
+}
+.code-chip-clip .embed-editor_clip-modal-body {
+  padding: var(--space-3, 12px) 0 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.code-chip-clip .clip-path_component {
+  gap: var(--space-3, 12px);
+  flex-grow: 0;
+}
+.code-chip-clip .clip-path_canvas-wrap {
+  padding: 12px;
+}
+.code-chip-clip .clip-path_canvas {
+  width: min(100%, 240px);
+  margin-inline: auto;
+}
+.code-chip-clip .clip-path_code {
+  min-height: 0;
+  flex-grow: 0;
+}
+
+/* A keyword chip's popover (CodeChips.tsx, KeywordChipEditor): the panel's button group, then the
+   longer options as menu rows (ui/menu.css), the list scrolling on its own past a dozen rows. */
+.code-chip-keywords {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+.code-chip-keyword-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}

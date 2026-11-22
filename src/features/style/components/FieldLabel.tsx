@@ -8,6 +8,7 @@ import { useInheritedSource } from '../model/computedStyle';
 import InheritedPropertyLabel from './InheritedPropertyLabel';
 import { panelBounds } from '../model/panelBox';
 import { useHoverTip } from './CssPropertyTip';
+import { useShortcutTip } from '../../../ui/shortcutTip';
 import type { ScrubHandlers } from './useScrub';
 
 const ResetGlyph = centralIcon(centralArrowRotateCounterClockwise, 12);
@@ -110,9 +111,13 @@ function ClearableFieldLabel(props: Props) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        disabled={disabled}
+        // Inert while the panel saves, but never natively disabled: `button:disabled` dims every
+        // button to 0.4 (controls.css), so each commit's busy flag flashed the blue pill grey and
+        // back (a slider drag's release, liveLabelStable.test.js). The click handler and the
+        // drag handle below refuse a press instead; the scrub checks busy itself (useScrub).
+        aria-disabled={disabled ? true : undefined}
         title={nativeTitle}
-        onMouseDown={onMouseDown}
+        onMouseDown={disabled ? undefined : onMouseDown}
         {...scrubProps}
         onClick={onLabelClick}
       >
@@ -237,6 +242,8 @@ function FieldLabelMenu({
   onClose: () => void;
 }) {
   const translate = useTranslate();
+  // The Option-click gesture is told in the row's tooltip after a rest, not printed in the row.
+  const resetTip = useShortcutTip(resetLabel, translate('styleModel.shared.optionClick'));
   return (
     <Popup
       mode="popover"
@@ -256,10 +263,13 @@ function FieldLabelMenu({
           event.preventDefault();
           onReset();
         }}
+        {...resetTip.props}
+        // A gesture (Option-click), not a key chord, so there is nothing for aria-keyshortcuts to name.
+        aria-keyshortcuts={undefined}
       >
         <ResetGlyph className="u-field-label-menu-icon" />
         <span>{resetLabel}</span>
-        <span className="u-field-label-menu-shortcut">{translate('styleModel.shared.optionClick')}</span>
+        {resetTip.tip}
       </button>
       {menuNote ? <div className="u-field-label-menu-note">{typeof menuNote === 'function' ? menuNote(onClose) : menuNote}</div> : undefined}
     </Popup>

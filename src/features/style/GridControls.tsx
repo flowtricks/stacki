@@ -20,6 +20,7 @@ import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICO
 import { GridDirectionControl, GridContentControl, CountField } from './GridFlowControls';
 import { displayOf, displayText, parseImportant, withImportant } from './model/styleDisplay';
 import { useHoverPreview } from './connectFieldHelpers';
+import { TOOLTIP_DELAY_MS } from '../../ui/delayedTooltip';
 
 // The grid controls in the Layout section (shown when Display is grid). Mirrors
 // Webflow: Columns/Rows track counts, Direction (+ dense), Align (justify-items X /
@@ -463,7 +464,7 @@ function ConfigureGridButton({ busy, customTracks, onOpen }: { busy: boolean; cu
         aria-label={translate('style.gridControls.configureGrid')}
         onMouseEnter={() => {
           clearGearTimer();
-          gearTimer.current = window.setTimeout(() => setGearTip(true), 500);
+          gearTimer.current = window.setTimeout(() => setGearTip(true), TOOLTIP_DELAY_MS);
         }}
         onMouseLeave={() => {
           clearGearTimer();

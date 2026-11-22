@@ -31,6 +31,9 @@ const { ROOT, repoPath, stubSources } = require('../../helpers/sources.js');
 const VARIABLES_STUB = {
   'src/features/style/model/webflow.ts': () => ({
     contents: `
+      // The CSS Code section's chips read the panel's keyword option tables, whose modules import these.
+      export async function getProjectFontFamilies() { return []; }
+      export async function getImageAssets() { return []; }
       export async function streamProjectVariables(onAdd) {
         onAdd({ name: 'accent', collection: 'Sizes', group: '', value: '2rem', binding: 'var(--accent)', type: 'Size' });
         onAdd({ name: 'brand', collection: 'Sizes', group: '', value: '1rem', binding: 'var(--brand)', type: 'Size' });

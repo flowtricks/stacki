@@ -38,6 +38,10 @@ const VARIABLES_STUB = {
         onAdd({ name: 'ink', collection: 'Sizes', group: '', value: '#000', binding: 'var(--ink)', type: 'Color' });
         return [];
       }
+      // The style panel now reaches the font fields, which ask for the project's families.
+      export async function getProjectFontFamilies() {
+        return [];
+      }
     `,
     loader: 'js',
   }),

@@ -37,6 +37,11 @@ export interface ChipEditorOptions<Chip> {
   readonly onChipClick?: (chip: Chip, element: HTMLElement) => void;
   /** Adds anything to the pill beyond its label (an icon). Called once per drawn pill. */
   readonly decorate?: (chip: Chip, element: HTMLElement) => void;
+  /**
+   * After an edit removes a chip: the indexes (into `remaining`, in document order) of chips that cannot stand
+   * without the removed ones. They go in the same transaction, so one undo brings all of them back.
+   */
+  readonly orphans?: (remaining: readonly Chip[]) => readonly number[];
 }
 
 export interface ChipEditor<Chip> {
@@ -51,6 +56,10 @@ export interface ChipEditor<Chip> {
   /** A transaction that replaces the whole draft with `segments`. */
   readonly replaceSegments: (state: EditorState, segments: readonly Segment<Chip>[]) => TransactionSpec;
   readonly chipCount: (state: EditorState) => number;
+  /** Every chip with the position of its placeholder, in document order. */
+  readonly chipRanges: (state: EditorState) => readonly { readonly from: number; readonly chip: Chip }[];
+  /** A transaction that draws every chip again from `describe`, for a look that changed without the draft changing (a chip turned invalid). */
+  readonly redraw: (state: EditorState) => TransactionSpec;
 }
 
 export interface InsertOptions {
@@ -58,6 +67,10 @@ export interface InsertOptions {
   readonly to?: number;
   /** Text typed after the chip; a space by default, so the next word does not touch it. */
   readonly trailing?: string;
+  /** Text typed before the chip; none by default. */
+  readonly leading?: string;
+  /** Where the caret goes: after the chip (the default, as typing it would), or where it was (an edit made from a popover). */
+  readonly caret?: 'after' | 'keep';
 }
 
 // Marks a transaction that inserts placeholders on purpose.
@@ -113,6 +126,7 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
   const addChip = StateEffect.define<{ readonly pos: number; readonly chip: Chip }>({
     map: (value, changes) => ({ pos: changes.mapPos(value.pos), chip: value.chip }),
   });
+  const redrawChips = StateEffect.define<undefined>();
   // Which chip a decoration stands for. Mapping a decoration set through changes keeps the
   // same Decoration objects, so this finds the payload without reading untyped decoration specs.
   const chipOfDecoration = new WeakMap<Decoration, Chip>();
@@ -134,7 +148,27 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
         // history group) carries a restore effect for a chip the whole group ends without: it must not decorate whatever
         // character now sits at that position, or a pill would stand over text and the draft would claim a chip it does not hold.
         if (effect.is(addChip) && transaction.newDoc.sliceString(effect.value.pos, effect.value.pos + 1) === CHIP_CHARACTER) {
-          next = next.update({ add: [decorationFor(effect.value.chip).range(effect.value.pos, effect.value.pos + 1)] });
+          // A chip put in place of another (the placeholder replaced by a new one) keeps the old decoration through the
+          // mapping; it must go, or the place would hold two chips and read back as the old one.
+          const position = effect.value.pos;
+          next = next.update({
+            filter: (from) => from !== position,
+            filterFrom: position,
+            filterTo: position + 1,
+            add: [decorationFor(effect.value.chip).range(position, position + 1)],
+          });
+        }
+        if (effect.is(redrawChips)) {
+          // Same chips at the same places, each drawn from a fresh `describe`.
+          const ranges: ReturnType<Decoration['range']>[] = [];
+          next.between(0, transaction.newDoc.length, (from, to, decoration) => {
+            const chip = chipOfDecoration.get(decoration);
+            if (chip !== undefined) {
+              ranges.push(decorationFor(chip).range(from, to));
+            }
+          });
+          assert(ranges.length <= CHIP_COUNT_MAX, 'chip editor: a redraw keeps the chip bound');
+          next = Decoration.set(ranges);
         }
       }
       return next;
@@ -172,6 +206,38 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
     return stray ? [] : transaction;
   });
 
+  // A person's edit that removes a chip also removes the chips that depended on it (and the space typed after each),
+  // as one change: undo then restores the whole group together. Undo, redo and deliberate insertions are left alone:
+  // they set a draft that was already whole.
+  const removeOrphans = EditorState.transactionFilter.of((transaction) => {
+    const { orphans } = options;
+    if (orphans === undefined || !transaction.docChanged || transaction.annotation(chipInsertion) === true) {
+      return transaction;
+    }
+    if (transaction.isUserEvent('undo') || transaction.isUserEvent('redo')) {
+      return transaction;
+    }
+    const before = chipsOf(transaction.startState);
+    const remaining = before.filter(({ from }) => transaction.changes.mapPos(from, 1, MapMode.TrackAfter) !== null);
+    if (remaining.length === before.length) {
+      return transaction;
+    }
+    const dropped = orphans(remaining.map(({ chip }) => chip));
+    if (dropped.length === 0) {
+      return transaction;
+    }
+    const newDocument = transaction.newDoc;
+    const changes = dropped.map((index) => {
+      const entry = remaining[index];
+      assert(entry !== undefined, 'chip editor: an orphan index names a remaining chip');
+      const from = transaction.changes.mapPos(entry.from, 1);
+      assert(newDocument.sliceString(from, from + 1) === CHIP_CHARACTER, 'chip editor: an orphan still sits on its placeholder');
+      const to = newDocument.sliceString(from + 1, from + 2) === ' ' ? from + 2 : from + 1;
+      return { from, to };
+    });
+    return [transaction, { changes, sequential: true }];
+  });
+
   const restoreOnUndo = invertedEffects.of((transaction) => {
     const restored: StateEffect<{ readonly pos: number; readonly chip: Chip }>[] = [];
     for (const { from, chip } of chipsOf(transaction.startState)) {
@@ -203,7 +269,7 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
     return documentToSegments({ text, chips });
   };
 
-  const extension: Extension = [chipField, refuseStrayPlaceholders, restoreOnUndo, copyLabels];
+  const extension: Extension = [chipField, refuseStrayPlaceholders, removeOrphans, restoreOnUndo, copyLabels];
 
   const createState = (segments: readonly Segment<Chip>[], extensions: readonly Extension[] = []): EditorState => {
     const draft = segmentsToDocument(segments);
@@ -230,6 +296,8 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
     readSegments,
     createState,
     chipCount: (state) => chipsOf(state).length,
+    chipRanges: (state) => chipsOf(state),
+    redraw: () => ({ effects: redrawChips.of(undefined) }),
     insertChip: (state, chip, insertOptions = {}) => {
       if (chipsOf(state).length >= CHIP_COUNT_MAX) {
         return undefined;
@@ -240,14 +308,17 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
       assert(from <= to, 'insertChip: the range runs forward');
       assert(to <= state.doc.length, 'insertChip: the range is inside the document');
       const trailing = insertOptions.trailing ?? ' ';
-      return {
-        changes: { from, to, insert: CHIP_CHARACTER + trailing },
-        effects: addChip.of({ pos: from, chip }),
-        selection: { anchor: from + 1 + trailing.length },
+      const leading = insertOptions.leading ?? '';
+      assert(!leading.includes(CHIP_CHARACTER), 'insertChip: the leading text holds no placeholder');
+      const chipAt = from + leading.length;
+      const spec = {
+        changes: { from, to, insert: leading + CHIP_CHARACTER + trailing },
+        effects: addChip.of({ pos: chipAt, chip }),
         annotations: [chipInsertion.of(true)],
         userEvent: 'input',
-        scrollIntoView: true,
       };
+      // Without a selection the caret is mapped through the change: it stays where the person left it.
+      return insertOptions.caret === 'keep' ? spec : { ...spec, selection: { anchor: chipAt + 1 + trailing.length }, scrollIntoView: true };
     },
     replaceSegments: (state, segments) => {
       const draft = segmentsToDocument(segments);
