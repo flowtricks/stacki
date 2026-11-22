@@ -1,12 +1,13 @@
 // Goal: spoken commands fire when they are commands and not when they are words in a sentence.
-// "send" alone sends; "please send it to the server" is text. "new line" breaks a line anywhere;
+// "send" alone sends; "please send it to the server" is text. a break ("new line", "next line", "line break",
+// "new paragraph") at a phrase edge is one blank line and is text inside a sentence;
 // "scratch that" alone takes back the last piece, and inside a phrase drops what came before it.
 // Methodology: each command whole, inside a sentence, with punctuation and capitals the
 // recognizer adds, and the empty phrase; then the history that backs "delete that" when the box
 // was typed in after the dictation.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseVoiceCommands } from '#dist/shared/properties/voice/voiceCommands.js';
+import { parseVoiceCommands, withParagraphBreak } from '#dist/shared/properties/voice/voiceCommands.js';
 import { pushDictated, takeBackLast } from '#dist/shared/properties/voice/voiceHistory.js';
 import { VOICE_LIMITS } from '#dist/shared/properties/voice/voiceLimits.js';
 
@@ -24,17 +25,35 @@ test('the same words inside a sentence are text, never a command', () => {
   assert.deepEqual(parseVoiceCommands('stop listening to me'), [{ kind: 'insert', text: 'stop listening to me' }]);
 });
 
-test('new line and new paragraph break inside a phrase', () => {
-  assert.deepEqual(parseVoiceCommands('first item new line second item'), [
-    { kind: 'insert', text: 'first item' },
-    { kind: 'newline', count: 1 },
-    { kind: 'insert', text: 'second item' },
-  ]);
-  assert.deepEqual(parseVoiceCommands('new paragraph'), [{ kind: 'newline', count: 2 }]);
-  assert.deepEqual(parseVoiceCommands('done new line'), [
-    { kind: 'insert', text: 'done' },
-    { kind: 'newline', count: 1 },
-  ]);
+const BREAK = { kind: 'newline', count: 2 } as const;
+
+test('every break phrase alone, or at a phrase edge, is one paragraph break, whatever the capitals or the mark', () => {
+  for (const phrase of ['new line', 'New line.', 'next line', 'Line break!', 'new paragraph', 'Newline']) {
+    assert.deepEqual(parseVoiceCommands(phrase), [BREAK], phrase);
+  }
+  assert.deepEqual(parseVoiceCommands('done new line'), [{ kind: 'insert', text: 'done' }, BREAK]);
+  assert.deepEqual(parseVoiceCommands('New line. See how this will work.'), [BREAK, { kind: 'insert', text: 'See how this will work.' }]);
+});
+
+test('a break inside a sentence is text, not a command', () => {
+  assert.deepEqual(parseVoiceCommands('add a new line of code'), [{ kind: 'insert', text: 'add a new line of code' }]);
+  assert.deepEqual(parseVoiceCommands('first item new line second item'), [{ kind: 'insert', text: 'first item new line second item' }]);
+  assert.deepEqual(parseVoiceCommands('the line break is wrong'), [{ kind: 'insert', text: 'the line break is wrong' }]);
+});
+
+test('breaks said one after another make one break', () => {
+  assert.deepEqual(parseVoiceCommands('new line new line'), [BREAK]);
+  assert.deepEqual(parseVoiceCommands('new line new paragraph next line'), [BREAK]);
+  assert.deepEqual(parseVoiceCommands('done new line next line'), [{ kind: 'insert', text: 'done' }, BREAK]);
+});
+
+test('a paragraph break ends the text in exactly one blank line, trailing spaces gone, never three newlines', () => {
+  assert.equal(withParagraphBreak('This is a test.'), 'This is a test.\n\n');
+  assert.equal(withParagraphBreak('This is a test.   '), 'This is a test.\n\n');
+  assert.equal(withParagraphBreak('This is a test.\n'), 'This is a test.\n\n');
+  assert.equal(withParagraphBreak('This is a test.\n\n'), 'This is a test.\n\n', 'already broken: unchanged');
+  assert.equal(withParagraphBreak('This is a test. \n\n\n'), 'This is a test.\n\n');
+  assert.equal(withParagraphBreak(''), '', 'an empty box gets no blank lines');
 });
 
 test('scratch that inside a phrase drops the words said before it', () => {

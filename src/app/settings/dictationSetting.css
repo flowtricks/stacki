@@ -1,0 +1,121 @@
+/* Settings → AI → Dictation (DictationSetting.tsx). Fills, never borders. */
+.dictation-setting-status {
+  margin-inline-end: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.dictation-setting-problem {
+  margin: 0;
+}
+.dictation-setting-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  font-size: 12px;
+}
+.dictation-setting-facts dt {
+  color: var(--text-faint);
+}
+.dictation-setting-facts dd {
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.dictation-setting-path {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+.dictation-words-chips {
+  margin-block: 4px 8px;
+}
+.dictation-words-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-block-end: 8px;
+}
+.dictation-words-suggestions-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-inline-end: 4px;
+}
+.dictation-words-suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 2px;
+  padding-inline: 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  font-size: 11px;
+}
+.dictation-snippets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dictation-snippets-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.dictation-snippets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dictation-snippet {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  padding-inline: 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  font-size: 12px;
+}
+.dictation-snippet-trigger {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dictation-snippet-expansion {
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dictation-words-dialog {
+  inline-size: min(420px, calc(100vw - 32px));
+}
+.dictation-words-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dictation-words-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.dictation-words-field textarea {
+  resize: vertical;
+}
+.dictation-words-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}

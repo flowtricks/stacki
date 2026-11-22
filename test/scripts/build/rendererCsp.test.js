@@ -28,8 +28,15 @@ test('the policy allows the app’s scripts and each inline script by its hash, 
   const second = 'window.x = 1;';
   const html = page(CHARSET, `<script>${first}</script><script type="module" src="./assets/index.js"></script><script>${second}</script>`);
   assert.deepEqual(inlineScriptHashes(html), [sha(first), sha(second)], 'a script with a src is not hashed');
-  assert.equal(rendererContentSecurityPolicy(html), `script-src 'self' '${sha(first)}' '${sha(second)}'; object-src 'none'; base-uri 'self'`);
-  assert.equal(rendererContentSecurityPolicy(page(CHARSET)), "script-src 'self'; object-src 'none'; base-uri 'self'", 'no inline script, no hash');
+  assert.equal(
+    rendererContentSecurityPolicy(html),
+    `script-src 'self' 'wasm-unsafe-eval' '${sha(first)}' '${sha(second)}'; object-src 'none'; base-uri 'self'`,
+  );
+  assert.equal(
+    rendererContentSecurityPolicy(page(CHARSET)),
+    "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'self'",
+    'no inline script, no hash',
+  );
 });
 
 test('the policy goes right after the charset, before any script', async () => {
@@ -60,7 +67,7 @@ test('the built page carries the policy, and allows each of its inline scripts b
   const policies = [...html.matchAll(/<meta http-equiv="Content-Security-Policy" content="([^"]*)" \/>/g)].map((match) => match[1]);
   assert.equal(policies.length, 1, 'exactly one policy');
   const policy = policies[0];
-  assert.match(policy, /^script-src 'self'( 'sha256-[A-Za-z0-9+/=]+')*; object-src 'none'; base-uri 'self'$/);
+  assert.match(policy, /^script-src 'self' 'wasm-unsafe-eval'( 'sha256-[A-Za-z0-9+/=]+')*; object-src 'none'; base-uri 'self'$/);
   assert.ok(html.indexOf('Content-Security-Policy') < html.indexOf('<script'), 'the policy comes before every script');
   const inline = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
   assert.ok(inline.length > 0, 'the startup mark is an inline script');

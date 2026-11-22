@@ -17,6 +17,8 @@ export const VOICE_LIMITS = {
   dictionaryWrittenCharsMax: 120,
   /** Dictated pieces remembered so "delete that" can take the last one back. */
   historyMax: 32,
+  /** How long the platform may take to say whether its on-device speech model is installed before the answer counts as no. */
+  engineDetectMsMax: 2_000,
   /** Bars the waveform draws. */
   waveformBarsMax: 64,
   /** Presses at least this long are hold-to-talk: letting go stops; a shorter press latches hands-free. */

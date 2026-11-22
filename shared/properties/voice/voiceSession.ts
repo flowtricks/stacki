@@ -4,7 +4,7 @@
 //
 //   idle ──press──▶ starting ──started──▶ listening ──stop──▶ stopping ──ended──▶ idle
 //
-// One button, two ways to use it, the way the best dictation tools do it (docs/voice-competitors.md):
+// One button, two ways to use it, as dictation tools commonly offer:
 //   - hold: press and keep pressing; letting go ends the session (push to talk);
 //   - latch: a short press keeps listening hands-free; the next press ends it.
 // `reduceVoice` is pure: it takes the state and an event and returns the next state and the

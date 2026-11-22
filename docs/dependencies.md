@@ -72,6 +72,28 @@ the main process starts to import belongs back under Runtime.
 `<textarea>` has no syntax model, incremental parsing, or transactions. **Cost:** the largest
 renderer dependency family; split per language so only what is used ships.
 
+### `@huggingface/transformers`
+
+**Does:** runs OpenAI's Whisper on this computer for composer dictation, in a Web Worker
+(`src/features/ai/voice/whisperWorker.ts`): audio features, tokenizer, the decoder loop, and ONNX
+inference through its `onnxruntime-web` dependency (MIT). Pinned exactly (4.3.2, Apache-2.0).
+**Why not the platform:** no browser or Electron API turns speech into text offline; Chromium's Web
+Speech API needs Google's online service, which Electron lacks (docs/voice-engine.md). **Cost:** a
+599 kB lazy chunk plus the 26.9 MB ONNX Runtime WebAssembly (6.7 MB gzipped), both fetched only when
+a dictation session starts; a one-time model download to the app data folder (568.5 MB for the default Best tier, 338.4 MB Balanced, 100.0 MB Fast); about one core
+for 2.5 s per decode. `npm install` also fetches `onnxruntime-node` (about 300 MB unpacked), which
+Stacki never loads or packages.
+
+### `onnxruntime-web`
+
+**Does:** runs Silero VAD, the neural voice detector that decides which audio Whisper may hear
+(`src/features/ai/voice/vadWorker.ts`), so dictation never writes words for silence, a fan or a
+keyboard. Pinned to the exact build `@huggingface/transformers` depends on (MIT), so npm installs
+one copy and the worker reuses the WebAssembly file Whisper already ships. **Why not the platform:**
+no browser API runs an ONNX model; Transformers.js does not expose its runtime's sessions and has no
+Silero pipeline. **Cost:** nothing new shipped beyond a small worker chunk; the 2.2 MB model is
+downloaded and verified with the Whisper model.
+
 ### `@sanity/icons`
 
 **Does:** draws the icon a site's Sanity schema gives each document type (`icon: UserIcon`) in
