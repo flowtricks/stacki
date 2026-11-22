@@ -101,16 +101,21 @@ type SegmentedFieldProps = {
   busy: boolean;
   onCommit: (value: string, important: boolean) => void;
   ariaLabel?: string;
+  /**
+   * What an unset bar highlights: the page's computed value (the panel, about the selected element),
+   * or only what is written (a code chip, whose declaration is no element's).
+   */
+  highlight?: 'computed' | 'authored';
 };
 
-export default function SegmentedField({ value, important, options, prop, fallback, busy, onCommit, ariaLabel }: SegmentedFieldProps) {
+export default function SegmentedField({ value, important, options, prop, fallback, busy, onCommit, ariaLabel, highlight = 'computed' }: SegmentedFieldProps) {
   const current = value.trim().toLowerCase();
   const supported = new Set(options.map((option) => option.value));
   // The bar represents a listed value with no !important; anything else is custom.
   const customMode = !((supported.has(current) || !current) && !important);
   const active = useHighlight(
     current,
-    prop,
+    highlight === 'computed' ? prop : '',
     options.map((option) => option.value),
     fallback,
   );

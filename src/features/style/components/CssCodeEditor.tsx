@@ -9,6 +9,7 @@ import { cssEditorIndentExtensions } from './cssEditorIndent';
 import { lockedEdgeExtensions, type CodeEditorLockedEdges } from '../../../ui/codeEditorLockedEdges';
 import { type CodeVariableScope } from '../model/codeVariableScope';
 import { useCodeVariables } from './CodeVariables';
+import { useCodeChips } from '../codeChips/CodeChips';
 import './CssCodeEditor.css';
 
 type CodeEditorLanguage = 'css';
@@ -189,6 +190,11 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const codeVariables = useCodeVariables(variables, { readOnly });
   const variableExtension = codeVariables.extension;
+  // A rule or a declaration list is the CSS Code section's; it draws chips. A single value (the
+  // clip-path editor's own code) is already inside the editor a chip would open, and draws none.
+  // The typed chooser is this editor's own (useCodeVariables above), so the chips leave it out.
+  const codeChips = useCodeChips(variables.kind === 'declarations' ? 'stylesheet' : undefined, { typing: 'elsewhere' });
+  const chipExtension = codeChips.extension;
   const prefixLength = lockedEdges?.prefixLength ?? 0;
   const suffixLength = lockedEdges?.suffixLength ?? 0;
   const extensions = useMemo(() => {
@@ -199,18 +205,19 @@ export function CodeEditor({
     const locked = lockedEdgeExtensions({ prefixLength, suffixLength });
     const wrapping = lineOverflow === 'wrap' ? [EditorView.lineWrapping] : [];
     if (!highlights.length) {
-      return [...codeEditorExtensions[language], ...wrapping, variableExtension, ...locked, ...selectionExtensions, ...extraExtensions];
+      return [...codeEditorExtensions[language], ...wrapping, variableExtension, chipExtension, ...locked, ...selectionExtensions, ...extraExtensions];
     }
     return [
       ...codeEditorExtensions[language],
       ...wrapping,
       variableExtension,
+      chipExtension,
       ...locked,
       highlightDecorations(highlights),
       ...selectionExtensions,
       ...extraExtensions,
     ];
-  }, [language, lineOverflow, onSelectionChange, prefixLength, suffixLength, tokenHighlights, value.length, variableExtension, extraExtensions]);
+  }, [language, lineOverflow, onSelectionChange, prefixLength, suffixLength, tokenHighlights, value.length, variableExtension, chipExtension, extraExtensions]);
 
   // The frame holds the bind dot in the editor's top-left corner, shown on
   // hover as it is over every value field (embed-editor_varconnect's rules).
@@ -232,6 +239,7 @@ export function CodeEditor({
         aria-label={ariaLabel}
       />
       {codeVariables.overlay}
+      {codeChips.overlay}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { code as centralCode } from '../../ui/central/centralGeometry';
 import { createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
 import type { Contributor } from './model/resolved';
 import { withImportant } from './model/styleDisplay';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -133,9 +134,9 @@ function ProvenanceItem({
       {tip !== undefined &&
         tooltip.value !== undefined &&
         createPortal(
-          <div className="rail-tooltip below" role="tooltip" style={tooltip.value}>
+          <FittedTooltip role="tooltip" anchor={tooltip.value}>
             {tip}
-          </div>,
+          </FittedTooltip>,
           tooltipHost(undefined),
         )}
     </li>

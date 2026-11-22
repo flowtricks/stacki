@@ -52,6 +52,7 @@ Totals: 53 files, 77 controls: 30 took variables before, 26 converted, 21 exempt
 | `BordersSection.tsx` | border-style bar | Yes (converted) |  |
 | `BordersSection.tsx` | border-width, border-color | Yes (before) |  |
 | `BoxShadowsRow.tsx` | shadow inset / outset | No | a keyword inside one shadow of a list |
+| `codeChips/CodeChips.tsx` | a code chip’s gradient type and keyword buttons | No | they edit code, where a variable is its own chip (the variable picker) |
 | `CustomValueEditor.tsx` | the large value editor, any property | Yes (before) |  |
 | `DecorationPopover.tsx` | text-decoration-skip-ink | Yes (converted) |  |
 | `DecorationPopover.tsx` | text-decoration line / style facets | No | facets of the text-decoration shorthand, written together |

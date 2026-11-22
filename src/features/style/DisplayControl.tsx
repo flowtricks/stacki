@@ -67,6 +67,11 @@ const TOOLTIPS: Record<string, MessageKey> = {
 
 const cap = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
+/** The menu's name for a display value: its full label, or the keyword capitalised. */
+export function displayMenuLabel(value: string): string {
+  return FULL[value] ?? cap(value);
+}
+
 /** True when the display value maps onto the segmented bar (not a free value). */
 export function isDisplayValueSupported(value: string): boolean {
   return SUPPORTED.has(value.trim().toLowerCase());
@@ -158,7 +163,9 @@ export default function DisplayControl({
   const current = value.trim().toLowerCase();
   // The bar only represents a supported token *without* !important. Anything else
   // — contents, unset, var(--x), or a supported token made !important — is custom.
-  const segmented = isDisplayValueSupported(current) && !important;
+  // No value at all (a code chip's create chip, before anything is written) is the bar with no
+  // segment selected, never the custom field: there is nothing custom to show.
+  const segmented = (current === '' || isDisplayValueSupported(current)) && !important;
   const customMode = !segmented;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -304,8 +311,10 @@ function SegmentTooltipBubble({ tooltip }: { tooltip: SegmentTooltip }) {
 // The bar: Block / Flex / Grid, then the 4th slot.
 function DisplaySegments({ current, busy, tooltip, pick }: { current: string; busy: boolean; tooltip: SegmentTooltip; pick: (next: string) => void }) {
   const isPrimary = PRIMARY.some((value) => value === current);
+  // With no value, no segment is selected and the 4th shows None.
+  const isFourth = current !== '' && !isPrimary;
   // The 4th segment shows the chosen inline/none value, or None as the default.
-  const fourth = isPrimary ? 'none' : current;
+  const fourth = isFourth ? current : 'none';
   return (
     <>
       <SegmentPill />
@@ -330,8 +339,8 @@ function DisplaySegments({ current, busy, tooltip, pick }: { current: string; bu
       <button
         type="button"
         role="radio"
-        aria-checked={!isPrimary}
-        className={`embed-editor_display-seg ${!isPrimary ? 'is-selected' : ''}`}
+        aria-checked={isFourth}
+        className={`embed-editor_display-seg ${isFourth ? 'is-selected' : ''}`}
         disabled={busy}
         onClick={() => {
           tooltip.endHover();

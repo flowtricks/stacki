@@ -5,7 +5,8 @@
 // Goal: the Style panel's selector field behaves like a tag input whose caret
 // stays after the last chip. A click anywhere in the field's empty space —
 // a gap between two chips included — opens the add field at its normal place,
-// on its own row after the chips, never between them; a class typed there goes
+// inline after the chips, never between them; a press on another control while
+// the field is focused clicks that control the first time (0b); a class typed there goes
 // last among the element's classes; ← and → do not move a caret among chips;
 // Backspace with nothing typed takes off the last chip; Delete on a selected
 // chip takes off the class or attribute it names, wherever the element's tag
@@ -104,11 +105,13 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   const bundle = require(bundlePath);
   const { caretAtPoint, caretStep, clampCaret, chipAtCaret, chipPart, attributeChipName } = bundle;
 
+  // The press watch hands held work to a 0ms timer; this waits past it.
+  const tick = () => new Promise((resolve) => dom.window.setTimeout(resolve, 5));
+
   // 0. A press that blurs the field: the collapse waits for the click to land.
   {
     const { createPressWatch } = bundle;
     const fire = (type) => dom.window.dispatchEvent(new dom.window.Event(type));
-    const tick = () => new Promise((resolve) => dom.window.setTimeout(resolve, 5));
     const watch = createPressWatch(dom.window);
     let runs = 0;
     const work = () => {
@@ -140,6 +143,62 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
     fire('mouseup');
     await tick();
     check('nothing runs after unmount', runs === 3, String(runs));
+  }
+
+  // 0b. The reported case: with the selector field focused, Flex needed two or three
+  // clicks. The field's own blur reached the window's capture listener and ended the
+  // press at mouse down, so the held layout change ran before mouse up; and a change
+  // the blur makes anyway (the restored selector redraws the panel) moved the button
+  // from under the pointer, so the browser clicked nothing. Here the button moves the
+  // way that redraw moves it: mouse up lands on another element where it stood.
+  {
+    const { createPressWatch } = bundle;
+    const page = dom.window.document;
+    const field = page.createElement('input');
+    const flex = page.createElement('button');
+    const spacer = page.createElement('div');
+    page.body.append(field, spacer, flex);
+    flex.getBoundingClientRect = () => ({ left: 100, right: 140, top: 200, bottom: 220, width: 40, height: 20 });
+    let clicks = 0;
+    flex.addEventListener('click', () => {
+      clicks += 1;
+    });
+    const mouse = (element, type, x, y) => element.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y }));
+    const watch = createPressWatch(dom.window);
+    let collapsed = 0;
+    // A press on Flex while the field has the caret: the field blurs mid-press, and
+    // its blur handler hands the layout change to the watch, as SelectorPicker does.
+    const pressFlexFromField = (releaseOn, x, y) => {
+      const before = collapsed;
+      field.focus();
+      mouse(flex, 'mousedown', 120, 210);
+      field.blur();
+      watch.whenPressEnds(() => {
+        collapsed += 1;
+      });
+      check('the field’s own blur does not end the press', collapsed === before, `${before} → ${collapsed}`);
+      mouse(releaseOn, 'mouseup', x, y);
+    };
+    pressFlexFromField(spacer, 120, 210);
+    await tick();
+    check('released where Flex stood, Flex is clicked once', clicks === 1, String(clicks));
+    check('and the held change runs after it', collapsed === 1, String(collapsed));
+    pressFlexFromField(flex, 120, 210);
+    flex.click(); // The browser's own click: mouse up came up over Flex.
+    await tick();
+    check('released over Flex, the browser’s click is the only one', clicks === 2, String(clicks));
+    pressFlexFromField(spacer, 400, 400);
+    await tick();
+    check('released away from Flex, the press is cancelled and clicks nothing', clicks === 2, String(clicks));
+    check('and the held change still runs', collapsed === 3, String(collapsed));
+    mouse(flex, 'mousedown', 120, 210);
+    mouse(spacer, 'mouseup', 120, 210);
+    await tick();
+    check('a press that blurred nothing is left to the browser', clicks === 2, String(clicks));
+    watch.dispose();
+    field.remove();
+    spacer.remove();
+    flex.remove();
   }
 
   // 1a. Gaps from a click. Two rows: chips 0–2 on the first (y 0–20), 3–4 on the second (y 30–50).
@@ -384,10 +443,16 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
     }
     return element.parentElement?.lastElementChild === element;
   };
+  // The field is drawn before the well is opened, so opening and leaving it never
+  // changes the well's height; Tab still passes over it, as when it was not drawn.
+  const resting = document.querySelector('.embed-editor_selector-add');
+  check('the add field is drawn in the chip row before the well is opened', resting !== null && fieldAtEnd(), slot()?.outerHTML);
+  check('and is out of the tab order until then', resting?.tabIndex === -1, String(resting?.tabIndex));
   await act(async () => {
     well.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, clientX: 95, clientY: 10 }));
   });
   const input = () => document.querySelector('.embed-editor_selector-add');
+  check('the opened field is the same element, in the tab order', input() === resting && input()?.tabIndex === 0, String(input()?.tabIndex));
   check('a click between .hero_title and .text-style-h1 opens the field', input() !== null);
   check('with the field after the last chip, not in that gap', fieldAtEnd(), slot()?.outerHTML);
   check('and not the narrow, between-chips kind', document.querySelector('.embed-editor_selector-field')?.classList.contains('is-between') === false);

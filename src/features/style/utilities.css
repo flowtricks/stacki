@@ -1628,13 +1628,6 @@ body.is-scrubbing * {
   stroke-linejoin: round;
 }
 
-.u-field-label-menu-shortcut {
-  justify-self: end;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-}
-
 /* Extra note under the reset item (e.g. which selector overrides this value). */
 .u-field-label-menu-note {
   padding: var(--space-3) var(--space-4);

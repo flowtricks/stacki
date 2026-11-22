@@ -94,7 +94,8 @@ export function chipTrigger(options: ChipTriggerOptions): Extension {
   );
 }
 
-export type PickerKey = 'up' | 'down' | 'choose' | 'close';
+/** `previousTab`/`nextTab` (Cmd or Ctrl with `[` / `]`) switch a picker's filter tabs; a picker without tabs leaves them to the editor. */
+export type PickerKey = 'up' | 'down' | 'choose' | 'close' | 'previousTab' | 'nextTab';
 
 export interface PickerKeymapOptions {
   /** Read each time a key arrives: keys pass through to the editor whenever this is false. */
@@ -117,6 +118,8 @@ export function pickerKeymap(options: PickerKeymapOptions): Extension {
       { key: 'Enter', run: route('choose') },
       { key: 'Tab', run: route('choose') },
       { key: 'Escape', run: route('close') },
+      { key: 'Mod-[', run: route('previousTab') }, // i18n-ignore: a CodeMirror key binding, not text.
+      { key: 'Mod-]', run: route('nextTab') }, // i18n-ignore: a CodeMirror key binding, not text.
     ]),
   );
 }

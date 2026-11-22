@@ -17,15 +17,20 @@ import {
   scanHasElement,
   serializeElementId,
   scanPage,
+  scanPageNow,
   syncNodeDocuments,
   webflowApi,
+  embedWritesStarted,
+  loadEmbedDocs,
+  type EmbedDocument,
 } from '../model/webflow';
 import { elementSelectionKey } from '../model/webflowElement';
 import { assert } from '../../../../shared/core/assert';
 import { onCanvasRendered } from '../../../editor/canvasQuery';
 import type { ElementSnapshot } from '../model/styleTypes';
 import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
-import { readScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
+import { readScanSnapshot, scanSnapshotKey, type ScanSnapshot } from './scanSnapshotCache';
+import { filledDocuments, memoryContent, type MemoryContent } from './memoryContent';
 import {
   placeholdersFor,
   readDesignerState,
@@ -249,6 +254,42 @@ export function useDesignerSync(
   return { syncFromDesigner };
 }
 
+/**
+ * Draw an element from its last settled answer (scanSnapshotCache.ts) when one is remembered
+ * under the CSS the panel holds now, and say whether it was. Its match target goes with it, so
+ * an edit made before the canvas's fresh answer lands is made against this element.
+ */
+function useRememberedSnapshot(editorRefs: ReturnType<typeof useEditorRefs>, setScan: ReturnType<typeof useScanState>['setScan']) {
+  const { classListRef, docsRef, primedRef, settledElementKeyRef, targetRef } = editorRefs;
+  // Each ref is listed, never the refs object: useEditorRefs builds that object afresh on every
+  // render, and a callback that changed identity with it re-ran the selection effects on every
+  // render, which asked the canvas again on every render.
+  return useCallback(
+    (elementKey: string): boolean => {
+      const remembered = rememberedSnapshotFor(docsRef.current, elementKey);
+      if (remembered === undefined) {
+        return false;
+      }
+      settledElementKeyRef.current = elementKey;
+      targetRef.current = remembered.target;
+      classListRef.current = [...remembered.classList];
+      primedRef.current = remembered.primed;
+      setScan(remembered.scan);
+      return true;
+    },
+    [classListRef, docsRef, primedRef, settledElementKeyRef, targetRef, setScan],
+  );
+}
+
+function rememberedSnapshotFor(docs: readonly EmbedDocument[], elementKey: string): ScanSnapshot | undefined {
+  if (elementKey === '') {
+    return undefined;
+  }
+  const remembered = readScanSnapshot(scanSnapshotKey(elementKey, docs));
+  assert(remembered === undefined || remembered.scan.settled, 'rememberedSnapshotFor: a remembered answer is settled');
+  return remembered;
+}
+
 // Forget the previous element's picks when another element is selected.
 export function useElementReset(
   editorRefs: ReturnType<typeof useEditorRefs>,
@@ -256,9 +297,10 @@ export function useElementReset(
   selectionState: ReturnType<typeof useSelectionState>,
   nativeState: ReturnType<typeof useNativeState>,
 ) {
-  const { classListRef, docsRef, primedRef, selectedElementKeyRef, settledElementKeyRef, targetRef } = editorRefs;
+  const { selectedElementKeyRef, settledElementKeyRef } = editorRefs;
   const { setQuickSnapshot, setScan } = scanState;
-  const { pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey, tokenIdentityRef } = selectionState;
+  const paintRemembered = useRememberedSnapshot(editorRefs, setScan);
+  const { pendingDefaultRef, setContextStale, setSelectedSelectorText, setSelectedTokens, setStateKey, tokenIdentityRef } = selectionState;
   const { nativeIdentityRef, nativeModelRef, setNativeModel } = nativeState;
 
   // A new element must not inherit the previous one's picked selector. Reset the
@@ -271,6 +313,8 @@ export function useElementReset(
         return;
       }
       selectedElementKeyRef.current = elementKey;
+      // The query the person was in belongs to the previous element's list until this one's is known.
+      setContextStale(true);
       setSelectedSelectorText(undefined);
       setSelectedTokens([]);
       setStateKey('');
@@ -279,14 +323,9 @@ export function useElementReset(
       // answer at once (scanSnapshotCache.ts); the canvas's fresh answer follows and
       // replaces it only where it differs. Its match target goes with it, so an edit
       // made before that answer lands is made against this element, not the last one.
-      const remembered = elementKey ? readScanSnapshot(scanSnapshotKey(elementKey, docsRef.current)) : undefined;
-      if (remembered !== undefined) {
-        settledElementKeyRef.current = elementKey;
-        targetRef.current = remembered.target;
-        classListRef.current = [...remembered.classList];
-        primedRef.current = remembered.primed;
-        setScan(remembered.scan);
-      } else {
+      // The panel's docs are already those of the file open now when it opened from memory
+      // (resolveSelection), so an element of a file opened before is found here too.
+      if (!paintRemembered(elementKey)) {
         settledElementKeyRef.current = '';
         // The chips are derived from these two models, and both are refilled by
         // async reads. Left alone they keep listing the PREVIOUS element's
@@ -307,15 +346,13 @@ export function useElementReset(
       pendingDefaultRef.current = true;
     },
     [
-      classListRef,
-      docsRef,
       nativeIdentityRef,
       nativeModelRef,
+      paintRemembered,
       pendingDefaultRef,
-      primedRef,
       selectedElementKeyRef,
       settledElementKeyRef,
-      targetRef,
+      setContextStale,
       setNativeModel,
       setQuickSnapshot,
       setScan,
@@ -382,25 +419,85 @@ export function useScanSelection(
   applyResolveHook: ReturnType<typeof useApplyResolve>,
   backgroundRefreshHook: ReturnType<typeof useBackgroundRefresh>,
 ) {
-  const { contentRef, seqRef } = editorRefs;
-  const { setPhase, setQuickSnapshot, setScanningMore, setStatus } = scanState;
-  const { rebuildAndStore } = contentRebuild;
+  const { contentRef, seqRef, settledElementKeyRef } = editorRefs;
+  const { setPhase, setQuickSnapshot, setScan, setScanningMore, setStatus } = scanState;
+  const { rebuildAndStore, storeContent } = contentRebuild;
   const { applyResolve } = applyResolveHook;
   const { backgroundRefresh } = backgroundRefreshHook;
+  const paintRemembered = useRememberedSnapshot(editorRefs, setScan);
+
+  // The content for the file open now, from memory, synchronously, when every source is in
+  // memory (memoryContent.ts): called before the selection resets, so the reset finds an
+  // element seen before in this file and draws it in the same render. Undefined when the
+  // cached content already serves the element, or a source needs a read.
+  const prepareSelection = useCallback(
+    (element: unknown, options: { readonly force?: boolean }): Content | undefined => {
+      const cached = contentRef.current;
+      if (cached !== undefined && options.force !== true) {
+        if (cached.scan.elementByKey.get(serializeElementId(element)) === element) {
+          return undefined;
+        }
+        const sameFile = contentForCurrentTree(cached, scanPageNow(), element);
+        if (sameFile !== undefined) {
+          contentRef.current = sameFile;
+          return sameFile;
+        }
+      }
+      const fromMemory = memoryContent();
+      if (fromMemory.missing.length > 0 || !scanHasElement(fromMemory.scan, element)) {
+        return undefined;
+      }
+      return storeContent(memoryContentOf(fromMemory, []), { fromMemory: true });
+    },
+    [contentRef, storeContent],
+  );
+
+  // The same with the few sources memory lacks read first (the page a component was opened
+  // from, a stylesheet new to the list). Undefined when too many are missing (the first scan)
+  // or a read failed or raced a write: the full rebuild then reads, streams and reports.
+  const contentWithReads = useCallback(
+    async (element: unknown): Promise<Content | undefined> => {
+      const fromMemory = memoryContent();
+      if (fromMemory.missing.length > MEMORY_MISSING_READS_MAX || !scanHasElement(fromMemory.scan, element)) {
+        return undefined;
+      }
+      const writes = embedWritesStarted();
+      const read = await loadEmbedDocs([...fromMemory.missing]);
+      if (read.errors.length > 0 || writes !== embedWritesStarted()) {
+        return undefined;
+      }
+      assert(read.docs.length === fromMemory.missing.length, 'contentWithReads: every missing source was read');
+      return storeContent(memoryContentOf(fromMemory, read.docs), { fromMemory: true });
+    },
+    [storeContent],
+  );
 
   const scanSelection = useCallback(
-    async (element: unknown, seq: number, options: { force?: boolean }) => {
+    async (element: unknown, seq: number, options: { force?: boolean }, prepared: Content | undefined) => {
       // Read a fast snapshot (tag + classes) straight off the element so the chips
       // render right away, before the (slower) embed scan produces the full model.
       showSourceSnapshot(element, seq, seqRef, setQuickSnapshot);
 
       const cached = contentRef.current;
-      const reusable = await reuseSelectedContent(cached, element, options);
+      let reusable = prepared ?? (await reuseSelectedContent(cached, element, options));
       if (seq !== seqRef.current) {
         return;
       }
       if (reusable && reusable !== cached) {
         contentRef.current = reusable;
+      }
+      // Another file opened, or the list of stylesheets changed: build from memory, reading
+      // only what memory lacks, rather than reading every stylesheet again before the chips.
+      if (reusable === undefined) {
+        reusable = await contentWithReads(element);
+        if (seq !== seqRef.current) {
+          return;
+        }
+        // The docs changed under the reset's look-up: an element seen before is drawn now.
+        const elementKey = elementSelectionKey(element);
+        if (reusable !== undefined && settledElementKeyRef.current !== elementKey) {
+          paintRemembered(elementKey);
+        }
       }
 
       if (reusable) {
@@ -438,9 +535,33 @@ export function useScanSelection(
         setStatus(error instanceof Error ? error.message : String(error));
       }
     },
-    [applyResolve, backgroundRefresh, rebuildAndStore, contentRef, seqRef, setPhase, setQuickSnapshot, setScanningMore, setStatus],
+    [
+      applyResolve,
+      backgroundRefresh,
+      contentWithReads,
+      paintRemembered,
+      rebuildAndStore,
+      contentRef,
+      seqRef,
+      settledElementKeyRef,
+      setPhase,
+      setQuickSnapshot,
+      setScanningMore,
+      setStatus,
+    ],
   );
-  return { scanSelection };
+  return { prepareSelection, scanSelection };
+}
+
+// The most sources a switch reads before drawing (contentWithReads). A switch from memory misses
+// one or two (the page a component is open on); past this it is a first scan, which streams.
+const MEMORY_MISSING_READS_MAX = 8;
+
+// Memory's content as the panel's Content, once its missing documents are read.
+function memoryContentOf(fromMemory: MemoryContent, read: readonly EmbedDocument[]): Content {
+  const docs = filledDocuments(fromMemory, read);
+  assert(docs.length === fromMemory.scan.embeds.length, 'memoryContentOf: every source has its document');
+  return { scan: fromMemory.scan, docs, rules: [], errors: [], embedCount: 0, componentEmbedCount: 0, partial: false };
 }
 
 function showSourceSnapshot(element: unknown, seq: number, seqRef: { readonly current: number }, publish: (snapshot: ElementSnapshot) => void): void {
@@ -475,20 +596,22 @@ export function useRefresh(
   const { selectedRef, seqRef } = editorRefs;
   const { resetForElement } = elementReset;
   const { scanWithoutSelection } = scanWithoutSelectionHook;
-  const { scanSelection } = scanSelectionHook;
+  const { prepareSelection, scanSelection } = scanSelectionHook;
 
   const resolveSelection = useCallback(
     async (element: unknown, options: { force?: boolean } = {}) => {
       const seq = ++seqRef.current;
       selectedRef.current = element;
+      // Before the reset: the reset looks the element up under the docs of the file open now.
+      const prepared = element ? prepareSelection(element, options) : undefined;
       resetForElement(element);
       if (!element) {
         await scanWithoutSelection(seq, options);
         return;
       }
-      await scanSelection(element, seq, options);
+      await scanSelection(element, seq, options, prepared);
     },
-    [resetForElement, scanWithoutSelection, scanSelection, selectedRef, seqRef],
+    [prepareSelection, resetForElement, scanWithoutSelection, scanSelection, selectedRef, seqRef],
   );
 
   // Whether the panel is still working out what styles the selected element.

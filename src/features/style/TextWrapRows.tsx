@@ -210,6 +210,12 @@ export function BreakingRow(props: Props) {
   );
 }
 
+/** Truncate's two keywords (text-overflow), shared with a code chip's keyword popover. */
+export const TEXT_OVERFLOW_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
+  { value: 'clip', label: 'Clip' }, // i18n-ignore: CSS keyword.
+  { value: 'ellipsis', label: 'Ellipsis' }, // i18n-ignore: CSS keyword.
+];
+
 // ─────────────── Wrap (overflow-wrap) ───────────────
 
 export const WRAP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
@@ -290,10 +296,7 @@ export function TruncateRow({ read, busy, setProp, clearProp, onProvenance, onSe
           onClear={() => clearProp('text-overflow')}
         >
           <SegmentedControl
-            options={[
-              { value: 'clip', label: 'Clip' }, // i18n-ignore: CSS keyword.
-              { value: 'ellipsis', label: 'Ellipsis' }, // i18n-ignore: CSS keyword.
-            ]}
+            options={TEXT_OVERFLOW_OPTIONS}
             value={current}
             onChange={(value) => setProp('text-overflow', value, display.important)}
             ariaLabel={translate('style.textWrapRows.truncate')}

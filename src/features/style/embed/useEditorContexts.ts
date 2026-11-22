@@ -34,6 +34,7 @@ import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/quer
 import { canvasWidthForQuery } from '../model/queryWidth';
 import { baseCanvasTarget } from '../model/baseWidth';
 import { followedContextKey } from '../model/followWidth';
+import { resolveActiveQuery } from '../model/activeQuery';
 import { followBreakpoint } from './followBreakpoint';
 import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { followRetargetKey, useCanvasWidthPx, useFollowMode, useFollowToggleHandler, type FollowMode } from './contextFollow';
@@ -127,7 +128,7 @@ export function useStyleContexts(
   wrapperReachHook: ReturnType<typeof useWrapperReach>,
 ) {
   const translate = useTranslate();
-  const { context, setContext, stickyContextRef } = selectionState;
+  const { context, setContext } = selectionState;
   const { nativeModel } = nativeState;
   const { allContextKeys } = contextKeys;
   const { sourceContexts, styledEmbedContexts } = embedContexts;
@@ -142,17 +143,12 @@ export function useStyleContexts(
     const list = buildStyleContexts(allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, translate).filter(
       (entry) => reachOf(entry.key).kind !== 'misses',
     );
-    // Keep the manually-selected query available on any element — even one with no
-    // styles there yet — so switching elements stays on it and you can add a style.
-    // Only needed for custom @media/@container (breakpoints are always built). A
-    // nested query that cannot reach this element is not kept: the effect below
-    // returns the panel to Base instead.
-    const sticky = stickyContextRef.current;
-    if (context && sticky && sticky.key === context && !list.some((entry) => entry.key === context) && reachOf(context).kind !== 'misses') {
-      list.push(sticky);
-    }
+    // The list is the element's own: a query the previous element was in is NOT re-listed here
+    // (an earlier version did, which kept the panel on a component's `>= 64rem` after the selection
+    // left that component). The query is checked against this list once the element settles
+    // (useContextChange, model/activeQuery.ts).
     return list;
-  }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, context, stickyContextRef, reachOf, translate]);
+  }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, reachOf, translate]);
   const currentContext = useMemo<StyleContext>(
     () =>
       styleContexts.find((entry) => entry.key === context) ??
@@ -162,16 +158,12 @@ export function useStyleContexts(
       styleContexts[0] ?? { key: '', label: translate('styleModel.breakpoint.main'), breakpoint: 'main', embedAtContext: '' },
     [styleContexts, context, translate],
   );
-  // Remember the selected context object so it survives an element switch (the list
-  // rebuilds per element; a custom query the new element lacks gets re-injected above).
   useEffect(() => {
-    if (currentContext.key === context) {
-      stickyContextRef.current = currentContext;
-    } else if (currentContext.key !== '' && splitSourcedKey(currentContext.key).placed === context) {
+    if (currentContext.key !== context && currentContext.key !== '' && splitSourcedKey(currentContext.key).placed === context) {
       // The typed query was written: follow it to its row, which names the stylesheet.
       setContext(currentContext.key);
     }
-  }, [currentContext, context, stickyContextRef, setContext]);
+  }, [currentContext, context, setContext]);
   // Where a canvas width is known the panel owns its target: following moves it with the width, and
   // holding leaves it exactly where the person put it, through every width and device change (a held
   // breakpoint must not fall back to Base on Desktop). The Desktop-returns-to-Base rule is only for a
@@ -816,7 +808,7 @@ export function useContextChange(
   selectorPick: ReturnType<typeof useSelectorPick>,
   styleContextsHook: ReturnType<typeof useStyleContexts>,
 ) {
-  const { context, pendingDefaultRef, setContext } = selectionState;
+  const { context, contextStale, pendingDefaultRef, setContext, setContextStale } = selectionState;
   const { nativeModel } = nativeState;
   const { model, scan } = elementTokens;
   const { activeSelector } = activeSelectorHook;
@@ -935,6 +927,25 @@ export function useContextChange(
 
   // The element's rules and the reach of its nested queries have both been answered.
   const settled = (scan === undefined || scan.settled) && !reachPending;
+
+  // The selection moved: once the new element's queries are known, the query the panel was in stays only
+  // where this element offers it, else it is the row that holds at the canvas while following, else Base
+  // (model/activeQuery.ts). Done while rendering, from state, so the first frame that draws the settled
+  // element already has its target; an effect would paint the old query for a frame first. Until the
+  // element settles the list is partial and nothing is judged. A rename or a typed query is no selection
+  // change, so it never passes through here.
+  if (contextStale && settled) {
+    const available = styleContexts.flatMap((entry) => (entry.key === '' ? [] : [entry.key, splitSourcedKey(entry.key).placed]));
+    const resolved = resolveActiveQuery({
+      previous: context,
+      available,
+      followedKey: followMode === 'follow' ? matchedKey : undefined,
+    });
+    setContextStale(false);
+    if (resolved !== context) {
+      setContext(resolved);
+    }
+  }
 
   // Moves the target to the row following picks, in the same update as whatever else the caller changes. A
   // breakpoint nobody has written yet is registered like a typed query: it is listed and checked, and the first

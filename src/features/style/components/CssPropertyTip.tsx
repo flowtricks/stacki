@@ -126,9 +126,15 @@ export function ProvenanceLabel({
         ref={ref}
         type="button"
         className={`${className} embed-editor_prop-orange`}
-        disabled={busy}
+        // Inert while the panel saves, but never natively disabled: `button:disabled` dims it
+        // to 0.4 (controls.css), so every commit flashed the orange label and back. The click
+        // is refused below instead (FieldLabel's active pill does the same).
+        aria-disabled={busy ? true : undefined}
         {...hoverProps}
         onClick={(event) => {
+          if (busy) {
+            return;
+          }
           const property = anchorProp ?? props[0];
           if (property === undefined) {
             return;

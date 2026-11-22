@@ -68,6 +68,10 @@ const REGISTRY = {
     ],
   },
   'BoxShadowsRow.tsx': { counts: { segmented: 1 }, controls: [['shadow inset / outset', 'exempt', 'a keyword inside one shadow of a list']] },
+  'codeChips/CodeChips.tsx': {
+    counts: { segmented: 1 },
+    controls: [['a code chip’s gradient type', 'exempt', 'it edits code, where a variable is its own chip (the variable picker)']],
+  },
   'CustomValueEditor.tsx': { counts: { textarea: 1 }, controls: [['the large value editor, any property', 'variable']] },
   'DecorationPopover.tsx': {
     counts: { select: 1 },

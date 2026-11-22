@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import ColorSwatch from './components/ColorSwatch';
 import {
+  clampedPercent,
+  formatPercent,
   gradientCenter,
   serializeGradient,
   stopPercent,
+  stopPositionWritable,
   stopsBarCss,
   type Gradient,
   type GradientPatch,
@@ -148,20 +151,27 @@ function insertedStops(stops: GradientStop[], percent: number): { stops: Gradien
       nearest = index;
     }
   });
-  const next = [...stops, { color: stops[nearest]?.color ?? '#000000', pos: `${percent}%` }];
+  const position = formatPercent(percent);
+  const next = [...stops, { color: stops[nearest]?.color ?? '#000000', pos: position }];
   const tagged = next.map((stop, index) => ({
     stop,
     percent: index === next.length - 1 ? percent : stopPercent(next, index),
   }));
   tagged.sort((left, right) => left.percent - right.percent);
   const sorted = tagged.map((entry) => entry.stop);
-  return { stops: sorted, selected: sorted.findIndex((stop) => stop.pos === `${percent}%`) };
+  return { stops: sorted, selected: sorted.findIndex((stop) => stop.pos === position) };
 }
 
-// Where along the bar a pointer is, as a whole percentage clamped to 0–100.
-function barPercent(bar: HTMLElement, clientX: number): number {
+// Where along the bar a pointer is, as a whole percentage clamped to 0–100: a drag far
+// past either end is that end. Undefined while the bar has no width (collapsed, or not
+// laid out yet), where the division would be NaN or Infinity and write `NaN%`.
+function barPercent(bar: HTMLElement, clientX: number): number | undefined {
   const rect = bar.getBoundingClientRect();
-  return Math.round(Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100)));
+  if (rect.width > 0) {
+    const fraction = (clientX - rect.left) / rect.width;
+    return Number.isFinite(fraction) ? clampedPercent(Math.round(fraction * 100)) : undefined;
+  }
+  return undefined;
 }
 
 // Delete / Backspace removes the selected stop (a gradient needs ≥ 2, so it's a no-op
@@ -312,14 +322,18 @@ function StopsBar({
 }) {
   const translate = useTranslate();
   const barRef = useRef<HTMLDivElement>(null);
-  const drag = useStopDrag({ barRef, busy, editingRef, setSelected, setStop, sortStops });
+  const drag = useStopDrag({ barRef, stops, busy, editingRef, setSelected, setStop, sortStops });
   // Click the bar background → insert a stop there (color = nearest stop's).
   const onBarClick = (event: React.MouseEvent) => {
     const bar = barRef.current;
     if (busy || drag.dragStop.current !== undefined || !bar) {
       return;
     }
-    const inserted = insertedStops(stops, barPercent(bar, event.clientX));
+    const percent = barPercent(bar, event.clientX);
+    if (percent === undefined) {
+      return;
+    }
+    const inserted = insertedStops(stops, percent);
     setSelected(inserted.selected);
     patchStops(inserted.stops, { live: false });
   };
@@ -359,6 +373,7 @@ function StopsBar({
 // index being dragged, so a click that ends a drag does not also insert a stop.
 function useStopDrag({
   barRef,
+  stops,
   busy,
   editingRef,
   setSelected,
@@ -366,6 +381,7 @@ function useStopDrag({
   sortStops,
 }: {
   barRef: React.RefObject<HTMLDivElement>;
+  stops: GradientStop[];
   busy: boolean;
   editingRef: React.MutableRefObject<boolean>;
   setSelected: (index: number) => void;
@@ -389,7 +405,16 @@ function useStopDrag({
     if (index === undefined || !bar) {
       return;
     }
-    setStop(index, { pos: `${barPercent(bar, event.clientX)}%` }, { live: true });
+    const percent = barPercent(bar, event.clientX);
+    if (percent === undefined) {
+      return;
+    }
+    const position = formatPercent(percent);
+    // Past an end every move is that end: the stop is already there, so nothing is written.
+    if (stops[index]?.pos === position) {
+      return;
+    }
+    setStop(index, { pos: position }, { live: true });
   };
   const onHandleUp = (event: React.PointerEvent) => {
     const index = dragStop.current;
@@ -424,7 +449,7 @@ function RepeatRow({ gradient, busy, patch, patchStops }: { gradient: Gradient; 
           patchStops(
             [...stops].reverse().map((stop, i) => ({
               ...stop,
-              pos: stop.pos.trim() ? `${100 - stopPercent(stops, stops.length - 1 - i)}%` : '',
+              pos: stop.pos.trim() ? formatPercent(100 - stopPercent(stops, stops.length - 1 - i)) : '',
             })),
           )
         }
@@ -501,8 +526,17 @@ function StopFields({
           unit="%"
           label={translate('style.gradientEditor.stopPosition')}
           busy={busy}
-          onLive={(next) => setStop(selectedIndex, { pos: next }, { live: true })}
+          onLive={(next) => {
+            // A half-typed number (`-`, `.`) waits in the field; only a position the
+            // page can read is written.
+            if (stopPositionWritable(next)) {
+              setStop(selectedIndex, { pos: next }, { live: true });
+            }
+          }}
           onCommit={(next) => {
+            if (!stopPositionWritable(next)) {
+              return;
+            }
             setStop(selectedIndex, { pos: next });
             sortStops(selectedIndex);
           }}

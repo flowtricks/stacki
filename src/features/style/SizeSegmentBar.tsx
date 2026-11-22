@@ -133,7 +133,8 @@ export type SegmentBarProps = {
 export function SegmentBar(props: SegmentBarProps) {
   const { prop, config, value, busy, onCommit, onLiveCommit, onClear } = props;
   const current = value.trim().toLowerCase() || config.fallback;
-  const customMode = !config.segments.some((segment) => segment.value === current);
+  // No value and no fallback (a code chip's create chip) is the bar with nothing selected.
+  const customMode = current !== '' && !config.segments.some((segment) => segment.value === current);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { inputRef, requestFocus } = useCustomFocus({ customMode, busy });

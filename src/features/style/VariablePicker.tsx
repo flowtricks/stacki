@@ -6,7 +6,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MutableRefObject } from 'react';
 import { SkeletonRows } from '../../ui/Skeleton';
 import { SearchIcon } from '../../ui/Icons';
-import { arrangeNames, shortLabel } from '../../../shared/properties/variableGroups';
+import { arrangeNames, shortLabel, type NameBlock } from '../../../shared/properties/variableGroups';
+import { panelBlockKey } from './model/panelVariableList';
 import Menu, { useMenuTrigger } from '../../ui/Menu';
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { settings as centralSettings, eyeOff as centralEyeOff } from '../../ui/central/centralGeometry';
@@ -73,6 +74,7 @@ export function VariablePicker({
   selectedBinding,
   slot,
   typing,
+  panel,
   onPreview,
   previewEpoch = ZERO_EPOCH,
   onPreviewEnd,
@@ -104,6 +106,13 @@ export function VariablePicker({
    */
   typing?: { readonly query: string; readonly navigationRef: MutableRefObject<PickerNavigation | undefined> };
   /**
+   * Set where a custom property's value is written (`--x: |`): `vars` is the Variables panel's own
+   * list (panelVariableList.ts), drawn in its order and in exactly these blocks, with nothing left out
+   * by type or by what reaches an element, and the names hidden in the panel left out without
+   * exception.
+   */
+  panel?: { readonly blocks: ReadonlyMap<string, readonly NameBlock[]> };
+  /**
    * The arrows moved the mark in the chooser's own search box: show this
    * variable in the value for now. Enter or a click makes it so; closing any
    * other way is the caller's cue to put the original back.
@@ -132,15 +141,23 @@ export function VariablePicker({
   // here do not hold (a local custom property of the element or its component) gets a row of its
   // own, first, labelled as this element's, with the value the page computes for it.
   const localLabel = translate('style.variablePicker.localScope');
-  const withApplied = useMemo(() => withAppliedVariable(vars, selectedBinding, localLabel), [vars, selectedBinding, localLabel]);
+  const withApplied = useMemo(
+    () => (panel === undefined ? withAppliedVariable(vars, selectedBinding, localLabel) : vars),
+    [vars, selectedBinding, localLabel, panel],
+  );
   const answer = useDefinedVariables(withApplied);
   // What the page says is declared in scope of the element (its own rules and its parents'), beyond what the
   // stylesheets read here hold: a component's own `--_mw`, grouped under the selector that declares it.
-  const listed = useMemo(() => withScopedVariables(withApplied, answer, localLabel), [withApplied, answer, localLabel]);
+  const listed = useMemo(
+    () => (panel === undefined ? withScopedVariables(withApplied, answer, localLabel) : withApplied),
+    [withApplied, answer, localLabel, panel],
+  );
   const scopeDepth = useMemo(() => scopeDepths(answer), [answer]);
   const defined = answer?.names;
   const winning = answer?.winning;
-  const [grouped, setGrouped] = useGrouped();
+  const [groupedChoice, setGrouped] = useGrouped();
+  // The panel's listing is the panel's blocks, always.
+  const grouped = panel === undefined ? groupedChoice : true;
   // Session only: opening the picker always starts on the filtered list.
   const [showAll, setShowAll] = useState(false);
   const optionsMenu = useMenuTrigger();
@@ -148,7 +165,9 @@ export function VariablePicker({
   // left out of the list, except the variable applied to this property, and "show all" brings them back
   // dimmed. The set is cached and live, so a toggle in the panel changes an open list.
   const { hidden } = useHiddenVariables(getHost().projectPath);
-  const appliedName = selectedBinding === undefined ? undefined : customPropertyOf(selectedBinding);
+  // A hidden variable stays listed where it is applied, except in the panel's listing, which follows
+  // the panel's choice strictly.
+  const appliedName = selectedBinding === undefined || panel !== undefined ? undefined : customPropertyOf(selectedBinding);
   const suggested = useMemo(
     () =>
       new Set(
@@ -162,7 +181,7 @@ export function VariablePicker({
   );
   const suggestible = (variable: ProjectVariable): boolean => showAll || suggested.has(customPropertyOf(variable.binding) ?? '');
   const visibleHere = (variable: ProjectVariable): boolean =>
-    sameVariable(variable.binding, selectedBinding) || defined === undefined || defined.has(customPropertyOf(variable.binding) ?? '');
+    panel !== undefined || sameVariable(variable.binding, selectedBinding) || defined === undefined || defined.has(customPropertyOf(variable.binding) ?? '');
   // Each row shows the variable's value as WRITTEN for the selected element: the declaration that wins
   // for it (the page traces the property up the element's parents), never a computed value. The computed
   // value serves the swatch, the kind and the validity filter, and the tooltip's "Computes to" line.
@@ -184,7 +203,7 @@ export function VariablePicker({
     // No traced declaration: the row's own source text (a local row carries its declaration's text, or none).
     return variable;
   };
-  const context = { computed: defined, selectedBinding, slot, scopeDepth };
+  const context = { computed: defined, selectedBinding, slot, scopeDepth, order: panel === undefined ? ('name' as const) : ('given' as const) };
   // What the picker offers, before any search: the variables valid for the property at the slot, or
   // with "show all" every one the element can see. Group structure is judged on this list, so a
   // search narrows rows without dissolving a group.
@@ -208,7 +227,11 @@ export function VariablePicker({
   }, [showAll, listed, prop, defined, selectedBinding, slot, suggested]);
   // With a search the rows are ranked (variableSearch.ts), best match first, and the list below keeps that order.
   const filtered = query === '' ? offered : rankVariables(offered, query);
-  const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped, query }), [filtered, listed, offered, grouped, query]);
+  const panelBlocks = panel?.blocks;
+  const drawn = useMemo(
+    () => drawingOrder(filtered, listed, offered, { grouped, query, panelBlocks }),
+    [filtered, listed, offered, grouped, query, panelBlocks],
+  );
   const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, previewEpoch, onPick);
   // With its own search box the arrows move the purple mark itself, from the
   // applied variable to the one being previewed. Following typing, the mark
@@ -323,6 +346,7 @@ export function VariablePicker({
             allVariables={listed}
             offered={offered}
             grouped={grouped}
+            panelBlocks={panelBlocks}
             refused={refused}
             hiddenNames={hidden}
             overridden={overriddenHere}
@@ -489,6 +513,8 @@ export function pickerVariables(
     readonly showAll?: boolean | undefined;
     /** How many parents up each local scope's selector is declared; nearer scopes sort first. */
     readonly scopeDepth?: ReadonlyMap<string, number> | undefined;
+    /** `given` keeps the list's own order (the Variables panel's); `name`, the default, sorts it. */
+    readonly order?: 'name' | 'given' | undefined;
   } = {},
 ): ProjectVariable[] {
   const declared = declaredValues(vars);
@@ -532,14 +558,17 @@ export function pickerVariables(
   // nothing; the grammar slot has already narrowed the pool, so that is what is offered.
   const slotted = slotRule !== undefined && judged.length === 0 ? pool : judged;
   const depthOf = (variable: ProjectVariable): number => (variable.group === '' ? -1 : (context.scopeDepth?.get(variable.group) ?? 0));
-  const sorted = [...slotted].sort(
-    (left, right) =>
-      Number(right.file === LOCAL_FILE) - Number(left.file === LOCAL_FILE) ||
-      (left.file === LOCAL_FILE && right.file === LOCAL_FILE ? depthOf(left) - depthOf(right) : 0) ||
-      left.collection.localeCompare(right.collection) ||
-      left.group.localeCompare(right.group) ||
-      left.name.localeCompare(right.name),
-  );
+  const sorted =
+    context.order === 'given'
+      ? slotted
+      : [...slotted].sort(
+          (left, right) =>
+            Number(right.file === LOCAL_FILE) - Number(left.file === LOCAL_FILE) ||
+            (left.file === LOCAL_FILE && right.file === LOCAL_FILE ? depthOf(left) - depthOf(right) : 0) ||
+            left.collection.localeCompare(right.collection) ||
+            left.group.localeCompare(right.group) ||
+            left.name.localeCompare(right.name),
+        );
   if (!query) {
     return sorted;
   }
@@ -606,6 +635,7 @@ export function PickerCollections({
   allVariables,
   offered,
   grouped = true,
+  panelBlocks,
   refused,
   hiddenNames,
   overridden,
@@ -618,6 +648,8 @@ export function PickerCollections({
   offered?: readonly ProjectVariable[] | undefined;
   /** One flat list when false. */
   grouped?: boolean;
+  /** The panel's own blocks per file's rule group, for the panel's listing (VariablePicker's `panel`). */
+  panelBlocks?: ReadonlyMap<string, readonly NameBlock[]> | undefined;
   /** Bindings listed by "show all" that are not valid for the property: drawn muted. */
   refused?: ReadonlySet<string> | undefined;
   /** Names hidden from suggestions: listed (by "show all") dimmed with a mark. */
@@ -650,7 +682,7 @@ export function PickerCollections({
         </button>
         {open
           ? groups.map(({ group, items }) => {
-              const blocks = blocksOf(collection, group, items, allVariables, offered, { grouped, query });
+              const blocks = blocksOf(collection, group, items, allVariables, offered, { grouped, query, panelBlocks });
               const scopeLabel = group && !isRootScope(group) ? group : undefined;
               const hasNamedGroups = blocks.some((block) => block.title !== undefined);
               const flatRun = blocks.some((block) => block.title === undefined);
@@ -726,9 +758,10 @@ function blocksOf(
   items: ProjectVariable[],
   allVariables: readonly ProjectVariable[] | undefined,
   offered: readonly ProjectVariable[] | undefined,
-  options: { readonly grouped: boolean; readonly query?: string },
+  options: BlockOptions,
 ): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
-  const blocks = panelBlocksOf(collection, group, items, allVariables, offered, options);
+  const given = options.panelBlocks?.get(panelBlockKey(collection, group));
+  const blocks = given === undefined ? panelBlocksOf(collection, group, items, allVariables, offered, options) : givenBlocks(given, items);
   return options.query !== undefined && options.query !== '' ? rankedBlocks(blocks, items, options.query) : blocks;
 }
 
@@ -789,6 +822,29 @@ function panelBlocksOf(
   return [...(flat.length > 0 ? [{ title: undefined, items: flat }] : []), ...groups];
 }
 
+// How a scope's rows are cut into blocks: grouped or flat, narrowed by a search, and, for the panel's
+// listing, the panel's own blocks for each file's rule group (panelVariableList.ts).
+interface BlockOptions {
+  readonly grouped: boolean;
+  readonly query?: string;
+  readonly panelBlocks?: ReadonlyMap<string, readonly NameBlock[]> | undefined;
+}
+
+// The panel's blocks as given, each holding the rows still listed, in the panel's order; a block with
+// none left is dropped, and a listed row no block names (none should be) is kept at the end.
+function givenBlocks(given: readonly NameBlock[], items: ProjectVariable[]): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
+  const byName = new Map(items.map((variable): [string, ProjectVariable] => [`--${variable.name}`, variable]));
+  const placed = new Set<string>();
+  const blocks = given.flatMap((block) => {
+    const rows = block.names.flatMap((name) => byName.get(name) ?? []);
+    rows.forEach((variable) => placed.add(variable.binding));
+    return rows.length === 0 ? [] : [{ title: block.title, items: rows }];
+  });
+  const rest = items.filter((variable) => !placed.has(variable.binding));
+  assert(placed.size + rest.length === items.length, 'givenBlocks: every listed row is drawn once');
+  return rest.length === 0 ? blocks : [...blocks, { title: undefined, items: rest }];
+}
+
 // Offered rows a group needs to be drawn as a group.
 const GROUP_ROWS_MIN = 2;
 
@@ -797,7 +853,7 @@ function drawingOrder(
   filtered: ProjectVariable[],
   allVariables: readonly ProjectVariable[],
   offered: readonly ProjectVariable[],
-  options: { readonly grouped: boolean; readonly query?: string },
+  options: BlockOptions,
 ): ProjectVariable[] {
   const ordered: ProjectVariable[] = [];
   for (const { collection, groups } of byCollection(filtered)) {

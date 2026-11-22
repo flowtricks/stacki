@@ -49,12 +49,13 @@
 .chip-picker {
   z-index: 300;
   box-sizing: border-box;
-  max-height: min(340px, calc(100vh - 16px));
+  display: flex;
+  flex-direction: column;
   padding: 6px;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
   border: 0;
   border-radius: 12px;
+  /* One step above the composer, as every composer popover: the menu surface. */
   background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
   color: var(--text, #f5f5f5);
   box-shadow:
@@ -62,47 +63,110 @@
     0 2px 6px rgba(0, 0, 0, 0.35);
   font-size: 13px;
 }
-.chip-picker-heading {
-  padding: 8px 10px 4px;
-  color: var(--text-faint, #989898);
-  font-size: 12px;
-  font-weight: 500;
+/* The filter tabs: one row on its own darker fill, scrolling sideways with no fade and no wrap. The active tab is
+   a lighter pill with white text; inactive labels and counts keep readable contrast, a tab with no match too. */
+.chip-picker-tabs {
+  flex: none;
+  margin-block-end: 4px;
+  padding: 3px;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
 }
+.chip-picker-tabs .ui-tabs {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  background: transparent;
+}
+.chip-picker-tabs .ui-tabs-indicator {
+  background: rgba(255, 255, 255, 0.16);
+}
+.chip-picker-tabs .ui-tab {
+  color: var(--text-dim, #b8b8b8);
+  font-size: 12px;
+}
+.chip-picker-tabs .ui-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.chip-picker-tabs .ui-tab.on {
+  color: #fff;
+}
+.chip-picker-tabs .ui-tab-badge {
+  color: #a3a3a3;
+}
+.chip-picker-tabs .ui-tab.is-dim {
+  opacity: 0.7;
+}
+/* The rows scroll inside the box's fixed height; the box itself never resizes. */
+.chip-picker-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.chip-picker-heading {
+  display: flex;
+  align-items: flex-end;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 6px 8px 2px;
+  color: var(--text-dim, #b8b8b8);
+  font-size: 11px;
+  font-variant: small-caps;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+/* One line per row: the name, then the path muted beside it, the path cut first. */
 .chip-picker-option {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 30px;
-  padding: 5px 10px;
-  border-radius: 8px;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
   cursor: default;
 }
 .chip-picker-option.is-active {
-  background: rgba(255, 255, 255, 0.09);
+  background: color-mix(in srgb, var(--accent, #0099ff) 32%, transparent);
+  color: #fff;
 }
 .chip-picker-icon {
   display: inline-flex;
   flex: none;
-  color: var(--text-dim, #b8b8b8);
+  color: var(--text, #f5f5f5);
 }
 .chip-picker-text {
   display: flex;
-  flex-direction: column;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
 }
 .chip-picker-label {
+  flex: 0 1 auto;
   overflow: hidden;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .chip-picker-description {
+  flex: 0 100 auto;
+  min-width: 0;
   overflow: hidden;
-  color: var(--text-faint, #989898);
+  color: var(--text-dim, #b8b8b8);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.chip-picker-option.is-active .chip-picker-description {
+  color: rgba(255, 255, 255, 0.85);
+}
 .chip-picker-empty {
-  padding: 8px 10px;
-  color: var(--text-faint, #989898);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
 }

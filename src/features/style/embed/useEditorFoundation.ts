@@ -9,7 +9,7 @@ import { assert } from '../../../../shared/core/assert';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadEmbedSource } from '../model/toolPreferences';
 import { computeRuleModel } from '../model/cascade';
-import { type ContextKey, type StateKey, type StyleContext } from '../model/resolved';
+import { type ContextKey, type StateKey } from '../model/resolved';
 import { type MatchTarget } from '../model/selectors';
 import {
   loadEmbedDocs,
@@ -28,6 +28,8 @@ import type { ElementSnapshot, NativeModel } from '../model/styleTypes';
 import type { ManualSourcePick } from '../model/selectorHome';
 import { type ScanState, type Phase } from './EditorBasics';
 import { rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
+import { forgetDocuments, rememberDocuments } from './memoryContent';
+import { getHost } from '../model/host';
 import { elementSelectionKey } from '../model/webflowElement';
 import {
   streamDocs,
@@ -226,22 +228,25 @@ export function useSelectionState() {
   // stateKey follows the active selector's own pseudo-classes (see the selection
   // handlers) so native reads/writes target the right (breakpoint, pseudo).
   const [context, setContext] = useState<ContextKey>('');
-  // The selected context's full object, remembered so the query stays selected when
-  // the element changes (re-injected into the rebuilt list if the new element lacks it).
-  const stickyContextRef = useRef<StyleContext | undefined>(undefined);
+  // Set when the selected element changed, until the new element's queries are known and the
+  // chosen query has been checked against them (model/activeQuery.ts). It is state, not a ref, so
+  // the check runs in the render that first sees the element's settled list: no frame draws the
+  // previous element's query on this one.
+  const [contextStale, setContextStale] = useState(false);
   const [stateKey, setStateKey] = useState<StateKey>('');
   return {
     context,
+    contextStale,
     defaultTokensRef,
     pendingDefaultRef,
     selectedSelectorText,
     selectedTokens,
     setContext,
+    setContextStale,
     setSelectedSelectorText,
     setSelectedTokens,
     setStateKey,
     stateKey,
-    stickyContextRef,
     tokenIdentityRef,
     typedClassRef,
   };
@@ -413,7 +418,8 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
       const onDocument = streamDocs(pageScan, onPartial);
       // Page and component embeds both re-read their CODE fresh so out-of-app edits
       // show up.
-      const [pageResult, componentResult] = await Promise.all([loadEmbedDocs(page.pageEmbeds, onDocument), loadComponentDocs(onDocument)]);
+      const pageKeys = new Set(page.pageEmbeds.map((source) => source.key));
+      const [pageResult, componentResult] = await Promise.all([loadEmbedDocs(page.pageEmbeds, onDocument), loadComponentDocs(pageKeys, onDocument)]);
       return mergedContent(pageScan, [pageResult, componentResult]);
     },
     [pageInstancesRef],
@@ -441,10 +447,20 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
 export function useContentStore(editorRefs: ReturnType<typeof useEditorRefs>, contentBuild: ReturnType<typeof useContentBuild>) {
   const { contentRef, docsRef, inComponentRef, lastScanAtRef, pageDocsRef } = editorRefs;
   const { composeDocs } = contentBuild;
+  // The documents a switch builds from (memoryContent.ts) are the ones this panel read: a new
+  // panel (a reopen, another project) starts without them, from editorSession.scan, rather than
+  // drawing another session's copy of a file that may have changed since. Once, while mounting.
+  const memoryOwnedRef = useRef(false);
+  if (!memoryOwnedRef.current) {
+    memoryOwnedRef.current = true;
+    forgetDocuments();
+  }
 
-  // Returns the content with its rules and counts derived from the active embeds.
+  // Returns the content with its rules and counts derived from the active embeds. Content built
+  // from memory (memoryContent.ts) is not a read: it leaves the time of the last read alone, so
+  // the background refresh that revalidates it is not held back by its throttle.
   const storeContent = useCallback(
-    (scanned: Content): Content => {
+    (scanned: Content, options: { readonly fromMemory?: boolean } = {}): Content => {
       // Only a complete (non-partial) page scan refreshes the remembered page
       // embeds; while in a component we keep the previous ones (they hold any
       // unsaved edits), and a partial snapshot must not clobber them either.
@@ -461,7 +477,10 @@ export function useContentStore(editorRefs: ReturnType<typeof useEditorRefs>, co
       contentRef.current = content;
       docsRef.current = active;
       inComponentRef.current = content.scan.inComponentContext;
-      lastScanAtRef.current = Date.now();
+      rememberDocuments(active, getHost().openFilePath);
+      if (options.fromMemory !== true) {
+        lastScanAtRef.current = Date.now();
+      }
       // Persist completed scans so a reopen restores them (see editorSession.scan). Skip
       // partials — restoring a page-only snapshot would drop the component chips.
       if (!content.partial) {
@@ -586,7 +605,7 @@ export function useContentRebuild(
     },
     [buildContent, flushPending, storeContent, contentRef, inComponentRef, pendingKeysRef],
   );
-  return { rebuildAndStore };
+  return { rebuildAndStore, storeContent };
 }
 
 // Resolve the selected element against the cached content.

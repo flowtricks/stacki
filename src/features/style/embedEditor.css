@@ -1021,15 +1021,18 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border-radius: var(--radius-md);
-  /* Blend with the panel and outline the whole group with a border (Webflow's native
-     look) instead of a dark inset fill. */
-  border: var(--border-width-thin) solid var(--color-border-strong);
+  /* Each row is its own filled tile with a small gap between: a fill marks the rows, never a
+     border round the list or a divider between them, as every control in the app is marked. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: 0;
   background: transparent;
-  overflow: hidden;
 }
-.embed-editor_bg-layer:not(:last-child) {
-  border-bottom: var(--border-width-thin) solid var(--color-border-default);
+.embed-editor_bg-layer {
+  border-radius: var(--radius-md);
+  background: var(--color-bg-hover);
+  overflow: hidden;
 }
 .embed-editor_bg-layer.is-drop-target {
   box-shadow: inset 0 2px 0 var(--color-border-focus);
@@ -1050,7 +1053,7 @@
   transition: background var(--transition-fast);
 }
 .embed-editor_bg-layer-row:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-bg-active);
 }
 /* The whole row opens the layer, not just the label: the button's hit area is
    stretched over the row (padding and gaps included) rather than nesting the icons
@@ -1086,6 +1089,8 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  /* The icon at the row's start and the label after it, whatever reset a button around it has. */
+  justify-content: flex-start;
   gap: var(--space-3);
   padding: 0;
   border: 0;
@@ -3957,7 +3962,7 @@
 .embed-editor_selectors:has(.embed-editor_selector-add:focus) {
   border-color: var(--color-border-focus);
 }
-/* The well wraps the selector tags; the add input is revealed at its bottom.
+/* The well wraps the selector tags; the add input follows the last one inline.
    Clicking any empty space in it focuses the input. Keeps a min height so the black
    box (on .embed-editor_selectors) holds its shape before any tags load. */
 .embed-editor_selector-well {
@@ -3980,11 +3985,17 @@
   align-items: center;
   gap: var(--space-2);
 }
-/* The add field follows the last chip on a row of its own at the bottom; it never
-   stands between two chips (SelectorPicker.tsx). */
+/* The add field follows the last chip inline and takes the rest of that row; it
+   wraps to a row of its own only when fewer than four characters are left. It is
+   drawn focused or not and stands exactly a chip high, so focusing or leaving it
+   never changes the well's height and nothing below moves under a press. It never
+   stands between two chips (SelectorPicker.tsx). The font is the input's, so `4ch`
+   is four of its characters. */
 .embed-editor_selector-caret-slot {
-  flex: 1 0 100%;
-  min-width: 0;
+  flex: 1 0 4ch;
+  min-width: 4ch;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
 }
 
 /* The well before its chips have been counted. An empty black box reads as "this
@@ -4244,7 +4255,7 @@
 }
 .embed-editor_selector-well .embed-editor_selector-add {
   width: 100%;
-  height: 22px;
+  height: var(--embed-editor_chip-h); /* a chip's height: the row never grows for it */
   padding: 0 var(--space-1);
   background: transparent;
   border-radius: 0;
@@ -4255,6 +4266,10 @@
 .embed-editor_selector-well .embed-editor_selector-add:hover {
   background: transparent;
   box-shadow: none;
+}
+/* The placeholder shows only with the caret: at rest the well reads as its chips. */
+.embed-editor_selector-well .embed-editor_selector-add:not(:focus)::placeholder {
+  color: transparent;
 }
 .embed-editor_selector-suggest {
   position: absolute;
@@ -5494,6 +5509,43 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+/* The easing editor as a sheet, wherever it opens (the panel's transition row, a code chip, the
+   variables window): never taller than min(560px, the window less 24px), the curve at a fixed compact
+   size at the top, and only the preset list scrolling under it. A sheet sized by the panel's height
+   (PanelSheet.css) was the whole window tall, its presets running off the bottom. Three classes, to
+   outrank both the sheet's own sizing and `.is-framed`.
+
+   Layers, lowest first (the panel kit's scale, tokens.css):
+   | --z-modal       | a panel sheet (PanelSheet.css)                                |
+   | --z-modal + 2   | a layer popover (.embed-editor_layer-popover), the transition |
+   |                 | row's editor among them                                       |
+   | --z-modal + 3   | the easing editor, opened from that popover: above its opener |
+   | --z-tooltip     | the variable picker and tooltips, opened from anything above  |
+   test/renderer/style/codeChipsLayout.test.js holds this order. */
+.panel-sheet.panel-sheet.embed-editor_ease-modal {
+  z-index: calc(var(--z-modal) + 3);
+  max-height: min(560px, calc(100vh - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-main {
+  flex: none;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-curve {
+  max-width: 200px;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-presets {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_ease-group-title {
   font-size: var(--font-size-sm);

@@ -47,7 +47,7 @@ function ScrollIcon() {
 // display control's segmented-bar CSS.
 const strongMark = (text: ReactNode) => <strong>{text}</strong>;
 
-const OVERFLOW_SEGS: ReadonlyArray<{ value: string; icon?: ReactNode; labelKey: MessageKey; tooltipKey: MessageKey }> = [
+export const OVERFLOW_SEGS: ReadonlyArray<{ value: string; icon?: ReactNode; labelKey: MessageKey; tooltipKey: MessageKey }> = [
   { value: 'visible', icon: <ShowIcon />, labelKey: 'style.sizeSection.visible', tooltipKey: 'style.sizeSection.tooltipVisible' },
   { value: 'hidden', icon: <HideIcon />, labelKey: 'style.sizeSection.hidden', tooltipKey: 'style.sizeSection.tooltipHidden' },
   { value: 'clip', icon: <CropIcon />, labelKey: 'style.sizeSection.clip', tooltipKey: 'style.sizeSection.tooltipClip' },
@@ -57,8 +57,9 @@ const OVERFLOW_SEGS: ReadonlyArray<{ value: string; icon?: ReactNode; labelKey: 
 const OVERFLOW_VALUES = OVERFLOW_SEGS.map((seg) => seg.value);
 // Segmented icon bar (visible/hidden/clip/scroll/auto) + a dropdown arrow whose
 // menu offers Custom; a free value shows the editable field. Mirrors DisplayControl.
+// Exported: a code chip for `overflow` opens this same bar.
 // No overflow set → CSS defaults to `visible`, so that segment shows as active.
-function overflowBar(translateRich: RichTranslator, translate: Translator): SegmentBarConfig {
+export function overflowBar(translateRich: RichTranslator, translate: Translator): SegmentBarConfig {
   return {
     segments: OVERFLOW_SEGS.map((seg) => ({
       value: seg.value,
@@ -241,7 +242,7 @@ function ContentBoxIcon() {
   );
 }
 
-const BOX_OPTIONS: ReadonlyArray<{ value: string; icon: ReactNode; labelKey: MessageKey; tooltipKey: MessageKey }> = [
+export const BOX_OPTIONS: ReadonlyArray<{ value: string; icon: ReactNode; labelKey: MessageKey; tooltipKey: MessageKey }> = [
   { value: 'border-box', icon: <BorderBoxIcon />, labelKey: 'style.sizeSection.borderBox', tooltipKey: 'style.sizeSection.tooltipBorderBox' },
   { value: 'content-box', icon: <ContentBoxIcon />, labelKey: 'style.sizeSection.contentBox', tooltipKey: 'style.sizeSection.tooltipContentBox' },
 ];
@@ -249,7 +250,7 @@ const BOX_OPTIONS: ReadonlyArray<{ value: string; icon: ReactNode; labelKey: Mes
 // Custom; a free value (`inherit`, `unset`, var(…)…) shows the editable field — the
 // same bar as Overflow, so box-sizing matches the Overflow / Display controls. No
 // box-sizing set → Webflow assumes border-box, so that segment shows as active.
-function boxSizingBar(translateRich: RichTranslator, translate: Translator): SegmentBarConfig {
+export function boxSizingBar(translateRich: RichTranslator, translate: Translator): SegmentBarConfig {
   return {
     segments: BOX_OPTIONS.map((option) => ({
       value: option.value,

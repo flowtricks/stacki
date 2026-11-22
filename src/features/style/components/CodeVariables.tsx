@@ -7,6 +7,9 @@ import { assert } from '../../../../shared/core/assert';
 import type { ValueSlot } from '../../../../shared/properties/valueSlot';
 import { codeSlotAt, type CodeTypedVariable, type CodeVariableScope } from '../model/codeVariableScope';
 import { useSharedVars } from '../sharedVars';
+import { rootSwatchScope, SwatchScopeContext } from '../model/computedColor';
+import { declaredPropertyAt } from '../model/panelVariableList';
+import { usePanelListing } from '../usePanelListing';
 import { ConnectDot } from '../VariableConnect';
 import { VariablePicker, type PickerNavigation } from '../VariablePicker';
 import { bindInView, codeVariableExtension, completeInView, type CodeVariableHandlers, type CodeVariableKey } from './codeVariableExtension';
@@ -53,6 +56,14 @@ export function useCodeVariables(scope: CodeVariableScope, access: { readonly re
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const { vars, loading } = useSharedVars({ active: chooser.kind !== 'closed' });
+  // A custom property's value (`--x: |`) takes any variable: the chooser lists the Variables panel's,
+  // in its groups and order, less the one being declared (panelVariableList.ts).
+  const customValue = chooser.kind === 'typing' && chooser.typed.prop === undefined && scope.kind === 'declarations';
+  const self =
+    customValue && chooser.kind === 'typing' && viewRef.current !== undefined
+      ? declaredPropertyAt(viewRef.current.state.doc.toString(), chooser.typed.typed.start)
+      : undefined;
+  const listing = usePanelListing({ active: customValue }, self, vars);
   const handlersRef = useRef<CodeVariableHandlers>(codeVariableHandlers({ scopeRef, viewRef, chooserRef, readOnlyRef, navigationRef, setChooser }));
   const [extension] = useState(() => codeVariableExtension(handlersRef));
   const pickTyped = (binding: string): void => {
@@ -85,16 +96,20 @@ export function useCodeVariables(scope: CodeVariableScope, access: { readonly re
         />
       ) : undefined}
       {frame !== undefined && chooser.kind !== 'closed' ? (
-        <VariablePicker
-          anchor={frame}
-          vars={vars}
-          loading={loading}
-          {...pickerProp(scope, chooser)}
-          {...pickerSlot(scope, chooser, viewRef.current)}
-          {...(chooser.kind === 'typing' ? { typing: { query: chooser.typed.typed.query, navigationRef } } : bindSelection(viewRef.current))}
-          onPick={chooser.kind === 'typing' ? pickTyped : pickBind}
-          onClose={() => setChooser(CLOSED)}
-        />
+        // A code editor's swatches are its variables on `:root`, the page's root element (rootColors.ts).
+        <SwatchScopeContext.Provider value={rootSwatchScope(vars)}>
+          <VariablePicker
+            anchor={frame}
+            vars={listing === undefined ? vars : [...listing.variables]}
+            loading={loading}
+            {...(listing === undefined ? {} : { panel: { blocks: listing.blocks } })}
+            {...pickerProp(scope, chooser)}
+            {...pickerSlot(scope, chooser, viewRef.current)}
+            {...(chooser.kind === 'typing' ? { typing: { query: chooser.typed.typed.query, navigationRef } } : bindSelection(viewRef.current))}
+            onPick={chooser.kind === 'typing' ? pickTyped : pickBind}
+            onClose={() => setChooser(CLOSED)}
+          />
+        </SwatchScopeContext.Provider>
       ) : undefined}
     </>
   );
