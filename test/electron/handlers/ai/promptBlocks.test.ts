@@ -220,3 +220,41 @@ test('attachments follow the parts: an image inline, a project file as a link, o
     { type: 'resource_link', name: 'index.astro', uri: pathToFileURL(path.join(root, 'src', 'index.astro')).href },
   ]);
 });
+
+test("a screenshot's note is a text block right before its image, and an image without one has none", () => {
+  const { source } = setup();
+  const result = buildPrompt(source, {
+    text: 'what changed?',
+    parts: undefined,
+    attachments: [
+      {
+        kind: 'image',
+        name: 'Screenshot 1 (2×2)',
+        mimeType: 'image/png',
+        data: 'AAAA',
+        note: 'Screenshot 1: element, 1280px breakpoint, src/components/Hero.astro Hero',
+      },
+      { kind: 'image', name: 'pasted.png', mimeType: 'image/jpeg', data: 'BBBB' },
+    ],
+  });
+  assert.ok(result.ok);
+  assert.deepEqual(result.value.blocks, [
+    { type: 'text', text: 'what changed?' },
+    { type: 'text', text: 'Screenshot 1: element, 1280px breakpoint, src/components/Hero.astro Hero' },
+    { type: 'image', mimeType: 'image/png', data: 'AAAA' },
+    { type: 'image', mimeType: 'image/jpeg', data: 'BBBB' },
+  ]);
+  const full = buildPrompt(source, {
+    text: 'x',
+    parts: [{ kind: 'text', text: 'x' }],
+    attachments: Array.from({ length: AI_LIMITS.attachmentsMax }, (_, index) => ({
+      kind: 'image' as const,
+      name: `Screenshot ${index + 1}`,
+      mimeType: 'image/png' as const,
+      data: 'AAAA',
+      note: `Screenshot ${index + 1}: panel`,
+    })),
+  });
+  assert.ok(full.ok, 'every attachment with its note stays within the block bound');
+  assert.equal(full.value.blocks.length, 1 + AI_LIMITS.attachmentsMax * 2);
+});

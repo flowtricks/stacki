@@ -3,6 +3,10 @@
 // asks again after a short pause, an answer that arrives after a newer question is
 // dropped, and a failed search leaves the built-in rows (and says so) instead of
 // breaking the box.
+//
+// Stale while it revalidates: between a keystroke and its answer the picker keeps the
+// last answer, narrowed to what is typed now, rather than dropping to the built-in rows
+// and back, which made the list flicker as each answer landed.
 import { useEffect, useState } from 'react';
 import type { MentionCandidate, MentionKind } from '../../../../shared/properties/ai/mentions';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
@@ -49,12 +53,20 @@ export function useMentionRows(query: string | undefined, search: MentionSearch)
     return { rows: [], state: 'ready' };
   }
   const builtins = matchingBuiltinChips(query);
-  // An answer for an older query would list rows that no longer match what is typed; show the built-in ones until the right one lands.
-  const fresh = found?.query === query ? found : undefined;
+  const candidates = found?.query === query ? found.candidates : stillMatching(found?.candidates, query);
   return {
-    rows: pickerRows(builtins, fresh?.candidates ?? [], translate),
-    state: fresh === undefined ? 'searching' : fresh.candidates === undefined ? 'failed' : 'ready',
+    rows: pickerRows(builtins, candidates ?? [], translate),
+    state: found === undefined ? 'searching' : found.candidates === undefined ? 'failed' : 'ready',
   };
+}
+
+/** An older answer narrowed to what is typed now: a candidate stays while its name or path still holds the query. */
+export function stillMatching(candidates: readonly MentionCandidate[] | undefined, query: string): readonly MentionCandidate[] | undefined {
+  if (candidates === undefined) {
+    return undefined;
+  }
+  const needle = query.trim().toLocaleLowerCase();
+  return candidates.filter((candidate) => needle === '' || `${candidate.name} ${candidate.path}`.toLocaleLowerCase().includes(needle));
 }
 
 /** The candidates, or undefined when the search could not run (no project open, the main process refused). */

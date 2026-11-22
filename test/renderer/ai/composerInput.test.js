@@ -4,8 +4,10 @@
 // brings it back; Enter, Cmd+Enter, Ctrl+Enter and Shift+Enter report send, queue, queue and a new
 // line; an input method that is composing neither opens the picker nor sends; a paste is plain text
 // (a file path stays text, a stray placeholder character is stripped); a file dragged from the
-// Pages or Assets panel becomes a chip and a folder or `..` does not; the `/` menu still completes
-// the agent's commands; a draft that changes from outside (cleared on send, dictation, Build an
+// Pages or Assets panel becomes a chip and a folder or `..` does not; the `/` menu completes
+// Stacki's and the agent's commands and lists every skill of the active agent (narrowed by name,
+// tagged Project or Personal, placeholder rows until the list first arrives, an empty card when
+// nothing matches, Esc to close); a draft that changes from outside (cleared on send, dictation, Build an
 // app) replaces the text and is not undoable; at sixteen chips the picker says so and adds none; an
 // empty or failed search says so; the App builder chip copies the bundled instructions and says
 // "Copied" for a moment, in the box and in a sent message.
@@ -20,13 +22,16 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const output = repoPath('node_modules/.stacki-test/composerInput.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 esbuild.buildSync({
   stdin: {
     contents: [
-      "export { ComposerInput, matchingCommands } from './src/features/ai/composer/ComposerInput';",
+      "export { ComposerInput } from './src/features/ai/composer/ComposerInput';",
+      "export { forgetSlashSkills } from './src/features/ai/composer/useSlashSkills';",
+      "export { skillsForAgent, slashQueryOf, slashRows, SLASH_ROWS_MAX } from './src/features/ai/composer/slashRows';",
       "export { MentionChipView } from './src/features/ai/mentions/MentionChipView';",
       "export { appBuildPrompt } from './src/features/apps/appPrompt';",
       "export { subscribeErrorToasts } from './src/ui/errorNotices';",
@@ -153,10 +158,12 @@ function Harness({ record, options }) {
     },
     onSend: (key) => record.sent.push(key),
     searchMentions: options.search ?? search,
+    ...(options.agent === undefined ? {} : { agent: options.agent }),
   });
 }
 
 async function mount(options = {}) {
+  input.forgetSlashSkills(); // Each mount reads its own skill list, not one an earlier test left behind.
   const host = await freshHost();
   const record = { sent: [], changes: [], segments: options.segments ?? [], root: rootFor(host), focus: React.createRef() };
   record.redraw = (segments) => {
@@ -189,11 +196,12 @@ const pills = () => [...document.querySelectorAll('.cm-content .chip-editor-chip
 test('typing @ opens the picker with the three groups, and Enter makes the highlighted row a chip', async () => {
   const record = await mount();
   await typeText(record, 'Update @');
-  assert.deepEqual(groupsOf(), ['Built-in', 'Skills', 'Files']);
-  assert.deepEqual(rowsOf(), ['App builder instructions', 'lumos', 'AGENTS.md', 'apps.md', 'guide.md']);
+  // The best matches come first; on a tie the kind decides, files before skills before the built-in instructions.
+  assert.deepEqual(groupsOf(), ['Files', 'Skills', 'Built-in']);
+  assert.deepEqual(rowsOf(), ['AGENTS.md', 'apps.md', 'guide.md', 'lumos', 'App builder instructions']);
   await typeText(record, 'ap');
-  assert.deepEqual(rowsOf(), ['App builder instructions', 'apps.md'], 'the query narrows built-in rows and the search');
-  await act(async () => void press(record.view, 'ArrowDown'));
+  assert.deepEqual(rowsOf(), ['apps.md', 'App builder instructions'], 'the query narrows built-in rows and the search');
+  // The top row, the best match, is highlighted at first: Enter takes it.
   await act(async () => void press(record.view, 'Enter'));
   await settle(2);
   assert.deepEqual(record.segments, [text('Update '), fileChip('docs/apps.md'), text(' ')]);
@@ -347,7 +355,7 @@ test('the / menu completes the agent’s commands: arrows move, Enter and a clic
   ];
   const record = await mount({ commands });
   await typeText(record, '/');
-  assert.equal(document.querySelectorAll('.ai-commands button').length, 3);
+  assert.equal(document.querySelectorAll('.ai-commands button').length, 4, 'the three commands and the project skill');
   await typeText(record, 'i');
   assert.deepEqual(
     [...document.querySelectorAll('.ai-commands .ai-command-name')].map((name) => name.textContent),
@@ -366,8 +374,162 @@ test('the / menu completes the agent’s commands: arrows move, Enter and a clic
     async () => void document.querySelector('.ai-commands button').dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true })),
   );
   assert.deepEqual(clicked.segments, [text('/review ')]);
-  assert.deepEqual(input.matchingCommands(commands, 'plain'), []);
-  assert.deepEqual(input.matchingCommands(commands, '/a b'), []);
+  assert.equal(input.slashQueryOf('plain'), undefined);
+  assert.equal(input.slashQueryOf('/a b'), undefined);
+  assert.equal(input.slashQueryOf('/Lum'), 'lum');
+});
+
+// The `/` menu's skills: the active agent's, from the project and the home folder, filtered as one types.
+const slashSkill = (name, place, source = 'project') => ({
+  kind: 'skill',
+  name,
+  description: `${name} does things`,
+  source,
+  path: `${place}/${name}/SKILL.md`,
+});
+const SLASH_SKILLS = [
+  slashSkill('lumos-audit-props', '.claude/skills'),
+  slashSkill('lumos-import-figma', '.claude/skills'),
+  slashSkill('shipstudio-team', '~/.claude/skills', 'user'),
+  slashSkill('codex-only', '~/.codex/skills', 'user'),
+  slashSkill('agents-only', '.agents/skills'),
+];
+const skillSearch = async (query, kinds) => {
+  searches.push(`${kinds.join('+')}:${query}`);
+  return { ok: true, value: kinds.length === 1 && kinds[0] === 'skill' ? SLASH_SKILLS : [] };
+};
+const slashNames = () => [...document.querySelectorAll('.ai-commands .ai-command-name')].map((name) => name.textContent);
+const slashSources = () => [...document.querySelectorAll('.ai-commands .ai-command-source')].map((tag) => tag.textContent);
+
+test('typing / lists every skill of the active agent with its source; typing narrows them; Enter, Tab and a click insert the name', async () => {
+  const commands = [
+    { name: 'clear', description: 'New chat' },
+    { name: 'compact', description: 'Shrink the conversation' },
+  ];
+  const record = await mount({ commands, search: skillSearch });
+  await typeText(record, '/');
+  assert.deepEqual(
+    slashNames(),
+    ['/clear', '/lumos-audit-props', '/lumos-import-figma', '/shipstudio-team', '/compact'],
+    'Stacki first, then skills, then the agent',
+  );
+  assert.deepEqual(slashSources(), ['Project', 'Project', 'Personal']);
+  await typeText(record, 'lumos-');
+  assert.deepEqual(slashNames(), ['/lumos-audit-props', '/lumos-import-figma'], 'the query narrows by name');
+  await act(async () => void press(record.view, 'ArrowDown'));
+  await act(async () => void press(record.view, 'Enter'));
+  assert.deepEqual(record.segments, [text('/lumos-import-figma ')]);
+  assert.deepEqual(record.sent, [], 'choosing a skill did not send');
+
+  const tabbed = await mount({ commands, search: skillSearch });
+  await typeText(tabbed, '/figma');
+  assert.deepEqual(slashNames(), ['/lumos-import-figma'], 'a name that contains the query matches');
+  await act(async () => void press(tabbed.view, 'Tab'));
+  assert.deepEqual(tabbed.segments, [text('/lumos-import-figma ')]);
+
+  const clicked = await mount({ commands, search: skillSearch });
+  await typeText(clicked, '/ship');
+  await act(
+    async () =>
+      void document.querySelector('.ai-commands .ai-command').dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true })),
+  );
+  assert.deepEqual(clicked.segments, [text('/shipstudio-team ')]);
+});
+
+test('the / menu: Esc closes it for that text, the up arrow wraps, Codex sees its own skills, and nothing matching shows the empty card', async () => {
+  const record = await mount({ commands: [{ name: 'compact', description: 'Shrink' }], search: skillSearch });
+  await typeText(record, '/');
+  await act(async () => void press(record.view, 'ArrowUp'));
+  assert.equal(
+    document.querySelector('.ai-commands [aria-selected="true"] .ai-command-name')?.textContent,
+    '/compact',
+    'up from the first row wraps to the last',
+  );
+  await act(async () => void press(record.view, 'Escape'));
+  assert.equal(document.querySelector('.ai-commands') ?? undefined, undefined, 'Esc closes the menu');
+  assert.equal(record.view.state.doc.toString(), '/', 'and keeps the text');
+  await typeText(record, 'lu');
+  assert.ok(document.querySelector('.ai-commands'), 'typing again opens it');
+
+  const codex = await mount({ agent: 'codex', search: skillSearch });
+  await typeText(codex, '/');
+  assert.deepEqual(slashNames(), ['/agents-only', '/codex-only'], 'only the places Codex reads');
+
+  const empty = await mount({ search: skillSearch });
+  await typeText(empty, '/nothing-like-this');
+  assert.ok(document.querySelector('.ai-commands .ui-empty-state'), 'the empty-state card');
+  assert.equal(document.querySelector('.ai-commands [role="option"]') ?? undefined, undefined);
+  await act(async () => void press(empty.view, 'Enter'));
+  assert.deepEqual(empty.sent, ['send'], 'Enter with nothing to choose sends as usual');
+});
+
+test('the / menu draws placeholder rows until the skills first arrive, then keeps them for the next opening', async () => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const slow = async (query, kinds) => {
+    await gate;
+    return skillSearch(query, kinds);
+  };
+  const record = await mount({ commands: [{ name: 'compact', description: 'Shrink' }], search: slow });
+  await typeText(record, '/');
+  assert.deepEqual(slashNames(), ['/compact'], 'the commands show at once');
+  assert.ok(document.querySelector('.ai-commands .ui-skeleton'), 'placeholder rows stand in for the skills');
+  assert.equal(document.querySelector('.ai-commands').getAttribute('aria-busy'), 'true');
+  await act(async () => release());
+  await settle(2);
+  assert.equal(document.querySelector('.ai-commands .ui-skeleton') ?? undefined, undefined);
+  assert.ok(slashNames().includes('/lumos-audit-props'));
+  await record.redraw([]);
+  await settle(1);
+  await typeText(record, '/');
+  assert.equal(document.querySelector('.ai-commands .ui-skeleton') ?? undefined, undefined, 'the kept list shows at once on the next opening');
+
+  const failing = await mount({ search: async () => ({ ok: false, error: { code: 'x', message: 'no' } }) });
+  await typeText(failing, '/zzz');
+  assert.match(document.querySelector('.ai-commands .ui-empty-state').textContent, /couldn’t be read/);
+});
+
+test('slash rows: exact before prefix before contains, a skill hides an agent command of its name, a Stacki command hides both, and the list is bounded', () => {
+  const skills = input.skillsForAgent(
+    [
+      { name: 'review', description: 'Skill review', source: 'project', path: '.claude/skills/review/SKILL.md' },
+      { name: 'clear', description: 'A skill named clear', source: 'user', path: '~/.claude/skills/clear/SKILL.md' },
+      { name: 'pre-review', description: '', source: 'user', path: '~/.claude/skills/pre-review/SKILL.md' },
+      { name: 'elsewhere', description: '', source: 'user', path: '~/somewhere/elsewhere/SKILL.md' },
+    ],
+    'claude',
+  );
+  assert.deepEqual(
+    skills.map((skill) => skill.name),
+    ['clear', 'pre-review', 'review'],
+    'a path outside the agent’s places is not its skill',
+  );
+  const rows = input.slashRows({
+    commands: [
+      { name: 'clear', description: 'New chat', hint: undefined },
+      { name: 'review', description: 'Agent review', hint: undefined },
+      { name: 'reviewer', description: '', hint: undefined },
+    ],
+    skills,
+    query: 'review',
+  });
+  assert.deepEqual(
+    rows.map((row) => `${row.kind}:${row.kind === 'skill' ? row.skill.name : row.command.name}`),
+    ['skill:review', 'command:reviewer', 'skill:pre-review'],
+  );
+  assert.deepEqual(
+    input.slashRows({ commands: [{ name: 'clear', description: 'New chat', hint: undefined }], skills, query: 'clear' }).map((row) => row.kind),
+    ['builtin'],
+  );
+  const many = Array.from({ length: input.SLASH_ROWS_MAX + 20 }, (_, index) => ({
+    name: `skill-${String(index).padStart(3, '0')}`,
+    description: '',
+    source: 'user',
+    path: `~/.claude/skills/skill-${index}/SKILL.md`,
+  }));
+  assert.equal(input.slashRows({ commands: [], skills: many, query: '' }).length, input.SLASH_ROWS_MAX);
 });
 
 test('a draft that changes from outside replaces the text without being reported back, and is not undoable', async () => {
@@ -424,8 +586,12 @@ test('the App builder chip copies the bundled instructions and says Copied for a
   assert.deepEqual(clipboard, [input.appBuildPrompt()]);
   assert.equal(pill.querySelector('.chip-editor-chip-label').textContent, 'Copied');
   assert.deepEqual(record.sent, []);
-  await new Promise((resolve) => setTimeout(resolve, 1650));
-  assert.equal(pill.querySelector('.chip-editor-chip-label').textContent, 'App builder instructions');
+  // The label comes back on its own timer (COPIED_LABEL_MS); wait on the label, not a guessed pause.
+  await waitFor({
+    what: 'the App builder pill label to return after Copied',
+    read: () => pill.querySelector('.chip-editor-chip-label').textContent,
+    until: (label) => label === 'App builder instructions',
+  });
 });
 
 test('a chip in a sent message is the same pill; the instructions chip copies and says Copied; a file chip is plain unless given a click', async () => {
@@ -458,6 +624,9 @@ test('a chip in a sent message is the same pill; the instructions chip copies an
   assert.equal(builder.textContent, 'Copied');
   await act(async () => skillView.click());
   assert.equal(clicks, 1);
-  await new Promise((resolve) => setTimeout(resolve, 1650));
-  assert.equal(builder.textContent, 'App builder instructions');
+  await waitFor({
+    what: 'the sent App builder chip label to return after Copied',
+    read: () => builder.textContent,
+    until: (label) => label === 'App builder instructions',
+  });
 });

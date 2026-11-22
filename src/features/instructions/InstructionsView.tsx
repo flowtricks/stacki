@@ -26,6 +26,7 @@ import { markdownHTML, parseMarkdown, TASK_CLASS, TASK_DONE_CLASS } from '../../
 import { codeHighlightRules, paintCodeBlocks } from './codeBlockHighlights';
 import { changedOnDisk, edited, isDirty, openSession, resolved, saved, shouldSave, type ConflictChoice, type DocumentSession } from './documentSession';
 import { frontmatterView } from './frontmatterFields';
+import { isCodexAgentFile } from '../../../shared/properties/instructions';
 import { onInstructionsChanged, readInstruction, writeInstruction } from './instructionsBridge';
 import './instructions.css';
 
@@ -61,7 +62,11 @@ export default function InstructionsView({
 }: InstructionsViewProps & { readonly Form: ComponentType<InstructionFormProps> }) {
   const translate = useTranslate();
   const document = useInstructionDocument(projectPath, file);
-  const [mode, setMode] = useState<ViewMode>('rich');
+  const [chosenMode, setMode] = useState<ViewMode>('rich');
+  // A Codex agent definition is TOML: there are no fields to draw it as, so it opens as source only.
+  const toml = isCodexAgentFile(file);
+  const mode: ViewMode = toml ? 'source' : chosenMode;
+  const language = toml ? 'toml' : 'markdown';
   const { session } = document;
   return (
     <div className={`cms-view instructions-view ${hidden ? 'hidden' : ''}`} role="region" aria-label={translate('instructionsPanel.view.region', { file })}>
@@ -72,15 +77,17 @@ export default function InstructionsView({
           <span className="instructions-view-path">{file}</span>
           <div className="remote-cms-item-meta">
             <SaveStatus session={session} save={document.save} editable={editable} />
-            <SegmentedTabs
-              label={translate('instructionsPanel.view.label')}
-              value={mode}
-              tabs={[
-                { value: 'rich', label: translate('instructionsPanel.view.fields') },
-                { value: 'source', label: translate('instructionsPanel.view.source') },
-              ]}
-              onPick={setMode}
-            />
+            {!toml && (
+              <SegmentedTabs
+                label={translate('instructionsPanel.view.label')}
+                value={mode}
+                tabs={[
+                  { value: 'rich', label: translate('instructionsPanel.view.fields') },
+                  { value: 'source', label: translate('instructionsPanel.view.source') },
+                ]}
+                onPick={setMode}
+              />
+            )}
             <button type="button" className="ghost" aria-label={translate('instructionsPanel.view.closeFile')} title={translate('ui.close')} onClick={onClose}>
               <CloseIcon size={13} />
             </button>
@@ -99,9 +106,9 @@ export default function InstructionsView({
               {mode === 'source' ? (
                 <div className="remote-cms-fields instructions-source">
                   {editable ? (
-                    <CodeEditor language="markdown" value={session.draft} onChange={(text: string) => document.edit(text)} />
+                    <CodeEditor language={language} value={session.draft} onChange={(text: string) => document.edit(text)} />
                   ) : (
-                    <CodeBlock text={session.draft} language="markdown" label={file} />
+                    <CodeBlock text={session.draft} language={language} label={file} />
                   )}
                 </div>
               ) : (

@@ -125,7 +125,10 @@ test('candidates and kinds', () => {
     { kind: 'skill', name: 'a', description: 'd', source: 'project', path: '.claude/skills/a/SKILL.md' },
   ];
   assert.deepEqual(parseMentionCandidates(candidates), candidates);
-  assert.throws(() => parseMentionCandidates(Array.from({ length: AI_LIMITS.mentionResultsMax + 1 }, () => candidates[0])), /exceeds limit/);
+  assert.throws(
+    () => parseMentionCandidates(Array.from({ length: Math.max(AI_LIMITS.mentionResultsMax, AI_LIMITS.skillListMax) + 1 }, () => candidates[0])),
+    /exceeds limit/,
+  );
   assert.throws(() =>
     parseMentionCandidate({ kind: 'skill', name: 'a', description: 'x'.repeat(AI_LIMITS.mentionSkillDescriptionCharsMax + 1), source: 'user', path: '~/a' }),
   );

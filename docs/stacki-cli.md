@@ -44,7 +44,8 @@ by the app's own parser (`validateMetadata`). The app and the CLI cannot disagre
 - **Closed-world keys.** The app's parsers ignore keys they do not know, so a typo would be dead data. The CLI refuses a key that is not in the key
   reference (`unknown-key`) before the parser sees it.
 - **Never invalid.** A file the app's parser would refuse is never written; an existing file the parser refuses is never overwritten.
-- **No secrets, no network.** The CLI reads and writes only the listed `.stacki` settings files. Secret-bearing and generated paths are
+- **No secrets, no network.** The CLI reads and writes only the listed `.stacki` settings files, and the agent files `stacki agents`
+  generates (`.claude/agents/`, `.codex/agents/`). Secret-bearing and generated paths are
   "not settable" (below) and are never read, printed or written. No command uses the network.
 - **Undo.** Each apply writes one journal entry (`.stacki/io/cli-journal/<id>.json`, last 16 kept); `stacki undo <id> --apply` puts the files back when
   they still hold what the apply wrote. Desktop's undo stack is in memory inside the app window and cannot be fed from another process; git remains
@@ -130,6 +131,10 @@ files other people rely on and a newly installed command should never be runnabl
 | `stacki components rename <path> <Name>`, `components move <path> <folder>` | write | `cli:components` | `cli.components.rename`, `.move` | `stacki_components_rename`, `_move` |
 | `stacki components duplicate <path>` | write | `cli:components` | `cli.components.duplicate` | `stacki_components_duplicate` |
 | `stacki components delete <path>` | write, deletes | `cli:components` | `cli.components.delete` | `stacki_components_delete` |
+| `stacki agents list`, `agents show <name>` | read | `cli:read` | `cli.agents.list`, `.show` | `stacki_agents_list`, `_show` |
+| `stacki agents create <name> --description <text> [--instructions <text>\|--instructions-file <path>] [--tools <list>] [--claude-model <id>] [--codex-model <id>]` | write | `cli:config` | `cli.agents.create` | `stacki_agents_create` |
+| `stacki agents sync [<name>\|--all] [--force]` | write | `cli:config` | `cli.agents.sync` | `stacki_agents_sync` |
+| `stacki agents delete <name>` | write, deletes | `cli:config` | `cli.agents.delete` | `stacki_agents_delete` |
 | `stacki undo <id>` | write | `cli:config` | `cli.undo` | `stacki_undo` |
 
 Config on `roles` needs `cli:roles`, on the apps files `cli:apps`, on `cli.json` `cli:roles`, whatever the command's own feature: no route around the
@@ -192,6 +197,32 @@ every effect already applied and puts back every file already written.
   `.stacki/apps/settings.json`. The app platform has no dependency between apps (no manifest key names another app), so there is nothing for a removal to refuse on that ground. An app's sealed
   secrets live in its vault outside the project and are not touched.
 
+### Agents: paired agents and their generated files
+
+`stacki agents` does what Settings > Agents does. A paired agent is one source, `.stacki/agents/<name>.json`, and two files generated
+from it, `.claude/agents/<name>.md` and `.codex/agents/<name>.toml`. The rules are the panel's, called and never copied:
+`agentSaveDecision` (names, collisions, which edits block a write), `generateAgent` and `pairedFileState` in
+`shared/properties/projectAgents.ts`, read and written by `planAgentSave`, `applyAgentChanges` and `agentDeleteFiles` in
+`electron/project/agentFiles.ts`, which `saveAgent` (behind the panel's `agents:save`) also runs. So the CLI and the panel write the
+same bytes for the same source; `test/electron/project/cli/cliAgents.test.ts` compares them.
+
+- **`list`** answers `result.paired` (`name`, `description`, `source`, `providers`: the CLIs whose file exists, `files`: `in-sync`,
+  `edited` or `missing` per CLI, `drift`: the worst of them, or `unreadable` for a source that does not read), `result.unpaired` (the
+  definitions written by hand) and `result.truncated`. **`show <name>`** adds the fields and, for an edited file, its drift.
+- **`create`** checks the name like the panel (lowercase letters, digits and single hyphens, at most 64 characters, unique ignoring case
+  across every agent of either CLI) and refuses when any of the three files exists. `--instructions-file` reads a file inside the
+  project only, at most 100000 characters: an MCP client could otherwise copy any file the CLI can read into a tracked agent file.
+- **`sync <name>` or `sync --all`** regenerates the files from the source. A generated file edited since Stacki wrote it is refused
+  (`refused`, exit 1, nothing written) with its drift in the message and in `result.edited` (`linesAdded`, `linesRemoved`, `firstLine`);
+  `--force` overwrites it and says so in a note. With `--all`, a source that does not read is skipped with a note.
+- **`delete <name>`** removes a pair (the source and both files), never a definition written by hand, and needs `--apply --yes`. The
+  Trash is reachable only from the app, so the texts are kept in the undo journal, as for `components delete`.
+- Every write is one `agent-files` effect (`electron/project/cli/cliAgents.ts`): each file with the text it held and will hold, checked
+  again at apply (`conflict` when one changed), written all or none, undone by `stacki undo <id>`.
+- **Access.** Writes need `cli:config` and, like the panel, `instructions:edit` (which takes `panel:instructions`); reads need `cli:read`.
+  `.stacki/agents/` is a domain folder (`STACKI_DOMAIN_FOLDERS` in `shared/properties/cli/stackiFiles.ts`): `config` refuses it with
+  `unsupported-file` and names these commands, and `stacki schema` lists it under `domainFolders`.
+
 ## Reference: every `.stacki` file
 
 `stacki schema` prints these (also MCP tool `stacki_schema` and resources `stacki://schema/<id>`; current text as `stacki://state/<id>`).
@@ -216,6 +247,7 @@ every effect already applied and puts back every file already written.
 | `.stacki/apps/settings.json` | version, apps (non-secret values) | apps settings set | `panel:apps` |
 | `.stacki/cli.json` | version, apps (enabled, trusted, sha256, network) | apps enable/disable | `settings:roles` |
 | App-declared files | declared in the app's manifest `cli.files` | the app's commands | `cli:apps` |
+| `.stacki/agents/<name>.json` (a domain folder: never `config`) | version, name, description, instructions, tools, models | agents create/sync/delete | `instructions:edit` |
 
 **Not settable (never read, printed or written):** `.stacki/preview/` and `.stacki/canvas/` (generated, git-ignored), `.stacki/io/` (write staging, locks and the CLI
 journal), `.stacki/studio/` (Studio machine state), `.stacki/studio-app-secrets/`, `.stacki/studio-media/`, `.stacki/studio-cms/` (credentials),
@@ -229,7 +261,7 @@ Written outside `.stacki` and out of scope: `.mcp.json`, `~/.codex/config.toml`,
 `test/shared/properties/cli/stackiSchemaCoverage.test.ts` fails when: a project metadata kind has no registry file; a registry file's empty document is
 refused by the app's own parser; a key a parser reads (`value['key']`, `.get('key')`, `for (const key of ['a', 'b'])`, in the parser sources each
 registry file names) is neither in the registry nor listed with a reason in `parserKeyExceptions`; the app's source names a `.stacki/...` path that is neither
-a registry file nor in `STACKI_UNSETTABLE`; a registry key names a command that is not in the table. So adding a setting to the app without CLI
+a registry file, nor under a domain folder (`STACKI_DOMAIN_FOLDERS`, whose commands must exist and write), nor in `STACKI_UNSETTABLE`; a registry key names a command that is not in the table. So adding a setting to the app without CLI
 coverage breaks the build. It is a source scan, not a proof: a parser that builds a key name dynamically, or reads keys through a helper in another
 module, is not seen; list that module in `parserSources`.
 

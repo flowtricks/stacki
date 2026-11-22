@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { METADATA_FILES } from '#dist/shared/properties/projectMetadata.js';
-import { STACKI_FILES, STACKI_UNSETTABLE, refusalOfSource, serializeDocument } from '#dist/shared/properties/cli/stackiFiles.js';
+import { STACKI_DOMAIN_FOLDERS, STACKI_FILES, STACKI_UNSETTABLE, refusalOfSource, serializeDocument } from '#dist/shared/properties/cli/stackiFiles.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
 import { COMMANDS } from '#dist/shared/properties/cli/stackiCommands.js';
 
@@ -145,17 +145,39 @@ test('every .stacki path the app names is a registry file or listed as not setta
     }
   }
   const settable = new Set(STACKI_FILES.map((file) => file.file));
+  const within = (name: string, entry: { readonly path: string }): boolean => name.startsWith(entry.path) || entry.path.startsWith(name);
   const unlisted = [...found].filter(
-    ([name]) => !settable.has(name) && !STACKI_UNSETTABLE.some((entry) => name.startsWith(entry.path) || entry.path.startsWith(name)),
+    ([name]) => !settable.has(name) && !STACKI_DOMAIN_FOLDERS.some((entry) => within(name, entry)) && !STACKI_UNSETTABLE.some((entry) => within(name, entry)),
   );
   assert.deepEqual(
     unlisted.map(([name, where]) => `${name} (${where})`),
     [],
-    'add the path to a registry file, or to STACKI_UNSETTABLE with the reason it is not settable',
+    'add the path to a registry file, to STACKI_DOMAIN_FOLDERS with the commands that change it, or to STACKI_UNSETTABLE with the reason it is not settable',
   );
   for (const entry of STACKI_UNSETTABLE) {
     assert.ok(entry.reason.length > 20, `${entry.path} says why it is not settable`);
   }
+});
+
+test('a domain folder is changed by commands that exist, is never also unsettable, and names the access its panel asks', () => {
+  const known = new Set(COMMANDS.map((spec) => spec.words.join(' ')));
+  for (const entry of STACKI_DOMAIN_FOLDERS) {
+    assert.ok(entry.path.startsWith('.stacki/') && entry.path.endsWith('/'), `${entry.path} is a .stacki folder`);
+    assert.ok(entry.commands.length > 0, `${entry.path} names its commands`);
+    for (const command of entry.commands) {
+      assert.ok(known.has(command), `${entry.path} names "${command}", which is not in the command table`);
+      assert.equal(COMMANDS.find((spec) => spec.words.join(' ') === command)?.access, 'write', `${command} writes`);
+    }
+    assert.ok(entry.description.length > 20, `${entry.path} says what it holds`);
+    assert.ok(entry.requires.includes(':'), `${entry.path} names an access feature`);
+    assert.ok(!STACKI_UNSETTABLE.some((unsettable) => unsettable.path === entry.path), `${entry.path} is not also listed as not settable`);
+    assert.ok(!STACKI_FILES.some((file) => file.file.startsWith(entry.path)), `${entry.path} holds no registry file a config write could reach`);
+  }
+  assert.deepEqual(
+    STACKI_DOMAIN_FOLDERS.map((entry) => entry.path),
+    ['.stacki/agents/'],
+    'the paired agents folder is covered by the agents commands',
+  );
 });
 
 test('the files with rules across files are edited by domain commands, not only by config', () => {

@@ -6,11 +6,12 @@
 import { err, ok, type Result } from '../../../shared/core/result';
 import { COMMANDS, commandByWords, type CommandSpec } from '../../../shared/properties/cli/stackiCommands';
 import { CLI_SCHEMA_VERSION, type CliEnvelope, type CliError, type CliFailure, type PlannedFile } from '../../../shared/properties/cli/stackiOutput';
-import { fileSchemaById, fileSchemaByPath, registerAppFiles } from '../../../shared/properties/cli/stackiFiles';
+import { domainFolderOf, fileSchemaById, fileSchemaByPath, registerAppFiles } from '../../../shared/properties/cli/stackiFiles';
 import type { CliAccessFeature } from '../../../shared/properties/cli/stackiFeatures';
 import { applyStaged, DEFAULT_WRITER, planUndo, type FileWriter } from './cliApply';
 import { describeEffect, type EffectApplier, type EffectRecord } from './cliEffects';
 import { APP_ADMIN_HANDLERS } from './cliAppAdmin';
+import { AGENT_HANDLERS } from './cliAgents';
 import { CORE_HANDLERS, schemaOfArgument, type Handler, type Outcome } from './cliCommands';
 import { findProject } from './cliFiles';
 import { appsAdd, appsRemove } from './cliAppsInstall';
@@ -50,6 +51,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   'apps add': appsAdd,
   'apps remove': appsRemove,
   ...APP_ADMIN_HANDLERS,
+  ...AGENT_HANDLERS,
   'apps settings set': (context) => {
     const schema = fileSchemaById('appSettings');
     const [app, setting, value] = [context.args['app'], context.args['setting'], context.args['value']];
@@ -163,9 +165,16 @@ async function finish(request: RunRequest, spec: CommandSpec, root: string, role
   }
   const effects = outcome.effects ?? [];
   for (const file of effects.flatMap(describeEffect)) {
-    // Effects touching a settings file need the same access as editing it.
+    // Effects touching a settings file need the same access as editing it; a domain folder's files (and the files generated
+    // from them, such as .claude/agents/) need the access its panel asks.
     const schema = fileSchemaByPath(file.file);
-    const refusal = schema === undefined ? undefined : fileDenial(role.view, schema.requires, schema.file);
+    const folder = domainFolderOf(file.file);
+    let refusal: CliError | undefined;
+    if (schema !== undefined) {
+      refusal = fileDenial(role.view, schema.requires, schema.file);
+    } else if (folder !== undefined) {
+      refusal = fileDenial(role.view, folder.requires, folder.path);
+    }
     if (refusal !== undefined) {
       return failure(name, refusal);
     }

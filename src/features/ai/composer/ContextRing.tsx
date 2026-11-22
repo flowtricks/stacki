@@ -1,22 +1,28 @@
 // The context ring at the far right of the status line: how much of the agent's context window this chat
-// has used (neutral below 70%, amber from 70%, red from 90%), and, on hover or click, a small panel with the
-// numbers and a Compact button.
+// has used (neutral below 70%, amber from 70%, red from 90%). Hovering the ring shows a short tip ("Context 42%
+// used"); a click opens a small panel with the numbers, Compact and the auto-compact picker.
 //
-// A custom Popup, not the ring's tooltip slot: the panel holds a button, which a tooltip cannot. Hovering
-// opens it and leaving closes it after a beat (so the pointer can cross to the button); clicking pins it
-// open until Escape or a press outside. Compact exists only for agents that can compact (a table in
+// A custom Popup, not the ring's tooltip slot: the panel holds buttons, which a tooltip cannot. It opens on click only
+// (Enter and Space click the button too), toggles on the next click of the ring, and closes on Escape or a press
+// outside. Focus moves to its first control when it opens and returns to the ring when it closes. Compact exists only for agents that can compact (a table in
 // agentPresentation.ts: Codex has no compact command) and waits while a turn runs, because the agent
 // compacts by taking a turn of its own.
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { assert } from '../../../../shared/core/assert';
 import type { AgentId } from '../../../../shared/properties/ai/agentIds';
 import { canCompact } from '../../../../shared/properties/ai/agentPresentation';
 import type { ChatId } from '../../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
+import { tooltipHost, useDelayedTooltip } from '../../../ui/delayedTooltip';
+import FittedTooltip from '../../../ui/FittedTooltip';
+import { LayersIcon } from '../../../ui/Icons';
 import Popup from '../../../ui/Popup';
 import { ProgressRing, type RingTone } from '../../../ui/ProgressRing';
+import { autoCompactSupported, contextBarTone } from '../../../../shared/properties/ai/autoCompact';
 import { compactChat } from '../aiStore';
+import { AutoCompactPicker, useAutoCompactPercent } from '../autoCompactPreference';
 import { contextPercent, contextTone } from '../chatStatus';
 
 export interface ContextUsage {
@@ -24,8 +30,6 @@ export interface ContextUsage {
   readonly size: number;
 }
 
-/** How long the pointer may be outside both the ring and its panel before the panel closes. */
-const LEAVE_DELAY_MS = 180;
 const PANEL_GAP_PX = 8;
 
 interface PanelPlace {
@@ -62,40 +66,33 @@ export function ContextRing({
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
   const [place, setPlace] = useState<PanelPlace | undefined>(undefined);
   const [open, setOpen] = useState(false);
-  const pinned = useRef(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const clearTimer = (): void => {
-    if (timer.current !== undefined) {
-      clearTimeout(timer.current);
-      timer.current = undefined;
-    }
-  };
-  // A timer left running would set state on an unmounted chip.
-  useEffect(() => clearTimer, []);
+  const panel = useRef<HTMLDivElement | undefined>(undefined);
+  const tip = useDelayedTooltip();
   const show = (): void => {
-    clearTimer();
     if (anchor !== undefined) {
       const rectangle = anchor.getBoundingClientRect();
       setPlace({ right: Math.max(8, window.innerWidth - rectangle.right), bottom: window.innerHeight - rectangle.top + PANEL_GAP_PX });
     }
+    tip.hide();
     setOpen(true);
   };
   const close = (): void => {
-    clearTimer();
-    pinned.current = false;
     setOpen(false);
+    // The ring gets the keyboard back, so Tab continues from where the person was.
+    anchor?.focus();
   };
-  const leave = (): void => {
-    clearTimer();
-    if (!pinned.current) {
-      timer.current = setTimeout(close, LEAVE_DELAY_MS);
+  // The first control takes focus once the panel is on screen.
+  useEffect(() => {
+    if (open) {
+      panel.current?.querySelector<HTMLElement>('button, input')?.focus();
     }
-  };
+  }, [open]);
   const known = usage !== undefined && usage.size > 0;
   const tone = known ? contextTone(usage.used, usage.size) : 'unknown';
   const ringTone: RingTone = tone === 'unknown' ? 'neutral' : tone;
   const percent = known ? contextPercent(usage.used, usage.size) : undefined;
   const compactable = canCompact(agent);
+  const threshold = useAutoCompactPercent();
   const blocked = running ? translate('ai.context.wait') : compacting ? translate('ai.context.already') : undefined;
   return (
     <>
@@ -106,12 +103,10 @@ export function ContextRing({
         aria-label={percent === undefined ? translate('ai.context.label') : translate('ai.context.labelPercent', { percent })}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onMouseEnter={show}
-        onMouseLeave={leave}
-        onClick={() => {
-          pinned.current = true;
-          show();
-        }}
+        onMouseEnter={open ? undefined : tip.show}
+        onMouseLeave={tip.hide}
+        onBlur={tip.hide}
+        onClick={() => (open ? close() : show())}
       >
         <ProgressRing
           value={known ? Math.min(1, usage.used / usage.size) : undefined}
@@ -120,6 +115,13 @@ export function ContextRing({
           label={percent === undefined ? translate('ai.context.ring') : translate('ai.context.ringPercent', { percent })}
         />
       </button>
+      {tip.value !== undefined &&
+        createPortal(
+          <FittedTooltip role="tooltip" anchor={tip.value} preferred="above">
+            {percent === undefined ? translate('ai.context.ring') : translate('ai.context.ringPercent', { percent })}
+          </FittedTooltip>,
+          tooltipHost(undefined),
+        )}
       {place !== undefined && (
         <Popup
           mode="popover"
@@ -127,29 +129,54 @@ export function ContextRing({
           label={translate('ai.context.label')}
           open={open}
           anchor={anchor}
+          // A press on the ring is its own toggle, not an outside press that would close the panel and reopen it.
+          within={anchor}
           onClose={close}
+          ref={(element) => {
+            panel.current = element ?? undefined;
+          }}
           className="ai-ring-panel"
           style={{ position: 'fixed', right: place.right, bottom: place.bottom, zIndex: 400 }}
-          onMouseEnter={clearTimer}
-          onMouseLeave={leave}
         >
-          <div className="ai-ring-sentence" data-tone={tone}>
-            {contextSentence(usage, translate, formatNumber)}
+          <div className="ai-ring-head">
+            <span className="ai-ring-title">{translate('ai.context.ring')}</span>
+            {percent !== undefined && (
+              <span className="ai-ring-percent" data-tone={contextBarTone(percent)}>
+                {percent}%
+              </span>
+            )}
           </div>
-          {compactable && known && <div className="ai-ring-note">{translate('ai.context.note')}</div>}
-          {compactable && (
-            <button
-              type="button"
-              className="ai-ring-compact"
-              disabled={blocked !== undefined}
-              title={blocked ?? translate('ai.context.compact.title')}
-              onClick={() => {
-                close();
-                void compactChat(chat);
-              }}
-            >
-              {compacting ? translate('ai.context.compacting') : translate('ai.context.compact')}
-            </button>
+          <div className="ai-ring-bar" data-tone={contextBarTone(percent)} role="presentation">
+            {percent !== undefined && <span className="ai-ring-fill" style={{ inlineSize: `${Math.min(100, percent)}%` }} />}
+            {threshold !== undefined && <span className="ai-ring-tick" style={{ insetInlineStart: `${threshold}%` }} />}
+          </div>
+          <div className="ai-ring-tokens">
+            {known
+              ? translate('ai.context.usedTokens', {
+                  used: formatNumber(usage.used, { notation: 'compact', maximumFractionDigits: 1 }),
+                  size: formatNumber(usage.size, { notation: 'compact', maximumFractionDigits: 1 }),
+                })
+              : translate('ai.context.empty')}
+          </div>
+          {(compactable || autoCompactSupported(agent)) && (
+            <div className="ai-ring-actions">
+              {compactable && (
+                <button
+                  type="button"
+                  className="ai-ring-compact"
+                  disabled={blocked !== undefined}
+                  title={blocked ?? translate('ai.context.compact.title')}
+                  onClick={() => {
+                    close();
+                    void compactChat(chat);
+                  }}
+                >
+                  <LayersIcon size={14} />
+                  {compacting ? translate('ai.context.compacting') : translate('ai.context.compact')}
+                </button>
+              )}
+              {autoCompactSupported(agent) && <AutoCompactPicker ariaLabel={translate('ai.autoCompact.label')} variant="short" />}
+            </div>
           )}
         </Popup>
       )}

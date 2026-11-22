@@ -1,8 +1,8 @@
 // The two kinds of message in the transcript: what the person sent (a bubble) and what the agent
-// answered (text blocks). Both fold behind "Show more" when long, and show a toolbar in a row below the bubble on hover (the time, copy, and for the last user message edit and resend).
+// answered (text blocks). Both fold behind "Show more" when long, and show a toolbar in a row below the bubble on hover (the time, copy, for the last user message edit and resend, and for the agent's last reply retry).
 //
 // Presentational only: the transcript decides which message may be edited or resent and what those
-// do (`onEdit`, `onResend`), supplies the chips of a message that had mentions (`partsView`), and may
+// do (`onEdit`, `onResend`, `onRetry`), supplies the chips of a message that had mentions (`partsView`), and may
 // control the fold (`expanded`, `onExpandedChange`) so it survives the message being re-rendered.
 import { useState, type ReactNode } from 'react';
 import type { ChatAttachmentName } from '../../../../shared/properties/ai/chatModel';
@@ -52,7 +52,7 @@ export function UserMessage({
         <ShowMore folding={folding} />
       </div>
       {/* The actions sit below the bubble, never on its edge, so they cannot overlap or clip the text. */}
-      <MessageToolbar text={text} at={at} onEdit={onEdit} onResend={onResend} />
+      <MessageToolbar text={text} at={at} onEdit={onEdit} onResend={onResend} onRetry={undefined} />
     </div>
   );
 }
@@ -61,12 +61,15 @@ export function AgentMessage({
   text,
   at,
   onQuickReply,
+  onRetry,
   ...fold
 }: FoldProps & {
   readonly text: string;
   readonly at: number | undefined;
   /** Sends one of the agent's numbered options as the person's reply. Given only to the reply that may still be answered. */
   readonly onQuickReply?: ((reply: string) => void) | undefined;
+  /** Asks the agent again with the prompt this reply answered. Given only to the last reply of a turn that ended normally. */
+  readonly onRetry?: (() => void) | undefined;
 }) {
   const folding = useFold(text, fold);
   return (
@@ -75,7 +78,7 @@ export function AgentMessage({
         <ChatText text={text} onQuickReply={onQuickReply} />
       </div>
       <ShowMore folding={folding} />
-      <MessageToolbar text={text} at={at} onEdit={undefined} onResend={undefined} />
+      <MessageToolbar text={text} at={at} onEdit={undefined} onResend={undefined} onRetry={onRetry} />
     </div>
   );
 }
@@ -117,11 +120,13 @@ function MessageToolbar({
   at,
   onEdit,
   onResend,
+  onRetry,
 }: {
   readonly text: string;
   readonly at: number | undefined;
   readonly onEdit: (() => void) | undefined;
   readonly onResend: (() => void) | undefined;
+  readonly onRetry: (() => void) | undefined;
 }) {
   const translate = useTranslate();
   const { formatDate } = useFormat();
@@ -144,6 +149,11 @@ function MessageToolbar({
       )}
       {onResend !== undefined && (
         <button className="ai-msg-action" title={translate('ai.message.resendTitle')} aria-label={translate('ai.message.resend')} onClick={onResend}>
+          <RefreshIcon size={14} />
+        </button>
+      )}
+      {onRetry !== undefined && (
+        <button className="ai-msg-action" title={translate('ai.message.retryTitle')} aria-label={translate('ai.message.retry')} onClick={onRetry}>
           <RefreshIcon size={14} />
         </button>
       )}

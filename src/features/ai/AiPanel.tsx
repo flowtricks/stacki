@@ -6,7 +6,21 @@
 // The panel is a frame-agnostic pair: `renderFrame` receives its header and
 // body, so the app can put them in the docked left panel or a floating window
 // (DockableWindow) without the panel knowing which.
-import { useEffect, useMemo, type ReactNode } from 'react';
+//
+// The panel measures its own body and lays itself out for that width (chatLayout.ts): one column that shows
+// the list or a chat when narrow, and the list as a sidebar beside the chat when wide (an expanded panel or a
+// wide window). Ctrl+Tab and Ctrl+Shift+Tab step through the chats in the list's order in either layout.
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefCallback,
+} from 'react';
 import type { AgentAvailability, ReviewOutcome, SetupState } from '../../../shared/ipc/aiChat';
 import type { WireMergeClash } from '../../../shared/ipc/ipcWire';
 import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
@@ -15,11 +29,15 @@ import type { ChatId, TurnId } from '../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { PlusIcon } from '../../ui/Icons';
 import {
   dismissAiError,
   EMPTY_DRAFT,
   installAgent,
   loadAiProject,
+  newChat,
+  openChat,
+  preferredAgent,
   openStartingChat,
   runSetup,
   reviewChange,
@@ -33,14 +51,18 @@ import { loadReviewMode } from './reviewChanges';
 import { ChatComposer } from './composer/ChatComposer';
 import { usePrewarm } from './prewarm';
 import { agentBadge, type AgentBadge } from './agentSwitch';
-import { AccountRow, SetupCard } from './SetupCard';
+import { SetupCard } from './SetupCard';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
 import { readSignInFailures } from './signInTranscript';
 import { PlanCard } from './transcript/PlanCard';
 import { ChatTranscript } from './transcript/SubagentPane';
-import { ChatHeader } from './sessions/ChatHeader';
+import { ChatHeader, type PanelExpansion, type PanelWindow } from './sessions/ChatHeader';
 import { SessionsView } from './sessions/SessionsView';
+import { groupSessions, listOrder } from './sessions/sessionsModel';
+import { chatLayoutFor, chatStepFor, stepThrough, type ChatLayout } from './chatLayout';
 import { EMPTY_CHAT } from './chatReducer';
+import { AgentChoiceNotices, AgentChoicesDialog } from './AgentChoices';
+import { loadAgentChoices } from './agentChoiceStore';
 import './aiShell.css';
 
 export interface AiPanelProps {
@@ -53,6 +75,10 @@ export interface AiPanelProps {
   /** Shows a project file in the editor (the changes card's "Open file"); a path relative to the project. Without it the action is not offered. */
   readonly onOpenFile?: ((path: string) => void) | undefined;
   readonly renderFrame: (header: ReactNode, body: ReactNode) => ReactNode;
+  /** The host's expand toggle (the panel over the editor area); absent where the host has none. */
+  readonly expansion?: PanelExpansion | undefined;
+  /** The host's pop out / dock toggle, offered in the header's menu; absent where the host has none. */
+  readonly windowToggle?: PanelWindow | undefined;
 }
 
 export default function AiPanel(props: AiPanelProps) {
@@ -62,6 +88,8 @@ export default function AiPanel(props: AiPanelProps) {
   // Each time the panel opens: read the project's agents and chats, then go straight to a chat.
   useEffect(() => {
     void loadAiProject(props.projectPath).then(() => openStartingChat());
+    // The agent chosen for each surface, and the project's definitions it is checked against.
+    void loadAgentChoices(props.projectPath);
   }, [props.projectPath]);
   // Whether changes wait for Keep is the person's setting, read once the panel opens.
   useEffect(() => {
@@ -73,9 +101,23 @@ export default function AiPanel(props: AiPanelProps) {
     return () => setPanelVisibility('hidden');
   }, []);
   const chat = state.open === undefined ? undefined : state.chats.find((candidate) => candidate.id === state.open);
-  const header = <ChatHeader chat={chat} />;
+  const { ref: bodyRef, widthPx } = useBodyWidth();
+  const layout = chatLayoutFor(widthPx);
+  const header = <ChatHeader chat={chat} layout={layout} expansion={props.expansion} windowToggle={props.windowToggle} />;
+  const onBodyKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const direction = chatStepFor(event);
+    if (direction === undefined || event.defaultPrevented) {
+      return;
+    }
+    const order = listOrder(groupSessions(state.chats, state.sections, state.filter).groups).map((candidate) => candidate.id);
+    const target = stepThrough(order, state.open, direction);
+    event.preventDefault();
+    if (target !== undefined) {
+      void openChat(target);
+    }
+  };
   const body = (
-    <div className="ai-body">
+    <div ref={bodyRef} className={`ai-body is-${layout}`} onKeyDown={onBodyKeyDown}>
       {state.error !== undefined && (
         <ErrorToast
           message={translateDescribed({ message: state.error, messageRef: state.errorRef })}
@@ -88,14 +130,72 @@ export default function AiPanel(props: AiPanelProps) {
             <span key={row} className="ai-skeleton-row" />
           ))}
         </div>
-      ) : chat === undefined ? (
-        <SessionsView chats={state.chats} />
       ) : (
-        <ChatPane {...props} state={state} chatId={chat.id} agent={chat.agent} />
+        <PanelContent {...props} layout={layout} state={state} chat={chat} />
       )}
     </div>
   );
   return <>{props.renderFrame(header, body)}</>;
+}
+
+/**
+ * The body's content for its layout. Stacked: the list, or the open chat. Split: the list as a sidebar on the
+ * inline-start side with the open chat beside it, or, with none open, a line that says how to start. The sidebar
+ * is the same list, so its search, grouping and menus are the ones the narrow panel has.
+ */
+function PanelContent(props: AiPanelProps & { readonly layout: ChatLayout; readonly state: AiState; readonly chat: AiState['chats'][number] | undefined }) {
+  const { layout, state, chat } = props;
+  const translate = useTranslate();
+  if (layout === 'stacked') {
+    return chat === undefined ? <SessionsView chats={state.chats} /> : <ChatPane {...props} state={state} chatId={chat.id} agent={chat.agent} />;
+  }
+  return (
+    <>
+      <nav className="ai-sidebar" aria-label={translate('ai.panel.chatList')}>
+        <SessionsView chats={state.chats} selected={chat?.id} layout="split" />
+      </nav>
+      <div className="ai-main">
+        {chat === undefined ? (
+          <div className="ai-pick">
+            <p>{translate('ai.panel.pickChat')}</p>
+            <button className="ai-primary ai-sessions-start" onClick={() => void newChat(preferredAgent())}>
+              <PlusIcon size={12} /> {translate('ai.sessions.newChat')}
+            </button>
+          </div>
+        ) : (
+          // Keyed by chat, so a switch replaces the column in one frame instead of showing the old chat's state with the new one's data.
+          <ChatPane key={chat.id} {...props} state={state} chatId={chat.id} agent={chat.agent} />
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The body's width, read before the first paint (a layout effect) and on every resize after, so a wide panel
+ * opens split rather than drawing one column for a frame first.
+ */
+function useBodyWidth(): { readonly ref: RefCallback<HTMLDivElement>; readonly widthPx: number | undefined } {
+  const [element, setElement] = useState<HTMLDivElement | undefined>(undefined);
+  // React hands a callback ref the platform's null when the element goes; the state says absence with undefined.
+  const ref = useCallback<RefCallback<HTMLDivElement>>((next) => setElement(next ?? undefined), []);
+  const [widthPx, setWidthPx] = useState<number | undefined>(undefined);
+  const observer = useRef<ResizeObserver | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (element === undefined) {
+      return undefined;
+    }
+    setWidthPx(Math.floor(element.getBoundingClientRect().width));
+    observer.current = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (entry !== undefined) {
+        setWidthPx(Math.floor(entry.contentRect.width));
+      }
+    });
+    observer.current.observe(element);
+    return () => observer.current?.disconnect();
+  }, [element]);
+  return { ref, widthPx };
 }
 
 function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chatId: ChatId; readonly agent: AgentId }) {
@@ -110,6 +210,7 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
   const retryText = view.running === undefined && reading.interrupted ? view.lastPrompt?.text : undefined;
   const moment = useSignedInMoment({ agent, needed: stage !== undefined, holdMs: retryText === undefined ? SIGNED_IN_MS : SIGNED_IN_RETRY_MS });
   const started = view.items.some((item) => item.kind === 'user');
+  const [choosingAgents, setChoosingAgents] = useState(false);
   const badges = Object.fromEntries(
     AGENT_IDS.flatMap((id) => {
       const badge = agentBadge(state, id);
@@ -131,6 +232,8 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
   }, [agent, chatId]);
   return (
     <>
+      <AgentChoiceNotices onChoose={() => setChoosingAgents(true)} />
+      {choosingAgents && <AgentChoicesDialog onClose={() => setChoosingAgents(false)} />}
       {view.plan !== undefined && view.plan.entries.length > 0 && <PlanCard plan={view.plan} chat={chatId} />}
       <ChatTranscript
         view={view}
@@ -232,7 +335,7 @@ function AgentGate(
     return <SetupCard setup={setup} />;
   }
   if (availability === undefined || availability.state === 'ready') {
-    return setup?.step === 'ready' ? <AccountRow setup={setup} chat={props.chatId} started={props.started} badges={props.badges} /> : undefined;
+    return undefined;
   }
   switch (availability.state) {
     case 'missing-cli':

@@ -64,6 +64,10 @@ const PATH = arg('path', 'string', 'The key inside the file, for example setting
   positional: true,
 });
 const SIZE = 'A length such as 16px or 3rem, a project variable such as --site-margin, or "default" to clear it.';
+const AGENT_NAME = arg('name', 'string', 'The agent name: lowercase letters, digits and single hyphens (code-reviewer), at most 64 characters.', {
+  required: true,
+  positional: true,
+});
 
 function command(
   words: readonly string[],
@@ -340,6 +344,52 @@ export const COMMANDS: readonly CommandSpec[] = [
     destructive: true,
     args: [arg('path', 'string', 'The component file or folder.', { required: true, positional: true })],
   }),
+  command(
+    ['agents', 'list'],
+    "List the project's paired agents (.stacki/agents/) with each generated file's state (in-sync, edited, missing), and the agent files written by hand.",
+    'cli:read',
+  ),
+  command(['agents', 'show'], "Show one paired agent's fields and the state of its Claude and Codex files.", 'cli:read', {
+    args: [AGENT_NAME],
+  }),
+  command(
+    ['agents', 'create'],
+    'Create a paired agent as Settings > Agents does: .stacki/agents/<name>.json and the .claude/agents/<name>.md and .codex/agents/<name>.toml generated from it.',
+    'cli:config',
+    {
+      write: true,
+      args: [
+        AGENT_NAME,
+        arg('description', 'string', 'One line both CLIs read to decide when to use the agent.', { required: true }),
+        arg('instructions', 'string', "The agent's instructions (its system prompt); or use --instructions-file."),
+        arg('instructionsFile', 'string', 'A project-relative text file holding the instructions, at most 100000 characters.', { placeholder: 'path' }),
+        arg('tools', 'string', 'Claude tools, comma separated (Read, Grep, Bash(git status:*)); default every tool. Codex has no per-agent tool list.', {
+          placeholder: 'list',
+        }),
+        arg('claudeModel', 'string', "Claude's model alias (sonnet, opus, haiku, inherit); default Claude's own.", { placeholder: 'id' }),
+        arg('codexModel', 'string', "Codex's model id; default the session's model.", { placeholder: 'id' }),
+      ],
+    },
+  ),
+  command(
+    ['agents', 'sync'],
+    "Regenerate a paired agent's Claude and Codex files from its source. A file edited since Stacki wrote it is refused (its drift is printed) unless --force.",
+    'cli:config',
+    {
+      write: true,
+      args: [
+        arg('name', 'string', 'The agent name; or --all.', { positional: true }),
+        arg('all', 'boolean', 'Sync every paired agent.'),
+        arg('force', 'boolean', 'Overwrite generated files someone edited.'),
+      ],
+    },
+  ),
+  command(
+    ['agents', 'delete'],
+    'Delete a paired agent: its source and both generated files. The CLI cannot reach the Trash, so the texts are kept in the undo journal.',
+    'cli:config',
+    { write: true, destructive: true, args: [AGENT_NAME] },
+  ),
   command(['undo'], 'Put back what an applied command changed, if those files are still as it left them.', 'cli:config', {
     write: true,
     args: [arg('id', 'string', 'The undo id an apply printed.', { required: true, positional: true })],

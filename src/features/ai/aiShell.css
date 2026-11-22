@@ -62,6 +62,65 @@
 .ai-body > :not(.ai-transcript) {
   margin-inline: 1rem;
 }
+
+/* The split layout (chatLayout.ts, at 760px and wider): the chat list as a 280px sidebar on the inline-start side,
+   the open chat beside it. The sidebar is a step darker than the chat (a fill, never a line between them), and
+   every row of the chat column keeps to a 760px reading width centred in the space, the composer included, so a
+   very wide panel never sets lines too long to read. The transcript's scroll box stays full width so its scrollbar
+   is at the edge; only its flow is held to the column. */
+.ai-body.is-split {
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+}
+.ai-body.is-split > * {
+  margin-inline: 0;
+}
+.ai-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 280px;
+  min-height: 0;
+  box-sizing: border-box;
+  padding-block: 0 12px;
+  padding-inline: 10px 6px;
+  background: var(--bg-panel);
+}
+.ai-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: 6px;
+  padding-block: 0 12px;
+  background: var(--bg);
+}
+.ai-main > :not(.ai-transcript) {
+  box-sizing: border-box;
+  width: calc(100% - 2rem);
+  max-width: 760px;
+  margin-inline: auto;
+}
+.ai-main .ai-transcript-flow {
+  max-width: 760px;
+  margin-inline: auto;
+}
+.ai-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+.ai-pick p {
+  margin: 0;
+}
 .ai-empty {
   color: var(--text-faint);
   font-size: 12px;
@@ -133,45 +192,6 @@
   50% {
     opacity: 0.3;
   }
-}
-.ai-account {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-faint);
-}
-.ai-account-spacer {
-  flex: 1;
-}
-/* The mark and name are the agent switcher: a quiet fill on hover or while open, no border. */
-.ai-account-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  font-size: inherit;
-}
-.ai-account-switch:hover,
-.ai-account-switch.is-open {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-.ai-account-switch svg {
-  flex: none;
-}
-.ai-account-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 /* The sign-in card (SignInCard.tsx): one filled surface for every sign-in state. */
 .ai-signin {

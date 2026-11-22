@@ -7,6 +7,10 @@ import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import {
   isProjectRelativePath,
   type BuiltinChipId,
+  elementKey,
+  isReferenceChip,
+  REFERENCE_CHIPS_MAX,
+  type ComponentMemberChip,
   type ComposerSegment,
   type ComposerSegments,
   type MentionCandidate,
@@ -14,6 +18,17 @@ import {
 } from '../../../../shared/properties/ai/mentions';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import type { ChipLook } from '../../../ui/chipEditor/chipEditor';
+import {
+  AssetManagerIcon,
+  ComponentIcon,
+  ComponentPropertiesIcon,
+  FileIcon,
+  InstructionsIcon,
+  PaintBrushIcon,
+  SkillIcon,
+  TagIcon,
+  VariableIcon,
+} from '../../../ui/Icons';
 import { BUILTIN_CHIPS, type BuiltinMentionChip } from './builtinChips';
 
 /** Rows the picker shows at once (ChipPicker's own bound). */
@@ -32,7 +47,15 @@ export interface PickerRow {
   /** The heading already translated. */
   readonly group: string;
   readonly chip: MentionChip;
+  /** What the row's icon shows when the chip's kind does not say it alone (a page is a file chip, a layout a component chip). */
+  readonly look?: RowLook | undefined;
 }
+
+/** The icon a picker row draws: one per group, a colour swatch for a colour variable, a small thumbnail for an image. */
+export type RowLook =
+  | { readonly kind: 'page' | 'layout' | 'class' | 'video' | 'font' }
+  | { readonly kind: 'variable'; readonly color: string | undefined }
+  | { readonly kind: 'image'; readonly abs: string; readonly key: string };
 
 // ---------------------------------------------------------------------------
 // Chips
@@ -56,8 +79,77 @@ export function candidateChip(candidate: MentionCandidate): MentionChip {
   return { kind: 'skill', name: candidate.name, source: candidate.source, path: candidate.path };
 }
 
-/** How the editor draws a chip: its label, the hover text, and the kind a stylesheet can mark. */
-export function chipLook(chip: MentionChip, translate: Translator): ChipLook {
+// ---------------------------------------------------------------------------
+// The one table of how each kind of chip looks: its colour (mentions.css, by `data-chip-kind`) and its icon,
+// read by the editor's pills, the sent chips and the picker's rows alike
+// ---------------------------------------------------------------------------
+
+/** A chip's look: its kind, except that a CSS chip is a class (blue, the paint brush) or a variable (purple, the swatches). */
+export const CHIP_STYLES = ['file', 'skill', 'builtin', 'component', 'member', 'element', 'class', 'variable', 'asset'] as const;
+export type ChipStyle = (typeof CHIP_STYLES)[number];
+
+/** The colour each look takes: the chip tokens the rest of the app uses for the same thing. */
+export const CHIP_STYLE_COLOURS: Readonly<Record<ChipStyle, 'purple' | 'green' | 'blue'>> = {
+  file: 'purple',
+  skill: 'purple',
+  builtin: 'purple',
+  component: 'green',
+  member: 'green',
+  element: 'purple',
+  class: 'blue',
+  variable: 'purple',
+  asset: 'purple',
+};
+
+export const CHIP_STYLE_ICONS: Readonly<Record<ChipStyle, typeof FileIcon>> = {
+  file: FileIcon,
+  skill: SkillIcon,
+  builtin: InstructionsIcon,
+  component: ComponentIcon,
+  member: ComponentPropertiesIcon,
+  element: TagIcon,
+  class: PaintBrushIcon,
+  variable: VariableIcon,
+  asset: AssetManagerIcon,
+};
+
+export function chipStyleOf(chip: MentionChip): ChipStyle {
+  return chip.kind === 'css' ? chip.target : chip.kind;
+}
+
+/** The label a member chip shows: the name, `name = value` for a value, `name slot` for a slot. */
+export function memberLabel(chip: ComponentMemberChip, translate: Translator): string {
+  if (chip.role === 'text') {
+    return translate('ai.mention.member.text', { value: chip.value });
+  }
+  if (chip.role === 'slot') {
+    return translate('ai.mention.member.slot', { name: chip.name });
+  }
+  return chip.value === undefined ? chip.name : translate('ai.mention.member.value', { name: chip.name, value: chip.value });
+}
+
+/** The hover text of a member chip: which component it belongs to, and what it names. */
+export function memberTitle(chip: ComponentMemberChip, translate: Translator): string {
+  return translate('ai.mention.member.title', { component: componentLabel(chip.component), member: memberLabel(chip, translate) });
+}
+
+/** A component's name as its file says it (`Hero` for `src/components/Hero.astro`); an element's key reads as its file and locator. */
+export function componentLabel(path: string): string {
+  const hash = path.lastIndexOf('#');
+  if (hash > 0) {
+    return `${baseName(path.slice(0, hash))}${path.slice(hash)}`;
+  }
+  const name = baseName(path);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
+/**
+ * How the editor draws a chip: its label, the hover text, and the kind a stylesheet can mark. `problem` is why a
+ * component or member chip no longer matches the project (componentMentions.ts): the chip is then marked invalid
+ * and its hover text says why, while its label stays what the person picked.
+ */
+export function chipLook(chip: MentionChip, translate: Translator, problem?: string): ChipLook {
   switch (chip.kind) {
     case 'file':
       return { label: chip.name, title: chip.path, kind: 'file' };
@@ -65,6 +157,20 @@ export function chipLook(chip: MentionChip, translate: Translator): ChipLook {
       return { label: chip.name, title: translate('ai.mention.skillTitle', { name: chip.name, path: chip.path }), kind: 'skill' };
     case 'builtin':
       return { label: translate(BUILTIN_CHIPS[chip.id].titleKey), title: translate(BUILTIN_CHIPS[chip.id].descriptionKey), kind: 'builtin' };
+    case 'component':
+      return { label: chip.name, title: problem ?? chip.path, kind: problem === undefined ? 'component' : 'invalid' };
+    case 'element':
+      return { label: `<${chip.tag}>`, title: elementKey(chip), kind: 'element' };
+    case 'css':
+      return {
+        label: chip.target === 'variable' ? chip.name : `.${chip.name}`,
+        title: chip.path ?? (chip.target === 'variable' ? chip.name : `.${chip.name}`),
+        kind: chipStyleOf(chip),
+      };
+    case 'asset':
+      return { label: baseName(chip.path), title: chip.path, kind: 'asset' };
+    case 'member':
+      return { label: memberLabel(chip, translate), title: problem ?? memberTitle(chip, translate), kind: problem === undefined ? 'member' : 'invalid' };
     default: {
       const exhaustive: never = chip;
       return exhaustive;
@@ -152,7 +258,8 @@ export function normalizeSegments(segments: ComposerSegments): ComposerSegments 
   return result;
 }
 
-function chipsEqual(left: MentionChip, right: MentionChip): boolean {
+/** Whether two chips name the same thing. */
+export function chipsEqual(left: MentionChip, right: MentionChip): boolean {
   if (left.kind === 'file' && right.kind === 'file') {
     return left.path === right.path && left.name === right.name;
   }
@@ -161,6 +268,21 @@ function chipsEqual(left: MentionChip, right: MentionChip): boolean {
   }
   if (left.kind === 'builtin' && right.kind === 'builtin') {
     return left.id === right.id;
+  }
+  if (left.kind === 'component' && right.kind === 'component') {
+    return left.path === right.path && left.name === right.name;
+  }
+  if (left.kind === 'css' && right.kind === 'css') {
+    return left.target === right.target && left.name === right.name && left.path === right.path;
+  }
+  if (left.kind === 'asset' && right.kind === 'asset') {
+    return left.assetKind === right.assetKind && left.path === right.path;
+  }
+  if (left.kind === 'element' && right.kind === 'element') {
+    return left.path === right.path && left.locator === right.locator && left.tag === right.tag;
+  }
+  if (left.kind === 'member' && right.kind === 'member') {
+    return left.component === right.component && left.role === right.role && left.name === right.name && left.value === right.value;
   }
   return false;
 }
@@ -191,6 +313,21 @@ export function chipCountOf(segments: ComposerSegments): number {
   return segments.filter((segment) => segment.kind === 'chip').length;
 }
 
+/** The chips `AI_LIMITS.mentionsMax` bounds: those the host expands (files, skills, built-ins), not the reference chips. */
+export function hostChipCountOf(segments: ComposerSegments): number {
+  return segments.filter((segment) => segment.kind === 'chip' && !isReferenceChip(segment.chip)).length;
+}
+
+/** The component, element and member chips, bounded by `REFERENCE_CHIPS_MAX`. */
+export function referenceChipCountOf(segments: ComposerSegments): number {
+  return segments.filter((segment) => segment.kind === 'chip' && isReferenceChip(segment.chip)).length;
+}
+
+/** Whether one more `chip` still fits its bound. */
+export function chipFits(segments: ComposerSegments, chip: MentionChip): boolean {
+  return isReferenceChip(chip) ? referenceChipCountOf(segments) < REFERENCE_CHIPS_MAX : hostChipCountOf(segments) < AI_LIMITS.mentionsMax;
+}
+
 export function hasBuiltinChip(segments: ComposerSegments, id: BuiltinChipId): boolean {
   return segments.some((segment) => segment.kind === 'chip' && segment.chip.kind === 'builtin' && segment.chip.id === id);
 }
@@ -200,7 +337,7 @@ export function hasBuiltinChip(segments: ComposerSegments, id: BuiltinChipId): b
  * space before it when the draft ends in a word. A draft already at the mention limit is returned unchanged.
  */
 export function appendChip(segments: ComposerSegments, chip: MentionChip): ComposerSegments {
-  if (chipCountOf(segments) >= AI_LIMITS.mentionsMax) {
+  if (!chipFits(segments, chip)) {
     return segments;
   }
   const last = segments[segments.length - 1];

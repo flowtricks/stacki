@@ -4,19 +4,27 @@
 // Files come from `git ls-files` (tracked and untracked, ignore rules applied) and,
 // outside a repository, from a bounded walk; both are filtered to text extensions
 // and to folders that are never worth mentioning (dependencies, build output, Stacki's
-// preview). Skills are `SKILL.md` files in `<project>/.claude/skills/*`,
-// `<project>/.agents/skills/*`, `~/.claude/skills/*` and `~/.codex/skills/*`
-// (the last location is Codex's convention and is read only if it exists; it has not
-// been checked against an installed Codex). The scan is cached per project for
-// `mentionCacheMs`, because a keystroke asks again.
+// preview). Skills are `SKILL.md` files in each agent's skill folders, in the project
+// and in the home folder (`SKILL_PLACES`, shared/properties/ai/skillPlaces.ts); a folder
+// that does not exist is skipped. The scan is cached per project for `mentionCacheMs`,
+// because a keystroke asks again.
 //
 // Nothing here reads outside those known places: the query is only ever matched
-// against names already listed, never turned into a path.
+// against names already listed, never turned into a path, and a skill folder that is a
+// symbolic link is read only when it resolves inside its base (the project for a
+// project skill, the home folder for a personal one).
+//
+// Two kinds of question come in. The `@` picker asks for files and skills together and
+// gets one row per skill name. The `/` menu asks for skills alone, with an empty query,
+// and gets up to `skillListMax` of them, one per agent and name: it keeps the active
+// agent's and filters them as the person types, without asking again.
 import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../../shared/core/assert';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import { isProjectRelativePath, type MentionCandidate, type MentionKind, type SkillSource } from '../../../shared/properties/ai/mentions';
+import type { AgentId } from '../../../shared/properties/ai/agentIds';
+import { SKILL_PLACES, skillPlacePrefix } from '../../../shared/properties/ai/skillPlaces';
 import { git } from '../../lib/nodeTools';
 
 export interface MentionEnvironment {
@@ -62,6 +70,7 @@ interface SkillRecord {
   readonly description: string;
   readonly source: SkillSource;
   readonly path: string;
+  readonly agent: AgentId;
 }
 
 interface Scan {
@@ -85,12 +94,18 @@ export class MentionIndex {
     const scan = await this.scan(root);
     const needle = query.trim().replace(/^@/, '').toLowerCase();
     const wanted = kinds.length === 0 ? (['file', 'skill'] as const) : kinds;
-    const skills = wanted.includes('skill') ? rankSkills(scan.skills, needle).slice(0, SKILLS_SHARE) : [];
-    const room = AI_LIMITS.mentionResultsMax - skills.length;
-    const files = wanted.includes('file') ? rankFiles(scan.files, needle).filter((file) => fs.existsSync(path.join(root, ...file.split('/')))) : [];
-    const results = [...skills, ...files.slice(0, room).map(toFileCandidate)];
-    assert(results.length <= AI_LIMITS.mentionResultsMax, 'MentionIndex.search: results are bounded');
-    return results;
+    if (wanted.includes('file')) {
+      const skills = wanted.includes('skill') ? rankSkills(oneSkillPerName(scan.skills), needle).slice(0, SKILLS_SHARE) : [];
+      const room = AI_LIMITS.mentionResultsMax - skills.length;
+      const files = rankFiles(scan.files, needle).filter((file) => fs.existsSync(path.join(root, ...file.split('/'))));
+      const results = [...skills, ...files.slice(0, room).map(toFileCandidate)];
+      assert(results.length <= AI_LIMITS.mentionResultsMax, 'MentionIndex.search: results are bounded');
+      return results;
+    }
+    // Skills alone: the `/` menu's whole list, every agent's, which the renderer narrows to the active agent.
+    const skills = wanted.includes('skill') ? rankSkills(scan.skills, needle).slice(0, AI_LIMITS.skillListMax) : [];
+    assert(skills.length <= AI_LIMITS.skillListMax, 'MentionIndex.search: the skill list is bounded');
+    return skills;
   }
 
   private async scan(root: string): Promise<Scan> {
@@ -250,27 +265,68 @@ export function walkProject(root: string): readonly string[] {
 // Skills
 // ---------------------------------------------------------------------------
 
-/** Every skill the person's agents can use here, the project's first (a project skill hides a user skill of the same name). */
+/**
+ * Every skill the person's agents can use here, one per agent and name, the project's first: an agent's
+ * project skill hides its personal skill of the same name, as the agent itself does. Two agents may
+ * each have a skill of one name; `oneSkillPerName` folds them for the `@` picker.
+ */
 export function readSkills(root: string, home: string): readonly SkillRecord[] {
-  const places: readonly { readonly directory: string; readonly source: SkillSource; readonly display: string }[] = [
-    { directory: path.join(root, '.claude', 'skills'), source: 'project', display: '.claude/skills' },
-    { directory: path.join(root, '.agents', 'skills'), source: 'project', display: '.agents/skills' },
-    { directory: path.join(home, '.claude', 'skills'), source: 'user', display: '~/.claude/skills' },
-    { directory: path.join(home, '.codex', 'skills'), source: 'user', display: '~/.codex/skills' },
-  ];
+  assert(path.isAbsolute(root), 'readSkills: the project root is absolute');
+  assert(path.isAbsolute(home), 'readSkills: the home folder is absolute');
   const skills: SkillRecord[] = [];
-  const names = new Set<string>();
-  for (const place of places) {
-    for (const folder of skillFolders(place.directory)) {
-      const skill = readSkill(path.join(place.directory, folder, 'SKILL.md'), folder, place.source, `${place.display}/${folder}/SKILL.md`);
-      if (skill !== undefined && !names.has(skill.name) && skills.length < AI_LIMITS.mentionSkillsMax) {
-        names.add(skill.name);
+  const taken = new Set<string>();
+  for (const place of SKILL_PLACES) {
+    const base = place.base === 'project' ? root : home;
+    const directory = path.join(base, ...place.folder.split('/'));
+    for (const folder of skillFolders(directory)) {
+      const file = path.join(directory, folder, 'SKILL.md');
+      const skill = isInside(file, base)
+        ? readSkill(file, { folder, source: place.source, agent: place.agent, display: `${skillPlacePrefix(place)}/${folder}/SKILL.md` })
+        : undefined;
+      const key = `${place.agent}:${skill?.name ?? ''}`;
+      if (skill !== undefined && !taken.has(key) && skills.length < AI_LIMITS.mentionSkillsMax) {
+        taken.add(key);
         skills.push(skill);
       }
     }
   }
   assert(skills.length <= AI_LIMITS.mentionSkillsMax, 'readSkills: bounded');
   return skills;
+}
+
+/** The skills with one row per name, the first of each kept (the order `readSkills` gives: project first). */
+function oneSkillPerName(skills: readonly SkillRecord[]): readonly SkillRecord[] {
+  const names = new Set<string>();
+  const kept = skills.filter((skill) => {
+    if (names.has(skill.name)) {
+      return false;
+    }
+    names.add(skill.name);
+    return true;
+  });
+  assert(kept.length <= skills.length, 'oneSkillPerName: a subset');
+  return kept;
+}
+
+/**
+ * Whether `file`, with every symbolic link resolved, is inside `base` (also resolved). Why: a skill folder may
+ * be a link (a shared skills repository is often linked in), but a link that leads out of the project, or out
+ * of the home folder, would let a checked-out project make Stacki read any file on the computer.
+ */
+function isInside(file: string, base: string): boolean {
+  let resolvedFile: string;
+  let resolvedBase: string;
+  try {
+    resolvedFile = fs.realpathSync(file);
+    resolvedBase = fs.realpathSync(base);
+  } catch {
+    return false; // Missing, or a broken link: nothing to read.
+  }
+  const relative = path.relative(resolvedBase, resolvedFile);
+  if (relative.length === 0 || path.isAbsolute(relative)) {
+    return false;
+  }
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`);
 }
 
 function skillFolders(directory: string): readonly string[] {
@@ -286,7 +342,10 @@ function skillFolders(directory: string): readonly string[] {
   }
 }
 
-function readSkill(file: string, folder: string, source: SkillSource, display: string): SkillRecord | undefined {
+function readSkill(
+  file: string,
+  place: { readonly folder: string; readonly source: SkillSource; readonly agent: AgentId; readonly display: string },
+): SkillRecord | undefined {
   let header: string;
   try {
     const handle = fs.openSync(file, 'r');
@@ -301,11 +360,12 @@ function readSkill(file: string, folder: string, source: SkillSource, display: s
     return undefined; // No SKILL.md, or not readable: not a skill.
   }
   const front = parseFrontmatter(header);
-  const name = front.get('name') ?? folder;
-  if (!SKILL_NAME.test(name) || !isProjectRelativePath(display.replace(/^~\//, ''))) {
+  const name = front.get('name') ?? place.folder;
+  if (!SKILL_NAME.test(name) || !isProjectRelativePath(place.display.replace(/^~\//, ''))) {
     return undefined;
   }
-  return { name, description: (front.get('description') ?? '').slice(0, AI_LIMITS.mentionSkillDescriptionCharsMax), source, path: display };
+  const description = (front.get('description') ?? '').slice(0, AI_LIMITS.mentionSkillDescriptionCharsMax);
+  return { name, description, source: place.source, path: place.display, agent: place.agent };
 }
 
 /**

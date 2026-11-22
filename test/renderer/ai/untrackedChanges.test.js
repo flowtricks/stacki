@@ -47,6 +47,7 @@ const saved = (enabled) => ({
   aiAskBeforeTrust: false,
   aiTrackChanges: enabled,
   aiReviewChanges: false,
+  codeChips: true,
   saved: true,
 });
 

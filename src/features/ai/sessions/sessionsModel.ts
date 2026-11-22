@@ -104,6 +104,41 @@ export function dragSectionsOf(groups: readonly SessionGroup[]): readonly DragSe
   return groups.map((group) => ({ id: group.key, collapsed: group.collapsed, itemIds: group.chats.map((chat) => chat.id) }));
 }
 
+/** The chats in the order the list draws them, leaving out folded sections: what Ctrl+Tab and the arrow keys walk through. */
+export function listOrder(groups: readonly SessionGroup[]): readonly ChatSummary[] {
+  const order = groups.flatMap((group) => (group.collapsed ? [] : group.chats));
+  assert(order.length <= AI_LIMITS.chatsMax, 'listOrder: no more chats than the list holds');
+  return order;
+}
+
+/**
+ * Where an arrow key moves the focus in the list of `count` focusable rows from `index`: Up and Down step one row
+ * and stop at the ends (a list is not a ring: reaching the end is information), Home and End jump there. Any other
+ * key, or a modifier (Alt+Arrow moves the chat itself), is not the list's, and the answer is undefined.
+ */
+export function listKeyStep(event: KeyEventLike, index: number, count: number): number | undefined {
+  assert(count >= 0, 'listKeyStep: a count is not negative');
+  if (count === 0) {
+    return undefined;
+  }
+  assert(index < count, 'listKeyStep: the focused row is in the list');
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return undefined;
+  }
+  switch (event.key) {
+    case 'ArrowDown':
+      return Math.min(index + 1, count - 1);
+    case 'ArrowUp':
+      return Math.max(index - 1, 0);
+    case 'Home':
+      return 0;
+    case 'End':
+      return count - 1;
+    default:
+      return undefined;
+  }
+}
+
 /** The groups with the chats put in the order `sections` says; a chat not in the groups is skipped. */
 export function applyOrder(groups: readonly SessionGroup[], sections: readonly DragSection[]): readonly SessionGroup[] {
   const byId = new Map<string, ChatSummary>();
@@ -151,7 +186,7 @@ export function lockPinned(sections: readonly DragSection[], pinned: ReadonlySet
 }
 
 /** Something a person can do to a chat, from its menu or a letter on its row. */
-export type ChatAction = 'pin' | 'unread' | 'rename' | 'fork' | 'archive' | 'restore' | 'delete';
+export type ChatAction = 'pin' | 'rename' | 'fork' | 'archive' | 'restore' | 'delete';
 
 export interface KeyEventLike {
   readonly key: string;
@@ -161,7 +196,7 @@ export interface KeyEventLike {
   readonly shiftKey: boolean;
 }
 
-/** The action a letter means on a focused row: P, U, R, F, A, D with no modifier. Restore shares the archive letter and is chosen by the caller. */
+/** The action a letter means on a focused row: P, R, F, A, D with no modifier. Restore shares the archive letter and is chosen by the caller. */
 export function rowShortcut(event: KeyEventLike): Exclude<ChatAction, 'restore'> | undefined {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
     return undefined;
@@ -169,8 +204,6 @@ export function rowShortcut(event: KeyEventLike): Exclude<ChatAction, 'restore'>
   switch (event.key.toLowerCase()) {
     case 'p':
       return 'pin';
-    case 'u':
-      return 'unread';
     case 'r':
       return 'rename';
     case 'f':

@@ -237,11 +237,8 @@ test('the panel never starts on an archived chat', async () => {
   assert.equal(store.aiState().open, SECOND);
 });
 
-test('unread: marked and cleared through the channel, and opening an unread chat reads it', async () => {
+test('unread: opening an unread chat reads it through the channel', async () => {
   const fake = await start(list([summary(FIRST, { unread: true }), summary(SECOND)]));
-  await store.markUnread(SECOND);
-  assert.equal(fake.named('aiChatUpdate').at(-1).payload.unread, true);
-  assert.equal(store.aiState().chats.find((chat) => chat.id === SECOND).unread, true);
   await store.openChat(FIRST);
   await settle();
   assert.equal(

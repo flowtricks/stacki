@@ -730,3 +730,83 @@ button.ai-agents-head:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
+
+/* Find in the chat (ChatFindBar.tsx): a floating pill held at the top of the scrolling transcript. Filled a clear step
+   above the panel and the composer, lifted by a soft shadow, never outlined; focus brightens the fill. */
+.ai-find {
+  position: sticky;
+  inset-block-start: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  block-size: 44px;
+  margin-block-end: 8px;
+  padding-inline: 14px 6px;
+  border-radius: 22px;
+  /* A solid surface, so the messages scrolling underneath do not show through. */
+  background: color-mix(in srgb, var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b)), #fff 8%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  transition: background-color 0.12s;
+}
+.ai-find:focus-within {
+  background: color-mix(in srgb, var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b)), #fff 14%);
+}
+.ai-find-icon {
+  flex: none;
+  color: var(--text);
+}
+.ai-find-field {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+}
+/* A mid-contrast grey that still reads against the pill's fill. */
+.ai-find-field::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.ai-find-count {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-find-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  padding: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+}
+.ai-find-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.ai-find-button:active:not(:disabled) {
+  background: var(--bg-pressed);
+}
+.ai-find-button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+/* Painted with the Custom Highlight API: every match in a strong amber, the current one stronger still, both legible on the dark transcript. */
+::highlight(ai-find) {
+  background-color: color-mix(in srgb, #f5c542 42%, transparent);
+  color: var(--text);
+}
+::highlight(ai-find-current) {
+  background-color: #ffb020;
+  color: #111;
+}

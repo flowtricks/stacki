@@ -1,4 +1,4 @@
-// A section's header in the sessions list: its name and a chevron that folds the rows away, with a "⋯" menu on
+// A section's header in the sessions list: its name, how many chats it shows and a chevron that folds the rows away, with a "⋯" menu on
 // hover (rename, move up, move down, delete) and a double click to rename in place. The implicit first section
 // ("No section") has no stored state, so it has a name only: it cannot fold, rename or be deleted.
 import { useEffect } from 'react';
@@ -6,7 +6,7 @@ import type { ChatSection } from '../../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
-import { ChevronDownIcon, ChevronRightIcon, MoreIcon } from '../../../ui/Icons';
+import { ArrowDownIcon, ChevronDownIcon, ChevronRightIcon, MoreIcon, PencilIcon, TrashIcon } from '../../../ui/Icons';
 import Menu, { useMenuTrigger } from '../../../ui/Menu';
 import type { MenuEntry } from '../../../ui/Menu';
 import { collapseSection, deleteSection, moveSection, renameSection } from '../aiStore';
@@ -20,6 +20,8 @@ export interface SectionHeaderProps {
   readonly sections: readonly ChatSection[];
   /** How many chats the section holds, archived ones included; the delete question says so. */
   readonly chatCount: number;
+  /** How many chats the section lists now (the filter applied, archived ones left out): the dim number after the name. */
+  readonly shownCount: number;
   readonly collapsed: boolean;
   readonly renaming: boolean;
   readonly onRenameStart: () => void;
@@ -42,6 +44,7 @@ export function SectionHeader(props: SectionHeaderProps) {
     return (
       <div className="ai-section-head is-static">
         <span className="ai-section-name">{props.name}</span>
+        <span className="ai-section-count">{props.shownCount}</span>
       </div>
     );
   }
@@ -72,7 +75,8 @@ export function SectionHeader(props: SectionHeaderProps) {
         title={props.collapsed ? translate('ai.sessions.showSection', { name: section.name }) : translate('ai.sessions.hideSection', { name: section.name })}
       >
         <span className="ai-section-name">{section.name}</span>
-        {props.collapsed ? <ChevronRightIcon size={11} /> : <ChevronDownIcon size={11} />}
+        <span className="ai-section-count">{props.shownCount}</span>
+        {props.collapsed ? <ChevronRightIcon size={11} className="icon-mirror-rtl" /> : <ChevronDownIcon size={11} />}
       </button>
       <button
         ref={trigger.ref}
@@ -100,11 +104,24 @@ function sectionMenuEntries(props: SectionHeaderProps, section: ChatSection, tra
   const up = sectionStep(props.sections, section.id, 'up');
   const down = sectionStep(props.sections, section.id, 'down');
   return [
-    { kind: 'item', id: 'rename', label: translate('ai.sessions.rename'), shortcut: 'R', accelerator: 'r', onSelect: props.onRenameStart },
+    {
+      kind: 'item',
+      id: 'rename',
+      label: translate('ai.sessions.rename'),
+      icon: <PencilIcon size={14} />,
+      shortcut: 'R',
+      accelerator: 'r',
+      onSelect: props.onRenameStart,
+    },
     {
       kind: 'item',
       id: 'up',
       label: translate('ai.sessions.moveUp'),
+      icon: (
+        <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+          <ArrowDownIcon size={14} />
+        </span>
+      ),
       disabled: up === undefined,
       onSelect: () => up !== undefined && void moveSection(section.id, up),
     },
@@ -112,6 +129,7 @@ function sectionMenuEntries(props: SectionHeaderProps, section: ChatSection, tra
       kind: 'item',
       id: 'down',
       label: translate('ai.sessions.moveDown'),
+      icon: <ArrowDownIcon size={14} />,
       disabled: down === undefined,
       onSelect: () => down !== undefined && void moveSection(section.id, down),
     },
@@ -120,6 +138,7 @@ function sectionMenuEntries(props: SectionHeaderProps, section: ChatSection, tra
       kind: 'item',
       id: 'delete',
       label: translate('ai.sessions.deleteSection'),
+      icon: <TrashIcon size={14} />,
       shortcut: 'D',
       accelerator: 'd',
       danger: true,

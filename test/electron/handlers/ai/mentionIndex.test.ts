@@ -1,7 +1,10 @@
 // Goal: the `@` picker lists the right things in the right order and stays inside
 // its bounds: text files only, never dependencies or Stacki's preview, AGENTS.md
-// and CLAUDE.md first, Markdown before other files, skills from the four known
-// folders with the project's winning, and nothing that is not a valid candidate.
+// and CLAUDE.md first, Markdown before other files, skills from each agent's known
+// folders with the project's winning, and nothing that is not a valid candidate. The
+// `/` menu's skill list keeps each agent's copy of a name, stops at `skillListMax`,
+// never follows a link out of the project or home folder, and reads only a SKILL.md's
+// header however large the file is.
 // Methodology: a temporary project and home folder with fixture files and
 // SKILL.md files, a fake file lister for ranking and bounds, the real walk for
 // the outside-git case, and every result run back through the candidate parser.
@@ -181,4 +184,60 @@ test('skills: frontmatter forms, folder-name fallback, bad names and a missing S
   );
   assert.deepEqual([...parseFrontmatter('name: x')], [], 'no fence, no frontmatter');
   assert.equal(parseFrontmatter('---\nname: first\nname: second\n---').get('name'), 'first');
+});
+
+test('skills for the / menu: each agent keeps its own of a name, the @ picker folds them, and the list is bounded and parseable', async () => {
+  const { root, home } = fixture();
+  write(root, '.claude/skills/lumos-audit/SKILL.md', '---\nname: lumos-audit\ndescription: Audit props\n---\n');
+  write(home, '.claude/skills/shared/SKILL.md', '---\nname: shared\ndescription: Claude copy\n---\n');
+  write(home, '.codex/skills/shared/SKILL.md', '---\nname: shared\ndescription: Codex copy\n---\n');
+  write(home, '.agents/skills/agents-skill/SKILL.md', '---\nname: agents-skill\n---\n');
+  write(root, '.codex/skills/codex-project/SKILL.md', '---\nname: codex-project\n---\n');
+  const skills = readSkills(root, home);
+  assert.deepEqual(
+    skills.map((skill) => `${skill.agent}:${skill.source}:${skill.name}`),
+    ['claude:project:lumos-audit', 'codex:project:codex-project', 'claude:user:shared', 'codex:user:shared', 'codex:user:agents-skill'],
+  );
+  const index = new MentionIndex({ home: () => home, now: () => 1, listFiles: async () => [] });
+  const list = await index.search(root, '', ['skill']);
+  assert.equal(list.filter((candidate) => candidate.name === 'shared').length, 2, 'the / list keeps both agents’ copies');
+  assert.deepEqual(parseMentionCandidates(list), list);
+  const picker = await index.search(root, '', []);
+  assert.equal(picker.filter((candidate) => candidate.name === 'shared').length, 1, 'the @ picker shows a name once');
+
+  const crowded = fixture();
+  for (let position = 0; position < AI_LIMITS.skillListMax + 10; position++) {
+    write(crowded.home, `.claude/skills/s${String(position).padStart(4, '0')}/SKILL.md`, '---\ndescription: x\n---\n');
+  }
+  const bounded = await new MentionIndex({ home: () => crowded.home, now: () => 1, listFiles: async () => [] }).search(crowded.root, '', ['skill']);
+  assert.equal(bounded.length, AI_LIMITS.skillListMax, 'the / list stops at its bound');
+  assert.deepEqual(parseMentionCandidates(bounded), bounded, 'and the reply parser accepts a full list');
+  assert.throws(() => parseMentionCandidates([...bounded, ...bounded]), /candidates/, 'a longer reply is refused at the boundary');
+});
+
+test('skills: a linked folder is read inside its base and skipped when it leads out; an oversize file is read only for its header', () => {
+  const { root, home } = fixture();
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-mentions-outside-')));
+  write(outside, 'escape/SKILL.md', '---\nname: escape\n---\n');
+  write(root, 'shared-skills/linked/SKILL.md', '---\nname: linked\n---\n');
+  fs.mkdirSync(path.join(root, '.claude', 'skills'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.claude', 'skills'), { recursive: true });
+  try {
+    fs.symlinkSync(path.join(outside, 'escape'), path.join(root, '.claude', 'skills', 'escape'));
+    fs.symlinkSync(path.join(root, 'shared-skills', 'linked'), path.join(root, '.claude', 'skills', 'linked'));
+    fs.symlinkSync(path.join(outside, 'escape'), path.join(home, '.claude', 'skills', 'escape-home'));
+    fs.symlinkSync(path.join(root, 'missing'), path.join(root, '.claude', 'skills', 'broken'));
+  } catch {
+    return; // A platform without symlinks has no link to escape through.
+  }
+  write(root, '.claude/skills/huge/SKILL.md', `---\nname: huge\ndescription: big\n---\n${'x'.repeat(5 * 1024 * 1024)}`);
+  write(root, '.claude/skills/late/SKILL.md', `---\n${'# filler\n'.repeat(2000)}name: late-name\n---\n`);
+  const names = readSkills(root, home).map((skill) => skill.name);
+  assert.ok(names.includes('linked'), 'a link inside the project is read');
+  assert.ok(!names.includes('escape'), 'a link out of the project is skipped');
+  assert.ok(!names.includes('escape-home'), 'a link out of the home folder is skipped');
+  assert.ok(!names.includes('broken'), 'a broken link is no skill');
+  assert.ok(names.includes('huge'), 'a large SKILL.md still lists by its header');
+  assert.ok(!names.includes('late-name'), 'frontmatter past the header bound is not read');
+  assert.ok(names.includes('late'), 'such a skill falls back to its folder name');
 });

@@ -6,7 +6,7 @@ import { toRecord } from '../../core/record';
 import { err, ok, type Result } from '../../core/result';
 import { validateMetadata, type MetadataKind } from '../projectMetadata';
 import type { CliError } from './stackiOutput';
-import type { FileSchema, UnsettableEntry } from './stackiSchema';
+import type { DomainFolderEntry, FileSchema, UnsettableEntry } from './stackiSchema';
 import { AUDITS_FILE } from './files/auditsFile';
 import { APPS_FILE } from './files/appsFile';
 import { APP_SETTINGS_FILE } from './files/appSettingsFile';
@@ -65,6 +65,24 @@ export const STACKI_UNSETTABLE: readonly UnsettableEntry[] = [
   },
   { path: '.stacki/app-data/', reason: 'Per-app stored data written by installed apps at runtime: app data, not project settings.' },
 ];
+
+/** The `.stacki` folders only domain commands change: `config` refuses them and names the commands instead. */
+export const STACKI_DOMAIN_FOLDERS: readonly DomainFolderEntry[] = [
+  {
+    path: '.stacki/agents/',
+    description:
+      'Paired agents (one <name>.json each, shared/properties/projectAgents.ts). Each is the source of two generated files (.claude/agents/<name>.md, .codex/agents/<name>.toml) that a raw write would leave stale, so the agents commands write all three with the generator Settings > Agents uses.',
+    requires: 'instructions:edit',
+    commands: ['agents create', 'agents sync', 'agents delete'],
+    generates: ['.claude/agents/', '.codex/agents/'],
+  },
+];
+
+/** The domain folder `file` (project-relative) lies in, or is generated from; undefined for any other path. */
+export function domainFolderOf(file: string): DomainFolderEntry | undefined {
+  assert(file.length >= 0, 'A path has a length');
+  return STACKI_DOMAIN_FOLDERS.find((entry) => file.startsWith(entry.path) || entry.generates.some((folder) => file.startsWith(folder)));
+}
 
 // ----- Files installed apps declare -----
 //

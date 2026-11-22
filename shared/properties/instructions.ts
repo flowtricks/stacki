@@ -529,10 +529,26 @@ export function parseInstructionPath(input: unknown): string {
   return path;
 }
 
-/** A Markdown file's path: an instructions path ending in `.md` (or `.mdc` in a rule folder). */
+/**
+ * A Codex agent definition (`.codex/agents/<name>.toml`, as `AGENT_FOLDERS` in projectAgents.ts says):
+ * the one non-Markdown file the editor opens, as source only, for Settings > Agents. The walk never
+ * lists it, so the Instructions panel's sections are unchanged. Written out here rather than imported,
+ * because projectAgents.ts already imports this module.
+ */
+const CODEX_AGENT_PATH = /^\.codex\/agents\/[^/]+\.toml$/i;
+
+/** Whether a path is a Codex agent definition the editor opens as TOML source. */
+export function isCodexAgentFile(path: string): boolean {
+  return CODEX_AGENT_PATH.test(path);
+}
+
+/** A Markdown file's path: an instructions path ending in `.md` (or `.mdc` in a rule folder), or a Codex agent definition. */
 export function parseInstructionFilePath(input: unknown): string {
   const path = parseInstructionPath(input);
   const slash = path.lastIndexOf('/');
+  if (isCodexAgentFile(path)) {
+    return path;
+  }
   if (!isInstructionFileName(path.slice(slash + 1), slash < 0 ? '' : path.slice(0, slash))) {
     throw new Error('Only Markdown files open in the Instructions panel.');
   }

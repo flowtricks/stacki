@@ -13,7 +13,7 @@
 import fs from 'fs';
 import path from 'path';
 import { assert } from '../../shared/core/assert';
-import { INSTRUCTIONS_FILE, SKIPPED_DIRECTORIES, isInstructionFileName } from '../../shared/properties/instructions';
+import { INSTRUCTIONS_FILE, SKIPPED_DIRECTORIES, isCodexAgentFile, isInstructionFileName } from '../../shared/properties/instructions';
 
 /** The part of `fs.watch` this uses; the filename is checked where it is read. */
 export type WatchFolder = (folder: string, options: { readonly recursive: boolean }, listener: (event: string, filename: unknown) => void) => { close(): void };
@@ -120,6 +120,10 @@ export function watchInstructions({
 export function concerns(relative: string): boolean {
   assert(!relative.startsWith('/'), 'A watched path is project-relative');
   if (relative === INSTRUCTIONS_FILE) {
+    return true;
+  }
+  // Settings > Agents lists these too: a Codex definition and a paired agent's fields (inside the skipped `.stacki`).
+  if (isCodexAgentFile(relative) || /^\.stacki\/agents\/[^/]+\.json$/.test(relative)) {
     return true;
   }
   const segments = relative.split('/');

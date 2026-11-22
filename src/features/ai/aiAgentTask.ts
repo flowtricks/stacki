@@ -6,7 +6,8 @@
 // delivery is `draft` (the Apps panel's "Build an app") is never sent: it waits
 // in the composer for the person to review and send. When the task carries a
 // `draftChip` it is the chip that waits (App builder instructions), added to the end of a
-// draft the person already has in the open chat, never over it.
+// draft the person already has in the open chat, never over it. A task names its surface (`auditFix`,
+// `appBuild`); the project agent chosen for it decides the provider and rides with a new chat.
 import { assert } from '../../../shared/core/assert';
 import { agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
@@ -17,6 +18,8 @@ import type { AgentTaskHandler } from '../../lib/agentTasks';
 import { aiState, draftFromText, draftText, isDraftEmpty, loadAiProject, newChat, preferredAgent, requestComposerFocus, sendPrompt, setDraft } from './aiStore';
 import { builtinChip } from './mentions/builtinChips';
 import { appendChip, hasBuiltinChip } from './mentions/mentionChips';
+import { loadAgentChoices, resolvedChoice } from './agentChoiceStore';
+import { providerFor, type AgentSurface } from '../../../shared/properties/ai/agentChoices';
 
 /** Above the terminal's priority (10, DesktopAudits.tsx): the panel answers first when it can. */
 export const AI_PANEL_HANDLER_PRIORITY = 20;
@@ -32,11 +35,16 @@ export function aiAgentTaskHandler(deps: {
       return { tag: 'declined' };
     }
     await loadAiProject(projectPath);
-    const agent = preferredAgent();
+    await loadAgentChoices(projectPath);
+    // A surface with a chosen agent runs on that agent's provider; without one, on the panel's preferred provider.
+    const surface: AgentSurface = task.surface ?? 'chat';
+    const resolved = resolvedChoice(surface);
+    const agent = providerFor(resolved, preferredAgent());
+    const target = { agent, surface, fresh: resolved.kind === 'agent' };
     if (task.delivery === 'draft') {
-      return task.draftChip === undefined ? handDraft(task.prompt, agent, deps.openPanel) : handDraftChip(task, task.draftChip, agent, deps.openPanel);
+      return task.draftChip === undefined ? handDraft(task.prompt, target, deps.openPanel) : handDraftChip(task, task.draftChip, target, deps.openPanel);
     }
-    const chat = await newChat(agent);
+    const chat = await newChat(agent, surface);
     if (chat === undefined) {
       return { tag: 'declined' };
     }
@@ -60,12 +68,13 @@ export function aiAgentTaskHandler(deps: {
  */
 async function handDraft(
   prompt: string,
-  agent: AgentId,
+  target: DraftTarget,
   openPanel: () => void,
 ): Promise<{ readonly tag: 'sent'; readonly where: string } | { readonly tag: 'declined' }> {
+  const { agent } = target;
   // A box holds at most promptCharsMax characters and would cut the rest silently; a longer prompt is a bug in its builder.
   assert(prompt.length <= AI_LIMITS.promptCharsMax, 'handDraft: the prompt fits the message box');
-  const chat = reusableChat() ?? (await newChat(agent));
+  const chat = (target.fresh ? undefined : reusableChat()) ?? (await newChat(agent, target.surface));
   if (chat === undefined) {
     return { tag: 'declined' };
   }
@@ -85,11 +94,13 @@ async function handDraft(
 async function handDraftChip(
   task: AgentTask,
   id: BuiltinChipId,
-  agent: AgentId,
+  target: DraftTarget,
   openPanel: () => void,
 ): Promise<{ readonly tag: 'sent'; readonly where: string } | { readonly tag: 'declined' }> {
+  const { agent } = target;
   assert(task.delivery === 'draft', 'handDraftChip: a chip belongs to a draft');
-  const chat = chatHoldingDraft() ?? reusableChat() ?? (await newChat(agent));
+  // A chosen agent applies only to a chat that starts with it, so the chip then gets a new chat of its own.
+  const chat = (target.fresh ? undefined : (chatHoldingDraft() ?? reusableChat())) ?? (await newChat(agent, target.surface));
   if (chat === undefined) {
     return { tag: 'declined' };
   }
@@ -102,6 +113,16 @@ async function handDraftChip(
   openPanel();
   requestComposerFocus();
   return { tag: 'sent', where: `${agentLabel(aiState().chats.find((entry) => entry.id === chat)?.agent ?? agent)} in the AI panel` };
+}
+
+/**
+ * Where a draft goes: the provider, the surface whose agent a new chat takes, and whether it must be a new
+ * chat (a chosen agent is applied when a chat's session starts, so an existing chat would not run with it).
+ */
+interface DraftTarget {
+  readonly agent: AgentId;
+  readonly surface: AgentSurface;
+  readonly fresh: boolean;
 }
 
 /** The open chat when its message box holds something (text, a chip or an attachment), else undefined. */

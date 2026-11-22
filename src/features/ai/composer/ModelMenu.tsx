@@ -85,7 +85,7 @@ export function modelMenuEntries(settings: ComposerSettings, translate: Translat
     kind: 'item',
     id: 'reset',
     label: translate('ai.composer.model.reset'),
-    description: translate('ai.composer.model.resetHint', { agent: agentLabel(settings.agent) }),
+    tooltip: translate('ai.composer.model.resetHint', { agent: agentLabel(settings.agent) }),
     disabled: !settings.canReset,
     onSelect: settings.reset,
   });

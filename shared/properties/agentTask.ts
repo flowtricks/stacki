@@ -40,6 +40,11 @@ export interface AgentTask {
    * composer (the terminal declines drafts), so the chip and the prompt always say the same thing.
    */
   readonly draftChip?: BuiltinChipId;
+  /**
+   * Which of the AI panel's surfaces the task is: the panel runs it with the project agent chosen for that
+   * surface (shared/properties/ai/agentChoices.ts, `AgentSurface`). Absent is a plain new chat.
+   */
+  readonly surface?: 'auditFix' | 'appBuild';
   readonly context: {
     /** Project-relative files the task is about. */
     readonly files: readonly string[];

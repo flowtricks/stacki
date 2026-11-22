@@ -118,6 +118,8 @@ export const AI_LIMITS = {
   /** Skills the mention scan reads, and characters kept of a skill's description. */
   mentionSkillsMax: 500,
   mentionSkillDescriptionCharsMax: 400,
+  /** Skills one `/` menu list carries (every agent's, before the renderer keeps the active agent's). */
+  skillListMax: 200,
   /** The characters of a query typed after `@`. */
   mentionQueryCharsMax: 200,
   /** Segments (text runs and chips) in one composer draft. */

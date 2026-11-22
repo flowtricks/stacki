@@ -12,10 +12,17 @@
 //
 // A long chat draws a window of its newest rows (`ROWS_SHOWN_MAX`) with "Show earlier" above, and rows
 // are memoized by item identity, so a streamed word re-renders the last row and not the thousand above it.
+//
+// Keys while focus is in the transcript (chatShortcuts.ts): ⌘F / Ctrl+F opens the find bar
+// (ChatFindBar.tsx; the composer asks for it through `requestChatFind`) and ⌘⇧O / Ctrl+Shift+O starts
+// a new chat. While a query is typed the window grows (FIND_LIMITS.rowsShownMax) so earlier messages
+// can be found.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatId, TurnId, TurnStop } from '../../../../shared/properties/ai/chatModel';
 import { ArrowDownIcon } from '../../../ui/Icons';
-import { answerPermission, draftWithText, sendPrompt, setDraft, stopChat } from '../aiStore';
+import { currentDesktopPlatform } from '../../../lib/shortcutLabel';
+import { answerPermission, draftWithText, newChat, preferredAgent, sendPrompt, setDraft, stopChat } from '../aiStore';
+import { chatShortcut } from '../chatShortcuts';
 import { waitingPermissions, type ChatView, type ToolItem, type TranscriptItem } from '../chatReducer';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import type { Translator } from '../../../lib/i18n/localeContext';
@@ -24,6 +31,8 @@ import type { SignInReading } from '../signInTranscript';
 import { ActivityGroup } from './ActivityGroup';
 import { BackgroundTasks } from './BackgroundTasks';
 import { ChangesCard } from './ChangesCard';
+import { ChatFindBar } from './ChatFindBar';
+import { FIND_LIMITS, useChatFindRequests } from './chatFind';
 import { UntrackedChangesNote } from './UntrackedChangesNote';
 import { CompactionRow } from './CompactionRow';
 import { ErrorRow } from './ErrorRow';
@@ -80,6 +89,9 @@ export function Transcript({
   const scrolling = useRef(false);
   const [away, setAway] = useState(false);
   const [shown, setShown] = useState(ROWS_SHOWN_MAX);
+  const [find, setFind] = useState<{ readonly open: boolean; readonly query: string; readonly focus: number }>({ open: false, query: '', focus: 0 });
+  const findRequests = useChatFindRequests(chatId);
+  const findRequestsSeen = useRef({ chat: chatId, count: findRequests });
   // The latest review handler, behind a stable function, so memoized rows are not re-rendered when the parent is.
   const reviewRef = useRef(onReview);
   reviewRef.current = onReview;
@@ -105,7 +117,18 @@ export function Transcript({
     previousRows.current = built;
     return built;
   }, [view.items, reading]);
-  const windowed = windowRows(rows, shown);
+  const windowed = windowRows(rows, find.open && find.query !== '' ? Math.max(shown, FIND_LIMITS.rowsShownMax) : shown);
+  const openFind = useCallback((): void => setFind((previous) => ({ open: true, query: previous.open ? previous.query : '', focus: previous.focus + 1 })), []);
+  const closeFind = useCallback((): void => setFind((previous) => ({ open: false, query: '', focus: previous.focus })), []);
+  const flowElement = useCallback((): HTMLElement | undefined => flow.current ?? undefined, []);
+  // The composer asked for find (its ⌘F or `/find`): a count that grew since the last look at this chat opens the bar.
+  useEffect(() => {
+    const seen = findRequestsSeen.current;
+    if (seen.chat === chatId && findRequests > seen.count) {
+      openFind();
+    }
+    findRequestsSeen.current = { chat: chatId, count: findRequests };
+  }, [chatId, findRequests, openFind]);
 
   const scrollToEnd = useCallback((): void => {
     const element = scroll.current;
@@ -137,13 +160,14 @@ export function Transcript({
     observer.observe(content);
     return () => observer.disconnect();
   }, [scrollToEnd]);
-  // Another chat opens at its end.
+  // Another chat opens at its end, with no find bar.
   useEffect(() => {
     follow.current = true;
     setAway(false);
     setShown(ROWS_SHOWN_MAX);
+    closeFind();
     scrollToEnd();
-  }, [chatId, scrollToEnd]);
+  }, [chatId, scrollToEnd, closeFind]);
 
   const lastEndIndex = view.items.map((item) => item.kind).lastIndexOf('turn-end');
   const lastEnd = view.items[lastEndIndex];
@@ -152,6 +176,8 @@ export function Transcript({
   const standaloneRetry = canRetry && lastEnd?.kind === 'turn-end' && lastEnd.stop !== 'error' && (lastEnd.stop !== 'sign-in' || !retryHeldByCard);
   const retryLast = (): void => void sendPrompt(chatId, view.lastPrompt?.text ?? '');
   const lastUser = lastUserMessageId(view.items);
+  // The agent's last reply may be asked for again, once the turn ended normally (a failed one has its own Retry).
+  const retryReplyText = view.running === undefined && lastEnd?.kind === 'turn-end' && lastEnd.stop === 'end_turn' ? view.lastPrompt?.text : undefined;
   const answerable = answerableMessageId(view.items, { running: view.running !== undefined });
   const toolsByCall = useMemo(() => toolItemsByCall(view.items), [view.items]);
   const waiting = useMemo(() => waitingPermissions(view), [view]);
@@ -192,10 +218,32 @@ export function Transcript({
       onPointerDown={() => {
         scrolling.current = false;
       }}
-      onKeyDown={() => {
+      onKeyDown={(event) => {
         scrolling.current = false;
+        if (event.defaultPrevented) {
+          return;
+        }
+        const shortcut = chatShortcut(event, currentDesktopPlatform());
+        if (shortcut === 'find') {
+          // Taken here, so the app's ⌘F (the insert palette) does not also open.
+          event.preventDefault();
+          openFind();
+        } else if (shortcut === 'new-chat') {
+          event.preventDefault();
+          void newChat(preferredAgent());
+        }
       }}
     >
+      {find.open && (
+        <ChatFindBar
+          chatId={chatId}
+          items={view.items}
+          flow={flowElement}
+          focusRequests={find.focus}
+          onQueryChange={(query) => setFind((previous) => ({ ...previous, query }))}
+          onClose={closeFind}
+        />
+      )}
       <div className="ai-transcript-flow" ref={flow}>
         {view.items.length === 0 && <p className="ai-empty">{empty ?? translate('ai.transcript.empty')}</p>}
         {windowed.hidden > 0 && (
@@ -218,6 +266,7 @@ export function Transcript({
               onRetry={canRetry && row.index === lastEndIndex ? retryLast : undefined}
               resendable={view.running === undefined && row.item.id === lastUser}
               answerable={row.item.id === answerable}
+              retryText={row.item.id === answerable ? retryReplyText : undefined}
               streaming={view.running !== undefined && row === rows[rows.length - 1] && row.item === lastItem}
             />
           ),
@@ -289,6 +338,7 @@ const Item = memo(function Item({
   onRetry,
   resendable,
   answerable,
+  retryText,
   streaming,
 }: {
   readonly item: TranscriptItem;
@@ -304,6 +354,8 @@ const Item = memo(function Item({
   readonly resendable: boolean;
   /** The agent's last reply, once it is done: its numbered options may be answered with a click. */
   readonly answerable: boolean;
+  /** The prompt the agent's last reply answered, given to that reply alone so it can be asked for again. */
+  readonly retryText: string | undefined;
   /** The reply is still arriving: it is drawn whole, never cut to a preview. */
   readonly streaming: boolean;
 }) {
@@ -317,7 +369,7 @@ const Item = memo(function Item({
       return item.role === 'thought' ? (
         <ThinkingBlock item={item} chatId={chatId} live={streaming} />
       ) : (
-        <AgentRow item={item} chatId={chatId} streaming={streaming} answerable={answerable} />
+        <AgentRow item={item} chatId={chatId} streaming={streaming} answerable={answerable} retryText={retryText} />
       );
     case 'tool':
       return <ToolCard item={item} chatId={chatId} projectPath={projectPath} live={false} childCount={0} />;
@@ -386,11 +438,13 @@ function AgentRow({
   chatId,
   streaming,
   answerable,
+  retryText,
 }: {
   readonly item: TextItem;
   readonly chatId: ChatId;
   readonly streaming: boolean;
   readonly answerable: boolean;
+  readonly retryText: string | undefined;
 }) {
   const [expanded, change] = useOpenState(chatId, `message:${item.id}`, { open: false });
   return (
@@ -401,6 +455,7 @@ function AgentRow({
       expanded={expanded}
       onExpandedChange={(open) => change({ open })}
       onQuickReply={answerable ? (reply) => void sendPrompt(chatId, reply) : undefined}
+      onRetry={retryText === undefined ? undefined : () => void sendPrompt(chatId, retryText)}
     />
   );
 }

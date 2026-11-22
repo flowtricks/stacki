@@ -40,6 +40,8 @@ import {
   type ListResult,
 } from './chatStore';
 import { MentionIndex, listProjectFiles } from './mentionIndex';
+import { captureScreenshot, cssRectToWindow } from './screenshotCapture';
+import { ScreenRecorder } from './screenRecorder';
 import type { ChatSummary } from '../../../shared/properties/ai/chatModel';
 import { GIT_SNAPSHOTS } from './treeSnapshot';
 import { currentBranch } from '../../git/gitParking';
@@ -51,6 +53,8 @@ export interface AiHandlerOptions {
   readonly askBeforeTrust: () => boolean;
   /** The Settings toggle: take the change ledger's snapshots around each turn. Read at each turn's start, so a toggle applies to the next turn. */
   readonly trackChanges: () => boolean;
+  /** The saved "Auto-compact at" percentage: read when an adapter is spawned (so it applies to adapters started afterwards); `set` saves and answers whether it was saved. */
+  readonly autoCompact: { readonly get: () => number | undefined; readonly set: (percent: number | undefined) => boolean };
   /** Whether a window is visible and not minimized: an agent is only started early for a person who is looking at the app. Absent means yes. */
   readonly isForeground?: () => boolean;
 }
@@ -84,6 +88,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       version: options.version(),
       askBeforeTrust: options.askBeforeTrust,
       trackChanges: options.trackChanges,
+      autoCompactPercent: options.autoCompact.get,
       currentBranch,
       ...(options.isForeground === undefined ? {} : { isForeground: options.isForeground }),
     });
@@ -98,6 +103,13 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     assert(path.isAbsolute(root), 'ai: the open project has an absolute path');
     return root;
   };
+  const recorder = new ScreenRecorder({
+    now: Date.now,
+    setTimer: (run, delayMs) => {
+      const timer = setTimeout(run, delayMs);
+      return { cancel: () => clearTimeout(timer) };
+    },
+  });
   const mentions = new MentionIndex({ home: () => os.homedir(), now: Date.now, listFiles: listProjectFiles });
   let setup: AgentSetup | undefined;
   const agentSetup = (): AgentSetup => {
@@ -199,6 +211,11 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     return agentHost().prompt(root, input.chat, input.text, input.attachments, { parts: input.parts });
   });
   host.ipcMain.handle('ai:steer', (_event, input) => agentHost().steer(open(input.projectPath), input.chat, input.text, input.attachments, input.parts));
+  host.ipcMain.handle('ai:autoCompactGet', () => ({ percent: options.autoCompact.get() }));
+  host.ipcMain.handle('ai:autoCompactSet', (_event, input) => {
+    options.autoCompact.set(input.percent);
+    return { percent: options.autoCompact.get() };
+  });
   host.ipcMain.handle('ai:compact', (_event, input) => agentHost().compact(open(input.projectPath), input.chat));
   host.ipcMain.handle('ai:chatFork', (_event, input) => {
     const forked = chats().fork(open(input.projectPath), input.chat, Date.now());
@@ -223,6 +240,23 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     return diff === undefined ? err({ code: 'invalid', ...described('ai.error.diffGone') }) : ok(diff);
   });
   host.ipcMain.handle('ai:mentions', async (_event, input) => ok(await mentions.search(open(input.projectPath), input.query, input.kinds)));
+  // The sender's own window only: a renderer can photograph what it already shows, never another window.
+  host.ipcMain.handle('ai:screenshot', (event, input) => {
+    open(input.projectPath);
+    return captureScreenshot(event.sender, cssRectToWindow(input.rect, event.sender.getZoomFactor()));
+  });
+  // A recording of the sender's own window, held in memory only; a closing window frees it.
+  host.ipcMain.handle('ai:record', (event, input) => {
+    open(input.projectPath);
+    if (input.action.kind === 'start') {
+      event.sender.once('destroyed', () => recorder.release());
+    }
+    const action = input.action.kind === 'start' ? { ...input.action, rect: cssRectToWindow(input.action.rect, event.sender.getZoomFactor()) } : input.action;
+    return recorder.act(action, {
+      capture: (rect) => event.sender.capturePage(rect, { stayHidden: false, stayAwake: false }),
+      visible: options.isForeground ?? (() => true),
+    });
+  });
   host.ipcMain.handle('ai:cancel', (_event, input) => {
     agentHost().cancel(open(input.projectPath), input.chat);
     return { ok: true as const };
@@ -237,6 +271,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
   return {
     host: agentHost,
     stopAll: () => {
+      recorder.release();
       setup?.stopAll();
       agents?.stopAll();
     },

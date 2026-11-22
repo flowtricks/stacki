@@ -4,22 +4,30 @@
 // Alt+Up / Alt+Down moves the focused one; pinned chats stay at the top of their section whatever is dropped.
 // Dragging is off while a search or filter narrows the list, because a row's place in a partial list is not its
 // place in the whole. Archived chats show only behind the filter menu's "Show archived".
+// The search stays at the top while the rows scroll under it. Up and Down walk the rows and section headers
+// (Home and End jump to the ends), Enter opens the focused chat. In the split layout the list is the sidebar
+// beside the open chat: its row is marked and kept in view, and the filter sits beside the search.
+// Grouping is by section only, never by date: the order inside a section is the person's own (drag), and date
+// buckets would put back an order they chose to leave.
 // What each piece does lives beside it: rows (ChatRow), headers (SectionHeader), the pure rules (sessionsModel).
-import { Fragment, useState } from 'react';
-import type { ChatSummary } from '../../../../shared/properties/ai/chatModel';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, RefCallback } from 'react';
+import type { ChatId, ChatSummary } from '../../../../shared/properties/ai/chatModel';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { DropLine } from '../../../ui/DropLine';
-import { PlusIcon } from '../../../ui/Icons';
+import { CommentIcon, PlusIcon, SearchIcon } from '../../../ui/Icons';
 import { SearchField } from '../../../ui/SearchField';
 import { applyMove, resolveDrop } from '../../../ui/sectionedDragModel';
 import { useSectionedDrag } from '../../../ui/useSectionedDrag';
 import type { DropMove, DropTarget } from '../../../ui/useSectionedDrag';
 import { DEFAULT_CHAT_FILTER, moveChat, newChat, preferredAgent, setChatListFilter, useAiState } from '../aiStore';
+import type { ChatLayout } from '../chatLayout';
 import { addSection } from './chatActions';
 import { ChatRow } from './ChatRow';
 import { SectionHeader } from './SectionHeader';
-import { NO_SECTION, applyOrder, dragSectionsOf, groupSessions, isNarrowing, lockPinned } from './sessionsModel';
+import { SessionsFilter } from './SessionsFilter';
+import { NO_SECTION, applyOrder, dragSectionsOf, groupSessions, isNarrowing, listKeyStep, lockPinned } from './sessionsModel';
 import type { SessionGroup } from './sessionsModel';
 import './sessions.css';
 
@@ -27,15 +35,33 @@ export { filterChats, sortChats } from './sessionsModel';
 
 type Editing = { readonly kind: 'chat'; readonly id: string } | { readonly kind: 'section'; readonly id: string } | undefined;
 
-export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[] }) {
+/** What the keyboard walks in the list: the rows that open a chat and the headers that fold a section. */
+const LIST_FOCUS_SELECTOR = 'button.ai-list-open, button.ai-section-toggle';
+
+export interface SessionsViewProps {
+  readonly chats: readonly ChatSummary[];
+  /** The chat open beside the list (split layout), marked in it; undefined when the list is the whole panel. */
+  readonly selected?: ChatId | undefined;
+  readonly layout?: ChatLayout | undefined;
+}
+
+export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsViewProps) {
   const translate = useTranslate();
+  const listRef = useRef<HTMLDivElement | undefined>(undefined);
+  // The open chat's row stays in view as Ctrl+Tab or a new chat changes it; `nearest` never scrolls a row that already shows.
+  useEffect(() => {
+    if (selected === undefined) {
+      return;
+    }
+    listRef.current?.querySelector(`[data-chat="${selected}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [selected]);
   const state = useAiState();
   const { filter, sections, views } = state;
   const [editing, setEditing] = useState<Editing>(undefined);
   // The order a drop shows until the main process answers with the real list.
   const [pending, setPending] = useState<ReturnType<typeof dragSectionsOf> | undefined>(undefined);
-  const layout = groupSessions(chats, sections, filter);
-  const groups = pending === undefined ? layout.groups : applyOrder(layout.groups, pending);
+  const grouping = groupSessions(chats, sections, filter);
+  const groups = pending === undefined ? grouping.groups : applyOrder(grouping.groups, pending);
   const dragSections = dragSectionsOf(groups);
   const pinned = new Set(chats.filter((chat) => chat.pinned).map((chat) => chat.id));
   const narrowing = isNarrowing(filter);
@@ -59,30 +85,58 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
       void moveChat(chat.id, { section: section?.id, before: before?.id }).finally(() => setPending(undefined));
     },
   });
+  const { containerRef } = drag;
+  const setListElement = useCallback<RefCallback<HTMLDivElement>>(
+    (element) => {
+      listRef.current = element ?? undefined;
+      containerRef(element);
+    },
+    [containerRef],
+  );
   const line = drag.dragging === undefined || drag.drop === undefined ? undefined : settledDrop(dragSections, pinned, drag.dragging, drag.drop);
   const live = chats.filter((chat) => chat.archivedAt === undefined);
   const sectionLimit = sections.length >= AI_LIMITS.sectionsMax;
+  const onListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    // A row handles its own letters and Alt+Arrow first; what it leaves, and only on a row or a header, is the list's.
+    if (event.defaultPrevented || !(event.target instanceof HTMLElement) || !event.target.matches(LIST_FOCUS_SELECTOR)) {
+      return;
+    }
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(LIST_FOCUS_SELECTOR)];
+    const target = listKeyStep(event, focusable.indexOf(event.target), focusable.length);
+    if (target !== undefined) {
+      event.preventDefault();
+      focusable[target]?.focus();
+    }
+  };
   return (
-    <div className="ai-sessions">
-      {chats.length > 0 && (
-        <SearchField
-          label={translate('ai.sessions.search')}
-          className="ai-sessions-search"
-          value={filter.query}
-          onChange={(query) => setChatListFilter({ ...filter, query })}
-        />
+    <div className={`ai-sessions is-${layout}`}>
+      {(chats.length > 0 || layout === 'split') && (
+        <div className="ai-sessions-tools">
+          {chats.length > 0 && (
+            <SearchField
+              label={translate('ai.sessions.search')}
+              clearLabel={translate('elements.panel.clearSearch')}
+              className="ai-sessions-search"
+              value={filter.query}
+              onChange={(query) => setChatListFilter({ ...filter, query })}
+            />
+          )}
+          {layout === 'split' && <SessionsFilter />}
+        </div>
       )}
-      <div className="ai-list" ref={drag.containerRef}>
+      <div className="ai-list" ref={setListElement} onKeyDown={onListKeyDown}>
         {live.length === 0 && !narrowing && (
-          <div className="ai-empty ai-sessions-empty">
+          <div className="ai-sessions-empty">
+            <CommentIcon size={20} className="ai-sessions-empty-icon" />
             <p>{translate('ai.sessions.empty')}</p>
-            <button className="ai-sessions-start" onClick={() => void newChat(preferredAgent())}>
+            <button className="ai-primary ai-sessions-start" onClick={() => void newChat(preferredAgent())}>
               <PlusIcon size={12} /> {translate('ai.sessions.newChat')}
             </button>
           </div>
         )}
-        {live.length > 0 && layout.groups.every((group) => group.chats.length === 0) && narrowing && (
-          <div className="ai-empty ai-sessions-empty">
+        {live.length > 0 && grouping.groups.every((group) => group.chats.length === 0) && narrowing && (
+          <div className="ai-sessions-empty">
+            <SearchIcon size={20} className="ai-sessions-empty-icon" />
             <p>{translate('ai.sessions.noMatch')}</p>
             <button className="ai-sessions-start" onClick={() => setChatListFilter({ ...DEFAULT_CHAT_FILTER, showArchived: filter.showArchived })}>
               {translate('ai.sessions.clearFilters')}
@@ -97,6 +151,7 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
                 section={group.section}
                 sections={sections}
                 chatCount={chats.filter((chat) => chat.section === group.section?.id).length}
+                shownCount={group.chats.length}
                 collapsed={group.collapsed}
                 renaming={editing?.kind === 'section' && editing.id === group.key}
                 onRenameStart={() => setEditing({ kind: 'section', id: group.key })}
@@ -108,6 +163,7 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
                 group={group}
                 sections={sections}
                 running={(chat) => views.get(chat.id)?.running !== undefined}
+                selected={selected}
                 editing={editing}
                 setEditing={setEditing}
                 now={now}
@@ -123,14 +179,15 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
               <span className="ai-section-name">{translate('ai.sessions.archivedHeading')}</span>
             </div>
             <ul className="ai-list-rows">
-              {layout.archived.length === 0 && <li className="ai-section-empty">{translate('ai.sessions.noArchived')}</li>}
-              {layout.archived.map((chat) => (
+              {grouping.archived.length === 0 && <li className="ai-section-empty">{translate('ai.sessions.noArchived')}</li>}
+              {grouping.archived.map((chat) => (
                 <ChatRow
                   key={chat.id}
                   chat={chat}
                   sections={sections}
                   running={false}
                   renaming={false}
+                  selected={false}
                   now={now}
                   dragProps={undefined}
                   onRenameStart={() => undefined}
@@ -159,6 +216,7 @@ interface GroupRowsProps {
   readonly group: SessionGroup;
   readonly sections: ReturnType<typeof useAiState>['sections'];
   readonly running: (chat: ChatSummary) => boolean;
+  readonly selected: ChatId | undefined;
   readonly editing: Editing;
   readonly setEditing: (editing: Editing) => void;
   readonly now: number;
@@ -166,7 +224,7 @@ interface GroupRowsProps {
   readonly line: DropTarget | undefined;
 }
 
-function GroupRows({ group, sections, running, editing, setEditing, now, drag, line }: GroupRowsProps) {
+function GroupRows({ group, sections, running, selected, editing, setEditing, now, drag, line }: GroupRowsProps) {
   const translate = useTranslate();
   const lineHere = line !== undefined && line.sectionId === group.key;
   return (
@@ -182,6 +240,7 @@ function GroupRows({ group, sections, running, editing, setEditing, now, drag, l
             sections={sections}
             running={running(chat)}
             renaming={editing?.kind === 'chat' && editing.id === chat.id}
+            selected={chat.id === selected}
             now={now}
             dragProps={drag.itemProps(chat.id)}
             onRenameStart={() => setEditing({ kind: 'chat', id: chat.id })}

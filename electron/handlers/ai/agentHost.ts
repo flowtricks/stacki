@@ -59,6 +59,7 @@ import {
 } from '../../../shared/properties/ai/acpWire';
 import { canCompact, isDangerousMode } from '../../../shared/properties/ai/agentPresentation';
 import { AGENTS, AGENT_IDS, parseAgentId, type AgentId } from '../../../shared/properties/ai/agentIds';
+import { autoCompactEnvironment } from '../../../shared/properties/ai/autoCompact';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import {
   parseChatOption,
@@ -169,6 +170,8 @@ export interface AgentHostDeps {
   readonly askBeforeTrust?: () => boolean;
   /** Settings "Snapshot before & after each AI change": read when a turn begins and kept on that turn. Absent means on. */
   readonly trackChanges?: () => boolean;
+  /** Settings "Auto-compact at": the percentage Claude is told to compact at, read when an adapter is spawned. Absent or undefined: the agent's default. */
+  readonly autoCompactPercent?: () => number | undefined;
   /**
    * The project's current git branch (`git rev-parse --abbrev-ref HEAD`), or undefined when it has none or is no repository. Read at a
    * turn's start and end, whatever the snapshot setting says, so a branch the AI made or switched to is announced. Absent means never.
@@ -958,7 +961,10 @@ export class AgentHost {
 
   private spawnProcess(agent: AgentId, root: string, entry: string, cli: string): AgentProcess {
     const runnable = runnableAdapterCli(cli, this.deps.environment());
-    const environment = adapterEnvironment(this.deps.environment(), ADAPTERS[agent].cliVariable, runnable);
+    const environment = {
+      ...adapterEnvironment(this.deps.environment(), ADAPTERS[agent].cliVariable, runnable),
+      ...autoCompactEnvironment(agent, this.deps.autoCompactPercent?.()),
+    };
     const spawnedAt = this.deps.now();
     const child = (this.deps.spawnAdapter ?? spawnAdapter)(entry, root, environment);
     let spawnMs: number | undefined;

@@ -76,13 +76,17 @@ import {
 } from './aiBridge';
 import { EMPTY_CHAT, reduceChat, type ChatView } from './chatReducer';
 import { readStoredDrafts, writeStoredDrafts } from './draftStorage';
+import { agentSettingsForSurface } from './agentChoiceStore';
+import type { AgentSurface } from '../../../shared/properties/ai/agentChoices';
 
 /** What a draft carries before it is sent. Images are already encoded (chatImages.ts). */
 export interface DraftAttachment {
   readonly id: string;
   readonly attachment: PromptAttachment;
-  /** A data URL for the thumbnail; undefined for files. */
+  /** A data URL for the thumbnail; undefined for files. Held in memory only: drafts in browser storage keep no attachments. */
   readonly preview: string | undefined;
+  /** A screenshot's number in its draft ("Screenshot 2"); absent for a pasted, dropped or picked image (screenshot/). */
+  readonly screenshotNumber?: number | undefined;
 }
 
 /**
@@ -364,9 +368,11 @@ export async function installAgent(agent: AgentId): Promise<void> {
 }
 
 /** A new chat with `agent`. It starts with the settings last used for that agent: the main process applies them when its session starts. */
-export async function newChat(agent: AgentId): Promise<ChatId | undefined> {
+export async function newChat(agent: AgentId, surface: AgentSurface = 'chat'): Promise<ChatId | undefined> {
   const projectPath = requireProject();
-  const reply = await aiChatCreate({ projectPath, agent });
+  // The project agent chosen for this surface rides with the chat; main applies it once the session exists.
+  const settings = agentSettingsForSurface(surface, agent);
+  const reply = await aiChatCreate(settings.length === 0 ? { projectPath, agent } : { projectPath, agent, settings });
   if (!reply.ok) {
     fail(reply.error);
     return undefined;
@@ -422,10 +428,6 @@ export async function archiveChat(chat: ChatId): Promise<void> {
 
 export async function restoreChat(chat: ChatId): Promise<void> {
   await changeChat(chat, { archived: false }, { reorders: 'yes' });
-}
-
-export async function markUnread(chat: ChatId): Promise<void> {
-  await changeChat(chat, { unread: true }, { reorders: 'no' });
 }
 
 export async function markRead(chat: ChatId): Promise<void> {
@@ -566,6 +568,14 @@ function builtinTextOf(id: BuiltinChipId): string {
   return builtinChipText(id);
 }
 
+/** Registers the check a send runs on its chips: the names of component mentions that no longer match the project (none: send). */
+export function registerMentionCheck(check: (segments: ComposerSegments) => readonly string[]): void {
+  mentionCheck = check;
+}
+
+// Unset until the composer's component mentions load; a draft can only hold a component chip once they have.
+let mentionCheck: ((segments: ComposerSegments) => readonly string[]) | undefined;
+
 /** What a prompt carries to the main process. `parts` only when the message has a chip: a plain message is plain text, as before. */
 interface PromptContent {
   readonly text: string;
@@ -573,8 +583,17 @@ interface PromptContent {
   readonly attachments: readonly PromptAttachment[];
 }
 
-function contentOf(draft: ChatDraft): PromptContent {
+/**
+ * The draft as a prompt, or undefined (and the reason shown) when a component mention no longer matches the
+ * project: the message is refused whole rather than sent with a path the agent cannot find.
+ */
+function contentOf(draft: ChatDraft): PromptContent | undefined {
   const hasChip = draft.segments.some((segment) => segment.kind === 'chip');
+  const invalid = hasChip && mentionCheck !== undefined ? mentionCheck(draft.segments) : [];
+  if (invalid.length > 0) {
+    fail({ code: 'invalid', ...described('ai.store.mentionInvalid', { names: invalid.join(', ') }) });
+    return undefined;
+  }
   return {
     text: draftText(draft),
     parts: hasChip ? promptPartsOf(draft.segments, builtinTextOf) : undefined,
@@ -609,6 +628,9 @@ function reportSendFailure(error: AiFailure): void {
 export async function sendPrompt(chat: ChatId, text?: string): Promise<boolean> {
   const draft = state.drafts.get(chat) ?? EMPTY_DRAFT;
   const content = text === undefined ? contentOf(draft) : { text, parts: undefined, attachments: [] };
+  if (content === undefined) {
+    return false; // A mention no longer matches: the draft stays as it is, its chip marked.
+  }
   if (content.text.trim() === '' && content.attachments.length === 0) {
     return false;
   }
@@ -635,8 +657,12 @@ export async function steerPrompt(chat: ChatId): Promise<boolean> {
   if (isDraftEmpty(draft)) {
     return false;
   }
+  const content = contentOf(draft);
+  if (content === undefined) {
+    return false;
+  }
   setDraft(chat, () => EMPTY_DRAFT);
-  const reply = await submitSteer(chat, contentOf(draft));
+  const reply = await submitSteer(chat, content);
   if (reply.ok) {
     return true;
   }
@@ -686,6 +712,10 @@ export async function sendQueuedNow(chat: ChatId, id: string): Promise<boolean> 
   }
   removeQueued(chat, id);
   const content = contentOf(entry.draft);
+  if (content === undefined) {
+    putBack(chat, entry);
+    return false;
+  }
   const reply = state.views.get(chat)?.running === undefined ? await submitPrompt(chat, content) : await submitSteer(chat, content);
   if (!reply.ok) {
     putBack(chat, entry);
@@ -729,7 +759,12 @@ async function sendNextQueued(chat: ChatId): Promise<void> {
   }
   // Out of the queue before the send, so a second trigger cannot send it twice.
   removeQueued(chat, entry.id);
-  const reply = await submitPrompt(chat, contentOf(entry.draft));
+  const content = contentOf(entry.draft);
+  if (content === undefined) {
+    putBack(chat, entry); // Held, and the queue paused, until the person fixes or removes it.
+    return;
+  }
+  const reply = await submitPrompt(chat, content);
   if (!reply.ok) {
     putBack(chat, entry);
     reportSendFailure(reply.error);

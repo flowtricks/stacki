@@ -27,6 +27,15 @@ const projectPath = '/projects/site';
 const chat = `c${'a'.repeat(24)}`;
 const turn = `t${'b'.repeat(16)}`;
 
+test('auto-compact payloads: a bounded integer or nothing', () => {
+  assert.deepEqual(parseIpcPayload('ai:autoCompactGet', {}), {});
+  assert.deepEqual(parseIpcPayload('ai:autoCompactSet', { percent: 80 }), { percent: 80 });
+  assert.deepEqual(parseIpcPayload('ai:autoCompactSet', { percent: undefined }), {});
+  for (const percent of [29, 96, 80.5, '80', Number.NaN]) {
+    assert.throws(() => parseIpcPayload('ai:autoCompactSet', { percent }), `rejects ${String(percent)}`);
+  }
+});
+
 test('good payloads parse for every AI channel', () => {
   assert.deepEqual(parseIpcPayload('ai:agents', { projectPath }), { projectPath });
   assert.deepEqual(parseIpcPayload('ai:prewarm', { projectPath, agent: 'claude', action: 'warm' }), { projectPath, agent: 'claude', action: 'warm' });
