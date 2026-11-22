@@ -2,7 +2,9 @@
 // for which buttons exist; a stored order only arranges them. Every default id appears exactly once whatever the
 // stored text holds (unknown ids dropped, repeats collapsed, missing ids placed where the default puts them),
 // a role-hidden button keeps its place, and each move (within a list, across lists, reset) keeps every id.
-// The geometry of a drag (threshold, which list, which slot, outside the rail) is pure numbers.
+// Settings is a third container: every move goes through `moveRailItem`, which keeps each id exactly once and never
+// puts Settings or the AI button inside Settings. The geometry of a drag (threshold, which list, which slot, the
+// Settings button and list, outside the rail) is pure numbers.
 // Method: bundle the pure model, parser, store and drag geometry with esbuild and call them on exact cases,
 // valid and invalid: hostile JSON, wrong types, oversized lists, empty lists, a missing localStorage, a
 // second window's storage event. Negative space is exercised on every parser branch.
@@ -30,11 +32,14 @@ esbuild.buildSync({
 });
 const model = require(output);
 
-const DEFAULT = { top: ['pages', 'navigator', 'assets', 'code'], bottom: ['projectSettings', 'ai'] };
+const DEFAULT = { top: ['pages', 'navigator', 'assets', 'code'], bottom: ['projectSettings', 'ai'], settings: ['secrets', 'mcp'] };
+// A version 1 value predates the Settings list; it is still read, and its Settings items are placed by default.
 const stored = (top, bottom) => JSON.stringify({ version: 1, top, bottom });
+const storedWithSettings = (top, bottom, settings) => JSON.stringify({ version: 2, top, bottom, settings });
 const resolve = (top, bottom) => model.resolveRailOrder(DEFAULT, model.parseStoredRailOrder(stored(top, bottom)));
-const ids = (order) => [...order.top, ...order.bottom].sort();
-const ALL = [...DEFAULT.top, ...DEFAULT.bottom].sort();
+const ids = (order) => [...order.top, ...order.bottom, ...order.settings].sort();
+const ALL = [...DEFAULT.top, ...DEFAULT.bottom, ...DEFAULT.settings].sort();
+const SETTINGS = DEFAULT.settings;
 
 test('the default order is used when nothing usable is stored', () => {
   assert.deepEqual(model.resolveRailOrder(DEFAULT, undefined), DEFAULT);
@@ -47,6 +52,8 @@ test('the default order is used when nothing usable is stored', () => {
     '{}',
     'null',
     '{"version":2,"top":[],"bottom":[]}',
+    '{"version":3,"top":[],"bottom":[],"settings":[]}',
+    '{"version":2,"top":[],"bottom":[],"settings":"x"}',
     '{"version":1,"top":"x","bottom":[]}',
     '{"version":1,"top":[]}',
   ]) {
@@ -56,7 +63,7 @@ test('the default order is used when nothing usable is stored', () => {
 
 test('a stored order is applied, in both lists', () => {
   const order = resolve(['code', 'pages'], ['ai', 'assets', 'projectSettings', 'navigator']);
-  assert.deepEqual(order, { top: ['code', 'pages'], bottom: ['ai', 'assets', 'projectSettings', 'navigator'] });
+  assert.deepEqual(order, { top: ['code', 'pages'], bottom: ['ai', 'assets', 'projectSettings', 'navigator'], settings: SETTINGS });
 });
 
 test('unknown and repeated ids are dropped, and the first place of a repeat wins', () => {
@@ -68,16 +75,16 @@ test('unknown and repeated ids are dropped, and the first place of a repeat wins
 
 test('ids a stored order lacks are placed where the default puts them', () => {
   const order = resolve(['code', 'pages'], ['ai']);
-  assert.deepEqual(order, { top: ['code', 'pages', 'navigator', 'assets'], bottom: ['projectSettings', 'ai'] });
+  assert.deepEqual(order, { top: ['code', 'pages', 'navigator', 'assets'], bottom: ['projectSettings', 'ai'], settings: SETTINGS });
   assert.deepEqual(ids(order), ALL);
   // A new first default id goes first in its list.
-  const withNewFirst = model.resolveRailOrder({ top: ['fresh', 'pages'], bottom: [] }, { top: ['pages'], bottom: [] });
+  const withNewFirst = model.resolveRailOrder({ top: ['fresh', 'pages'], bottom: [], settings: [] }, { top: ['pages'], bottom: [], settings: [] });
   assert.deepEqual(withNewFirst.top, ['fresh', 'pages']);
 });
 
 test('non-string, empty and oversized ids are dropped and lists are bounded', () => {
   const parsed = model.parseStoredRailOrder(stored([1, {}.missing, '', 'x'.repeat(65), {}, 'pages'], []));
-  assert.deepEqual(parsed, { top: ['pages'], bottom: [] });
+  assert.deepEqual(parsed, { top: ['pages'], bottom: [], settings: [] });
   const many = Array.from({ length: 500 }, (_, index) => `id${index}`);
   const bounded = model.parseStoredRailOrder(stored(many, many));
   assert.equal(bounded.top.length, model.RAIL_ORDER_IDS_MAX);
@@ -85,7 +92,7 @@ test('non-string, empty and oversized ids are dropped and lists are bounded', ()
 });
 
 test('stringify and parse round-trip', () => {
-  const order = { top: ['code'], bottom: ['pages', 'ai'] };
+  const order = { top: ['code'], bottom: ['pages', 'ai'], settings: ['mcp'] };
   assert.deepEqual(model.parseStoredRailOrder(model.stringifyRailOrder(order)), order);
 });
 
@@ -99,13 +106,13 @@ test('moving within a list places an item before another, or at the end', () => 
 
 test('moving across lists keeps every id and works into an empty list', () => {
   const moved = model.placeRailItem(DEFAULT, 'pages', 'bottom', 'ai');
-  assert.deepEqual(moved, { top: ['navigator', 'assets', 'code'], bottom: ['projectSettings', 'pages', 'ai'] });
-  const emptied = { top: [], bottom: ['pages', 'navigator', 'assets', 'code', 'projectSettings', 'ai'] };
+  assert.deepEqual(moved, { top: ['navigator', 'assets', 'code'], bottom: ['projectSettings', 'pages', 'ai'], settings: SETTINGS });
+  const emptied = { top: [], bottom: ['pages', 'navigator', 'assets', 'code', 'projectSettings', 'ai'], settings: SETTINGS };
   const back = model.placeRailItem(emptied, 'ai', 'top', undefined);
   assert.deepEqual(back.top, ['ai']);
   assert.deepEqual(ids(back), ALL);
-  const intoEmptyBottom = model.placeRailItem({ top: ['a', 'b'], bottom: [] }, 'a', 'bottom', undefined);
-  assert.deepEqual(intoEmptyBottom, { top: ['b'], bottom: ['a'] });
+  const intoEmptyBottom = model.placeRailItem({ top: ['a', 'b'], bottom: [], settings: [] }, 'a', 'bottom', undefined);
+  assert.deepEqual(intoEmptyBottom, { top: ['b'], bottom: ['a'], settings: [] });
 });
 
 test('shifting steps over shown buttons only; a hidden button between keeps its place', () => {
@@ -120,8 +127,16 @@ test('shifting steps over shown buttons only; a hidden button between keeps its 
 });
 
 test('crossing moves to the edge that meets the list it left', () => {
-  assert.deepEqual(model.crossRailItem(DEFAULT, 'code', 'bottom'), { top: ['pages', 'navigator', 'assets'], bottom: ['code', 'projectSettings', 'ai'] });
-  assert.deepEqual(model.crossRailItem(DEFAULT, 'ai', 'top'), { top: ['pages', 'navigator', 'assets', 'code', 'ai'], bottom: ['projectSettings'] });
+  assert.deepEqual(model.crossRailItem(DEFAULT, 'code', 'bottom'), {
+    top: ['pages', 'navigator', 'assets'],
+    bottom: ['code', 'projectSettings', 'ai'],
+    settings: SETTINGS,
+  });
+  assert.deepEqual(model.crossRailItem(DEFAULT, 'ai', 'top'), {
+    top: ['pages', 'navigator', 'assets', 'code', 'ai'],
+    bottom: ['projectSettings'],
+    settings: SETTINGS,
+  });
   assert.equal(model.crossRailItem(DEFAULT, 'code', 'top'), DEFAULT);
 });
 
@@ -136,7 +151,8 @@ test('reset is the default order', () => {
   const order = model.placeRailItem(DEFAULT, 'pages', 'bottom', undefined);
   assert.equal(model.isDefaultRailOrder(DEFAULT, order), false);
   assert.equal(model.isDefaultRailOrder(DEFAULT, DEFAULT), true);
-  assert.equal(model.isDefaultRailOrder(DEFAULT, { top: [...DEFAULT.top], bottom: [...DEFAULT.bottom] }), true);
+  assert.equal(model.isDefaultRailOrder(DEFAULT, { top: [...DEFAULT.top], bottom: [...DEFAULT.bottom], settings: [...DEFAULT.settings] }), true);
+  assert.equal(model.isDefaultRailOrder(DEFAULT, { ...DEFAULT, settings: ['mcp', 'secrets'] }), false, 'a Settings reorder is not the default');
 });
 
 test('positions are reported among shown buttons, for announcements', () => {
@@ -179,7 +195,7 @@ test('the store reads before use, writes the order, forgets the default, and sur
 });
 
 test('the order is never kept in a project: no project path, `.stacki` or file API in the store', () => {
-  for (const file of ['railOrder.ts', 'railOrderStore.ts', 'railDrag.ts', 'railDragModel.ts']) {
+  for (const file of ['railOrder.ts', 'railOrderStore.ts', 'railDrag.ts', 'railDragModel.ts', 'railItems.ts', 'SettingsRailRows.tsx']) {
     const source = fs.readFileSync(repoPath(`src/app/${file}`), 'utf8');
     assert.ok(!/\.stacki|projectPath|window\.avb|writeFile|projectPreference/.test(source.replace(/\/\/.*$/gm, '')), file);
   }
@@ -226,4 +242,143 @@ test('outside the rail there is no slot, so a release there cancels', () => {
   assert.equal(model.slotAt(measure, { x: 45, y: 20 }), undefined);
   assert.equal(model.slotAt(measure, { x: 20, y: -1 }), undefined);
   assert.equal(model.slotAt(measure, { x: 20, y: 801 }), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// Settings as a third container
+// ---------------------------------------------------------------------------
+
+// Each id once across all three lists: the invariant every move must keep.
+const assertWhole = (order) => {
+  assert.deepEqual(ids(order), ALL);
+  assert.ok(!order.settings.includes('projectSettings') && !order.settings.includes('ai'), 'no fixed item inside Settings');
+};
+
+test('moveRailItem moves a rail panel into Settings and a Settings view out onto the rail, keeping every id once', () => {
+  const into = model.moveRailItem(DEFAULT, 'assets', { container: 'settings', beforeId: 'mcp' });
+  assert.deepEqual(into.settings, ['secrets', 'assets', 'mcp']);
+  assert.ok(!into.top.includes('assets'), 'it leaves the rail');
+  assertWhole(into);
+  const out = model.moveRailItem(into, 'secrets', { container: 'bottom', beforeId: 'projectSettings' });
+  assert.deepEqual(out.bottom, ['secrets', 'projectSettings', 'ai']);
+  assert.deepEqual(out.settings, ['assets', 'mcp']);
+  assertWhole(out);
+  const reordered = model.moveRailItem(DEFAULT, 'mcp', { container: 'settings', beforeId: 'secrets' });
+  assert.deepEqual(reordered.settings, ['mcp', 'secrets']);
+  assertWhole(reordered);
+});
+
+test('moveRailItem negative space: unknown id, fixed item, same place, foreign before id, empty containers', () => {
+  assert.equal(model.moveRailItem(DEFAULT, 'ghost', { container: 'settings', beforeId: undefined }), DEFAULT, 'an unknown id is no move');
+  assert.equal(model.moveRailItem(DEFAULT, 'projectSettings', { container: 'settings', beforeId: undefined }), DEFAULT, 'Settings never goes inside itself');
+  assert.equal(model.moveRailItem(DEFAULT, 'ai', { container: 'settings', beforeId: 'secrets' }), DEFAULT, 'the AI button is fixed to the rail');
+  assert.equal(model.moveRailItem(DEFAULT, 'mcp', { container: 'settings', beforeId: undefined }), DEFAULT, 'a move to where it is returns the same order');
+  assert.equal(model.moveRailItem(DEFAULT, 'secrets', { container: 'settings', beforeId: 'mcp' }), DEFAULT, 'before its own follower is where it is');
+  assert.equal(model.moveRailItem(DEFAULT, 'pages', { container: 'settings', beforeId: 'navigator' }), DEFAULT, 'a before id outside the target is no move');
+  // Fixed items still reorder on the rail.
+  assert.deepEqual(model.moveRailItem(DEFAULT, 'ai', { container: 'bottom', beforeId: 'projectSettings' }).bottom, ['ai', 'projectSettings']);
+  // Every item moved into Settings, then every Settings item out: no container needs anything in it.
+  let order = DEFAULT;
+  for (const id of [...DEFAULT.top]) {
+    order = model.moveIntoSettings(order, id);
+  }
+  assert.deepEqual(order.top, []);
+  assertWhole(order);
+  for (const id of [...order.settings]) {
+    order = model.moveOutOfSettings(order, id);
+  }
+  assert.deepEqual(order.settings, []);
+  assert.deepEqual(order.bottom.slice(-2), ['projectSettings', 'ai'], 'rows leave for the place right above Settings');
+  assertWhole(order);
+  assert.equal(model.moveOutOfSettings(order, 'pages'), order, 'an item not in Settings is not moved out');
+});
+
+test('moveRailItem asserts its invariant: an order with a repeated id or a fixed item in Settings is a programmer error', () => {
+  assert.throws(
+    () => model.moveRailItem({ top: ['a', 'a'], bottom: [], settings: [] }, 'a', { container: 'bottom', beforeId: undefined }),
+    /holds each id once/,
+  );
+  assert.throws(() => model.moveRailItem({ top: ['a'], bottom: [], settings: ['a'] }, 'a', { container: 'top', beforeId: undefined }), /holds each id once/);
+  assert.throws(
+    () => model.moveRailItem({ top: ['a'], bottom: [], settings: ['ai'] }, 'a', { container: 'settings', beforeId: undefined }),
+    /never go inside Settings/,
+  );
+});
+
+test('a random walk of moves never loses or repeats an item', () => {
+  const containers = ['top', 'bottom', 'settings'];
+  // A fixed seed: a failure repeats exactly.
+  let seed = 7;
+  const next = (count) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return Math.floor((seed / 2147483648) * count);
+  };
+  let order = DEFAULT;
+  for (let step = 0; step < 500; step += 1) {
+    const id = ALL[next(ALL.length)];
+    const container = containers[next(containers.length)];
+    const list = order[container];
+    const beforeId = next(2) === 0 ? undefined : list[next(Math.max(list.length, 1))];
+    order = model.moveRailItem(order, id, { container, beforeId });
+    assertWhole(order);
+  }
+});
+
+test('the stored Settings list is parsed and resolved: unknown ids dropped, fixed items put back on the rail, new views appended', () => {
+  const parsed = model.parseStoredRailOrder(storedWithSettings(['pages'], ['ai'], ['assets', 'ghost', 'pages', 7, 'projectSettings']));
+  assert.deepEqual(parsed, { top: ['pages'], bottom: ['ai'], settings: ['assets', 'ghost', 'projectSettings'] }, 'a repeat of a rail id keeps its rail place');
+  const order = model.resolveRailOrder(DEFAULT, parsed);
+  assert.deepEqual(order.settings, ['secrets', 'mcp', 'assets'], 'the Settings views it lacks go where the default puts them: first, in default order');
+  assert.ok(order.bottom.includes('projectSettings'), 'Settings stored inside itself is put back on the rail');
+  assertWhole(order);
+  // A version 1 value: the Settings list comes whole from the default.
+  assert.deepEqual(resolve(['code'], ['ai']).settings, SETTINGS);
+  const bounded = model.parseStoredRailOrder(
+    storedWithSettings(
+      [],
+      [],
+      Array.from({ length: 500 }, (_, index) => `id${index}`),
+    ),
+  );
+  assert.equal(bounded.settings.length, model.RAIL_ORDER_IDS_MAX);
+});
+
+test('positions in Settings are announced as Settings', () => {
+  const shown = new Set(['secrets', 'mcp']);
+  assert.deepEqual(model.railPosition(DEFAULT, shown, 'mcp'), { group: 'settings', position: 2, count: 2 });
+  const shifted = model.shiftRailItem(DEFAULT, shown, 'mcp', 'up');
+  assert.deepEqual(shifted.settings, ['mcp', 'secrets']);
+});
+
+test('the Settings button and the Settings list are drop targets; the button edges still reorder around it', () => {
+  const withSettings = {
+    ...measure,
+    settingsButton: { top: 758, bottom: 790 },
+    settings: {
+      left: 50,
+      right: 300,
+      top: 100,
+      bottom: 400,
+      rows: [
+        { id: 'secrets', top: 110, bottom: 140 },
+        { id: 'mcp', top: 146, bottom: 176 },
+      ],
+    },
+  };
+  assert.deepEqual(model.slotAt(withSettings, { x: 20, y: 774 }), { group: 'settingsButton' }, 'the middle of Settings drops inside it');
+  assert.deepEqual(model.slotAt(withSettings, { x: 20, y: 760 }), { group: 'bottom', beforeId: 'z', lineY: 756 }, 'its top edge reorders before it');
+  assert.deepEqual(model.slotAt(withSettings, { x: 100, y: 120 }), { group: 'settings', beforeId: 'secrets', lineY: 109 });
+  assert.deepEqual(model.slotAt(withSettings, { x: 100, y: 150 }), { group: 'settings', beforeId: 'mcp', lineY: 145 });
+  assert.deepEqual(model.slotAt(withSettings, { x: 100, y: 390 }), { group: 'settings', beforeId: undefined, lineY: 177 });
+  const empty = { ...withSettings, settings: { ...withSettings.settings, rows: [] } };
+  assert.deepEqual(model.slotAt(empty, { x: 100, y: 300 }), { group: 'settings', beforeId: undefined, lineY: 102 }, 'an empty Settings list is still a target');
+  assert.equal(model.slotAt(withSettings, { x: 400, y: 120 }), undefined, 'beside the list is no target');
+  // Without the Settings zones (a fixed item is dragged), the geometry is the rail's alone.
+  assert.deepEqual(model.slotAt(measure, { x: 20, y: 774 }), { group: 'bottom', beforeId: undefined, lineY: 792 });
+});
+
+test('a drop turns into the order: the Settings button appends to Settings', () => {
+  assert.deepEqual(model.orderAfterDrop(DEFAULT, 'code', { group: 'settingsButton' }).settings, ['secrets', 'mcp', 'code']);
+  assert.deepEqual(model.orderAfterDrop(DEFAULT, 'mcp', { group: 'top', beforeId: 'pages', lineY: 0 }).top[0], 'mcp');
+  assert.equal(model.orderAfterDrop(DEFAULT, 'ai', { group: 'settingsButton' }), DEFAULT);
 });

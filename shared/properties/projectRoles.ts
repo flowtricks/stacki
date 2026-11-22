@@ -74,6 +74,8 @@ export const ROLE_LIMITS = {
  */
 export const ACCESS_FEATURES = [
   // Left rail panels.
+  /** The Add elements panel: its rail button, its `A` shortcut and its drag-insert. Roles files that predate it get it by default, see `can`. */
+  'panel:elements',
   'panel:pages',
   'panel:navigator',
   'panel:properties',
@@ -209,8 +211,34 @@ export function can(role: RoleView, feature: AccessFeature): boolean {
     // Sharing starts from an installed app, so it lives in the Apps panel like the apps themselves.
     return role.features.has('panel:apps') && role.features.has(feature);
   }
+  if (feature === 'panel:elements') {
+    return canElements(role);
+  }
   return role.features.has(feature);
 }
+
+/**
+ * The default-grant rule of `panel:elements`. The Add elements panel was open to every role
+ * that could edit before it had a permission, so a roles file written then has no grant for
+ * it. Such a file must keep working: a role that holds a design panel, `panel:navigator`, or
+ * any page edit permission (`page:create`, `page:delete`, `page:rename`, `page:layout`)
+ * has the panel without naming it, and a role with none of those does not.
+ * Limit: a role that holds one of those therefore cannot be denied the panel on its own;
+ * withdraw the design panel to take it away.
+ */
+function canElements(role: RoleView): boolean {
+  assert(!role.isAdmin, 'Admin is answered before the Elements rule');
+  if (role.features.has('panel:elements')) {
+    return true;
+  }
+  if (role.features.has('panel:navigator')) {
+    return true;
+  }
+  return PAGE_EDIT_FEATURES.some((feature) => role.features.has(feature));
+}
+
+/** The page permissions that mean a role edits pages, and so gets Add elements by default. */
+const PAGE_EDIT_FEATURES = ['page:create', 'page:delete', 'page:rename', 'page:layout'] as const satisfies readonly StaticAccessFeature[];
 
 // The marketplace lives in the Apps panel, and installing from it means seeing it:
 // a grant without its prerequisite gives nothing, so no file can grant a hidden action.
@@ -232,6 +260,7 @@ export const ADMIN_ROLE_ALIASES: readonly string[] = ['developer', 'designer'];
 
 /** What the built-in client role may do until a project changes it: Studio's Client mode. */
 export const CLIENT_DEFAULT_ACCESS: readonly StaticAccessFeature[] = [
+  'panel:elements',
   'panel:pages',
   'panel:navigator',
   'panel:components',
@@ -306,6 +335,7 @@ export const ACCESS_GROUPS: readonly {
     label: 'Panels',
     labelRef: messageRef('roles.group.panels'),
     features: [
+      { feature: 'panel:elements', label: 'Add elements', labelRef: messageRef('roles.feature.panelElements') },
       { feature: 'panel:pages', label: 'Pages', labelRef: messageRef('roles.feature.panelPages') },
       { feature: 'panel:navigator', label: 'Navigator', labelRef: messageRef('roles.feature.panelNavigator') },
       { feature: 'panel:properties', label: 'Component properties', labelRef: messageRef('roles.feature.panelProperties') },

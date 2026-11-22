@@ -3,8 +3,9 @@
 // Settings, Navigator and every other panel put their title at the same x, centre it at the same y inside
 // the same row height, end their actions at the same right inset and hand the content below the same top.
 // A panel passes content, never layout: there is no prop for padding, height or alignment.
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
 import { ChevronLeftIcon } from './Icons';
+import { PanelBackContext } from './panelBack';
 import './panelHeader.css';
 
 export interface PanelHeaderBack {
@@ -20,7 +21,7 @@ export interface PanelHeaderProps {
   readonly titleHint?: string | undefined;
   /** Extra class names for the heading element, for a panel whose heading holds a control. */
   readonly titleClassName?: string | undefined;
-  /** Present on a detail view: the chevron that returns to the panel's list. */
+  /** Present on a detail view: the chevron that returns to the panel's list. Absent, the header inherits one (panelBack.ts). */
   readonly back?: PanelHeaderBack | undefined;
   /** Content between the chevron and the title, such as a connection's logo. */
   readonly lead?: ReactNode;
@@ -30,13 +31,16 @@ export interface PanelHeaderProps {
   readonly className?: string | undefined;
 }
 
-export function PanelHeader({ title, titleHint, titleClassName, back, lead, actions, className }: PanelHeaderProps) {
+export function PanelHeader({ title, titleHint, titleClassName, back: ownBack, lead, actions, className }: PanelHeaderProps) {
+  // A panel opened from somewhere that leads back (a Settings row, panelBack.ts) inherits that chevron.
+  const inherited = useContext(PanelBackContext);
+  const back = ownBack ?? inherited;
   return (
     <div className={className === undefined ? 'panel-header' : `panel-header ${className}`}>
       <div className="panel-header-lead">
         {back !== undefined && (
           <button type="button" className="ghost panel-header-back" title={back.label} aria-label={back.label} onClick={back.onBack}>
-            <ChevronLeftIcon size={14} />
+            <ChevronLeftIcon size={14} className="icon-mirror-rtl" />
           </button>
         )}
         {lead}

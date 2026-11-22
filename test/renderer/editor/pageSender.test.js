@@ -410,3 +410,42 @@ test('a failed preview never presents a version with a queued edit missing', asy
   assert.deepEqual(previews, ['set-attribute', 'replace-node', 'replace-page']);
   assert.equal(origin.source, PAGE, 'review cannot mutate the baseline');
 });
+
+test('a live gesture refused again and again for one reason is reported once per drag', async () => {
+  // A drag sends a write per pointer move; when the engine refuses each of them for the
+  // same reason, the page says so once, not once per move. A committed gesture, or a
+  // write of the stream that applies, makes the next refusal news again.
+  let refusing = true;
+  const fixture = harness(PAGE, {
+    edit: async (request) => {
+      if (refusing) {
+        const error = pageEditError(PATH, { tag: 'rejected', reason: 'unsupported-operation', message: 'x', diskChecksum: sha256(fixture.disk.text) });
+        return { ok: false, error };
+      }
+      return engine(fixture.disk)(request);
+    },
+  });
+  const { box, queue, send } = fixture;
+  const sendText = async (value, urgency) => {
+    const text = box.state.model.nodes[0].children[0].children[0];
+    const gesture = editGestures.nodeGesture(text.id, { ...text, value }, { coalesceKey: `text:${text.id}`, urgency });
+    queue.addGesture(PATH, gesture, step());
+    const entry = queue.shift(PATH);
+    assert.equal(entry?.tag, 'gesture');
+    box.state = { ...box.state, save: { tag: 'dirty', baseChecksum: box.state.origin.checksum } };
+    return send(PATH, entry);
+  };
+  for (const value of ['A', 'B', 'C']) {
+    assert.deepEqual(await sendText(value, 'live'), { tag: 'sent' });
+  }
+  assert.deepEqual(box.notices, ['unsupported-operation'], 'three refused moves of one drag: one notice');
+  await sendText('D', true);
+  assert.equal(box.notices.length, 2, 'a committed gesture is always reported');
+  await sendText('E', 'live');
+  assert.equal(box.notices.length, 3, 'a new drag after a commit is reported');
+  refusing = false;
+  await sendText('F', 'live');
+  refusing = true;
+  await sendText('G', 'live');
+  assert.equal(box.notices.length, 4, 'after a write of the stream applied, a refusal is news again');
+});

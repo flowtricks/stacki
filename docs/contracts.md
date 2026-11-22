@@ -194,6 +194,18 @@ from `origin` with the project's publishing account, then merges through the exi
 uncommitted files are never discarded. Conflicts are unwound for review through
 `git:resolveMerge`. The Git panel flushes saves first and refreshes Git and the editor afterward.
 `git:incoming` takes the same payload and returns a validated nonnegative commit count.
+
+Every git child process runs with `LC_ALL=C`, no credential prompt, no editor and no optional index lock (`git()` in
+`electron/lib/nodeTools.ts`), and a failed command's message is git's own output, never the command line. Every `git:*` failure
+leaves main through `explainGitFailure` (`electron/git/gitFailure.ts`): a locked index, missing identity, refused sign-in, offline,
+rejected push (never forced), timeout, a missing git or a folder git does not trust becomes a referenced sentence; anything else keeps
+git's words. `git:info` throws, instead of answering "not a repository", when git is missing or refuses the folder's owner.
+`git:status` and `git:info` read `status --porcelain=v1 -z`: paths are unquoted and relative to the project folder, which may sit inside
+a larger repository, and a list over 20,000 files is refused rather than truncated. `git:commit` is scoped to the project folder, treats
+paths literally, takes long lists through a pathspec file, finishes a merge with a plain commit, and refuses to commit during a
+cherry-pick, revert or rebase. `git:checkout`, `git:merge`, `git:pull` and `git:restoreProject` refuse while one of those is unfinished;
+branch names are checked with `git check-ref-format --branch` and refs or names that start with a dash are refused before reaching git.
+`git:push` sends `refs/heads/<branch>` to the same name on origin and refuses a detached HEAD.
 It reads the advertised branch and fetches missing objects without touching working files,
 the index, remote-tracking refs, or `FETCH_HEAD`. A missing remote branch returns zero;
 network failures remain unavailable rather than pretending the branch is current.
@@ -771,6 +783,13 @@ transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`)
   256 grants a role, 256 KiB a file.
 - Apps: `panel:apps` shows the Apps panel and `app:<appId>` allows one app (`app:*` every app).
   `can(role, 'app:x')` needs both. `settings:roles` is never grantable: only admin edits roles.
+- Add elements: `panel:elements` shows the Add elements rail button, its `A` shortcut, its Settings row
+  and its drag-insert; inserting through the palette (⌘K) is not gated. Files written before it existed
+  have no grant, so `can` gives it by default to a role that holds `panel:navigator` or a page edit
+  permission (`page:create`, `page:delete`, `page:rename`, `page:layout`), and not to any other role;
+  admin always has it, and the built-in client holds it explicitly. Because of the default, a role
+  with a design panel cannot be denied Add elements on its own. `stacki roles access grant <role>
+  panel:elements` works like any feature.
 - App permissions: a non-admin role may hold `appPermissions: { "<appId>": { "<permissionId>": true | false } }`
   for the switches apps declare in their manifest (`permissions`, `shared/properties/appPermissions.ts`).
   `appPermissionsFor(role, appId, declarations)` resolves them: admin has every one, a role that may
@@ -947,6 +966,24 @@ each snapshot before use and ignores other projects or previous attempts. Main
 batches output at 150 ms intervals, flushes on stage changes and completion, and
 caps command time and output. Progress counts completed stages, not elapsed time.
 
+### Upgrading an installed Studio
+
+`studio:upgradeCheck` (project path) answers what Settings > Stacki Studio may offer; `studio:upgrade`
+(project path, `requestId`) runs it and reports through the same `studio:progress` event as an install.
+`shared/ipc/studioUpgrade.ts` holds the pure rules and both parsers. The latest version is the newest
+`flowtricks/stacki-releases` release that carries a Studio bundle (`latestRelease`); offline or
+unparsable versions answer `unavailable` and the box shows nothing. Only an exact stable version is compared.
+A behind version is `ready` only when nothing an upgrade would lose or break exists. The updater replaces
+the whole `studio/` folder and keeps just `retainedPath` entries (no merge), so a conflict is: an edited
+Studio file, an added file outside retained folders, a deleted release file, `cloudflare/auth-provider.ts`
+(kept, but its interface is experimental) or a custom `AUTH_PROVIDER`. Main compares the folder with the
+installed version's own release (line endings normalised); if that cannot be done, or the folder exceeds
+the scan bounds, the answer is `unverified` and no run is offered. `studio:upgrade` repeats the check in
+main and refuses anything but `ready`, then downloads the latest release and runs the same transactional
+`installRelease` as `astro-studio update` (npm ci, check and build run through `runStudioCommand`: argument
+arrays, 180 s per command, 2 MiB output cap), keeping the previous folder under `.stacki/studio/updates`.
+`npm create stacki@latest` is not used: it leaves an installed Studio untouched.
+
 The managed website preview starts installed Studio and serves an entry page at its
 own `/studio` URL. A private loopback server isolates Studio's module graph from the
 desktop canvas instrumentation; the entry embeds that editor while preserving the
@@ -968,6 +1005,13 @@ accepts one named boolean preference and returns both current values plus `saved
 A failed disk write applies only to the current session and is shown in the popup.
 Disabling usage counts still aborts in-flight counting. Studio setup is available
 in the same popup when a project is open.
+
+`codeChips` (Settings > Editor > Code, "Show CSS chips in code"; default on, kept per person in
+`settings.json`) draws CSS values in the code editors as chips: variables as the purple chip, easings,
+clip-paths, shadows and gradients with a small preview that opens the Style panel's editor for that
+value (`src/features/style/codeChips/`). It changes only what is drawn: the text, a copy and every save
+are the CSS as written. Turned off, each open editor shows plain CSS at once. Studio and the demo have
+no app settings file and keep the default.
 
 ## Interface language in the main process
 
@@ -1405,6 +1449,48 @@ Docs sections are remembered per project in `src/lib/settingsSections.ts`)
   the block it replaces. The CMS still reads CommonMark. Frontmatter is spliced line by
   line (`src/features/instructions/frontmatterFields.ts`).
 
+## Agents (Settings > Agents and the AI panel's agent choice)
+
+`shared/properties/projectAgents.ts` is the contract; `electron/project/agentFiles.ts` does the work behind
+`agents:list`, `agents:save` and `agents:delete` (`shared/ipc/projectAgentChannels.ts`, renderer calls in `src/ipc/agentsBridge.ts`).
+
+- **Where each CLI reads agents.** Claude Code: `.claude/agents/<name>.md`, YAML frontmatter with `name` and
+  `description` (required), `tools`, `model` (optional), the body is the prompt. Codex: `.codex/agents/<name>.toml`
+  with `name`, `description`, `developer_instructions` (required), `model` and other config keys (optional), from
+  OpenAI's Codex subagents page; not checked against an installed Codex. User-level folders (`~/.claude/agents`,
+  `~/.codex/agents`) are not listed: the panel shows the project's.
+- **Listing.** Each folder is read flat (no subfolders), at most `agentsMax` (200) definitions each and
+  `pairedMax` paired agents, 256 KiB per file. A definition that does not read stays listed with its problems
+  (`AgentProblem`: no or unclosed frontmatter, YAML or TOML syntax with a line, a top-level key written twice,
+  a missing or wrong-typed field, past a bound). A byte-order mark and CRLF read; YAML aliases are refused.
+- **Editing.** A definition opens in the Instructions editor over the canvas (`selectInstruction`), with its
+  save, conflict and outside-change handling and line-by-line frontmatter; `parseInstructionFilePath` accepts a
+  Codex definition, which opens as TOML source only (`src/ui/tomlSyntax.ts` colours it). The watcher hears
+  `.codex/agents/*.toml` and `.stacki/agents/*.json`.
+- **Paired agents.** "New agent" writes `.stacki/agents/<name>.json` (`version`, `name`, `description`,
+  `instructions`, `tools`, `models.claude`, `models.codex`) and generates both definitions from it; each begins
+  with a "Generated by Stacki from …" comment. A generated file's state is `in-sync`, `edited` or `missing`,
+  decided by comparing it with what the fields generate now (CRLF ignored). `agents:save` with `mode: 'update'`
+  overwrites an edited file only when its provider is in `overwrite`, which the renderer sends after the confirm
+  dialog. Names are lowercase letters, digits and single hyphens, unique ignoring case across every agent of
+  either CLI. Tools are Claude's only (Codex has no per-agent tool list); each CLI has its own model field.
+- **Delete** moves files to the Trash (`shell.trashItem`), a pair with its source.
+- **Command line.** `stacki agents list|show|create|sync|delete` (docs/stacki-cli.md, "Agents") runs the same rules:
+  `agentSaveDecision` in `shared/properties/projectAgents.ts` decides a save for both `saveAgent` and the CLI, and
+  `planAgentSave`, `applyAgentChanges` and `agentDeleteFiles` in `agentFiles.ts` read and write for both, so the two
+  write byte-identical files. The CLI's writes are journalled effects (`agent-files`) instead of the Trash, a sync
+  refuses an `edited` file (with its `pairedFileDrift`) unless `--force`, and a write needs `instructions:edit` as the
+  panel does. `.stacki/agents/` is a CLI domain folder (`STACKI_DOMAIN_FOLDERS`): `config` never writes it.
+- **AI panel choice** (`shared/properties/ai/agentChoices.ts`, `src/features/ai/agentChoiceStore.ts`). Surfaces:
+  `chat` (new chats), `auditFix` ("Fix with AI", `AgentTask.surface`), `appBuild` ("Build an app"). Kept per
+  project in browser storage (`stacki.ai.agentChoices`, at most 50 projects, parsed totally). A usable Claude
+  choice rides on `ai:chatCreate` as the setting `{ option: 'agent', value: <name> }`, the session option
+  claude-agent-acp 0.105.0 offers for the project's agents, applied like every chat setting once the session
+  exists. Codex agents are listed but disabled with the reason: neither Codex nor its adapter documents a way to
+  run a session as a custom agent. A choice whose agent is gone or broken resolves as `missing` (or
+  `unsupported`), sends nothing, and the open chat shows a notice. A task with a chosen agent always opens a new
+  chat, since an existing chat's session would not take it.
+
 ## Historical file diffs
 
 `git:commitDiff` accepts a project path, a full SHA-1/SHA-256 commit hash, a repository-relative
@@ -1806,6 +1892,22 @@ rename rules plus `index` reserved beside the homepage) and the wire parsers of 
 - The Layout props section draws the layout instance's props with the Properties panel's own editors
   (`InstancePropFields`) and the same handlers, so an edit there is the panel's edit, one undo step.
 
+### Data file variables
+
+A data file's row in the CMS panel (`src/consts.ts`, the open page) carries a gear that opens its
+settings (`src/features/cms/CmsFileFields.tsx`), on hosts that pass `renderFileSettings` (Desktop;
+Studio shows no gear yet). `cms:constants` takes `{ projectPath, rel }` (the file under `src/`) and
+answers `ConstantListingReply`: the file's variables (a module's exported `const`s, a page's
+top-level `const`s), every name its top level binds, and the style it writes them in.
+`cms:editConstants` takes an `edit` (`add` a field, `remove` a name, `reorder` them all, each moving
+with the comments directly above it and after it on its line, or `restore` a text over the exact text
+it replaced, for undo and redo) and answers `ConstantEditReply`: the text before and after,
+or a refusal (`syntax`, `fence`, `invalidName`, `reservedName`, `duplicateName`, `missing`, `inUse`,
+`compound`, `changed`, `invalidValue`, `dependency`: an order that reads a constant before it is declared) with the file untouched. Shapes and parsers live in
+`shared/properties/cmsConstants.ts`, with the one serializer both the preview and the write use;
+reading and editing parse the file with the TypeScript parser (`electron/parse/constantFields.ts`),
+refuse any file with a syntax error, and write through the document actor witnessed by the bytes read.
+
 ### CMS connections
 
 A project's hosted CMS connections (`shared/properties/cmsConnections.ts`) name which CMS its
@@ -2129,6 +2231,11 @@ and `snapshotBeforeMs` / `snapshotAfterMs` (durations only, no prompt text, no p
 snapshot is not run beside the model call: the agent's own tools edit files without asking Stacki (auto-accept
 modes), so only finishing the snapshot first guarantees it sees the tree as the turn found it. Stacki Studio
 has no ledger and no such setting.
+Auto-compact: `ai:autoCompactGet` and `ai:autoCompactSet` read and save the person's "Auto-compact at" percentage (an integer 30 to 95,
+or none for the agent's default; `shared/properties/ai/autoCompact.ts`), stored in the main process's settings file as `aiAutoCompactPercent`.
+It reaches Claude Code as `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` in the environment of each adapter process spawned afterwards (so it applies to
+adapters started after the change); Codex takes a token limit, not a percentage, and gets nothing, so the setting is hidden for it.
+
 Compaction: `ai:compact` sends `/compact` as an ordinary prompt in a turn of its own (no `user` event,
 no change ledger) for agents whose presentation says `canCompact` (Claude; Codex answers `unsupported`),
 only while idle and only for a chat that has a session (`invalid` otherwise). Both the
@@ -2243,6 +2350,30 @@ is a project file (no folder, no `..`). The built-in text is not in the project:
 is where the Apps panel provides it at load (features may not import each other) and
 `src/features/ai/mentions/builtinChips.ts` registers it with the store, so a send expands the chip; clicking the
 chip, in the box or in a sent message (`MentionChipView`), copies the text and shows "Copied" for 1.5 s.
+
+**Component mentions.** `@` also lists the project's components (the scan's `components`, handed to
+`src/features/ai/mentions/componentMentions.ts` by `DesktopAi`; at most four rows, by name then path), and `@`
+right after a component chip, or after one of its member chips, lists that component's props, each followed by its
+values (a choice's options, a switch's `true`/`false`: its variants), then its slots. A `component` chip carries the
+project-relative file (the scan's `file`, relative to the project root the agent runs in, whatever the components
+folder or the project's depth in its repository; a package component's path is made relative the same way); a
+`member` chip carries that file, `role` (`prop` or `slot`), `name` and, for a prop, an optional `value`. Neither is a
+prompt part: `promptPartsOf` and `plainTextOf` write each as its compact reference inside the text, and nothing else
+(no type, description, schema or file contents): `src/components/Hero.astro`, then `prop:variant=large`,
+`prop:title` or `slot:header`; a token that is empty or holds whitespace, `"`, `=` or a control character is a JSON
+string; a member not right after its component (only whitespace or that component's members between) carries the
+path first. Deleting a component chip deletes the member chips no other chip of that component keeps, in the same
+undoable change. A chip whose component, prop, value or slot is no longer in the scan is drawn red with the reason
+as its hover text, and a send, steer or queued send with one is refused (`ai.store.mentionInvalid`) with the draft
+kept; a queued message is put back and the queue paused. Component and member chips are the components green
+(`--component-green`), not purple. Clicking a valid component chip opens `ComponentMembersPopover` (320 px, start-aligned,
+scrolling, a search field past 12 props): the Properties panel's own `PropField` for each prop, as for an instance
+(the default dim), grouped as Props, Variants (props that control a union) and Slots (a switch per slot). The AI
+feature may not import the props feature, so `src/app/shell/aiMemberField.tsx` registers the field as an adapter
+(value in, value out). An untouched row adds nothing; a changed value adds or updates `prop:name=value` right after
+the component chip, a cleared one (or the default) removes it, and a row's include dot toggles `prop:name`. Each change
+is one isolated history event and leaves the caret where it was; Tab moves between controls and Escape returns focus
+to the composer.
 
 **Protocol capabilities Stacki declares.** The host declares only open ACP capabilities
 (`session.compaction`, `session.notices`, `_meta.terminal_output_delta`; not `jetbrains`, not
@@ -2385,6 +2516,67 @@ version 1 history (no `version`, oldest first) is read and turned around, and a 
 falls back to its words. The panel is `--bg-panel`, the rail's colour. Proofs: `studio/test/chatState.test.ts`
 (migration, pin and reorder, chips, mention search, durations) and `studio/test/ai.browser.ts` (the panel in
 a real browser, including a legacy history).
+
+**Screenshots** (Desktop only). The composer's Screenshot button (`screenshot/ScreenshotButton.tsx`, crop icon,
+shortcut ⌘⇧S / Ctrl+Shift+S told by the app's tooltip) starts the one capture there is, a dragged region
+(`RegionSelector.tsx`: a crosshair layer over the whole window, Escape or a right click cancels, a drag under
+4 px is a click); there is no menu and no element or whole-canvas mode, and the shortcut starts the same drag.
+Whether a region is over the canvas comes from `src/lib/screenshotSource.ts`, installed by the shell
+(`src/app/shell/aiScreenshotSource.ts`: the `.frame-clip` box and the `.frame-sized` width as the breakpoint).
+For the capture's frame the body takes `is-taking-screenshot`, which hides the canvas outlines. `ai:screenshot` (`{ projectPath, rect }`, whole CSS
+pixels within `SCREENSHOT_RECT_PX_MAX`) photographs that rect of the sender's own window with
+`webContents.capturePage` and answers `Result<{ mimeType: 'image/png' | 'image/jpeg', data, width, height }>`:
+scaled to `SCREENSHOT_EDGE_PX_MAX` (1600) on the longer side, PNG when its base64 is within 1.5 million
+characters, else JPEG at 90, 75, 60, 45; a failed, empty or too detailed capture is `invalid`.
+**Privacy.** The bytes are never written to disk and never logged: a NativeImage in main's memory, the invoke
+reply, the draft's in-memory attachment (browser-stored drafts keep no attachments), then the `ai:prompt`
+payload and the ACP `image` block (base64 `data`) on the adapter's stdin. No temporary file exists, so there is
+none to sweep: the Claude adapter passes the block to the CLI as a base64 `source` (read in the installed 0.105.0 adapter); the Codex adapter
+is not installed here, so its handling of the block is unverified. The transcript stores only the attachment's name (`Screenshot 2 (1600×900)`). What the
+person's own CLI keeps in its own session history (`~/.claude/projects`, `~/.codex/sessions`) is the CLI's,
+outside Stacki's control. **Note.** An image attachment may carry `note` (one line, at most
+`SCREENSHOT_NOTE_CHARS_MAX` characters, no control characters), sent as a text block right before the image and
+never stored: `Screenshot 1: region, 768px breakpoint`, `Screenshot 2: panel` (a region whose centre is
+off the canvas). **Bounds.** Every attachment, pasted, dropped, picked or captured, enters the draft through
+`appendAttachments` (`screenshot/draftAttachments.ts`): at most `attachmentsMax` and at most
+`DRAFT_IMAGE_CHARS_MAX` base64 characters of images in all. Chips show the thumbnail, open it in a lightbox
+(`AttachmentChips.tsx`, the app's `Popup`) and remove. Proofs: `test/electron/handlers/ai/screenshotCapture.test.ts`,
+`test/shared/ipc/screenshotContract.test.ts`, `test/renderer/ai/screenshot.test.js`, and in
+`agentHost.test.ts` and `promptBlocks.test.ts` the stored chat without bytes or note and the note block.
+
+**Recording.** The capture control is one bar (`ScreenshotButton.tsx`): at rest the crop button alone; on hover or
+focus it grows upward (160 ms, anchored at the crop button's bottom, overlaying, closing after 180 ms) to reveal
+Record above it, with a pill that slides to the pointed segment; Record is `visibility: hidden` until then;
+ArrowUp and ArrowDown move between them; while a recording runs the crop slot is Record in red. Record opens the
+same region selector (with a size readout) and nothing records until the drag is released. `ai:record`
+(`{ projectPath, action }`) takes `start` (a rect, as `ai:screenshot`), `status`, `stop`, `frame` (`index` below
+`RECORDING_FRAMES_MAX`, 240) and `discard`, each but `start` naming the recording (`r` and 16 hex digits); the
+answer is `Result<RecordReply>` by kind. Main (`electron/handlers/ai/screenRecorder.ts`) photographs the rect with
+`capturePage` (both channels map the page's CSS-pixel rect to window pixels by the page's zoom factor, `cssRectToWindow`); the first frame is taken at once, the rate is `fpsForCost`: `floor(1000 / (cost × 1.5))` of the
+measured per-frame cost (capture and encode), within 2 to 15 fps, chosen from the first frame, every 10 frames and
+at once after an overrun; Stop waits for a capture under way and takes the last frame. Frames are never
+deduplicated. Each frame is scaled to `SCREENSHOT_EDGE_PX_MAX` as JPEG 70 plus a 640 px JPEG 80 thumbnail (sharp enough to stand in for the full frame in the preview), held as
+Buffers in memory only: no file, no temporary file, no log, never persisted. Bounds (`RECORDING_LIMITS`): 15 s of
+capture time, 240 frames, 40 MiB of frames and thumbnails; at a bound the recording stops by itself (not a ring)
+and the sheet says why. Capture pauses while the window is hidden or minimised (the handlers' `isForeground`), and
+paused time does not count. One recording exists app-wide: a new start, `discard`, the sender's window being
+destroyed, `stopAll` at quit, or ten minutes stopped and untouched frees it. The bar beside the region
+(`RecordingBar.tsx`) polls `status` every 250 ms and stops on Stop or Escape. The "Pick frames" sheet
+(`FramePicker.tsx`) shows the whole current frame, never cropped (a box of the recording's own aspect fitted in a
+fixed stage, `fitContain`, `object-fit: contain`), over a timeline of the whole recording that never scrolls: evenly
+sampled tiles across the width (`timelineTiles`), every frame addressable by position (`frameAt`), blue ticks for
+the chosen frames and a time scale beneath. All thumbnails are decoded once into object URLs; a drag reads the strip's
+box once and then only does arithmetic, writing the playhead's transform, the preview's source and the time label at
+most once per animation frame, and renders no tile again (about 0.03 ms per move in the 200-frame test); full frames
+are fetched around the playhead when it rests, at most 5 held. The composer lightbox sizes its image to the window at
+the image's own aspect (`lightboxSize`). After a screenshot or added frames the composer takes the keyboard again
+(`requestComposerFocus`). Add fetches the chosen frames and appends them through `appendAttachments` as "Recording frame 3
+(t=1.2s)" with the note `Screenshot 4: recording frame at 1.2s, region, 1280px breakpoint`, then discards.
+Selection (`frameSelection.ts`): Enter or "Use this frame" toggles, shift-click adds the range from the last frame
+toggled, "Pick evenly" takes every 2nd, 3rd, 5th or 10th or clears; never more than the draft's free attachment
+slots. Proofs: `test/electron/handlers/ai/screenRecorder.test.ts`, `test/electron/handlers/ai/screenRecordingElectron.test.js`
+(a hidden window, a synthetic animated page, three region sizes for about 2 s each, no file writes, a small region
+at 10 fps or more), `test/renderer/ai/screenRecording.test.js`, `test/shared/ipc/screenshotContract.test.ts`.
 
 Proofs: `test/shared/properties/ai/acpWire.test.ts` (recorded adapter lines, each bad shape, bounds,
 unknown variants), `test/shared/ipc/aiChatContract.test.ts`, `test/electron/handlers/ai/agentHost.test.ts`
@@ -2596,6 +2788,18 @@ field of an item in the default array literal (`arrayValue.ts`), kept exactly as
 fields as `item.children[0].title`; the loop's Filters and Sort list a Group's fields by path (`address.city`) and a nested
 List as a field that is set or empty.
 
+## Attributes props (`ScanComponent.extendsTag`)
+
+`extendsTag` on a scanned component (`shared/properties/projectScan.ts`, Desktop) and on
+Studio's `Component` (`studio/src/features/project/projectClient.ts`, parsed as a lowercase
+tag of at most 128 characters) is the tag Props takes attributes from, read by
+`parseExtendsTag` (`electron/parse/astroComponentApi.ts`) anywhere in an `interface Props`
+extends list or at the top level of a `type Props` alias's intersection; the tag-less
+`astroHTML.JSX.HTMLAttributes` gives none. The Properties panel passes it as
+`attributesTag` to an instance's Attributes section, which checks names against it
+(`attributeNameNote`, advisory). Writing the prop, its precedence and disconnecting are in
+docs/component-properties.md (An attributes prop).
+
 ## Boot snapshot (`shared/properties/bootSnapshot.ts`)
 
 The cross-process cache that lets a window's first frame show the last session's real state. Main reads
@@ -2620,3 +2824,17 @@ or be a link, and a folder may hold only `.astro` files within `COMPONENT_OP_LIM
 - Delete is planned first (`component:planRemove` answers a `ComponentRemovalPreview`, `shared/properties/componentRemoval.ts`, parsed at the boundary) and confirmed with what it takes out; `component:remove` carries `uses`: `'remove'` (the panel) takes every instance and import out with the file (see docs/components.md, "Deleting a component"), `'refuse'` (a duplicate's undo) refuses a used component. Either way it removes the component's `.stacki/components.json` recipe and every nested `component` reference, and drops its `.stacki/roles.json` `componentRules`, then moves it to the operating system's Trash. Main keeps the removed texts and the settings as they were and as the deletion left them under a token: Undo restores the files and restores each setting only while it still reads as the deletion left it.
 - Folder rows in the panel are real folders, so a folder row offers Duplicate (confirmed from 6 components) and Delete (planned and confirmed the same way, over every component under it).
 - Studio's panel passes no `management`, so the rows are left out: its server has neither a copy/trash operation nor an undo store for them yet.
+
+## Dictation model
+
+`dictation:status`, `dictation:download`, `dictation:cancel` and `dictation:remove`
+(`shared/properties/voice/dictationModel.ts`) manage the on-device Whisper model
+(docs/voice-engine.md). The renderer names a model id and nothing else: addresses, hashes, sizes
+and the folder (`<userData>/models/whisper`) are fixed in main by `whisperModels.ts`. A status lists
+each known model once with bytes never past its pinned size; a download resolves to an outcome
+(`installed` or a `DownloadFailure`), never a rejection for a network or disk problem. Progress
+arrives as `dictation:progress` events, parsed by `parseDownloadProgress`, at most ten a second.
+The worker reads the model through `stacki-model://whisper/<model>/<revision>/<file>`, which serves
+only manifest files of an installed model. Messages between the page and the Whisper worker are a
+boundary too: `parseToWorker` and `parseFromWorker` (`whisperWorkerProtocol.ts`) bound audio to the
+30-second window and text to `segmentCharsMax`.

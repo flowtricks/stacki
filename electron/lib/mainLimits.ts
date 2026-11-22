@@ -31,6 +31,20 @@ export const MAIN_LIMITS = {
   /** Output one command (git, the package manager, astro) may print before it
    * is killed. Node's own default, stated so no call relies on it. */
   commandOutputBytesMax: 1024 * 1024,
+  /** Output one git command may print: a status or file listing of a very large project is far longer than a build's output. */
+  gitOutputBytesMax: 64 * 1024 * 1024,
+  /** The part of a failed git command's output shown to the person; hooks print their verdict last, so the tail is kept. */
+  gitMessageCharsMax: 4000,
+  /** Characters of one commit message: far past any real one, and well inside the argument limit of every platform. */
+  commitMessageCharsMax: 50_000,
+  /** Paths one commit or restore may name; past this the listing no longer fits a process argument and a file carries it. */
+  pathspecArgumentsMax: 200,
+  /** Files the commit picker lists. A project with more has a missing ignore rule, which is said instead of hiding files. */
+  statusFilesMax: 20_000,
+  /** Commits in one history page: a screenful and a scroll, never the whole history. */
+  logPageMax: 500,
+  /** The wait for a commit: hooks (lint-staged, tests) and signing programs may legitimately run for minutes. */
+  commitTimeoutMs: 5 * 60 * 1000,
   /**
    * Removal attempts for one publish temporary directory. Windows reports EBUSY
    * or EPERM while git, antivirus or the search indexer still holds a file such

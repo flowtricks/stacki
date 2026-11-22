@@ -64,7 +64,11 @@ import { createServer, type ViteDevServer } from 'vite';
 // componentRename, componentAccess), the props' variant rules (variantRules), the new style tag setting
 // (newStyleTag), the recovery screen's messages (recovery) and the loop selection reader (loopSelection):
 // about ten more, 159 measured, with a little headroom.
-const MODULES_MAX = 170;
+// HEAD stood at 169 before Settings > Agents and Add elements. The agents channels validate their payloads before invoke
+// (projectAgentChannels, over the agent definitions' parsers in projectAgents, which reads Codex's TOML through mcpToml and
+// mcpCodex), and the English catalog gained the Add elements namespace (elements): five more, 174 measured. None can leave:
+// the payload parsers are the boundary docs/contracts.md requires, and the catalog is one module per namespace.
+const MODULES_MAX = 180;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

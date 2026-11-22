@@ -67,6 +67,7 @@ import {
   paperclip as centralPaperclip,
   paragraph as centralParagraph,
   fileText as centralFileText,
+  robot as centralRobot,
   phone as centralPhone,
   phoneCall as centralPhoneCall,
   pin as centralPin,
@@ -93,6 +94,7 @@ import {
   undo as centralUndo,
   unlink as centralUnlink,
   upload as centralUpload,
+  styles as centralStyles,
   variables as centralVariables,
   warning as centralWarning,
   documentSparkle as centralDocumentSparkle,
@@ -131,6 +133,12 @@ export const ComponentEditIcon = centralIcon(centralComponentEdit);
 export const GitHubIcon = (props: IconProps) => (
   <I24 {...props}>
     <path fill="currentColor" d={paths.githubIconPath} />
+  </I24>
+);
+
+export const GoogleIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.googleIconPath} />
   </I24>
 );
 
@@ -214,6 +222,9 @@ export const FileIcon = centralIcon(centralFile);
 
 // A document with text lines: the Instructions panel holds the project's Markdown files.
 export const InstructionsIcon = centralIcon(centralFileText);
+
+// A robot: an agent definition, the persona a coding agent runs as (Settings > Agents).
+export const AgentIcon = centralIcon(centralRobot);
 
 // A document with a sparkle: a skill is a written playbook an agent picks up when a task calls for it.
 export const SkillIcon = centralIcon(centralDocumentSparkle);
@@ -496,3 +507,5 @@ export const FieldSwitchIcon = centralIcon(centralToggle);
 
 // Variables — the panel that reads a project's CSS custom properties.
 export const VariableIcon = centralIcon(centralVariables, 20);
+/** The paint brush the Style selectors rail draws (central `styles`): a CSS class. */
+export const PaintBrushIcon = centralIcon(centralStyles, 20);

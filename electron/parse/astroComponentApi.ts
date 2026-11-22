@@ -367,14 +367,43 @@ export function defaultSlotInline(source: string): boolean {
 }
 
 // Extracts the tag from `interface Props extends HTMLAttributes<"button">`
-// so the UI can offer that element's built-in attributes (type, disabled, …).
+// so the UI can offer that element's built-in attributes (type, disabled, …)
+// and check an instance's attribute names against it. HTMLAttributes may sit
+// anywhere in the extends list (`extends Base, HTMLAttributes<"img">`, as
+// Stacki's attributes prop writes it), or anywhere in a `type Props` alias's
+// intersection. The tag-less `astroHTML.JSX.HTMLAttributes` names no tag.
 export function parseExtendsTag(source: string): string | undefined {
   const frontmatter = frontmatterOf(source)?.code ?? '';
-  const match = frontmatter.match(new RegExp('interface\\s+Props\\s+extends\\s+(?:astroHTML\\.JSX\\' + '.)?HTMLAttributes\\s*<\\s*[\'"](\\w+)[\'"]\\s*>', ''));
-  if (match) {
-    return required(match[1], 'Extended HTML tag capture');
+  const tagOf = (typing: string): string | undefined => {
+    const match = /\b(?:astroHTML\.JSX\.)?HTMLAttributes\s*<\s*['"]([a-z][a-z0-9]*)['"]\s*>/.exec(typing);
+    return match ? required(match[1], 'Extended HTML tag capture') : undefined;
+  };
+  // The extends list runs to the interface's `{`; a list never holds one, though a generic's `<…>` may.
+  const extended = /\binterface\s+Props\s+extends\s+([^{]*)\{/.exec(frontmatter);
+  if (extended) {
+    return tagOf(required(extended[1], 'Extends list capture'));
   }
-  // The same thing as an intersection: `type Props = HTMLAttributes<'button'> & { label: string }`.
-  const intersected = frontmatter.match(/type\s+Props\s*=\s*(?:astroHTML\.JSX\.)?HTMLAttributes\s*<\s*['"](\w+)['"]\s*>\s*&/);
-  return intersected ? required(intersected[1], 'Intersected HTML tag capture') : undefined;
+  // In an alias only a top-level intersection member counts: `{ attrs: HTMLAttributes<"div"> }` is a prop, not the Props' attributes.
+  const aliased = /\btype\s+Props\s*=/.exec(frontmatter);
+  return aliased ? tagOf(topLevelText(frontmatter.slice(aliased.index + aliased[0].length))) : undefined;
+}
+
+// A type's text with the insides of its `{}`, `()` and `[]` blanked, up to the
+// `;` or line that ends it at the top level. One pass over at most the text.
+function topLevelText(text: string): string {
+  let depth = 0;
+  let out = '';
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index] ?? '';
+    if ('{(['.includes(character)) {
+      depth++;
+    } else if ('})]'.includes(character)) {
+      depth = Math.max(0, depth - 1);
+    } else if (depth === 0 && (character === ';' || (character === '\n' && /^\n[A-Za-z]/.test(text.slice(index, index + 2))))) {
+      return out;
+    } else if (depth === 0) {
+      out += character;
+    }
+  }
+  return out;
 }

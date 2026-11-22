@@ -17,6 +17,8 @@ import PagesPanel from '../../features/pages/PagesPanel';
 import { usePageBulkRemoveHost } from './pageBulkRemoveDesktop';
 import { ConnectSanity } from '../../features/cmsConnections/ConnectSanity';
 import PalettePanel from '../../features/palette/PalettePanel';
+import AddElementsPanel from '../../features/palette/AddElementsPanel';
+import { navigatorShown, useElementDragNavigator } from '../state/elementDragNavigator';
 import { useComponentRoleRules } from '../roles/componentRoleRules';
 import StructurePanel from '../../features/structure/StructurePanel';
 import PanelBoundary from '../../ui/PanelBoundary';
@@ -40,6 +42,7 @@ import { AssetPickOverlay } from '../../ui/AssetPickOverlay';
 import type { HistoryCommit, HistoryCommitFile } from '../../features/history/historyBridge';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
 import { type LeftTab } from '../appTypes';
 import type { CodeReveal, SourceRange } from '../../features/code/codePanelModel';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
@@ -51,9 +54,10 @@ import { projectRelative, type VariablePlace } from '../../editor/variablePlace'
 import { prewarmKeepList, prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
 import { prewarmInstructionsListing } from '../../features/instructions/instructionsListingCache';
 import { prewarmSecretsListing } from '../../features/projectSettings/secretsCache';
+import { prewarmProjectRoles } from '../roles/rolesCache';
 import { prewarmInstalledApps } from '../../features/apps/installedAppsCache';
 import { prewarmPageOrder } from '../../features/pages/pageOrderPersistence';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { PreviewModeStage } from '../../features/preview/SizedFrame';
 import { usePreviewSizing } from '../../features/preview/usePreviewSizing';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
@@ -63,17 +67,19 @@ import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, 
 import { selectedPseudo } from '../model/selectionStructure';
 import type { ShellView } from '../App';
 import { useCurrentRole } from '../../lib/useCurrentRole';
-import { canRailTab } from '../../lib/roleAccess';
+import { canPanel, canRailTab } from '../../lib/roleAccess';
 import { requestSettingsSection } from '../../lib/settingsSections';
 import { can } from '../../../shared/properties/projectRoles';
 import { ViewAsChip } from '../roles/ViewAsChip';
 import { AppsTab, DesktopAppsHost } from './DesktopApps';
 import { AuditsHost, AuditsTab } from './DesktopAudits';
-import { AiHost, AiTab, useAiRailButton } from './DesktopAi';
+import { AiCover, AiHost, AiTab, useAiRailButton } from './DesktopAi';
 import { selectFromPanel } from './panelSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { SettingsButton } from './WelcomeView';
+import { SettingsBackScope } from '../SettingsBackScope';
 import { PageLoadLine } from '../../features/preview/PageLoadLine';
+import { useCodeChips } from '../../features/style/codeChips/CodeChips';
 
 // The editor around an open project.
 export function AppShell({ app }: { readonly app: ShellView }) {
@@ -125,6 +131,8 @@ export function AppShell({ app }: { readonly app: ShellView }) {
           </PanelBoundary>
           <PanelBoundary name="The canvas cover" label={translate('recovery.pane.canvas')} resetKey={app.leftTab}>
             <CanvasCovers app={app} />
+            {/* Last, so an expanded chat is on top of any other cover: it is the mode the person just chose. */}
+            <AiCover app={app} />
           </PanelBoundary>
         </div>
         {app.assetPick?.presentation === 'overlay' && (
@@ -181,6 +189,8 @@ function desktopPanelReads(projectPath: string): ReadonlyArray<() => Promise<voi
     () => prewarmKeepList(projectPath),
     () => prewarmInstructionsListing(projectPath),
     () => prewarmSecretsListing(projectPath),
+    // The login behind Settings → Roles comes from `gh auth status`, about a second: read it before the tab opens.
+    () => prewarmProjectRoles(projectPath),
   ];
 }
 
@@ -372,8 +382,8 @@ function OpenBrowserButton({ liveUrl }: { readonly liveUrl: ShellView['liveUrl']
   );
 }
 
-// The refresh button beside the address. Its tip waits for a resting pointer and names the shortcut that does the same with focus
-// in the canvas, where the menu hands ⌘R to the site (electron/app/reloadRouting.ts). The shortcut is never drawn on the button.
+// The refresh button beside the address. Its tip waits for a resting pointer and names the shortcut that does the same from
+// anywhere, since the menu always hands ⌘R to the site (electron/app/reloadRouting.ts). The shortcut is never drawn on the button.
 export function ReloadButton({ disabled, onReload }: { readonly disabled: boolean; readonly onReload: () => void }) {
   const translate = useTranslate();
   const tooltip = useDelayedTooltip();
@@ -395,9 +405,9 @@ export function ReloadButton({ disabled, onReload }: { readonly disabled: boolea
         <RefreshIcon size={13} />
       </button>
       {tooltip.value ? (
-        <div className="rail-tooltip below" style={tooltip.value}>
+        <FittedTooltip anchor={tooltip.value}>
           {label} <span className="rail-tooltip-shortcut">{shortcut}</span>
-        </div>
+        </FittedTooltip>
       ) : undefined}
     </>
   );
@@ -453,11 +463,7 @@ function PreviewButton({ app }: { readonly app: ShellView }) {
       >
         <PlayIcon size={16} />
       </button>
-      {tooltip.value ? (
-        <div className="rail-tooltip below" style={tooltip.value}>
-          {label}
-        </div>
-      ) : undefined}
+      {tooltip.value ? <FittedTooltip anchor={tooltip.value}>{label}</FittedTooltip> : undefined}
     </>
   );
 }
@@ -506,10 +512,15 @@ function variablePlace(app: ShellView): VariablePlace {
 // (test/renderer/app/panelSwitch.test.js holds this).
 export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab: LeftTabName }) {
   const translate = useTranslate();
+  const { setLeftTab } = app;
+  const backToSettings = useCallback(() => setLeftTab('projectSettings'), [setLeftTab]);
   return (
     <ResizablePanel kind={tab === 'code' ? 'code' : 'left'}>
       <PanelBoundary name="The left panel" label={translate('recovery.pane.leftPanel')} resetKey={tab}>
-        <LeftPanelBody app={app} tab={tab} />
+        {/* A panel a person moved into Settings gets Settings' back chevron in its header (SettingsBackScope.tsx). */}
+        <SettingsBackScope tab={tab} onBack={backToSettings}>
+          <LeftPanelBody app={app} tab={tab} />
+        </SettingsBackScope>
       </PanelBoundary>
     </ResizablePanel>
   );
@@ -519,6 +530,7 @@ function LeftPanelBody({ app, tab }: { readonly app: ShellView; readonly tab: Le
   return (
     <>
       {tab === 'properties' && <PropertiesTab app={app} />}
+      {tab === 'elements' && <ElementsTab app={app} />}
       {tab === 'pages' && <PagesTab app={app} />}
       {tab === 'navigator' && <NavigatorTab app={app} />}
       {tab === 'components' && <PaletteTab app={app} />}
@@ -529,7 +541,14 @@ function LeftPanelBody({ app, tab }: { readonly app: ShellView; readonly tab: Le
       {tab === 'history' && <HistoryTab app={app} />}
       {tab === 'apps' && <AppsTab app={app} />}
       {tab === 'audits' && <AuditsTab app={app} />}
-      {tab === 'projectSettings' && <ProjectSettingsPanel projectPath={app.project.path} showToast={app.showToast} />}
+      {tab === 'projectSettings' && (
+        <ProjectSettingsPanel
+          projectPath={app.project.path}
+          showToast={app.showToast}
+          onOpenPanel={(panel) => app.setLeftTab(panel)}
+          componentOpen={app.componentPropertiesOpen}
+        />
+      )}
       {tab === 'ai' && <AiTab app={app} />}
       {tab === 'assets' && (
         <AssetsPanel
@@ -653,12 +672,36 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
         onOpenCode={app.openCodeWindowById}
         onChangeLayout={app.onChangeLayout}
         onDropComponent={app.onDropComponent}
+        onDropInsert={app.insertItemAt}
         onMoveNode={app.moveNode}
         onCodeChange={app.onCodeChange}
         onOpenCodePanel={() => app.setLeftTab('code')}
         devLog={app.devLog}
       />
     </PanelBoundary>
+  );
+}
+
+// The Add elements panel. A click inserts at the selection through the palette's insert; a tile dragged out shows
+// the Navigator over the panel until the drag ends (elementDragNavigator.ts), so it is a drop target without the
+// left panel changing under the drag.
+export function ElementsTab({ app }: { readonly app: ShellView }) {
+  const role = useCurrentRole();
+  const drag = useElementDragNavigator(canPanel(role, 'navigator') ? 'allowed' : 'denied');
+  return (
+    <div className="elements-tab">
+      <AddElementsPanel
+        allowSlot={app.currentPage?.kind === 'component'}
+        onInsert={app.insertItem}
+        onPickComponent={() => app.setLeftTab('components')}
+        onDragPhase={drag.onDragPhase}
+      />
+      {navigatorShown(drag.state) && (
+        <div className="elements-drag-navigator">
+          <NavigatorTab app={app} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -718,6 +761,7 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
       selectedRemote={app.cmsRemote}
       onSelectRemote={(selection) => {
         app.setCmsRemote(selection);
+        app.setCmsFileSettings(undefined);
         if (selection) {
           app.setCmsRel(undefined);
           app.setContentName(undefined);
@@ -726,6 +770,7 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
       }}
       onSelectContent={(name) => {
         app.setContentName(name);
+        app.setCmsFileSettings(undefined);
         if (name) {
           app.setCmsRel(undefined);
           app.setCmsRemote(undefined);
@@ -737,6 +782,8 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
       onSelect={(rel) => {
         app.setCmsRel(rel);
         app.setCmsSettings(false);
+        // Any selection in the list, or closing one, leaves a file's settings.
+        app.setCmsFileSettings(undefined);
         if (rel) {
           app.setContentName(undefined);
           app.setCmsRemote(undefined);
@@ -749,11 +796,21 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
         }
       }}
       onOpenSettings={(rel) => {
+        app.setCmsFileSettings(undefined);
         app.setCmsRel(rel);
         app.setCmsSettings(true);
       }}
       onConnect={() => openAppSettings('cms')}
       showToast={app.showToast}
+      // A data file's gear opens its settings in the main view, in place of whatever was open there.
+      onNavigate={() => app.setCmsFileSettings(undefined)}
+      onOpenFileSettings={(file) => {
+        app.setCmsRel(undefined);
+        app.setCmsSettings(false);
+        app.setContentName(undefined);
+        app.setCmsRemote(undefined);
+        app.setCmsFileSettings(file);
+      }}
     />
   );
 }
@@ -761,6 +818,8 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
 export function CodeTab({ app }: { readonly app: ShellView }) {
   const page = app.currentPage;
   const state = app.pageState;
+  // The page's `<style>` blocks draw CSS chips; the markup around them is left as it is.
+  const codeChips = useCodeChips('markup');
   if (!page || page.kind === 'route' || !state) {
     return undefined;
   }
@@ -776,6 +835,8 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
       onOpenComponent={(name, id) => {
         void app.openComponent(name, app.pathFor(id)).catch(app.reportFailure);
       }}
+      extensions={codeChips.extension}
+      overlay={codeChips.overlay}
     />
   );
 }

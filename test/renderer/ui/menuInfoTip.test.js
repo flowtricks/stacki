@@ -143,7 +143,6 @@ test('the tip flips to the left of the menu when the window has no room on the r
   await wait(600);
   const [tip] = tips();
   assert.equal(tip.dataset.side, 'left');
-  assert.ok(tip.classList.contains('is-left'));
   assert.equal(tip.style.left, '90px');
 });
 

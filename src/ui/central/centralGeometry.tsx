@@ -157,6 +157,30 @@ export const alignRight = {
   ),
 };
 
+export const arrowCornerDownLeft = {
+  name: 'arrow-corner-down-left',
+  // Figma variant 9303:25731.
+  compact: (
+    <>
+      <path
+        d="M20.25 4.75V13.25C20.25 14.3546 19.3546 15.25 18.25 15.25H4.75"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M7.75 11.25L3.75 15.25L7.75 19.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // Figma variant 9303:25751.
+  standard: (
+    <>
+      <path d="M20.5 4.5V15H3.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 10.5L3.5 15L8 19.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
 export const arrowDown = {
   name: 'arrowDown',
   // Figma variant 9278:27325.
@@ -4384,6 +4408,29 @@ export const roles = {
         strokeLinejoin="round"
       />
     </>
+  ),
+};
+
+export const robot = {
+  name: 'robot',
+  // Figma variant 9367:24875.
+  compact: (
+    <path
+      d="M12 2.75V4.75M3 8.75C2.58579 8.75 2.25 9.08579 2.25 9.5V10.5C2.25 10.9142 2.58579 11.25 3 11.25M21 11.25C21.4142 11.25 21.75 10.9142 21.75 10.5V9.5C21.75 9.08579 21.4142 8.75 21 8.75M9.75 14.5H14.25M9.25 10C9.25 10.4142 8.91421 10.75 8.5 10.75C8.08579 10.75 7.75 10.4142 7.75 10C7.75 9.58579 8.08579 9.25 8.5 9.25C8.91421 9.25 9.25 9.58579 9.25 10ZM16.25 10C16.25 10.4142 15.9142 10.75 15.5 10.75C15.0858 10.75 14.75 10.4142 14.75 10C14.75 9.58579 15.0858 9.25 15.5 9.25C15.9142 9.25 16.25 9.58579 16.25 10ZM20.75 16.25V6.75C20.75 5.64543 19.8546 4.75 18.75 4.75H5.25C4.14543 4.75 3.25 5.64543 3.25 6.75V16.25C3.25 17.9069 4.59315 19.25 6.25 19.25H17.75C19.4069 19.25 20.75 17.9069 20.75 16.25Z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+  // Figma variant 9367:24907.
+  standard: (
+    <path
+      d="M9.5 14.5H14.5M12 4.5V2.5M2.5 8.5C1.94772 8.5 1.5 8.94772 1.5 9.5V10.5C1.5 11.0523 1.94772 11.5 2.5 11.5M21.5 8.5C22.0523 8.5 22.5 8.94772 22.5 9.5V10.5C22.5 11.0523 22.0523 11.5 21.5 11.5M9.5 10C9.5 10.5523 9.05228 11 8.5 11C7.94772 11 7.5 10.5523 7.5 10C7.5 9.44772 7.94772 9 8.5 9C9.05228 9 9.5 9.44772 9.5 10ZM16.5 10C16.5 10.5523 16.0523 11 15.5 11C14.9477 11 14.5 10.5523 14.5 10C14.5 9.44772 14.9477 9 15.5 9C16.0523 9 16.5 9.44772 16.5 10ZM21 16.5V6.5C21 5.39543 20.1046 4.5 19 4.5H5C3.89543 4.5 3 5.39543 3 6.5V16.5C3 18.1569 4.34315 19.5 6 19.5H18C19.6569 19.5 21 18.1569 21 16.5Z"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   ),
 };
 

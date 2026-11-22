@@ -27,6 +27,11 @@ export function dragSubject(drag: Drag | undefined, environment: PlacementEnviro
       const node = placementNodeOfItem({ type: 'component', name: drag.name }, environment);
       return node === undefined ? undefined : { kind: 'new', node };
     }
+    case 'insert': {
+      // A tile from the Add elements panel: placed by the same rule the insert palette asks.
+      const node = placementNodeOfItem(drag.choice, environment);
+      return node === undefined ? undefined : { kind: 'new', node };
+    }
     default: {
       const exhaustive: never = drag;
       return exhaustive;

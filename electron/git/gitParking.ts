@@ -8,6 +8,7 @@ import { described } from '../../shared/properties/i18n/messageRef';
 import * as gitHistory from './gitHistory';
 import { git } from '../lib/nodeTools';
 import { ensureExcluded } from '../lib/projectExclusions';
+import { readHead } from './gitState';
 
 // Work in progress, set aside under the branch it belongs to.
 //
@@ -44,6 +45,11 @@ export async function parkedRef(projectPath: string, branch: string | undefined)
 }
 
 export async function parkBranch(projectPath: string, branch: string | undefined) {
+  // A stash records the work against a commit; a repository with no commit yet has none, and git refuses. There is also nothing to
+  // protect from a switch there, since no other branch exists to carry the files over to.
+  if (!(await readHead(git, projectPath)).born) {
+    return false;
+  }
   await preserveIgnoredPaths(projectPath);
   if (!(await isDirty(projectPath))) {
     return false;
@@ -100,12 +106,13 @@ export async function unparkBranch(projectPath: string, branch: string | undefin
   }
 }
 
+/** The branch HEAD is on; "HEAD" when detached (git's own spelling, which callers already compare against); undefined before the first commit. */
 export async function currentBranch(projectPath: string) {
-  try {
-    return (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
-  } catch {
+  const head = await readHead(git, projectPath);
+  if (!head.born) {
     return undefined;
   }
+  return head.branch ?? 'HEAD';
 }
 
 // --- Reading history -------------------------------------------------------
@@ -130,11 +137,9 @@ export async function readGitIdentity(projectPath: string) {
     head: undefined,
     userEmail: undefined,
   };
-  try {
-    identity.branch = (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
-  } catch {
-    identity.branch = '(no commits yet)';
-  }
+  // A repository with no commits yet keeps the sentinel the publish workflow looks for; a detached HEAD is spelled "HEAD".
+  const head = await readHead(git, projectPath);
+  identity.branch = head.born ? (head.branch ?? 'HEAD') : '(no commits yet)';
   try {
     // What HEAD actually points at. The history panel reloads when this moves,
     // which is how a commit made from the chip shows up in the timeline

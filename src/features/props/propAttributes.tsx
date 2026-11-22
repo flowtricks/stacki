@@ -14,7 +14,7 @@ import AssetField from '../../ui/AssetField';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
 import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propBindings';
 import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon, MaximizeIcon } from '../../ui/Icons';
-import { AttributesPropControl } from './AttributesPropBinding';
+import { AttributesPropControl, BoundSpreadRow } from './AttributesPropBinding';
 import { CodeInline } from '../../ui/CodeBlock';
 import { ComputedField, ConditionalBadge, ConditionalEditor, ConditionalField, useConditionCatalog } from './ConditionalValue';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -22,7 +22,7 @@ import { classListOfAttr, computedOfAttr, conditionalOfAttr, startingConditional
 import { ClassListField } from './ClassListValue';
 import { CLASS_LIST_ATTRIBUTE, classListAppended, classListOfferOf, type ClassListOffer } from './classListProp';
 import { isReferencePath } from '../../editor/conditionalValue';
-import { readAttributesBinding } from '../../editor/attributesBinding';
+import { readAttributesBinding, withDefaultAttribute } from '../../editor/attributesBinding';
 import { attributeNameNote, type AttributeNameContext } from '../../editor/htmlAttributes';
 import { visibleAttributeNames } from '../../../shared/core/internalAttributes';
 import {
@@ -65,6 +65,10 @@ interface AttributesSectionProps extends ContextProps {
   readonly tag?: string | undefined;
   /** The names an attribute here would collide with: an instance's component props. */
   readonly reservedNames?: readonly string[] | undefined;
+  /** For an instance: the tag its component passes attributes to (Props extends HTMLAttributes<"img">), shown and checked against. */
+  readonly passedTo?: string | undefined;
+  /** Renames a frontmatter variable across the file: the attributes prop's rest binding, from its chip's settings. */
+  readonly onRenameVariable?: ((rename: { readonly from: string; readonly to: string }) => string | undefined) | undefined;
   /** Writes the whole attribute list in order, for connecting it to an attributes prop. */
   readonly onReplaceProps?: ((props: Readonly<Record<string, Attr>>) => void) | undefined;
   /**
@@ -77,6 +81,7 @@ interface AttributesSectionProps extends ContextProps {
 }
 interface AttrEditorProps extends ContextProps {
   readonly tag?: string | undefined;
+  readonly passedTo?: string | undefined;
   readonly reservedNames?: readonly string[] | undefined;
   readonly pos: FieldPosition;
   readonly triggerRootRef: RefObject<HTMLElement>;
@@ -113,25 +118,26 @@ export function AttributesSection(props: AttributesSectionProps) {
   const translate = useTranslate();
   const state = useAttributesSection(props);
   const { node, onSetProp, editor, setEditor, listRef, openEditor, tag, onReplaceProps, bindContext } = state;
-  // Connected to the component's attributes prop: the defaults before the
-  // spread are the prop's, edited from its settings; the spread itself and
-  // the rows after it are the element's own markup, in source order.
+  // Connected to the component's attributes prop: every attribute is a row in
+  // source order, and the spread is the "+ items in {} rest" row where it sits:
+  // the rows before it are defaults an instance overrides, the rows after it
+  // win (attributesBinding.ts).
   const restLocal = bindContext?.newProp?.restLocal;
   const binding = restLocal === undefined ? undefined : readAttributesBinding(node.props, restLocal);
   // Stacki's own attributes stay on the node and are never a row: no edit here
   // can reach them, so every write below carries them through untouched.
-  const ownNames = visibleAttributeNames(state.names);
-  const names = binding === undefined ? ownNames : ownNames.filter((name) => !binding.defaults.some((entry) => entry.name === name));
+  const names = visibleAttributeNames(state.names);
 
   return (
     <div className="props-field" ref={listRef}>
       {/* A label activates its control on any click, including blank space.
           A plain row keeps the add button as the only activation target. */}
-      <div className="props-label-row">
+      <div className="props-label-row attrs-label-row">
         <span className="prop-label">
           <BracesIcon size={12} className="prop-label-icon" />
           {translate('props.attributes.title')}
         </span>
+        {state.passedTo !== undefined && <span className="attrs-tag-type">{translate('props.attributes.tagType', { tag: state.passedTo })}</span>}
         {tag !== undefined && onReplaceProps !== undefined && (
           <AttributesPropControl
             props={node.props}
@@ -139,6 +145,7 @@ export function AttributesSection(props: AttributesSectionProps) {
             bindContext={bindContext}
             onReplaceProps={onReplaceProps}
             onSetFrontmatter={state.onSetFrontmatter}
+            onRenameVariable={state.onRenameVariable}
           />
         )}
         <button className="ghost" title={translate('props.attributes.add')} data-attribute-editor-trigger onClick={() => openEditor(undefined)}>
@@ -150,6 +157,9 @@ export function AttributesSection(props: AttributesSectionProps) {
         <div className="attrs-list">
           {names.map((name) => {
             const value = node.props?.[name];
+            if (value?.type === 'spread' && binding !== undefined && value.value === restLocal) {
+              return <BoundSpreadRow key={name} local={value.value} />;
+            }
             if (value?.type === 'spread') {
               return <SpreadRow key={name} name={name} spread={value.value} state={state} />;
             }
@@ -302,6 +312,16 @@ export function withoutAttribute(props: PropValues | undefined, name: string): R
 function useAttributesSection(props: AttributesSectionProps) {
   const { names } = props;
   assert(names.length <= LIMITS.attrsPerNodeMax, 'Attributes: name limit exceeded');
+  // A new attribute of an element connected to the attributes prop goes
+  // before the spread, so it stays a default an instance can override.
+  const onSetProp: SetProp = (name, value, immediate) => {
+    const placed = value === undefined ? undefined : defaultPlacement(props, name, value);
+    if (placed === undefined) {
+      props.onSetProp(name, value, immediate);
+    } else {
+      props.onReplaceProps?.(placed);
+    }
+  };
   const [editor, setEditor] = useState<AttributeEditor | undefined>(undefined);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -319,9 +339,27 @@ function useAttributesSection(props: AttributesSectionProps) {
     );
   };
 
-  return { ...props, editor, setEditor, listRef, openEditor };
+  return { ...props, onSetProp, editor, setEditor, listRef, openEditor };
 }
 type AttributesState = ReturnType<typeof useAttributesSection>;
+
+// The attribute list with a new `name` before the connected spread, or
+// undefined when it is not a new attribute of a connected element.
+function defaultPlacement(props: AttributesSectionProps, name: string, value: Attr): Readonly<Record<string, Attr>> | undefined {
+  const local = props.bindContext?.newProp?.restLocal;
+  if (local === undefined || props.onReplaceProps === undefined || name.startsWith('...')) {
+    return undefined;
+  }
+  if (Object.hasOwn(props.node.props ?? {}, name)) {
+    return undefined;
+  }
+  if (readAttributesBinding(props.node.props, local) === undefined) {
+    return undefined;
+  }
+  const out = withDefaultAttribute(props.node.props, local, name, value);
+  assert(Object.keys(out).indexOf(name) < Object.keys(out).indexOf(`...${local}`), 'defaultPlacement: the new attribute is before the spread');
+  return out;
+}
 function AttributesSectionPopup({ state }: { readonly state: AttributesState }) {
   const { node, projectPath, bindContext, onSetProp, onRenameProp, editor, setEditor } = state;
   if (!editor) {
@@ -340,6 +378,7 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       bindContext={bindContext}
       dataContext={bindContext}
       tag={state.tag}
+      passedTo={state.passedTo}
       reservedNames={state.reservedNames}
       name={spreadPath === undefined ? (editor.attr ?? '') : `{...${spreadPath}}`}
       value={spreadPath === undefined ? decodeAttr(value) : ''}
@@ -465,7 +504,13 @@ function AttrEditor(props: AttrEditorProps) {
       {spreadName.kind === 'none' && state.spreadPath === undefined && (
         <AttributeNameNote
           name={state.draftName}
-          context={{ tag: state.tag, reserved: state.reservedNames ?? [], own: state.isNew ? undefined : state.name, taken: state.takenNames }}
+          context={{
+            tag: state.tag,
+            passedTo: state.passedTo,
+            reserved: state.reservedNames ?? [],
+            own: state.isNew ? undefined : state.name,
+            taken: state.takenNames,
+          }}
         />
       )}
       {spreadName.kind === 'none' && state.spreadPath !== undefined && (

@@ -6,8 +6,10 @@
 // `canvasPropEdits`); a JSDOM page of the captured markup gets a synthetic layout (boxes nest as the elements do); the real
 // frame code (`installTextMarks`) is driven by pointer events over the first line of every text-bearing element; and the
 // overlays the app would draw (`PreviewOverlays`) are rendered for each state the frame's messages produce. The table that
-// results, one row per component, is printed and every row is asserted: an element that gets neither a text hover, a refused
-// hover nor the component's own root hover fails the test, as does any state whose classes differ from the machine's.
+// results, one row per component, is printed and every row is asserted. Words a prop or the slot of the instance reaches get a
+// text hover and a double click that edits them; words the component writes itself (hardcoded or computed, no prop reaches
+// them) get no text hover, no text outline and no editor, only the component's own hover (closedComponentReach.ts). An
+// element that breaks either side fails the test, as does any state whose classes differ from the machine's.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -108,6 +110,7 @@ const { canvasTextPlans } = loadRenderer('src/features/preview/canvasTextSource.
 const { createTreeIndex } = loadRenderer('src/editor/editorTree.ts');
 const { installTextMarks, pathsOf, findTextHit } = loadRenderer('test/helpers/frameTextEntry.js');
 const { ownerState } = loadRenderer('src/features/preview/textOwnerState.ts');
+const { isEditableThroughProps, textReach } = require('#dist/shared/properties/closedComponentReach.js');
 
 function parsed(text) {
   const result = parsePage(text, { locs: true });
@@ -196,7 +199,8 @@ function outlines({ scope, selected, hoverPath, marks }) {
     }),
   );
   // The owner's outline is the one at its box; the layout's is the one at the layout's.
-  const found = [...markup.matchAll(/<div class="(node-outline [^"]*)" style="left:(\d+)px;top:(\d+)px/g)].map((match) => ({
+  // Read by attribute, not by position: an outline carries other attributes too.
+  const found = [...markup.matchAll(/<div [^>]*?class="(node-outline [^"]*)" style="left:(\d+)px;top:(\d+)px/g)].map((match) => ({
     classes: match[1].split(' '),
     left: Number(match[2]),
   }));
@@ -213,7 +217,7 @@ const failures = [];
 const scopes = new Map();
 function row(component) {
   if (!TABLE.has(component)) {
-    TABLE.set(component, { elements: 0, text: 0, refused: 0, root: 0, none: [] });
+    TABLE.set(component, { elements: 0, text: 0, refused: 0, root: 0, internal: 0 });
   }
   return TABLE.get(component);
 }
@@ -241,18 +245,34 @@ test('every text-bearing element of the real page follows the state machine', as
     settle();
     move(at.x, at.y);
     const hover = last().hover;
+    // What a double click here would type in: the hover and the editor follow one rule (closedComponentReach.ts), so they agree.
+    const hit = findTextHit(catalog, { target: document.elementFromPoint(at.x, at.y), clientX: at.x, clientY: at.y });
+    const hitHere = hit !== undefined && (hit.match.element === element || element.contains(hit.match.element) || hit.match.element.contains(element));
     if (hover === undefined) {
       if (instanceRoot) {
         summary.root += 1; // The component is its words: the component's own hover is the hover.
-      } else {
-        summary.none.push(element.textContent.trim().slice(0, 24));
-        failures.push(`${component}: no hover over "${element.textContent.trim().slice(0, 30)}"`);
+        continue;
+      }
+      // Words the component writes itself: no prop or slot of this instance reaches them, so no text outline, no label and no
+      // editor; the pointer on them is the component's own hover. The overlays drawn for that state hold no text mark.
+      summary.internal += 1;
+      if (hitHere) {
+        failures.push(`${component} "${element.textContent.trim().slice(0, 20)}": not hovered, yet a double click edits ${hit.target.key}`);
+      }
+      const drawn = outlines({ scope: 'owner', selected: undefined, hoverPath: 'owner', marks: { hover: undefined, picked: undefined } });
+      if (drawn.all.some((outline) => outline.classes.includes('text-mark'))) {
+        failures.push(`${component} "${element.textContent.trim().slice(0, 20)}": a text outline is drawn for words no prop reaches`);
       }
       continue;
     }
     if (hover.kind === 'refused') {
+      // Only prop text the catalog names as blocked is refused; this catalog names none, so words no prop reaches never are.
       summary.refused += 1;
+      failures.push(`${component} "${element.textContent.trim().slice(0, 20)}": refused, though no prop reaches it`);
       continue;
+    }
+    if (!hit?.target.scope || !isEditableThroughProps(textReach({ loaded: true, covering: hit.target }))) {
+      failures.push(`${component} "${element.textContent.trim().slice(0, 20)}": hovered, but no prop or slot of the instance reaches it`);
     }
     summary.text += 1;
     const scope = hover.scope;
@@ -279,8 +299,7 @@ test('every text-bearing element of the real page follows the state machine', as
       }
     }
     // A double click edits exactly the words under the pointer: the target it resolves from the point is the hovered one.
-    const hit = findTextHit(catalog, { target: document.elementFromPoint(at.x, at.y), clientX: at.x, clientY: at.y });
-    if (!(hit && hit.target.scope === scope && (hit.match.element === element || element.contains(hit.match.element) || hit.match.element.contains(element)))) {
+    if (!(hit && hit.target.scope === scope && hitHere)) {
       failures.push(
         `${component} "${element.textContent.trim().slice(0, 20)}": a double click resolves ${hit ? `${hit.target.key}` : 'nothing'}, not the hovered words`,
       );
@@ -365,8 +384,15 @@ test('every text-bearing element of the real page follows the state machine', as
   assert.ok(pairs >= 3, `${pairs} owners with two texts`);
   const printable = [...TABLE].map(
     ([component, value]) =>
-      `${component.padEnd(14)} elements ${String(value.elements).padStart(3)}  text ${String(value.text).padStart(3)}  refused ${String(value.refused).padStart(3)}  root ${String(value.root).padStart(3)}  none ${value.none.length}`,
+      `${component.padEnd(14)} elements ${String(value.elements).padStart(3)}  text ${String(value.text).padStart(3)}  refused ${String(value.refused).padStart(3)}  root ${String(value.root).padStart(3)}  internal ${String(value.internal).padStart(3)}`,
   );
+  // Both sides of the rule are exercised by the real page: words a prop or slot reaches, and words a component writes itself.
+  const totals = [...TABLE.values()].reduce((sum, value) => ({ text: sum.text + value.text, internal: sum.internal + value.internal }), {
+    text: 0,
+    internal: 0,
+  });
+  assert.ok(totals.text > 50, `${totals.text} words reached by a prop or slot`);
+  assert.ok(totals.internal > 10, `${totals.internal} words a component writes itself`);
   console.log(`# component text table\n# ${printable.join('\n# ')}`);
   assert.deepEqual(failures.slice(0, 20), [], `${failures.length} deviations`);
 });

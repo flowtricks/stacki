@@ -337,6 +337,20 @@ test('Desktop lets anyone edit roles: a person named in a Client role, or in no 
   roles.setActualRole(roles.ADMIN_VIEW);
 });
 
+test('the two Access cards share one grid row container', async () => {
+  // Why: the cards sit side by side in one grid (roles.css); two separate containers would stack them again.
+  stored = JSON.stringify({ version: 1, roles: [{ id: 'admin', members: ['owner'] }] });
+  roles.setActualRole(roles.ADMIN_VIEW);
+  await mount();
+  const grid = document.querySelector('.app-roles-access-grid');
+  assert.ok(grid, 'the Access section has a grid container');
+  const cards = [...grid.children];
+  assert.equal(cards.length, 2, 'the grid holds exactly the two cards');
+  assert.ok(cards[0].querySelector('button[aria-label="View as"]'), 'the first card is View as');
+  assert.ok(cards[1].querySelector('button.app-roles-dropdown:not([aria-label="View as"])'), 'the second card is the no-role picker');
+  await unmount();
+});
+
 test('"View as" previews a role without writing, and ends with Admin', async () => {
   writes.length = 0;
   stored = JSON.stringify({ version: 1, roles: [{ id: 'admin', members: ['owner'] }] });

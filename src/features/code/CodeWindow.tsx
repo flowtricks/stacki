@@ -11,6 +11,8 @@ interface CodeWindowProps extends CodeEditorProps {
   readonly title: string;
   readonly onClose: () => void;
   readonly editorKey?: React.Key | undefined;
+  /** What the editor draws beside its code, made by the caller with its `extensions` (the CSS chips' popups). */
+  readonly overlay?: React.ReactNode;
 }
 
 /** A window showing only CSS or a script pins its headers; one showing markup does not. */
@@ -21,7 +23,7 @@ export function codeWindowPinsHeaders(language: string | undefined): boolean {
 // A single pointer session owns movement and cleanup, including closing mid-drag.
 export default function CodeWindow(props: CodeWindowProps) {
   const translate = useTranslate();
-  const { title, language, indentation, value, onChange, onClose, editorKey, revealLine } = props;
+  const { title, language, indentation, value, onChange, onClose, editorKey, revealLine, extensions, overlay } = props;
   const windowState = useWindowRectangle({ width: 340, height: 220 });
   const { rectangle } = windowState;
   return (
@@ -57,7 +59,9 @@ export default function CodeWindow(props: CodeWindowProps) {
           value={value}
           onChange={onChange}
           revealLine={revealLine}
+          extensions={extensions}
         />
+        {overlay}
       </div>
       <WindowResizeHandles windowState={windowState} />
     </Popup>

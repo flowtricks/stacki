@@ -443,7 +443,8 @@ test('the attributes prop is a row with its connections and defaults, saved as e
   assert.deepEqual(
     replaced.map((entry) => [entry.id, Object.keys(entry.props)]),
     [
-      ['n0', ['href', 'target', '...rest', 'class']],
+      // The class before the spread is not a default and keeps its place (attributesBinding.ts).
+      ['n0', ['class', 'href', 'target', '...rest']],
       ['n2', ['href', 'target', '...rest']],
     ],
   );

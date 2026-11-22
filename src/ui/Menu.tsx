@@ -2,7 +2,7 @@
 // of the AI panel are drawn. It is generic: it knows rows, not what they choose.
 //
 // A row is an item (title, optional muted description, optional "Recommended" style pill,
-// a number or key at the end, a blue check on the chosen one), a submenu (current value and
+// a number or key told in a tooltip after a rest (never printed in the row), a blue check on the chosen one), a submenu (current value and
 // a chevron that opens a menu to the side), a toggle (a switch at the end) or, between
 // them, a heading, a muted note or a divider. `menuModel.ts` holds the row types and the
 // keyboard model; this file draws them.
@@ -27,8 +27,10 @@ import { CheckIcon, ChevronRightIcon } from './Icons';
 import { centralIcon } from './central/CentralIcon';
 import { info as centralInfo } from './central/centralGeometry';
 import { assertMenuEntries, decideKey, initialIndex, isMenuRow, isNavigable, placeInfoTip, placeMenu } from './menuModel';
-import { tooltipHost, useDelayedPlacement } from './delayedTooltip';
-import type { Box, InfoTipPlacement, MenuEntry, MenuPlacement, MenuPosition, MenuRow, Size } from './menuModel';
+import { tooltipHost, useDelayedPlacement, type TooltipAnchor, type TooltipSide } from './delayedTooltip';
+import FittedTooltip from './FittedTooltip';
+import { useShortcutTip } from './shortcutTip';
+import type { Box, MenuEntry, MenuPlacement, MenuPosition, MenuRow, Size } from './menuModel';
 import './menu.css';
 
 export type { MenuEntry, MenuItem, MenuSubmenu, MenuToggle, MenuHeading, MenuNote, MenuDivider, MenuPlacement } from './menuModel';
@@ -436,6 +438,12 @@ function RowButton({ entry, hasIcons, expanded, buttonRef, onChoose, onHover }: 
   assert(entry.label.length > 0, 'Menu: every row has a label');
   const infoText = entry.kind === 'submenu' ? undefined : entry.info;
   const tip = useDelayedPlacement(placeTipFor);
+  // The row's own explanation, told after a rest on the row itself (not on a mark), beside the menu like the info tip.
+  const rowTipText = entry.kind === 'item' ? entry.tooltip : undefined;
+  const rowTip = useDelayedPlacement(placeTipFor);
+  // A row's key (its shortcut, or the digit that chooses it) is told in a tip after a rest, never printed in the row.
+  const key = entry.kind === 'item' ? (entry.shortcut ?? (entry.numberKey === undefined ? undefined : String(entry.numberKey))) : undefined;
+  const keyTip = useShortcutTip(entry.label, key);
   // The row's own element, to draw its info tip inside the open modal (tooltipHost).
   const rowElement = useRef<HTMLButtonElement | undefined>(undefined);
   return (
@@ -451,8 +459,19 @@ function RowButton({ entry, hasIcons, expanded, buttonRef, onChoose, onHover }: 
         event.stopPropagation();
         onChoose();
       }}
-      onMouseEnter={onHover}
+      aria-keyshortcuts={keyTip.props['aria-keyshortcuts']}
+      onMouseEnter={(event) => {
+        onHover();
+        keyTip.props.onMouseEnter(event);
+        if (rowTipText !== undefined) {
+          rowTip.show(event.currentTarget);
+        }
+      }}
       onFocus={(event) => {
+        keyTip.props.onFocus(event);
+        if (rowTipText !== undefined) {
+          rowTip.show(event.currentTarget);
+        }
         // Keyboard focus explains the row at once; a pointer's hover-focus waits for the mark (below).
         if (infoText !== undefined && isKeyboardFocus(event.currentTarget)) {
           const mark = event.currentTarget.querySelector<HTMLElement>('.menu-info');
@@ -461,8 +480,16 @@ function RowButton({ entry, hasIcons, expanded, buttonRef, onChoose, onHover }: 
           }
         }
       }}
-      onBlur={tip.hide}
-      onMouseLeave={tip.hide}
+      onBlur={() => {
+        tip.hide();
+        rowTip.hide();
+        keyTip.props.onBlur();
+      }}
+      onMouseLeave={() => {
+        tip.hide();
+        rowTip.hide();
+        keyTip.props.onMouseLeave();
+      }}
       {...rowSemantics(entry, { expanded })}
     >
       {hasIcons && <span className="menu-icon">{entry.icon}</span>}
@@ -474,17 +501,29 @@ function RowButton({ entry, hasIcons, expanded, buttonRef, onChoose, onHover }: 
         {entry.description !== undefined && <span className="menu-description">{entry.description}</span>}
       </span>
       <RowEnd entry={entry} onMarkEnter={infoText === undefined ? undefined : tip.show} onMarkLeave={tip.hide} />
-      {infoText !== undefined && tip.value !== undefined && createPortal(<InfoTip text={infoText} placement={tip.value} />, tooltipHost(rowElement.current))}
+      {infoText !== undefined && tip.value !== undefined && createPortal(<InfoTip text={infoText} target={tip.value} />, tooltipHost(rowElement.current))}
+      {rowTipText !== undefined &&
+        rowTip.value !== undefined &&
+        createPortal(<InfoTip text={rowTipText} target={rowTip.value} />, tooltipHost(rowElement.current))}
+      {keyTip.tip}
     </button>
   );
 }
 
 // Why not the native `title`: the operating system draws it, late, in its own place, and not at all over
 // some popups. The tip is the app's own, drawn on the body so the menu's scroll and clip never cut it.
-function placeTipFor(mark: HTMLElement): InfoTipPlacement {
-  const menu = mark.closest('.menu-surface') ?? mark;
+// The tip is anchored to the menu's edge, level with the mark, so it sits beside the menu and never over a row. The side
+// (`placeInfoTip`) is only the one tried first: FittedTooltip flips it, and shifts it up or down, to stay inside the window.
+interface InfoTipTarget {
+  readonly side: TooltipSide;
+  readonly anchor: TooltipAnchor;
+}
+
+function placeTipFor(mark: HTMLElement): InfoTipTarget {
+  const menu = (mark.closest('.menu-surface') ?? mark).getBoundingClientRect();
   const box = mark.getBoundingClientRect();
-  return placeInfoTip(menu.getBoundingClientRect(), box, window.innerWidth);
+  const { side } = placeInfoTip(menu, box, window.innerWidth);
+  return { side, anchor: { left: side === 'right' ? menu.right : menu.left, width: 0, top: box.top, bottom: box.bottom } };
 }
 
 function isKeyboardFocus(element: HTMLElement): boolean {
@@ -495,16 +534,11 @@ function isKeyboardFocus(element: HTMLElement): boolean {
   }
 }
 
-function InfoTip({ text, placement }: { readonly text: string; readonly placement: InfoTipPlacement }) {
+function InfoTip({ text, target }: { readonly text: string; readonly target: InfoTipTarget }) {
   return (
-    <div
-      className={`rail-tooltip menu-info-tip${placement.side === 'left' ? ' is-left' : ''}`}
-      role="tooltip"
-      data-side={placement.side}
-      style={{ left: placement.left, top: placement.top }}
-    >
+    <FittedTooltip className="menu-info-tip" role="tooltip" anchor={target.anchor} preferred={target.side}>
       {text}
-    </div>
+    </FittedTooltip>
   );
 }
 
@@ -534,11 +568,9 @@ function RowEnd({
 }) {
   switch (entry.kind) {
     case 'item': {
-      const key = entry.shortcut ?? (entry.numberKey === undefined ? undefined : String(entry.numberKey));
       return (
         <span className="menu-end">
           <InfoMark text={entry.info} onEnter={onMarkEnter} onLeave={onMarkLeave} />
-          {key !== undefined && <span className="menu-key">{key}</span>}
           {entry.checked === true && (
             <span className="menu-check">
               <CheckIcon size={14} />

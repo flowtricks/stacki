@@ -28,6 +28,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
 import { HideIcon, LockIcon, PencilIcon, PlusIcon, PreviewIcon, TrashIcon } from '../../ui/Icons';
 import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 import InfoHint from '../../ui/InfoHint';
@@ -397,9 +398,9 @@ function GitignoreButton({ why, onClick }: { readonly why: string; readonly onCl
       </button>
       {tooltip.value !== undefined &&
         createPortal(
-          <div className="rail-tooltip below" role="tooltip" style={tooltip.value}>
+          <FittedTooltip role="tooltip" anchor={tooltip.value}>
             {why}
-          </div>,
+          </FittedTooltip>,
           tooltipHost(button.current ?? undefined),
         )}
     </>

@@ -7,6 +7,7 @@ import React from 'react';
 import { assert } from '../../shared/core/assert';
 import { useTranslate } from '../lib/i18n/useTranslate';
 import { useDelayedTooltip, tooltipHost } from './delayedTooltip';
+import FittedTooltip from './FittedTooltip';
 import { createPortal } from 'react-dom';
 
 /** Characters of a path a chip shows before the start is cut. */
@@ -63,9 +64,9 @@ export default function DataChip({ path, onPick, valuePreview }: DataChipProps) 
       </span>
       {tooltip.value !== undefined &&
         createPortal(
-          <div className="rail-tooltip below" role="tooltip" style={tooltip.value}>
+          <FittedTooltip role="tooltip" anchor={tooltip.value}>
             {tip}
-          </div>,
+          </FittedTooltip>,
           tooltipHost(undefined),
         )}
     </>

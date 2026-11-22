@@ -26,3 +26,26 @@
   font: inherit;
   font-size: 12px;
 }
+/* The clear button of a field that asks for one (`clearLabel`): inside the field at its end edge, in logical
+   properties so it follows the reading direction; the text stops short of it, and the browser's own cross is
+   hidden so there is one. */
+.ui-search.clearable input {
+  padding-inline-end: 28px;
+}
+.ui-search.clearable input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.ui-search-clear {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--text-faint);
+}

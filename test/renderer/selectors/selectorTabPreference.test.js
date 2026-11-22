@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
-const { initialFilter, isSelectorFilter } = loadRenderer('src/features/selectors/selectorList.ts');
+const { initialFilter, isSelectorFilter, resolveInitialSelectorTab } = loadRenderer('src/features/selectors/selectorList.ts');
 const tabs = loadRenderer('src/features/selectors/selectorTabPreference.ts');
 
 const counts = (unused, unknown, kept, all) => ({ unused, unknown, kept, all });
@@ -23,6 +23,23 @@ test('the first-open tab is Unused, else Locked, else All', () => {
   assert.equal(initialFilter(counts(0, 4, 78, 495)), 'kept', 'locked when nothing is unused');
   assert.equal(initialFilter(counts(0, 4, 0, 10)), 'all', "only Can't tell does not open that tab");
   assert.equal(initialFilter(counts(0, 0, 0, 0)), 'all', 'an empty project opens on All');
+});
+
+test('resolveInitialSelectorTab: a remembered tab wins, else the counts decide, else nothing yet', () => {
+  const full = counts(3, 0, 5, 20);
+  for (const tab of ['all', 'unused', 'unknown', 'kept']) {
+    assert.equal(resolveInitialSelectorTab(tab, full), tab, 'remembered wins over every count');
+    assert.equal(resolveInitialSelectorTab(tab, counts(0, 0, 0, 0)), tab, 'remembered wins even when its tab is empty');
+    assert.equal(resolveInitialSelectorTab(tab, undefined), tab, 'remembered wins while counts load');
+  }
+  assert.equal(resolveInitialSelectorTab(undefined, counts(3, 0, 5, 20)), 'unused', 'none remembered, unused > 0');
+  assert.equal(resolveInitialSelectorTab(undefined, counts(0, 0, 5, 20)), 'kept', 'unused = 0, locked > 0');
+  assert.equal(resolveInitialSelectorTab(undefined, counts(0, 0, 0, 0)), 'all', 'both 0');
+  for (const invalid of ['locked', '', 'ALL', 3, {}, ['all']]) {
+    assert.equal(resolveInitialSelectorTab(invalid, counts(0, 0, 5, 20)), 'kept', 'an invalid stored value falls back to the default');
+  }
+  assert.equal(resolveInitialSelectorTab(undefined, undefined), undefined, 'counts still loading: no tab yet');
+  assert.equal(resolveInitialSelectorTab('nope', undefined), undefined, 'invalid stored value while loading: no tab yet');
 });
 
 test('only the four tabs are tabs', () => {

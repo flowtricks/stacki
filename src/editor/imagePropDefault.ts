@@ -59,6 +59,20 @@ export function imageDefaultOf(source: string, translate: Translator = ENGLISH_T
   return err(translate('editor.imageDefault.chooseOrUrl'));
 }
 
+/**
+ * What `source` names as the default when the person may choose none. An empty
+ * source is no default, which is valid: the prop is optional and an instance
+ * supplies the image, or it is required and must. A non-empty source is read
+ * as imageDefaultOf reads it, so a half-typed address still says why it fails.
+ */
+export function imageDefaultChoice(source: string, translate: Translator = ENGLISH_TRANSLATE): Result<ImageDefault | undefined, string> {
+  assert(source.length <= IMAGE_LIMITS.sourceCharsMax * 2, 'imageDefaultChoice: a source is bounded');
+  if (source.trim() === '') {
+    return ok(undefined);
+  }
+  return imageDefaultOf(source, translate);
+}
+
 /** The type the prop is declared with: the imported image's metadata, or a URL's string. */
 export function imageTypeText(image: ImageDefault): string {
   switch (image.kind) {

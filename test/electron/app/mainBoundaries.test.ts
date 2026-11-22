@@ -120,7 +120,13 @@ test('the complete channel inventory matches real main and terminal registration
   // journal (styleMove:record, :clear, :pending and :resolve), 296 in all.
   // Changing an installed Studio's sign-in type adds one (studio:setAuth), 299 in all.
   // The in-app update popup adds two (update:read, update:act), 301 in all.
-  assert.equal(harness.handlers.size, 301);
+  // The Studio box's upgrade adds three (studio:upgradeCheck, studio:upgrade and studio:restore), 304 in all.
+  // Settings > Agents adds three (agents:list, :save and :delete, shared/ipc/projectAgentChannels.ts) and the AI
+  // composer's screenshot one (ai:screenshot: main captures the sender's own window, as apps:canvasSnapshot does), 308 in all.
+  // On-device dictation adds four (dictation:status, :download, :cancel and :remove; shared/properties/voice/dictationModel.ts), 312 in all.
+  // The composer's screen recording and the CMS constants add three more, 315 in all.
+  // The AI panel's auto-compact threshold adds two (ai:autoCompactGet and :autoCompactSet), 317 in all.
+  assert.equal(harness.handlers.size, 317);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
@@ -202,6 +208,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
     aiAskBeforeTrust: false,
     aiTrackChanges: true,
     aiReviewChanges: false,
+    codeChips: true,
     localePreference: 'system',
   });
   assert.equal(parseSettings({ sound: true, appsPersonHidden: true }).appsPersonHidden, true);
@@ -221,6 +228,13 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
   for (const bad of ['yes', 'true', 0, 1, {}]) {
     assert.throws(() => parseSettings({ sound: true, aiReviewChanges: bad }), /boolean/);
   }
+  // CSS chips are on unless the person turned them off; a file written before the setting existed keeps them on.
+  assert.equal(parseSettings({ sound: true }).codeChips, true);
+  assert.equal(parseSettings({ sound: true, codeChips: false }).codeChips, false);
+  assert.equal(parseSettings({ sound: true, codeChips: true }).codeChips, true);
+  for (const bad of ['yes', 'false', 0, 1, {}]) {
+    assert.throws(() => parseSettings({ sound: true, codeChips: bad }), /boolean/);
+  }
   assert.throws(() => parseSettings({ sound: true, appsPersonHidden: 'yes' }), /boolean/);
   assert.throws(() => parseSettings({ sound: 'yes' }), /boolean/);
   assert.deepEqual(
@@ -239,6 +253,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
       aiAskBeforeTrust: false,
       aiTrackChanges: true,
       aiReviewChanges: false,
+      codeChips: true,
       localePreference: 'system',
     },
   );

@@ -1,15 +1,18 @@
 import type { MessageRef } from '../core/i18n/messageReference';
 import type { BreakpointSyncApplied, BreakpointSyncScan, BreakpointUsage } from '../properties/breakpointSyncPlan';
 import type { MicrophoneReport } from '../properties/microphone';
+import type { DictationStatus, DownloadOutcome } from '../properties/voice/dictationModel';
 import type { ClassUsageReply } from '../properties/classUsage';
 import type { PendingStyleMove, StyleMoveResolution } from '../properties/styleMoveJournal';
 import type { AiResults } from './aiChat';
+import type { AgentResults } from './projectAgentChannels';
 import type { AppFileAnswer } from '../properties/appFiles';
 import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
 import type { AppNetResponse } from '../properties/appNet';
 import type { AccountState } from './publishAccount';
 import type { PreviewHealth } from './previewHealth';
 import type { CmsCheckResult, CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
+import type { ConstantEditReply, ConstantListingReply } from '../properties/cmsConstants';
 import type {
   RemoteCollection,
   RemoteAsset,
@@ -50,6 +53,7 @@ import type { CommitAvatarResult } from './commitAvatars';
 import type { GitHubUserSearchResult } from './githubUserSearch';
 import type { StudioStatus, StudioInstallResult, StudioAuthResult } from './studioSetup';
 import type { StudioInstallProgress } from './studioProgress';
+import type { StudioRestoreResult, StudioUpgradeCheck, StudioUpgradeResult } from './studioUpgrade';
 import type { UpdateEvent, UpdateState } from './updateState';
 import type { AppSecretScan } from '../properties/appSecrets';
 import type { SecretsListing, SecretsResult, SecretValue } from '../properties/secrets';
@@ -153,7 +157,7 @@ export type WirePageEdit =
     } & WirePageDiskRead)
   | { readonly ok: false; readonly error: WirePageEditError };
 
-export interface IpcResults extends AiResults {
+export interface IpcResults extends AiResults, AgentResults {
   readonly 'project:createDefaultsCanvas': { readonly file: string };
   readonly 'project:removeDefaultsCanvas': undefined;
   readonly 'instructions:create': InstructionWriteResult;
@@ -173,6 +177,9 @@ export interface IpcResults extends AiResults {
   readonly 'studio:status': StudioStatus;
   readonly 'studio:install': StudioInstallResult;
   readonly 'studio:setAuth': StudioAuthResult;
+  readonly 'studio:upgrade': StudioUpgradeResult;
+  readonly 'studio:upgradeCheck': StudioUpgradeCheck;
+  readonly 'studio:restore': StudioRestoreResult;
   readonly 'component:properties': Result<ComponentProperties>;
   readonly 'component:editProperties': Result<ComponentProperties & { readonly undo: string }>;
   readonly 'component:revertProperties': Result<{ readonly undo: string }>;
@@ -233,6 +240,7 @@ export interface IpcResults extends AiResults {
         readonly asset: string;
         readonly value?: never;
       };
+  readonly 'cms:constants': ConstantListingReply;
   readonly 'cms:create': {
     readonly rel: string;
   };
@@ -240,6 +248,7 @@ export interface IpcResults extends AiResults {
     readonly ok: true;
     readonly rewritten: ReadonlyArray<string>;
   };
+  readonly 'cms:editConstants': ConstantEditReply;
   readonly 'cms:list': {
     readonly files: ReadonlyArray<WireCmsFile>;
   };
@@ -684,6 +693,14 @@ export interface IpcResults extends AiResults {
         readonly errorRef?: MessageRef | undefined;
       };
   readonly 'git:worktrees': ReadonlyArray<WireWorktreeInfo>;
+  readonly 'dictation:status': DictationStatus;
+  readonly 'dictation:download': DownloadOutcome;
+  readonly 'dictation:cancel': {
+    readonly ok: true;
+  };
+  readonly 'dictation:remove': {
+    readonly kind: 'removed';
+  };
   readonly 'locale:set': {
     readonly saved: boolean;
   };

@@ -27,7 +27,9 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import { cleanError } from '../../lib/cleanError';
 import { PlusIcon } from '../../ui/Icons';
 import { setViewAs, viewingAs } from '../../lib/currentRole';
-import { readRolesIdentity, readStoredRoles, saveStoredRoles, type StoredRoles } from '../roles/rolesBridge';
+import { saveStoredRoles, type StoredRoles } from '../roles/rolesBridge';
+import { rolesCache, storedRolesSource, useRolesSnapshot, type RolesIdentityState } from '../roles/rolesCache';
+import { Skeleton } from '../../ui/Skeleton';
 import { reloadProjectRoles } from '../roles/useProjectRoles';
 import { useActualRole, useCurrentRole } from '../../lib/useCurrentRole';
 import { RoleCard, type RoleCardActions } from './RoleCard';
@@ -61,48 +63,105 @@ import { assert } from '../../../shared/core/assert';
 import { SettingsSaveRow, SettingsNotice, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import './roles.css';
 
-type Loaded = { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly stored: StoredRoles };
-
 export function RolesSettings(props: { readonly projectPath: string; readonly componentFiles?: readonly string[] }) {
   const { projectPath } = props;
-  const translate = useTranslate();
-  const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
-  const [login, setLogin] = useState<string | undefined>(undefined);
+  // The last-known file and login paint in the first frame (rolesCache.ts); both are read again behind them.
+  const snapshot = useRolesSnapshot(projectPath);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
   useEffect(() => {
     let lifetime: 'active' | 'disposed' = 'active';
-    void Promise.all([readStoredRoles(projectPath), readRolesIdentity(projectPath).catch(() => undefined)]).then(
-      ([stored, identity]) => {
+    void rolesCache.refreshStoredRoles(projectPath).then(
+      () => {
         if (lifetime === 'active') {
-          setLoaded({ kind: 'ready', stored });
-          setLogin(identity);
+          setFailure(undefined);
         }
       },
       (error: unknown) => {
         if (lifetime === 'active') {
-          setLoaded({ kind: 'failed', message: cleanError(error) });
+          setFailure(cleanError(error));
         }
       },
     );
+    void rolesCache.refreshRolesIdentity(projectPath);
     return () => {
       lifetime = 'disposed';
     };
   }, [projectPath]);
-  switch (loaded.kind) {
-    case 'loading':
+  const login = snapshot.identity.kind === 'known' ? snapshot.identity.login : undefined;
+  switch (snapshot.file.kind) {
+    case 'unknown':
+      // Nothing read yet this session: the real headings, with the pickers and cards drawn as their shapes.
+      return failure === undefined ? <RolesSkeleton /> : <ErrorToast message={failure} />;
+    case 'known':
+      // A failed refresh keeps the cards as last read and says so beside them.
       return (
-        <p className="app-settings-status" role="status">
-          {translate('settings.roles.loading')}
-        </p>
+        <>
+          {failure !== undefined && <ErrorToast message={failure} />}
+          <RolesEditor
+            projectPath={projectPath}
+            stored={snapshot.file.stored}
+            login={login}
+            identity={snapshot.identity.kind}
+            componentFiles={props.componentFiles}
+          />
+        </>
       );
-    case 'failed':
-      return <ErrorToast message={loaded.message} />;
-    case 'ready':
-      return <RolesEditor projectPath={projectPath} stored={loaded.stored} login={login} componentFiles={props.componentFiles} />;
     default: {
-      const exhaustive: never = loaded;
+      const exhaustive: never = snapshot.file;
       return exhaustive;
     }
   }
+}
+
+/** Summary rows on each card a new file starts with: Admin (Members, Sidebar apps, Components) and Client (and Permissions). */
+const ROLES_SKELETON_CARD_ROWS = [3, 4] as const;
+/** Widths of the summary labels, in percent of the row: fixed, so nothing moves between renders. */
+const ROLES_SKELETON_ROW_WIDTHS_PERCENT = [38, 46, 42, 50] as const;
+
+// The Roles tab before its first read this session: the real sections, picker rows and card boxes at their real
+// sizes, with filled shapes where the file's names and counts go. One hidden status tells assistive technology.
+export function RolesSkeleton() {
+  const translate = useTranslate();
+  const picker = (
+    <span className="app-roles-dropdown app-roles-skeleton-picker">
+      <Skeleton height="28px" radius="6px" />
+    </span>
+  );
+  return (
+    <section className="app-roles" aria-label={translate('settings.roles.screen.label')} aria-busy="true">
+      <span className="ui-skeleton-status" role="status">
+        {translate('ui.loading')}
+      </span>
+      <SettingsSection title={translate('settings.roles.section.access')}>
+        <div className="app-roles-access">
+          <div className="app-roles-access-grid">
+            <SettingsRow label={translate('settings.roles.viewAs.label')} info={translate('settings.roles.viewAs.info')}>
+              {picker}
+            </SettingsRow>
+            <SettingsRow label={translate('settings.roles.defaultRole.label')} info={translate('settings.roles.defaultRole.info')}>
+              {picker}
+            </SettingsRow>
+          </div>
+        </div>
+      </SettingsSection>
+      <SettingsSection title={translate('settings.roles.section.roles')} info={translate('settings.roles.members.info')}>
+        {ROLES_SKELETON_CARD_ROWS.map((rows, card) => (
+          <div key={card} className="app-role" data-skeleton="role" aria-hidden="true">
+            <div className="app-role-heading">
+              <Skeleton width="96px" height="14px" />
+            </div>
+            <div className="app-role-rows">
+              {ROLES_SKELETON_ROW_WIDTHS_PERCENT.slice(0, rows).map((widthPercent) => (
+                <div key={widthPercent} className="app-role-row app-role-skeleton-row">
+                  <Skeleton width={`${widthPercent}%`} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </SettingsSection>
+    </section>
+  );
 }
 
 function initialRoles(stored: StoredRoles, login: string | undefined): ProjectRoles {
@@ -151,6 +210,8 @@ function RolesEditor(props: {
   readonly projectPath: string;
   readonly stored: StoredRoles;
   readonly login: string | undefined;
+  /** Whether `login` is read yet: until it is, the signed-out notice stays hidden rather than flashing. */
+  readonly identity: RolesIdentityState['kind'];
   readonly componentFiles: readonly string[] | undefined;
 }) {
   const { stored, login } = props;
@@ -170,7 +231,7 @@ function RolesEditor(props: {
   const [queries, setQueries] = useState<Readonly<Record<string, string>>>({});
   // What is on disk, the text it was written as (the next write's base), and the save waiting to run.
   const saved = useRef<ProjectRoles>(shown);
-  const base = useRef<string | undefined>(stored.kind === 'absent' ? undefined : stored.source);
+  const base = useRef<string | undefined>(storedRolesSource(stored));
   const waiting = useRef<{ readonly scope: RolesNoticeScope; readonly roles: ProjectRoles } | undefined>(undefined);
   const writing = useRef<'idle' | 'writing'>('idle');
 
@@ -186,8 +247,11 @@ function RolesEditor(props: {
       const next = waiting.current;
       waiting.current = undefined;
       try {
-        base.current = await indicator.track(saveStoredRoles(props.projectPath, next.roles, base.current));
+        const source = await indicator.track(saveStoredRoles(props.projectPath, next.roles, base.current));
+        base.current = source;
         saved.current = next.roles;
+        // The cache holds what was just written, so the next open paints it without a read.
+        rolesCache.rememberStoredRoles(props.projectPath, { kind: 'ready', roles: next.roles, source });
         reloadProjectRoles();
       } catch (failure: unknown) {
         // A change waiting behind this one was built on it, so it goes too.
@@ -198,6 +262,22 @@ function RolesEditor(props: {
     }
     writing.current = 'idle';
   };
+  // The tab opened on the file as last read; a newer read (the background refresh, an edit from another window)
+  // replaces it in place. While a save runs its own reload follows, so a read then is skipped. With no file yet,
+  // nothing is saved, so a login that arrives late only names the first admin.
+  useEffect(() => {
+    if (writing.current === 'writing') {
+      return;
+    }
+    const source = storedRolesSource(stored);
+    if (source !== undefined && source === base.current) {
+      return;
+    }
+    const next = initialRoles(stored, login);
+    base.current = source;
+    saved.current = next;
+    setShown(next);
+  }, [stored, login]);
   const apply = (scope: RolesNoticeScope, change: (roles: ProjectRoles) => ProjectRoles): boolean => {
     assert(editable, 'Only an editor changes roles');
     let next: ProjectRoles;
@@ -290,11 +370,16 @@ function RolesEditor(props: {
   return (
     <section className="app-roles" aria-label={translate('settings.roles.screen.label')}>
       <SettingsSaveRow saving={indicator.state} />
-      {login === undefined && <p className="app-roles-notice">{translate('settings.roles.signedOut')}</p>}
+      {props.identity === 'known' && login === undefined && <p className="app-roles-notice">{translate('settings.roles.signedOut')}</p>}
       {stored.kind === 'invalid' && <ErrorToast message={translate('settings.roles.fileUnreadable', { message: stored.message })} />}
       <SettingsSection title={translate('settings.roles.section.access')}>
-        <ViewAs roles={shown} />
-        <DefaultRole roles={shown} editable={editable} change={(id) => apply({ kind: 'access' }, (roles) => setDefaultRole(roles, id))} />
+        {/* The two pickers share one grid row (roles.css); the outer box is the container the grid's width query reads. */}
+        <div className="app-roles-access">
+          <div className="app-roles-access-grid">
+            <ViewAs roles={shown} />
+            <DefaultRole roles={shown} editable={editable} change={(id) => apply({ kind: 'access' }, (roles) => setDefaultRole(roles, id))} />
+          </div>
+        </div>
         {noticeFor({ kind: 'access' })}
       </SettingsSection>
       <SettingsSection title={translate('settings.roles.section.roles')} info={translate('settings.roles.members.info')}>

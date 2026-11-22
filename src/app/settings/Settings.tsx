@@ -26,9 +26,12 @@ import { useCurrentRole } from '../../lib/useCurrentRole';
 import { canSettingsTab } from '../../lib/roleAccess';
 import { FeatureIcon } from '../featureIcons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { AutoCompactPicker } from '../../features/ai/autoCompactPreference';
 import { publishReviewMode, reviewModeOf } from '../../features/ai/reviewChanges';
+import { codeChipsModeOf, publishCodeChipsMode } from '../../features/style/codeChips/codeChipsPreference';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { LanguageSetting } from './LanguageSetting';
+import { DictationSetting } from './DictationSetting';
 import { RailOrderSetting } from './RailOrderSetting';
 import { SettingsEmpty, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 
@@ -339,6 +342,8 @@ function usePreferences() {
       setValue(result);
       // The AI panel's cards follow the switch at once, wherever it was flipped.
       publishReviewMode(reviewModeOf({ enabled: result.aiReviewChanges }));
+      // Every open code editor shows or drops its chips at once.
+      publishCodeChipsMode(codeChipsModeOf({ enabled: result.codeChips }));
       if (!result.saved) {
         setError(translate('settings.editor.saveFailed'));
       }
@@ -368,6 +373,15 @@ function Preferences() {
           onToggle={() => void change({ setting: 'sound', enabled: !value?.sound })}
         />
       </SettingsSection>
+      <SettingsSection title={translate('settings.editor.section.code')}>
+        <PreferenceToggle
+          label={translate('settings.editor.code.chips.label')}
+          info={translate('settings.editor.code.chips.info')}
+          checked={value?.codeChips ?? true}
+          disabled={!value || busy}
+          onToggle={() => void change({ setting: 'codeChips', enabled: !value?.codeChips })}
+        />
+      </SettingsSection>
       <SettingsSection title={translate('settings.editor.section.ai')}>
         <PreferenceToggle
           label={translate('settings.editor.ai.askBeforeTrust.label')}
@@ -390,6 +404,10 @@ function Preferences() {
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'aiReviewChanges', enabled: !value?.aiReviewChanges })}
         />
+        <SettingsRow label={translate('ai.autoCompact.label')} info={translate('ai.autoCompact.info')}>
+          <AutoCompactPicker ariaLabel={translate('ai.autoCompact.label')} />
+        </SettingsRow>
+        <DictationSetting />
       </SettingsSection>
       <SettingsSection title={translate('settings.editor.section.privacy')}>
         <PreferenceToggle

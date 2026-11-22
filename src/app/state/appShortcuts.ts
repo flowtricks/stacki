@@ -26,7 +26,8 @@ import {
   referencesInScope,
   removeMarkedQuery,
 } from '../../editor/dataSuggest';
-import type { InsertItem } from '../../features/palette/InsertSearch';
+import type { InsertChoice, InsertItem } from '../../features/palette/InsertSearch';
+import type { InsertTarget } from '../../editor/insertTarget';
 import { toRecord } from '../../../shared/core/record';
 import { type EditorModel } from '../../editor/pageView';
 import {
@@ -108,15 +109,16 @@ export function useInsertItem(
     [insertables],
   );
 
-  const insertItem = useCallback(
-    (item: InsertItem) => {
+  // Inserts `item` where `aimed` points: the selection's place for the palette and the panel's click, the drop's
+  // place for a drag from the Add elements panel. One path, so a drop and a click write the same node.
+  const insertItemAt = useCallback(
+    (item: InsertChoice, aimed: InsertTarget) => {
       editTrace.begin(`insert ${item.type}`);
       setInsertOpen(false);
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
       }
-      const aimed = insertTargetFor(state.model, selectedIdRef.current, item);
 
       // A component is placed (and refused, or moved with a note) by addComponent, which asks the same rule once it has read the component.
       if (item.type === 'component') {
@@ -162,20 +164,20 @@ export function useInsertItem(
       editTrace.finish();
       setSelectedId(id);
     },
-    [
-      insertTargetFor,
-      addComponent,
-      commitEdit,
-      canvasPathForRef,
-      reportFailure,
-      showToast,
-      translate,
-      insertables,
-      pageStateRef,
-      selectedIdRef,
-      setInsertOpen,
-      setSelectedId,
-    ],
+    [addComponent, commitEdit, canvasPathForRef, reportFailure, showToast, translate, insertables, pageStateRef, setInsertOpen, setSelectedId],
+  );
+
+  // The palette's pick, and the Add elements panel's click: where the selection points (insertTarget.ts).
+  const insertItem = useCallback(
+    (item: InsertItem) => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable) {
+        setInsertOpen(false);
+        return;
+      }
+      insertItemAt(item, insertTargetFor(state.model, selectedIdRef.current, item));
+    },
+    [insertItemAt, insertTargetFor, pageStateRef, selectedIdRef, setInsertOpen],
   );
 
   // Why the palette cannot put an item where the selection points: the refusal, or undefined when it can (or lands beside, with a note).
@@ -212,7 +214,7 @@ export function useInsertItem(
     },
     [warmComponent],
   );
-  return { cmsOpenRef, insertItem, placementForItem, warmInsertItem };
+  return { cmsOpenRef, insertItem, insertItemAt, placementForItem, warmInsertItem };
 }
 
 // The app’s keyboard shortcuts.
@@ -386,8 +388,9 @@ export function useMenuShortcuts(
       window.avb.onMenu('copySelection', () => {
         void copySelection().catch(reportFailure);
       }),
-      // ⌘R and ⇧⌘R with focus in the canvas: the main process sends them here (electron/app/reloadRouting.ts) instead of
-      // reloading Stacki. The same bump as the toolbar's refresh button; with no site loaded it remounts nothing visible.
+      // ⌘R and ⇧⌘R, wherever focus is: the menu accelerator runs before any page key handling, so a focused text field cannot swallow
+      // it, and the main process sends it here (electron/app/reloadRouting.ts) only while a project is open. The same bump as the
+      // toolbar's refresh button; with no site loaded it remounts nothing visible.
       window.avb.onMenu('refreshPreview', () => {
         if (!windowHeld()) {
           setRefreshKey((count) => count + 1);

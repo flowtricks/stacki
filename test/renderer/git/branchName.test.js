@@ -75,6 +75,14 @@ const check = (what, condition, detail) => {
   check('and one that differs only in case says why that counts', /same branch here/.test(why('Main', existing) || ''), why('Main', existing));
   check('a free name is free', why('feature/logout', existing) === undefined);
 
+  // --- shapes git refuses that typing cannot prevent ------------------------------
+  check('a part of the name opening with a dot is refused', /“\.”/.test(why('a/.hidden', existing) || ''), why('a/.hidden', existing));
+  check('the sanitiser drops the dot a part opens with', clean('a/.b') === 'a/b', clean('a/.b'));
+  check('HEAD is reserved in any case', /HEAD/.test(why('head', existing) || '') && /HEAD/.test(why('HEAD', existing) || ''));
+  check('a name inside an existing branch is refused', /main/.test(why('main/inner', existing) || ''), why('main/inner', existing));
+  check('a name around an existing branch is refused', /feature\/login/.test(why('feature', ['feature/login']) || ''), why('feature', ['feature/login']));
+  check('unicode and slashes are fine', ok('área/ñandú', existing));
+
   // --- the answer the field acts on -------------------------------------------
   check('valid is the absence of a reason', ok('feature/logout', existing) && !ok('main', existing));
   check('and an empty field is never valid', !ok('', existing) && !ok('   ', existing));

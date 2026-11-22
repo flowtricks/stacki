@@ -24,6 +24,8 @@ interface DockableWindowProps {
   /** The floating size before the user has moved or resized it; centered in the viewport. */
   readonly initialSize?: WindowSize;
   readonly hidden?: boolean;
+  /** Whether the header carries the dock toggle; a host that offers it elsewhere (a menu) says 'none'. */
+  readonly dockToggle?: 'header' | 'none';
   readonly className?: string;
 }
 
@@ -65,14 +67,16 @@ export default function DockableWindow(props: DockableWindowProps) {
           onKeyDown={floating ? (event) => windowState.onKeyDown(event) : undefined}
         >
           {props.header}
-          <button
-            className="ghost dockable-window-toggle"
-            title={action}
-            aria-label={action}
-            onClick={() => props.onModeChange(floating ? 'docked' : 'floating')}
-          >
-            {floating ? <MaximizeIcon size={14} /> : <MinimizeIcon size={14} />}
-          </button>
+          {(props.dockToggle ?? 'header') === 'header' && (
+            <button
+              className="ghost dockable-window-toggle"
+              title={action}
+              aria-label={action}
+              onClick={() => props.onModeChange(floating ? 'docked' : 'floating')}
+            >
+              {floating ? <MaximizeIcon size={14} /> : <MinimizeIcon size={14} />}
+            </button>
+          )}
           {props.trailing}
         </div>
         <div className="dockable-window-body">{props.children}</div>

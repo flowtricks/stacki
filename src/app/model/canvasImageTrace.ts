@@ -13,6 +13,7 @@ import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { err, ok, type Result } from '../../../shared/core/result';
+import { isEditableThroughProps, type ClosedComponentReach } from '../../../shared/properties/closedComponentReach';
 import { componentReference } from './componentReference';
 import { REPEATS, childrenOf, isInstance, type PropNode, type PropSiteContext } from './canvasPropSites';
 import {
@@ -118,6 +119,50 @@ export async function traceImage(context: ImageTraceContext, paths: readonly str
     return err({ kind: 'outside', file: '' });
   }
   return instanceTarget(context, top, marked.others);
+}
+
+/** A refusal the popup explains: the open file's own code, a loop of the page, or a file the page only embeds decides the picture. */
+export type ShownImageRefusal = Extract<ImageRefusal, { readonly kind: 'bound' | 'loop' | 'outside' }>;
+
+/** What a double click on an image does with its trace. */
+export type ImageDecision =
+  /** A prop of the instance, or the open file's own element, decides the picture: the popup edits it. */
+  | { readonly kind: 'edit'; readonly target: ImageTarget }
+  /** The open file decides the picture through something the popup cannot write: the popup says why. */
+  | { readonly kind: 'explain'; readonly refusal: ShownImageRefusal }
+  /** A closed component draws the picture itself (or its source has not been read): nothing on this instance changes it, so nothing opens. */
+  | { readonly kind: 'nothing'; readonly reach: ClosedComponentReach };
+
+/**
+ * The popup's answer to a trace. An image inside a closed component opens the popup only when a prop of this instance
+ * decides it (closedComponentReach.ts, the rule the text hover and the text editor follow too); a picture the component
+ * writes, computes or cannot be read for opens nothing, not even an explanation, since the instance has nothing to change.
+ */
+export function imageDecision(traced: Result<ImageTarget, ImageRefusal>): ImageDecision {
+  if (traced.ok) {
+    const reach = traced.value.kind === 'instance' ? 'prop' : undefined;
+    assert(reach === undefined || isEditableThroughProps(reach), 'A picture a prop decides is the instance’s to change');
+    return { kind: 'edit', target: traced.value };
+  }
+  const refusal = traced.error;
+  switch (refusal.kind) {
+    case 'bound':
+    case 'loop':
+    case 'outside':
+      return { kind: 'explain', refusal };
+    case 'fixed':
+    case 'computed':
+    case 'unreadable': {
+      // Only the walk through a closed component's templates refuses these: the component, not the page, decides the picture.
+      const reach: ClosedComponentReach = 'internal';
+      assert(!isEditableThroughProps(reach), 'A picture the component decides is not the instance’s to change');
+      return { kind: 'nothing', reach };
+    }
+    default: {
+      const exhaustive: never = refusal;
+      return exhaustive;
+    }
+  }
 }
 
 async function instanceTarget(

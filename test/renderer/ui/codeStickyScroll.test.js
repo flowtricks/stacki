@@ -52,6 +52,9 @@ const STYLE = lines(
     Object.defineProperty(global, name, { value: name === 'window' ? dom.window : dom.window[name], configurable: true });
   }
   global.getComputedStyle = dom.window.getComputedStyle;
+  // The CSS Code box lists the project's variables for its chips; no project is open here, so the
+  // bridge only needs its change subscription.
+  dom.window.avb = { onCssChanged: () => () => undefined };
   global.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
   global.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
   global.IS_REACT_ACT_ENVIRONMENT = true;

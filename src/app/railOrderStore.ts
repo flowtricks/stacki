@@ -8,7 +8,7 @@
 // person's order and never the default flashing into place.
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { assert } from '../../shared/core/assert';
-import { isDefaultRailOrder, parseStoredRailOrder, resolveRailOrder, stringifyRailOrder, type RailOrder } from './railOrder';
+import { isDefaultRailOrder, parseStoredRailOrder, railOrderIds, resolveRailOrder, stringifyRailOrder, type RailOrder } from './railOrder';
 import { DEFAULT_RAIL_ORDER } from './railDefaults';
 
 export const RAIL_ORDER_KEY = 'stacki.rail.order';
@@ -35,7 +35,7 @@ export function saveRailOrder(defaults: RailOrder, order: RailOrder): void {
   }
 }
 
-// One store for the whole window: the rail and Settings both read it, so a drag or a reset shows in both at once.
+// One store for the whole window: the rail, the Settings panel's root and Editor settings all read it, so a drag or a reset shows in both at once.
 // The snapshot is the stored text (an empty string for none), a stable primitive for useSyncExternalStore.
 // Storage is read each time (a synchronous string read), so another window's change is seen; when storage is
 // blocked, the last text written in this window stands in for it.
@@ -102,7 +102,7 @@ export function useRailOrder(defaults: RailOrder): RailOrderControl {
   const order = useMemo(() => resolveRailOrder(defaults, parseStoredRailOrder(text === '' ? undefined : text)), [defaults, text]);
   const change = useCallback(
     (next: RailOrder) => {
-      assert(next.top.length + next.bottom.length === defaults.top.length + defaults.bottom.length, 'A change keeps every rail button');
+      assert(railOrderIds(next).length === railOrderIds(defaults).length, 'A change keeps every rail item');
       writeRailOrder(defaults, next);
     },
     [defaults],

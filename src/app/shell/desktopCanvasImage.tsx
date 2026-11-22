@@ -10,7 +10,7 @@ import type { ShellView } from '../App';
 import type { ContextPoint } from '../../features/preview/contextPosition';
 import { readPage } from '../../ipc/bridge';
 import { projectRelativePath } from '../../lib/projectPath';
-import { traceImage, type ImageTraceContext } from '../model/canvasImageTrace';
+import { imageDecision, traceImage, type ImageTraceContext } from '../model/canvasImageTrace';
 import type { ComponentSource } from '../model/canvasPropSites';
 import { CanvasImagePopup, imageFieldNames, type CanvasImageShown } from './CanvasImagePopup';
 
@@ -46,11 +46,17 @@ export function useCanvasImagePopup(app: ShellView, renderFields: (fieldNames: r
         }
         selected.current = false;
         const generation = ticket;
-        if (!traced.ok) {
-          setShown({ generation, point: request.point, nodeId: undefined, name: '', outcome: { kind: 'refused', refusal: traced.error } });
+        const decision = imageDecision(traced);
+        if (decision.kind === 'nothing') {
+          // A closed component draws this picture itself: nothing on the instance changes it, so the double click opens nothing.
+          setShown(undefined);
           return;
         }
-        const target = traced.value;
+        if (decision.kind === 'explain') {
+          setShown({ generation, point: request.point, nodeId: undefined, name: '', outcome: { kind: 'refused', refusal: decision.refusal } });
+          return;
+        }
+        const target = decision.target;
         const nodeId = target.kind === 'instance' ? target.instanceId : target.nodeId;
         setSelectedId(nodeId);
         const name = target.kind === 'instance' ? target.componentName : target.tag;

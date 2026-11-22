@@ -20,6 +20,34 @@
 .app-roles .app-roles-dropdown {
   width: 180px;
 }
+/* The two Access cards sit side by side in equal columns (the section's own 8px gap between them), each stacking its
+   label above its picker so the label never truncates. Under 520px of panel width they stack one under another.
+   The wrapper is the query container; the grid inside it is what changes columns. */
+.app-roles-access {
+  container-type: inline-size;
+}
+.app-roles-access-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+.app-roles-access-grid .app-settings-row {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+.app-roles-access-grid .app-settings-row-control {
+  justify-content: flex-start;
+}
+.app-roles-access-grid .app-roles-dropdown {
+  inline-size: 100%;
+  max-inline-size: 180px;
+}
+@container (inline-size < 520px) {
+  .app-roles-access-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .app-role {
   display: flex;
   flex-direction: column;
@@ -32,14 +60,24 @@
 .app-role + .app-role {
   margin-top: 4px;
 }
+/* The header shares the rows' columns: its icon sits in the same 16px column as theirs, and its buttons end where
+   their chevrons do (rows pad 8px a side; the 24px buttons' glyphs centre 12px from the edge, the chevrons 14px). */
 .app-role-heading {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 24px;
+  min-height: 32px;
+  padding-inline: 8px 2px;
+}
+.app-role-heading .app-role-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--text-faint);
 }
 .app-role-heading h3 {
   margin: 0;
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
 }
@@ -706,6 +744,7 @@ button.app-role-row:hover:not(:disabled) {
   display: grid;
   flex: none;
   place-items: center;
+  width: 16px;
   color: var(--text-faint);
 }
 .app-role-row-label {
@@ -717,12 +756,15 @@ button.app-role-row:hover:not(:disabled) {
 }
 .app-role-row-summary {
   flex: none;
+  min-inline-size: 56px;
+  text-align: end;
   color: var(--text-dim);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .app-role-row > svg:last-child {
   flex: none;
+  inline-size: 12px;
   color: var(--text-faint);
 }
 
@@ -829,4 +871,12 @@ button.app-role-back:hover:not(:disabled) {
 }
 .app-role-components-tree {
   max-height: min(384px, calc(100dvh - 300px));
+}
+/* The Roles tab's placeholder (RolesSkeleton in RolesSettings.tsx): a picker's shape at the picker's own width, and
+   summary rows at the real rows' height, so the first read swaps content in place without moving anything. */
+.app-roles .app-roles-skeleton-picker {
+  display: block;
+}
+.app-role-row.app-role-skeleton-row {
+  cursor: default;
 }

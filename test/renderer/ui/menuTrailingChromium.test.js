@@ -1,15 +1,15 @@
-// Goal: in the shared Menu every row's trailing content (a shortcut hint, a value with its chevron, a check, a
-// switch) ends at one right edge, the row's right padding edge, so a hint is never pushed inward by a reserved
-// check column. Multi-character chords (⌘⇧K) right-align with single letters, a long label is cut with an
-// ellipsis before it can touch its hint, a row with nothing to show keeps only its label, and a descriptive first
-// row (a toggle with a wrapped description) is laid out as before.
+// Goal: in the shared Menu every row's trailing content (a value with its chevron, a check, a switch) ends at one
+// right edge, the row's right padding edge, so nothing is pushed inward by a reserved check column. A row's shortcut
+// is never printed in the row (it is told in a tooltip, test/renderer/ui/shortcutTip.test.js), so a row with only a
+// shortcut keeps only its label, a long label is cut with an ellipsis before it can touch its check, and a descriptive
+// first row (a toggle with a wrapped description) is laid out as before.
 //
 //   node test/renderer/ui/menuTrailingChromium.test.js
 //
 // Method: run under the Electron binary, because only Chromium lays out flex, ellipsis and wrapping. A harness
 // bundles the real Menu and styles.css and opens one menu with every kind of row: the chat menu's hint-only rows
 // (Pin P ... Delete D), a submenu with a value and chevron, check rows, a checked row that also has a key, a chord, a
-// long label with a key, and a toggle with a description. The probe reads each row's box and padding, and the right
+// long checked label with a key, and a toggle with a description. The probe reads each row's box and padding, and the right
 // edge of its last visible trailing element, and asserts they agree within 1px. The menu is captured as a
 // screenshot in node_modules/.stacki-test/menu-trailing-chromium/. Waits are for a condition, bounded.
 const fs = require('node:fs');
@@ -33,7 +33,6 @@ const entries = [
   { kind: 'toggle', id: 'keep', label: 'Ask me to keep AI changes', description: 'Review each change before it is kept, so nothing lands in your files unseen.', on: true, onChange: noop },
   { kind: 'divider', id: 'd1' },
   item('pin', 'Pin', { shortcut: 'P' }),
-  item('unread', 'Mark as unread', { shortcut: 'U' }),
   item('rename', 'Rename', { shortcut: 'R' }),
   item('fork', 'Fork', { shortcut: 'F' }),
   { kind: 'submenu', id: 'section', label: 'Move to section', value: 'No section', entries: [item('none', 'No section', { checked: true })] },
@@ -41,7 +40,7 @@ const entries = [
   item('delete', 'Delete', { shortcut: 'D', danger: true }),
   { kind: 'divider', id: 'd2' },
   item('chord', 'Open settings', { shortcut: '⌘⇧K' }),
-  item('long', 'A label that is far too long to fit beside its key without being cut short', { shortcut: 'L' }),
+  item('long', 'A label that is far too long to fit beside its check without being cut short', { shortcut: 'L', checked: true }),
   item('on', 'Checked', { checked: true }),
   item('off', 'Unchecked', { checked: false }),
   item('both', 'Checked with a key', { checked: true, shortcut: 'G' }),
@@ -94,7 +93,6 @@ window.steps = {
         labelCut: label.scrollWidth > label.clientWidth + 1,
         labelTitled: true,
         keyText: key === null ? undefined : key.textContent,
-        keyRight: key === null ? undefined : Math.round(key.getBoundingClientRect().right * 10) / 10,
         valueChevronGap: value === null || chevron === null ? undefined : Math.round((chevron.getBoundingClientRect().left - value.getBoundingClientRect().right) * 10) / 10,
         hasCheck: row.querySelector('.menu-check') !== null,
         hasEnd: end !== null && trailing.length > 0,
@@ -168,29 +166,27 @@ function check(measured) {
   }
   const row = (label) => measured.rows.find((entry) => entry.label === label);
   const withEnd = measured.rows.filter((entry) => entry.hasEnd);
-  expect('there are trailing elements to compare', withEnd.length >= 10, withEnd.length);
+  expect('there are trailing elements to compare', withEnd.length >= 4, withEnd.length);
   for (const entry of withEnd) {
     expect(`"${entry.label}": its trailing content ends at the row's padding edge`, Math.abs(entry.edgeGap) <= EDGE_TOLERANCE_PX, entry);
     expect(`"${entry.label}": the label ends before its trailing content`, entry.labelEndsBeforeEnd === true, entry);
   }
   const gaps = withEnd.map((entry) => entry.edgeGap);
   expect('every trailing edge is the same edge', Math.max(...gaps) - Math.min(...gaps) <= EDGE_TOLERANCE_PX, gaps);
-  for (const label of ['Pin', 'Mark as unread', 'Rename', 'Fork', 'Archive', 'Delete', 'Open settings']) {
+  for (const label of ['Pin', 'Rename', 'Fork', 'Archive', 'Delete', 'Open settings']) {
     expect(
-      `"${label}": a hint-only row ends its hint at the edge`,
-      row(label) !== undefined && Math.abs(row(label).edgeGap) <= EDGE_TOLERANCE_PX && row(label).hasCheck === false,
+      `"${label}": a shortcut-only row prints no key and draws nothing at its end`,
+      row(label) !== undefined && row(label).hasEnd === false && row(label).keyText === undefined,
       row(label),
     );
   }
-  const keyRights = ['Pin', 'Mark as unread', 'Rename', 'Fork', 'Archive', 'Delete', 'Open settings'].map((label) => row(label).keyRight);
-  expect('single letters and the chord right-align to one x', Math.max(...keyRights) - Math.min(...keyRights) <= EDGE_TOLERANCE_PX, keyRights);
   const section = row('Move to section');
   expect(
     'the value and its chevron end at the edge, together',
     section !== undefined && Math.abs(section.edgeGap) <= EDGE_TOLERANCE_PX && section.valueChevronGap >= 0 && section.valueChevronGap <= 10,
     section,
   );
-  expect('the value row and the hint rows share one edge', Math.abs(section.edgeGap - row('Pin').edgeGap) <= EDGE_TOLERANCE_PX);
+  expect('the value row and the check rows share one edge', Math.abs(section.edgeGap - row('Checked').edgeGap) <= EDGE_TOLERANCE_PX);
   expect(
     'a checked row ends with its check at the edge',
     row('Checked').hasCheck === true && Math.abs(row('Checked').edgeGap) <= EDGE_TOLERANCE_PX,
@@ -199,14 +195,14 @@ function check(measured) {
   expect('an unchecked row in a menu with checks draws no reserved column', row('Unchecked').hasEnd === false, row('Unchecked'));
   const both = row('Checked with a key');
   expect(
-    'a checked row that also has a key ends with its check, the key beside it',
-    both.hasCheck === true && Math.abs(both.edgeGap) <= EDGE_TOLERANCE_PX && both.keyText === 'G',
+    'a checked row that also has a key ends with its check and prints no key',
+    both.hasCheck === true && Math.abs(both.edgeGap) <= EDGE_TOLERANCE_PX && both.keyText === undefined,
     both,
   );
   expect('a row with nothing to show has only its label', row('Nothing at the end').hasEnd === false, row('Nothing at the end'));
   const long = measured.rows.find((entry) => entry.label.startsWith('A label that is far too long'));
   expect(
-    'a long label is cut with an ellipsis and never touches its hint',
+    'a long label is cut with an ellipsis and never touches its check',
     long.labelCut === true && long.labelEndsBeforeEnd === true && Math.abs(long.edgeGap) <= EDGE_TOLERANCE_PX,
     long,
   );

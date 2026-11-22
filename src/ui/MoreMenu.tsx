@@ -5,6 +5,7 @@ import { LIMITS } from '../../shared/core/limits';
 import Popup from './Popup';
 import { MoreIcon } from './Icons';
 import { popupBox } from './Dropdown';
+import { useShortcutTip } from './shortcutTip';
 
 // The `⋯` that opens a short menu of things to do to the thing beside it.
 //
@@ -18,7 +19,7 @@ export interface MenuItem {
   readonly icon?: React.ReactNode;
   readonly danger?: boolean;
   readonly disabled?: boolean;
-  /** A key that does the same, muted at the end of the row (the rail's More menu shows each panel's). */
+  /** A key that does the same, told in the row's tooltip after a rest, never printed in the row (the rail's More menu has each panel's). */
   readonly shortcut?: string;
   /** The row is what is open now (the rail's active panel); it keeps a fill. */
   readonly current?: boolean;
@@ -141,29 +142,35 @@ export function MenuSurface({ rows, box, width, menuRef, close, open, anchor }: 
       style={{ position: 'fixed', ...box, minWidth: width }}
       onMouseDown={(event) => event.stopPropagation()}
     >
-      {({ finish }) =>
-        rows.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            role="menuitem"
-            className={`more-menu-item ${item.danger ? 'is-danger' : ''} ${item.current ? 'is-current' : ''}`}
-            aria-current={item.current ? 'true' : undefined}
-            disabled={item.disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              finish(() => {
-                close();
-                item.onSelect?.();
-              });
-            }}
-          >
-            {item.icon}
-            <span className="more-menu-label">{item.label}</span>
-            {item.shortcut !== undefined && <span className="more-menu-shortcut">{item.shortcut}</span>}
-          </button>
-        ))
-      }
+      {({ finish }) => rows.map((item) => <MoreMenuRow key={item.label} item={item} close={close} finish={finish} />)}
     </Popup>
+  );
+}
+
+function MoreMenuRow({ item, close, finish }: { readonly item: MenuItem; readonly close: () => void; readonly finish: (action: () => void) => void }) {
+  const { props, tip } = useShortcutTip(item.label, item.shortcut);
+  return (
+    <>
+      <button
+        type="button"
+        role="menuitem"
+        className={`more-menu-item ${item.danger ? 'is-danger' : ''} ${item.current ? 'is-current' : ''}`}
+        aria-current={item.current ? 'true' : undefined}
+        disabled={item.disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onMouseLeave();
+          finish(() => {
+            close();
+            item.onSelect?.();
+          });
+        }}
+        {...props}
+      >
+        {item.icon}
+        <span className="more-menu-label">{item.label}</span>
+      </button>
+      {tip}
+    </>
   );
 }

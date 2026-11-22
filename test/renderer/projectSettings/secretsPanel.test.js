@@ -414,6 +414,31 @@ test('the Settings panel opens on a root of links and a link opens its view; bac
   await unmount();
 });
 
+test('the Agents row sits after Instructions and opens the Agents view the host draws', async () => {
+  reset('A=1\n');
+  root = createRoot(document.getElementById('root'));
+  await act(async () =>
+    root.render(
+      React.createElement(panel.ProjectSettingsPanel, {
+        projectPath: '/project',
+        views: ['secrets', 'mcp', 'instructions', 'agents'],
+        renderInstructions: () => 'instructions view',
+        renderAgents: () => 'agents view',
+      }),
+    ),
+  );
+  await settleAll();
+  assert.deepEqual(
+    [...document.querySelectorAll('.settings-link')].map((link) => link.textContent.trim()),
+    ['Secrets', 'MCP', 'Instructions', 'Agents'],
+  );
+  await act(async () => document.querySelectorAll('.settings-link')[3].click());
+  await settleAll();
+  assert.equal(document.querySelector('.panel-header h2').textContent, 'Agents');
+  assert.equal(document.querySelector('.settings-detail, .settings-body').textContent.includes('agents view'), true);
+  await unmount();
+});
+
 test('a role sees only the links it may open', async () => {
   reset('A=1\n');
   root = createRoot(document.getElementById('root'));

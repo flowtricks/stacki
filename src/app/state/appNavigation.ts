@@ -490,6 +490,8 @@ export function useGitInfo(coreState: ReturnType<typeof useCoreState>, lifecycle
   const { project, projectRef, refreshKey, setGitInfo, pageState } = coreState;
   const { showToast } = lifecycle;
   const requestRefresh = useRef<() => void>(() => undefined);
+  // The refresh runs every 15 seconds; a failure that stays (git missing, a folder git refuses) must be said once, not at every tick.
+  const lastFailure = useRef<string | undefined>(undefined);
   const savedChecksum = pageState === undefined ? undefined : saveStateBase(pageState.save);
 
   const refreshGit = useCallback(async () => {
@@ -498,9 +500,13 @@ export function useGitInfo(coreState: ReturnType<typeof useCoreState>, lifecycle
     }
     const result = await readGitInfo(project.path);
     if (!result.ok) {
-      showToast(result.error, 'error');
+      if (lastFailure.current !== result.error) {
+        lastFailure.current = result.error;
+        showToast(result.error, 'error');
+      }
       return undefined;
     }
+    lastFailure.current = undefined;
     if (projectRef.current?.path === project.path) {
       setGitInfo(result.value);
     }

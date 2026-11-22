@@ -33,7 +33,9 @@ import {
   type NavigatorDragView,
 } from '../../editor/canvasDragSession';
 import { clearDrag } from '../../editor/dragState';
-import { navigatorDropOf, parseNavigatorDrop } from './navigatorDrop';
+import { navigatorDropOf, parseNavigatorDrop, type NavigatorDrop } from './navigatorDrop';
+import { INSERT_DRAG_TYPE, type InsertDragChoice } from '../../editor/insertDragData';
+import type { Drag } from '../../editor/dragState';
 import { dropPlacement, type DropPlacement } from './dropPlacement';
 import { documentOfPath, type PlacementEnvironment, type PlacementInsertable } from '../../editor/placementCheck';
 import { getDrag } from '../../editor/dragState';
@@ -42,6 +44,7 @@ import { type LiveValue } from '../../ui/liveValue';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 import { PanelHeader } from '../../ui/PanelHeader';
+import { TOOLTIP_DELAY_MS } from '../../ui/delayedTooltip';
 
 interface StructurePanelProps {
   readonly clientMode?: boolean;
@@ -77,6 +80,8 @@ interface StructurePanelProps {
   readonly onOpenCode?: (id: string) => void;
   readonly onChangeLayout: (name: string) => void;
   readonly onDropComponent: (name: string, target: DropLocation) => void;
+  /** Inserts a tile dropped from the Add elements panel; without it the Navigator takes no such drop. */
+  readonly onDropInsert?: (choice: InsertDragChoice, target: DropLocation) => void;
   readonly onMoveNode: (id: string, target: DropLocation) => void;
   readonly onWrapNode?: (id: string, tag: WrapperTag) => void;
   readonly canChangeStructure?: (id: string) => boolean;
@@ -271,7 +276,7 @@ function useHeaderTooltip(): Pick<TreeState, 'tooltip' | 'showTooltip' | 'hideTo
   const showTooltip = useCallback((event: React.MouseEvent<HTMLButtonElement>): void => {
     const bounds = event.currentTarget.getBoundingClientRect();
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setTooltip({ left: bounds.left + bounds.width / 2, top: bounds.bottom + 8 }), 500);
+    timer.current = setTimeout(() => setTooltip({ left: bounds.left + bounds.width / 2, top: bounds.bottom + 8 }), TOOLTIP_DELAY_MS);
   }, []);
   useEffect(() => () => clearTimeout(timer.current), []);
   return { tooltip, showTooltip, hideTooltip };
@@ -498,7 +503,8 @@ function endSearch(props: EditableProps, state: TreeState, selectedId: string): 
 }
 
 function isDndPayload(event: React.DragEvent<HTMLElement>): boolean {
-  return event.dataTransfer.types.includes('avb/component') || event.dataTransfer.types.includes('avb/node');
+  const types = event.dataTransfer.types;
+  return types.includes('avb/component') || types.includes('avb/node') || types.includes(INSERT_DRAG_TYPE);
 }
 
 function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, props: EditableProps, state: TreeState): void {
@@ -514,7 +520,7 @@ function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, p
   }
   // The rule is asked again at the drop, not trusted from the last dragover: a refused place writes nothing,
   // and one with a valid neighbour lands there, as the indicator showed.
-  const drag = drop.kind === 'component' ? ({ kind: 'component', name: drop.name } as const) : ({ kind: 'node', id: drop.id, nodeKind: 'node' } as const);
+  const drag = dragOfDrop(drop);
   const placement = dropPlacement(props.pageState.model.nodes, drag, target, placementEnvironment(props));
   state.setDropNote(undefined);
   if (placement.kind === 'refused') {
@@ -525,12 +531,31 @@ function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, p
     case 'component':
       props.onDropComponent(drop.path ?? drop.name, landing);
       return;
+    case 'insert':
+      props.onDropInsert?.(drop.choice, landing);
+      return;
     case 'node':
       if (drop.id === props.editRootId || !canEditNode(props, drop.id)) {
         return;
       }
       props.onMoveNode(drop.id, landing);
       return;
+    default: {
+      const exhaustive: never = drop;
+      return exhaustive;
+    }
+  }
+}
+
+// The drag a drop stands for, as the placement rule reads it: what was dropped, not the last dragover's record.
+function dragOfDrop(drop: NavigatorDrop): Drag {
+  switch (drop.kind) {
+    case 'component':
+      return { kind: 'component', name: drop.name };
+    case 'insert':
+      return { kind: 'insert', choice: drop.choice, label: '' };
+    case 'node':
+      return { kind: 'node', id: drop.id, nodeKind: 'node' };
     default: {
       const exhaustive: never = drop;
       return exhaustive;

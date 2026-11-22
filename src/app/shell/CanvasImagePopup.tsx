@@ -16,13 +16,13 @@ import { AssetPickPresentationContext } from '../../ui/assetPickPresentation';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import type { ContextPoint } from '../../features/preview/contextPosition';
-import type { AltTarget, ImageRefusal, ImageTarget } from '../model/canvasImageTrace';
+import type { AltTarget, ImageTarget, ShownImageRefusal } from '../model/canvasImageTrace';
 import './canvasImagePopup.css';
 
 /** What the popup shows: the fields of an image that can be edited, or why it cannot. */
 export type CanvasImageOutcome =
   | { readonly kind: 'edit'; readonly target: ImageTarget; readonly fieldNames: readonly string[] }
-  | { readonly kind: 'refused'; readonly refusal: ImageRefusal };
+  | { readonly kind: 'refused'; readonly refusal: ShownImageRefusal };
 
 export interface CanvasImageShown {
   /** A new request remounts the popup, so an earlier dismissal cannot close its replacement. */
@@ -192,21 +192,18 @@ function ImageNotes({ outcome, translate }: { readonly outcome: CanvasImageOutco
   return note === undefined ? undefined : <p className="canvas-image-note">{note}</p>;
 }
 
-/** Why the image cannot be edited from the popup, in the person's language. */
-export function refusalNote(refusal: ImageRefusal, translate: Translator): string {
+/**
+ * Why the image cannot be edited from the popup, in the person's language. Only the open file's own refusals are explained:
+ * a picture a closed component decides opens no popup at all (imageDecision in canvasImageTrace.ts).
+ */
+export function refusalNote(refusal: ShownImageRefusal, translate: Translator): string {
   switch (refusal.kind) {
-    case 'fixed':
-      return translate('preview.image.refused.fixed', { file: fileName(refusal.file) });
     case 'bound':
       return translate('preview.image.refused.bound', { expression: refusal.expression });
     case 'loop':
       return translate('preview.image.refused.loop');
     case 'outside':
       return refusal.file === '' ? translate('preview.image.refused.unknown') : translate('preview.image.refused.outside', { file: fileName(refusal.file) });
-    case 'computed':
-      return translate('preview.image.refused.computed', { file: fileName(refusal.file), expression: refusal.expression });
-    case 'unreadable':
-      return refusal.file === '' ? translate('preview.image.refused.unknown') : translate('preview.image.refused.unreadable', { file: fileName(refusal.file) });
     default: {
       const exhaustive: never = refusal;
       return exhaustive;

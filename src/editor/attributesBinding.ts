@@ -6,12 +6,19 @@
 // Astro gives a rest binding no default, so the prop's defaults are the
 // attributes written before the spread: an instance passing the same name
 // overrides them. The attributes after the spread are the element's own and
-// override what an instance passes, as they did before the element was
-// connected. That order is the whole model, so it is read and written here and
-// nowhere else: the defaults are edited from the prop's settings, the
-// element's own attributes from its attribute list. Props are an ordered
-// record (pageNode.ts keys a spread by its source, `...rest`), so order is
-// kept by building a new record rather than patching one.
+// override what an instance passes. That order is the whole model, so it is
+// read and written here and nowhere else. Props are an ordered record
+// (pageNode.ts keys a spread by its source, `...rest`), so order is kept by
+// building a new record rather than patching one.
+//
+// Connecting puts the spread after the element's attributes, so an instance
+// can override each of them (Astro: a later attribute wins), and the
+// Attributes list shows them in source order with the spread last, as
+// "+ items in {} rest". Class, style and directives stay after it: the class
+// and style fields own them, and an instance's `class` would otherwise
+// replace the component's own classes instead of reaching it through a field.
+// A new attribute added while connected goes before the spread, so it stays a
+// default. Disconnecting takes out the spread alone; every attribute stays.
 
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
@@ -61,24 +68,35 @@ export function readAttributesBinding(props: Props | undefined, local: string): 
 }
 
 /**
- * The element's props connected to `local`: `defaults`, the spread, then every
- * attribute it already had (its own, still overriding). A default named like
- * one of its own attributes is dropped: the own one would always win.
+ * The element's props connected to `local`: the attributes an instance may
+ * override, `defaults`, the spread, then the element's own (class, style,
+ * directives, and whatever already followed the spread). Connecting again (to
+ * change the defaults) replaces the defaults before the spread and keeps every
+ * other attribute where it is. A default named like one of its own attributes
+ * is dropped: the own one would always win.
  */
 export function boundAttributes(props: Props | undefined, local: string, defaults: readonly AttributeDefault[]): WrittenProps {
   const key = spreadKey(local);
-  const before = readAttributesBinding(props, local);
-  // Connecting again (to change the defaults) keeps the element's own attributes and replaces the defaults.
-  const kept = present(props).filter(([name]) => name !== key && (before === undefined || before.own.includes(name) || !isDefault(before, name)));
-  const ownNames = new Set(kept.map(([name]) => name));
+  const entries = present(props);
+  const at = entries.findIndex(([name]) => name === key);
+  const connected = at >= 0;
+  const before = connected ? entries.slice(0, at).filter((entry) => !isDefaultable(entry)) : entries.filter((entry) => !isOwn(entry, local));
+  const after = connected ? entries.slice(at + 1) : entries.filter((entry) => isOwn(entry, local));
+  const ownNames = new Set(after.map(([name]) => name));
+  const replaced = new Set(defaults.map((entry) => entry.name));
   const out: Record<string, Attr> = {};
+  for (const [name, value] of before) {
+    if (!replaced.has(name)) {
+      define(out, name, value);
+    }
+  }
   for (const entry of defaults) {
     if (!ownNames.has(entry.name)) {
       define(out, entry.name, entry.value === '' ? { type: 'bare' } : { type: 'string', value: entry.value });
     }
   }
   define(out, key, { type: 'spread', value: local });
-  for (const [name, value] of kept) {
+  for (const [name, value] of after) {
     define(out, name, value);
   }
   assert(Object.keys(out).length <= LIMITS.attrsPerNodeMax, 'boundAttributes: attribute limit exceeded');
@@ -86,22 +104,73 @@ export function boundAttributes(props: Props | undefined, local: string, default
   return out;
 }
 
-/** The element's props with the spread of `local` and the defaults before it taken out. */
+/** The element's props with the spread of `local` taken out; every attribute stays where it was. */
 export function unboundAttributes(props: Props | undefined, local: string): WrittenProps {
-  const binding = readAttributesBinding(props, local);
+  const key = spreadKey(local);
   const out: Record<string, Attr> = {};
   for (const [name, value] of present(props)) {
-    if (binding === undefined) {
-      define(out, name, value);
-      continue;
-    }
-    if (name !== spreadKey(local) && !isDefault(binding, name)) {
+    if (name !== key) {
       define(out, name, value);
     }
   }
   assert(readAttributesBinding(out, local) === undefined, 'unboundAttributes: the spread is gone');
-  assert(binding === undefined || binding.own.every((name) => Object.hasOwn(out, name)), 'unboundAttributes: the element keeps its own attributes');
+  assert(Object.keys(out).length >= present(props).length - 1, 'unboundAttributes: only the spread is taken out');
   return out;
+}
+
+/**
+ * The element's props with `name` added as a default of the spread of
+ * `local`: just before the spread, so an instance can still override it.
+ * Without the spread, `name` goes last, as any new attribute does.
+ */
+export function withDefaultAttribute(props: Props | undefined, local: string, name: string, value: Attr): WrittenProps {
+  const key = spreadKey(local);
+  assert(name !== key, 'withDefaultAttribute: the spread is not a default');
+  assert(!Object.hasOwn(props ?? {}, name), 'withDefaultAttribute: the attribute is new');
+  const out: Record<string, Attr> = {};
+  for (const [entryName, entryValue] of present(props)) {
+    if (entryName === key) {
+      define(out, name, value);
+    }
+    define(out, entryName, entryValue);
+  }
+  if (!Object.hasOwn(out, name)) {
+    define(out, name, value);
+  }
+  assert(Object.keys(out).length <= LIMITS.attrsPerNodeMax + 1, 'withDefaultAttribute: attribute limit exceeded');
+  return out;
+}
+
+/**
+ * Whether the markup reads `local` anywhere but the one spread being taken
+ * out: another element's `{...rest}`, or an expression such as `{rest.id}`.
+ * Reading the text, not the tree, so every use counts, and a use counted
+ * wrongly only keeps the prop (the safe side).
+ */
+export function restUsedElsewhere(markup: string, local: string): boolean {
+  assert(/^[A-Za-z_$][\w$]*$/.test(local), 'restUsedElsewhere: a rest binding is an identifier');
+  assert(markup.length <= LIMITS.sourceBytesMax, 'restUsedElsewhere: the markup is bounded');
+  const word = new RegExp(`(?<![\\w$])${local.replace(/\$/g, '\\$')}(?![\\w$])`, 'g');
+  let count = 0;
+  for (const match of markup.matchAll(word)) {
+    assert(match.index <= markup.length, 'restUsedElsewhere: a match is in the markup');
+    count++;
+    if (count > 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// An attribute that stays after the spread when one is connected: the class
+// and style fields' own, a directive, or another spread.
+function isOwn([name, value]: readonly [string, Attr], local: string): boolean {
+  return NOT_DEFAULTS.test(name) || (value.type === 'spread' && name !== spreadKey(local));
+}
+
+// An attribute before the spread that is one of the prop's defaults.
+function isDefaultable([name, value]: readonly [string, Attr]): boolean {
+  return !NOT_DEFAULTS.test(name) && (value.type === 'string' || value.type === 'bare');
 }
 
 // The attributes that have a value, in order.
@@ -113,10 +182,6 @@ function present(props: Props | undefined): readonly (readonly [string, Attr])[]
     }
   }
   return out;
-}
-
-function isDefault(binding: AttributesBinding, name: string): boolean {
-  return binding.defaults.some((entry) => entry.name === name);
 }
 
 // `__proto__` is an ordinary attribute name; assigning it would hit the setter.

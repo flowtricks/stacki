@@ -27,7 +27,11 @@
 // "Home" needs the project's routing, which lives in project/ — so that
 // translation happens at the IPC edge, and this module stays about git.
 
+import { assert } from '../../shared/core/assert';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
+import { MAIN_LIMITS } from '../lib/mainLimits';
 import { gitErrorDetail } from './git';
+import { projectPrefix } from './gitState';
 import type { Git } from './git';
 
 // Field and record separators: git will happily put anything in a subject
@@ -103,16 +107,25 @@ async function log(
 ): Promise<{ commits: CommitInfo[]; atEnd: boolean }> {
   // Topological order keeps every parent below its children even when clocks
   // disagree. Exclude stashes because their synthetic commits are not history.
-  const args = ['log', '--topo-order', '--decorate=short', `--format=${LOG_FORMAT}`, `-n${limit}`, `--skip=${skip}`];
+  // A ref that starts with a dash would be read as an option (`--output=<file>` writes a file), so it never reaches git. The limit and
+  // skip are clamped: a page is a screenful, and a negative or fractional count is git's usage error rather than a history.
+  if (ref !== undefined && (ref.startsWith('-') || ref.includes('\0'))) {
+    throw new ReferencedError('git.error.refInvalid');
+  }
+  const pageSize = Math.min(Math.max(Math.trunc(limit), 1), MAIN_LIMITS.logPageMax);
+  const pageSkip = Math.max(Math.trunc(skip), 0);
+  // core.quotepath=off keeps accented file names as written; the default escapes them as octal and the panel would show the escape.
+  const args = ['-c', 'core.quotepath=off', 'log', '--topo-order', '--decorate=short', `--format=${LOG_FORMAT}`, `-n${pageSize}`, `--skip=${pageSkip}`];
   // One call for the whole page, files included. The alternative — a `git
   // show` per commit to find out what it touched — is fifty processes to draw
   // one screen, and the panel needs the files to say "you changed Home"
   // rather than just the subject line.
   if (withFiles) {
-    args.push('--name-status', ...DIFF_FLAGS);
+    // `--relative` reports paths from the project folder, and drops what a commit changed elsewhere in a larger repository.
+    args.push('--name-status', '--relative', ...DIFF_FLAGS);
   }
   if (ref) {
-    args.push(ref);
+    args.push(ref, '--');
   } else {
     args.push('--exclude=refs/stash', '--all');
   }
@@ -155,7 +168,7 @@ async function log(
   // `atEnd` is inferred from a short page, which costs nothing and is right
   // except when the history length is an exact multiple of the page size (one
   // extra empty fetch).
-  return { commits, atEnd: commits.length < limit };
+  return { commits, atEnd: commits.length < pageSize };
 }
 
 function parseNameStatus(stdout: string): FileChange[] {
@@ -191,35 +204,36 @@ export interface StatusFile {
 }
 
 /**
- * Everything changed right now, for the file picker — the whole list, with
- * what happened to each file. `git:info` keeps its own capped summary for the
- * chip; this is the one that has to be complete, because a file missing from
- * it is a file that silently cannot be committed.
+ * Reads `git status --porcelain=v1 -z` output: records are `XY path` separated by NUL, and a rename or copy is followed by one more
+ * record holding the old path. NUL-separated output is never quoted, so a path with spaces, accents, quotes or a leading dash arrives
+ * exactly as written on disk (the line form quotes and escapes such paths, which then cannot be passed back to git).
+ *
+ * Paths are reported from the repository root; `prefix` (the project's folder inside the repository, '' at the root) is removed so
+ * they are relative to the project, which is where every other command runs. `limit` bounds the list: past it the parse throws rather
+ * than returning a list with files silently missing.
  */
-async function status(git: Git, { projectPath }: { readonly projectPath: string }): Promise<StatusFile[]> {
-  const { stdout } = await git(projectPath, ['status', '--porcelain']);
+export function parseStatusRecords(stdout: string, prefix: string, limit: number): StatusFile[] {
+  assert(prefix === '' || prefix.endsWith('/'), 'parseStatusRecords: a folder prefix ends with a slash');
+  const records = stdout.split('\0');
   const files: StatusFile[] = [];
-  for (const line of stdout.split('\n')) {
-    if (!line.trim()) {
-      continue;
+  const relative = (entryPath: string): string => (prefix !== '' && entryPath.startsWith(prefix) ? entryPath.slice(prefix.length) : entryPath);
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index];
+    if (record === undefined || record.length < 4) {
+      continue; // The empty record after the final NUL.
     }
-    // Porcelain v1 is "XY path": two status columns, a space, then the path.
-    // Not trimmed before slicing — the first column is a space for changes
-    // that are only in the working tree, and trimming loses that distinction.
-    const code = line.slice(0, 2);
-    let entryPath = line.slice(3);
-    let from: string | undefined;
-    // "R  old -> new" — staged renames carry both names.
-    const arrow = entryPath.lastIndexOf(' -> ');
-    if (arrow !== -1) {
-      from = unquote(entryPath.slice(0, arrow));
-      entryPath = entryPath.slice(arrow + 4);
+    if (files.length >= limit) {
+      throw new ReferencedError('git.error.statusTooLarge', { count: limit });
     }
+    // "XY path": two status columns, a space, then the path. Never trimmed: the first column is a space for working-tree-only changes.
+    const code = record.slice(0, 2);
+    const entryPath = relative(record.slice(3));
+    const renamed = code.includes('R') || code.includes('C');
+    const from = renamed ? records[++index] : undefined;
     files.push({
-      path: unquote(entryPath),
-      from,
-      // The letter to show. `??` is git's "untracked", which to anyone who did
-      // not choose that spelling is simply a new file.
+      path: entryPath,
+      from: from === undefined ? undefined : relative(from),
+      // The letter to show. `??` is git's "untracked", which to anyone who did not choose that spelling is simply a new file.
       status: code === '??' ? 'A' : code.trim().charAt(0) || 'M',
       staged: code.charAt(0) !== ' ' && code !== '??',
       untracked: code === '??',
@@ -228,11 +242,16 @@ async function status(git: Git, { projectPath }: { readonly projectPath: string 
   return files;
 }
 
-// Git quotes paths containing non-ASCII or control characters. Only the outer
-// quotes are undone here — a path that needed the full C-style unescaping is
-// rare enough that showing it slightly wrong beats getting the common case
-// wrong by hand-rolling an unescaper.
-const unquote = (text: string): string => (text.startsWith('"') && text.endsWith('"') ? text.slice(1, -1) : text);
+/**
+ * Everything changed right now, for the file picker — the whole list, with what happened to each file. `git:info` keeps its own capped
+ * summary for the chip; this is the one that has to be complete, because a file missing from it is a file that silently cannot be
+ * committed. Untracked folders are listed file by file for the same reason: the picker commits files, not folders.
+ */
+async function status(git: Git, { projectPath }: { readonly projectPath: string }): Promise<StatusFile[]> {
+  const prefix = await projectPrefix(git, projectPath);
+  const { stdout } = await git(projectPath, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']);
+  return parseStatusRecords(stdout, prefix, MAIN_LIMITS.statusFilesMax);
+}
 
 export interface ProjectFile {
   readonly path: string;
@@ -254,21 +273,15 @@ export interface ProjectFile {
  * appear as changed in one place and clean in another.
  */
 async function allFiles(git: Git, { projectPath }: { readonly projectPath: string }): Promise<ProjectFile[]> {
-  const { stdout } = await git(projectPath, ['ls-files', '--cached', '--others', '--exclude-standard']);
+  const { stdout } = await git(projectPath, ['ls-files', '--cached', '--others', '--exclude-standard', '-z']);
   const changed = new Map((await status(git, { projectPath })).map((entry) => [entry.path, entry]));
-  const paths = [
-    ...new Set(
-      stdout
-        .split('\n')
-        .map((line) => unquote(line.trim()))
-        .filter(Boolean),
-    ),
-  ];
+  const paths = [...new Set(stdout.split('\0').filter(Boolean))];
   // A deleted file is gone from the working tree, so ls-files still lists it
   // from the index — but a file deleted and staged is not listed at all, and
   // it is exactly the one somebody may want to find and put back.
+  const listed = new Set(paths);
   for (const [changedPath] of changed) {
-    if (!paths.includes(changedPath)) {
+    if (!listed.has(changedPath)) {
       paths.push(changedPath);
     }
   }

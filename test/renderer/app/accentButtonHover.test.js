@@ -37,12 +37,12 @@ function addButtonClasses() {
 }
 
 // [name, wrapper class, button class list]; the wrapper supplies the ancestors the real rules select through.
+// The AI send button is no longer an accent button: it is a plain icon button like the microphone (composer.css).
 const TARGETS = [
   ['Settings > Breakpoints Add', 'breakpoints-add-actions', addButtonClasses()],
   ['a plain primary button', 'probe', 'primary'],
   ['the Apps panel Open', 'apps-row', 'apps-open primary'],
   ['the AI trust button', 'ai-gate', 'ai-primary'],
-  ['the AI send button', 'probe', 'ai-send'],
   ['the AI keep-all button', 'ai-changes-bulk', 'ai-changes-keep'],
   ['the AI permission allow', 'ai-ask-actions', 'ai-allow'],
   ['the Audits run button', 'probe', 'audits-card-button'],

@@ -6,8 +6,8 @@
 import type { MenuItemConstructorOptions } from 'electron';
 import type { MainMessageKey } from '../lib/mainLocale';
 
-/** The three reloads the View menu offers: the dev relaunch, the window, and the window bypassing caches. */
-export type ReloadCommand = 'reloadAllCode' | 'reloadWindow' | 'forceReloadWindow';
+/** What the View menu's reload items ask for: the site preview refreshed (⌘R, ⇧⌘R), or Stacki itself reloaded (the escape hatch). */
+export type ReloadCommand = 'refreshSite' | 'reloadStacki';
 
 export interface ApplicationMenuOptions {
   readonly isMac: boolean;
@@ -16,14 +16,13 @@ export interface ApplicationMenuOptions {
   /** Forwards a menu command to the renderer, which decides between app-level actions and native ones. */
   readonly send: (channel: string) => void;
   readonly checkForUpdates: () => void;
-  /** Runs a reload; `main.ts` first asks `routeReload` (reloadRouting.ts) whether focus in the canvas turns it into a site refresh. */
+  /** Runs a reload; `main.ts` asks `routeReload` (reloadRouting.ts) whether there is a preview to refresh. */
   readonly reload: (command: ReloadCommand) => void;
 }
 
-// In dev ⌘R has to mean "restart the process". main.js, astroParser.js and the rest of this side are bound in at require time, so the
-// stock reload repaints the renderer while silently going on running the old code: the failure mode is an edit that appears to do
-// nothing. The plain window reload keeps its usual behaviour one item down. A packaged build has no supervisor to restart it and no
-// source to pick up, so it keeps the stock reload items. In both, focus inside the canvas sends the shortcut to the site instead.
+// ⌘R and ⇧⌘R always refresh the site preview, wherever focus is: the person is looking at the site, and reloading Stacki under
+// them lost their place. Stacki's own reload stays reachable for developers (⌥⌘R in a dev run, where it relaunches the process so
+// edits to the main side take effect) and, without an accelerator, in a packaged build so a stuck window can still be recovered.
 export function buildApplicationMenuTemplate(options: ApplicationMenuOptions): MenuItemConstructorOptions[] {
   const translate = options.translate;
   const send = options.send;
@@ -61,37 +60,24 @@ export function buildApplicationMenuTemplate(options: ApplicationMenuOptions): M
         { label: translate('menu.edit.insertElement'), accelerator: 'CmdOrCtrl+E', click: () => send('menu:insert') }, // i18n-ignore: keyboard accelerator.
       ],
     },
-    options.isDev
-      ? {
-          label: translate('menu.view.title'),
-          submenu: [
-            { label: translate('menu.view.reloadAllCode'), accelerator: 'CmdOrCtrl+R', click: () => options.reload('reloadAllCode') }, // i18n-ignore: keyboard accelerator.
-            { label: translate('menu.view.reloadWindow'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reload('reloadWindow') }, // i18n-ignore: keyboard accelerator.
-            { type: 'separator' },
-            { role: 'toggleDevTools', label: translate('menu.view.toggleDevTools') },
-            { type: 'separator' },
-            { role: 'resetZoom', label: translate('menu.view.actualSize') },
-            { role: 'zoomIn', label: translate('menu.view.zoomIn') },
-            { role: 'zoomOut', label: translate('menu.view.zoomOut') },
-            { type: 'separator' },
-            { role: 'togglefullscreen', label: translate('menu.view.fullScreen') },
-          ],
-        }
-      : {
-          label: translate('menu.view.title'),
-          submenu: [
-            // Spelled out rather than `role: 'reload'`, which reloads Stacki whatever has focus; the click is routed (reloadRouting.ts).
-            { label: translate('menu.view.reload'), accelerator: 'CmdOrCtrl+R', click: () => options.reload('reloadWindow') }, // i18n-ignore: keyboard accelerator.
-            { label: translate('menu.view.forceReload'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reload('forceReloadWindow') }, // i18n-ignore: keyboard accelerator.
-            { role: 'toggleDevTools', label: translate('menu.view.toggleDevTools') },
-            { type: 'separator' },
-            { role: 'resetZoom', label: translate('menu.view.actualSize') },
-            { role: 'zoomIn', label: translate('menu.view.zoomIn') },
-            { role: 'zoomOut', label: translate('menu.view.zoomOut') },
-            { type: 'separator' },
-            { role: 'togglefullscreen', label: translate('menu.view.fullScreen') },
-          ],
-        },
+    {
+      label: translate('menu.view.title'),
+      submenu: [
+        { label: translate('menu.view.reload'), accelerator: 'CmdOrCtrl+R', click: () => options.reload('refreshSite') }, // i18n-ignore: keyboard accelerator.
+        { label: translate('menu.view.forceReload'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reload('refreshSite') }, // i18n-ignore: keyboard accelerator.
+        options.isDev
+          ? { label: translate('menu.view.reloadAllCode'), accelerator: 'Alt+CmdOrCtrl+R', click: () => options.reload('reloadStacki') } // i18n-ignore: keyboard accelerator.
+          : { label: translate('menu.view.reloadAllCode'), click: () => options.reload('reloadStacki') },
+        { type: 'separator' },
+        { role: 'toggleDevTools', label: translate('menu.view.toggleDevTools') },
+        { type: 'separator' },
+        { role: 'resetZoom', label: translate('menu.view.actualSize') },
+        { role: 'zoomIn', label: translate('menu.view.zoomIn') },
+        { role: 'zoomOut', label: translate('menu.view.zoomOut') },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: translate('menu.view.fullScreen') },
+      ],
+    },
     windowMenu({ isMac: options.isMac, translate }),
   ];
 }

@@ -18,10 +18,12 @@
 /* Drawn on the body above popups: popups sit at 10000 (popup.css) and the rail tooltip's own 600 left the tip hidden beneath. */
 .rail-tooltip.settings-info-tip {
   z-index: 10001;
-  max-width: 260px;
+  /* Never wider than the window less the margin kept on both sides, so a narrow panel or window cannot push it off screen. */
+  max-width: min(280px, calc(100vw - 16px));
   font-weight: 400;
   line-height: 1.45;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
 /* The description a screen reader reads: present in the page, never on screen. */
 .info-hint-text {

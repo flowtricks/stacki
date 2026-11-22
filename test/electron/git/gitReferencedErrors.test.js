@@ -27,7 +27,8 @@ test('deleting the branch you are on throws a reference that survives the wrappe
 
 test('git’s own words pass through without a reference', async () => {
   const git = async (_path, args) => {
-    if (args[0] === 'rev-parse') {
+    // The preflight questions (name check, HEAD, unfinished operation) are answered; only the branch creation fails.
+    if (['rev-parse', 'symbolic-ref', 'check-ref-format'].includes(args[0])) {
       return { stdout: 'topic\n' };
     }
     throw Object.assign(new Error('failed'), { stderr: 'fatal: a branch named x already exists' });

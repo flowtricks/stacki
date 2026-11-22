@@ -244,8 +244,48 @@ export function run(cmd: string, args: readonly string[], cwd: string, options: 
   });
 }
 
+/**
+ * What every git child process is told about its surroundings. Why each one:
+ * - `LC_ALL=C` and `LANGUAGE=C`: the modules that read git's answers match its English wording ("not fully merged", "would be
+ *   overwritten"); on a machine set to another language those matches silently stop working and a question turns into a raw error.
+ * - `GIT_TERMINAL_PROMPT=0`: no terminal exists to answer a credential prompt, so git must fail with a reason instead of waiting out the timeout.
+ * - `GIT_EDITOR=true`, `GIT_MERGE_AUTOEDIT=no`: nothing may open an editor nobody is sitting at.
+ * - `GIT_OPTIONAL_LOCKS=0`: a status read must not take the index lock, or the polling panel races the user's own commit into `index.lock`.
+ */
+const GIT_ENVIRONMENT = {
+  LC_ALL: 'C',
+  LANGUAGE: 'C',
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_EDITOR: 'true',
+  GIT_MERGE_AUTOEDIT: 'no',
+  GIT_OPTIONAL_LOCKS: '0',
+} as const;
+
+/** Both streams of a failed git command, the tail kept: hooks and signing tools print their verdict last. */
+function gitFailureText(error: Error & { stdout?: unknown; stderr?: unknown }): string {
+  const parts = [error.stderr, error.stdout].map((stream) => (typeof stream === 'string' ? stream.trim() : '')).filter((stream) => stream.length > 0);
+  const joined = parts.join('\n');
+  return joined.length > MAIN_LIMITS.gitMessageCharsMax ? `…${joined.slice(-MAIN_LIMITS.gitMessageCharsMax)}` : joined;
+}
+
 export async function git(projectPath: string, args: readonly string[], options: ExecFileOptions = {}) {
-  return run('git', args, projectPath, options);
+  try {
+    return await run('git', args, projectPath, {
+      maxBuffer: MAIN_LIMITS.gitOutputBytesMax,
+      ...options,
+      env: { ...(options.env ?? process.env), ...GIT_ENVIRONMENT },
+    });
+  } catch (error: unknown) {
+    // execFile's message is "Command failed: git <every argument>", which quotes a whole commit message and path list at the person.
+    // The streams carry git's own words, so they replace it; `stdout`, `stderr`, `code` and `killed` stay for the code that matches them.
+    if (error instanceof Error) {
+      const words = gitFailureText(error);
+      if (words.length > 0 && error.message.startsWith('Command failed:')) {
+        error.message = words;
+      }
+    }
+    throw error;
+  }
 }
 
 export async function findFreePort(start: number): Promise<number> {

@@ -3,6 +3,7 @@ import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
 import { parseSyncApply, parseSyncRestore, parseSyncScan, parseUsageRequest } from '../properties/breakpointSyncPlan';
 import { parseCmsCheckRequest, parseCmsConnectionDraft, parseConnectionId, parseSanityLoginRequest } from '../properties/cmsConnections';
+import { parseConstantEdit } from '../properties/cmsConstants';
 import {
   parseRemoteCollectionName,
   parseRemoteColumns,
@@ -82,7 +83,9 @@ import { parsePropertyChange, propertyName, propertySource } from '../properties
 import { parseEdit, parseEditBatchRequest, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
 import { AI_PAYLOADS } from './aiChat';
+import { AGENT_PAYLOADS } from './projectAgentChannels';
 import { parseEmDashInstallRequest } from '../properties/emdashInstall';
+import { parseModelRequest } from '../properties/voice/dictationModel';
 // Complete invoke-channel inventory. Every main-process listener receives the
 // parsed shape below; payload field names retain the existing renderer protocol.
 import { object, text, pathText, boolean, count, optional, nullable, list, dictionary, data, digest, record } from '../core/boundary';
@@ -302,6 +305,8 @@ function parsePickTarget(input: unknown): 'file' {
 export const IPC_PAYLOADS = {
   // The AI chat panel's channels (shared/ipc/aiChat.ts).
   ...AI_PAYLOADS,
+  // Settings > Agents (shared/ipc/projectAgentChannels.ts).
+  ...AGENT_PAYLOADS,
   'instructions:create': object({ ...project, file: parseInstructionFilePath, source: text }),
   'instructions:createFolder': object({ ...project, folder: parseInstructionPath }),
   'instructions:list': object({ ...project }),
@@ -327,6 +332,10 @@ export const IPC_PAYLOADS = {
     auth: optional(parseStudioAuth),
   }),
   'studio:setAuth': object({ ...project, auth: parseStudioAuth }),
+  // The Studio box's upgrade: whether a newer Studio can replace this one, and the upgrade itself (progress echoes the request ID).
+  'studio:upgrade': object({ ...project, requestId: parseStudioRequestId }),
+  'studio:upgradeCheck': pathText,
+  'studio:restore': object({ ...project }),
   'assets:delete': object({ ...relative }),
   'assets:dimensions': object({ ...relative }),
   'assets:list': pathText,
@@ -340,6 +349,9 @@ export const IPC_PAYLOADS = {
   'assets:upload': object({ ...project, destRel: pathText, filePaths: optional(list(pathText)) }),
   'assets:writeText': object({ ...relative, text }),
   'cms:assetRef': object({ ...relative, assetRel: pathText }),
+  // A data file's plain variables: read them, or add, remove or restore one (shared/properties/cmsConstants.ts).
+  'cms:constants': object({ ...relative }),
+  'cms:editConstants': object({ ...relative, edit: parseConstantEdit }),
   'cms:create': object({ ...named }),
   'cms:delete': object({ ...relative }),
   'cms:list': pathText,
@@ -637,6 +649,13 @@ export const IPC_PAYLOADS = {
   'git:status': object({ ...project }),
   'git:unpark': object({ ...project }),
   'git:worktrees': object({ ...project }),
+  // Dictation's on-device model (shared/properties/voice/dictationModel.ts): what is downloaded, a download the person
+  // agreed to in the setup dialog, cancelling it, and removing the model. The model id is the only input: addresses,
+  // hashes and the folder are fixed in main (shared/properties/voice/whisperModels.ts).
+  'dictation:status': nothing,
+  'dictation:download': parseModelRequest,
+  'dictation:cancel': parseModelRequest,
+  'dictation:remove': parseModelRequest,
   'locale:set': parseLocaleSet,
   'microphone:openSettings': nothing,
   'microphone:request': nothing,

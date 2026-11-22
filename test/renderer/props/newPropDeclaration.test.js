@@ -7,7 +7,9 @@
 // the `Astro.props` destructure (with its default), both created when absent,
 // and every other byte kept. The negative space is tested beside each case:
 // names already taken, defaults that do not fit their settings, a second
-// rest binding, a `type Props` the edit cannot extend. Then the readers:
+// rest binding, a `type Props` the edit cannot extend (an attributes prop
+// intersects it), a tag astro/types does not type, a frontmatter that does not
+// parse, and disconnecting an attributes prop. Then the readers:
 // settings tags round-trip through readPropDocumentation, the attributes
 // prop's tag and tooltip read back, and the picker's fit and naming rules.
 
@@ -165,6 +167,51 @@ test('an existing extends list gains HTMLAttributes, and one already there is ke
   assert.equal(fresh.value.frontmatter, 'interface Props extends HTMLAttributes<"section"> {\n}\nconst { ...rest } = Astro.props;\n');
 });
 
+test('the Attributes header’s purple + declares rest typed by the tag, across every Props shape, once', () => {
+  const host = { propKeys: ['title'], restLocal: undefined };
+  const write = (frontmatter, tag) => {
+    const offer = model.restConnectOffer(host, { tag, connected: false });
+    assert.equal(offer.kind, 'declare');
+    return declaration.declaredProp(frontmatter, offer.declaration, new Set(['title']));
+  };
+  // Each tag gets its own attributes type: an input's `type`, an img's `alt`, a button's `disabled`.
+  for (const tag of ['a', 'input', 'img', 'button']) {
+    const out = write('interface Props {\n  title?: string;\n}\nconst { title } = Astro.props;\n', tag);
+    assert.ok(out.ok);
+    assert.equal(
+      out.value.frontmatter,
+      `interface Props extends HTMLAttributes<"${tag}"> {\n  title?: string;\n}\nconst { title, ...rest } = Astro.props;\n`,
+      `${tag}: the extends and the rest entry are the only new text`,
+    );
+    assert.deepEqual(
+      out.value.imports.map((entry) => `${entry.name} ${entry.path} ${entry.typeOnly}`),
+      ['HTMLAttributes astro/types true'],
+    );
+  }
+  const alias = write('type Props = { title?: string };\nconst { title } = Astro.props;\n', 'a');
+  assert.ok(alias.ok);
+  assert.equal(alias.value.frontmatter, 'type Props = { title?: string } & HTMLAttributes<"a">;\nconst { title, ...rest } = Astro.props;\n');
+  const extended = write('interface Props extends Base {}\nconst { title, count = 2 } = Astro.props;\n', 'button');
+  assert.ok(extended.ok);
+  assert.equal(extended.value.frontmatter, 'interface Props extends Base, HTMLAttributes<"button"> {}\nconst { title, count = 2, ...rest } = Astro.props;\n');
+  const custom = write('', 'my-card');
+  assert.ok(custom.ok);
+  assert.match(custom.value.frontmatter, /^interface Props extends astroHTML\.JSX\.HTMLAttributes \{/, 'a custom element: the global type');
+  assert.deepEqual(custom.value.imports, [], 'which needs no import');
+  // Idempotent: once the rest binding exists the + only spreads it, so a second press declares nothing.
+  assert.equal(declaration.readRestBinding(extended.value.frontmatter).local, 'rest');
+  assert.deepEqual(model.restConnectOffer({ propKeys: ['title'], restLocal: 'rest' }, { tag: 'button', connected: false }), { kind: 'spread', local: 'rest' });
+  assert.equal(model.restConnectOffer({ propKeys: [], restLocal: 'rest' }, { tag: 'button', connected: true }), undefined, 'connected: the chip shows');
+  assert.equal(model.restConnectOffer(undefined, { tag: 'a', connected: false }), undefined, 'a page: no prop to connect');
+  assert.equal(model.restConnectOffer(host, { tag: 'Button', connected: false }), undefined, 'an instance: its attributes are its props');
+  assert.equal(
+    model.restConnectOffer({ propKeys: ['rest'], restLocal: undefined }, { tag: 'a', connected: false }).declaration.key,
+    'rest2',
+    'a taken name is numbered',
+  );
+  assert.throws(() => model.restDeclaration({ propKeys: [], restLocal: 'rest' }, 'a'), /passes its attributes on once/);
+});
+
 test('a component passes its other attributes on once', () => {
   const out = declared('const { ...rest } = Astro.props;\n', { key: 'more', kind: 'attributes', tag: 'div' });
   assert.equal(out.error, 'This component already passes its other attributes on as rest.');
@@ -187,6 +234,64 @@ test('the attributes tooltip is rewritten and removed in place', () => {
   assert.ok(added.ok);
   assert.equal(added.value, '/** @attributes Hi */\ninterface Props {}\n');
   assert.equal(declaration.withRestTooltip('', 'Hi').ok, false, 'no interface, nothing to describe');
+});
+
+test('a type Props alias is intersected with HTMLAttributes, a union in parentheses', () => {
+  const object = declared('type Props = { title?: string };\nconst { title } = Astro.props;\n', { key: 'rest', kind: 'attributes', tag: 'img' });
+  assert.ok(object.ok);
+  assert.equal(object.value.frontmatter, 'type Props = { title?: string } & HTMLAttributes<"img">;\nconst { title, ...rest } = Astro.props;\n');
+  assert.equal(declaration.attributesTag(object.value.frontmatter), 'img');
+  assert.deepEqual(object.value.imports, [{ name: 'HTMLAttributes', path: 'astro/types', named: true, typeOnly: true }]);
+  const union = declared('type Props = { a: string } | { b: number };\n', { key: 'rest', kind: 'attributes', tag: 'a' });
+  assert.ok(union.ok);
+  assert.match(union.value.frontmatter, /^type Props = \(\{ a: string \} \| \{ b: number \}\) & HTMLAttributes<"a">;\n/);
+  assert.match(
+    declared('type Props = { a: string };\n', { key: 'label', kind: 'string' }).error,
+    /declares its props as a type/,
+    'a member still cannot be added to one',
+  );
+});
+
+test('a tag astro/types does not type extends the global attributes type, with no import', () => {
+  const custom = declared('', { key: 'rest', kind: 'attributes', tag: 'my-card' });
+  assert.ok(custom.ok);
+  assert.equal(custom.value.frontmatter, 'interface Props extends astroHTML.JSX.HTMLAttributes {\n}\nconst { ...rest } = Astro.props;\n');
+  assert.deepEqual(custom.value.imports, []);
+  assert.equal(declaration.attributesTag(custom.value.frontmatter), undefined, 'no tag: an instance takes any name');
+  assert.equal(declaration.attributesTyped(custom.value.frontmatter), true);
+  assert.equal(declaration.attributesBase('template'), 'astroHTML.JSX.HTMLAttributes');
+  assert.equal(declaration.attributesBase('button'), 'HTMLAttributes<"button">');
+  const typed = declared('interface Props extends HTMLAttributes<"p"> {}\n', { key: 'rest', kind: 'attributes', tag: 'p' });
+  assert.ok(typed.ok);
+  assert.deepEqual(typed.value.imports, [], 'already typed: nothing new names HTMLAttributes');
+});
+
+test('a frontmatter that does not parse is refused, not rewritten', () => {
+  const broken = declared('interface Props {\n  title?: string\nconst { title = } = Astro.props;\n', { key: 'rest', kind: 'attributes', tag: 'img' });
+  assert.equal(broken.error, 'Fix the code in this component’s frontmatter before connecting its attributes.');
+});
+
+test('disconnecting releases the rest binding, its typing and its tooltip, and nothing else', () => {
+  const connected = declared('interface Props extends Base {\n  title?: string;\n}\nconst { title } = Astro.props;\n', {
+    key: 'rest',
+    kind: 'attributes',
+    tag: 'img',
+    tooltip: 'Extra',
+  });
+  assert.ok(connected.ok);
+  assert.equal(
+    declaration.restReleased(connected.value.frontmatter, 'rest'),
+    'interface Props extends Base {\n  title?: string;\n}\nconst { title } = Astro.props;\n',
+  );
+  const alone = declared('', { key: 'rest', kind: 'attributes', tag: 'img' });
+  assert.ok(alone.ok);
+  assert.equal(declaration.restReleased(alone.value.frontmatter, 'rest'), 'interface Props {\n}\n', 'a destructure of the rest alone goes');
+  const alias = declared('type Props = { a: string } | { b: number };\nconst { a } = Astro.props;\n', { key: 'rest', kind: 'attributes', tag: 'a' });
+  assert.ok(alias.ok);
+  assert.equal(declaration.restReleased(alias.value.frontmatter, 'rest'), 'type Props = ({ a: string } | { b: number });\nconst { a } = Astro.props;\n');
+  const read = 'interface Props extends HTMLAttributes<"img"> {}\nconst { ...rest } = Astro.props;\nconst id = rest.id;\n';
+  assert.equal(declaration.restReleased(read, 'rest'), undefined, 'the frontmatter still reads it');
+  assert.equal(declaration.restReleased(read, 'other'), undefined, 'not this component’s rest binding');
 });
 
 // ── What the picker offers ──────────────────────────────────────────────────

@@ -13,7 +13,8 @@ import { err, ok, type Result } from '../../../shared/core/result';
 import { frontmatterGesture } from '../../editor/editGestures';
 import type { EditGesture } from '../../editor/pageEdits';
 import { namesInScope } from '../../editor/dataSuggest';
-import { declaredProp, type PropDeclaration, type PropImport } from '../../editor/propDeclaration';
+import { ATTRIBUTES_TYPE, declaredProp, restReleased, type PropDeclaration, type PropImport } from '../../editor/propDeclaration';
+import { restUsedElsewhere } from '../../editor/attributesBinding';
 import type { EditorModel } from '../../editor/pageView';
 
 /** The gesture declaring the prop, and the name the field binds. */
@@ -51,4 +52,28 @@ function withImports(imports: EditorModel['imports'], needed: readonly PropImpor
   const out = [...imports, ...added];
   assert(out.length <= imports.length + needed.length, 'withImports: at most the needed imports are added');
   return out;
+}
+
+/**
+ * The gesture taking the attributes prop `local` out of the component when its
+ * one spread is disconnected: the rest binding, the Props typing, the tooltip,
+ * and the HTMLAttributes import once nothing names it. Undefined, leaving the
+ * prop as it is, while anything else reads it: another spread or expression in
+ * `markup` (the file's text after the frontmatter), or the frontmatter itself.
+ * Stacki cannot tell whether it wrote the prop, so "nothing reads it" is the test.
+ */
+export function releasedRestGesture(model: EditorModel, local: string, markup: string): EditGesture | undefined {
+  if (restUsedElsewhere(markup, local)) {
+    return undefined;
+  }
+  const frontmatter = restReleased(model.extraFrontmatter, local);
+  if (frontmatter === undefined) {
+    return undefined;
+  }
+  const named = new RegExp(`\\b${ATTRIBUTES_TYPE.name}\\b`).test(frontmatter);
+  const imports = model.imports.filter((entry) => named || entry.name !== ATTRIBUTES_TYPE.name || entry.path !== ATTRIBUTES_TYPE.path);
+  assert(imports.length >= model.imports.length - 1, 'releasedRestGesture: at most the one import goes');
+  const gesture = frontmatterGesture(model, { coalesceKey: undefined, urgency: true }, (shown) => ({ ...shown, extraFrontmatter: frontmatter, imports }));
+  assert(gesture.coalesceKey === undefined, 'A released prop is a step of its own');
+  return gesture;
 }

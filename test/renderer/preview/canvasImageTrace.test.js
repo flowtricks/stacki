@@ -7,12 +7,14 @@
 // that draws it and the node of each instance that rendered it, up to the page. Each test is one spelling of
 // the same question: a direct prop, a renamed prop, an `image.alt` object, a `{...image}` spread, a
 // pass-through, a default, a static alt, no alt, and then the refusals (an expression, a loop, a fixed
-// picture, a computed one, an image outside the open file).
+// picture, a computed one, an image outside the open file). Last, the double click's decision over every one
+// of them (imageDecision): inside a closed component only a picture a prop of the instance decides opens the
+// popup; one the component writes, computes or cannot be read for opens nothing at all.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const loadRenderer = require('../../helpers/rendererModule');
-const { traceImage } = loadRenderer('src/app/model/canvasImageTrace.ts');
+const { traceImage, imageDecision } = loadRenderer('src/app/model/canvasImageTrace.ts');
 const { traceValue, componentScope, topLevelConsts, objectLiteral } = loadRenderer('src/app/model/canvasImageExpression.ts');
 
 const ROOT = '/site';
@@ -324,4 +326,62 @@ test('object literals read shorthand, keyed, quoted and spread entries', () => {
     ['alt=alt', 'width=w', 'class:list=c', '...rest'],
   );
   assert.equal(objectLiteral('image'), undefined);
+});
+
+// Each row: a page, the component sources, the image's marker chain, and what the double click must do with it.
+const DECISIONS = [
+  { name: 'bound to a prop the page passes', page: page('<Card image="/a.png" />'), files: {}, chain: cardChain(), decision: 'edit' },
+  { name: 'bound to a prop the page leaves at its default', page: page('<Card />'), files: {}, chain: cardChain(), decision: 'edit' },
+  { name: 'a member of an object prop', page: PHOTO_PAGE, files: photo('<img src={image.src} />'), chain: photoChain, decision: 'edit' },
+  { name: 'computed in the component', page: PHOTO_PAGE, files: photo('<img src={image ? image : "/x.png"} />'), chain: photoChain, decision: 'nothing' },
+  { name: 'hardcoded in the component', page: PHOTO_PAGE, files: photo('<img src="/fixed.png" />'), chain: photoChain, decision: 'nothing' },
+  {
+    name: 'hardcoded by a nested closed component',
+    page: page('<Card image="/a.png" />'),
+    files: { '/site/src/components/Card.astro': CARD.replace('src={image}', 'src="/fixed.png"') },
+    chain: cardChain(),
+    decision: 'nothing',
+  },
+  {
+    name: 'a component the scan does not list',
+    page: page('<Mystery />', 'import Mystery from "@/components/Mystery.astro";'),
+    files: {},
+    chain: { page: named('Mystery') },
+    decision: 'nothing',
+  },
+  {
+    name: 'a component whose source cannot be read yet',
+    page: PHOTO_PAGE,
+    files: { '/site/src/components/Photo.astro': undefined },
+    chain: { page: named('Photo') },
+    decision: 'nothing',
+  },
+  { name: "the open page's own img", page: page('<img src="/a.png" />'), files: {}, chain: { page: element('img') }, decision: 'edit' },
+  { name: 'a prop the page binds to code', page: page('<Card image={cards[0].photo} />'), files: {}, chain: cardChain(), decision: 'explain' },
+  { name: 'a loop of the page', page: page('{items.map(() => <Card image="/a.png" />)}'), files: {}, chain: cardChain(), decision: 'explain' },
+];
+
+test('a double click opens the popup only for a picture this instance decides', async () => {
+  for (const row of DECISIONS) {
+    const { result } = await trace(row.page, row.files, row.chain);
+    const decision = imageDecision(result);
+    assert.equal(decision.kind, row.decision, `${row.name}: ${JSON.stringify(result)}`);
+    if (decision.kind === 'nothing') {
+      assert.equal(decision.reach, 'internal', `${row.name}: nothing of the instance reaches it`);
+    }
+  }
+});
+
+test('the decision covers every refusal, and only the open file’s own are explained', () => {
+  const refusals = [
+    [{ kind: 'bound', expression: 'x' }, 'explain'],
+    [{ kind: 'loop' }, 'explain'],
+    [{ kind: 'outside', file: '' }, 'explain'],
+    [{ kind: 'fixed', file: 'Photo.astro' }, 'nothing'],
+    [{ kind: 'computed', file: 'Photo.astro', expression: 'a ? b : c' }, 'nothing'],
+    [{ kind: 'unreadable', file: '' }, 'nothing'],
+  ];
+  for (const [refusal, expected] of refusals) {
+    assert.equal(imageDecision({ ok: false, error: refusal }).kind, expected, refusal.kind);
+  }
 });

@@ -181,6 +181,7 @@ function newPropHostOf(
     propKeys: [...keys],
     restLocal,
     create: app.createBoundProp,
+    releaseRest: app.releaseRestProp,
     imageProps: imagePropsOf(frontmatter),
     projectPath,
     fileDirectory: projectDirectoryOf(projectPath, page.path),

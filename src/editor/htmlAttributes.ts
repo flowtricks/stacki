@@ -199,6 +199,31 @@ const GLOBAL_ONLY = new Set([
   'wbr',
 ]);
 
+// The tags `HTMLAttributes<Tag>` from astro/types accepts: the keys of
+// `astroHTML.JSX.DefinedIntrinsicElements` (astro-jsx.d.ts, Astro 7.3), the
+// lowercase ones, since an editor tag is lowercase. Any other tag (a custom
+// element, `template`, a typo) is a type error there, so an attributes prop on
+// one is typed by the tag-less `astroHTML.JSX.HTMLAttributes` instead
+// (propDeclaration.ts). Bounded by being written out.
+const ASTRO_TYPED_TAGS: ReadonlySet<string> = new Set(
+  (
+    'a abbr address area article aside audio b base bdi bdo big blockquote body br button canvas caption cite code col colgroup data datalist dd del ' +
+    'details dfn dialog div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe img input ins ' +
+    'kbd keygen label legend li link main map mark menu menuitem meta meter nav noindex noscript object ol optgroup option output p param picture pre ' +
+    'progress q rp rt ruby s samp slot script section select small source span strong style sub summary sup table tbody td textarea tfoot th thead ' +
+    'time title tr track u ul var video wbr svg animate circle defs desc ellipse filter g image line marker mask metadata path pattern polygon ' +
+    'polyline rect stop switch symbol text tspan use view'
+  ).split(' '),
+);
+
+/** Whether astro/types' `HTMLAttributes<Tag>` takes `tag`: false for a custom element or a tag Astro does not type. */
+export function astroTypesTag(tag: string): boolean {
+  assert(tag.length <= LIMITS.attrCharsMax, 'astroTypesTag: a tag is bounded');
+  const typed = ASTRO_TYPED_TAGS.has(tag);
+  assert(!typed || !tag.includes('-'), 'astroTypesTag: a custom element is never an Astro typed tag');
+  return typed;
+}
+
 // Names Astro reads itself: an instance attribute by one of these is a directive, not an attribute.
 const RESERVED = /^(class:list|set:html|set:text|slot|define:vars)$|^(is|client|server|transition):/;
 
@@ -220,8 +245,14 @@ export function attributeValidOn(name: string, tag: string): boolean {
 
 /** What an attribute name is checked against. */
 export interface AttributeNameContext {
-  /** The element's tag; absent for an instance, whose attribute names are not checked against one. */
+  /** The element's tag; absent for an instance, which is checked against `passedTo` instead. */
   readonly tag: string | undefined;
+  /**
+   * For an instance: the tag its component types its passed attributes by
+   * (`interface Props extends HTMLAttributes<"img">`), as Astro checks the
+   * instance's attributes. Absent when the component names no tag: any name goes.
+   */
+  readonly passedTo?: string | undefined;
   /** The component's declared props, for an instance's attribute list. */
   readonly reserved: readonly string[];
   /** The name the attribute already has, when an existing one is being edited: it is never flagged. */
@@ -253,8 +284,10 @@ export function attributeNameNote(name: string, context: AttributeNameContext, t
   if (RESERVED.test(clean) || context.reserved.includes(clean)) {
     return translate('editor.htmlAttributes.reserved');
   }
-  if (context.tag === undefined || clean.startsWith('{')) {
+  // An element is checked against its own tag, an instance against the tag its component passes attributes to.
+  const tag = context.tag ?? context.passedTo;
+  if (tag === undefined || clean.startsWith('{')) {
     return undefined;
   }
-  return attributeValidOn(clean, context.tag) ? undefined : translate('editor.htmlAttributes.notOnTag', { name: clean, tag: context.tag });
+  return attributeValidOn(clean, tag) ? undefined : translate('editor.htmlAttributes.notOnTag', { name: clean, tag });
 }

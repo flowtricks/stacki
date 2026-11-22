@@ -11,6 +11,7 @@ import { cssLanguage } from '@codemirror/lang-css';
 import { htmlLanguage } from '@codemirror/lang-html';
 import { javascriptLanguage, tsxLanguage } from '@codemirror/lang-javascript';
 import { markdownLanguage } from '@codemirror/lang-markdown';
+import { tomlLanguage } from './tomlSyntax';
 import type { Parser, Tree } from '@lezer/common';
 import { highlightTree, tagHighlighter, tags as t, type Tag } from '@lezer/highlight';
 import { assert } from '../../shared/core/assert';
@@ -34,7 +35,7 @@ export interface CodeToken {
 /** A line of tokens. Joining a line's texts gives the source line, without its break. */
 export type CodeLine = readonly CodeToken[];
 
-export type CodeLanguage = 'astro' | 'commit' | 'css' | 'html' | 'javascript' | 'json' | 'markdown' | 'shell' | 'typescript';
+export type CodeLanguage = 'astro' | 'commit' | 'css' | 'html' | 'javascript' | 'json' | 'markdown' | 'shell' | 'toml' | 'typescript';
 
 export const CODE_TOKEN_RULES: readonly { readonly tag: Tag | readonly Tag[]; readonly style: CodeTokenStyle }[] = [
   { tag: [t.keyword, t.modifier], style: { color: '#c792ea' } },
@@ -64,8 +65,9 @@ export const CODE_TOKEN_RULES: readonly { readonly tag: Tag | readonly Tag[]; re
 ];
 
 // A file extension or a Markdown fence name, and the language it means. Formats
-// with no grammar here (YAML, TOML) stay out: they show as plain text in the
-// same type rather than coloured by a parser that misreads them.
+// with no grammar here (YAML) stay out: they show as plain text in the same type
+// rather than coloured by a parser that misreads them. TOML has a small lexer of
+// its own (tomlSyntax.ts), for Codex's agent definitions.
 const CODE_LANGUAGE_NAMES: Readonly<Record<string, CodeLanguage>> = {
   astro: 'astro',
   bash: 'shell',
@@ -90,6 +92,7 @@ const CODE_LANGUAGE_NAMES: Readonly<Record<string, CodeLanguage>> = {
   sh: 'shell',
   shell: 'shell',
   svg: 'html',
+  toml: 'toml',
   ts: 'typescript',
   tsx: 'typescript',
   typescript: 'typescript',
@@ -285,6 +288,8 @@ function grammarFor(language: Exclude<CodeLanguage, 'astro' | 'commit' | 'shell'
       return htmlLanguage;
     case 'markdown':
       return markdownLanguage;
+    case 'toml':
+      return tomlLanguage;
     case 'json':
       return javascriptLanguage;
     case 'javascript':

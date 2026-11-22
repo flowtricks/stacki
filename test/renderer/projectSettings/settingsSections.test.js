@@ -50,9 +50,9 @@ const roles = model.parseProjectRoles({
 });
 
 test('the root lists the views a role may open, and the rail button follows', () => {
-  assert.deepEqual(model.settingsViewsOf(model.ADMIN_VIEW), ['secrets', 'mcp', 'instructions']);
+  assert.deepEqual(model.settingsViewsOf(model.ADMIN_VIEW), ['secrets', 'mcp', 'instructions', 'agents']);
   assert.deepEqual(model.settingsViewsOf(model.roleViewOf(roles, 'ops')), ['secrets', 'mcp']);
-  assert.deepEqual(model.settingsViewsOf(model.roleViewOf(roles, 'docs')), ['instructions']);
+  assert.deepEqual(model.settingsViewsOf(model.roleViewOf(roles, 'docs')), ['instructions', 'agents']);
   assert.deepEqual(model.settingsViewsOf(model.roleViewOf(roles, 'client')), []);
   assert.equal(model.canRailTab(model.roleViewOf(roles, 'docs'), 'projectSettings'), true);
   assert.equal(model.canRailTab(model.roleViewOf(roles, 'client'), 'projectSettings'), false);

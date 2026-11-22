@@ -3,6 +3,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { ChevronRightIcon } from '../../ui/Icons';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
+import { useShortcutTip } from '../../ui/shortcutTip';
 
 export type ContextAction = 'defaults' | 'open' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
 export interface ContextPosition {
@@ -106,11 +107,15 @@ function MenuItem({
   readonly title?: string;
   readonly onSelect?: () => void;
 }) {
+  // The chord is told in a tooltip after a rest, never printed in the row.
+  const { props, tip } = useShortcutTip(label, shortcut);
   return (
-    <button type="button" role="menuitem" className="ctx-menu-item" disabled={disabled} aria-disabled={disabled} title={title} onClick={onSelect}>
-      <span>{label}</span>
-      {shortcut && <span className="ctx-shortcut">{shortcut}</span>}
-    </button>
+    <>
+      <button type="button" role="menuitem" className="ctx-menu-item" disabled={disabled} aria-disabled={disabled} title={title} onClick={onSelect} {...props}>
+        <span>{label}</span>
+      </button>
+      {tip}
+    </>
   );
 }
 

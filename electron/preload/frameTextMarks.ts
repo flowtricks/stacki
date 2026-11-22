@@ -16,6 +16,7 @@
 
 import type { CanvasTextCatalog, CanvasTextTarget } from '../../shared/properties/canvasText';
 import { assert } from '../../shared/core/assert';
+import { isEditableThroughProps, textReach } from '../../shared/properties/closedComponentReach';
 import { elementsWithPath, pathsOf, runsOf } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
 import { ownClasses } from './frameMeasure';
@@ -37,6 +38,8 @@ interface MarkSource {
 interface TextMatchAt {
   readonly target: CanvasTextTarget;
   readonly element: Element;
+  /** The text nodes that read the words; empty for the words being typed in, which the editor's element stands for. */
+  readonly nodes: readonly Text[];
 }
 
 export function installTextMarks(source: MarkSource): () => void {
@@ -71,15 +74,17 @@ export function installTextMarks(source: MarkSource): () => void {
         : undefined;
     const at = held ? undefined : pointer;
     // The selected instance's marked words first; otherwise any prop text under the pointer, selected or not.
-    const hover = at ? (shown.find(({ element }) => holds(element, at)) ?? hoverBeforeSelect(source, at)) : undefined;
+    const hover = at ? (shown.find((match) => holds(wordsBox(match), at)) ?? hoverBeforeSelect(source, at)) : undefined;
     const chosen =
       shown.find(({ target }) => target.key === picked) ??
       (awaiting === undefined ? undefined : matchesWhere(source.catalog(), (target) => target.key === awaiting?.key)[0]);
     if (!layer.isConnected) {
       document.documentElement.appendChild(layer);
     }
-    layer.replaceChildren(...shown.filter((match) => match !== hover && match !== chosen).map(({ element }) => dashedMark(element.getBoundingClientRect())));
-    const refused = at && hover === undefined ? (refusedAt(source, at) ?? inertTextAt(source, at)) : undefined;
+    layer.replaceChildren(...shown.filter((match) => match !== hover && match !== chosen).map((match) => dashedMark(wordsBox(match))));
+    // Words a closed component writes itself (no prop or slot of the instance reaches them) get nothing: the pointer on them
+    // is the component's own hover (closedComponentReach.ts).
+    const refused = at && hover === undefined ? refusedAt(source, at) : undefined;
     const message = { type: 'avb:text-marks', hover: refused ?? report(hover), picked: report(chosen) };
     const text = JSON.stringify(message);
     if (text !== reported) {
@@ -109,7 +114,7 @@ export function installTextMarks(source: MarkSource): () => void {
     'click',
     (event) => {
       const at = { x: event.clientX, y: event.clientY };
-      const hit = markedNow(source).find(({ element }) => holds(element, at)) ?? hoverBeforeSelect(source, at);
+      const hit = markedNow(source).find((match) => holds(wordsBox(match), at)) ?? hoverBeforeSelect(source, at);
       picked = hit?.target.key;
       const scope = hit?.target.scope;
       awaiting = hit !== undefined && scope !== undefined && !source.focus().has(scope) ? { key: hit.target.key, scope } : undefined;
@@ -135,12 +140,14 @@ function markedNow(source: MarkSource): TextMatchAt[] {
   const element = source.editingElement();
   const typed = source.catalog()?.targets.find((target) => sameKey(target.key, editing));
   // Whether its instance is the selection yet or not (the app's selection can arrive after the editor opens), the words being typed in are picked.
-  const typing = typed && element ? [{ target: typed, element }] : [];
+  const typing = typed && element ? [{ target: typed, element, nodes: [] }] : [];
   const others = matchesWhere(source.catalog(), (target) => marked(target, focus) && !sameKey(target.key, editing));
   // Text whose element is the instance's own root — a Heading's words in its
   // <h2> — is the selection itself, not something inside it: no second
-  // outline or tag is drawn over the selection's.
-  return [...typing, ...others].filter((match) => !isInstanceRoot(match.element, match.target.scope));
+  // outline or tag is drawn over the selection's. A root that frames its words
+  // (a Button's `<a>` with padding around its slot) is not its words: they get
+  // their own outline, hugging them.
+  return [...typing, ...others].filter((match) => !isInstanceRoot(match.element, match.target.scope) || framesWords(match));
 }
 
 // Prop or slot text under the pointer (a prop's words, or the words the page writes inside the instance), whether or not its instance is selected: the words a double click would edit once the component is
@@ -160,8 +167,16 @@ function hoverBeforeSelect(source: MarkSource, at: { readonly x: number; readonl
     if (target.from === undefined || target.scope === undefined || !ancestors.has(target.scope) || !ancestors.has(target.parent)) {
       continue;
     }
+    if (!isEditableThroughProps(textReach({ loaded: true, covering: target }))) {
+      continue;
+    }
     for (const match of matchesWhere(catalog, (candidate) => candidate === target)) {
-      if (pathsOf(match.element).includes(target.scope) || !holds(match.element, at)) {
+      // Words held by an element that carries the instance's own path are the component itself (its hover is the hover),
+      // unless that element is the instance's root and frames them: a Button's `<a><slot /></a>` with padding around the words.
+      if (pathsOf(match.element).includes(target.scope) && !framesWords(match)) {
+        continue;
+      }
+      if (!holds(wordsBox(match), at)) {
         continue;
       }
       // Nested words: the innermost box under the pointer is the one named.
@@ -173,44 +188,32 @@ function hoverBeforeSelect(source: MarkSource, at: { readonly x: number; readonl
   return best;
 }
 
-// Text a prop prints from code that leads to no one string: muted, named as refused, never as something to edit.
+// Text a prop of the instance prints from code that leads to no one string (`body={entry.body}` printed as HTML): a prop
+// decides it, so it is hovered and named as refused, and its double click says where to edit it. Words no prop reaches are
+// not looked for here or anywhere: the component writes them itself, and the canvas offers nothing for them.
 function refusedAt(source: MarkSource, at: { readonly x: number; readonly y: number }) {
   const catalog = source.catalog();
   if (!catalog?.blocked || !source.visible()) {
     return undefined;
   }
-  for (const entry of catalog.blocked.filter((blocked) => /(^|:)prop:/.test(blocked.key))) {
+  const propBlocked = catalog.blocked.filter((blocked) => /(^|:)prop:/.test(blocked.key));
+  assert(isEditableThroughProps(textReach({ loaded: true, covering: { from: 'prop' } })), 'Text a prop prints is the instance’s to change');
+  for (const entry of propBlocked) {
     const runs = [...(runsOf(entry.path) ?? []), ...inlineTextRuns(entry.path)];
     for (const run of runs) {
       const element = run[0]?.parentElement;
-      if (element && element.getBoundingClientRect().width > 0 && holds(element, at) && run.every((node) => node.parentElement === element)) {
+      if (
+        element &&
+        element.getBoundingClientRect().width > 0 &&
+        holds(element.getBoundingClientRect(), at) &&
+        run.every((node) => node.parentElement === element)
+      ) {
         const box = element.getBoundingClientRect();
         return { x: box.left, y: box.top, w: box.width, h: box.height, label: labelOf(element).label, kind: 'refused' };
       }
     }
   }
   return undefined;
-}
-
-// Words a component draws that no target covers (a label computed from a variant table, a footer's links, a count the component
-// formats): muted and named as refused, so the canvas says why nothing edits instead of staying silent. A component's own root
-// that is only its words is the component itself (its hover), and an element outside every component is the page's own.
-function inertTextAt(source: MarkSource, at: { readonly x: number; readonly y: number }) {
-  if (!source.catalog() || !source.visible()) {
-    return undefined;
-  }
-  const element = document.elementFromPoint(at.x, at.y);
-  if (!element || !Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '')) {
-    return undefined;
-  }
-  const paths = pathsOf(element);
-  const drawn = paths.some((path) => path.includes('|'));
-  const instanceRoot = paths.some((path) => !path.includes('|'));
-  if (!drawn || instanceRoot || !hasBox(element)) {
-    return undefined;
-  }
-  const box = element.getBoundingClientRect();
-  return { x: box.left, y: box.top, w: box.width, h: box.height, label: labelOf(element).label, kind: 'refused' };
 }
 
 // The paths of the element under a point and of everything around it.
@@ -266,7 +269,7 @@ function report(match: TextMatchAt | undefined) {
   if (!match) {
     return undefined;
   }
-  const box = match.element.getBoundingClientRect();
+  const box = wordsBox(match);
   // `scope` names the page instance the words belong to, so the app can draw that instance (and no other) as their owner.
   return {
     x: box.left,
@@ -319,7 +322,7 @@ function matchesWhere(catalog: CanvasTextCatalog | undefined, accept: (target: C
         continue;
       }
       seen.add(element);
-      found.push({ target, element });
+      found.push({ target, element, nodes: match.nodes });
     }
   }
   assert(found.length <= MATCHES_MAX, 'Marked text stays within its bound');
@@ -344,13 +347,57 @@ function folded(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+// Whether words sit directly in their instance's root while that root draws a box around them (padding or a border on any
+// side): a Button's `<a class="button"><slot /></a>`. The root is then more than its words, so the words are outlined on
+// their own, hugging them, and the pointer on the padding is the component's own hover. A root with neither (a Heading's
+// `<h2><slot /></h2>`) is its words: the component's hover is the hover, as before.
+function framesWords(match: TextMatchAt): boolean {
+  if (match.nodes.length === 0 || !isInstanceRoot(match.element, match.target.scope)) {
+    return false;
+  }
+  assert(
+    match.nodes.every((node) => match.element.contains(node)),
+    'The words of a match lie inside its element',
+  );
+  // The element's own window computes its style: the frame's, never another document's.
+  const view = match.element.ownerDocument.defaultView;
+  if (view === null) {
+    return false;
+  }
+  const style = view.getComputedStyle(match.element);
+  return FRAME_SIDES.some((side) => cssLength(style.getPropertyValue(`padding-${side}`)) > 0 || cssLength(style.getPropertyValue(`border-${side}-width`)) > 0);
+}
+
+const FRAME_SIDES = ['top', 'right', 'bottom', 'left'] as const;
+
+// A computed length in pixels; anything unreadable (a test DOM computes no styles) is no length at all.
+function cssLength(value: string): number {
+  const pixels = Number.parseFloat(value);
+  return Number.isFinite(pixels) ? pixels : 0;
+}
+
+// The box the words are drawn in. Words framed by their instance's root are measured as the words themselves (their range's
+// box), never the root's, so the outline hugs the text and not the whole component; any other words are their element's box.
+function wordsBox(match: TextMatchAt): DOMRect {
+  const first = match.nodes[0];
+  const last = match.nodes.at(-1);
+  if (first === undefined || last === undefined || !framesWords(match)) {
+    return match.element.getBoundingClientRect();
+  }
+  const range = document.createRange();
+  range.setStartBefore(first);
+  range.setEndAfter(last);
+  const box = range.getBoundingClientRect();
+  assert(Number.isFinite(box.width), 'The words have a measurable box');
+  return box;
+}
+
 function hasBox(element: Element): boolean {
   const box = element.getBoundingClientRect();
   return box.width > 0 && box.height > 0;
 }
 
-function holds(element: Element, point: { readonly x: number; readonly y: number }): boolean {
-  const box = element.getBoundingClientRect();
+function holds(box: DOMRect, point: { readonly x: number; readonly y: number }): boolean {
   return point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom;
 }
 

@@ -3,13 +3,16 @@
 //
 // Method: the pure modules, bundled as the app bundles them. An element's
 // props are an ordered record, a spread keyed by its source (`...rest`), as
-// the page parser writes them. Connecting puts the prop's defaults before the
-// spread and the element's own attributes after it; the cases read that back,
-// replace the defaults, disconnect, and check the negative space: a default
-// named like an own attribute, an element with no spread, class and
+// the page parser writes them. Connecting puts the spread after the element's
+// attributes (an instance overrides them) and keeps class, style and
+// directives after it; the cases read that back, replace the defaults, add a
+// default while connected, disconnect (the spread alone goes), count the
+// markup's other uses of the rest binding, and check the negative space: a
+// default named like an own attribute, an element with no spread, class and
 // directives never counted as defaults. Then the advisory name table: per-tag
-// validity, the names that are always valid, reserved names, and a custom
-// element that takes any name.
+// validity, the names that are always valid, reserved names, a custom element
+// that takes any name, and an instance checked against the tag its component
+// passes attributes to.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,12 +22,28 @@ const names = load('src/editor/htmlAttributes.ts');
 
 const text = (value) => ({ type: 'string', value });
 
-test('connecting writes the defaults before the spread and keeps the element’s own after it', () => {
-  const own = { class: text('card'), 'data-text': { type: 'bare' } };
+test('connecting puts the spread after the element’s attributes, with class and directives after it', () => {
+  const own = { class: text('card'), 'data-text': { type: 'bare' }, 'set:html': { type: 'expr', value: 'html' } };
   const bound = binding.boundAttributes(own, 'rest', [{ name: 'data-testing', value: '1' }]);
-  assert.deepEqual(Object.keys(bound), ['data-testing', '...rest', 'class', 'data-text']);
+  assert.deepEqual(Object.keys(bound), ['data-text', 'data-testing', '...rest', 'class', 'set:html']);
   assert.deepEqual(bound['...rest'], { type: 'spread', value: 'rest' });
-  assert.deepEqual(binding.readAttributesBinding(bound, 'rest'), { defaults: [{ name: 'data-testing', value: '1' }], own: ['class', 'data-text'] });
+  assert.deepEqual(binding.readAttributesBinding(bound, 'rest'), {
+    defaults: [
+      { name: 'data-text', value: '' },
+      { name: 'data-testing', value: '1' },
+    ],
+    own: ['class', 'set:html'],
+  });
+  const again = binding.boundAttributes(bound, 'rest', binding.readAttributesBinding(bound, 'rest').defaults);
+  assert.deepEqual(again, bound, 'connecting twice changes nothing');
+});
+
+test('a new attribute while connected goes before the spread, so an instance can override it', () => {
+  const bound = binding.boundAttributes({ id: text('a') }, 'rest', []);
+  const added = binding.withDefaultAttribute(bound, 'rest', 'data-plain', text('text'));
+  assert.deepEqual(Object.keys(added), ['id', 'data-plain', '...rest']);
+  assert.deepEqual(Object.keys(binding.withDefaultAttribute({ id: text('a') }, 'rest', 'title', text('t'))), ['id', 'title'], 'no spread: last');
+  assert.throws(() => binding.withDefaultAttribute(bound, 'rest', 'id', text('b')), /the attribute is new/);
 });
 
 test('an existing `{...rest}` element reads back with its before and after attributes', () => {
@@ -46,14 +65,18 @@ test('editing the defaults replaces only them; a default named like an own attri
     { name: 'data-two', value: '2' },
     { name: 'id', value: 'shadowed' },
   ]);
-  assert.deepEqual(Object.keys(edited), ['data-two', '...rest', 'id']);
-  assert.deepEqual(edited.id, text('a'), 'the element’s own id wins, as it would in the browser');
+  assert.deepEqual(Object.keys(edited), ['data-two', 'id', '...rest'], 'the id before the spread is a default, replaced by the new one');
+  assert.deepEqual(edited.id, text('shadowed'));
+  const withOwn = { '...rest': { type: 'spread', value: 'rest' }, id: text('a') };
+  const kept = binding.boundAttributes(withOwn, 'rest', [{ name: 'id', value: 'shadowed' }]);
+  assert.deepEqual(Object.keys(kept), ['...rest', 'id']);
+  assert.deepEqual(kept.id, text('a'), 'the element’s own id after the spread wins, as it would in the browser');
 });
 
-test('disconnecting takes out the spread and the defaults, leaving the element’s own attributes', () => {
+test('disconnecting takes out the spread alone; every attribute stays', () => {
   const bound = binding.boundAttributes({ class: text('card') }, 'rest', [{ name: 'data-x', value: '1' }]);
   const out = binding.unboundAttributes(bound, 'rest');
-  assert.deepEqual(out, { class: text('card') });
+  assert.deepEqual(out, { 'data-x': text('1'), class: text('card') });
   assert.deepEqual(binding.unboundAttributes({ id: text('a'), gone: undefined }, 'rest'), { id: text('a') }, 'nothing to disconnect leaves the attributes');
   assert.throws(() => binding.spreadKey('not valid'), /rest binding is an identifier/);
 });
@@ -85,4 +108,24 @@ test('a name is noted only as it is typed for a new or renamed attribute, never 
   assert.equal(names.attributeNameNote('class', on(undefined)), undefined, 'a tag with no class field takes class like any attribute');
   assert.equal(names.attributeNameNote('id', on('div', { taken: ['id'] })), 'id is already on this element.');
   assert.equal(names.attributeNameNote('id', on('div', { own: 'id', taken: [] })), undefined);
+});
+
+test('the markup’s other uses of the rest binding keep the prop', () => {
+  assert.equal(binding.restUsedElsewhere('<img {...rest} />', 'rest'), false, 'the one spread being taken out');
+  assert.equal(binding.restUsedElsewhere('<img {...rest} /><a {...rest}></a>', 'rest'), true, 'another element spreads it');
+  assert.equal(binding.restUsedElsewhere('<img {...rest} /><p>{rest.title}</p>', 'rest'), true, 'an expression reads it');
+  assert.equal(binding.restUsedElsewhere('<img {...rest} /><p>{restless}</p>', 'rest'), false, 'a longer name is not a use');
+  assert.equal(binding.restUsedElsewhere('<img {...$r} />', '$r'), false, 'a dollar in the name is matched literally');
+});
+
+test('an instance is checked against the tag its component passes attributes to', () => {
+  const context = { tag: undefined, passedTo: 'img', reserved: ['size'], own: undefined, taken: [] };
+  assert.equal(names.attributeNameNote('alt', context), undefined);
+  assert.equal(names.attributeNameNote('data-x', context), undefined);
+  assert.equal(names.attributeNameNote('href', context), 'href isn’t an attribute of <img>.');
+  assert.equal(names.attributeNameNote('size', context), 'This is a reserved name.', 'a declared prop still wins');
+  assert.equal(names.attributeNameNote('href', { ...context, passedTo: undefined }), undefined, 'no typed tag: any name');
+  assert.equal(names.astroTypesTag('img'), true);
+  assert.equal(names.astroTypesTag('template'), false, 'astro/types does not type every tag');
+  assert.equal(names.astroTypesTag('my-card'), false);
 });

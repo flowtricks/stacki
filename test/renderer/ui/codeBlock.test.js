@@ -288,8 +288,8 @@ test('CodeInline keeps the host class on a code element', async () => {
 });
 
 test('the install and launch commands are highlighted shell', async () => {
-  const install = await mount(create(code.InstallCommand));
-  assert.equal(install.querySelector('.studio-install-command-box code').textContent, 'npm create stacki@latest');
+  const install = await mount(create(code.InstallCommand, { command: 'npm create stacki@latest', copyLabel: 'Copy npm install command' }));
+  assert.equal(install.querySelector('.studio-install-command-box pre.code-block').textContent, 'npm create stacki@latest');
   assert.ok(tokenCount(install) > 0);
   const launch = await mount(create(code.LocalStep, { installed: true, previewURL: undefined }));
   assert.ok(launch.querySelector('pre.studio-launch-code[aria-label="Launch command"] .code-token'));

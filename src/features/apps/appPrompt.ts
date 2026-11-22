@@ -34,6 +34,7 @@ export async function requestBuildApp(translate: Translator, notify: (message: s
       prompt: appBuildPrompt(),
       delivery: 'draft',
       draftChip: 'app-builder',
+      surface: 'appBuild',
       context: { files: [], nodeRefs: [], findingIds: [] },
     }),
   );

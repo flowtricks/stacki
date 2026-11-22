@@ -18,10 +18,27 @@ import { registerGitAvatarHandler } from './gitAvatarHandlers';
 import { registerGitHubUserSearchHandler } from './githubUserSearchHandlers';
 import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { referencingIpc } from '../lib/referencingIpc';
+import type { createIpcRegistrar } from '../lib/ipcRegistrar';
+import { explainGitFailure, explainingGitFailures } from '../git/gitFailure';
+import { projectPrefix, readHead, requireValidBranchName } from '../git/gitState';
+import { parseStatusRecords } from '../git/gitHistory';
+import { MAIN_LIMITS } from '../lib/mainLimits';
+import { toRecord } from '../../shared/core/record';
+
+type Registrar = ReturnType<typeof createIpcRegistrar>;
+
+// Every failure leaving a git channel goes through `explainGitFailure`: a locked index, a refused sign-in or a missing identity reach the
+// person as the sentence that says what to do, never as git's raw output with a command line in front of it.
+function explainingIpc(ipcMain: { readonly handle: Registrar }): { readonly handle: Registrar } {
+  const handle: Registrar = (channel, listener) => {
+    ipcMain.handle(channel, (event, payload) => explainingGitFailures(async () => listener(event, payload)));
+  };
+  return { handle };
+}
 
 export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
   // Our own refusals (a branch changed, a merge went stale) carry a reference to their translation; this keeps it across IPC.
-  const referencing = { ipcMain: referencingIpc(host.ipcMain) };
+  const referencing = { ipcMain: explainingIpc(referencingIpc(host.ipcMain)) };
   registerGitInfoHandler(referencing);
   registerGitGhStatusHandlers(referencing);
   registerGitUnparkHandlers(referencing);
@@ -31,11 +48,28 @@ export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
   registerGitHubUserSearchHandler(host);
 }
 
+/**
+ * Whether the folder is inside a repository's working tree. "Not a repository" is an answer; git missing, or refusing the folder because
+ * another user owns it, is a failure the person must be told about, because answering "not a repository" there would offer to initialise
+ * a new repository on top of an existing one (or one that cannot be created at all).
+ */
+async function isWorkTree(projectPath: string): Promise<boolean> {
+  try {
+    // A bare repository, or a folder inside `.git`, answers "false" with success: there are no files to work on there.
+    return (await git(projectPath, ['rev-parse', '--is-inside-work-tree'])).stdout.trim() === 'true';
+  } catch (error: unknown) {
+    const code = toRecord(error)?.['code'];
+    const explained = explainGitFailure(error);
+    if (code === 'ENOENT' || (explained instanceof ReferencedError && explained.messageRef.key === 'git.error.unsafeDirectory')) {
+      throw explained;
+    }
+    return false;
+  }
+}
+
 function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
   ipcMain.handle('git:info', async (_event, projectPath) => {
-    try {
-      await git(projectPath, ['rev-parse', '--is-inside-work-tree']);
-    } catch {
+    if (!(await isWorkTree(projectPath))) {
       return { isRepo: false as const };
     }
     const info: GitInfo = {
@@ -77,21 +111,13 @@ function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
     } catch {
       info.remote = undefined;
     }
-    try {
-      const out = (await git(projectPath, ['status', '--porcelain'])).stdout;
-      // Porcelain v1 is "XY path" — two status columns, a space, then the path
-      // (renames as "old -> new"). Don't trim the line before slicing: the
-      // first column is a space for worktree-only changes.
-      const lines = out.split('\n').filter((line) => line.trim());
-      info.dirty = lines.length > 0;
-      info.dirtyFiles = lines.slice(0, 50).map((line) => {
-        const filePath = line.slice(3);
-        const arrow = filePath.lastIndexOf(' -> ');
-        return (arrow === -1 ? filePath : filePath.slice(arrow + 4)).replace(/^"|"$/g, '');
-      });
-    } catch {
-      /* ignore */
-    }
+    // A failed status is not "clean": reporting `dirty: false` there would let a switch or a publish go ahead as if nothing were
+    // unsaved, so the failure is thrown and the panel says so. `-z` and the prefix give project-relative, unquoted paths.
+    const prefix = await projectPrefix(git, projectPath);
+    const out = (await git(projectPath, ['status', '--porcelain=v1', '-z', '--', '.'])).stdout;
+    const changed = parseStatusRecords(out, prefix, MAIN_LIMITS.statusFilesMax);
+    info.dirty = changed.length > 0;
+    info.dirtyFiles = changed.slice(0, 50).map((file) => file.path);
     // Without an upstream there's no count to give — and "0 ahead" would read
     // as "nothing to push" when in fact the branch has never been pushed at
     // all, so the two cases have to stay distinguishable.
@@ -141,7 +167,13 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
   });
 
   ipcMain.handle('git:init', async (_event, projectPath) => {
-    await git(projectPath, ['init', '-b', 'main']);
+    try {
+      await git(projectPath, ['init', '-b', 'main']);
+    } catch {
+      // Git older than 2.28 has no `-b`. Initialise, then point HEAD at main, which is what `-b` does.
+      await git(projectPath, ['init']);
+      await git(projectPath, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
+    }
     return { ok: true as const };
   });
 
@@ -216,8 +248,15 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
   });
 
   ipcMain.handle('git:push', async (_event, { projectPath, branch }) => {
+    // Push the named local branch to the same name, and nothing else: never a force, never "all", never whatever HEAD happens to be.
+    // A detached HEAD has no branch to send, and a name git would not accept is never handed to it.
+    const head = await readHead(git, projectPath);
+    if (head.branch === undefined) {
+      throw new ReferencedError('git.error.detachedHead');
+    }
+    await requireValidBranchName(git, projectPath, branch);
     const environment = await publishingGitEnvironment(projectPath, readPublishConfig(projectPath));
-    await git(projectPath, ['push', '-u', 'origin', branch], {
+    await git(projectPath, ['push', '-u', 'origin', `refs/heads/${branch}:refs/heads/${branch}`], {
       timeout: 120000,
       env: environment,
     });

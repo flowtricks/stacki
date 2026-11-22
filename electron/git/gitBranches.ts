@@ -11,6 +11,7 @@ import { parseConflict, renderResolved } from './conflicts';
 import type { ConflictPart } from './conflicts';
 import { gitErrorDetail, gitErrorFull } from './git';
 import type { Git } from './git';
+import { branchExists, readHead, requireNoUnfinishedOperation, requireValidBranchName } from './gitState';
 
 // Merging a branch and deleting one.
 //
@@ -32,11 +33,8 @@ import type { Git } from './git';
  * conversion: `isDirty` was defined here in HEAD but never called or exported.
  */
 async function currentBranch(git: Git, projectPath: string): Promise<string | undefined> {
-  try {
-    return (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
-  } catch {
-    return undefined;
-  }
+  const head = await readHead(git, projectPath);
+  return head.branch ?? (head.born ? 'HEAD' : undefined);
 }
 
 /**
@@ -110,6 +108,8 @@ async function resolveMerge(
     readonly choices?: Record<string, unknown>;
   },
 ): Promise<MergeOutcome> {
+  requireRefName(branch);
+  await requireNoUnfinishedOperation(git, projectPath);
   const into = await currentBranch(git, projectPath);
   const resolutions = Object.fromEntries(
     Object.entries(choices ?? {}).map(([file, choice]): readonly [string, MergeResolution] => [file, parseMergeResolution(choice)]),
@@ -218,6 +218,9 @@ async function resolveMergeFile(git: Git, projectPath: string, file: string, cho
  * would suggest work arrived that was already present.
  */
 async function mergeBranch(git: Git, { projectPath, branch }: { readonly projectPath: string; readonly branch: string }): Promise<MergeOutcome> {
+  requireRefName(branch);
+  // A merge, rebase or cherry-pick that is still open would be tangled with this one, and the abort below would unwind both.
+  await requireNoUnfinishedOperation(git, projectPath);
   const into = await currentBranch(git, projectPath);
   if (branch === into) {
     throw new ReferencedError('git.error.mergeSelf', { branch });
@@ -348,6 +351,7 @@ async function deleteBranch(
     readonly allowTrunk?: boolean;
   },
 ): Promise<DeleteOutcome> {
+  requireRefName(branch);
   const here = await currentBranch(git, projectPath);
   if (branch === here) {
     throw new ReferencedError('git.error.deleteSelf', { branch });
@@ -420,7 +424,20 @@ async function switchBranch(
     readonly unpark: (branch: string) => Promise<unknown>;
   },
 ): Promise<SwitchOutcome> {
-  const from = (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
+  if (create) {
+    // Asked of git so the rules are its own, and before anything is parked: a refused name must leave the work exactly where it was.
+    await requireValidBranchName(git, projectPath, branch);
+    if (await branchExists(git, projectPath, branch)) {
+      throw new ReferencedError('git.error.branchExists');
+    }
+  } else {
+    requireRefName(branch);
+  }
+  await requireNoUnfinishedOperation(git, projectPath);
+  const head = await readHead(git, projectPath);
+  // Detached HEAD is spelled "HEAD", as git's own `--abbrev-ref` does and as parked work is tagged; before the first commit there is no
+  // branch to leave, so the unborn branch's name stands in.
+  const from = head.branch ?? 'HEAD';
   let parked = false;
   if (!create && from !== branch) {
     parked = await park(from);
@@ -446,6 +463,16 @@ async function switchBranch(
     throw gitFailure(detail, new ReferencedError('git.error.switchFailed', { branch }));
   }
   return { ok: true, from, parked };
+}
+
+/**
+ * A name from the renderer that is about to be an argument to git. One that starts with a dash would be read as an option
+ * (`--abort`, `--output=...`), and an empty or NUL-bearing one is never a ref; none of them is a branch to look for.
+ */
+function requireRefName(name: string): void {
+  if (name.length === 0 || name.startsWith('-') || name.includes('\0')) {
+    throw new ReferencedError('git.error.refInvalid');
+  }
 }
 
 /** A branch name longer than this is not one git would have made; the answer falls back to the trunk. */

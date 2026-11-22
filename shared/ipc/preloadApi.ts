@@ -11,6 +11,9 @@ interface InvokeChannels {
   readonly createInstruction: 'instructions:create';
   readonly createInstructionFolder: 'instructions:createFolder';
   readonly revealInstruction: 'instructions:reveal';
+  readonly listAgents: 'agents:list';
+  readonly saveAgent: 'agents:save';
+  readonly deleteAgent: 'agents:delete';
   readonly projectMetadata: 'project:metadata';
   readonly writeProjectMetadata: 'project:writeMetadata';
   readonly pickProjectFolder: 'project:pickFolder';
@@ -19,6 +22,9 @@ interface InvokeChannels {
   readonly studioStatus: 'studio:status';
   readonly installStudio: 'studio:install';
   readonly setStudioAuth: 'studio:setAuth';
+  readonly upgradeStudio: 'studio:upgrade';
+  readonly studioUpgradeCheck: 'studio:upgradeCheck';
+  readonly restoreStudio: 'studio:restore';
   readonly openProjectDialog: 'project:openDialog';
   readonly createAstroProject: 'project:createAstro';
   readonly parentDialog: 'project:parentDialog';
@@ -49,6 +55,8 @@ interface InvokeChannels {
   readonly deleteCms: 'cms:delete';
   readonly cmsUsage: 'cms:usage';
   readonly cmsAssetRef: 'cms:assetRef';
+  readonly cmsConstants: 'cms:constants';
+  readonly editCmsConstants: 'cms:editConstants';
   readonly resolveImport: 'project:resolveImport';
   readonly cmsMeta: 'cms:meta';
   readonly contentConfig: 'content:config';
@@ -281,11 +289,15 @@ interface InvokeChannels {
   readonly aiPrompt: 'ai:prompt';
   readonly aiSteer: 'ai:steer';
   readonly aiCompact: 'ai:compact';
+  readonly aiAutoCompactGet: 'ai:autoCompactGet';
+  readonly aiAutoCompactSet: 'ai:autoCompactSet';
   readonly aiChatFork: 'ai:chatFork';
   readonly aiChatMove: 'ai:chatMove';
   readonly aiSections: 'ai:sections';
   readonly aiDiff: 'ai:diff';
   readonly aiMentions: 'ai:mentions';
+  readonly aiScreenshot: 'ai:screenshot';
+  readonly aiRecord: 'ai:record';
   readonly aiCancel: 'ai:cancel';
   readonly aiPermission: 'ai:permission';
   readonly aiSetOption: 'ai:setOption';
@@ -300,6 +312,10 @@ interface InvokeChannels {
   readonly setLocale: 'locale:set';
   readonly readUpdateState: 'update:read';
   readonly actOnUpdate: 'update:act';
+  readonly dictationStatus: 'dictation:status';
+  readonly dictationDownload: 'dictation:download';
+  readonly dictationCancel: 'dictation:cancel';
+  readonly dictationRemove: 'dictation:remove';
   readonly microphoneOpenSettings: 'microphone:openSettings';
   readonly microphoneRequest: 'microphone:request';
   readonly microphoneStatus: 'microphone:status';
@@ -345,6 +361,8 @@ export type PreloadBridge = InvokeSurface & {
   readonly onDevExit: (callback: (data: unknown) => void) => () => void;
   readonly onProgress: (callback: (data: unknown) => void) => () => void;
   readonly onStudioProgress: (callback: (data: unknown) => void) => () => void;
+  /** Bytes of the dictation model received so far (shared/properties/voice/dictationModel.ts, parseDownloadProgress). */
+  readonly onDictationProgress: (callback: (data: unknown) => void) => () => void;
   /** The update popup's state changed (shared/ipc/updateState.ts UpdateState). */
   readonly onUpdateState: (callback: (data: unknown) => void) => () => void;
   readonly onAppShareProgress: (callback: (data: unknown) => void) => () => void;

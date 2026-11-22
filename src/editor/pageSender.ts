@@ -46,13 +46,14 @@ export interface SenderDeps {
 }
 
 export function createEntrySender(deps: SenderDeps): (path: string, entry: QueueEntry) => Promise<EntrySent> {
+  const refusals = new LiveRefusals();
   return async (path, entry) => {
     const state = deps.state();
     assert(state !== undefined, 'An entry is sent for an open page');
     deps.update(path, (current) => withSave(current, started(current.save)));
     switch (entry.tag) {
       case 'gesture':
-        return sendGestureEntry(deps, path, entry);
+        return sendGestureEntry(deps, path, entry, refusals);
       case 'code':
         return sendCodeEntry(deps, path, entry);
       default: {
@@ -65,7 +66,37 @@ export function createEntrySender(deps: SenderDeps): (path: string, entry: Queue
 
 // --- Gestures ----------------------------------------------------------------------
 
-async function sendGestureEntry(deps: SenderDeps, path: string, entry: Extract<QueueEntry, { tag: 'gesture' }>): Promise<EntrySent> {
+/** Which refusals of live (mid-drag) gestures the page has already reported. A drag
+ * sends a write per pointer move, and every one the engine refuses for the same reason
+ * is the same news: the first is reported, the rest of that drag are not. Holds one
+ * key, so it is bounded; a committed gesture, or any write of the stream that applies,
+ * clears it. Private mutable state with one owner, the entry sender (AGENTS.md §7). */
+class LiveRefusals {
+  #reported: string | undefined;
+
+  /** Whether this refusal is news the page should report. */
+  report(gesture: EditGesture, reason: RejectionReason): boolean {
+    if (gesture.urgency !== 'live') {
+      this.#reported = undefined;
+      return true;
+    }
+    const key = `${gesture.stream ?? ''}\n${reason}`;
+    if (key === this.#reported) {
+      return false;
+    }
+    this.#reported = key;
+    return true;
+  }
+
+  /** A gesture applied: its stream works again, so a later refusal is news. */
+  applied(gesture: EditGesture): void {
+    if (this.#reported?.startsWith(`${gesture.stream ?? ''}\n`) === true) {
+      this.#reported = undefined;
+    }
+  }
+}
+
+async function sendGestureEntry(deps: SenderDeps, path: string, entry: Extract<QueueEntry, { tag: 'gesture' }>, refusals: LiveRefusals): Promise<EntrySent> {
   const state = deps.state();
   assert(state?.editable === true, 'A gesture is sent for an editable page');
   const origin = state.origin;
@@ -85,6 +116,7 @@ async function sendGestureEntry(deps: SenderDeps, path: string, entry: Extract<Q
   });
   switch (sent.tag) {
     case 'applied':
+      refusals.applied(entry.gesture);
       settle(deps, path, advanced(origin, sent.replies, entry.gesture));
       if (entry.gesture.urgency === true && sent.replies.length > 0) {
         deps.onAppliedUrgentEdit?.();
@@ -97,7 +129,7 @@ async function sendGestureEntry(deps: SenderDeps, path: string, entry: Extract<Q
         // Nothing changed on disk: the gesture itself has no form the engine
         // can plan here. It is taken back, and the page says why (plan §6: a
         // fallback is visible, never silent) — never saved some other way.
-        withdraw(deps, path, now, entry.record, sent.reason);
+        withdraw(deps, path, now, entry.record, { reason: sent.reason, reported: refusals.report(entry.gesture, sent.reason) });
         return { tag: 'sent' };
       }
       advance(deps, path, now);
@@ -288,9 +320,17 @@ function refuse(deps: SenderDeps, path: string, reason: RejectionReason | undefi
 // A gesture the engine cannot plan, taken back: the shown model is the origin
 // with the gestures still queued applied again. Earlier successful requests in
 // this gesture keep their undo information; only the failed request is settled.
-function withdraw(deps: SenderDeps, path: string, origin: PageOrigin, record: EditsRecord, reason: RejectionReason): void {
+function withdraw(
+  deps: SenderDeps,
+  path: string,
+  origin: PageOrigin,
+  record: EditsRecord,
+  refusal: { readonly reason: RejectionReason; readonly reported: boolean },
+): void {
   recordNoChange(record);
-  deps.notice(reason);
+  if (refusal.reported) {
+    deps.notice(refusal.reason);
+  }
   const queued = deps.queue.entries(path);
   const code = queued.some((entry) => entry.tag !== 'gesture');
   deps.update(path, (current) => {

@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { assert } from '../../../shared/core/assert';
 import { ok, type Result } from '../../../shared/core/result';
 import Popup from '../../ui/Popup';
+import type { ReactNode } from 'react';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { messageRef, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
@@ -24,16 +25,17 @@ import { EMPTY_KEEP_LIST, folderLock, keepMatcher, serializeStyleKeepList, style
 import { loadSelectorTab, saveSelectorTab } from './selectorTabPreference';
 import { lockSheetChange, unlockOneChange, unlockSheetChange, type KeepListChange } from './lockChanges';
 import { LockIcon, SweepIcon } from './SelectorIcons';
+import { selectorEmptyState } from './selectorEmptyState';
 import {
   exactPatterns,
   firstRows,
   folderGroups,
-  initialFilter,
   LIST_LOOKAHEAD_VIEWPORTS,
   LIST_PAGE_ROWS,
   listedEntries,
   matchesFilter,
   nextRowLimit,
+  resolveInitialSelectorTab,
   selectorCounts,
   selectorGroups,
   selectorSegments,
@@ -58,6 +60,7 @@ import { lockShownClosed, type RowTransition } from './rowTransitions';
 import { useRowTransitions, type RowTransitionActions } from './useRowTransitions';
 import './selectors.css';
 import { PanelHeader } from '../../ui/PanelHeader';
+import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 
 export interface SelectorsPanelProps {
   readonly project: { readonly path: string };
@@ -116,12 +119,15 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
   const unused = report === undefined ? [] : unusedEntries(report);
   // With no remembered or picked tab, open on the clean-up when there is one, else the locked styles, else
   // All. The opening tab is decided once, from the first full check, and then held: deriving it live would
-  // jump away the moment the last unused style is locked, moving the user off the tab they were on.
+  // jump away the moment the last unused style is locked, moving the user off the tab they were on. Until
+  // the check answers there is no tab (`undefined`), and the panel draws skeletons rather than a wrong one.
   const [opening, setOpening] = useState<SelectorFilter | undefined>(undefined);
-  if (opening === undefined && state.kind === 'ready') {
-    setOpening(initialFilter(selectorCounts(state.value)));
+  const resolved = resolveInitialSelectorTab(chosen, state.kind === 'ready' ? selectorCounts(state.value) : undefined);
+  if (opening === undefined && chosen === undefined && resolved !== undefined) {
+    setOpening(resolved);
   }
-  const filter = chosen ?? opening ?? (report === undefined ? 'all' : initialFilter(selectorCounts(report)));
+  const tab = chosen ?? opening ?? resolved;
+  const filter: SelectorFilter = tab ?? 'all';
 
   const hover = useHoverTip();
   // One path for removing styles, whether all of them or one row: the check
@@ -232,7 +238,7 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
       ) : (
         <>
           <div className="selectors-controls">
-            <FilterTabs report={report} filter={filter} onFilter={setFilter} />
+            {tab === undefined ? <FilterTabsSkeleton /> : <FilterTabs report={report} filter={tab} onFilter={setFilter} />}
             <label className="selectors-search">
               <SearchIcon size={13} />
               <input
@@ -246,10 +252,13 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
           </div>
           <div className="panel-body selectors-body">
             <Banner filter={filter} report={report} checking={checking} />
-            {filter === 'unknown' ? (
+            {tab === undefined ? (
+              <SkeletonRows count={6} />
+            ) : filter === 'unknown' ? (
               <ReasonList
                 report={report}
                 search={search}
+                empty={selectorEmptyState(report, filter, search, translate, () => setFilter('all'))}
                 limit={limit}
                 onMore={more}
                 keepList={keep.stored}
@@ -265,7 +274,7 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
                 locks={sheetLocks}
                 limit={limit}
                 onMore={more}
-                empty={emptyText(report, filter, translate)}
+                empty={selectorEmptyState(report, filter, search, translate, () => setFilter('all'))}
                 keepList={keep.stored}
                 transitions={transitions}
                 onToggleKeep={toggleKeep}
@@ -351,6 +360,15 @@ const FILTER_LABELS: Readonly<Record<SelectorFilter, MessageKey>> = {
   kept: 'selectors.filter.kept',
   all: 'selectors.filter.all',
 };
+
+// The tab row before the first full check names a tab: the same pill, with no tab selected.
+function FilterTabsSkeleton() {
+  return (
+    <div className="selectors-tabs" aria-hidden="true">
+      <Skeleton height="1.5rem" />
+    </div>
+  );
+}
 
 function FilterTabs({
   report,
@@ -542,25 +560,6 @@ function useKeepList(
   return { stored, toggle, toggleSheet, unlockOne };
 }
 
-function emptyText(report: SelectorReport, filter: SelectorFilter, translate: Translator): string {
-  if (report.entries.length === 0) {
-    return translate('selectors.empty.noSelectors');
-  }
-  switch (filter) {
-    case 'unused':
-      return translate('selectors.empty.noUnused');
-    case 'kept':
-      return translate('selectors.empty.noLocked');
-    case 'unknown':
-    case 'all':
-      return translate('selectors.empty.noMatch');
-    default: {
-      const exhaustive: never = filter;
-      return exhaustive;
-    }
-  }
-}
-
 interface RowActions {
   readonly keepList: StoredKeepList | undefined;
   /** The rows animating after a lock click; undefined where rows have no lock. */
@@ -602,11 +601,12 @@ function SelectorGroups({
   readonly report: SelectorReport | undefined;
   readonly sheets: readonly SelectorGroup[];
   readonly locks: SheetLocks | undefined;
-  readonly empty: string;
+  /** What shows when nothing is listed: an empty-state card, or text for the plain list. */
+  readonly empty: ReactNode;
 } & RowActions &
   Paging) {
   if (all.length === 0) {
-    return <p className="selectors-empty">{empty}</p>;
+    return typeof empty === 'string' ? <p className="selectors-empty">{empty}</p> : empty;
   }
   const { groups: sheets, total } = firstRows(all, limit);
   const folders = report === undefined ? [{ folder: undefined, sheets }] : folderGroups(report, sheets);
@@ -733,6 +733,7 @@ function SheetLock({
 // selectors it covers.
 function ReasonList({
   report,
+  empty,
   search,
   limit,
   onMore,
@@ -741,12 +742,11 @@ function ReasonList({
   onToggleKeep,
   hover,
   onRemove,
-}: { readonly report: SelectorReport; readonly search: string } & RowActions & Paging) {
-  const translate = useTranslate();
+}: { readonly report: SelectorReport; readonly search: string; readonly empty: ReactNode } & RowActions & Paging) {
   const translateDescribed = useTranslateDescribed();
   const all = unknownReasons(report, search, transitions?.reasons ?? NO_REASONS);
   if (all.length === 0) {
-    return <p className="selectors-empty">{translate('selectors.empty.certain')}</p>;
+    return empty;
   }
   const { groups: reasons, total } = firstRows(all, limit);
   return (

@@ -12,7 +12,8 @@ import { assert } from '../../shared/core/assert';
 import { useTranslate } from '../lib/i18n/useTranslate';
 import { centralIcon } from './central/CentralIcon';
 import { info as centralInfo } from './central/centralGeometry';
-import { tooltipHost, tooltipPointBelow, useDelayedPlacement, type TooltipPoint } from './delayedTooltip';
+import { tooltipAnchor, tooltipHost, useDelayedPlacement, type TooltipAnchor } from './delayedTooltip';
+import FittedTooltip from './FittedTooltip';
 import './infoHint.css';
 
 const InfoIcon = centralIcon(centralInfo, 12);
@@ -21,7 +22,7 @@ export default function InfoHint({ text }: { readonly text: string }) {
   assert(text.length > 0, 'InfoHint: the explanation is not empty');
   const translate = useTranslate();
   const descriptionId = useId();
-  const tip = useDelayedPlacement(placeTipBelow);
+  const tip = useDelayedPlacement(measureAnchor);
   const button = useRef<HTMLButtonElement>(null);
   return (
     <>
@@ -51,15 +52,15 @@ export default function InfoHint({ text }: { readonly text: string }) {
       </span>
       {tip.value !== undefined &&
         createPortal(
-          <div className="rail-tooltip below settings-info-tip" style={tip.value} role="tooltip" aria-hidden="true">
+          <FittedTooltip className="settings-info-tip" role="tooltip" hidden anchor={tip.value}>
             {text}
-          </div>,
+          </FittedTooltip>,
           tooltipHost(button.current ?? undefined),
         )}
     </>
   );
 }
 
-function placeTipBelow(element: HTMLElement): TooltipPoint {
-  return tooltipPointBelow(element.getBoundingClientRect());
+function measureAnchor(element: HTMLElement): TooltipAnchor {
+  return tooltipAnchor(element.getBoundingClientRect());
 }

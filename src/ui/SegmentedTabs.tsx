@@ -19,6 +19,10 @@ export interface SegmentedTab<T extends string> {
   readonly value: T;
   readonly label: string;
   readonly icon?: ReactNode;
+  /** A small muted note after the label (a count of matches). */
+  readonly badge?: string;
+  /** Shown dimmed, still selectable (a filter with nothing in it now). */
+  readonly dim?: boolean;
 }
 
 /** The most tabs a row holds: a handful fit; more is a caller bug. */
@@ -63,7 +67,7 @@ export function SegmentedTabs<T extends string>({
     trackRef,
     buttonsRef,
     selectedIndex,
-    layoutKey: `${layout}:${tabs.map((tab) => tab.label).join('\u0000')}`,
+    layoutKey: `${layout}:${tabs.map((tab) => `${tab.label}${tab.badge ?? ''}`).join('\u0000')}`,
   });
   const extra = (name: string | undefined): string => (name === undefined ? '' : ` ${name}`);
   return (
@@ -82,11 +86,12 @@ export function SegmentedTabs<T extends string>({
           type="button"
           role="tab"
           aria-selected={value === tab.value}
-          className={`ui-tab${extra(className?.tab)}${value === tab.value ? ' on' : ''}`}
+          className={`ui-tab${extra(className?.tab)}${value === tab.value ? ' on' : ''}${tab.dim === true ? ' is-dim' : ''}`}
           onClick={() => onPick(tab.value)}
         >
           {tab.icon}
           {tab.label}
+          {tab.badge !== undefined && <span className="ui-tab-badge">{tab.badge}</span>}
         </button>
       ))}
     </div>

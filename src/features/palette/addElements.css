@@ -1,0 +1,184 @@
+/* The Add elements panel (AddElementsPanel.tsx): square tiles three to a row, set apart by background fills as across
+   the app; nothing draws a border. */
+
+/* Every measure the panel lines up on. The inset is the panel header's and the search box's 12px, so the title,
+   the box, the headings and the tiles share one start edge. At the end edge the scroll body keeps the 8px
+   scrollbar gutter (scroll-gutter.md) and pads only the rest, so the grid ends where the search box ends and the
+   scroll thumb never lies over a tile. */
+.add-elements {
+  --add-elements-inset: var(--panel-header-padding-start, 12px);
+  --add-elements-scrollbar: 8px;
+  --add-elements-gap: 6px;
+  --add-elements-row-height: 28px;
+  /* A tile is its top padding, the 20px icon, a 6px gap, one line of name and its bottom padding. Every English
+     name fits one line at the panel's narrowest width (en/elements.ts), so every tile is the same and icons and names
+     line up across the grid. A longer language may wrap a name onto more lines: the icon stays at its offset and
+     the row grows, its tiles stretching together. */
+  --add-elements-tile-padding-top: 15px;
+  --add-elements-label-line: 15px;
+  --add-elements-label-height: var(--add-elements-label-line);
+  --add-elements-tile-height: calc(var(--add-elements-tile-padding-top) + 20px + 7px + var(--add-elements-label-height) + 15px);
+}
+
+.add-elements-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-block: 0 12px;
+  padding-inline: var(--add-elements-inset) calc(var(--add-elements-inset) - var(--add-elements-scrollbar));
+}
+
+/* The two top sections, HTML and Astro: the strongest line in the list, set like the panel title. */
+.add-elements-section {
+  display: flex;
+  align-items: center;
+  height: var(--add-elements-row-height);
+  margin: 0;
+  color: var(--text);
+  font-size: var(--panel-header-title-size, 11.5px);
+  font-weight: 600;
+}
+.add-elements-group + .add-elements-section {
+  margin-block-start: 12px;
+}
+
+/* Hover and pressed rules sit under `.add-elements` so they outrank controls.css's `button:hover` fill. */
+
+/* A group's heading: a calm, dim, sentence-case row the same height as a section's, the name at the start
+   edge and the chevron at the end edge, both on the tiles' edges. It is a full-width button so the whole row folds the group. */
+.add-elements-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: var(--add-elements-row-height);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: start;
+  /* controls.css centres a button's content; a heading row reads from its start edge. */
+  justify-content: flex-start;
+}
+.add-elements .add-elements-toggle:hover {
+  background: transparent;
+  color: var(--text);
+}
+.add-elements-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.add-elements-chevron {
+  display: flex;
+  flex: 0 0 12px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+.add-elements-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Three equal columns with one gutter, as wide as the panel allows. Every row is one tile tall; a name that needs a
+   third line in a longer language grows its whole row rather than spilling, and the row's tiles stretch with it. */
+.add-elements-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--add-elements-tile-height), auto);
+  gap: var(--add-elements-gap);
+  padding-block: 2px 8px;
+}
+
+.add-elements-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  min-width: 0;
+  min-height: var(--add-elements-tile-height);
+  /* The icon is anchored at this offset in every tile: the content starts at the top, never centred, so a second
+     line of name below never pushes the icon up. */
+  padding-block: var(--add-elements-tile-padding-top) 15px;
+  /* Narrow on purpose, so at the panel's narrowest width every English word fits whole on its line (en/elements.ts
+     gives long names a short tile name). */
+  padding-inline: 2px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  cursor: grab;
+}
+.add-elements .add-elements-tile:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.add-elements .add-elements-tile:active {
+  background: var(--bg-pressed);
+  cursor: grabbing;
+}
+.add-elements-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  color: var(--text);
+}
+/* The tile in the person's hand: the browser draws it under the pointer, and its place is left as a faint hole. */
+.add-elements-tile.dragged {
+  opacity: 0.4;
+}
+
+.add-elements-icon {
+  display: flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+/* The name sits on one line under the icon, centred across. A name is never cut: a longer language's name wraps,
+   two lines split evenly ("Deleted / text"), and a word wider than the tile, which only a long German or Russian
+   name has, breaks where the line ends as a last resort (`break-word`, not `anywhere`, which would split words that
+   fit on a line of their own). No automatic hyphenation: it split words the line could have kept whole. */
+.add-elements-label {
+  width: 100%;
+  min-height: var(--add-elements-label-height);
+  font-size: 12px;
+  line-height: var(--add-elements-label-line);
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+.add-elements-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.add-elements-tip .code-inline {
+  background: transparent;
+  padding: 0;
+}
+
+/* The Navigator shown over the panel while a tile is dragged (src/app/shell/AppShell.tsx, ElementsTab). */
+.elements-tab {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.elements-drag-navigator {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+}

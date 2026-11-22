@@ -12,6 +12,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
 import type { HTMLAttributes, KeyboardEvent, ReactNode, RefCallback, RefObject } from 'react';
 import useListReorder from '../../ui/useListReorder';
 import { DropLine } from '../../ui/DropLine';
@@ -1007,16 +1008,16 @@ export function PlainerSuggestion(props: { readonly why: string; readonly words:
       </button>
       {rowTip.value !== undefined &&
         createPortal(
-          <div className="rail-tooltip below" role="tooltip" style={rowTip.value}>
+          <FittedTooltip role="tooltip" anchor={rowTip.value}>
             {props.why}
-          </div>,
+          </FittedTooltip>,
           tooltipHost(undefined),
         )}
       {switchTip.value !== undefined &&
         createPortal(
-          <div className="rail-tooltip below" role="tooltip" style={switchTip.value}>
+          <FittedTooltip role="tooltip" anchor={switchTip.value}>
             {tip}
-          </div>,
+          </FittedTooltip>,
           tooltipHost(undefined),
         )}
     </div>

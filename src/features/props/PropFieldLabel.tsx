@@ -11,7 +11,7 @@ import PropTip from './PropTip';
 import { BracesIcon } from '../../ui/Icons';
 import { FieldTypeIcon } from './FieldTypeIcon';
 import { controlLabel, type PropState } from './propFieldModel';
-import { fitOfFieldType, literalOf, type NewPropSeed } from './newPropModel';
+import { defaultForConnectedValue, fitOfFieldType, type NewPropSeed } from './newPropModel';
 import { fieldTooltip } from '../../editor/propDocumentation';
 import { isMediaName } from '../../editor/fieldNames';
 import { arrayItems } from './arrayValue';
@@ -156,7 +156,7 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
   const [conditional, setConditional] = useState(false);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const catalog = useConditionCatalog(bindContext);
-  const seed = seedOf(field, value);
+  const seed = seedOf(field, value, importsText(state.dataContext));
   // Words only: a branch gives text or a prop, which a number or a switch field cannot hold as typed.
   const wordy = seed?.fit === 'text' || seed?.fit === 'content';
   const start = bindContext?.newProp !== undefined && wordy ? startingConditional(value, catalog) : undefined;
@@ -226,7 +226,13 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
 // whether it takes an imported image's URL (typed string) or the image itself.
 // A list field of a child component offers a List prop with its items' fields,
 // starting from the items it holds.
-function seedOf(field: PropState['field'], value: PropState['value']): NewPropSeed | undefined {
+// The file's code the imports are read from, as the asset display reads it (assetImportOf).
+function importsText(context: PropState['dataContext']): string {
+  const imports = context?.imports;
+  return typeof imports === 'string' ? imports : (context?.frontmatter ?? '');
+}
+
+function seedOf(field: PropState['field'], value: PropState['value'], frontmatter: string): NewPropSeed | undefined {
   const list = field.shapeIsList === true;
   const fit = fitOfFieldType(field.type, { numeric: field.numeric, media: isMediaName(field.name), list });
   if (fit === undefined) {
@@ -237,5 +243,5 @@ function seedOf(field: PropState['field'], value: PropState['value']): NewPropSe
     const items = value?.type === 'expr' && arrayItems(value.value) !== undefined ? value.value : '';
     return { fit, label: field.name, value: items, reference, itemFields: itemShapeOf(field.shape) };
   }
-  return { fit, label: field.name, value: literalOf(value), reference };
+  return { fit, label: field.name, value: defaultForConnectedValue(value, fit, frontmatter), reference };
 }

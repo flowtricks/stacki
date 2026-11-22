@@ -3,7 +3,16 @@
 // Why a model: the card, the detail view and the tests read the same numbers, so a count on a row can
 // never disagree with the list it opens.
 import { assert } from '../../../shared/core/assert';
-import { ACCESS_GROUPS, APPS_ACCESS_GROUP, APP_ACCESS_ALL, type ProjectRole, type StaticAccessFeature } from '../../../shared/properties/projectRoles';
+import {
+  ACCESS_GROUPS,
+  ADMIN_ROLE_ID,
+  APPS_ACCESS_GROUP,
+  APP_ACCESS_ALL,
+  can,
+  roleView,
+  type ProjectRole,
+  type StaticAccessFeature,
+} from '../../../shared/properties/projectRoles';
 import type { AppSummary } from '../../../shared/properties/apps';
 import type { Described } from '../../../shared/properties/i18n/messageRef';
 
@@ -37,11 +46,22 @@ export interface PermissionGroupView {
   readonly features: readonly StaticAccessFeature[];
 }
 
+/**
+ * Whether a switch reads as on. `panel:elements` reads its effective state, because a role that holds a design panel has it
+ * by default without naming it (`can`); every other switch is exactly what the role stores.
+ */
+function switchOn(role: ProjectRole, feature: StaticAccessFeature): boolean {
+  if (feature === 'panel:elements' && role.id !== ADMIN_ROLE_ID) {
+    return can(roleView(role), feature);
+  }
+  return role.access.includes(feature);
+}
+
 /** Granted and total switches: every grouped feature plus "Every app". */
 export function permissionCounts(role: ProjectRole): { readonly granted: number; readonly total: number } {
   const features = ACCESS_GROUPS.flatMap((group) => group.features.map((item) => item.feature));
   const total = features.length + 1;
-  const granted = features.filter((feature) => role.access.includes(feature)).length + (role.access.includes(APP_ACCESS_ALL) ? 1 : 0);
+  const granted = features.filter((feature) => switchOn(role, feature)).length + (role.access.includes(APP_ACCESS_ALL) ? 1 : 0);
   assert(granted <= total, 'Role permissions: granted switches are among the listed ones');
   assert(total > 1, 'Role permissions: the grid lists features');
   return { granted, total };
@@ -90,7 +110,7 @@ export function permissionGroups(
     const all: PermissionRowView[] = group.features.map((item): PermissionRowView => ({
       feature: item.feature,
       label: translateDescribed({ message: item.label, messageRef: item.labelRef }),
-      checked: granted.has(item.feature),
+      checked: item.feature === 'panel:elements' ? switchOn(role, item.feature) : granted.has(item.feature),
     }));
     const counted = all.length;
     if (group.label === APPS_ACCESS_GROUP) {

@@ -1,7 +1,7 @@
 // Goal: the words a component prints from a prop show their hover outline and name under the
 // pointer with nothing selected, not only after the component is selected. A prop bound to code
-// the editor cannot follow shows a muted, refused look instead; the page's own slot text and
-// words outside every component are left to the element hover as before.
+// the editor cannot follow shows a refused look instead. Words a component writes itself (no prop
+// or slot of the instance reaches them) get nothing: they are the component's own hover.
 // Method: a JSDOM page tagged like a rendered Card and Button with per-element boxes, a stubbed
 // `elementFromPoint`, animation frames run at once, no focus at all, and the frame's
 // `avb:text-marks` messages to the app collected and checked.
@@ -124,11 +124,11 @@ test('words the page writes inside an unselected instance hover too (a Button la
   assert.equal(hover.scope, '0.1', 'and names the instance it belongs to');
 });
 
-test('words a component draws that no target covers hover muted, as refused', () => {
+test('words a component draws that no prop or slot reaches get no outline, no label and no double click', () => {
   move(40, 230);
-  const hover = posted.at(-1).hover;
-  assert.ok(hover);
-  assert.equal(hover.kind, 'refused');
+  assert.equal(posted.at(-1).hover, undefined, "the pointer on them is the component's own hover");
+  const words = document.querySelector('[data-avb-p="Input.astro|0.0.1"]');
+  assert.equal(findTextHit(CATALOG, { target: words, clientX: 40, clientY: 230 }), undefined, 'a double click opens no editor on them');
 });
 
 test("a component's own root that is only its words stays the component's hover, not a second outline", () => {

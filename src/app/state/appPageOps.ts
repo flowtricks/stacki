@@ -49,7 +49,7 @@ import {
 } from './appShortcuts';
 import { useScopeSamples } from './scopeSamples';
 import { useDesktopProjectSources, useImportedValues } from './appImportedValues';
-import { newPropGesture } from '../model/newPropGesture';
+import { newPropGesture, releasedRestGesture } from '../model/newPropGesture';
 import type { PropDeclaration } from '../../editor/propDeclaration';
 import { err, ok, type Result } from '../../../shared/core/result';
 import type { ConnectionKeyCopy, PageTemplateDraft } from '../../../shared/properties/pageTemplate';
@@ -406,8 +406,21 @@ export function useSelectionModel(
     holdForNextEdit(made.value.gesture);
     return ok(made.value.local);
   };
+  // An attributes prop whose last spread is being disconnected: its removal is
+  // held for the spread's edit, so Disconnect is one undo step.
+  const releaseRestProp = (local: string): void => {
+    const source = coreState.pageStateRef.current.pageState?.source;
+    if (model === undefined || source === undefined) {
+      return;
+    }
+    const released = releasedRestGesture(model, local, source.slice(model.bodyStart ?? 0));
+    if (released !== undefined) {
+      holdForNextEdit(released);
+    }
+  };
   return {
     createBoundProp,
+    releaseRestProp,
     ensureCollectionQuery,
     ensureDataImport,
     frontmatterCode,

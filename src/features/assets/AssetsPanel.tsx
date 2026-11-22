@@ -618,7 +618,15 @@ function AssetContents({
   readonly search: { readonly searching: boolean; readonly query: string };
 }) {
   const translate = useTranslate();
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  // The body is state, not a ref: the item list measures against it in a layout effect, which runs before this
+  // ancestor's ref is attached (AssetItems.tsx, `scroller`). Setting the state re-renders once with the element.
+  const [scroller, setScroller] = useState<HTMLDivElement | undefined>(undefined);
+  // The search's scroll keeper writes the body's scroll position, so it reads the body through a ref.
+  const scrollerRef = useRef<HTMLDivElement | undefined>(undefined);
+  const attachScroller = useCallback<React.RefCallback<HTMLDivElement>>((element) => {
+    scrollerRef.current = element ?? undefined;
+    setScroller(element ?? undefined);
+  }, []);
   useSearchScroll(scrollerRef, search);
   const dimensions = dimensionCacheFor(props.project.path);
   const onItemKey = useCallback(
@@ -627,7 +635,7 @@ function AssetContents({
   );
   return (
     <div
-      ref={scrollerRef}
+      ref={attachScroller}
       className={`panel-body asset-body ${state.dragTarget === state.cwd ? 'drop' : ''}`}
       onDragOver={actions.dragOverInto(state.cwd)}
       onDragLeave={(event) => {
@@ -645,7 +653,7 @@ function AssetContents({
         view={view}
         items={files}
         label={translate('assets.items.label')}
-        scrollerRef={scrollerRef}
+        scroller={scroller}
         onItemKey={onItemKey}
         renderItem={(file, slot) => (
           <AssetTile file={file} view={view} slot={slot} dimensions={dimensions} props={props} state={state} actions={actions} showPath={search.searching} />
@@ -662,13 +670,13 @@ function AssetContents({
 // A search starts at the top of its results and ends back where the folder was scrolled to. The
 // folder's position is noted from scroll events while no search is on (the browser clamps it as the
 // results shrink the list, and that clamp must not overwrite it), and put back when the query clears.
-function useSearchScroll(scrollerRef: React.RefObject<HTMLElement>, search: { readonly searching: boolean; readonly query: string }): void {
+function useSearchScroll(scrollerRef: React.MutableRefObject<HTMLElement | undefined>, search: { readonly searching: boolean; readonly query: string }): void {
   const folderScrollTop = useRef(0);
   const searchingRef = useRef(false);
   const wasSearching = useRef(false);
   useEffect(() => {
     const scroller = scrollerRef.current;
-    if (scroller === null) {
+    if (scroller === undefined) {
       return undefined;
     }
     const note = (): void => {
@@ -682,7 +690,7 @@ function useSearchScroll(scrollerRef: React.RefObject<HTMLElement>, search: { re
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
     searchingRef.current = search.searching;
-    if (scroller !== null) {
+    if (scroller !== undefined) {
       if (search.searching) {
         scroller.scrollTop = 0;
       } else if (wasSearching.current) {
