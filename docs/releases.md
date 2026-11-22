@@ -47,6 +47,30 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.12
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.12.
+- **Features**
+  - voice: pure core for dictation: cleanup, dictionary, commands, session, waveform
+  - ai: voice input in the chat box: hold to talk, hands-free, live waveform, cleanup, commands
+  - update: redesign the up-to-date popup, no outline or divider
+  - ai: see each subagent at work and open its own transcript
+  - i18n: thirteen more languages, Arabic and Hebrew right to left
+  - voice: on-device Whisper dictation with model download
+  - ai: screenshots and screen recording in the composer
+  - ai: composer, mentions, sessions and project agents
+  - studio: upgrade an installed Studio and show its status
+  - cms: file fields and constants in CMS settings
+  - style: CSS value chips in the code editor
+  - app: Add elements panel, rail in Settings, roles cache and fixes
+  - i18n: catalogs for the new features in every language
+- **Fixes**
+  - preview: cmd+R in the canvas refreshes the site, not Stacki
+  - i18n: the rail tooltip's shortcut keeps its gap in right to left
+  - studio: add, delete and reorder show before a slow render lands
+- **Documentation**
+  - voice: competitor research for voice dictation (Wispr Flow and rivals)
+
 ## 1.4.11
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.11.
