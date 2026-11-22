@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEMO_ASSETS, DEMO_MANIFEST_ASSET, demoAssetName } from '../scripts/demoAssets';
+import { DEMO_ASSETS, DEMO_FILE_BYTES_MAX, DEMO_MANIFEST_ASSET, demoAssetName } from '../scripts/demoAssets';
 import { RELEASE_DIRECTORIES, RELEASE_EXCLUDED_FILES, RELEASE_FILES } from '../scripts/releaseFiles';
 import { record } from '../src/shared/validation';
 
@@ -114,4 +114,27 @@ test('normal Studio keeps its server and its dev client', async () => {
   assert.match(integration, /apply: 'serve'/, 'The dev markers still run only in the dev server');
   const build = await readFile(path.join(studio, 'scripts/build.ts'), 'utf8');
   assert.match(build, /external: \['\/@vite\/client'\]/, 'The dev preview client still uses the real Vite client');
+});
+
+// 1.4.12: a 20.8 MB studio.js passed every check here, then stacki.build refused the manifest (its
+// worker accepts files up to 20,000,000 bytes) after the release was public. The build now writes the
+// client as UTF-8 and stops on a file over the site's bound, so the Candidate fails instead.
+test('the demo build stops on a file the site would refuse, and writes the client as UTF-8', async () => {
+  assert.equal(DEMO_FILE_BYTES_MAX, 20_000_000, "the site's worker/demo.ts FILE_BYTES_MAX");
+  const source = await readFile(path.join(studio, 'scripts/buildDemoAssets.ts'), 'utf8');
+  assert.match(source, /bytes\.length <= DEMO_FILE_BYTES_MAX/, 'every released file is held to the bound');
+  assert.match(source, /charset: 'utf8'/, 'the client keeps its catalogs as UTF-8, not \\u escapes');
+});
+
+test('a demo already built here is within the bound, file by file', async (context) => {
+  const upload = path.join(studio, '.studio/demo-release/upload');
+  const names = await readdir(upload).catch(() => undefined);
+  if (names === undefined) {
+    context.skip('no demo built here');
+    return;
+  }
+  for (const name of DEMO_ASSETS) {
+    const size = (await lstat(path.join(upload, demoAssetName(name)))).size;
+    assert.ok(size <= DEMO_FILE_BYTES_MAX, `${name} is ${size} bytes, over ${DEMO_FILE_BYTES_MAX}`);
+  }
 });
