@@ -7,10 +7,12 @@ import InstallProgress from './InstallProgress';
 import LocalStep from './LocalStep';
 import CloudStep from './CloudStep';
 import './studioSetup.css';
-import InstallCommand from './InstallCommand';
+import InstallCommand, { STUDIO_CREATE_COMMAND } from './InstallCommand';
+import StudioUpgrade, { type ManageAction } from './StudioUpgrade';
+import { StudioActionSkeleton, StudioDisclosure, StudioSettingsSection, StudioStatusCard } from './StudioStatusCard';
+import { SignInProviderIcon } from './signInProviderIcons';
 import SignInDialog from './SignInDialog';
 import type { StudioAuthConfig, StudioAuthKind } from '../../../shared/ipc/studioAuth';
-import InfoHint from '../../ui/InfoHint';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 
@@ -30,42 +32,64 @@ export default function StudioSetup(props: Props) {
   const [revision, setRevision] = useState(0);
   const setup = useSetup(props.projectPath, revision);
   const entry = studioEntry(setup.status, setup.activity, translate);
+  const manage: ManageAction = {
+    label: entry.label,
+    disabled: entry.kind === 'checking' || setup.activity.kind === 'busy',
+    onClick: () => {
+      if (setup.status?.kind === 'missing') {
+        // Ask how people sign in first; installation starts when this is answered.
+        setSignInDialog('add');
+        return;
+      }
+      props.onOpen?.();
+      setOpen(true);
+    },
+  };
   return (
     <section className="studio-project-settings" aria-label={translate('studioSetup.name')}>
-      <div className="studio-project-settings-card">
-        <div className="studio-install-actions">
-          <div className="studio-install-option">
-            <p className="studio-install-status" data-state={setup.status?.kind} role="status">
-              {entry.status}
-              <InfoHint text={translate('settings.studio.info')} />
-            </p>
-            <button
-              disabled={entry.loading || setup.activity.kind === 'busy'}
-              onClick={() => {
-                if (setup.status?.kind === 'missing') {
-                  // Ask how people sign in first; installation starts when this is answered.
-                  setSignInDialog('add');
-                  return;
-                }
-                props.onOpen?.();
-                setOpen(true);
-              }}
-            >
-              {entry.label}
+      <StudioSettingsSection title={translate('studioSetup.install.title')} info={translate('settings.studio.info')}>
+        {setup.status?.kind === 'installed' ? (
+          <StudioUpgrade
+            projectPath={props.projectPath}
+            installedVersion={setup.status.version}
+            manage={manage}
+            onUpgraded={() => setRevision((value) => value + 1)}
+          />
+        ) : (
+          <StudioStatusCard
+            line={entry.kind === 'checking' ? { kind: 'checking' } : { kind: 'text', state: entry.kind, text: entry.status, tag: undefined }}
+            actions={
+              entry.kind === 'checking' ? (
+                <StudioActionSkeleton />
+              ) : (
+                <button type="button" className="primary" disabled={manage.disabled} onClick={manage.onClick}>
+                  {manage.label}
+                </button>
+              )
+            }
+          >
+            <StudioDisclosure summary={translate('studioSetup.upgrade.manual')}>
+              <InstallCommand command={STUDIO_CREATE_COMMAND} copyLabel={translate('studioSetup.command.copyAria')} />
+            </StudioDisclosure>
+          </StudioStatusCard>
+        )}
+      </StudioSettingsSection>
+      {setup.status?.kind === 'installed' && (
+        <StudioSettingsSection title={translate('studioSetup.auth.groupLabel')}>
+          <div className="studio-auth-current">
+            <span className="studio-auth-current-mark" aria-hidden="true">
+              <SignInProviderIcon provider={setup.status.signIn} size={20} />
+            </span>
+            <div className="studio-auth-current-text" role="status">
+              <span className="studio-auth-current-name">{signInName(setup.status.signIn, translate)}</span>
+              {signInSaved && <span className="studio-auth-current-note">{translate('studioSetup.auth.change.saved')}</span>}
+            </div>
+            <button type="button" onClick={() => setSignInDialog('change')}>
+              {translate('studioSetup.auth.change')}
             </button>
           </div>
-          <InstallCommand />
-        </div>
-        {setup.status?.kind === 'installed' && (
-          <div className="studio-auth-current">
-            <p className="studio-install-status" role="status">
-              {translate('studioSetup.auth.current', { type: signInName(setup.status.signIn, translate) })}
-              {signInSaved && ` · ${translate('studioSetup.auth.change.saved')}`}
-            </p>
-            <button onClick={() => setSignInDialog('change')}>{translate('studioSetup.auth.change')}</button>
-          </div>
-        )}
-      </div>
+        </StudioSettingsSection>
+      )}
       {signInDialog !== 'closed' && (
         <SignInDialog
           mode={signInDialog}
@@ -229,27 +253,30 @@ function SetupHeader({ busy, onClose }: { readonly busy: boolean; readonly onClo
   );
 }
 
-function studioEntry(status: StudioStatus | undefined, activity: StudioActivity, translate: Translator) {
-  if (!status) {
-    return activity.kind === 'error'
-      ? { status: translate('studioSetup.entry.failed'), label: translate('studioSetup.entry.open'), loading: false }
-      : { status: translate('studioSetup.entry.checking'), label: translate('studioSetup.entry.checkingLabel'), loading: true };
+// What the status card says and what its main button does, per installation state. While the check runs there is
+// nothing to say yet: the card draws skeletons, and the label is only for the disabled button the type still needs.
+type StudioEntry =
+  | { readonly kind: 'checking'; readonly label: string }
+  | { readonly kind: 'installed' | 'missing' | 'blocked' | 'failed'; readonly status: string; readonly label: string };
+
+function studioEntry(status: StudioStatus | undefined, activity: StudioActivity, translate: Translator): StudioEntry {
+  if (status === undefined) {
+    if (activity.kind === 'error') {
+      return { kind: 'failed', status: translate('studioSetup.entry.failed'), label: translate('studioSetup.entry.open') };
+    }
+    return { kind: 'checking', label: translate('studioSetup.entry.manage') };
   }
   switch (status.kind) {
     case 'installed':
-      return {
-        status: translate('studioSetup.entry.installed', { version: status.version }),
-        label: translate('studioSetup.entry.manage'),
-        loading: false,
-      };
+      return { kind: 'installed', status: translate('studioSetup.entry.installed', { version: status.version }), label: translate('studioSetup.entry.manage') };
     case 'missing':
-      return { status: translate('studioSetup.entry.missing'), label: translate('studioSetup.entry.add'), loading: false };
+      return { kind: 'missing', status: translate('studioSetup.entry.missing'), label: translate('studioSetup.entry.add') };
     case 'blocked':
-      return {
-        status: translate('studioSetup.entry.blocked'),
-        label: translate('studioSetup.entry.review'),
-        loading: false,
-      };
+      return { kind: 'blocked', status: translate('studioSetup.entry.blocked'), label: translate('studioSetup.entry.review') };
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
   }
 }
 

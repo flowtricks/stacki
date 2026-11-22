@@ -158,6 +158,15 @@ async function prepareHistory(origin: string, git: (...args: readonly string[]) 
   return head;
 }
 
+/** The git subcommand of an argument list: the first argument that is not a `-c` setting or its value. */
+function gitSubcommand(args: readonly string[]): string | undefined {
+  let index = 0;
+  while (index < args.length && args[index] === '-c') {
+    index += 2;
+  }
+  return args[index];
+}
+
 function historyFixture(draft: string, origin: string) {
   let commands = 0;
   let grants = 0;
@@ -174,7 +183,8 @@ function historyFixture(draft: string, origin: string) {
     },
     (context, args, input, options) => {
       commands++;
-      if (args[0] === 'log') {
+      // The subcommand follows any `-c <name>=<value>` settings (Desktop's history log runs with `-c core.quotepath=off`).
+      if (gitSubcommand(args) === 'log') {
         logCommands.push(args);
       }
       return publishGit(

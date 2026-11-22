@@ -116,7 +116,7 @@ export async function publishedStudio(version: string): Promise<StudioRelease> {
   }
 }
 
-async function validateStudio(directory: string, project: string, onProgress: (update: StudioInstallUpdate) => void): Promise<void> {
+export async function validateStudio(directory: string, project: string, onProgress: (update: StudioInstallUpdate) => void): Promise<void> {
   const node = resolveNodeBin();
   if (!node) {
     throw new Error(translateMain('error.studio.nodeMissing'));

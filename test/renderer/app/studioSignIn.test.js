@@ -186,7 +186,8 @@ test('the secret commands and redirect URI have Copy buttons', async () => {
 test('an installed Studio shows its sign-in type and Change edits only that, with a warning', async () => {
   const state = await fixture({ ...missing, kind: 'installed', version: '0.1.48', signIn: 'passkey' });
   try {
-    assert.match(document.body.textContent, /Sign-in: Passkeys/);
+    const signInName = () => document.querySelector('.studio-auth-current-name').textContent;
+    assert.equal(signInName(), 'Passkeys');
     await click(button('Change'));
     assert.match(document.querySelector('dialog').textContent, /new credentials or invites/);
     assert.equal(radios().find((radio) => radio.checked) && labelOf(radios().find((radio) => radio.checked)), 'Passkeys');
@@ -194,7 +195,7 @@ test('an installed Studio shows its sign-in type and Change edits only that, wit
     await click(button('Save sign-in type'));
     assert.deepEqual(state.changes, [{ projectPath: '/project', auth: { kind: 'github' } }]);
     assert.equal(state.installs.length, 0);
-    assert.match(document.body.textContent, /Sign-in: GitHub/);
+    assert.equal(signInName(), 'GitHub');
     assert.match(document.body.textContent, /Deploy Studio to apply it/);
   } finally {
     await state.close();

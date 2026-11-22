@@ -81,6 +81,7 @@ export function Settings(props: Props) {
         takesSlotText={component?.slots.includes('default') ?? false}
         slotOptions={slotOptions(project, document.file, source, selected)}
         allowAttrs={takesAttributes(current, component)}
+        attributesTag={current?.kind === 'component' ? component?.extendsTag : undefined}
         projectClasses={project.classes}
         bindContext={bindContext}
         loopContext={{ ...bindContext, frontmatter: page.frontmatter }}

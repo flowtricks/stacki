@@ -110,6 +110,36 @@ async function installReleaseWithMode(
   }
 }
 
+// Puts a kept backup back as the Studio folder: the same swap an update does, with the backup as the incoming
+// folder and the current one set aside under a new name, so the restore can itself be undone by hand. Retained
+// paths (settings, secrets, state) stay with the project, exactly as in an update.
+export async function restoreBackup(target: string, backupName: string) {
+  const directory = path.resolve(target);
+  if (path.basename(directory) !== 'studio') {
+    throw new Error('Restores target a project’s studio directory');
+  }
+  if (!/^backup-[0-9A-Za-z.-]+$/.test(backupName)) {
+    throw new Error('A backup is a folder named backup-…');
+  }
+  const metadata = await updateStorage(path.dirname(directory));
+  const source = path.join(metadata, backupName);
+  const kept = await lstat(source);
+  if (!kept.isDirectory() || kept.isSymbolicLink()) {
+    throw new Error('The backup must be a real directory');
+  }
+  const current = await lstat(directory);
+  if (!current.isDirectory() || current.isSymbolicLink()) {
+    throw new Error('Studio must be a real directory');
+  }
+  const lock = await open(path.join(metadata, 'update.lock'), 'wx');
+  try {
+    await activate(directory, source, path.join(metadata, `backup-replaced-${randomUUID()}`));
+  } finally {
+    await lock.close();
+    await rm(path.join(metadata, 'update.lock'), { force: true });
+  }
+}
+
 async function activate(directory: string, staging: string, backup: string) {
   const preserved = (await readdir(directory)).filter(retainedPath);
   const moved: string[] = [];

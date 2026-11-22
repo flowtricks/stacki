@@ -7,6 +7,7 @@ import type { MainHost } from './mainHost';
 import { translateMain } from '../lib/mainLocale';
 import type { StudioInstallResult } from '../../shared/ipc/studioSetup';
 import { createStudioProgress } from '../project/studioProgress';
+import { checkStudioUpgrade, restoreStudio, upgradeStudio } from '../project/studioUpgrade';
 import { writeStudioSignInFile } from '../project/studioAuthFile';
 import type { StudioAuthResult } from '../../shared/ipc/studioSetup';
 
@@ -22,6 +23,21 @@ export function registerStudioHandlers(
       return await setStudioAuth(project, options.auth, desktopVersion());
     } catch (error: unknown) {
       return { kind: 'error', message: errorMessage(error) };
+    }
+  });
+  host.ipcMain.handle('studio:upgradeCheck', (_event, projectPath) =>
+    checkStudioUpgrade(path.dirname(host.assertInProject(path.join(projectPath, 'studio'))), desktopVersion()),
+  );
+  host.ipcMain.handle('studio:restore', (_event, options) =>
+    restoreStudio(path.dirname(host.assertInProject(path.join(options.projectPath, 'studio'))), desktopVersion()),
+  );
+  host.ipcMain.handle('studio:upgrade', async (_event, options) => {
+    const project = path.dirname(host.assertInProject(path.join(options.projectPath, 'studio')));
+    const progress = createStudioProgress({ projectPath: options.projectPath, requestId: options.requestId }, (value) => host.send('studio:progress', value));
+    try {
+      return await upgradeStudio(project, desktopVersion(), progress.update);
+    } finally {
+      progress.close();
     }
   });
   host.ipcMain.handle('studio:install', async (_event, options): Promise<StudioInstallResult> => {

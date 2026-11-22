@@ -127,6 +127,10 @@ export function PromptInput(props: PromptInputProps) {
         }
         return false;
       }
+      case 'previousTab':
+      case 'nextTab':
+        // This picker has no filter tabs: the keys stay the editor's.
+        return false;
       default: {
         const exhaustive: never = key;
         return exhaustive;

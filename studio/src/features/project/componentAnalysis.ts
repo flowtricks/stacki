@@ -1,5 +1,5 @@
 import { assert } from '../../../vendor/stacki/shared/core/assert';
-import { forwardsRest, parseSlots, rootTag, defaultSlotInline } from '../../../vendor/stacki/electron/parse/astroComponentApi';
+import { forwardsRest, parseExtendsTag, parseSlots, rootTag, defaultSlotInline } from '../../../vendor/stacki/electron/parse/astroComponentApi';
 import { componentSchema } from '../components/componentSchema';
 import { numericStyleBindings } from '../preview/numericStyleBindings';
 
@@ -90,6 +90,7 @@ async function readOptional(file: string, read: (file: string) => Promise<string
 
 async function analyzeComponent(file: string, source: string, read: (file: string) => Promise<string>) {
   const renderTag = rootTag(source);
+  const extendsTag = parseExtendsTag(source);
   return {
     fields: await componentSchema(file, source, read),
     slots: parseSlots(source),
@@ -98,6 +99,8 @@ async function analyzeComponent(file: string, source: string, read: (file: strin
     // A `...rest` spread on Astro.props: its instances take free-form attributes,
     // as Desktop's scan reads it (electron/properties/propDefaults.ts).
     hasRest: forwardsRest(source),
+    // The tag Props takes its attributes from (`extends HTMLAttributes<"img">`), which instances are checked against.
+    ...(extendsTag === undefined ? {} : { extendsTag }),
     ...(renderTag === undefined ? {} : { renderTag }),
   };
 }
