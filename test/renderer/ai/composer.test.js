@@ -8,6 +8,10 @@
 // a turn runs. No native select is drawn anywhere in the composer. Voice input: a tap latches hands-free and a hold is push
 // to talk; the waveform and the phrase being spoken show at once; finished phrases are cleaned, written with the project's
 // names, and understood as commands (send, new line, scratch that); a refused microphone says so and opens nothing.
+// On-device dictation (Whisper) with a fake engine host and a fake microphone: without the model, a press downloads it
+// with no dialog, shows the bytes as a ring on the button, and listens by itself when it is ready; a second press cancels;
+// a failed download says why and offers Retry; an installed model listens, and a phrase followed by a pause lands cleaned
+// in the box; a computer too slow for the standard model is offered the small one; a runtime that cannot run says so.
 // Method: bundle the real panel and store with esbuild, mount them in jsdom against a fake preload
 // (window.avb) that records every call, and push events through its listener as main would. Layout and
 // colour are checked in the Electron render probe, not here: jsdom has no layout.
@@ -18,6 +22,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor, waitForSteady } = require('../../helpers/waitFor.js');
 
 const output = repoPath('node_modules/.stacki-test/composer.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -33,6 +38,9 @@ esbuild.buildSync({
       "export { formattersFor } from './shared/core/i18n/format';",
       "export { agentBadge } from './src/features/ai/agentSwitch';",
       "export { VoiceEnvironmentContext } from './src/features/ai/voice/voiceEnvironment';",
+      "export { createDictationStore } from './src/features/ai/voice/dictationStore';",
+      "export { createWhisperRecognition } from './src/features/ai/voice/whisperEngine';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'tsx',
@@ -188,6 +196,8 @@ function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { c
     aiPrompt: record('aiPrompt', { ok: true, value: { turn: TURN } }),
     aiSteer: record('aiSteer', { ok: true, value: { turn: TURN, outcome: 'steered' } }),
     aiCompact: record('aiCompact', { ok: true, value: { started: true } }),
+    aiAutoCompactGet: record('aiAutoCompactGet', { percent: undefined }),
+    aiAutoCompactSet: record('aiAutoCompactSet', (payload) => ({ percent: payload.percent })),
     aiCancel: record('aiCancel', { ok: true }),
     aiSetOption: record('aiSetOption', { ok: true, value: { set: true } }),
     aiChatUpdate: record('aiChatUpdate', { ok: true, value: summary }),
@@ -210,6 +220,19 @@ function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { c
     microphoneStatus: record('microphoneStatus', () => microphone),
     microphoneOpenSettings: record('microphoneOpenSettings', { ok: true }),
     aiMentions: record('aiMentions', () => ({ ok: true, value: [{ kind: 'file', path: 'src/components/HeroSection.astro', name: 'HeroSection.astro' }] })),
+    // The panel reads the review preference and the project's agent definitions when it opens, and listens
+    // for definition files changing; a project with no agents and the default preferences.
+    settings: record('settings', () => ({
+      sound: false,
+      usageCountsEnabled: true,
+      appsPersonHidden: false,
+      aiAskBeforeTrust: false,
+      aiTrackChanges: true,
+      aiReviewChanges: false,
+      codeChips: true,
+    })),
+    listAgents: record('listAgents', () => ({ agents: [], paired: [], truncated: false })),
+    onInstructionsChanged: () => () => undefined,
     platform: 'darwin',
   };
   return { calls, listeners };
@@ -226,6 +249,14 @@ async function settle() {
 async function mount(context, over) {
   ai.resetAiStore();
   ai.forgetDangerousModeConfirmations();
+  // Dictation's notices are toasts: the test is the toast owner and keeps what was shown.
+  toasts.length = 0;
+  context.after(
+    ai.subscribeErrorToasts(
+      (notice) => toasts.push(notice),
+      () => undefined,
+    ),
+  );
   window.localStorage.clear();
   if (over?.agent === 'codex') {
     window.localStorage.setItem('stacki.ai.agent', 'codex');
@@ -279,6 +310,23 @@ const click = async (element) => {
     element.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
   });
   await settle();
+};
+// The microphone's tip is the app's own, drawn after a rest on the button: rest, read it, leave.
+const tipOf = async (element) => {
+  element.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true, cancelable: true, relatedTarget: document.body }));
+  // The tip appears after its rest; poll for it instead of guessing how long that takes.
+  const text = await waitFor({
+    what: 'the tooltip',
+    read: async () => {
+      await act(async () => undefined);
+      return [...document.querySelectorAll('[role="tooltip"]')].at(-1)?.textContent;
+    },
+    until: (value) => value !== undefined && value !== '',
+  });
+  await act(async () => {
+    element.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true, cancelable: true, relatedTarget: document.body }));
+  });
+  return text;
 };
 const key = async (target, init) => {
   await act(async () => {
@@ -393,8 +441,11 @@ test('the model chip names the model and effort; its menu lists models with numb
   await click(chip);
   const labels = rows().map((row) => row.querySelector('.menu-label').textContent);
   assert.deepEqual(labels, ['Opus 5.5', 'Fable 5.2', 'Sonnet 5.5', 'Haiku 5.5', 'Effort', 'Ultracode', 'More models', 'Agent', 'Reset to defaults']);
-  assert.equal(rowNamed('Opus 5.5').querySelector('.menu-key').textContent, '1');
-  assert.equal(rowNamed('Haiku 5.5').querySelector('.menu-key').textContent, '4');
+  // A row's digit is told in a tooltip and to screen readers, never printed in the row.
+  assert.equal(rowNamed('Opus 5.5').getAttribute('aria-keyshortcuts'), '1');
+  assert.equal(rowNamed('Haiku 5.5').getAttribute('aria-keyshortcuts'), '4');
+  assert.equal(rowNamed('Opus 5.5').querySelector('.menu-key') === null, true);
+  assert.doesNotMatch(rowNamed('Opus 5.5').textContent, /1$/);
   assert.equal(rowNamed('Sonnet 5.5').querySelectorAll('.menu-check svg').length, 1, 'a check on the current model');
   assert.equal(rowNamed('Opus 5.5').querySelectorAll('.menu-check svg').length, 0);
   assert.match(rowNamed('Effort').textContent, /Medium/);
@@ -470,21 +521,21 @@ test('More models holds the rest, and Agent switches provider (a started chat sa
   );
 });
 
-test('the account header above the box is the agent switcher: Claude and Codex with state badges, a check, and a new chat on Codex', async (context) => {
+test('the footer ⋯ is the agent switcher and account menu: Claude and Codex with state badges, a check, then the account; a new chat on Codex', async (context) => {
   const { calls, container } = await mount(context);
-  const trigger = container.querySelector('.ai-account-switch');
-  assert.ok(trigger, 'the logo and name above the box are a button');
+  assert.equal(container.querySelector('.ai-account-switch') ?? undefined, undefined, 'no account row above the box any more');
+  const trigger = container.querySelector('.ai-status-line button[aria-label="Account options"]');
+  assert.ok(trigger, 'a ⋯ at the end of the line under the box');
   assert.equal(trigger.getAttribute('aria-haspopup'), 'menu');
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
-  assert.match(trigger.getAttribute('aria-label'), /Change agent/);
-  assert.ok(trigger.querySelector('svg'), 'the agent mark');
-  assert.ok(trigger.querySelector('.ai-account-name'), 'the name truncates (ellipsis in aiShell.css) instead of wrapping');
+  assert.match(trigger.getAttribute('title'), /^Claude/, 'the tooltip names the active agent');
   await click(trigger);
   assert.equal(trigger.getAttribute('aria-expanded'), 'true');
   const list = [...document.querySelectorAll('[role="menu"]')].at(-1);
-  assert.deepEqual(
-    [...list.querySelectorAll('.menu-label')].map((label) => label.textContent),
-    ['Claude', 'Codex'],
+  assert.deepEqual([...list.querySelectorAll('.menu-label')].map((label) => label.textContent).slice(0, 2), ['Claude', 'Codex']);
+  assert.ok(
+    [...list.querySelectorAll('.menu-label')].some((label) => label.textContent === 'Sign out'),
+    'the account section follows',
   );
   assert.deepEqual(
     [...list.querySelectorAll('.menu-pill')].map((pill) => pill.textContent),
@@ -516,7 +567,7 @@ test('the agent badge says Ready, Sign in or Not installed from the setup state,
   assert.equal(ai.agentBadge(state(undefined, { state: 'failed', message: 'x' }), 'codex'), undefined);
 });
 
-test('the Mode menu: heading, the agent’s descriptions, numbers, Recommended on Auto, a check on the current mode', async (context) => {
+test('the Mode menu: heading, numbers, Recommended on Auto, a check on the current mode', async (context) => {
   const { calls, live } = await mount(context);
   await live(CLAUDE_OPTIONS);
   const chip = byLabel('Mode');
@@ -529,13 +580,11 @@ test('the Mode menu: heading, the agent’s descriptions, numbers, Recommended o
     ['Auto', 'Manual', 'Accept edits', 'Plan', 'Bypass permissions'],
   );
   assert.deepEqual(
-    modes.map((row) => row.querySelector('.menu-key').textContent),
+    modes.map((row) => row.getAttribute('aria-keyshortcuts')),
     ['1', '2', '3', '4', '5'],
   );
   assert.match(modes[0].textContent, /Recommended/);
-  assert.match(modes[0].textContent, /Claude handles permission decisions/);
-  assert.match(modes[1].textContent, /Always ask before making changes/);
-  assert.match(modes[4].textContent, /Accepts all permissions/);
+  assert.equal(document.querySelectorAll('[role="menu"] .menu-description').length, 0, 'the agent’s descriptions are tooltips, never paragraphs');
   assert.equal(modes[1].querySelectorAll('.menu-check svg').length, 1);
   assert.equal(modes.filter((row) => row.textContent.includes('Recommended')).length, 1);
   await key(document.activeElement, { key: '3' });
@@ -713,8 +762,48 @@ test('the context ring: neutral, amber from 70%, red from 90%; the panel says N 
   await push(listeners, [{ kind: 'usage', used: 41250, size: 1000000 }]);
   assert.equal(ring().getAttribute('data-tone'), 'neutral');
   await click(document.querySelector('.ai-ring'));
-  assert.match(document.querySelector('.ai-ring-panel').textContent, /41,250 tokens of 1,000,000 · 4%/);
+  const panel = document.querySelector('.ai-ring-panel');
+  assert.equal(panel.querySelector('.ai-ring-percent').textContent, '4%', 'the percentage is the big number');
+  assert.match(panel.querySelector('.ai-ring-tokens').textContent, /of 1M tokens/, 'the muted line gives the tokens, compact');
+  assert.equal(panel.querySelector('.ai-ring-bar').getAttribute('data-tone'), 'blue');
+  assert.ok(panel.querySelector('.ai-ring-fill'), 'a bar with a fill');
+  assert.ok(panel.querySelector('.ai-ring-auto button'), 'Claude offers the Auto-compact at picker');
+  assert.equal(panel.querySelector('.ai-ring-compact').textContent, 'Compact');
+  assert.equal(panel.querySelector('.ai-ring-auto button').textContent, 'Auto: default', 'one short line, never wrapping; the long words are its tooltip');
+  assert.equal(panel.querySelector('.ai-ring-auto').textContent.includes('Auto-compact at'), false);
   assert.equal(ai.contextSentence(undefined, ai.ENGLISH_TRANSLATE, ai.formattersFor('en').formatNumber), 'The agent has not reported its context window yet.');
+});
+
+test('before the agent reports a window the panel is one clean card: title, an empty track, and a one-line caption', async (context) => {
+  await mount(context);
+  await click(document.querySelector('.ai-ring'));
+  const panel = document.querySelector('.ai-ring-panel');
+  assert.equal(panel.querySelector('.ai-ring-title').textContent, 'Context');
+  assert.equal(panel.querySelector('.ai-ring-percent') ?? undefined, undefined, 'no percentage yet');
+  assert.ok(panel.querySelector('.ai-ring-bar'), 'the track is there');
+  assert.equal(panel.querySelector('.ai-ring-fill') ?? undefined, undefined, 'nothing filled');
+  assert.equal(panel.querySelector('.ai-ring-tokens').textContent, 'Context fills as you chat');
+  assert.equal(panel.querySelector('.ai-ring-empty') ?? undefined, undefined, 'no icon block or sentence of its own');
+  assert.equal(panel.querySelector('.ai-ring-actions').children.length, 2, 'Compact and the picker share one row');
+});
+
+test('the context panel opens on click only: hover shows a tip, a second click closes, Escape closes and the ring gets focus back', async (context) => {
+  const { listeners } = await mount(context);
+  await push(listeners, [{ kind: 'usage', used: 420, size: 1000 }]);
+  const ring = document.querySelector('.ai-ring');
+  assert.equal(await tipOf(ring), 'Context 42% used', 'hover only tells the percentage');
+  assert.equal(document.querySelector('.ai-ring-panel') ?? undefined, undefined, 'hover opens nothing');
+  await click(ring);
+  assert.ok(document.querySelector('.ai-ring-panel'), 'a click opens it');
+  assert.equal(ring.getAttribute('aria-expanded'), 'true');
+  assert.ok(document.querySelector('.ai-ring-panel').contains(document.activeElement), 'focus moved into the panel');
+  await click(ring);
+  assert.equal(document.querySelector('.ai-ring-panel') ?? undefined, undefined, 'a second click on the ring closes it');
+  await click(ring);
+  await key(document.activeElement, { key: 'Escape' });
+  await settle();
+  assert.equal(document.querySelector('.ai-ring-panel') ?? undefined, undefined, 'Escape closes it');
+  assert.equal(document.activeElement, ring, 'the ring has the keyboard again');
 });
 
 test('Compact: offered to Claude when idle, calls compact, waits while a turn runs', async (context) => {
@@ -738,8 +827,9 @@ test('Compact is not offered to an agent that cannot compact, though the ring st
   await live(CODEX_OPTIONS);
   await push(listeners, [{ kind: 'usage', used: 500, size: 1000 }]);
   await click(document.querySelector('.ai-ring'));
-  assert.match(document.querySelector('.ai-ring-panel').textContent, /500 tokens of 1,000 · 50%/);
+  assert.equal(document.querySelector('.ai-ring-percent').textContent, '50%');
   assert.ok(document.querySelector('.ai-ring-compact') === null);
+  assert.ok(document.querySelector('.ai-ring-auto') === null, 'Codex cannot take the setting, so the row is hidden');
 });
 
 test('the plus menu offers images and commands; choosing commands puts a slash in an empty box', async (context) => {
@@ -749,7 +839,8 @@ test('the plus menu offers images and commands; choosing commands puts a slash i
   await click(rowNamed('Commands and skills'));
   assert.equal(inputText(), '/');
   await click(byLabel('Add to message'));
-  assert.equal(rowNamed('Commands and skills').disabled, true, 'a command can only start an empty box');
+  assert.equal(rowNamed('Commands and skills'), undefined, 'a command can only start an empty box, so the row is hidden otherwise');
+  assert.equal(document.querySelector('[role="menu"] .menu-note') ?? undefined, undefined, 'no paragraph in the menu');
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -759,6 +850,7 @@ function fakeVoice() {
   const state = { recognizers: [], meters: [], nowMs: 1000 };
   const environment = {
     isSupported: () => true,
+    detectEngine: async () => ({ kind: 'online' }),
     createRecognition: () => {
       const recognizer = {
         continuous: false,
@@ -794,7 +886,7 @@ function fakeVoice() {
 
 const pointer = async (type) => {
   await act(async () => {
-    byLabelStartingWith('Dictate', 'Stop dictation').dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true }));
+    (byLabelStartingWith('Dictate', 'Stop dictation') ?? micButton()).dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true }));
   });
   await settle();
 };
@@ -806,6 +898,15 @@ const speak = async (recognizer, results, resultIndex = 0) => {
   await settle();
 };
 const voiceText = () => document.querySelector('.ai-voice-text')?.textContent;
+const draftText = () => document.querySelector('.ai-dictation-draft')?.textContent;
+const toasts = [];
+const lastToast = () => toasts.at(-1)?.message ?? '';
+const runToast = async (label) => {
+  const action = toasts.at(-1)?.recovery?.find((recovery) => recovery.label === label);
+  assert.ok(action, `the toast offers ${label}`);
+  await act(async () => action.run());
+  await settle();
+};
 
 test('a tap latches hands-free: the line and waveform show at once, spoken phrases are cleaned and land in the box', async (context) => {
   const voice = fakeVoice();
@@ -817,20 +918,21 @@ test('a tap latches hands-free: the line and waveform show at once, spoken phras
   assert.equal(voice.current().continuous, true, 'hands-free keeps listening across pauses');
   assert.equal(voice.current().interimResults, true);
   assert.equal(voice.current().lang, 'en-US', 'the recognizer listens for the interface language');
-  assert.match(voiceText(), /Hands-free/, 'the hint says how to stop and which commands exist');
+  assert.match(voiceText(), /Say “send”/, 'the hint names the commands');
   await speak(voice.current(), [['um hello there', false]]);
-  assert.equal(voiceText(), 'Hello there', 'the phrase being spoken shows cleaned');
+  assert.equal(draftText(), 'Hello there', 'the phrase being spoken shows cleaned, as a draft in the box');
+  assert.equal(inputText(), '', 'the draft is not text');
   await speak(voice.current(), [['um fix the the header comma please', true]]);
   assert.equal(inputText(), 'Fix the header, please');
   await speak(
     voice.current(),
     [
       ['Fix the header comma please', true],
-      ['new line add a test', true],
+      ['new line. Add a test', true],
     ],
     1,
   );
-  assert.equal(inputText(), 'Fix the header, please\nAdd a test');
+  assert.equal(inputText(), 'Fix the header, please\n\nAdd a test');
   assert.equal(voice.state.meters.length, 1, 'one meter for the session');
   voice.state.meters[0].onBars(Array.from({ length: 28 }, () => 0.5));
   await settle();
@@ -938,33 +1040,461 @@ test('a microphone the system keeps off opens nothing and says what to switch on
   await pointer('pointerup');
   assert.equal(voice.state.recognizers.length, 0, 'no recognizer, no meter');
   assert.equal(voice.state.meters.length, 0);
-  assert.match(document.querySelector('.ai-dictation-notice').textContent, /Microphone access is off/);
+  assert.match(lastToast(), /Microphone access is off/);
   assert.ok(document.querySelector('.ai-voice-line') === null);
-  await click(document.querySelector('.ai-dictation-settings'));
+  await runToast('Open System Settings');
   assert.equal(callsNamed(calls, 'microphoneOpenSettings').length, 1);
 });
 
-test('a recognizer error stops the session and names the cause', async (context) => {
+test('a network error while online says the build has no speech service, and the button then says so', async (context) => {
   const voice = fakeVoice();
   await mount(context, { voice: voice.environment });
   await pointer('pointerdown');
   await pointer('pointerup');
   await act(async () => voice.current().onerror({ error: 'network' }));
   await settle();
-  assert.match(document.querySelector('.ai-dictation-notice').textContent, /could not reach the speech service/);
+  const text = lastToast();
+  assert.match(text, /isn’t available in this build of Stacki/);
+  assert.doesNotMatch(text, /connection/, 'the connection is fine; never blame it');
   assert.equal(voice.current().stopped, 1);
+  assert.equal(await tipOf(byLabel('Dictate')), 'Dictation isn’t available in this build');
+  const opened = voice.state.recognizers.length;
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  assert.equal(voice.state.recognizers.length, opened, 'a second press opens nothing that would fail the same way');
 });
 
-test('the microphone shows its privacy note', async (context) => {
+test('a network error while offline asks to reconnect', async (context) => {
   const voice = fakeVoice();
   await mount(context, { voice: voice.environment });
-  assert.match(byLabel('Dictate').title, /Stacki stores no audio/);
+  // An own property shadows jsdom's getter for this test only.
+  Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false });
+  context.after(() => delete window.navigator.onLine);
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await act(async () => voice.current().onerror({ error: 'network' }));
+  await settle();
+  assert.match(lastToast(), /this computer is offline/);
+});
+
+test('no microphone and an interruption each name their own cause', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await act(async () => voice.current().onerror({ error: 'audio-capture' }));
+  await settle();
+  assert.match(lastToast(), /No microphone was found/);
+  await act(async () => voice.current().onend());
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await act(async () => voice.current().onerror({ error: 'aborted' }));
+  await settle();
+  assert.match(lastToast(), /was interrupted/);
+});
+
+test('an Electron build without an on-device model explains itself before any microphone opens', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: { ...voice.environment, detectEngine: async () => ({ kind: 'none', reason: 'serviceMissing' }) } });
+  await settle();
+  assert.equal(await tipOf(byLabel('Dictate')), 'Dictation isn’t available in this build');
+  await pointer('pointerdown');
+  assert.equal(voice.state.recognizers.length, 0);
+  assert.match(lastToast(), /isn’t available in this build of Stacki/);
+});
+
+test('an installed on-device model is used', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: { ...voice.environment, detectEngine: async () => ({ kind: 'onDevice' }) } });
+  await settle();
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  await settle();
+  assert.equal(voice.current().processLocally, true);
+});
+
+test('the microphone has a custom tooltip of one short line, no native title and no privacy paragraph', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  assert.equal(byLabel('Dictate').getAttribute('title') ?? undefined, undefined, 'no native tooltip');
+  assert.equal(await tipOf(byLabel('Dictate')), 'Click to dictate or hold to talk');
 });
 
 test('a platform with no recognizer says voice input is unavailable', async (context) => {
   const none = { ...fakeVoice().environment, isSupported: () => false, createRecognition: () => undefined };
   await mount(context, { voice: none });
-  assert.equal(byLabel('Dictate').title, 'Voice input is not available');
+  assert.equal(await tipOf(byLabel('Dictate')), 'Voice input is not available');
   await pointer('pointerdown');
-  assert.match(document.querySelector('.ai-dictation-notice').textContent, /not available here/);
+  assert.match(lastToast(), /not available here/);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// On-device dictation. The Whisper host, the model channels and the microphone are fakes; no worker, model or audio.
+
+const BASE_TOTAL = 568_491_146; // The Best tier's download, the default model.
+
+function fakeWhisper({
+  install = { kind: 'installed', sizeBytes: BASE_TOTAL },
+  transcripts = [],
+  decodeMs = 500,
+  load = { ok: true, value: undefined },
+  outcomes = [],
+  holdDecodes = false,
+  // The last transcript answers every later decode, as a phrase decoded again reads the same.
+  sticky = false,
+} = {}) {
+  // The store reads the chosen model when it is made, before mount clears storage: a test's choice must not leak into the next.
+  window.localStorage.clear();
+  const calls = { downloads: [], transcribes: [], loads: 0, cancels: 0, overlapping: 0 };
+  let running = 0;
+  const held = [];
+  let finishDownload;
+  let progressListener;
+  let status = {
+    directory: '/data/Stacki/models/whisper',
+    models: [
+      { id: 'turbo', install },
+      { id: 'small', install: { kind: 'notInstalled' } },
+      { id: 'base', install: { kind: 'notInstalled' } },
+    ],
+  };
+  const store = ai.createDictationStore({
+    status: async () => status,
+    // Each download waits for the test to finish it (`finish`), with the next of `outcomes` or an install.
+    download: (id) => {
+      calls.downloads.push(id);
+      setTimeout(() => progressListener?.({ id, receivedBytes: Math.floor(BASE_TOTAL / 2), totalBytes: BASE_TOTAL }), 0);
+      return new Promise((resolve) => {
+        finishDownload = (outcome) => {
+          if (outcome.kind === 'installed') {
+            status = {
+              ...status,
+              models: status.models.map((model) => (model.id === id ? { id, install: { kind: 'installed', sizeBytes: BASE_TOTAL } } : model)),
+            };
+          }
+          resolve(outcome);
+        };
+      });
+    },
+    cancel: async () => {
+      calls.cancels += 1;
+      finishDownload?.({ kind: 'failed', failure: 'cancelled' });
+    },
+    remove: async () => undefined,
+    onProgress: (listener) => {
+      progressListener = listener;
+      return () => undefined;
+    },
+  });
+  let warm = false;
+  let microphone;
+  const host = {
+    isWarm: () => warm,
+    load: async () => {
+      calls.loads += 1;
+      warm = load.ok;
+      return load;
+    },
+    transcribe: async (audio, language) => {
+      running += 1;
+      calls.overlapping = Math.max(calls.overlapping, running);
+      calls.transcribes.push({ samples: audio.length, language });
+      // A held decode waits for the test to release it; the others answer on the next task.
+      if (holdDecodes) {
+        await new Promise((resolve) => held.push(resolve));
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      running -= 1;
+      const text = sticky && transcripts.length === 1 ? transcripts[0] : (transcripts.shift() ?? '');
+      return { ok: true, value: { text, language: 'en', decodeMs } };
+    },
+    release: () => undefined,
+  };
+  const whisper = {
+    store,
+    createRecognition: () =>
+      ai.createWhisperRecognition({
+        host,
+        store,
+        listen: async (listener) => {
+          microphone = listener;
+          return { ok: true, value: () => (microphone = undefined) };
+        },
+        nowMs: () => Date.now(),
+      }),
+    audioLevels: { start: async () => ({ ok: true, value: () => undefined }) },
+  };
+  const voice = fakeVoice();
+  return {
+    environment: { ...voice.environment, detectEngine: async () => ({ kind: 'whisper' }), whisper },
+    calls,
+    microphoneOpen: () => microphone !== undefined,
+    finish: async () => {
+      await act(async () => finishDownload?.(outcomes.shift() ?? { kind: 'installed', sizeBytes: BASE_TOTAL }));
+      await until('the download outcome reached the engine', () => store.snapshot().engine.kind !== 'downloading');
+    },
+    /** Releases every held decode. */
+    releaseDecodes: async () => {
+      await act(async () => held.splice(0).forEach((resolve) => resolve()));
+      await settle();
+    },
+    /**
+     * Speech (a 220 Hz tone) for `speechMs`, then silence for `pauseMs`, in the worklet's 100 ms chunks, then waits
+     * until `done()` holds (by default: the box and the decode count stop changing). `paced` waits for a decode after
+     * every second of speech, as a person still talking would see interim words.
+     */
+    say: async (speechMs, pauseMs, { paced = false, done } = {}) => {
+      const total = Math.floor(((speechMs + pauseMs) * 16_000) / 1000);
+      const speech = Math.floor((speechMs * 16_000) / 1000);
+      for (let at = 0; at < total; at += 1_600) {
+        const chunk = new Float32Array(1_600);
+        for (let index = 0; index < chunk.length; index += 1) {
+          chunk[index] = at + index < speech ? 0.2 * Math.sin((2 * Math.PI * 220 * (at + index)) / 16_000) : 0;
+        }
+        microphone?.(chunk, 0.1);
+        if (paced && at > 0 && at % 16_000 === 0) {
+          const count = calls.transcribes.length;
+          await until('an interim decode while speaking', () => calls.transcribes.length > count);
+        }
+      }
+      if (done === undefined) {
+        await waitForSteady({
+          what: 'the live loop went quiet',
+          read: async () => {
+            await act(async () => undefined);
+            return [calls.transcribes.length, inputText(), draftText() ?? ''];
+          },
+          until: () => true,
+        });
+        await settle();
+      } else {
+        await until('the spoken words were handled', done);
+      }
+    },
+  };
+}
+
+const tapMicrophone = async () => {
+  await pointer('pointerdown');
+  await pointer('pointerup');
+};
+const buttonNamed = (name) => [...document.querySelectorAll('button')].find((button) => button.textContent === name);
+const micButton = () => document.querySelector('.ai-tool-button[aria-pressed]');
+/** Waits, inside act, until `check()` holds (test/helpers/waitFor.js): never a guessed pause. */
+const until = async (what, check) => {
+  // Each poll flushes React in its own act, so a render the state caused is seen by the next read.
+  await waitFor({
+    what,
+    read: async () => {
+      await act(async () => undefined);
+      return check();
+    },
+    until: Boolean,
+  });
+  await settle();
+};
+
+test('without the model, one press downloads it with no dialog, shows the bytes on the button, and listens when ready', async (context) => {
+  const whisper = fakeWhisper({ install: { kind: 'notInstalled' } });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the download started', () => micButton().querySelector('.progress-ring') !== null);
+  assert.deepEqual(whisper.calls.downloads, ['turbo'], 'the press started the Best tier download');
+  assert.ok(document.querySelector('[role="dialog"]') === null, 'no dialog asks first');
+  assert.equal(whisper.microphoneOpen(), false, 'nothing listens before the model is here');
+  assert.ok(micButton().querySelector('.progress-ring'), 'the button draws the download as a ring');
+  assert.equal(await tipOf(micButton()), 'Downloading the dictation model, 50%. Click to cancel.');
+  await whisper.finish();
+  await until('the same press listens', () => whisper.microphoneOpen());
+  assert.equal(whisper.calls.loads, 1, 'the model loads as soon as it is downloaded');
+  assert.equal(whisper.microphoneOpen(), true, 'and the same press is now listening');
+  assert.ok(document.querySelector('.ai-voice-line'));
+  assert.ok(micButton().querySelector('.progress-ring') === null, 'the ring gives way to the microphone');
+});
+
+test('a press during the download cancels it, and nothing listens afterwards', async (context) => {
+  const whisper = fakeWhisper({ install: { kind: 'notInstalled' } });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the download started', () => whisper.calls.downloads.length === 1);
+  await tapMicrophone();
+  await until('the download is cancelled', () => whisper.calls.cancels === 1 && micButton().querySelector('.progress-ring') === null);
+  assert.equal(whisper.calls.cancels, 1);
+  assert.equal(whisper.microphoneOpen(), false);
+  assert.ok(micButton().querySelector('.progress-ring') === null);
+  assert.equal(toasts.length, 0, 'a cancel is the person’s choice: no notice');
+});
+
+test('a failed download says why, never blames speech, and Retry downloads again and then listens', async (context) => {
+  const whisper = fakeWhisper({ install: { kind: 'notInstalled' }, outcomes: [{ kind: 'failed', failure: 'offline' }] });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the download started', () => whisper.calls.downloads.length === 1);
+  await whisper.finish();
+  await until('the failure toast', () => toasts.length > 0);
+  assert.match(lastToast(), /Hugging Face could not be reached/);
+  await runToast('Retry');
+  await until('the retry started', () => whisper.calls.downloads.length === 2);
+  assert.deepEqual(whisper.calls.downloads, ['turbo', 'turbo']);
+  await whisper.finish();
+  await until('the retried download listens', () => whisper.microphoneOpen());
+  assert.equal(whisper.microphoneOpen(), true, 'the retried download ends in listening');
+});
+
+test('with the model, a phrase followed by a pause lands cleaned in the box, and the session ends cleanly', async (context) => {
+  const whisper = fakeWhisper({ transcripts: [' Um, fix the the header, please.'] });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  assert.deepEqual(whisper.calls.downloads, [], 'nothing downloads when the model is there');
+  assert.ok(document.querySelector('.ai-voice-line'), 'the line shows at once');
+  await until('the microphone opened', () => whisper.microphoneOpen());
+  assert.equal(whisper.microphoneOpen(), true);
+  assert.equal(whisper.calls.loads, 1, 'the model loads on the first session');
+  await whisper.say(1_200, 800);
+  assert.equal(whisper.calls.transcribes.length, 1, 'the pause committed one segment');
+  assert.equal(whisper.calls.transcribes[0].language, 'auto', 'auto-detect is the default');
+  assert.equal(inputText(), 'Fix the header, please.');
+  await tapMicrophone();
+  await until('the session ended', () => !whisper.microphoneOpen() && document.querySelector('.ai-voice-line') === null);
+  assert.equal(whisper.microphoneOpen(), false, 'stop closes the microphone');
+  assert.ok(document.querySelector('.ai-voice-line') === null, 'the line goes with the session');
+  assert.equal(toasts.length, 0, 'a normal session leaves no notice');
+});
+
+test('a computer too slow for the standard model says so and offers the small one', async (context) => {
+  const whisper = fakeWhisper({ transcripts: [' Hello there.'], decodeMs: 9_000 });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the microphone opened', () => whisper.microphoneOpen());
+  await whisper.say(1_200, 800);
+  assert.equal(inputText(), 'Hello there.', 'the words still land');
+  await tapMicrophone();
+  await until('the session ended', () => !whisper.microphoneOpen() && document.querySelector('.ai-voice-line') === null);
+  const notice = lastToast();
+  assert.match(notice, /slower than you speak/);
+  assert.doesNotMatch(notice, /connection/);
+  await runToast('Use the faster model');
+  await until('the small model download started', () => whisper.calls.downloads.length === 1);
+  assert.deepEqual(whisper.calls.downloads, ['base'], 'the Fast tier downloads at once');
+});
+
+test('a runtime that cannot run the model names the cause, never the connection', async (context) => {
+  const whisper = fakeWhisper({ load: { ok: false, error: 'backendUnavailable' } });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the failure toast', () => toasts.length > 0);
+  const notice = lastToast();
+  assert.match(notice, /neither WebGPU nor WebAssembly/);
+  assert.equal(whisper.microphoneOpen(), false, 'the microphone closes with the failure');
+});
+
+test('a session that hears no speech writes nothing, even where Whisper would invent "Thank you."', async (context) => {
+  const whisper = fakeWhisper({ transcripts: [' Thank you.', ' Thank you.'] });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the microphone opened', () => whisper.microphoneOpen());
+  await whisper.say(0, 3_000);
+  await tapMicrophone();
+  await until('the session ended', () => !whisper.microphoneOpen() && document.querySelector('.ai-voice-line') === null);
+  assert.equal(whisper.calls.transcribes.length, 0, 'silence is never decoded');
+  assert.equal(inputText(), '');
+});
+
+test('while speaking, the words show as a draft that each decode replaces; only the final words become text', async (context) => {
+  const whisper = fakeWhisper({ transcripts: [' Make the', ' Make the heading', ' Make the heading larger.'], sticky: true });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the microphone opened', () => whisper.microphoneOpen());
+  await whisper.say(2_600, 0, { paced: true, done: () => (draftText() ?? '') !== '' });
+  assert.ok(whisper.calls.transcribes.length >= 2, `interim decodes ran while speaking (${whisper.calls.transcribes.length})`);
+  assert.equal(whisper.calls.overlapping, 1, 'never two decodes at once');
+  assert.match(draftText() ?? '', /^Make the/, 'the draft shows the words so far');
+  assert.equal(inputText(), '', 'nothing is text yet');
+  assert.equal(document.querySelectorAll('.ai-dictation-draft').length, 1, 'one draft, replaced, never appended');
+  await tapMicrophone();
+  await until('the final words', () => inputText() !== '' && document.querySelector('.ai-dictation-draft') === null);
+  assert.equal(inputText(), 'Make the heading larger.', 'stop writes the final words once');
+  assert.ok(document.querySelector('.ai-dictation-draft') === null, 'the draft is gone');
+});
+
+test('a decode with no words yet takes no room: nothing is drawn in the box, the microphone pulses instead', async (context) => {
+  const whisper = fakeWhisper({ transcripts: [''], holdDecodes: true, sticky: true });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the microphone opened', () => whisper.microphoneOpen());
+  await whisper.say(1_200, 0, {
+    done: () => (
+      console.log('DBG', whisper.calls.transcribes.length, micButton().className),
+      whisper.calls.transcribes.length >= 1 && micButton().classList.contains('is-decoding')
+    ),
+  });
+  assert.ok(whisper.calls.transcribes.length >= 1, 'a decode is running');
+  assert.ok(document.querySelector('.ai-dictation-draft') === null, 'no element is added to the editor while there are no words');
+  assert.ok(micButton().classList.contains('is-decoding'), 'the microphone shows the work instead');
+  await tapMicrophone();
+  await whisper.releaseDecodes();
+  await until('the session ended', () => !whisper.microphoneOpen());
+  await whisper.releaseDecodes();
+});
+
+test('final words take the vocabulary and the snippets; the draft does not', async (context) => {
+  const whisper = fakeWhisper({ transcripts: [' Open the lumus page and insert my signature.'] });
+  whisper.environment.whisper.store.setWords({
+    vocabulary: [{ word: 'Lumos' }],
+    snippets: [{ trigger: 'my signature', expansion: 'Thanks, Tim' }],
+  });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the microphone opened', () => whisper.microphoneOpen());
+  await whisper.say(2_200, 800);
+  assert.equal(inputText(), 'Open the Lumos page and Thanks, Tim');
+});
+
+test('a word fixed by hand right after dictation is offered for the vocabulary, once', async (context) => {
+  const whisper = fakeWhisper({ transcripts: [' Open the carosel page.'] });
+  await mount(context, { voice: whisper.environment });
+  await settle();
+  await tapMicrophone();
+  await until('the microphone opened', () => whisper.microphoneOpen());
+  await whisper.say(1_500, 800);
+  assert.equal(inputText(), 'Open the carosel page.');
+  await setText('Open the Carousel page.');
+  assert.match(lastToast(), /Add “Carousel” to your vocabulary\?/);
+  await runToast('Add to vocabulary');
+  assert.deepEqual(whisper.environment.whisper.store.snapshot().words.vocabulary, [{ word: 'Carousel', misheard: 'carosel' }]);
+  const shown = toasts.length;
+  await setText('Open the Carousel pages.');
+  assert.equal(toasts.length, shown, 'offered once');
+});
+
+test('dictation stands in the footer row instead of adding one: the footer is hidden in place, and comes back', async (context) => {
+  const voice = fakeVoice();
+  await mount(context, { voice: voice.environment });
+  const footer = () => document.querySelector('.ai-compose-footer');
+  const rows = () => document.querySelector('.ai-compose').children.length;
+  const before = rows();
+  assert.ok(footer().querySelector('.ai-compose-footer-status .ai-status, .ai-compose-footer-status > *'), 'the footer holds the status line');
+  await pointer('pointerdown');
+  await pointer('pointerup');
+  assert.equal(rows(), before, 'no row is added while dictating');
+  assert.ok(footer().classList.contains('is-dictating'));
+  assert.ok(footer().querySelector('.ai-compose-footer-voice .ai-voice-line'), 'the voice line is in the footer cell');
+  assert.equal(footer().querySelector('.ai-compose-footer-status').getAttribute('aria-hidden'), 'true', 'the replaced controls are hidden');
+  await pointer('pointerdown');
+  await act(async () => voice.current().onend());
+  await settle();
+  assert.equal(rows(), before);
+  assert.ok(!footer().classList.contains('is-dictating'), 'the footer controls return');
+  assert.ok(footer().querySelector('.ai-compose-footer-voice') === null);
 });

@@ -401,3 +401,38 @@ test('opening the panel allows agents in the project, unless Settings asks first
     assert.equal(store.readIndex(root).trusted, !ask, 'remembered');
   }
 });
+
+test('a screenshot reaches the agent inline and the stored chat keeps only its name: no bytes, no note, no file', async (context) => {
+  const { root, userData, store, host, events } = fakeHost();
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const chat = created(store.create(root, 'codex', 'New chat', 1));
+  // A marker no other part of a chat would contain, so finding it anywhere on disk means the bytes were written.
+  const data = Buffer.from('stacki-screenshot-bytes-marker').toString('base64');
+  const note = 'Screenshot 1: element, 1280px breakpoint, src/components/Hero.astro Hero';
+  const started = await host.prompt(root, chat.id, 'what is wrong here?', [{ kind: 'image', name: 'Screenshot 1 (2×2)', mimeType: 'image/png', data, note }]);
+  assert.ok(started.ok);
+  await until('the end of the turn', () => ofKind(events(), 'turn-end').length > 0);
+  const user = created(ofKind(store.read(root, chat.id).events, 'user')[0]);
+  assert.deepEqual(user.attachments, [{ kind: 'image', name: 'Screenshot 1 (2×2)' }]);
+  const written: string[] = [];
+  const pending = [userData, root];
+  // Both trees are small temporary folders made by this test; the cap only guards against a runaway walk.
+  for (let visited = 0; pending.length > 0 && visited < 10_000; visited += 1) {
+    const next = created(pending.pop());
+    for (const entry of fs.readdirSync(next, { withFileTypes: true })) {
+      const full = path.join(next, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(full);
+      } else if (entry.isFile()) {
+        written.push(fs.readFileSync(full, 'latin1'));
+      }
+    }
+  }
+  assert.ok(written.length > 0, 'the chat was stored');
+  for (const text of written) {
+    assert.ok(!text.includes(data), 'no stored file holds the image bytes');
+    assert.ok(!text.includes('stacki-screenshot-bytes-marker'), 'nor their decoded form');
+    assert.ok(!text.includes(note), 'nor the note');
+  }
+});

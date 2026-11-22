@@ -192,6 +192,19 @@ function fakeMain(over = {}) {
       return () => undefined;
     },
     getFilePath: () => undefined,
+    // The panel reads the review preference and the project's agent definitions when it opens, and listens
+    // for definition files changing; a project with no agents and the default preferences.
+    settings: record('settings', () => ({
+      sound: false,
+      usageCountsEnabled: true,
+      appsPersonHidden: false,
+      aiAskBeforeTrust: false,
+      aiTrackChanges: true,
+      aiReviewChanges: false,
+      codeChips: true,
+    })),
+    listAgents: record('listAgents', () => ({ agents: [], paired: [], truncated: false })),
+    onInstructionsChanged: () => () => undefined,
     platform: 'darwin',
   };
   return { calls, listeners };
@@ -619,7 +632,7 @@ test('the account line shows a name and plan, falls back to the plan, and keeps 
   fakeMain({ trusted: true });
   const { container, root } = await mount();
   context.after(() => act(() => root.unmount()));
-  assert.match(container.textContent, /Timothy Ricks · Max/);
+  assert.match(button(container, 'Account options').getAttribute('title'), /Timothy Ricks · Max/, 'the tooltip names the account');
   assert.doesNotMatch(container.textContent, /designer@example\.com/, 'no email until the menu opens');
   await click(button(container, 'Account options'));
   // The menu is the shared popup, portalled to the body: it is not inside the panel.
@@ -982,4 +995,76 @@ test('whole panel: the sessions list groups chats into their sections, with the 
   const titles = [...container.querySelectorAll('.ai-list-title')].map((element) => element.textContent);
   assert.deepEqual(titles, ['Loose chat', 'Pricing page', 'Header redesign'], 'the loose chat first, then the section with its pinned chat first');
   assert.equal(container.querySelectorAll('.ai-unread-dot').length, 1, 'only the unread chat has its dot');
+});
+
+// The panel lays itself out for the width it is given (chatLayout.ts). jsdom has no layout, so the body's box is
+// stubbed at a width on each side of the split threshold (760px): the panel reads it before its first paint.
+async function mountAtWidth(context, widthPx) {
+  // The jsdom DOM scrolls nothing; the list keeps the open chat's row in view with this.
+  window.HTMLElement.prototype.scrollIntoView ??= function () {};
+  const original = window.HTMLElement.prototype.getBoundingClientRect;
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    const width = this.classList.contains('ai-body') ? widthPx : 0;
+    return { left: 0, top: 0, right: width, bottom: 0, width, height: 0, x: 0, y: 0, toJSON: () => undefined };
+  };
+  context.after(() => {
+    window.HTMLElement.prototype.getBoundingClientRect = original;
+  });
+  const mounted = await mount();
+  context.after(() => act(() => mounted.root.unmount()));
+  return mounted;
+}
+
+test('whole panel: wide, the list is a sidebar beside the open chat, marked, and Ctrl+Tab steps through the chats', async (context) => {
+  ai.resetAiStore();
+  window.localStorage.clear();
+  const second = `c${'b'.repeat(24)}`;
+  fakeMain({
+    trusted: true,
+    chats: [
+      { ...summary, title: 'First chat' },
+      { ...summary, id: second, title: 'Second chat', rank: 1 },
+    ],
+  });
+  window.localStorage.setItem('stacki.ai.open./site', CHAT);
+  const { container } = await mountAtWidth(context, 900);
+  const body = container.querySelector('.ai-body');
+  assert.ok(body.classList.contains('is-split'), 'split at 900px');
+  const sidebar = container.querySelector('nav.ai-sidebar[aria-label="Chat list"]');
+  assert.ok(sidebar, 'the list is a sidebar');
+  assert.ok(
+    sidebar.compareDocumentPosition(container.querySelector('.ai-main')) & window.Node.DOCUMENT_POSITION_FOLLOWING,
+    'the sidebar comes first (inline start)',
+  );
+  const selected = sidebar.querySelector('.ai-list-row.is-selected');
+  assert.equal(selected?.querySelector('.ai-list-title').textContent, 'First chat', 'the open chat is marked');
+  assert.equal(selected.querySelector('.ai-list-open').getAttribute('aria-current'), 'true');
+  assert.ok(container.querySelector('.ai-main .ai-composer'), 'the chat is beside it');
+  assert.equal(container.querySelector('button[aria-label="All chats"]') ?? undefined, undefined, 'no way back to show: the list is there');
+  assert.ok(sidebar.querySelector('button[aria-label="Filter chats"]'), 'the filter sits with the list');
+  await act(async () => {
+    body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+  });
+  await settle();
+  assert.equal(ai.aiState().open, second, 'Ctrl+Tab opens the next chat');
+  assert.equal(container.querySelector('.ai-list-row.is-selected .ai-list-title').textContent, 'Second chat');
+  await act(async () => {
+    container
+      .querySelector('.ai-body')
+      .dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+  });
+  await settle();
+  assert.equal(ai.aiState().open, CHAT, 'Ctrl+Shift+Tab goes back');
+});
+
+test('whole panel: narrow, the panel shows the chat alone with the way back to the list', async (context) => {
+  ai.resetAiStore();
+  window.localStorage.clear();
+  fakeMain({ trusted: true, chats: [{ ...summary, title: 'First chat' }] });
+  window.localStorage.setItem('stacki.ai.open./site', CHAT);
+  const { container } = await mountAtWidth(context, 500);
+  assert.ok(container.querySelector('.ai-body').classList.contains('is-stacked'), 'stacked at 500px');
+  assert.equal(container.querySelector('.ai-sidebar') ?? undefined, undefined, 'no sidebar');
+  assert.ok(container.querySelector('button[aria-label="All chats"]'), 'the way back to the list');
+  assert.equal(container.querySelector('.ai-list-row') ?? undefined, undefined, 'the list is one step back');
 });

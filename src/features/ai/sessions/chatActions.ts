@@ -1,12 +1,14 @@
 // What choosing an item in a chat's menu does, and the menu's rows. The row's menu, a letter typed on a
 // focused row and the open chat's header menu all go through here, so they cannot drift apart.
 // Deleting always asks first, with Stacki's own dialog (never a native one).
+import { createElement, type ReactNode } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import type { ChatSection, ChatSummary, SectionId } from '../../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
+import { BranchIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, HideIcon, PencilIcon, PinIcon, ResetIcon, TrashIcon } from '../../../ui/Icons';
 import type { MenuEntry } from '../../../ui/Menu';
-import { archiveChat, createSection, deleteChat, forkChat, markRead, markUnread, moveChat, pinChat, restoreChat } from '../aiStore';
+import { archiveChat, createSection, deleteChat, forkChat, moveChat, pinChat, restoreChat } from '../aiStore';
 import { uniqueSectionName } from './sessionsModel';
 import type { ChatAction } from './sessionsModel';
 
@@ -22,9 +24,6 @@ export async function runChatAction(action: ChatAction, chat: ChatSummary, host:
   switch (action) {
     case 'pin':
       await pinChat(chat.id, { pinned: !chat.pinned });
-      return;
-    case 'unread':
-      await (chat.unread ? markRead(chat.id) : markUnread(chat.id));
       return;
     case 'rename':
       host.rename();
@@ -85,13 +84,35 @@ export async function moveChatToSection(chat: ChatSummary, section: SectionId | 
 }
 
 /** The rows of a chat's menu. Letters work while it is open; the same letters work on a focused row. */
+/** A menu row's icon, at the size every menu draws them. */
+function menuIcon(Icon: typeof PinIcon): ReactNode {
+  return createElement(Icon, { size: 14 });
+}
+
 export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSection[], host: ChatActionHost, translate: Translator): readonly MenuEntry[] {
   const run = (action: ChatAction) => (): void => void runChatAction(action, chat, host, translate);
   if (chat.archivedAt !== undefined) {
     return [
-      { kind: 'item', id: 'restore', label: translate('ai.sessions.restore'), shortcut: 'A', accelerator: 'a', onSelect: run('restore') },
+      {
+        kind: 'item',
+        id: 'restore',
+        label: translate('ai.sessions.restore'),
+        icon: menuIcon(ResetIcon),
+        shortcut: 'A',
+        accelerator: 'a',
+        onSelect: run('restore'),
+      },
       { kind: 'divider', id: 'divider-delete' },
-      { kind: 'item', id: 'delete', label: translate('ai.sessions.delete'), shortcut: 'D', accelerator: 'd', danger: true, onSelect: run('delete') },
+      {
+        kind: 'item',
+        id: 'delete',
+        label: translate('ai.sessions.delete'),
+        icon: menuIcon(TrashIcon),
+        shortcut: 'D',
+        accelerator: 'd',
+        danger: true,
+        onSelect: run('delete'),
+      },
     ];
   }
   const placed = sections.find((section) => section.id === chat.section);
@@ -102,6 +123,7 @@ export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSectio
         kind: 'item',
         id: `section-${section.id}`,
         label: section.name,
+        icon: menuIcon(FolderIcon),
         checked: placed?.id === section.id,
         onSelect: () => void moveChatToSection(chat, section.id),
       })),
@@ -109,6 +131,7 @@ export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSectio
       kind: 'item',
       id: 'section-none',
       label: translate('ai.sessions.noSection'),
+      icon: menuIcon(FolderOpenIcon),
       checked: placed === undefined,
       onSelect: () => void moveChatToSection(chat, undefined),
     },
@@ -117,6 +140,7 @@ export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSectio
       kind: 'item',
       id: 'section-new',
       label: translate('ai.sessions.newSectionMenu'),
+      icon: menuIcon(FolderPlusIcon),
       onSelect: () =>
         void addSection(sections, host, translate).then((created) => {
           if (created !== undefined) {
@@ -132,30 +156,49 @@ export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSectio
       kind: 'item',
       id: 'pin',
       label: chat.pinned ? translate('ai.sessions.unpin') : translate('ai.sessions.pin'),
+      icon: menuIcon(PinIcon),
       shortcut: 'P',
       accelerator: 'p',
       onSelect: run('pin'),
     },
     {
       kind: 'item',
-      id: 'unread',
-      label: chat.unread ? translate('ai.sessions.markRead') : translate('ai.sessions.markUnread'),
-      shortcut: 'U',
-      accelerator: 'u',
-      onSelect: run('unread'),
+      id: 'rename',
+      label: translate('ai.sessions.rename'),
+      icon: menuIcon(PencilIcon),
+      shortcut: 'R',
+      accelerator: 'r',
+      onSelect: run('rename'),
     },
-    { kind: 'item', id: 'rename', label: translate('ai.sessions.rename'), shortcut: 'R', accelerator: 'r', onSelect: run('rename') },
-    { kind: 'item', id: 'fork', label: translate('ai.sessions.fork'), shortcut: 'F', accelerator: 'f', onSelect: run('fork') },
+    { kind: 'item', id: 'fork', label: translate('ai.sessions.fork'), icon: menuIcon(BranchIcon), shortcut: 'F', accelerator: 'f', onSelect: run('fork') },
     { kind: 'divider', id: 'divider-move' },
     {
       kind: 'submenu',
       id: 'move',
       label: translate('ai.sessions.moveToSection'),
+      icon: menuIcon(FolderIcon),
       value: placed?.name ?? translate('ai.sessions.noSection'),
       entries: sectionRows,
     },
     { kind: 'divider', id: 'divider-archive' },
-    { kind: 'item', id: 'archive', label: translate('ai.sessions.archive'), shortcut: 'A', accelerator: 'a', onSelect: run('archive') },
-    { kind: 'item', id: 'delete', label: translate('ai.sessions.delete'), shortcut: 'D', accelerator: 'd', danger: true, onSelect: run('delete') },
+    {
+      kind: 'item',
+      id: 'archive',
+      label: translate('ai.sessions.archive'),
+      icon: menuIcon(HideIcon),
+      shortcut: 'A',
+      accelerator: 'a',
+      onSelect: run('archive'),
+    },
+    {
+      kind: 'item',
+      id: 'delete',
+      label: translate('ai.sessions.delete'),
+      icon: menuIcon(TrashIcon),
+      shortcut: 'D',
+      accelerator: 'd',
+      danger: true,
+      onSelect: run('delete'),
+    },
   ];
 }

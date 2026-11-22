@@ -15,7 +15,7 @@ const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
 const { EMPTY_CHAT, reduceChat, applyEvent, waitingPermissions, pendingChanges } = loadRenderer('src/features/ai/chatReducer.ts');
-const { matchingCommands } = loadRenderer('src/features/ai/composer/ComposerInput.tsx');
+const { slashQueryOf, slashRows } = loadRenderer('src/features/ai/composer/slashRows.ts');
 const { diffRows, compactRows } = loadRenderer('src/features/ai/lineDiff.ts');
 const { filterChats, sortChats } = loadRenderer('src/features/ai/sessions/SessionsView.tsx');
 
@@ -169,16 +169,20 @@ test('the slash menu matches commands by name, prefix matches first, and closes 
     { name: 'plan', description: 'Plan', hint: undefined },
     { name: 'preview-deploy', description: 'Deploy', hint: undefined },
   ];
-  assert.deepEqual(
-    matchingCommands(commands, '/p').map((command) => command.name),
-    ['plan', 'preview-deploy'],
-  );
-  assert.deepEqual(
-    matchingCommands(commands, '/view').map((command) => command.name),
-    ['review', 'preview-deploy'],
-  );
-  assert.deepEqual(matchingCommands(commands, '/plan now'), []);
-  assert.deepEqual(matchingCommands(commands, 'plan'), []);
+  // The agent's own commands only: Stacki's built-in rows are covered in composerInput.test.js.
+  const agentCommandsFor = (text) => {
+    const query = slashQueryOf(text);
+    if (query === undefined) {
+      return [];
+    }
+    return slashRows({ commands, skills: [], query })
+      .filter((row) => row.kind === 'command')
+      .map((row) => row.command.name);
+  };
+  assert.deepEqual(agentCommandsFor('/p'), ['plan', 'preview-deploy']);
+  assert.deepEqual(agentCommandsFor('/view'), ['review', 'preview-deploy']);
+  assert.deepEqual(agentCommandsFor('/plan now'), []);
+  assert.deepEqual(agentCommandsFor('plan'), []);
 });
 
 test('the diff shows every line once, and compacts long runs of context', () => {

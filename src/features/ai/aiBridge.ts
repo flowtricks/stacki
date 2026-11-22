@@ -20,7 +20,11 @@ import {
   parseSetupState,
   parseRememberedSettings,
   parseReviewOutcome,
+  parseScreenshotReply,
+  parseRecordReply,
   parseSteerReply,
+  parseAutoCompactReply,
+  type AutoCompactReply,
   type AgentAvailability,
   type AiAgentsReply,
   type AiEventsPush,
@@ -29,6 +33,8 @@ import {
   type ChatTranscript,
   type DiffReply,
   type ReviewOutcome,
+  type ScreenshotReply,
+  type RecordReply,
   type SetupState,
   type SteerReply,
 } from '../../../shared/ipc/aiChat';
@@ -131,6 +137,17 @@ export function aiSteer(input: IpcPayloads['ai:steer']): Promise<AiReply<SteerRe
   return callResult(() => window.avb.aiSteer(payload), parseSteerReply);
 }
 
+/** The saved "Auto-compact at" percentage (undefined: the agent's default). */
+export function aiAutoCompactGet(): Promise<AiReply<AutoCompactReply>> {
+  const payload = parseIpcPayload('ai:autoCompactGet', {});
+  return call(() => window.avb.aiAutoCompactGet(payload), parseAutoCompactReply);
+}
+
+export function aiAutoCompactSet(percent: number | undefined): Promise<AiReply<AutoCompactReply>> {
+  const payload = parseIpcPayload('ai:autoCompactSet', { percent });
+  return call(() => window.avb.aiAutoCompactSet(payload), parseAutoCompactReply);
+}
+
 export function aiCompact(input: IpcPayloads['ai:compact']): Promise<AiReply<{ readonly started: true }>> {
   const payload = parseIpcPayload('ai:compact', input);
   return callResult(() => window.avb.aiCompact(payload), parseCompactStarted);
@@ -161,6 +178,18 @@ export function aiDiff(input: IpcPayloads['ai:diff']): Promise<AiReply<DiffReply
 export function aiMentions(input: IpcPayloads['ai:mentions']): Promise<AiReply<readonly MentionCandidate[]>> {
   const payload = parseIpcPayload('ai:mentions', input);
   return callResult(() => window.avb.aiMentions(payload), parseMentionReply);
+}
+
+/** Photographs part of this window; the image comes back in memory and is never stored. */
+export function aiScreenshot(input: IpcPayloads['ai:screenshot']): Promise<AiReply<ScreenshotReply>> {
+  const payload = parseIpcPayload('ai:screenshot', input);
+  return callResult(() => window.avb.aiScreenshot(payload), parseScreenshotReply);
+}
+
+/** One step of a recording held in main's memory: start, status, stop, a frame, or discard. */
+export function aiRecord(input: IpcPayloads['ai:record']): Promise<AiReply<RecordReply>> {
+  const payload = parseIpcPayload('ai:record', input);
+  return callResult(() => window.avb.aiRecord(payload), parseRecordReply);
 }
 
 export function aiCancel(input: IpcPayloads['ai:cancel']): Promise<AiReply<true>> {

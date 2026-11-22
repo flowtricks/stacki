@@ -13,6 +13,7 @@ import { CodeBlock, CodeInline } from '../../../ui/CodeBlock';
 import { CheckIcon, CloseIcon, PencilIcon, SparkleIcon, TerminalIcon, TrashIcon, WarningTriangleIcon } from '../../../ui/Icons';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import type { PermissionItem, ToolItem } from '../chatReducer';
+import { useShortcutTip } from '../../../ui/shortcutTip';
 import { DiffView } from './DiffView';
 import { registerWaiting, requestInFocus, revealRequest, setOnScreen, typesText, usePermissionAttention } from './permissionAttention';
 import {
@@ -146,18 +147,29 @@ function WaitingCard({
       {preview !== undefined ? preview : <div className="ai-ask-title">{plainTitle(item.title, projectPath)}</div>}
       <div className="ai-permission-actions ai-ask-actions">
         {options.map((option, index) => (
-          <button
+          <AnswerButton
             key={option.id}
             className={optionClass(option, primary)}
-            data-key={index < 9 ? String(index + 1) : undefined}
-            aria-keyshortcuts={index < 9 ? String(index + 1) : undefined}
-            onClick={() => answer.current(option.id)}
-          >
-            {option.name}
-          </button>
+            name={option.name}
+            answerKey={index < 9 ? String(index + 1) : undefined}
+            onAnswer={() => answer.current(option.id)}
+          />
         ))}
       </div>
     </div>
+  );
+}
+
+// One answer. Its key is told in the tooltip after a rest, not printed on the button, so the button reads as the agent's own words.
+function AnswerButton(props: { readonly className: string; readonly name: string; readonly answerKey: string | undefined; readonly onAnswer: () => void }) {
+  const { props: tipProps, tip } = useShortcutTip(props.name, props.answerKey);
+  return (
+    <>
+      <button className={props.className} data-key={props.answerKey} onClick={props.onAnswer} {...tipProps}>
+        {props.name}
+      </button>
+      {tip}
+    </>
   );
 }
 

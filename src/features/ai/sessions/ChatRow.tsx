@@ -1,7 +1,10 @@
-// One chat in the sessions list: a quiet status mark (a running loader or an unread dot), the title on one
-// line, and at the end its pin, age and agent, which a hovered row swaps for a "⋯" button that opens the
-// chat's menu. The same menu opens on a right click or the Menu key. Letters work on a focused row exactly
-// as they do in the open menu (P pin, U unread, R rename, F fork, A archive, D delete).
+// One chat in the sessions list, on two lines in a fixed 16px icon column: the agent's mark at the start (with
+// the unread dot on its corner), the title on the first line (with a pin when pinned), and a dim second line
+// with the agent and the age, or a running loader in place of the age. The hovered or focused row shows a "⋯"
+// button at its end that opens the chat's menu; the title always stops short of that button, so it never
+// moves when the button appears. The same menu opens on a right click or the Menu key. Letters work on a
+// focused row exactly as they do in the open menu (P pin, R rename, F fork, A archive, D delete).
+// The open chat's row carries the app's selected fill (the split layout keeps the list beside the chat).
 // Archived rows are not opened or dragged: they offer Restore and the menu's Restore and Delete.
 import { useEffect } from 'react';
 import type { HTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -23,6 +26,8 @@ export interface ChatRowProps {
   readonly sections: readonly ChatSection[];
   readonly running: boolean;
   readonly renaming: boolean;
+  /** The chat open beside the list (split layout); its row has the selected fill. */
+  readonly selected: boolean;
   readonly now: number;
   /** The drag hook's props for this row (`data-drag-item`, pointer and Alt+Arrow handlers); absent on rows that cannot be dragged. */
   readonly dragProps: (HTMLAttributes<HTMLButtonElement> & { readonly 'data-drag-item'?: string }) | undefined;
@@ -83,12 +88,35 @@ export function ChatRow(props: ChatRowProps) {
       void runChatAction(action, chat, host, translate);
     }
   };
+  // The full line, for the tooltip: the short age is exact there, and the context window is told only here.
   const detail = [agentLabel(chat.agent), formatRelativeTime(chat.updatedAt, now), contextSummary(chat.context, words)]
     .filter((part) => part !== undefined)
     .join(' · ');
+  const age = ageLabel(chat.updatedAt, now, { ...words, formatDate });
+  const classes = [
+    'ai-list-row',
+    chat.unread ? 'is-unread' : '',
+    chat.pinned ? 'is-pinned' : '',
+    archived ? 'is-archived' : '',
+    props.selected ? 'is-selected' : '',
+    trigger.open ? 'has-menu' : '',
+  ].filter((name) => name !== '');
+  const lead = (
+    <span className="ai-row-lead">
+      {chat.agent === 'claude' ? <ClaudeLogo size={14} /> : <CodexLogo size={14} />}
+      {chat.unread ? <span className="ai-unread-dot" role="img" aria-label={translate('ai.sessions.unread')} /> : undefined}
+    </span>
+  );
+  const meta = (
+    <span className="ai-row-meta" title={detail}>
+      {running ? <LoaderDots label={translate('ai.sessions.running')} dotPx={3} /> : undefined}
+      <span className="ai-row-agent">{agentLabel(chat.agent)}</span>
+      {running ? undefined : <span className="ai-list-time">{age}</span>}
+    </span>
+  );
   return (
     <li
-      className={`ai-list-row${chat.unread ? ' is-unread' : ''}${chat.pinned ? ' is-pinned' : ''}${archived ? ' is-archived' : ''}${trigger.open ? ' has-menu' : ''}`}
+      className={classes.join(' ')}
       data-chat={chat.id}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -97,26 +125,33 @@ export function ChatRow(props: ChatRowProps) {
     >
       {archived ? (
         <span className="ai-list-open is-static" title={detail}>
-          <span className="ai-row-lead" />
-          <span className="ai-list-title">{chat.title}</span>
+          {lead}
+          <span className="ai-row-text">
+            <span className="ai-row-line">
+              <span className="ai-list-title">{chat.title}</span>
+            </span>
+            {meta}
+          </span>
           <button className="ai-row-restore" onClick={() => void runChatAction('restore', chat, host, translate)}>
             {translate('ai.sessions.restore')}
           </button>
         </span>
       ) : (
-        <button {...dragProps} className="ai-list-open" title={chat.title} onClick={() => void openChat(chat.id)} onKeyDown={onKeyDown}>
-          <span className="ai-row-lead">
-            {chat.unread ? <span className="ai-unread-dot" role="img" aria-label={translate('ai.sessions.unread')} /> : undefined}
-          </span>
-          <span className="ai-list-title">{chat.title}</span>
-          <span className="ai-row-meta" title={detail}>
-            {chat.pinned && <PinIcon size={11} aria-label={translate('ai.sessions.pinned')} />}
-            {chat.agent === 'claude' ? <ClaudeLogo size={11} /> : <CodexLogo size={11} />}
-            {running ? (
-              <LoaderDots label={translate('ai.sessions.running')} dotPx={3} />
-            ) : (
-              <span className="ai-list-time">{ageLabel(chat.updatedAt, now, { ...words, formatDate })}</span>
-            )}
+        <button
+          {...dragProps}
+          className="ai-list-open"
+          title={chat.title}
+          aria-current={props.selected ? 'true' : undefined}
+          onClick={() => void openChat(chat.id)}
+          onKeyDown={onKeyDown}
+        >
+          {lead}
+          <span className="ai-row-text">
+            <span className="ai-row-line">
+              <span className="ai-list-title">{chat.title}</span>
+              {chat.pinned && <PinIcon size={11} className="ai-row-pin" aria-label={translate('ai.sessions.pinned')} />}
+            </span>
+            {meta}
           </span>
         </button>
       )}

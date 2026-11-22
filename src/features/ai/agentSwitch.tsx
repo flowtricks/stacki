@@ -94,7 +94,7 @@ export function agentSwitchEntries(input: {
       icon: <AgentLogo agent={id} />,
       checked: id === input.agent,
       ...(badge === undefined ? {} : { pill: badgeText(badge, input.translate) }),
-      ...(input.started && id !== input.agent ? { description: input.translate('ai.agent.switch.newChat') } : {}),
+      ...(input.started && id !== input.agent ? { tooltip: input.translate('ai.agent.switch.newChat') } : {}),
       onSelect: () => {
         if (id !== input.agent) {
           rememberAgent(id);

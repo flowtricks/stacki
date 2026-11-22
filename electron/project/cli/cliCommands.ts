@@ -12,7 +12,7 @@ import type { ConfigOperation } from '../../../shared/properties/cli/stackiConfi
 import { parseConfigPath } from '../../../shared/properties/cli/stackiConfigPath';
 import { readConfigValue } from '../../../shared/properties/cli/stackiConfigEdit';
 import { accessFeatureOf } from '../../../shared/properties/cli/stackiFeatures';
-import { allFiles, fileSchemaById, fileSchemaByPath, STACKI_UNSETTABLE } from '../../../shared/properties/cli/stackiFiles';
+import { allFiles, fileSchemaById, fileSchemaByPath, STACKI_DOMAIN_FOLDERS, STACKI_UNSETTABLE } from '../../../shared/properties/cli/stackiFiles';
 import type { CliError } from '../../../shared/properties/cli/stackiOutput';
 import { describeFileSchema } from '../../../shared/properties/cli/stackiDescribe';
 import type { FileSchema } from '../../../shared/properties/cli/stackiSchema';
@@ -103,6 +103,13 @@ export function schemaOfArgument(name: string): Result<FileSchema, CliError> {
   if (found !== undefined) {
     return ok(found);
   }
+  const folder = STACKI_DOMAIN_FOLDERS.find((entry) => name.startsWith(entry.path) || `.stacki/${name}`.startsWith(entry.path));
+  if (folder !== undefined) {
+    return err({
+      code: 'unsupported-file',
+      message: `${folder.path} is changed only by its commands (${folder.commands.map((command) => `stacki ${command}`).join(', ')}): ${folder.description}`,
+    });
+  }
   const unsettable = STACKI_UNSETTABLE.find((entry) => name.startsWith(entry.path) || `.stacki/${name}`.startsWith(entry.path));
   if (unsettable !== undefined) {
     return err({ code: 'unsupported-file', message: `${unsettable.path} is not settable: ${unsettable.reason}` });
@@ -123,6 +130,7 @@ function schemaCommand(context: CommandContext): Result<Outcome, CliError> {
       summary: `${allFiles().length} settings files; run "stacki schema <file>" for the keys.`,
       result: {
         files: allFiles().map((file) => ({ id: file.id, file: file.file, description: file.description, requires: file.requires, commands: file.commands })),
+        domainFolders: STACKI_DOMAIN_FOLDERS,
         notSettable: STACKI_UNSETTABLE,
       },
     });

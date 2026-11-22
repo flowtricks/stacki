@@ -6,6 +6,9 @@
 // restore; a drag (or Alt+Arrow) reorders inside a section and between sections through ai:chatMove, with pinned
 // chats held at the top of their section, no drop into a folded section, and no dragging while a search is on;
 // the open chat's header renames, offers the same menu and returns to the list.
+// Rows are two lines (title, then the agent and age) behind the agent's mark; sections head with their count; Up,
+// Down, Home and End walk the rows and headers; the split layout's sidebar marks the open chat and carries the
+// filter; the layout switches to split at 760px and Ctrl+Tab steps through the chats (chatLayout.ts).
 // Method: part 1 runs the pure model (sessionsModel.ts) over fixed cases and seeded random drops. Part 2 bundles the
 // real view, header, store and Stacki's confirm host with esbuild and mounts them in jsdom against a fake preload
 // (window.avb) whose "main process" is the REAL list logic of electron/handlers/ai/chatStore.ts, so every move,
@@ -31,6 +34,7 @@ esbuild.buildSync({
       "import { ConfirmHost } from './src/ui/ConfirmDialog';",
       "import { useAiState } from './src/features/ai/aiStore';",
       "export * from './src/features/ai/sessions/sessionsModel';",
+      "export * from './src/features/ai/chatLayout';",
       "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
       "export { formattersFor } from './shared/core/i18n/format';",
       "export { aiState, resetAiStore, loadAiProject, openChat, receiveEvents, setChatListFilter, DEFAULT_CHAT_FILTER } from './src/features/ai/aiStore';",
@@ -39,6 +43,11 @@ esbuild.buildSync({
       'export function ListHarness() {',
       '  const state = useAiState();',
       '  return createElement(Fragment, null, createElement(ConfirmHost), createElement(SessionsView, { chats: state.chats }));',
+      '}',
+      // The list as the split layout's sidebar: the open chat marked, the filter beside the search.
+      'export function SidebarHarness() {',
+      '  const state = useAiState();',
+      "  return createElement(Fragment, null, createElement(ConfirmHost), createElement(SessionsView, { chats: state.chats, selected: state.open, layout: 'split' }));",
       '}',
       'export function HeaderHarness() {',
       '  const state = useAiState();',
@@ -263,11 +272,11 @@ test('lockPinned: after any drop the pinned chats are still first in every secti
   }
 });
 
-test('rows answer to P U R F A D with no modifier and nothing else', () => {
+test('rows answer to P R F A D with no modifier and nothing else', () => {
   const press = (key, init = {}) => sessions.rowShortcut({ key, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...init });
   assert.deepEqual(
-    ['p', 'u', 'r', 'f', 'a', 'd'].map((key) => press(key)),
-    ['pin', 'unread', 'rename', 'fork', 'archive', 'delete'],
+    ['p', 'r', 'f', 'a', 'd'].map((key) => press(key)),
+    ['pin', 'rename', 'fork', 'archive', 'delete'],
   );
   assert.equal(press('P'), 'pin', 'case does not matter');
   assert.equal(press('x'), undefined);
@@ -315,6 +324,62 @@ test('ages and context are written short', () => {
   assert.equal(sessions.contextSummary({ used: 900, size: 200_000 }), '900 of 200K tokens');
   assert.equal(sessions.contextSummary({ used: 1, size: 0 }), undefined);
   assert.equal(sessions.contextSummary(undefined), undefined);
+});
+
+test('layout: stacked below 760px and when not yet measured, split from 760px; a width that is not a width is refused', () => {
+  assert.equal(sessions.chatLayoutFor(undefined), 'stacked');
+  assert.equal(sessions.chatLayoutFor(0), 'stacked');
+  assert.equal(sessions.chatLayoutFor(759), 'stacked');
+  assert.equal(sessions.chatLayoutFor(760), 'split');
+  assert.equal(sessions.chatLayoutFor(1600), 'split');
+  assert.equal(sessions.CHAT_SPLIT_WIDTH_PX_MIN, sessions.CHAT_SIDEBAR_WIDTH_PX + 480, 'the threshold leaves the chat column 480px beside the sidebar');
+  assert.throws(() => sessions.chatLayoutFor(-1), /Assertion failed: chatLayoutFor: the width is not negative/);
+  assert.throws(() => sessions.chatLayoutFor(Number.NaN), /Assertion failed: chatLayoutFor: the width is finite/);
+});
+
+test('Ctrl+Tab steps to the next chat and Ctrl+Shift+Tab to the previous; other chords are not the panel’s', () => {
+  const key = (over) => ({ key: 'Tab', altKey: false, ctrlKey: true, metaKey: false, shiftKey: false, ...over });
+  assert.equal(sessions.chatStepFor(key({})), 'next');
+  assert.equal(sessions.chatStepFor(key({ shiftKey: true })), 'previous');
+  assert.equal(sessions.chatStepFor(key({ ctrlKey: false })), undefined, 'plain Tab moves focus');
+  assert.equal(sessions.chatStepFor(key({ metaKey: true })), undefined);
+  assert.equal(sessions.chatStepFor(key({ altKey: true })), undefined);
+  assert.equal(sessions.chatStepFor(key({ key: 'ArrowDown' })), undefined);
+});
+
+test('stepping through a list wraps at both ends and starts at an end when nothing is current', () => {
+  const order = ['a', 'b', 'c'];
+  assert.equal(sessions.stepThrough(order, 'a', 'next'), 'b');
+  assert.equal(sessions.stepThrough(order, 'c', 'next'), 'a');
+  assert.equal(sessions.stepThrough(order, 'a', 'previous'), 'c');
+  assert.equal(sessions.stepThrough(order, undefined, 'next'), 'a');
+  assert.equal(sessions.stepThrough(order, undefined, 'previous'), 'c');
+  assert.equal(sessions.stepThrough(order, 'gone', 'next'), 'a', 'a chat no longer listed starts from the top');
+  assert.equal(sessions.stepThrough([], undefined, 'next'), undefined);
+});
+
+test('the list order is the drawn order and leaves out folded sections', () => {
+  const sections = [section('1', 'Open', 0), section('2', 'Folded', 1, true)];
+  const chats = [chat('a', { rank: 1 }), chat('b', { rank: 0 }), chat('c', { section: sectionId('1') }), chat('d', { section: sectionId('2') })];
+  const { groups } = sessions.groupSessions(chats, sections, plain);
+  assert.deepEqual(
+    sessions.listOrder(groups).map((entry) => entry.id),
+    [chatId('b'), chatId('a'), chatId('c')],
+  );
+});
+
+test('arrow keys step the focus and stop at the ends; Home and End jump; modified arrows are not the list’s', () => {
+  const key = (name, over = {}) => ({ key: name, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...over });
+  assert.equal(sessions.listKeyStep(key('ArrowDown'), 0, 3), 1);
+  assert.equal(sessions.listKeyStep(key('ArrowDown'), 2, 3), 2, 'the end is the end');
+  assert.equal(sessions.listKeyStep(key('ArrowUp'), 0, 3), 0);
+  assert.equal(sessions.listKeyStep(key('ArrowUp'), 2, 3), 1);
+  assert.equal(sessions.listKeyStep(key('Home'), 2, 3), 0);
+  assert.equal(sessions.listKeyStep(key('End'), 0, 3), 2);
+  assert.equal(sessions.listKeyStep(key('ArrowDown', { altKey: true }), 0, 3), undefined, 'Alt+Arrow moves the chat');
+  assert.equal(sessions.listKeyStep(key('Enter'), 0, 3), undefined);
+  assert.equal(sessions.listKeyStep(key('ArrowDown'), 0, 0), undefined);
+  assert.throws(() => sessions.listKeyStep(key('ArrowDown'), 3, 3), /Assertion failed: listKeyStep: the focused row is in the list/);
 });
 
 // --- Part 2: the view in jsdom ----------------------------------------------
@@ -478,9 +543,11 @@ async function mountView(harness, index) {
   const rowOf = (title) => [...container.querySelectorAll('.ai-list-row')].find((element) => element.querySelector('.ai-list-title')?.textContent === title);
   const menuRows = () => [...document.querySelectorAll('[role="menu"] [role^="menuitem"]')];
   const menuTexts = () => menuRows().map(rowText);
+  // A row's letter is not printed in it (src/ui/shortcutTip.tsx tells it in a tooltip); the row carries it for screen readers.
+  const menuKeys = () => menuRows().map((element) => element.getAttribute('aria-keyshortcuts') ?? '');
   const menuRow = (label) => menuRows().find((element) => element.textContent.startsWith(label));
   const confirmButton = (label) => [...document.querySelectorAll('.confirm-dialog button')].find((element) => element.textContent === label);
-  return { container, main, click, press, unmount, titles, sectionOf, rowOf, menuRows, menuTexts, menuRow, confirmButton };
+  return { container, main, click, press, unmount, titles, sectionOf, rowOf, menuRows, menuTexts, menuKeys, menuRow, confirmButton };
 }
 
 const FIX = chatId('a');
@@ -519,7 +586,10 @@ test('the list shows the sections with their chats, pinned first, a dot for unre
 test('an empty project says what to do, with a button that starts a chat', async () => {
   const view = await mountView('ListHarness', chatStore.normalizeIndex({ version: 2, trusted: true, sections: [], chats: [] }));
   assert.match(view.container.textContent, /No chats yet/);
-  assert.ok([...view.container.querySelectorAll('button')].some((button) => button.textContent.includes('New chat')));
+  const start = [...view.container.querySelectorAll('button')].find((button) => button.textContent.includes('New chat'));
+  assert.ok(start, 'a button starts a chat');
+  assert.ok(start.classList.contains('ai-primary'), 'it is the blue primary button');
+  assert.ok(view.container.querySelector('.ai-sessions-empty svg'), 'a quiet mark above the words');
   assert.equal(view.container.querySelector('input[aria-label="Search chats"]') ?? undefined, undefined, 'nothing to search yet');
   await view.unmount();
 });
@@ -539,7 +609,8 @@ test('folding a section asks main and hides its rows; a folded one opens again',
 test('the “⋯” menu lists the actions with their letters; a letter does the action and closes the menu', async () => {
   const view = await mountView('ListHarness');
   await view.click(view.rowOf('App store flow').querySelector('.ai-row-more'));
-  assert.deepEqual(view.menuTexts(), ['Pin P', 'Mark as unread U', 'Rename R', 'Fork F', 'Move to section Apps', 'Archive A', 'Delete D']);
+  assert.deepEqual(view.menuTexts(), ['Pin', 'Rename', 'Fork', 'Move to section Apps', 'Archive', 'Delete']);
+  assert.deepEqual(view.menuKeys(), ['P', 'R', 'F', '', 'A', 'D'], 'each letter is the row’s shortcut, not its text');
   assert.ok(view.menuRow('Delete').classList.contains('is-danger'), 'delete is red');
   await view.press(document.activeElement, { key: 'p' });
   assert.deepEqual(view.main.named('aiChatUpdate').at(-1).payload, { projectPath: PROJECT, chat: chatId('d'), pinned: true });
@@ -548,7 +619,7 @@ test('the “⋯” menu lists the actions with their letters; a letter does the
   await view.click(view.rowOf('App store flow').querySelector('.ai-row-more'));
   assert.ok(view.menuRow('Unpin'), 'a pinned chat offers Unpin');
   await view.press(document.activeElement, { key: 'u' });
-  assert.equal(view.main.named('aiChatUpdate').at(-1).payload.unread, true);
+  assert.equal(view.main.named('aiChatUpdate').at(-1).payload.unread, undefined, 'U is not an action: nothing marks a chat unread by hand');
   await view.unmount();
 });
 
@@ -589,8 +660,9 @@ test('letters on a focused row act on that row; other keys and modified letters 
   assert.equal(view.main.named('aiChatUpdate').length, 0);
   await view.press(button('Lumos rem pass'), { key: 'p' });
   assert.deepEqual(view.main.named('aiChatUpdate').at(-1).payload, { projectPath: PROJECT, chat: chatId('e'), pinned: true });
+  const updates = view.main.named('aiChatUpdate').length;
   await view.press(button('Plan the launch'), { key: 'u' });
-  assert.deepEqual(view.main.named('aiChatUpdate').at(-1).payload, { projectPath: PROJECT, chat: chatId('b'), unread: false }, 'an unread chat is marked read');
+  assert.equal(view.main.named('aiChatUpdate').length, updates, 'U does nothing: unread is set by a finished turn, never by hand');
   await view.press(button('Sidebar idea'), { key: 'f' });
   assert.deepEqual(view.main.named('aiChatFork').at(-1).payload, { projectPath: PROJECT, chat: chatId('f') });
   await view.press(button('Fix the header'), { key: 'a' });
@@ -699,7 +771,8 @@ test('an archived chat’s menu offers Restore and Delete only', async () => {
   await act(async () => sessions.setChatListFilter({ ...sessions.aiState().filter, showArchived: true }));
   await settleUi();
   await view.click(view.container.querySelector('.ai-archived .ai-row-more'));
-  assert.deepEqual(view.menuTexts(), ['Restore A', 'Delete D']);
+  assert.deepEqual(view.menuTexts(), ['Restore', 'Delete']);
+  assert.deepEqual(view.menuKeys(), ['A', 'D']);
   await view.press(document.activeElement, { key: 'Escape' });
   await view.unmount();
 });
@@ -868,7 +941,8 @@ test('New section adds a section with a free name and puts its header into renam
   await view.press(view.container.querySelector('input.ai-section-rename'), { key: 'Escape' });
   // Delete "Apps" (three chats).
   await view.click(view.sectionOf('Apps').querySelector('.ai-row-more'));
-  assert.deepEqual(view.menuTexts(), ['Rename R', 'Move up', 'Move down', 'Delete section D']);
+  assert.deepEqual(view.menuTexts(), ['Rename', 'Move up', 'Move down', 'Delete section']);
+  assert.deepEqual(view.menuKeys(), ['R', '', '', 'D']);
   assert.equal(view.menuRow('Move up').disabled, true, 'the first section cannot go up');
   await view.press(document.activeElement, { key: 'd' });
   const dialog = document.querySelector('.confirm-dialog');
@@ -946,14 +1020,100 @@ test('500 chats render in a fair time', async () => {
   await view.unmount();
 });
 
+test('rows are two lines behind the agent’s mark: the title, then the agent and age; sections head with their count', async () => {
+  const view = await mountView('ListHarness');
+  // The chat was opened once, so the store follows its turn after the person went back to the list.
+  await act(async () => sessions.openChat(chatId('7')));
+  await act(async () => sessions.openChat(undefined));
+  sessions.receiveEvents({ projectPath: PROJECT, chat: chatId('7'), events: [{ kind: 'turn-start', turn: TURN, at: 1 }] });
+  await settleUi();
+  const row = view.rowOf('Plan the launch');
+  assert.ok(row.querySelector('.ai-row-lead svg'), 'the agent’s mark leads the row');
+  assert.ok(row.querySelector('.ai-row-lead .ai-unread-dot'), 'the unread dot sits on the mark');
+  assert.equal(row.querySelector('.ai-row-agent').textContent, 'Claude');
+  assert.match(row.querySelector('.ai-list-time').textContent, /^(now|\d+[mhd]|[A-Z][a-z]{2} \d+)$/);
+  assert.ok(view.rowOf('Fix the header').querySelector('.ai-row-line .ai-row-pin'), 'the pin follows the title');
+  // Booleans, not elements: a failed comparison would print a whole jsdom node.
+  assert.equal(view.rowOf('Running experiment').querySelector('.ai-list-time') === null, true, 'a running chat shows the loader, not an age');
+  const counts = Object.fromEntries(
+    [...view.container.querySelectorAll('.ai-section-head')].map((head) => [
+      head.querySelector('.ai-section-name').textContent,
+      head.querySelector('.ai-section-count')?.textContent,
+    ]),
+  );
+  assert.equal(counts['Apps'], String(view.sectionOf('Apps').querySelectorAll('.ai-list-row').length), 'a section counts what it lists');
+  assert.ok(Number(counts['Old']) > 0, 'a folded section still says how many it holds');
+  await view.unmount();
+});
+
+test('Up and Down walk the rows and section headers, Home and End jump, and Enter opens the focused chat', async () => {
+  const view = await mountView('ListHarness');
+  const focusable = () => [...view.container.querySelectorAll('button.ai-list-open, button.ai-section-toggle')];
+  const first = focusable()[0];
+  first.focus();
+  await view.press(first, { key: 'ArrowDown' });
+  assert.equal(document.activeElement, focusable()[1]);
+  await view.press(document.activeElement, { key: 'End' });
+  assert.equal(document.activeElement, focusable().at(-1));
+  await view.press(document.activeElement, { key: 'ArrowDown' });
+  assert.equal(document.activeElement, focusable().at(-1), 'the end is the end');
+  await view.press(document.activeElement, { key: 'Home' });
+  assert.equal(document.activeElement, first);
+  await view.press(document.activeElement, { key: 'ArrowUp' });
+  assert.equal(document.activeElement, first);
+  assert.ok(document.activeElement.matches('.ai-list-open'), 'the first stop is a chat');
+  // Enter on a focused button is the browser's click; jsdom does not synthesize it, so the click stands in.
+  const title = document.activeElement.querySelector('.ai-list-title').textContent;
+  await view.click(document.activeElement);
+  assert.equal(sessions.aiState().chats.find((entry) => entry.id === sessions.aiState().open)?.title, title, 'the focused chat opens');
+  await view.unmount();
+});
+
+test('as the sidebar, the list marks the open chat and carries the filter beside the search', async () => {
+  const view = await mountView('SidebarHarness');
+  assert.equal(view.container.querySelector('.ai-list-row.is-selected') ?? undefined, undefined, 'nothing open, nothing marked');
+  await act(async () => sessions.openChat(chatId('d')));
+  await settleUi();
+  const selected = [...view.container.querySelectorAll('.ai-list-row.is-selected')];
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].querySelector('.ai-list-title').textContent, 'App store flow');
+  assert.equal(selected[0].querySelector('.ai-list-open').getAttribute('aria-current'), 'true');
+  assert.ok(view.container.querySelector('.ai-sessions-tools button[aria-label="Filter chats"]'), 'the filter is in the list');
+  await view.unmount();
+});
+
+test('the search clears with its button and Escape, and a search with no match says so with the way back', async () => {
+  const view = await mountView('ListHarness');
+  const input = () => view.container.querySelector('input[aria-label="Search chats"]');
+  assert.equal(view.container.querySelector('.ui-search-clear') ?? undefined, undefined, 'nothing to clear');
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input(), 'zzz nothing');
+    input().dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await settleUi();
+  assert.match(view.container.textContent, /No chat matches/);
+  assert.equal(view.container.querySelectorAll('.ai-list-row').length, 0);
+  await view.click(view.container.querySelector('button.ui-search-clear[aria-label="Clear search"]'));
+  assert.equal(sessions.aiState().filter.query, '');
+  assert.ok(view.container.querySelectorAll('.ai-list-row').length > 0);
+  await act(async () => sessions.setChatListFilter({ ...sessions.aiState().filter, query: 'Fix' }));
+  await settleUi();
+  await view.press(input(), { key: 'Escape' });
+  assert.equal(sessions.aiState().filter.query, '', 'Escape empties the field');
+  await view.unmount();
+});
+
 // --- The header --------------------------------------------------------------
 
 test('on the list the header says Chats with a filter and a new chat button', async () => {
   const view = await mountView('HeaderHarness');
   assert.equal(view.container.querySelector('h2').textContent, 'Chats');
   assert.ok(view.container.querySelector('button[aria-label="Filter chats"]'));
-  assert.ok(view.container.querySelector('button[aria-label="New chat"]'));
+  const newChat = view.container.querySelector('button[aria-label="New chat"]');
+  assert.equal(newChat.classList.contains('ai-new-chat'), false, 'New chat is a plain header icon button, not a blue one');
   assert.equal(view.container.querySelector('button[aria-label="All chats"]') ?? undefined, undefined, 'nothing to go back to');
+  assert.equal(view.container.querySelector('.ai-header button[title]') ?? undefined, undefined, 'the buttons use the app’s tooltip, never the native one');
   await view.unmount();
 });
 
@@ -963,12 +1123,12 @@ test('the filter menu toggles archived, unread and pinned, picks an agent, and m
   assert.equal(trigger().classList.contains('on'), false);
   await view.click(trigger());
   assert.deepEqual(view.menuTexts(), ['Show archived', 'Only unread', 'Only pinned', 'Agent All']);
-  assert.match(document.querySelector('[role="menu"]').textContent, /Drag a chat to move it/, 'it says the order is the person’s');
   await view.click(view.menuRow('Show archived'));
   assert.equal(sessions.aiState().filter.showArchived, true);
   await view.click(view.menuRow('Only unread'));
   assert.equal(sessions.aiState().filter.onlyUnread, true);
   assert.equal(trigger().classList.contains('on'), true);
+  assert.ok(trigger().querySelector('.ai-filter-badge'), 'a dot on the funnel says a filter is on');
   await view.click(view.menuRow('Agent'));
   const codex = view.menuRows().find((row) => row.textContent.trim() === 'Codex');
   await view.click(codex);
@@ -976,32 +1136,20 @@ test('the filter menu toggles archived, unread and pinned, picks an agent, and m
   await view.unmount();
 });
 
-test('an open chat’s header: back, title, a menu with the same actions, and a double click renames', async () => {
+test('an open chat’s header: back, title, a menu of panel actions only, and a double click renames', async () => {
   const view = await mountView('HeaderHarness');
   await act(async () => sessions.openChat(chatId('d')));
   await settleUi();
   assert.equal(view.container.querySelector('h2').textContent, 'App store flow');
   assert.ok(view.container.querySelector('button[aria-label="All chats"]'));
   await view.click(view.container.querySelector('button[aria-label="Chat actions"]'));
-  assert.deepEqual(view.menuTexts(), [
-    'Ask me to keep AI changes Off: edits apply at once and can be undone. On: you choose Keep or Undo for each file.',
-    'Expand all',
-    'Collapse all',
-    'Pin P',
-    'Mark as unread U',
-    'Rename R',
-    'Fork F',
-    'Move to section Apps',
-    'Archive A',
-    'Delete D',
-  ]);
-  await view.press(document.activeElement, { key: 'r' });
-  let input = view.container.querySelector('input.ai-header-rename');
-  assert.ok(input, 'the title became a field');
-  await view.press(input, { key: 'Escape' });
+  // The chat's own actions (pin, rename, fork, move, archive, delete) are the list row's menu; no row has a paragraph under it.
+  assert.deepEqual(view.menuTexts(), ['Agents for tasks…', 'Ask me to keep AI changes', 'Expand all', 'Collapse all']);
+  assert.equal(document.querySelectorAll('[role="menu"] .menu-description').length, 0, 'no paragraph in the menu');
+  await view.press(document.activeElement, { key: 'Escape' });
   await act(async () => view.container.querySelector('h2').dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true, cancelable: true })));
-  input = view.container.querySelector('input.ai-header-rename');
-  assert.ok(input, 'a double click renames too');
+  const input = view.container.querySelector('input.ai-header-rename');
+  assert.ok(input, 'a double click renames');
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(input, 'Checkout flow');
@@ -1015,19 +1163,19 @@ test('an open chat’s header: back, title, a menu with the same actions, and a 
   await view.unmount();
 });
 
-test('archiving the open chat from its header returns to the list; deleting it asks first', async () => {
+test('Agents for tasks… opens a proper dialog card in the page layer, not inside the panel', async () => {
+  // Regression: the dialog lacked the shared `modal` card class, so it drew with no background over the canvas.
   const view = await mountView('HeaderHarness');
   await act(async () => sessions.openChat(chatId('d')));
   await settleUi();
   await view.click(view.container.querySelector('button[aria-label="Chat actions"]'));
-  await view.press(document.activeElement, { key: 'd' });
-  assert.ok(document.querySelector('.confirm-dialog'), 'asked first');
-  assert.equal(view.main.named('aiChatDelete').length, 0);
-  await view.click(view.confirmButton('Cancel'));
-  await view.click(view.container.querySelector('button[aria-label="Chat actions"]'));
-  await view.press(document.activeElement, { key: 'a' });
-  assert.equal(sessions.aiState().open, undefined);
-  assert.equal(view.container.querySelector('h2').textContent, 'Chats');
+  await view.click(view.menuRow('Agents for tasks…'));
+  const card = document.querySelector('.ai-agent-choices');
+  assert.ok(card, 'the dialog opened');
+  assert.ok(card.classList.contains('modal'), 'it wears the shared dialog card (background, radius)');
+  assert.equal(view.container.contains(card), false, 'it is portalled out of the panel, so no host (side panel, expanded, window) clips it');
+  assert.ok(card.closest('dialog'), 'it sits in a modal dialog above the scrim');
+  assert.ok(card.querySelector('h2') && card.querySelector('.ai-agent-choices-intro'), 'heading and intro are separate blocks, so text cannot overlap');
   await view.unmount();
 });
 

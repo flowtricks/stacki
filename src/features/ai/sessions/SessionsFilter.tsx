@@ -1,33 +1,35 @@
 // The filter button of the sessions list and its menu: show archived chats, only unread, only pinned, and one
 // agent. The order of the list is the person's own (drag), so the menu says so rather than offering a sort.
-// A mark on the funnel tells that something other than the defaults is on.
+// A blue dot on the funnel tells that something other than the defaults is on, so a list that looks short says why.
 import { AGENT_IDS, agentLabel } from '../../../../shared/properties/ai/agentIds';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
-import { FilterIcon } from '../../../ui/Icons';
+import { AgentIcon, FilterIcon, HideIcon, MailIcon, PinIcon } from '../../../ui/Icons';
+import { ProviderLogo } from '../AgentChoices';
 import Menu, { useMenuTrigger } from '../../../ui/Menu';
 import type { MenuEntry } from '../../../ui/Menu';
 import { setChatListFilter, useAiState } from '../aiStore';
 import type { ChatListFilter } from '../aiStore';
 import { isCustomFilter } from './sessionsModel';
+import { TipButton } from './TipButton';
 
 export function SessionsFilter() {
   const translate = useTranslate();
   const { filter } = useAiState();
   const trigger = useMenuTrigger();
+  const on = isCustomFilter(filter);
   return (
     <>
-      <button
-        ref={trigger.ref}
-        className={`ghost ai-filter-button${isCustomFilter(filter) ? ' on' : ''}`}
-        aria-label={translate('ai.sessions.filter')}
-        title={translate('ai.sessions.filter')}
-        aria-haspopup="menu"
-        aria-expanded={trigger.open}
+      <TipButton
+        buttonRef={trigger.ref}
+        className={`ai-filter-button${on ? ' on' : ''}`}
+        label={translate('ai.sessions.filter')}
+        menu={{ open: trigger.open }}
         onClick={trigger.toggle}
       >
         <FilterIcon size={14} />
-      </button>
+        {on && <span className="ai-filter-badge" aria-hidden="true" />}
+      </TipButton>
       <Menu
         open={trigger.open}
         anchor={trigger.anchor}
@@ -48,6 +50,7 @@ export function filterMenuEntries(filter: ChatListFilter, translate: Translator)
       kind: 'toggle',
       id: 'archived',
       label: translate('ai.sessions.filter.archived'),
+      icon: <HideIcon size={14} />,
       on: filter.showArchived,
       onChange: (showArchived) => change('showArchived', showArchived),
     },
@@ -55,6 +58,7 @@ export function filterMenuEntries(filter: ChatListFilter, translate: Translator)
       kind: 'toggle',
       id: 'unread',
       label: translate('ai.sessions.filter.unread'),
+      icon: <MailIcon size={14} />,
       on: filter.onlyUnread,
       onChange: (onlyUnread) => change('onlyUnread', onlyUnread),
     },
@@ -62,6 +66,7 @@ export function filterMenuEntries(filter: ChatListFilter, translate: Translator)
       kind: 'toggle',
       id: 'pinned',
       label: translate('ai.sessions.filter.pinned'),
+      icon: <PinIcon size={14} />,
       on: filter.onlyPinned,
       onChange: (onlyPinned) => change('onlyPinned', onlyPinned),
     },
@@ -70,12 +75,14 @@ export function filterMenuEntries(filter: ChatListFilter, translate: Translator)
       kind: 'submenu',
       id: 'agent',
       label: translate('ai.agent.switch.menu'),
+      icon: <AgentIcon size={14} />,
       value: filter.agent === undefined ? translate('ai.sessions.filter.all') : agentLabel(filter.agent),
       entries: [
         {
           kind: 'item',
           id: 'agent-all',
           label: translate('ai.sessions.filter.all'),
+          icon: <AgentIcon size={14} />,
           checked: filter.agent === undefined,
           onSelect: () => change('agent', undefined),
         },
@@ -83,12 +90,11 @@ export function filterMenuEntries(filter: ChatListFilter, translate: Translator)
           kind: 'item',
           id: `agent-${agent}`,
           label: agentLabel(agent),
+          icon: <ProviderLogo provider={agent} size={14} />,
           checked: filter.agent === agent,
           onSelect: () => change('agent', agent),
         })),
       ],
     },
-    { kind: 'divider', id: 'divider-order' },
-    { kind: 'note', id: 'order', text: translate('ai.sessions.filter.order') },
   ];
 }

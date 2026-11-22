@@ -129,7 +129,13 @@ function install(store, { chats = [] } = {}) {
       onAiEvents: () => () => undefined,
       onAiAgentStatus: () => () => undefined,
       onAiSetup: () => () => undefined,
+      // A hand-off reads the project's agent definitions (a project with none) and listens for their files changing.
+      listAgents: record('listAgents', () => ({ agents: [], paired: [], truncated: false })),
+      onInstructionsChanged: () => () => undefined,
     },
+    // The agent choice store reads the definitions again when the window regains focus.
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
   };
   return { calls, named: (name) => calls.filter((call) => call.name === name) };
 }

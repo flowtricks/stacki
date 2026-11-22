@@ -20,6 +20,7 @@ function fakePreferences({ stored, failSet = false }) {
     aiAskBeforeTrust: false,
     aiTrackChanges: true,
     aiReviewChanges,
+    codeChips: true,
   });
   window.avb = {
     settings: async () => everything(stored),

@@ -142,8 +142,8 @@ export function buildPrompt(source: PromptSource, content: PromptContent): Resul
   flush();
   const all = [...blocks, ...trailing, ...attachmentBlocks];
   assert(
-    all.length <= parts.length + content.attachments.length + AI_LIMITS.promptBlocksExtraMax,
-    'buildPrompt: blocks stay within the parts, attachments and the extras',
+    all.length <= parts.length + content.attachments.length * 2 + AI_LIMITS.promptBlocksExtraMax,
+    'buildPrompt: blocks stay within the parts, attachments (each with its note) and the extras',
   );
   assert(sent.length === parts.length, 'buildPrompt: one sent part per part');
   return ok({ blocks: all, sent });
@@ -155,11 +155,16 @@ export function inside(root: string, file: string): boolean {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-// The text of a prompt with attachments: each image inline, each project file as a link the agent reads itself.
+// The text of a prompt with attachments: each image inline (a screenshot's one-line note as a text block just
+// before it, so the agent reads which image the line describes), each project file as a link the agent reads itself.
+// The image travels as base64 in the block: no file is written for it (electron/handlers/ai/screenshotCapture.ts).
 function attachmentBlocksOf(root: string, attachments: readonly PromptAttachment[]): unknown[] {
   const blocks: unknown[] = [];
   for (const attachment of attachments) {
     if (attachment.kind === 'image') {
+      if (attachment.note !== undefined) {
+        blocks.push({ type: 'text', text: attachment.note });
+      }
       blocks.push({ type: 'image', mimeType: attachment.mimeType, data: attachment.data });
     } else {
       const file = path.resolve(root, attachment.path);
@@ -168,7 +173,7 @@ function attachmentBlocksOf(root: string, attachments: readonly PromptAttachment
       }
     }
   }
-  assert(blocks.length <= attachments.length, 'attachmentBlocksOf: never more blocks than attachments');
+  assert(blocks.length <= attachments.length * 2, 'attachmentBlocksOf: at most a note and an image per attachment');
   return blocks;
 }
 

@@ -28,6 +28,7 @@ import {
   type SectionId,
   type TurnId,
 } from '../properties/ai/chatModel';
+import { parseAutoCompactPercent } from '../properties/ai/autoCompact';
 import { parseRememberAction, parseRememberedSettings, type RememberedSettings } from '../properties/ai/rememberedSettings';
 import { parseMentionCandidates, parseMentionKinds, parseMentionQuery, parsePromptParts, type MentionCandidate } from '../properties/ai/mentions';
 import { parseMergeResolution, type MergeResolution } from './mergeResolution';
@@ -68,10 +69,32 @@ function title(input: unknown): string {
 }
 
 export type PromptAttachment =
-  | { readonly kind: 'image'; readonly name: string; readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; readonly data: string }
+  | {
+      readonly kind: 'image';
+      readonly name: string;
+      readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+      readonly data: string;
+      /** A screenshot's one-line description (kind and breakpoint), sent as text right before the image; never stored. */
+      readonly note?: string | undefined;
+    }
   | { readonly kind: 'file'; readonly path: string };
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
+
+/** A screenshot note's characters: one short line (`Screenshot 1: region, 768px breakpoint`). */
+export const SCREENSHOT_NOTE_CHARS_MAX = 500;
+
+// One line of plain text: a line break or control character would let the note pose as more of the message than it is.
+function screenshotNote(input: unknown): string {
+  const value = bounded(SCREENSHOT_NOTE_CHARS_MAX, 'attachment.note')(input);
+  if (value.trim() === '') {
+    throw new Error('attachment.note: expected text');
+  }
+  if (/\p{Cc}/u.test(value)) {
+    throw new Error('attachment.note: expected one line');
+  }
+  return value;
+}
 
 export function parsePromptAttachment(input: unknown): PromptAttachment {
   const value = record(input);
@@ -84,7 +107,9 @@ export function parsePromptAttachment(input: unknown): PromptAttachment {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
       throw new Error('attachment.data: expected base64');
     }
-    return { kind: 'image', name: bounded(AI_LIMITS.labelCharsMax, 'attachment.name')(value['name']), mimeType, data };
+    const name = bounded(AI_LIMITS.labelCharsMax, 'attachment.name')(value['name']);
+    const note = value['note'] === undefined ? undefined : screenshotNote(value['note']);
+    return note === undefined ? { kind: 'image', name, mimeType, data } : { kind: 'image', name, mimeType, data, note };
   }
   if (value['kind'] === 'file') {
     const path = pathText(value['path']);
@@ -199,8 +224,86 @@ export function parseSectionAction(input: unknown): SectionAction {
   }
 }
 
+/** Window CSS pixels a screenshot rect may reach each way: larger than any screen, so a rect past it is not one. */
+export const SCREENSHOT_RECT_PX_MAX = 16_384;
+
+/** A region of the sender's own window to photograph, in its CSS pixels. */
+export interface ScreenshotRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+function screenshotRect(input: unknown): ScreenshotRect {
+  const rect = object({ x: count, y: count, width: count, height: count })(input);
+  if (rect.width < 1) {
+    throw new Error('screenshot.rect: at least a pixel wide');
+  }
+  if (rect.height < 1) {
+    throw new Error('screenshot.rect: at least a pixel high');
+  }
+  if (rect.x + rect.width > SCREENSHOT_RECT_PX_MAX) {
+    throw new Error('screenshot.rect: past the window bound');
+  }
+  if (rect.y + rect.height > SCREENSHOT_RECT_PX_MAX) {
+    throw new Error('screenshot.rect: past the window bound');
+  }
+  return rect;
+}
+
+/** The frames a recording may hold; RECORDING_LIMITS.framesMax in electron/handlers/ai/screenRecorder.ts enforces it, the parsers check it. */
+export const RECORDING_FRAMES_MAX = 240;
+/** A recording's capture time before it stops by itself; RECORDING_LIMITS.durationMsMax enforces it. */
+export const RECORDING_DURATION_MS_MAX = 15_000;
+/** A thumbnail's base64 characters: 640 px on its longer side at JPEG 80 is tens of kilobytes; this is far above any real one. */
+const RECORDING_THUMB_CHARS_MAX = 400_000;
+/** A recording's id: `r` and 16 hex digits. */
+const RECORDING_ID = /^r[0-9a-f]{16}$/;
+
+/** What the composer asks of the one recording: start one over a rect, or read, stop, fetch a frame of, or free the one with `id`. */
+export type RecordAction =
+  | { readonly kind: 'start'; readonly rect: ScreenshotRect }
+  | { readonly kind: 'status'; readonly id: string }
+  | { readonly kind: 'stop'; readonly id: string }
+  | { readonly kind: 'frame'; readonly id: string; readonly index: number }
+  | { readonly kind: 'discard'; readonly id: string };
+
+function recordingId(input: unknown): string {
+  const value = text(input);
+  if (!RECORDING_ID.test(value)) {
+    throw new Error('record.id: expected a recording id');
+  }
+  return value;
+}
+
+function recordAction(input: unknown): RecordAction {
+  const value = record(input);
+  switch (value['kind']) {
+    case 'start':
+      return { kind: 'start', rect: screenshotRect(value['rect']) };
+    case 'status':
+    case 'stop':
+    case 'discard':
+      return { kind: value['kind'], id: recordingId(value['id']) };
+    case 'frame': {
+      const index = count(value['index']);
+      if (index >= RECORDING_FRAMES_MAX) {
+        throw new Error('record.index: past the frame bound');
+      }
+      return { kind: 'frame', id: recordingId(value['id']), index };
+    }
+    default:
+      throw new Error('record.kind: unknown action');
+  }
+}
+
 /** The payload parsers ipcPayloads.ts lists, one per channel. */
 export const AI_PAYLOADS = {
+  /** Photograph part of the sender's window for the composer: the bytes come back in the reply and are never written anywhere. */
+  'ai:screenshot': object({ projectPath, rect: screenshotRect }),
+  /** Record a region of the sender's window into main's memory, then read its thumbnails and frames; nothing is ever written anywhere. */
+  'ai:record': object({ projectPath, action: recordAction }),
   'ai:agents': object({ projectPath }),
   'ai:installAgent': object({ projectPath, agent: parseAgentId }),
   'ai:trust': object({ projectPath }),
@@ -223,6 +326,10 @@ export const AI_PAYLOADS = {
   'ai:prompt': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts), mode: optional(promptMode) }),
   'ai:steer': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts) }),
   'ai:compact': object({ projectPath, chat }),
+  /** The saved "Auto-compact at" percentage, if any. */
+  'ai:autoCompactGet': object({}),
+  /** `percent` undefined: the agent's own default. */
+  'ai:autoCompactSet': object({ percent: optional(parseAutoCompactPercent) }),
   'ai:chatFork': object({ projectPath, chat }),
   /** `section` undefined: the implicit first section. `before` undefined: after the section's last chat. */
   'ai:chatMove': object({ projectPath, chat, section: optional(section), before: optional(chat) }),
@@ -328,8 +435,47 @@ export interface AiStatusPush {
   readonly options: readonly ChatOption[] | undefined;
 }
 
+/** A screenshot as main encoded it: base64 of a PNG or JPEG no larger than the attachment bound, and its pixel size. */
+export interface ScreenshotReply {
+  readonly mimeType: 'image/png' | 'image/jpeg';
+  readonly data: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Why a recording stopped: the person, one of its bounds, a capture that failed, or it was freed. */
+export type RecordStopReason = 'person' | 'duration' | 'frames' | 'bytes' | 'failed' | 'discarded';
+const STOP_REASONS: readonly RecordStopReason[] = ['person', 'duration', 'frames', 'bytes', 'failed', 'discarded'];
+
+/** One frame as the sheet's strip sees it: its place, time, size and a small JPEG thumbnail. */
+export interface RecordedFrame {
+  readonly index: number;
+  readonly atMs: number;
+  readonly width: number;
+  readonly height: number;
+  readonly thumb: string;
+}
+
+export type RecordReply =
+  | { readonly kind: 'started'; readonly id: string }
+  | {
+      readonly kind: 'status';
+      readonly state: 'recording' | 'paused' | 'stopped';
+      readonly elapsedMs: number;
+      readonly frames: number;
+      readonly bytes: number;
+      /** Set once the recording stopped. */
+      readonly stopReason: RecordStopReason | undefined;
+    }
+  /** `fps`: the rate actually measured over the recording, to one decimal. */
+  | { readonly kind: 'stopped'; readonly frames: readonly RecordedFrame[]; readonly fps: number; readonly stopReason: RecordStopReason }
+  | { readonly kind: 'frame'; readonly image: ScreenshotReply }
+  | { readonly kind: 'discarded' };
+
 /** The result types ipcResults.ts lists, one per channel. */
 export interface AiResults {
+  readonly 'ai:screenshot': Result<ScreenshotReply, AiFailure>;
+  readonly 'ai:record': Result<RecordReply, AiFailure>;
   readonly 'ai:agents': AiAgentsReply;
   readonly 'ai:installAgent': Result<AgentAvailability, AiFailure>;
   readonly 'ai:trust': { readonly ok: true };
@@ -342,6 +488,8 @@ export interface AiResults {
   readonly 'ai:prompt': Result<{ readonly turn: TurnId }, AiFailure>;
   readonly 'ai:steer': Result<SteerReply, AiFailure>;
   readonly 'ai:compact': Result<{ readonly started: true }, AiFailure>;
+  readonly 'ai:autoCompactGet': AutoCompactReply;
+  readonly 'ai:autoCompactSet': AutoCompactReply;
   readonly 'ai:chatFork': Result<ChatSummary, AiFailure>;
   readonly 'ai:chatMove': Result<ChatList, AiFailure>;
   readonly 'ai:sections': Result<ChatList, AiFailure>;
@@ -540,6 +688,16 @@ export function parseSteerReply(input: unknown): SteerReply {
   return { turn: toTurnId(text(value['turn'])), outcome };
 }
 
+/** What `ai:autoCompactGet` and `ai:autoCompactSet` answer: the saved percentage, undefined for the agent's default. */
+export interface AutoCompactReply {
+  readonly percent: number | undefined;
+}
+
+export function parseAutoCompactReply(input: unknown): AutoCompactReply {
+  const percent = optional(parseAutoCompactPercent)(record(input)['percent']);
+  return { percent };
+}
+
 /** The success value of `ai:compact`. */
 export function parseCompactStarted(input: unknown): { readonly started: true } {
   if (record(input)['started'] !== true) {
@@ -553,6 +711,95 @@ export function parseDiffReply(input: unknown): DiffReply {
   const value = record(input);
   const side = optional(bounded(AI_LIMITS.fileCharsMax, 'diff'));
   return { oldText: side(value['oldText']), newText: side(value['newText']) };
+}
+
+/** The widest or tallest screenshot main returns: it downscales to this edge (electron/handlers/ai/screenshotCapture.ts). */
+export const SCREENSHOT_EDGE_PX_MAX = 1600;
+const SCREENSHOT_TYPES = ['image/png', 'image/jpeg'] as const;
+
+/** The success value of `ai:screenshot`: an image within the attachment bound and the edge bound. */
+export function parseScreenshotReply(input: unknown): ScreenshotReply {
+  const value = record(input);
+  const mimeType = SCREENSHOT_TYPES.find((type) => type === value['mimeType']);
+  if (mimeType === undefined) {
+    throw new Error('screenshot.mimeType: expected PNG or JPEG');
+  }
+  const data = bounded(AI_LIMITS.imageBase64CharsMax, 'screenshot.data')(value['data']);
+  if (data.length === 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
+    throw new Error('screenshot.data: expected base64');
+  }
+  const width = count(value['width']);
+  const height = count(value['height']);
+  for (const side of [width, height]) {
+    if (side < 1 || side > SCREENSHOT_EDGE_PX_MAX) {
+      throw new Error('screenshot: size outside the edge bound');
+    }
+  }
+  return { mimeType, data, width, height };
+}
+
+function stopReason(input: unknown): RecordStopReason {
+  const reason = STOP_REASONS.find((candidate) => candidate === input);
+  if (reason === undefined) {
+    throw new Error('record.stopReason: unknown reason');
+  }
+  return reason;
+}
+
+function recordedFrame(input: unknown): RecordedFrame {
+  const value = record(input);
+  const thumb = bounded(RECORDING_THUMB_CHARS_MAX, 'record.thumb')(value['thumb']);
+  if (thumb.length === 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(thumb)) {
+    throw new Error('record.thumb: expected base64');
+  }
+  const width = count(value['width']);
+  const height = count(value['height']);
+  for (const side of [width, height]) {
+    if (side < 1 || side > SCREENSHOT_EDGE_PX_MAX) {
+      throw new Error('record.frame: size outside the edge bound');
+    }
+  }
+  return { index: count(value['index']), atMs: count(value['atMs']), width, height, thumb };
+}
+
+/** The success value of `ai:record`, by the kind of answer. */
+export function parseRecordReply(input: unknown): RecordReply {
+  const value = record(input);
+  switch (value['kind']) {
+    case 'started':
+      return { kind: 'started', id: recordingId(value['id']) };
+    case 'status': {
+      const state = (['recording', 'paused', 'stopped'] as const).find((candidate) => candidate === value['state']);
+      if (state === undefined) {
+        throw new Error('record.state: unknown state');
+      }
+      const reason = value['stopReason'] === undefined ? undefined : stopReason(value['stopReason']);
+      return { kind: 'status', state, elapsedMs: count(value['elapsedMs']), frames: count(value['frames']), bytes: count(value['bytes']), stopReason: reason };
+    }
+    case 'stopped': {
+      const frames = toArray(value['frames']);
+      if (frames === undefined || frames.length > RECORDING_FRAMES_MAX) {
+        throw new Error('record.frames: expected a bounded array');
+      }
+      const parsed = frames.map(recordedFrame);
+      parsed.forEach((frame, index) => {
+        if (frame.index !== index) {
+          throw new Error('record.frames: indices in order');
+        }
+      });
+      const fps = value['fps'];
+      if (typeof fps !== 'number' || !Number.isFinite(fps) || fps < 0 || fps > 60) {
+        throw new Error('record.fps: expected a small rate');
+      }
+      return { kind: 'stopped', frames: parsed, fps, stopReason: stopReason(value['stopReason']) };
+    }
+    case 'frame':
+      return { kind: 'frame', image: parseScreenshotReply(value['image']) };
+    case 'discarded':
+      return { kind: 'discarded' };
+    default:
+      throw new Error('record.kind: unknown reply');
+  }
 }
 
 /** The success value of `ai:mentions`. */

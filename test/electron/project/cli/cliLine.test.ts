@@ -109,6 +109,11 @@ const LINES: ReadonlyArray<{ readonly words: string; readonly argv: readonly str
   { words: 'components move', argv: ['components', 'move', 'src/components/Card.astro', 'src/pages'], code: 1 },
   { words: 'components duplicate', argv: ['components', 'duplicate', 'src/components/Card.astro'], code: 0 },
   { words: 'components delete', argv: ['components', 'delete', 'src/components/Card.astro'], code: 1 },
+  { words: 'agents list', argv: ['agents', 'list'], code: 0 },
+  { words: 'agents show', argv: ['agents', 'show', 'code-reviewer'], code: 1 },
+  { words: 'agents create', argv: ['agents', 'create', 'code-reviewer', '--description', 'Reviews changes.', '--instructions', 'Read the diff.'], code: 0 },
+  { words: 'agents sync', argv: ['agents', 'sync', '--all'], code: 0 },
+  { words: 'agents delete', argv: ['agents', 'delete', 'code-reviewer'], code: 1 },
   { words: 'undo', argv: ['undo', 'abcdefgh1'], code: 1 },
 ];
 

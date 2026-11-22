@@ -85,6 +85,22 @@ export interface UnsettableEntry {
   readonly reason: string;
 }
 
+/**
+ * A `.stacki` folder of files that only domain commands change, never `config`: each file there is the source of files
+ * outside `.stacki` that a raw write would leave stale, so the commands write them all together with the app's own code.
+ */
+export interface DomainFolderEntry {
+  /** The `.stacki` folder, with its trailing `/`. */
+  readonly path: string;
+  readonly description: string;
+  /** The access feature (shared/properties/projectRoles.ts) a role needs to change the folder or what it generates, as the app's UI asks. */
+  readonly requires: string;
+  /** The commands that change it: words as in the command table. */
+  readonly commands: readonly string[];
+  /** The folders outside `.stacki` the commands generate files in, each with its trailing `/`. */
+  readonly generates: readonly string[];
+}
+
 // Builders: short, so a file's schema reads like its format.
 export const bool = (): ValueSchema => ({ kind: 'boolean' });
 export const integer = (min: number, max: number): ValueSchema => ({ kind: 'integer', min, max });

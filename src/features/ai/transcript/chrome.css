@@ -153,26 +153,6 @@
   border-radius: 6px;
   font-size: 12px;
 }
-/* The key that answers the button, drawn from its data-key so the button's text stays the agent's own words. */
-.ai-ask-actions button::before {
-  content: attr(data-key);
-  display: inline-grid;
-  place-items: center;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.16);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.ai-ask-actions button:not([data-key])::before {
-  display: none;
-}
-.ai-ask-actions .ai-reject::before,
-.ai-ask-actions .ai-allow-secondary::before {
-  background: rgba(127, 127, 127, 0.22);
-}
 .ai-ask-actions .ai-allow-secondary {
   background: var(--bg-active);
   color: var(--text);

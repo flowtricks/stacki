@@ -9,25 +9,44 @@
   position: absolute;
   bottom: 100%;
   inset-inline: 0;
-  margin-bottom: 4px;
+  margin-block-end: 4px;
   background: var(--bg-panel);
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   padding: 4px;
   display: flex;
   flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   z-index: 5;
 }
-.ai-commands button {
+/* The `/` menu's rows (SlashMenu.tsx): icon, name over a one-line description, and a skill's source at the end. */
+.ai-commands .ai-command {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   padding: 4px 8px;
+  border-radius: 6px;
   background: transparent;
   text-align: start;
 }
-.ai-commands button.on {
+.ai-commands .ai-command.on {
   background: var(--bg-active);
+}
+.ai-command-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-dim);
+}
+.ai-command-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
 .ai-command-name {
   font-family: var(--mono, ui-monospace, monospace);
@@ -41,26 +60,43 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ai-command-source {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.ai-command-skeleton {
+  min-height: 34px;
+}
+/* Nothing matches: the shared empty-state card fills the menu. */
+.ai-commands.ai-commands-empty {
+  padding: 0;
+  overflow: hidden;
+}
 /* The box: one slim row. The "+" and the right-hand buttons sit on the bottom edge so they stay put as the text grows. */
 .ai-composer {
-  background: var(--bg-input);
-  border-radius: 12px;
-  padding: 5px 6px;
+  /* Roomier and brighter than the panel, like Claude's own bar: a taller single line (about 50px), rounder corners and a fill a step lighter than the input fill. */
+  background: color-mix(in srgb, var(--bg-input), var(--text) 5%);
+  border-radius: 16px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .ai-composer-row {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 .ai-composer.is-blocked .ai-editor .cm-placeholder {
   color: var(--text-dim);
 }
 .ai-composer.is-blocked .ai-send {
-  background: var(--bg-active);
+  background: transparent;
   color: var(--text-faint);
   cursor: not-allowed;
 }
@@ -78,16 +114,16 @@
 .ai-composer .ai-editor .cm-editor {
   background: transparent;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 14.5px;
 }
 .ai-composer .ai-editor .cm-editor.cm-focused {
   outline: none;
 }
 .ai-composer .ai-editor .cm-content {
-  min-height: 26px;
-  padding: 4px 2px;
+  min-height: 32px;
+  padding: 5px 4px;
   font-family: inherit;
-  line-height: 18px;
+  line-height: 22px;
   caret-color: var(--text);
 }
 .ai-composer .ai-editor .cm-line {
@@ -101,11 +137,11 @@
   vertical-align: top;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--text-faint);
+  color: var(--text-dim);
 }
 .ai-plus {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   flex: none;
   display: inline-flex;
@@ -123,7 +159,7 @@
   align-items: center;
   gap: 2px;
   flex: none;
-  height: 26px;
+  height: 32px;
 }
 .ai-attachments {
   display: flex;
@@ -154,58 +190,49 @@
 .ai-tool-button.is-listening {
   color: var(--red);
 }
+/* Send and Stop as Claude's composer draws them: plain white icon buttons the size of the microphone, a subtle
+   hover fill, no coloured background; Send is not drawn at all while there is nothing to send. */
 .ai-send {
   width: 26px;
   height: 26px;
-  border-radius: 50%;
+  border-radius: 6px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: #fff;
+  background: transparent;
+  color: var(--text);
 }
 .ai-send:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--bg-hover);
 }
 .ai-send:active:not(:disabled) {
-  background: var(--accent-pressed);
+  background: var(--bg-pressed);
 }
-.ai-send-arrow {
-  transform: rotate(180deg);
+/* It appears with a short fade and slide when the box gets something to send; instant with reduced motion. */
+.ai-send:not(.ai-stop) {
+  animation: ai-send-in 140ms ease-out;
+}
+@keyframes ai-send-in {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-send:not(.ai-stop) {
+    animation: none;
+  }
 }
 .ai-stop-square {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 2px;
-  background: currentColor;
+  background: #fff;
 }
 .ai-compose-problem {
   font-size: 11px;
   color: var(--red);
-}
-.ai-dictation-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  background: var(--bg-input);
-  border-radius: 8px;
-  padding-block: 6px;
-  padding-inline: 10px 6px;
-}
-.ai-dictation-notice-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-.ai-dictation-settings {
-  margin-top: 4px;
-}
-.ai-dictation-dismiss {
-  flex: none;
 }
 .ai-compose-hint {
   font-size: 11px;
@@ -326,48 +353,102 @@
   border-radius: 7px;
 }
 
-/* The context panel the ring opens (ContextRing.tsx), drawn like a menu. */
+/* The context panel the ring opens (ContextRing.tsx): one compact card a clear step lighter than the composer, no borders. */
 .ai-ring-panel {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: min(260px, calc(100vw - 16px));
-  padding: 10px 12px;
+  inline-size: min(260px, calc(100vw - 16px));
+  padding: 12px;
   border: 0;
-  border-radius: 12px;
-  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-input), var(--text) 14%);
   color: var(--text);
   box-shadow:
     0 12px 32px rgba(0, 0, 0, 0.5),
     0 2px 6px rgba(0, 0, 0, 0.35);
-  font-size: 12px;
+  font-size: 13px;
 }
-.ai-ring-sentence {
+.ai-ring-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+.ai-ring-percent {
   font-variant-numeric: tabular-nums;
 }
-.ai-ring-sentence[data-tone='amber'] {
+.ai-ring-percent[data-tone='amber'] {
   color: #ffb340;
 }
-.ai-ring-sentence[data-tone='red'] {
+.ai-ring-percent[data-tone='red'] {
   color: var(--red);
 }
-.ai-ring-note {
-  color: var(--text-faint);
-  font-size: 11px;
+.ai-ring-tokens {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* The bar: a dark track, a bright fill (blue, amber from 70%, red from 90%), and a tick where auto-compaction starts. */
+.ai-ring-bar {
+  position: relative;
+  block-size: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+}
+.ai-ring-fill {
+  display: block;
+  block-size: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.ai-ring-bar[data-tone='amber'] .ai-ring-fill {
+  background: #ffb340;
+}
+.ai-ring-bar[data-tone='red'] .ai-ring-fill {
+  background: var(--red);
+}
+.ai-ring-tick {
+  position: absolute;
+  inset-block: -3px;
+  inline-size: 2px;
+  border-radius: 1px;
+  background: var(--text);
+}
+/* One row: Compact and the auto-compact picker side by side, each on one line. */
+.ai-ring-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .ai-ring-compact {
-  align-self: flex-start;
-  padding: 4px 11px;
-  border-radius: 7px;
-  background: var(--bg-active);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 30px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
   color: var(--text);
+  white-space: nowrap;
 }
 .ai-ring-compact:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.22);
 }
 .ai-ring-compact:disabled {
   opacity: 0.4;
+}
+.ai-ring-auto {
+  display: inline-flex;
+  flex: 1;
+  min-inline-size: 0;
+}
+.ai-ring-auto > * {
+  inline-size: 100%;
+  min-inline-size: 0;
+  white-space: nowrap;
 }
 
 /* Voice input: the waveform and the phrase being spoken sit in one quiet line under the box. */
@@ -419,4 +500,86 @@
 }
 .ai-voice-text.is-hint {
   color: var(--text-faint);
+}
+/* What a built-in command did ("Copied the chat as Markdown"): quiet, beside where a problem would show. */
+.ai-compose-note {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* The words being dictated, after the text and not part of it (dictationDraft.ts): dimmer and italic,
+   pulsing while Whisper decodes, always inline in the line that is there, so the box never grows for it.
+   Reduced motion keeps the dim style without the pulse. */
+.ai-dictation-draft {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.ai-dictation-draft.is-decoding {
+  animation: ai-dictation-draft-pulse 1.2s ease-in-out infinite;
+}
+/* The draft takes no room of its own: while it shows, the placeholder steps aside instead of sharing the line. */
+.cm-content:has(.ai-dictation-draft) .cm-placeholder {
+  display: none;
+}
+@keyframes ai-dictation-draft-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-dictation-draft.is-decoding {
+    animation: none;
+  }
+}
+
+/* A decode with no words to show yet pulses the microphone itself: no new element, no new line. */
+.ai-tool-button.is-decoding {
+  animation: ai-dictation-draft-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-tool-button.is-decoding {
+    animation: none;
+  }
+}
+
+/* The footer row and the voice line share one grid cell (ChatComposer.tsx): the footer sets the height and
+   stays in the layout while hidden, the voice line fades in over it, so nothing moves. */
+.ai-compose-footer {
+  display: grid;
+}
+.ai-compose-footer > * {
+  grid-area: 1 / 1;
+  min-inline-size: 0;
+}
+.ai-compose-footer-status {
+  transition: opacity 120ms ease;
+}
+.ai-compose-footer.is-dictating .ai-compose-footer-status {
+  visibility: hidden;
+  opacity: 0;
+}
+.ai-compose-footer-voice {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  animation: ai-compose-footer-in 120ms ease;
+}
+.ai-compose-footer-voice .ai-voice-line {
+  min-block-size: 0;
+  block-size: 100%;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+@keyframes ai-compose-footer-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-compose-footer-status {
+    transition: none;
+  }
+  .ai-compose-footer-voice {
+    animation: none;
+  }
 }
