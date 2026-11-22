@@ -6,7 +6,7 @@ import { STUDIO_INSTALL_STAGES, studioCompletedStages, type StudioInstallStage }
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { StudioActivity } from './useStudioSetup';
 
-const STAGE_LABELS: Readonly<Record<StudioInstallStage, MessageKey>> = {
+export const STAGE_LABELS: Readonly<Record<StudioInstallStage, MessageKey>> = {
   release: 'studioSetup.stage.release',
   files: 'studioSetup.stage.files',
   dependencies: 'studioSetup.stage.dependencies',

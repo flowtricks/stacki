@@ -314,93 +314,147 @@
   font: 11px/1.6 monospace;
 }
 
+/* The Studio tab in Settings: two labelled sections (the shared small heading from settings.css), 24px apart like
+   every other tab. One spacing scale: 4, 8, 12, 16, 24. Fills only, never borders or dividers. */
 .studio-project-settings {
-  padding: 0;
-}
-/* In Settings: the tab's opening sentence, then the install card on a fill. */
-.studio-project-settings-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
+  padding: 0;
 }
-.studio-project-settings .studio-install-actions {
+.studio-project-settings p {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* The status card: a header row (mark, name over status, actions at the inline end), then the state's own rows. */
+.studio-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 16px;
   border-radius: 10px;
   background: var(--bg-hover);
 }
-.studio-project-settings h2 {
-  font-size: 14px;
-  margin: 0 0 24px;
+.studio-status-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
-.studio-project-settings h3 {
-  font-size: 13px;
-  margin: 0 0 8px;
-}
-.studio-project-settings p {
-  color: #aaa;
-  line-height: 1.6;
-  margin: 8px 0 16px;
-}
-.studio-install-actions {
+/* The mark sits straight on the card fill, no tile: it is drawn in currentColor, so the light text colour keeps it
+   visible on the dark card by itself. */
+.studio-status-mark {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 40px;
+  block-size: 40px;
+  color: var(--text);
 }
-.studio-install-option > button {
-  width: auto;
-  padding: 8px 14px;
-  background: #fff;
-  border-color: #fff;
-  color: #111;
+.studio-status-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
-.studio-install-option > button:hover:not(:disabled) {
-  background: #e8e8e8;
-  border-color: #e8e8e8;
+.studio-status-name {
+  font-size: 13px;
+  font-weight: 600;
 }
-.studio-project-settings .studio-setup-note {
-  font-size: 11px;
-}
-.studio-install-option > .studio-install-status {
-  display: block;
-  margin: 0 0 8px;
-  color: #aaa;
+.studio-install-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  color: var(--text-dim);
   font-size: 12px;
 }
-.studio-install-option > .studio-install-status[data-state='installed'] {
-  color: #8bd8a2;
-}
-.studio-install-option > .studio-install-status[data-state='blocked'] {
+.studio-install-status[data-state='blocked'] {
   color: #e5bf83;
 }
+.studio-install-status[data-state='failed'] {
+  color: var(--red);
+}
+.studio-status-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.studio-status-actions > button {
+  padding: 8px 14px;
+}
 
+/* "Run it yourself" and the backup note: a quiet summary with the shared chevron, pointing at the inline end while
+   closed and down while open. */
+.studio-disclosure > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.studio-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.studio-disclosure > summary:hover {
+  color: var(--text);
+}
+.studio-disclosure-chevron {
+  transform: rotate(-90deg);
+  transition: transform 0.15s;
+}
+:root[dir='rtl'] .studio-disclosure-chevron {
+  transform: rotate(90deg);
+}
+.studio-disclosure[open] .studio-disclosure-chevron {
+  transform: none;
+}
+.studio-disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block-start: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-disclosure-chevron {
+    transition: none;
+  }
+}
+
+/* The command to run yourself: highlighted shell on a fill, the shared secondary Copy button beside it. */
 .studio-install-command {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
 }
 .studio-install-command > p {
-  margin: 0 0 8px;
   font-size: 12px;
 }
 .studio-install-command-box {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid #333;
+  padding-block: 8px;
+  padding-inline: 12px 8px;
   border-radius: 8px;
-  background: #111;
+  background: var(--bg-active);
 }
-.studio-install-command-box code {
+.studio-install-command-code {
   flex: 1;
   min-width: 0;
-  user-select: text;
   overflow-wrap: anywhere;
-  font:
-    12px/1.6 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .studio-install-command-box button {
   display: inline-flex;
@@ -420,7 +474,6 @@
   clip-path: inset(50%);
 }
 .studio-install-command > [role='alert'] {
-  margin: 8px 0 0;
   color: #ff9b92;
 }
 @media (max-width: 540px) {
@@ -451,11 +504,11 @@
   .studio-account-card {
     padding: 12px;
   }
-  .studio-install-actions {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: start;
+  .studio-status-header {
+    flex-wrap: wrap;
   }
-  .studio-install-command {
-    width: 100%;
+  .studio-status-actions {
+    inline-size: 100%;
+    justify-content: flex-start;
   }
 }

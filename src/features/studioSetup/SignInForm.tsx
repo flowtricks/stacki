@@ -11,28 +11,15 @@ import {
   type StudioAuthKind,
   type StudioAuthProblem,
 } from '../../../shared/ipc/studioAuth';
-import { centralIcon } from '../../ui/central/CentralIcon';
-import { globe, person } from '../../ui/central/centralGeometry';
 import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { CheckIcon, CopyIcon, GitHubIcon, LockIcon, UsersIcon } from '../../ui/Icons';
+import { CheckIcon, CopyIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { SignInProviderIcon } from './signInProviderIcons';
 import { SIGN_IN_FIELDS, STUDIO_AUTH_KINDS, draftFieldValue } from './signInChoices';
 import { useCopyText } from './useCopyText';
 import './studioAuth.css';
-
-// Central has no Google mark, key or fingerprint in this repository's icon set, so those choices
-// wear neutral Central icons beside their names. GitHub keeps its brand mark, which is in the set.
-const GlobeIcon = centralIcon(globe);
-const PersonIcon = centralIcon(person);
-const KIND_ICON: Readonly<Record<StudioAuthKind, (props: { readonly size?: number }) => ReactNode>> = {
-  github: GitHubIcon,
-  access: LockIcon,
-  google: GlobeIcon,
-  oidc: UsersIcon,
-  passkey: PersonIcon,
-};
 
 const FIELD_LABEL = {
   teamDomain: 'studioSetup.auth.field.teamDomain',
@@ -85,12 +72,11 @@ export default function SignInFormView({ form }: { readonly form: SignInForm }) 
 
 function KindRow({ kind, selected, onSelect }: { readonly kind: StudioAuthKind; readonly selected: boolean; readonly onSelect: () => void }) {
   const translate = useTranslate();
-  const Icon = KIND_ICON[kind];
   return (
     <label className="studio-auth-option" data-selected={selected}>
       <input type="radio" name="studio-auth-kind" value={kind} checked={selected} onChange={onSelect} />
       <span className="studio-auth-option-icon" aria-hidden="true">
-        <Icon size={16} />
+        <SignInProviderIcon provider={kind} size={16} />
       </span>
       <span className="studio-auth-option-text">
         <strong>{translate(`studioSetup.auth.kind.${kind}.label`)}</strong>
