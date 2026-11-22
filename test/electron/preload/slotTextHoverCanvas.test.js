@@ -187,7 +187,12 @@ const PAGE_SOURCE = [
        };
        const middle = (box) => ({ x: box.x + box.w / 2, y: box.y + box.h / 2 });
        out.first = await boxes('a.button', 0);
-       out.firstHover = await hoverAt(middle(out.first.words), 'first button words');
+       // The first hover may land before the frame has taken in the track and catalog messages just posted
+       // (a CI runner read none, 1.4.12): rest the pointer again, at most five times, until a hover is reported.
+       // Words that are never outlined still fail, after the fifth try.
+       for (let attempt = 0; attempt < 5 && out.firstHover === undefined; attempt += 1) {
+         out.firstHover = await hoverAt(middle(out.first.words), 'first button words, try ' + (attempt + 1));
+       }
        out.paddingHover = await hoverAt({ x: out.first.element.x + 6, y: out.first.element.y + out.first.element.h / 2 }, 'first button padding');
        out.second = await boxes('a.button', 1);
        out.secondHover = await hoverAt(middle(out.second.words), 'second button words');
