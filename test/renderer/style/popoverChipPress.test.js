@@ -61,6 +61,10 @@ const userCloses = (panel) => panel.popovers.events.filter((event) => event.kind
 async function panelEvents(panel, { seed }) {
   await panel.data('the canvas answers', () => panel.bridge.release({ order: 'shuffle', seed }));
   panel.bridge.mode = 'immediate';
+  // Queries the panel sent while the first answers were landing were still held when the mode
+  // changed; on a slow runner they were the rematch's own, so it waited on their 1.5 s deadline,
+  // which the harness never fires (1.4.12, Linux and macOS). The canvas answers them too.
+  await panel.data('the late queries are answered', () => panel.bridge.release({ order: 'fifo' }));
   await panel.data('the page adds a class that moves the default pick', () => panel.setPageClasses('n2', ['is-ready', 'heading']));
   // The rematch lands when it lands: a loaded runner took longer than the 100 ms once waited here (1.4.12, macOS),
   // so wait on the active chip (a bounded poll, test/helpers/waitFor.js) and read it after.
