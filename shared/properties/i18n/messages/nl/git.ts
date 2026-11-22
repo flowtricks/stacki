@@ -44,10 +44,13 @@ export const messages = {
   'git.branch.currentLabel': '{branch}, huidige branch',
   'git.branch.delete': '{branch} verwijderen',
   'git.branch.error.at': '“@” is de eigen naam van Git voor de huidige branch.',
+  'git.branch.error.component': 'Een deel van de naam mag niet met “.” beginnen of “..” bevatten.',
+  'git.branch.error.conflict': '“{branch}” is al een branch, en een naam mag niet in of om een andere staan (“a” en “a/b”).',
   'git.branch.error.endsDot': 'Een naam mag niet eindigen op “.”.',
   'git.branch.error.endsSlash': 'Een naam mag niet eindigen op “/”.',
   'git.branch.error.exists': '{branch} bestaat al.',
   'git.branch.error.existsCase': '{branch} bestaat al, en namen die alleen in hoofdletters verschillen zijn hier dezelfde branch.',
+  'git.branch.error.head': '“HEAD” is gereserveerd door git.',
   'git.branch.error.lock': '“.lock” is gereserveerd door Git.',
   'git.branch.heading': 'Branches', // same
   'git.branch.indicator.detached': 'Detached HEAD', // same
@@ -136,12 +139,21 @@ export const messages = {
   'git.conflict.yourEdit': 'Jouw bewerking',
   'git.conflict.yourEdits': 'Jouw bewerkingen',
   'git.done': 'Klaar',
+  'git.error.authFailed': 'GitHub heeft je aanmelding niet geaccepteerd. Meld je opnieuw aan in de publicatie-instellingen en probeer het dan opnieuw.',
+  'git.error.branchExists': 'Er bestaat al een branch met die naam.',
+  'git.error.branchNameConflict': '“{branch}” is al een branch, en een branchnaam mag niet in of om een andere staan. Kies een andere naam.',
+  'git.error.branchNameInvalid': 'Dat is geen naam die git voor een branch accepteert. Gebruik letters, cijfers, “-”, “_”, “.” en “/”, zonder spaties.',
   'git.error.cloneNotAstro': 'Gedownload naar {path}, maar de root is geen Astro-project. Gebruik Project openen om de Astro-map erin te kiezen.',
   'git.error.commitNothingPicked': 'Er is niets gekozen om op te slaan — kies minstens één bestand.',
   'git.error.deleteFailed': '“{branch}” kon niet worden verwijderd.',
   'git.error.deleteSelf': '“{branch}” is de branch waarop je zit — schakel eerst over naar een andere.',
   'git.error.deleteTrunk': '“{branch}” is de branch waar alles naar terugkeert. Verwijderen zou het project zonder hoofdlijn van het werk achterlaten.',
   'git.error.deleteWorktree': '“{branch}” is uitgecheckt in een andere worktree ({path}). Sluit of verlaat die eerst.',
+  'git.error.detachedHead': 'Je zit niet op een branch, dus er is niets om te versturen of te pullen. Schakel eerst over naar een branch.',
+  'git.error.identityMissing':
+    'Git weet nog niet wie je bent. Stel je naam en e-mailadres in (git config --global user.name en user.email) en sla dan opnieuw op.',
+  'git.error.locked':
+    'Er draait nog een andere Git-bewerking in dit project. Wacht even en probeer het opnieuw; als die nooit klaar komt, sluit dan andere Git-tools.',
   'git.error.mergeBranchChanged': 'De huidige branch is gewijzigd. Open de merge opnieuw om hem nogmaals te controleren.',
   'git.error.mergeChangedSinceReview': 'De merge is gewijzigd sinds de controle. Open hem opnieuw om het nieuwe resultaat te controleren.',
   'git.error.mergeFailed': '“{branch}” kon niet worden gemerged in “{into}”.',
@@ -149,14 +161,33 @@ export const messages = {
   'git.error.mergeFilesChanged': 'De bestanden met conflicten zijn gewijzigd. Open de merge opnieuw om ze nogmaals te controleren.',
   'git.error.mergeFinishFailed': 'Het mergen van “{branch}” kon niet worden afgerond.',
   'git.error.mergeSelf': '“{branch}” is de branch waarop je zit — er is niets om in te mergen.',
+  'git.error.messageTooLong': 'Dat bericht is te lang. Maak het korter en probeer het opnieuw.',
+  'git.error.noRemote': 'Dit project heeft nog geen gekoppelde GitHub-repository. Publiceer het eerst.',
+  'git.error.notInstalled': 'Git is niet geïnstalleerd, of Stacki kan het niet vinden. Installeer Git en open het project opnieuw.',
+  'git.error.nothingToCommit': 'Er is niets nieuws om op te slaan.',
+  'git.error.offline': 'GitHub is niet bereikbaar. Controleer je internetverbinding en probeer het opnieuw.',
+  'git.error.operationInProgress':
+    'Er is een onafgemaakte {operation} in dit project. Rond die eerst af of breek hem af (bijvoorbeeld met “git {operation} --abort”) en probeer het dan opnieuw.',
   'git.error.originExists': 'Dit project heeft al een origin-remote. Die is ongewijzigd gelaten.',
+  'git.error.outputTooLarge':
+    'Dit project heeft meer gewijzigde bestanden dan Stacki kan tonen. Voeg de gegenereerde mappen (zoals node_modules) toe aan .gitignore.',
   'git.error.pullBranchChanged': 'De huidige branch is gewijzigd. Ververs Git en probeer opnieuw te pullen.',
+  'git.error.pushRejected': 'GitHub heeft wijzigingen die dit project nog niet heeft. Pull eerst en verstuur dan opnieuw. Stacki overschrijft ze nooit.',
+  'git.error.refInvalid': 'Die versie is niet gevonden.',
   'git.error.restoreMissing': 'Die versie heeft dit bestand niet — het is later toegevoegd.',
   'git.error.restoreUnsaved': 'Er zijn hier niet-opgeslagen wijzigingen. Sla ze eerst op — teruggaan zou ze overschrijven.',
+  'git.error.signingFailed':
+    'Git kon de commit niet ondertekenen. Controleer je ondertekeningssleutel of zet ondertekenen uit met “git config commit.gpgsign false”.',
+  'git.error.statusTooLarge':
+    'Er zijn meer dan {count} bestanden gewijzigd. Voeg gegenereerde mappen (zoals node_modules) toe aan .gitignore en open de lijst dan opnieuw.',
   'git.error.switchFailed': 'Overschakelen naar “{branch}” is mislukt.',
+  'git.error.timedOut':
+    'Git deed er te lang over en is gestopt. Probeer het opnieuw; als het blijft gebeuren, controleer dan op een traag netwerk of een trage commit-hook.',
   'git.error.unparkDirty': 'Je werk op “{branch}” blijft geparkeerd omdat deze branch lokale wijzigingen heeft.',
   'git.error.unparkFailed':
     'Je werk op “{branch}” blijft geparkeerd — het kon niet automatisch worden teruggezet omdat de branch eronder is gewijzigd. Het is veilig: haal het terug met `git stash list` en `git stash pop`.',
+  'git.error.unsafeDirectory':
+    'Git vertrouwt deze map niet omdat een andere gebruiker de eigenaar is ({path}). Voer “git config --global --add safe.directory {path}” uit en open het project dan opnieuw.',
   'git.file.changed': 'Gewijzigd',
   'git.file.changed.inVersion': 'Gewijzigd in deze versie',
   'git.file.changed.why': 'Dit bestand heeft wijzigingen die nog niet zijn opgeslagen',

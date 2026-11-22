@@ -135,6 +135,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'Для Studio нужен Node.js 22.19 или новее. Обновите Node.js и повторите.',
   'error.studio.npmFailed': 'Studio не удалось выполнить npm {command}. См. вывод выше. Ваш проект не заменён.',
   'error.studio.releaseFileTooLarge': 'Выберите JSON-файл выпуска Studio меньше 32 МБ.',
+  'error.studio.restoreNotReady': 'Здесь нет предыдущей версии Studio для восстановления.',
+  'error.studio.upgradeNotReady': 'Studio здесь больше нельзя обновить. Более нового выпуска нет. Снова откройте настройки, чтобы проверить ещё раз.',
   'error.terminal.missingId': 'Не указан ID терминала.',
   'error.terminal.outsideProject': 'Терминал можно открыть только внутри текущего проекта.',
   'error.thumbnails.devServerSlow': 'сервер разработки не запустился вовремя',

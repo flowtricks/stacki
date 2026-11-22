@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': 'ניסיון חוזר',
   'ui.search': 'חיפוש…',
   'ui.shortcutRecorder.pressKeys': 'יש ללחוץ על מקשים…',
+  'ui.shortcutTip': '{label} ({shortcut})', // same
   'ui.windowResize.e': 'שינוי גודל החלון (ימין)',
   'ui.windowResize.n': 'שינוי גודל החלון (למעלה)',
   'ui.windowResize.ne': 'שינוי גודל החלון (למעלה מימין)',

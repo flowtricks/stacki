@@ -224,6 +224,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Each default attribute needs a name.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} is not an attribute name.',
   'editor.propDeclaration.attributes.restTaken': 'This component already passes its other attributes on as {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'Fix the code in this component’s frontmatter before connecting its attributes.',
   'editor.propDeclaration.attributes.tooMany': 'That is too many attributes.',
   'editor.propDeclaration.attributes.valueTooLong': 'The value of {name} is too long.',
   'editor.propDeclaration.codeType.multiline': 'Write the code type on one line, without a semicolon.',

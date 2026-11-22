@@ -16,6 +16,9 @@ export const LOCALE_DEFAULT: Locale = 'en';
 /** Text direction of a locale, for the `dir` attribute. */
 export type TextDirection = 'ltr' | 'rtl';
 
+/** The countries whose flags are vendored in `src/ui/flags/flagPaths.ts`; that table is keyed by this union, so a flag without artwork cannot compile. */
+export type FlagCountry = 'br' | 'cn' | 'de' | 'es' | 'fr' | 'id' | 'il' | 'in' | 'it' | 'jp' | 'kr' | 'nl' | 'pl' | 'ru' | 'sa' | 'tr' | 'tw' | 'us';
+
 export interface LocaleInfo {
   /**
    * The language written in itself, never translated: a person who cannot read the current language must still find their own in the
@@ -26,28 +29,40 @@ export interface LocaleInfo {
   readonly directory: string;
   /** Right to left for Arabic and Hebrew; the document root's `dir` follows it, and the interface lays out with logical properties. */
   readonly direction: TextDirection;
+  /**
+   * The short mark: two letters of the language code, and for the two Chinese locales the script's own character (简, 繁), because their
+   * codes share "ZH". It is the fallback `LocaleMark` draws only when `flag` has no artwork.
+   */
+  readonly mark: string;
+  /**
+   * The country flag drawn beside the language in the switcher (`LocaleMark`). A language is not a country, so each is a judgement call:
+   * English is the United States (the largest English-speaking audience; GB is the alternative), Arabic is Saudi Arabia (the most
+   * widely recognised neutral choice; EG or AE would also do), Portuguese is Brazil (the catalog is pt-BR), Chinese is China for
+   * simplified and Taiwan for traditional, Hindi is India, and the rest are their own country.
+   */
+  readonly flag: FlagCountry;
 }
 
 /** One row per shipped locale; the compiler rejects a locale without a row. */
 export const LOCALE_INFO = {
-  en: { nativeName: 'English', directory: 'en', direction: 'ltr' },
-  es: { nativeName: 'Español', directory: 'es', direction: 'ltr' },
-  fr: { nativeName: 'Français', directory: 'fr', direction: 'ltr' },
-  de: { nativeName: 'Deutsch', directory: 'de', direction: 'ltr' },
-  'pt-BR': { nativeName: 'Português (Brasil)', directory: 'ptBR', direction: 'ltr' },
-  it: { nativeName: 'Italiano', directory: 'it', direction: 'ltr' },
-  nl: { nativeName: 'Nederlands', directory: 'nl', direction: 'ltr' },
-  pl: { nativeName: 'Polski', directory: 'pl', direction: 'ltr' },
-  tr: { nativeName: 'Türkçe', directory: 'tr', direction: 'ltr' },
-  ru: { nativeName: 'Русский', directory: 'ru', direction: 'ltr' },
-  id: { nativeName: 'Bahasa Indonesia', directory: 'id', direction: 'ltr' },
-  hi: { nativeName: 'हिन्दी', directory: 'hi', direction: 'ltr' },
-  ar: { nativeName: 'العربية', directory: 'ar', direction: 'rtl' },
-  he: { nativeName: 'עברית', directory: 'he', direction: 'rtl' },
-  ja: { nativeName: '日本語', directory: 'ja', direction: 'ltr' },
-  ko: { nativeName: '한국어', directory: 'ko', direction: 'ltr' },
-  'zh-CN': { nativeName: '中文（简体）', directory: 'zhCN', direction: 'ltr' },
-  'zh-TW': { nativeName: '中文（繁體）', directory: 'zhTW', direction: 'ltr' },
+  en: { nativeName: 'English', directory: 'en', direction: 'ltr', mark: 'EN', flag: 'us' },
+  es: { nativeName: 'Español', directory: 'es', direction: 'ltr', mark: 'ES', flag: 'es' },
+  fr: { nativeName: 'Français', directory: 'fr', direction: 'ltr', mark: 'FR', flag: 'fr' },
+  de: { nativeName: 'Deutsch', directory: 'de', direction: 'ltr', mark: 'DE', flag: 'de' },
+  'pt-BR': { nativeName: 'Português (Brasil)', directory: 'ptBR', direction: 'ltr', mark: 'PT', flag: 'br' },
+  it: { nativeName: 'Italiano', directory: 'it', direction: 'ltr', mark: 'IT', flag: 'it' },
+  nl: { nativeName: 'Nederlands', directory: 'nl', direction: 'ltr', mark: 'NL', flag: 'nl' },
+  pl: { nativeName: 'Polski', directory: 'pl', direction: 'ltr', mark: 'PL', flag: 'pl' },
+  tr: { nativeName: 'Türkçe', directory: 'tr', direction: 'ltr', mark: 'TR', flag: 'tr' },
+  ru: { nativeName: 'Русский', directory: 'ru', direction: 'ltr', mark: 'RU', flag: 'ru' },
+  id: { nativeName: 'Bahasa Indonesia', directory: 'id', direction: 'ltr', mark: 'ID', flag: 'id' },
+  hi: { nativeName: 'हिन्दी', directory: 'hi', direction: 'ltr', mark: 'HI', flag: 'in' },
+  ar: { nativeName: 'العربية', directory: 'ar', direction: 'rtl', mark: 'AR', flag: 'sa' },
+  he: { nativeName: 'עברית', directory: 'he', direction: 'rtl', mark: 'HE', flag: 'il' },
+  ja: { nativeName: '日本語', directory: 'ja', direction: 'ltr', mark: 'JA', flag: 'jp' },
+  ko: { nativeName: '한국어', directory: 'ko', direction: 'ltr', mark: 'KO', flag: 'kr' },
+  'zh-CN': { nativeName: '中文（简体）', directory: 'zhCN', direction: 'ltr', mark: '简', flag: 'cn' },
+  'zh-TW': { nativeName: '中文（繁體）', directory: 'zhTW', direction: 'ltr', mark: '繁', flag: 'tw' },
 } as const satisfies Record<Locale, LocaleInfo>;
 
 /**

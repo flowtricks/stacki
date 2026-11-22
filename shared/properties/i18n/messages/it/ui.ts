@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': 'Riprova',
   'ui.search': 'Cerca…',
   'ui.shortcutRecorder.pressKeys': 'Premi i tasti…',
+  'ui.shortcutTip': '{label} ({shortcut})', // same
   'ui.windowResize.e': 'Ridimensiona finestra (destra)',
   'ui.windowResize.n': 'Ridimensiona finestra (alto)',
   'ui.windowResize.ne': 'Ridimensiona finestra (alto a destra)',

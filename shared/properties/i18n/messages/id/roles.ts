@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': 'Mengedit folder',
   'roles.feature.cliComponents': 'Mengelola komponen',
   'roles.feature.cliApps': 'Mengelola aplikasi',
+  'roles.feature.panelElements': 'Tambah elemen',
   'roles.feature.panelPages': 'Halaman',
   'roles.feature.panelNavigator': 'Navigator', // same
   'roles.feature.panelProperties': 'Properti komponen',

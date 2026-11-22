@@ -227,6 +227,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Elk standaardattribuut heeft een naam nodig.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} is geen attribuutnaam.',
   'editor.propDeclaration.attributes.restTaken': 'Dit component geeft zijn andere attributen al door als {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'De frontmatter van dit component bevat een syntaxfout. Los die op voordat je de attributen verbindt.',
   'editor.propDeclaration.attributes.tooMany': 'Dat zijn te veel attributen.',
   'editor.propDeclaration.attributes.valueTooLong': 'De waarde van {name} is te lang.',
   'editor.propDeclaration.codeType.multiline': 'Schrijf het codetype op één regel, zonder puntkomma.',

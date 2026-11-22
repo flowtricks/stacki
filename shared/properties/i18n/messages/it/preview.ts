@@ -65,13 +65,10 @@ export const messages = {
   'preview.image.close': 'Chiudi',
   'preview.image.refused.bound':
     'Questa immagine proviene dal codice ({expression}), che non è un valore modificabile da questo popup. Modificala nel sorgente.',
-  'preview.image.refused.computed': 'Questa immagine è calcolata in {file} ({expression}), quindi nessuna proprietà la determina. Modificala lì.',
-  'preview.image.refused.fixed': 'Questa immagine è scritta in {file}, quindi è uguale per ogni istanza. Apri il componente per cambiarla.',
   'preview.image.refused.loop':
     'Questa immagine viene disegnata a ogni passaggio di un ciclo, quindi una sola modifica si applicherebbe a tutte. Modifica invece i dati del ciclo.',
   'preview.image.refused.outside': 'Questa immagine appartiene a {file}, che questo file si limita a incorporare. Apri quel file per cambiarla.',
   'preview.image.refused.unknown': 'L’editor non riesce a capire da dove provenga questa immagine.',
-  'preview.image.refused.unreadable': 'L’editor non riesce a leggere {file}, quindi non può capire da dove provenga questa immagine.',
   'preview.image.title': 'Proprietà di {name}',
   'preview.image.titleFallback': 'Proprietà dell’immagine',
   'preview.inspector.hide': 'Nascondi il pannello stile e impostazioni',

@@ -234,6 +234,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Każdy domyślny atrybut potrzebuje nazwy.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} nie jest nazwą atrybutu.',
   'editor.propDeclaration.attributes.restTaken': 'Ten komponent już przekazuje swoje pozostałe atrybuty jako {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'Popraw kod we frontmatter tego komponentu, zanim połączysz jego atrybuty.',
   'editor.propDeclaration.attributes.tooMany': 'Atrybutów jest za dużo.',
   'editor.propDeclaration.attributes.valueTooLong': 'Wartość {name} jest za długa.',
   'editor.propDeclaration.codeType.multiline': 'Zapisz typ w kodzie w jednym wierszu, bez średnika.',

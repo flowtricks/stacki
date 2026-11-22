@@ -64,13 +64,10 @@ export const messages = {
   'preview.image.alt.none': 'Komponen ini tidak mencetak teks alt dari properti, jadi tidak ada yang dapat disunting di sini.',
   'preview.image.close': 'Tutup',
   'preview.image.refused.bound': 'Gambar ini berasal dari kode ({expression}), yang bukan nilai yang dapat diubah popup ini. Sunting di sumbernya.',
-  'preview.image.refused.computed': 'Gambar ini dihitung di {file} ({expression}), jadi tidak ada properti yang menentukannya. Sunting di sana.',
-  'preview.image.refused.fixed': 'Gambar ini ditulis di {file}, jadi sama untuk setiap instance. Buka komponen untuk mengubahnya.',
   'preview.image.refused.loop':
     'Gambar ini digambar sekali untuk setiap putaran loop, jadi satu perubahan akan berlaku untuk semuanya. Sunting data loop sebagai gantinya.',
   'preview.image.refused.outside': 'Gambar ini milik {file}, yang hanya disematkan oleh file ini. Buka file tersebut untuk mengubahnya.',
   'preview.image.refused.unknown': 'Editor tidak dapat mengetahui dari mana gambar ini berasal.',
-  'preview.image.refused.unreadable': 'Editor tidak dapat membaca {file}, jadi tidak dapat mengetahui dari mana gambar ini berasal.',
   'preview.image.title': 'Properti {name}',
   'preview.image.titleFallback': 'Properti gambar',
   'preview.inspector.hide': 'Sembunyikan panel gaya dan pengaturan',

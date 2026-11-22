@@ -127,6 +127,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'Studio memerlukan Node.js 22.19 atau lebih baru. Perbarui Node.js lalu coba lagi.',
   'error.studio.npmFailed': 'Studio tidak dapat menyelesaikan npm {command}. Lihat output di atas. Proyek Anda tidak diganti.',
   'error.studio.releaseFileTooLarge': 'Pilih file JSON rilis Studio yang lebih kecil dari 32 MB.',
+  'error.studio.restoreNotReady': 'Tidak ada Studio sebelumnya yang dapat dipulihkan di sini.',
+  'error.studio.upgradeNotReady': 'Studio tidak dapat lagi ditingkatkan di sini. Tidak ada rilis yang lebih baru. Buka Pengaturan lagi untuk memeriksa ulang.',
   'error.terminal.missingId': 'ID terminal tidak ada.',
   'error.terminal.outsideProject': 'Terminal hanya dapat dibuka di dalam proyek saat ini.',
   'error.thumbnails.devServerSlow': 'server dev tidak mulai tepat waktu',

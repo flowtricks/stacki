@@ -64,13 +64,10 @@ export const messages = {
   'preview.image.alt.none': 'Ten komponent nie wypisuje tekstu alternatywnego z właściwości, więc nie ma czego tu edytować.',
   'preview.image.close': 'Zamknij',
   'preview.image.refused.bound': 'Ten obraz pochodzi z kodu ({expression}), a to nie jest wartość, którą to okno może zmienić. Edytuj go w źródle.',
-  'preview.image.refused.computed': 'Ten obraz jest obliczany w {file} ({expression}), więc żadna właściwość o nim nie decyduje. Edytuj go tam.',
-  'preview.image.refused.fixed': 'Ten obraz jest zapisany w {file}, więc jest taki sam dla każdego wystąpienia. Otwórz komponent, aby go zmienić.',
   'preview.image.refused.loop':
     'Ten obraz jest rysowany dla każdego przebiegu pętli, więc jedna zmiana dotyczyłaby wszystkich. Edytuj zamiast tego dane pętli.',
   'preview.image.refused.outside': 'Ten obraz należy do {file}, który ten plik tylko osadza. Otwórz tamten plik, aby go zmienić.',
   'preview.image.refused.unknown': 'Edytor nie potrafi ustalić, skąd pochodzi ten obraz.',
-  'preview.image.refused.unreadable': 'Edytor nie może odczytać {file}, więc nie potrafi ustalić, skąd pochodzi ten obraz.',
   'preview.image.title': 'Właściwości: {name}',
   'preview.image.titleFallback': 'Właściwości obrazu',
   'preview.inspector.hide': 'Ukryj panel stylów i ustawień',

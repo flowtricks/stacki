@@ -223,6 +223,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': '每個預設特性都需要名稱。',
   'editor.propDeclaration.attributes.nameInvalid': '{name} 不是有效的特性名稱。',
   'editor.propDeclaration.attributes.restTaken': '此元件已將其他特性以 {name} 傳遞下去。',
+  'editor.propDeclaration.attributes.syntaxError': '請先修正此元件 frontmatter 中的程式碼，再連結其屬性。',
   'editor.propDeclaration.attributes.tooMany': '特性太多。',
   'editor.propDeclaration.attributes.valueTooLong': '{name} 的值太長。',
   'editor.propDeclaration.codeType.multiline': '請將程式碼型別寫在同一行，且不加分號。',

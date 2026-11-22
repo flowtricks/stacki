@@ -126,6 +126,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'Studio에는 Node.js 22.19 이상이 필요합니다. Node.js를 업데이트하고 다시 시도하세요.',
   'error.studio.npmFailed': 'Studio가 npm {command}을(를) 완료하지 못했습니다. 위 출력을 확인하세요. 프로젝트는 교체되지 않았습니다.',
   'error.studio.releaseFileTooLarge': '32 MB보다 작은 Studio 릴리스 JSON 파일을 선택하세요.',
+  'error.studio.restoreNotReady': '여기에는 복원할 이전 Studio가 없습니다.',
+  'error.studio.upgradeNotReady': '여기서는 더 이상 Studio를 업그레이드할 수 없습니다. 더 새로운 릴리스가 없습니다. 설정을 다시 열어 확인하세요.',
   'error.terminal.missingId': '터미널 ID가 없습니다.',
   'error.terminal.outsideProject': '터미널은 현재 프로젝트 안에서만 열 수 있습니다.',
   'error.thumbnails.devServerSlow': '개발 서버가 제시간에 시작되지 않았습니다',

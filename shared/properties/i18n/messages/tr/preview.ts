@@ -64,13 +64,10 @@ export const messages = {
   'preview.image.alt.none': 'Bu bileşen bir prop’tan alt metin yazdırmıyor, bu yüzden burada düzenlenecek bir şey yok.',
   'preview.image.close': 'Kapat',
   'preview.image.refused.bound': 'Bu görsel koddan geliyor ({expression}); bu açılır pencere bu değeri değiştiremez. Kaynakta düzenleyin.',
-  'preview.image.refused.computed': 'Bu görsel {file} dosyasında hesaplanıyor ({expression}), bu yüzden onu belirleyen bir prop yok. Orada düzenleyin.',
-  'preview.image.refused.fixed': 'Bu görsel {file} dosyasında yazılı, bu yüzden her örnekte aynı. Değiştirmek için bileşeni açın.',
   'preview.image.refused.loop':
     'Bu görsel bir döngünün her turu için bir kez çiziliyor, bu yüzden tek bir değişiklik hepsine uygulanır. Bunun yerine döngünün verisini düzenleyin.',
   'preview.image.refused.outside': 'Bu görsel, bu dosyanın yalnızca gömdüğü {file} dosyasına ait. Değiştirmek için o dosyayı açın.',
   'preview.image.refused.unknown': 'Düzenleyici bu görselin nereden geldiğini belirleyemiyor.',
-  'preview.image.refused.unreadable': 'Düzenleyici {file} dosyasını okuyamıyor, bu yüzden bu görselin nereden geldiğini belirleyemiyor.',
   'preview.image.title': '{name} özellikleri',
   'preview.image.titleFallback': 'Görsel özellikleri',
   'preview.inspector.hide': 'Stil ve ayarlar panelini gizle',

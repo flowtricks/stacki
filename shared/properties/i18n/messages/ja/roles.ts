@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': 'フォルダーの編集',
   'roles.feature.cliComponents': 'コンポーネントの管理',
   'roles.feature.cliApps': 'アプリの管理',
+  'roles.feature.panelElements': '要素を追加',
   'roles.feature.panelPages': 'ページ',
   'roles.feature.panelNavigator': 'ナビゲーター',
   'roles.feature.panelProperties': 'コンポーネントのプロパティ',

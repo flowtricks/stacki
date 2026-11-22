@@ -155,7 +155,7 @@ export const messages = {
   'publish.repositories.error.listFailed': 'このアカウントのリポジトリ一覧を取得できませんでした。更新するか、アカウントを再接続してください。',
   'publish.repositories.error.noWriteAccess': 'このアカウントにはそのリポジトリへの書き込み権限がありません。',
   'publish.repositories.error.organizationApproval':
-    '{owner}にリポジトリを作成するには、{owner}がこのアプリを承認するか、シングルサインオンを要求する必要があります。オーナーに依頼してから、もう一度お試しください。',
+    '{owner}がこのアプリを承認するか、シングルサインオンを要求するまで、そこにリポジトリは作成できません。オーナーに依頼してから、もう一度お試しください。',
   'publish.repositories.error.organizationForbids':
     '{owner}ではリポジトリの作成が許可されていません。オーナーに権限を依頼するか、別のオーナーを選択してください。',
   'publish.repositories.find': 'リポジトリを検索…',

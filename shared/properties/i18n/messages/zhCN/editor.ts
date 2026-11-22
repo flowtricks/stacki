@@ -223,6 +223,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': '每个默认特性都需要名称。',
   'editor.propDeclaration.attributes.nameInvalid': '{name} 不是有效的特性名称。',
   'editor.propDeclaration.attributes.restTaken': '此组件已将其他特性作为 {name} 传递。',
+  'editor.propDeclaration.attributes.syntaxError': '请先修复此组件 frontmatter 中的代码，再连接其属性。',
   'editor.propDeclaration.attributes.tooMany': '特性过多。',
   'editor.propDeclaration.attributes.valueTooLong': '{name} 的值过长。',
   'editor.propDeclaration.codeType.multiline': '请将代码类型写在一行内，不要加分号。',

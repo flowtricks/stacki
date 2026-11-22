@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': '重試',
   'ui.search': '搜尋…',
   'ui.shortcutRecorder.pressKeys': '請按下按鍵…',
+  'ui.shortcutTip': '{label}（{shortcut}）',
   'ui.windowResize.e': '調整視窗大小（右）',
   'ui.windowResize.n': '調整視窗大小（上）',
   'ui.windowResize.ne': '調整視窗大小（右上）',

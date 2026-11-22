@@ -132,6 +132,8 @@ export const messages = {
   'error.studio.nodeOutdated': 'Studio דורש Node.js 22.19 ומעלה. יש לעדכן את Node.js ולנסות שוב.',
   'error.studio.npmFailed': 'Studio לא הצליח להשלים את npm {command}. פרטים בפלט שלמעלה. הפרויקט לא הוחלף.',
   'error.studio.releaseFileTooLarge': 'יש לבחור קובץ JSON של גרסת Studio שקטן מ־32 MB.',
+  'error.studio.restoreNotReady': 'אין כאן Studio קודם לשחזור.',
+  'error.studio.upgradeNotReady': 'אי אפשר לשדרג כאן את Studio יותר. אין גרסה חדשה יותר. יש לפתוח שוב את ההגדרות כדי לבדוק מחדש.',
   'error.terminal.missingId': 'מזהה הטרמינל חסר.',
   'error.terminal.outsideProject': 'אפשר לפתוח טרמינל רק בתוך הפרויקט הנוכחי.',
   'error.thumbnails.devServerSlow': 'שרת הפיתוח לא עלה בזמן',

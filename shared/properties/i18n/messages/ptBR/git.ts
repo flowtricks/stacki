@@ -44,10 +44,13 @@ export const messages = {
   'git.branch.currentLabel': '{branch}, branch atual',
   'git.branch.delete': 'Excluir {branch}',
   'git.branch.error.at': '“@” é o nome que o git usa para o branch atual.',
+  'git.branch.error.component': 'Uma parte do nome não pode começar com “.” nem conter “..”.',
+  'git.branch.error.conflict': '“{branch}” já é um branch, e um nome não pode ficar dentro de outro nem em volta dele (“a” e “a/b”).',
   'git.branch.error.endsDot': 'Um nome não pode terminar com “.”.',
   'git.branch.error.endsSlash': 'Um nome não pode terminar com “/”.',
   'git.branch.error.exists': '{branch} já existe.',
   'git.branch.error.existsCase': '{branch} já existe, e aqui nomes que diferem apenas em maiúsculas e minúsculas são o mesmo branch.',
+  'git.branch.error.head': '“HEAD” é reservado pelo git.',
   'git.branch.error.lock': '“.lock” é reservado pelo git.',
   'git.branch.heading': 'Branches', // same
   'git.branch.indicator.detached': 'HEAD desanexado',
@@ -136,12 +139,20 @@ export const messages = {
   'git.conflict.yourEdit': 'Sua edição',
   'git.conflict.yourEdits': 'Suas edições',
   'git.done': 'Concluído',
+  'git.error.authFailed': 'O GitHub não aceitou seu login. Entre novamente nas configurações de publicação e tente de novo.',
+  'git.error.branchExists': 'Já existe um branch com esse nome.',
+  'git.error.branchNameConflict': '“{branch}” já é um branch, e o nome de um branch não pode ficar dentro de outro nem em volta dele. Escolha outro nome.',
+  'git.error.branchNameInvalid': 'O git não aceita esse nome para um branch. Use letras, números, “-”, “_”, “.” e “/”, sem espaços.',
   'git.error.cloneNotAstro': 'Baixado em {path}, mas a raiz não é um projeto Astro. Use Abrir projeto para escolher a pasta do Astro dentro dela.', // review
   'git.error.commitNothingPicked': 'Nada foi escolhido para salvar: escolha pelo menos um arquivo.',
   'git.error.deleteFailed': 'Não foi possível excluir “{branch}”.',
   'git.error.deleteSelf': '“{branch}” é o branch em que você está: mude primeiro para outro.',
   'git.error.deleteTrunk': '“{branch}” é o branch para o qual tudo volta. Excluí-lo deixaria o projeto sem sua linha principal de trabalho.',
   'git.error.deleteWorktree': '“{branch}” está em uso em outro worktree ({path}). Feche ou troque esse primeiro.', // review
+  'git.error.detachedHead': 'Você não está em nenhum branch, então não há nada para enviar ou puxar. Mude primeiro para um branch.',
+  'git.error.identityMissing': 'O Git ainda não sabe quem você é. Defina seu nome e e-mail (git config --global user.name e user.email) e salve de novo.',
+  'git.error.locked':
+    'Outra operação do Git ainda está em andamento neste projeto. Aguarde um instante e tente de novo; se ela nunca terminar, feche outras ferramentas do Git.',
   'git.error.mergeBranchChanged': 'O branch atual mudou. Reabra a mesclagem para revisá-la de novo.',
   'git.error.mergeChangedSinceReview': 'A mesclagem mudou desde a revisão. Reabra-a para revisar o novo resultado.',
   'git.error.mergeFailed': 'Não foi possível mesclar “{branch}” em “{into}”.',
@@ -149,14 +160,32 @@ export const messages = {
   'git.error.mergeFilesChanged': 'Os arquivos em conflito mudaram. Reabra a mesclagem para revisá-los de novo.',
   'git.error.mergeFinishFailed': 'Não foi possível concluir a mesclagem de “{branch}”.',
   'git.error.mergeSelf': '“{branch}” é o branch em que você está: não há nada para mesclar nele.', // review
+  'git.error.messageTooLong': 'Essa mensagem é longa demais. Encurte-a e tente de novo.',
+  'git.error.noRemote': 'Este projeto ainda não tem um repositório do GitHub conectado. Publique-o primeiro.',
+  'git.error.notInstalled': 'O Git não está instalado ou o Stacki não consegue encontrá-lo. Instale o Git e reabra o projeto.',
+  'git.error.nothingToCommit': 'Não há nada novo para salvar.',
+  'git.error.offline': 'Não foi possível acessar o GitHub. Verifique sua conexão com a internet e tente de novo.',
+  'git.error.operationInProgress':
+    'Há um {operation} inacabado neste projeto. Conclua-o ou aborte-o primeiro (por exemplo com “git {operation} --abort”) e tente de novo.',
   'git.error.originExists': 'Este projeto já tem um remoto origin. Ele não foi alterado.',
+  'git.error.outputTooLarge':
+    'Este projeto tem mais arquivos alterados do que o Stacki consegue listar. Adicione as pastas geradas (como node_modules) ao .gitignore.',
   'git.error.pullBranchChanged': 'O branch atual mudou. Atualize o Git e tente puxar as alterações de novo.',
+  'git.error.pushRejected': 'O GitHub tem alterações que este projeto ainda não tem. Puxe primeiro e depois envie de novo — o Stacki nunca as sobrescreve.',
+  'git.error.refInvalid': 'Não foi possível encontrar essa versão.',
   'git.error.restoreMissing': 'Essa versão não tem este arquivo: ele foi adicionado depois.',
   'git.error.restoreUnsaved': 'Há alterações não salvas aqui. Salve-as primeiro: voltar atrás as sobrescreveria.',
+  'git.error.signingFailed':
+    'O Git não conseguiu assinar o commit. Verifique sua chave de assinatura ou desative a assinatura com “git config commit.gpgsign false”.',
+  'git.error.statusTooLarge': 'Mais de {count} arquivos foram alterados. Adicione as pastas geradas (como node_modules) ao .gitignore e reabra a lista.',
   'git.error.switchFailed': 'Não foi possível mudar para “{branch}”.',
+  'git.error.timedOut':
+    'O Git demorou demais e foi interrompido. Tente de novo; se continuar acontecendo, verifique se a rede ou um hook de commit está lento.',
   'git.error.unparkDirty': 'Seu trabalho em “{branch}” continua guardado à parte porque este branch tem alterações locais.',
   'git.error.unparkFailed':
     'Seu trabalho em “{branch}” continua guardado à parte: não foi possível recolocá-lo automaticamente porque o branch mudou nesse meio-tempo. Ele está seguro: recupere-o com `git stash list` e `git stash pop`.',
+  'git.error.unsafeDirectory':
+    'O Git não confia nesta pasta porque ela pertence a outro usuário ({path}). Execute “git config --global --add safe.directory {path}” e reabra o projeto.',
   'git.file.changed': 'Alterado',
   'git.file.changed.inVersion': 'Alterado nesta versão',
   'git.file.changed.why': 'Este arquivo tem alterações que ainda não foram salvas',

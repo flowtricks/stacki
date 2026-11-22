@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': 'Yeniden dene',
   'ui.search': 'Ara…',
   'ui.shortcutRecorder.pressKeys': 'Tuşlara basın…',
+  'ui.shortcutTip': '{label} ({shortcut})', // same
   'ui.windowResize.e': 'Pencereyi yeniden boyutlandır (sağ)',
   'ui.windowResize.n': 'Pencereyi yeniden boyutlandır (üst)',
   'ui.windowResize.ne': 'Pencereyi yeniden boyutlandır (sağ üst)',

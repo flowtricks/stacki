@@ -3,6 +3,74 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/settings';
 
 export const messages = {
+  'settings.agents.delete.body': '{file} est déplacé dans la corbeille.',
+  'settings.agents.delete.confirm': 'Mettre à la corbeille',
+  'settings.agents.delete.label': 'Supprimer {name}',
+  'settings.agents.delete.pairedBody':
+    'Les deux fichiers de {name}, pour Claude et pour Codex, et ses champs dans .stacki/agents sont déplacés dans la corbeille.',
+  'settings.agents.delete.title': 'Supprimer {name} ?',
+  'settings.agents.empty.hint':
+    'Un agent est un assistant enregistré pour votre chat IA, avec sa propre mission. Créez-en un qui fonctionne à la fois avec Claude et avec Codex.',
+  'settings.agents.empty.title': 'Aucun agent pour l’instant',
+  'settings.agents.field.empty': 'Renseignez ce champ.',
+  'settings.agents.field.format': 'Utilisez uniquement des lettres, des chiffres et . _ : / -.',
+  'settings.agents.field.nameFormat': 'Utilisez des lettres minuscules, des chiffres et des tirets simples, comme code-reviewer.',
+  'settings.agents.field.taken': 'Un agent portant ce nom existe déjà.',
+  'settings.agents.field.tooLong': 'C’est trop long.',
+  'settings.agents.field.tooMany': 'Il y a plus d’outils qu’un agent ne peut en lister.',
+  'settings.agents.form.cancel': 'Annuler',
+  'settings.agents.form.claudeModel': 'Modèle Claude',
+  'settings.agents.form.codexModel': 'Modèle Codex',
+  'settings.agents.form.codexModelHint': 'Un identifiant de modèle Codex. Chaque CLI nomme ses modèles différemment, donc chacune a son propre champ.',
+  'settings.agents.form.create': 'Créer l’agent',
+  'settings.agents.form.description': 'Quand l’utiliser',
+  'settings.agents.form.descriptionHint': 'Une ligne. Les deux CLI la lisent pour décider quand confier du travail à cet agent.',
+  'settings.agents.form.editTitle': 'Modifier {name}',
+  'settings.agents.form.instructions': 'Instructions', // same
+  'settings.agents.form.intro': 'Stacki écrit un fichier pour Claude et un pour Codex à partir de ces champs, pour que les deux agents restent identiques.',
+  'settings.agents.form.modelDefault': 'Par défaut',
+  'settings.agents.form.name': 'Nom',
+  'settings.agents.form.nameHint': 'C’est aussi le nom des deux fichiers.',
+  'settings.agents.form.namePlaceholder': 'code-reviewer', // same
+  'settings.agents.form.save': 'Enregistrer les deux fichiers',
+  'settings.agents.form.title': 'Nouvel agent',
+  'settings.agents.form.tools': 'Outils',
+  'settings.agents.form.toolsHint':
+    'Claude uniquement, séparés par des virgules ; vide autorise tous les outils. Codex n’a pas de liste d’outils par agent, donc son agent garde tous les outils.',
+  'settings.agents.form.toolsPlaceholder': 'Read, Grep, Glob', // same
+  'settings.agents.list.info':
+    'Un assistant enregistré pour votre chat IA, avec sa propre mission, comme un correcteur ou un relecteur d’accessibilité. Choisissez-en un quand vous discutez. Enregistré dans .claude/agents et .codex/agents.',
+  'settings.agents.list.title': 'Agents', // same
+  'settings.agents.new': 'Nouvel agent',
+  'settings.agents.open': 'Modifier {file}',
+  'settings.agents.paired.editFields': 'Modifier les champs',
+  'settings.agents.paired.edited': '{provider} : modifié',
+  'settings.agents.paired.inSync': '{provider} : synchronisé',
+  'settings.agents.paired.info':
+    'Agents que Stacki a créés pour les deux CLI. Un fichier modifié à la main ne correspond plus à ses champs ; Resynchroniser le réécrit à partir d’eux.',
+  'settings.agents.paired.missing': '{provider} : manquant',
+  'settings.agents.paired.title': 'Créés pour Claude et Codex',
+  'settings.agents.pairedTag': 'Les deux CLI',
+  'settings.agents.problem.duplicateKey': 'Le frontmatter définit {key} deux fois.',
+  'settings.agents.problem.missingField': 'Il n’a pas de {field}.',
+  'settings.agents.problem.noFrontmatter': 'Il n’a pas de frontmatter. Commencez par --- puis un nom et une description.',
+  'settings.agents.problem.notAMap': 'Son frontmatter n’est pas une liste de clés et de valeurs.',
+  'settings.agents.problem.syntax': 'Il est illisible : {detail}',
+  'settings.agents.problem.syntaxLine': 'Il est illisible à la ligne {line} : {detail}',
+  'settings.agents.problem.tooLarge': 'Il dépasse {size} Ko.',
+  'settings.agents.problem.tooLong': 'Son {field} est trop long.',
+  'settings.agents.problem.unclosedFrontmatter': 'Son frontmatter n’est jamais fermé. Ajoutez une ligne --- après.',
+  'settings.agents.problem.wrongType': 'Son {field} n’est pas du bon type de valeur.',
+  'settings.agents.resync.body': 'Le fichier {providers} a été modifié à la main. Resynchroniser remplace ces modifications par ce que disent les champs.',
+  'settings.agents.resync.confirm': 'Remplacer les modifications',
+  'settings.agents.resync.label': 'Resynchroniser',
+  'settings.agents.resync.tip': 'Réécrire les deux fichiers à partir des champs de l’agent',
+  'settings.agents.resync.title': 'Remplacer les modifications de {name} ?',
+  'settings.agents.template.output': 'Une fois terminé, indique ce que tu as fait et ce qui reste à faire.',
+  'settings.agents.template.role': 'Tu es un assistant ciblé pour ce projet. Décris le travail que fait cet agent.',
+  'settings.agents.template.steps':
+    'Étapes :\n1. Lis les fichiers que la tâche nomme.\n2. Fais le travail en gardant les modifications petites.\n3. Vérifie le résultat.',
+  'settings.agents.truncated': 'Ce projet a plus d’agents que ceux listés ici.',
   'settings.audits.rules.px': 'px hors des variables',
   'settings.audits.phrases.info': 'Un seul mot doit constituer tout le texte pour compter ; plusieurs mots peuvent n’en être qu’une partie.',
   'settings.breakpoints.add': 'Ajouter un point d’arrêt',
@@ -157,6 +225,9 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Enregistre un instantané masqué avant et après chaque tour d’IA pour afficher les modifications. N’ajoute aucun commit à votre historique. Désactivé, c’est plus rapide sur les gros projets.',
   'settings.editor.ai.trackChanges.label': 'Instantané avant et après chaque modification d’IA',
+  'settings.editor.code.chips.info':
+    'Les variables, easings, ombres, dégradés et clip-paths du code CSS s’affichent sous forme de chips qui ouvrent leurs éditeurs. Désactivé : CSS brut.',
+  'settings.editor.code.chips.label': 'Afficher les chips CSS dans le code',
   'settings.editor.loading': 'Chargement des préférences…',
   'settings.editor.preferences': 'Préférences de l’app',
   'settings.editor.privacy.hideDetails.info': 'Les apps voient seulement un ID par projet, pas votre nom ni e-mail Git ni votre compte GitHub.',
@@ -166,6 +237,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Comptages d’utilisation anonymes',
   'settings.editor.saveFailed': 'Appliqué pour cette session, mais l’enregistrement a échoué. Vérifiez l’espace disque et réessayez.',
   'settings.editor.section.ai': 'IA',
+  'settings.editor.section.code': 'Code', // same
   'settings.editor.section.general': 'Général',
   'settings.editor.section.privacy': 'Confidentialité',
   'settings.editor.sound.label': 'Sons de l’interface',
@@ -354,6 +426,7 @@ export const messages = {
   'settings.refresh': 'Actualiser',
   'settings.instructions.search.noMatch': 'Aucune instruction ne correspond',
   'settings.instructions.search.placeholder': 'Rechercher des instructions',
+  'settings.section.agents': 'Agents', // same
   'settings.section.mcp': 'MCP', // same
   'settings.section.instructions': 'Instructions', // same
   'settings.section.secrets': 'Secrets', // same

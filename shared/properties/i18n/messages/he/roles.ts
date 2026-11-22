@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': 'עריכת תיקיות',
   'roles.feature.cliComponents': 'ניהול רכיבים',
   'roles.feature.cliApps': 'ניהול אפליקציות',
+  'roles.feature.panelElements': 'הוספת אלמנטים',
   'roles.feature.panelPages': 'דפים',
   'roles.feature.panelNavigator': 'ניווט',
   'roles.feature.panelProperties': 'מאפייני רכיב',

@@ -44,10 +44,13 @@ export const messages = {
   'git.branch.currentLabel': '{branch}, branche actuelle',
   'git.branch.delete': 'Supprimer {branch}',
   'git.branch.error.at': '« @ » est le nom que git donne à la branche actuelle.',
+  'git.branch.error.component': 'Une partie du nom ne peut pas commencer par « . » ni contenir « .. ».',
+  'git.branch.error.conflict': '« {branch} » est déjà une branche, et un nom ne peut pas se trouver à l’intérieur d’un autre ni l’entourer (« a » et « a/b »).',
   'git.branch.error.endsDot': 'Un nom ne peut pas se terminer par « . ».',
   'git.branch.error.endsSlash': 'Un nom ne peut pas se terminer par « / ».',
   'git.branch.error.exists': '{branch} existe déjà.',
   'git.branch.error.existsCase': '{branch} existe déjà, et ici deux noms qui ne diffèrent que par la casse désignent la même branche.',
+  'git.branch.error.head': '« HEAD » est réservé par git.',
   'git.branch.error.lock': '« .lock » est réservé par git.',
   'git.branch.heading': 'Branches', // same
   'git.branch.indicator.detached': 'HEAD détaché',
@@ -136,6 +139,12 @@ export const messages = {
   'git.conflict.yourEdit': 'Votre modification',
   'git.conflict.yourEdits': 'Vos modifications',
   'git.done': 'Terminé',
+  'git.error.authFailed': 'GitHub n’a pas accepté votre connexion. Reconnectez-vous dans les réglages de publication, puis réessayez.',
+  'git.error.branchExists': 'Une branche portant ce nom existe déjà.',
+  'git.error.branchNameConflict':
+    '« {branch} » est déjà une branche, et un nom de branche ne peut pas se trouver à l’intérieur d’un autre ni l’entourer. Choisissez un autre nom.',
+  'git.error.branchNameInvalid':
+    'Ce nom n’est pas accepté par git pour une branche. Utilisez des lettres, des chiffres, « - », « _ », « . » et « / », sans espaces.',
   'git.error.cloneNotAstro':
     'Téléchargé dans {path}, mais sa racine n’est pas un projet Astro. Utilisez Ouvrir un projet pour choisir le dossier Astro qu’il contient.', // review
   'git.error.commitNothingPicked': 'Rien n’a été sélectionné pour l’enregistrement : choisissez au moins un fichier.',
@@ -143,6 +152,11 @@ export const messages = {
   'git.error.deleteSelf': '« {branch} » est la branche sur laquelle vous êtes : passez d’abord à une autre.',
   'git.error.deleteTrunk': '« {branch} » est la branche à laquelle tout revient. La supprimer laisserait le projet sans sa ligne de travail principale.',
   'git.error.deleteWorktree': '« {branch} » est extraite dans un autre worktree ({path}). Fermez-le ou changez-en d’abord.', // review
+  'git.error.detachedHead': 'Vous n’êtes sur aucune branche : il n’y a donc rien à envoyer ni à récupérer. Passez d’abord à une branche.',
+  'git.error.identityMissing':
+    'Git ne sait pas encore qui vous êtes. Définissez votre nom et votre e-mail (git config --global user.name et user.email), puis enregistrez à nouveau.',
+  'git.error.locked':
+    'Une autre opération Git est encore en cours dans ce projet. Patientez un instant et réessayez ; si elle ne se termine jamais, fermez les autres outils Git.',
   'git.error.mergeBranchChanged': 'La branche actuelle a changé. Rouvrez la fusion pour la revoir.',
   'git.error.mergeChangedSinceReview': 'La fusion a changé depuis la relecture. Rouvrez-la pour revoir le nouveau résultat.',
   'git.error.mergeFailed': 'Impossible de fusionner « {branch} » dans « {into} ».',
@@ -150,14 +164,31 @@ export const messages = {
   'git.error.mergeFilesChanged': 'Les fichiers en conflit ont changé. Rouvrez la fusion pour les revoir.',
   'git.error.mergeFinishFailed': 'Impossible de terminer la fusion de « {branch} ».',
   'git.error.mergeSelf': '« {branch} » est la branche sur laquelle vous êtes : il n’y a rien à fusionner dedans.', // review
+  'git.error.messageTooLong': 'Ce message est trop long. Raccourcissez-le et réessayez.',
+  'git.error.noRemote': 'Ce projet n’a pas encore de dépôt GitHub connecté. Publiez-le d’abord.',
+  'git.error.notInstalled': 'Git n’est pas installé, ou Stacki ne le trouve pas. Installez Git, puis rouvrez le projet.',
+  'git.error.nothingToCommit': 'Il n’y a rien de nouveau à enregistrer.',
+  'git.error.offline': 'Impossible de joindre GitHub. Vérifiez votre connexion internet et réessayez.',
+  'git.error.operationInProgress':
+    'Une opération {operation} est inachevée dans ce projet. Terminez-la ou abandonnez-la d’abord (par exemple avec « git {operation} --abort »), puis réessayez.',
   'git.error.originExists': 'Ce projet a déjà un dépôt distant origin. Il n’a pas été modifié.',
+  'git.error.outputTooLarge':
+    'Ce projet compte plus de fichiers modifiés que Stacki ne peut en lister. Ajoutez les dossiers générés (comme node_modules) à .gitignore.',
   'git.error.pullBranchChanged': 'La branche actuelle a changé. Actualisez Git et réessayez de récupérer les modifications.',
+  'git.error.pushRejected': 'GitHub a des modifications que ce projet n’a pas encore. Récupérez-les d’abord, puis renvoyez : Stacki ne les écrase jamais.',
+  'git.error.refInvalid': 'Cette version est introuvable.',
   'git.error.restoreMissing': 'Cette version n’a pas ce fichier : il a été ajouté plus tard.',
   'git.error.restoreUnsaved': 'Il y a ici des modifications non enregistrées. Enregistrez-les d’abord : revenir en arrière les écraserait.',
+  'git.error.signingFailed':
+    'Git n’a pas pu signer le commit. Vérifiez votre clé de signature ou désactivez la signature avec « git config commit.gpgsign false ».',
+  'git.error.statusTooLarge': 'Plus de {count} fichiers ont changé. Ajoutez les dossiers générés (comme node_modules) à .gitignore, puis rouvrez la liste.',
   'git.error.switchFailed': 'Impossible de passer à « {branch} ».',
+  'git.error.timedOut': 'Git a mis trop de temps et a été arrêté. Réessayez ; si cela se répète, vérifiez si le réseau ou un hook de commit est lent.',
   'git.error.unparkDirty': 'Votre travail sur « {branch} » reste mis de côté, car cette branche a des modifications locales.',
   'git.error.unparkFailed':
     'Votre travail sur « {branch} » reste mis de côté : il n’a pas pu être remis en place automatiquement, car la branche a changé entre-temps. Il est en sécurité : récupérez-le avec `git stash list` et `git stash pop`.',
+  'git.error.unsafeDirectory':
+    'Git ne fait pas confiance à ce dossier, car il appartient à un autre utilisateur ({path}). Exécutez « git config --global --add safe.directory {path} », puis rouvrez le projet.',
   'git.file.changed': 'Modifié',
   'git.file.changed.inVersion': 'Modifié dans cette version',
   'git.file.changed.why': 'Ce fichier a des modifications pas encore enregistrées',

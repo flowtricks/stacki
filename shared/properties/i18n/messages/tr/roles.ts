@@ -18,6 +18,7 @@ export const messages = {
   'roles.feature.cliFolders': 'Klasörleri düzenle',
   'roles.feature.cliComponents': 'Bileşenleri yönet',
   'roles.feature.cliApps': 'Uygulamaları yönet',
+  'roles.feature.panelElements': 'Öğe ekle',
   'roles.feature.panelPages': 'Sayfalar',
   'roles.feature.panelNavigator': 'Gezgin',
   'roles.feature.panelProperties': 'Bileşen özellikleri',

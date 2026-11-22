@@ -226,6 +226,7 @@ export const messages = {
   'editor.propDeclaration.attributes.nameEmpty': 'Setiap atribut bawaan memerlukan nama.',
   'editor.propDeclaration.attributes.nameInvalid': '{name} bukan nama atribut.',
   'editor.propDeclaration.attributes.restTaken': 'Komponen ini sudah meneruskan atribut lainnya sebagai {name}.',
+  'editor.propDeclaration.attributes.syntaxError': 'Perbaiki kode di frontmatter komponen ini sebelum menghubungkan atributnya.',
   'editor.propDeclaration.attributes.tooMany': 'Terlalu banyak atribut.',
   'editor.propDeclaration.attributes.valueTooLong': 'Nilai {name} terlalu panjang.',
   'editor.propDeclaration.codeType.multiline': 'Tulis tipe kode dalam satu baris, tanpa titik koma.',

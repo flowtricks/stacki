@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': 'फिर कोशिश करें',
   'ui.search': 'खोजें…',
   'ui.shortcutRecorder.pressKeys': 'कुंजियाँ दबाएँ…',
+  'ui.shortcutTip': '{label} ({shortcut})', // same
   'ui.windowResize.e': 'विंडो का आकार बदलें (दाएँ)',
   'ui.windowResize.n': 'विंडो का आकार बदलें (ऊपर)',
   'ui.windowResize.ne': 'विंडो का आकार बदलें (ऊपर दाएँ)',

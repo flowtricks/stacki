@@ -64,13 +64,10 @@ export const messages = {
   'preview.image.alt.none': 'Diese Komponente gibt keinen Alternativtext aus einer Eigenschaft aus, daher gibt es hier nichts zu bearbeiten.',
   'preview.image.close': 'Schließen',
   'preview.image.refused.bound': 'Dieses Bild stammt aus Code ({expression}), den dieses Popup nicht ändern kann. Bearbeite es im Quellcode.',
-  'preview.image.refused.computed': 'Dieses Bild wird in {file} berechnet ({expression}), keine Eigenschaft bestimmt es. Bearbeite es dort.',
-  'preview.image.refused.fixed': 'Dieses Bild steht in {file} und ist für jede Instanz gleich. Öffne die Komponente, um es zu ändern.',
   'preview.image.refused.loop':
     'Dieses Bild wird bei jedem Durchlauf einer Schleife gezeichnet, eine Änderung würde für alle gelten. Bearbeite stattdessen die Daten der Schleife.',
   'preview.image.refused.outside': 'Dieses Bild gehört zu {file}, das diese Datei nur einbettet. Öffne diese Datei, um es zu ändern.',
   'preview.image.refused.unknown': 'Der Editor kann nicht erkennen, woher dieses Bild stammt.',
-  'preview.image.refused.unreadable': 'Der Editor kann {file} nicht lesen und deshalb nicht erkennen, woher dieses Bild stammt.',
   'preview.image.title': 'Eigenschaften von {name}',
   'preview.image.titleFallback': 'Bildeigenschaften',
   'preview.inspector.hide': 'Stil- und Einstellungspanel ausblenden',

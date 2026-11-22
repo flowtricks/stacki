@@ -14,7 +14,9 @@ import { messages as cmsRemote } from './cmsRemote';
 import { messages as componentProps } from './componentProps';
 import { messages as contentUi } from './contentUi';
 import { messages as dialog } from './dialog';
+import { messages as dictation } from './dictation';
 import { messages as editor } from './editor';
+import { messages as elements } from './elements';
 import { messages as emdash } from './emdash';
 import { messages as error } from './error';
 import { messages as git } from './git';
@@ -55,7 +57,9 @@ export const messages = {
   ...componentProps,
   ...contentUi,
   ...dialog,
+  ...dictation,
   ...editor,
+  ...elements,
   ...emdash,
   ...error,
   ...git,

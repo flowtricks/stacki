@@ -116,6 +116,7 @@ export const messages = {
   'ui.retry': 'Coba lagi',
   'ui.search': 'Cari…',
   'ui.shortcutRecorder.pressKeys': 'Tekan tombol…',
+  'ui.shortcutTip': '{label} ({shortcut})', // same
   'ui.windowResize.e': 'Ubah ukuran jendela (kanan)',
   'ui.windowResize.n': 'Ubah ukuran jendela (atas)',
   'ui.windowResize.ne': 'Ubah ukuran jendela (kanan atas)',

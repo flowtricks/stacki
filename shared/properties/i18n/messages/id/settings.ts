@@ -3,6 +3,72 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/settings';
 
 export const messages = {
+  'settings.agents.delete.body': '{file} dipindahkan ke Tempat Sampah.',
+  'settings.agents.delete.confirm': 'Pindahkan ke Tempat Sampah',
+  'settings.agents.delete.label': 'Hapus {name}',
+  'settings.agents.delete.pairedBody': 'Kedua file {name}, untuk Claude dan untuk Codex, beserta kolomnya di .stacki/agents dipindahkan ke Tempat Sampah.',
+  'settings.agents.delete.title': 'Hapus {name}?',
+  'settings.agents.empty.hint':
+    'Agen adalah asisten tersimpan untuk chat AI Anda, dengan tugasnya sendiri. Buat agen yang bekerja dengan Claude dan Codex sekaligus.',
+  'settings.agents.empty.title': 'Belum ada agen',
+  'settings.agents.field.empty': 'Isi kolom ini.',
+  'settings.agents.field.format': 'Gunakan hanya huruf, angka, dan . _ : / -.',
+  'settings.agents.field.nameFormat': 'Gunakan huruf kecil, angka, dan tanda hubung tunggal, seperti code-reviewer.',
+  'settings.agents.field.taken': 'Agen dengan nama ini sudah ada.',
+  'settings.agents.field.tooLong': 'Ini terlalu panjang.',
+  'settings.agents.field.tooMany': 'Itu lebih banyak alat daripada yang dapat didaftar oleh sebuah agen.',
+  'settings.agents.form.cancel': 'Batal',
+  'settings.agents.form.claudeModel': 'Model Claude',
+  'settings.agents.form.codexModel': 'Model Codex',
+  'settings.agents.form.codexModelHint': 'ID model Codex. Setiap CLI menamai modelnya secara berbeda, jadi masing-masing punya kolomnya sendiri.',
+  'settings.agents.form.create': 'Buat agen',
+  'settings.agents.form.description': 'Kapan digunakan',
+  'settings.agents.form.descriptionHint': 'Satu baris. Kedua CLI membacanya untuk menentukan kapan menyerahkan pekerjaan ke agen ini.',
+  'settings.agents.form.editTitle': 'Edit {name}', // same
+  'settings.agents.form.instructions': 'Instruksi',
+  'settings.agents.form.intro': 'Stacki menulis satu file untuk Claude dan satu untuk Codex dari kolom-kolom ini, sehingga kedua agen tetap sama.',
+  'settings.agents.form.modelDefault': 'Bawaan',
+  'settings.agents.form.name': 'Nama',
+  'settings.agents.form.nameHint': 'Juga menjadi nama kedua file.',
+  'settings.agents.form.namePlaceholder': 'code-reviewer', // same
+  'settings.agents.form.save': 'Simpan kedua file',
+  'settings.agents.form.title': 'Agen baru',
+  'settings.agents.form.tools': 'Alat',
+  'settings.agents.form.toolsHint':
+    'Hanya untuk Claude, dipisahkan koma; kosong berarti semua alat diizinkan. Codex tidak punya daftar alat per agen, jadi agennya tetap memiliki semua alat.',
+  'settings.agents.form.toolsPlaceholder': 'Read, Grep, Glob', // same
+  'settings.agents.list.info':
+    'Asisten tersimpan untuk chat AI Anda dengan tugasnya sendiri, misalnya editor naskah atau peninjau aksesibilitas. Pilih satu saat chat. Disimpan di .claude/agents dan .codex/agents.',
+  'settings.agents.list.title': 'Agen',
+  'settings.agents.new': 'Agen baru',
+  'settings.agents.open': 'Edit {file}', // same
+  'settings.agents.paired.editFields': 'Edit kolom',
+  'settings.agents.paired.edited': '{provider}: diedit',
+  'settings.agents.paired.inSync': '{provider}: sinkron',
+  'settings.agents.paired.info':
+    'Agen yang dibuat Stacki untuk kedua CLI. File yang diedit manual tidak lagi cocok dengan kolomnya; Sinkronkan ulang menulisnya lagi dari kolom tersebut.',
+  'settings.agents.paired.missing': '{provider}: hilang',
+  'settings.agents.paired.title': 'Dibuat untuk Claude dan Codex',
+  'settings.agents.pairedTag': 'Kedua CLI',
+  'settings.agents.problem.duplicateKey': 'Frontmatter mengatur {key} dua kali.',
+  'settings.agents.problem.missingField': 'Tidak ada {field}.',
+  'settings.agents.problem.noFrontmatter': 'Tidak ada frontmatter. Mulai dengan --- lalu name dan description.',
+  'settings.agents.problem.notAMap': 'Frontmatter-nya bukan daftar kunci dan nilai.',
+  'settings.agents.problem.syntax': 'Tidak dapat dibaca: {detail}',
+  'settings.agents.problem.syntaxLine': 'Tidak dapat dibaca pada baris {line}: {detail}',
+  'settings.agents.problem.tooLarge': 'Ukurannya lebih dari {size} KB.',
+  'settings.agents.problem.tooLong': '{field}-nya terlalu panjang.',
+  'settings.agents.problem.unclosedFrontmatter': 'Frontmatter-nya tidak pernah ditutup. Tambahkan baris --- setelahnya.',
+  'settings.agents.problem.wrongType': '{field}-nya bukan jenis nilai yang benar.',
+  'settings.agents.resync.body': 'File {providers} diedit secara manual. Sinkronkan ulang mengganti hasil edit itu dengan isi kolom.',
+  'settings.agents.resync.confirm': 'Ganti hasil edit',
+  'settings.agents.resync.label': 'Sinkronkan ulang',
+  'settings.agents.resync.tip': 'Tulis kedua file lagi dari kolom agen',
+  'settings.agents.resync.title': 'Ganti hasil edit {name}?',
+  'settings.agents.template.output': 'Setelah selesai, laporkan apa yang Anda kerjakan dan apa yang masih tersisa.',
+  'settings.agents.template.role': 'Anda adalah pembantu yang fokus untuk proyek ini. Jelaskan pekerjaan yang dilakukan agen ini.',
+  'settings.agents.template.steps': 'Langkah:\n1. Baca file yang disebut dalam tugas.\n2. Kerjakan, jaga perubahan tetap kecil.\n3. Periksa hasilnya.',
+  'settings.agents.truncated': 'Proyek ini memiliki lebih banyak agen daripada yang terdaftar di sini.',
   'settings.audits.rules.px': 'px di luar variabel',
   'settings.audits.phrases.info': 'Satu kata harus menjadi seluruh teks agar dihitung; beberapa kata boleh menjadi bagian dari teks.',
   'settings.breakpoints.add': 'Tambah breakpoint',
@@ -153,6 +219,9 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Menyimpan snapshot tersembunyi sebelum dan sesudah setiap giliran AI untuk menampilkan perubahan. Tidak menambah commit ke riwayat Anda. Nonaktif lebih cepat di proyek besar.',
   'settings.editor.ai.trackChanges.label': 'Snapshot sebelum & sesudah setiap perubahan AI',
+  'settings.editor.code.chips.info':
+    'Variabel, easing, bayangan, gradien, dan clip-path di kode CSS tampil sebagai chip yang membuka editornya. Nonaktif: CSS biasa.',
+  'settings.editor.code.chips.label': 'Tampilkan chip CSS di kode',
   'settings.editor.loading': 'Memuat preferensi…',
   'settings.editor.preferences': 'Preferensi app',
   'settings.editor.privacy.hideDetails.info': 'App hanya melihat ID per proyek, bukan nama Git, email, atau akun GitHub Anda.',
@@ -162,6 +231,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Penghitungan penggunaan anonim',
   'settings.editor.saveFailed': 'Diterapkan untuk sesi ini, tetapi tidak dapat disimpan. Periksa ruang disk lalu coba lagi.',
   'settings.editor.section.ai': 'AI', // same
+  'settings.editor.section.code': 'Kode',
   'settings.editor.section.general': 'Umum',
   'settings.editor.section.privacy': 'Privasi',
   'settings.editor.sound.label': 'Suara antarmuka',
@@ -350,6 +420,7 @@ export const messages = {
   'settings.refresh': 'Segarkan',
   'settings.instructions.search.noMatch': 'Tidak ada instruksi yang cocok',
   'settings.instructions.search.placeholder': 'Cari instruksi',
+  'settings.section.agents': 'Agen',
   'settings.section.mcp': 'MCP', // same
   'settings.section.instructions': 'Instruksi',
   'settings.section.secrets': 'Secret',
