@@ -36,7 +36,9 @@ async function repository(context, { commits = true, identity = true } = {}) {
   if (commits) {
     await write(directory, 'base.txt', 'base\n');
     await plain(directory, ['add', '-A']);
-    await plain(directory, ['commit', '-m', 'base']);
+    // The base commit always names its author inline: a repository made without an identity must
+    // still get its first commit on a runner that has no global one (GitHub's Linux runners).
+    await plain(directory, ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'base']);
   }
   return directory;
 }
