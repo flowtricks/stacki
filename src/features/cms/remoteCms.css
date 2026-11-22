@@ -1080,26 +1080,6 @@
   box-shadow: none;
 }
 
-/* A content collection's row: on hover its settings take the arrow's place,
-   and the settings button lights on its own hover. */
-.cms-collection-settings {
-  display: none;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  place-items: center;
-  border-radius: 5px;
-}
-.cms-collection:hover .cms-collection-settings {
-  display: grid;
-}
-.cms-collection:has(.cms-collection-settings):hover .cms-collection-chevron {
-  display: none;
-}
-.cms-collection-settings:hover {
-  background: var(--bg-active);
-}
-
 /* Collection settings: sections of plain fields on the panel's background. */
 .remote-cms-settings-body {
   display: grid;

@@ -14,7 +14,8 @@ import type { DescribedTranslator, MessageKey, Translator } from '../../lib/i18n
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { SkeletonRows } from '../../ui/Skeleton';
 import Dropdown from '../../ui/Dropdown';
-import { tooltipHost, tooltipPointBelow, useDelayedPlacement, type TooltipPoint } from '../../ui/delayedTooltip';
+import { tooltipAnchor, tooltipHost, useDelayedPlacement, type TooltipAnchor } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { ChevronLeftIcon, CopyIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
@@ -423,8 +424,8 @@ function AddField(props: {
 }
 
 /** The tooltip's anchor: centred under the tile, as every delayed tooltip in the app is. */
-function placeUnder(element: HTMLElement): TooltipPoint {
-  return tooltipPointBelow(element.getBoundingClientRect());
+function placeUnder(element: HTMLElement): TooltipAnchor {
+  return tooltipAnchor(element.getBoundingClientRect());
 }
 
 /**
@@ -472,9 +473,9 @@ function KindTile({ kind, onPick }: { readonly kind: NewFieldKind; readonly onPi
       {withHint !== undefined &&
         tip.value !== undefined &&
         createPortal(
-          <div className="rail-tooltip below" role="tooltip" id={tooltipId} style={tip.value}>
+          <FittedTooltip role="tooltip" id={tooltipId} anchor={tip.value}>
             {withHint}
-          </div>,
+          </FittedTooltip>,
           // Inside a modal dialog the tip joins it, or it would be painted under the dialog's top layer.
           tooltipHost(button.current ?? undefined),
         )}
