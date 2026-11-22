@@ -1,0 +1,8 @@
+/* For the frame of an AI composer screenshot, the editor's own marks over the canvas step aside, so the
+   picture shows the page as it renders (aiScreenshotSource.ts). */
+body.is-taking-screenshot .node-outline,
+body.is-taking-screenshot .node-focus,
+body.is-taking-screenshot .spacing-band,
+body.is-taking-screenshot .rail-tooltip {
+  visibility: hidden;
+}
