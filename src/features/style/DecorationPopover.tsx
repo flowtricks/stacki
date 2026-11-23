@@ -8,6 +8,7 @@ import { RatioOtherInput } from './AspectRatioField';
 import ColorSwatch from './components/ColorSwatch';
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf } from './model/styleDisplay';
+import TipAnchor from '../../ui/TipAnchor';
 import ImportantMark from './components/ImportantMark';
 import { DecorNoneIcon, DecorStrikeIcon, DecorUnderlineIcon, DecorOverlineIcon } from './TypographyIcons';
 import { type Props, LiveInput } from './TypographyKit';
@@ -150,34 +151,36 @@ export function DecorationPopover(props: Props) {
       <div className="embed-editor_size-row">
         <PopLabel label={translate('style.decorationPopover.skipInk')} prop="text-decoration-skip-ink" {...props} />
         {/* No custom field: a flagged value is marked, and picks keep the flag. */}
-        <ImportantMark important={skip.important}>
-          <VariableSelect
-            prop="text-decoration-skip-ink"
-            rawValue={skip.present ? skip.value : ''}
-            onVariable={(binding) => setProp('text-decoration-skip-ink', binding, skip.important)}
-            customInput={
-              skip.present && variableIn(skip.value) !== undefined ? (
-                <RatioOtherInput
-                  value={skip.value}
-                  busy={busy}
-                  prop="text-decoration-skip-ink"
-                  ariaLabel={translate('style.decorationPopover.skipInk')}
-                  onCommit={(value, important) => setProp('text-decoration-skip-ink', value, important || skip.important)}
-                  onLiveCommit={(value, important) => props.liveSetProp('text-decoration-skip-ink', value, important || skip.important)}
-                  onClear={() => props.clearProp('text-decoration-skip-ink')}
-                />
-              ) : undefined
-            }
-            value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
-            options={skipInkOptions(translate)}
-            onChange={(value) => setProp('text-decoration-skip-ink', value, skip.important)}
-            onPreview={(value) => hoverPreview('text-decoration-skip-ink', value ?? undefined, skip.important)}
-            ariaLabel={translate('style.decorationPopover.skipInk')}
-            disabled={busy}
-          />
-        </ImportantMark>
+        {/* What skip ink does is the control's tooltip (hover and keyboard focus), not a paragraph under the rows. */}
+        <TipAnchor text={translate('style.decorationPopover.note')}>
+          <ImportantMark important={skip.important}>
+            <VariableSelect
+              prop="text-decoration-skip-ink"
+              rawValue={skip.present ? skip.value : ''}
+              onVariable={(binding) => setProp('text-decoration-skip-ink', binding, skip.important)}
+              customInput={
+                skip.present && variableIn(skip.value) !== undefined ? (
+                  <RatioOtherInput
+                    value={skip.value}
+                    busy={busy}
+                    prop="text-decoration-skip-ink"
+                    ariaLabel={translate('style.decorationPopover.skipInk')}
+                    onCommit={(value, important) => setProp('text-decoration-skip-ink', value, important || skip.important)}
+                    onLiveCommit={(value, important) => props.liveSetProp('text-decoration-skip-ink', value, important || skip.important)}
+                    onClear={() => props.clearProp('text-decoration-skip-ink')}
+                  />
+                ) : undefined
+              }
+              value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
+              options={skipInkOptions(translate)}
+              onChange={(value) => setProp('text-decoration-skip-ink', value, skip.important)}
+              onPreview={(value) => hoverPreview('text-decoration-skip-ink', value ?? undefined, skip.important)}
+              ariaLabel={translate('style.decorationPopover.skipInk')}
+              disabled={busy}
+            />
+          </ImportantMark>
+        </TipAnchor>
       </div>
-      <p className="embed-editor_more-note">{translate('style.decorationPopover.note')}</p>
     </div>
   );
 }

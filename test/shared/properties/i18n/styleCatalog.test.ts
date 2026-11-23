@@ -8,12 +8,7 @@ import { test } from 'node:test';
 import { formatMessage, parseMessage } from '#dist/shared/core/i18n/catalog.js';
 import { LOCALE_INFO, LOCALES } from '#dist/shared/core/i18n/locales.js';
 
-const PLURAL_KEYS = [
-  'style.embedEditor.pendingTooltip',
-  'style.embedEditor.pendingNote',
-  'style.embedEditor.scanned',
-  'style.embedEditor.scannedWithComponents',
-] as const;
+const PLURAL_KEYS = ['style.embedEditor.pendingTooltip', 'style.embedEditor.scanned', 'style.embedEditor.scannedWithComponents'] as const;
 const FLOW_LABEL_KEYS = [
   'style.directionControl.singleRow',
   'style.directionControl.wrapDown',

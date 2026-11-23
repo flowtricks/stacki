@@ -150,7 +150,6 @@ export const messages = {
   'palette.manage.renameDone': '{name} hernoemd',
   'palette.menu.move': 'Verplaatsen naar map…',
   'palette.menu.rename': 'Hernoemen',
-  'palette.rename.available': 'Beschikbaar',
   'palette.rename.checking': 'Controleren welke bestanden veranderen…',
   'palette.rename.extension': 'Laat “.astro” weg: het wordt automatisch toegevoegd.',
   'palette.rename.files': { one: '{count} bestand wordt bijgewerkt', other: '{count} bestanden worden bijgewerkt' },

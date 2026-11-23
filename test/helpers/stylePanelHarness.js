@@ -80,6 +80,8 @@ async function panelEnvironment() {
       loader: 'tsx',
     },
     outfile: bundlePath,
+    // The same error handoff the app's toast owner reads, so a test sees a toast the panel raises (toastCapture.js).
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',

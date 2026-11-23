@@ -257,13 +257,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'סגנון קו המתאר',
   'style.effectsSection.pointerEvents': 'אירועי מצביע',
   'style.effectsSection.width': 'עובי',
-  'style.embedEditor.dismiss': 'סגירה',
   'style.embedEditor.noEmbeds': 'לא נמצאו בדף הזה הטמעות HTML עם בלוקי {tag}.',
-  'style.embedEditor.pendingNote': {
-    one: 'שינוי אחד בבלוק {tag} של הדף עצמו מוחזק כאן. הקנבס לא יציג אותו עד שתצא מהרכיב הזה, והוא נשמר ביציאה.',
-    two: 'שני שינויים בבלוקי {tag} של הדף עצמו מוחזקים כאן. הקנבס לא יציג אותם עד שתצא מהרכיב הזה, והם נשמרים ביציאה.',
-    other: '{count} שינויים בבלוקי {tag} של הדף עצמו מוחזקים כאן. הקנבס לא יציג אותם עד שתצא מהרכיב הזה, והם נשמרים ביציאה.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: 'שינוי אחד בסגנונות הדף. לא בקנבס עד היציאה מהרכיב הזה',
     two: 'שני שינויים בסגנונות הדף. לא בקנבס עד היציאה מהרכיב הזה',

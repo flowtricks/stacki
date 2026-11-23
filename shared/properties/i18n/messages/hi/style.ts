@@ -261,13 +261,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'आउटलाइन शैली',
   'style.effectsSection.pointerEvents': 'पॉइंटर इवेंट',
   'style.effectsSection.width': 'चौड़ाई',
-  'style.embedEditor.dismiss': 'बंद करें',
   'style.embedEditor.noEmbeds': 'इस पेज पर {tag} ब्लॉक वाला कोई HTML एम्बेड नहीं मिला।',
-  'style.embedEditor.pendingNote': {
-    one: 'पेज के अपने {tag} ब्लॉक के {count} बदलाव यहाँ रोके गए हैं — जब तक आप इस कंपोनेंट से बाहर नहीं जाते कैनवास उसे नहीं दिखाएगा, और बाहर जाने पर वह सहेजा जाता है।',
-    other:
-      'पेज के अपने {tag} ब्लॉक के {count} बदलाव यहाँ रोके गए हैं — जब तक आप इस कंपोनेंट से बाहर नहीं जाते कैनवास उन्हें नहीं दिखाएगा, और बाहर जाने पर वे सहेजे जाते हैं।',
-  },
   'style.embedEditor.pendingTooltip': {
     one: 'पेज की स्टाइल के {count} बदलाव — जब तक आप इस कंपोनेंट से बाहर नहीं जाते कैनवास पर नहीं',
     other: 'पेज की स्टाइल के {count} बदलाव — जब तक आप इस कंपोनेंट से बाहर नहीं जाते कैनवास पर नहीं',

@@ -144,7 +144,6 @@ export const messages = {
   'palette.manage.renameDone': '{name} 이름 변경됨',
   'palette.menu.move': '폴더로 이동…',
   'palette.menu.rename': '이름 변경',
-  'palette.rename.available': '사용 가능',
   'palette.rename.checking': '변경될 파일 확인 중…',
   'palette.rename.extension': '“.astro”는 생략하세요. 자동으로 추가됩니다.',
   'palette.rename.files': { other: '파일 {count}개가 업데이트됩니다' },

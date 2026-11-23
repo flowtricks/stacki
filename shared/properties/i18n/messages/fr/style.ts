@@ -261,13 +261,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Style du contour',
   'style.effectsSection.pointerEvents': 'Événements du pointeur',
   'style.effectsSection.width': 'Épaisseur',
-  'style.embedEditor.dismiss': 'Ignorer',
   'style.embedEditor.noEmbeds': 'Aucun embed HTML avec des blocs {tag} n’a été trouvé sur cette page.',
-  'style.embedEditor.pendingNote': {
-    one: '{count} modification du bloc {tag} propre à la page est retenue ici : le canevas ne l’affichera pas avant que vous ayez quitté ce composant, et elle s’enregistre à ce moment-là.',
-    other:
-      '{count} modifications des blocs {tag} propres à la page sont retenues ici : le canevas ne les affichera pas avant que vous ayez quitté ce composant, et elles s’enregistrent à ce moment-là.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: '{count} modification des styles de la page : absente du canevas tant que vous n’avez pas quitté ce composant',
     other: '{count} modifications des styles de la page : absentes du canevas tant que vous n’avez pas quitté ce composant',

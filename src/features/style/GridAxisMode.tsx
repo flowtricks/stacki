@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import TipAnchor from '../../ui/TipAnchor';
 import SegmentedControl from '../../ui/SegmentedControl';
 import { GroupLabel } from './TypographySection';
 import { CountField } from './GridFlowControls';
@@ -107,13 +108,16 @@ export default function GridAxisMode({ title, prop, axis, setProp, labels }: Gri
           onSelectSelector={onSelectSelector}
         />
       </div>
-      <SegmentedControl
-        options={modeOptions}
-        value={mode}
-        ariaLabel={translate('style.gridSettings.modeAria', { title })}
-        disabled={busy}
-        onChange={(next) => void choose(next)}
-      />
+      {/* What subgrid does is the mode control's tooltip: a row under it would shift the panel when the mode changes. */}
+      <TipAnchor text={mode === 'subgrid' ? translate('style.gridSettings.subgridOn') : undefined}>
+        <SegmentedControl
+          options={modeOptions}
+          value={mode}
+          ariaLabel={translate('style.gridSettings.modeAria', { title })}
+          disabled={busy}
+          onChange={(next) => void choose(next)}
+        />
+      </TipAnchor>
       {mode === 'count' ? (
         <div className="embed-editor_grid-mode-body">
           <CountField
@@ -135,7 +139,6 @@ export default function GridAxisMode({ title, prop, axis, setProp, labels }: Gri
           />
         </div>
       ) : undefined}
-      {mode === 'subgrid' ? <div className="embed-editor_grid-note">{translate('style.gridSettings.subgridOn')}</div> : undefined}
     </section>
   );
 }

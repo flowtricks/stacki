@@ -2,6 +2,7 @@
 // popover each opens, and the modal the grid settings open in
 // (GridSettings.tsx).
 
+import InfoHint from '../../ui/InfoHint';
 import { useState } from 'react';
 import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
@@ -98,10 +99,13 @@ export function AutoTrackPopover({
   return (
     <TrackPopover anchorElement={anchorElement} onClose={onClose}>
       <TrackSizeEditor track={track} busy={busy} onChange={onChange} />
-      <div className="embed-editor_grid-popover-note">{note}</div>
-      <button type="button" className="embed-editor_grid-popover-ok" onClick={onClose}>
-        {translate('style.gridAutoSection.okGotIt')}
-      </button>
+      {/* The explanation is the (i) beside the button, so the popover is as tall as its controls. */}
+      <div className="embed-editor_grid-popover-actions">
+        <button type="button" className="embed-editor_grid-popover-ok" onClick={onClose}>
+          {translate('style.gridAutoSection.okGotIt')}
+        </button>
+        <InfoHint text={note} />
+      </div>
     </TrackPopover>
   );
 }

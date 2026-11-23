@@ -258,12 +258,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': '외곽선 스타일',
   'style.effectsSection.pointerEvents': '포인터 이벤트',
   'style.effectsSection.width': '너비',
-  'style.embedEditor.dismiss': '닫기',
   'style.embedEditor.noEmbeds': '이 페이지에서 {tag} 블록이 있는 HTML 임베드를 찾을 수 없습니다.',
-  'style.embedEditor.pendingNote': {
-    other:
-      '페이지 자체 {tag} 블록의 변경 사항 {count}개가 여기에 보류되어 있습니다. 이 컴포넌트를 벗어날 때까지 캔버스에 표시되지 않으며, 벗어나면 저장됩니다.',
-  },
   'style.embedEditor.pendingTooltip': {
     other: '페이지 스타일 변경 사항 {count}개 — 이 컴포넌트를 벗어날 때까지 캔버스에 표시되지 않음',
   },

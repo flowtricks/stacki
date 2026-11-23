@@ -146,7 +146,6 @@ export const messages = {
   'palette.manage.renameDone': '{name} の名前を変更しました',
   'palette.menu.move': 'フォルダに移動…',
   'palette.menu.rename': '名前を変更',
-  'palette.rename.available': '使用可能',
   'palette.rename.checking': '変更されるファイルを確認中…',
   'palette.rename.extension': '「.astro」は省略してください：自動的に追加されます。',
   'palette.rename.files': { other: '{count} 個のファイルが更新されます' },

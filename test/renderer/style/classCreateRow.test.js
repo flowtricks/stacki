@@ -50,6 +50,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
       loader: 'tsx',
     },
     outfile: bundlePath,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -366,7 +367,11 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   await key('Enter');
   check('Style: Enter does not add it', added.length === count, JSON.stringify(added.slice(count)));
   check('Style: the text stays to be corrected', field().value === '.1col');
-  check('Style: and the box says why', document.querySelector('.embed-editor_suggest-note')?.textContent === 'Check the class name and retry.');
+  check(
+    'Style: the field takes the error look, not a text row',
+    field().getAttribute('aria-invalid') === 'true' && document.querySelector('.embed-editor_suggest-note') === null,
+  );
+  check('Style: and one toast says why', require('../../helpers/toastCapture').toastMessages().includes('Check the class name and retry.'));
   await type('1col');
   await key('Enter');
   check('Style: bare, too', added.length === count, JSON.stringify(added.slice(count)));

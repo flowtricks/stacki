@@ -260,13 +260,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Konturstil',
   'style.effectsSection.pointerEvents': 'Zeigerereignisse',
   'style.effectsSection.width': 'Breite',
-  'style.embedEditor.dismiss': 'Schließen',
   'style.embedEditor.noEmbeds': 'Auf dieser Seite wurden keine HTML-Embeds mit {tag}-Blöcken gefunden.',
-  'style.embedEditor.pendingNote': {
-    one: '{count} Änderung am eigenen {tag}-Block der Seite wird hier zurückgehalten – die Canvas zeigt sie erst, wenn du diese Komponente verlässt, und sie wird dann gespeichert.',
-    other:
-      '{count} Änderungen an den eigenen {tag}-Blöcken der Seite werden hier zurückgehalten – die Canvas zeigt sie erst, wenn du diese Komponente verlässt, und sie werden dann gespeichert.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: '{count} Änderung an den Seitenstilen – erscheint erst auf der Canvas, wenn du diese Komponente verlässt',
     other: '{count} Änderungen an den Seitenstilen – erscheinen erst auf der Canvas, wenn du diese Komponente verlässt',

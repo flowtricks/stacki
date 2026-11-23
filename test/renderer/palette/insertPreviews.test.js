@@ -547,7 +547,11 @@ test('without a dev server the card says there is no preview, and the card still
     assert.equal(producers().length, 0);
     const note = view.cards()[0].querySelector('.insert-surface-note');
     assert.equal(note.textContent, 'No preview available');
-    assert.equal(note.getAttribute('title'), 'The project dev server is not running.', 'the reason is on hover');
+    assert.equal(
+      note.closest('.tip-anchor').querySelector('.info-hint-text').textContent,
+      'The project dev server is not running.',
+      'the reason is the tile tooltip',
+    );
     assert.ok(note.querySelector('.insert-surface-note-icon svg'), 'the component icon sits in it');
     await view.act(() => view.cards()[1].click());
     assert.equal(view.events.inserted[0].name, 'Pricing');
@@ -561,7 +565,10 @@ test('a component without a file has no preview either', async () => {
   try {
     assert.equal(producers().length, 0);
     assert.equal(view.cards()[0].querySelector('.insert-surface-note').textContent, 'No preview available');
-    assert.equal(view.cards()[0].querySelector('.insert-surface-note').getAttribute('title'), 'This component has no file the preview can load.');
+    assert.equal(
+      view.cards()[0].querySelector('.insert-surface-note').closest('.tip-anchor').querySelector('.info-hint-text').textContent,
+      'This component has no file the preview can load.',
+    );
   } finally {
     await view.finish();
   }
@@ -681,7 +688,10 @@ test('an empty report says why on hover, and Try with sample data renders the ti
     await send(view, first, { type: 'avb:component-preview', status: 'empty', reason: 'Preview needs data for: items, band. Open an instance on a page.' });
     const note = view.cards()[0].querySelector('.insert-surface-note');
     assert.equal(note.textContent.startsWith('No preview available'), true);
-    assert.equal(note.getAttribute('title'), 'Needs a value for: items, band. Open an instance on a page to preview it.');
+    assert.equal(
+      note.closest('.tip-anchor').querySelector('.info-hint-text').textContent,
+      'Needs a value for: items, band. Open an instance on a page to preview it.',
+    );
     const retry = note.querySelector('button');
     assert.equal(retry.textContent, 'Try with sample data');
     const before = producers().length;
@@ -705,14 +715,17 @@ test('a thrown error is named on hover, and a page that loads and never answers 
     const [first, second] = producers();
     await send(view, first, { type: 'avb:component-preview', status: 'empty', reason: "Threw: Cannot read properties of undefined (reading 'x')" });
     assert.match(
-      view.cards()[0].querySelector('.insert-surface-note').getAttribute('title'),
+      view.cards()[0].querySelector('.insert-surface-note').closest('.tip-anchor').querySelector('.info-hint-text').textContent,
       /The component threw an error: Cannot read properties of undefined/,
     );
     mock.timers.enable({ apis: ['setTimeout'] });
     await view.act(() => second.dispatchEvent(new view.dom.window.Event('load')));
     await view.act(() => mock.timers.tick(6100));
     mock.timers.reset();
-    assert.match(view.cards()[1].querySelector('.insert-surface-note').getAttribute('title'), /did not render the component/);
+    assert.match(
+      view.cards()[1].querySelector('.insert-surface-note').closest('.tip-anchor').querySelector('.info-hint-text').textContent,
+      /did not render the component/,
+    );
   } finally {
     mock.timers.reset();
     await view.finish();

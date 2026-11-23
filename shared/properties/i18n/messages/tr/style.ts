@@ -259,12 +259,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Anahat stili',
   'style.effectsSection.pointerEvents': 'İşaretçi olayları',
   'style.effectsSection.width': 'Genişlik',
-  'style.embedEditor.dismiss': 'Kapat',
   'style.embedEditor.noEmbeds': 'Bu sayfada {tag} blokları olan HTML gömmesi bulunamadı.',
-  'style.embedEditor.pendingNote': {
-    one: 'Sayfanın kendi {tag} bloğunda {count} değişiklik burada bekletiliyor — bu bileşenden çıkana kadar tuvalde görünmez ve çıktığınızda kaydedilir.',
-    other: 'Sayfanın kendi {tag} bloklarında {count} değişiklik burada bekletiliyor — bu bileşenden çıkana kadar tuvalde görünmez ve çıktığınızda kaydedilir.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: 'Sayfanın stillerinde {count} değişiklik — bu bileşenden çıkana kadar tuvalde değil',
     other: 'Sayfanın stillerinde {count} değişiklik — bu bileşenden çıkana kadar tuvalde değil',

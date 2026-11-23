@@ -149,7 +149,6 @@ export const messages = {
   'palette.manage.renameDone': '{name} yeniden adlandırıldı',
   'palette.menu.move': 'Klasöre taşı…',
   'palette.menu.rename': 'Yeniden adlandır',
-  'palette.rename.available': 'Kullanılabilir',
   'palette.rename.checking': 'Hangi dosyaların değişeceği denetleniyor…',
   'palette.rename.extension': '“.astro” yazmayın: sizin için eklenir.',
   'palette.rename.files': { one: '{count} dosya güncellenecek', other: '{count} dosya güncellenecek' },

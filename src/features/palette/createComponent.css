@@ -8,17 +8,10 @@
 .modal.create-component .create-folder label {
   margin-bottom: 0;
 }
-.modal.create-component .create-folder-warning {
-  margin-top: 6px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: rgba(255, 190, 80, 0.14);
-  color: #ffd08a;
-  font-size: 12px;
-}
-.modal.create-component .create-folder-problem {
-  font-size: 12px;
-  color: #ff9b9b;
+/* A name or folder the dialog cannot take: the error tint behind the text, no border; the reason is a toast when Create is tried. */
+.modal.create-component input[aria-invalid='true'] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 /* "Move styles": the value list's rows, with a checkbox first and where the CSS is at the end.
    The file names give way first (ellipsis, full list in the tooltip); the class and its tag keep their size. */

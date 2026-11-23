@@ -2,7 +2,7 @@
 // It opens on the project's convention (mobile first for a stylesheet written with `>=`), lists the
 // project's breakpoints with the condition each would write, in bar order, marks a condition that
 // exists as Already added (and choosing it only switches the edit target), narrows as a custom width
-// is typed with a live preview line, and writes only on Enter or a click: exactly one empty at-rule
+// is typed (what Add will do is the Add button's tooltip; a width it cannot take wears the error look and Enter raises one toast), and writes only on Enter or a click: exactly one empty at-rule
 // with the chosen condition, in one undo step, leaving the existing CSS as it was. Hovering,
 // arrowing and typing write nothing. Desktop first writes `width < X` over the same boundaries.
 // Method: the real StylePanel through the shared harness over one fixture stylesheet (a single
@@ -25,6 +25,8 @@ const trigger = (panel) => panel.container.querySelector('.embed-editor_context-
 const text = (element) => element.textContent.replace(/\s+/g, ' ').trim();
 const form = (panel) => panel.container.querySelector('.embed-editor_add-query.is-suggested') ?? undefined;
 const rows = (panel) => [...form(panel).querySelectorAll('.embed-editor_aq-row')];
+// What Add will do is the Add button's tooltip text (also its aria-description); the form has no preview row.
+const addTip = (panel) => text(form(panel).querySelector('.embed-editor_aq-custom .tip-anchor .info-hint-text') ?? { textContent: '' });
 const rowText = (row) => [...row.children].map(text).filter(Boolean).join(' ');
 
 async function openForm(panel) {
@@ -77,7 +79,8 @@ test('hovering, arrowing and typing write nothing and record nothing', async (co
     setter.call(input, '40rem');
     input.dispatchEvent(new panel.window.Event('input', { bubbles: true }));
   });
-  assert.equal(text(form(panel).querySelector('.embed-editor_aq-preview')), 'Will add @media (width >= 40rem)', 'the live preview names the exact query');
+  assert.equal(addTip(panel), 'Will add @media (width >= 40rem)', 'the Add tooltip names the exact query');
+  assert.equal(form(panel).querySelector('.embed-editor_aq-preview') ?? undefined, undefined, 'no preview row');
   assert.deepEqual(panel.writes, [], 'nothing written by browsing or typing');
   assert.deepEqual(panel.writes, [], 'and nothing after the list is left again');
   assert.deepEqual(undos, [], 'no undo step was recorded');
@@ -124,12 +127,15 @@ test('a custom width types, previews and adds with Enter; garbage is refused wit
       input.dispatchEvent(new panel.window.Event('input', { bubbles: true }));
     });
   await type('banana');
-  assert.match(text(form(panel).querySelector('.embed-editor_aq-preview')), /Type a width/);
+  assert.equal(input.getAttribute('aria-invalid'), 'true', 'garbage takes the error look');
+  assert.equal(addTip(panel), '', 'and offers nothing to add');
+  assert.equal(form(panel).querySelector('.embed-editor_aq-preview') ?? undefined, undefined, 'with no text row under the field');
   await panel.user('Enter on garbage', () => key(panel, input, 'Enter'));
   assert.ok(form(panel), 'the form stays open');
+  assert.match(require('../../helpers/toastCapture').toastMessages(), /Type a width/, 'the reason is one toast on Enter');
   assert.deepEqual(panel.writes, []);
   await type('1100');
-  assert.equal(text(form(panel).querySelector('.embed-editor_aq-preview')), 'Will add @media (width >= 1100px)');
+  assert.equal(addTip(panel), 'Will add @media (width >= 1100px)');
   assert.deepEqual(rows(panel), [], 'no breakpoint matches 1100');
   await type('48');
   assert.deepEqual(rows(panel).map(rowText), ['Tablet width >= 48rem'], 'typing narrows the suggestions');

@@ -191,7 +191,6 @@ export const messages = {
   'palette.manage.renameDone': 'تمت إعادة تسمية {name}',
   'palette.menu.move': 'نقل إلى مجلد…',
   'palette.menu.rename': 'إعادة تسمية',
-  'palette.rename.available': 'متاح',
   'palette.rename.checking': 'جارٍ فحص الملفات التي ستتغير…',
   'palette.rename.extension': 'اترك “.astro” خارج الاسم: يُضاف تلقائيًا.',
   'palette.rename.files': {

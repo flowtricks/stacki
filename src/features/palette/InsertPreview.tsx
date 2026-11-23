@@ -1,3 +1,4 @@
+import TipAnchor from '../../ui/TipAnchor';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
@@ -159,26 +160,28 @@ function PreviewNote({ icon, reason, onRetry }: { readonly icon: ReactNode; read
   const translate = useTranslate();
   const text = unavailableText(reason, translate);
   assert(text.length > 0, 'An empty preview says why');
-  // The reason is the hover text: the tile stays one short line, and the cause is a pointer away.
+  // The reason is the tile's tooltip (hover and focus): the tile stays one short line, and the cause is a pointer away.
   return (
-    <div className="insert-surface-note" title={text}>
-      <span className="insert-surface-note-icon">{icon}</span>
-      <span>{translate('palette.preview.unavailable')}</span>
-      {onRetry !== undefined && (
-        <button
-          type="button"
-          className="insert-surface-retry"
-          // A click on the retry is not a click on the card: it must not insert the component.
-          onClick={(event) => {
-            event.stopPropagation();
-            onRetry();
-          }}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          {translate('palette.preview.retry')}
-        </button>
-      )}
-    </div>
+    <TipAnchor text={text}>
+      <div className="insert-surface-note">
+        <span className="insert-surface-note-icon">{icon}</span>
+        <span>{translate('palette.preview.unavailable')}</span>
+        {onRetry !== undefined && (
+          <button
+            type="button"
+            className="insert-surface-retry"
+            // A click on the retry is not a click on the card: it must not insert the component.
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetry();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {translate('palette.preview.retry')}
+          </button>
+        )}
+      </div>
+    </TipAnchor>
   );
 }
 

@@ -610,8 +610,8 @@ const check = (what, condition, detail) => {
     check('a typed name is left as typed while typing', field()?.value === 'Component name', field()?.value);
     check(
       'but the dialog shows what it will be saved as',
-      /ComponentName\.astro/.test(dom.window.document.querySelector('.modal .hint-text')?.textContent || ''),
-      dom.window.document.querySelector('.modal .hint-text')?.textContent,
+      /ComponentName\.astro/.test(dom.window.document.querySelector('.modal .tip-anchor .info-hint-text')?.textContent || ''),
+      dom.window.document.querySelector('.modal .tip-anchor .info-hint-text')?.textContent,
     );
     check('and it can be created', createButton()?.disabled === false, String(createButton()?.disabled));
 

@@ -8,7 +8,10 @@ import type { ComponentOpError } from '../../../shared/properties/componentOps';
 import type { ComponentRenameRequest, ComponentRenameSummary, RenameNoticeKind } from '../../../shared/properties/componentRename';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { reportErrorToast } from '../../ui/errorNotices';
 import Popup from '../../ui/Popup';
+import TipAnchor from '../../ui/TipAnchor';
 import { detectFolderStyle, detectNamingStyle } from '../../../shared/properties/componentNaming';
 import { folderInput, renameAvailability, type RenameCandidate } from './renameAvailability';
 import './renameComponent.css';
@@ -79,9 +82,34 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
   const ready = request !== undefined && preview.kind === 'ready';
   const nameChanged = availability.kind === 'available' && availability.fileName !== baseOf(props.file);
   const change = nameChanged ? (chosenFolder === currentFolder ? 'rename' : 'both') : 'move';
+  // Why the button is off: the name field and the folder field wear the error look, and the reason is the button's tooltip and one
+  // toast when Enter or the button is tried, never a line under a field, so the dialog keeps its height whatever is typed.
+  const blockedReason =
+    availability.kind === 'taken'
+      ? translate('palette.rename.taken', { file: availability.by })
+      : availability.kind === 'same'
+        ? translate('palette.rename.unchanged')
+        : availability.kind === 'invalid'
+          ? translateDescribed(availability.problem)
+          : folderProblem !== undefined && newFolder.trim() !== ''
+            ? translateDescribed(folderProblem)
+            : undefined;
+  const nameInvalid = availability.kind === 'taken' || availability.kind === 'invalid';
+  const folderInvalid = folderProblem !== undefined && newFolder.trim() !== '';
+  // What the typed name became and a same name elsewhere explain the path row below; the row's tooltip carries both.
+  const pathNotes = [
+    availability.kind === 'available' && availability.change !== undefined
+      ? translate(availability.change === 'spaces' ? 'palette.rename.spacesRemoved' : 'palette.rename.normalized', { name: availability.fileName })
+      : undefined,
+    availability.kind === 'available' && availability.sameNameIn !== undefined
+      ? translate('palette.rename.sameNameElsewhere', { name: availability.fileName, file: availability.sameNameIn })
+      : undefined,
+  ].filter((note): note is string => note !== undefined);
   const submit = (): void => {
     if (ready) {
       props.onApply(request, change);
+    } else if (blockedReason !== undefined) {
+      reportErrorToast(blockedReason);
     }
   };
   return (
@@ -93,6 +121,7 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
             <label>{translate('palette.rename.name')}</label>
             <input
               ref={nameRef}
+              aria-invalid={nameInvalid || undefined}
               value={name}
               spellCheck={false}
               // i18n-ignore: an example component identifier, not prose.
@@ -106,22 +135,6 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
                 }
               }}
             />
-            <div className={`rename-status is-${availability.kind}`} role="status">
-              {availability.kind === 'available' && translate('palette.rename.available')}
-              {availability.kind === 'taken' && translate('palette.rename.taken', { file: availability.by })}
-              {availability.kind === 'same' && translate('palette.rename.unchanged')}
-              {availability.kind === 'invalid' && translateDescribed(availability.problem)}
-            </div>
-            {availability.kind === 'available' && availability.change !== undefined && (
-              <div className="rename-note">
-                {translate(availability.change === 'spaces' ? 'palette.rename.spacesRemoved' : 'palette.rename.normalized', { name: availability.fileName })}
-              </div>
-            )}
-            {availability.kind === 'available' && availability.sameNameIn !== undefined && (
-              <div className="rename-warning">
-                {translate('palette.rename.sameNameElsewhere', { name: availability.fileName, file: availability.sameNameIn })}
-              </div>
-            )}
             <label>{translate('palette.rename.folder')}</label>
             <Dropdown
               value={folder}
@@ -135,22 +148,31 @@ export function RenameComponentDialog(props: RenameComponentDialogProps) {
                   value={newFolder}
                   spellCheck={false}
                   aria-label={translate('palette.rename.newFolderName')}
+                  aria-invalid={folderInvalid || undefined}
                   onChange={(event) => setNewFolder(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      submit();
+                    }
+                  }}
                 />
-                {newFolder.trim() !== '' && folderProblem !== undefined && <div className="rename-status is-invalid">{translateDescribed(folderProblem)}</div>}
               </>
             )}
-            <div className="rename-path">
-              <span>{translate('palette.rename.path')}</span>
-              <code>{previewPath(availability, chosenFolder, props.file)}</code>
-            </div>
+            <TipAnchor text={pathNotes.length === 0 ? undefined : pathNotes.join(' ')}>
+              <div className="rename-path">
+                <span>{translate('palette.rename.path')}</span>
+                <code>{previewPath(availability, chosenFolder, props.file)}</code>
+              </div>
+            </TipAnchor>
             <PreviewSummary preview={preview} active={request !== undefined} />
           </div>
           <div className="modal-footer">
             <button onClick={close}>{translate('ui.cancel')}</button>
-            <button className="primary" disabled={!ready} onClick={submit}>
-              {translate(change === 'rename' ? 'palette.rename.submitRename' : change === 'move' ? 'palette.rename.submitMove' : 'palette.rename.submitBoth')}
-            </button>
+            <TipAnchor text={ready ? undefined : blockedReason}>
+              <button className="primary" disabled={!ready} onClick={submit}>
+                {translate(change === 'rename' ? 'palette.rename.submitRename' : change === 'move' ? 'palette.rename.submitMove' : 'palette.rename.submitBoth')}
+              </button>
+            </TipAnchor>
           </div>
         </>
       )}
@@ -238,7 +260,8 @@ function PreviewSummary({ preview, active }: { readonly preview: Preview; readon
     return <div className="rename-files panel-loading-label">{translate('palette.rename.checking')}</div>;
   }
   if (preview.kind === 'error') {
-    return <div className="rename-status is-invalid">{preview.message}</div>;
+    // The plan could not be read: one toast, and the button stays off; a row here would move the dialog's footer.
+    return <ErrorToast message={preview.message} />;
   }
   const { files, notices } = preview.summary;
   return (

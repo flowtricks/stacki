@@ -144,7 +144,6 @@ export const messages = {
   'palette.manage.renameDone': '已重新命名 {name}',
   'palette.menu.move': '移到資料夾…',
   'palette.menu.rename': '重新命名',
-  'palette.rename.available': '可使用',
   'palette.rename.checking': '正在檢查哪些檔案會變更…',
   'palette.rename.extension': '不用輸入「.astro」：系統會自動加上。',
   'palette.rename.files': { other: '將更新 {count} 個檔案' },

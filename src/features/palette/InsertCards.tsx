@@ -22,6 +22,7 @@ export function InsertCard({
   showFolder,
   onHover,
   onInsert,
+  describedBy,
 }: {
   readonly item: InsertItem;
   readonly itemKey: string;
@@ -33,6 +34,8 @@ export function InsertCard({
   readonly showFolder: boolean;
   readonly onHover: () => void;
   readonly onInsert: () => void;
+  /** The id of the element that says why the card cannot be inserted here (InsertPlacementTip). */
+  readonly describedBy?: string | undefined;
 }) {
   assert(item.card !== undefined, 'Only a card item renders as a card');
   const translate = useTranslate();
@@ -41,7 +44,13 @@ export function InsertCard({
   const uses = item.instances ?? 0;
   const folder = showFolder && item.card.folder !== undefined ? insertFolderLabel(item.card.folder) : undefined;
   return (
-    <div ref={ref} className={`insert-item insert-card ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onInsert}>
+    <div
+      ref={ref}
+      className={`insert-item insert-card ${highlighted ? 'highlight' : ''}`}
+      aria-describedby={describedBy}
+      onMouseMove={highlighted ? undefined : onHover}
+      onClick={onInsert}
+    >
       <InsertPreviewSurface source={{ ...host, component: item.preview }} icon={item.icon} />
       <div className="insert-card-foot">
         <span className="insert-item-icon">{item.icon}</span>
@@ -62,16 +71,24 @@ export function InsertRow({
   highlighted,
   onHover,
   onInsert,
+  describedBy,
 }: {
   readonly item: InsertItem;
   readonly highlighted: boolean;
   readonly onHover: () => void;
   readonly onInsert: () => void;
+  /** The id of the element that says why the row cannot be inserted here (InsertPlacementTip). */
+  readonly describedBy?: string | undefined;
 }) {
   const translate = useTranslate();
   const where = item.card?.folder === undefined ? insertItemSub(item, translate) : insertFolderLabel(item.card.folder);
   return (
-    <div className={`insert-item ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onInsert}>
+    <div
+      className={`insert-item ${highlighted ? 'highlight' : ''}`}
+      aria-describedby={describedBy}
+      onMouseMove={highlighted ? undefined : onHover}
+      onClick={onInsert}
+    >
       <span className="insert-item-icon">{item.icon}</span>
       <span className="insert-item-label">{insertItemLabel(item, translate)}</span>
       {where !== undefined && where !== '' && <span className="insert-item-sub">{where}</span>}

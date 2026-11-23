@@ -146,7 +146,6 @@ export const messages = {
   'palette.manage.renameDone': '{name} renomeado',
   'palette.menu.move': 'Mover para pasta…',
   'palette.menu.rename': 'Renomear',
-  'palette.rename.available': 'Disponível',
   'palette.rename.checking': 'Verificando quais arquivos mudarão…',
   'palette.rename.extension': 'Deixe de fora “.astro”: ele é adicionado para você.',
   'palette.rename.files': { one: '{count} arquivo será atualizado', other: '{count} arquivos serão atualizados' },

@@ -257,11 +257,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': '轮廓样式',
   'style.effectsSection.pointerEvents': '指针事件',
   'style.effectsSection.width': '宽度',
-  'style.embedEditor.dismiss': '关闭',
   'style.embedEditor.noEmbeds': '此页面上未找到包含 {tag} 块的 HTML 嵌入。',
-  'style.embedEditor.pendingNote': {
-    other: '对页面自身 {tag} 块的 {count} 项更改暂存在此——离开此组件前画布不会显示，离开时会自动保存。',
-  },
   'style.embedEditor.pendingTooltip': {
     other: '对页面样式的 {count} 项更改——离开此组件前不会显示在画布上',
   },

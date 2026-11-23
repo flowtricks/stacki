@@ -259,13 +259,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Estilo do contorno',
   'style.effectsSection.pointerEvents': 'Eventos do ponteiro',
   'style.effectsSection.width': 'Espessura',
-  'style.embedEditor.dismiss': 'Dispensar',
   'style.embedEditor.noEmbeds': 'Nenhum embed HTML com blocos {tag} foi encontrado nesta página.',
-  'style.embedEditor.pendingNote': {
-    one: '{count} alteração no bloco {tag} da própria página fica retida aqui: a tela não a mostrará até você sair deste componente, e ela é salva quando você sair.',
-    other:
-      '{count} alterações nos blocos {tag} da própria página ficam retidas aqui: a tela não as mostrará até você sair deste componente, e elas são salvas quando você sair.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: '{count} alteração nos estilos da página: não aparece na tela até você sair deste componente',
     other: '{count} alterações nos estilos da página: não aparecem na tela até você sair deste componente',

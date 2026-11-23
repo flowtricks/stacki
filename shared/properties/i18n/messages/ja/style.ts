@@ -259,12 +259,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'アウトラインのスタイル',
   'style.effectsSection.pointerEvents': 'ポインターイベント',
   'style.effectsSection.width': '幅',
-  'style.embedEditor.dismiss': '閉じる',
   'style.embedEditor.noEmbeds': 'このページに {tag} ブロックを含む HTML 埋め込みは見つかりませんでした。',
-  'style.embedEditor.pendingNote': {
-    other:
-      'ページ自身の {tag} ブロックへの {count} 件の変更がここで保留されています。このコンポーネントを離れるまでキャンバスには表示されず、離れるときに保存されます。',
-  },
   'style.embedEditor.pendingTooltip': {
     other: 'ページのスタイルへの {count} 件の変更 — このコンポーネントを離れるまでキャンバスには表示されません',
   },

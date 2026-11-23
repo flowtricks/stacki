@@ -260,13 +260,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Stile del contorno',
   'style.effectsSection.pointerEvents': 'Eventi del puntatore',
   'style.effectsSection.width': 'Spessore',
-  'style.embedEditor.dismiss': 'Chiudi',
   'style.embedEditor.noEmbeds': 'Nessun embed HTML con blocchi {tag} trovato in questa pagina.',
-  'style.embedEditor.pendingNote': {
-    one: '{count} modifica al blocco {tag} della pagina è trattenuta qui: il canvas non la mostra finché non esci da questo componente, e viene salvata quando esci.',
-    other:
-      '{count} modifiche ai blocchi {tag} della pagina sono trattenute qui: il canvas non le mostra finché non esci da questo componente, e vengono salvate quando esci.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: '{count} modifica agli stili della pagina: non è sul canvas finché non esci da questo componente',
     other: '{count} modifiche agli stili della pagina: non sono sul canvas finché non esci da questo componente',

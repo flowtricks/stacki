@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { ProvenanceEmbedNav } from './ProvenanceList';
 import { type RuleModel } from './model/cascade';
 import { type ScanState, type Phase, SaveIndicator } from './embed/EditorBasics';
@@ -479,7 +480,7 @@ function useEditorView(
 ) {
   const { rootRef } = editorRefs;
   const { busy, saveError } = busyState;
-  const { nativeFallback, phase, scan, scanningMore, setNativeFallback } = scanState;
+  const { nativeFallback, phase, scan, scanningMore } = scanState;
   const { pendingKeys } = nativeState;
   const { model } = elementTokens;
   const { embedNav, nativeHasAny } = embedNavHook;
@@ -495,7 +496,6 @@ function useEditorView(
     saveError,
     pendingCount: pendingKeys.size,
     nativeFallback,
-    dismissFallback: () => setNativeFallback(undefined),
     phase,
     card,
     scanningMore,
@@ -514,7 +514,6 @@ interface EditorView {
   saveError: string | undefined;
   pendingCount: number;
   nativeFallback: string | undefined;
-  dismissFallback: () => void;
   phase: Phase;
   card: StyleCardProps;
   scanningMore: boolean;
@@ -536,8 +535,8 @@ function EditorRoot({ view }: { view: EditorView }) {
           error={view.saveError}
           pending={pendingCount ? translate('style.embedEditor.pendingTooltip', { count: pendingCount }) : undefined}
         />
-        <PendingNote count={pendingCount} />
-        {view.nativeFallback ? <FallbackNote note={view.nativeFallback} onDismiss={view.dismissFallback} /> : undefined}
+        {/* Why a native write fell back to an embed is a toast, not a row: the panel does not shift when it happens. */}
+        <ErrorToast message={view.nativeFallback} />
 
         {/* The panel is always usable once Webflow responds, including when no canvas
           element is selected. Embeds and native class values fill in as they load. */}
@@ -554,28 +553,6 @@ function EditorRoot({ view }: { view: EditorView }) {
         ) : undefined}
       </div>
     </ProvenanceEmbedNav.Provider>
-  );
-}
-
-// Edits to the page's own <style> blocks held while a component is open.
-function PendingNote({ count }: { count: number }) {
-  const translate = useTranslate();
-  if (!count) {
-    return undefined;
-  }
-  return <p className="embed-editor_pending-note">{translate('style.embedEditor.pendingNote', { count, tag: STYLE_TAG })}</p>;
-}
-
-// Why a native write fell back to an embed, until dismissed.
-function FallbackNote({ note, onDismiss }: { note: string; onDismiss: () => void }) {
-  const translate = useTranslate();
-  return (
-    <p className="embed-editor_fallback-note" role="status">
-      {note}
-      <button type="button" className="embed-editor_fallback-dismiss" aria-label={translate('style.embedEditor.dismiss')} onClick={onDismiss}>
-        ✕
-      </button>
-    </p>
   );
 }
 

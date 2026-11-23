@@ -3,6 +3,7 @@ import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTra
 import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { add as centralAdd } from '../../../ui/central/centralGeometry';
+import { ErrorToast } from '../../../ui/ErrorToast';
 import Popup from '../../../ui/Popup';
 // The selector well: the chips a selection is styled by, picking and adding
 // one, and filtering global selectors (EmbedEditor.tsx).
@@ -352,7 +353,7 @@ export function useAddSelectorField({
   const list = selectorRows({ typed, filtered, selectors });
   const highlight = classRowStep(moved, list);
   const refusal = refused === draft.trim();
-  const showList = open && (list.rows.length > 0 || refusal);
+  const showList = open && list.rows.length > 0;
 
   // Keep the highlighted row visible while arrowing through a long list.
   useHighlightInView({ listRef, highlight, showList });
@@ -899,6 +900,7 @@ export function SelectorAddField({
         role="combobox"
         aria-expanded={showList}
         aria-autocomplete="list"
+        aria-invalid={add.refusal || undefined}
         // Focusing the add field clears the active pick — you're composing a new
         // selector, so the panel drops back to showing all winners read-only. Stash
         // the previously-active selector to restore if you leave without adding one.
@@ -923,6 +925,8 @@ export function SelectorAddField({
         }}
         aria-label={translate('styleModel.embed.picker.addLabel')}
       />
+      {/* A name that cannot be a class: the field takes the error look and the reason is one toast, never a row in the list. */}
+      <ErrorToast message={add.refusal ? translate('styleModel.embed.picker.classRefusal') : undefined} />
       {showList ? <SelectorSuggestions add={add} listRef={listRef} apply={apply} /> : undefined}
     </div>
   );
@@ -1102,7 +1106,7 @@ function SelectorSuggestions({
   readonly apply: (text: string) => void;
 }) {
   const translate = useTranslate();
-  const { list, highlight, setHighlight, refusal } = add;
+  const { list, highlight, setHighlight } = add;
   return (
     <Popup
       mode="popover"
@@ -1128,12 +1132,6 @@ function SelectorSuggestions({
           <SelectorRowLabel row={row} />
         </button>
       ))}
-      {/* Last, so a row's place among the children stays its index in the list. */}
-      {refusal ? (
-        <div className="embed-editor_suggest-note" role="status">
-          {translate('styleModel.embed.picker.classRefusal')}
-        </div>
-      ) : undefined}
     </Popup>
   );
 }

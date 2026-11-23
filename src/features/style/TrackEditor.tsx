@@ -10,7 +10,7 @@ import VariableConnect from './VariableConnect';
 import { handleArrowStep } from './model/numberStep';
 import { panelSpan } from './model/panelBox';
 import { parseTrackSize, trackKind, type TrackSize } from './model/gridTemplate';
-import { WarnIcon } from './GridSettingsKit';
+import TipAnchor from '../../ui/TipAnchor';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { commitInPlace } from './model/commitStyleInPlace';
@@ -262,7 +262,7 @@ export function TrackSizeFields({ size, busy, onChange }: { size: TrackSize; bus
 export function AutoFitToggle({ autoFit, busy }: { autoFit: AutoFit; busy: boolean }) {
   const translate = useTranslate();
   return (
-    <>
+    <TipAnchor text={!autoFit.can && !autoFit.on ? translate('style.trackEditor.autoFitWarning') : undefined}>
       <label className="embed-editor_grad-check embed-editor_grid-autofit">
         <input
           type="checkbox"
@@ -272,15 +272,7 @@ export function AutoFitToggle({ autoFit, busy }: { autoFit: AutoFit; busy: boole
         />
         <span>{translate('style.trackEditor.autoFit')}</span>
       </label>
-      {!autoFit.can && !autoFit.on ? (
-        <div className="embed-editor_grid-warning">
-          <span className="embed-editor_grid-warning-icon">
-            <WarnIcon />
-          </span>
-          <span>{translate('style.trackEditor.autoFitWarning')}</span>
-        </div>
-      ) : undefined}
-    </>
+    </TipAnchor>
   );
 }
 

@@ -261,13 +261,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Omtrekstijl',
   'style.effectsSection.pointerEvents': 'Pointer-events',
   'style.effectsSection.width': 'Breedte',
-  'style.embedEditor.dismiss': 'Sluiten',
   'style.embedEditor.noEmbeds': 'Op deze pagina zijn geen HTML-embeds met {tag}-blokken gevonden.',
-  'style.embedEditor.pendingNote': {
-    one: '{count} wijziging aan het eigen {tag}-blok van de pagina wordt hier vastgehouden — het canvas toont die pas als je dit component verlaat, en ze wordt dan opgeslagen.',
-    other:
-      '{count} wijzigingen aan de eigen {tag}-blokken van de pagina worden hier vastgehouden — het canvas toont ze pas als je dit component verlaat, en ze worden dan opgeslagen.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: '{count} wijziging aan de stijlen van de pagina — niet op het canvas tot je dit component verlaat',
     other: '{count} wijzigingen aan de stijlen van de pagina — niet op het canvas tot je dit component verlaat',

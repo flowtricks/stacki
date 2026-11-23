@@ -258,15 +258,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Styl konturu',
   'style.effectsSection.pointerEvents': 'Zdarzenia wskaźnika',
   'style.effectsSection.width': 'Szerokość',
-  'style.embedEditor.dismiss': 'Zamknij',
   'style.embedEditor.noEmbeds': 'Na tej stronie nie znaleziono osadzeń HTML z blokami {tag}.',
-  'style.embedEditor.pendingNote': {
-    one: '{count} zmiana we własnym bloku {tag} strony jest tu wstrzymana — kanwa nie pokaże jej, dopóki nie opuścisz tego komponentu, a zapisze się, gdy to zrobisz.',
-    few: '{count} zmiany we własnych blokach {tag} strony są tu wstrzymane — kanwa nie pokaże ich, dopóki nie opuścisz tego komponentu, a zapiszą się, gdy to zrobisz.',
-    many: '{count} zmian we własnych blokach {tag} strony jest tu wstrzymanych — kanwa nie pokaże ich, dopóki nie opuścisz tego komponentu, a zapiszą się, gdy to zrobisz.',
-    other:
-      '{count} zmiany we własnych blokach {tag} strony są tu wstrzymane — kanwa nie pokaże ich, dopóki nie opuścisz tego komponentu, a zapiszą się, gdy to zrobisz.',
-  },
   'style.embedEditor.pendingTooltip': {
     one: '{count} zmiana stylów strony — nie ma jej na kanwie, dopóki nie opuścisz tego komponentu',
     few: '{count} zmiany stylów strony — nie ma ich na kanwie, dopóki nie opuścisz tego komponentu',

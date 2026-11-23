@@ -1,6 +1,6 @@
 // Goal: the Add query form is compact and sound in real layout: its rows are 32px with the official
 // breakpoint icons, every row ends in the same 16px check slot, left and right insets match (net of the scrollbar gutter), nothing
-// scrolls sideways at the panel's width, the preview line is shown under the Custom row, and the
+// scrolls sideways at the panel's width, what Add will do is the Add button's tooltip (no line under the Custom row), and the
 // list scrolls inside its own cap rather than growing the panel.
 // Method: a real Electron window (skipped without Electron; the pattern of contextDropdownScroll)
 // mounts the real AddQueryForm, with the real icon components, under the real tokens and
@@ -98,7 +98,7 @@ const check = (what, condition, detail) => {
            icons: rows.map((r) => r.querySelector('.embed-editor_aq-icon svg') !== null),
            insets: rows.map(inset),
            sideways: form.scrollWidth > form.clientWidth || list.scrollWidth > list.clientWidth || document.documentElement.scrollWidth > document.documentElement.clientWidth,
-           preview: document.querySelector('.embed-editor_aq-preview').textContent,
+           preview: document.querySelector('.embed-editor_aq-custom .info-hint-text')?.textContent ?? '',
            labels: rows.map((r) => r.textContent),
          };
        })()\`);
@@ -116,7 +116,7 @@ const check = (what, condition, detail) => {
        out.desktop = await measure();
        await shoot('add-query-desktop-first');
        await js("(() => { const input = document.querySelector('.embed-editor_aq-input'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(input, '40rem'); input.dispatchEvent(new Event('input', { bubbles: true })); return true })()");
-       await waitFor({ what: 'preview shown', read: () => js("document.querySelector('.embed-editor_aq-preview').textContent"), until: (text) => text.includes('40rem') });
+       await waitFor({ what: 'preview shown', read: () => js("document.querySelector('.embed-editor_aq-custom .info-hint-text')?.textContent ?? ''"), until: (text) => text.includes('40rem') });
        out.custom = await measure();
        await shoot('add-query-custom');
        console.log(JSON.stringify(out));

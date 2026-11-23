@@ -5,6 +5,8 @@ import type { InlineChip, InlineCodeView } from './useInlineTarget';
 import { InlineBranchEditor, InlineBranchPicker } from './InlineBranchEditor';
 import { CodeBlock } from '../../../ui/CodeBlock';
 import Popup from '../../../ui/Popup';
+import TipAnchor from '../../../ui/TipAnchor';
+import { reportErrorToast } from '../../../ui/errorNotices';
 // Media and container queries — picking one, adding and editing it — and the
 // style card's CSS code view (EmbedEditor.tsx).
 
@@ -265,6 +267,9 @@ export function AddQueryForm({
       write(custom.query, custom.existingKey);
     } else if (custom.kind === 'raw') {
       onAdd(custom.query, canNest ? mode : 'wrap');
+    } else if (custom.kind === 'invalid') {
+      // The field already wears the error look; the reason is one toast per commit, never a line under the field.
+      reportErrorToast(customPreview(custom, translate));
     }
   };
   const onListKey = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -291,22 +296,24 @@ export function AddQueryForm({
   return (
     <div className="embed-editor_add-query is-suggested">
       <div className="embed-editor_add-query-controls">
-        <SegmentedControl
-          className="embed-editor_add-query-mode"
-          options={queryModes(translate)}
-          value={canNest ? mode : 'wrap'}
-          onChange={setMode}
-          ariaLabel={translate('styleModel.embed.query.howToAdd')}
-          disabled={!canNest}
-          widthMode="hug"
-        />
+        {/* Why nesting is off is the control's tooltip: a line under the row would shift the panel when a selection changes. */}
+        <TipAnchor text={canNest ? undefined : translate('styleModel.embed.query.pickToNest')}>
+          <SegmentedControl
+            className="embed-editor_add-query-mode"
+            options={queryModes(translate)}
+            value={canNest ? mode : 'wrap'}
+            onChange={setMode}
+            ariaLabel={translate('styleModel.embed.query.howToAdd')}
+            disabled={!canNest}
+            widthMode="hug"
+          />
+        </TipAnchor>
         <div className="embed-editor_add-query-actions">
           <button type="button" className="u-button is-ghost is-small" onClick={onCancel}>
             {translate('ui.cancel')}
           </button>
         </div>
       </div>
-      {!canNest ? <p className="embed-editor_add-query-note">{translate('styleModel.embed.query.pickToNest')}</p> : undefined}
       <SegmentedControl
         className="embed-editor_add-query-direction"
         options={directionOptions}
@@ -374,13 +381,13 @@ export function AddQueryForm({
             }
           }}
         />
-        <button type="button" className="u-button is-primary is-small" onClick={addCustom} disabled={custom.kind !== 'width' && custom.kind !== 'raw'}>
-          {translate('styleModel.embed.query.add')}
-        </button>
+        {/* What Add will do is the button's tooltip, so the form keeps its height as the text changes. */}
+        <TipAnchor text={custom.kind === 'width' || custom.kind === 'raw' ? customPreview(custom, translate) : undefined}>
+          <button type="button" className="u-button is-primary is-small" onClick={addCustom} disabled={custom.kind !== 'width' && custom.kind !== 'raw'}>
+            {translate('styleModel.embed.query.add')}
+          </button>
+        </TipAnchor>
       </div>
-      <p className={custom.kind === 'invalid' ? 'embed-editor_aq-preview is-invalid' : 'embed-editor_aq-preview'} role="status" aria-live="polite">
-        {customPreview(custom, translate)}
-      </p>
     </div>
   );
 }

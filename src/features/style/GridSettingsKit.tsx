@@ -1,5 +1,5 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
-import { add as centralAdd, close as centralClose, trashCanSimple as centralTrashCanSimple, warning as centralWarning } from '../../ui/central/centralGeometry';
+import { add as centralAdd, close as centralClose, trashCanSimple as centralTrashCanSimple } from '../../ui/central/centralGeometry';
 // What the grid settings' parts share: the writers and labels they are handed,
 // reading a resolved value, and the small icons they draw (GridSettings.tsx).
 
@@ -31,4 +31,3 @@ export const resolvedValue = (read: Read, prop: string): string => {
 export const CloseIcon = centralIcon(centralClose);
 export const PlusIcon = centralIcon(centralAdd);
 export const TrashIcon = centralIcon(centralTrashCanSimple);
-export const WarnIcon = centralIcon(centralWarning);

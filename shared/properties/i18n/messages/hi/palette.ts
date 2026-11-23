@@ -145,7 +145,6 @@ export const messages = {
   'palette.manage.renameDone': '{name} का नाम बदला गया',
   'palette.menu.move': 'फ़ोल्डर में ले जाएँ…',
   'palette.menu.rename': 'नाम बदलें',
-  'palette.rename.available': 'उपलब्ध',
   'palette.rename.checking': 'जाँचा जा रहा है कि कौन-सी फ़ाइलें बदलेंगी…',
   'palette.rename.extension': '“.astro” न लिखें: वह अपने-आप जुड़ जाता है।',
   'palette.rename.files': { one: '{count} फ़ाइल अपडेट होगी', other: '{count} फ़ाइलें अपडेट होंगी' },

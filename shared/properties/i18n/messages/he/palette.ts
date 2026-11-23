@@ -150,7 +150,6 @@ export const messages = {
   'palette.manage.renameDone': 'שם {name} שונה',
   'palette.menu.move': 'העברה לתיקייה…',
   'palette.menu.rename': 'שינוי שם',
-  'palette.rename.available': 'פנוי',
   'palette.rename.checking': 'בודק אילו קבצים ישתנו…',
   'palette.rename.extension': 'יש להשמיט את “.astro”: הוא מתווסף אוטומטית.',
   'palette.rename.files': { one: 'קובץ אחד יעודכן', two: 'שני קבצים יעודכנו', other: '{count} קבצים יעודכנו' },

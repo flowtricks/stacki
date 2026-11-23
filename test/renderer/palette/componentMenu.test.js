@@ -245,7 +245,12 @@ test('Rename and Move to folder… sit between Roles and Duplicate, and the dial
   const dialog = () => document.querySelector('.rename-component');
   assert.ok(dialog(), 'the dialog is open');
   const input = () => dialog().querySelector('input');
-  const status = () => dialog().querySelector('.rename-status').textContent;
+  // The reason the button is off is its tooltip (read by aria-describedby) and the name field's error look: never a status row.
+  const reason = () => [...dialog().querySelectorAll('.tip-anchor')].map((anchor) => anchor.querySelector('.info-hint-text')?.textContent ?? '').join('|');
+  const invalid = () => input().getAttribute('aria-invalid') === 'true';
+  assert.equal(dialog().querySelector('.rename-status') ?? undefined, undefined, 'no status row');
+  assert.equal(dialog().querySelector('.rename-note') ?? undefined, undefined, 'no note row');
+  assert.equal(dialog().querySelector('.rename-warning') ?? undefined, undefined, 'no warning row');
   const primary = () => [...dialog().querySelectorAll('button')].find((button) => button.className.includes('primary'));
   const type = async (value) => {
     const { Simulate } = require('react-dom/test-utils');
@@ -254,35 +259,38 @@ test('Rename and Move to folder… sit between Roles and Duplicate, and the dial
       Simulate.change(input());
     });
   };
-  assert.equal(status(), 'This is the current name and folder.');
+  assert.match(reason(), /This is the current name and folder\./);
+  assert.equal(invalid(), false, 'unchanged is not an error');
   assert.equal(primary().disabled, true, 'unchanged: nothing to apply');
   await type('Taken');
-  assert.equal(status(), 'Already taken by src/components/Taken.astro');
+  assert.match(reason(), /Already taken by src\/components\/Taken\.astro/);
+  assert.equal(invalid(), true, 'taken wears the error look');
   assert.equal(primary().disabled, true);
   await type('TAKEN');
-  assert.match(status(), /^Already taken by src\/components\/Taken\.astro/, 'case-insensitively');
+  assert.match(reason(), /Already taken by src\/components\/Taken\.astro/, 'case-insensitively');
   await type('card 🙂');
-  assert.equal(status(), '“🙂” can’t be used in a name.');
+  assert.match(reason(), /“🙂” can’t be used in a name\./);
   await type('Card.astro');
-  assert.match(status(), /Leave out/);
+  assert.match(reason(), /Leave out/);
   await type('a/b');
-  assert.match(status(), /can’t contain/);
+  assert.match(reason(), /can’t contain/);
   assert.equal(primary().disabled, true);
   assert.deepEqual(requests, [], 'nothing is asked of main while the name is not usable');
   await type('Button');
-  assert.equal(status(), 'Available');
+  assert.equal(invalid(), false, 'a free name shows nothing');
+  assert.doesNotMatch(dialog().textContent, /Available/);
   assert.match(
-    dialog().textContent,
+    reason(),
     /Another component is also called Button \(src\/components\/forms\/Button\.astro\)/,
     'the same name in another folder is warned about',
   );
   await type('Contact Card');
-  assert.equal(status(), 'Available');
-  assert.match(dialog().querySelector('.rename-note').textContent, /Spaces removed: ContactCard/, 'the muted line shows what the spaces became');
+  assert.equal(invalid(), false);
+  assert.match(reason(), /Spaces removed: ContactCard/, 'the path tooltip shows what the spaces became');
   await type('tak en');
-  assert.match(status(), /^Already taken by src\/components\/Taken\.astro/, 'taken is checked on the normalized name');
+  assert.match(reason(), /Already taken by src\/components\/Taken\.astro/, 'taken is checked on the normalized name');
   await type('Contact Card');
-  assert.equal(status(), 'Available');
+  assert.equal(invalid(), false);
   assert.match(dialog().textContent, /src\/components\/ContactCard\.astro/, 'the resulting path is previewed');
   // The rename's plan arrives after its debounce: waited for, bounded, not paused for.
   await view.act(() =>

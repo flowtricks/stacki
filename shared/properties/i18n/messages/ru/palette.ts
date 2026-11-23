@@ -173,7 +173,6 @@ export const messages = {
   'palette.manage.renameDone': '{name} переименован',
   'palette.menu.move': 'Переместить в папку…',
   'palette.menu.rename': 'Переименовать',
-  'palette.rename.available': 'Доступно',
   'palette.rename.checking': 'Проверка, какие файлы изменятся…',
   'palette.rename.extension': 'Не указывайте «.astro»: расширение добавится автоматически.',
   'palette.rename.files': {

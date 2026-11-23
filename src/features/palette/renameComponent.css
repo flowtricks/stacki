@@ -4,24 +4,10 @@
   flex-direction: column;
   gap: 8px;
 }
-.rename-component .rename-status {
-  min-height: 18px;
-  font-size: 12px;
-  color: var(--text-dim, #b8b8b8);
-}
-.rename-component .rename-status.is-available {
-  color: #7ad9a0;
-}
-.rename-component .rename-status.is-taken,
-.rename-component .rename-status.is-invalid {
-  color: #ff9b9b;
-}
-.rename-component .rename-warning {
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: rgba(255, 190, 80, 0.14);
-  color: #ffd08a;
-  font-size: 12px;
+/* A name or folder the dialog cannot take: the error tint behind the text, no border; the reason is the button's tooltip and a toast. */
+.rename-component input[aria-invalid='true'] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 .rename-component .rename-path {
   display: flex;
@@ -51,9 +37,4 @@
 }
 .rename-component .rename-notices-title {
   color: var(--text-dim, #b8b8b8);
-}
-
-.rename-component .rename-note {
-  font-size: 12px;
-  color: var(--text-faint, #989898);
 }

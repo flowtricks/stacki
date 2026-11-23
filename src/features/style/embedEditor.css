@@ -126,49 +126,6 @@
   transform: translateY(0);
 }
 
-.embed-editor_pending-note {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-}
-
-/* Native (Webflow class) write couldn't apply and fell back to an embed — shown
-   inline (the status line was retired for the header indicator) so it isn't silent. */
-.embed-editor_fallback-note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  line-height: 1.4;
-}
-
-.embed-editor_fallback-dismiss {
-  flex: none;
-  margin-inline-start: auto;
-  padding: 0 var(--space-1);
-  border: 0;
-  background: none;
-  color: inherit;
-  font-size: var(--font-size-xs);
-  line-height: 1.4;
-  cursor: pointer;
-  opacity: 0.7;
-}
-
-.embed-editor_fallback-dismiss:hover {
-  opacity: 1;
-}
-
 /* ── Sections ── */
 
 .embed-editor_section {
@@ -1870,10 +1827,6 @@
   flex-direction: column;
   padding-top: var(--space-3);
 }
-.embed-editor_grid-note {
-  padding-top: var(--space-3);
-  color: var(--color-text-tertiary);
-}
 .embed-editor_grid-count.is-invalid .u-input,
 .embed-editor_grid-count.is-invalid .embed-editor_varconnect-editor {
   background: var(--color-danger-bg);
@@ -2244,10 +2197,10 @@
   border-right: var(--border-width-thin) solid var(--color-border-default); /* physical: caret placed by measured left */
   border-bottom: var(--border-width-thin) solid var(--color-border-default);
 }
-.embed-editor_grid-popover-note {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: 1.45;
+.embed-editor_grid-popover-actions {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
 }
 .embed-editor_grid-popover-ok {
   align-self: flex-start;
@@ -2341,23 +2294,6 @@
 .embed-editor_switch-label {
   letter-spacing: -0.01em;
 }
-.embed-editor_grid-warning {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-warning-bg);
-  border: var(--border-width-thin) solid var(--color-warning-border);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: 1.45;
-}
-.embed-editor_grid-warning-icon {
-  flex: none;
-  color: var(--color-warning);
-  margin-top: 1px;
-}
-
 /* Direction: the segmented control fills the row, the dense toggle sits beside it. */
 .embed-editor_grid-direction {
   display: flex;
@@ -3837,11 +3773,6 @@
   gap: var(--space-2);
   margin-inline-start: auto;
 }
-.embed-editor_add-query-note {
-  margin: 0;
-  font-size: var(--font-size-2xs);
-  color: var(--color-text-tertiary);
-}
 /* What a rename is about to touch — on the same line as the buttons it qualifies,
    at the panel's ordinary label size. It's the one thing on this form that says
    how far the change reaches, so it reads as text, not as fine print. */
@@ -3930,17 +3861,10 @@
   min-width: 0;
   font-size: var(--font-size-xs);
 }
-.embed-editor_aq-preview {
-  margin: 0;
-  min-height: 1rem;
-  font-size: var(--font-size-2xs);
-  color: var(--color-text-tertiary);
-  font-family: var(--font-family-mono);
-  overflow-wrap: anywhere;
-}
-.embed-editor_aq-preview.is-invalid {
-  color: var(--color-danger, #ff9b9b);
-  font-family: var(--font-family-sans);
+/* A custom query the field cannot take: the error tint behind the text, no border; the reason is a toast on commit. */
+.embed-editor_aq-input[aria-invalid='true'] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 /* The add form wraps (its wrap/nest switch needs the room); the rename form is a
    label and two buttons and stays on one line, the label giving way first. */
@@ -4307,11 +4231,10 @@
   background: var(--color-info-border);
   color: var(--color-text-primary);
 }
-/* Why Enter left a name in the field: a line of the list, never a row to pick. */
-.embed-editor_suggest-note {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+/* A name that cannot be a class: the error tint behind the text, no border; the reason is a toast. */
+.embed-editor_selector-add[aria-invalid='true'] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 /* The letters a typed query matched (fuzzyRank.ts): a tint behind them, not a
    border, so the name keeps its width and reads as one word. */
@@ -4808,14 +4731,6 @@
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
-/* Informational footnote (e.g. the skip-ink explainer). */
-.embed-editor_more-note {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-  color: var(--color-text-tertiary);
-}
-
 /* ── Breaking row (Word = word-break / Line = white-space) ──
    A static "Breaking" label in the shared label column, then two dropdown cells
    sharing the control area — each a Select stacked over its clickable label. */

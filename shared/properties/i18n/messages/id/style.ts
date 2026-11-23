@@ -259,12 +259,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Gaya outline',
   'style.effectsSection.pointerEvents': 'Event penunjuk',
   'style.effectsSection.width': 'Lebar',
-  'style.embedEditor.dismiss': 'Tutup',
   'style.embedEditor.noEmbeds': 'Tidak ditemukan embed HTML dengan blok {tag} di halaman ini.',
-  'style.embedEditor.pendingNote': {
-    other:
-      '{count} perubahan pada blok {tag} milik halaman ini ditahan di sini. Kanvas tidak akan menampilkannya sampai Anda keluar dari komponen ini, dan perubahan disimpan saat Anda keluar.',
-  },
   'style.embedEditor.pendingTooltip': {
     other: '{count} perubahan pada gaya halaman, belum tampil di kanvas sampai Anda keluar dari komponen ini',
   },

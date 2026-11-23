@@ -1,9 +1,11 @@
-import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { CodeInline } from '../../ui/CodeBlock';
 import InfoHint from '../../ui/InfoHint';
 import { SegmentedTabs, type SegmentedTab } from '../../ui/SegmentedTabs';
 import { assert } from '../../../shared/core/assert';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { reportActionToast, reportErrorToast } from '../../ui/errorNotices';
+import TipAnchor from '../../ui/TipAnchor';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
@@ -96,9 +98,27 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
   const blocked = problem !== undefined || target.folder === undefined;
   const error = problem === undefined ? undefined : translateDescribed(problem);
   const shown = text.trim() ? error : undefined;
+  // What the name will become, or that another component already has it: both are the field's tooltip (hover and focus), never a
+  // line under it, so the dialog keeps its height whatever is typed. The same-name case also warns once, with a toast, when it starts.
+  const twinWarning = target.twin === undefined ? undefined : translate('palette.rename.sameNameElsewhere', { name, file: target.twin });
+  const nameTip =
+    shown === undefined && twinWarning !== undefined
+      ? twinWarning
+      : translate('palette.create.hint', { label: props.source.label, tag: `<${name || 'Name'} />`, file: target.file });
+  const hasTwin = shown === undefined && twinWarning !== undefined;
+  useEffect(() => {
+    if (hasTwin && twinWarning !== undefined) {
+      reportActionToast(twinWarning, 'warning', []);
+    }
+    // Once per start of the warning, not per keystroke: the message changes with the name, the start does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on whether the warning is showing
+  }, [hasTwin]);
   const submit = (): void => {
     if (problem === undefined && target.folder !== undefined) {
       props.onCreate(name, { asProp: [...asProp], folder: target.folder, moveStyles: [...styles.chosen] });
+    } else if (target.folderProblem !== undefined) {
+      // The folder field wears the error look as it is typed; its reason is one toast, when Create is tried.
+      reportErrorToast(translateDescribed(target.folderProblem));
     }
   };
   return (
@@ -107,20 +127,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
         <>
           <div className="modal-header">{translate('palette.create.title')}</div>
           <div className="modal-body">
-            <ComponentNameField
-              inputRef={inputRef}
-              text={text}
-              setText={setText}
-              name={name}
-              file={target.file}
-              error={shown}
-              source={props.source}
-              submit={submit}
-              onClose={close}
-            />
-            {shown === undefined && target.twin !== undefined && (
-              <div className="create-folder-warning">{translate('palette.rename.sameNameElsewhere', { name, file: target.twin })}</div>
-            )}
+            <ComponentNameField inputRef={inputRef} text={text} setText={setText} error={shown} tip={nameTip} submit={submit} onClose={close} />
             <FolderField
               root={props.root}
               folders={target.folders}
@@ -341,54 +348,43 @@ function ComponentNameField({
   inputRef,
   text,
   setText,
-  name,
-  file,
   error,
-  source,
+  tip,
   submit,
   onClose,
 }: {
   readonly inputRef: React.RefObject<HTMLInputElement>;
   readonly text: string;
   readonly setText: React.Dispatch<React.SetStateAction<string>>;
-  readonly name: string;
-  readonly file: string;
   readonly error: string | undefined;
-  readonly source: Extract<ComponentCreationSource, { readonly kind: 'ready' }>;
+  /** What the field's tooltip says: what the name becomes, or that the name is already used elsewhere. */
+  readonly tip: string;
   readonly submit: () => void;
   readonly onClose: () => void;
 }) {
-  const translateRich = useTranslateRich();
   const translate = useTranslate();
   return (
     <div>
       <label>{translate('palette.create.name')}</label>
-      <input
-        ref={inputRef}
-        value={text}
-        spellCheck={false}
-        // i18n-ignore: an example component identifier, not prose.
-        placeholder="Card"
-        onChange={(event) => setText(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            submit();
-          } else if (event.key === 'Escape') {
-            onClose();
-          }
-        }}
-      />
-      {error ? (
-        <ErrorToast message={error} />
-      ) : (
-        <div className="hint-text component-name-hint">
-          {translateRich('palette.create.hint', {
-            label: source.label,
-            tag: <code>&lt;{name || 'Name'} /&gt;</code>,
-            file: <code>{file}</code>,
-          })}
-        </div>
-      )}
+      <TipAnchor text={tip}>
+        <input
+          ref={inputRef}
+          aria-invalid={error !== undefined || undefined}
+          value={text}
+          spellCheck={false}
+          // i18n-ignore: an example component identifier, not prose.
+          placeholder="Card"
+          onChange={(event) => setText(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              submit();
+            } else if (event.key === 'Escape') {
+              onClose();
+            }
+          }}
+        />
+      </TipAnchor>
+      <ErrorToast message={error} />
     </div>
   );
 }
@@ -424,6 +420,7 @@ function FolderField(props: {
           spellCheck={false}
           autoFocus={true}
           aria-label={translate('palette.rename.newFolderName')}
+          aria-invalid={props.problem !== undefined || undefined}
           // i18n-ignore: an example folder path, not prose.
           placeholder="Global/Layout"
           onChange={(event) => props.setNewFolder(event.currentTarget.value)}
@@ -435,11 +432,6 @@ function FolderField(props: {
             }
           }}
         />
-      )}
-      {props.problem !== undefined && (
-        <div className="create-folder-problem" role="status">
-          {props.problem}
-        </div>
       )}
     </div>
   );

@@ -13,6 +13,7 @@ import { insertFolderOf, type InsertFolderKey } from './insertFolders';
 import { insertResultsMax, insertView, moveHighlight, type GridMove, type InsertTab } from './insertGrid';
 import type { InsertItem } from './insertItem';
 import { previewStoreFor, tileId, tileRequests } from './previewTiles';
+import { InsertPlacementTip, PLACEMENT_REASON_ID } from './InsertPlacementTip';
 import { InsertCard, InsertHints, InsertPills, InsertRow, type InsertPreviewHost } from './InsertCards';
 import { INSERT_TAB_DEFAULT, loadInsertFolder, loadInsertTab, saveInsertFolder, saveInsertTab } from './insertPreferences';
 import type { AppsEmpty } from './InsertAppRows';
@@ -102,6 +103,8 @@ export default function InsertSearch(props: InsertSearchProps) {
   const translate = useTranslate();
   const { query, setQuery, tab, setTab, pickFolder, highlight, setHighlight, listRef, view } = state;
   const highlighted = view.shown[highlight];
+  const refusal = highlighted === undefined || highlighted.type === 'app' || highlighted.type === 'marketplace' ? undefined : props.placementOf?.(highlighted);
+  const placementReason = refusal === undefined ? undefined : translate(refusal.messageKey, refusal.params);
   const onWarm = props.onWarm;
   useEffect(() => {
     if (highlighted !== undefined && highlighted.type !== 'app' && highlighted.type !== 'marketplace') {
@@ -160,9 +163,10 @@ export default function InsertSearch(props: InsertSearchProps) {
               return <InsertMarketplaceRow key={key} app={item.app} first={first} highlighted={i === highlight} onHover={hover} onOpen={select} />;
             }
             const refusal = props.placementOf?.(item);
+            const describedBy = refusal !== undefined && i === highlight ? PLACEMENT_REASON_ID : undefined;
             const shownItem =
               !grid || item.card === undefined ? (
-                <InsertRow key={key} item={item} highlighted={i === highlight} onHover={hover} onInsert={select} />
+                <InsertRow key={key} item={item} highlighted={i === highlight} describedBy={describedBy} onHover={hover} onInsert={select} />
               ) : (
                 <InsertCard
                   key={key}
@@ -173,11 +177,12 @@ export default function InsertSearch(props: InsertSearchProps) {
                   scrollRoot={listRef}
                   onVisible={state.reportVisible}
                   showFolder={view.folders?.selected === undefined}
+                  describedBy={describedBy}
                   onHover={hover}
                   onInsert={select}
                 />
               );
-            // An item with no valid place here stays listed but dimmed, and says why below (never a native tooltip).
+            // An item with no valid place here stays listed but dimmed, and says why in a tooltip on the row while it is highlighted.
             return refusal === undefined ? (
               shownItem
             ) : (
@@ -188,24 +193,9 @@ export default function InsertSearch(props: InsertSearchProps) {
           })}
           {view.shown.length === 0 && <InsertEmpty state={state} onClose={onClose} />}
         </div>
-        <InsertPlacementNote
-          refusal={highlighted === undefined || highlighted.type === 'app' || highlighted.type === 'marketplace' ? undefined : props.placementOf?.(highlighted)}
-        />
+        <InsertPlacementTip reason={placementReason} listRef={listRef} highlight={highlight} />
         {grid && <InsertHints />}
       </div>
-    </div>
-  );
-}
-
-/** The reason the highlighted item cannot go where the page's selection points; nothing when it can. */
-function InsertPlacementNote({ refusal }: { readonly refusal: PlacementMessage | undefined }) {
-  const translate = useTranslate();
-  if (refusal === undefined) {
-    return undefined;
-  }
-  return (
-    <div className="insert-placement-note" role="status">
-      {translate(refusal.messageKey, refusal.params)}
     </div>
   );
 }

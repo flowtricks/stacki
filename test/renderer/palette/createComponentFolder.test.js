@@ -1,9 +1,10 @@
 // Goal: the Create component dialog asks where the new component goes. Its Folder field, under Name, is the custom dropdown (never a
 // native select) and starts on the components root every time; it lists every folder below the root that holds a component, nested
-// ones as paths, and a last "New folder…" row that opens a field for a typed path. The hint under the name says the file it will be
-// saved as, live; a typed folder that climbs out, starts at the disk, has an empty level or a bad character is refused with its
-// reason on screen and Create disabled; a name is taken only in the chosen folder, and the same name in another folder is a
-// warning, not a refusal. Creating hands the host the folder below the root, `''` for the root.
+// ones as paths, and a last "New folder…" row that opens a field for a typed path. The name field's tooltip says the file it will be
+// saved as, live (no paragraph under the field); a typed folder that climbs out, starts at the disk, has an empty level or a bad
+// character takes the error look and Create disabled, with its reason as one toast when Create is tried (no text row under the
+// field); a name is taken only in the chosen folder, and the same name in another folder is a warning (tooltip and toast), not a
+// refusal. Creating hands the host the folder below the root, `''` for the root.
 // "Move styles" lists the classes whose CSS may go into the component, read when the dialog opens, none checked to begin
 // with, each with where its CSS is; absent when there is nothing to read or nothing to move; and Create hands over the checked ones.
 // Method: bundle the real PalettePanel, mount it in jsdom with components in nested folders and a stub management whose rename
@@ -102,7 +103,8 @@ async function mount(sourceName, styles) {
     created,
     act,
     modal: () => document.querySelector('.modal.create-component'),
-    hint: () => document.querySelector('.modal .component-name-hint')?.textContent ?? '',
+    // The name field's tooltip text, which the field also names with aria-describedby for a screen reader.
+    hint: () => document.querySelector('.modal .tip-anchor .info-hint-text')?.textContent ?? '',
     trigger: () => document.querySelector('.modal .create-folder .dd-trigger'),
     options: () => [...document.querySelectorAll('.dd-option')].map((option) => option.textContent.trim()),
     createButton: () => [...document.querySelectorAll('.modal-footer button')].find((button) => button.textContent === 'Create'),
@@ -171,7 +173,7 @@ test('a typed new nested folder is normalized, case folded onto an existing fold
   await view.unmount();
 });
 
-test('an invalid typed folder is refused with a visible reason and Create disabled', async () => {
+test('an invalid typed folder takes the error look and Create disabled; the reason is one toast on Enter, never a text row', async () => {
   const cases = [
     ['../pages', /“\.\.” can’t be used/],
     ['/Global', /no \/ or drive at the front/],
@@ -181,9 +183,15 @@ test('an invalid typed folder is refused with a visible reason and Create disabl
   for (const [typed, reason] of cases) {
     const view = await mount('Div');
     await view.pick('New folder…');
-    await view.type(view.modal().querySelector('.create-folder-input'), typed);
-    assert.match(view.folderText(), reason, `${typed} says why`);
+    const input = view.modal().querySelector('.create-folder-input');
+    await view.type(input, typed);
+    assert.equal(input.getAttribute('aria-invalid'), 'true', `${typed} wears the error look`);
+    assert.equal(view.modal().querySelector('.create-folder-problem') ?? undefined, undefined, 'no problem row under the field');
+    assert.doesNotMatch(view.folderText(), reason, `${typed} adds no text under the field`);
     assert.equal(view.createButton().disabled, true, `${typed} cannot be created`);
+    await view.act(() => input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    assert.match(toastMessages(), reason, `${typed} says why in a toast`);
+    assert.deepEqual(view.created, [], `${typed} created nothing`);
     assert.match(view.hint(), /saved as src\/components\/…\/Div\.astro/, `${typed} names no folder in the hint`);
     await view.unmount();
   }
@@ -192,7 +200,16 @@ test('an invalid typed folder is refused with a visible reason and Create disabl
 test('a name is taken only in the chosen folder, and the same name elsewhere is a warning', async () => {
   const view = await mount('Field');
   assert.equal(view.createButton().disabled, false, 'Field is free in the root');
-  assert.match(view.modal().textContent, /Another component is also called Field \(src\/components\/Form\/Field\.astro\)/);
+  assert.match(view.hint(), /Another component is also called Field \(src\/components\/Form\/Field\.astro\)/, 'the tooltip carries the warning');
+  assert.doesNotMatch(
+    [...view.modal().querySelectorAll('div, p')]
+      .filter((node) => node.children.length === 0 && !node.closest('.info-hint-text'))
+      .map((node) => node.textContent)
+      .join(' '),
+    /Another component is also called/,
+    'no warning paragraph in the dialog',
+  );
+  assert.match(toastMessages(), /Another component is also called Field/, 'and it warns once with a toast');
   await view.pick('Form');
   assert.equal(view.createButton().disabled, true, 'but taken in Form');
   assert.match(toastMessages(), /src\/components\/Form\/Field\.astro already exists/, 'and says which file holds the name');

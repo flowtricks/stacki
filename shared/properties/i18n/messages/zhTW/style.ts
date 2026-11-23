@@ -257,11 +257,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': '外框樣式',
   'style.effectsSection.pointerEvents': '指標事件',
   'style.effectsSection.width': '寬度',
-  'style.embedEditor.dismiss': '關閉',
   'style.embedEditor.noEmbeds': '此頁面上找不到含 {tag} 區塊的 HTML 嵌入內容。',
-  'style.embedEditor.pendingNote': {
-    other: '對頁面本身 {tag} 區塊的 {count} 項變更暫存在這裡——離開此元件前畫布不會顯示，離開時會儲存。',
-  },
   'style.embedEditor.pendingTooltip': {
     other: '頁面樣式有 {count} 項變更——離開此元件前不會顯示在畫布上',
   },

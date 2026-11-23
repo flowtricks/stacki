@@ -258,13 +258,7 @@ export const messages = {
   'style.effectsSection.outlineStyle': 'Outline style',
   'style.effectsSection.pointerEvents': 'Pointer events',
   'style.effectsSection.width': 'Width',
-  'style.embedEditor.dismiss': 'Dismiss',
   'style.embedEditor.noEmbeds': 'No HTML embeds with {tag} blocks were found on this page.',
-  'style.embedEditor.pendingNote': {
-    one: "{count} change to the page's own {tag} block is held here — the canvas won't show it until you leave this component, and it saves when you do.",
-    other:
-      "{count} changes to the page's own {tag} blocks are held here — the canvas won't show them until you leave this component, and they save when you do.",
-  },
   'style.embedEditor.pendingTooltip': {
     one: "{count} change to the page's styles — not on the canvas until you leave this component",
     other: "{count} changes to the page's styles — not on the canvas until you leave this component",
