@@ -223,6 +223,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Salva um instantâneo oculto antes e depois de cada turno de IA para mostrar alterações. Não adiciona commits ao seu histórico. Desativado é mais rápido em projetos grandes.',
   'settings.editor.ai.trackChanges.label': 'Instantâneo antes e depois de cada alteração de IA',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} e mais largo',
+  'settings.editor.canvas.scrollbar.info':
+    'Desligada: uma barra de rolagem fina ao lado da página, que mantém toda a largura do breakpoint, como no celular. A partir de um breakpoint: a barra de rolagem do próprio Chromium ali e em larguras maiores, que ocupa largura como em um computador com mouse.',
+  'settings.editor.canvas.scrollbar.label': 'Barra de rolagem do Chromium',
+  'settings.editor.canvas.scrollbar.off': 'Desligada',
   'settings.editor.code.chips.info':
     'Variáveis, easings, sombras, gradientes e clip-paths no código CSS aparecem como chips que abrem seus editores. Desligado: CSS simples.',
   'settings.editor.code.chips.label': 'Mostrar chips de CSS no código',
@@ -235,6 +240,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Contagens de uso anônimas',
   'settings.editor.saveFailed': 'Aplicado nesta sessão, mas não foi possível salvar. Verifique o espaço em disco e tente novamente.',
   'settings.editor.section.ai': 'IA',
+  'settings.editor.section.canvas': 'Canvas', // same
   'settings.editor.section.code': 'Código',
   'settings.editor.section.general': 'Geral',
   'settings.editor.section.privacy': 'Privacidade',

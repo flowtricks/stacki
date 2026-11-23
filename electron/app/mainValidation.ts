@@ -4,6 +4,7 @@ import { boolean, count, data, dictionary, list, nullable, object, optional, pat
 import type { Data } from '../../shared/core/boundary';
 import type { LocalePreference } from '../../shared/core/i18n/locales';
 import { parseAutoCompactPercent } from '../../shared/properties/ai/autoCompact';
+import { CANVAS_SCROLLBAR_DEFAULT, canvasScrollbarPreferenceText, parseCanvasScrollbarPreference } from '../../shared/properties/canvasScrollbarChoice';
 import { parseLocalePreferenceValue } from '../../shared/ipc/localeChannel';
 import type { ContentCollection } from '../content/contentEntries';
 import type { DynamicEntry } from '../lib/mainTypes';
@@ -27,6 +28,8 @@ export interface AppSettings {
   readonly aiAutoCompactPercent?: number;
   /** Draw CSS values in code editors as chips (variables, easings, shadows, gradients, clip-paths); on unless turned off. */
   readonly codeChips: boolean;
+  /** Where Chromium's own scrollbar starts on the canvas: `off` (the canvas's bar everywhere) or a breakpoint id (canvasScrollbar.ts). */
+  readonly canvasScrollbar: string;
   /** The interface language the renderer last chose (docs/i18n-playbook.md, "Main process"); "system" follows the operating system. */
   readonly localePreference: LocalePreference;
 }
@@ -43,6 +46,7 @@ export function parseSettings(input: unknown): AppSettings {
     aiReviewChanges: optional(boolean),
     aiAutoCompactPercent: optional(parseAutoCompactPercent),
     codeChips: optional(boolean),
+    canvasScrollbar: optional(parseCanvasScrollbarPreference),
     localePreference: optional(parseLocalePreferenceValue),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
@@ -60,6 +64,7 @@ export function parseSettings(input: unknown): AppSettings {
     aiTrackChanges: value.aiTrackChanges ?? true,
     aiReviewChanges: value.aiReviewChanges ?? false,
     codeChips: value.codeChips ?? true,
+    canvasScrollbar: canvasScrollbarPreferenceText(value.canvasScrollbar ?? CANVAS_SCROLLBAR_DEFAULT),
     localePreference: value.localePreference ?? 'system',
     ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
     ...(value.aiAutoCompactPercent === undefined ? {} : { aiAutoCompactPercent: value.aiAutoCompactPercent }),

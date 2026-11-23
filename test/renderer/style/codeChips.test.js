@@ -675,6 +675,7 @@ test('the saved preference is read once from the desktop bridge, and a failure k
         aiTrackChanges: true,
         aiReviewChanges: false,
         codeChips: false,
+        canvasScrollbar: 'off',
       };
     },
   };

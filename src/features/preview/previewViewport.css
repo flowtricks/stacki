@@ -60,6 +60,30 @@
   /* The frame and overlay must move in the same paint when changing devices. */
   transition: none;
 }
+/* The canvas's own scrollbar for the page (CanvasScrollbar.tsx): a solid thumb in the gutter beside the frame, never over
+   the page. Its width and offset come in screen pixels divided by the frame's scale.
+   Under the resize handles (z-index 5), which sit further out and only at mid-height. */
+.canvas-scrollbar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  cursor: default;
+}
+.canvas-scrollbar-thumb {
+  position: absolute;
+  inset-inline: 0;
+  background: var(--border-strong);
+  transition: background 0.12s;
+}
+.canvas-scrollbar:hover .canvas-scrollbar-thumb,
+.frame-sized.scrolling .canvas-scrollbar-thumb {
+  background: var(--text-dim);
+}
+/* A thumb drag crosses the page: the iframe would take the pointer from the canvas. */
+.frame-sized.scrolling iframe {
+  pointer-events: none;
+}
 /* The canvas chrome's stacking order, bottom to top. One scale, so a new layer
    is placed by name against the others rather than by a number picked to beat
    one of them. The layer is its own stacking context (`isolation`), so these

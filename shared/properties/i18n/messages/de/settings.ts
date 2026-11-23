@@ -227,6 +227,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Speichert vor und nach jedem KI-Durchgang einen versteckten Schnappschuss, um Änderungen zu zeigen. Fügt keine Commits hinzu. Aus ist schneller bei großen Projekten.',
   'settings.editor.ai.trackChanges.label': 'Snapshot vor und nach jeder KI-Änderung',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} und breiter',
+  'settings.editor.canvas.scrollbar.info':
+    'Aus: eine schmale Scrollleiste neben der Seite, die so die volle Breite des Breakpoints behält, wie auf einem Smartphone. Ab einem Breakpoint: Chromiums eigene Scrollleiste dort und breiter, die Breite kostet wie an einem Computer mit Maus.',
+  'settings.editor.canvas.scrollbar.label': 'Chromium-Scrollleiste',
+  'settings.editor.canvas.scrollbar.off': 'Aus',
   'settings.editor.code.chips.info':
     'Variablen, Easings, Schatten, Verläufe und clip-paths in CSS-Code erscheinen als Chips, die ihre Editoren öffnen. Aus: reines CSS.',
   'settings.editor.code.chips.label': 'CSS-Chips im Code anzeigen',
@@ -239,6 +244,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Anonyme Nutzungszählung',
   'settings.editor.saveFailed': 'Für diese Sitzung übernommen, konnte aber nicht gespeichert werden. Prüfe den Speicherplatz und versuche es erneut.',
   'settings.editor.section.ai': 'KI',
+  'settings.editor.section.canvas': 'Canvas', // same
   'settings.editor.section.code': 'Code', // same
   'settings.editor.section.general': 'Allgemein',
   'settings.editor.section.privacy': 'Datenschutz',
