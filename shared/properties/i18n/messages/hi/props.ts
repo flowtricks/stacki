@@ -370,7 +370,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] या [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'आइटम पंक्तियाँ उपयोग करें',
   'props.loop.literal.writeCode': 'आइटम को कोड के रूप में लिखें',
-  'props.loop.notice.dismiss': 'खारिज करें',
   'props.loop.notice.relinked': 'अंदर की बाइंडिंग फिर से जुड़ गईं, जैसी वे इस सूची के लिए थीं।',
   'props.loop.notice.switchBack': { one: 'इसे फिर से जोड़ने के लिए {name} पर वापस जाएँ।', other: 'इन्हें फिर से जोड़ने के लिए {name} पर वापस जाएँ।' },
   'props.loop.notice.unlinked': {

@@ -369,7 +369,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["פריט 1", "פריט 2"] או [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'שימוש בשורות הפריטים',
   'props.loop.literal.writeCode': 'כתיבת הפריטים כקוד',
-  'props.loop.notice.dismiss': 'סגירה',
   'props.loop.notice.relinked': 'החיבורים שבפנים מקושרים שוב, כמו שהיו עבור הרשימה הזו.',
   'props.loop.notice.switchBack': {
     one: 'יש לחזור אל {name} כדי לקשר אותו שוב.',

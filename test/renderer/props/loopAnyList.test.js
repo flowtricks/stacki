@@ -27,6 +27,7 @@ const { readSections } = load('src/editor/loopSections.ts');
 const { planLoop } = load('src/editor/loopQueryPlan.ts');
 const loopQuery = load('src/editor/loopQuery.ts');
 const typedModel = load('src/features/props/loopTypedField.ts');
+const { installToastLog } = require('../../helpers/toastLog.js');
 const { literalListFields } = load('src/editor/loopLiteral.ts');
 const { treeListFields } = load('src/features/props/loopProjectData.ts');
 
@@ -39,6 +40,7 @@ buildSync({
       "export { default as LoopSettings } from './src/features/props/LoopSettings';",
       "export { CmsIcon } from './src/ui/Icons';",
       "export { EditorView } from '@codemirror/view';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'ts',
@@ -303,10 +305,12 @@ async function panel(context, data, frontmatter = FRONTMATTER) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
-  const state = { head: `${data}.map((card) => (`, frontmatter, applied: [] };
+  const toasts = installToastLog(modules.subscribeErrorToasts);
+  const state = { head: `${data}.map((card) => (`, frontmatter, applied: [], toasts };
   context.after(async () => {
     await act(async () => root.unmount());
     host.remove();
+    toasts.uninstall();
   });
   const render = () => {
     const current = state.head.slice(0, state.head.lastIndexOf('.map('));
@@ -374,7 +378,11 @@ test('every kind of loop shows Filters, Sort and Limit items', async (context) =
 
 test('an untyped list says its fields are not seen, and a field typed by name makes a filter and a sort', async (context) => {
   const { host, state } = await panel(context, 'platformIntro.cards');
-  assert.ok(host.textContent.includes('Stacki cannot see what this list holds'));
+  assert.equal(host.textContent.includes('Stacki cannot see what this list holds'), false, 'the explanation is not a paragraph in the panel');
+  const tip = host.querySelector('.loop-settings-mode .prop-tip-icon');
+  assert.ok(tip, 'the Items row has a "?" beside its label');
+  assert.ok(tip.getAttribute('aria-label').includes('Stacki cannot see what this list holds'), 'and it carries the explanation');
+  assert.equal(tip.getAttribute('tabindex'), '0', 'reachable by keyboard');
   const start = state.head;
   const setValue = async (element, text) =>
     act(async () => {
@@ -647,9 +655,11 @@ test('None takes the loop away, with a notice that says what became of the bindi
   assert.equal(state.applied.length, 1);
   assert.equal(state.applied[0].kind, 'remove', 'None removes the loop, it does not leave an empty one');
   assert.deepEqual(state.applied[0].samples, {}, 'with nothing sampled, nothing is claimed');
-  assert.match(
-    host.querySelector('.loop-settings-notice').textContent,
-    /Loop removed · 2 bindings replaced with their current values · 1 had no value to keep/,
+  assert.match(state.toasts.messages().join('\n'), /Loop removed · 2 bindings replaced with their current values · 1 had no value to keep/);
+  assert.equal(
+    host.querySelector('[role="alert"], [role="status"], [class*="-notice"]') ?? undefined,
+    undefined,
+    'what became of the bindings is a toast, not a banner in the panel',
   );
 });
 

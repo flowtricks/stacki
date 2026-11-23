@@ -369,7 +369,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["항목 1", "항목 2"] 또는 [{{ title: "A" }}]',
   'props.loop.literal.useRows': '항목 행 사용',
   'props.loop.literal.writeCode': '항목을 코드로 작성',
-  'props.loop.notice.dismiss': '닫기',
   'props.loop.notice.relinked': '내부 바인딩을 이 목록에서와 같이 다시 연결했습니다.',
   'props.loop.notice.switchBack': { other: '다시 연결하려면 {name}(으)로 되돌리세요.' },
   'props.loop.notice.unlinked': {

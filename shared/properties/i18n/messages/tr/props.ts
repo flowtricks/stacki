@@ -372,7 +372,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Öğe 1", "Öğe 2"] veya [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Öğe satırlarını kullan',
   'props.loop.literal.writeCode': 'Öğeleri kod olarak yaz',
-  'props.loop.notice.dismiss': 'Kapat',
   'props.loop.notice.relinked': 'İçerideki bağlamalar, bu liste için olduğu gibi yeniden bağlandı.',
   'props.loop.notice.switchBack': { one: 'Yeniden bağlamak için {name} öğesine geri dönün.', other: 'Yeniden bağlamak için {name} öğesine geri dönün.' },
   'props.loop.notice.unlinked': {

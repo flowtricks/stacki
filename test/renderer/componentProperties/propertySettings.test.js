@@ -307,11 +307,13 @@ test('number and switch settings round-trip through the JSDoc tags, one line at 
   assert.equal(panel.tooltip().value, 'How many columns the grid uses.\n@default 3');
   // A half-typed or contradictory setting is shown and not written.
   await panel.setValue(panel.field('Max'), '-');
-  assert.match(document.querySelector('.property-settings-problem').textContent, /Enter a number/);
+  assert.match(toastMessages(), /Enter a number/, 'the reason is a toast');
+  assert.ok(document.querySelector('.property-settings.is-invalid'), 'the fields take the error tint');
+  assert.equal(document.querySelector('.property-settings-problem') ?? undefined, undefined, 'no paragraph is added under the fields');
   await panel.setValue(panel.field('Max'), '0');
-  assert.match(document.querySelector('.property-settings-problem').textContent, /minimum is above the maximum/);
+  assert.match(toastMessages(), /minimum is above the maximum/);
   await panel.setValue(panel.field('Max'), '8');
-  assert.ok(document.querySelector('.property-settings-problem') === null);
+  assert.ok(document.querySelector('.property-settings.is-invalid') === null, 'a valid value clears the tint');
   await panel.click(panel.saveButton());
   assert.equal(panel.source(), JSDOC_SOURCE.replace('   * @max 6\n', '   * @max 8\n'));
   // Clearing a setting takes its line out; a default outside the range is flagged.
@@ -319,9 +321,9 @@ test('number and switch settings round-trip through the JSDoc tags, one line at 
   await panel.click(panel.row('columns'));
   await panel.setValue(panel.field('Decimals'), '');
   await panel.setValue(panel.field('Min'), '4');
-  assert.match(document.querySelector('.property-default-note').textContent, /least this takes is 4/);
+  assert.match(toastMessages(), /least this takes is 4/, 'a default outside the range is a warning toast');
+  assert.equal(document.querySelector('.property-default-note') ?? undefined, undefined, 'no paragraph is added under the default');
   await panel.setValue(panel.field('Min'), '1');
-  assert.ok(document.querySelector('.property-default-note') === null);
   await panel.click(panel.saveButton());
   assert.equal(panel.source(), afterMax.replace('   * @decimals 0\n', ''));
   // A Switch has no label fields; its legacy tags stay until the docs are edited and their removal asked for.

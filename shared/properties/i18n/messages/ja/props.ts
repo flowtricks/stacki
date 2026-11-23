@@ -370,7 +370,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] または [{{ title: "A" }}]',
   'props.loop.literal.useRows': '項目の行を使う',
   'props.loop.literal.writeCode': '項目をコードで書く',
-  'props.loop.notice.dismiss': '閉じる',
   'props.loop.notice.relinked': '内部のバインディングは、このリストでの状態どおりに再びリンクされました。',
   'props.loop.notice.switchBack': { other: '再びリンクするには{name}に切り替えてください。' },
   'props.loop.notice.unlinked': {

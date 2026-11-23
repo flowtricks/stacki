@@ -1,4 +1,6 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import PropTip from './PropTip';
+import { reportActionToast } from '../../ui/errorNotices';
 import { itemFieldTitle } from '../../editor/itemFields';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -167,7 +169,6 @@ function ItemFieldControl(props: {
   readonly onSet: (field: ItemField) => void;
 }) {
   const { field, declaration, projectPath, onSet } = props;
-  const [note, setNote] = useState<string | undefined>(undefined);
   // Code the list cannot hold yet stays on screen here, because the number box
   // shows only what it is given and `-` has to survive on the way to `-2`.
   const [draft, setDraft] = useState<Attr | undefined>(undefined);
@@ -187,7 +188,6 @@ function ItemFieldControl(props: {
     const next = itemFieldOf(field, value, declaration, '"');
     setDraft(next === undefined ? heldDraft(value, declaration.kind) : undefined);
     if (next !== undefined) {
-      setNote(undefined);
       onSet(next);
     }
   };
@@ -198,7 +198,7 @@ function ItemFieldControl(props: {
     if (picked.root === 'public') {
       write({ type: 'string', value: `/${picked.rel.split('/').slice(1).join('/')}` });
     } else {
-      setNote('A list item’s image is a URL: choose one from public/, or enter its address.');
+      reportActionToast('A list item’s image is a URL: choose one from public/, or enter its address.', 'warning', []);
     }
   };
   return (
@@ -212,7 +212,6 @@ function ItemFieldControl(props: {
         assetContext={projectPath === undefined ? undefined : { projectPath, onPickAsset: pickAsset }}
         onChange={write}
       />
-      {note !== undefined && <div className="list-item-note">{note}</div>}
     </>
   );
 }
@@ -247,11 +246,10 @@ function NestedFieldEditor(props: {
       >
         <Chevron size={12} />
         <span className="list-item-nested-name">{field.key}</span>
+        {/* Why there is nothing to open: this one is code, behind a "?" rather than a line beneath. */}
+        {nested === undefined && <PropTip text={translate(declaration.kind === 'list' ? 'props.list.listInCode' : 'props.list.groupInCode')} />}
         {summary !== '' && <span className="list-item-nested-count">{summary}</span>}
       </button>
-      {open && nested === undefined && (
-        <div className="list-item-note">{translate(declaration.kind === 'list' ? 'props.list.listInCode' : 'props.list.groupInCode')}</div>
-      )}
       {open && nested !== undefined && declaration.kind === 'list' && (
         <ListField
           value={field.text}

@@ -9,6 +9,7 @@
 // until then the reason shows and the text stays. Code the controls cannot show
 // opens here on its own and stays here, as code a prop's control cannot hold does.
 
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Completion } from '@codemirror/autocomplete';
@@ -132,11 +133,7 @@ export function useSectionCode(section: LoopSection, context: SectionCodeContext
             onCommit={commit}
           />
         </div>
-        {problem !== undefined && (
-          <div className="prop-field-note problem" role="alert">
-            {problem}
-          </div>
-        )}
+        <ErrorToast message={problem} />
       </div>
     ) : undefined,
   };

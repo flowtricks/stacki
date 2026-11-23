@@ -20,6 +20,7 @@
 // with the fixture plus the expected replacement.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { toastMessages } = require('../../helpers/toastCapture');
 const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
@@ -247,7 +248,8 @@ test('removing an option from the Options list writes the union edit, refusals s
   await button.open('variant');
   await button.click(button.labelled('Remove close'));
   assert.equal(button.source(), BUTTON);
-  assert.match(button.section().querySelector('.property-error').textContent, /close/);
+  assert.match(toastMessages(), /close/, 'the refusal is a toast');
+  assert.equal(button.section().querySelector('.property-error') ?? undefined, undefined, 'no paragraph is added under the fields');
   await button.unmount();
 });
 
@@ -499,7 +501,8 @@ test('Visibility: Hide on a plain prop opens the editor Show first, Hide the Els
   const before = alone.source();
   await alone.click(field.querySelector('[role="radio"][aria-label="Hide"]'));
   assert.equal(document.querySelector('.conditional-editor') ?? undefined, undefined);
-  assert.match(alone.section().querySelector('.property-error').textContent, /Hide needs a condition/);
+  assert.match(toastMessages(), /Hide needs a condition/, 'the refusal is a toast');
+  assert.equal(alone.section().querySelector('.property-error') ?? undefined, undefined, 'no paragraph is added under the fields');
   assert.equal(alone.source(), before);
   await alone.unmount();
 });

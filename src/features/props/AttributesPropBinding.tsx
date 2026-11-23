@@ -299,7 +299,7 @@ function AttributesSettings(props: AttributesPropProps & { readonly local: strin
           onBlur={saveTooltip}
         />
       </label>
-      {problem !== undefined && <div className="loop-bind-problem">{problem}</div>}
+      <ErrorToast message={problem} />
     </div>
   );
 }

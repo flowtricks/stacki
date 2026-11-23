@@ -184,6 +184,8 @@ async function draw(element) {
   await act(async () => root.render(element));
 }
 async function clear() {
+  // Each case reads the toasts of its own run.
+  globalThis.stackiCapturedToasts = [];
   if (root !== undefined) {
     await act(async () => root.unmount());
     root = undefined;
@@ -436,7 +438,9 @@ test('an invalid name is not written: the text stays, and the reason shows besid
   assert.equal(log.edits, 0);
   assert.equal(source(), COMPONENT);
   assert.equal(labelled('Name').querySelector('input').value, '9 lives');
-  assert.match(form().querySelector('[role="alert"]').textContent, /Use a name/);
+  // The reason is a toast and the field is marked; no paragraph is added to the form.
+  assert.match(toastMessages(), /Use a name/);
+  assert.equal(form().querySelector('[role="alert"]') ?? undefined, undefined, 'and no paragraph is added');
 
   // The rest of the form still saves, under the name the file holds.
   await type(labelled('Tooltip').querySelector('textarea'), 'Still saved.');
@@ -484,9 +488,8 @@ test('a name the local cannot take is blocked under Name: the text stays and not
   assert.equal(source(), COMPONENT);
   assert.equal(pageSource(), PAGE);
   assert.equal(name().value, 'local', 'the text stays to be fixed');
-  const alert = form().querySelector('[role="alert"]');
-  assert.equal(alert.textContent, '“local” already exists in this file.');
-  assert.equal(labelled('Name').nextElementSibling, alert, 'the reason sits directly under the field');
+  assert.match(toastMessages(), /“local” already exists in this file\./);
+  assert.equal(form().querySelector('[role="alert"]') ?? undefined, undefined, 'and no paragraph is added under the field');
 
   // Blurring again is not a second attempt; a free name clears it and saves.
   await act(async () => name().dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })));
@@ -495,7 +498,6 @@ test('a name the local cannot take is blocked under Name: the text stays and not
   await type(name(), 'perks');
   await act(async () => name().dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })));
   await flush();
-  assert.equal(form().querySelector('[role="alert"]') ?? undefined, undefined);
   assert.match(source(), /\{ perks = \[/);
   await clear();
 });
@@ -601,7 +603,8 @@ test('a file changed on disk reloads under the form, and the edit is kept and sa
   assert.match(source(), /\bfeatures: readonly/, 'and so is this one');
   assert.match(source(), /\/\*\* From elsewhere\. \*\//, 'a field this form did not touch takes the file’s value');
   assert.equal(labelled('Tooltip').querySelector('textarea').value, 'From elsewhere.', 'the form shows it');
-  assert.match(form().querySelector('[role="status"]').textContent, /changed on disk/);
+  assert.match(toastMessages(), /changed on disk/, 'the merge is told as a toast');
+  assert.equal(form().querySelector('[role="status"]') ?? undefined, undefined, 'and no paragraph is added');
   await clear();
 });
 
@@ -616,7 +619,8 @@ test('a save the file refuses keeps the text, says why, and is not repeated', as
   assert.equal(source(), COMPONENT);
   assert.equal(log.edits, 1);
   assert.equal(form().querySelector('[aria-label="Code type"]').textContent, 'string; }', 'the text stays');
-  assert.ok(form().querySelector('[role="alert"]'), 'the reason shows beside it');
+  assert.notEqual(toastMessages(), '', 'the reason is told as a toast');
+  assert.equal(form().querySelector('[role="alert"]') ?? undefined, undefined, 'and no paragraph is added');
   await click(form().querySelector('[aria-label="Close property settings"]'));
   await flush();
   assert.equal(log.edits, 1, 'closing does not send the same refusal again');

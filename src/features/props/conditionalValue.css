@@ -302,14 +302,6 @@
   height: 0;
 }
 
-/* A spread typed into a new attribute's Name (propAttributes.tsx SpreadNameNote): the code it writes, then what it does. */
-.attr-spread-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
 /* "If [all] conditions in this group are true" stays one line beside its picker. */
 .conditional-group-head {
   white-space: nowrap;

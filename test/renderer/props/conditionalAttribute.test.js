@@ -545,10 +545,16 @@ test('a spread is a row of code in source order, removed alone as one undo step,
   const nameInput = document.querySelector('.attr-editor .attr-name-field input');
   assert.equal(nameInput.value, '{...rest}');
   assert.doesNotMatch(document.querySelector('.attr-editor').textContent, /Value/, 'a spread has no value');
-  assert.match(document.querySelector('.attr-editor').textContent, /Spread: passes every property of rest/);
+  const nameTip = () => document.querySelector('.attr-editor .attr-editor-row .prop-tip-icon')?.getAttribute('aria-label');
+  assert.match(nameTip(), /Spread: passes every property of rest/, 'what it does is the Name’s tooltip');
   assert.ok(document.querySelector('.attr-editor .attr-name-field .bind-handle'), 'with the dot to pick what it spreads');
   await type(nameInput, 'title');
-  assert.match(document.querySelector('.attr-editor').textContent, /A spread’s Name is its code/, 'a spread stays a spread');
+  assert.match(nameTip(), /A spread’s Name is its code/, 'a spread stays a spread');
+  assert.equal(
+    document.querySelector('.attr-editor [role="alert"], .attr-editor [class*="-note"]') ?? undefined,
+    undefined,
+    'said by the tooltip, not a line under the Name',
+  );
   await type(nameInput, '{...attrs}');
   await act(async () => nameInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
   assert.equal(replaced.length, 1, 'renaming it is one write');
@@ -608,7 +614,12 @@ test('a spread typed into Add attribute is checked as it is typed and added in p
   });
   const nameInput = () => document.querySelector('.attr-editor .attr-editor-row input');
   const valueRow = () => [...document.querySelectorAll('.attr-editor .attr-editor-row')].find((row) => row.textContent.startsWith('Value'));
-  const note = () => document.querySelector('.attr-editor .attr-name-note')?.textContent;
+  // What the Name has to say is the "?" tooltip beside its label; a refusal is also one toast on commit. Nothing is a row under the field.
+  const note = () => document.querySelector('.attr-editor .attr-editor-row .prop-tip-icon')?.getAttribute('aria-label');
+  // The bundle's own toast capture (toastCaptureEntry) reads the same channel, newest first.
+  const toasts = { messages: () => toastNotices().map((notice) => notice.message) };
+  const noParagraph = () =>
+    assert.equal(document.querySelector('.attr-editor [role="alert"], .attr-editor [class*="-note"]') ?? undefined, undefined, 'no paragraph under the Name');
 
   // The existing class:list is what the file says: no note on it.
   await click(container.querySelector('.attr-row'));
@@ -628,8 +639,8 @@ test('a spread typed into Add attribute is checked as it is typed and added in p
     ['{...Astro.props}', '{...Astro.props}'],
   ]) {
     await type(nameInput(), typed);
-    assert.equal(document.querySelector('.attr-spread-note code').textContent, shown, `${typed} reads as ${shown}`);
-    assert.match(note(), /Spread: passes every property of/);
+    assert.match(note(), new RegExp(`^${shown.replace(/[.{}]/g, '\\$&')} Spread: passes every property of`), `${typed} reads as ${shown}`);
+    noParagraph();
     assert.equal(valueRow(), undefined, 'a spread has no value');
   }
   await type(nameInput(), '{... rest}');
@@ -638,8 +649,16 @@ test('a spread typed into Add attribute is checked as it is typed and added in p
   assert.match(note(), /Type the value to spread/);
   await type(nameInput(), '{...1x}');
   assert.match(note(), /one name in scope/);
+  assert.equal(
+    toasts.messages().some((message) => /one name in scope/.test(message)),
+    false,
+    'typing refuses nothing yet',
+  );
+  assert.equal(nameInput().getAttribute('aria-invalid'), 'true', 'the Name takes the error look');
   await act(async () => nameInput().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
   assert.equal(replaced.length, 0, 'an invalid spread writes nothing');
+  assert.match(toasts.messages().join('\n'), /one name in scope/, 'committing says why, once, as a toast');
+  noParagraph();
 
   await type(nameInput(), '...rest');
   await act(async () => nameInput().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));

@@ -373,7 +373,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Eintrag 1", "Eintrag 2"] oder [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Zeilen verwenden',
   'props.loop.literal.writeCode': 'Einträge als Code schreiben',
-  'props.loop.notice.dismiss': 'Schließen',
   'props.loop.notice.relinked': 'Die Bindungen darin sind wieder verknüpft, wie sie für diese Liste waren.',
   'props.loop.notice.switchBack': {
     one: 'Wechsle zurück zu {name}, um sie wieder zu verknüpfen.',

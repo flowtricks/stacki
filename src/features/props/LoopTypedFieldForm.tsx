@@ -5,6 +5,7 @@
 // is ever cut, and its controls shrink with the pop-up rather than run past it.
 
 import { useState } from 'react';
+import { reportErrorToast } from '../../ui/errorNotices';
 import Dropdown from '../../ui/Dropdown';
 import CodeTextField from './CodeTextField';
 import { LOOP_QUERY_LIMITS } from '../../editor/loopQuery';
@@ -29,6 +30,8 @@ export function TypedFieldForm(props: { readonly item: string | undefined; reado
       props.onUse(typedField(path.path, kind));
     } else {
       setInvalid(true);
+      // Said once per press of Use, and the field takes the error look until it is edited.
+      reportErrorToast(translate('props.loop.typed.invalid'));
     }
   };
   const labels: Readonly<Record<TypedKind, string>> = {
@@ -55,7 +58,11 @@ export function TypedFieldForm(props: { readonly item: string | undefined; reado
           language="javascript"
           ariaLabel={translate('props.loop.typed.path')}
           placeholder={translate('props.loop.typed.placeholder')}
-          onChange={(next) => setText(next.slice(0, LOOP_QUERY_LIMITS.fieldPathCharsMax))}
+          invalid={invalid}
+          onChange={(next) => {
+            setInvalid(false);
+            setText(next.slice(0, LOOP_QUERY_LIMITS.fieldPathCharsMax));
+          }}
         />
       </div>
       <span className="loop-typed-label">{translate('props.loop.typed.type')}</span>
@@ -66,7 +73,6 @@ export function TypedFieldForm(props: { readonly item: string | undefined; reado
         options={TYPED_KINDS.map((option) => ({ value: option, label: labels[option] }))}
         onChange={setKind}
       />
-      {invalid && <div className="loop-typed-note">{translate('props.loop.typed.invalid')}</div>}
       <div className="loop-typed-actions">
         <button type="button" className="primary" onClick={use}>
           {translate('props.loop.typed.use')}

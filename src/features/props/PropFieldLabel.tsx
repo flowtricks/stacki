@@ -48,18 +48,6 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
   );
 }
 
-// The line under a field that names what it is missing (PropField.tsx).
-export function PropFieldNote({ state }: { readonly state: PropState }) {
-  const translate = useTranslate();
-  if (!state.missingRequired) {
-    return undefined;
-  }
-  return (
-    <div className="prop-field-note required" role="note">
-      {translate('props.field.requiredNeeds')}
-    </div>
-  );
-}
 export function PropFieldMenu({ state }: { readonly state: PropState }) {
   const { menuPosition, setMenuPosition, reset, resetRefusal } = state;
 

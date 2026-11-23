@@ -18,6 +18,7 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { installToastLog } = require('../../helpers/toastLog.js');
 const { installPopupDOM } = require('../../helpers/popupDom.js');
 const load = require('../../helpers/rendererModule');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
@@ -32,7 +33,11 @@ fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'loop-section-code.cjs');
 buildSync({
   stdin: {
-    contents: ["export { default as LoopSettings } from './src/features/props/LoopSettings';", "export { EditorView } from '@codemirror/view';"].join('\n'),
+    contents: [
+      "export { default as LoopSettings } from './src/features/props/LoopSettings';",
+      "export { EditorView } from '@codemirror/view';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
+    ].join('\n'),
     resolveDir: ROOT,
     loader: 'ts',
   },
@@ -406,9 +411,11 @@ async function panel(context, start) {
   document.body.append(host);
   const root = createRoot(host);
   const state = { ...start, applied: [] };
+  toastLog = installToastLog(modules.subscribeErrorToasts);
   context.after(async () => {
     await act(async () => root.unmount());
     host.remove();
+    toastLog.uninstall();
   });
   const render = () => {
     const data = state.head.slice(0, state.head.lastIndexOf('.map('));
@@ -444,7 +451,16 @@ const toggle = (host, section) => host.querySelector(`button[aria-label="${TITLE
 const sectionOf = (host, section) => toggle(host, section).closest('.loop-settings-section');
 const editorOf = (host, section) => sectionOf(host, section).querySelector('.cm-content');
 const codeOf = (host, section) => modules.EditorView.findFromDOM(editorOf(host, section)).state.doc.toString();
-const noteOf = (host, section) => sectionOf(host, section).querySelector('.prop-field-note.problem')?.textContent;
+// What a refused section says is a toast; the section itself holds no note or alert (checked with the toast).
+let toastLog;
+const noteOf = (host, section) => {
+  assert.equal(
+    sectionOf(host, section).querySelector('[role="alert"], [class*="-note"], [class*="-problem"]') ?? undefined,
+    undefined,
+    'no paragraph in the section',
+  );
+  return toastLog.messages().at(-1);
+};
 const press = async (element) => {
   assert.ok(element, 'the control is there');
   await act(async () => element.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
@@ -570,7 +586,11 @@ test('a collection’s code view edits its declaration and leaves the rest', asy
 
 test('a list that cannot be split keeps its code and has no toggles, but still has the controls', async (context) => {
   const { host } = await panel(context, listModel('features.filter(a).slice(1).filter(b)'));
-  assert.ok(host.textContent.includes('applies after it'));
+  assert.ok(
+    host.querySelector('.loop-settings-mode .prop-tip-icon').getAttribute('aria-label').includes('applies after it'),
+    'the Items row’s tooltip says the code is kept',
+  );
+  assert.equal(host.textContent.includes('applies after it'), false, 'and no paragraph does');
   assert.ok(host.textContent.includes('Filters'));
   assert.ok(host.textContent.includes('Sort'));
   assert.ok(toggle(host, 'filter') === null);
@@ -588,7 +608,13 @@ test('a filter or sort row’s custom code is the highlighted editor, and ⌘↵
   await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'item.title >' } }));
   const enter = () => new window.KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true });
   await act(async () => content.dispatchEvent(enter()));
-  assert.equal(document.querySelector('.loop-settings-code-problem').textContent, 'This is not one JavaScript expression.');
+  assert.equal(toastLog.messages().at(-1), 'This is not one JavaScript expression.');
+  assert.equal(
+    document.querySelector('[role="alert"], .loop-settings-code-problem') ?? undefined,
+    undefined,
+    'the reason is a toast, not a line in the editor',
+  );
+  assert.ok(box.querySelector('.expr-input.invalid') ?? document.querySelector('.loop-settings-code .expr-input.invalid'), 'the field takes the error look');
   assert.equal(view.state.doc.toString(), 'item.title >', 'the key is not the editor’s blank line, and the text stays');
   assert.deepEqual(state.applied, []);
   await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'item.title.endsWith("P")' } }));

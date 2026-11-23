@@ -1,4 +1,6 @@
 import { useCodeAccess } from '../../ui/CodeAccess';
+import PropTip from './PropTip';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { dataPickerPosition } from './dataPickerPosition';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
@@ -18,17 +20,18 @@ import { AttributesPropControl, BoundSpreadRow } from './AttributesPropBinding';
 import { CodeInline } from '../../ui/CodeBlock';
 import { ComputedField, ConditionalBadge, ConditionalEditor, ConditionalField, useConditionCatalog } from './ConditionalValue';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { DescribedTranslator } from '../../lib/i18n/localeContext';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { classListOfAttr, computedOfAttr, conditionalOfAttr, startingConditional, valueLanguageOf } from './conditionalModel';
 import { ClassListField } from './ClassListValue';
 import { CLASS_LIST_ATTRIBUTE, classListAppended, classListOfferOf, type ClassListOffer } from './classListProp';
 import { isReferencePath } from '../../editor/conditionalValue';
 import { readAttributesBinding, withDefaultAttribute } from '../../editor/attributesBinding';
-import { attributeNameNote, type AttributeNameContext } from '../../editor/htmlAttributes';
+import { attributeNameNote } from '../../editor/htmlAttributes';
 import { visibleAttributeNames } from '../../../shared/core/internalAttributes';
 import {
   type AttributePair,
   type ObjectEntry,
-  type SpreadName,
   decodeAttr,
   encodeAttr,
   parseAttrPaste,
@@ -502,30 +505,6 @@ function AttrEditor(props: AttrEditorProps) {
   return (
     <div ref={ref} className="attr-editor" style={{ top: position.top, left: position.left, width: position.width }}>
       <AttributeName state={state} />
-      {spreadName.kind === 'none' && state.spreadPath === undefined && (
-        <AttributeNameNote
-          name={state.draftName}
-          context={{
-            tag: state.tag,
-            passedTo: state.passedTo,
-            reserved: state.reservedNames ?? [],
-            own: state.isNew ? undefined : state.name,
-            taken: state.takenNames,
-          }}
-        />
-      )}
-      {spreadName.kind === 'none' && state.spreadPath !== undefined && (
-        <div className="attr-name-note" role="alert">
-          {translate('props.attributes.spreadName')}
-        </div>
-      )}
-      {spreadName.kind !== 'none' && (
-        <SpreadNameNote
-          spread={spreadName}
-          // An existing spread always says what it does; a new one only where one can be written.
-          available={state.spreadPath !== undefined || state.onCommitSpread !== undefined}
-        />
-      )}
       {/* The field sits beside its label like the name row, whichever kind it
           is; `top` just stops the label and toggle from centring against a
           tall field. A spread has no value. */}
@@ -689,58 +668,70 @@ function useAttrEditorDismiss(ref: RefObject<HTMLElement>, triggerRootRef: RefOb
     };
   }, [onClose, ref, triggerRootRef]);
 }
-// Advice under the Name, never a refusal: a name this tag does not take, or
-// one the component already means something by, still saves (htmlAttributes.ts).
-export function AttributeNameNote(props: { readonly name: string; readonly context: AttributeNameContext }) {
-  const translate = useTranslate();
-  const note = attributeNameNote(props.name, props.context, translate);
-  return note === undefined ? undefined : (
-    <div className="attr-name-note" role="note">
-      {note}
-    </div>
-  );
-}
-// What a spread typed into the Name does, shown as it is typed: the code it
-// writes, highlighted, and what it passes; or why it cannot be written.
-function SpreadNameNote({ spread, available }: { readonly spread: Exclude<SpreadName, { readonly kind: 'none' }>; readonly available: boolean }) {
-  const translate = useTranslate();
-  const translateDescribed = useTranslateDescribed();
-  if (spread.kind === 'invalid') {
-    return (
-      <div className="attr-name-note" role="alert">
-        {translateDescribed(spread)}
-      </div>
-    );
+// What the Name has to say, shown behind a "?" beside its label and, for a refusal,
+// as the field's error look and one toast when the Name is committed: never as a
+// row under it. Advice never refuses: a name this tag does not take, or one the
+// component already means something by, still saves (htmlAttributes.ts).
+type NameWords = { readonly kind: 'advice' | 'refusal'; readonly text: string } | undefined;
+function nameWords(state: AttributeState, translate: Translator, translateDescribed: DescribedTranslator): NameWords {
+  const { spreadName } = state;
+  if (spreadName.kind === 'invalid') {
+    return { kind: 'refusal', text: translateDescribed(spreadName) };
   }
-  if (!available) {
-    return (
-      <div className="attr-name-note" role="note">
-        {translate('props.attributes.spreadAdded')}
-      </div>
-    );
+  if (spreadName.kind === 'spread') {
+    // An existing spread always says what it does; a new one only where one can be written.
+    const available = state.spreadPath !== undefined || state.onCommitSpread !== undefined;
+    return {
+      kind: 'advice',
+      text: available
+        ? `{...${spreadName.path}} ${translate('props.attributes.spreadPasses', { path: spreadName.path })}`
+        : translate('props.attributes.spreadAdded'),
+    };
   }
-  return (
-    <div className="attr-name-note attr-spread-note" role="note">
-      <CodeInline text={`{...${spread.path}}`} language="javascript" />
-      {translate('props.attributes.spreadPasses', { path: spread.path })}
-    </div>
+  if (state.spreadPath !== undefined) {
+    return { kind: 'refusal', text: translate('props.attributes.spreadName') };
+  }
+  const advice = attributeNameNote(
+    state.draftName,
+    {
+      tag: state.tag,
+      passedTo: state.passedTo,
+      reserved: state.reservedNames ?? [],
+      own: state.isNew ? undefined : state.name,
+      taken: state.takenNames,
+    },
+    translate,
   );
+  return advice === undefined ? undefined : { kind: 'advice', text: advice };
 }
 function AttributeName({ state }: { readonly state: AttributeState }) {
   const translate = useTranslate();
-  const { isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany, commitName } = state;
+  const translateDescribed = useTranslateDescribed();
+  const { isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany } = state;
+  const words = nameWords(state, translate, translateDescribed);
+  // A refusal is toasted once when the Name is committed, not on every key typed.
+  const [refused, setRefused] = useState<string | undefined>(undefined);
+  const commitName = (): void => {
+    setRefused(words?.kind === 'refusal' ? words.text : undefined);
+    state.commitName();
+  };
   const nameRef = useRef<HTMLDivElement>(null);
   const [picker, setPicker] = useState<FieldPosition | undefined>(undefined);
   // A spread's Name takes data like a value does: the dot picks what it spreads.
   const spreading = state.spreadPath !== undefined || state.spreadName.kind !== 'none';
   return (
     <div className="attr-editor-row">
-      <span>{translate('props.attributes.name')}</span>
+      <span>
+        {translate('props.attributes.name')}
+        <PropTip text={words?.text} />
+      </span>
+      <ErrorToast message={refused} />
       <div className="attr-name-field" ref={nameRef}>
         <input
           autoFocus={isNew}
           value={draftName}
           placeholder="data-attribute"
+          aria-invalid={words?.kind === 'refusal'}
           spellCheck={false}
           onPaste={(event) => {
             const text = event.clipboardData.getData('text');
@@ -763,7 +754,10 @@ function AttributeName({ state }: { readonly state: AttributeState }) {
               onCommitMany(pairs);
             }
           }}
-          onChange={(event) => setDraftName(typedAttributeName(event.target.value))}
+          onChange={(event) => {
+            setRefused(undefined);
+            setDraftName(typedAttributeName(event.target.value));
+          }}
           onBlur={commitName}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {

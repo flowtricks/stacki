@@ -332,7 +332,11 @@ const connectedRest = async () => {
   const spreadEditor = document.querySelector('.attr-editor:not(.var-src)');
   assert.equal(spreadEditor.querySelector('input').value, '{...rest}', 'its Name is the spread');
   assert.doesNotMatch(spreadEditor.textContent, /Value/, 'with no value');
-  assert.match(spreadEditor.textContent, /Spread: passes every property of rest/);
+  assert.match(
+    spreadEditor.querySelector('.prop-tip-icon').getAttribute('aria-label'),
+    /Spread: passes every property of rest/,
+    'the Name’s tooltip says what it does',
+  );
   await internalAttributeKept();
   await act(async () => root.unmount());
   dom.window.close();

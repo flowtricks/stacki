@@ -10,6 +10,8 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
@@ -84,7 +86,7 @@ export function PropertyDefaultNote({ property }: { readonly property: Component
   }
   const value = Number(property.defaultValue);
   const note = Number.isFinite(value) ? numberNote(value, numberSettingsOf(property.description), translate) : undefined;
-  return note === undefined ? undefined : <p className="property-help property-default-note">{translate('componentProps.settings.defaultNote', { note })}</p>;
+  return <NoticeToast message={note === undefined ? undefined : translate('componentProps.settings.defaultNote', { note })} kind="warning" />;
 }
 
 type NumberTag = Extract<SettingTagName, 'min' | 'max' | 'decimals'>;
@@ -115,7 +117,11 @@ function NumberSettingsFields({ property, onChange }: SettingsProps) {
     }
   };
   return (
-    <div className="property-settings" role="group" aria-label={translate('componentProps.settings.numberGroup')}>
+    <div
+      className={`property-settings${problem === undefined ? '' : ' is-invalid'}`}
+      role="group"
+      aria-label={translate('componentProps.settings.numberGroup')}
+    >
       <div className="property-settings-row">
         <NumberSettingField
           label={translate('componentProps.settings.min')}
@@ -137,7 +143,7 @@ function NumberSettingsFields({ property, onChange }: SettingsProps) {
           onChange={(text) => change('decimals', text)}
         />
       </div>
-      {problem !== undefined && <p className="property-help property-settings-problem">{problem}</p>}
+      <ErrorToast message={problem} />
     </div>
   );
 }

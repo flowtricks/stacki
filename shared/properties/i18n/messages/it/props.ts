@@ -373,7 +373,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Elemento 1", "Elemento 2"] o [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Usa le righe degli elementi',
   'props.loop.literal.writeCode': 'Scrivi gli elementi come codice',
-  'props.loop.notice.dismiss': 'Chiudi',
   'props.loop.notice.relinked': 'I collegamenti interni sono di nuovo collegati, com’erano per questo elenco.',
   'props.loop.notice.switchBack': { one: 'Torna a {name} per collegarlo di nuovo.', other: 'Torna a {name} per collegarli di nuovo.' },
   'props.loop.notice.unlinked': {

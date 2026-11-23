@@ -369,7 +369,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] or [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Use the item rows',
   'props.loop.literal.writeCode': 'Write the items as code',
-  'props.loop.notice.dismiss': 'Dismiss',
   'props.loop.notice.relinked': 'Bindings inside are linked again, as they were for this list.',
   'props.loop.notice.switchBack': { one: 'Switch back to {name} to link it again.', other: 'Switch back to {name} to link them again.' },
   'props.loop.notice.unlinked': {

@@ -371,7 +371,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] of [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'De itemrijen gebruiken',
   'props.loop.literal.writeCode': 'De items als code schrijven',
-  'props.loop.notice.dismiss': 'Sluiten',
   'props.loop.notice.relinked': 'Koppelingen binnenin zijn weer gekoppeld, zoals ze voor deze lijst waren.',
   'props.loop.notice.switchBack': { one: 'Wissel terug naar {name} om hem opnieuw te koppelen.', other: 'Wissel terug naar {name} om ze opnieuw te koppelen.' },
   'props.loop.notice.unlinked': {

@@ -126,12 +126,12 @@ const field = (name) => label(name).closest('.props-field');
 const one = (element, selector) => element.querySelector(selector) ?? undefined;
 // The open menu's item that starts with these words, undefined when there is none.
 const menuItem = (words) => [...document.querySelectorAll('.prop-menu-item')].find((item) => item.textContent.startsWith(words));
-// The note PropField puts after the field, or undefined.
+// A note or alert element after the field, or undefined: a missing prop is said by its marker's tooltip, so there is none.
 function noteAfter(name) {
   let next = field(name).nextElementSibling ?? undefined;
   // The zoo wraps controls; here the field is the panel's own box.
   while (next !== undefined && !next.classList.contains('props-field')) {
-    if (next.classList.contains('prop-field-note')) {
+    if (next.matches('[class*="-note"], [role="alert"], [role="note"]')) {
       return next;
     }
     next = next.nextElementSibling ?? undefined;
@@ -156,7 +156,8 @@ test('a required prop carries a marker, and a note while the instance leaves it 
   const marker = label('title').querySelector('.prop-required');
   assert.ok(marker, 'the required prop is marked');
   assert.ok(marker.classList.contains('missing'), 'unset, the marker says it is missing');
-  assert.equal(noteAfter('title')?.textContent, 'Required — the component needs a value');
+  assert.equal(marker.title, 'Required — the component needs a value', "the marker's tooltip says what is missing");
+  assert.equal(noteAfter('title'), undefined, 'and no line is added under the field');
   assert.equal(one(label('subtitle'), '.prop-required'), undefined, 'an optional prop is not marked');
   assert.equal(one(label('count'), '.prop-required'), undefined, 'a prop with a default is not marked');
   assert.equal(noteAfter('subtitle'), undefined);
@@ -165,7 +166,7 @@ test('a required prop carries a marker, and a note while the instance leaves it 
   assert.deepEqual(panel.values.title, { type: 'string', value: 'Hello' });
   assert.ok(label('title').querySelector('.prop-required'), 'still required once set');
   assert.equal(one(label('title'), '.prop-required.missing'), undefined, 'no longer missing');
-  assert.equal(noteAfter('title'), undefined, 'the note goes once a value is given');
+  assert.equal(noteAfter('title'), undefined, 'still no line once a value is given');
   act(() => root.render(React.createElement(React.Fragment)));
 });
 

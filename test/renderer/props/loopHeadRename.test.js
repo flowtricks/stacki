@@ -1,5 +1,5 @@
 // Goal: the Loop panel's Code row and the Source row's code popup refuse what
-// would crash the page, say why under the field and keep what was typed, and hand
+// would crash the page, say why in a toast (never a paragraph in the panel), keep what was typed, and hand
 // a rename to the file-wide rename. The popup opens under the Source row, not the
 // row it used to measure, and names the file the frontmatter is in.
 //
@@ -7,6 +7,8 @@
 // a host that holds a real page: each commit runs the real check and plan against
 // main's real parser, and the page is parsed again from what was written. Boxes
 // are stubbed, since jsdom lays nothing out; CodeMirror is driven through its view.
+// Refusals are read from the toast channel the same bundle reports to, and the panel
+// is checked to hold no alert or note element.
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -16,6 +18,7 @@ const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { installPopupDOM } = require('../../helpers/popupDom.js');
+const { installToastLog } = require('../../helpers/toastLog.js');
 const load = require('../../helpers/rendererModule');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 
@@ -27,7 +30,11 @@ fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'loop-head-rename.cjs');
 buildSync({
   stdin: {
-    contents: ["export { MapEditor } from './src/features/props/propNodeEditors';", "export { EditorView } from '@codemirror/view';"].join('\n'),
+    contents: [
+      "export { MapEditor } from './src/features/props/propNodeEditors';",
+      "export { EditorView } from '@codemirror/view';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
+    ].join('\n'),
     resolveDir: ROOT,
     loader: 'ts',
   },
@@ -95,10 +102,12 @@ async function panel(context, filePath = 'src/components/PricingCard.astro') {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
-  const state = { source: SOURCE, writes: 0, texts: [] };
+  const toasts = installToastLog(modules.subscribeErrorToasts);
+  const state = { source: SOURCE, writes: 0, texts: [], toasts };
   context.after(async () => {
     await act(async () => root.unmount());
     host.remove();
+    toasts.uninstall();
   });
   const rename = (change) => {
     const plan = planVariableRename({ source: state.source, model: parsed(state.source) }, change);
@@ -152,7 +161,9 @@ const codeRow = (host) => [...host.querySelectorAll('.loop-settings-row')].find(
 const sourceRow = (host) => [...host.querySelectorAll('.loop-settings-row')].find((row) => row.textContent.includes('Source'));
 const editorOf = (row) => row.querySelector('.cm-content');
 const textOf = (editor) => modules.EditorView.findFromDOM(editor).state.doc.toString();
-const noteOf = (host) => host.querySelector('.prop-field-note.problem')?.textContent;
+// The latest toast the panel reported; nothing is ever drawn in the panel itself.
+const noteOf = (state) => state.toasts.messages().at(-1);
+const panelHoldsNotice = (host) => host.querySelector('[role="alert"], [class*="-note"], [class*="-problem"]') !== null;
 
 async function type(editor, text) {
   const view = modules.EditorView.findFromDOM(editor);
@@ -182,7 +193,7 @@ async function openPopup(host) {
 test('renaming in the Code row reaches the rest of the file and shows no error', async (context) => {
   const { host, state } = await panel(context);
   await commit(host, 'stats.map((item) => (');
-  assert.equal(noteOf(host), undefined);
+  assert.equal(noteOf(state), undefined);
   assert.equal(state.writes, 1);
   assert.equal(state.source, SOURCE.replaceAll('statsEntries2', 'stats'));
   assert.equal(textOf(editorOf(codeRow(host))), 'stats.map((item) => (');
@@ -191,15 +202,15 @@ test('renaming in the Code row reaches the rest of the file and shows no error',
 test('a collision blocks the write, shows the reason and keeps the text', async (context) => {
   const { host, state } = await panel(context);
   await commit(host, 'other.map((item) => (');
-  assert.equal(noteOf(host), '“other” already exists in this file. To loop over it, choose it in the Source menu.');
-  assert.equal(host.querySelector('.prop-field-note.problem').getAttribute('role'), 'alert');
+  assert.equal(noteOf(state), '“other” already exists in this file. To loop over it, choose it in the Source menu.');
+  assert.equal(panelHoldsNotice(host), false, 'the reason is a toast, not a paragraph in the panel');
   assert.equal(state.writes, 0);
   assert.equal(state.source, SOURCE);
   assert.equal(textOf(editorOf(codeRow(host))), 'other.map((item) => (', 'The text stays to be corrected');
   assert.ok(codeRow(host).querySelector('.expr-input.invalid'), 'The field shows it is refused');
 });
 
-test('every refusal lands in the same note, and typing clears it', async (context) => {
+test('every refusal is one toast, and typing takes the error look off the field', async (context) => {
   const { host, state } = await panel(context);
   const cases = [
     ['class.map((item) => (', /reserved word/],
@@ -209,18 +220,21 @@ test('every refusal lands in the same note, and typing clears it', async (contex
   ];
   for (const [text, message] of cases) {
     await commit(host, text);
-    assert.match(noteOf(host), message, text);
+    assert.match(noteOf(state), message, text);
+    assert.equal(panelHoldsNotice(host), false, text);
     assert.equal(textOf(editorOf(codeRow(host))), text);
   }
   assert.equal(state.writes, 0);
+  const toastCount = state.toasts.messages().length;
   await type(editorOf(codeRow(host)), 'statsEntries2.map((item) =');
-  assert.equal(noteOf(host), undefined, 'A correction in progress is not nagged about');
+  assert.equal(state.toasts.messages().length, toastCount, 'A correction in progress is not nagged about');
+  assert.equal(codeRow(host).querySelector('.expr-input.invalid') ?? undefined, undefined, 'the field is no longer red');
 });
 
 test('an ordinary edit still writes, through the same commit', async (context) => {
   const { host, state } = await panel(context);
   await commit(host, 'statsEntries2.slice(0, 3).map((item) => (');
-  assert.equal(noteOf(host), undefined);
+  assert.equal(noteOf(state), undefined);
   assert.equal(state.writes, 1);
   assert.match(state.source, /\{statsEntries2\.slice\(0, 3\)\.map\(\(item\) =>/);
 });
@@ -306,7 +320,8 @@ test('the popup refuses a collision and keeps the text', async (context) => {
   const text = "const other = await getCollection('stats');";
   await type(editor, text);
   await leave(editor);
-  assert.match(popup.querySelector('.prop-field-note.problem').textContent, /“other” already exists in this file\./);
+  assert.match(noteOf(state), /“other” already exists in this file\./);
+  assert.equal(panelHoldsNotice(popup), false);
   assert.equal(state.source, SOURCE);
   assert.deepEqual(state.texts, []);
   assert.equal(textOf(editor), text);
@@ -318,7 +333,8 @@ test('the popup will not mix a rename with another change', async (context) => {
   const editor = editorOf(popup);
   await type(editor, "const stats = await getCollection('other');");
   await leave(editor);
-  assert.match(popup.querySelector('.prop-field-note.problem').textContent, /Rename the variable on its own/);
+  assert.match(noteOf(state), /Rename the variable on its own/);
+  assert.equal(panelHoldsNotice(popup), false);
   assert.equal(state.source, SOURCE);
 });
 

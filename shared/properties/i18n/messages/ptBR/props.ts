@@ -371,7 +371,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] ou [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Usar as linhas de itens',
   'props.loop.literal.writeCode': 'Escrever os itens como código',
-  'props.loop.notice.dismiss': 'Dispensar',
   'props.loop.notice.relinked': 'Os vínculos internos foram restaurados, como estavam nesta lista.',
   'props.loop.notice.switchBack': { one: 'Volte para {name} para vinculá-lo de novo.', other: 'Volte para {name} para vinculá-los de novo.' },
   'props.loop.notice.unlinked': {

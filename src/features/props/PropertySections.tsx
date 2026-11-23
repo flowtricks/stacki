@@ -18,6 +18,7 @@
 // - The default items: the very field an instance of the component edits the
 //   list with (PropField), with its `{}` toggle between the list and its code.
 
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useRef, type ReactNode } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
@@ -228,7 +229,7 @@ export function ItemFieldsEditor(props: ListShape & { readonly onChange: ShapeCh
     <div className="new-prop-settings property-item-fields" role="group" aria-label={translate('props.sections.itemFields')}>
       <div className="loop-bind-title">{translate('props.sections.itemFields')}</div>
       <ItemFieldRows shape={{ fields, itemsText }} parent={[]} heldKeys={heldKeys.current} onChange={onChange} />
-      {problem !== undefined && <div className="new-prop-note">{problem}</div>}
+      <ErrorToast message={problem} />
     </div>
   );
 }

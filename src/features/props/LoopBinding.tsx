@@ -9,6 +9,7 @@
 // default is the setting's current value, so the component looks the same
 // until a page passes another.
 
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useCallback, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import { CheckIcon, CloseIcon, FieldNumberIcon, FilterIcon, PlusIcon, SortIcon } from '../../ui/Icons';
@@ -157,7 +158,7 @@ export function NewProperty(props: {
           }}
         />
       </label>
-      {problem !== undefined && key !== '' && <div className="loop-bind-problem">{problem}</div>}
+      <ErrorToast message={key === '' ? undefined : problem} />
       <label className="loop-bind-name top">
         <span className="loop-settings-editor-label">{translate('props.loop.binding.tooltip')}</span>
         <AutoTextarea value={tooltip} placeholder={translate('props.loop.binding.tooltipPlaceholder')} onChange={(event) => setTooltip(event.target.value)} />

@@ -1,4 +1,5 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ImportDecl, MapNode } from '../../../shared/page/pageNode';
@@ -155,11 +156,7 @@ export function MapEditor(props: MapEditorProps) {
           onCommit={commitCode}
         />
       </div>
-      {problem !== undefined && (
-        <div className="prop-field-note problem" role="alert">
-          {problem}
-        </div>
-      )}
+      <ErrorToast message={problem} />
     </>
   );
   // The Code field goes inside the settings, so their Details come after it.

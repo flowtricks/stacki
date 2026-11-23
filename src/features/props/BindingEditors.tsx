@@ -690,11 +690,7 @@ export function VarSourceEditorView({ state }: { readonly state: SourceEditorSta
         onCommit={commit}
       />
       {error ? <ErrorToast message={error} /> : undefined}
-      {refusal !== undefined && (
-        <div className="prop-field-note problem" role="alert">
-          {refusal}
-        </div>
-      )}
+      <ErrorToast message={refusal} />
     </div>
   );
 }

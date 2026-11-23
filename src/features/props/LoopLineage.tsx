@@ -15,6 +15,8 @@ import type { CatalogField, LoopCatalog } from './loopCatalog';
 import { titled } from './loopCatalog';
 import { conditionSummary, sortSummary, sourceKey } from './loopSettingsModel';
 import { useLocale, useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import PropTip from './PropTip';
 
 export interface LoopTrace {
   readonly steps: readonly TraceStep[];
@@ -108,7 +110,10 @@ function LineageBody(props: {
   const functionName = firstFunction(trace);
   return (
     <>
-      <div className="loop-lineage-title">{translate('props.loop.lineage.comesFrom')}</div>
+      <div className="loop-lineage-title">
+        {translate('props.loop.lineage.comesFrom')}
+        <PropTip text={collection === undefined ? undefined : lineageNote(props, functionName, translate)} />
+      </div>
       {props.names.map((name) => (
         <LineageRow key={`value:${name}`} icon={<LayersIcon size={12} />} name={name} detail={translate('props.loop.lineage.thisPage')} />
       ))}
@@ -117,18 +122,6 @@ function LineageBody(props: {
         <LineageStep key={`${index}:${step.kind}`} step={step} catalog={props.catalog} fields={props.fields} editable={props.editable} />
       ))}
       {trace !== undefined && collection === undefined && <div className="loop-settings-empty">{translate('props.loop.lineage.unrecognised')}</div>}
-      {collection !== undefined && (
-        <div className="loop-lineage-note">
-          {trace !== undefined && trace.reshaped.length > 0
-            ? `${translate('props.loop.lineage.reshaped', { methods: trace.reshaped.map((method) => `.${method}`).join(', ') })} `
-            : ''}
-          {props.editable
-            ? functionName === undefined
-              ? translate('props.loop.lineage.savedIt', { file: collection.file })
-              : translate('props.loop.lineage.savedFunction', { file: collection.file, name: functionName })
-            : translate('props.loop.lineage.liveIn', { file: collection.file })}
-        </div>
-      )}
     </>
   );
 }
@@ -201,4 +194,26 @@ function LineageRow(props: { readonly icon: ReactNode; readonly name: string; re
       <span className="loop-lineage-detail-inline">{props.detail}</span>
     </div>
   );
+}
+
+// Where the list is saved, and what a method after it reshaped: a tooltip on the title, not a paragraph under the rows.
+function lineageNote(
+  props: { readonly trace: LoopTrace | undefined; readonly collection: TracedCollection | undefined; readonly editable: boolean },
+  functionName: string | undefined,
+  translate: Translator,
+): string | undefined {
+  const { trace, collection } = props;
+  if (collection === undefined) {
+    return undefined;
+  }
+  const reshaped =
+    trace !== undefined && trace.reshaped.length > 0
+      ? `${translate('props.loop.lineage.reshaped', { methods: trace.reshaped.map((method) => `.${method}`).join(', ') })} `
+      : '';
+  if (!props.editable) {
+    return `${reshaped}${translate('props.loop.lineage.liveIn', { file: collection.file })}`;
+  }
+  return functionName === undefined
+    ? `${reshaped}${translate('props.loop.lineage.savedIt', { file: collection.file })}`
+    : `${reshaped}${translate('props.loop.lineage.savedFunction', { file: collection.file, name: functionName })}`;
 }

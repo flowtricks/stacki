@@ -370,7 +370,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Elemento 1", "Elemento 2"] o [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Usar las filas de elementos',
   'props.loop.literal.writeCode': 'Escribir los elementos como código',
-  'props.loop.notice.dismiss': 'Descartar',
   'props.loop.notice.relinked': 'Los enlaces del interior se han vinculado de nuevo, como estaban en esta lista.',
   'props.loop.notice.switchBack': { one: 'Vuelve a {name} para vincularlo de nuevo.', other: 'Vuelve a {name} para vincularlos de nuevo.' },
   'props.loop.notice.unlinked': {

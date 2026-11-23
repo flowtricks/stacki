@@ -23,6 +23,7 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { installToastLog } = require('../../helpers/toastLog.js');
 const { installPopupDOM } = require('../../helpers/popupDom.js');
 
 const directory = repoPath('node_modules/.stacki-test/new-prop-picker');
@@ -37,6 +38,7 @@ buildSync({
       "export { sendGesture } from './src/editor/pageEdits';",
       "export { readRestBinding } from './src/editor/propDeclaration';",
       "export { withAttributes } from './src/editor/attributesBinding';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'ts',
@@ -205,9 +207,18 @@ test('in a component: fitting props, CMS data, and a new prop bound in one undo 
   const name = document.querySelector('.new-prop-form input[aria-label="Name"]');
   assert.equal(name.value, 'dataLabel', 'named from the attribute');
   assert.equal(document.querySelector('.new-prop-form textarea[aria-label="Default"]').value, 'Click me', 'the default is the current value');
+  const toasts = installToastLog(modules.subscribeErrorToasts);
   await type(name, 'title');
-  assert.equal(document.querySelector('.new-prop-form .loop-bind-problem').textContent, 'This component already has a title property.');
+  assert.deepEqual(toasts.messages(), ['This component already has a title property.'], 'the refusal is one toast');
+  assert.equal(
+    document.querySelector('.new-prop-form [role="alert"], .new-prop-form [class*="-problem"], .new-prop-form [class*="-note"]') ?? undefined,
+    undefined,
+    'and no paragraph in the form',
+  );
+  assert.equal(name.getAttribute('aria-invalid'), 'true', 'the Name takes the error look');
   assert.ok(byText('Create').disabled);
+  assert.equal(byText('Create').title, 'This component already has a title property.', 'the disabled button says why');
+  toasts.uninstall();
   await type(name, 'label');
   await type(document.querySelector('.new-prop-form textarea[aria-label="Tooltip"]'), 'The link’s label');
   await click(byText('Create'));
@@ -346,7 +357,7 @@ test('an attributes prop: the header’s purple + makes it in one press, the ele
   await act(async () => root.unmount());
 });
 
-test('an attribute name the tag does not take gets a muted note under the Name field', async (context) => {
+test('an attribute name the tag does not take is explained by a tooltip beside Name, never a line under it', async (context) => {
   const { harness, file } = await project(context);
   const read = parsePageDiskRead(await harness.invoke('page:read', file));
   installDom();
@@ -361,11 +372,17 @@ test('an attribute name the tag does not take gets a muted note under the Name f
   await click(container.querySelector('.props-label-row button[title="Add attribute"]'));
   const input = document.querySelector('.attr-editor-row input');
   await type(input, 'required');
-  assert.equal(document.querySelector('.attr-name-note').textContent, 'required isn’t an attribute of <a>.');
+  const tip = () => document.querySelector('.attr-editor-row .prop-tip-icon')?.getAttribute('aria-label');
+  assert.equal(tip(), 'required isn’t an attribute of <a>.');
   await type(input, 'set:html');
-  assert.equal(document.querySelector('.attr-name-note').textContent, 'This is a reserved name.');
+  assert.equal(tip(), 'This is a reserved name.');
   await type(input, 'href');
-  assert.equal(document.querySelector('.attr-name-note') ?? undefined, undefined, 'a valid name has no note');
+  assert.equal(tip(), undefined, 'a valid name has no tooltip');
+  assert.equal(
+    document.querySelector('.attr-editor [role="alert"], .attr-editor [class*="-note"]') ?? undefined,
+    undefined,
+    'nothing is appended under the Name field',
+  );
   await act(async () => root.unmount());
 });
 

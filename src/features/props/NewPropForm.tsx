@@ -18,6 +18,7 @@
 // the instance's list field, `{}` toggle and all: code the list cannot show is
 // written as typed (PropDeclaration.defaultExpression).
 
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
@@ -98,7 +99,7 @@ export default function NewPropForm(props: NewPropFormProps) {
           }}
         />
       </label>
-      {form.nameProblem !== undefined && <div className="loop-bind-problem">{form.nameProblem}</div>}
+      <ErrorToast message={name.trim() === '' ? undefined : form.nameProblem} />
       <label className="loop-bind-name top">
         <span className="loop-settings-editor-label">{translate('props.newProp.form.tooltip')}</span>
         <AutoTextarea
@@ -135,12 +136,12 @@ export default function NewPropForm(props: NewPropFormProps) {
           <DefaultEditor form={form} host={props.host} />
         </div>
       )}
-      {problem !== undefined && form.nameProblem === undefined && <div className="loop-bind-problem">{problem}</div>}
+      <ErrorToast message={form.nameProblem === undefined && name.trim() !== '' ? problem : undefined} />
       <div className="loop-bind-actions">
         <button type="button" className="loop-bind-button" onClick={props.onCancel}>
           {translate('ui.cancel')}
         </button>
-        <button type="button" className="loop-bind-button primary" disabled={problem !== undefined || created} onClick={form.create}>
+        <button type="button" className="loop-bind-button primary" disabled={problem !== undefined || created} title={problem} onClick={form.create}>
           {translate('props.newProp.form.create')}
         </button>
       </div>

@@ -369,7 +369,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["項目 1", "項目 2"] 或 [{{ title: "A" }}]',
   'props.loop.literal.useRows': '使用項目列',
   'props.loop.literal.writeCode': '以程式碼撰寫項目',
-  'props.loop.notice.dismiss': '關閉',
   'props.loop.notice.relinked': '內部的綁定已重新連結，與此清單原本的狀態相同。',
   'props.loop.notice.switchBack': { other: '切換回 {name} 即可重新連結。' },
   'props.loop.notice.unlinked': {

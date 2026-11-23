@@ -21,7 +21,7 @@ import {
   ColorControl,
   TextControl,
 } from './PropControls';
-import { PropFieldPill, PropFieldMenu, PropFieldLabelRow, PropFieldPicker, PropFieldNote } from './PropFieldLabel';
+import { PropFieldPill, PropFieldMenu, PropFieldLabelRow, PropFieldPicker } from './PropFieldLabel';
 import { ConditionalField } from './ConditionalValue';
 import { conditionalOfAttr, valueLanguageOf } from './conditionalModel';
 
@@ -44,14 +44,8 @@ function PropFieldControls({ state }: { readonly state: PropState }) {
     </>
   );
   const view = { ...state, pill, menu, label };
-  // The note sits under the field, outside it: every control lays out its own
-  // box, and a note is about the field, not part of any one control.
-  return (
-    <>
-      {propFieldControl(view)}
-      <PropFieldNote state={state} />
-    </>
-  );
+  // What a required field is missing is said by its marker's tooltip (PropFieldPill), not by a line under it.
+  return propFieldControl(view);
 }
 function propFieldControl(view: PropControlState) {
   const { field, value, slotOptions, assetContext, linkContext, name, type, isSet, valueText, assetBinding, showExpr, isExpr, isMediaAttr } = view;

@@ -370,7 +370,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] atau [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Gunakan baris item',
   'props.loop.literal.writeCode': 'Tulis item sebagai kode',
-  'props.loop.notice.dismiss': 'Tutup',
   'props.loop.notice.relinked': 'Binding di dalamnya terhubung lagi, seperti sebelumnya untuk daftar ini.',
   'props.loop.notice.switchBack': { other: 'Kembali ke {name} untuk menghubungkannya lagi.' },
   'props.loop.notice.unlinked': { other: '{count} binding{names} diputuskan: daftar ini tidak memiliki bidang tersebut.' },

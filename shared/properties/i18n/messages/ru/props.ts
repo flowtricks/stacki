@@ -375,7 +375,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Элемент 1", "Элемент 2"] или [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Использовать строки элементов',
   'props.loop.literal.writeCode': 'Записать элементы кодом',
-  'props.loop.notice.dismiss': 'Закрыть',
   'props.loop.notice.relinked': 'Привязки внутри снова связаны, как и были для этого списка.',
   'props.loop.notice.switchBack': {
     one: 'Вернитесь к {name}, чтобы связать её снова.',

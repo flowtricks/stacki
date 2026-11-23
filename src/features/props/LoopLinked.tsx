@@ -10,6 +10,8 @@
 // The default is edited with the setting's own editor, passed in as `editor`,
 // so it reads and writes exactly as the unlinked setting does.
 
+import PropTip from './PropTip';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useCallback, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import { CheckIcon, ChevronDownIcon, CloseIcon, ComponentIcon, GearIcon, PlusIcon, UnlinkIcon } from '../../ui/Icons';
@@ -160,11 +162,15 @@ function PropertySettings(props: {
         </button>
       </div>
       <label className="loop-bind-name">
-        <span className="loop-settings-editor-label">{translate('props.loop.binding.name')}</span>
+        <span className="loop-settings-editor-label">
+          {translate('props.loop.binding.name')}
+          <PropTip text={translate('props.loop.binding.renameNote')} />
+        </span>
         <input
           value={name}
           spellCheck={false}
           disabled={locked}
+          aria-invalid={state.kind === 'error'}
           onChange={(event) => identity.setName(event.target.value)}
           onBlur={save}
           onKeyDown={(event) => {
@@ -184,8 +190,7 @@ function PropertySettings(props: {
           onBlur={save}
         />
       </label>
-      {state.kind === 'error' && <div className="loop-bind-problem">{state.message}</div>}
-      {name.trim() !== props.propKey && state.kind !== 'error' && <div className="loop-bind-note">{translate('props.loop.binding.renameNote')}</div>}
+      <ErrorToast message={state.kind === 'error' ? state.message : undefined} />
       <div className="loop-property-default">
         <div className="loop-bind-title">{translate('props.loop.binding.default', { title: settingTitle(props.setting, translate) })}</div>
         {props.editor}

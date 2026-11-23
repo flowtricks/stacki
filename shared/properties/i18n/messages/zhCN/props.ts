@@ -369,7 +369,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] 或 [{{ title: "A" }}]',
   'props.loop.literal.useRows': '使用项行',
   'props.loop.literal.writeCode': '以代码形式编写项',
-  'props.loop.notice.dismiss': '关闭',
   'props.loop.notice.relinked': '内部绑定已重新链接，与此列表原先的状态一致。',
   'props.loop.notice.switchBack': { other: '切换回 {name} 即可重新链接。' },
   'props.loop.notice.unlinked': {

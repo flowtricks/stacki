@@ -376,7 +376,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Item 1", "Item 2"] أو [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'استخدم صفوف العناصر',
   'props.loop.literal.writeCode': 'اكتب العناصر كشيفرة',
-  'props.loop.notice.dismiss': 'تجاهل',
   'props.loop.notice.relinked': 'أُعيد ربط الارتباطات الداخلية كما كانت لهذه القائمة.',
   'props.loop.notice.switchBack': {
     zero: 'عُد إلى {name} لربطها مرة أخرى.',

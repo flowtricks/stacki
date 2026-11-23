@@ -2,14 +2,15 @@
 // type (`SeoProps` in src/types.ts) is edited in that file, so the form says
 // so before anything is changed, and lists the components using the type and
 // the files placing them; a prop whose options live in a shared alias carries
-// the reader's warning. Both are said in the form rather than as a toast, so
-// they are on screen while the edit is made.
+// the reader's warning. The shared-type summary stays in the form, because it
+// is the control that lists the files; the warning is a toast, never a paragraph.
 
 import { useState } from 'react';
 import type { ComponentProperty, PropertyShare } from '../../../shared/properties/propertyEditing';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { CodeInline } from '../../ui/CodeBlock';
+import { NoticeToast } from '../../ui/NoticeToast';
 
 interface ShareNoticeProps {
   readonly property: ComponentProperty;
@@ -28,11 +29,7 @@ export function PropertyShareNotice({ property, onOpenFile }: ShareNoticeProps) 
       ? translateDescribed({ message: editing.warning, messageRef: editing.warningRef })
       : undefined;
   if (share === undefined) {
-    return warning === undefined ? undefined : (
-      <p className="property-share-warning" role="note">
-        {warning}
-      </p>
-    );
+    return <NoticeToast message={warning} kind="warning" />;
   }
   return (
     <div className="property-share" role="note">

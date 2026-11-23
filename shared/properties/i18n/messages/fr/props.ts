@@ -372,7 +372,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Élément 1", "Élément 2"] ou [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Utiliser les lignes d’éléments',
   'props.loop.literal.writeCode': 'Écrire les éléments en code',
-  'props.loop.notice.dismiss': 'Ignorer',
   'props.loop.notice.relinked': 'Les liaisons à l’intérieur sont rétablies, comme elles l’étaient pour cette liste.',
   'props.loop.notice.switchBack': { one: 'Revenez à {name} pour la relier.', other: 'Revenez à {name} pour les relier.' },
   'props.loop.notice.unlinked': {

@@ -235,31 +235,6 @@
   text-decoration: underline;
 }
 
-.loop-settings-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 4px 12px;
-  padding-block: 8px;
-  padding-inline: 10px 6px;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--text);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.loop-settings-notice > span {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-/* Something was unlinked: amber, and it stays until dismissed. */
-.loop-settings-notice.warning {
-  background: color-mix(in srgb, var(--amber) 18%, transparent);
-}
-.loop-settings-notice.error {
-  background: color-mix(in srgb, var(--red) 18%, transparent);
-}
-
 .loop-settings-partial {
   display: flex;
   flex-direction: column;
@@ -316,6 +291,8 @@
   padding: 2px 0 8px;
 }
 .loop-lineage-title {
+  display: flex;
+  align-items: center;
   color: var(--text-faint);
   font-size: 10px;
   font-weight: 600;
@@ -362,12 +339,6 @@
   color: var(--text-dim);
   font-size: 11px;
   line-height: 1.5;
-}
-.loop-lineage-note {
-  margin-top: 4px;
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.45;
 }
 
 /* A filter or sort being edited: a raised panel under its row. Positioned by
@@ -659,15 +630,6 @@
 }
 .loop-bind-name input[aria-invalid='true'] {
   background: rgba(255, 90, 90, 0.12);
-}
-.loop-bind-problem {
-  color: #ff8a8a;
-  font-size: 11px;
-}
-.loop-bind-note {
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.4;
 }
 .loop-bind-actions {
   display: flex;
@@ -968,12 +930,6 @@
   background: var(--bg-hover);
   color: var(--text);
 }
-.loop-typed-note {
-  grid-column: 1 / -1;
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.45;
-}
 .loop-typed-actions {
   grid-column: 1 / -1;
   display: flex;
@@ -1017,16 +973,12 @@
 }
 
 /* Custom code for a filter or a sort: monospace, on the field fill. */
-/* A section as code: the prop field's `{}` and red note, in a section's spacing. */
 .loop-settings-section:hover .prop-expr-toggle:not(.on) {
   color: var(--text-dim);
 }
 /* The label's flex gap already is the toggle's own 4px margin; both would double it. */
 .loop-settings-label > .prop-expr-toggle {
   margin-inline-start: 0;
-}
-.loop-settings-section > .prop-field-note {
-  margin: 0;
 }
 .loop-section-code {
   min-width: 0;
@@ -1045,17 +997,13 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
+.loop-typed-input .expr-input.invalid,
 .loop-settings-code .expr-input.invalid {
   background: rgba(255, 80, 80, 0.12);
 }
-.loop-settings-code-problem {
-  color: #ff8a8a;
-  font-size: 11px;
-}
 
 /* A new component prop's settings (NewPropForm.tsx), in the loop dialog's
-   look. A name with a problem says so in red words beneath it; the field
-   itself keeps its fill, so the problem reads as text, not as an alarm. */
+   look. A name with a problem takes the error tint and says why in a toast. */
 .new-prop-form .loop-bind-name {
   /* Stated here too: opened from a field's dot, the form sits inside the
      field's .props-field, whose `label { display: block }` would stack each
@@ -1189,10 +1137,6 @@
   margin-top: 6px;
   padding-inline-start: 10px;
 }
-.new-prop-note {
-  color: var(--text-dim);
-  font-size: 11px;
-}
 .new-prop-add {
   display: inline-flex;
   align-items: center;
@@ -1241,16 +1185,6 @@
   flex: 0 0 auto;
   margin-inline-end: 6px;
   color: var(--text-dim);
-}
-/* Advice under an attribute's Name: muted words in a filled box. */
-.attr-name-note {
-  margin-top: 4px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.4;
 }
 /* An element's attributes connected to an attributes prop: the purple chip
    in the header, and the line naming what an instance adds. */

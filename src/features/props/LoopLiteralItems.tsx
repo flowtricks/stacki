@@ -3,6 +3,7 @@
 // it. An edit is written when the row is left or Enter is pressed, not on
 // every key, so typing a word is one undo step rather than one per letter.
 
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import useListReorder from '../../ui/useListReorder';
 import ExprInput from '../../ui/ExprInput';
@@ -112,11 +113,7 @@ function ItemsCode(props: { readonly data: string; readonly onCode: (code: strin
           onCommit={commit}
         />
       </div>
-      {problem !== undefined && (
-        <div className="prop-field-note problem" role="alert">
-          {problem}
-        </div>
-      )}
+      <ErrorToast message={problem} />
     </>
   );
 }

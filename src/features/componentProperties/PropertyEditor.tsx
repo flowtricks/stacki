@@ -1,5 +1,6 @@
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
 import { fallbackEdit, optionListEdit, useVariantHost, useVariantRun, variantRoleOf } from './PropertyVariants';
 import type { VariantHost } from './PropertyVariants';
@@ -372,18 +373,8 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
         run={variantRun.run}
         onProblem={report}
       />
-      {creating
-        ? error && <ErrorToast message={error} />
-        : error && (
-            <p className="property-error" role="alert">
-              {error}
-            </p>
-          )}
-      {notice && (
-        <p className="property-help" role="status">
-          {notice}
-        </p>
-      )}
+      <ErrorToast message={error || undefined} />
+      <NoticeToast message={notice || undefined} kind="info" />
       {actions}
     </fieldset>
   );
@@ -435,6 +426,7 @@ function PropertyIdentity({ form, creating, inherited }: { readonly form: Proper
         {translate('componentProps.editor.name')}
         <input
           value={form.nameText}
+          aria-invalid={form.nameError !== '' ? true : undefined}
           maxLength={PROPERTY_LIMITS.nameCharsMax}
           autoFocus={!inherited}
           disabled={inherited}
@@ -448,11 +440,7 @@ function PropertyIdentity({ form, creating, inherited }: { readonly form: Proper
           }}
         />
       </label>
-      {form.nameError !== '' && (
-        <p className="property-error" role="alert">
-          {form.nameError}
-        </p>
-      )}
+      <ErrorToast message={form.nameError || undefined} />
       {!creating && form.nameError === '' && form.savedName !== form.nameText && <RenameHelp property={form.property} />}
     </>
   );

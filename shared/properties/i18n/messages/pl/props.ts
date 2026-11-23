@@ -375,7 +375,6 @@ export const messages = {
   'props.loop.literal.placeholder': '["Element 1", "Element 2"] lub [{{ title: "A" }}]',
   'props.loop.literal.useRows': 'Użyj wierszy elementów',
   'props.loop.literal.writeCode': 'Zapisz elementy jako kod',
-  'props.loop.notice.dismiss': 'Zamknij',
   'props.loop.notice.relinked': 'Powiązania wewnątrz zostały połączone ponownie, tak jak dla tej listy.',
   'props.loop.notice.switchBack': {
     one: 'Wróć do {name}, aby połączyć je ponownie.',

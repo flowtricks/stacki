@@ -10,14 +10,14 @@
 // opens here the same way: settings it can show are shown, and code it cannot
 // is kept and said to be custom rather than rewritten.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { type DropdownOption } from '../../ui/Dropdown';
 import type { DescribedTranslator } from '../../lib/i18n/localeContext';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import type { Described, Translator } from '../../../shared/properties/i18n/messageRef';
-import { AstroIcon, SanityIcon, CloseIcon, CmsIcon, TextIcon } from '../../ui/Icons';
+import { AstroIcon, SanityIcon, CmsIcon, TextIcon } from '../../ui/Icons';
 import type { TreeNode } from '../../editor/dataSample';
 import { treeListFields } from './loopProjectData';
 import { assert } from '../../../shared/core/assert';
@@ -48,6 +48,8 @@ import { propTooltip } from '../../editor/loopProps';
 import { listPropOf } from '../../editor/propDeclaration';
 import type { BindingContext } from './LoopBinding';
 import { LOOP_SETTINGS, type LoopSetting, type SettingHome } from '../../editor/optionsQuery';
+import { reportActionToast } from '../../ui/errorNotices';
+import PropTip from './PropTip';
 import { LoopLineage, tracedCollection, useLoopTrace, type TracedCollection } from './LoopLineage';
 import { FilterSection } from './LoopFilters';
 import { itemSamples, type ItemSamples } from '../../editor/loopRemove';
@@ -57,7 +59,7 @@ import type { TypedFieldSupport } from './LoopTypedFieldForm';
 import { LimitSection, SortSection } from './LoopOrder';
 import { editableTrace, loadSanitySample, useCatalogFields, useLoopCatalog, writeTracedQuery } from './loopSettingsData';
 import { ItemsSection } from './LoopItems';
-import { LoopDetails } from './LoopRows';
+import { LoopDetails, LoopDetailsTip } from './LoopRows';
 import SegSwitch from './SegSwitch';
 import { err, ok, type Result } from '../../../shared/core/result';
 import type { PropDeclaration } from '../../editor/propDeclaration';
@@ -166,13 +168,11 @@ function removedNotice(removed: { readonly replaced: number; readonly emptied: n
   return parts.join(' · ');
 }
 
-const NOTICE_MS = 6_000;
-
 export default function LoopSettings(props: LoopSettingsProps) {
   const catalog = useLoopCatalog(props.projectPath);
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
-  const [notice, setNotice] = useNotice();
+  const setNotice = sayNotice;
   const tree = props.pickerData?.tree;
   // A list another file's function returns is edited where its query lives; when that cannot be
   // edited from here, the loop's own head takes the settings, as for every other list.
@@ -251,7 +251,6 @@ export default function LoopSettings(props: LoopSettingsProps) {
         newList={newListOffer(props, catalog, translate, translateDescribed, setNotice)}
         samples={samples}
       />
-      {notice !== undefined && <NoticeBanner notice={notice} onDismiss={() => setNotice(undefined)} />}
       <ReadingSettings
         {...shared}
         reading={reading}
@@ -418,7 +417,12 @@ function ReadingSettings(props: {
       {/* Custom code in a section: that section is code, and the rest stay
           controls. There is no Items switch: picking items would replace the code. */}
       {reading.kind === 'partial' && code !== undefined && (
-        <ItemsSwitch current="dynamic" selectedReason={refusalText('custom', translate)} onPick={() => undefined} />
+        <ItemsSwitch
+          current="dynamic"
+          selectedReason={refusalText('custom', translate)}
+          tip={listTip({ kept: props.kept, fields, source: reading.source }, translate)}
+          onPick={() => undefined}
+        />
       )}
       {reading.kind === 'partial' && code !== undefined && (
         <QuerySections
@@ -432,7 +436,6 @@ function ReadingSettings(props: {
           onChange={(query) => onApply({ kind: 'query', query, fields: fields ?? [] })}
         />
       )}
-      {props.kept && <div className="loop-lineage-note">{translate('props.loop.note.kept')}</div>}
       {reading.kind === 'query' && reading.query.source.kind === 'list' && (
         <ListSettings
           {...shared}
@@ -441,6 +444,7 @@ function ReadingSettings(props: {
           item={props.item}
           code={code}
           picks={props.picks}
+          kept={props.kept}
           onChange={(query) => onApply({ kind: 'query', query, fields: [] })}
         />
       )}
@@ -496,19 +500,15 @@ function ReadingDetails(props: {
   }
   if (reading.kind === 'partial') {
     return props.split ? undefined : (
-      <LoopDetails>
-        <div className="loop-lineage-note">
-          {translateDescribed({ message: reading.reason, ...(reading.reasonIssue === undefined ? {} : { messageRef: reading.reasonIssue.messageRef }) })}{' '}
-          {translate('props.loop.details.stillWorks')}
-        </div>
-      </LoopDetails>
+      <LoopDetailsTip
+        text={`${translateDescribed({
+          message: reading.reason,
+          ...(reading.reasonIssue === undefined ? {} : { messageRef: reading.reasonIssue.messageRef }),
+        })} ${translate('props.loop.details.stillWorks')}`}
+      />
     );
   }
-  return reading.kind === 'query' && reading.home !== undefined ? (
-    <LoopDetails>
-      <OptionsNote home={reading.home} />
-    </LoopDetails>
-  ) : undefined;
+  return reading.kind === 'query' && reading.home !== undefined ? <OptionsDetails home={reading.home} /> : undefined;
 }
 
 // A collection list: Dynamic (filters, sort, limit) or Selected (items picked
@@ -557,6 +557,8 @@ function CollectionSettings(props: {
 function ItemsSwitch(props: {
   readonly current: 'dynamic' | 'selected';
   readonly selectedReason: string | undefined;
+  /** Why the list's settings are as they are, behind a "?" beside the label rather than as a paragraph under it. */
+  readonly tip?: string | undefined;
   readonly onPick: (mode: 'dynamic' | 'selected') => void;
 }) {
   const translate = useTranslate();
@@ -564,6 +566,7 @@ function ItemsSwitch(props: {
     <div className="props-field loop-settings-row loop-settings-mode">
       <label>
         <span className="prop-label">{translate('props.loop.settings.items')}</span>
+        <PropTip text={props.tip} />
       </label>
       <SegSwitch
         options={[
@@ -575,6 +578,18 @@ function ItemsSwitch(props: {
       />
     </div>
   );
+}
+
+// What a list's settings cannot show: code kept as written, or items of an unknown shape. A tooltip on the Items row, so nothing is appended.
+function listTip(
+  list: { readonly kept: boolean; readonly fields: readonly CatalogField[] | undefined; readonly source: LoopSource },
+  translate: Translator,
+): string | undefined {
+  const notes = [
+    ...(list.kept ? [translate('props.loop.note.kept')] : []),
+    ...(list.source.kind === 'list' && (list.fields === undefined || list.fields.length === 0) ? [translate('props.loop.note.unknownShape')] : []),
+  ];
+  return notes.length === 0 ? undefined : notes.join(' ');
 }
 
 function refusalText(reason: PickRefusal, translate: Translator): string {
@@ -602,6 +617,8 @@ function ListSettings(props: {
   readonly code: SectionCodeContext | undefined;
   readonly item: string | undefined;
   readonly picks: ListPicks | undefined;
+  /** Whether the list's own steps are kept as written, with what is set here applied after them. */
+  readonly kept: boolean;
   readonly onChange: (query: LoopQuery) => void;
 }) {
   const translate = useTranslate();
@@ -618,6 +635,7 @@ function ListSettings(props: {
       <ItemsSwitch
         current={selected ? 'selected' : 'dynamic'}
         selectedReason={props.picks === undefined && !selected ? refusalText('unknown', translate) : undefined}
+        tip={listTip({ kept: props.kept, fields: props.fields, source: query.source }, translate)}
         onPick={switchTo}
       />
       {selected ? (
@@ -687,7 +705,6 @@ function QuerySections(props: {
   readonly onChange: (query: LoopQuery) => void;
 }) {
   const { code } = props;
-  const translate = useTranslate();
   const filterCode = useSectionCode('filter', code);
   const sortCode = useSectionCode('sort', code);
   const limitCode = useSectionCode('limit', code);
@@ -714,9 +731,6 @@ function QuerySections(props: {
   const fields = withTypedFields(props.fields, props.query);
   return (
     <>
-      {typed !== undefined && (props.fields === undefined || props.fields.length === 0) && (
-        <div className="loop-lineage-note">{translate('props.loop.note.unknownShape')}</div>
-      )}
       {filterCode.editor ?? (
         <FilterSection
           typed={typed}
@@ -765,37 +779,11 @@ function noticeFor(result: LoopApplyResult, before: string | undefined, translat
   return result.restored ? { tone: 'info', text: translate('props.loop.notice.relinked') } : undefined;
 }
 
-function NoticeBanner(props: { readonly notice: Notice; readonly onDismiss: () => void }) {
-  const translate = useTranslate();
-  const { notice } = props;
-  return (
-    <div className={`loop-settings-notice ${notice.tone}`} role={notice.tone === 'info' ? 'status' : 'alert'}>
-      <span>{notice.text}</span>
-      <button
-        type="button"
-        className="loop-settings-remove"
-        aria-label={translate('props.loop.notice.dismiss')}
-        title={translate('props.loop.notice.dismiss')}
-        onClick={props.onDismiss}
-      >
-        <CloseIcon size={12} />
-      </button>
-    </div>
-  );
-}
-
-// An unlink warning stays until it is dismissed or the next change: it says
-// what was lost and how to get it back. Anything else fades on its own.
-function useNotice(): readonly [Notice | undefined, (notice: Notice | undefined) => void] {
-  const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  useEffect(() => {
-    if (notice === undefined || notice.tone === 'warning') {
-      return undefined;
-    }
-    const timer = setTimeout(() => setNotice(undefined), NOTICE_MS);
-    return () => clearTimeout(timer);
-  }, [notice]);
-  return [notice, setNotice];
+// Said through the toast stack, never as a row in the panel: a failure, what a change unlinked (with how to get it back), or that a switch relinked.
+function sayNotice(notice: Notice | undefined): void {
+  if (notice !== undefined) {
+    reportActionToast(notice.text, notice.tone, []);
+  }
 }
 
 // Read once for the source, then again with its fields' kinds, which settle
@@ -1092,18 +1080,18 @@ function currentOption(props: SourceRowProps, current: string, translate: Transl
 }
 
 // Where an options object's settings are saved.
-function OptionsNote(props: { readonly home: QueryHome }) {
+function OptionsDetails(props: { readonly home: QueryHome }) {
   const translate = useTranslate();
   const { formatList } = useFormat();
   const home = props.home;
   if (home.kind === 'chain') {
-    return <div className="loop-lineage-note">{translate('props.loop.details.chain', { list: home.list })}</div>;
+    return <LoopDetailsTip text={translate('props.loop.details.chain', { list: home.list })} />;
   }
   const bound =
     home.kind === 'options' ? LOOP_SETTINGS.filter((setting) => home.settings[setting].kind === 'prop').map((setting) => settingTitle(setting, translate)) : [];
   const saved = translate('props.loop.details.saved', { reader: home.reader });
   const text = bound.length === 0 ? saved : `${saved} ${translate('props.loop.details.defaults', { titles: formatList(bound, 'and') })}`;
-  return <div className="loop-lineage-note">{text}</div>;
+  return <LoopDetailsTip text={text} />;
 }
 
 function PartialNotice(props: { readonly onReplace: () => void }) {

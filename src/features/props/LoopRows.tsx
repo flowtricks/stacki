@@ -2,6 +2,8 @@
 // its add button, a closed filter or sort as a row, and the pop-up its editor
 // opens in, under the row (LoopSettings.tsx).
 
+import PropTip from './PropTip';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import Popup from '../../ui/Popup';
@@ -257,11 +259,7 @@ export function CodeBox(props: {
         onChange={setDraft}
         onCommit={commit}
       />
-      {problem !== undefined && (
-        <span className="loop-settings-code-problem" role="alert">
-          {problem}
-        </span>
-      )}
+      <ErrorToast message={problem} />
     </div>
   );
 }
@@ -284,6 +282,20 @@ export function EditorRow(props: { readonly label: string; readonly dot?: ReactN
  * code a list comes through. Folded under Details by default, so the panel
  * reads as controls; opened when someone wants to know.
  */
+// The Details row of a list whose explanation is one sentence: the row stays, and the words
+// are behind its "?" (hover or focus), so nothing is appended under it.
+export function LoopDetailsTip(props: { readonly text: string }) {
+  const translate = useTranslate();
+  return (
+    <div className="loop-lineage">
+      <div className="loop-lineage-toggle">
+        {translate('props.loop.rows.details')}
+        <PropTip text={props.text} />
+      </div>
+    </div>
+  );
+}
+
 export function LoopDetails(props: { readonly children: ReactNode }) {
   const translate = useTranslate();
   const [open, setOpen] = useState(false);
