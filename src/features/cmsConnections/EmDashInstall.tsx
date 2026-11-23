@@ -7,8 +7,11 @@
 // streamed output in a highlighted block and Cancel; the dialog cannot be closed from under it. A failure or a cancel
 // says in words what happened and lists the files that changed; nothing is reverted. Success is only what detection finds
 // after the run, which the dialog shows by re-reading the project.
+import { ErrorToast } from '../../ui/ErrorToast';
+import InfoHint from '../../ui/InfoHint';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useEffect, useRef, useState } from 'react';
-import { CheckIcon, WarningTriangleIcon } from '../../ui/Icons';
+import { CheckIcon } from '../../ui/Icons';
 import { EmDashCode } from './EmDashCode';
 import { ProgressRing } from '../../ui/ProgressRing';
 import { SkeletonRows } from '../../ui/Skeleton';
@@ -111,8 +114,8 @@ export function EmDashInstall({ projectPath, onDismiss, onInstalled, onRunningCh
     <section className="emdash-install" aria-label={translate('emdash.install.title')}>
       <h5 className="emdash-install-heading">{translate(headingKey(phase))}</h5>
       {phase.kind === 'planning' && <SkeletonRows count={2} />}
-      {phase.kind === 'planFailed' && <p className="emdash-install-problem">{translate('emdash.install.planFailed')}</p>}
-      {phase.kind === 'unavailable' && <p className="emdash-install-problem">{translate(REFUSAL_KEYS[phase.reason])}</p>}
+      {phase.kind === 'planFailed' && <ErrorToast message={translate('emdash.install.planFailed')} />}
+      {phase.kind === 'unavailable' && <ErrorToast message={translate(REFUSAL_KEYS[phase.reason])} />}
       {phase.kind === 'ready' && <Preview plan={phase.plan} onConfirm={() => start(phase.plan)} onDismiss={onDismiss} />}
       {phase.kind === 'running' && <Running log={phase.log} stopping={phase.stopping} onCancel={stop} />}
       {phase.kind === 'ended' && <Ended phase={phase} onRetry={() => setPhase({ kind: 'ready', plan: phase.plan })} />}
@@ -145,10 +148,7 @@ function Preview({ plan, onConfirm, onDismiss }: { readonly plan: Ready; readonl
     <>
       <p>{translate('emdash.install.intro')}</p>
       {plan.warnings.map((warning) => (
-        <p key={warning} className="emdash-install-warning">
-          <WarningTriangleIcon size={13} />
-          <span>{translate(WARNING_KEYS[warning])}</span>
-        </p>
+        <NoticeToast key={warning} message={translate(WARNING_KEYS[warning])} kind="warning" />
       ))}
       <p className="emdash-install-summary">
         {translate(plan.saveFirst ? 'emdash.install.summarySaving' : 'emdash.install.summary', { count: String(plan.files.length), manager: plan.manager })}
@@ -156,8 +156,10 @@ function Preview({ plan, onConfirm, onDismiss }: { readonly plan: Ready; readonl
       <details className="emdash-more">
         <summary>{translate('emdash.install.details')}</summary>
         <div className="emdash-more-body">
-          {plan.saveFirst && <p className="emdash-install-note">{translate('emdash.install.saveFirst')}</p>}
-          <h6>{translate('emdash.install.command')}</h6>
+          <h6>
+            {translate('emdash.install.command')}
+            {plan.saveFirst && <InfoHint text={translate('emdash.install.saveFirst')} />}
+          </h6>
           <EmDashCode text={plan.command} language="shell" label={translate('emdash.install.command')} />
           <h6>{translate('emdash.install.files')}</h6>
           <FileList files={plan.files} />
@@ -208,7 +210,7 @@ function Ended({ phase, onRetry }: { readonly phase: Extract<Phase, { readonly k
   const { result } = phase;
   return (
     <>
-      {result.kind === 'failed' && <p className="emdash-install-problem">{translate(FAILURE_KEYS[result.reason])}</p>}
+      <ErrorToast message={result.kind === 'failed' ? translate(FAILURE_KEYS[result.reason]) : undefined} />
       <ChangedFiles files={result.changedFiles} />
       <details className="emdash-more">
         <summary>{translate('emdash.install.log')}</summary>

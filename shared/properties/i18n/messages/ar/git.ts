@@ -96,7 +96,6 @@ export const messages = {
   'git.chip.initialize': 'تهيئة Git',
   'git.chip.initialized': 'تمت تهيئة مستودع git',
   'git.chip.pickedUp': 'تمت استعادة تغييراتك على {branch}',
-  'git.chip.reading': 'جارٍ قراءة المستودع…',
   'git.chip.savedFiles': {
     zero: 'لم تُحفظ أي ملفات',
     one: 'تم حفظ ملف واحد',

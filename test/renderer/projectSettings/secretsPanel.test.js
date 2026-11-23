@@ -30,6 +30,7 @@ esbuild.buildSync({
       "export { default as ProjectSettingsPanel } from './src/features/projectSettings/ProjectSettingsPanel';",
       "export { default as SecretsTab } from './src/features/projectSettings/SecretsTab';",
       "export { secretsCacheKey, secretsListingCache, prewarmSecretsListing } from './src/features/projectSettings/secretsCache';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
       "export { ConfirmHost } from './src/ui/ConfirmDialog';",
       "export { changeEnvFile, parseEnvFile, serializeEnvFile, envEntries, envInvalidLines } from './shared/properties/envFile';",
     ].join('\n'),
@@ -60,6 +61,7 @@ const SECRET = 'hunter2-secret';
 const OTHER = 'zzz-other-value';
 const panel = require(output);
 const React = require('react');
+const { installToastLog } = require('../../helpers/toastLog.js');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
 
@@ -160,7 +162,10 @@ const button = (label) => [...document.querySelectorAll('button')].find((candida
 const rowText = () => [...document.querySelectorAll('.secrets-row')].map((row) => row.textContent);
 
 let root;
+let toastLog;
 async function mount(projectPath = '/project') {
+  toastLog?.uninstall();
+  toastLog = installToastLog(panel.subscribeErrorToasts);
   root = createRoot(document.getElementById('root'));
   await act(async () =>
     root.render(React.createElement(React.Fragment, {}, React.createElement(panel.SecretsTab, { projectPath }), React.createElement(panel.ConfirmHost))),
@@ -169,6 +174,8 @@ async function mount(projectPath = '/project') {
 }
 async function unmount() {
   await act(async () => root.unmount());
+  toastLog?.uninstall();
+  toastLog = undefined;
 }
 function reset(initial, ignoreState = 'ignored') {
   text = initial;
@@ -239,8 +246,11 @@ test('editing validates the name beside the field and sends nothing', async () =
   await click(byLabel('Edit A'));
   await type(byLabel('Name'), 'B');
   await press(byLabel('Name'), 'Enter');
-  assert.match(document.body.textContent, /A secret with this name already exists\./);
+  assert.match(toastLog.messages().join('\n'), /A secret with this name already exists\./, 'the reason is a toast');
+  assert.ok(byLabel('Name').classList.contains('is-invalid'), 'the refused field takes the error tint');
+  assert.equal(document.querySelector('.secrets-problem') ?? undefined, undefined, 'no paragraph is added to the row');
   await type(byLabel('Name'), '1bad');
+  assert.ok(!byLabel('Name').classList.contains('is-invalid'), 'typing clears the tint');
   await press(byLabel('Name'), 'Enter');
   assert.match(document.body.textContent, /do not start with a number/);
   await type(byLabel('Name'), '');
@@ -573,12 +583,13 @@ test('a refresh that fails keeps the cached names and shows the error notice wit
     ['A', 'B'],
     'the names stay',
   );
-  assert.match(document.querySelector('.secrets-failure').textContent, /Cannot read \.env/);
-  assert.ok(button('Reload'));
+  assert.match(toastLog.messages().join('\n'), /Cannot read \.env/, 'the failure is a toast');
+  assert.equal(document.querySelector('.secrets-failure') ?? undefined, undefined, 'no notice paragraph is added to the panel');
+  assert.ok(button('Reload'), 'the toast carries Reload');
   assert.equal(document.querySelector('.ui-skeleton-rows') ?? undefined, undefined);
   window.avb.listSecrets = async () => ({ ok: true, value: listing() });
   await click(button('Reload'));
-  assert.equal(document.querySelector('.secrets-failure') ?? undefined, undefined, 'a good read clears the notice');
+  assert.deepEqual(toastLog.messages(), [], 'a good read withdraws the toast');
   await unmount();
 });
 
@@ -682,8 +693,10 @@ test('a name a later file sets again says which file dev uses', async () => {
   others.set('.env.development', 'A=dev\n');
   await mount('/overridden');
   const rows = rowText();
-  assert.match(rows[0], /Dev uses the value in \.env\.development/);
-  assert.ok(!rows[1].includes('Dev uses'), 'a name set only here has no note');
+  const names = [...document.querySelectorAll('.secrets-name')];
+  assert.match(names[0].title, /Dev uses the value in \.env\.development/);
+  assert.equal(names[1].title, '', 'a name set only here has no note');
+  assert.ok(!rows.join('').includes('Dev uses'), 'the note is a tooltip, not a paragraph in the row');
   assert.ok(!document.body.textContent.includes('local'), 'only the last overriding file is named');
   await unmount();
 });
@@ -697,9 +710,10 @@ test('.env.development is not offered for .gitignore, and its Git state is no wa
   assert.equal(button('Add to .gitignore') ?? undefined, undefined);
   ignore = 'tracked';
   await pick('.env.local');
+  const reported = toastLog.messages().length;
+  assert.match(toastLog.messages().join('\n'), /\.env\.local is committed to Git/, 'a tracked file is a warning toast');
   await pick('.env.development');
-  assert.ok(!document.body.textContent.includes('committed to Git'));
-  await pick('.env.local');
-  assert.match(document.body.textContent, /\.env\.local is committed to Git/);
+  assert.equal(toastLog.messages().length, reported, 'a development file reports nothing');
+  assert.ok(!document.getElementById('root').textContent.includes('committed to Git'), 'and the panel holds no warning paragraph');
   await unmount();
 });

@@ -13,6 +13,7 @@ import {
 } from '../../../shared/ipc/studioAuth';
 import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
+import TipAnchor from '../../ui/TipAnchor';
 import { CheckIcon, CopyIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
@@ -113,23 +114,25 @@ function FieldRow({ form, field }: { readonly form: SignInForm; readonly field: 
   const problem = form.problems.find((candidate) => candidate.field === field);
   const shown = form.attempted || problem?.code === 'customDomain';
   const list = field === 'allowedDomains' || field === 'allowedEmails';
+  const input = (
+    <input
+      type="text"
+      value={draftFieldValue(form.draft, field)}
+      placeholder={placeholder(form.draft.kind, field)}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoComplete="off"
+      aria-invalid={shown && problem !== undefined}
+      onChange={(event) => form.setField(field, event.currentTarget.value)}
+    />
+  );
   return (
     <div className="studio-auth-field" data-invalid={shown && problem !== undefined}>
       <label>
         <span>{translate(labelKey)}</span>
-        <input
-          type="text"
-          value={draftFieldValue(form.draft, field)}
-          placeholder={placeholder(form.draft.kind, field)}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          aria-invalid={shown && problem !== undefined}
-          onChange={(event) => form.setField(field, event.currentTarget.value)}
-        />
+        {list ? <TipAnchor text={translate('studioSetup.auth.field.listHint')}>{input}</TipAnchor> : input}
       </label>
-      {list && <small>{translate('studioSetup.auth.field.listHint')}</small>}
-      {shown && problem !== undefined && <small role="alert">{problemText(problem, translate)}</small>}
+      <ErrorToast message={shown && problem !== undefined ? problemText(problem, translate) : undefined} />
     </div>
   );
 }

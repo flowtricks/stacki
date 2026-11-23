@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': '空のツリー',
   'history.diff.firstParent': '最初の親と比較',
   'history.diff.label': 'ファイルの差分',
-  'history.diff.loading': '差分を読み込み中…',
   'history.diff.noTextChanges': 'このファイルにテキストの変更はありません。',
   'history.diff.restoreFile': 'ファイルを復元…',
   'history.error.diffUnreadable': 'このコミットの差分を読み込めませんでした。',

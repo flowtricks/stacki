@@ -83,7 +83,6 @@ export const messages = {
   'git.chip.initialize': '初始化 Git',
   'git.chip.initialized': '已初始化 git 儲存庫',
   'git.chip.pickedUp': '已在 {branch} 上取回你的變更',
-  'git.chip.reading': '正在讀取儲存庫…',
   'git.chip.savedFiles': { other: '已儲存 {count} 個檔案' },
   'git.chip.switched': '已切換到 {branch}',
   'git.chip.waiting': '位於 {branch}——你的變更在 {from} 上等候',

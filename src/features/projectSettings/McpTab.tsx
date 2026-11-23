@@ -20,6 +20,8 @@ import { ChevronDownIcon, ChevronRightIcon, CodeIcon, PlugIcon } from '../../ui/
 import ProviderLogo from '../../ui/ProviderLogo';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
 import InfoHint from '../../ui/InfoHint';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { reportActionToast } from '../../ui/errorNotices';
 import McpJsonView from './McpJsonView';
 import { AddServer } from './McpAddSection';
 import { McpCardsSkeleton } from './McpSkeleton';
@@ -61,7 +63,6 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
   const [jsonDirty, setJsonDirty] = useState(false);
   const [edit, setEdit] = useState<(ServerEdit & { readonly name: string }) | undefined>(undefined);
   const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
-  const [notice, setNotice] = useState<MessageKey | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [codexOpen, setCodexOpen] = useState(false);
 
@@ -97,7 +98,6 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
       setJsonDirty(false);
     }
     setFailure(undefined);
-    setNotice(undefined);
     setView(next);
   };
 
@@ -143,17 +143,13 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
     return (
       <div className="secrets mcp">
         {header}
-        <div className="secrets-note" role="alert">
-          <p>{translate(code === undefined ? 'settings.mcp.error.unreadable' : MCP_ERROR_KEYS[code])}</p>
-          <button type="button" className="ghost" onClick={listing.reload}>
-            {translate('settings.mcp.reload')}
-          </button>
-          {code === 'unreadable' && (
-            <button type="button" className="ghost" onClick={() => void pick('json')}>
-              {translate('settings.mcp.invalid.open')}
-            </button>
-          )}
-        </div>
+        <ErrorToast
+          message={translate(code === undefined ? 'settings.mcp.error.unreadable' : MCP_ERROR_KEYS[code])}
+          recovery={[
+            { label: translate('settings.mcp.reload'), run: listing.reload },
+            ...(code === 'unreadable' ? [{ label: translate('settings.mcp.invalid.open'), run: () => void pick('json') }] : []),
+          ]}
+        />
       </div>
     );
   }
@@ -162,7 +158,6 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
   const applied = (next: McpListing): void => {
     listing.replace(next);
     env.reload();
-    setNotice(undefined);
   };
   const reveal = async (name: string) => {
     const read = await revealMcpServer(projectPath, current.revision, name);
@@ -227,7 +222,7 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
     }
     try {
       await navigator.clipboard.writeText(copyText(name, config));
-      setNotice('settings.mcp.copied');
+      reportActionToast(translate('settings.mcp.copied'), 'success', []);
     } catch {
       setFailure('settings.mcp.error.copy');
     }
@@ -298,30 +293,24 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
   return (
     <div className="secrets mcp">
       {header}
-      {failure !== undefined && (
-        <div className="secrets-warning secrets-failure" role="alert">
-          <span>{translate(failure, DEFAULT_SECRETS_FILE_PARAMS)}</span>
-          {stale && (
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                setFailure(undefined);
-                setEdit(undefined);
-                listing.reload();
-                codex.reload();
-              }}
-            >
-              {translate('settings.mcp.reload')}
-            </button>
-          )}
-        </div>
-      )}
-      {notice !== undefined && (
-        <div className="secrets-warning" role="status">
-          <span>{translate(notice)}</span>
-        </div>
-      )}
+      <ErrorToast
+        message={failure === undefined ? undefined : translate(failure, DEFAULT_SECRETS_FILE_PARAMS)}
+        recovery={
+          stale
+            ? [
+                {
+                  label: translate('settings.mcp.reload'),
+                  run: () => {
+                    setFailure(undefined);
+                    setEdit(undefined);
+                    listing.reload();
+                    codex.reload();
+                  },
+                },
+              ]
+            : []
+        }
+      />
       <section className="mcp-section" aria-label={translate('settings.mcp.connected.title')}>
         <h4>{translate('settings.mcp.connected.title')}</h4>
         {current.servers.length === 0 ? (

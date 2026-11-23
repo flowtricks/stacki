@@ -145,15 +145,6 @@
   color: var(--text-faint);
   font-size: 11px;
 }
-.cms-connections .cms-payload-problem {
-  color: #ff9b92;
-}
-.cms-connections .cms-payload-live {
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: #3a3017;
-  color: #e6c76a;
-}
 .cms-payload-snippet {
   display: grid;
   gap: 8px;
@@ -325,29 +316,8 @@
   margin: 0;
   line-height: 1.4;
 }
-/* One compact line with an icon, on a warning tint. */
-.emdash-dialog-body .emdash-install-warning {
-  display: flex;
-  align-items: center;
-  gap: var(--emdash-gap-small);
-  padding: var(--emdash-gap-small) var(--emdash-gap);
-  border-radius: 6px;
-  background: #3a3017;
-  color: #e6c76a;
-}
-.emdash-install-warning > svg {
-  flex: none;
-}
-.emdash-dialog-body .emdash-install-problem {
-  color: #ff9b92;
-}
 .emdash-dialog-body .emdash-install-summary {
   color: var(--text-faint);
-}
-.emdash-dialog-body .emdash-install-note {
-  padding: var(--emdash-gap-small) var(--emdash-gap);
-  border-radius: 6px;
-  background: var(--bg-hover);
 }
 /* A disclosure is a plain row at the content edge; what opens under it is flush with it, and cards carry their own fill. */
 .emdash-more > summary {

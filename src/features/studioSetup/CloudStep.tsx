@@ -1,5 +1,6 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
+import TipAnchor from '../../ui/TipAnchor';
 import { useState } from 'react';
 import type { StudioStatus } from '../../../shared/ipc/studioSetup';
 import { openExternalURL } from '../../ipc/appBridge';
@@ -51,11 +52,12 @@ function AgentHandoff({ text }: { readonly text: string }) {
       <section className="studio-agent-card" aria-labelledby="studio-agent-title">
         <h4 id="studio-agent-title">{translate('studioSetup.cloud.agentTitle')}</h4>
         <p>{translate('studioSetup.cloud.agentIntro')}</p>
-        <button className="primary studio-copy-action" disabled={clipboard.status === 'copying'} onClick={() => void clipboard.copy()}>
-          {clipboard.status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
-          {clipboard.status === 'copied' ? translate('studioSetup.cloud.copiedInstructions') : translate('studioSetup.cloud.copyInstructions')}
-        </button>
-        <p className="studio-setup-note">{translate('studioSetup.cloud.agentNote')}</p>
+        <TipAnchor text={translate('studioSetup.cloud.agentNote')}>
+          <button className="primary studio-copy-action" disabled={clipboard.status === 'copying'} onClick={() => void clipboard.copy()}>
+            {clipboard.status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+            {clipboard.status === 'copied' ? translate('studioSetup.cloud.copiedInstructions') : translate('studioSetup.cloud.copyInstructions')}
+          </button>
+        </TipAnchor>
         {clipboard.status === 'copied' && (
           <span className="studio-command-status" role="status">
             {translate('studioSetup.cloud.copiedStatus')}

@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
+const { toastMessages } = require('../../helpers/toastCapture');
 const { repoPath, sourceSpecifier } = require('../../helpers/sources');
 
 test('Git controls stay open in the panel and preserve repository actions', async () => {
@@ -28,9 +29,11 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     bundle: true,
     format: 'cjs',
     platform: 'node',
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     logLevel: 'silent',
   });
+  globalThis.stackiCapturedToasts = [];
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   for (const key of ['window', 'document', 'HTMLElement', 'Element', 'Node']) {
     global[key] = key === 'window' ? dom.window : dom.window[key];
@@ -334,7 +337,12 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     assert.equal(button('Create').disabled, true);
     await fill('[aria-label="New branch name"]', 'main');
     assert.equal(button('Create').disabled, true);
-    assert.match(document.querySelector('.git-branch-editor .git-hint').textContent, /already exists/);
+    assert.equal(document.querySelector('[aria-label="New branch name"]').getAttribute('aria-invalid'), 'true');
+    assert.equal(document.querySelector('.git-branch-editor .git-hint') ?? undefined, undefined, 'no paragraph under the field');
+    await act(async () => {
+      document.querySelector('.git-branch-editor form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    });
+    assert.match(toastMessages(), /already exists/, 'Enter on a refused name says why once');
     await act(async () => {
       document.querySelector('.git-branch-editor form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     });

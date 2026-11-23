@@ -10,6 +10,7 @@ import { withReferencedMessage } from '../../../shared/core/i18n/referencedMessa
 import { deleteBranchAction, mergeBranchAction, tidyUp } from './gitActions';
 import { checkoutGitBranch, commitGitChanges, initializeGit, pullGitBranch, readGitStatus, resolveGitMerge } from './gitChipBridge';
 import { BranchIcon } from '../../ui/Icons';
+import { SkeletonRows } from '../../ui/Skeleton';
 import type { Conflict, ConflictChoices } from './gitConflictModel';
 import GitChipView from './GitChipView';
 import { buildCommitSubject } from './commitType';
@@ -127,11 +128,7 @@ export default function GitChip(props: GitChipProps) {
     translate,
   });
   if (!info) {
-    return (
-      <p className="history-note" role="status">
-        {translate('git.chip.reading')}
-      </p>
-    );
+    return <SkeletonRows count={1} />;
   }
   if (!info.isRepo) {
     return <InitializeGitChip projectPath={props.project.path} busy={action.busy ?? props.busy} runAction={action.runAction} translate={translate} />;

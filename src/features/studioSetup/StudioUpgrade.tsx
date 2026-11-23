@@ -4,6 +4,7 @@ import { assert } from '../../../shared/core/assert';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { CodeInline } from '../../ui/CodeBlock';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { CheckIcon } from '../../ui/Icons';
 import { Skeleton } from '../../ui/Skeleton';
 import InstallCommand, { STUDIO_CREATE_COMMAND } from './InstallCommand';
@@ -169,17 +170,11 @@ function UpgradeLine({ state, onRestore }: { readonly state: UpgradeState; reado
       );
     case 'failure':
       // Retry is the card's primary action, in the header; this line only says what went wrong.
-      return (
-        <p className="studio-upgrade-line studio-upgrade-error" role="alert">
-          {state.message}
-        </p>
-      );
+      return <ErrorToast message={state.message} />;
     case 'restoreFailure':
       return (
         <div className="studio-upgrade-row">
-          <p className="studio-upgrade-line studio-upgrade-error" role="alert">
-            {state.message}
-          </p>
+          <ErrorToast message={state.message} />
           <button type="button" onClick={onRestore}>
             {translate('studioSetup.upgrade.retry')}
           </button>

@@ -5,6 +5,8 @@
 import { useState } from 'react';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { CodeInline } from '../../ui/CodeBlock';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { useSettledMessage } from '../../ui/useSettledMessage';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
@@ -202,16 +204,14 @@ export function CommitTypeDetails({ control, disabled }: { readonly control: Com
   );
 }
 
-/** Why the typed scope can't be used, under the row that holds it. */
+// A pause long enough to mean the scope is finished, so a half-typed one is not reported.
+const SCOPE_SETTLE_MS = 900;
+
+/** Why the typed scope can't be used, said once as a toast rather than a row under the field. */
 export function CommitTypeScopeError({ control }: { readonly control: CommitTypeControl }) {
-  if (control.state.kind === 'ready') {
-    return undefined;
-  }
-  return (
-    <p className="hint-text git-commit-scope-error" role="alert">
-      {control.state.error}
-    </p>
-  );
+  // The scope field wears the error look while it is wrong (CommitTypeDetails); the words wait until typing rests.
+  const settled = useSettledMessage(control.state.kind === 'invalid' ? control.state.error : undefined, SCOPE_SETTLE_MS);
+  return <ErrorToast message={settled} />;
 }
 
 /** The subject the commit will carry, dim and monospaced. Hidden with no type: it would only echo the field. */

@@ -27,7 +27,10 @@ import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate
 import { pageDisplayLabel } from '../../lib/pageName';
 import { tooltipHost, useDelayedTooltip } from '../../ui/delayedTooltip';
 import { CopyIcon, FolderIcon, FolderPlusIcon, HomeIcon, TrashIcon } from '../../ui/Icons';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { reportErrorToast } from '../../ui/errorNotices';
 import Popup from '../../ui/Popup';
+import TipAnchor from '../../ui/TipAnchor';
 import Dropdown, { popupBox } from '../../ui/Dropdown';
 import { SkeletonRows } from '../../ui/Skeleton';
 import './pageSettings.css';
@@ -90,11 +93,7 @@ export function PageSettingsDialog(props: PageSettingsDialogProps) {
           </div>
           <div className="page-settings-body">
             {inSections(model.step) ? <SettingsSections model={model} props={props} /> : <ConfirmStep model={model} props={props} />}
-            {model.problem !== undefined && (
-              <div className="page-settings-problem" role="alert">
-                {model.problem}
-              </div>
-            )}
+            <ErrorToast message={model.problem} />
           </div>
         </>
       )}
@@ -278,11 +277,12 @@ function HomeBadge() {
   const translate = useTranslate();
   return (
     <div className="page-settings-home">
-      <span className="page-settings-badge">
-        <HomeIcon size={12} />
-        {translate('pages.settings.homeBadge')}
-      </span>
-      <span className="page-settings-note">{translate('pages.settings.home.isHome')}</span>
+      <TipAnchor text={translate('pages.settings.home.isHome')}>
+        <span className="page-settings-badge">
+          <HomeIcon size={12} />
+          {translate('pages.settings.homeBadge')}
+        </span>
+      </TipAnchor>
     </div>
   );
 }
@@ -304,6 +304,7 @@ function UrlNameField({ model, props }: { readonly model: Model; readonly props:
   const [made, setMade] = useState<string | undefined>(undefined);
   const anchor = useRef<HTMLDivElement>(null);
   const justMade = useRef<string | undefined>(undefined);
+  const toasted = useRef<string | undefined>(undefined);
   const known = made === undefined ? props.folders : [...props.folders, made];
   const inventory = { pages: props.pages.map((page) => page.name), folders: known };
   // A folder made in this same gesture is not in `known` until the next render: it is checked as known already.
@@ -317,7 +318,36 @@ function UrlNameField({ model, props }: { readonly model: Model; readonly props:
     if (next.kind === 'valid' && props.allowed.rename && !model.busy) {
       void model.begin({ kind: 'rename', to: next.change.to });
     }
+    // Committing a refused name says why once; typing toward a valid one stays quiet, the field's error look shows the state.
+    // Enter and then leaving the field commit the same text twice: the reason is said once per text.
+    const said = `${typed}\n${chosen}`;
+    if (next.kind === 'invalid' && toasted.current !== said) {
+      toasted.current = said;
+      reportErrorToast(translateDescribed(next.problem));
+    }
+    if (next.kind === 'valid') {
+      toasted.current = undefined;
+    }
   };
+  const field = (
+    <input
+      id={id}
+      value={dynamic ? original : name}
+      readOnly={dynamic}
+      maxLength={200}
+      spellCheck={false}
+      disabled={!props.allowed.rename || model.busy}
+      aria-invalid={current.kind === 'invalid'}
+      onChange={(event) => setName(event.currentTarget.value)}
+      onBlur={() => offer(name, folder)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          offer(name, folder);
+        }
+      }}
+    />
+  );
   const revert = () => {
     setName(original);
     setFolder(originalFolder);
@@ -334,30 +364,7 @@ function UrlNameField({ model, props }: { readonly model: Model; readonly props:
     <div className="page-settings-general" ref={anchor}>
       <div className="props-field">
         <label htmlFor={id}>{translate('pages.rename.urlName')}</label>
-        <input
-          id={id}
-          value={dynamic ? original : name}
-          readOnly={dynamic}
-          maxLength={200}
-          spellCheck={false}
-          disabled={!props.allowed.rename || model.busy}
-          aria-invalid={current.kind === 'invalid'}
-          aria-describedby={id + '-status'}
-          onChange={(event) => setName(event.currentTarget.value)}
-          onBlur={() => offer(name, folder)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              offer(name, folder);
-            }
-          }}
-        />
-        {dynamic && <div className="page-settings-note">{translate('pages.settings.slug.dynamic')}</div>}
-        {current.kind === 'invalid' && (
-          <div id={id + '-status'} className="page-rename-error" role="status">
-            {translateDescribed(current.problem)}
-          </div>
-        )}
+        {dynamic ? <TipAnchor text={translate('pages.settings.slug.dynamic')}>{field}</TipAnchor> : field}
       </div>
       <div className="props-field">
         <label>{translate('pages.settings.folder')}</label>

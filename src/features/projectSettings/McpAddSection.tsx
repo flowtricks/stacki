@@ -14,6 +14,7 @@ import { moveLiteralsToSecrets } from '../../../shared/properties/mcpSecrets';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { ChevronLeftIcon, HideIcon, PreviewIcon } from '../../ui/Icons';
 import ProviderLogo from '../../ui/ProviderLogo';
 import InfoHint from '../../ui/InfoHint';
@@ -134,7 +135,13 @@ function ProviderForm({
       </div>
       <label className="mcp-field">
         <span>{translate('settings.mcp.add.name')}</span>
-        <input className="secrets-input" value={name} spellCheck={false} autoComplete="off" onChange={(event) => setName(event.target.value)} />
+        <input
+          className={`secrets-input${problem === undefined ? '' : ' is-invalid'}`}
+          value={name}
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(event) => setName(event.target.value)}
+        />
       </label>
       {provider.options.map((option) => (
         <label className="mcp-field" key={option.id}>
@@ -154,7 +161,10 @@ function ProviderForm({
         const visible = shown.has(secret.name);
         return (
           <div className="mcp-field" key={secret.name}>
-            <span>{translate('settings.mcp.add.secret', { name: secret.name })}</span>
+            <span>
+              {translate('settings.mcp.add.secret', { name: secret.name })}
+              <InfoHint text={translate('settings.mcp.add.secret.note')} />
+            </span>
             <div className="mcp-pair mcp-pair-secret">
               <input
                 className="secrets-input"
@@ -190,15 +200,10 @@ function ProviderForm({
                 {visible ? <HideIcon size={14} /> : <PreviewIcon size={14} />}
               </button>
             </div>
-            <span className="secrets-hint">{translate('settings.mcp.add.secret.note')}</span>
           </div>
         );
       })}
-      {problem !== undefined && (
-        <span className="secrets-hint secrets-problem" role="alert">
-          {translate(problem, DEFAULT_SECRETS_FILE_PARAMS)}
-        </span>
-      )}
+      <ErrorToast message={problem === undefined ? undefined : translate(problem, DEFAULT_SECRETS_FILE_PARAMS)} />
       <div className="mcp-form-actions">
         <button type="button" className="primary" disabled={busy} onClick={() => void submit()}>
           {translate('settings.mcp.add.submit')}
@@ -223,6 +228,8 @@ function PasteRow({ projectPath, listing, envNames, onAdded, onFailure, onPick }
   const [nameOverride, setNameOverride] = useState<string | undefined>(undefined);
   const [problem, setProblem] = useState<MessageKey | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  // A half-typed command is not an error yet: its reason is a toast once the field is left or Enter is pressed.
+  const [committed, setCommitted] = useState(false);
   const parsed = useMemo(() => (pasted.trim().length === 0 ? undefined : parseMcpCommand(pasted)), [pasted]);
   const name = nameOverride ?? (parsed?.ok === true ? parsed.value.name : '');
   const taken = listing.servers.map((server) => server.name);
@@ -231,6 +238,15 @@ function PasteRow({ projectPath, listing, envNames, onAdded, onFailure, onPick }
     [parsed, name, envNames],
   );
 
+  const previewHints: readonly string[] = [
+    ...(parsed?.ok === true && parsed.value.scope !== undefined && parsed.value.scope !== 'project'
+      ? [translate(parsed.value.scope === 'user' ? 'settings.mcp.custom.scopeUser' : 'settings.mcp.custom.scopeLocal')]
+      : []),
+    ...(plan !== undefined && plan.secrets.length > 0
+      ? [translate('settings.mcp.custom.moves', { names: plan.secrets.map((secret) => secret.name).join(', ') })]
+      : []),
+    ...(plan !== undefined && plan.leftLiteral.length > 0 ? [translate('settings.mcp.custom.leftLiteral', { names: plan.leftLiteral.join(', ') })] : []),
+  ];
   const confirm = async (): Promise<void> => {
     if (parsed?.ok !== true || plan === undefined || busy) {
       return;
@@ -285,7 +301,7 @@ function PasteRow({ projectPath, listing, envNames, onAdded, onFailure, onPick }
         />
         <input
           id="mcp-paste"
-          className="mcp-add-input"
+          className={`mcp-add-input${committed && parsed?.ok === false ? ' is-invalid' : ''}`}
           aria-label={translate('settings.mcp.custom.label')}
           placeholder={translate('settings.mcp.add.paste.placeholder')}
           value={pasted}
@@ -295,10 +311,13 @@ function PasteRow({ projectPath, listing, envNames, onAdded, onFailure, onPick }
             setPasted(event.target.value);
             setNameOverride(undefined);
             setProblem(undefined);
+            setCommitted(false);
           }}
+          onBlur={() => setCommitted(true)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
+              setCommitted(true);
               void confirm();
             }
           }}
@@ -308,11 +327,9 @@ function PasteRow({ projectPath, listing, envNames, onAdded, onFailure, onPick }
           {translate('settings.mcp.add.submit')}
         </button>
       </div>
-      {parsed?.ok === false && (
-        <span className="secrets-hint secrets-problem" role="alert">
-          {translate(PASTE_PROBLEM_KEYS[parsed.error.code], { detail: parsed.error.detail ?? '' })}
-        </span>
-      )}
+      <ErrorToast
+        message={parsed?.ok === false && committed ? translate(PASTE_PROBLEM_KEYS[parsed.error.code], { detail: parsed.error.detail ?? '' }) : undefined}
+      />
       {parsed?.ok === true && plan !== undefined && (
         <div className="mcp-preview">
           <ProviderLogo id={MCP_PROVIDERS.find((entry) => entry.id === name.toLowerCase())?.id} name={name.length > 0 ? name : '?'} size={20} />
@@ -325,22 +342,16 @@ function PasteRow({ projectPath, listing, envNames, onAdded, onFailure, onPick }
           </p>
           <label className="mcp-field">
             <span>{translate('settings.mcp.custom.name')}</span>
-            <input className="secrets-input" value={name} spellCheck={false} autoComplete="off" onChange={(event) => setNameOverride(event.target.value)} />
+            <input
+              className={`secrets-input${problem === undefined ? '' : ' is-invalid'}`}
+              value={name}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setNameOverride(event.target.value)}
+            />
           </label>
-          {parsed.value.scope !== undefined && parsed.value.scope !== 'project' && (
-            <p className="secrets-hint">{translate(parsed.value.scope === 'user' ? 'settings.mcp.custom.scopeUser' : 'settings.mcp.custom.scopeLocal')}</p>
-          )}
-          {plan.secrets.length > 0 && (
-            <p className="secrets-hint">{translate('settings.mcp.custom.moves', { names: plan.secrets.map((secret) => secret.name).join(', ') })}</p>
-          )}
-          {plan.leftLiteral.length > 0 && (
-            <p className="secrets-hint">{translate('settings.mcp.custom.leftLiteral', { names: plan.leftLiteral.join(', ') })}</p>
-          )}
-          {problem !== undefined && (
-            <span className="secrets-hint secrets-problem" role="alert">
-              {translate(problem, DEFAULT_SECRETS_FILE_PARAMS)}
-            </span>
-          )}
+          {previewHints.length > 0 && <InfoHint text={previewHints.join(' ')} />}
+          <ErrorToast message={problem === undefined ? undefined : translate(problem, DEFAULT_SECRETS_FILE_PARAMS)} />
         </div>
       )}
     </div>

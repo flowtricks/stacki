@@ -7,7 +7,8 @@
 // EmDash the content types, missing pieces and the customer-content guide. The big inline card is gone.
 // Adding EmDash: nothing runs until the confirm button; the run names the command that was shown, once; it shows progress,
 // live output and Cancel and cannot be closed from under; a failure says one plain sentence and lists changed files; after
-// success the project is re-read and the button's mark follows. Locale catalogs hold the same keys.
+// success the project is re-read and the button's mark follows. Locale catalogs hold the same keys. Failures, warnings and the
+// save-first note never append a paragraph to the dialog: failures and warnings are toasts, the note is the command's (i) tip.
 // Method: bundle the real CmsConnections and EmDashButton with esbuild, mount them in jsdom over a fake preload bridge
 // (queued answers for `emdash:project`, `emdash:installPlan` and `emdash:install`, a recorded Cancel, a pushable log
 // stream), drive the dialog with dispatched events, and read the DOM. Waits go through test/helpers/waitFor.js.
@@ -29,7 +30,8 @@ const bundled = esbuild.build({
   stdin: {
     contents: `export { CmsConnections } from './src/features/cmsConnections/CmsConnections';
 export { EmDashButton } from './src/features/cmsConnections/EmDashButton';
-export { EmDashIcon } from './src/ui/Icons';`,
+export { EmDashIcon } from './src/ui/Icons';
+export { subscribeErrorToasts } from './src/ui/errorNotices';`,
     resolveDir: repoPath('.'),
     loader: 'ts',
   },
@@ -155,7 +157,16 @@ async function mount(element) {
 const mountRow = async () => {
   await mount(React.createElement(component.CmsConnections, { projectPath: '/project' }));
 };
+// Every toast the app raised, in order: the dialog's failures and warnings are said there, never as a paragraph in the dialog.
+const toasts = [];
+let unsubscribe;
 test.beforeEach(() => {
+  toasts.length = 0;
+  unsubscribe?.();
+  unsubscribe = component.subscribeErrorToasts(
+    (notice) => toasts.push(notice),
+    () => undefined,
+  );
   answer = async () => ({ kind: 'absent' });
   planAnswer = async () => READY_PLAN;
   installAnswer = async () => ({ kind: 'failed', reason: 'other', changedFiles: [] });
@@ -291,28 +302,29 @@ test('a project with unsaved work says it will be saved first, in one plain line
   assert.match(popup().querySelector('.emdash-install-summary').textContent, /Saves your changes · files: 4/, 'the one-line summary says so');
   assert.ok(popup().querySelector('.emdash-install > .emdash-install-note') === null, 'no extra line outside the disclosure');
   assert.equal(detailsNamed('See what will change').firstElementChild.nextElementSibling.className, 'emdash-more-body');
+  assert.ok(detailsNamed('See what will change').querySelector('.emdash-install-note') === null, 'the note is not a paragraph');
   assert.match(
-    detailsNamed('See what will change').querySelector('.emdash-install-note').textContent,
+    detailsNamed('See what will change').querySelector('.emdash-more-body h6 .info-hint-text').textContent,
     /Saves your current changes first, as a commit called “Before Adding EmDash”/,
+    'it is the command heading’s (i) tip',
   );
-  assert.equal(detailsNamed('See what will change').querySelector('.emdash-more-body').firstElementChild.className, 'emdash-install-note', 'its first item');
   assert.equal(buttonNamed('Add EmDash to this project').disabled, false);
   await act(async () => key(document, 'Escape'));
   await popupGone('closed');
   planAnswer = async () => READY_PLAN;
   await openLoaded();
-  assert.ok(popup().querySelector('.emdash-install-note') === null, 'a clean tree has no such line');
+  assert.ok(popup().querySelector('.emdash-more-body h6 .info-hint-text') === null, 'a clean tree has no such tip');
   assert.match(popup().querySelector('.emdash-install-summary').textContent, /^Files: 4 · runs npm$/);
 });
 
-test('another adapter is one compact line with an icon', async () => {
+test('another adapter is a warning toast, not a line in the dialog', async () => {
   planAnswer = async () => ({ ...READY_PLAN, warnings: ['otherAdapter'] });
   await mountRow();
   await openLoaded();
-  const notes = popup().querySelectorAll('.emdash-install-warning');
-  assert.equal(notes.length, 1);
-  assert.ok(notes[0].querySelector('svg'));
-  assert.match(notes[0].textContent, /You already use another adapter/);
+  assert.ok(popup().querySelector('.emdash-install-warning') === null, 'nothing is appended to the dialog');
+  const warnings = toasts.filter((notice) => notice.kind === 'warning');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0].message, /You already use another adapter/);
 });
 
 test('a failed save names itself and installs nothing', async () => {
@@ -321,7 +333,9 @@ test('a failed save names itself and installs nothing', async () => {
   await openLoaded();
   await act(async () => buttonNamed('Add EmDash to this project').dispatchEvent(event('click')));
   await settle();
-  assert.match(popup().querySelector('.emdash-install-problem').textContent, /Could not save your changes first, so nothing was installed\./);
+  assert.ok(popup().querySelector('.emdash-install-problem') === null, 'no paragraph in the dialog');
+  assert.match(toasts.at(-1).message, /Could not save your changes first, so nothing was installed\./);
+  assert.equal(toasts.at(-1).kind, 'error');
   assert.ok(buttonNamed('Try again'));
 });
 
@@ -374,7 +388,8 @@ test('a failure is one plain sentence with the log behind a disclosure, the chan
   await openLoaded();
   await act(async () => buttonNamed('Add EmDash to this project').dispatchEvent(event('click')));
   await settle();
-  assert.match(popup().querySelector('.emdash-install-problem').textContent, /Could not reach the package registry\. Check your connection\./);
+  assert.ok(popup().querySelector('.emdash-install-problem') === null, 'no paragraph in the dialog');
+  assert.match(toasts.at(-1).message, /Could not reach the package registry\. Check your connection\./);
   assert.match(popup().textContent, /No files changed\./);
   assert.equal(detailsNamed('Show log').open, false);
   await act(async () => buttonNamed('Try again').dispatchEvent(event('click')));
@@ -423,7 +438,7 @@ test('success: a short header, a tight checklist, one primary button, and everyt
   assert.match(details, /Your site now renders pages on request\./);
   assert.match(details, /Changed files \(2\)/);
   assert.ok(detailsNamed('Details').querySelector('.emdash-collection'), 'the content types are in Details');
-  assert.ok(popup().querySelector('.emdash-install-warning') === null, 'no warning when nothing needs doing');
+  assert.equal(toasts.filter((notice) => notice.kind === 'warning').length, 0, 'no warning when nothing needs doing');
   assert.doesNotMatch(popup().textContent.replace(details, ''), /dev server|Run the dev server|run the dev server/i);
   await act(async () => primary[0].dispatchEvent(event('click')));
   assert.deepEqual(opened, ['http://127.0.0.1:4321/_emdash/admin/'], 'opens the admin on the preview’s own address');
@@ -451,11 +466,9 @@ test('success that still needs the config: the remaining steps are named, never 
   await settle();
   assert.match(popup().textContent, /Packages installed\. Still to do:/);
   assert.doesNotMatch(popup().textContent, /EmDash is ready/);
-  assert.match(
-    popup().querySelector('.emdash-install-warning').textContent,
-    /The preview did not restart\. Reopen the project\./,
-    'one short line, with an icon',
-  );
+  assert.ok(popup().querySelector('.emdash-install-warning') === null, 'nothing is appended to the dialog');
+  assert.match(toasts.at(-1).message, /The preview did not restart\. Reopen the project\./, 'one warning toast');
+  assert.equal(toasts.at(-1).kind, 'warning');
   assert.ok(buttonNamed('Open EmDash setup') === undefined, 'no admin button without a preview that answered');
   const pending = [...popup().querySelectorAll('.emdash-checklist > li[data-done="false"]')].map((item) => item.textContent.trim());
   assert.ok(
@@ -467,11 +480,12 @@ test('success that still needs the config: the remaining steps are named, never 
   assert.match(popup().textContent, /Add the emdash\(\) integration/, 'detection still lists the missing integration');
 });
 
-test('a plan that cannot be made says why in one line and offers no way to run', async () => {
+test('a plan that cannot be made says why in a toast and offers no way to run', async () => {
   planAnswer = async () => ({ kind: 'unavailable', reason: 'astroTooOld' });
   await mountRow();
   await openLoaded();
-  assert.match(popup().querySelector('.emdash-install-problem').textContent, /EmDash needs Astro 6 or later\./);
+  assert.ok(popup().querySelector('.emdash-install-problem') === null, 'no paragraph in the dialog');
+  assert.match(toasts.at(-1).message, /EmDash needs Astro 6 or later\./);
   assert.ok(buttonNamed('Add EmDash to this project') === undefined);
 });
 

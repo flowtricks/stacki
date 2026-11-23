@@ -5,8 +5,9 @@
 //
 // What it shows: the project as detected (not set up, or the content types, missing pieces and the preview guide), and for a
 // project without EmDash the section that adds it to this project (EmDashInstall) beside the starter command for a new site.
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useState } from 'react';
-import { CloseIcon, EmDashIcon, WarningTriangleIcon } from '../../ui/Icons';
+import { CloseIcon, EmDashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import { SkeletonRows } from '../../ui/Skeleton';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -100,12 +101,7 @@ function Outcome({ installed, projectPath }: { readonly installed: EmDashInstall
         />
         {installed.databaseReady && <Check done label={translate('emdash.install.check.database')} />}
       </ul>
-      {installed.preview === 'failed' && (
-        <p className="emdash-install-warning">
-          <WarningTriangleIcon size={13} />
-          <span>{translate('emdash.install.previewFailed')}</span>
-        </p>
-      )}
+      {installed.preview === 'failed' && <NoticeToast message={translate('emdash.install.previewFailed')} kind="warning" />}
       {installed.preview !== 'failed' && (
         <EmDashAdminButton projectPath={projectPath} address={installed.adminUrl} label={translate('emdash.install.openSetup')} />
       )}

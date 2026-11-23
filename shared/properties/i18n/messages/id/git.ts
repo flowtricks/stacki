@@ -85,7 +85,6 @@ export const messages = {
   'git.chip.initialize': 'Inisialisasi Git',
   'git.chip.initialized': 'Repositori git diinisialisasi',
   'git.chip.pickedUp': 'Perubahan Anda diambil kembali di {branch}',
-  'git.chip.reading': 'Membaca repositori…',
   'git.chip.savedFiles': { other: '{count} file disimpan' },
   'git.chip.switched': 'Beralih ke {branch}',
   'git.chip.waiting': 'Di {branch} — perubahan Anda menunggu di {from}',

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, 
 import { assert } from '../../../shared/core/assert';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { CodeBlock } from '../../ui/CodeBlock';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
 import { CloseIcon } from '../../ui/Icons';
@@ -96,11 +97,7 @@ export default function InstructionsView({
         {session?.conflict !== undefined && <ConflictBar conflict={session.conflict} onChoose={document.resolve} />}
         <div className="cms-detail-body">
           {document.load.kind === 'loading' && <div className="props-empty">{translate('instructionsPanel.view.opening', { file })}</div>}
-          {document.load.kind === 'error' && (
-            <div className="props-empty" role="alert">
-              {document.load.message}
-            </div>
-          )}
+          {document.load.kind === 'error' && <ErrorToast message={document.load.message} />}
           {document.load.kind === 'ready' && session !== undefined && (
             <>
               {mode === 'source' ? (
@@ -143,9 +140,11 @@ function SaveStatus(props: { readonly session: DocumentSession | undefined; read
     return <span className="remote-cms-times">{translate('instructionsPanel.view.readOnly')}</span>;
   }
   if (props.save.kind === 'error') {
+    // The failure is a toast; the status stays in place, at the same height, and says the text is still unsaved.
     return (
-      <span className="remote-cms-times instructions-status-error" role="alert">
-        {props.save.message}
+      <span className="remote-cms-times instructions-status-error">
+        <ErrorToast message={props.save.message} />
+        {translate('instructionsPanel.view.edited')}
       </span>
     );
   }

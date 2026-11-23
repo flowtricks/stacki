@@ -32,6 +32,7 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown from '../../ui/Dropdown';
+import InfoHint from '../../ui/InfoHint';
 import { ErrorToast } from '../../ui/ErrorToast';
 import ExprInput from '../../ui/ExprInput';
 import { ChevronLeftIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
@@ -113,7 +114,7 @@ function FileFieldsBody(props: {
   switch (props.state.kind) {
     case 'loading':
       return (
-        <div className="remote-cms-note">
+        <div className="remote-cms-loading">
           <SkeletonRows count={4} />
         </div>
       );
@@ -314,10 +315,12 @@ function FieldList(props: {
   });
   return (
     <section className="remote-cms-settings-section">
-      <h3 className="remote-cms-settings-label">{translate('cmsRemote.settings.fields')}</h3>
-      <p className="remote-cms-settings-hint">{translate('cms.fileFields.fieldsNote', { path: `src/${props.fileRel}` })}</p>
+      <h3 className="remote-cms-settings-label">
+        {translate('cmsRemote.settings.fields')}
+        <InfoHint text={translate('cms.fileFields.fieldsNote', { path: `src/${props.fileRel}` })} />
+      </h3>
       <div className="remote-cms-settings-fields">
-        {props.listing.fields.length === 0 && <p className="remote-cms-settings-hint">{translate('cms.fileFields.noFields')}</p>}
+        {props.listing.fields.length === 0 && <p className="remote-cms-settings-empty">{translate('cms.fileFields.noFields')}</p>}
         {fields.map((field, index) => (
           <FieldRow
             key={field.name}
@@ -433,9 +436,11 @@ function NewFieldEditor(props: {
       }
     });
   };
-  const message = refusal !== undefined ? refusalText(refusal.refusal, refusal.name, translate) : check.kind === 'problem' ? check.message : undefined;
+  // A refusal is said once, in a toast; a draft that cannot be added tints its fields (a fill) while it stays that way.
+  const refused = refusal !== undefined ? refusalText(refusal.refusal, refusal.name, translate) : undefined;
   return (
-    <div className="remote-cms-settings-editor">
+    <div className={`remote-cms-settings-editor${check.kind === 'problem' ? ' is-invalid' : ''}`}>
+      <ErrorToast message={refused} />
       <div className="remote-cms-settings-editor-head">
         <KindIcon kind={kind} />
         <span className="remote-cms-settings-name">
@@ -497,7 +502,6 @@ function NewFieldEditor(props: {
           <CodeBlock className="cms-file-fields-preview" text={statement} language={languageOf(props.listing)} />
         </div>
       )}
-      {message !== undefined && <p className="cms-file-fields-error">{message}</p>}
     </div>
   );
 }

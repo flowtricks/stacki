@@ -165,11 +165,11 @@ function HistoryDialog(
           <div className="modal-body remote-cms-history-body">
             {error && <ErrorToast message={error} />}
             {revisions === undefined && (
-              <div className="remote-cms-note">
+              <div className="remote-cms-loading">
                 <SkeletonRows count={3} />
               </div>
             )}
-            {revisions?.length === 0 && !error && <p className="remote-cms-note">{translate('cmsRemote.actions.noHistory')}</p>}
+            {revisions?.length === 0 && !error && <p className="remote-cms-empty">{translate('cmsRemote.actions.noHistory')}</p>}
             {revisions?.map((revision, index) => (
               <RevisionRow key={revision.id} revision={revision} current={index === 0} onRestore={() => void restore(revision, close)} />
             ))}

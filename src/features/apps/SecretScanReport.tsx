@@ -3,6 +3,7 @@
 // no override. Each one names its file and line with a masked excerpt, and the
 // report shows how to move the key into an app setting, which every installer
 // fills in with their own. "I've removed it, rescan" reads the files again.
+import { ErrorToast } from '../../ui/ErrorToast';
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -39,11 +40,7 @@ export function SecretScanReport({ load, onRescan }: { readonly load: ScanLoad; 
         </p>
       );
     case 'failed':
-      return (
-        <ScanBlocked title={translate('apps.scan.couldNotRun')} onRescan={onRescan}>
-          {translateDescribed(load)}
-        </ScanBlocked>
-      );
+      return <ScanBlocked title={translate('apps.scan.couldNotRun')} onRescan={onRescan} message={translateDescribed(load)} />;
     case 'ready':
       return <ScanResult scan={load.scan} onRescan={onRescan} />;
     default: {
@@ -166,14 +163,16 @@ function ScanResult({ scan, onRescan }: { readonly scan: AppSecretScan; readonly
       );
     case 'too-large':
       return (
-        <ScanBlocked title={translate('apps.scan.tooLarge')} onRescan={onRescan}>
-          {translate('apps.scan.cannotFinish', { reason: translateDescribed({ message: scan.reason, messageRef: scan.reasonRef }) })}
-        </ScanBlocked>
+        <ScanBlocked
+          title={translate('apps.scan.tooLarge')}
+          onRescan={onRescan}
+          message={translate('apps.scan.cannotFinish', { reason: translateDescribed({ message: scan.reason, messageRef: scan.reasonRef }) })}
+        />
       );
     case 'found': {
       assert(scan.findings.length > 0, 'A scan that found something lists it');
       return (
-        <div className="apps-scan apps-scan-found" role="alert">
+        <div className="apps-scan apps-scan-found">
           <p className="apps-scan-title">
             <WarningTriangleIcon size={14} />{' '}
             {translate('apps.scan.foundTitle', { count: scan.findings.length, total: `${scan.findings.length}${scan.truncated ? '+' : ''}` })}
@@ -224,14 +223,14 @@ function ScanFindings({ scan }: { readonly scan: Extract<AppSecretScan, { readon
   );
 }
 
-function ScanBlocked(props: { readonly title: string; readonly onRescan: () => void; readonly children: ReactNode }) {
+function ScanBlocked(props: { readonly title: string; readonly onRescan: () => void; readonly message: string }) {
   const translate = useTranslate();
   return (
-    <div className="apps-scan apps-scan-found" role="alert">
+    <div className="apps-scan apps-scan-found">
+      <ErrorToast message={props.message} />
       <p className="apps-scan-title">
         <WarningTriangleIcon size={14} /> {props.title}
       </p>
-      <p className="apps-note">{props.children}</p>
       <button type="button" className="apps-button" onClick={props.onRescan}>
         <RefreshIcon size={12} /> {translate('apps.scan.again')}
       </button>

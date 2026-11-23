@@ -1,5 +1,6 @@
 // What the connected-CMS panel and view share: one load per subject with its
 // failure in place, the open document, and each CMS's logo.
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import type { RemoteCache } from './remoteCmsCache';
 import { AstroIcon, CmsIcon, PayloadIcon, SanityIcon } from '../../ui/Icons';
@@ -74,15 +75,15 @@ export function Loading<T>(props: {
   const translate = useTranslate();
   if (props.result === undefined) {
     return (
-      <div className="remote-cms-note">
+      <div className="remote-cms-loading">
         <SkeletonRows count={4} />
       </div>
     );
   }
   if (!props.result.ok) {
     return (
-      <div className="remote-cms-note">
-        <p className="remote-cms-failure">{props.result.message}</p>
+      <div className="remote-cms-loading">
+        <ErrorToast message={props.result.message} />
         <button type="button" onClick={props.retry}>
           {translate('cmsRemote.common.tryAgain')}
         </button>

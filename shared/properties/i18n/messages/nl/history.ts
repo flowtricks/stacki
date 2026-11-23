@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'Lege tree',
   'history.diff.firstParent': 'vergeleken met eerste parent',
   'history.diff.label': 'Bestandsdiff',
-  'history.diff.loading': 'Diff laden…',
   'history.diff.noTextChanges': 'Geen tekstwijzigingen in dit bestand.',
   'history.diff.restoreFile': 'Bestand herstellen…',
   'history.error.diffUnreadable': 'De diff van deze commit kon niet worden gelezen.',

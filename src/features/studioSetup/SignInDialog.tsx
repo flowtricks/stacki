@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { StudioAuthConfig, StudioAuthKind } from '../../../shared/ipc/studioAuth';
 import SignInFormView, { useSignInForm } from './SignInForm';
@@ -47,7 +48,7 @@ export default function SignInDialog({ mode, initialKind, onConfirm, onClose }: 
           </header>
           <section className="studio-setup-content studio-auth-content">
             <p>{translate('studioSetup.auth.intro')}</p>
-            {mode === 'change' && <p className="studio-auth-warning">{translate('studioSetup.auth.change.warning')}</p>}
+            <NoticeToast message={mode === 'change' ? translate('studioSetup.auth.change.warning') : undefined} kind="warning" />
             <SignInFormView form={form} />
             {failure !== undefined && <ErrorToast message={failure} />}
           </section>

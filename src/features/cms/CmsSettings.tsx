@@ -1,4 +1,5 @@
 import Popup from '../../ui/Popup';
+import InfoHint from '../../ui/InfoHint';
 import React, { useState } from 'react';
 import type { Collection, CmsField, FieldType } from './cmsSchema';
 import type { DeclaredTypes } from './cmsTypes';
@@ -8,7 +9,7 @@ import { contentFieldsAt, fieldsAt, keyFor } from './cmsSchema';
 import { withDeclaredTypes } from './cmsTypes';
 import { readCmsUsage, deleteCms } from './cmsBridge';
 import { cleanError } from '../../lib/cleanError';
-import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import useListReorder from '../../ui/useListReorder';
@@ -80,10 +81,10 @@ export default function CmsSettings({
 
       <div className="cms-detail-body">
         <div className="cms-card">
-          <h3>{translate('cms.settings.fieldsTitle')}</h3>
-          <p className="cms-note">
-            {collection.single ? translate('cms.settings.fieldsSingle') : translate('cms.settings.fieldsShared', { count: items.length })}
-          </p>
+          <h3>
+            {translate('cms.settings.fieldsTitle')}
+            <InfoHint text={collection.single ? translate('cms.settings.fieldsSingle') : translate('cms.settings.fieldsShared', { count: items.length })} />
+          </h3>
           <FieldSchema
             items={items}
             declared={declared}
@@ -105,8 +106,10 @@ function DeleteCollectionCard({ collection, project, showToast, onDeleted }: Pic
   const translate = useTranslate();
   return (
     <div className="cms-card cms-danger">
-      <h3>{translate('cms.settings.deleteCollection')}</h3>
-      <p className="cms-note">{translate('cms.settings.deleteNote', { path: collection.rel })}</p>
+      <h3>
+        {translate('cms.settings.deleteCollection')}
+        <InfoHint text={translate('cms.settings.deleteNote', { path: collection.rel })} />
+      </h3>
       <button
         className="ghost danger"
         onClick={() => {
@@ -343,7 +346,7 @@ function NewFieldDialog({ onAdd, onClose }: NewFieldProps) {
                 <button key={value} className="cms-type-tile" onClick={() => setType(value)}>
                   <Icon size={18} />
                   <span className="cms-type-name">{translate(label)}</span>
-                  <span className="cms-type-hint">{translate(hint)}</span>
+                  <span className="cms-type-description">{translate(hint)}</span>
                 </button>
               ))}
             </div>
@@ -362,7 +365,6 @@ interface NewFieldNameProps extends NewFieldProps {
 }
 function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps) {
   const translate = useTranslate();
-  const translateRich = useTranslateRich();
   const info = typeInfo(type);
   const submit = () => {
     const key = keyFor(name);
@@ -374,7 +376,10 @@ function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps
     <>
       <div className="modal-body">
         <div>
-          <label>{translate('cms.settings.nameLabel')}</label>
+          <label>
+            {translate('cms.settings.nameLabel')}
+            {keyFor(name) && <InfoHint text={translate('cms.settings.codeKey', { key: keyFor(name) })} />}
+          </label>
           <input
             autoFocus
             value={name}
@@ -390,11 +395,6 @@ function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps
             }}
           />
         </div>
-        {keyFor(name) && (
-          <div className="cms-note" style={{ margin: 0 }}>
-            {translateRich('cms.settings.codeKey', { key: <code>{keyFor(name)}</code> })}
-          </div>
-        )}
       </div>
       <div className="modal-footer">
         <button className="ghost" onClick={onClose}>

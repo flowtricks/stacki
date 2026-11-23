@@ -14,6 +14,7 @@ import type { AuditFinding } from '../../../shared/page/auditFindings';
 import { parseRawValue, valueFixes, type ValueRefusal, type ValueSupport } from '../../../shared/page/auditValueEdit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { CodeInline } from '../../ui/CodeBlock';
+import { ErrorToast } from '../../ui/ErrorToast';
 import type { Actions } from './AuditsPanel';
 
 /** What the app shell lends the review window: the Style panel's value input (features may not import each other) and what the property accepts. */
@@ -158,7 +159,7 @@ function ValueEditor(props: {
   return (
     <span
       ref={wrapRef}
-      className="audits-review-edit"
+      className={props.refusal === undefined ? 'audits-review-edit' : 'audits-review-edit is-refused'}
       onKeyDown={(event) => {
         // The picker is a portal inside this tree: its Escape closes it, not this field.
         if (event.key === 'Escape' && event.target instanceof Element && event.target.closest('.embed-editor_varpicker') === null) {
@@ -190,11 +191,7 @@ function ValueEditor(props: {
           {props.count}×
         </span>
       )}
-      {props.refusal !== undefined && (
-        <span className="audits-review-edit-error" role="alert">
-          {translate(`audits.review.refused.${props.refusal}`, { property: props.property })}
-        </span>
-      )}
+      <ErrorToast message={props.refusal === undefined ? undefined : translate(`audits.review.refused.${props.refusal}`, { property: props.property })} />
     </span>
   );
 }

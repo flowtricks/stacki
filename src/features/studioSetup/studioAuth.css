@@ -84,15 +84,6 @@
 .studio-auth-field[data-invalid='true'] input[type='text'] {
   background: #4a2a2a;
 }
-.studio-auth-field small {
-  display: block;
-  margin-top: 4px;
-  font-size: 11px;
-  color: #aaa;
-}
-.studio-auth-field[data-invalid='true'] small[role='alert'] {
-  color: #ff9d9d;
-}
 .studio-auth-confirm {
   display: flex;
   align-items: center;
@@ -130,15 +121,6 @@
   gap: 6px;
   flex-shrink: 0;
 }
-.studio-auth-warning {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #3a3220;
-  color: #ecd9a0;
-  font-size: 12px;
-  line-height: 1.5;
-}
 /* The sign-in row in Settings: the same fill, radius and inline padding as the status card above it, so both share
    their left and right edges; the provider's mark on a tile, its name, then Change at the inline end. */
 .studio-auth-current {
@@ -171,10 +153,6 @@
 .studio-auth-current-name {
   font-size: 13px;
   font-weight: 500;
-}
-.studio-auth-current-note {
-  color: var(--text-dim);
-  font-size: 12px;
 }
 .studio-auth-current > button {
   flex-shrink: 0;

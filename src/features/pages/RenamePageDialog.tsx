@@ -3,6 +3,8 @@ import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate
 import { DescribedError, problemOf } from '../../../shared/properties/describedError';
 import { useId, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { parsePageRename, type PageRename } from '../../../shared/properties/pageRename';
 import { pageRenameConflicts, type RenameInventory } from '../../../shared/properties/pageRenameConflicts';
 import { err, ok, type Result } from '../../../shared/core/result';
@@ -59,14 +61,11 @@ function RenameFields({ model }: { readonly model: ReturnType<typeof useRenameDi
         value={model.name}
         disabled={model.busy}
         spellCheck={false}
-        aria-invalid={!!model.error}
-        aria-describedby={id + '-error'}
+        aria-invalid={model.error !== ''}
         onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => model.change(event.target.value)}
       />
-      <div id={id + '-error'} className="page-rename-error" role="alert">
-        {model.error}
-      </div>
+      <ErrorToast message={model.failure} />
     </div>
   );
 }
@@ -79,10 +78,15 @@ function useRenameDialog({ item, inventory, save, close }: RenamePageDialogProps
   const parsed = renameCandidate(item, name, translate);
   const valid = parsed.ok ? pageRenameConflicts(parsed.value, inventory) : parsed;
   const error = !valid.ok ? translateDescribed(valid.error) : state.kind === 'error' ? translateDescribed(state.problem) : '';
+  const failure = state.kind === 'error' ? translateDescribed(state.problem) : undefined;
   const busy = state.kind === 'saving';
   const canApply = !busy && valid.ok && parsed.ok && parsed.value.to !== item.from;
   const submit = async () => {
     if (pending.current || !canApply || !parsed.ok) {
+      // Enter on a refused name: the field already wears the error look, so the reason arrives once as a toast.
+      if (!pending.current && error !== '') {
+        reportErrorToast(error);
+      }
       return;
     }
     pending.current = true;
@@ -101,7 +105,7 @@ function useRenameDialog({ item, inventory, save, close }: RenamePageDialogProps
     setName(value);
     setState({ kind: 'idle' });
   };
-  return { name, change, error, busy, canApply, submit };
+  return { name, change, error, failure, busy, canApply, submit };
 }
 function renameCandidate(item: Pick<PageRename, 'kind' | 'from'>, name: string, translate: Translator): Result<PageRename> {
   const clean = name.trim();

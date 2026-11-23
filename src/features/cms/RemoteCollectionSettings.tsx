@@ -5,6 +5,7 @@
 // Save collection (settingsDraft.ts), which takes any field form still open and
 // writes them to the content config, with the entries and code that depend on
 // them (astroCollectionSettings.ts).
+import InfoHint from '../../ui/InfoHint';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CollectionSettings, NewFieldKind, SettingsChange, SettingsField, SettingsFieldKind } from '../../../shared/properties/collectionSettings';
@@ -79,7 +80,7 @@ export function RemoteCollectionSettings(props: {
           {error && <ErrorToast message={error} />}
           {draft === undefined ? (
             !error && (
-              <div className="remote-cms-note">
+              <div className="remote-cms-loading">
                 <SkeletonRows count={4} />
               </div>
             )
@@ -260,14 +261,18 @@ function CollectionName(props: { readonly settings: CollectionSettings; readonly
   return (
     <section className="remote-cms-settings-section">
       <label className="remote-cms-settings-label">
-        {translate('cmsRemote.collection.name')}
+        <span>
+          {translate('cmsRemote.collection.name')}
+          <InfoHint
+            text={
+              props.settings.source
+                ? translate('cmsRemote.settings.renameHintSource', { source: props.settings.source })
+                : translate('cmsRemote.settings.renameHint')
+            }
+          />
+        </span>
         <input value={props.name} onChange={(event) => props.onName(event.target.value)} />
       </label>
-      <p className="remote-cms-settings-hint">
-        {props.settings.source
-          ? translate('cmsRemote.settings.renameHintSource', { source: props.settings.source })
-          : translate('cmsRemote.settings.renameHint')}
-      </p>
     </section>
   );
 }

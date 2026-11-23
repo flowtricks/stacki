@@ -54,6 +54,8 @@ interface BranchesProps {
 }
 
 interface CommitProps {
+  /** The running action's label: the Commit button says it in place, so no status row is added. */
+  readonly busy: string | undefined;
   readonly branch: string;
   readonly color: number;
   readonly error: string | undefined;
@@ -144,6 +146,7 @@ function CommitControls({
   onPick,
   onCommit,
   error,
+  busy,
 }: CommitProps) {
   const translate = useTranslate();
   const pickedCount = picked?.length ?? 0;
@@ -182,7 +185,14 @@ function CommitControls({
         <CommitSubjectPreview subject={subject} convention={commitType.state.kind === 'ready' ? commitType.state.convention : undefined} />
         <div className="git-commit-action-row">
           <button className="primary" disabled={working || blocked || !dirty || (picking && pickedCount === 0)} onClick={onCommit}>
-            {label}
+            {busy === undefined ? (
+              label
+            ) : (
+              <>
+                <span className="mini-spinner" />
+                {busy}
+              </>
+            )}
           </button>
           {dirty && (
             <CommitFilePicker
@@ -207,13 +217,7 @@ export default function GitChipView(props: GitChipViewProps) {
   const working = props.busy !== undefined;
   const colors = gitBranchColors(props.info.branches, props.info.trunk ?? 'main');
   return (
-    <div className="git-panel-controls" aria-label={translate('git.chip.controls')}>
-      {props.busy && (
-        <p className="history-note" role="status">
-          {props.busy}
-        </p>
-      )}
-
+    <div className="git-panel-controls" aria-label={translate('git.chip.controls')} aria-busy={working}>
       {props.info.remote && <GitPullControl incoming={props.incoming} busy={props.busy} info={props.info} onPull={props.onPull} />}
       <Branches
         colors={colors}
@@ -233,6 +237,7 @@ export default function GitChipView(props: GitChipViewProps) {
         onRefreshFiles={props.onRefreshFiles}
         dirty={props.info.dirty}
         working={working}
+        busy={props.busy}
         message={props.commitMessage}
         commitType={props.commitType}
         subject={props.commitSubject}

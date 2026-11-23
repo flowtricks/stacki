@@ -3,7 +3,8 @@
 // whose source is the chosen content type and nothing else. The Pages menu offers the EmDash entry only for a
 // project that uses EmDash.
 // Method: bundle the real dialog and the menu builder with esbuild, mount in jsdom over a fake preload bridge that
-// answers the project read and the plan, and read the DOM and the draft handed to the creator.
+// answers the project read and the plan, and read the DOM, the toasts and the draft handed to the creator. A refusal is a
+// toast, never a paragraph in the form (owner rule: nothing appends text into a dialog).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -11,6 +12,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture.js');
 const emdash = require('#dist/shared/properties/emdash.js');
 
 const output = repoPath('node_modules/.stacki-test/emdash-template-dialog.cjs');
@@ -28,6 +30,7 @@ const bundled = esbuild.build({
   format: 'cjs',
   jsx: 'automatic',
   loader: { '.css': 'empty', '.svg': 'empty' },
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   logLevel: 'silent',
 });
@@ -84,6 +87,7 @@ const created = [];
 async function mount(layouts = []) {
   planned.length = 0;
   created.length = 0;
+  globalThis.stackiCapturedToasts = [];
   document.body.innerHTML = '<div id="root"></div>';
   root = createRoot(document.getElementById('root'));
   await act(async () =>
@@ -112,6 +116,7 @@ test('the first content type is chosen, its address is suggested, and Create is 
   assert.equal(document.querySelector('input').value, '/posts/[slug]');
   assert.equal(planned.at(-1).draft.source.collection, 'posts');
   assert.equal(create().disabled, false);
+  assert.equal(toastMessages(), '', 'a plan that allows Create says nothing');
   await act(async () => create().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   assert.deepEqual(created, [{ route: '/posts/[slug]', layout: undefined, source: { kind: 'emdash', collection: 'posts' } }]);
 });
@@ -120,7 +125,8 @@ test('a refusal from the plan shows in words and keeps Create off', async () => 
   project = PRESENT;
   plan = async () => ({ ok: false, message: 'A page already exists at src/pages/posts/[slug].astro.' });
   await mount();
-  assert.match(document.querySelector('.page-template-problem').textContent, /already exists/);
+  assert.match(toastMessages(), /already exists/);
+  assert.equal(document.querySelector('.page-template-problem') ?? undefined, undefined, 'no paragraph is appended to the form');
   assert.equal(create().disabled, true);
   plan = async () => ({ ok: true, value: { route: '/posts/[slug]', changes: [{ path: 'a', action: 'create', text: 'x' }], env: [] } });
 });

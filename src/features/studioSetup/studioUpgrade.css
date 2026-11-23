@@ -39,12 +39,6 @@
   gap: 6px;
   color: var(--green);
 }
-.studio-status-card p.studio-upgrade-error {
-  flex: 1;
-  min-width: 0;
-  color: var(--red);
-  overflow-wrap: anywhere;
-}
 .studio-upgrade-progress {
   display: flex;
   flex-direction: column;

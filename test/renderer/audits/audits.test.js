@@ -24,6 +24,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { installToastLog } = require('../../helpers/toastLog.js');
 
 const output = repoPath('node_modules/.stacki-test/audits.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -49,6 +50,7 @@ esbuild.buildSync({
       "export { storedFilter, breakdown } from './src/features/audits/AuditsPanel';",
       "export { parseRawValue, valueFixes } from './shared/page/auditValueEdit';",
       "export { RawValueField } from './src/features/audits/RawValueField';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
       "export { withIgnoredPage } from './shared/properties/auditIgnores';",
       "export { reviewRows, reviewMatches } from './src/features/audits/StyleReview';",
       "export { revealNode, nextReveal, REVEAL_FLASH_MS, REVEAL_SETTLE_MS } from './src/app/shell/auditReveal';",
@@ -927,8 +929,12 @@ test('the value field is read-only without the style kit, and a refused value ke
   assert.ok(draft, 'pressing the pill opens the input');
   assert.equal(draft.value, '0.5em', 'pre-filled with the declared value');
   await act(async () => draft.onChange('banana'));
+  const toasts = installToastLog(audits.subscribeErrorToasts);
   await act(async () => draft.onBlur());
-  assert.match(container.querySelector('[role="alert"]').textContent, /does not accept/);
+  assert.match(toasts.messages().join('\n'), /does not accept/, 'the reason is a toast');
+  assert.equal(container.querySelector('[role="alert"]') ?? undefined, undefined, 'no alert paragraph in the field');
+  assert.ok(container.querySelector('.audits-review-edit.is-refused'), 'the field takes the error look');
+  toasts.uninstall();
   assert.deepEqual(fixed, [], 'a refused value writes nothing');
   await act(async () => draft.onChange('1rem'));
   await act(async () => draft.onBlur());

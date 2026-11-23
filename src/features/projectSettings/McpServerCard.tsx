@@ -4,6 +4,8 @@
 // the card holds the form: a connection kind, an address or command, and the variables or headers the server
 // is started with. A value is masked until its eye is pressed, as in the Secrets tab; a `${NAME}` reference is
 // not a secret and is always shown.
+import { ErrorToast } from '../../ui/ErrorToast';
+import InfoHint from '../../ui/InfoHint';
 import { useState } from 'react';
 import type { McpCodexState, McpServerItem } from '../../../shared/properties/mcp';
 import type { McpTransport } from '../../../shared/properties/mcpConfig';
@@ -77,7 +79,10 @@ export default function McpServerCard({
         <ProviderLogo id={logoId} name={item.name} />
         <div className="mcp-card-text">
           <span className="mcp-card-name">{item.name}</span>
-          <span className="mcp-card-line">{item.status === 'server' ? serverLine(translate, item.summary) : translate('settings.mcp.invalid.line')}</span>
+          <span className="mcp-card-line">
+            {item.status === 'server' ? serverLine(translate, item.summary) : translate('settings.mcp.invalid.line')}
+            {item.status === 'invalid' && <InfoHint text={translate(PROBLEM_KEYS[item.problem.code])} />}
+          </span>
           {secretCount > 0 && (
             <span className="mcp-card-line">
               {missing.length > 0
@@ -92,18 +97,11 @@ export default function McpServerCard({
           items={[
             item.status === 'server' && { label: translate('settings.mcp.menu.edit'), onSelect: onEditStart },
             item.status === 'server' && { label: translate('settings.mcp.menu.copy'), onSelect: onCopy },
+            item.status === 'invalid' && { label: translate('settings.mcp.invalid.open'), onSelect: onOpenJson },
             { label: translate('settings.mcp.menu.remove'), danger: true, onSelect: onRemove },
           ]}
         />
       </div>
-      {item.status === 'invalid' && (
-        <p className="mcp-card-note">
-          {translate(PROBLEM_KEYS[item.problem.code])}{' '}
-          <button type="button" className="ghost" onClick={onOpenJson}>
-            {translate('settings.mcp.invalid.open')}
-          </button>
-        </p>
-      )}
       {item.status === 'server' && (
         <div className="mcp-agents">
           <span className="mcp-chip">{translate('settings.mcp.agent.claude')}</span>
@@ -167,7 +165,8 @@ function ServerForm({
     return <McpEditorSkeleton />;
   }
   const stdio = draft.transport === 'stdio';
-  const problemText = (field: DraftField): string | undefined => (problem?.field === field ? translate(PROBLEM_KEYS[problem.code]) : undefined);
+  // The refused field takes the error tint; the reason is one toast, reported when Save is pressed.
+  const invalid = (field: DraftField): string => (problem?.field === field ? ' is-invalid' : '');
   const setPair = (at: number, patch: { readonly name?: string; readonly value?: string }): void => {
     onChange({ ...draft, pairs: draft.pairs.map((pair, index) => (index === at ? { ...pair, ...patch } : pair)) });
   };
@@ -202,37 +201,34 @@ function ServerForm({
           <label className="mcp-field">
             <span>{translate('settings.mcp.edit.command')}</span>
             <input
-              className="secrets-input"
+              className={`secrets-input${invalid('command')}`}
               value={draft.command}
               spellCheck={false}
               autoComplete="off"
               onChange={(event) => onChange({ ...draft, command: event.target.value })}
             />
-            {problemText('command') !== undefined && <span className="secrets-hint secrets-problem">{problemText('command')}</span>}
           </label>
           <label className="mcp-field">
             <span>{translate('settings.mcp.edit.args')}</span>
             <textarea
-              className="secrets-input mcp-args"
+              className={`secrets-input mcp-args${invalid('args')}`}
               rows={3}
               value={draft.args}
               spellCheck={false}
               onChange={(event) => onChange({ ...draft, args: event.target.value })}
             />
-            {problemText('args') !== undefined && <span className="secrets-hint secrets-problem">{problemText('args')}</span>}
           </label>
         </>
       ) : (
         <label className="mcp-field">
           <span>{translate('settings.mcp.edit.url')}</span>
           <input
-            className="secrets-input"
+            className={`secrets-input${invalid('url')}`}
             value={draft.url}
             spellCheck={false}
             autoComplete="off"
             onChange={(event) => onChange({ ...draft, url: event.target.value })}
           />
-          {problemText('url') !== undefined && <span className="secrets-hint secrets-problem">{problemText('url')}</span>}
         </label>
       )}
       <div className="mcp-field">
@@ -242,7 +238,7 @@ function ServerForm({
           return (
             <div className="mcp-pair" key={at}>
               <input
-                className="secrets-input"
+                className={`secrets-input${invalid('pairs')}`}
                 aria-label={translate('settings.mcp.edit.pairName')}
                 placeholder={translate('settings.mcp.edit.pairName')}
                 value={pair.name}
@@ -283,7 +279,6 @@ function ServerForm({
             </div>
           );
         })}
-        {problemText('pairs') !== undefined && <span className="secrets-hint secrets-problem">{problemText('pairs')}</span>}
         <button
           type="button"
           className="ghost mcp-add-pair"
@@ -294,7 +289,7 @@ function ServerForm({
           {translate('settings.mcp.edit.addPair')}
         </button>
       </div>
-      {problemText('server') !== undefined && <span className="secrets-hint secrets-problem">{problemText('server')}</span>}
+      <ErrorToast message={problem === undefined ? undefined : translate(PROBLEM_KEYS[problem.code])} />
       <div className="mcp-form-actions">
         <button type="button" className="ghost" onClick={onCancel}>
           {translate('settings.mcp.cancel')}

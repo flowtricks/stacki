@@ -10,6 +10,7 @@
 // nothing is reported about values that are not the selected item's. Every
 // write names the document its form shows, not the selection, which may have
 // moved on by the time an edit is saved.
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
@@ -188,11 +189,7 @@ function EntryForm(props: {
     <FieldChecksContext.Provider value={props.checks}>
       <div className="remote-cms-fields" {...(props.checks === 'held' ? HELD_FORM : {})}>
         {props.error && <ErrorToast message={props.error} />}
-        {document.appliesLive === true && (
-          <p className="remote-cms-live-notice" role="status">
-            {translate('settings.cms.payload.liveNotice')}
-          </p>
-        )}
+        {document.appliesLive === true && <NoticeToast message={translate('settings.cms.payload.liveNotice')} kind="warning" />}
         {document.slug && <EntrySlugField key={document.id} slug={document.slug} onCommit={props.onRename} />}
         <RemoteFieldList document={document} context={props.context} requiredShown={requiredShown} onSave={props.onSave} />
         <RemoteItemActions

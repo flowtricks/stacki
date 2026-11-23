@@ -3,7 +3,8 @@
 // the server's own words, says which collections change live content, shows the snippet a site's pages use
 // without the key, and Disconnect hands the connection back to the list.
 // Method: bundle the real PayloadStatus with esbuild, mount it in jsdom over a fake preload bridge that
-// answers Test connection from a queue, and click through it.
+// answers Test connection from a queue, and click through it. A failure and the live-collections warning are toasts, never
+// paragraphs in the card: the toast stream is captured through the app's own subscription and the card is checked to hold none.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -15,7 +16,11 @@ const { repoPath } = require('../../helpers/sources.js');
 const output = repoPath('node_modules/.stacki-test/payload-status.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 const bundled = esbuild.build({
-  stdin: { contents: "export { PayloadStatus } from './src/features/cmsConnections/PayloadStatus';", resolveDir: repoPath('.'), loader: 'ts' },
+  stdin: {
+    contents: "export { PayloadStatus } from './src/features/cmsConnections/PayloadStatus';\nexport { subscribeErrorToasts } from './src/ui/errorNotices';",
+    resolveDir: repoPath('.'),
+    loader: 'ts',
+  },
   outfile: output,
   bundle: true,
   platform: 'node',
@@ -75,8 +80,16 @@ const SUMMARY = {
 let root;
 let disconnected = 0;
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+const toasts = [];
+let unsubscribe;
 async function mount(connection = CONNECTION) {
   asked.length = 0;
+  toasts.length = 0;
+  unsubscribe?.();
+  unsubscribe = component.subscribeErrorToasts(
+    (notice) => toasts.push(notice),
+    () => undefined,
+  );
   disconnected = 0;
   document.body.innerHTML = '<div id="root"></div>';
   root = createRoot(document.getElementById('root'));
@@ -108,7 +121,11 @@ test('Test connection shows who the account is, when, and which collections chan
   assert.deepEqual(asked, [{ projectPath: '/project', request: { action: 'test', id: CONNECTION.id } }]);
   assert.match(document.querySelector('.cms-payload-chip').textContent, /Connected as admin@example\.test/);
   assert.match(document.querySelector('.cms-payload-time').textContent, /Checked/);
-  assert.match(document.querySelector('.cms-payload-live').textContent, /Edits apply live in: pages$/);
+  assert.ok(!document.querySelector('.cms-payload-live'), 'no paragraph in the card');
+  assert.deepEqual(
+    toasts.map((notice) => [notice.kind, notice.message.replace(/^.*Edits apply live/, 'Edits apply live')]),
+    [['warning', 'Edits apply live in: pages']],
+  );
 });
 
 test('an API key with no email says the key is valid', async () => {
@@ -123,10 +140,14 @@ test('a failure shows the server’s reason, the chip says not connected, and th
   answers.push({ ok: false, message: 'Too many attempts; try again in about 10 minutes.' });
   await press('Test connection');
   assert.match(document.querySelector('.cms-payload-chip').textContent, /Not connected/);
-  assert.match(document.querySelector('.cms-payload-problem').textContent, /Too many attempts/);
+  assert.ok(!document.querySelector('.cms-payload-problem'), 'no paragraph in the card');
+  assert.equal(toasts.length, 1, 'said once');
+  assert.equal(toasts[0].kind, 'error');
+  assert.match(toasts[0].message, /Too many attempts/);
   answers.push({ ok: true, summary: SUMMARY });
   await press('Test connection');
   assert.ok(!document.querySelector('.cms-payload-problem'));
+  assert.equal(toasts.filter((notice) => notice.kind === 'error').length, 1, 'a passing test says no error');
 });
 
 test('the snippet shows the address and the variable names, never a key', async () => {

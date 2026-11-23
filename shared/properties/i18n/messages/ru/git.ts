@@ -88,7 +88,6 @@ export const messages = {
   'git.chip.initialize': 'Инициализировать Git',
   'git.chip.initialized': 'Репозиторий git инициализирован',
   'git.chip.pickedUp': 'Ваши изменения возвращены в {branch}',
-  'git.chip.reading': 'Чтение репозитория…',
   'git.chip.savedFiles': {
     one: 'Сохранён {count} файл',
     few: 'Сохранено {count} файла',

@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'شجرة فارغة',
   'history.diff.firstParent': 'مقارنة بالأصل الأول',
   'history.diff.label': 'فروقات الملف',
-  'history.diff.loading': 'جارٍ تحميل الفروقات…',
   'history.diff.noTextChanges': 'لا توجد تغييرات نصية في هذا الملف.',
   'history.diff.restoreFile': 'استعادة الملف…',
   'history.error.diffUnreadable': 'تعذّرت قراءة فروقات هذا الـ commit.',

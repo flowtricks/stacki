@@ -85,7 +85,6 @@ export const messages = {
   'git.chip.initialize': 'Git 초기화',
   'git.chip.initialized': 'git 저장소를 초기화했습니다',
   'git.chip.pickedUp': '{branch}에서 변경 사항을 다시 가져왔습니다',
-  'git.chip.reading': '저장소 읽는 중…',
   'git.chip.savedFiles': { other: '파일 {count}개 저장됨' },
   'git.chip.switched': '{branch}(으)로 전환함',
   'git.chip.waiting': '{branch}에 있음 — 변경 사항은 {from}에서 대기 중',

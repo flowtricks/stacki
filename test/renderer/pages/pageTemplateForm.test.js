@@ -1,7 +1,8 @@
 // Goal: the Pages panel's + offers both kinds of page in the app's menu, and the template
 // form turns what a designer typed into a valid draft or one plain sentence.
 // Method: the pure form model is driven field by field; the real panel and dialog are
-// mounted in JSDOM with a fake bridge, clicked through, and their requests inspected.
+// mounted in JSDOM with a fake bridge, clicked through, and their requests inspected. Problems and notices are toasts, never
+// paragraphs in the form (owner rule), so each case reads the captured toasts and checks the form holds no problem node.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,6 +12,8 @@ const { JSDOM } = require('jsdom');
 const React = require('react');
 const { act } = React;
 const { repoPath, ROOT } = require('../../helpers/sources');
+const { toastMessages } = require('../../helpers/toastCapture');
+const { waitFor } = require('../../helpers/waitFor.js');
 const output = repoPath('node_modules/.stacki-test/page-template-form.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
@@ -27,6 +30,7 @@ buildSync({
   jsx: 'automatic',
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   loader: { '.css': 'empty' },
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   logLevel: 'silent',
 });
 // React decides how to listen for input as it loads, so a document exists before it does.
@@ -146,6 +150,7 @@ test('each missing or wrong value is named in a sentence', () => {
 });
 
 function fixture(context, bridge = {}) {
+  globalThis.stackiCapturedToasts = [];
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   require('../../helpers/popupDom').installPopupDOM(dom.window);
   dom.window.Element.prototype.scrollIntoView = () => {};
@@ -169,6 +174,7 @@ function fixture(context, bridge = {}) {
     },
   };
   dom.window.avb = {
+    projectMetadata: async () => ({ ok: true, value: {} }),
     contentCollections: async () => ({ collections: [{ name: 'blog', count: 2 }] }),
     cmsConnections: async () => ({ encryption: 'available', connections: [] }),
     contentRemoteRead: async () => ({ ok: true, value: { name: 'blog', source: undefined, fields: [] } }),
@@ -234,10 +240,21 @@ const typeInto = (dom, input, value) =>
     Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, value);
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   });
-const settled = () => act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
 // A sample tree draws the data picker's rows (ui/DataTree.tsx): a row by the name it shows.
 const row = (label) => [...document.querySelectorAll('.page-template-data .dp-row')].find((item) => item.querySelector('.dp-key').textContent === label);
 const shownValue = (label) => row(label).querySelector('.dp-val').textContent;
+const settled = () => act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+// A draft error is told only once typing has rested (useSettledMessage): wait on the toast, not on the delay.
+const toastTold = (pattern) =>
+  waitFor({
+    what: 'a toast matching ' + pattern,
+    // The settled message is set by a timer outside the render, so each poll lets React flush before it reads.
+    read: async () => {
+      await act(async () => undefined);
+      return toastMessages();
+    },
+    until: (text) => pattern.test(text),
+  });
 
 test('+ opens a menu with both kinds, and Create page keeps today’s flow', async (context) => {
   const { root } = fixture(context);
@@ -276,7 +293,7 @@ test('Create page template plans from a chosen collection, shows the code, and c
     'the first collection is chosen',
   );
   assert.match(document.querySelector('.page-template-address').textContent, /^yoursite\.com\/blog\//, 'the address is filled from it');
-  assert.equal(document.querySelectorAll('.page-template-problem').length, 0, 'nothing is wrong yet');
+  assert.equal(toastMessages(), '', 'nothing is wrong yet');
   assert.ok(!document.querySelector('.modal-body').textContent.includes('Choose a collection'));
   assert.equal(byText('.modal-footer button', 'Create template').disabled, false, 'it can be created as it opens');
   assert.equal(calls.plan.at(-1).draft.source.collection, 'blog');
@@ -291,7 +308,8 @@ test('Create page template plans from a chosen collection, shows the code, and c
   await click(byText('.modal-footer button', 'Create template'));
   await settled();
   assert.equal(created.length, 1);
-  assert.match(document.querySelector('.page-template-problem').textContent, /The disk is full/, 'a failure stays in the form');
+  assert.match(toastMessages(), /The disk is full/, 'a failure is a toast');
+  assert.equal(document.querySelector('.page-template-problem') ?? undefined, undefined, 'and no paragraph joins the form');
 });
 
 test('the address select disables what cannot work and shows what a slugified one makes', async (context) => {
@@ -391,10 +409,11 @@ test('with a connection, Sanity asks for nothing typed and loads its types', asy
   });
   const created = [];
   await openSanity(root, panelProps({ onCreateTemplate: async (draft, keyCopy) => void created.push({ draft, keyCopy }) }));
-  assert.match(document.querySelector('.modal-body').textContent, /Using Marketing: abc123, production\./);
+  assert.match(document.querySelector('.modal-body').textContent, /Marketing/, 'the only connection is shown in its field, not in a sentence');
+  assert.doesNotMatch(document.querySelector('.modal-body').textContent, /Using Marketing/);
   assert.equal(document.querySelectorAll('.modal input[type="password"]').length, 0, 'no token field');
   assert.equal(sample.calls.sample[0].request.connectionId, CONNECTION);
-  assert.equal(document.querySelectorAll('.page-template-problem').length, 0);
+  assert.equal(toastMessages(), '');
   await click([...document.querySelectorAll('.modal button')].find((button) => button.textContent.includes('Choose a type')));
   await click(byText('.dd-option', 'post'));
   await settled();
@@ -427,7 +446,7 @@ test('without a connection, Connect Sanity opens the sign-in and the form surviv
   await settled();
   await settled();
   assert.equal(document.querySelectorAll('[data-connect-sanity]').length, 0);
-  assert.match(document.querySelector('.modal-body').textContent, /Using Marketing/);
+  assert.match(document.querySelector('.modal-body').textContent, /Marketing/);
   assert.equal(document.querySelector('.modal input[placeholder="/blog/[slug]"]').value, '/news/[slug]', 'what was entered stays');
   assert.equal(sample.calls.sample.at(-1).request.kind, 'sanity-types', 'its types load on return');
 });
@@ -504,7 +523,9 @@ test('editing the address ends with Done, Enter, Escape or leaving, unless it ca
   await click(byText('.page-template-preview button', 'Done'));
   await act(async () => input().dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })));
   assert.ok(input(), 'a route that cannot work stays open');
-  assert.match(document.querySelector('.page-template-problem').textContent, /needs a placeholder/);
+  assert.equal(toastMessages(), '', 'a half-typed value is not announced at once');
+  await toastTold(/needs a placeholder/);
+  assert.match(toastMessages(), /needs a placeholder/);
   await key('Escape');
   assert.match(shown(), /\/three\//, 'and Escape still gets out');
 });
@@ -517,15 +538,17 @@ test('a project without collections leads with a new one, and stays quiet until 
   await settled();
   const trigger = [...document.querySelectorAll('.modal button')].find((button) => button.textContent.includes('Choose a collection'));
   assert.ok(trigger, 'the empty choice says so');
-  assert.equal(document.querySelectorAll('.page-template-problem').length, 0, 'no red before anything is done');
+  assert.equal(toastMessages(), '', 'no red before anything is done');
   await click(trigger);
   assert.equal(document.querySelector('.dd-option').textContent.trim(), 'New collection…');
   await click(document.querySelector('.dd-option'));
   await settled();
-  assert.equal(document.querySelectorAll('.page-template-problem').length, 0, 'an unnamed collection is unfinished, not wrong');
+  assert.equal(toastMessages(), '', 'an unnamed collection is unfinished, not wrong');
   await typeInto(dom, document.querySelector('.modal input[placeholder="Blog posts"]'), '9 lives');
   await settled();
-  assert.match(document.querySelector('.page-template-problem').textContent, /starts with a letter/);
+  assert.equal(toastMessages(), '', 'typing alone says nothing');
+  await toastTold(/starts with a letter/);
+  assert.match(toastMessages(), /starts with a letter/);
 });
 
 test('each collection carries the CMS icon, and the new row keeps its plus', async (context) => {
@@ -577,7 +600,7 @@ test('a JSON address fetches by itself, once, after typing stops', async (contex
   await openJSON(root);
   assert.equal(document.querySelectorAll('.page-template-refresh').length, 0, 'no refresh before an address');
   assert.equal(byText('.modal button', 'Fetch sample'), undefined);
-  assert.equal(document.querySelectorAll('.page-template-problem').length, 0, 'no red before typing');
+  assert.equal(toastMessages(), '', 'no red before typing');
   await typeInto(dom, urlInput(), 'not an address');
   await debounced();
   assert.equal(httpRequests(calls).length, 0, 'an invalid address is not fetched');
@@ -595,7 +618,7 @@ test('a JSON address fetches by itself, once, after typing stops', async (contex
   assert.ok(byText('.page-template-trigger', '2 fields · 2 items'));
   assert.match(document.querySelector('.page-template-preview').textContent, /2 pages, like: One/);
   assert.match(document.querySelector('.page-template-address').textContent, /yoursite\.com\/products\/7/);
-  assert.equal(document.querySelectorAll('.page-template-problem').length, 0, 'the happy path has no red');
+  assert.equal(toastMessages(), '', 'the happy path has no red');
   assert.equal(byText('.modal-footer button', 'Create template').disabled, false, 'pasting a link is enough');
   await click(document.querySelector('.page-template-refresh'));
   await settled();
@@ -646,7 +669,7 @@ test('headers live in a popover, start empty, and a secret goes to .env and leav
   assert.match(document.querySelector('.page-template-popover').textContent, /Only needed if your link requires a key\./);
   await click(byText('.page-template-popover button', 'Add header'));
   await settled();
-  assert.equal(document.querySelectorAll('.modal-body .page-template-problem').length, 0, 'an empty row blocks nothing');
+  assert.equal(toastMessages(), '', 'an empty row blocks nothing');
   assert.equal(document.querySelectorAll('.page-template-header-send').length, 0, 'an empty row asks nothing more');
   assert.equal(byText('.modal-footer button', 'Create template').disabled, false);
   await typeInto(dom, document.querySelector('input[placeholder="Authorization"]'), 'Authorization');
@@ -948,7 +971,7 @@ test('a failure no form value caused reads as a sentence, and the detail goes to
   await click(byText('.more-menu [role="menuitem"]', 'Create page template'));
   await settled();
   await settled();
-  const shown = document.querySelector('.modal-body').textContent;
+  const shown = toastMessages();
   assert.ok(shown.includes(form.UNEXPECTED_FAILURE));
   assert.ok(!shown.includes('remote method'));
   assert.ok(logged.some((line) => line.includes('remote method')));

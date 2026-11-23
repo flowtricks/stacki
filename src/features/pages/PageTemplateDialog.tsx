@@ -23,8 +23,13 @@ import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import { planPageTemplate, sampleDataSource, setProjectEnv } from '../../ipc/pageTemplateBridge';
 import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
 import Dropdown from '../../ui/Dropdown';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
+import TipAnchor from '../../ui/TipAnchor';
 import { AstroIcon, BracesIcon, CmsIcon, PlusIcon, RefreshIcon, SanityIcon, TrashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
+import { SkeletonRows } from '../../ui/Skeleton';
+import { useSettledMessage } from '../../ui/useSettledMessage';
 import {
   EMPTY_TEMPLATE_FORM,
   ENTRY_ID,
@@ -59,6 +64,8 @@ import './pageTemplate.css';
 const PLAN_DELAY_MS = 250;
 // A pause in typing long enough to mean the address is finished.
 const SAMPLE_DELAY_MS = 600;
+// Longer than a pause between keystrokes, shorter than a person waits to be told what is wrong.
+const PROBLEM_SETTLE_MS = 900;
 
 type Sampling = { readonly kind: 'idle' } | { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string };
 type Planning = { readonly kind: 'none' } | { readonly kind: 'ready'; readonly plan: PageTemplatePlan } | { readonly kind: 'failed'; readonly message: string };
@@ -189,11 +196,12 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
       onClose();
     }
   };
-  // A plan's refusal explains why Create is off, so it shows even untouched, as a note rather than an error.
+  // A plan's refusal explains why Create is off, so it is told even untouched: once, as a toast, never as a row in the form.
   const refused = creating.kind === 'failed' ? creating.message : planning.kind === 'failed' ? planning.message : undefined;
   const invalid = draft.ok || !touched || unfinishedQuietly(form) ? undefined : draft.error;
-  const problem = refused ?? invalid;
-  const problemClass = touched || creating.kind === 'failed' ? 'page-template-problem' : 'hint-text';
+  // A refusal from the plan or the creation is final news; a draft error follows typing, so it waits until typing rests.
+  const settledInvalid = useSettledMessage(invalid, PROBLEM_SETTLE_MS);
+  const problem = refused ?? settledInvalid;
   const ready = planning.kind === 'ready' && creating.kind !== 'busy';
 
   return (
@@ -236,7 +244,7 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
                 </div>
               )}
               {planning.kind === 'ready' && <EnvNotes form={form} env={planning.plan.env} set={set} />}
-              {problem !== undefined && <p className={problemClass}>{problem}</p>}
+              <ErrorToast message={problem} />
             </div>
           )}
           <div className="modal-footer">
@@ -401,16 +409,17 @@ export function ContentFields({
       {form.collection === NEW_COLLECTION && (
         <div>
           <label>{translate('pages.template.collection.name')}</label>
-          <input
-            autoFocus
-            value={form.newCollection}
-            placeholder={translate('pages.template.collection.namePlaceholder')}
-            onChange={(event) => {
-              const newCollection = event.currentTarget.value;
-              set((previous) => named(newCollection, { ...previous, newCollection }));
-            }}
-          />
-          <p className="hint-text">{translate('pages.template.collection.hint')}</p>
+          <TipAnchor text={translate('pages.template.collection.hint')}>
+            <input
+              autoFocus
+              value={form.newCollection}
+              placeholder={translate('pages.template.collection.namePlaceholder')}
+              onChange={(event) => {
+                const newCollection = event.currentTarget.value;
+                set((previous) => named(newCollection, { ...previous, newCollection }));
+              }}
+            />
+          </TipAnchor>
         </div>
       )}
       {form.collection !== NEW_COLLECTION && (
@@ -544,15 +553,16 @@ function SanityFields({
       },
     });
   if (connections === undefined) {
-    return <p className="hint-text">{translate('pages.template.sanity.looking')}</p>;
+    return <SkeletonRows count={1} />;
   }
   if (connections.length === 0) {
     return (
       <div className="page-template-connect">
-        <p className="hint-text">{translate('pages.template.sanity.connectHint')}</p>
-        <button onClick={() => setConnecting(true)}>
-          <SanityIcon size={13} /> {translate('pages.template.sanity.connect')}
-        </button>
+        <TipAnchor text={translate('pages.template.sanity.connectHint')}>
+          <button onClick={() => setConnecting(true)}>
+            <SanityIcon size={13} /> {translate('pages.template.sanity.connect')}
+          </button>
+        </TipAnchor>
         {connect}
       </div>
     );
@@ -571,7 +581,7 @@ function SanityFields({
           onChange={(value) => void pickType(value)}
         />
       </div>
-      {sampling.kind === 'failed' && <p className="page-template-problem">{sampling.message}</p>}
+      <ErrorToast message={sampling.kind === 'failed' ? sampling.message : undefined} />
       {lists[0] !== undefined && (
         <>
           <div className="page-template-triggers">
@@ -594,10 +604,6 @@ function SanityConnectionField({
   readonly set: SetForm;
 }) {
   const translate = useTranslate();
-  const [only] = connections;
-  if (only !== undefined && connections.length === 1) {
-    return <p className="hint-text">{translate('pages.template.sanity.using', { label: only.label, projectId: only.projectId, dataset: only.dataset })}</p>;
-  }
   return (
     <div>
       <label>{translate('pages.template.sanity.connection')}</label>
@@ -620,6 +626,7 @@ function SanityConnectionField({
 // copied there; it is an Editor key, which is more than a site needs, so the
 // person can leave it and set a read token of their own.
 function EnvNotes({ form, env, set }: { readonly form: TemplateForm; readonly env: readonly EnvStatus[]; readonly set: SetForm }) {
+  const translate = useTranslate();
   const translateRich = useTranslateRich();
   const missing = env.flatMap((item) => (item.state === 'missing' ? [item.name] : []));
   const offered = form.kind === 'sanity' && missing.includes(SANITY_TOKEN_ENV);
@@ -639,7 +646,7 @@ function EnvNotes({ form, env, set }: { readonly form: TemplateForm; readonly en
           <span>{translateRich('pages.template.env.copyKey', { name: <CodeInline text={SANITY_TOKEN_ENV} /> })}</span>
         </label>
       )}
-      {unset.length > 0 && <p className="hint-text">{translateRich('pages.template.env.unset', { names: <CodeInline text={unset.join(', ')} /> })}</p>}
+      <NoticeToast message={unset.length > 0 ? translate('pages.template.env.unset', { names: unset.join(', ') }) : undefined} kind="warning" />
     </>
   );
 }
@@ -789,7 +796,7 @@ function HttpFields({
         {sampling.kind === 'loading' && chosen === undefined && (
           <div className="page-template-shimmer" role="status" aria-label={translate('pages.template.http.reading')} />
         )}
-        {sampling.kind === 'failed' && <p className="page-template-problem">{sampling.message}</p>}
+        <ErrorToast message={sampling.kind === 'failed' ? sampling.message : undefined} />
       </div>
       <div className="page-template-triggers">
         <DetailPopover
@@ -797,7 +804,6 @@ function HttpFields({
           title={translate('pages.template.http.requestHeaders')}
           surface="form"
         >
-          <p className="hint-text">{translate('pages.template.http.headersHint')}</p>
           {form.headers.map((row, index) => (
             <HeaderFields
               key={index}
@@ -808,11 +814,13 @@ function HttpFields({
               saved={refresh}
             />
           ))}
-          {!headers.ok && <p className="page-template-problem">{headers.error}</p>}
-          <button className="ghost page-template-add" onClick={() => set((previous) => ({ ...previous, headers: withHeaderRow(previous.headers) }))}>
-            <PlusIcon size={11} />
-            {translate('pages.template.http.addHeader')}
-          </button>
+          <ErrorToast message={headers.ok ? undefined : headers.error} />
+          <TipAnchor text={translate('pages.template.http.headersHint')}>
+            <button className="ghost page-template-add" onClick={() => set((previous) => ({ ...previous, headers: withHeaderRow(previous.headers) }))}>
+              <PlusIcon size={11} />
+              {translate('pages.template.http.addHeader')}
+            </button>
+          </TipAnchor>
         </DetailPopover>
         {chosen !== undefined && <FieldsPopover list={chosen} form={form} set={set} />}
         {lists.length > 1 && (
@@ -892,7 +900,6 @@ function HeaderFields({
 // and nothing in the form or the page holds it.
 function SecretField({ projectPath, name, saved }: { readonly projectPath: string; readonly name: string; readonly saved: () => void }) {
   const translate = useTranslate();
-  const translateRich = useTranslateRich();
   const [value, setValue] = useState('');
   const [state, setState] = useState<{ readonly kind: 'idle' } | { readonly kind: 'saved' } | { readonly kind: 'failed'; readonly message: string }>({
     kind: 'idle',
@@ -923,8 +930,8 @@ function SecretField({ projectPath, name, saved }: { readonly projectPath: strin
           {translate('pages.template.secret.save')}
         </button>
       </div>
-      {state.kind === 'saved' && <p className="hint-text">{translateRich('pages.template.secret.saved', { file: <CodeInline text=".env" /> })}</p>}
-      {state.kind === 'failed' && <p className="page-template-problem">{state.message}</p>}
+      <NoticeToast message={state.kind === 'saved' ? translate('pages.template.secret.saved', { file: '.env' }) : undefined} kind="success" />
+      <ErrorToast message={state.kind === 'failed' ? state.message : undefined} />
     </div>
   );
 }

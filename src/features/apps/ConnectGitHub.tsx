@@ -8,6 +8,7 @@
 // choice. "Check release" downloads and checks the bundle and shows its icon,
 // name and version; "Install" installs exactly those bytes. Studio has no
 // sign-in, so there the pasted repository is the whole path.
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   orderReleases,
@@ -426,23 +427,25 @@ export function ChooserListState(props: { readonly list: ChooserList }) {
       );
     case 'failed':
       return (
-        <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title={translate('apps.connect.loadFailed')} action={<RetryButton onRetry={list.retry} />} alert>
-          {translateDescribed(list)}
-        </ChooserEmpty>
+        <ChooserEmpty
+          icon={<WarningTriangleIcon size={20} />}
+          title={translate('apps.connect.loadFailed')}
+          action={<RetryButton onRetry={list.retry} />}
+          failure={translateDescribed(list)}
+        />
       );
     case 'rate-limited':
       return (
-        <ChooserEmpty icon={<ClockIcon size={20} />} title={translate('apps.connect.rateLimited')} action={<RetryButton onRetry={list.retry} />} alert>
-          {rateLimitWait(list.resetAtMs, Date.now(), translate)}
-        </ChooserEmpty>
+        <ChooserEmpty
+          icon={<ClockIcon size={20} />}
+          title={translate('apps.connect.rateLimited')}
+          action={<RetryButton onRetry={list.retry} />}
+          failure={rateLimitWait(list.resetAtMs, Date.now(), translate)}
+        />
       );
     case 'restart':
       // No renderer-side restart exists, and a main process this old could not run a new one: the person quits and reopens.
-      return (
-        <ChooserEmpty icon={<RefreshIcon size={20} />} title={translate('apps.connect.restartTitle')} alert>
-          {translate('apps.connect.restartDetail')}
-        </ChooserEmpty>
-      );
+      return <ChooserEmpty icon={<RefreshIcon size={20} />} title={translate('apps.connect.restartTitle')} failure={translate('apps.connect.restartDetail')} />;
     case 'signed-out':
       return list.signIn === undefined ? (
         <ChooserEmpty icon={<GitHubIcon size={20} />} title={translate('apps.connect.pasteTitle')}>
@@ -473,20 +476,21 @@ export function ChooserEmpty(props: {
   readonly icon: ReactNode;
   readonly title: string;
   readonly action?: ReactNode;
-  /** A failure is announced as it appears; a plain empty list is not. */
-  readonly alert?: boolean;
+  /** A failure arrives once as a toast; the empty state keeps its icon, title and action, so no text is appended. */
+  readonly failure?: string;
   /** A quieter second way forward, under the action. */
   readonly hint?: string;
-  readonly children: ReactNode;
+  readonly children?: ReactNode;
 }) {
   assert(props.title.length > 0, 'An empty state has a title');
   return (
-    <div className="apps-connect-empty" role={props.alert === true ? 'alert' : undefined}>
+    <div className="apps-connect-empty">
+      <ErrorToast message={props.failure} />
       <span className="apps-empty-icon" aria-hidden="true">
         {props.icon}
       </span>
       <p className="apps-connect-empty-title">{props.title}</p>
-      <p className="apps-connect-empty-detail">{props.children}</p>
+      {props.children !== undefined && <p className="apps-connect-empty-detail">{props.children}</p>}
       {props.action}
       {props.hint !== undefined && <p className="apps-connect-empty-hint">{props.hint}</p>}
     </div>
@@ -637,11 +641,7 @@ function ReleaseStep(props: {
         ← {pick.owner}/{pick.repository}
       </button>
       {load.kind === 'loading' && <p className="apps-note">{translate('apps.connect.loadingReleases')}</p>}
-      {load.kind === 'failed' && (
-        <p className="apps-error" role="alert">
-          {translateDescribed(load)}
-        </p>
-      )}
+      <ErrorToast message={load.kind === 'failed' ? translateDescribed(load) : undefined} />
       {load.kind === 'ready' && releases.length === 0 && <p className="apps-note">{translate('apps.connect.noReleases')}</p>}
       <ul className="apps-choice-list" aria-label={translate('apps.connect.releases')}>
         {releases.map((entry) => (
@@ -667,7 +667,7 @@ function ReleaseStep(props: {
           </li>
         ))}
       </ul>
-      {choice?.kind === 'none' && <p className="apps-error">{translate('apps.connect.noBundle')}</p>}
+      <ErrorToast message={choice?.kind === 'none' ? translate('apps.connect.noBundle') : undefined} />
       {choice?.kind === 'choose' && (
         <Dropdown
           ariaLabel={translate('apps.connect.bundle')}
@@ -690,11 +690,7 @@ function ReleaseStep(props: {
           </span>
         </div>
       )}
-      {check.kind === 'failed' && (
-        <p className="apps-error" role="alert">
-          {translateDescribed(check)}
-        </p>
-      )}
+      <ErrorToast message={check.kind === 'failed' ? translateDescribed(check) : undefined} />
       <div className="apps-actions">
         {check.kind === 'ready' ? (
           <button type="button" className="apps-button primary" onClick={() => props.onStaged(check.value)}>

@@ -55,10 +55,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mcp-card-note {
-  color: var(--text-dim);
-  font-size: 11.5px;
-}
 .mcp-status {
   flex: 0 0 auto;
   padding: 2px 7px;
@@ -297,13 +293,7 @@
   background: transparent;
   color: var(--text-dim);
 }
-.mcp-issues {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  color: var(--red);
-  font-size: 11px;
-  list-style: none;
+/* A document that does not parse tints its editor: a fill, not a border; the reasons are a toast on blur. */
+.mcp-json-editor.is-invalid {
+  background: rgba(255, 90, 90, 0.16);
 }

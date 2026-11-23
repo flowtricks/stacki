@@ -111,7 +111,7 @@ const check = (what, condition, detail) => {
        const padding = parseFloat(getComputedStyle(body).paddingLeft);
        // Not the same as the left padding: the body's stable scrollbar gutter holds 8px, which the right padding gives back.
        const paddingRight = parseFloat(getComputedStyle(body).paddingRight);
-       const rows = [...dialog.querySelectorAll('button')].filter((button) => !button.classList.contains('emdash-dialog-close') && !button.classList.contains('emdash-code-copy'));
+       const rows = [...dialog.querySelectorAll('button')].filter((button) => !button.classList.contains('emdash-dialog-close') && !button.classList.contains('emdash-code-copy') && !button.classList.contains('settings-info'));
        const status = dialog.querySelector('.emdash-install-status');
        const statusText = status && status.querySelector(':scope > span:not(.progress-ring)');
        const centre = (element) => (element ? (element.getBoundingClientRect().top + element.getBoundingClientRect().bottom) / 2 : undefined);
@@ -196,7 +196,7 @@ const check = (what, condition, detail) => {
        await shows('the long line shows', "document.querySelector('.emdash-install-log pre').textContent.length > 3000");
        for (const width of [320, 480]) { await record('runningLong', width); }
        await run("window.resolveInstall({ kind: 'failed', reason: 'noNetwork', changedFiles: ['package.json'] })");
-       await shows('the failure', "document.querySelector('.emdash-install-problem') && document.querySelector('.emdash-install-heading')");
+       await shows('the failure', "[...document.querySelectorAll('.emdash-actions button')].some((button) => /Try again/.test(button.textContent))");
        for (const width of [480, 560]) { await record('failed', width); }
        await run("[...document.querySelectorAll('.emdash-actions button')].find((button) => /Try again/.test(button.textContent)).click()");
        await shows('the preview again', "document.querySelector('.emdash-install .primary')");

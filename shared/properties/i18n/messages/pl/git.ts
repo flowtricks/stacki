@@ -88,7 +88,6 @@ export const messages = {
   'git.chip.initialize': 'Zainicjuj Git',
   'git.chip.initialized': 'Zainicjowano repozytorium git',
   'git.chip.pickedUp': 'Twoje zmiany zostały przywrócone na {branch}',
-  'git.chip.reading': 'Odczyt repozytorium…',
   'git.chip.savedFiles': { one: 'Zapisano {count} plik', few: 'Zapisano {count} pliki', many: 'Zapisano {count} plików', other: 'Zapisano {count} pliku' },
   'git.chip.switched': 'Przełączono na {branch}',
   'git.chip.waiting': 'Na {branch} — Twoje zmiany czekają na {from}',

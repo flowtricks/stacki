@@ -4,18 +4,19 @@
   display: flex;
   color: var(--text-dim);
 }
-.remote-cms-note {
+/* Rows while a panel loads, and the Try again button of one that could not. */
+.remote-cms-loading {
+  padding: 6px 0;
+}
+.remote-cms-loading button {
+  margin-top: 8px;
+}
+/* An empty state: nothing to list. */
+.remote-cms-empty {
   padding: 6px 0;
   color: var(--text-faint);
   font-size: 11px;
   line-height: 1.5;
-}
-.remote-cms-failure {
-  color: var(--text-dim);
-  font-size: 12px;
-}
-.remote-cms-note button {
-  margin-top: 8px;
 }
 /* The last item, held while the next one loads (entryLoad.ts). A read that
    answers at once never dims it; only one that keeps the person waiting does. */
@@ -568,17 +569,10 @@
   }
 }
 
-/* A broken rule under its field: red blocks publishing, amber only warns. */
-.remote-cms-problem {
-  font-size: 11px;
-  color: var(--red);
-}
-.remote-cms-problem.is-warning {
-  color: var(--amber);
-}
-/* What a typed slug is saved as: information, not a problem. */
-.remote-cms-problem.is-note {
-  color: var(--text-dim);
+/* A field whose rule blocks publishing fills its box red (a background, never a border); the words are a toast (NoticeToast.tsx). */
+.remote-cms-field.is-invalid input,
+.remote-cms-field.is-invalid textarea {
+  background: rgba(255, 90, 90, 0.16);
 }
 
 /* An Astro entry's Slug field (EntrySlugField.tsx): the folder its id keeps,
@@ -1109,7 +1103,7 @@
 .remote-cms-settings-row > button {
   flex: none;
 }
-.remote-cms-settings-hint {
+.remote-cms-settings-empty {
   margin: 0;
   color: var(--text-faint);
   font-size: 12px;
@@ -1153,6 +1147,9 @@
 }
 .remote-cms-settings-required {
   margin-inline-start: auto;
+}
+.remote-cms-settings-editor.is-invalid input {
+  background: rgba(255, 90, 90, 0.16);
 }
 .remote-cms-settings-editor {
   display: grid;
@@ -1362,10 +1359,9 @@
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
-.field-settings-note {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 12.5px;
+/* A field name or key the form cannot save fills its box red (a background, never a border); the words are a toast. */
+.field-settings-field [aria-invalid='true'] {
+  background: rgba(255, 90, 90, 0.16);
 }
 @media (max-width: 700px) {
   .field-settings-grid {
@@ -1447,17 +1443,6 @@
   padding: 0;
   border: 0;
 }
-/* A collection that keeps no drafts: its edits change the live content, so the form says so above its fields. */
-.remote-cms-live-notice {
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #3a3017;
-  color: #e6c76a;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 /* What a list and a group hold (RemoteFieldSettings.tsx): the kind of item, and a group's fields as
    rows on a filled background, one to a line, each opening to the field form a collection's fields have. */
 .list-items {

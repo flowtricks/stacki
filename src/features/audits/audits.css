@@ -1198,10 +1198,10 @@
   flex: 1;
   min-width: 0;
 }
-.audits-review-edit-error {
-  flex: none;
-  color: var(--danger, #e5484d);
-  font-size: 11px;
+/* A refused value takes the error look (a fill, never a border); the reason arrives once as a toast. */
+.audits-review-edit.is-refused {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+  border-radius: var(--radius);
 }
 
 /* The Ignored view: entries grouped by file, each row a name, its reason and Unignore. */

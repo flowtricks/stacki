@@ -86,6 +86,7 @@ const { act } = require('react');
 const panelModule = bundle('test/helpers/appsPanelEntry.ts', 'panel');
 const AppsPanel = panelModule.default;
 const { ConfirmHost, registerAgentTaskHandler } = panelModule;
+const { installToastLog } = require('../../helpers/toastLog.js');
 const LeftRail = bundle('src/app/LeftRail.tsx', 'rail').default;
 const roles = bundle('shared/properties/projectRoles.ts', 'roles');
 
@@ -136,14 +137,18 @@ test('an older main process shows the restart message, never a blank panel', asy
       throw new Error("Error invoking remote method 'apps:list': Error: No handler registered for 'apps:list'");
     },
   };
+  const toasts = installToastLog(panelModule.subscribeErrorToasts);
   const { container, root } = await mount(panel());
   assert.equal(container.querySelector('h2').textContent, 'Apps');
-  assert.equal(container.querySelector('[role=alert]').textContent, 'Restart Stacki to use Apps.');
+  assert.deepEqual(toasts.messages(), ['Restart Stacki to use Apps.'], 'the failure is one toast');
+  assert.equal(container.querySelector('[role=alert]') ?? undefined, undefined, 'and no paragraph in the panel');
   await act(async () => root.unmount());
   window.avb = {};
   const missing = await mount(panel());
-  assert.equal(missing.container.querySelector('[role=alert]').textContent, 'Restart Stacki to use Apps.');
+  assert.ok(toasts.messages().includes('Restart Stacki to use Apps.'));
+  assert.equal(missing.container.querySelector('[role=alert]') ?? undefined, undefined);
   await act(async () => missing.root.unmount());
+  toasts.uninstall();
 });
 
 test('no apps: the empty state points at the + menu, with no button of its own', async () => {

@@ -1,6 +1,7 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useId, useState } from 'react';
 import { CloseIcon, PlusIcon } from '../../ui/Icons';
+import { reportErrorToast } from '../../ui/errorNotices';
 import Popup from '../../ui/Popup';
 import { branchNameError, sanitizeBranchName } from './branchName';
 
@@ -71,7 +72,6 @@ export default function BranchCreate(props: BranchCreateProps) {
 function BranchCreateForm(props: BranchCreateProps & { readonly onClose: () => void }) {
   const translate = useTranslate();
   const inputId = useId();
-  const errorId = useId();
   const error = branchNameError(props.name, props.branches, translate);
   const disabled = props.working || !props.name.trim() || Boolean(error);
   return (
@@ -79,6 +79,10 @@ function BranchCreateForm(props: BranchCreateProps & { readonly onClose: () => v
       onSubmit={(event) => {
         event.preventDefault();
         if (disabled) {
+          // Enter on a refused name: the field wears the error look, and the reason arrives once as a toast.
+          if (error && !props.working) {
+            reportErrorToast(error);
+          }
           return;
         }
         props.onCreate(props.name.trim());
@@ -105,18 +109,12 @@ function BranchCreateForm(props: BranchCreateProps & { readonly onClose: () => v
           placeholder="new-branch-name"
           value={props.name}
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? errorId : undefined}
           onChange={(event) => props.onName(sanitizeBranchName(event.target.value))}
         />
         <button type="submit" className="primary" disabled={disabled}>
           {translate('git.branch.create')}
         </button>
       </div>
-      {error && (
-        <div className="git-hint" id={errorId}>
-          {error}
-        </div>
-      )}
     </form>
   );
 }

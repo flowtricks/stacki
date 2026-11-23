@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': '空的樹狀結構',
   'history.diff.firstParent': '與第一個父提交比較',
   'history.diff.label': '檔案差異',
-  'history.diff.loading': '正在載入差異…',
   'history.diff.noTextChanges': '此檔案沒有文字變更。',
   'history.diff.restoreFile': '還原檔案…',
   'history.error.diffUnreadable': '無法讀取此提交的差異。',

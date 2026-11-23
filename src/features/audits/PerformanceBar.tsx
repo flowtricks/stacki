@@ -5,6 +5,7 @@
 // work or poor dot, and a footer saying the numbers are a dev-server
 // approximation and when they were taken), and failed (why, and Retry). "All
 // pages" measures every static page, up to a bound, and lists each one's score.
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import type { Formatters } from '../../../shared/core/i18n/format';
 import { assert } from '../../../shared/core/assert';
@@ -184,14 +185,14 @@ export function PerformanceBar(props: { readonly measure: AuditsPanelProps['meas
   }
   if (page === undefined) {
     return (
-      <div className="audits-card audits-card-error" role="alert">
+      <div className="audits-card audits-card-error">
         <div className="audits-card-head">
           <WarningTriangleIcon size={14} />
           <span className="audits-card-title">
             {route === undefined ? translate('auditsUi.perf.failedThis') : translate('auditsUi.perf.failed', { route })}
           </span>
         </div>
-        <p className="audits-card-note">{performance.problem === undefined ? '' : translateDescribed(performance.problem)}</p>
+        <ErrorToast message={performance.problem === undefined ? undefined : translateDescribed(performance.problem)} />
         <button className="audits-card-button" onClick={() => current !== undefined && run([current])}>
           {translate('ui.retry')}
         </button>

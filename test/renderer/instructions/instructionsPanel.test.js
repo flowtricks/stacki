@@ -14,6 +14,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 const esbuild = require('esbuild');
+const { installToastLog } = require('../../helpers/toastLog.js');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
 
@@ -31,6 +32,7 @@ esbuild.buildSync({
       "export { default as InstructionsDocument } from './src/app/shell/InstructionsDocument';",
       "export { selectedInstruction, selectInstruction } from './src/features/instructions/instructionSelection';",
       "export { setActualRole } from './src/lib/currentRole';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
       "export { ADMIN_VIEW } from './shared/properties/projectRoles';",
       "export { classifyInstruction as sectionOf, readInstructionSettingsSource } from './shared/properties/instructions';",
     ].join('\n'),
@@ -239,13 +241,22 @@ test('creating a skill writes its scaffold and opens it', async () => {
   await click(byLabel('New skill'));
   const form = formOf('New skill');
   assert.ok(form, 'the form opens');
+  const toasts = installToastLog(panel.subscribeErrorToasts);
   await submit(form);
-  assert.match(form.textContent, /Give the skill a name\./, 'an empty name is refused before main is asked');
+  assert.match(toasts.messages().join('\n'), /Give the skill a name\./, 'an empty name is refused before main is asked, as a toast');
+  assert.doesNotMatch(form.textContent, /Give the skill a name\./, 'the form appends no problem text');
   await type(byLabel('Skill name'), 'Write Tests');
   await submit(form);
-  assert.match(formOf('New skill').textContent, /Say when an agent should use this skill\./);
+  assert.match(toasts.messages().join('\n'), /Say when an agent should use this skill\./);
   await type(byLabel('Skill description'), 'Writes tests: use when adding code.');
-  assert.match(formOf('New skill').textContent, /Saved as \.claude\/skills\/write-tests\/SKILL\.md/);
+  assert.match(
+    formOf('New skill').querySelector('.info-hint-text')?.textContent ?? '',
+    /Saved as \.claude\/skills\/write-tests\/SKILL\.md/,
+    "where it is saved is the info mark's description, not a visible line",
+  );
+  assert.ok(formOf('New skill').querySelector('.settings-info'), 'the info mark holds it');
+  assert.equal(formOf('New skill').querySelector('.instructions-form-hint') ?? undefined, undefined, 'no hint line');
+  toasts.uninstall();
   await submit(formOf('New skill'));
   assert.deepEqual(created, [
     {
@@ -268,8 +279,11 @@ test('creating a rule writes a heading file in the chosen folder; an existing on
   assert.deepEqual(created, [{ file: '.claude/rules/testing.md', source: '# testing\n\n' }]);
   await click(byLabel('New rule'));
   await type(byLabel('Rule name'), 'testing.md');
+  const toasts = installToastLog(panel.subscribeErrorToasts);
   await submit(formOf('New rule'));
-  assert.match(formOf('New rule').textContent, /\.claude\/rules\/testing\.md already exists\./);
+  assert.match(toasts.messages().join('\n'), /\.claude\/rules\/testing\.md already exists\./);
+  assert.doesNotMatch(formOf('New rule').textContent, /already exists/, 'the form appends no problem text');
+  toasts.uninstall();
   await click([...formOf('New rule').querySelectorAll('button')].find((button) => button.textContent === 'Cancel'));
   assert.equal(formOf('New rule') ?? undefined, undefined, 'cancel closes the form');
   await unmount();
@@ -302,18 +316,26 @@ test('Settings → Instructions lists, adds, refuses and removes hidden paths', 
   await mount(React.createElement(panel.InstructionsSettings, { projectPath: '/project' }));
   const rows = () => [...document.querySelectorAll('.instructions-hidden-row code')].map((code) => code.textContent);
   assert.deepEqual(rows(), ['docs/archive']);
+  const toasts = installToastLog(panel.subscribeErrorToasts);
   await type(byLabel('Path or pattern to hide'), '../outside');
-  assert.match(document.querySelector('[role="alert"]').textContent, /A hidden path stays inside the project\./, 'the reason shows while typing');
-  assert.equal(document.querySelector('.instructions-hidden-add button').disabled, true, 'Hide waits for a valid path');
+  // While it is typed a refused pattern only turns the field red; the reason is said once, as a toast, when Hide is pressed.
+  assert.equal(document.querySelector('[role="alert"]') ?? undefined, undefined, 'no reason paragraph is added while typing');
+  assert.equal(document.querySelector('.instructions-hidden-add').hasAttribute('data-invalid'), true, 'the field wears the error look');
+  assert.equal(byLabel('Path or pattern to hide').getAttribute('aria-invalid'), 'true');
+  assert.deepEqual(toasts.messages(), [], 'typing says nothing');
+  assert.equal(document.querySelector('.instructions-hidden-add button').disabled, false, 'Hide stays pressable so it can say why not');
   await submit(document.querySelector('.instructions-hidden-add'));
+  assert.match(toasts.messages().join('\n'), /A hidden path stays inside the project\./, 'the reason is one toast on commit');
   assert.equal(writes.length, 0, 'a refused path writes nothing');
   await type(byLabel('Path or pattern to hide'), '**/CHANGELOG.md');
   await submit(document.querySelector('.instructions-hidden-add'));
   assert.deepEqual(rows(), ['docs/archive', '**/CHANGELOG.md']);
   await type(byLabel('Path or pattern to hide'), 'docs/archive/');
   await submit(document.querySelector('.instructions-hidden-add'));
-  assert.match(document.querySelector('[role="alert"]').textContent, /docs\/archive is already hidden\./);
-  assert.equal(document.querySelector('.instructions-hidden-add button').disabled, true, 'a duplicate cannot be added');
+  assert.match(toasts.messages().join('\n'), /docs\/archive is already hidden\./);
+  assert.equal(document.querySelector('[role="alert"]') ?? undefined, undefined, 'the duplicate adds no paragraph');
+  assert.equal(writes.length, 1, 'a duplicate is not written');
+  toasts.uninstall();
   await click(byLabel('Show docs/archive again'));
   assert.deepEqual(rows(), ['**/CHANGELOG.md']);
   assert.deepEqual(hiddenPaths(), ['**/CHANGELOG.md']);

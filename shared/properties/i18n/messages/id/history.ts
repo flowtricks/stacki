@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'Tree kosong',
   'history.diff.firstParent': 'dibandingkan dengan parent pertama',
   'history.diff.label': 'Diff file',
-  'history.diff.loading': 'Memuat diff…',
   'history.diff.noTextChanges': 'Tidak ada perubahan teks pada file ini.',
   'history.diff.restoreFile': 'Pulihkan file…',
   'history.error.diffUnreadable': 'Tidak dapat membaca diff commit ini.',

@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': '空树',
   'history.diff.firstParent': '与第一个父提交比较',
   'history.diff.label': '文件差异',
-  'history.diff.loading': '正在加载差异…',
   'history.diff.noTextChanges': '此文件没有文本更改。',
   'history.diff.restoreFile': '恢复文件…',
   'history.error.diffUnreadable': '无法读取此提交的差异。',

@@ -1,7 +1,8 @@
 // Goal: moving between entries in the CMS view never reports a problem that is not the selected
 // entry's own. Nothing red shows while an entry's read is outstanding, the form never empties, a
 // late answer for an earlier selection changes nothing, and a real problem still shows once the
-// entry has loaded and while typing.
+// entry has loaded and while typing. A problem is never a line in the form: the field is tinted and the reason is one toast,
+// captured here through the app's own subscription (a slug says it when the person tries to keep it, not on every keystroke).
 // Method: the whole view is mounted against reads the test answers by hand. A Profiler snapshots
 // the DOM in every commit, because the bug lived for one commit that a check after `act` never
 // sees: the assertions read every frame, not just the last. The load state's rules are then
@@ -18,7 +19,11 @@ const loadRenderer = require('../../helpers/rendererModule');
 const output = repoPath('node_modules/.stacki-test/remote-entry-switch.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
-  entryPoints: [repoPath('src/features/cms/RemoteCmsView.tsx')],
+  stdin: {
+    contents: "export { RemoteCmsView } from './src/features/cms/RemoteCmsView';\nexport { subscribeErrorToasts } from './src/ui/errorNotices';",
+    resolveDir: repoPath('.'),
+    loader: 'ts',
+  },
   outfile: output,
   bundle: true,
   platform: 'node',
@@ -30,7 +35,7 @@ buildSync({
 });
 const dom = new JSDOM('<!doctype html>', { pretendToBeVisual: true, url: 'http://localhost/' });
 global.window = dom.window;
-for (const name of ['document', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'Element', 'Node', 'localStorage']) {
+for (const name of ['document', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'Element', 'Node', 'localStorage', 'FocusEvent']) {
   global[name] = dom.window[name];
 }
 global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -41,7 +46,7 @@ global.ResizeObserver = class {
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
-const { RemoteCmsView } = require(output);
+const { RemoteCmsView, subscribeErrorToasts } = require(output);
 const { entryLoadOf, entryShown } = loadRenderer('src/features/cms/entryLoad.ts');
 
 const ASTRO_CONTENT = { kind: 'astro', id: '00000000-0000-4000-8000-00000a57c0de', label: 'Content' };
@@ -77,6 +82,11 @@ function fixture(documents, connection = ASTRO_CONTENT) {
   const reads = [];
   const writes = [];
   const frames = [];
+  const toasts = [];
+  subscribeErrorToasts(
+    (notice) => toasts.push(notice.message),
+    () => undefined,
+  );
   const answerWrite = (write) => ({ ok: true, value: documents.find((document) => document.id === write.id) });
   window.avb = {
     contentRemoteRead: (payload) => new Promise((resolve) => reads.push({ request: payload.request, resolve })),
@@ -97,7 +107,7 @@ function fixture(documents, connection = ASTRO_CONTENT) {
   const snapshot = () => {
     const form = document.querySelector('.remote-cms-fields');
     frames.push({
-      problems: [...document.querySelectorAll('.remote-cms-problem.is-error, .remote-cms-problem.is-warning')].map((label) => label.textContent),
+      lines: document.querySelectorAll('.remote-cms-problem').length,
       invalid: document.querySelectorAll('[aria-invalid="true"], .is-invalid').length,
       values: [...document.querySelectorAll('.remote-cms-fields input, .remote-cms-fields textarea')].map((input) => input.value),
       form: form !== null,
@@ -137,7 +147,7 @@ function fixture(documents, connection = ASTRO_CONTENT) {
     await act(async () => root.unmount());
     container.remove();
   };
-  return { reads, writes, frames, open, answer, answerList, close };
+  return { reads, writes, frames, toasts, open, answer, answerList, close };
 }
 
 const values = (frame) => frame.values.join(' / ');
@@ -158,9 +168,10 @@ async function opened(connection) {
   return { ...view, documents };
 }
 
-function assertNothingReported(frames) {
+function assertNothingReported(frames, toasts) {
+  assert.deepEqual(toasts, [], 'no problem is said in a toast');
   for (const frame of frames) {
-    assert.deepEqual(frame.problems, [], `no problem shows: ${values(frame)}`);
+    assert.equal(frame.lines, 0, `no problem line is appended: ${values(frame)}`);
     assert.equal(frame.invalid, 0, `no field is marked invalid: ${values(frame)}`);
   }
 }
@@ -174,7 +185,7 @@ test('fast switching over delayed reads reports nothing and never empties the fo
   await view.open(third);
   await view.answer(second.id);
   await view.answer(third.id);
-  assertNothingReported(view.frames);
+  assertNothingReported(view.frames, view.toasts);
   const started = view.frames.findIndex((frame) => frame.form);
   for (const frame of view.frames.slice(started)) {
     assert.equal(frame.form, true, 'the form stays up through every switch');
@@ -196,7 +207,7 @@ test('going back to an entry already read reports nothing about the slug left be
   // The second visit shows the kept entry at once, whose taken slugs hold the entry just left.
   await view.open(first);
   await view.answer(first.id);
-  assertNothingReported(view.frames);
+  assertNothingReported(view.frames, view.toasts);
   await view.close();
 });
 
@@ -235,7 +246,7 @@ test('an answer naming another entry does not stand in for the one selected', as
   await view.open(second);
   await view.answer(second.id, first);
   assert.equal(view.frames.at(-1).held, true, 'the wrong document never becomes this entry');
-  assertNothingReported(view.frames);
+  assertNothingReported(view.frames, view.toasts);
   await view.close();
 });
 
@@ -247,9 +258,11 @@ test('a value that really is missing says so once its entry has loaded, and not 
   await view.answerList();
   await view.answer(documents[0].id);
   await view.open(blank);
-  assertNothingReported(view.frames);
+  assertNothingReported(view.frames, view.toasts);
   await view.answer(blank.id);
-  assert.deepEqual(view.frames.at(-1).problems, ['heading is required']);
+  assert.deepEqual(view.toasts, ['heading is required'], 'said once, in a toast');
+  assert.ok(view.frames.at(-1).invalid > 0, 'the field is tinted');
+  assert.equal(view.frames.at(-1).lines, 0, 'no line is appended under it');
   await view.close();
 });
 
@@ -260,29 +273,39 @@ test('a held entry keeps quiet about its own problems, which return with it', as
   await view.open(blank);
   await view.answerList();
   await view.answer(blank.id);
-  assert.deepEqual(view.frames.at(-1).problems, ['heading is required']);
+  assert.deepEqual(view.toasts, ['heading is required']);
   const shown = view.frames.length;
+  const said = view.toasts.length;
   await view.open(documents[1]);
   await view.answer(documents[1].id);
-  assertNothingReported(view.frames.slice(shown));
+  assertNothingReported(view.frames.slice(shown), view.toasts.slice(said));
   // Its own kept document shows at once, so its own problem may too.
   await view.open(blank);
-  assert.deepEqual(view.frames.at(-1).problems, ['heading is required']);
   await view.answer(blank.id);
-  assert.deepEqual(view.frames.at(-1).problems, ['heading is required']);
+  const again = view.toasts.slice(said);
+  assert.ok(again.length > 0, 'its own problem returns with it');
+  assert.ok(
+    again.every((message) => message === 'heading is required'),
+    `and only its own: ${again.join(' / ')}`,
+  );
   await view.close();
 });
 
-test('a problem still shows while typing', async () => {
+test('a slug problem tints the box while typing and is said once when the person tries to keep it', async () => {
   const view = await opened();
   const slug = document.querySelector('.entry-slug-field input');
   await type(slug, 'forty-five');
-  assert.deepEqual(view.frames.at(-1).problems, ['Another item already uses this slug']);
+  assert.equal(slug.getAttribute('aria-invalid'), 'true', 'the box shows it while typing');
+  assert.deepEqual(view.toasts, [], 'no toast per keystroke');
+  assert.equal(view.frames.at(-1).lines, 0, 'no line is appended under the field');
+  await act(async () => slug.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })));
+  assert.deepEqual(view.toasts, ['Another item already uses this slug'], 'said once, on commit');
   await type(slug, 'twenty-six');
-  assert.deepEqual(view.frames.at(-1).problems, []);
+  assert.equal(slug.getAttribute('aria-invalid'), 'false', 'a good slug clears the tint');
   const heading = document.querySelectorAll('.remote-cms-field-save input, .remote-cms-field-save textarea')[0];
   await type(heading, '');
-  assert.deepEqual(view.frames.at(-1).problems, ['heading is required']);
+  assert.equal(view.toasts.at(-1), 'heading is required');
+  assert.ok(view.frames.at(-1).invalid > 0);
   await view.close();
 });
 

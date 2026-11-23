@@ -10,6 +10,7 @@ import type { FieldDescriptor } from './contentSchema';
 import { planContentRename, readContentEntries, renameContentEntry, validateContentEntry, writeContentEntry } from './contentViewBridge';
 import type { ContentEntries, ContentEntry } from './contentViewBridge';
 import CodeEditor from '../../ui/CodeEditor';
+import InfoHint from '../../ui/InfoHint';
 import { CheckIcon, ChevronRightIcon, CloseIcon, HelpCircleIcon, HideIcon } from '../../ui/Icons';
 import { FieldRow, UnionField, isPlainObject, issueMessageAt, omitField } from './ContentFields';
 import type { FieldContext } from './ContentFields';
@@ -507,8 +508,9 @@ function BodyEditor(props: EntryDetailProps & { readonly entry: ContentEntry }) 
   const translate = useTranslate();
   return (
     <div className="cms-card">
-      <h3>{translate('contentUi.body.title')}</h3>
-      <div className="content-body-note">{translate('contentUi.body.note')}</div>
+      <h3>
+        {translate('contentUi.body.title')} <InfoHint text={translate('contentUi.body.note')} />
+      </h3>
       <div className="content-body-editor">
         <CodeEditor key={props.entry.id} language="markdown" value={props.body ?? ''} onChange={(body: string) => props.change({ data: props.data, body })} />
       </div>

@@ -442,13 +442,6 @@
 .publish-status-results > div > svg:last-child {
   color: var(--green);
 }
-.publish-status-body .publish-status-note {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: var(--bg-input);
-  font-size: 12px;
-}
 
 .publish-settings .publish-connections {
   display: grid;

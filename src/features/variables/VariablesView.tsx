@@ -17,6 +17,7 @@ import { dropPlan, stemOf } from './variableRows';
 import { fluidCheck, resolveValue } from './fluid';
 import { getHost, setHost } from '../style/model/host';
 import { CloseIcon, CheckIcon } from '../../ui/Icons';
+import { ErrorToast } from '../../ui/ErrorToast';
 import Sheet from './VariableTable';
 import { messageRef } from '../../../shared/properties/i18n/messageRef';
 import { VariableScopeBadge } from './VariableScopeBadge';
@@ -101,11 +102,9 @@ function VariablesViewBody({
       storageKey="stacki.window.variables"
       header={<VariablesWindowHeader state={state} />}
     >
-      {state.visibilityBlocked !== undefined && (
-        <div className="vars-notice" role="alert">
-          {translate('variables.visibility.blocked', { detail: state.visibilityBlocked })}
-        </div>
-      )}
+      <ErrorToast
+        message={state.visibilityBlocked === undefined ? undefined : translate('variables.visibility.blocked', { detail: state.visibilityBlocked })}
+      />
       <VariablePreviewContext.Provider value={state.preview}>
         <Sheet
           blocks={state.blocks}

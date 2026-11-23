@@ -4,6 +4,7 @@
 // Every state wears the same shape (a tinted circle with an icon, a headline, secondary text, the buttons), so the popup
 // does not change character as an update moves from available to downloading to ready.
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import { ArrowDownIcon, CheckIcon, ClockIcon, CloseIcon, CodeIcon } from '../../ui/Icons';
 import { useFormat, useTranslate } from '../../lib/i18n/useTranslate';
@@ -143,7 +144,7 @@ function PopupBody({ state }: { readonly state: ActiveState }) {
       return (
         <div className="modal-body confirm-body">
           <div>{state.stage === 'check' ? translate('dialog.update.check.failed') : translate('dialog.update.download.failed')}</div>
-          {state.detail.length > 0 && <div className="update-error-detail">{state.detail}</div>}
+          <ErrorToast message={state.detail.length > 0 ? state.detail : undefined} />
         </div>
       );
     default: {

@@ -1,4 +1,5 @@
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
+import { SkeletonRows } from '../../ui/Skeleton';
 import { translateReference } from '../../lib/i18n/translateErrorText';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assert } from '../../../shared/core/assert';
@@ -51,7 +52,7 @@ export default function HistoryFileDiff({
         {commit.parents[0]?.slice(0, 7) ?? translate('history.diff.emptyTree')} → {commit.shortHash}
         {commit.isMerge ? ` · ${translate('history.diff.firstParent')}` : ''}
       </div>
-      {state.kind === 'loading' && <p className="history-note">{translate('history.diff.loading')}</p>}
+      {state.kind === 'loading' && <SkeletonRows count={4} />}
       {state.kind === 'error' && (
         <ErrorToast
           message={translateReference(state.message, state.messageRef, translate)}

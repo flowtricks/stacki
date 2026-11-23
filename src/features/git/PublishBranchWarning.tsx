@@ -12,6 +12,7 @@ import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { cleanError } from '../../lib/cleanError';
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import { branchStatusOf, needsBranchWarning, type BranchStatus } from './branchStatus';
 import { isBranchWarningSilenced, silenceBranchWarning } from './branchWarningPreference';
@@ -179,7 +180,7 @@ function PublishBranchWarning({ status, dirty, publish, switchFirst, cancel }: D
                 ? translate('publish.branchWarning.bodyDetached', { default: status.defaultName })
                 : translate('publish.branchWarning.body', { branch, default: status.defaultName })}
             </div>
-            {problem !== undefined && <p className="stacki-branch-warning-problem">{problem}</p>}
+            <ErrorToast message={problem} />
             {!detached && (
               <label className="confirm-check">
                 <input type="checkbox" checked={remember} disabled={working} onChange={(event) => setRemember(event.target.checked)} />

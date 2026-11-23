@@ -2,7 +2,8 @@
 // and Desktop and Studio show it through one shared popup that renders their steps the same way.
 // Method: render the shared popup with each backend state and inspect progress and result controls;
 // render Studio's job stages through Studio's mapping into that same popup and compare the markup;
-// read both hosts' sources to pin them to the shared component.
+// read both hosts' sources to pin them to the shared component. A failure and a host note are toasts (owner rule: nothing is
+// appended into the popup), so those cases read the captured toasts and check the popup holds no alert or note node.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -10,6 +11,7 @@ const path = require('node:path');
 const { build } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources');
+const { toastMessages } = require('../../helpers/toastCapture');
 const React = require('react');
 const { act } = React;
 
@@ -36,6 +38,7 @@ async function bundle(entry, name) {
     jsx: 'automatic',
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     logLevel: 'silent',
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     loader: { '.css': 'empty' },
     plugins: [vendoredStacki],
   });
@@ -48,6 +51,7 @@ async function fixture(context, component = 'PublishStatus') {
     component === 'PublishStatus'
       ? (await bundle('src/features/publishing/PublishStatus.tsx', 'publish-status')).PublishStatus
       : (await bundle('src/app/shell/DesktopPublishButton.tsx', 'desktop-publish-button'))[component];
+  globalThis.stackiCapturedToasts = [];
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
@@ -185,7 +189,8 @@ test('A failed deployment retains the confirmed GitHub result', async (context) 
   const show = await fixture(context);
   await show({ kind: 'failed', message: 'Hosting is unavailable', github: true, hosting: false });
   assert.match(document.body.textContent, /Publish needs attention/);
-  assert.equal(document.querySelector('[role="alert"]').textContent, 'Hosting is unavailable');
+  assert.equal(toastMessages(), 'Hosting is unavailable');
+  assert.equal(document.querySelector('[role="alert"]') ?? undefined, undefined, 'the sentence is not a paragraph in the popup');
   assert.match(document.body.textContent, /Changes pushed to GitHub/);
   assert.doesNotMatch(document.body.textContent, /Hosting deployment completed/);
   assert.equal(document.querySelector('.modal-footer button').textContent, 'Close');
@@ -237,11 +242,12 @@ test('Studio results use the shared success, review and failure states', async (
   await show(live);
   assert.match(document.body.textContent, /Published successfully/);
   assert.match(document.body.textContent, /Hosting deployment completed/);
-  assert.equal(document.querySelector('.publish-status-note') === null, true);
+  assert.equal(toastMessages(), '', 'a live deployment has nothing to add');
   const pending = publishStatusView({ kind: 'committed', id: 'run', sha: 'a', url: 'https://example.com', deployment: 'pending' }, 'running');
   assert.deepEqual(pending.state, { kind: 'done', github: true, hosting: false });
   await show(pending);
-  assert.match(document.querySelector('.publish-status-note').textContent, /Deployment is still unconfirmed/);
+  assert.match(toastMessages(), /Deployment is still unconfirmed/);
+  assert.equal(document.querySelector('.publish-status-note') ?? undefined, undefined);
   const hostingOnly = publishStatusView(
     { kind: 'committed', id: 'run', sha: 'a', url: 'https://example.com', github: 'skipped', deployment: 'live' },
     'running',
@@ -249,7 +255,7 @@ test('Studio results use the shared success, review and failure states', async (
   assert.deepEqual(hostingOnly.state, { kind: 'done', github: false, hosting: true });
   const failed = publishStatusView({ kind: 'failed', id: 'run', message: 'Build failed' }, 'interrupted');
   await show(failed);
-  assert.equal(document.querySelector('[role="alert"]').textContent, 'Build failed');
+  assert.match(toastMessages(), /Build failed/);
   assert.equal(document.querySelector('.modal-footer button').textContent, 'Close');
   assert.deepEqual(publishStatusView(undefined, 'interrupted').state.message, PUBLISH_INTERRUPTED_MESSAGE);
   assert.equal(publishStatusView({ kind: 'failed', id: 'run', message: 'Build failed' }, 'running').state.kind, 'failed');
@@ -262,7 +268,8 @@ test('Studio results use the shared success, review and failure states', async (
 test('A host note and running footer have their own place in the popup', async (context) => {
   const show = await fixture(context);
   await show({ state: { kind: 'running', step: 'Saving to GitHub…', progress: { completed: 2, total: 4 } }, note: 'Demo note.', runningNote: 'Keep going.' });
-  assert.equal(document.querySelector('.publish-status-body .publish-status-note').textContent, 'Demo note.');
+  assert.equal(toastMessages(), 'Demo note.');
+  assert.equal(document.querySelector('.publish-status-note') ?? undefined, undefined);
   assert.equal(document.querySelector('.modal-footer > span').textContent, 'Keep going.');
   await show({ kind: 'running', step: 'Saving to GitHub…' });
   assert.equal(document.querySelector('.modal-footer > span').textContent, 'Keep Stacki open until publishing finishes.');

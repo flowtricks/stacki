@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'Boş ağaç',
   'history.diff.firstParent': 'ilk üst commit ile karşılaştırıldı',
   'history.diff.label': 'Dosya farkı',
-  'history.diff.loading': 'Fark yükleniyor…',
   'history.diff.noTextChanges': 'Bu dosyada metin değişikliği yok.',
   'history.diff.restoreFile': 'Dosyayı geri yükle…',
   'history.error.diffUnreadable': 'Bu commit’in farkı okunamadı.',

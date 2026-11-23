@@ -19,6 +19,7 @@ import type { AppSummary } from '../../../shared/properties/apps';
 import { connectAppAuth, disconnectAppAuth, onAppAuthChanged, readAppAuthStatus } from '../../ipc/appAccessBridge';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { WarningTriangleIcon } from '../../ui/Icons';
 import { AppDetailsRow, AppDetailsSection } from './AppDetailsLayout';
 
@@ -130,7 +131,7 @@ export function AppConnectionsSection({ projectPath, app }: { readonly projectPa
           </AppDetailsRow>
         );
       })}
-      {problem !== undefined && <p className="apps-connections-problem">{problem}</p>}
+      <ErrorToast message={problem} />
       <OwnClientNote app={app} />
     </AppDetailsSection>
   );

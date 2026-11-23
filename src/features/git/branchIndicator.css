@@ -42,16 +42,6 @@
   background: rgba(255, 214, 10, 0.24);
   color: var(--amber);
 }
-/* The question asked before publishing from a branch other than the default (the dialog itself is the shared .confirm-dialog). */
-.stacki-branch-warning-problem {
-  margin: 12px 0 0;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  background: rgba(255, 214, 10, 0.12);
-  color: var(--amber);
-  font-size: 12px;
-  line-height: 1.45;
-}
 /* Three answers with names in them (German is the longest): wider than a plain confirmation, and the footer wraps rather than clips. */
 .modal.confirm-dialog.stacki-branch-warning {
   width: 520px;

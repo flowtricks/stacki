@@ -17,6 +17,7 @@
 // itself while an advanced setting is required and empty, because a field the
 // app cannot start without must never be hidden. The "Set up" prompt lists every
 // setting, advanced or not: it is shown only while something is missing.
+import { ErrorToast } from '../../ui/ErrorToast';
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -114,11 +115,7 @@ function SettingsBody(props: {
     case 'loading':
       return <p className="apps-note">{translate('apps.settings.reading')}</p>;
     case 'failed':
-      return (
-        <p className="apps-error" role="alert">
-          {translateDescribed(load)}
-        </p>
-      );
+      return <ErrorToast message={translateDescribed(load)} />;
     case 'ready':
       return <SettingsForm key={JSON.stringify(load.values)} {...props} saved={load.values} />;
     default: {
@@ -194,11 +191,7 @@ function SettingsForm(props: {
       {advanced.length > 0 && (
         <AdvancedSettings openInitially={missingRequiredSettings(advanced, props.saved).length > 0}>{advanced.map(field)}</AdvancedSettings>
       )}
-      {state.kind === 'failed' && (
-        <p className="apps-error" role="alert">
-          {translateDescribed(state)}
-        </p>
-      )}
+      <ErrorToast message={state.kind === 'failed' ? translateDescribed(state) : undefined} />
       <div className={props.layout === 'rows' ? 'apps-details-section-footer' : 'apps-actions'}>
         <button type="submit" className="apps-button primary" disabled={!changed || state.kind === 'saving'}>
           {state.kind === 'saving' ? translate('apps.settings.saving') : translate('apps.settings.save')}

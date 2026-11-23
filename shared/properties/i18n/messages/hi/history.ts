@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'खाली ट्री',
   'history.diff.firstParent': 'पहले पैरेंट से तुलना',
   'history.diff.label': 'फ़ाइल का अंतर',
-  'history.diff.loading': 'अंतर लोड हो रहा है…',
   'history.diff.noTextChanges': 'इस फ़ाइल में टेक्स्ट में कोई बदलाव नहीं है।',
   'history.diff.restoreFile': 'फ़ाइल वापस लाएँ…',
   'history.error.diffUnreadable': 'इस कमिट का अंतर नहीं पढ़ा जा सका।',

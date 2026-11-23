@@ -1,6 +1,8 @@
 // A saved Payload connection's card details: whether the account works (checked on demand, never behind
 // the person's back: a check is a login for a password connection), what it can reach, and how to use the
 // same server from the site's own pages. The key never appears here; only the address and the variable names.
+import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useState } from 'react';
 import { checkCmsConnection } from '../../ipc/cmsConnectionsBridge';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -55,9 +57,9 @@ export function PayloadStatus(props: { readonly projectPath: string; readonly co
           {translate('settings.cms.payload.disconnect')}
         </button>
       </div>
-      {state.kind === 'failed' && <p className="cms-payload-problem">{state.message}</p>}
+      <ErrorToast message={state.kind === 'failed' ? state.message : undefined} />
       {live.length > 0 && (
-        <p className="cms-payload-live">{translate('settings.cms.payload.liveIn', { names: live.map((collection) => collection.slug).join(', ') })}</p>
+        <NoticeToast message={translate('settings.cms.payload.liveIn', { names: live.map((collection) => collection.slug).join(', ') })} kind="warning" />
       )}
       {snippet && <SiteSnippet connection={props.connection} />}
     </div>

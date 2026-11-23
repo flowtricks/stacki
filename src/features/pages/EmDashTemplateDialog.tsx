@@ -11,6 +11,7 @@ import { readEmDashProject } from '../../ipc/emdashBridge';
 import { planPageTemplate } from '../../ipc/pageTemplateBridge';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import { Skeleton } from '../../ui/Skeleton';
 import { suggestedRoute } from './pageTemplateForm';
@@ -162,7 +163,7 @@ export function EmDashTemplateDialog({ projectPath, layouts, onClose, onCreate }
                 )}
               </>
             )}
-            {refused !== undefined && <p className="page-template-problem">{refused}</p>}
+            <ErrorToast message={refused} />
           </div>
           <div className="modal-footer">
             <button onClick={close}>{translate('ui.cancel')}</button>

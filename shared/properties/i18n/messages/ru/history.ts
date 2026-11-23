@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'Пустое дерево',
   'history.diff.firstParent': 'сравнение с первым родителем',
   'history.diff.label': 'Различия в файле',
-  'history.diff.loading': 'Загрузка различий…',
   'history.diff.noTextChanges': 'В этом файле нет изменений текста.',
   'history.diff.restoreFile': 'Восстановить файл…',
   'history.error.diffUnreadable': 'Не удалось прочитать различия этого коммита.',

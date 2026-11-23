@@ -2,6 +2,7 @@
 // collection's fields, each checked while it shows as a column. The fields
 // come from the collection's template (its fields with no values), read once
 // when the menu first opens.
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useRef, useState } from 'react';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
@@ -80,16 +81,21 @@ function ColumnMenu(props: {
   const { fields } = props;
   if (fields === undefined || fields.kind === 'loading') {
     return (
-      <div className="remote-cms-note">
+      <div className="remote-cms-loading">
         <SkeletonRows count={4} />
       </div>
     );
   }
   if (fields.kind === 'failed') {
-    return <p className="remote-cms-note remote-cms-failure">{fields.message}</p>;
+    return (
+      <>
+        <ErrorToast message={fields.message} />
+        <p className="remote-cms-empty">{translate('cmsRemote.columns.none')}</p>
+      </>
+    );
   }
   if (fields.fields.length === 0) {
-    return <p className="remote-cms-note">{translate('cmsRemote.columns.none')}</p>;
+    return <p className="remote-cms-empty">{translate('cmsRemote.columns.none')}</p>;
   }
   return fields.fields.map((field) => (
     <button

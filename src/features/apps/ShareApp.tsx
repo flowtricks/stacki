@@ -15,6 +15,7 @@
 // exactly what was created. Afterwards the app can switch from its uploaded
 // file to the release (a switch, on by default), so the project hears of new
 // releases; auto-update stays off.
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { AppManifest, AppRepositoryListing, AppSummary } from '../../../shared/properties/apps';
@@ -378,9 +379,9 @@ function SharePhase(
     case 'failed':
       return (
         <ShareFrame app={app.manifest} onCancel={props.onDone} actions={back}>
-          <div className="apps-share-result" role="alert">
+          <div className="apps-share-result">
             <StepList states={shareStepStates(phase.outcome.step, { failed: true })} visibility={undefined} />
-            <p className="apps-error">{translateDescribed(phase.outcome)}</p>
+            <ErrorToast message={translateDescribed(phase.outcome)} />
             <CreatedReport created={phase.outcome.created} createdRefs={phase.outcome.createdRefs} />
           </div>
         </ShareFrame>
@@ -388,8 +389,8 @@ function SharePhase(
     case 'error':
       return (
         <ShareFrame app={app.manifest} onCancel={props.onDone} actions={back}>
-          <div className="apps-share-result" role="alert">
-            <p className="apps-error">{translateDescribed(phase)}</p>
+          <div className="apps-share-result">
+            <ErrorToast message={translateDescribed(phase)} />
             <p className="apps-share-detail">{translate('apps.share.nothingCreated')}</p>
           </div>
         </ShareFrame>
@@ -553,13 +554,15 @@ function NameStatus(props: { readonly id: string; readonly status: RepositoryNam
   switch (status.kind) {
     case 'invalid':
       return (
-        <p id={props.id} className="apps-share-status invalid" role="alert">
+        <p id={props.id} className="apps-share-status invalid">
+          <ErrorToast message={translateDescribed(status)} />
           <WarningTriangleIcon size={11} /> {translateDescribed(status)}
         </p>
       );
     case 'exists':
       return (
-        <p id={props.id} className="apps-share-status invalid" role="alert">
+        <p id={props.id} className="apps-share-status invalid">
+          <ErrorToast message={translate('apps.share.exists', { name: `${props.owner}/${props.name}` })} />
           <WarningTriangleIcon size={11} /> {translate('apps.share.exists', { name: `${props.owner}/${props.name}` })}
         </p>
       );

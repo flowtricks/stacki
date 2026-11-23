@@ -12,6 +12,7 @@ import type { MessageKey } from '../../lib/i18n/localeContext';
 import { DEFAULT_SECRETS_FILE_PARAMS } from './secretsModel';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { readMcpText, saveMcpText } from './mcpBridge';
 import { ISSUE_KEYS, MCP_ERROR_KEYS } from './mcpModel';
 import { McpEditorSkeleton } from './McpSkeleton';
@@ -53,6 +54,8 @@ export default function McpJsonView({
   const base = state.kind === 'ready' ? state.value : undefined;
   const blank = base !== undefined && base.text.trim().length === 0;
   const shown = draft?.text ?? (blank ? STARTER_TEXT : (base?.text ?? ''));
+  // The reasons are reported when the editor loses focus, not on every keystroke of a half-typed document.
+  const [committed, setCommitted] = useState(false);
   const issues = useMemo(() => mcpJsonIssues(shown), [shown]);
   const dirty = base !== undefined && shown !== base.text;
   const conflict = base !== undefined && draft !== undefined && draft.from !== base.revision && dirty;
@@ -63,6 +66,7 @@ export default function McpJsonView({
     }
     const next = { text, from: draft?.from ?? base.revision };
     setDraft(next);
+    setCommitted(false);
     onDirtyChange(text !== base.text);
   };
   const discard = (): void => {
@@ -95,6 +99,20 @@ export default function McpJsonView({
     }
   };
 
+  const issueText =
+    issues.length === 0
+      ? undefined
+      : issues
+          .slice(0, ISSUES_SHOWN_MAX)
+          .map((issue) =>
+            translate(issue.path.length > 0 ? 'settings.mcp.json.issuePath' : 'settings.mcp.json.issue', {
+              line: issue.line,
+              column: issue.column,
+              path: issue.path,
+              message: translate(ISSUE_KEYS[issue.code]),
+            }),
+          )
+          .join('\n');
   if (state.kind === 'loading') {
     return <McpEditorSkeleton />;
   }
@@ -106,48 +124,23 @@ export default function McpJsonView({
     );
   }
   if (base === undefined) {
-    return (
-      <div className="secrets-note" role="alert">
-        <p>{translate('settings.mcp.error.unreadable')}</p>
-        <button type="button" className="ghost" onClick={reload}>
-          {translate('settings.mcp.reload')}
-        </button>
-      </div>
-    );
+    return <ErrorToast message={translate('settings.mcp.error.unreadable')} recovery={[{ label: translate('settings.mcp.reload'), run: reload }]} />;
   }
   return (
     <div className="mcp-json" onKeyDown={keys}>
-      {!base.exists && draft === undefined && <p className="secrets-hint">{translate('settings.mcp.json.empty')}</p>}
-      <div className="mcp-json-editor" aria-label={translate('settings.mcp.json.label')}>
+      <div
+        className={`mcp-json-editor${issues.length > 0 ? ' is-invalid' : ''}`}
+        onBlur={() => setCommitted(true)}
+        aria-label={translate('settings.mcp.json.label')}
+      >
         <CodeEditor language="json" indentation="spaces" value={shown} onChange={edit} />
       </div>
-      {conflict && (
-        <div className="secrets-warning secrets-failure" role="alert">
-          <span>{translate('settings.mcp.json.conflict')}</span>
-          <button type="button" className="ghost" onClick={discard}>
-            {translate('settings.mcp.json.reload')}
-          </button>
-        </div>
-      )}
-      {failure !== undefined && (
-        <div className="secrets-warning secrets-failure" role="alert">
-          <span>{translate(failure, DEFAULT_SECRETS_FILE_PARAMS)}</span>
-        </div>
-      )}
-      {issues.length > 0 && (
-        <ul className="mcp-issues" role="alert">
-          {issues.slice(0, ISSUES_SHOWN_MAX).map((issue) => (
-            <li key={`${issue.line}:${issue.column}:${issue.code}`}>
-              {translate(issue.path.length > 0 ? 'settings.mcp.json.issuePath' : 'settings.mcp.json.issue', {
-                line: issue.line,
-                column: issue.column,
-                path: issue.path,
-                message: translate(ISSUE_KEYS[issue.code]),
-              })}
-            </li>
-          ))}
-        </ul>
-      )}
+      <ErrorToast
+        message={conflict ? translate('settings.mcp.json.conflict') : undefined}
+        recovery={[{ label: translate('settings.mcp.json.reload'), run: discard }]}
+      />
+      <ErrorToast message={failure === undefined ? undefined : translate(failure, DEFAULT_SECRETS_FILE_PARAMS)} />
+      <ErrorToast message={committed ? issueText : undefined} />
       <div className="mcp-form-actions">
         <button type="button" className="ghost" disabled={!dirty} onClick={discard}>
           {translate('settings.mcp.json.revert')}

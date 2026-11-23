@@ -86,7 +86,6 @@ export const messages = {
   'git.chip.initialize': 'Git’i başlat',
   'git.chip.initialized': 'Git deposu başlatıldı',
   'git.chip.pickedUp': 'Değişiklikleriniz {branch} dalında geri alındı',
-  'git.chip.reading': 'Depo okunuyor…',
   'git.chip.savedFiles': { one: '{count} dosya kaydedildi', other: '{count} dosya kaydedildi' },
   'git.chip.switched': '{branch} dalına geçildi',
   'git.chip.waiting': '{branch} dalındasınız — değişiklikleriniz {from} dalında bekliyor',

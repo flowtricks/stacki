@@ -29,15 +29,6 @@
   font-size: 12px;
   resize: vertical;
 }
-.instructions-form-hint {
-  color: var(--text-faint);
-  font-size: 11px;
-  word-break: break-all;
-}
-.instructions-form-problem {
-  color: var(--red);
-  font-size: 11px;
-}
 .instructions-form-actions {
   display: flex;
   justify-content: flex-end;

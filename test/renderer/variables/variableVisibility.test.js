@@ -18,6 +18,7 @@ const os = require('os');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
 const { waitFor } = require('../../helpers/waitFor.js');
+const { installToastLog } = require('../../helpers/toastLog.js');
 
 const failures = [];
 let checked = 0;
@@ -62,6 +63,7 @@ const STYLESHEET = `:root {
   await esbuild.build({
     stdin: {
       contents: `export { default } from './src/features/variables/VariablesView';
+export { subscribeErrorToasts } from './src/ui/errorNotices';
 export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from './src/ipc/hiddenVariables';`,
       resolveDir: repoPath('.'),
       loader: 'ts',
@@ -370,6 +372,7 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   fs.writeFileSync(variablesFile, corrupt);
   bundle.forgetHiddenVariables();
   await act(async () => reactRoot.unmount());
+  const reported = installToastLog(bundle.subscribeErrorToasts);
   const secondRoot = createRoot(container);
   await act(async () => {
     secondRoot.render(
@@ -384,7 +387,11 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
     );
     await settle(80);
   });
-  check('a corrupt file is reported in the panel', !!container.querySelector('.vars-notice'), container.innerHTML.slice(0, 200));
+  check(
+    'a corrupt file is reported as a toast, with no paragraph in the panel',
+    reported.messages().length > 0 && !container.querySelector('.vars-notice'),
+    container.innerHTML.slice(0, 200),
+  );
   check('it reads as nothing hidden', bundle.getHiddenVariables(directory).size === 0);
   await act(async () => {
     nameCell('light-100').dispatchEvent(event('mouseover', { relatedTarget: body }));

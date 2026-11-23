@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useEffect, useState } from 'react';
 import Popup from '../../ui/Popup';
 import type { StudioStatus } from '../../../shared/ipc/studioSetup';
@@ -82,7 +83,7 @@ export default function StudioSetup(props: Props) {
             </span>
             <div className="studio-auth-current-text" role="status">
               <span className="studio-auth-current-name">{signInName(setup.status.signIn, translate)}</span>
-              {signInSaved && <span className="studio-auth-current-note">{translate('studioSetup.auth.change.saved')}</span>}
+              <NoticeToast message={signInSaved ? translate('studioSetup.auth.change.saved') : undefined} kind="success" />
             </div>
             <button type="button" onClick={() => setSignInDialog('change')}>
               {translate('studioSetup.auth.change')}
@@ -211,7 +212,7 @@ function InstallStep({ status, activity, install }: ReturnType<typeof useSetup>)
       {status?.kind === 'installed' && <p role="status">{translate('studioSetup.install.version', { version: status.version })}</p>}
       {status?.kind === 'missing' && (
         <>
-          <p className="studio-setup-note">{translate('studioSetup.install.versionShort', { version: status.desktopVersion })}</p>
+          <p role="status">{translate('studioSetup.install.versionShort', { version: status.desktopVersion })}</p>
           {activity.kind === 'error' && (
             <button className="primary" onClick={() => void install()}>
               {translate('studioSetup.install.retry')}

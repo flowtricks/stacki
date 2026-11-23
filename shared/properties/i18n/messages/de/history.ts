@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'Leerer Baum', // review
   'history.diff.firstParent': 'verglichen mit dem ersten Elternteil', // review
   'history.diff.label': 'Datei-Diff',
-  'history.diff.loading': 'Diff wird geladen …',
   'history.diff.noTextChanges': 'Keine Textänderungen in dieser Datei.',
   'history.diff.restoreFile': 'Datei wiederherstellen …',
   'history.error.diffUnreadable': 'Der Diff dieses Commits konnte nicht gelesen werden.',

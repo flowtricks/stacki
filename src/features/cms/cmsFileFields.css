@@ -33,11 +33,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.cms-file-fields-error {
-  margin: 0;
-  color: var(--red);
-  font-size: 12px;
-}
 .cms-file-fields-code {
   min-height: 56px;
   font-weight: 400;

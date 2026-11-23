@@ -86,7 +86,6 @@ export const messages = {
   'git.chip.initialize': 'Git शुरू करें',
   'git.chip.initialized': 'git रिपॉज़िटरी शुरू हो गई',
   'git.chip.pickedUp': 'आपके बदलाव {branch} पर वापस ले लिए गए',
-  'git.chip.reading': 'रिपॉज़िटरी पढ़ी जा रही है…',
   'git.chip.savedFiles': { one: '{count} फ़ाइल सहेजी गई', other: '{count} फ़ाइलें सहेजी गईं' },
   'git.chip.switched': '{branch} पर स्विच किया गया',
   'git.chip.waiting': '{branch} पर — आपके बदलाव {from} पर प्रतीक्षा में हैं',

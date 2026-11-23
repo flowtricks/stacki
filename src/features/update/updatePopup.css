@@ -101,11 +101,6 @@
 .update-bytes {
   color: var(--text-dim);
 }
-.update-error-detail {
-  margin-top: 6px;
-  overflow-wrap: anywhere;
-  opacity: 0.8;
-}
 @media (prefers-reduced-motion: reduce) {
   .update-bar-fill {
     transition: none;

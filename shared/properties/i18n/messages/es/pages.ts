@@ -228,11 +228,9 @@ export const messages = {
   'pages.template.sanity.connectHint': 'Conecta este proyecto a Sanity para crear una plantilla a partir de su contenido.',
   'pages.template.sanity.connection': 'Conexión de Sanity',
   'pages.template.sanity.documentType': 'Tipo de documento',
-  'pages.template.sanity.looking': 'Buscando una conexión de Sanity…',
   'pages.template.sanity.noDocuments': 'Este conjunto de datos de Sanity aún no tiene documentos.',
   'pages.template.sanity.noTypes': 'Sanity no listó ningún tipo de documento.',
   'pages.template.sanity.sentNone': 'Sanity no envió documentos.',
-  'pages.template.sanity.using': 'Usando {label}: {projectId}, {dataset}.', // review
   'pages.template.secret.save': 'Guardar en .env',
   'pages.template.secret.saved': 'Guardado en {file}, que queda fuera de Git.',
   'pages.template.secret.value': 'Valor de {name}',

@@ -9,6 +9,8 @@
 // on leaving, clicking, blurring and Escape.
 // A group is configured like a collection: its fields are added, named, given a type (with the type's icon), help text
 // and checks, and written to the config as z.object({ … }); a list of groups does the same for each item.
+// A field name that cannot be saved is never a line under the field: the box is tinted (aria-invalid) and the reason is one
+// toast; the key a label becomes is the name label's (i) tip. The toast stream is captured through the app's own subscription.
 // Method: the real settings view is mounted over a project held in memory. Requests pass the real
 // renderer boundary, and the host runs the real schema editor on a config text, so each test can
 // read what Save wrote. The test drives the form by clicking and typing, as a person does.
@@ -24,7 +26,11 @@ const { repoPath } = require('../../helpers/sources.js');
 const output = repoPath('node_modules/.stacki-test/collection-settings-form.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
-  entryPoints: [repoPath('src/features/cms/RemoteCollectionSettings.tsx')],
+  stdin: {
+    contents: "export * from './src/features/cms/RemoteCollectionSettings';\nexport { subscribeErrorToasts } from './src/ui/errorNotices';",
+    resolveDir: repoPath('.'),
+    loader: 'ts',
+  },
   outfile: output,
   bundle: true,
   platform: 'node',
@@ -47,7 +53,9 @@ global.ResizeObserver = class {
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
-const { RemoteCollectionSettings } = require(output);
+const { RemoteCollectionSettings, subscribeErrorToasts } = require(output);
+const toasts = [];
+let unsubscribe;
 
 const ASTRO_CONTENT = { kind: 'astro', id: '00000000-0000-4000-8000-00000a57c0de', label: 'Content' };
 const CONFIG = [
@@ -92,6 +100,12 @@ const KIND_TILES = [
 
 // A project in memory: `refuse` answers an edit with a failure, as a config the editor cannot change.
 async function mount(options = {}) {
+  toasts.length = 0;
+  unsubscribe?.();
+  unsubscribe = subscribeErrorToasts(
+    (notice) => toasts.push(notice),
+    () => undefined,
+  );
   const project = { config: CONFIG, sent: [], refuse: options.refuse ?? (() => undefined) };
   const settings = () => {
     const read = readCollectionSchema(project.config, 'blog');
@@ -160,8 +174,12 @@ async function mount(options = {}) {
   };
   const openRow = () => click(container.querySelector('.remote-cms-settings-field'));
   const rows = () => [...container.querySelectorAll('.remote-cms-settings-field .remote-cms-settings-name')].map((row) => row.textContent);
-  const problem = () => container.querySelector('.field-settings .remote-cms-problem:not(.is-note)')?.textContent;
-  const note = () => container.querySelector('.field-settings .remote-cms-problem.is-note')?.textContent;
+  // The reason a name is refused: the last toast, while the name box is marked invalid; nothing once the name is good.
+  const problem = () => {
+    assert.equal(container.querySelector('.field-settings .remote-cms-problem') ?? undefined, undefined, 'no line is appended under the field');
+    return nameInput()?.getAttribute('aria-invalid') === 'true' ? toasts.at(-1)?.message : undefined;
+  };
+  const note = () => container.querySelector('.field-settings .field-settings-field .field-settings-label .info-hint-text')?.textContent;
   const close = async () => {
     await act(async () => root.unmount());
     container.remove();

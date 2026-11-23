@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import InfoHint from '../../ui/InfoHint';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import React, { useRef, useState } from 'react';
@@ -620,9 +621,9 @@ export function FieldRow(props: FieldProps) {
   }
   return (
     <div className={`cms-field ${props.field.control} ${issue ? 'has-issue' : ''}`}>
-      <FieldHeader {...props} present={present} synthesized={synthesized} />
+      <FieldHeader {...props} present={present} synthesized={synthesized} hint={hint} />
       {props.value === null ? <div className="content-null">{translate('contentUi.field.none')}</div> : <FieldControl {...props} />}
-      {issue ? <ErrorToast message={issue} /> : hint ? <div className="content-hint">{hint}</div> : undefined}
+      <ErrorToast message={issue || undefined} />
     </div>
   );
 }
@@ -641,7 +642,7 @@ function AddOptionalField(props: FieldProps & { readonly pathKey: string }) {
   );
 }
 
-function FieldHeader(props: FieldProps & { readonly present: boolean; readonly synthesized: boolean }) {
+function FieldHeader(props: FieldProps & { readonly present: boolean; readonly synthesized: boolean; readonly hint: string | undefined }) {
   const translate = useTranslate();
   return (
     <div className="cms-field-head">
@@ -659,6 +660,7 @@ function FieldHeader(props: FieldProps & { readonly present: boolean; readonly s
           </span>
         )}
       </label>
+      {props.hint !== undefined && props.hint.length > 0 && <InfoHint text={props.hint} />}
       {props.field.nullable && (
         <button
           className={`content-none ${props.value === null ? 'on' : ''}`}

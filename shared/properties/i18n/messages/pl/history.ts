@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'Puste drzewo',
   'history.diff.firstParent': 'porównano z pierwszym rodzicem',
   'history.diff.label': 'Różnice w pliku',
-  'history.diff.loading': 'Wczytywanie różnic…',
   'history.diff.noTextChanges': 'Brak zmian tekstowych w tym pliku.',
   'history.diff.restoreFile': 'Przywróć plik…',
   'history.error.diffUnreadable': 'Nie udało się odczytać różnic tego commita.',

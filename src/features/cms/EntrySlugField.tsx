@@ -2,16 +2,18 @@
 // puts it: the editable last segment of the entry's id (entrySlug.ts).
 //
 // What is typed is checked on every keystroke against the other slugs in the
-// entry's folder, so "Another item already uses this slug" shows before focus
-// leaves; text that is not already a slug says what it will be saved as. The
+// entry's folder, so a slug another item already uses tints the box before focus
+// leaves and says why in one toast when the person tries to keep it; text that is
+// not already a slug says what it will be saved as in the field's `?` tip. The
 // rename is committed on Enter or blur, never per keystroke, because renaming an
 // id moves a file and rewrites every reference to it. Escape puts the stored
 // slug back. An id the panel cannot rename (a loader that builds ids in code)
-// shows read-only, with why. What is typed belongs to one entry, so a form that
+// shows read-only, with why in the field's `?` tip. What is typed belongs to one entry, so a form that
 // moves to another entry gives this field a new key: the slugs beside an entry
 // include the entry before it, and text carried over reads as already taken.
 import { useContext, useEffect, useState } from 'react';
 import { checkEntrySlug, ENTRY_SLUG_LIMITS, slugNote, slugProblem, type EntrySlug } from '../../../shared/properties/entrySlug';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { TagIcon } from '../../ui/Icons';
 import { CmsFieldFrame } from './CmsPropField';
 import { committable } from './entrySlugDraft';
@@ -45,7 +47,6 @@ export function EntrySlugField(props: {
         <CmsFieldFrame name={slugName} help={`${slugHelp} ${lockedReason}`} icon={<TagIcon size={12} />} set={slug.value !== ''}>
           <div className="remote-cms-locked">{`${slug.folder}${slug.value}`}</div>
         </CmsFieldFrame>
-        <span className="remote-cms-problem is-note">{lockedReason}</span>
       </div>
     );
   }
@@ -62,11 +63,14 @@ export function EntrySlugField(props: {
     const slugged = committable(check, slug.value);
     if (slugged !== undefined) {
       props.onCommit(slugged);
+    } else if (problem !== undefined) {
+      // The box is tinted while the slug is broken; the words come once, when the person tries to keep it.
+      reportErrorToast(problem);
     }
   };
   return (
     <div className={`remote-cms-field entry-slug-field is-required${problem === undefined ? '' : ' is-invalid'}`} data-kind="slug">
-      <CmsFieldFrame name={slugName} help={slugHelp} icon={<TagIcon size={12} />} set={text !== ''}>
+      <CmsFieldFrame name={slugName} help={note === undefined ? slugHelp : `${slugHelp} ${note}`} icon={<TagIcon size={12} />} set={text !== ''}>
         <div className="entry-slug-input">
           {slug.folder !== '' && <span className="entry-slug-folder">{slug.folder}</span>}
           <input
@@ -90,8 +94,6 @@ export function EntrySlugField(props: {
           />
         </div>
       </CmsFieldFrame>
-      {problem !== undefined && <span className="remote-cms-problem is-error">{problem}</span>}
-      {problem === undefined && note !== undefined && <span className="remote-cms-problem is-note">{note}</span>}
     </div>
   );
 }

@@ -4,6 +4,7 @@
 // subscriber the hook registered, so no timer or sleep is involved; each assertion reads the DOM after the event has been applied.
 // Negative space: hiding survives progress ticks but not news, an event beating the first read is not overwritten by it, an unknown
 // total shows bytes without a percent, and a bridge that refuses is logged, not thrown into the render.
+// A failed download's cause is a toast, never a line in the dialog (owner rule).
 // The look of the up-to-date state (icon, headline, version, one primary button, no outline or divider, dialog role with a name,
 // focus on the button, Escape closes) is pinned here; updateLookChromium.test.js reads the real computed styles and Enter.
 const assert = require('node:assert/strict');
@@ -13,6 +14,7 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture.js');
 const { installPopupDOM } = require('../../helpers/popupDom');
 
 const directory = repoPath('node_modules/.stacki-test/update-popup');
@@ -26,6 +28,7 @@ buildSync({
   format: 'cjs',
   logLevel: 'silent',
   jsx: 'automatic',
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   loader: { '.css': 'empty' },
 });
@@ -72,6 +75,7 @@ function fakeBridge({ initial = { kind: 'idle' }, readFails = false } = {}) {
 }
 
 async function mount(element) {
+  globalThis.stackiCapturedToasts = [];
   document.getElementById('root').innerHTML = '';
   const root = createRoot(document.getElementById('root'));
   await act(async () => root.render(element));
@@ -161,14 +165,15 @@ test('a failed download shows a custom error with Retry and Close, and Retry ask
   const { unmount } = await mount(React.createElement(UpdatePopupHost, { bridge }));
   await act(async () => bridge.emit({ kind: 'error', stage: 'download', detail: 'Error: net::ERR_CONNECTION_CLOSED' }));
   assert.match(text('.modal-body'), /could not be downloaded/);
-  assert.match(text('.update-error-detail'), /ERR_CONNECTION_CLOSED/);
+  assert.match(toastMessages(), /ERR_CONNECTION_CLOSED/, 'the cause is a toast');
+  assert.equal(present('.update-error-detail'), false, 'and no line is appended to the dialog');
   assert.deepEqual(buttons(), ['Close', 'Retry']);
   await act(async () => [...document.querySelectorAll('.popup-surface button')][1].click());
   assert.deepEqual(bridge.actions, ['retry']);
 
   await act(async () => bridge.emit({ kind: 'error', stage: 'check', detail: '' }));
   assert.match(text('.modal-body'), /could not check for updates/);
-  assert.equal(present('.update-error-detail'), false, 'no empty detail line');
+  assert.equal(toastMessages().includes('could not check'), false, 'no empty detail toast');
   await unmount();
 });
 

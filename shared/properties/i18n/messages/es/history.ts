@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'Árbol vacío', // review
   'history.diff.firstParent': 'comparado con el primer padre', // review
   'history.diff.label': 'Diferencias del archivo',
-  'history.diff.loading': 'Cargando diferencias…',
   'history.diff.noTextChanges': 'No hay cambios de texto en este archivo.',
   'history.diff.restoreFile': 'Restaurar archivo…',
   'history.error.diffUnreadable': 'No se pudo leer la diferencia de esta confirmación.',

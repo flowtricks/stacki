@@ -9,6 +9,8 @@
 // memory (secretsCache.ts), so a reopened tab paints its names at once and refreshes behind them; with
 // nothing cached it paints placeholder rows, never a word. Choosing another file remounts the file's view,
 // so nothing revealed or typed for one file is ever shown beside another's names.
+import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ENV_LIMITS } from '../../../shared/properties/envFile';
@@ -129,11 +131,8 @@ function SecretsFileView({
   }
   if (state.kind === 'failed') {
     return (
-      <div className="secrets-note" role="alert">
-        <p>{translate(problemKey(state.code), named)}</p>
-        <button type="button" className="ghost" onClick={reload}>
-          {translate('settings.secrets.reload')}
-        </button>
+      <div className="secrets">
+        <ErrorToast message={translate(problemKey(state.code), named)} recovery={[{ label: translate('settings.secrets.reload'), run: reload }]} />
         <SecretsFilePicker file={file} onChange={onFileChange} />
       </div>
     );
@@ -292,33 +291,28 @@ function SecretsFileView({
       </div>
       {warnsAboutGit && listing.ignore === 'not-ignored' && (
         // The button alone, so no sentence wraps beside it; the risk it removes is its tooltip and its description.
-        <div className="secrets-warning secrets-warning-action" role="status">
+        <div className="secrets-action-row">
           <GitignoreButton why={translate('settings.secrets.ignore.warning', named)} onClick={() => void ignore()} />
         </div>
       )}
-      {warnsAboutGit && listing.ignore === 'tracked' && (
-        <div className="secrets-warning" role="status">
-          <span>{translate('settings.secrets.tracked.warning', named)}</span>
-        </div>
-      )}
-      {notice !== undefined && (
-        <div className="secrets-warning secrets-failure" role="alert">
-          <span>{translate(problemKey(notice), named)}</span>
-          {(failure === undefined || failure === 'changed' || failure === 'not-found') && (
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                setFailure(undefined);
-                setDraft({ kind: 'none' });
-                reload();
-              }}
-            >
-              {translate('settings.secrets.reload')}
-            </button>
-          )}
-        </div>
-      )}
+      <NoticeToast message={warnsAboutGit && listing.ignore === 'tracked' ? translate('settings.secrets.tracked.warning', named) : undefined} kind="warning" />
+      <ErrorToast
+        message={notice === undefined ? undefined : translate(problemKey(notice), named)}
+        recovery={
+          failure === undefined || failure === 'changed' || failure === 'not-found'
+            ? [
+                {
+                  label: translate('settings.secrets.reload'),
+                  run: () => {
+                    setFailure(undefined);
+                    setDraft({ kind: 'none' });
+                    reload();
+                  },
+                },
+              ]
+            : []
+        }
+      />
       {empty && (
         // Add secret is the one way in: adding to a missing file creates it, private, so no second button offers an empty file.
         <div className="secrets-empty">
@@ -356,7 +350,10 @@ function SecretsFileView({
           ),
         )}
       </div>
-      {listing.invalidLines > 0 && <p className="secrets-note">{translate('settings.secrets.invalidLines', { count: listing.invalidLines, file })}</p>}
+      <NoticeToast
+        message={listing.invalidLines > 0 ? translate('settings.secrets.invalidLines', { count: listing.invalidLines, file }) : undefined}
+        kind="warning"
+      />
     </div>
   );
 }
@@ -462,7 +459,16 @@ function SecretRow({
   const named = { file };
   return (
     <div className="secrets-row" role="listitem">
-      <span className="secrets-name" title={entry.duplicate ? translate('settings.secrets.duplicate', named) : undefined}>
+      <span
+        className="secrets-name"
+        title={
+          entry.duplicate
+            ? translate('settings.secrets.duplicate', named)
+            : entry.overriddenBy !== undefined
+              ? translate('settings.secrets.overridden', { file: entry.overriddenBy })
+              : undefined
+        }
+      >
         {entry.name}
       </span>
       {entry.multiline ? (
@@ -504,9 +510,6 @@ function SecretRow({
           <TrashIcon size={14} />
         </button>
       </span>
-      {entry.duplicate && <span className="secrets-hint">{translate('settings.secrets.duplicate', named)}</span>}
-      {entry.multiline && <span className="secrets-hint">{translate('settings.secrets.multiline', named)}</span>}
-      {entry.overriddenBy !== undefined && <span className="secrets-hint">{translate('settings.secrets.overridden', { file: entry.overriddenBy })}</span>}
     </div>
   );
 }
@@ -542,7 +545,7 @@ function DraftRow({
   return (
     <div className="secrets-row secrets-draft" role="listitem">
       <input
-        className="secrets-input secrets-name-input"
+        className={`secrets-input secrets-name-input${draft.problem === undefined ? '' : ' is-invalid'}`}
         aria-label={translate('settings.secrets.name')}
         placeholder={SECRET_NAME_EXAMPLE}
         value={draft.name}
@@ -554,10 +557,12 @@ function DraftRow({
         onKeyDown={keys}
       />
       {valueLocked ? (
-        <span className="secrets-value secrets-value-static">{SECRET_MASK}</span>
+        <span className="secrets-value secrets-value-static" title={translate('settings.secrets.multiline', { file })}>
+          {SECRET_MASK}
+        </span>
       ) : (
         <input
-          className="secrets-input"
+          className={`secrets-input${draft.problem === undefined ? '' : ' is-invalid'}`}
           aria-label={translate('settings.secrets.value')}
           placeholder={translate('settings.secrets.value')}
           value={draft.value}
@@ -577,12 +582,7 @@ function DraftRow({
           {translate('settings.secrets.save')}
         </button>
       </span>
-      {draft.problem !== undefined && (
-        <span className="secrets-hint secrets-problem" role="alert">
-          {draft.problem}
-        </span>
-      )}
-      {valueLocked && <span className="secrets-hint">{translate('settings.secrets.multiline', { file })}</span>}
+      <ErrorToast message={draft.problem} />
     </div>
   );
 }

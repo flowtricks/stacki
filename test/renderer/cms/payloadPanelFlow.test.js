@@ -2,7 +2,7 @@
 // collection loads through the panel's own bridge parsers, an item opens with its fields, typing a value
 // saves it as a DRAFT (the live document is untouched, the item then reads "changed"), a collection without
 // drafts says its edits are live and offers no Publish, and a server failure shows its reason where the
-// person is looking instead of an empty panel.
+// person is looking (a toast, the panel keeps its place) instead of an empty panel.
 // Method: the real RemoteCmsView in jsdom; its preload bridge (window.avb) answers from the real Payload
 // provider (electron/content/payloadService.ts) talking to the fake Payload (test/helpers/fakePayload.js, replies
 // recorded from a real Payload 3.93). Replies cross JSON like IPC does, and the renderer's own bridge parses them.
@@ -21,7 +21,11 @@ const { clearPayloadSchemas } = require('#dist/electron/content/payloadSchema.js
 const output = repoPath('node_modules/.stacki-test/payload-panel-flow.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
-  entryPoints: [repoPath('src/features/cms/RemoteCmsView.tsx')],
+  stdin: {
+    contents: "export { RemoteCmsView } from './src/features/cms/RemoteCmsView';\nexport { subscribeErrorToasts } from './src/ui/errorNotices';",
+    resolveDir: repoPath('.'),
+    loader: 'ts',
+  },
   outfile: output,
   bundle: true,
   platform: 'node',
@@ -44,7 +48,12 @@ global.ResizeObserver = class {
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
-const { RemoteCmsView } = require(output);
+const { RemoteCmsView, subscribeErrorToasts } = require(output);
+const toasts = [];
+subscribeErrorToasts(
+  (notice) => toasts.push(notice),
+  () => undefined,
+);
 
 const CONNECTION = { kind: 'payload', id: '22222222-2222-4222-8222-222222222222', label: 'Payload' };
 const through = (value) => JSON.parse(JSON.stringify(value));
@@ -148,18 +157,21 @@ test('a collection lists, an item opens, and typing a value saves a draft the li
 test('a collection without drafts says its edits are live and offers no Publish', async () => {
   await withPanel({}, async ({ open }) => {
     await open('pages', 'pages.1', 'Home');
-    await settleUntil(() => document.querySelector('.remote-cms-live-notice') !== null);
-    assert.match(document.querySelector('.remote-cms-live-notice').textContent, /keeps no drafts: edits are saved live/);
+    await settleUntil(() => document.querySelector('.remote-cms-fields') !== null);
+    assert.ok(document.querySelector('.remote-cms-live-notice') === null, 'no paragraph above the fields');
     assert.ok(![...document.querySelectorAll('button')].some((button) => /^publish$/i.test(button.textContent.trim())), 'no Publish button');
   });
 });
 
-test('a server that is down shows its reason instead of an empty panel', async () => {
+test('a server that is down says its reason in a toast instead of an empty panel', async () => {
   await withPanel({}, async ({ fake, open }) => {
     await fake.close();
     await open('posts', 'posts.1', 'Post 1');
-    await settleUntil(() => /Nothing is answering/.test(document.body.textContent));
-    assert.match(document.body.textContent, /Nothing is answering at http:\/\/127\.0\.0\.1:\d+/);
+    await settleUntil(() => toasts.some((notice) => /Nothing is answering/.test(notice.message)));
+    const failure = toasts.find((notice) => /Nothing is answering/.test(notice.message));
+    assert.match(failure.message, /Nothing is answering at http:\/\/127\.0\.0\.1:\d+/);
+    assert.equal(failure.kind, 'error');
+    assert.doesNotMatch(document.body.textContent, /Nothing is answering/, 'the reason is a toast, not text in the panel');
     assert.ok(!document.querySelector('.remote-cms-fields input'), 'no half-filled form');
   });
 });

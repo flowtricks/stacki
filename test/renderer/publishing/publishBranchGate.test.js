@@ -6,7 +6,7 @@
 // Methodology: the real DesktopPublishButton and BranchIndicator bundled for jsdom, with a scripted window.avb whose git:info
 // answer can change between clicks (a branch switched outside the app) and which records each checkout and publish start.
 // Negative space: the default branch, no repository, no commits, a stale cached branch, a dirty tree, a refused checkout, a
-// silenced branch in another project, and Cancel.
+// silenced branch in another project, and Cancel. A refusal is a toast, never a paragraph in the dialog (owner rule).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -14,6 +14,7 @@ const path = require('node:path');
 const { build } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources');
+const { toastMessages } = require('../../helpers/toastCapture');
 const React = require('react');
 const { act } = React;
 
@@ -28,6 +29,7 @@ async function bundle(entry, name) {
     format: 'cjs',
     platform: 'node',
     jsx: 'automatic',
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     logLevel: 'silent',
     loader: { '.css': 'empty' },
@@ -228,7 +230,8 @@ test('switching first with uncommitted changes explains and changes nothing', as
   await click(button('Switch to main first'));
   assert.equal(view.checkouts.length, 0, 'git is never asked to move a dirty tree');
   assert.notEqual(warning(), undefined, 'the question stays open');
-  assert.match(warning().querySelector('.stacki-branch-warning-problem').textContent, /changes on feature\/x that are not committed/);
+  assert.match(toastMessages(), /changes on feature\/x that are not committed/);
+  assert.equal(warning().querySelector('.stacki-branch-warning-problem') ?? undefined, undefined, 'no paragraph joins the question');
   assert.equal(view.starts.length, 0);
 });
 
@@ -252,7 +255,7 @@ test('a checkout git refuses keeps the question open and sends nothing', async (
   await click(button('Switch to main first'));
   assert.equal(view.checkouts.length, 1);
   assert.notEqual(warning(), undefined);
-  assert.match(warning().querySelector('.stacki-branch-warning-problem').textContent, /not committed/);
+  assert.match(toastMessages(), /not committed/);
   assert.equal(view.starts.length, 0);
   assert.equal(view.reloads.length, 0);
 });

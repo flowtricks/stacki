@@ -85,7 +85,6 @@ export const messages = {
   'git.chip.initialize': 'Git を初期化',
   'git.chip.initialized': 'Git リポジトリを初期化しました',
   'git.chip.pickedUp': '{branch} で変更を元に戻しました',
-  'git.chip.reading': 'リポジトリを読み込み中…',
   'git.chip.savedFiles': { other: '{count} 件のファイルを保存しました' },
   'git.chip.switched': '{branch} に切り替えました',
   'git.chip.waiting': '{branch} にいます。変更は {from} で待機中です',

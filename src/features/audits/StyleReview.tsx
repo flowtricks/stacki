@@ -7,13 +7,14 @@
 // "has a fix"; identical values collapse ("6px used 9×"). "Apply all exact
 // fixes" previews every swap first and writes them as one undo step. Only values
 // are ever swapped: selectors and scoping stay exactly as written.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { AuditFinding, AuditFix } from '../../../shared/page/auditFindings';
 import { TOKEN_GROUPS } from '../../../shared/page/auditTokens';
 import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
+import { reportActionToast } from '../../ui/errorNotices';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import Dropdown from '../../ui/Dropdown';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon } from '../../ui/Icons';
@@ -200,7 +201,7 @@ export function StyleReview(props: {
               })}
           </section>
         ))}
-        {drawn > ROWS_MAX && <p className="audits-note">{translate('auditsUi.review.rowsMax', { count: ROWS_MAX })}</p>}
+        <RowsMaxToast drawn={drawn} />
         {shown.length === 0 && <p className="audits-note">{translate('auditsUi.review.noMatch')}</p>}
       </div>
     </DockableWindow>
@@ -372,4 +373,18 @@ function ReviewLine(props: {
 // Every reviewed finding of the same rule in the same file.
 function sameFile(reviewed: readonly AuditFinding[], finding: AuditFinding): readonly AuditFinding[] {
   return reviewed.filter((each) => each.check === finding.check && each.file === finding.file);
+}
+
+// Rows past the limit are not drawn: said once as a toast when the limit is first passed, never as a line under the list.
+function RowsMaxToast(props: { readonly drawn: number }) {
+  const translate = useTranslate();
+  const over = props.drawn > ROWS_MAX;
+  useEffect(() => {
+    if (over) {
+      reportActionToast(translate('auditsUi.review.rowsMax', { count: ROWS_MAX }), 'info', []);
+    }
+    // The text depends on the constant limit alone; the toast fires on crossing it, not on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on crossing the limit
+  }, [over]);
+  return undefined;
 }

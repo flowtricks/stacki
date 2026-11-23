@@ -21,6 +21,7 @@
 // details popup (AppDetails.tsx): about, App settings, commands, updates and
 // Uninstall. Shared by Desktop and Studio: the host supplies its role, how to
 // draw a GitHub picture and its GitHub sign-in.
+import { ErrorToast } from '../../ui/ErrorToast';
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { can, type RoleView } from '../../../shared/properties/projectRoles';
@@ -29,7 +30,7 @@ import { appAccessFeature } from '../../../shared/properties/appsRpc';
 import { applyAppUpdate, commitApp, discardApp, listInstalledAppList, uninstallApp } from '../../ipc/appsBridge';
 import { setAppAutoUpdate } from '../../ipc/appMarketplaceBridge';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
-import { AppsIcon, GitHubIcon, PlusIcon, SparkleIcon, RefreshIcon, WarningTriangleIcon } from '../../ui/Icons';
+import { AppsIcon, GitHubIcon, PlusIcon, SparkleIcon, RefreshIcon } from '../../ui/Icons';
 import { SearchField } from '../../ui/SearchField';
 import MoreMenu from '../../ui/MoreMenu';
 import { AppTile } from './AppTile';
@@ -474,10 +475,7 @@ function AppsBody({
   if (load.kind === 'failed') {
     return (
       <div className="panel-body apps-body">
-        <div className="apps-message" role="alert">
-          <WarningTriangleIcon size={20} />
-          <p>{translateDescribed(load)}</p>
-        </div>
+        <ErrorToast message={translateDescribed(load)} />
       </div>
     );
   }

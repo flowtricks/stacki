@@ -19,6 +19,20 @@ const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const loadRenderer = require('../../helpers/rendererModule');
 const { repoPath, sourceSpecifier } = require('../../helpers/sources');
+const { toastMessages } = require('../../helpers/toastCapture');
+const { waitFor } = require('../../helpers/waitFor.js');
+
+// A draft error is told only once typing has rested (useSettledMessage): wait on the toast, not on the delay.
+const toastTold = (act, pattern) =>
+  waitFor({
+    what: 'a toast matching ' + pattern,
+    // The settled message is set by a timer outside the render, so each poll lets React flush before it reads.
+    read: async () => {
+      await act(async () => undefined);
+      return toastMessages();
+    },
+    until: (text) => pattern.test(text),
+  });
 
 const { COMMIT_TYPES, COMMIT_SCOPE_LENGTH_MAX, buildCommitSubject, parseCommitScope, stripCommitTypePrefix } = loadRenderer('src/features/git/commitType.ts');
 const { COMMIT_TYPE_PROJECTS_MAX, parseStoredCommitTypes, withCommitType, commitTypeProjectKey } = loadRenderer('src/features/git/commitTypePreference.ts');
@@ -115,9 +129,11 @@ test('the Git panel commits as typed by default, and with the picked type once c
     bundle: true,
     format: 'cjs',
     platform: 'node',
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     logLevel: 'silent',
   });
+  globalThis.stackiCapturedToasts = [];
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true, url: 'http://localhost/' });
   for (const key of ['window', 'document', 'HTMLElement', 'Element', 'Node', 'localStorage']) {
     global[key] = key === 'window' ? dom.window : dom.window[key];
@@ -238,7 +254,11 @@ test('the Git panel commits as typed by default, and with the picked type once c
     assert.equal(query('.git-commit-preview').textContent, 'fix: header gap');
     assert.ok(query('.git-commit-preview .code-token'), 'the preview is syntax highlighted');
     await fill('[aria-label="Commit scope"]', 'nav bar');
-    assert.match(query('.git-commit-scope-error').textContent, /no spaces/);
+    assert.equal(query('[aria-label="Commit scope"]').getAttribute('aria-invalid'), 'true', 'the field takes the error look');
+    assert.equal(query('.git-commit-scope-error') ?? undefined, undefined, 'and no paragraph is added under it');
+    assert.equal(toastMessages(), '', 'half-typed scope is not announced at once');
+    await toastTold(act, /no spaces/);
+    assert.match(toastMessages(), /no spaces/);
     assert.equal(button('Commit all changes').disabled, true);
     await fill('[aria-label="Commit scope"]', 'nav');
     await act(async () => query('.git-commit-type-row input[type="checkbox"]').click());

@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': '빈 트리',
   'history.diff.firstParent': '첫 번째 부모와 비교',
   'history.diff.label': '파일 diff',
-  'history.diff.loading': 'diff 불러오는 중…',
   'history.diff.noTextChanges': '이 파일에는 텍스트 변경 사항이 없습니다.',
   'history.diff.restoreFile': '파일 복원…',
   'history.error.diffUnreadable': '이 커밋의 diff를 읽을 수 없습니다.',

@@ -3,7 +3,8 @@
 // Method: the real shared dialog, Pages panel and props editors, bundled as the app bundles them and rendered in
 // jsdom with React. A recording host stands in for main (its plan answers a fixed summary), so each case reads the
 // DOM a person would see — the badge, the disabled button and its reason, the confirm's lines — and the requests the
-// host received. No timers are waited on: every step is awaited through React's act.
+// host received. A refusal is said once as a toast and the field wears the error look; no paragraph is appended to the dialog
+// (owner rule), which the cases below check on the DOM. No timers are waited on: every step is awaited through React's act.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -13,6 +14,7 @@ const { JSDOM } = require('jsdom');
 const React = require('react');
 const { act } = React;
 const { repoPath, ROOT } = require('../../helpers/sources');
+const { toastMessages } = require('../../helpers/toastCapture');
 const output = repoPath('node_modules/.stacki-test/page-settings-dialog.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
@@ -30,6 +32,7 @@ buildSync({
   jsx: 'automatic',
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   loader: { '.css': 'empty' },
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   logLevel: 'silent',
 });
 
@@ -44,6 +47,7 @@ const PAGES = [
 const SUMMARY = { files: 3, links: 7, moves: [], reviews: [{ file: 'astro.config.mjs', line: 4, text: "'/old': '/'," }], reviewsMore: 0 };
 
 function fixture(context) {
+  globalThis.stackiCapturedToasts = [];
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
@@ -190,9 +194,13 @@ test('the URL name is offered on Enter or blur in a popover beside it; invalid n
     ['CONTACT', 'The URL /CONTACT is already used by another page or folder.'],
   ];
   for (const [typed, problem] of table) {
+    globalThis.stackiCapturedToasts = [];
     await setup.type(typed);
+    assert.equal(toastMessages(), '', 'typing alone says nothing');
     await enter();
-    assert.equal(document.querySelector('.page-rename-error').textContent, problem);
+    assert.equal(toastMessages(), problem);
+    assert.equal(field().getAttribute('aria-invalid'), 'true');
+    assert.equal(document.querySelector('.page-settings-body').textContent.includes(problem), false, 'the reason is not a node in the dialog');
     assert.equal(document.querySelector('.page-settings-move') ?? undefined, undefined, typed);
   }
   assert.equal(setup.planned.length, 0);
@@ -245,7 +253,8 @@ test('a refused step shows main’s sentence in the dialog and stays open', asyn
   const host = { ...setup.host, plan: async () => ({ ok: false, error: { code: 'parse', message: 'src/a.ts does not parse.' } }) };
   await setup.show('about.astro', { host });
   await setup.click(button('Make this page the homepage'));
-  assert.equal(document.querySelector('.page-settings-problem').textContent, 'src/a.ts does not parse.');
+  assert.equal(toastMessages(), 'src/a.ts does not parse.');
+  assert.equal(document.querySelector('.page-settings-problem') ?? undefined, undefined);
   assert.equal(setup.closes(), 0);
 });
 
@@ -348,7 +357,14 @@ test('picking another folder offers the move at once; Cancel puts the folder bac
   await setup.click(moveButton('Cancel'));
   await setup.show('contact.md');
   await setup.type('about');
-  assert.equal(document.querySelector('.page-rename-error').textContent, 'The URL /about is already used by another page or folder.');
+  assert.equal(document.querySelector('.page-settings-general input').getAttribute('aria-invalid'), 'true');
+  await act(async () =>
+    document.querySelector('.page-settings-general input').dispatchEvent(new setup.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+  );
+  assert.equal(toastMessages(), 'The URL /about is already used by another page or folder.');
+  // Leaving the field after Enter commits the same text again: still one toast.
+  await act(async () => document.querySelector('.page-settings-general input').dispatchEvent(new setup.dom.window.FocusEvent('focusout', { bubbles: true })));
+  assert.equal(toastMessages().split('\n').length, 1);
   // The homepage has no folder control.
   await setup.show('index.astro');
   assert.equal(document.querySelector('.page-settings-folder') ?? undefined, undefined);

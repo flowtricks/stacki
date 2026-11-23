@@ -1,3 +1,5 @@
+import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import Popup from '../../ui/Popup';
 import { CheckIcon, CloseIcon, UploadCloudIcon } from '../../ui/Icons';
 import { PublishProviderIcon } from './PublishProviderIcon';
@@ -14,7 +16,7 @@ import './publishing.css';
 interface Props {
   readonly state: DesktopPublishState;
   readonly close: () => void;
-  /** A host-specific sentence under the result, such as an unconfirmed deployment. */
+  /** A host-specific sentence about the result, such as an unconfirmed deployment: told once as a toast, never a row in the popup. */
   readonly note?: string;
   /** The footer line while publishing, already translated; it says whether the host must stay open. Desktop's default asks to keep Stacki open. */
   readonly runningNote?: string;
@@ -40,7 +42,7 @@ export function PublishStatus({ state, close, note, runningNote }: Props) {
               <PublishRunning state={state} />
             ) : (
               <>
-                {state.kind === 'failed' && <p role="alert">{translateDescribed(state)}</p>}
+                <ErrorToast message={state.kind === 'failed' ? translateDescribed(state) : undefined} />
                 {state.kind === 'review-open' && (
                   <p>
                     <a href={state.url} target="_blank" rel="noreferrer">
@@ -52,7 +54,7 @@ export function PublishStatus({ state, close, note, runningNote }: Props) {
                 <PublishResults state={state} />
               </>
             )}
-            {note !== undefined && <p className="publish-status-note">{note}</p>}
+            <NoticeToast message={note} kind="info" />
           </div>
           <div className="modal-footer">
             {busy ? (

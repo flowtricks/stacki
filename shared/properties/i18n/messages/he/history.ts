@@ -17,7 +17,6 @@ export const messages = {
   'history.diff.emptyTree': 'עץ ריק',
   'history.diff.firstParent': 'בהשוואה להורה הראשון',
   'history.diff.label': 'diff של קובץ',
-  'history.diff.loading': 'ה-diff נטען…',
   'history.diff.noTextChanges': 'אין שינויי טקסט בקובץ הזה.',
   'history.diff.restoreFile': 'שחזור הקובץ…',
   'history.error.diffUnreadable': 'לא ניתן לקרוא את ה-diff של הקומיט הזה.',

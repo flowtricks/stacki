@@ -86,7 +86,6 @@ export const messages = {
   'git.chip.initialize': 'אתחול Git',
   'git.chip.initialized': 'מאגר git אותחל',
   'git.chip.pickedUp': 'השינויים שלך נקלטו מחדש ב-{branch}',
-  'git.chip.reading': 'קוראים את המאגר…',
   'git.chip.savedFiles': { one: 'קובץ אחד נשמר', two: 'שני קבצים נשמרו', other: '{count} קבצים נשמרו' },
   'git.chip.switched': 'עברת אל {branch}',
   'git.chip.waiting': 'ב-{branch} — השינויים שלך ממתינים ב-{from}',

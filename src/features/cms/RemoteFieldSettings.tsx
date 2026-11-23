@@ -23,6 +23,8 @@ import { checksFor, FIELD_CHECKS, type FieldCheckKey, type FieldChecks } from '.
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import Dropdown from '../../ui/Dropdown';
+import { ErrorToast } from '../../ui/ErrorToast';
+import InfoHint from '../../ui/InfoHint';
 import { ChevronDownIcon, ChevronRightIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
 import { checkLabel, choicesFor, typedValue, withCheck } from './fieldCheckInputs';
@@ -37,7 +39,7 @@ export function FieldInputs(props: {
   readonly draft: SettingsField;
   /** A new field's form starts in its name; an open field's does not move focus. */
   readonly autoFocusName?: boolean;
-  /** Why the name cannot be saved, said under it. The text stays as typed. */
+  /** Why the name cannot be saved, said in a toast; the box is tinted. The text stays as typed. */
   readonly nameProblem: string | undefined;
   readonly onDraft: Draft;
   /**
@@ -53,14 +55,18 @@ export function FieldInputs(props: {
     <div className="field-settings">
       <div className="field-settings-grid">
         {props.member === undefined && (
-          <Labelled label={translate('cmsRemote.fieldSettings.name')} wide>
+          <Labelled
+            label={translate('cmsRemote.fieldSettings.name')}
+            wide
+            hint={props.field.editable ? savedKeyHint(draft.name, translate) : translate('cmsRemote.fieldSettings.methodNote')}
+          >
             <input
               autoFocus={props.autoFocusName === true}
               aria-invalid={nameProblem !== undefined}
               value={draft.name}
               onChange={(event) => onDraft({ ...draft, name: event.target.value })}
             />
-            {nameProblem === undefined ? <SavedKey typed={draft.name} /> : <span className="remote-cms-problem">{nameProblem}</span>}
+            <ErrorToast message={nameProblem} />
           </Labelled>
         )}
         {props.field.editable && (
@@ -80,18 +86,21 @@ export function FieldInputs(props: {
       {props.field.editable ? (
         <FieldRules draft={draft} onDraft={onDraft} requiredBox={props.member === undefined} />
       ) : (
-        <p className="field-settings-note">{translate('cmsRemote.fieldSettings.methodNote')}</p>
+        props.member !== undefined && (
+          <span className="field-settings-label">
+            <InfoHint text={translate('cmsRemote.fieldSettings.methodNote')} />
+          </span>
+        )
       )}
     </div>
   );
 }
 
-// The key a typed label is saved as, when that is not what was typed.
-function SavedKey(props: { readonly typed: string }) {
-  const translate = useTranslate();
-  const name = typedFieldName(props.typed);
-  if (name.kind === 'key' && name.key !== props.typed.trim()) {
-    return <span className="remote-cms-problem is-note">{translate('cmsRemote.fieldSettings.savedAs', { key: name.key })}</span>;
+// The key a typed label is saved as, when that is not what was typed: the name label's `?` tip says so.
+function savedKeyHint(typed: string, translate: Translator): string | undefined {
+  const name = typedFieldName(typed);
+  if (name.kind === 'key' && name.key !== typed.trim()) {
+    return translate('cmsRemote.fieldSettings.savedAs', { key: name.key });
   }
   return undefined;
 }
@@ -293,10 +302,13 @@ function DefaultInput(props: { readonly draft: SettingsField; readonly onDraft: 
 
 const TYPED_DEFAULTS: readonly SettingsField['kind'][] = ['text', 'richText', 'link', 'videoLink', 'email', 'phone', 'color', 'file', 'number'];
 
-function Labelled(props: { readonly label: string; readonly wide?: boolean; readonly children: React.ReactNode }) {
+function Labelled(props: { readonly label: string; readonly wide?: boolean; readonly hint?: string | undefined; readonly children: React.ReactNode }) {
   return (
     <label className={`field-settings-field ${props.wide === true ? 'is-wide' : ''}`}>
-      <span className="field-settings-label">{props.label}</span>
+      <span className="field-settings-label">
+        {props.label}
+        {props.hint !== undefined && <InfoHint text={props.hint} />}
+      </span>
       {props.children}
     </label>
   );
@@ -349,11 +361,11 @@ export function ListItems(props: { readonly draft: SettingsField; readonly onDra
     });
   return (
     <section className="list-items">
-      <span className="field-settings-label">{translate('cmsRemote.items.title')}</span>
-      <p className="field-settings-note">{translate('cmsRemote.items.hint')}</p>
-      {item === 'other' ? (
-        <p className="field-settings-note">{translate('cmsRemote.items.byHand')}</p>
-      ) : props.locked ? (
+      <span className="field-settings-label">
+        {translate('cmsRemote.items.title')}
+        <InfoHint text={item === 'other' ? `${translate('cmsRemote.items.hint')} ${translate('cmsRemote.items.byHand')}` : translate('cmsRemote.items.hint')} />
+      </span>
+      {item === 'other' ? undefined : props.locked ? (
         <span className="list-items-kind">
           <KindIcon kind={ITEM_ICON_KINDS[item]} /> {translate(ITEM_LABELS[item])}
         </span>
@@ -422,7 +434,7 @@ export function MembersEditor(props: { readonly draft: SettingsField; readonly o
           onRemove={() => set(members.filter((_, position) => position !== index))}
         />
       ))}
-      {!problem.ok && <span className="remote-cms-problem">{translateDescribed(problem)}</span>}
+      <ErrorToast message={problem.ok ? undefined : translateDescribed(problem)} />
       <button
         type="button"
         className="remote-cms-settings-add"

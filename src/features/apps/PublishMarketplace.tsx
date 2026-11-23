@@ -13,6 +13,7 @@
 // one without the MIT license offers "Add MIT license". Once every check passes,
 // a summary with Notes, Contact and the terms checkbox, then Submit. A
 // marketplace that cannot take submissions yet gets its own state and the web form.
+import { ErrorToast } from '../../ui/ErrorToast';
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -407,10 +408,8 @@ export function RepositoryPublish(props: { readonly projectPath: string; readonl
           icon={<WarningTriangleIcon size={20} />}
           title={translate('apps.publish.readFailed', { name })}
           action={<RetryButton onRetry={reload} />}
-          alert
-        >
-          {translateDescribed(status)}
-        </ChooserEmpty>
+          failure={translateDescribed(status)}
+        />
       )}
       {status.kind === 'ready' && (
         <ReadyChecks
@@ -493,11 +492,7 @@ function ReadyChecks(props: {
           <p className="apps-note">{translate('apps.publish.attachZip')}</p>
         </Requirement>
       )}
-      {action.kind === 'failed' && (
-        <p className="apps-error" role="alert">
-          {translateDescribed(action)}
-        </p>
-      )}
+      <ErrorToast message={action.kind === 'failed' ? translateDescribed(action) : undefined} />
       {readiness.ready && status.release !== undefined && <SubmitStep projectPath={props.projectPath} target={props.target} release={status.release} />}
     </>
   );
@@ -519,8 +514,8 @@ function VisibilityRefused({ outcome }: { readonly outcome: Extract<AppVisibilit
   const text = visibilityRefusal(outcome, translate);
   assert(outcome.settingsURL.startsWith('https://github.com/'), 'A refusal links to GitHub');
   return (
-    <div className="apps-refused" role="alert">
-      <p className="apps-requirement-title">{text.title}</p>
+    <div className="apps-refused">
+      <ErrorToast message={text.title} />
       <p className="apps-note">{text.detail}</p>
       <a className="apps-connect-empty-link" href={outcome.settingsURL} target="_blank" rel="noopener noreferrer">
         {translate('apps.publish.openSettings')} <ExternalIcon size={11} />
@@ -605,11 +600,7 @@ export function SubmitStep(props: {
         {/* i18n-ignore: the consent wording is the marketplace web form's own, word for word (appPublish.ts), so it is shown as written. */}
         <span>{MARKETPLACE_TERMS}</span>
       </label>
-      {state.kind === 'failed' && (
-        <p className="apps-error" role="alert">
-          {state.message}
-        </p>
-      )}
+      <ErrorToast message={state.kind === 'failed' ? state.message : undefined} />
       <div className="apps-actions">
         <button type="submit" className="apps-button primary" disabled={!accepted || !ready || state.kind === 'sending'}>
           {state.kind === 'sending' ? translate('apps.publish.submitting') : translate('apps.publish.submit')}
@@ -627,11 +618,7 @@ function PrecheckLine({ check }: { readonly check: Precheck }) {
     return <p className="apps-note">{translate('apps.publish.asking')}</p>;
   }
   if (check.kind === 'failed') {
-    return (
-      <p className="apps-error" role="alert">
-        {translateDescribed(check)}
-      </p>
-    );
+    return <ErrorToast message={translateDescribed(check)} />;
   }
   const { precheck } = check;
   switch (precheck.kind) {
@@ -642,11 +629,7 @@ function PrecheckLine({ check }: { readonly check: Precheck }) {
         </p>
       );
     case 'refused':
-      return (
-        <p className="apps-error" role="alert">
-          {translateDescribed(precheck)}
-        </p>
-      );
+      return <ErrorToast message={translateDescribed(precheck)} />;
     case 'unavailable':
       return <SubmissionResult outcome={precheck} />;
     default: {
@@ -670,11 +653,7 @@ function SubmissionResult({ outcome }: { readonly outcome: MarketplaceSubmission
         </ChooserEmpty>
       );
     case 'refused':
-      return (
-        <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title={translate('apps.publish.refused')} alert>
-          {outcome.message}
-        </ChooserEmpty>
-      );
+      return <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title={translate('apps.publish.refused')} failure={outcome.message} />;
     case 'unavailable':
       return (
         <ChooserEmpty
@@ -685,8 +664,7 @@ function SubmissionResult({ outcome }: { readonly outcome: MarketplaceSubmission
               {translate('apps.publish.webForm')} <ExternalIcon size={11} />
             </a>
           }
-          hint={translateDescribed(outcome)}
-          alert
+          failure={translateDescribed(outcome)}
         >
           {translate('apps.publish.nothingSent')}
         </ChooserEmpty>

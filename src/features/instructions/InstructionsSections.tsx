@@ -24,6 +24,8 @@ import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate
 import { SETTINGS_SECTION_TITLE_KEYS, type SettingsSectionId, type SettingsSectionsContext } from '../../lib/settingsSections';
 import { instructionsListingCache } from './instructionsListingCache';
 import Dropdown from '../../ui/Dropdown';
+import { ErrorToast } from '../../ui/ErrorToast';
+import InfoHint from '../../ui/InfoHint';
 import { type MenuItem } from '../../ui/MoreMenu';
 import { FileIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, PlusIcon, SkillIcon } from '../../ui/Icons';
 import { PanelRow } from '../../ui/PanelRow';
@@ -162,11 +164,8 @@ export default function InstructionsSections({ projectPath, context, showToast }
   };
 
   if (listing.state.kind === 'error') {
-    return (
-      <div className="props-empty" role="alert">
-        {listing.state.message}
-      </div>
-    );
+    // The failure is a toast; the panel keeps its empty body, so nothing is appended.
+    return <ErrorToast message={listing.state.message} />;
   }
   if (listing.state.kind === 'loading' || sections === undefined) {
     // Nothing is listed yet: no sections and no word, so the panel does not move when the rows arrive.
@@ -449,9 +448,7 @@ function SkillForm(props: FormProps & { readonly home: string }) {
         value={description}
         onChange={(event) => setDescription(event.target.value)}
       />
-      <span className="instructions-form-hint">
-        {translate('instructionsPanel.form.savedAs', { path: `${props.home}/${slugName(name) || 'skill-name'}/SKILL.md` })}
-      </span>
+      <InfoHint text={translate('instructionsPanel.form.savedAs', { path: `${props.home}/${slugName(name) || 'skill-name'}/SKILL.md` })} />
     </CreateForm>
   );
 }
@@ -577,11 +574,7 @@ function CreateForm(props: {
       }}
     >
       {props.children}
-      {props.problem !== undefined && (
-        <span className="instructions-form-problem" role="alert">
-          {props.problem}
-        </span>
-      )}
+      <ErrorToast message={props.problem} />
       <div className="instructions-form-actions">
         <button type="button" onClick={props.onCancel}>
           {translate('ui.cancel')}

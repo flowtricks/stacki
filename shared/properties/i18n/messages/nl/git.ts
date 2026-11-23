@@ -86,7 +86,6 @@ export const messages = {
   'git.chip.initialize': 'Git initialiseren',
   'git.chip.initialized': 'Git-repository geïnitialiseerd',
   'git.chip.pickedUp': 'Je wijzigingen weer opgepakt op {branch}',
-  'git.chip.reading': 'Repository lezen…',
   'git.chip.savedFiles': { one: '{count} bestand opgeslagen', other: '{count} bestanden opgeslagen' },
   'git.chip.switched': 'Overgeschakeld naar {branch}',
   'git.chip.waiting': 'Op {branch} — je wijzigingen wachten op {from}',

@@ -22,6 +22,7 @@ import { ignoreReasons, ignoredEntryCount } from '../../../shared/properties/aud
 import { withIgnore, withIgnoredPage, withoutAnyIgnores, withoutIgnore, withoutIgnoredPage, type AuditIgnores } from '../../../shared/properties/auditIgnores';
 import { agentTaskMessage, requestAgentTask } from '../../lib/agentTasks';
 import { CodeBlock } from '../../ui/CodeBlock';
+import { ErrorToast } from '../../ui/ErrorToast';
 import Dropdown from '../../ui/Dropdown';
 import MoreMenu from '../../ui/MoreMenu';
 import { SearchField } from '../../ui/SearchField';
@@ -337,15 +338,22 @@ function SpeedClear() {
   );
 }
 
-// Nothing to list: why, in one muted line.
+// Nothing to list: why, in one muted line. A failed audit is a toast; the ordinary empty line stays, so nothing is appended.
 function EmptyState({ filtered }: { readonly filtered: boolean }) {
+  const problem = useAuditState().problem;
+  return (
+    <>
+      <ErrorToast message={problem} />
+      <EmptyLine filtered={filtered} />
+    </>
+  );
+}
+
+function EmptyLine({ filtered }: { readonly filtered: boolean }) {
   const translate = useTranslate();
   const { formatDate } = useFormat();
   const state = useAuditState();
   const report = state.report;
-  if (state.problem !== undefined) {
-    return <p className="audits-note">{state.problem}</p>;
-  }
   if (report === undefined) {
     return <p className="audits-note">{state.running ? translate('auditsUi.empty.auditing') : translate('auditsUi.empty.open')}</p>;
   }

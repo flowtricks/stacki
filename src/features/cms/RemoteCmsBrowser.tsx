@@ -4,6 +4,7 @@
 // of them says so and offers the first. A collection opens in the main view (RemoteCmsView.tsx),
 // as a table of its items; one holding a single item opens that item. The open
 // collection stays highlighted here.
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -230,7 +231,7 @@ function CreateCollectionRow(props: {
           }}
         />
       </div>
-      {failure && <p className="remote-cms-note remote-cms-failure">{failure}</p>}
+      <ErrorToast message={failure || undefined} />
     </>
   );
 }

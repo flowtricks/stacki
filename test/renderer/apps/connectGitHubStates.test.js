@@ -74,11 +74,16 @@ function designed(document, expected) {
   assert.ok(empty !== null, `${expected.title}: an empty state, not bare text`);
   assert.ok(empty.querySelector('.apps-empty-icon svg') !== null, `${expected.title}: a muted icon on its soft fill`);
   assert.equal(empty.querySelector('.apps-connect-empty-title')?.textContent, expected.title);
-  assert.match(empty.querySelector('.apps-connect-empty-detail')?.textContent ?? '', expected.detail);
+  if (expected.alert) {
+    // A failure's text arrives once as a toast (an effect, so static markup never holds it); the empty state appends no paragraph.
+    assert.equal(empty.querySelector('.apps-connect-empty-detail') ?? undefined, undefined, `${expected.title}: the failure text is a toast, not a paragraph`);
+  } else {
+    assert.match(empty.querySelector('.apps-connect-empty-detail')?.textContent ?? '', expected.detail);
+  }
   const actions = [...empty.querySelectorAll('button')].map((button) => button.textContent.trim());
   assert.deepEqual(actions, expected.actions, `${expected.title}: its actions`);
   assert.ok(document.querySelector('.apps-error') === null, `${expected.title}: no bare red error text`);
-  assert.equal(empty.getAttribute('role') ?? undefined, expected.alert ? 'alert' : undefined, `${expected.title}: announced only when it is a failure`);
+  assert.equal(empty.getAttribute('role') ?? undefined, undefined, `${expected.title}: no inline alert; failures are toasts`);
   // The field still works: the typed repository is offered.
   assert.ok(document.querySelector('.apps-connect-field input') !== null, `${expected.title}: the field is there`);
   const use = document.querySelector('[role=option].apps-connect-use');

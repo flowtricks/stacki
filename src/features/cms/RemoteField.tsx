@@ -3,10 +3,10 @@
 // kind keeps its own control (RemoteValueEditor.tsx) under the same label row.
 // The label turns blue once the field holds something, and carries an asterisk
 // when the CMS requires it; its help is the `?` beside it; a broken rule shows
-// under the control, red when it blocks publishing and amber when it only warns.
+// as a toast, red when it blocks publishing and amber when it only warns; the field itself is tinted while a rule blocks.
 // A field the Studio locks (`readOnly`) shows its value without a control.
 // Where an empty required field blocks saving (an Astro entry), it says so
-// under the control once the editor asks it to (`requiredShown`). An entry held
+// in a toast once the editor asks it to (`requiredShown`). An entry held
 // on screen while the next one loads says nothing at all (FieldChecksContext).
 import { useContext } from 'react';
 import {
@@ -31,6 +31,7 @@ import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages'
 import { ReferenceIcon, referenceTitle, useReferenceOptions } from './RemoteReferenceInput';
 import { typeIcons } from './SanityTypeIcon';
 import { FieldChecksContext } from './remoteCmsShared';
+import { NoticeToast } from '../../ui/NoticeToast';
 
 export function RemoteField(props: {
   readonly field: RemoteSchemaField;
@@ -48,10 +49,11 @@ export function RemoteField(props: {
   const problems = checks === 'shown' ? problemsOf(field, value, translate) : [];
   const name = field.titleRef === undefined ? fieldTitle(field) : translateDescribed({ message: field.title, messageRef: field.titleRef });
   const help = field.descriptionRef === undefined ? field.description : translateDescribed({ message: field.description, messageRef: field.descriptionRef });
+  const invalid = missing || problems.some((problem) => problem.level === 'error');
   const scalar = scalarOf(field.type);
   const { icon: Icon } = fieldTypeOf(field.type);
   return (
-    <div className={`remote-cms-field${field.required ? ' is-required' : ''}`} data-kind={field.type.kind}>
+    <div className={`remote-cms-field${field.required ? ' is-required' : ''}${invalid ? ' is-invalid' : ''}`} data-kind={field.type.kind}>
       {isLocked(field, value) ? (
         <CmsFieldFrame name={name} help={lockedHelp(field, translate)} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
           <LockedValue type={field.type} value={value} context={props.context} />
@@ -82,14 +84,12 @@ export function RemoteField(props: {
           <RemoteValueEditor type={field.type} label={name} value={value} context={props.context} onChange={props.onChange} />
         </CmsFieldFrame>
       )}
-      {missing && <span className="remote-cms-problem is-error">{requiredMessage(field, translate)}</span>}
-      {/* Required is the label's asterisk; Publish still waits for it (remoteValidation.ts). */}
+      {/* Required is the label's asterisk; Publish still waits for it (remoteValidation.ts). The words are toasts, the field is tinted. */}
+      {missing && <NoticeToast message={requiredMessage(field, translate)} kind="error" />}
       {problems
         .filter((problem) => problem.rule !== 'required')
         .map((problem) => (
-          <span key={problem.message} className={`remote-cms-problem is-${problem.level}`}>
-            {problem.message}
-          </span>
+          <NoticeToast key={problem.message} message={problem.message} kind={problem.level === 'error' ? 'error' : 'warning'} />
         ))}
     </div>
   );

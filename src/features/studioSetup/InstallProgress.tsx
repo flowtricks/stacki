@@ -1,6 +1,7 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { classifyInstallOutput, type InstallOutputLine } from './installOutputLines';
 import { STUDIO_INSTALL_STAGES, studioCompletedStages, type StudioInstallStage } from '../../../shared/ipc/studioProgress';
 import type { MessageKey } from '../../lib/i18n/localeContext';
@@ -55,7 +56,7 @@ export default function InstallProgress({ activity }: { readonly activity: Studi
       >
         {progress.output ? lines.map((line, index) => <OutputLine key={index} line={line} />) : translate('studioSetup.progress.preparing')}
       </pre>
-      {activity.kind === 'busy' && <p className="studio-setup-note">{translate('studioSetup.progress.keepOpen')}</p>}
+      <NoticeToast message={activity.kind === 'busy' ? translate('studioSetup.progress.keepOpen') : undefined} kind="info" />
     </div>
   );
 }
