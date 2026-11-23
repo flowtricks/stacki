@@ -218,6 +218,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Saves a hidden snapshot before and after each AI turn to show changes. Adds no commits to your history. Off is faster on big projects.',
   'settings.editor.ai.trackChanges.label': 'Snapshot before & after each AI change',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} and wider',
+  'settings.editor.canvas.scrollbar.info':
+    'Off: a thin bar beside the page, which keeps the breakpoint’s full width, as on a phone. A breakpoint: Chromium’s bar there and wider, taking width as with a mouse.',
+  'settings.editor.canvas.scrollbar.label': 'Chromium scrollbar',
+  'settings.editor.canvas.scrollbar.off': 'Off',
   'settings.editor.code.chips.info': 'Variables, easings, shadows, gradients and clip-paths in CSS code show as chips that open their editors. Off: plain CSS.',
   'settings.editor.code.chips.label': 'Show CSS chips in code',
   'settings.editor.loading': 'Loading preferences…',
@@ -228,6 +233,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Anonymous usage counts',
   'settings.editor.saveFailed': 'Applied for this session, but could not save. Check disk space and try again.',
   'settings.editor.section.ai': 'AI',
+  'settings.editor.section.canvas': 'Canvas',
   'settings.editor.section.code': 'Code',
   'settings.editor.section.general': 'General',
   'settings.editor.section.privacy': 'Privacy',

@@ -223,6 +223,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'AIの各ターンの前後に非表示のスナップショットを保存して変更を表示します。履歴にコミットは追加されません。大きなプロジェクトではオフの方が高速です。',
   'settings.editor.ai.trackChanges.label': 'AIの変更ごとに前後のスナップショットを保存',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} 以上の幅',
+  'settings.editor.canvas.scrollbar.info':
+    'オフ: ページの横に細いスクロールバーを表示し、ページはスマートフォンと同じくブレークポイントの幅をすべて使います。ブレークポイントを選ぶと、その幅以上では Chromium 本来のスクロールバーになり、マウスを使うコンピューターと同じく幅を取ります。',
+  'settings.editor.canvas.scrollbar.label': 'Chromium のスクロールバー',
+  'settings.editor.canvas.scrollbar.off': 'オフ',
   'settings.editor.code.chips.info':
     'CSS コード内の変数、イージング、シャドウ、グラデーション、clip-path は、それぞれのエディターを開くチップとして表示されます。オフにすると通常の CSS になります。',
   'settings.editor.code.chips.label': 'コード内に CSS チップを表示',
@@ -235,6 +240,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': '匿名の利用回数カウント',
   'settings.editor.saveFailed': 'このセッションには適用されましたが、保存できませんでした。ディスクの空き容量を確認して、もう一度お試しください。',
   'settings.editor.section.ai': 'AI', // same
+  'settings.editor.section.canvas': 'キャンバス',
   'settings.editor.section.code': 'コード',
   'settings.editor.section.general': '一般',
   'settings.editor.section.privacy': 'プライバシー',

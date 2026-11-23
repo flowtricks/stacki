@@ -221,6 +221,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Değişiklikleri göstermek için her yapay zekâ turundan önce ve sonra gizli bir anlık görüntü kaydeder. Geçmişinize commit eklemez. Kapalıyken büyük projelerde daha hızlıdır.',
   'settings.editor.ai.trackChanges.label': 'Her yapay zekâ değişikliğinden önce ve sonra anlık görüntü al',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} ve daha geniş',
+  'settings.editor.canvas.scrollbar.info':
+    'Kapalı: sayfanın yanında ince bir kaydırma çubuğu; sayfa, telefondaki gibi kesme noktasının tüm genişliğini kullanır. Bir kesme noktasından itibaren: orada ve daha geniş yerlerde Chromium’un kendi kaydırma çubuğu; fareli bir bilgisayardaki gibi genişlik kaplar.',
+  'settings.editor.canvas.scrollbar.label': 'Chromium kaydırma çubuğu',
+  'settings.editor.canvas.scrollbar.off': 'Kapalı',
   'settings.editor.code.chips.info':
     'CSS kodundaki değişkenler, easing’ler, gölgeler, gradyanlar ve clip-path’ler, düzenleyicilerini açan çipler olarak görünür. Kapalı: düz CSS.',
   'settings.editor.code.chips.label': 'Kodda CSS çiplerini göster',
@@ -233,6 +238,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Anonim kullanım sayımları',
   'settings.editor.saveFailed': 'Bu oturum için uygulandı, ancak kaydedilemedi. Disk alanını kontrol edip yeniden deneyin.',
   'settings.editor.section.ai': 'Yapay zekâ',
+  'settings.editor.section.canvas': 'Tuval',
   'settings.editor.section.code': 'Kod',
   'settings.editor.section.general': 'Genel',
   'settings.editor.section.privacy': 'Gizlilik',

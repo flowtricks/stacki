@@ -219,6 +219,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Menyimpan snapshot tersembunyi sebelum dan sesudah setiap giliran AI untuk menampilkan perubahan. Tidak menambah commit ke riwayat Anda. Nonaktif lebih cepat di proyek besar.',
   'settings.editor.ai.trackChanges.label': 'Snapshot sebelum & sesudah setiap perubahan AI',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} dan lebih lebar',
+  'settings.editor.canvas.scrollbar.info':
+    'Nonaktif: scrollbar tipis di samping halaman, sehingga halaman tetap selebar breakpoint, seperti di ponsel. Dari breakpoint: scrollbar Chromium sendiri di sana dan yang lebih lebar, yang memakan lebar seperti di komputer dengan mouse.',
+  'settings.editor.canvas.scrollbar.label': 'Scrollbar Chromium',
+  'settings.editor.canvas.scrollbar.off': 'Nonaktif',
   'settings.editor.code.chips.info':
     'Variabel, easing, bayangan, gradien, dan clip-path di kode CSS tampil sebagai chip yang membuka editornya. Nonaktif: CSS biasa.',
   'settings.editor.code.chips.label': 'Tampilkan chip CSS di kode',
@@ -231,6 +236,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Penghitungan penggunaan anonim',
   'settings.editor.saveFailed': 'Diterapkan untuk sesi ini, tetapi tidak dapat disimpan. Periksa ruang disk lalu coba lagi.',
   'settings.editor.section.ai': 'AI', // same
+  'settings.editor.section.canvas': 'Kanvas',
   'settings.editor.section.code': 'Kode',
   'settings.editor.section.general': 'Umum',
   'settings.editor.section.privacy': 'Privasi',

@@ -225,6 +225,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Enregistre un instantané masqué avant et après chaque tour d’IA pour afficher les modifications. N’ajoute aucun commit à votre historique. Désactivé, c’est plus rapide sur les gros projets.',
   'settings.editor.ai.trackChanges.label': 'Instantané avant et après chaque modification d’IA',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} et plus large',
+  'settings.editor.canvas.scrollbar.info':
+    'Désactivée : une fine barre de défilement à côté de la page, qui garde toute la largeur du point d’arrêt, comme sur un téléphone. À partir d’un point d’arrêt : la barre de défilement de Chromium à cette largeur et au-delà, qui prend de la largeur comme sur un ordinateur avec une souris.',
+  'settings.editor.canvas.scrollbar.label': 'Barre de défilement Chromium',
+  'settings.editor.canvas.scrollbar.off': 'Désactivée',
   'settings.editor.code.chips.info':
     'Les variables, easings, ombres, dégradés et clip-paths du code CSS s’affichent sous forme de chips qui ouvrent leurs éditeurs. Désactivé : CSS brut.',
   'settings.editor.code.chips.label': 'Afficher les chips CSS dans le code',
@@ -237,6 +242,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Comptages d’utilisation anonymes',
   'settings.editor.saveFailed': 'Appliqué pour cette session, mais l’enregistrement a échoué. Vérifiez l’espace disque et réessayez.',
   'settings.editor.section.ai': 'IA',
+  'settings.editor.section.canvas': 'Canevas',
   'settings.editor.section.code': 'Code', // same
   'settings.editor.section.general': 'Général',
   'settings.editor.section.privacy': 'Confidentialité',

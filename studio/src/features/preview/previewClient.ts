@@ -8,6 +8,7 @@ import { receivePointQuery, type FramePointHit } from '../../../vendor/stacki/el
 import { deepHoverAt, receiveOutlineMode } from '../../../vendor/stacki/electron/preload/frameOutlineMode';
 import { HIGHLIGHT_MESSAGE, parseCanvasHighlight } from '../../../vendor/stacki/shared/properties/deepOutline';
 import { receiveAppScroll, receiveAppWheel } from '../../../vendor/stacki/electron/preload/frameAppScroll';
+import { installPageScrollReport, receiveCanvasScrollbar } from '../../../vendor/stacki/electron/preload/frameScrollbar';
 import { rectsForPath } from '../../../vendor/stacki/electron/preload/frameMeasure';
 import { installCanvasText } from '../../../vendor/stacki/electron/preload/frameText';
 import { parseCanvasInteraction, parseCanvasSitePages, type CanvasInteraction } from '../../../vendor/stacki/shared/properties/canvasInteraction';
@@ -45,6 +46,8 @@ const studioOrigin = parentOrigin(document, location.origin);
 const post = (message: unknown) => window.parent.postMessage(message, studioOrigin);
 const cursorPresence = installCursorPresence(post);
 const columnGuide = startGuide(post);
+// The canvas draws the page's scrollbar beside the frame from these reports (frameScrollbar.ts).
+installPageScrollReport(post);
 // Recreating a Vite hot context clears its earlier event listeners.
 const hot = createHotContext('/studio/preview.js');
 const variants = receiveRenderPush(hot);
@@ -266,6 +269,9 @@ window.addEventListener('message', (event) => {
     return;
   }
   if (receiveLiveRules(data)) {
+    return;
+  }
+  if (receiveCanvasScrollbar(data)) {
     return;
   }
   if (receiveAppCursor(data)) {

@@ -77,7 +77,7 @@ import { parseImageFormat, parseImagePath } from './assetConversion';
 import { parseGitHubRepository } from './githubRepository';
 import { parseCommitDiffRequest } from './gitCommitDiff';
 import { parseCommitAvatarRequest } from './commitAvatars';
-import { parsePreferenceName } from './preferences';
+import { parsePreferenceChange } from './preferences';
 import { parseStudioSource } from './studioSetup';
 import { parseStudioRequestId } from './studioProgress';
 import { parseUpdateAction } from './updateState';
@@ -776,7 +776,7 @@ export const IPC_PAYLOADS = {
   'recents:remove': pathText,
   'selection:copy': object({ ...project, keys: strings }),
   'settings:get': nothing,
-  'settings:set': object({ setting: parsePreferenceName, enabled: boolean }),
+  'settings:set': parsePreferenceChange,
   'shell:openExternal': pathText,
   'src:readSymbol': object({ ...source, name: text }),
   'src:readText': object({ ...relative }),

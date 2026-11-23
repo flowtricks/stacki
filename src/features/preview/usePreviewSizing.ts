@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { activeDeviceFor, deviceForShortcut, deviceWidth, type PreviewDevice } from './breakpointDevices';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
-import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
+import { fluidFrameWidthPx, PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
 import { panelDragPhase, setPanelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
  *  query). `serial` counts the asks, so the same width asked again still applies. */
@@ -52,8 +52,8 @@ export function usePreviewSizing(
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
   const viewport = previewViewport(width, available, customHeight);
-  // A fluid Desktop frame has no width of its own: the pane's (0 before the first measure, which keeps Desktop pressed) is the one it draws at.
-  const activeDevice = activeDeviceFor(device, width ?? available.width, breakpoints);
+  // A fluid Desktop frame has no width of its own: the pane's less its gutters (0 before the first measure, which keeps Desktop pressed) is the one it draws at.
+  const activeDevice = activeDeviceFor(device, width ?? fluidFrameWidthPx(available.width), breakpoints);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
     onDevice('custom');

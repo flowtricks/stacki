@@ -4,6 +4,7 @@ import { receiveAppCursor } from './frameAppCursor';
 import { receivePointQuery } from './framePointQuery';
 import { receiveOutlineMode } from './frameOutlineMode';
 import { receiveAppScroll, receiveAppWheel } from './frameAppScroll';
+import { receiveCanvasScrollbar } from './frameScrollbar';
 import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
 import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from './framePendingDelete';
 import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
@@ -157,6 +158,9 @@ export function listenForQueries(): void {
       return;
     }
     if (receiveAppCursor(data)) {
+      return;
+    }
+    if (receiveCanvasScrollbar(data)) {
       return;
     }
     if (data['type'] === 'avb:click-query') {

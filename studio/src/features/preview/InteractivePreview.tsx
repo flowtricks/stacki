@@ -292,7 +292,8 @@ function PreviewModeView({ preview, size }: { readonly preview: InteractivePrevi
   const { resolved: breakpoints } = useProjectBreakpoints(size.projectName);
   const sizing = usePreviewSizing(size.device, size.dimensions, breakpoints, { deviceShortcuts: false }, size.onDevice);
   return (
-    <PreviewModeStage sizing={sizing}>
+    // Studio has no app settings file: the canvas draws its own scrollbar at every width (canvasScrollbar.ts).
+    <PreviewModeStage sizing={sizing} chromiumFromPx={undefined}>
       {preview.target ? (
         <PreviewFrame preview={preview} target={preview.target} />
       ) : (
