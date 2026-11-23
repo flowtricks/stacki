@@ -11,6 +11,8 @@ import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
 import type { AppNetResponse } from '../properties/appNet';
 import type { AccountState } from './publishAccount';
 import type { PreviewHealth } from './previewHealth';
+import type { DevNetworkReply, DevNetworkState } from './devNetwork';
+import type { AstroCopyCheck, AstroCopyReply, SiteFolderChoice } from './astroCopy';
 import type { CmsCheckResult, CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
 import type { ConstantEditReply, ConstantListingReply } from '../properties/cmsConstants';
 import type {
@@ -470,6 +472,7 @@ export interface IpcResults extends AiResults, AgentResults {
     readonly launchedFromGui: boolean;
   };
   readonly 'dev:inspect': PreviewHealth;
+  readonly 'dev:network': DevNetworkState;
   readonly 'dev:probe': {
     readonly ok: boolean;
     readonly status: number;
@@ -493,6 +496,7 @@ export interface IpcResults extends AiResults, AgentResults {
         readonly bare: boolean;
         readonly external?: never;
       };
+  readonly 'dev:setNetwork': DevNetworkReply;
   readonly 'dev:stop': {
     readonly ok: true;
   };
@@ -701,6 +705,9 @@ export interface IpcResults extends AiResults, AgentResults {
   readonly 'dictation:remove': {
     readonly kind: 'removed';
   };
+  readonly 'dictation:reveal': {
+    readonly ok: true;
+  };
   readonly 'locale:set': {
     readonly saved: boolean;
   };
@@ -842,6 +849,9 @@ export interface IpcResults extends AiResults, AgentResults {
         readonly projectPath: string;
         readonly error?: never;
       };
+  readonly 'project:openSiteDialog': SiteFolderChoice;
+  readonly 'project:checkAstroCopy': AstroCopyCheck;
+  readonly 'project:createAstroCopy': AstroCopyReply;
   readonly 'project:parentDialog':
     | {
         readonly canceled: true;

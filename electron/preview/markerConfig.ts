@@ -342,7 +342,7 @@ import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 // Marking happens in electron/previewServer/previewMarkers.ts, in memory: it reads project
 // files and returns strings, and nothing it returns is ever written back.
-const { markCanvasSourceFile, markChunkFile, scanStyleBlocks, variantScopeMiddleware } = require(`,
+const { loopbackGuardMiddleware, markCanvasSourceFile, markChunkFile, scanStyleBlocks, variantScopeMiddleware } = require(`,
   `);
 const componentPreviewModule = `,
   `;
@@ -393,6 +393,21 @@ const PROJECT_DIRS = `,
 // scope hash comes from the file's path, so identical style blocks compile to
 // identical CSS, and reading the file cannot disturb the module graph.
 const avbStyleText = new Map();
+// Outside writes are logged one line each, and no faster than a burst of agents writes: a bound on the log.
+const AVB_EXTERNAL_LOG_PER_SECOND = 20;
+let avbExternalWindow = 0;
+let avbExternalCount = 0;
+const avbNoteExternal = (file) => {
+  const second = Math.floor(Date.now() / 1000);
+  if (second !== avbExternalWindow) {
+    avbExternalWindow = second;
+    avbExternalCount = 0;
+  }
+  if (avbExternalCount < AVB_EXTERNAL_LOG_PER_SECOND) {
+    avbExternalCount += 1;
+    console.log('[stacki] file changed outside the app: ' + file);
+  }
+};
 const avbReadFile = (file) => {
   try {
     return readFileSync(file, 'utf8');
@@ -660,6 +675,9 @@ const avbMorph = {
         touched.delete(file);
         if (bytes === avbReadFile(file)) return true;
       }
+      // A change the app did not announce: an agent, an editor, a checkout. Each one can make Vite send a
+      // full reload, so a report of "it reloads" names the file that did it (avbNoteExternal).
+      if (event === 'change' && typeof file === 'string' && /\\.(astro|md|mdx|css|ts|js)$/i.test(file)) avbNoteExternal(file);
       return ownEmit(event, file, ...rest);
     };
     // The canvas says why it reloaded instead of patching (morphClient.ts reloadFor): one bounded line
@@ -670,7 +688,7 @@ const avbMorph = {
       for (const ch of reason.slice(0, 300)) {
         line += ch.charCodeAt(0) < 32 ? ' ' : ch;
       }
-      console.log('[stacki] canvas reloaded instead of patching (' + line + ')');
+      console.log('[stacki] canvas ' + line);
       res.statusCode = 204;
       res.end();
     });
@@ -709,6 +727,7 @@ const avbMorph = {
       ch.send = (...args) => {
         const payload = args[0];
         if (payload && payload.type === 'full-reload') {
+          console.log('[stacki] the dev server asked for a full reload (' + (typeof payload.path === 'string' ? payload.path : '?') + '); the canvas patches the page instead');
           return send({ type: 'custom', event: 'avb:page-changed' });
         }
         return send(...args);
@@ -719,6 +738,27 @@ const avbMorph = {
 
 const AVB_MORPH_TAG = `,
   `;
+// The hosts the preview answers to on the local network, or null while it answers this computer only
+// (devServers.ts setNetwork). Vite refuses a request whose Host header it does not know; it always knows
+// IP addresses and localhost, and naming them here keeps that true for a Vite that checks differently.
+// Never set otherwise: the project's own allowedHosts stays exactly what it wrote.
+const AVB_NETWORK_HOSTS = `,
+  `;
+const avbAllowedHosts = (own) => {
+  if (own === true || !Array.isArray(AVB_NETWORK_HOSTS)) return own;
+  return [...new Set([...(Array.isArray(own) ? own : []), ...AVB_NETWORK_HOSTS])];
+};
+
+// Stacki's own routes (/__avb/*, /studio, Vite's /__open-in-editor) answer this computer only, in every
+// mode: the guard runs before any of them and before Vite's own middleware (previewServer/loopbackGuard.ts).
+// First among the plugins and enforce:'pre', so its configureServer adds the first middleware of ours.
+const avbLoopbackGuard = {
+  name: 'avb-loopback-guard',
+  enforce: 'pre',
+  configureServer(server) {
+    server.middlewares.use(loopbackGuardMiddleware);
+  },
+};
 
 // \`order: 'pre'\` is load-bearing: Vite takes the first plugin that returns
 // source from \`load\`, and a project plugin that marks .astro files itself
@@ -931,7 +971,10 @@ export default {
   },
   vite: {
     ...(base.vite || {}),
-    plugins: [studioEntryPlugin(PROJECT_DIRS[0]),
+    ...(Array.isArray(AVB_NETWORK_HOSTS)
+      ? { server: { ...((base.vite && base.vite.server) || {}), allowedHosts: avbAllowedHosts(base.vite && base.vite.server && base.vite.server.allowedHosts) } }
+      : {}),
+    plugins: [avbLoopbackGuard, studioEntryPlugin(PROJECT_DIRS[0]),
       componentPreviewPlugin(PROJECT_DIRS, readPackagePreviews),
       avbMarkers, avbMorph, avbVanishedStyles, avbStyleCheck,
       ...((base.vite && base.vite.plugins) || [])],

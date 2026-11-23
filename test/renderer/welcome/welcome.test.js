@@ -149,9 +149,9 @@ const PIXEL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAA
   );
   check('alternate project actions stay in their dropdowns', all('[role=menuitem]').length === 0);
   let folderRequests = 0;
-  dom.window.avb.openProjectDialog = async () => {
+  dom.window.avb.openSiteDialog = async () => {
     folderRequests++;
-    return { canceled: true };
+    return { kind: 'canceled' };
   };
   await act(async () => all('.actions button')[0].click());
   check('the main Open from folder button opens the folder picker', folderRequests === 1);

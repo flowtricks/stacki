@@ -1,7 +1,8 @@
 // The dictation model's channels (docs/contracts.md, "Dictation model"): its status, a download
 // with consent (the renderer asks only after the person pressed Download in the setup dialog),
-// cancelling it, and removing the model. One download runs at a time; its progress reaches the
+// cancelling it, removing the model, and showing its folder in the file manager. One download runs at a time; its progress reaches the
 // window as `dictation:progress`, at most `progressEventsPerSecondMax` times a second.
+import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { assert } from '../../shared/core/assert';
 import { DICTATION_LIMITS } from '../../shared/properties/voice/dictationLimits';
@@ -31,7 +32,7 @@ interface ActiveDownload {
   readonly totalBytes: number;
 }
 
-export function registerDictationHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain' | 'send'>, options: DictationOptions): void {
+export function registerDictationHandlers({ ipcMain, send, shell }: Pick<MainHost, 'ipcMain' | 'send' | 'shell'>, options: DictationOptions): void {
   // The one download in flight; its byte count is kept here so a status read during it is current.
   let active: ActiveDownload | undefined;
 
@@ -99,6 +100,16 @@ export function registerDictationHandlers({ ipcMain, send }: Pick<MainHost, 'ipc
   ipcMain.handle('dictation:cancel', (_event, { modelId }) => {
     if (active?.id === modelId) {
       active.abort.abort();
+    }
+    return { ok: true as const };
+  });
+
+  // Settings' "Show in Finder" for a model's folder. The renderer names a model id, never a path; the folder is
+  // the one main downloads into, and nothing is opened when the model has not been downloaded yet.
+  ipcMain.handle('dictation:reveal', (_event, { modelId }) => {
+    const folder = modelDirectory(options.root(), WHISPER_MODELS[modelId]);
+    if (existsSync(folder)) {
+      shell.showItemInFolder(folder);
     }
     return { ok: true as const };
   });

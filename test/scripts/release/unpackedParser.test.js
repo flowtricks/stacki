@@ -184,6 +184,7 @@ function checkGeneratedConfig(directory) {
     JSON.stringify([directory]),
     JSON.stringify(''),
     JSON.stringify(''),
+    'null', // JavaScript's own null in the generated file: the preview answers this computer only
     local('preview.astro'),
     local('paths.js'),
     local('data.js'),

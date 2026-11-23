@@ -12,7 +12,7 @@ import StudioSetup from '../../features/studioSetup/StudioSetup';
 import { cleanError } from '../../lib/cleanError';
 import { readPreferences, savePreference } from './preferencesBridge';
 import './settings.css';
-import { BracesIcon, CloseIcon } from '../../ui/Icons';
+import { BracesIcon, CloseIcon, MicrophoneIcon } from '../../ui/Icons';
 import { Switch } from '../../ui/Switch';
 import { useScrollEdges } from '../../ui/useScrollEdges';
 import { FolderSettings } from './FolderSettings';
@@ -32,6 +32,7 @@ import { codeChipsModeOf, publishCodeChipsMode } from '../../features/style/code
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { LanguageSetting } from './LanguageSetting';
 import { DictationSetting } from './DictationSetting';
+import { useVoiceEnvironment } from '../../features/ai/voice/voiceEnvironment';
 import { RailOrderSetting } from './RailOrderSetting';
 import { SettingsEmpty, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 
@@ -93,6 +94,7 @@ export default function Settings(props: Props) {
 
 const TAB_LABELS: Readonly<Record<SettingsTab, MessageKey>> = {
   editor: 'settings.tab.editor',
+  dictation: 'settings.tab.dictation',
   folders: 'settings.tab.folders',
   cms: 'settings.tab.cms',
   studio: 'settings.tab.studio',
@@ -110,12 +112,23 @@ function TabIcon(props: { readonly tab: SettingsTab }) {
 // New style locations are the project's style setup, as its breakpoints are, so the tab is governed by the
 // breakpoints permission: a role that could edit them under Breakpoints still can, and no existing
 // roles file has to learn a new feature. Its icon is the code braces of the template it edits.
-function accessTabOf(tab: SettingsTab): Exclude<SettingsTab, 'styles'> {
-  return tab === 'styles' ? 'breakpoints' : tab;
+// Dictation is a person's way of working like the Editor's preferences, so it is governed by `settings:editor`
+// (its words and quality are kept on this computer, not in the project); its icon is the composer's microphone.
+function accessTabOf(tab: SettingsTab): Exclude<SettingsTab, 'styles' | 'dictation'> {
+  if (tab === 'styles') {
+    return 'breakpoints';
+  }
+  return tab === 'dictation' ? 'editor' : tab;
 }
 
 function SettingsTabIcon(props: { readonly tab: SettingsTab; readonly size: number }) {
-  return props.tab === 'styles' ? <BracesIcon size={props.size} /> : <FeatureIcon feature={`settings:${accessTabOf(props.tab)}`} size={props.size} />;
+  if (props.tab === 'styles') {
+    return <BracesIcon size={props.size} />;
+  }
+  if (props.tab === 'dictation') {
+    return <MicrophoneIcon size={props.size} />;
+  }
+  return <FeatureIcon feature={`settings:${accessTabOf(props.tab)}`} size={props.size} />;
 }
 
 interface DialogProps extends Props {
@@ -129,7 +142,9 @@ function SettingsDialog(props: DialogProps) {
   const translate = useTranslate();
   // Tabs the project's role hides are left out; a hidden tab opens on the first shown one.
   const role = useCurrentRole();
-  const shown = SETTINGS_TABS.filter((item) => canSettingsTab(role, accessTabOf(item)));
+  // Dictation is there only where Stacki's own speech engine runs (Desktop); elsewhere the tab would have nothing to show.
+  const dictationAvailable = useVoiceEnvironment().whisper !== undefined;
+  const shown = SETTINGS_TABS.filter((item) => canSettingsTab(role, accessTabOf(item)) && (item !== 'dictation' || dictationAvailable));
   const [chosen, setChosen] = useState<SettingsTab>(props.tab);
   const tab = shown.includes(chosen) ? chosen : (shown[0] ?? 'roles');
   const tabButtons = useRef(new Map<SettingsTab, HTMLButtonElement>());
@@ -232,7 +247,9 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
   const icon = <SettingsTabIcon tab={props.tab} size={20} />;
   switch (props.tab) {
     case 'editor':
-      return <Preferences projectPath={props.projectPath} />;
+      return <Preferences />;
+    case 'dictation':
+      return <DictationSetting projectPath={props.projectPath} />;
     case 'folders':
       return props.projectPath ? (
         <FolderSettings
@@ -357,7 +374,7 @@ function usePreferences() {
 }
 
 // Editor settings save each switch as it flips: each is safe to apply alone.
-function Preferences({ projectPath }: { readonly projectPath: string | undefined }) {
+function Preferences() {
   const translate = useTranslate();
   const { value, busy, error, change, saving } = usePreferences();
   return (
@@ -407,7 +424,6 @@ function Preferences({ projectPath }: { readonly projectPath: string | undefined
         <SettingsRow label={translate('ai.autoCompact.label')} info={translate('ai.autoCompact.info')}>
           <AutoCompactPicker ariaLabel={translate('ai.autoCompact.label')} />
         </SettingsRow>
-        <DictationSetting projectPath={projectPath} />
       </SettingsSection>
       <SettingsSection title={translate('settings.editor.section.privacy')}>
         <PreferenceToggle

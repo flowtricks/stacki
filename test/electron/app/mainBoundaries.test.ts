@@ -126,7 +126,11 @@ test('the complete channel inventory matches real main and terminal registration
   // On-device dictation adds four (dictation:status, :download, :cancel and :remove; shared/properties/voice/dictationModel.ts), 312 in all.
   // The composer's screen recording and the CMS constants add three more, 315 in all.
   // The AI panel's auto-compact threshold adds two (ai:autoCompactGet and :autoCompactSet), 317 in all.
-  assert.equal(harness.handlers.size, 317);
+  // The phone preview adds two (dev:network and dev:setNetwork; shared/ipc/devNetwork.ts), 319 in all.
+  // Settings > Dictation's "Show in Finder" adds one (dictation:reveal), 320 in all.
+  // "Open from folder" on a plain website adds three (project:openSiteDialog, :checkAstroCopy and :createAstroCopy;
+  // shared/ipc/astroCopy.ts), 323 in all.
+  assert.equal(harness.handlers.size, 323);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

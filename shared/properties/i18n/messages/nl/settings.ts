@@ -437,6 +437,7 @@ export const messages = {
   'settings.tab.audits': 'Audits', // same
   'settings.tab.breakpoints': 'Breakpoints', // same
   'settings.tab.cms': 'CMS-verbindingen',
+  'settings.tab.dictation': 'Dicteren',
   'settings.tab.editor': 'Editorinstellingen',
   'settings.tab.folders': 'Mappen',
   'settings.tab.instructions': 'Instructies',
@@ -547,7 +548,6 @@ export const messages = {
   'settings.mcp.json.discard.confirm': 'Wijzigingen negeren',
   'settings.mcp.json.discard.keep': 'Doorgaan met bewerken',
   'settings.mcp.json.discard.title': 'Je JSON-wijzigingen negeren?',
-  'settings.mcp.json.empty': 'Nog geen .mcp.json. Opslaan maakt het aan.',
   'settings.mcp.json.issue': 'Regel {line}, kolom {column}: {message}',
   'settings.mcp.json.issuePath': 'Regel {line}, kolom {column} · {path}: {message}',
   'settings.mcp.json.label': 'Inhoud van .mcp.json',

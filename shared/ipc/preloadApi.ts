@@ -28,6 +28,9 @@ interface InvokeChannels {
   readonly openProjectDialog: 'project:openDialog';
   readonly createAstroProject: 'project:createAstro';
   readonly parentDialog: 'project:parentDialog';
+  readonly openSiteDialog: 'project:openSiteDialog';
+  readonly checkAstroCopy: 'project:checkAstroCopy';
+  readonly createAstroCopy: 'project:createAstroCopy';
   readonly createStarter: 'project:createStarter';
   readonly scanProject: 'project:scan';
   readonly listProjectClasses: 'project:classes';
@@ -158,6 +161,8 @@ interface InvokeChannels {
   readonly diagnoseDev: 'dev:diagnose';
   readonly inspectDevPage: 'dev:inspect';
   readonly probeDevPage: 'dev:probe';
+  readonly devNetwork: 'dev:network';
+  readonly setDevNetwork: 'dev:setNetwork';
   readonly listStyleFiles: 'style:listFiles';
   readonly listAstroStyleFiles: 'style:listAstroStyles';
   readonly readStyleFile: 'style:readFile';
@@ -316,6 +321,7 @@ interface InvokeChannels {
   readonly dictationDownload: 'dictation:download';
   readonly dictationCancel: 'dictation:cancel';
   readonly dictationRemove: 'dictation:remove';
+  readonly dictationReveal: 'dictation:reveal';
   readonly microphoneOpenSettings: 'microphone:openSettings';
   readonly microphoneRequest: 'microphone:request';
   readonly microphoneStatus: 'microphone:status';

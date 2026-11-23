@@ -1227,11 +1227,6 @@ html[data-platform='win32'] .titlebar {
   gap: 5px;
   margin: 0;
 }
-.list-item-note {
-  margin-top: -8px;
-  color: var(--text-dim);
-  font-size: 11px;
-}
 /* The component's own items, shown while the instance sets none. */
 .list-field.is-fallback .list-field-text {
   color: var(--text-dim);
@@ -1599,9 +1594,6 @@ html[data-platform='win32'] .titlebar {
 }
 .var-src .var-src-code .cm-content {
   max-width: none;
-}
-.var-src > .prop-field-note {
-  margin: 0;
 }
 
 /* Insert palette (⌘F / ⌘E / ⌘K) */
@@ -2875,8 +2867,11 @@ html[data-platform='win32'] .titlebar {
    edge facing the control, at the control's centre (--tip-arrow). Physical sides: the side is measured on screen. */
 .rail-tooltip.rail-tooltip[data-fitted] {
   transform: none;
-  /* Never wider than the window less the margin kept on both sides (fitTooltip). */
-  max-width: calc(100vw - 16px);
+  /* A short label stays on one line; a sentence wraps at a reading width instead of running across the window
+     (an unwrapped tip once measured 1900px). Never wider than the window less the margin kept on both sides (fitTooltip). */
+  max-width: min(20rem, calc(100vw - 16px));
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .rail-tooltip[data-fitted][data-side='below']::before,
 .rail-tooltip[data-fitted][data-side='above']::before {
@@ -4519,20 +4514,13 @@ body > .embed-editor_provenance {
   opacity: 0.45;
 }
 
-/* An insert-palette item with no valid place for the current selection: still listed, dimmed, with the reason below the list. */
+/* An insert-palette item with no valid place for the current selection: still listed, dimmed, with the reason in a tooltip on the highlighted row (InsertPlacementTip.tsx). */
 .insert-placement {
   display: contents;
 }
 .insert-placement[data-refused] .insert-item {
   opacity: 0.4;
   cursor: not-allowed;
-}
-.insert-placement-note {
-  padding: 8px 12px;
-  background: var(--bg-panel-2);
-  color: var(--text-dim);
-  font-size: 11.5px;
-  line-height: 1.4;
 }
 
 /* ------------------------------------------------------------------ */
@@ -4677,16 +4665,6 @@ body > .embed-editor_provenance {
 }
 .prop-required.missing {
   background: var(--red);
-}
-.prop-field-note {
-  margin: -8px 12px 12px;
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--text-faint);
-}
-.prop-field-note.required,
-.prop-field-note.problem {
-  color: var(--red);
 }
 /* A colour prop: the swatch opens the system picker (the native input fills
    it, invisible), and the text beside it holds any CSS colour or token. */
@@ -5510,12 +5488,6 @@ body > .embed-editor_provenance {
 /* Git bar                                                             */
 /* ------------------------------------------------------------------ */
 
-.git-hint {
-  padding: 2px 10px 6px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--amber);
-}
 /* While an action runs the chip states it, so there's feedback even with the
    dropdown closed (publishing can take a while). */
 
@@ -5560,17 +5532,6 @@ body > .embed-editor_provenance {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
 }
-/* The Create component hint sits under an input and explains the result, so it reads in the
-   secondary text colour (the faint one is too low-contrast) with a step of air above it. The
-   chips keep their fill and take the same colour; no border, per the fills-not-borders rule. */
-.hint-text.component-name-hint {
-  margin-top: var(--space-2, 4px); /* The token lives in the style panel's sheet: hold the gap without it. */
-  color: var(--text-dim);
-}
-.hint-text.component-name-hint code {
-  color: var(--text-dim);
-}
-
 /* The values the new component reads: a header (summary and the bulk control), one filled list
    of compact rows, and a counts line. The dialog is a column capped to the window, so the footer
    and its Create button never leave view; only the list scrolls, with soft shadows on the edges
@@ -5808,6 +5769,32 @@ body > .embed-editor_provenance {
   white-space: nowrap;
   direction: rtl;
   text-align: left; /* physical: rtl ellipsis trick on path */
+}
+/* Make an Astro copy: where the copy goes, shortened, with the picker beside it. A refused location
+   takes the error look (a fill, never a border); the reason arrives as a toast. */
+.astro-copy-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  background: var(--bg-input);
+  border-radius: 6px;
+  padding: 4px 4px 4px 10px;
+  color: var(--text-faint);
+}
+.astro-copy-location[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
+}
+.astro-copy-location > .code-inline {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.astro-copy-location > button {
+  flex: none;
 }
 .template-list {
   display: grid;
@@ -7563,13 +7550,6 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .cms-settings .cms-detail-head .primary {
   padding: 5px 14px;
 }
-.cms-note {
-  color: var(--text-faint);
-  font-size: 11.5px;
-  margin: -8px 0 14px;
-  line-height: 1.5;
-}
-
 .cms-schema {
   display: flex;
   flex-direction: column;
@@ -7691,7 +7671,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   font-weight: 500;
   color: var(--text);
 }
-.cms-type-hint {
+.cms-type-description {
   font-size: 10.5px;
   color: var(--text-faint);
   font-weight: 400;
@@ -8031,11 +8011,6 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: transparent;
 }
 
-.content-hint {
-  font-size: 10.5px;
-  color: var(--text-faint);
-  margin-top: 4px;
-}
 .content-issue {
   font-size: 10.5px;
   color: var(--red);
@@ -8197,11 +8172,6 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   margin: 2px 0 6px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-}
-.content-body-note {
-  font-size: 10.5px;
-  color: var(--text-faint);
-  margin-bottom: 6px;
 }
 /* The body is an editor, not a growing textarea: a long post would push every
    other field off the screen, so it scrolls within a window big enough to
@@ -8754,14 +8724,6 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   color: var(--text);
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-}
-/* The settings file could not be read: suggestions are unfiltered and hiding is paused. */
-.vars-notice {
-  flex: none;
-  padding: 0.5rem 0.75rem;
-  background: rgba(255, 90, 90, 0.12);
-  color: var(--text);
-  font-size: 0.75rem;
 }
 
 /* Value, colour box and field: the box is beside the field, not in it, and the
@@ -10792,9 +10754,10 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   flex: none;
   margin: 0;
 }
-.git-commit-scope-error {
-  color: var(--red);
-  margin: 0;
+/* A refused scope or branch name takes the error look: a fill, never a border. The reason arrives as a toast. */
+.git-commit-scope[aria-invalid='true'],
+.git-branch-editor .git-create-branch input[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
 }
 /* What will be committed, quiet beside the fields that set it. */
 .git-commit-preview {
@@ -10807,11 +10770,9 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   white-space: nowrap;
 }
 
-.page-rename-error {
-  color: var(--red);
-  font-size: 12px;
-  min-height: 18px;
-  margin-top: 6px;
+/* A refused field takes the error look (a fill, never a border); the reason arrives once as a toast, never as a row under it. */
+.modal-body input[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
 }
 
 /* A panel whose render failed (src/ui/PanelBoundary.tsx): what broke and a way

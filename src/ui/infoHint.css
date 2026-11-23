@@ -34,3 +34,7 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+/* The wrapper of TipAnchor: lays out as its child does, so wrapping a control never moves it. */
+.tip-anchor {
+  display: contents;
+}

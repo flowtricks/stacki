@@ -46,6 +46,8 @@ import FittedTooltip from '../../ui/FittedTooltip';
 import { type LeftTab } from '../appTypes';
 import type { CodeReveal, SourceRange } from '../../features/code/codePanelModel';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
+import { PhonePreviewButton } from '../../features/preview/phone/PhonePreviewMenu';
+import type { ReactNode } from 'react';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, ProjectSettingsPanel, preloadPanels } from '../appPanels';
 import { canvasPageOf, findEditorNodeById } from '../../editor/pageState';
@@ -288,7 +290,12 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
       ) : (
         <PageSwitcher pages={app.scan.pages} currentPage={app.currentScanPage} onSelect={app.onSelectPage} />
       )}
-      <UrlGroup app={app} />
+      <UrlGroup
+        app={app}
+        trailing={
+          <PhonePreviewButton projectPath={app.project.path} devUrl={app.devUrl} devStatus={app.devStatus} route={app.pageUrlPath} showToast={app.showToast} />
+        }
+      />
       <span className="spacer" />
       <ViewAsChip />
       <TitleActions app={app} />
@@ -308,7 +315,11 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
   );
 }
 
-export function UrlGroup({ app }: { readonly app: ShellView }) {
+/**
+ * The address bar. `trailing` is a host's own control drawn in it before "Open in browser" (Desktop's phone
+ * preview, PhonePreviewMenu.tsx); a host without one passes nothing, and the bar is as it always was.
+ */
+export function UrlGroup({ app, trailing }: { readonly app: ShellView; readonly trailing?: ReactNode }) {
   const translate = useTranslate();
   const { liveUrl, patternRoute } = app;
   return (
@@ -340,6 +351,7 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
             app.goToUrl(event.currentTarget.value);
           }}
         />
+        {trailing}
         <OpenBrowserButton liveUrl={liveUrl} />
         <PageLoadLine />
       </div>

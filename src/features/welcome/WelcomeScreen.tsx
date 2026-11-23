@@ -3,20 +3,16 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import CloneRepositoryModal from './CloneRepositoryModal';
 import WelcomeSplitButton from './WelcomeSplitButton';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  chooseExistingProject,
-  chooseStarterParent,
-  listRecentProjects,
-  refreshRecentThumbnail,
-  removeRecentProject,
-  type RecentProject,
-} from './welcomeBridge';
+import { chooseSiteFolder, chooseStarterParent, listRecentProjects, refreshRecentThumbnail, removeRecentProject, type RecentProject } from './welcomeBridge';
 import { AstroIcon, CloseIcon, FolderIcon, GitHubIcon, LayersIcon, LumosIcon } from '../../ui/Icons';
 import StackiLogo from './StackiLogo';
 import WelcomeShaderBackground from './WelcomeShaderBackground';
 import { railScrollbarFor, watchRailEdges } from './recentRail';
 import { currentDesktopPlatform } from '../../lib/shortcutLabel';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
+import AstroCopyDialog, { type AstroCopySource } from './AstroCopyDialog';
+import type { AstroCopyCreated } from '../../../shared/ipc/astroCopy';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 interface WelcomeScreenProps {
   readonly onOpen: (projectPath: string) => void;
@@ -29,8 +25,9 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
   const [error, setError] = useState<string | undefined>(undefined);
   const [newProjectParent, setNewProjectParent] = useState<string | undefined>(undefined);
   const [starterDirectory, setStarterDirectory] = useState<string | undefined>(undefined);
+  const [copySource, setCopySource] = useState<AstroCopySource | undefined>(undefined);
   const recent = useRecentProjects(showToast);
-  const actions = useWelcomeActions(onOpen, setError, setNewProjectParent, setStarterDirectory);
+  const actions = useWelcomeActions(onOpen, setError, setNewProjectParent, setStarterDirectory, setCopySource);
 
   return (
     <div className="welcome">
@@ -64,6 +61,17 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
           }}
         />
       )}
+      {copySource && (
+        <AstroCopyDialog
+          source={copySource}
+          onClose={() => setCopySource(undefined)}
+          onDone={(created) => {
+            setCopySource(undefined);
+            announceAstroCopy(created, translate, showToast);
+            onOpen(created.projectPath);
+          }}
+        />
+      )}
       {newProjectParent && (
         <NewProjectWizard
           parentPath={newProjectParent}
@@ -84,16 +92,34 @@ function useWelcomeActions(
   setError: React.Dispatch<React.SetStateAction<string | undefined>>,
   setNewProjectParent: React.Dispatch<React.SetStateAction<string | undefined>>,
   setStarterDirectory: React.Dispatch<React.SetStateAction<string | undefined>>,
+  setCopySource: React.Dispatch<React.SetStateAction<AstroCopySource | undefined>>,
 ) {
+  const translate = useTranslate();
+  // An Astro project opens; a plain website folder is offered an Astro copy; anything else is a toast.
   const openExisting = async (): Promise<void> => {
     setError(undefined);
-    const result = await chooseExistingProject();
+    const result = await chooseSiteFolder();
     if (!result.ok) {
       setError(result.error);
-    } else if (!result.value.canceled && 'error' in result.value) {
-      setError(result.value.error);
-    } else if (!result.value.canceled) {
-      onOpen(result.value.projectPath);
+      return;
+    }
+    const choice = result.value;
+    switch (choice.kind) {
+      case 'canceled':
+        return;
+      case 'astro':
+        onOpen(choice.projectPath);
+        return;
+      case 'plainWebsite':
+        setCopySource({ sourcePath: choice.sourcePath, parentPath: choice.parentPath, name: choice.name, homePath: choice.homePath });
+        return;
+      case 'notWebsite':
+        setError(translate('welcome.notWebsite'));
+        return;
+      default: {
+        const exhaustive: never = choice;
+        return exhaustive;
+      }
     }
   };
   // Both wizards ask where the site should go and name its folder themselves.
@@ -116,6 +142,17 @@ function useWelcomeActions(
     }
   };
   return { openExisting, createNew, startFromLumos };
+}
+
+// What a finished copy says before it opens: that it was made, and anything the person should know about it.
+function announceAstroCopy(created: AstroCopyCreated, translate: Translator, showToast: WelcomeScreenProps['showToast']): void {
+  showToast(translate('welcome.copy.created'), 'success');
+  if (created.keptAsFilesCount > 0) {
+    showToast(translate('welcome.copy.keptAsFiles', { count: created.keptAsFilesCount, files: created.keptAsFiles.join(', ') }), 'info');
+  }
+  if (created.install.kind === 'failed') {
+    showToast(translate('welcome.copy.installFailed', { detail: created.install.detail }), 'error');
+  }
 }
 
 function useRecentProjects(showToast: WelcomeScreenProps['showToast']) {

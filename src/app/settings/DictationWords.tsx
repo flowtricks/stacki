@@ -1,7 +1,8 @@
-// Settings → AI → Dictation → Vocabulary and Snippets: the person's own words (dictationVocabulary.ts).
-// Vocabulary is a list of chips, each a word written the person's way, optionally with what Whisper
-// hears instead; names from the open project are offered as one-click suggestions. Snippets are a
-// trigger to say and the text it writes, listed with a search. Everything is edited in the app's own
+// Settings → Dictation → Vocabulary and Snippets: the person's own words (dictationVocabulary.ts).
+// Vocabulary is a list of words written the person's way, optionally with what Whisper hears instead;
+// names from the open project are offered as one-click suggestions. Snippets are a trigger to say and
+// the text it writes, listed with a search. Each section has its Add button in its heading, and each
+// row can be edited or deleted. Everything is edited in the app's own
 // dialogs and kept on this computer (dictationStore.ts), never shared.
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -16,11 +17,12 @@ import { normalizeWords } from '../../../shared/properties/voice/dictationVocabu
 import { aiMentions } from '../../features/ai/aiBridge';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
-import { CloseIcon, PencilIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import { reportErrorToast } from '../../ui/errorNotices';
+import { ListViewIcon, PencilIcon, PlusIcon, SearchIcon, TextIcon, TrashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import { SearchField } from '../../ui/SearchField';
 import { Switch } from '../../ui/Switch';
-import { SettingsEmpty, SettingsRow } from './SettingsLayout';
+import { SettingsEmpty, SettingsSection } from './SettingsLayout';
 
 /** Project names offered as vocabulary at once. */
 const SUGGESTIONS_MAX = 12;
@@ -35,12 +37,113 @@ export function DictationWordsRows({
   readonly projectPath: string | undefined;
   readonly onChange: (words: DictationWords) => void;
 }) {
+  return (
+    <>
+      <VocabularySection words={words} projectPath={projectPath} onChange={onChange} />
+      <SnippetsSection words={words} onChange={onChange} />
+    </>
+  );
+}
+
+type WordEdit = { readonly kind: 'new' } | { readonly kind: 'edit'; readonly entry: VocabularyEntry };
+
+// Vocabulary: a list of words written the person's way, each with what Whisper hears instead when there is one;
+// the open project's component names are offered under it as one-click chips.
+function VocabularySection({
+  words,
+  projectPath,
+  onChange,
+}: {
+  readonly words: DictationWords;
+  readonly projectPath: string | undefined;
+  readonly onChange: (words: DictationWords) => void;
+}) {
   const translate = useTranslate();
-  const [wordOpen, setWordOpen] = useState(false);
-  const [snippetEdit, setSnippetEdit] = useState<{ readonly kind: 'new' } | { readonly kind: 'edit'; readonly snippet: Snippet } | undefined>(undefined);
-  const [search, setSearch] = useState('');
+  const [wordEdit, setWordEdit] = useState<WordEdit | undefined>(undefined);
   const suggestions = useProjectNames(projectPath, words.vocabulary);
   const addWord = (entry: VocabularyEntry): void => onChange({ ...words, vocabulary: [...words.vocabulary, entry] });
+  return (
+    <SettingsSection
+      title={translate('dictation.words.vocabulary.label')}
+      info={translate('dictation.words.vocabulary.info')}
+      action={
+        <button type="button" disabled={words.vocabulary.length >= VOCABULARY_LIMITS.entriesMax} onClick={() => setWordEdit({ kind: 'new' })}>
+          <PlusIcon size={12} /> {translate('dictation.words.vocabulary.add')}
+        </button>
+      }
+    >
+      {words.vocabulary.length === 0 ? (
+        <SettingsEmpty compact icon={<TextIcon size={16} />}>
+          {translate('dictation.words.vocabulary.empty')}
+        </SettingsEmpty>
+      ) : (
+        <ul className="dictation-rows">
+          {words.vocabulary.map((entry) => (
+            <li key={entry.word} className="dictation-row">
+              <span className="dictation-row-text">
+                <span className="dictation-row-title">{entry.word}</span>
+                {entry.misheard !== undefined && (
+                  <span className="dictation-row-detail">{translate('dictation.words.vocabulary.misheard', { misheard: entry.misheard })}</span>
+                )}
+              </span>
+              <button
+                type="button"
+                className="ghost"
+                aria-label={translate('dictation.words.vocabulary.edit', { word: entry.word })}
+                onClick={() => setWordEdit({ kind: 'edit', entry })}
+              >
+                <PencilIcon size={12} />
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                aria-label={translate('dictation.words.vocabulary.remove', { word: entry.word })}
+                onClick={() => onChange({ ...words, vocabulary: words.vocabulary.filter((each) => each !== entry) })}
+              >
+                <TrashIcon size={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {suggestions.length > 0 && (
+        <div className="dictation-words-suggestions" role="group" aria-label={translate('dictation.words.vocabulary.suggestions')}>
+          <span className="dictation-words-suggestions-label">{translate('dictation.words.vocabulary.suggestions')}</span>
+          {suggestions.map((name) => (
+            <button
+              key={name}
+              type="button"
+              className="dictation-words-suggestion"
+              aria-label={translate('dictation.words.vocabulary.suggestion', { word: name })}
+              onClick={() => addWord({ word: name })}
+            >
+              <PlusIcon size={10} /> {name}
+            </button>
+          ))}
+        </div>
+      )}
+      {wordEdit !== undefined && (
+        <WordDialog
+          initial={wordEdit.kind === 'edit' ? wordEdit.entry : undefined}
+          taken={words.vocabulary.filter((each) => wordEdit.kind === 'new' || each !== wordEdit.entry).map((entry) => entry.word.toLowerCase())}
+          onClose={() => setWordEdit(undefined)}
+          onSave={(entry) => {
+            const vocabulary =
+              wordEdit.kind === 'edit' ? words.vocabulary.map((each) => (each === wordEdit.entry ? entry : each)) : [...words.vocabulary, entry];
+            onChange({ ...words, vocabulary });
+            setWordEdit(undefined);
+          }}
+        />
+      )}
+    </SettingsSection>
+  );
+}
+
+// Snippets: a trigger to say and the text it writes, listed with a search once there are enough to need one.
+function SnippetsSection({ words, onChange }: { readonly words: DictationWords; readonly onChange: (words: DictationWords) => void }) {
+  const translate = useTranslate();
+  const [snippetEdit, setSnippetEdit] = useState<{ readonly kind: 'new' } | { readonly kind: 'edit'; readonly snippet: Snippet } | undefined>(undefined);
+  const [search, setSearch] = useState('');
   const shown = words.snippets.filter((snippet) => {
     const query = normalizeWords(search);
     return query === '' || normalizeWords(`${snippet.trigger} ${snippet.expansion}`).includes(query);
@@ -57,60 +160,21 @@ export function DictationWordsRows({
     }
   };
   return (
-    <>
-      <SettingsRow label={translate('dictation.words.vocabulary.label')} info={translate('dictation.words.vocabulary.info')}>
-        <button type="button" disabled={words.vocabulary.length >= VOCABULARY_LIMITS.entriesMax} onClick={() => setWordOpen(true)}>
-          <PlusIcon size={12} /> {translate('dictation.words.vocabulary.add')}
-        </button>
-      </SettingsRow>
-      {words.vocabulary.length === 0 ? (
-        <SettingsEmpty icon={<PlusIcon size={16} />}>{translate('dictation.words.vocabulary.empty')}</SettingsEmpty>
-      ) : (
-        <div className="audits-chips dictation-words-chips">
-          {words.vocabulary.map((entry) => (
-            <span
-              key={entry.word}
-              className="audits-chip-item"
-              title={entry.misheard === undefined ? undefined : translate('dictation.words.vocabulary.misheard', { misheard: entry.misheard })}
-            >
-              {entry.word}
-              <button
-                type="button"
-                className="audits-chip-remove"
-                aria-label={translate('dictation.words.vocabulary.remove', { word: entry.word })}
-                onClick={() => onChange({ ...words, vocabulary: words.vocabulary.filter((each) => each !== entry) })}
-              >
-                <CloseIcon size={10} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      {suggestions.length > 0 && (
-        <div className="dictation-words-suggestions" aria-label={translate('dictation.words.vocabulary.suggestions')}>
-          <span className="dictation-words-suggestions-label">{translate('dictation.words.vocabulary.suggestions')}</span>
-          {suggestions.map((name) => (
-            <button
-              key={name}
-              type="button"
-              className="dictation-words-suggestion"
-              aria-label={translate('dictation.words.vocabulary.suggestion', { word: name })}
-              onClick={() => addWord({ word: name })}
-            >
-              <PlusIcon size={10} /> {name}
-            </button>
-          ))}
-        </div>
-      )}
-      <SettingsRow label={translate('dictation.words.snippets.label')} info={translate('dictation.words.snippets.info')}>
+    <SettingsSection
+      title={translate('dictation.words.snippets.label')}
+      info={translate('dictation.words.snippets.info')}
+      action={
         <button type="button" disabled={words.snippets.length >= VOCABULARY_LIMITS.snippetsMax} onClick={() => setSnippetEdit({ kind: 'new' })}>
           <PlusIcon size={12} /> {translate('dictation.words.snippets.add')}
         </button>
-      </SettingsRow>
+      }
+    >
       {words.snippets.length === 0 ? (
-        <SettingsEmpty icon={<PlusIcon size={16} />}>{translate('dictation.words.snippets.empty')}</SettingsEmpty>
+        <SettingsEmpty compact icon={<ListViewIcon size={16} />}>
+          {translate('dictation.words.snippets.empty')}
+        </SettingsEmpty>
       ) : (
-        <div className="dictation-snippets">
+        <>
           {words.snippets.length > 4 && (
             <SearchField
               label={translate('dictation.words.snippets.search')}
@@ -119,42 +183,39 @@ export function DictationWordsRows({
               onChange={setSearch}
             />
           )}
-          {shown.length === 0 && <p className="dictation-snippets-empty">{translate('dictation.words.snippets.noMatch')}</p>}
-          <ul className="dictation-snippets-list">
-            {shown.map((snippet) => (
-              <li key={snippet.trigger} className="dictation-snippet">
-                <span className="dictation-snippet-trigger">{snippet.trigger}</span>
-                <span className="dictation-snippet-expansion">{snippet.expansion.replace(/\s+/gu, ' ')}</span>
-                <button
-                  type="button"
-                  className="ghost"
-                  aria-label={translate('dictation.words.snippets.edit', { trigger: snippet.trigger })}
-                  onClick={() => setSnippetEdit({ kind: 'edit', snippet })}
-                >
-                  <PencilIcon size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  aria-label={translate('dictation.words.snippets.delete', { trigger: snippet.trigger })}
-                  onClick={() => void removeSnippet(snippet)}
-                >
-                  <TrashIcon size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {wordOpen && (
-        <WordDialog
-          taken={words.vocabulary.map((entry) => entry.word.toLowerCase())}
-          onClose={() => setWordOpen(false)}
-          onAdd={(entry) => {
-            addWord(entry);
-            setWordOpen(false);
-          }}
-        />
+          {shown.length === 0 ? (
+            <SettingsEmpty compact icon={<SearchIcon size={16} />}>
+              {translate('dictation.words.snippets.noMatch')}
+            </SettingsEmpty>
+          ) : (
+            <ul className="dictation-rows">
+              {shown.map((snippet) => (
+                <li key={snippet.trigger} className="dictation-row">
+                  <span className="dictation-row-text">
+                    <span className="dictation-row-title">{snippet.trigger}</span>
+                    <span className="dictation-row-detail">{snippet.expansion.replace(/\s+/gu, ' ')}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="ghost"
+                    aria-label={translate('dictation.words.snippets.edit', { trigger: snippet.trigger })}
+                    onClick={() => setSnippetEdit({ kind: 'edit', snippet })}
+                  >
+                    <PencilIcon size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    aria-label={translate('dictation.words.snippets.delete', { trigger: snippet.trigger })}
+                    onClick={() => void removeSnippet(snippet)}
+                  >
+                    <TrashIcon size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
       {snippetEdit !== undefined && (
         <SnippetDialog
@@ -168,7 +229,7 @@ export function DictationWordsRows({
           }}
         />
       )}
-    </>
+    </SettingsSection>
   );
 }
 
@@ -209,36 +270,52 @@ function useProjectNames(projectPath: string | undefined, vocabulary: readonly V
 }
 
 function WordDialog({
+  initial,
   taken,
   onClose,
-  onAdd,
+  onSave,
 }: {
+  /** The word being edited; none when a new one is added. */
+  readonly initial: VocabularyEntry | undefined;
   readonly taken: readonly string[];
   readonly onClose: () => void;
-  readonly onAdd: (entry: VocabularyEntry) => void;
+  readonly onSave: (entry: VocabularyEntry) => void;
 }) {
   const translate = useTranslate();
-  const [word, setWord] = useState('');
-  const [correcting, setCorrecting] = useState(false);
-  const [misheard, setMisheard] = useState('');
-  const [problem, setProblem] = useState<string | undefined>(undefined);
+  const [word, setWord] = useState(initial?.word ?? '');
+  const [correcting, setCorrecting] = useState(initial?.misheard !== undefined);
+  const [misheard, setMisheard] = useState(initial?.misheard ?? '');
+  const title = translate(initial === undefined ? 'dictation.words.dialog.wordTitle' : 'dictation.words.dialog.wordEditTitle');
+  // The fields the last submit refused wear the error look; why is said once, as a toast (never a paragraph in the dialog).
+  const [refused, setRefused] = useState<ReadonlySet<'word' | 'misheard'>>(new Set());
+  const refuse = (fields: ReadonlySet<'word' | 'misheard'>, message: string): void => {
+    setRefused(fields);
+    reportErrorToast(message);
+  };
   const submit = (): void => {
-    if (word.trim() === '' || (correcting && misheard.trim() === '')) {
-      setProblem(translate('dictation.words.dialog.required'));
+    const missing = new Set<'word' | 'misheard'>();
+    if (word.trim() === '') {
+      missing.add('word');
+    }
+    if (correcting && misheard.trim() === '') {
+      missing.add('misheard');
+    }
+    if (missing.size > 0) {
+      refuse(missing, translate('dictation.words.dialog.required'));
       return;
     }
     if (taken.includes(word.trim().toLowerCase())) {
-      setProblem(translate('dictation.words.dialog.duplicate'));
+      refuse(new Set(['word']), translate('dictation.words.dialog.duplicate'));
       return;
     }
     try {
-      onAdd(parseVocabularyEntry(correcting ? { word, misheard } : { word }));
+      onSave(parseVocabularyEntry(correcting ? { word, misheard } : { word }));
     } catch {
-      setProblem(translate('dictation.words.dialog.tooLong'));
+      refuse(new Set(['word', 'misheard']), translate('dictation.words.dialog.tooLong'));
     }
   };
   return (
-    <Popup className="modal dictation-words-dialog" role="dialog" label={translate('dictation.words.dialog.wordTitle')} onClose={onClose}>
+    <Popup className="modal dictation-words-dialog" role="dialog" label={title} onClose={onClose}>
       {({ close }) => (
         <form
           onSubmit={(event) => {
@@ -246,7 +323,7 @@ function WordDialog({
             submit();
           }}
         >
-          <div className="modal-header">{translate('dictation.words.dialog.wordTitle')}</div>
+          <div className="modal-header">{title}</div>
           <div className="modal-body dictation-words-dialog-body">
             <label className="dictation-words-field">
               <span>{translate('dictation.words.dialog.word')}</span>
@@ -255,7 +332,11 @@ function WordDialog({
                 value={word}
                 maxLength={VOCABULARY_LIMITS.wordCharsMax}
                 placeholder={translate('dictation.words.dialog.wordPlaceholder')}
-                onChange={(event) => setWord(event.currentTarget.value)}
+                aria-invalid={refused.has('word') ? true : undefined}
+                onChange={(event) => {
+                  setWord(event.currentTarget.value);
+                  setRefused(withoutField(refused, 'word'));
+                }}
               />
             </label>
             <div className="dictation-words-toggle">
@@ -269,18 +350,21 @@ function WordDialog({
                   value={misheard}
                   maxLength={VOCABULARY_LIMITS.wordCharsMax}
                   placeholder={translate('dictation.words.dialog.misheardPlaceholder')}
-                  onChange={(event) => setMisheard(event.currentTarget.value)}
+                  aria-invalid={refused.has('misheard') ? true : undefined}
+                  onChange={(event) => {
+                    setMisheard(event.currentTarget.value);
+                    setRefused(withoutField(refused, 'misheard'));
+                  }}
                 />
               </label>
             )}
-            {problem !== undefined && <p className="ai-compose-problem">{problem}</p>}
           </div>
           <div className="modal-footer">
             <button type="button" onClick={close}>
               {translate('ui.cancel')}
             </button>
             <button type="submit" className="primary">
-              {translate('dictation.words.dialog.add')}
+              {translate(initial === undefined ? 'dictation.words.dialog.add' : 'dictation.words.dialog.saveWord')}
             </button>
           </div>
         </form>
@@ -303,21 +387,33 @@ function SnippetDialog({
   const translate = useTranslate();
   const [trigger, setTrigger] = useState(initial?.trigger ?? '');
   const [expansion, setExpansion] = useState(initial?.expansion ?? '');
-  const [problem, setProblem] = useState<string | undefined>(undefined);
+  // The fields the last submit refused wear the error look; why is said once, as a toast (never a paragraph in the dialog).
+  const [refused, setRefused] = useState<ReadonlySet<'trigger' | 'expansion'>>(new Set());
+  const refuse = (fields: ReadonlySet<'trigger' | 'expansion'>, message: string): void => {
+    setRefused(fields);
+    reportErrorToast(message);
+  };
   const title = translate(initial === undefined ? 'dictation.words.dialog.snippetTitle' : 'dictation.words.dialog.snippetEditTitle');
   const submit = (): void => {
-    if (normalizeWords(trigger) === '' || expansion.trim() === '') {
-      setProblem(translate('dictation.words.dialog.required'));
+    const missing = new Set<'trigger' | 'expansion'>();
+    if (normalizeWords(trigger) === '') {
+      missing.add('trigger');
+    }
+    if (expansion.trim() === '') {
+      missing.add('expansion');
+    }
+    if (missing.size > 0) {
+      refuse(missing, translate('dictation.words.dialog.required'));
       return;
     }
     if (taken.includes(normalizeWords(trigger))) {
-      setProblem(translate('dictation.words.dialog.duplicate'));
+      refuse(new Set(['trigger']), translate('dictation.words.dialog.duplicate'));
       return;
     }
     try {
       onSave(parseSnippet({ trigger, expansion }));
     } catch {
-      setProblem(translate('dictation.words.dialog.tooLong'));
+      refuse(new Set(['trigger', 'expansion']), translate('dictation.words.dialog.tooLong'));
     }
   };
   return (
@@ -338,7 +434,11 @@ function SnippetDialog({
                 value={trigger}
                 maxLength={VOCABULARY_LIMITS.triggerCharsMax}
                 placeholder={translate('dictation.words.dialog.triggerPlaceholder')}
-                onChange={(event) => setTrigger(event.currentTarget.value)}
+                aria-invalid={refused.has('trigger') ? true : undefined}
+                onChange={(event) => {
+                  setTrigger(event.currentTarget.value);
+                  setRefused(withoutField(refused, 'trigger'));
+                }}
               />
             </label>
             <label className="dictation-words-field">
@@ -347,10 +447,13 @@ function SnippetDialog({
                 rows={4}
                 value={expansion}
                 maxLength={VOCABULARY_LIMITS.expansionCharsMax}
-                onChange={(event) => setExpansion(event.currentTarget.value)}
+                aria-invalid={refused.has('expansion') ? true : undefined}
+                onChange={(event) => {
+                  setExpansion(event.currentTarget.value);
+                  setRefused(withoutField(refused, 'expansion'));
+                }}
               />
             </label>
-            {problem !== undefined && <p className="ai-compose-problem">{problem}</p>}
           </div>
           <div className="modal-footer">
             <button type="button" onClick={close}>
@@ -364,4 +467,13 @@ function SnippetDialog({
       )}
     </Popup>
   );
+}
+
+function withoutField<Field extends string>(fields: ReadonlySet<Field>, field: Field): ReadonlySet<Field> {
+  if (!fields.has(field)) {
+    return fields;
+  }
+  const next = new Set(fields);
+  next.delete(field);
+  return next;
 }

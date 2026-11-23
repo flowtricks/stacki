@@ -81,11 +81,14 @@ test('an override parses only from the shape it has', () => {
 });
 
 // Runs the statement as a frontmatter would, over these props, inside `override`'s request or none.
+// The editor's own requests come from this computer; the middleware honours an override from loopback only.
+const LOOPBACK = { remoteAddress: '127.0.0.1' };
+
 function render(props, override) {
   const run = new Function('Astro', variantOverrideStatement(HEADING));
   const Astro = { props: { ...props } };
   const headers = override === undefined ? {} : { [VARIANT_HEADER]: variantHeaderValue(override) };
-  variantScopeMiddleware({ headers }, {}, () => run(Astro));
+  variantScopeMiddleware({ headers, socket: LOOPBACK }, {}, () => run(Astro));
   return Astro.props;
 }
 
@@ -102,8 +105,14 @@ test('the statement changes the target instance only, and only inside its reques
   const malformed = { 'data-avb-p': '3', variant: 'h2' };
   const run = new Function('Astro', variantOverrideStatement(HEADING));
   const Astro = { props: { ...malformed } };
-  variantScopeMiddleware({ headers: { [VARIANT_HEADER]: 'garbage' } }, {}, () => run(Astro));
+  variantScopeMiddleware({ headers: { [VARIANT_HEADER]: 'garbage' }, socket: LOOPBACK }, {}, () => run(Astro));
   assert.deepEqual(Astro.props, malformed, 'a malformed header renders as written');
+  // The preview opened on the local network: a device on the Wi-Fi gets the page as written, header or not.
+  for (const remoteAddress of ['192.168.1.20', '::ffff:10.0.0.4', undefined]) {
+    const remote = { props: { ...instance } };
+    variantScopeMiddleware({ headers: { [VARIANT_HEADER]: variantHeaderValue(good) }, socket: { remoteAddress } }, {}, () => run(remote));
+    assert.deepEqual(remote.props, instance, `an override from ${remoteAddress} is not honoured`);
+  }
 });
 
 // Runs the statement as a component in another runtime would (workerd, for a project on
@@ -162,10 +171,10 @@ test('with the scope on the global, the statement never reads the request header
     },
   };
   const Astro = { props: { 'data-avb-p': '3', variant: 'h2' }, request };
-  variantScopeMiddleware({ headers: { [VARIANT_HEADER]: variantHeaderValue(good) } }, {}, () => run(Astro));
+  variantScopeMiddleware({ headers: { [VARIANT_HEADER]: variantHeaderValue(good) }, socket: LOOPBACK }, {}, () => run(Astro));
   assert.deepEqual(Astro.props, { 'data-avb-p': '3', variant: 'h1' });
   const plain = { props: { 'data-avb-p': '3', variant: 'h2' }, request };
-  variantScopeMiddleware({ headers: {} }, {}, () => run(plain));
+  variantScopeMiddleware({ headers: {}, socket: LOOPBACK }, {}, () => run(plain));
   assert.deepEqual(plain.props, { 'data-avb-p': '3', variant: 'h2' });
 });
 
@@ -242,7 +251,7 @@ test('a component whose root the prop picks, slotted into another, previews its 
     const run = new Function('Astro', statement);
     const Astro = { props: { slot: 'visual', variant: 'navigator', 'data-avb-p': '0.1.1.1.0' } };
     const override = { component: file, target: '0.1.1.1.0', prop: 'variant', value: 'style' };
-    variantScopeMiddleware({ headers: { [VARIANT_HEADER]: variantHeaderValue(override) } }, {}, () => run(Astro));
+    variantScopeMiddleware({ headers: { [VARIANT_HEADER]: variantHeaderValue(override) }, socket: LOOPBACK }, {}, () => run(Astro));
     assert.deepEqual(Astro.props, { slot: 'visual', variant: 'style', 'data-avb-p': '0.1.1.1.0' }, 'the slotted instance renders the hovered option');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

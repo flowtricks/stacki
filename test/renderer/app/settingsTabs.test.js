@@ -1,4 +1,4 @@
-// Goal: the Settings dialog is a set of tabs (Editor settings, Folders, CMS connections,
+// Goal: the Settings dialog is a set of tabs (Editor settings, Dictation where it runs, Folders, CMS connections,
 // Stacki Studio, Instructions, Audits, Breakpoints, New style locations, Roles) that show the right panel, move with the arrow keys, remember
 // the last tab, open on CMS connections when the CMS rail asks for it, and leave out
 // the tabs the project's role hides.
@@ -255,6 +255,14 @@ test('Settings reopens on the last tab, and the CMS rail opens CMS connections',
 test('a stored tab is parsed, and storage failures fall back to the first tab', () => {
   assert.equal(model.parseStoredSettingsTab('cms'), 'cms');
   assert.equal(model.parseStoredSettingsTab('studio'), 'studio');
+  assert.equal(model.parseStoredSettingsTab('dictation'), 'dictation');
+  // Dictation used to live in Editor's AI section: the targets written for that place open its own tab now.
+  for (const old of ['editor:dictation', 'editor.dictation', 'ai:dictation', 'ai.dictation']) {
+    assert.equal(model.parseStoredSettingsTab(old), 'dictation', `${old} is an old name for the Dictation tab`);
+  }
+  for (const near of ['dictation ', 'Dictation', 'editor:', 'toString', '__proto__', 'constructor']) {
+    assert.equal(model.settingsTabOfTarget(near), undefined, `${near} names no tab`);
+  }
   for (const bad of [JSON.parse('null'), undefined, '', 'top', 'CMS', 'editor ', 3, {}]) {
     assert.equal(model.parseStoredSettingsTab(bad), 'editor', `${String(bad)} is not a tab`);
   }
@@ -272,7 +280,9 @@ test('a stored tab is parsed, and storage failures fall back to the first tab', 
     Object.defineProperty(global, 'localStorage', original);
   }
   assert.throws(() => model.saveSettingsTab('top'), /Assertion failed: A Settings tab is one of SETTINGS_TABS/);
-  assert.equal(model.settingsTabAfterKey('editor', 'ArrowRight'), 'folders', 'the narrow tab row moves sideways');
+  assert.equal(model.settingsTabAfterKey('editor', 'ArrowRight'), 'dictation', 'Dictation follows Editor in the tab row');
+  assert.equal(model.settingsTabAfterKey('dictation', 'ArrowRight'), 'folders', 'the narrow tab row moves sideways');
+  assert.equal(model.settingsTabAfterKey('editor', 'ArrowRight', ['editor', 'folders']), 'folders', 'a hidden Dictation tab is stepped over');
   assert.equal(model.settingsTabAfterKey('editor', 'ArrowLeft'), 'roles');
   assert.equal(model.settingsTabAfterKey('editor', 'ArrowLeft', ['editor', 'roles']), 'roles', 'only the shown tabs are stepped through');
   assert.equal(model.settingsTabAfterKey('editor', 'Enter'), undefined);

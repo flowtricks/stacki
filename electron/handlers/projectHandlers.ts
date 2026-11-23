@@ -16,11 +16,16 @@ import { detectPackageManager, installArguments } from '../project/packageManage
 import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
 import { translateMain } from '../lib/mainLocale';
+import { classifySiteFolder } from '../project/plainSiteScan';
+import { checkAstroCopyTarget, createAstroCopy } from '../project/astroCopyWrite';
+import { ASTRO_COPY_LIMITS, defaultAstroCopyName, type AstroCopyInstall, type AstroCopyReply, type SiteFolderChoice } from '../../shared/ipc/astroCopy';
+import { err, ok } from '../../shared/core/result';
 
 export function registerProjectHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
   registerProjectOpenDialogHandlers(host);
   registerProjectCreateAstroHandlers(host);
   registerProjectCreateStarterHandlers(host);
+  registerAstroCopyHandlers(host);
 }
 
 function registerProjectOpenDialogHandlers({ ipcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
@@ -121,6 +126,82 @@ function registerProjectCreateStarterHandlers({ ipcMain, send }: Pick<MainHost, 
     });
     return result;
   });
+}
+
+function registerAstroCopyHandlers({ ipcMain, send, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
+  // The Welcome screen's "Open from folder": an Astro project opens, a plain website is offered an
+  // Astro copy (shared/ipc/astroCopy.ts), and anything else is said to be neither.
+  ipcMain.handle('project:openSiteDialog', async (): Promise<SiteFolderChoice> => {
+    const result = await showOpenDialog({
+      title: translateMain('dialog.open.project.title'),
+      properties: ['openDirectory'],
+    });
+    const directory = result.filePaths[0];
+    if (result.canceled || directory === undefined) {
+      return { kind: 'canceled' };
+    }
+    const folder = path.resolve(directory);
+    const kind = classifySiteFolder(folder);
+    switch (kind) {
+      case 'astro':
+        return { kind, projectPath: folder };
+      case 'plainWebsite':
+        return { kind, sourcePath: folder, parentPath: path.dirname(folder), name: defaultAstroCopyName(path.basename(folder)), homePath: os.homedir() };
+      case 'notWebsite':
+        return { kind, folderPath: folder };
+      default: {
+        const exhaustive: never = kind;
+        return exhaustive;
+      }
+    }
+  });
+  ipcMain.handle('project:checkAstroCopy', (_event, request) => checkAstroCopyTarget(normalizedRequest(request)));
+  // The copy, then the steps every new site gets: Stacki's defaults, the install and a first commit.
+  // A manager that is missing fails before any folder exists; a failed install keeps the finished copy
+  // (opening it installs again) and says so.
+  ipcMain.handle('project:createAstroCopy', async (_event, input): Promise<AstroCopyReply> => {
+    const request = normalizedRequest(input);
+    ensureToolPath(); // npm and git are both on the PATH the Dock does not have
+    const manager = detectPackageManager(request.sourcePath);
+    try {
+      await requirePackageManager(manager);
+    } catch {
+      return err({ code: 'package-manager-missing', manager });
+    }
+    const onLog = (text: string): void => send('create:log', text);
+    const made = await createAstroCopy(request, onLog);
+    if (!made.ok) {
+      return made;
+    }
+    const { projectPath, plan } = made.value;
+    let install: AstroCopyInstall = { kind: 'done' };
+    try {
+      await finishNewSite({ send }, projectPath, { install: true, manager, history: true, label: path.basename(request.sourcePath) });
+    } catch (error: unknown) {
+      send('progress', PROGRESS_CLEARED);
+      install = { kind: 'failed', detail: error instanceof Error ? error.message : String(error) };
+    }
+    return ok({
+      projectPath,
+      pageCount: plan.pageCount,
+      assetCount: plan.assetCount,
+      keptAsFiles: plan.keptAsFiles.slice(0, ASTRO_COPY_LIMITS.reportPathsMax),
+      keptAsFilesCount: plan.keptAsFiles.length,
+      skippedCount: plan.skippedCount,
+      install,
+    });
+  });
+}
+
+// The parsers check a path is absolute and normalized in shape; the platform's own rules decide here.
+function normalizedRequest<Request extends { readonly sourcePath: string; readonly parentPath: string }>(request: Request): Request {
+  if (path.resolve(request.sourcePath) !== request.sourcePath) {
+    throw new Error('Astro copy: the original folder path is not normalized');
+  }
+  if (path.resolve(request.parentPath) !== request.parentPath) {
+    throw new Error('Astro copy: the location path is not normalized');
+  }
+  return request;
 }
 
 export async function installDependencies({ send }: Pick<MainHost, 'send'>, directory: string, pm: PackageManager = detectPackageManager(directory)) {

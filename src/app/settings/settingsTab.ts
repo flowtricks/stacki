@@ -8,24 +8,40 @@
 import { assert } from '../../../shared/core/assert';
 
 /** The tabs, in sidebar order. */
-export const SETTINGS_TABS = ['editor', 'folders', 'cms', 'studio', 'instructions', 'audits', 'breakpoints', 'styles', 'roles'] as const;
+export const SETTINGS_TABS = ['editor', 'dictation', 'folders', 'cms', 'studio', 'instructions', 'audits', 'breakpoints', 'styles', 'roles'] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const SETTINGS_TAB_DEFAULT: SettingsTab = 'editor';
 
 const SETTINGS_TAB_KEY = 'stacki.settings.tab';
 
+/**
+ * Targets that named dictation before it had its own tab: it lived in Editor's AI section. Each still opens the
+ * Dictation tab, so a link, a stored value or a habit written for the old place lands where dictation is now.
+ */
+const SETTINGS_TAB_ALIASES: Readonly<Record<string, SettingsTab>> = {
+  'editor:dictation': 'dictation',
+  'editor.dictation': 'dictation',
+  'ai:dictation': 'dictation',
+  'ai.dictation': 'dictation',
+};
+
+/** The tab a target names: a tab id, or an old target that now means one; undefined for anything else. */
+export function settingsTabOfTarget(target: unknown): SettingsTab | undefined {
+  if (typeof target !== 'string') {
+    return undefined;
+  }
+  const found = SETTINGS_TABS.find((tab) => tab === target);
+  if (found !== undefined) {
+    return found;
+  }
+  return Object.hasOwn(SETTINGS_TAB_ALIASES, target) ? SETTINGS_TAB_ALIASES[target] : undefined;
+}
+
 /** A stored tab, or the default for anything absent or not one: storage is
  * shared with every earlier build, so what it holds is parsed like any input. */
 export function parseStoredSettingsTab(raw: unknown): SettingsTab {
-  if (typeof raw === 'string') {
-    const found = SETTINGS_TABS.find((tab) => tab === raw);
-    if (found === undefined) {
-      return SETTINGS_TAB_DEFAULT;
-    }
-    return found;
-  }
-  return SETTINGS_TAB_DEFAULT;
+  return settingsTabOfTarget(raw) ?? SETTINGS_TAB_DEFAULT;
 }
 
 export function loadSettingsTab(): SettingsTab {

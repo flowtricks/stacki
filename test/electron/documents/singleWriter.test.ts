@@ -127,6 +127,14 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/handlers/componentRenameApply.ts': {
     renameSync: { count: 3, reason: 'a component file or folder move (a case-only rename goes through a temporary name); text changes use the host writer' },
   },
+  'electron/project/astroCopyWrite.ts': {
+    writeFile: {
+      count: 2,
+      reason: 'files of a brand-new Astro copy of a plain-HTML site, created exclusive (wx) in a temporary sibling folder; the original is only read',
+    },
+    copyFile: { count: 1, reason: 'a binary asset copied into that new folder, exclusive (COPYFILE_EXCL); nothing existing is overwritten' },
+    renameSync: { count: 1, reason: 'the finished temporary folder moved to the target name in one atomic step, asserted missing just before' },
+  },
   'electron/project/cli/cliApply.ts': {
     writeFileSync: { count: 1, reason: 'the CLI undo journal entry in .stacki, written to a temporary file' },
     renameSync: { count: 1, reason: 'the journal entry moved into place whole' },

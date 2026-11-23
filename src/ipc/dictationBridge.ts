@@ -36,6 +36,11 @@ export function removeDictationModel(modelId: WhisperModelId): Promise<void> {
 }
 
 /** Progress events of the download in flight; the result unsubscribes. */
+/** Shows the model's folder in the file manager (Finder, Explorer); nothing happens until the model has been downloaded. */
+export function revealDictationModel(modelId: WhisperModelId): Promise<void> {
+  return window.avb.dictationReveal(parseIpcPayload('dictation:reveal', { modelId })).then(() => undefined);
+}
+
 export function onDictationProgress(listener: (progress: DownloadProgress) => void): () => void {
   return window.avb.onDictationProgress((data) => listener(parseDownloadProgress(data)));
 }

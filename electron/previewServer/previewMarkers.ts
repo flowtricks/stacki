@@ -26,6 +26,9 @@ import { markChunkHtml, parsePage, resolveChunks, serializePageMarked } from '..
 import { withScopeCapture } from './scopeCapture';
 // The generated config counts a file's extracted <style> blocks with it (avbStyleBlockCount); it requires only this module.
 export { scanStyleBlocks } from './styleBlockScan';
+// The generated config registers this first, so Stacki's own routes answer this computer only (loopbackGuard.ts).
+export { loopbackGuardMiddleware } from './loopbackGuard';
+import { isLoopbackAddress } from './loopbackGuard';
 import { parseVariantHeader, VARIANT_HEADER, VARIANT_SCOPE_GLOBAL, withVariantOverride, type VariantOverride } from '../../shared/page/variantOverride';
 
 export interface MarkedSource {
@@ -117,7 +120,9 @@ Reflect.set(globalThis, VARIANT_SCOPE_GLOBAL, variantScope);
  * only; nothing here can write.
  */
 export function variantScopeMiddleware(request: IncomingMessage, _response: ServerResponse, next: () => void): void {
-  const override = parseVariantHeader(request.headers[VARIANT_HEADER]);
+  // Only the editor asks for a hover preview, and the editor is this computer: a device on the network
+  // (the preview opened on the local network, loopbackGuard.ts) gets the page as written.
+  const override = isLoopbackAddress(request.socket.remoteAddress) ? parseVariantHeader(request.headers[VARIANT_HEADER]) : undefined;
   if (override === undefined) {
     next();
     return;

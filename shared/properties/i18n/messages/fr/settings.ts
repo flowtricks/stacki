@@ -438,6 +438,7 @@ export const messages = {
   'settings.tab.audits': 'Audits', // same
   'settings.tab.breakpoints': 'Points d’arrêt',
   'settings.tab.cms': 'Connexions CMS',
+  'settings.tab.dictation': 'Dictée',
   'settings.tab.editor': 'Réglages de l’éditeur',
   'settings.tab.folders': 'Dossiers',
   'settings.tab.instructions': 'Instructions', // same
@@ -548,7 +549,6 @@ export const messages = {
   'settings.mcp.json.discard.confirm': 'Abandonner les modifications',
   'settings.mcp.json.discard.keep': 'Continuer la modification',
   'settings.mcp.json.discard.title': 'Abandonner vos modifications JSON ?',
-  'settings.mcp.json.empty': 'Pas encore de .mcp.json. L’enregistrement le crée.',
   'settings.mcp.json.issue': 'Ligne {line}, colonne {column} : {message}',
   'settings.mcp.json.issuePath': 'Ligne {line}, colonne {column} · {path} : {message}',
   'settings.mcp.json.label': 'Contenu de .mcp.json',

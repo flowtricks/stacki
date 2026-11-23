@@ -1,4 +1,4 @@
-// Goal: Settings > Editor > Dictation's word list never takes Settings down, with or without a project, whether or not
+// Goal: Settings > Dictation's word list never takes Settings down, with or without a project, whether or not
 // the AI panel has been opened. Its project-name suggestions used to come from the AI panel's store, which learns a
 // project only when the panel opens; asking it before then asserted ("aiStore: a project is loaded before the panel
 // acts in it") and crashed Settings for anyone who had not opened the AI panel yet, and from the welcome screen.
@@ -7,7 +7,8 @@
 // records each request and answers with a chosen reply. Checked: no project asks nothing and shows nothing; a project
 // asks for its own files and suggests its component names the person does not have yet; a failed or thrown read shows
 // nothing and crashes nothing; another project replaces the last one's names. A source check pins that the word list
-// no longer reaches into the AI store.
+// no longer reaches into the AI store. The add-word and snippet dialogs refuse a field with the error look (aria-invalid) and say why
+// once, as a toast, when they are submitted, never as a paragraph in the dialog; a valid submit says nothing.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -16,6 +17,7 @@ const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { waitFor, waitForSteady } = require('../../helpers/waitFor.js');
+const { toastMessages } = require('../../helpers/toastCapture');
 
 const directory = repoPath('node_modules/.stacki-test/dictation-words');
 fs.mkdirSync(directory, { recursive: true });
@@ -26,6 +28,7 @@ esbuild.buildSync({
     loader: 'jsx',
   },
   outfile: path.join(directory, 'words.js'),
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   format: 'cjs',
   platform: 'node',
@@ -96,7 +99,7 @@ test('the word list reads project files through the main process, not through th
   assert.doesNotMatch(source, /features\/ai\/aiStore/, 'Settings never depends on the AI panel having opened');
   assert.match(source, /aiMentions\(\{ projectPath, query: '', kinds: \['file'\] \}\)/);
   const settings = fs.readFileSync(repoPath('src/app/settings/Settings.tsx'), 'utf8');
-  assert.match(settings, /<DictationSetting projectPath=\{projectPath\} \/>/, 'Settings passes its own open project');
+  assert.match(settings, /<DictationSetting projectPath=\{props\.projectPath\} \/>/, 'Settings passes its own open project');
 });
 
 test('with no project open (the welcome screen), the list renders, asks nothing and suggests nothing', async (context) => {
@@ -142,4 +145,49 @@ test('another project replaces the last one’s names, and closing the project c
   await view.render(undefined);
   await view.suggestionsStayEmpty();
   assert.equal(view.asked.length, 2, 'closing the project asks nothing more');
+});
+
+test('the word and snippet dialogs wear the error look and say why once as a toast; a valid entry says nothing', async (context) => {
+  const view = await mount('/work/site', () => ({ ok: true, value: [] }));
+  context.after(view.close);
+  const { act } = require('react');
+  window.HTMLDialogElement.prototype.showModal = function showModal() {
+    this.setAttribute('open', '');
+  };
+  window.HTMLDialogElement.prototype.close = function close() {
+    this.removeAttribute('open');
+  };
+  const submit = async () => {
+    globalThis.stackiCapturedToasts = [];
+    await act(async () =>
+      document.querySelector('.dictation-words-dialog form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })),
+    );
+  };
+  const type = async (input, text) =>
+    act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, text);
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+  const noParagraph = () =>
+    assert.equal(
+      document.querySelectorAll('.dictation-words-dialog p, .dictation-words-dialog [role="alert"], .ai-compose-problem').length,
+      0,
+      'the dialog appends no paragraph',
+    );
+
+  const add = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('Add a new word'));
+  await act(async () => add.click());
+  const word = document.querySelector('.dictation-words-dialog input');
+  assert.equal(word.getAttribute('aria-invalid') ?? undefined, undefined, 'an untouched dialog wears no error look');
+  await submit();
+  assert.match(toastMessages(), /Fill this in\./);
+  assert.equal(word.getAttribute('aria-invalid'), 'true', 'the refused word takes the error look');
+  noParagraph();
+  await type(word, 'Logo');
+  assert.equal(word.getAttribute('aria-invalid') ?? undefined, undefined, 'editing clears the look');
+  await submit();
+  assert.match(toastMessages(), /This is already in the list\./, 'a duplicate is refused');
+  await type(word, 'Stacki');
+  await submit();
+  assert.equal(toastMessages(), '', 'a valid word says nothing');
 });

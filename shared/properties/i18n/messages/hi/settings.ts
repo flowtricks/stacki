@@ -434,6 +434,7 @@ export const messages = {
   'settings.tab.audits': 'ऑडिट',
   'settings.tab.breakpoints': 'ब्रेकपॉइंट',
   'settings.tab.cms': 'CMS कनेक्शन',
+  'settings.tab.dictation': 'बोलकर लिखना',
   'settings.tab.editor': 'एडिटर सेटिंग',
   'settings.tab.folders': 'फ़ोल्डर',
   'settings.tab.instructions': 'Instructions', // same
@@ -544,7 +545,6 @@ export const messages = {
   'settings.mcp.json.discard.confirm': 'बदलाव छोड़ें',
   'settings.mcp.json.discard.keep': 'संपादन जारी रखें',
   'settings.mcp.json.discard.title': 'अपने JSON बदलाव छोड़ें?',
-  'settings.mcp.json.empty': 'अभी कोई .mcp.json नहीं। सहेजने पर वह बन जाती है।',
   'settings.mcp.json.issue': 'पंक्ति {line}, कॉलम {column}: {message}',
   'settings.mcp.json.issuePath': 'पंक्ति {line}, कॉलम {column} · {path}: {message}',
   'settings.mcp.json.label': '.mcp.json की सामग्री',

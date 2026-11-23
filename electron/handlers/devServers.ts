@@ -5,6 +5,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { execFile, type ChildProcess } from 'child_process';
 import { assert } from '../../shared/core/assert';
 import { toRecord } from '../../shared/core/record';
@@ -42,6 +43,10 @@ import type { MainHost } from './mainHost';
 import { readProjectFolders } from '../lib/projectFolders';
 import { configOf } from '../../shared/properties/projectFolders';
 import type { Thumbnails } from './thumbnails';
+import { devServerArgs, devServerURL, networkAllowedHosts } from '../preview/devServerArgs';
+import { selectLanAddresses, type InterfaceTable } from '../preview/lanAddresses';
+import { DEV_NETWORK_OFF, type DevNetworkMode, type DevNetworkReply, type DevNetworkState } from '../../shared/ipc/devNetwork';
+import { err, ok } from '../../shared/core/result';
 
 // Subscribe before sending the stop signal so a fast exit cannot be missed.
 function waitForPreviewExit(process: ChildProcess | undefined): Promise<void> {
@@ -125,6 +130,13 @@ export class DevServers {
   // Serialize dev:start calls — concurrent spawns race Astro's daemon lock and
   // the loser dies with "exited before becoming ready".
   private readonly starts = createKeyedQueue<IpcResults['dev:start']>();
+  // The project whose preview is open on the local network (`--host 0.0.0.0`), for this run of the app
+  // only: never written anywhere, so it is off at every launch, and cleared when the project closes or
+  // the app quits (stop()). A restart for any other reason (an .env change, a branch switch) keeps it.
+  private networkProject: string | undefined = undefined;
+  // One change of mode at a time: each is a restart of the dev server, and a second toggle while one
+  // restarts would race it.
+  private networkChange: 'idle' | 'changing' = 'idle';
 
   constructor(
     private readonly host: Pick<MainHost, 'send'>,
@@ -183,6 +195,9 @@ export class DevServers {
   stop(cancelPending = true): void {
     if (cancelPending) {
       this.starts.cancel();
+      // A stop that cancels is the project closing or the app quitting, never a restart (pause): the
+      // preview goes back to this computer only (see networkProject).
+      this.networkProject = undefined;
     }
     if (!this.server) {
       return;
@@ -315,8 +330,95 @@ export class DevServers {
     return 'ignore'; // Astro's default, and the one that serves either spelling
   }
 
-  /** The generated config's path, or undefined when the dev server runs without it. */
-  writeMarkerConfig(projectPath: string): string | undefined {
+  /**
+   * Whether this project's dev server answers this computer only, or the local network too. A server
+   * for another project, or none, is local: the mode belongs to the project that turned it on.
+   */
+  networkMode(projectPath: string): DevNetworkMode {
+    const project = this.networkProject;
+    if (project !== undefined && sameFilesystemPath(project, projectPath)) {
+      return 'network';
+    }
+    return 'local';
+  }
+
+  /** What the toolbar shows: on, with the port and the machine's network addresses, only while our server runs that way. */
+  networkState(projectPath: string, interfaces: InterfaceTable = os.networkInterfaces()): DevNetworkState {
+    const server = this.server;
+    if (server === undefined || server.external === true || !sameFilesystemPath(server.projectPath, projectPath)) {
+      return DEV_NETWORK_OFF;
+    }
+    if (this.networkMode(projectPath) === 'local') {
+      return DEV_NETWORK_OFF;
+    }
+    const port = Number(new URL(server.url).port);
+    assert(Number.isSafeInteger(port), 'networkState: the server has a port');
+    assert(port > 0, 'networkState: the port is positive');
+    return { kind: 'on', port, addresses: selectLanAddresses(interfaces) };
+  }
+
+  /**
+   * Opens this project's preview on the local network, or takes it back to this computer only, by
+   * restarting its dev server with the other `--host` (devServerArgs.ts). The canvas keeps its loopback
+   * address and reconnects by itself. A restart that fails leaves the mode off and the server started
+   * again on loopback, once; the reply says it failed, for the renderer's toast. At most two restarts.
+   */
+  async setNetwork(projectPath: string, mode: DevNetworkMode, interfaces: InterfaceTable = os.networkInterfaces()): Promise<DevNetworkReply> {
+    // First: while a change restarts the server there is no server to judge, and the answer is "wait".
+    if (this.networkChange === 'changing') {
+      return err('busy');
+    }
+    const server = this.server;
+    if (server === undefined || !sameFilesystemPath(server.projectPath, projectPath)) {
+      return err('no-server');
+    }
+    // A server the user runs themselves has no command line of ours to change.
+    if (server.external === true) {
+      return err('external');
+    }
+    if (this.networkMode(projectPath) === mode) {
+      return ok(this.networkState(projectPath, interfaces));
+    }
+    // A machine on no network has no address for a phone to open: stay local and say so.
+    if (mode === 'network' && selectLanAddresses(interfaces).length === 0) {
+      return err('no-address');
+    }
+    this.networkChange = 'changing';
+    try {
+      return await this.restartInMode(server.projectPath, server.url, mode, interfaces);
+    } finally {
+      this.networkChange = 'idle';
+    }
+  }
+
+  private async restartInMode(projectPath: string, devUrl: string, mode: DevNetworkMode, interfaces: InterfaceTable): Promise<DevNetworkReply> {
+    assert(this.networkChange === 'changing', 'restartInMode: one change at a time');
+    this.networkProject = mode === 'network' ? projectPath : undefined;
+    this.pushLog(
+      mode === 'network'
+        ? '\n[stacki] opening the preview on the local network; restarting it with --host 0.0.0.0.\n'
+        : '\n[stacki] taking the preview back to this computer only; restarting it with --host 127.0.0.1.\n',
+    );
+    try {
+      await this.restartAt(projectPath, devUrl);
+      assert(this.networkMode(projectPath) === mode, 'restartInMode: the server restarted in the asked mode');
+      return ok(this.networkState(projectPath, interfaces));
+    } catch (error: unknown) {
+      this.pushLog(`\n[stacki] the preview did not restart: ${errorMessage(error)}\n`);
+    }
+    // The second and last restart: back to this computer only, the mode that started before.
+    this.networkProject = undefined;
+    try {
+      await this.restartAt(projectPath, devUrl);
+    } catch {
+      this.host.send('dev:exit', { code: 1, log: this.recentLog() });
+    }
+    assert(this.networkMode(projectPath) === 'local', 'restartInMode: a failed change ends local');
+    return err('restart-failed');
+  }
+
+  /** The generated config's path, or undefined when the dev server runs without it. `networkHosts`: the hosts Vite answers to on the local network, only in that mode. */
+  writeMarkerConfig(projectPath: string, networkHosts?: readonly string[]): string | undefined {
     try {
       const directory = path.join(projectPath, 'node_modules', '.avb');
       fs.mkdirSync(directory, { recursive: true });
@@ -341,6 +443,8 @@ export class DevServers {
         JSON.stringify(projectDirectories),
         JSON.stringify(MORPH_CLIENT),
         JSON.stringify(MORPH_TAG_HTML),
+        // JavaScript's own null in the generated file: the config reads it as "this computer only".
+        networkHosts === undefined ? 'null' : JSON.stringify(networkHosts),
         JSON.stringify(toPosix(path.join(directory, 'preview.astro'))),
         JSON.stringify(toPosix(path.join(directory, 'paths.js'))),
         JSON.stringify(toPosix(path.join(directory, 'data.js'))),
@@ -395,6 +499,10 @@ export class DevServers {
       }
     }
     assertActive();
+    // The mode belongs to the project that turned it on: another project starts on this computer only.
+    if (this.networkProject !== undefined && !sameFilesystemPath(this.networkProject, projectPath)) {
+      this.networkProject = undefined;
+    }
     this.stop(false);
     this.logBuffer = [];
 
@@ -458,24 +566,23 @@ export class DevServers {
   private async spawn(projectPath: string, localBin: string, { force, bare }: { readonly force: boolean; readonly bare: boolean }, assertActive: () => void) {
     const port = await findFreePort(previewPort(fs.realpathSync(projectPath)));
     assertActive();
-    const args = ['dev', '--port', String(port), '--host', '127.0.0.1'];
+    // Every attempt (the first, the --force retry and the bare fallback) starts in the project's mode:
+    // on the local network only when it was turned on for this project (setNetwork).
+    const mode = this.networkMode(projectPath);
+    const networkHosts = mode === 'network' ? networkAllowedHosts(selectLanAddresses(os.networkInterfaces()).map((lan) => lan.address)) : undefined;
     // Astro resolves --config against the project root and rejects absolute
     // paths ([ConfigNotFound]), so pass it relative to the spawn cwd.
     // `bare` is the last resort: the project's own config, none of this app's,
     // so a preview still comes up even if what this app generates cannot run.
-    const markerConfig = bare ? undefined : this.writeMarkerConfig(projectPath);
-    if (markerConfig) {
-      args.push('--config', toPosix(path.relative(projectPath, markerConfig)));
-    }
-    if (force) {
-      args.push('--force');
-    }
+    const markerConfig = bare ? undefined : this.writeMarkerConfig(projectPath, networkHosts);
+    const args = devServerArgs({ port, mode, configPath: markerConfig ? toPosix(path.relative(projectPath, markerConfig)) : undefined, force });
 
     const startedAtMs = Date.now();
     const extra = this.previewEnvironment(fs.realpathSync(projectPath));
     const proc = spawnAstroServer(projectPath, localBin, args, extra);
 
-    const url = `http://127.0.0.1:${port}`;
+    // Loopback in every mode: the canvas, thumbnails and main's own requests never change address.
+    const url = devServerURL(port);
     this.server = { proc, url, projectPath, bin: localBin };
     // Startup failures belong to start()'s retries and final IPC reply. Only an
     // exit after readiness should take the renderer's running preview offline.
@@ -629,6 +736,10 @@ export function registerDevServerHandlers({
   ipcMain.handle('dev:probe', (_event, url) => probeUrl(url));
 
   ipcMain.handle('dev:inspect', (_event, url) => devServers.inspectPage(url));
+
+  ipcMain.handle('dev:network', (_event, projectPath) => devServers.networkState(projectPath));
+
+  ipcMain.handle('dev:setNetwork', (_event, request) => devServers.setNetwork(request.projectPath, request.mode));
 
   ipcMain.handle('dev:diagnose', async (_event, projectPath) => {
     const nodePath = resolveNodeBin() ?? undefined;

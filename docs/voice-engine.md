@@ -91,8 +91,19 @@ the window ever becomes isolated.
 6. If the first decode's real-time factor is over 1.5 (audio counted as at least 4 s), the session ends
    with a notice offering the small model.
 
-Settings → AI → Dictation shows the model's status, size, source, license and folder, downloads or
-removes it (after a confirmation), picks the model and the language.
+Settings → Dictation is a tab of its own, next to Editor, shown only where the Whisper engine runs (Desktop;
+Studio and the demo have no such tab). It is governed by the same role access as Editor (`settings:editor`).
+Its page, top to bottom: a status card (not set up, downloading with a progress bar and bytes, ready, or a
+paused partial download; the blue Download button, Cancel, or Remove after a confirmation; a failed
+download is a toast, never a paragraph); Quality as three cards (Fast, Balanced, Best) with their pinned
+sizes and a Downloaded badge, where picking a downloaded one switches at once and picking another asks
+first and then downloads, and the cards lock while a download runs; the language dropdown; the
+microphone permission the system reports, with a button to its pane when it is off; Vocabulary and
+Snippets, each a list with Add in its heading and edit and delete on each row; and a folded Model details
+row (friendly model name, source, license, and the folder cut in its middle with a reveal button, through
+`dictation:reveal`). The pinned commit is only ever in a tooltip inside the opened details. Old targets
+that named dictation (`editor:dictation`, `ai:dictation` and their dotted forms) open the tab
+(`settingsTabOfTarget`, `src/app/settings/settingsTab.ts`).
 
 ## Content Security Policy
 
@@ -126,7 +137,7 @@ from the app's own files.
   = '1'`) every left-out text and its reason reaches the console, never storage. Measured: 0 words written
   over 30 s each of silence, pink room noise, brown hum, white fan noise, keyboard clicks, quiet music and
   background talk at -30 dB, while "This is a test." and the 8 s sample transcribe correctly.
-- **Vocabulary and snippets** (`dictationVocabulary.ts`, Settings → AI → Dictation) apply to final words
+- **Vocabulary and snippets** (`dictationVocabulary.ts`, Settings → Dictation) apply to final words
   only. The Transformers.js Whisper pipeline takes no prompt ids, so the vocabulary corrects after
   decoding: explicit "heard as" pairs, then conservative near misses (five letters or more, one edit, two
   from nine letters, same first and last letter). A word the person fixes in what they just dictated is

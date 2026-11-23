@@ -157,6 +157,9 @@ function projectBridge() {
     openProjectDialog: invoke('project:openDialog'),
     createAstroProject: invoke('project:createAstro'),
     parentDialog: invoke('project:parentDialog'),
+    openSiteDialog: invoke('project:openSiteDialog'),
+    checkAstroCopy: invoke('project:checkAstroCopy'),
+    createAstroCopy: invoke('project:createAstroCopy'),
     createStarter: invoke('project:createStarter'),
     scanProject: invoke('project:scan'),
     listProjectClasses: invoke('project:classes'),
@@ -338,6 +341,8 @@ function pageBridge() {
     diagnoseDev: invoke('dev:diagnose'),
     inspectDevPage: invoke('dev:inspect'),
     probeDevPage: invoke('dev:probe'),
+    devNetwork: invoke('dev:network'),
+    setDevNetwork: invoke('dev:setNetwork'),
 
     // Style panel targets:
     listStyleFiles: invoke('style:listFiles'),
@@ -576,6 +581,7 @@ function eventBridge() {
     dictationDownload: invoke('dictation:download'),
     dictationCancel: invoke('dictation:cancel'),
     dictationRemove: invoke('dictation:remove'),
+    dictationReveal: invoke('dictation:reveal'),
     microphoneOpenSettings: invoke('microphone:openSettings'),
     microphoneRequest: invoke('microphone:request'),
     microphoneStatus: invoke('microphone:status'),

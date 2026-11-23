@@ -499,6 +499,7 @@ export const messages = {
   'settings.tab.audits': 'التدقيق',
   'settings.tab.breakpoints': 'نقاط التوقف',
   'settings.tab.cms': 'اتصالات CMS',
+  'settings.tab.dictation': 'الإملاء',
   'settings.tab.editor': 'إعدادات المحرر',
   'settings.tab.folders': 'المجلدات',
   'settings.tab.instructions': 'Instructions', // same
@@ -609,7 +610,6 @@ export const messages = {
   'settings.mcp.json.discard.confirm': 'تجاهل التغييرات',
   'settings.mcp.json.discard.keep': 'متابعة التعديل',
   'settings.mcp.json.discard.title': 'تجاهل تغييرات JSON؟',
-  'settings.mcp.json.empty': 'لا يوجد .mcp.json بعد. يؤدي الحفظ إلى إنشائه.',
   'settings.mcp.json.issue': 'السطر {line}، العمود {column}: {message}',
   'settings.mcp.json.issuePath': 'السطر {line}، العمود {column} · {path}: {message}',
   'settings.mcp.json.label': 'محتويات .mcp.json',

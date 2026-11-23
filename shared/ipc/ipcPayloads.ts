@@ -58,6 +58,8 @@ import { renamePath } from '../properties/pageRename';
 import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
 import { parseStudioAuth } from './studioAuth';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
+import { parseDevNetworkRequest } from './devNetwork';
+import { parseAstroCopyRequest } from './astroCopy';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
@@ -459,7 +461,9 @@ export const IPC_PAYLOADS = {
   'css:variables': pathText,
   'dev:diagnose': pathText,
   'dev:inspect': pathText,
+  'dev:network': pathText,
   'dev:probe': pathText,
+  'dev:setNetwork': parseDevNetworkRequest,
   'dev:start': pathText,
   'dev:stop': nothing,
   'git:allFiles': object({ ...project }),
@@ -656,6 +660,7 @@ export const IPC_PAYLOADS = {
   'dictation:download': parseModelRequest,
   'dictation:cancel': parseModelRequest,
   'dictation:remove': parseModelRequest,
+  'dictation:reveal': parseModelRequest,
   'locale:set': parseLocaleSet,
   'microphone:openSettings': nothing,
   'microphone:request': nothing,
@@ -757,6 +762,10 @@ export const IPC_PAYLOADS = {
   }),
   'project:injectedRoutes': object({ ...project }),
   'project:openDialog': nothing,
+  // The Welcome screen's "Open from folder" and the Astro copy of a plain website (shared/ipc/astroCopy.ts).
+  'project:openSiteDialog': nothing,
+  'project:checkAstroCopy': parseAstroCopyRequest,
+  'project:createAstroCopy': parseAstroCopyRequest,
   'project:parentDialog': nothing,
   'project:pending': nothing,
   'project:resolveImport': object({ ...source }),

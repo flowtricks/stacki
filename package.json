@@ -50,6 +50,7 @@
     "integration:dev": "node test/integration/devLifecycle.js",
     "integration:style": "node test/integration/styleLatency.js",
     "integration:recovery": "npm run build:runtime && node test/integration/canvasRecovery.js",
+    "integration:lan": "npm run build:runtime && node test/integration/lanPreview.js",
     "integration:style-delete": "npm run build:runtime && node test/integration/styleDelete.js",
     "bench:insert": "npm run build:runtime && node test/integration/insertLatency.bench.js",
     "bench:render": "npm run build:runtime && node test/integration/renderCost.bench.js",

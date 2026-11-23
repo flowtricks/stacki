@@ -5,6 +5,7 @@ import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import type { Result } from '../../../shared/core/result';
 import type { CreatePackageManager } from '../../../shared/properties/packageManager';
 import { cleanError } from '../../lib/cleanError';
+import { parseAstroCopyCheck, parseAstroCopyReply, parseSiteFolderChoice, type AstroCopyRequest } from '../../../shared/ipc/astroCopy';
 
 export type RecentProject = IpcResults['recents:list'][number];
 export type ProjectDialog = IpcResults['project:openDialog'];
@@ -76,9 +77,22 @@ export function removeRecentProject(projectPath: string) {
   return welcomeRequest(parseSuccess, () => window.avb.removeRecent(payload));
 }
 
-export function chooseExistingProject() {
-  const payload = parseIpcPayload('project:openDialog', undefined);
-  return welcomeRequest(parseProjectDialog, () => window.avb.openProjectDialog(payload));
+/** "Open from folder": the folder the person picks, and whether it is an Astro project, a plain website or neither. */
+export function chooseSiteFolder() {
+  const payload = parseIpcPayload('project:openSiteDialog', undefined);
+  return welcomeRequest(parseSiteFolderChoice, () => window.avb.openSiteDialog(payload));
+}
+
+/** Whether an Astro copy may go at `request`: the dialog's live check of its name and location. */
+export function checkAstroCopy(request: AstroCopyRequest) {
+  const payload = parseIpcPayload('project:checkAstroCopy', request);
+  return welcomeRequest(parseAstroCopyCheck, () => window.avb.checkAstroCopy(payload));
+}
+
+/** Makes the Astro copy, installs it and starts its history; the log streams on `create:log`. */
+export function createAstroCopy(request: AstroCopyRequest) {
+  const payload = parseIpcPayload('project:createAstroCopy', request);
+  return welcomeRequest(parseAstroCopyReply, () => window.avb.createAstroCopy(payload));
 }
 
 export function chooseStarterParent() {

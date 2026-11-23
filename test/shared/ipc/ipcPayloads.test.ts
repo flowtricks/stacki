@@ -33,6 +33,7 @@ const noPayload = new Set([
   'recents:list',
   'git:repositories',
   'project:openDialog',
+  'project:openSiteDialog',
   'project:parentDialog',
   'dev:stop',
   'update:read',
@@ -60,6 +61,7 @@ const pathPayload = new Set([
   'style:listAstroStyles',
   'dev:diagnose',
   'dev:inspect',
+  'dev:network',
   'git:info',
   'git:ghStatus',
   'git:init',
@@ -446,6 +448,11 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   // The Audits panel's rendered pass: a route of the loopback dev server.
   'audit:render': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/about' },
   'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
+  // The phone preview: the project and the mode its dev server restarts in (shared/ipc/devNetwork.ts).
+  'dev:setNetwork': { projectPath: '/site', mode: 'network' },
+  // The Astro copy of a plain website (shared/ipc/astroCopy.ts; its bad shapes are in astroCopyContract.test.ts).
+  'project:checkAstroCopy': { sourcePath: '/sites/shop', parentPath: '/sites', name: 'shop-astro' },
+  'project:createAstroCopy': { sourcePath: '/sites/shop', parentPath: '/sites', name: 'shop-astro' },
   // The interface language mirrored to main: a shipped locale or "system".
   'locale:set': { preference: 'de' },
   // The update popup's two buttons.

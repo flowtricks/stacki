@@ -162,6 +162,16 @@ reports failed subframe navigations on the active preview origin; aborted page
 switches are ignored. The renderer only recovers its current page, so a late
 failure from a previous navigation cannot reload the new page.
 
+`dev:network` and `dev:setNetwork` (`shared/ipc/devNetwork.ts`) carry the phone preview: whether the
+project's dev server listens on the local network (`--host 0.0.0.0`) or on 127.0.0.1 only. The request
+names the project and a mode, `local` or `network`; the state is `off`, or `on` with the server's port and
+at most eight IPv4 addresses with their interface names; a refused change is one of five failure codes
+(`no-address`, `no-server`, `external`, `busy`, `restart-failed`), each a toast in the renderer. The mode
+lives in main for the running app only: it is never written, it is off at launch, and `stop()` (project
+close, quit) clears it. The canvas, thumbnails and main's own requests keep the loopback address in both
+modes. Stacki's own dev-server routes (`/__avb/*`, `/studio`, Vite's `/__open-in-editor`) answer only a
+loopback socket with a loopback Host and Origin (`electron/previewServer/loopbackGuard.ts`), in both modes.
+
 Expected operating failures use `Result` or an explicit result union. A shape
 that violates the declared wire contract is a programmer error and throws at
 the boundary. Do not catch that assertion and turn it into an operating result.
@@ -1022,6 +1032,37 @@ sets `dir="rtl"` on the document root, main sets it on the recovery page. The re
 choice at startup and on every change; main keeps it as `localePreference` in `settings.json` (absent means `"system"`), rebuilds the application
 menu, and translates native dialogs with the same catalogs (`menu`, `dialog`, `error` namespaces). A failed disk write applies for the session only.
 Failure results may carry an optional `messageRef` (`{ key, params? }`, `parseMessageRef`) next to their English `message`; readers that do not know the key show the message.
+
+## Astro copy of a plain website (`shared/ipc/astroCopy.ts`)
+
+The Welcome screen's "Open from folder" calls `project:openSiteDialog` (no payload): main shows the folder
+picker and answers `SiteFolderChoice`, one of `canceled`, `astro` (open it, as `project:openDialog` did),
+`plainWebsite` (the folder, its parent, the suggested `<folder>-astro` name and the home folder for display)
+or `notWebsite` (a toast). Detection (`electron/project/plainSiteScan.ts`) is `isAstroProject` or a
+`src/pages/*.astro`, else at least one `.html`/`.htm` page in the folder's top two levels, skipping installed
+packages, build output, vendored code and hidden folders; it reads names only, bounded by depth and entries
+(`PLAIN_SITE_LIMITS`), and never follows a link to a folder or out of the picked folder.
+
+`project:checkAstroCopy` and `project:createAstroCopy` take `AstroCopyRequest` (`sourcePath`, `parentPath`,
+`name`): both paths absolute and normalized in shape by `parseAbsolutePath` and by the platform in main
+(`path.resolve(p) === p`), the name one folder name (no separator or NUL). The check answers
+`Result<{ targetPath }, AstroCopyTargetProblem>` (`name-empty`, `name-invalid`, `target-exists`,
+`location-missing`, `location-unwritable`, `inside-original`); `astroCopyNameProblem` is the same name rule in
+the renderer and main. The create answers `Result<AstroCopyCreated, AstroCopyFailure>`: the project path,
+counts, the pages kept as plain files (at most `ASTRO_COPY_LIMITS.reportPathsMax` listed, all counted) and
+the install outcome; or a failure code (a target problem, `not-plain-website`, `too-many-files`,
+`too-many-bytes`, `file-too-large` with the file, `package-manager-missing`, `copy-failed` with the detail).
+Its progress streams on `create:log`, as the new-site wizards' does.
+
+The original is only read. The plan (`electron/project/astroCopyPlan.ts`) puts each page at
+`src/pages/<same path>.astro` and every other file at `public/<same path>`; `astro.config.mjs` builds with
+`format: 'preserve'` and `inlineStylesheets: 'always'`, so every old address, relative URL and CSS `url()`
+resolves as before. Pages Astro cannot route as themselves (`_` or `[`/`]` names, the loser of two pages on
+one route) are copied unchanged under `public/`; a `.htm` page gets a forwarding page at its old address.
+`htmlToAstro.ts` changes only what Astro reads differently from a browser (braces in text, capitalised tags,
+unquoted braced values, `is:inline` scripts and slots, `is:global` styles, a leading `---`). The copy is
+written into a `mkdtemp` sibling and renamed into place after the target is checked missing again; any
+failure removes that temporary folder and nothing else. A failed install keeps the finished copy.
 
 ## Shared project editor metadata
 
@@ -2148,9 +2189,19 @@ unit in the transcript holding every call that names it as parent (directly or t
 most 8 deep); a call naming a parent the transcript does not hold belongs to no unit and stays in the
 coordinator's groups. Above the transcript, a strip lists the run's units; one subagent's transcript is
 the chat's `Transcript` given that subagent's re-rooted items. A subagent's words are drawn only
-there. Codex reports a subagent as one call titled "Start subagent …" and forwards none of its work,
-so a Codex subagent has a row but an empty transcript. No adapter Stacki drives can stop one subagent
-(per-subagent sessions are offered only to JetBrains AIR clients), so there is no per-subagent stop.
+there. An opened unit shows its calls as steps a designer reads ("Read 5 files", "Ran the tests"):
+`transcript/toolWords.ts` (`classifyStep`, a table of tool names, call kinds and recognised commands,
+bounds `STEP_WORDS_LIMITS`) sorts each call, `transcript/agentSteps.ts` (bounds `STEP_LIMITS`) merges
+consecutive calls of one kind, and `transcript/StepGroups.tsx` draws them, each command behind a
+"Show commands" control that is closed by default and not opened by "Expand all". Above the composer, a
+chip ("2 agents working, 1 background command") opens the Running panel (`transcript/RunningPanel.tsx`,
+model `runningWork.ts`, bounds `RUNNING_LIMITS`): what runs and, folded, what the current run finished,
+each subagent opening to the same steps. A subagent's title loses ids (`cleanTitle`). Codex reports a
+subagent as one call titled "Start subagent …" and forwards none of its work, so a Codex subagent has a
+row but an empty transcript. No row has a Stop of its own: claude-agent-acp stops one subagent only for a
+client that declares `clientCapabilities.subagents` (each subagent then streams as its own child
+session, cancelled with `session/cancel`) and one background command only for JetBrains AIR clients
+(`_session/async_task/stop`); Stacki declares neither, so the panel's one Stop is "Stop agent", the turn's.
 
 **Channels.** `ai:agents`, `ai:installAgent`, `ai:trust`, `ai:chats`, `ai:chatCreate`,
 `ai:chatUpdate` (rename, pin), `ai:chatDelete`, `ai:chatRead`, `ai:prompt`, `ai:cancel`,
@@ -2442,7 +2493,7 @@ next message.
 **Renderer.** The feature folder is split by area: `AiPanel.tsx` is the shell (header slot, body switch,
 the trust and agent gates, sign-in and setup cards, `aiShell.css`); `transcript/` draws the conversation
 (`TranscriptView` and `Messages`, `ActivityGroup` for the agent's work between two messages, `ToolCard`,
-`ThinkingBlock`, `PlanCard`, `BackgroundTasks`, `CompactionRow`, `DiffView`, `ChangesCard`, `PermissionCard`,
+`ThinkingBlock`, `PlanCard`, `BackgroundTasks`, `RunningPanel` and `StepGroups` (with `running.css` and `steps.css`), `CompactionRow`, `DiffView`, `ChangesCard`, `PermissionCard`,
 `SentParts` for a sent message's chips, `TurnStatus` and `ticker.ts`, the one clock every live timer reads,
 `ErrorRow`, with `transcript.css`, `chrome.css` and `diff.css`); `composer/` the message box (`ChatComposer`, `ComposerInput` for the text and the `/`
 menu, `ComposerStatusLine` for the provider, model and effort, `composer.css`); `sessions/` the chat list
@@ -2835,13 +2886,15 @@ or be a link, and a folder may hold only `.astro` files within `COMPONENT_OP_LIM
 
 ## Dictation model
 
-`dictation:status`, `dictation:download`, `dictation:cancel` and `dictation:remove`
+`dictation:status`, `dictation:download`, `dictation:cancel`, `dictation:remove` and `dictation:reveal`
 (`shared/properties/voice/dictationModel.ts`) manage the on-device Whisper model
 (docs/voice-engine.md). The renderer names a model id and nothing else: addresses, hashes, sizes
 and the folder (`<userData>/models/whisper`) are fixed in main by `whisperModels.ts`. A status lists
 each known model once with bytes never past its pinned size; a download resolves to an outcome
 (`installed` or a `DownloadFailure`), never a rejection for a network or disk problem. Progress
 arrives as `dictation:progress` events, parsed by `parseDownloadProgress`, at most ten a second.
+`dictation:reveal` shows a model's folder in the file manager (Settings > Dictation, Model details); it takes the same
+model id, opens nothing before the model is downloaded, and never accepts a path.
 The worker reads the model through `stacki-model://whisper/<model>/<revision>/<file>`, which serves
 only manifest files of an installed model. Messages between the page and the Whisper worker are a
 boundary too: `parseToWorker` and `parseFromWorker` (`whisperWorkerProtocol.ts`) bound audio to the

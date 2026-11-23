@@ -214,7 +214,8 @@ function PackageManagerField(props: {
   );
 }
 
-function useCreateLog() {
+/** The scaffolder's and installer's output as it streams on `create:log`, bounded and kept scrolled to the end. */
+export function useCreateLog() {
   const [text, setText] = useState('');
   const elementRef = useRef<HTMLPreElement>(null);
   useEffect(() => subscribeCreateLog((chunk) => setText((previous) => (previous + chunk).slice(-CREATE_LOG_CHARS_MAX))), []);
@@ -303,7 +304,15 @@ function CheckRow({ label, checked, change }: { readonly label: string; readonly
 
 // While it runs, dots animate after the last line, as a terminal shows work in progress:
 // installs and downloads can print nothing for a long time.
-function CreateLog({ log, running, elementRef }: { readonly log: string; readonly running: boolean; readonly elementRef: React.RefObject<HTMLPreElement> }) {
+export function CreateLog({
+  log,
+  running,
+  elementRef,
+}: {
+  readonly log: string;
+  readonly running: boolean;
+  readonly elementRef: React.RefObject<HTMLPreElement>;
+}) {
   const translate = useTranslate();
   return (
     <pre className="create-log" ref={elementRef}>
