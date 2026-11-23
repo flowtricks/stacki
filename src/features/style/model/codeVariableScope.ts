@@ -70,8 +70,7 @@ function declarationPropertyAt(text: string, typed: TypedVariable): string | und
   const windowStart = Math.max(0, typed.start - DECLARATION_CHARS_MAX);
   const before = text.slice(windowStart, typed.start);
   // The declaration starts after the last `;`, `{` or `}` before the fragment.
-  const opener = Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}'));
-  const declaration = before.slice(opener + 1);
+  const declaration = declarationTextBefore(before);
   const colon = declaration.indexOf(':');
   if (colon < 0) {
     return undefined;
@@ -88,6 +87,36 @@ function declarationPropertyAt(text: string, typed: TypedVariable): string | und
     return property;
   }
   return undefined;
+}
+
+// A line that opens a declaration: a property name and its colon (`text-wrap:`), nothing else before it.
+const DECLARATION_LINE = /^[ \t]*-{0,2}[a-z][a-z0-9-]*[ \t]*:/i;
+
+/**
+ * The text of the declaration that ends `before` (the text up to the caret): what follows the last
+ * `;`, `{` or `}`. A line above that was left without its `;` is still being written, and must not
+ * name the property of the line being typed: `width: 1rem` + newline + `text-wrap: --` is a
+ * `text-wrap` value, so the declaration starts at the last line that opens with a property and a
+ * colon. A continuation line (a grid's strings, a value broken after a comma) opens no declaration.
+ */
+export function declarationTextBefore(before: string): string {
+  const opener = Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}'));
+  const declaration = before.slice(opener + 1);
+  let lineStart = declaration.length;
+  // Each pass moves to an earlier line, so the declaration's length bounds the loop.
+  for (let steps = 0; steps <= declaration.length && lineStart > 0; steps++) {
+    const lineBreak = declaration.lastIndexOf('\n', lineStart - 1);
+    const line = declaration.slice(lineBreak + 1);
+    if (DECLARATION_LINE.test(line)) {
+      assert(declaration.endsWith(line), "declarationTextBefore: the line is the declaration's tail");
+      return line;
+    }
+    if (lineBreak < 0) {
+      return declaration;
+    }
+    lineStart = lineBreak;
+  }
+  return declaration;
 }
 
 /**
@@ -107,9 +136,26 @@ export function codeSlotAt(text: string, variable: CodeTypedVariable, scope: Cod
   if (scope.kind === 'value') {
     return slotOfMarked(`${text.slice(0, start)}${SLOT_MARK}${text.slice(end)}`);
   }
+  const value = declarationValueAround(text, variable, SLOT_MARK);
+  return value === undefined ? undefined : slotOfMarked(value);
+}
+
+/**
+ * The declaration's value as it would read with `replacement` over the typed fragment, in a `declarations`
+ * editor: the text after the colon up to the declaration's `;` or `}`. Undefined when the fragment sits
+ * in no declaration. The hover preview of the typed chooser shows this value on the canvas.
+ */
+export function declarationValueWith(text: string, variable: CodeTypedVariable, replacement: string): string | undefined {
+  assert(replacement.length > 0, 'declarationValueWith: a replacement is never empty');
+  return declarationValueAround(text, variable, replacement);
+}
+
+function declarationValueAround(text: string, variable: CodeTypedVariable, between: string): string | undefined {
+  const { start, end } = variable.typed;
+  assert(start <= end, 'declarationValueAround: the fragment does not end before it starts');
+  assert(end <= text.length, 'declarationValueAround: the fragment lies inside the text');
   const before = text.slice(Math.max(0, start - DECLARATION_CHARS_MAX), start);
-  const opener = Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}'));
-  const declaration = before.slice(opener + 1);
+  const declaration = declarationTextBefore(before);
   const colon = declaration.indexOf(':');
   if (colon < 0) {
     return undefined;
@@ -117,5 +163,5 @@ export function codeSlotAt(text: string, variable: CodeTypedVariable, scope: Cod
   const ahead = text.slice(end, end + DECLARATION_CHARS_MAX);
   const closer = ahead.search(/[;}]/);
   const valueAfter = closer < 0 ? ahead : ahead.slice(0, closer);
-  return slotOfMarked(`${declaration.slice(colon + 1).trimStart()}${SLOT_MARK}${valueAfter}`);
+  return `${declaration.slice(colon + 1).trimStart()}${between}${valueAfter}`;
 }

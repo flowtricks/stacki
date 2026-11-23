@@ -1,6 +1,7 @@
 import { assert } from '../../../../shared/core/assert';
 import type { NameBlock } from '../../../../shared/properties/variableGroups';
 import type { VariablesSnapshot } from '../../../ipc/variablesBridge';
+import { declarationTextBefore } from './codeVariableScope';
 import type { ProjectVariable } from './webflow';
 
 // The variable chooser's list where a custom property's value is being written (`--x: |`): every
@@ -94,8 +95,7 @@ export function declaredPropertyAt(text: string, offset: number): string | undef
   assert(offset <= text.length, 'declaredPropertyAt: the offset ends in the text');
   // How far back a declaration's start is looked for: a hand-written declaration is shorter.
   const before = text.slice(Math.max(0, offset - 4_096), offset);
-  const opener = Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}'));
-  const declaration = before.slice(opener + 1);
+  const declaration = declarationTextBefore(before);
   const colon = declaration.indexOf(':');
   if (colon < 0) {
     return undefined;
