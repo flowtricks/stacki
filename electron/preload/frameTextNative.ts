@@ -87,7 +87,7 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
   const { cleanup, pressed } = installNativeTextEvents({ root, space, buffer, finish, refused });
   const stopPointer = installInterceptedPointer(root, match.nodes);
   root.focus({ preventScroll: true });
-  placeTextCaret(match.nodes, event);
+  placeTextCaret(space, event);
   return {
     finish,
     intact: buffer.intact,

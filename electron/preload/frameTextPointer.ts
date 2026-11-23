@@ -4,28 +4,9 @@
 // words it places the caret at the character under it (found from where the characters are drawn), a double click selects the
 // word, a triple click the whole text, and a drag extends the selection. A press that lands on the editor itself is left entirely
 // to the browser, and a press outside the words keeps its old meaning.
-import { caretByGeometry, selectTextOffsets } from './frameTextSelection';
+import { caretByGeometry, pointOnWords, selectTextOffsets } from './frameTextSelection';
 
-/** Whether a point lies on a line of the words, by the boxes the browser draws their characters in. */
-export function pointOnWords(nodes: readonly Text[], x: number, y: number): boolean {
-  for (const node of nodes) {
-    if (node.length === 0) {
-      continue;
-    }
-    const range = document.createRange();
-    range.setStart(node, 0);
-    range.setEnd(node, node.length);
-    if (typeof range.getClientRects !== 'function') {
-      return false;
-    }
-    for (const box of Array.from(range.getClientRects())) {
-      if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
+export { pointOnWords };
 
 /** The word around an offset of the words' text, or the whole run of non-word characters it sits in. */
 function wordAt(text: string, offset: number): { readonly start: number; readonly end: number } {

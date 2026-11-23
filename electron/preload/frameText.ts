@@ -117,6 +117,13 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
   let innermost: ReadonlySet<string> | undefined;
   // Everything stacked at the point counts, so words beneath a stretched link are found; only the clicked element decides which text is nearest.
   const stack = elementsAt(event.clientX, event.clientY, event.target);
+  // The clicked element's inline children (a `strong` or `em` in a heading) are candidates after the stacked elements: a click in
+  // the empty corner beside the heading's last line is not on them, yet the words that end it are theirs.
+  for (const inline of inlineDescendants(event.target)) {
+    if (!stack.includes(inline)) {
+      stack.push(inline);
+    }
+  }
   for (const [position, start] of stack.entries()) {
     let element: Element | undefined = start;
     for (let depth = 0; element && depth < 32; depth++) {
@@ -133,7 +140,7 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
   // A double-click inside the element that holds the text but beside its
   // words — the empty width of a centred heading — still means "edit this
   // text", not "open the component": the nearest text in that element takes it.
-  let nearest: { readonly hit: TextHit; readonly distance: number } | undefined;
+  let nearest: { readonly hit: TextHit; readonly distance: number; readonly gap: number } | undefined;
   for (const target of catalog.targets) {
     if (!ancestors.has(target.parent)) {
       continue;
@@ -148,19 +155,27 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
     }
     // The words are found from whichever stacked element lies inside their component: the clicked one first.
     const match = stack.reduce<ReturnType<typeof matchCanvasText>>((found, candidate) => found ?? matchCanvasText(target, candidate), undefined);
-    const box = match && canvasTextRect(match);
-    if (!box || !match) {
+    // The words' own line boxes, not the one box around them all: that spans a `<br>`'s lines and the whitespace after the last
+    // word, so it would hold the empty corner beside a shorter last line and take it for the first words' own.
+    const boxes = match ? textLineBoxes(match) : [];
+    if (!match || boxes.length === 0) {
       continue;
     }
-    const distance = distanceToBox(box, event.clientX, event.clientY);
+    const distance = Math.min(...boxes.map((box) => distanceToBox(box, event.clientX, event.clientY)));
     if (distance === 0) {
       return { target, match };
     }
-    if (!innermost?.has(target.parent)) {
+    // Only the clicked element's own words, or the words of an inline child of it (a `strong` or `em` the heading holds), are near
+    // enough: they are the same text to the eye, so the empty corner beside a heading's last, shorter line reaches the `strong`
+    // that ends it.
+    if (!innermost?.has(target.parent) && !inlineWithin(event.target, match.element)) {
       continue;
     }
-    if (!nearest || distance < nearest.distance) {
-      nearest = { hit: { target, match }, distance };
+    // The nearest line first (the vertical gap), then the horizontal gap: the corner below and beside the last line belongs to
+    // that line's words and not to a longer line above it that happens to be nearer by straight distance.
+    const gap = Math.min(...boxes.map((box) => verticalGapToBox(box, event.clientY)));
+    if (!nearest || gap < nearest.gap || (gap === nearest.gap && distance < nearest.distance)) {
+      nearest = { hit: { target, match }, distance, gap };
     }
   }
   return nearest?.hit;
@@ -196,6 +211,59 @@ type TextHit = {
   readonly target: CanvasTextTarget;
   readonly match: NonNullable<ReturnType<typeof matchCanvasText>>;
 };
+
+// The boxes the browser draws the matched words' lines in. Bounded: a text node is a few lines, and the match a bounded number of nodes.
+function textLineBoxes(match: NonNullable<ReturnType<typeof matchCanvasText>>): DOMRect[] {
+  const boxes: DOMRect[] = [];
+  // A host with no per-line boxes (a test double) still has the one box around the words.
+  const probe = document.createRange();
+  if (typeof probe.getClientRects !== 'function') {
+    const whole = canvasTextRect(match);
+    return whole ? [whole] : [];
+  }
+  for (const node of match.nodes) {
+    if (node.length === 0) {
+      continue;
+    }
+    const range = document.createRange();
+    range.setStart(node, 0);
+    range.setEnd(node, node.length);
+    for (const box of Array.from(range.getClientRects())) {
+      if (box.width > 0 && box.height > 0) {
+        boxes.push(box);
+      }
+    }
+  }
+  return boxes;
+}
+
+// The inline elements inside one, in document order; a bounded walk.
+const INLINE_DESCENDANTS_MAX = 24;
+function inlineDescendants(clicked: Element): Element[] {
+  const found: Element[] = [];
+  if (typeof getComputedStyle !== 'function') {
+    return found;
+  }
+  const queue: Element[] = Array.from(clicked.children).reverse();
+  for (let step = 0; queue.length > 0 && step < 200 && found.length < INLINE_DESCENDANTS_MAX; step++) {
+    const element = queue.pop();
+    if (element && getComputedStyle(element).display === 'inline') {
+      found.push(element);
+      queue.push(...Array.from(element.children).reverse());
+    }
+  }
+  return found;
+}
+
+// Whether an element lies inside the clicked one and is drawn inline with its words.
+function inlineWithin(clicked: Element, element: Element): boolean {
+  return typeof getComputedStyle === 'function' && clicked !== element && clicked.contains(element) && getComputedStyle(element).display === 'inline';
+}
+
+// How far a point's height is from a box's; zero within its rows.
+function verticalGapToBox(box: DOMRect, y: number): number {
+  return Math.max(box.top - y, 0, y - box.bottom);
+}
 
 // How far a point is from a box; zero inside it.
 function distanceToBox(box: DOMRect, x: number, y: number): number {

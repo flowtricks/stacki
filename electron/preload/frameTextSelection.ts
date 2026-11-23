@@ -52,16 +52,49 @@ export function selectRunsOffsets(runs: TextSpace['runs'], offsets: TextOffsets)
   selection?.addRange(range);
 }
 
-export function placeTextCaret(nodes: readonly Text[], event: MouseEvent): void {
-  const offsets = caretOffsetsAt(nodes, event.clientX, event.clientY) ?? caretBesideText(nodes, event) ?? caretByGeometry(nodes, event.clientX, event.clientY);
+// Where a double click puts the caret once the editor is open. On a character it goes to the character the browser names. Anywhere
+// else (the empty corner beside the last short line of a centred or balanced heading, the band below the words) the browser's own
+// answer is unreliable (it may name the start, or a position in another element), so the caret goes by where the lines are drawn:
+// the line nearest the point's height, clamped, and the end of that line past its right edge or the start of it before its left.
+// The corner below and beside the last line is therefore the end of all the words. The runs are the editor's whole text, so a
+// line in a neighbouring `strong` counts, and offsets are the editor's (a seam between runs counts one).
+export function placeTextCaret(space: TextSpace, event: MouseEvent): void {
+  const nodes = space.runs.flat();
+  const onWords = pointOnWords(nodes, event.clientX, event.clientY);
+  const offsets =
+    (onWords ? caretOffsetsAt(space.runs, event.clientX, event.clientY) : undefined) ??
+    caretByRunsGeometry(space.runs, event.clientX, event.clientY) ??
+    caretOffsetsAt(space.runs, event.clientX, event.clientY) ??
+    caretBesideText(space.runs, event);
   if (offsets) {
-    selectTextOffsets(nodes, offsets);
+    selectRunsOffsets(space.runs, offsets);
   }
 }
 
-function caretOffsetsAt(nodes: readonly Text[], x: number, y: number) {
+/** Whether a point lies on a line of the words, by the boxes the browser draws their characters in. */
+export function pointOnWords(nodes: readonly Text[], x: number, y: number): boolean {
+  for (const node of nodes) {
+    if (node.length === 0) {
+      continue;
+    }
+    const range = document.createRange();
+    range.setStart(node, 0);
+    range.setEnd(node, node.length);
+    if (typeof range.getClientRects !== 'function') {
+      return false;
+    }
+    for (const box of Array.from(range.getClientRects())) {
+      if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function caretOffsetsAt(runs: TextSpace['runs'], x: number, y: number) {
   const range = document.caretRangeFromPoint(x, y);
-  return range ? textSelection(nodes, range) : undefined;
+  return range ? runsSelection(runs, range) : undefined;
 }
 
 // The caret position by where the characters are drawn, for a point the browser's hit test answers with something else: an element
@@ -70,6 +103,11 @@ function caretOffsetsAt(nodes: readonly Text[], x: number, y: number) {
 // past either end of the line the caret goes to that end. Characters read are bounded.
 const CARET_CHARS_MAX = 20_000;
 export function caretByGeometry(nodes: readonly Text[], x: number, y: number) {
+  return caretByRunsGeometry([nodes], x, y);
+}
+
+// The same over separate runs, whose offsets count one extra position at each seam (see TextSpace).
+export function caretByRunsGeometry(runs: TextSpace['runs'], x: number, y: number) {
   const lines: {
     readonly top: number;
     readonly bottom: number;
@@ -78,23 +116,26 @@ export function caretByGeometry(nodes: readonly Text[], x: number, y: number) {
     readonly rects: { readonly left: number; readonly right: number; readonly at: number }[];
   }[] = [];
   let total = 0;
-  for (const node of nodes) {
-    for (let index = 0; index < node.length && total < CARET_CHARS_MAX; index++, total++) {
-      const range = document.createRange();
-      range.setStart(node, index);
-      range.setEnd(node, index + 1);
-      const box = typeof range.getClientRects === 'function' ? range.getClientRects()[0] : undefined;
-      if (!box || box.width === 0) {
-        continue;
-      }
-      const line = lines.find((entry) => Math.abs(entry.top - box.top) < box.height / 2);
-      if (line) {
-        line.rects.push({ left: box.left, right: box.right, at: total });
-        line.last = total;
-      } else {
-        lines.push({ top: box.top, bottom: box.bottom, first: total, last: total, rects: [{ left: box.left, right: box.right, at: total }] });
+  for (const nodes of runs) {
+    for (const node of nodes) {
+      for (let index = 0; index < node.length && total < CARET_CHARS_MAX; index++, total++) {
+        const range = document.createRange();
+        range.setStart(node, index);
+        range.setEnd(node, index + 1);
+        const box = typeof range.getClientRects === 'function' ? range.getClientRects()[0] : undefined;
+        if (!box || box.width === 0) {
+          continue;
+        }
+        const line = lines.find((entry) => Math.abs(entry.top - box.top) < box.height / 2);
+        if (line) {
+          line.rects.push({ left: box.left, right: box.right, at: total });
+          line.last = total;
+        } else {
+          lines.push({ top: box.top, bottom: box.bottom, first: total, last: total, rects: [{ left: box.left, right: box.right, at: total }] });
+        }
       }
     }
+    total += 1; // The seam before the next run.
   }
   if (lines.length === 0) {
     return undefined;
@@ -122,7 +163,8 @@ export function caretByGeometry(nodes: readonly Text[], x: number, y: number) {
 
 // A double-click beside the words (frameText.ts) puts the caret at the point
 // in them nearest the click: the click moved inside their box.
-function caretBesideText(nodes: readonly Text[], event: MouseEvent) {
+function caretBesideText(runs: TextSpace['runs'], event: MouseEvent) {
+  const nodes = runs.flat();
   const first = nodes[0];
   const last = nodes.at(-1);
   if (!first || !last) {
@@ -134,7 +176,7 @@ function caretBesideText(nodes: readonly Text[], event: MouseEvent) {
   const box = range.getBoundingClientRect();
   const x = Math.min(Math.max(event.clientX, box.left + 1), box.right - 1);
   const y = Math.min(Math.max(event.clientY, box.top + 1), box.bottom - 1);
-  return caretOffsetsAt(nodes, x, y);
+  return caretOffsetsAt(runs, x, y);
 }
 
 export function textEditorRoot(match: TextMatch): HTMLElement | undefined {
