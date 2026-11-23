@@ -110,6 +110,8 @@ export interface TextMarkBox extends Box {
   readonly kind: 'component' | 'text' | 'refused';
   /** The page path of the component instance the words belong to, when they are its slot or prop text. */
   readonly scope?: string;
+  /** Where the words come from: `slot` is the page's own content inside the instance (drawn as plain content), `prop` is rendered by the component. */
+  readonly from?: 'slot' | 'prop';
 }
 
 /** Why the canvas patcher reloaded (electron/previewClient/morphClient.ts): past one of its
@@ -484,7 +486,17 @@ function parseTextMarkBox(input: unknown): TextMarkBox {
   if (kind !== 'component' && kind !== 'text' && kind !== 'refused') {
     throw new Error('Text mark: expected component, text or refused');
   }
-  return { ...parseBox(value), label: pathText(value['label']), kind, ...(value['scope'] === undefined ? {} : { scope: pathText(value['scope']) }) };
+  const from = value['from'];
+  if (from !== undefined && from !== 'slot' && from !== 'prop') {
+    throw new Error('Text mark: expected slot or prop');
+  }
+  return {
+    ...parseBox(value),
+    label: pathText(value['label']),
+    kind,
+    ...(value['scope'] === undefined ? {} : { scope: pathText(value['scope']) }),
+    ...(from === undefined ? {} : { from }),
+  };
 }
 
 function parseSpacing(input: unknown): Spacing {

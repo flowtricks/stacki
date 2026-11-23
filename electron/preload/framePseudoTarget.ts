@@ -14,7 +14,7 @@ import { isElement, type Box } from './frameBasics';
 import { PATH_ATTR, elementsWithPath, inFocus, inScope, pathsOf, runsOf } from './frameRegions';
 import { measurePseudo } from './framePseudo';
 import { drawsPseudoAt } from './frameReports';
-import { PSEUDO_CANDIDATES_MAX, boxAt, pseudoAt, type PseudoBoxes } from './pseudoHit';
+import { PSEUDO_CANDIDATES_MAX, boxAt, pseudoAt, pseudoOffered, type PseudoBoxes } from './pseudoHit';
 
 /** A pseudo-element the pointer is on: the node that draws it and which one. */
 export interface PseudoTarget {
@@ -142,6 +142,13 @@ function measureHost(candidate: Candidate): MeasuredHost {
   const origin = candidate.host.getBoundingClientRect();
   const relative = (pseudo: PseudoLayer): Box | undefined => {
     if (!drawsPseudoAt(candidate.path, pseudo)) {
+      return undefined;
+    }
+    // Only a pseudo-element the pointer can reach is measured, so one that cannot (pointer-events: none) or that a component
+    // keeps quiet (no text) never wins the hit and the point falls through to what is beneath (pseudoOffered).
+    const style = window.getComputedStyle(candidate.host, `::${pseudo}`);
+    const inComponent = pathsOf(candidate.host).some((path) => path.includes('|'));
+    if (!pseudoOffered({ inComponent, content: style.content, pointerEvents: style.pointerEvents })) {
       return undefined;
     }
     const box = measurePseudo(candidate.host, pseudo);

@@ -14,7 +14,7 @@
 // aside for the text being typed in, and are hidden whenever the canvas is
 // not selecting.
 
-import type { CanvasTextCatalog, CanvasTextTarget } from '../../shared/properties/canvasText';
+import type { CanvasTextBlocked, CanvasTextCatalog, CanvasTextTarget } from '../../shared/properties/canvasText';
 import { assert } from '../../shared/core/assert';
 import { isEditableThroughProps, textReach } from '../../shared/properties/closedComponentReach';
 import { elementsWithPath, pathsOf, runsOf } from './frameRegions';
@@ -81,10 +81,15 @@ export function installTextMarks(source: MarkSource): () => void {
     if (!layer.isConnected) {
       document.documentElement.appendChild(layer);
     }
-    layer.replaceChildren(...shown.filter((match) => match !== hover && match !== chosen).map((match) => dashedMark(wordsBox(match))));
     // Words a closed component writes itself (no prop or slot of the instance reaches them) get nothing: the pointer on them
     // is the component's own hover (closedComponentReach.ts).
     const refused = at && hover === undefined ? refusedAt(source, at) : undefined;
+    // Prop text printed from data (a loop item's title) is marked like any prop text; the one under the pointer is drawn by the app.
+    const bound = boundBoxesNow(source).filter((box) => !sameBox(box, refused));
+    layer.replaceChildren(
+      ...shown.filter((match) => match !== hover && match !== chosen).map((match) => dashedMark(wordsBox(match))),
+      ...bound.map(dashedMark),
+    );
     const message = { type: 'avb:text-marks', hover: refused ?? report(hover), picked: report(chosen) };
     const text = JSON.stringify(message);
     if (text !== reported) {
@@ -196,24 +201,66 @@ function refusedAt(source: MarkSource, at: { readonly x: number; readonly y: num
   if (!catalog?.blocked || !source.visible()) {
     return undefined;
   }
-  const propBlocked = catalog.blocked.filter((blocked) => /(^|:)prop:/.test(blocked.key));
   assert(isEditableThroughProps(textReach({ loaded: true, covering: { from: 'prop' } })), 'Text a prop prints is the instance’s to change');
-  for (const entry of propBlocked) {
-    const runs = [...(runsOf(entry.path) ?? []), ...inlineTextRuns(entry.path)];
-    for (const run of runs) {
-      const element = run[0]?.parentElement;
-      if (
-        element &&
-        element.getBoundingClientRect().width > 0 &&
-        holds(element.getBoundingClientRect(), at) &&
-        run.every((node) => node.parentElement === element)
-      ) {
-        const box = element.getBoundingClientRect();
+  for (const entry of catalog.blocked.filter(isPropBlocked)) {
+    for (const element of blockedElements(entry)) {
+      const box = element.getBoundingClientRect();
+      if (holds(box, at)) {
         return { x: box.left, y: box.top, w: box.width, h: box.height, label: labelOf(element).label, kind: 'refused' };
       }
     }
   }
   return undefined;
+}
+
+function isPropBlocked(entry: CanvasTextBlocked): boolean {
+  return /(^|:)prop:/.test(entry.key);
+}
+
+// The elements that print a blocked text, one per copy of its instance: found by the source path of the words, since the words
+// themselves are unknown (data) or differ per copy (a loop).
+function blockedElements(entry: CanvasTextBlocked): Element[] {
+  const found: Element[] = [];
+  const runs = [...(runsOf(entry.path) ?? []), ...inlineTextRuns(entry.path)];
+  for (const run of runs.slice(0, MATCHES_MAX)) {
+    const element = run[0]?.parentElement;
+    if (
+      element &&
+      element.getBoundingClientRect().width > 0 &&
+      run.every((node) => node.parentElement === element) &&
+      (entry.scope === undefined || insideScope(element, entry.scope)) &&
+      !found.includes(element)
+    ) {
+      found.push(element);
+    }
+  }
+  assert(found.length <= MATCHES_MAX, 'Blocked marks stay within their bound');
+  return found;
+}
+
+// The dashed boxes of the selected instance's data-bound prop text: every copy of it that is on the page.
+function boundBoxesNow(source: MarkSource): DOMRect[] {
+  const catalog = source.catalog();
+  if (!catalog?.blocked || !source.visible()) {
+    return [];
+  }
+  const focus = source.focus();
+  const boxes: DOMRect[] = [];
+  for (const entry of catalog.blocked.filter(isPropBlocked)) {
+    if (entry.scope === undefined || !focus.has(entry.scope)) {
+      continue;
+    }
+    for (const element of blockedElements(entry)) {
+      if (boxes.length < MATCHES_MAX) {
+        boxes.push(element.getBoundingClientRect());
+      }
+    }
+  }
+  return boxes;
+}
+
+function sameBox(box: DOMRect, reported: { readonly x: number; readonly y: number; readonly w: number; readonly h: number } | undefined): boolean {
+  return reported !== undefined && box.left === reported.x && box.top === reported.y && box.width === reported.w && box.height === reported.h;
 }
 
 // The paths of the element under a point and of everything around it.
@@ -278,6 +325,7 @@ function report(match: TextMatchAt | undefined) {
     h: box.height,
     ...labelOf(match.element),
     ...(match.target.scope === undefined ? {} : { scope: match.target.scope }),
+    ...(match.target.from === undefined ? {} : { from: match.target.from }),
   };
 }
 
@@ -411,12 +459,15 @@ export function marked(target: CanvasTextTarget, focus: ReadonlySet<string>): bo
 
 /** Whether an element sits inside the page instance a target belongs to. */
 export function withinScope(element: Element, target: CanvasTextTarget): boolean {
-  if (target.scope === undefined) {
-    return true;
-  }
+  return target.scope === undefined || insideScope(element, target.scope);
+}
+
+// A copy of the same component elsewhere on the page carries the same template paths but not this instance's path, so the
+// ancestor chain is what tells whose words an element holds.
+function insideScope(element: Element, scope: string): boolean {
   let ancestor: Element | undefined = element;
   for (let depth = 0; ancestor && depth < 64; depth++) {
-    if (pathsOf(ancestor).includes(target.scope)) {
+    if (pathsOf(ancestor).includes(scope)) {
       return true;
     }
     ancestor = ancestor.parentElement ?? undefined;

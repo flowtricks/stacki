@@ -6719,6 +6719,10 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .node-outline.hover.text-mark {
   background: none;
 }
+/* A ::before or ::after inside a component is outlined in the component green but never filled: the fill is the instance's. */
+.node-outline.hover.pseudo {
+  background: none;
+}
 .node-outline-tag {
   position: absolute;
   top: 0;
@@ -10899,10 +10903,4 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .canvas-source-cue-uses {
   /* A solid colour for the quieter count, never opacity: the chip stays opaque throughout. */
   color: #b3a0ee;
-}
-
-/* A data chip in a Navigator row: the chip keeps its own purple (never restyled); the row only lets it shrink. */
-.structure-node .label .data-chip {
-  vertical-align: middle;
-  margin: 0;
 }
