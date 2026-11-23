@@ -179,7 +179,7 @@ export function FramePicker({
       return;
     }
     if (playhead.current !== null) {
-      // A transform only: the playhead spans the strip and is moved by a share of its own width (screenshot.css).
+      // A transform only: the playhead spans the track (the strip's width) and is moved by a share of its own width (screenshot.css).
       playhead.current.style.setProperty('--ai-playhead', `${positionPercent(index, frames.length)}%`);
     }
     if (preview.current !== null) {
@@ -200,7 +200,10 @@ export function FramePicker({
   // A press only moves the playhead; releasing it within CLICK_SLOP_PX of where it began is a click, which toggles
   // that frame (Shift: the range from the last frame toggled). Anything further is a drag, which only scrubs.
   const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
-    const box = event.currentTarget.getBoundingClientRect();
+    // The track takes the press (its handle row above the strip scrubs too), but frames map onto the strip's box.
+    const strip = timeline.ref.current;
+    assert(strip !== null, 'onPointerDown: the strip is mounted while it can be pressed');
+    const box = strip.getBoundingClientRect();
     drag.current = {
       left: box.left,
       width: Math.max(1, box.width),
@@ -365,20 +368,24 @@ export function FramePicker({
                 ))}
               </div>
               <div
-                ref={timeline.ref}
-                className="ai-frame-strip"
-                role="slider"
-                aria-label={translate('ai.record.timeline')}
-                aria-valuemin={1}
-                aria-valuemax={frames.length}
-                aria-valuenow={current + 1}
-                aria-valuetext={translate('ai.record.frameLabel', { frame: current + 1, seconds: seconds(frame.atMs) })}
+                className="ai-frame-track"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
               >
-                <TimelineTiles tiles={tiles} thumbs={thumbs} />
+                <div
+                  ref={timeline.ref}
+                  className="ai-frame-strip"
+                  role="slider"
+                  aria-label={translate('ai.record.timeline')}
+                  aria-valuemin={1}
+                  aria-valuemax={frames.length}
+                  aria-valuenow={current + 1}
+                  aria-valuetext={translate('ai.record.frameLabel', { frame: current + 1, seconds: seconds(frame.atMs) })}
+                >
+                  <TimelineTiles tiles={tiles} thumbs={thumbs} />
+                </div>
                 <span ref={playhead} className="ai-frame-playhead" style={playheadStyle(positionPercent(showing, frames.length))} />
               </div>
               <TimeScale frames={frames} seconds={seconds} />

@@ -31,6 +31,7 @@ esbuild.buildSync({
       "export { FramePicker, fitContain, frameAt, positionPercent, tileWidthFor, timelineTiles } from './src/features/ai/screenshot/FramePicker';",
       "export { ScreenshotButton } from './src/features/ai/screenshot/ScreenshotButton';",
       "export { useScreenshotCapture } from './src/features/ai/screenshot/useScreenshotCapture';",
+      "export { AI_LIMITS } from './shared/properties/ai/aiLimits';",
       "export { appendAttachments } from './src/features/ai/screenshot/draftAttachments';",
       "export { lightboxSize } from './src/features/ai/screenshot/AttachmentChips';",
       "export { aiState, resetAiStore } from './src/features/ai/aiStore';",
@@ -128,6 +129,24 @@ test('pick evenly takes every Nth frame from the first, as far as the cap', () =
   assert.equal(capped.selection.chosen.length, 8);
   assert.deepEqual(rec.everyNth(0, 5, 8).selection.chosen, []);
   assert.throws(() => rec.everyNth(10, 0, 8), /step of at least one/);
+});
+
+test('an empty draft lets the chooser pick exactly 16 frames (twice the old 8): the 16th passes, the 17th is capped', () => {
+  const cap = rec.AI_LIMITS.attachmentsMax;
+  assert.equal(cap, 16);
+  let selection = rec.EMPTY_SELECTION;
+  for (let index = 0; index < cap; index += 1) {
+    const change = rec.toggleFrame(selection, index * 3, cap);
+    assert.equal(change.capped, false, `frame ${index + 1} of ${cap} fits`);
+    selection = change.selection;
+  }
+  assert.equal(selection.chosen.length, cap);
+  const over = rec.toggleFrame(selection, 200, cap);
+  assert.equal(over.capped, true, 'one over the cap says so, which the sheet reports as a toast');
+  assert.equal(over.selection.chosen.length, cap);
+  const evenly = rec.everyNth(240, 1, cap);
+  assert.equal(evenly.selection.chosen.length, cap, 'pick evenly never passes the cap either');
+  assert.equal(evenly.capped, true);
 });
 
 test("a recording frame's note says when it was taken, then the region or panel as a screenshot does", () => {

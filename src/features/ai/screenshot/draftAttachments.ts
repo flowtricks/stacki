@@ -6,11 +6,11 @@ import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import type { DraftAttachment } from '../aiStore';
 
 /**
- * The base64 characters all of a draft's images may hold together: eight prepared images at their
+ * The base64 characters all of a draft's images may hold together: AI_LIMITS.attachmentsMax prepared images at their
  * 1.5 million character target. It keeps one message far below the agents' request limits and the
  * draft's memory small (the bytes live only in memory, and only until the message is sent or cleared).
  */
-export const DRAFT_IMAGE_CHARS_MAX = AI_LIMITS.attachmentsMax * 1_500_000;
+export const DRAFT_IMAGE_CHARS_MAX = AI_LIMITS.attachmentsImageCharsMax;
 
 export type AppendOutcome =
   | { readonly kind: 'appended'; readonly attachments: readonly DraftAttachment[] }

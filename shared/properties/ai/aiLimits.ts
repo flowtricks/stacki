@@ -78,9 +78,22 @@ export const AI_LIMITS = {
   titleCharsMax: 200,
   /** One prompt the person types. */
   promptCharsMax: 100_000,
-  /** Attachments on one prompt, and one image's base64 size. */
-  attachmentsMax: 8,
+  /**
+   * Attachments on one prompt, and one image's base64 size. 16 (was 8) so the "Pick frames" sheet offers twice as many frames of a
+   * recording: the choice is capped by the draft's free attachment slots. 16 stays far under the Claude API's 100 images per request
+   * (the Codex adapter's own cap is unverified here); the memory stays bounded by attachmentsImageCharsMax below.
+   */
+  attachmentsMax: 16,
+  /**
+   * The base64 characters all of one prompt's images may hold together: sixteen prepared images at their 1.5 million character target
+   * (about 18 MB). A recorded frame is a JPEG of about 0.2 MB, so sixteen picked frames are far below it; it is the hard byte cap that
+   * the draft (in memory only) and the ai:prompt payload hold, checked in the renderer and again at the main-process parser.
+   */
+  attachmentsImageCharsMax: 16 * 1_500_000,
   imageBase64CharsMax: 8 * 1024 * 1024,
+  /** The small preview stored beside a sent image's name (a JPEG data URL, 320 px wide), so the transcript shows it after a restart. */
+  thumbnailCharsMax: 60_000,
+  thumbnailEdgePx: 320,
   /** Files one turn's change ledger tracks, and the bytes it keeps for them. */
   ledgerFilesMax: 500,
   ledgerBytesMax: 64 * 1024 * 1024,

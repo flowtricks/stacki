@@ -218,7 +218,7 @@
 }
 .ai-record-bar {
   position: fixed;
-  z-index: 10002;
+  z-index: 10003;
   transform: translateX(-50%); /* physical: centred on the region, the same in either direction */
   display: inline-flex;
   align-items: center;
@@ -229,7 +229,8 @@
   color: var(--text);
   border-radius: 16px;
   font-size: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  /* Reaches at most 8px from the bar, the gap to the region (RecordingBar.tsx): a wider shadow would darken the region's edge in every frame. */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 .ai-record-dot {
   width: 8px;
@@ -381,15 +382,23 @@
   border-radius: 1px;
   background: var(--accent);
 }
+/* The track: the strip plus its own handle row above it. The row's height is reserved by the padding, so the
+   playhead's triangle sits above the thumbnails (never over or under them) and nothing shifts as it moves. A press
+   anywhere on the track, the handle row included, scrubs. */
+.ai-frame-track {
+  --ai-handle-height: 8px;
+  position: relative;
+  padding-top: var(--ai-handle-height);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
 .ai-frame-strip {
   position: relative;
   height: 40px;
   overflow: hidden;
   border-radius: 6px;
   background: #0b0b0c;
-  cursor: ew-resize;
-  touch-action: none;
-  user-select: none;
 }
 .ai-frame-tiles {
   display: flex;
@@ -414,28 +423,28 @@
 [dir='rtl'] .ai-frame-playhead {
   --ai-playhead-direction: -1;
 }
+/* The line runs from the triangle's tip down through the thumbnails. */
 .ai-frame-playhead::before {
   content: '';
   position: absolute;
-  top: 0;
+  top: var(--ai-handle-height);
   bottom: 0;
   inset-inline-start: -1px;
   width: 2px;
   background: #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
-/* The playhead's handle: a small white triangle pointing down onto the line, centred on it, inside the strip's top
-   so the strip's clipping never cuts it; the chosen-frame ticks sit in their own row above the strip. */
+/* The playhead's handle: a small white triangle in the track's own row above the strip, pointing down onto the
+   line and centred on it. It ends where the strip begins, so it never covers a thumbnail. */
 .ai-frame-playhead::after {
   content: '';
   position: absolute;
   top: 0;
   inset-inline-start: -5px;
   width: 10px;
-  height: 7px;
+  height: var(--ai-handle-height);
   background: #fff;
   clip-path: polygon(0 0, 100% 0, 50% 100%);
-  border-radius: 2px 2px 0 0;
 }
 .ai-frame-scale {
   position: relative;
@@ -478,4 +487,18 @@
   padding-inline: 12px;
   border-radius: 6px;
   white-space: nowrap;
+}
+/* The dim kept over the window while a recording runs (RecordScrim.tsx): the region drag's grey, with a hole over
+   the region and the capture bar. It takes no pointer events, so the app stays usable and the pointer is the
+   ordinary one. Below the recording bar (10003) and above popups and tooltips, as the region layer was. */
+.ai-record-scrim {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10002;
+  pointer-events: none;
+}
+.ai-record-scrim-fill {
+  fill: rgba(0, 0, 0, 0.36);
 }

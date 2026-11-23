@@ -17,6 +17,7 @@ import { reportActionToast, reportErrorToast } from '../../../ui/errorNotices';
 import { POPUP_MOTION_MS } from '../../../ui/popupLifecycle';
 import { FramePicker } from './FramePicker';
 import { RecordingBar } from './RecordingBar';
+import { RecordScrim } from './RecordScrim';
 import { RegionSelector } from './RegionSelector';
 import { screenshotNote, secondsText, type ScreenshotFacts } from './screenshotNote';
 import { clampToWindow, regionFacts, takeScreenshot } from './takeScreenshot';
@@ -64,6 +65,8 @@ export function useScreenshotCapture(options: {
   const [active, setActive] = useState<CaptureMode | undefined>(undefined);
   const [picking, setPicking] = useState<((region: WindowRect | undefined) => void) | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  // The region between the end of the drag and main's answer to `start`: the dim stays up so nothing flashes bright.
+  const [starting, setStarting] = useState<WindowRect | undefined>(undefined);
   const running = useRef(false);
   const latest = useRef(options);
   latest.current = options;
@@ -84,6 +87,7 @@ export function useScreenshotCapture(options: {
     setBusy(false);
     setActive(undefined);
     setPhase({ kind: 'idle' });
+    setStarting(undefined);
   }, []);
   const startRecording = useCallback(async (): Promise<void> => {
     const current = latest.current;
@@ -93,7 +97,8 @@ export function useScreenshotCapture(options: {
       end();
       return;
     }
-    const restore = screenshotSource()?.hideMarks() ?? (() => undefined);
+    setStarting(region);
+    const restore = screenshotSource()?.prepare() ?? (() => undefined);
     const started = await aiRecord({ projectPath: current.projectPath, action: { kind: 'start', rect: region } });
     if (!started.ok || started.value.kind !== 'started') {
       restore();
@@ -102,6 +107,7 @@ export function useScreenshotCapture(options: {
       return;
     }
     setPhase({ kind: 'recording', id: started.value.id, region, restore });
+    setStarting(undefined);
   }, [pickRegion, end, translate]);
   const start = useCallback(
     (kind: CaptureMode): void => {
@@ -222,7 +228,9 @@ export function useScreenshotCapture(options: {
     [],
   );
   let overlay: ReactNode = picking === undefined ? undefined : <RegionSelector onDone={picking} />;
-  if (phase.kind === 'recording') {
+  if (phase.kind === 'idle' && starting !== undefined) {
+    overlay = <RecordScrim region={starting} />;
+  } else if (phase.kind === 'recording') {
     overlay = (
       <RecordingBar
         projectPath={options.projectPath}

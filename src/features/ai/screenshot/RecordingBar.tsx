@@ -1,5 +1,5 @@
 // The bar that floats beside a region while it is recorded: a red dot, the elapsed capture time and Stop.
-// It sits outside the region (below it, else above, else at the window's top) so it is never in a frame.
+// While it runs, RecordScrim keeps everything outside the region greyed as the region drag did. It sits outside the region (below it, else above, else at the window's top) so it is never in a frame.
 // It reads the recording's status from main every STATUS_POLL_MS; a recording that stopped by itself (a
 // bound, a failed capture) ends the same way as Stop, with the reason. Escape stops too.
 import { useEffect, useRef, useState } from 'react';
@@ -8,6 +8,7 @@ import type { RecordReply, RecordStopReason } from '../../../../shared/ipc/aiCha
 import type { WindowRect } from '../../../lib/screenshotSource';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { aiRecord } from '../aiBridge';
+import { RecordScrim } from './RecordScrim';
 
 /** How often the bar asks main how the recording stands: often enough for the clock, cheap for main. */
 const STATUS_POLL_MS = 250;
@@ -33,11 +34,14 @@ export function RecordingBar({
   const format = useFormat();
   const [status, setStatus] = useState<Status | undefined>(undefined);
   const done = useRef(false);
+  // The scrim goes the moment the recording ends (Stop, Escape, a bound), not when the stop reply arrives.
+  const [ended, setEnded] = useState(false);
   const latest = useRef(onStop);
   latest.current = onStop;
   const finish = (reason: RecordStopReason): void => {
     if (!done.current) {
       done.current = true;
+      setEnded(true);
       latest.current(reason);
     }
   };
@@ -69,17 +73,24 @@ export function RecordingBar({
     };
   }, [projectPath, id]);
   const seconds = format.formatNumber((status?.elapsedMs ?? 0) / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return createPortal(
-    <div className="ai-record-bar" role="status" style={barPlace(region)}>
-      <span className={`ai-record-dot${status?.state === 'paused' ? ' is-paused' : ''}`} aria-hidden="true" />
-      <span className="ai-record-time">
-        {status?.state === 'paused' ? translate('ai.record.paused') : `${translate('ai.record.recording')} · ${translate('ai.record.elapsed', { seconds })}`}
-      </span>
-      <button type="button" className="ai-record-stop" aria-keyshortcuts="Escape" onClick={() => finish('person')}>
-        {translate('ai.record.stop')}
-      </button>
-    </div>,
-    document.body,
+  return (
+    <>
+      {ended ? undefined : <RecordScrim region={region} />}
+      {createPortal(
+        <div className="ai-record-bar" role="status" style={barPlace(region)}>
+          <span className={`ai-record-dot${status?.state === 'paused' ? ' is-paused' : ''}`} aria-hidden="true" />
+          <span className="ai-record-time">
+            {status?.state === 'paused'
+              ? translate('ai.record.paused')
+              : `${translate('ai.record.recording')} · ${translate('ai.record.elapsed', { seconds })}`}
+          </span>
+          <button type="button" className="ai-record-stop" aria-keyshortcuts="Escape" onClick={() => finish('person')}>
+            {translate('ai.record.stop')}
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
