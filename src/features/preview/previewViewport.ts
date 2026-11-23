@@ -13,30 +13,20 @@ export function parsePreviewWidth(input: string): number | undefined {
   return width;
 }
 
-/**
- * How a fixed-width frame sits in the canvas. `framed` leaves a gutter around the page (the side handles live in it), as every
- * breakpoint narrower than the pane does. `flush` covers the whole canvas, the Desktop device: the page is scaled to the pane's
- * width, so it keeps its own width for media queries and no gutter is reserved.
- */
-export type FrameFit = 'framed' | 'flush';
-
+// A fixed-width frame sits in the canvas with a gutter around it (the side handles live in it). A fluid frame (Desktop and the
+// all-breakpoints canvas) has no width to give here: it covers the canvas edge to edge at the pane's own width, scale 1.
 const FRAMED_GUTTER_PX = { side: 24, vertical: 32 } as const;
 
-export function previewViewport(
-  width: number | undefined,
-  available: { readonly width: number; readonly height: number },
-  height: number | undefined,
-  fit: FrameFit,
-) {
+export function previewViewport(width: number | undefined, available: { readonly width: number; readonly height: number }, height: number | undefined) {
   assert(Number.isFinite(available.width), 'Preview container width must be finite');
   assert(Number.isFinite(available.height), 'Preview container height must be finite');
   const fixed = width !== undefined;
   const viewportWidth = fixed ? width : Math.max(1, available.width);
   assert(viewportWidth > 0, 'Preview width must be positive');
-  const scale = fixed ? Math.min(1, Math.max(1, available.width - (fit === 'framed' ? FRAMED_GUTTER_PX.side : 0)) / viewportWidth) : 1;
+  const scale = fixed ? Math.min(1, Math.max(1, available.width - FRAMED_GUTTER_PX.side) / viewportWidth) : 1;
   // Keep the requested CSS viewport for media queries and viewport units. The
   // iframe scales to fit; overlay geometry scales separately so its labels do not.
-  const viewportHeight = height ?? Math.max(1, available.height - (fixed && fit === 'framed' ? FRAMED_GUTTER_PX.vertical : 0)) / scale;
+  const viewportHeight = height ?? Math.max(1, available.height - (fixed ? FRAMED_GUTTER_PX.vertical : 0)) / scale;
   return { width: viewportWidth, height: viewportHeight, scale };
 }
 

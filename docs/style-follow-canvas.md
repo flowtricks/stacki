@@ -32,6 +32,17 @@ in Base. Turning it back on targets the canvas's own query again, in the same fr
 Why a pick keeps following: picking a row while following asks to see and edit that breakpoint, so
 the target and the canvas move together. Only a row with no canvas width to go to holds instead.
 
+## The Desktop device at a narrow pane
+
+The Desktop device fills the pane at the pane's own width, never scaled (`previewFrameWidth` has no
+width for it, `previewViewport` scale 1). The canvas reports that width, so following works on the
+width the page really has. A pane narrower than the Laptop canvas is therefore a Laptop layout: the
+page's media queries switch, the toolbar shows the device that width belongs to (`activeDeviceFor`,
+here Laptop, not Desktop), and the panel follows `< 64rem` under the Laptop icon. No `< 64rem` row
+ever wears the Desktop icon, because the icon is the canvas's own device at the width it draws.
+Only a pane inside the Desktop range (past the widest `down` canvas, under the narrowest `up` one)
+reads as Desktop; a pane at or past an `up` canvas reads as that breakpoint's device.
+
 ## Where a picked row puts the canvas
 
 `rowPlacement` answers, and it only keeps a width at which following picks that very row, so the

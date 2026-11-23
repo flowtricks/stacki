@@ -53,7 +53,6 @@ const BREAKPOINTS = resolveBreakpoints([
 ]);
 
 // Settings' Desktop width (90rem), the narrowest the Desktop device draws; the stage is wider.
-const DESKTOP_FRAME_PX = 1440;
 
 // The forwarded key, replayed on the document as appNodeEdits.ts replays it.
 window.addEventListener('message', (event) => {
@@ -66,13 +65,13 @@ window.addEventListener('message', (event) => {
 });
 
 function Canvas({ device, setDevice, dimensions }) {
-  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: true, desktopFramePx: DESKTOP_FRAME_PX }, setDevice);
+  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: true }, setDevice);
   window.harness.canvasWidth = sizing.viewport.width;
   return React.createElement('div', { className: 'preview-frame-wrap', ref: sizing.wrapRef, style: { position: 'absolute', inset: 0 } },
     React.createElement(SizedFrame, { sizing }, React.createElement('div', { className: 'canvas-page' })));
 }
 function PreviewMode({ device, setDevice, dimensions }) {
-  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: false, desktopFramePx: DESKTOP_FRAME_PX }, setDevice);
+  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: false }, setDevice);
   window.harness.previewWidth = sizing.viewport.width;
   return React.createElement(PreviewModeStage, { sizing }, React.createElement('iframe', { title: 'Site', src: '/site.html' }));
 }

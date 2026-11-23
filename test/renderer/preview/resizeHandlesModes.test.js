@@ -47,7 +47,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 test('AppShell draws the preview mode through the shared stage and the window size state', () => {
   const shell = fs.readFileSync(repoPath('src/app/shell/AppShell.tsx'), 'utf8');
   assert.match(shell, /<PreviewModeStage sizing=\{sizing\}>/);
-  assert.match(shell, /usePreviewSizing\(app\.device, app\.previewDimensions, breakpoints, \{ deviceShortcuts: false, desktopFramePx \}, app\.setDevice\)/);
+  assert.match(shell, /usePreviewSizing\(app\.device, app\.previewDimensions, breakpoints, \{ deviceShortcuts: false \}, app\.setDevice\)/);
   const panes = fs.readFileSync(repoPath('src/app/shell/AppPanes.tsx'), 'utf8');
   assert.match(panes, /dimensions=\{app\.previewDimensions\}/);
 });
@@ -63,8 +63,8 @@ test('the handles are the same in design, interact and preview modes, and a prev
   const window = dom.window;
   // Desktop's window state (appState.ts useWindowState) and preview mode (AppShell PreviewModeView).
   function PreviewModeView({ device, setDevice, dimensions }) {
-    const { resolved, desktopFramePx } = modes.useProjectBreakpoints(undefined);
-    const sizing = modes.usePreviewSizing(device, dimensions, resolved, { deviceShortcuts: false, desktopFramePx }, setDevice);
+    const { resolved } = modes.useProjectBreakpoints(undefined);
+    const sizing = modes.usePreviewSizing(device, dimensions, resolved, { deviceShortcuts: false }, setDevice);
     return React.createElement(modes.PreviewModeStage, { sizing }, React.createElement('iframe', { title: 'Site' }));
   }
   function Window() {
@@ -172,8 +172,8 @@ test('a press that is not the main button does not start a resize in the preview
   function Stage() {
     const [device, setDevice] = React.useState('desktop');
     const dimensions = modes.usePreviewDimensions();
-    const { resolved, desktopFramePx } = modes.useProjectBreakpoints(undefined);
-    const sizing = modes.usePreviewSizing(device, dimensions, resolved, { deviceShortcuts: false, desktopFramePx }, setDevice);
+    const { resolved } = modes.useProjectBreakpoints(undefined);
+    const sizing = modes.usePreviewSizing(device, dimensions, resolved, { deviceShortcuts: false }, setDevice);
     return React.createElement(modes.PreviewModeStage, { sizing }, React.createElement('iframe', { title: 'Site' }));
   }
   try {

@@ -43,13 +43,13 @@ buildSync({
 const hold = require(output);
 
 test('the viewport follows the space it has, growing and shrinking', () => {
-  assert.deepEqual(hold.previewViewport(undefined, { width: 500, height: 600 }, undefined, 'framed'), { width: 500, height: 600, scale: 1 });
-  assert.deepEqual(hold.previewViewport(undefined, { width: 1400, height: 600 }, undefined, 'framed'), { width: 1400, height: 600, scale: 1 });
-  const fixed = hold.previewViewport(768, { width: 400, height: 600 }, undefined, 'framed');
+  assert.deepEqual(hold.previewViewport(undefined, { width: 500, height: 600 }, undefined), { width: 500, height: 600, scale: 1 });
+  assert.deepEqual(hold.previewViewport(undefined, { width: 1400, height: 600 }, undefined), { width: 1400, height: 600, scale: 1 });
+  const fixed = hold.previewViewport(768, { width: 400, height: 600 }, undefined);
   assert.equal(fixed.width, 768);
   assert.equal(fixed.scale, (400 - 24) / 768);
-  assert.equal(hold.previewViewport(768, { width: 1400, height: 600 }, undefined, 'framed').scale, 1, 'A fixed frame never scales up');
-  assert.throws(() => hold.previewViewport(undefined, { width: Number.NaN, height: 1 }, undefined, 'framed'), /Preview container width must be finite/);
+  assert.equal(hold.previewViewport(768, { width: 1400, height: 600 }, undefined).scale, 1, 'A fixed frame never scales up');
+  assert.throws(() => hold.previewViewport(undefined, { width: Number.NaN, height: 1 }, undefined), /Preview container width must be finite/);
 });
 
 test('the canvas follows a panel drag live and renders the fluid frame once, on release', async () => {
@@ -63,7 +63,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
     requestAnimationFrame: window.requestAnimationFrame.bind(window),
     cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
   });
-  // Wider than the Desktop frame (1440): Desktop fills a pane at least that wide, by CSS (desktopCanvasWidth).
+  // Desktop fills the pane at any width, by CSS: a fluid frame.
   let containerWidth = 2000;
   const observers = new Set();
   global.ResizeObserver = class {
@@ -83,7 +83,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
   let device = 'desktop';
   function Canvas() {
     const dimensions = hold.usePreviewDimensions();
-    const sizing = hold.usePreviewSizing(device, dimensions, hold.BREAKPOINT_DEFAULTS, { deviceShortcuts: true, desktopFramePx: 1440 }, () => {});
+    const sizing = hold.usePreviewSizing(device, dimensions, hold.BREAKPOINT_DEFAULTS, { deviceShortcuts: true }, () => {});
     renders.push({ width: sizing.viewport.width, scale: sizing.viewport.scale, settling: sizing.panelSettling });
     return React.createElement('div', { ref: sizing.wrapRef });
   }

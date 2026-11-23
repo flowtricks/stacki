@@ -3,9 +3,8 @@ import { assert } from '../../../shared/core/assert';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { activeDeviceFor, deviceForShortcut, deviceWidth, type PreviewDevice } from './breakpointDevices';
-import { desktopCanvasWidth } from '../../../shared/properties/breakpointIcon';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
-import { PREVIEW_WIDTH_LIMITS, previewViewport, type FrameFit } from './previewViewport';
+import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
 import { panelDragPhase, setPanelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
  *  query). `serial` counts the asks, so the same width asked again still applies. */
@@ -21,11 +20,9 @@ export type PreviewSizing = ReturnType<typeof usePreviewSizing>;
 
 /** How a sized frame takes part in the window. `deviceShortcuts` listens for the device
  *  keys (1 to 5): only one frame per window does, so a second frame over the canvas (the
- *  preview mode) does not set the same device twice for one key. `desktopFramePx` is the
- *  Desktop width from Settings (useProjectBreakpoints), the narrowest the Desktop device draws. */
+ *  preview mode) does not set the same device twice for one key. */
 export interface PreviewSizingOptions {
   readonly deviceShortcuts: boolean;
-  readonly desktopFramePx: number;
 }
 
 export function usePreviewSizing(
@@ -41,7 +38,7 @@ export function usePreviewSizing(
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const { customWidth, setCustomWidth, customHeight, setCustomHeight } = dimensions;
   const [resizing, setResizing] = useState(false);
-  const width = previewFrameWidth(device, customWidth, breakpoints, available.width, options.desktopFramePx);
+  const width = previewFrameWidth(device, customWidth, breakpoints);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
   useDeviceShortcuts(breakpoints, options, onDevice);
@@ -54,10 +51,9 @@ export function usePreviewSizing(
     }
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
-  // Desktop covers the whole canvas (scaled to the pane when the pane is narrower than its width); every narrower device is framed.
-  const fit: FrameFit = device === 'desktop' ? 'flush' : 'framed';
-  const viewport = previewViewport(width, available, customHeight, fit);
-  const activeDevice = activeDeviceFor(device, viewport.width, breakpoints);
+  const viewport = previewViewport(width, available, customHeight);
+  // A fluid Desktop frame has no width of its own: the pane's (0 before the first measure, which keeps Desktop pressed) is the one it draws at.
+  const activeDevice = activeDeviceFor(device, width ?? available.width, breakpoints);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
     onDevice('custom');
@@ -80,7 +76,6 @@ export function usePreviewSizing(
     frameRef,
     wrapWidth: available.width,
     viewport,
-    fit,
     setWidth,
     customHeight,
     resizing,
@@ -96,21 +91,15 @@ export function usePreviewSizing(
  * The width the frame draws the page at, or undefined to fill the canvas by CSS. A custom
  * width belongs to the custom device: read on any other, it drew one frame at the old custom
  * width after a device button was pressed, until the effect in usePreviewSizing cleared it.
- * Desktop is never narrower than its frame width (desktopCanvasWidth): a narrow pane scales it.
+ * Desktop has no width of its own: it fills the pane, so a narrow pane draws the page at the pane's width (scale 1) and the
+ * page's media queries switch to the laptop, tablet or phone layout, as they would in a browser window that size.
  */
-export function previewFrameWidth(
-  device: PreviewDevice,
-  customWidth: number | undefined,
-  breakpoints: readonly ResolvedBreakpoint[],
-  availablePx: number,
-  desktopFramePx: number,
-): number | undefined {
+export function previewFrameWidth(device: PreviewDevice, customWidth: number | undefined, breakpoints: readonly ResolvedBreakpoint[]): number | undefined {
   if (device === 'custom') {
     return customWidth ?? deviceWidth(device, breakpoints);
   }
   if (device === 'desktop') {
-    const desktop = desktopCanvasWidth(availablePx, breakpoints, desktopFramePx);
-    return desktop.kind === 'fixed' ? desktop.widthPx : undefined;
+    return undefined;
   }
   return deviceWidth(device, breakpoints);
 }
@@ -318,7 +307,7 @@ function drawFrame(context: ResizeContext, live: LiveResize): void {
     }
     return;
   }
-  const viewport = previewViewport(live.widthPx, context.available, live.heightPx ?? context.customHeight, 'framed');
+  const viewport = previewViewport(live.widthPx, context.available, live.heightPx ?? context.customHeight);
   frame.style.width = `${viewport.width}px`;
   frame.style.height = `${viewport.height}px`;
   frame.style.transform = `translateX(-50%) scale(${viewport.scale})`;

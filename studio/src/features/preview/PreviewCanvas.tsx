@@ -70,8 +70,8 @@ export function PreviewCanvas(props: Props) {
     offSite: { clearOverlays: props.preview.clearOverlays },
     pages: props.sitePages,
   });
-  const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectName);
-  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx }, props.onDevice);
+  const { resolved: breakpoints } = useProjectBreakpoints(props.projectName);
+  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true }, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
     preview: props.preview,
@@ -250,12 +250,12 @@ function CanvasOverlays({
     ? {
         width: sizing.viewport.width * sizing.viewport.scale,
         height: sizing.viewport.height * sizing.viewport.scale,
-        borderRadius: sizing.fit === 'framed' ? 10 * sizing.viewport.scale : 0,
+        borderRadius: 10 * sizing.viewport.scale,
       }
     : { width: '100%', height: '100%', borderRadius: 0 };
   // The overlays are drawn in the page's own coordinates over the user's site, which never mirrors, so they stay left to right.
   return (
-    <div dir="ltr" className={`preview-overlay-layer ${sizing.width && sizing.fit === 'framed' ? '' : 'full'}`} style={style}>
+    <div dir="ltr" className={`preview-overlay-layer ${sizing.width ? '' : 'full'}`} style={style}>
       {/* First in the layer, so the outlines and spacing bands paint over it. */}
       {shownGuide && <GuideOverlay {...shownGuide} scale={sizing.viewport.scale} />}
       <CollaboratorOutlines

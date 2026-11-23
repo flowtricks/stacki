@@ -78,7 +78,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'גדול מאוד',
   'settings.breakpoints.defaultName.up2': 'אולטרה',
   'settings.breakpoints.desktop': 'מחשב שולחני',
-  'settings.breakpoints.desktopNote': 'רוחב מחשב שולחני בקנבס ובתצוגה זו לצד זו, מוקטן להתאמה. לעולם לא משמש כ־media query.',
+  'settings.breakpoints.desktopNote': 'רוחב המסגרת בתצוגה זו לצד זו. לעולם לא משמש כ־media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) יגיע לצד השני של מחשב שולחני.',
   'settings.breakpoints.error.file': 'לא ניתן היה להשתמש בקובץ נקודות השבירה, ולכן מוצגות ברירות המחדל והקובץ נשאר כפי שהוא. {message}',
   'settings.breakpoints.error.name': 'שם הוא באורך 1 עד {maximum} תווים, וכל שם שונה.',

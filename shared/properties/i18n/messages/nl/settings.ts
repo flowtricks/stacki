@@ -83,7 +83,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Extra groot',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
-  'settings.breakpoints.desktopNote': 'Desktopbreedte op het canvas en naast elkaar, geschaald om te passen. Nooit gebruikt als media query.',
+  'settings.breakpoints.desktopNote': 'Framebreedte in de weergave naast elkaar. Nooit gebruikt als media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) zou aan de andere kant van Desktop terechtkomen.',
   'settings.breakpoints.error.file':
     'Het breakpointsbestand kon niet worden gebruikt, dus de standaardwaarden worden getoond en het bestand blijft zoals het is. {message}',

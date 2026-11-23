@@ -81,7 +81,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Очень большой',
   'settings.breakpoints.defaultName.up2': 'Ультра',
   'settings.breakpoints.desktop': 'Десктоп',
-  'settings.breakpoints.desktopNote': 'Ширина десктопа на холсте и в режиме «рядом», с масштабированием по размеру. Никогда не используется как медиазапрос.',
+  'settings.breakpoints.desktopNote': 'Ширина рамки в режиме «рядом». Никогда не используется как медиазапрос.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) окажется по другую сторону от десктопа.',
   'settings.breakpoints.error.file': 'Не удалось использовать файл брейкпоинтов, поэтому показаны значения по умолчанию, а файл оставлен как есть. {message}',
   'settings.breakpoints.error.name': 'Имя — от 1 до {maximum} символов, и все имена должны различаться.',
