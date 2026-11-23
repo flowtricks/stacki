@@ -87,8 +87,9 @@ function describeComponent(node: PairedNode, live?: readonly string[]) {
     return { icon: <CustomElementIcon size={12} />, label: truncate(labelWithLive(node, live), 40) };
   }
   // Central icons snap to 12/16/20, so a requested 14 drew at 16 beside the 12px element icons. Rows use 12.
+  // 'inherit': the row colours its own icon (component green, like the label), so Astro's brand orange must not override it.
   if (node.astroAsset) {
-    return { icon: astroAssetIcon(node.name, 12), label: node.name };
+    return { icon: astroAssetIcon(node.name, 12, undefined, 'inherit'), label: node.name };
   }
   return { icon: <ElementComponentIcon size={12} />, label: node.name };
 }

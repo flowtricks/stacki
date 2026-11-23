@@ -5,7 +5,6 @@ import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
 import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
 import { PseudoElementIcon, LayoutIcon, VariableTextSizeIcon } from '../../ui/Icons';
-import DataChip from '../../ui/DataChip';
 import { pureBindingPath } from '../../editor/bindingPath';
 import NodeStatus from './NodeStatus';
 import { defaultCollapsed, navigatorChildren, navigatorFamily, navigatorHost } from './structureModel';
@@ -367,7 +366,7 @@ interface TreeRowProps extends TreeNodeProps, NodeView {
 function TreeRow(props: TreeRowProps) {
   const translate = useTranslate();
   const { node, description } = props;
-  // A pure `{a.b}` is a data binding: its row is the purple chip, not braces.
+  // A pure `{a.b}` is a data binding: its row reads as its plain path, no braces and no chip (text never wears a chip here).
   const bindingPath = node.kind === 'expr' ? pureBindingPath(node.value) : undefined;
   const handlers = treeRowHandlers(props);
   return (
@@ -522,7 +521,7 @@ function RowLabel({
   const noteValue = note?.kind === 'comment' ? note.value : undefined;
   return (
     <span className="label" title={title} style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
-      {bindingPath === undefined ? <MarkedLabel label={label} words={highlightWords} /> : <DataChip path={bindingPath} />}
+      <MarkedLabel label={bindingPath ?? label} words={highlightWords} />
       {snippet !== undefined && (
         <span className="node-note" title={snippet}>
           {' / '}

@@ -1,11 +1,11 @@
-// An `{expression}` that is a pure data binding is a purple chip, not braces.
+// An `{expression}` that is a pure data binding is a purple chip in the Expression panel, and plain text in the Navigator.
 //
 //   node test/renderer/structure/expressionBinding.test.js
 //
-// Two places draw the node. The Navigator row for `{aiCallout1.cta.label}` shows the chip (the same `.expr-chip` the
-// Content field uses) with the path WITHOUT braces and the data-binding icon; a long path is cut at its start so its
-// end stays visible; complex code (a call, a ternary, a template literal, an operator) keeps its braces and the code
-// icon. The Expression panel shows the chip for a pure binding with a `{}` toggle to the raw code editor, and a click
+// Two places draw the node. The Navigator row for `{aiCallout1.cta.label}` shows NO chip (text never wears a purple
+// chip in the Navigator): the path as plain text WITHOUT braces and the data-binding icon; complex code (a call, a
+// ternary, a template literal, an operator) keeps its braces and the code icon. Other chip kinds (the Content field,
+// the prop fields, the Expression panel) are untouched. The Expression panel shows the chip for a pure binding with a `{}` toggle to the raw code editor, and a click
 // on the chip opens the data picker. The checks run on jsdom with rendered React, on generated nodes only.
 
 const fs = require('fs');
@@ -131,25 +131,15 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     await settle(20);
   });
   const row = (id) => container.querySelector(`.structure-node[data-node-id="${id}"]`);
-  const chip = (id) => row(id)?.querySelector('.label .expr-chip');
 
-  check('a pure binding renders a chip', chip('plain') !== null && chip('plain') !== undefined);
-  check('the chip shows the path without braces', chip('plain')?.textContent === 'aiCallout1.cta.label', chip('plain')?.textContent);
-  check('the row label has no braces', !/[{}]/.test(row('plain')?.querySelector('.label')?.textContent || ''));
-  check(
-    'the chip is named for assistive tech',
-    chip('plain')?.getAttribute('aria-label') === 'Data binding aiCallout1.cta.label',
-    chip('plain')?.getAttribute('aria-label'),
-  );
-  check('the chip has no native title', !chip('plain')?.hasAttribute('title'));
-
-  const longText = chip('long')?.textContent || '';
-  check('a long path is cut at its start', longText.startsWith('…') && longText.length < LONG.length, longText);
-  check('the end of a long path stays visible', LONG.endsWith(longText.slice(1)) && longText.endsWith('heading.label'), longText);
-  check('the cut chip still names the full path', chip('long')?.getAttribute('aria-label') === `Data binding ${LONG}`);
+  const labelText = (id) => row(id)?.querySelector('.label')?.textContent;
+  check('a pure binding row has no chip', row('plain')?.querySelector('.expr-chip, .data-chip') === null);
+  check('the row reads as the plain path without braces', labelText('plain') === 'aiCallout1.cta.label', labelText('plain'));
+  check('a long path has no chip either', row('long')?.querySelector('.expr-chip, .data-chip') === null);
+  check('a long path shows in full as text', labelText('long') === LONG, labelText('long'));
 
   for (const id of ['call', 'ternary', 'template']) {
-    check(`complex code stays code: ${id}`, chip(id) === null || chip(id) === undefined);
+    check(`complex code has no chip: ${id}`, row(id)?.querySelector('.expr-chip') === null);
     check(
       `complex code keeps its braces: ${id}`,
       /[{}]/.test(row(id)?.querySelector('.label')?.textContent || ''),
@@ -189,10 +179,12 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     await settle(20);
   });
   await act(async () => {
-    chip('plain').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    row('plain')
+      .querySelector('.label')
+      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     await settle(5);
   });
-  check('clicking the chip in the Navigator selects the row', selected.includes('plain'), selected.join(','));
+  check('clicking the label in the Navigator selects the row', selected.includes('plain'), selected.join(','));
 
   // --- the Expression panel ----------------------------------------------------
   const committed = [];
