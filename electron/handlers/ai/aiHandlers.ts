@@ -16,7 +16,7 @@ import { createProjectText, writeProjectText } from '../../documents/documentWri
 import { sameFilesystemPath } from '../../lib/platform';
 import { buildShellEnv } from '../../lib/shellEnvironment';
 import type { MainHost } from '../mainHost';
-import { AgentHost, NEW_CHAT_TITLE } from './agentHost';
+import { AgentHost, NEW_CHAT_TITLE, type AgentHostDeps } from './agentHost';
 import { AgentSetup } from './agentSetup';
 import { described } from './aiMessages';
 import { UnreadableFile, type LedgerFiles } from './changeLedger';
@@ -57,6 +57,8 @@ export interface AiHandlerOptions {
   readonly autoCompact: { readonly get: () => number | undefined; readonly set: (percent: number | undefined) => boolean };
   /** Whether a window is visible and not minimized: an agent is only started early for a person who is looking at the app. Absent means yes. */
   readonly isForeground?: () => boolean;
+  /** The small preview of a sent image kept in its chat (attachmentThumbnail.ts); absent: sent images keep their name only. */
+  readonly thumbnail?: AgentHostDeps['thumbnail'];
 }
 
 /** Registers the invoke channels; the host itself starts nothing until a prompt asks for it. */
@@ -90,6 +92,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       trackChanges: options.trackChanges,
       autoCompactPercent: options.autoCompact.get,
       currentBranch,
+      ...(options.thumbnail === undefined ? {} : { thumbnail: options.thumbnail }),
       ...(options.isForeground === undefined ? {} : { isForeground: options.isForeground }),
     });
     return agents;

@@ -64,6 +64,7 @@ import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import {
   parseChatOption,
   toTurnId,
+  type ChatAttachmentName,
   type ChatContext,
   type ChatEvent,
   type ChatId,
@@ -185,6 +186,8 @@ export interface AgentHostDeps {
   readonly isForeground?: () => boolean;
   /** Free memory over total memory, 0 to 1; the operating system's by default. Idle adapters leave sooner when it is low. */
   readonly freeMemoryRatio?: () => number;
+  /** A small JPEG data URL of a sent image, stored beside its name so the transcript can show it after a restart; undefined when it cannot be made. Absent: no thumbnails. */
+  readonly thumbnail?: (attachment: Extract<PromptAttachment, { readonly kind: 'image' }>) => string | undefined;
 }
 
 // The two kinds of state the host owns. Their mutable fields change only
@@ -626,7 +629,10 @@ export class AgentHost {
     runtime.branchAtStart = await this.readBranch(runtime.root);
     await runtime.ledger.begin(turn, this.trackingMode());
     const now = this.deps.now();
-    this.emit(runtime, [{ kind: 'turn-start', turn, at: now }, userEvent(turn, now, { text, attachments, sent: built.value.sent, mode: undefined })]);
+    this.emit(runtime, [
+      { kind: 'turn-start', turn, at: now },
+      userEvent(turn, now, { text, attachments, sent: built.value.sent, mode: undefined }, this.deps.thumbnail),
+    ]);
     if (record.title === NEW_CHAT_TITLE) {
       this.retitle(runtime, titleFrom(text, attachments));
     }
@@ -692,12 +698,12 @@ export class AgentHost {
     if (!outcome.ok) {
       // The reason goes to the log (the shape only, never the message text) so a new adapter reply is diagnosable.
       console.warn(`[ai] ${runtime.agent}: unreadable steering answer: ${outcome.error.message}; answer=${JSON.stringify(answer.value)?.slice(0, 200)}`);
-      this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' })]);
+      this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.deps.thumbnail)]);
       return err({ code: 'delivered', ...described('ai.error.misunderstood', { agent: AGENTS[runtime.agent].label }) });
     }
     switch (outcome.value.outcome) {
       case 'steered': {
-        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' })]);
+        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.deps.thumbnail)]);
         return ok({ turn, outcome: 'steered' });
       }
       case 'promptRequired': {
@@ -712,7 +718,7 @@ export class AgentHost {
       case 'startedNewTurn':
         // An adapter that ignores the opt-in began a turn on its own; Stacki cannot follow it, so say so. The message is
         // still delivered, so it is shown and never queued for a second send.
-        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' })]);
+        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.deps.thumbnail)]);
         return err({ code: 'delivered', ...described('ai.error.separateTurn', { agent: AGENTS[runtime.agent].label }) });
       default: {
         const exhaustive: never = outcome.value.outcome;
@@ -2096,12 +2102,22 @@ function userEvent(
     readonly sent: readonly SentPart[] | undefined;
     readonly mode: 'steer' | undefined;
   },
+  thumbnail: AgentHostDeps['thumbnail'],
 ): ChatEvent {
   return {
     kind: 'user',
     turn,
     text: sent.text,
-    attachments: sent.attachments.map((attachment) => ({ kind: attachment.kind, name: attachment.kind === 'image' ? attachment.name : attachment.path })),
+    attachments: sent.attachments.map((attachment): ChatAttachmentName => {
+      if (attachment.kind === 'image') {
+        const preview = thumbnail?.(attachment);
+        if (preview !== undefined && preview.length <= AI_LIMITS.thumbnailCharsMax) {
+          return { kind: 'image', name: attachment.name, thumbnail: preview };
+        }
+        return { kind: 'image', name: attachment.name };
+      }
+      return { kind: 'file', name: attachment.path };
+    }),
     at,
     ...(sent.sent === undefined ? {} : { parts: sent.sent }),
     ...(sent.mode === undefined ? {} : { mode: sent.mode }),

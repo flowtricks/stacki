@@ -276,3 +276,20 @@ test('the new replies parse and their bad shapes are refused', () => {
   }
   assert.throws(() => parseAiResult({ ok: false, error: { code: 'nope', message: 'm' } }, parseCompactStarted));
 });
+
+// The chooser's allowance: "Pick frames" fills the draft's free attachment slots, so these bounds are what it offers.
+// Exactly at the bound passes and one over fails, for the count and for the images' total size.
+test('a prompt takes exactly attachmentsMax (16) attachments and attachmentsImageCharsMax image characters', () => {
+  assert.equal(AI_LIMITS.attachmentsMax, 16, 'twice the 8 frames the chooser used to allow');
+  assert.ok(AI_LIMITS.attachmentsMax <= 100, "stays under the Claude API's 100 images per request");
+  const files = (count: number) => Array.from({ length: count }, () => ({ kind: 'file', path: 'a' }));
+  const at = parseIpcPayload('ai:prompt', { projectPath, chat, text: 'hi', attachments: files(AI_LIMITS.attachmentsMax) });
+  assert.ok(at !== undefined);
+  assert.throws(() => parseIpcPayload('ai:prompt', { projectPath, chat, text: 'hi', attachments: files(AI_LIMITS.attachmentsMax + 1) }), /exceeds limit/);
+  const images = (chars: readonly number[]) => chars.map((length) => ({ kind: 'image', name: 'a', mimeType: 'image/jpeg', data: 'A'.repeat(length) }));
+  const each = AI_LIMITS.attachmentsImageCharsMax / AI_LIMITS.attachmentsMax;
+  const full = images(Array.from({ length: AI_LIMITS.attachmentsMax }, () => each));
+  assert.ok(parseIpcPayload('ai:prompt', { projectPath, chat, text: 'hi', attachments: full }) !== undefined, 'exactly at the total passes');
+  const over = images([...Array.from({ length: AI_LIMITS.attachmentsMax - 1 }, () => each), each + 4]);
+  assert.throws(() => parseIpcPayload('ai:prompt', { projectPath, chat, text: 'hi', attachments: over }), /images exceed limit/);
+});

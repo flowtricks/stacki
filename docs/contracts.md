@@ -2530,7 +2530,7 @@ shortcut ⌘⇧S / Ctrl+Shift+S told by the app's tooltip) starts the one captur
 4 px is a click); there is no menu and no element or whole-canvas mode, and the shortcut starts the same drag.
 Whether a region is over the canvas comes from `src/lib/screenshotSource.ts`, installed by the shell
 (`src/app/shell/aiScreenshotSource.ts`: the `.frame-clip` box and the `.frame-sized` width as the breakpoint).
-For the capture's frame the body takes `is-taking-screenshot`, which hides the canvas outlines. `ai:screenshot` (`{ projectPath, rect }`, whole CSS
+For the capture's frame the source's `prepare` pins the canvas's last hovered node (`src/ui/canvasHoverPin.ts`: the pointer has left the canvas for the button, so the hover outline would be gone; a memory under 30 s old, held until the capture ends, the frame's hover reports ignored meanwhile) and the body takes `is-taking-screenshot`, which hides only transient tooltips. Selected outlines, tag labels and text marks are drawn as on screen: the capture is the window's pixels, so it shows them. `ai:screenshot` (`{ projectPath, rect }`, whole CSS
 pixels within `SCREENSHOT_RECT_PX_MAX`) photographs that rect of the sender's own window with
 `webContents.capturePage` and answers `Result<{ mimeType: 'image/png' | 'image/jpeg', data, width, height }>`:
 scaled to `SCREENSHOT_EDGE_PX_MAX` (1600) on the longer side, PNG when its base64 is within 1.5 million
@@ -2545,8 +2545,9 @@ outside Stacki's control. **Note.** An image attachment may carry `note` (one li
 `SCREENSHOT_NOTE_CHARS_MAX` characters, no control characters), sent as a text block right before the image and
 never stored: `Screenshot 1: region, 768px breakpoint`, `Screenshot 2: panel` (a region whose centre is
 off the canvas). **Bounds.** Every attachment, pasted, dropped, picked or captured, enters the draft through
-`appendAttachments` (`screenshot/draftAttachments.ts`): at most `attachmentsMax` and at most
-`DRAFT_IMAGE_CHARS_MAX` base64 characters of images in all. Chips show the thumbnail, open it in a lightbox
+`appendAttachments` (`screenshot/draftAttachments.ts`): at most `attachmentsMax` (16: twice the 8 the "Pick frames" sheet once
+offered) and at most `DRAFT_IMAGE_CHARS_MAX` (`attachmentsImageCharsMax`, 24 million, about 18 MB) base64 characters of images in all,
+which the `ai:prompt` parser checks again (16 is far under the Claude API's 100 images per request; the Codex adapter's cap is unverified). Chips show the thumbnail, open it in a lightbox
 (`AttachmentChips.tsx`, the app's `Popup`) and remove. Proofs: `test/electron/handlers/ai/screenshotCapture.test.ts`,
 `test/shared/ipc/screenshotContract.test.ts`, `test/renderer/ai/screenshot.test.js`, and in
 `agentHost.test.ts` and `promptBlocks.test.ts` the stored chat without bytes or note and the note block.

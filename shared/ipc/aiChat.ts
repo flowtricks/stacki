@@ -127,7 +127,13 @@ function attachments(input: unknown): readonly PromptAttachment[] {
   if (values.length > AI_LIMITS.attachmentsMax) {
     throw new Error('attachments: exceeds limit');
   }
-  return values.map(parsePromptAttachment);
+  const parsed = values.map(parsePromptAttachment);
+  // The pair of the composer's draft bound: the main process refuses a payload the composer could not have built.
+  const imageChars = parsed.reduce((sum, attachment) => sum + (attachment.kind === 'image' ? attachment.data.length : 0), 0);
+  if (imageChars > AI_LIMITS.attachmentsImageCharsMax) {
+    throw new Error('attachments: images exceed limit');
+  }
+  return parsed;
 }
 
 export type PermissionAnswer = { readonly kind: 'option'; readonly optionId: string } | { readonly kind: 'cancel' };

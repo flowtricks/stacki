@@ -109,6 +109,7 @@ import { registerAppPageFilesHandlers } from './handlers/appPageFilesHandlers';
 import { registerSelectorHandlers } from './handlers/selectorHandlers';
 import { registerAuditHandlers } from './handlers/auditHandlers';
 import { registerAiHandlers, registerAiSendChannels } from './handlers/ai/aiHandlers';
+import { attachmentThumbnail } from './handlers/ai/attachmentThumbnail';
 import { createGitHubIdentity, registerRoleHandlers } from './handlers/roleAccess';
 
 // The facade keeps native Electron registration behind a parsed payload boundary.
@@ -1287,6 +1288,7 @@ const aiServices = registerAiHandlers(host, {
     },
   },
   isForeground: () => mainWindow !== undefined && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized(),
+  thumbnail: attachmentThumbnail,
 });
 registerAuditHandlers(host, { openMeasureWindow: (options) => new BrowserWindow(options) });
 registerCmsHandlers(host);

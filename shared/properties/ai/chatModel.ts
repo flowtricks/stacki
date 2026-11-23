@@ -124,7 +124,12 @@ export interface ChatDiff {
 export interface ChatAttachmentName {
   readonly kind: 'image' | 'file';
   readonly name: string;
+  /** A small JPEG data URL of a sent image (`THUMBNAIL_PREFIX`); absent for files and in chats stored before thumbnails. */
+  readonly thumbnail?: string | undefined;
 }
+
+/** The only form a stored thumbnail takes: a JPEG, so the transcript never draws an unvetted media type. */
+export const THUMBNAIL_PREFIX = 'data:image/jpeg;base64,';
 
 export interface ChatOption {
   readonly id: string;
@@ -416,7 +421,9 @@ function parseChatEventOfKind(kind: unknown, value: Record<string, unknown>): Ch
         text: text(value['text'], AI_LIMITS.promptCharsMax, 'user.text'),
         attachments: list(value['attachments'], AI_LIMITS.attachmentsMax, 'user.attachments').map((entry) => {
           const attachment = object(entry, 'attachment');
-          return { kind: oneOf(attachment['kind'], ['image', 'file'] as const, 'attachment.kind'), name: label(attachment['name']) };
+          const kind = oneOf(attachment['kind'], ['image', 'file'] as const, 'attachment.kind');
+          const name = label(attachment['name']);
+          return attachment['thumbnail'] === undefined ? { kind, name } : { kind, name, thumbnail: thumbnailOf(kind, attachment['thumbnail']) };
         }),
         at: count(value['at'], 'user.at'),
         parts: value['parts'] === undefined ? undefined : list(value['parts'], AI_LIMITS.promptPartsMax, 'user.parts').map(parseSentPart),
@@ -633,6 +640,21 @@ function optionalRef<Name extends string>(name: Name, input: unknown): { readonl
 
 function label(input: unknown): string {
   return text(input, AI_LIMITS.labelCharsMax, 'label');
+}
+
+/** An attachment's stored preview: a bounded JPEG data URL, and only on an image. Throws on anything else. */
+function thumbnailOf(kind: 'image' | 'file', input: unknown): string {
+  const value = text(input, AI_LIMITS.thumbnailCharsMax, 'attachment.thumbnail');
+  if (kind !== 'image') {
+    throw new Error('attachment.thumbnail: only an image has one');
+  }
+  if (!value.startsWith(THUMBNAIL_PREFIX)) {
+    throw new Error('attachment.thumbnail: expected a JPEG data URL');
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value.slice(THUMBNAIL_PREFIX.length))) {
+    throw new Error('attachment.thumbnail: expected base64');
+  }
+  return value;
 }
 
 function optionalLabel(input: unknown): string | undefined {

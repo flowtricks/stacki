@@ -11,6 +11,7 @@ import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { CheckIcon, CopyIcon, PencilIcon, RefreshIcon } from '../../../ui/Icons';
 import { ChatText } from '../ChatText';
 import { useCopy, type CopyState } from './copyText';
+import { SentAttachments } from './SentAttachments';
 import { exceedsClamp, fullTimeLabel, timeLabel } from './messageModel';
 import './chrome.css';
 
@@ -48,7 +49,7 @@ export function UserMessage({
     <div className="ai-message ai-message-user ai-msg ai-msg-user">
       <div className="ai-msg-bubble">
         <div className={`ai-user-text ai-msg-body${folding.folded ? ' ai-msg-folded' : ''}`}>{partsView ?? text}</div>
-        {attachments.length > 0 && <div className="ai-message-attachments">{attachments.map((attachment) => attachment.name).join(', ')}</div>}
+        <SentAttachments attachments={attachments} />
         <ShowMore folding={folding} />
       </div>
       {/* The actions sit below the bubble, never on its edge, so they cannot overlap or clip the text. */}
