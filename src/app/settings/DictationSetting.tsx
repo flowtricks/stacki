@@ -35,12 +35,13 @@ const TIER_LABELS = {
 /** Characters of the pinned commit shown; the whole hash is in the tooltip. */
 const REVISION_CHARS_SHOWN = 7;
 
-export function DictationSetting() {
+/** `projectPath`: the project open in this window, whose component names the word list suggests; none on the welcome screen. */
+export function DictationSetting({ projectPath }: { readonly projectPath: string | undefined }) {
   const store = useVoiceEnvironment().whisper?.store;
-  return store === undefined ? undefined : <DictationRows store={store} />;
+  return store === undefined ? undefined : <DictationRows store={store} projectPath={projectPath} />;
 }
 
-function DictationRows({ store }: { readonly store: DictationStore }) {
+function DictationRows({ store, projectPath }: { readonly store: DictationStore; readonly projectPath: string | undefined }) {
   const translate = useTranslate();
   const { formatBytes } = useFormat();
   const snapshot = useSyncExternalStore(store.subscribe, store.snapshot);
@@ -129,7 +130,7 @@ function DictationRows({ store }: { readonly store: DictationStore }) {
           onChange={store.setLanguage}
         />
       </SettingsRow>
-      <DictationWordsRows words={snapshot.words} onChange={store.setWords} />
+      <DictationWordsRows words={snapshot.words} projectPath={projectPath} onChange={store.setWords} />
     </>
   );
 }
