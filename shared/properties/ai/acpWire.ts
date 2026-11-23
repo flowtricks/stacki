@@ -88,7 +88,7 @@ export interface AcpToolCall {
   readonly parent: string | undefined;
   /** The agent's own name for the tool (Claude's `_meta.claudeCode.toolName`: `Bash`, `compact`). */
   readonly toolName: string | undefined;
-  /** The five fields of `rawInput` the panel uses; the rest of the input is dropped. */
+  /** The seven fields of `rawInput` the panel uses; the rest of the input is dropped. */
   readonly rawInput: AcpRawInput | undefined;
   /** What a Codex subagent call reports in `rawInput.activityKind` (`started`, ...). */
   readonly activityKind: string | undefined;
@@ -103,6 +103,10 @@ export interface AcpRawInput {
   readonly subagentType: string | undefined;
   /** Claude's `model` on an Agent or Task call (`sonnet`, `opus`, `haiku`, `fable`): absent when the subagent inherits the session's. */
   readonly model: string | undefined;
+  /** Claude's `message` on a SendMessage call: the follow-up the coordinator sent a subagent. */
+  readonly message: string | undefined;
+  /** Claude's `to` on a SendMessage call: whom the follow-up went to (an agent's name or id, never shown). */
+  readonly recipient: string | undefined;
 }
 
 export interface AcpPlanEntry {
@@ -516,7 +520,7 @@ function parseToolCall(value: Record<string, unknown>): AcpToolCall {
   return call;
 }
 
-// Only five fields of a tool's input matter to the panel; the input itself can be a whole file.
+// Only seven fields of a tool's input matter to the panel; the input itself can be a whole file.
 function parseRawInput(raw: Record<string, unknown> | undefined): AcpRawInput | undefined {
   if (raw === undefined) {
     return undefined;
@@ -526,10 +530,20 @@ function parseRawInput(raw: Record<string, unknown> | undefined): AcpRawInput | 
   const runInBackground = typeof raw['run_in_background'] === 'boolean' ? raw['run_in_background'] : undefined;
   const subagentType = typeof raw['subagent_type'] === 'string' ? optionalText(raw['subagent_type'], AI_LIMITS.idCharsMax) : undefined;
   const model = typeof raw['model'] === 'string' ? optionalText(raw['model'], AI_LIMITS.idCharsMax) : undefined;
-  if (command === undefined && description === undefined && runInBackground === undefined && subagentType === undefined && model === undefined) {
+  const message = typeof raw['message'] === 'string' ? optionalText(raw['message'], AI_LIMITS.labelCharsMax) : undefined;
+  const recipient = typeof raw['to'] === 'string' ? optionalText(raw['to'], AI_LIMITS.idCharsMax) : undefined;
+  if (
+    command === undefined &&
+    description === undefined &&
+    runInBackground === undefined &&
+    subagentType === undefined &&
+    model === undefined &&
+    message === undefined &&
+    recipient === undefined
+  ) {
     return undefined;
   }
-  return { command, description, runInBackground, subagentType, model };
+  return { command, description, runInBackground, subagentType, model, message, recipient };
 }
 
 function parseToolContent(input: unknown): AcpToolContent {

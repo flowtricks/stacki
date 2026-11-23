@@ -63,6 +63,9 @@ export interface ToolItem {
    * report), apart from what it showed while it ran (a subagent's prompt). Undefined while the call is open.
    */
   readonly resultFrom: number | undefined;
+  /** The follow-up a SendMessage call sent: its text, and whom it went to (matched to a subagent, never shown). */
+  readonly sentMessage: string | undefined;
+  readonly sentTo: string | undefined;
 }
 
 export interface PermissionItem {
@@ -397,6 +400,8 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
       background: event.background ?? false,
       agentType: event.agentType,
       agentModel: event.agentModel,
+      sentMessage: event.sentMessage,
+      sentTo: event.sentTo,
       resultFrom: isFinished(status) ? 0 : undefined,
     }));
   }
@@ -420,6 +425,8 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
     background: event.background ?? existing.background,
     agentType: event.agentType ?? existing.agentType,
     agentModel: event.agentModel ?? existing.agentModel,
+    sentMessage: event.sentMessage ?? existing.sentMessage,
+    sentTo: event.sentTo ?? existing.sentTo,
     resultFrom: resultStart(existing, output, { finishing: isFinished(status), added: event.output?.length ?? 0 }),
   };
   assert(merged.resultFrom === undefined || merged.resultFrom <= merged.output.length, 'applyTool: the result starts inside the output');

@@ -199,6 +199,10 @@ export type ChatEvent =
       readonly agentType?: string | undefined;
       /** The model an Agent or Task call asked for (Claude's `model`: `sonnet`), when it named one; absent means the session's model. */
       readonly agentModel?: string | undefined;
+      /** The follow-up a SendMessage call sent (Claude's `message`), when it carried one. */
+      readonly sentMessage?: string | undefined;
+      /** Whom a SendMessage call sent it to (Claude's `to`); matched to a subagent, never shown. */
+      readonly sentTo?: string | undefined;
     }
   | {
       readonly kind: 'compaction';
@@ -570,6 +574,8 @@ function parseToolEvent(value: Record<string, unknown>): ChatEvent {
     background: value['background'] === undefined ? undefined : flag(value['background'], 'tool.background'),
     agentType: value['agentType'] === undefined ? undefined : identifier(value['agentType']),
     agentModel: value['agentModel'] === undefined ? undefined : identifier(value['agentModel']),
+    sentMessage: value['sentMessage'] === undefined ? undefined : text(value['sentMessage'], AI_LIMITS.labelCharsMax, 'tool.sentMessage'),
+    sentTo: value['sentTo'] === undefined ? undefined : identifier(value['sentTo']),
   };
 }
 

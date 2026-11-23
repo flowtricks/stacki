@@ -2,8 +2,9 @@
 // text: the dots share one left edge, the tasks one left edge, the models one left edge, and the times end on one right
 // edge in tabular figures, whether a row says "11s", "5.9s" or "4m 3s"; a long task is cut with an ellipsis before the
 // model column, never pushing it; the dot sits centred on the task's line. In the transcript a unit's chevron starts
-// where the prose starts and its time ends where the prose ends, as a group's do, and the calls inside an opened unit
-// sit flush under it (their chevron under the unit's), with no indent; the unit's columns are the strip's.
+// where the prose starts and its time ends where the prose ends, as a group's do, and the steps inside an opened unit
+// sit flush under it (their chevron under the unit's, their time ending where the unit's ends), with no indent; the
+// unit's columns are the strip's.
 // Method: bundle the real strip, unit card, message and stylesheets into one page, load it in Electron's Chromium at
 // 340 and 600 px, open the strip's summary and the unit with real clicks, and read the layout back.
 const test = require('node:test');
@@ -99,7 +100,7 @@ createRoot(document.getElementById('root')!).render(
       <div className="ai-transcript">
         <div className="ai-transcript-flow">
           <AgentMessage text="Starting four agents to look at the site." at={undefined} collapsible="none" />
-          <SubagentCard unit={${JSON.stringify(UNIT)}} chatId="chat" projectPath="/p" options={[]} live={false} reveal={undefined} onOpenTranscript={() => undefined} />
+          <SubagentCard unit={${JSON.stringify(UNIT)}} chatId="chat" projectPath="/p" options={[]} reveal={undefined} onOpenTranscript={() => undefined} />
         </div>
       </div>
     </div>
@@ -151,7 +152,7 @@ app.whenReady().then(async () => {
       document.querySelector('.ai-agents-head').click();
       await present('.ai-agent');
       document.querySelector('.ai-subagent-head').click();
-      await present('.ai-subagent-body .ai-tool-head');
+      await present('.ai-subagent-body .ai-step');
       const box = (element) => element.getBoundingClientRect();
       const round = (value) => Math.round(value * 10) / 10;
       const rows = [...document.querySelectorAll('.ai-agent')].map((row) => {
@@ -179,7 +180,7 @@ app.whenReady().then(async () => {
       const unitChevron = box(unitHead.querySelector('.ai-subagent-chevron svg'));
       const unitTime = box(unitHead.querySelector('.ai-agent-time'));
       const unitModel = box(unitHead.querySelector('.ai-agent-model'));
-      const childHeads = [...document.querySelectorAll('.ai-subagent-body .ai-tool-head')];
+      const childHeads = [...document.querySelectorAll('.ai-subagent-body .ai-step')];
       return {
         width: ${'${width}'},
         rows,
@@ -190,7 +191,9 @@ app.whenReady().then(async () => {
         unitModelWidth: round(unitModel.width),
         stripModelWidth: round(box(document.querySelector('.ai-agent .ai-agent-model')).width),
         childChevronLefts: childHeads.map((head) => round(box(head.querySelector('svg')).left)),
-        childNested: document.querySelectorAll('.ai-subagent-body .ai-tool-nested').length,
+        childTimeRights: childHeads.map((head) => round(box(head.querySelector('.ai-agent-time')).right)),
+        childLabels: childHeads.map((head) => head.querySelector('.ai-step-label').textContent),
+        childNested: document.querySelectorAll('.ai-subagent-body .ai-tool-nested, .ai-subagent-body .ai-tool-head').length,
         pageWidth: document.documentElement.scrollWidth,
       };
     })()\`;
@@ -232,11 +235,14 @@ app.whenReady().then(async () => {
     near(result.unitChevronLeft, result.proseLeft, 'a unit’s chevron starts where the prose starts');
     near(result.unitTimeRight, result.proseRight, 'a unit’s time ends where the prose ends');
     near(result.unitModelWidth, result.stripModelWidth, 'a unit’s model column is the strip’s');
-    assert.equal(result.childChevronLefts.length, UNIT.children.length, 'the opened unit shows its calls');
+    assert.deepEqual(result.childLabels, ['Ran the tests (2 times)'], 'the opened unit shows its calls as one step in words');
     for (const left of result.childChevronLefts) {
-      near(left, result.unitChevronLeft, 'a call inside the unit sits flush under the unit’s chevron');
+      near(left, result.unitChevronLeft, 'a step inside the unit sits flush under the unit’s chevron');
     }
-    assert.equal(result.childNested, 0, 'its direct calls are not indented');
+    for (const right of result.childTimeRights) {
+      near(right, result.unitTimeRight, 'a step’s time ends where the unit’s time ends');
+    }
+    assert.equal(result.childNested, 0, 'no raw call cards and no indent');
     assert.ok(result.pageWidth <= result.width + 40, `nothing scrolls sideways at ${result.width}px`);
   }
 });

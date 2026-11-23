@@ -55,6 +55,7 @@ import { SetupCard } from './SetupCard';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
 import { readSignInFailures } from './signInTranscript';
 import { PlanCard } from './transcript/PlanCard';
+import { RunningChip } from './transcript/RunningPanel';
 import { ChatTranscript } from './transcript/SubagentPane';
 import { ChatHeader, type PanelExpansion, type PanelWindow } from './sessions/ChatHeader';
 import { SessionsView } from './sessions/SessionsView';
@@ -270,6 +271,7 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
           details={reading.interrupted ? reading.details : undefined}
         />
       )}
+      <RunningChip view={view} chatId={chatId} projectPath={projectPath} />
       <ChatComposer chat={chatId} agent={agent} view={view} draft={draft} projectPath={projectPath} disabled={blocked} state={state} />
     </>
   );

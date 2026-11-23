@@ -80,9 +80,18 @@ export interface Subagent {
   readonly model: SubagentModel;
   readonly status: SubagentStatus;
   readonly activity: SubagentActivity;
-  /** The report it handed back, once it finished; undefined while it works or when it said nothing. */
+  /** The report it handed back, once it finished; undefined while it works or when it said nothing, and always for a follow-up. */
   readonly result: string | undefined;
+  /** A follow-up: what the coordinator told the agent, in its words; undefined for an agent's start or an old chat. */
+  readonly message: string | undefined;
+  /** A follow-up: the title of the agent it went to, when the transcript holds that agent. */
+  readonly target: string | undefined;
+  /** A follow-up: whether it reached the agent; undefined for an agent's start. */
+  readonly delivery: FollowUpDelivery | undefined;
 }
+
+/** `pending` until the call returns, then `sent`, or `failed` when the call failed or its reply says it did not succeed or cannot be read. */
+export type FollowUpDelivery = 'pending' | 'sent' | 'failed';
 
 /** A subagent with the calls it made (nested calls included), in the order they were made, newest `SUBAGENT_ITEMS_MAX`. */
 export interface SubagentUnit {
@@ -138,7 +147,38 @@ export function isWorking(status: SubagentStatus): boolean {
 export function subagentName(agent: Pick<Subagent, 'title'>): string {
   const title = agent.title.startsWith(CODEX_SUBAGENT_PREFIX) ? agent.title.slice(CODEX_SUBAGENT_PREFIX.length) : agent.title;
   const line = (title.split('\n')[0] ?? title).trim();
-  return line === FOLLOW_UP_TOOL ? '' : line;
+  return line === FOLLOW_UP_TOOL ? '' : cleanTitle(line);
+}
+
+/** Characters of a subagent's title kept; a longer one is cut with an ellipsis (the row cuts it again to its width). */
+export const TITLE_CHARS_MAX = 160;
+
+/** Ids the agent may write into a title: a tool call's (`toolu_…`, `call_…`), a UUID, or a run of hex with a digit and a letter (a hash, an agent id). */
+const TITLE_IDS =
+  /\b(?:toolu_|call_)[A-Za-z0-9_-]+|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,}\b/giu;
+
+/**
+ * A title as a row shows it: ids taken out (a designer has no use for `a7a4cd5`), spaces collapsed, a title shouted
+ * in capitals lowered, and its first letter capitalised ("Release Stacki 1.4.14" keeps its own capitals). Bounded to
+ * `TITLE_CHARS_MAX`. Empty when nothing but ids was there.
+ */
+export function cleanTitle(title: string): string {
+  const words = title
+    .slice(0, TITLE_CHARS_MAX * 2)
+    .replace(TITLE_IDS, '')
+    .replace(/[([{]\s*[)\]}]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .replace(/\s+([,.:;!?])/gu, '$1')
+    .trim()
+    .replace(/^[,.:;\-–—]+\s*|\s*[,:;\-–—]+$/gu, '');
+  const shouted = /\p{Lu}/u.test(words) && !/\p{Ll}/u.test(words) && words.length > 3;
+  const cased = shouted ? words.toLowerCase() : words;
+  // A name written as an identifier (Codex's `count_lines`, `fixBuild`) stays as it was written.
+  const identifier = /^[a-z0-9]+(?:[_-][a-z0-9]+)+(?:\s|$)|^[a-z]+[A-Z]/u.test(cased);
+  const capital = cased === '' || identifier ? cased : `${cased.charAt(0).toUpperCase()}${cased.slice(1)}`;
+  const cut = capital.length <= TITLE_CHARS_MAX ? capital : `${capital.slice(0, TITLE_CHARS_MAX - 1)}…`;
+  assert(cut.length <= TITLE_CHARS_MAX, 'cleanTitle: bounded');
+  return cut;
 }
 
 /** The name of the session's current model, from the agent's model option (`id` `model`); undefined when it reported none. */
@@ -176,6 +216,7 @@ export function deriveSubagentWork(view: ChatView, previous?: SubagentWork): Sub
   const facts = readFacts(view.items);
   const units = new Map<string, SubagentUnit>();
   for (const call of facts.units) {
+    const follow = !isSubagentCall(call);
     const all = facts.children.get(call.call) ?? [];
     const omitted = Math.max(0, all.length - SUBAGENT_ITEMS_MAX);
     const children = omitted === 0 ? all : all.slice(omitted);
@@ -188,7 +229,11 @@ export function deriveSubagentWork(view: ChatView, previous?: SubagentWork): Sub
       model: call.agentModel === undefined ? { kind: 'inherited' } : { kind: 'chosen', id: call.agentModel },
       status: statusOf(call, view, facts),
       activity: activityOf(facts.lastChild.get(call.call)),
-      result: resultOf(call),
+      // A follow-up's reply is the tool's own acknowledgement (JSON with ids): read for success, never shown.
+      result: follow ? undefined : reportOf(resultOf(call)),
+      message: follow ? call.sentMessage : undefined,
+      target: follow ? targetOf(call, facts.units) : undefined,
+      delivery: follow ? deliveryOf(call, resultOf(call)) : undefined,
     };
     const before = previous?.units.get(call.call);
     const unit = before !== undefined && sameUnit(before, agent, children, omitted) ? before : { agent, children, omitted };
@@ -545,6 +590,83 @@ function baseName(path: string): string {
   return cut === -1 ? trimmed : trimmed.slice(cut + 1);
 }
 
+/** Characters of a SendMessage reply read for its verdict; a longer one is not an acknowledgement. */
+const FOLLOW_UP_REPLY_CHARS_MAX = 20_000;
+
+/**
+ * Whether a follow-up reached its agent, from the call and the reply it returned. Parsed at the boundary: the reply is
+ * `unknown` until it is a JSON object with a boolean `success`; only that boolean is used (never its other fields, which
+ * hold ids). A reply that opens as JSON but is not an object with `success`, or is too long to be one, counts as failed;
+ * plain words or nothing say nothing against it.
+ */
+export function deliveryOf(call: Pick<ToolItem, 'status'>, reply: string | undefined): FollowUpDelivery {
+  switch (call.status) {
+    case 'pending':
+    case 'in_progress':
+      return 'pending';
+    case 'failed':
+      return 'failed';
+    case 'completed':
+      break;
+    default: {
+      const exhaustive: never = call.status;
+      return exhaustive;
+    }
+  }
+  const text = reply?.trim() ?? '';
+  if (text.charAt(0) !== '{' && text.charAt(0) !== '[') {
+    return 'sent';
+  }
+  if (text.length > FOLLOW_UP_REPLY_CHARS_MAX) {
+    return 'failed';
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return 'failed';
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return 'failed';
+  }
+  return 'success' in parsed && parsed.success === true ? 'sent' : 'failed';
+}
+
+/**
+ * The title of the agent a follow-up went to: the unit whose call id is the recipient, or whose own reply names it (Claude
+ * ends an agent's report with the id a follow-up can address it by). Undefined when none matches; the row then says
+ * "Follow-up message". Bounded by the number of units.
+ */
+function targetOf(call: ToolItem, units: readonly ToolItem[]): string | undefined {
+  const recipient = call.sentTo;
+  if (recipient === undefined || recipient === '') {
+    return undefined;
+  }
+  const match = units.find((unit) => isSubagentCall(unit) && (unit.call === recipient || (recipient.length >= 6 && unit.output.includes(recipient))));
+  if (match === undefined) {
+    return undefined;
+  }
+  const name = subagentName({ title: match.title });
+  return name === '' ? undefined : name;
+}
+
+/**
+ * An agent's report without the bookkeeping Claude appends to it: the line that names the agent's id and the
+ * `<usage>` block with its token counts. What is left is what the agent said.
+ */
+export function reportOf(result: string | undefined): string | undefined {
+  if (result === undefined) {
+    return undefined;
+  }
+  const kept = result
+    .replace(/<usage>[\s\S]*?<\/usage>/gu, '')
+    .split('\n')
+    .filter((line) => !/^\s*agentId:/iu.test(line))
+    .join('\n')
+    .trim();
+  return kept === '' ? undefined : kept;
+}
+
 /** The unit as it was, when nothing it shows has changed. */
 function sameUnit(before: SubagentUnit, agent: Subagent, children: readonly ToolItem[], omitted: number): boolean {
   if (before.omitted !== omitted || before.children.length !== children.length) {
@@ -559,6 +681,9 @@ function sameUnit(before: SubagentUnit, agent: Subagent, children: readonly Tool
     was.role === agent.role &&
     was.kind === agent.kind &&
     was.result === agent.result &&
+    was.message === agent.message &&
+    was.target === agent.target &&
+    was.delivery === agent.delivery &&
     JSON.stringify([was.model, was.status, was.activity]) === JSON.stringify([agent.model, agent.status, agent.activity])
   );
 }

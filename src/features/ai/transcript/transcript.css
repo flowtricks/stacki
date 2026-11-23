@@ -342,6 +342,15 @@
   font-size: 11px;
   color: var(--text-dim);
 }
+.ai-tool-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-subagent-body > .ai-tool-details {
+  margin: 4px 6px 0;
+}
 .ai-tool-body {
   display: flex;
   flex-direction: column;

@@ -132,7 +132,7 @@ test('compaction: summary chunks are acknowledged; unknown and malformed variant
   }
 });
 
-test('tool calls keep the agent’s tool name and only four fields of its input', () => {
+test('tool calls keep the agent’s tool name and only seven fields of its input', () => {
   const bash = updateOf({
     sessionUpdate: 'tool_call',
     toolCallId: 't1',
@@ -150,7 +150,18 @@ test('tool calls keep the agent’s tool name and only four fields of its input'
     runInBackground: true,
     subagentType: undefined,
     model: undefined,
+    message: undefined,
+    recipient: undefined,
   });
+  const sent = updateOf({
+    sessionUpdate: 'tool_call',
+    toolCallId: 't4',
+    rawInput: { to: 'researcher', message: 'Also check the footer.', summary: 'dropped' },
+    _meta: { claudeCode: { toolName: 'SendMessage' } },
+  });
+  assert.ok(sent.kind === 'tool-call');
+  assert.equal(sent.call.rawInput?.message, 'Also check the footer.', 'a follow-up keeps its text');
+  assert.equal(sent.call.rawInput?.recipient, 'researcher', 'and whom it went to');
   const odd = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't2', rawInput: { command: ['ls'], run_in_background: 'yes', other: 1 } });
   assert.ok(odd.kind === 'tool-call');
   assert.equal(odd.call.rawInput, undefined, 'a command that is not text and a flag that is not boolean are dropped');

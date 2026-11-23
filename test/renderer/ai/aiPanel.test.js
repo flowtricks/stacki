@@ -824,8 +824,15 @@ test('whole panel: subagents show in a strip and as units holding their own call
 
   await click(row);
   assert.equal(unit.querySelector('.ai-subagent-head').getAttribute('aria-expanded'), 'true', 'a strip row opens its unit');
-  assert.equal(unit.querySelectorAll('.ai-subagent-body .ai-tool').length, 2, 'with its own calls inside');
-  assert.equal(unit.querySelector('.ai-subagent-body .ai-tool-nested') ?? undefined, undefined, 'its direct calls sit flush, not indented');
+  assert.deepEqual(
+    [...unit.querySelectorAll('.ai-subagent-body .ai-step-label')].map((label) => label.textContent),
+    ['Read Hero.astro', 'Edited Hero.astro'],
+    'with its own calls inside, as steps in words',
+  );
+  assert.equal(unit.querySelector('.ai-subagent-body .ai-tool') ?? undefined, undefined, 'no raw call cards in the unit');
+  // The Running chip by the composer says the same, and opens to the same work.
+  const chip = container.querySelector('.ai-running-chip');
+  assert.equal(chip.textContent, '1 agent working');
 
   await click(button(container, 'Open transcript'));
   assert.equal(container.querySelector('.ai-agents') ?? undefined, undefined, 'the strip gives way to the subagent’s transcript');
@@ -861,6 +868,7 @@ test('whole panel: subagents show in a strip and as units holding their own call
   assert.equal(container.querySelector('.ai-agent .ai-agent-dot').getAttribute('aria-label'), 'Done', 'reopened, with its outcome');
   assert.equal(container.querySelector('.ai-agent-doing') ?? undefined, undefined, 'a finished agent is doing nothing');
   assert.equal(container.querySelector('.ai-tasks') ?? undefined, undefined, 'the background tray does not list it a second time');
+  assert.equal(container.querySelector('.ai-running-chip').textContent, '1 agent finished', 'the chip says the run just finished');
 });
 
 test('whole panel: a finished turn folds its work, and its changes card loads the diff and opens the file', async (context) => {

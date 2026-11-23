@@ -11,6 +11,7 @@ import type { BackgroundTask } from '../chatReducer';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { formatDuration } from '../chatStatus';
 import { useNow } from './ticker';
+import { toolTitleText } from './toolWords';
 import type { FinishedTask } from './transcriptModel';
 import { useOpenState } from './transcriptUi';
 
@@ -73,8 +74,10 @@ export const BackgroundTasks = memo(function BackgroundTasks({ tasks, finished, 
 });
 
 function TaskTitle({ kind, title }: { readonly kind: BackgroundTask['kind']; readonly title: string }) {
+  const translate = useTranslate();
   const Icon = kind === 'command' ? TerminalIcon : SparkleIcon;
-  const line = (title.split('\n')[0] ?? title).slice(0, 300);
+  const first = (title.split('\n')[0] ?? title).slice(0, 300);
+  const line = kind === 'tool' ? toolTitleText(first, undefined, translate) : first;
   return (
     <span className="ai-task-title">
       <Icon size={13} />

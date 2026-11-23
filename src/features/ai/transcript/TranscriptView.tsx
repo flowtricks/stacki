@@ -367,9 +367,7 @@ function UnitRow({
   if (unit === undefined) {
     return <ToolCard item={item} chatId={chatId} projectPath={projectPath} live={live} childCount={0} />;
   }
-  return (
-    <SubagentCard unit={unit} chatId={chatId} projectPath={projectPath} options={options} live={live} reveal={reveal} onOpenTranscript={onOpenTranscript} />
-  );
+  return <SubagentCard unit={unit} chatId={chatId} projectPath={projectPath} options={options} reveal={reveal} onOpenTranscript={onOpenTranscript} />;
 }
 
 /** The newest item this transcript draws (a subagent's words streaming after it are drawn elsewhere). */

@@ -13,6 +13,7 @@ import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 import { formatDuration } from '../chatStatus';
+import { commandName } from '../runningWork';
 import {
   chosenModelName,
   isWorking,
@@ -27,6 +28,7 @@ import {
 } from '../subagents';
 import { relativeTitle } from './paths';
 import { useNow } from './ticker';
+import { classifyStep, toolTitleText, type StepFacts } from './toolWords';
 import { useOpenState } from './transcriptUi';
 
 export interface SubagentStripProps {
@@ -120,7 +122,7 @@ export function SubagentRow({
 }) {
   const translate = useTranslate();
   const name = displayName(agent, projectPath, translate);
-  const model = modelLabel(agent.model, options, translate);
+  const model = agentModelLabel(agent, options, translate);
   return (
     <button className={`ai-agent ai-agent-${agent.status.kind}`} title={agentTooltip(name, agent.role, model)} onClick={() => onOpen(agent.call)}>
       <SubagentDot status={agent.status} />
@@ -134,13 +136,45 @@ export function SubagentRow({
   );
 }
 
-/** The task a row names: the agent's description, or "Follow-up message" / "Subagent" when it gave none. */
-export function displayName(agent: Pick<Subagent, 'title' | 'kind'>, projectPath: string, translate: Translator): string {
-  const name = subagentName(agent);
-  if (name !== '') {
-    return relativeTitle(name, projectPath);
+/**
+ * The task a row names: the agent's description; for a follow-up "Follow-up to <that agent's task>", or "Follow-up message"
+ * when the agent it went to is not known; "Subagent" when an agent gave no description.
+ */
+export function displayName(
+  agent: Pick<Subagent, 'title' | 'kind'> & { readonly target?: string | undefined },
+  projectPath: string,
+  translate: Translator,
+): string {
+  if (agent.kind === 'follow-up') {
+    return agent.target === undefined ? translate('ai.subagents.followUp') : translate('ai.followUp.to', { name: relativeTitle(agent.target, projectPath) });
   }
-  return agent.kind === 'follow-up' ? translate('ai.subagents.followUp') : translate('ai.subagents.untitled');
+  const name = subagentName(agent);
+  return name === '' ? translate('ai.subagents.untitled') : relativeTitle(name, projectPath);
+}
+
+/** The model column: the model a subagent runs on; empty for a follow-up, which is a message and runs on nothing of its own. */
+export function agentModelLabel(agent: Pick<Subagent, 'kind' | 'model'>, options: readonly ChatOption[], translate: Translator): string {
+  return agent.kind === 'follow-up' ? '' : modelLabel(agent.model, options, translate);
+}
+
+/** A follow-up's state in one word: Sent (it went, nothing has come of it yet), Working, Done, or the failure. */
+export function followUpWord(status: SubagentStatus, work: { readonly calls: number }, translate: Translator): string {
+  switch (status.kind) {
+    case 'queued':
+      return translate('ai.followUp.sent');
+    case 'running':
+    case 'waiting':
+      return translate('ai.followUp.working');
+    case 'done':
+      return work.calls > 0 ? translate('ai.subagents.status.done') : translate('ai.followUp.sent');
+    case 'failed':
+    case 'stopped':
+      return statusLabel(status, translate);
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
 }
 
 /** "Sonnet" for a model the call chose; the session's model, marked inherited, otherwise. */
@@ -231,7 +265,7 @@ function Duration({ milliseconds }: { readonly milliseconds: number }) {
   return <span className="ai-agent-time">{formatDuration(milliseconds, formatNumber)}</span>;
 }
 
-/** "Editing Hero.astro", "Running npm test", a tool's own title, or a plain phase. */
+/** "Editing Hero.astro", "Running Tests", a tool's own title, or a plain phase. */
 export function activityText(activity: SubagentActivity, translate: Translator): string {
   switch (activity.kind) {
     case 'file':
@@ -239,9 +273,10 @@ export function activityText(activity: SubagentActivity, translate: Translator):
         ? translate('ai.subagents.doing.reading', { file: activity.file })
         : translate('ai.subagents.doing.editing', { file: activity.file });
     case 'command':
-      return translate('ai.subagents.doing.command', { command: activity.command });
+      // The command's name in words ("Running Tests", "Running Dev server"), never its command line.
+      return translate('ai.subagents.doing.command', { command: commandName(commandStep(activity.command), translate) });
     case 'tool':
-      return activity.title;
+      return toolTitleText(activity.title, undefined, translate);
     case 'thinking':
       return translate('ai.subagents.doing.thinking');
     case 'writing':
@@ -253,4 +288,8 @@ export function activityText(activity: SubagentActivity, translate: Translator):
       return exhaustive;
     }
   }
+}
+
+function commandStep(command: string): StepFacts {
+  return classifyStep({ toolKind: 'execute', toolName: undefined, title: command, command, paths: [], diffs: [] });
 }

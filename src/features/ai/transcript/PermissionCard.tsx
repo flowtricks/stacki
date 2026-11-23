@@ -29,6 +29,7 @@ import {
   type PermissionOption,
 } from './permissionModel';
 import { relativePath } from './paths';
+import { toolTitleText } from './toolWords';
 import './chrome.css';
 
 export function PermissionCard({
@@ -54,7 +55,7 @@ function AnsweredCard({ item, tool, projectPath }: { readonly item: PermissionIt
   const translate = useTranslate();
   const verdict = verdictLabel(item, translate) ?? translate('ai.permission.verdict.answered');
   const denied = wasRefused(item);
-  const title = plainTitle(item.title, projectPath);
+  const title = askTitle(item.title, tool?.toolName, projectPath, translate);
   return (
     <div className="ai-permission ai-permission-answered ai-ask ai-ask-done">
       {denied ? <CloseIcon size={12} /> : <CheckIcon size={12} />}
@@ -144,7 +145,7 @@ function WaitingCard({
         <Icon size={13} />
         <span className="ai-ask-label">{askLabel(tool?.toolKind, translate)}</span>
       </div>
-      {preview !== undefined ? preview : <div className="ai-ask-title">{plainTitle(item.title, projectPath)}</div>}
+      {preview !== undefined ? preview : <div className="ai-ask-title">{askTitle(item.title, tool?.toolName, projectPath, translate)}</div>}
       <div className="ai-permission-actions ai-ask-actions">
         {options.map((option, index) => (
           <AnswerButton
@@ -274,7 +275,7 @@ export function PermissionPin({
   return (
     <div className="ai-ask-pin" role="status">
       <WarningTriangleIcon size={13} />
-      <span className="ai-ask-pin-text">{translate('ai.permission.waiting', { title: plainTitle(item.title, projectPath) })}</span>
+      <span className="ai-ask-pin-text">{translate('ai.permission.waiting', { title: askTitle(item.title, undefined, projectPath, translate) })}</span>
       <span className="ai-ask-pin-actions">
         {allow !== undefined && (
           <button className="ai-allow" onClick={() => onAnswer(item, allow.id)}>
@@ -292,4 +293,9 @@ export function PermissionPin({
       </span>
     </div>
   );
+}
+
+/** What a request asks about, in words: a bare tool name ("mcp__ccd_session__start_session") reads as what it does ("Started a session"). */
+function askTitle(title: string, toolName: string | undefined, projectPath: string, translate: Translator): string {
+  return plainTitle(toolTitleText(title, toolName, translate), projectPath);
 }

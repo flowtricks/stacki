@@ -603,7 +603,7 @@ test('an unknown kind of call degrades to a generic card; a call with nothing to
   assert.ok(container.querySelector('.ai-status-failed[aria-label="Failed"]'), 'status is announced, not only coloured');
 });
 
-test('a subagent is one unit holding its own calls; a nested subagent counts the calls under it', async () => {
+test('a subagent is one unit holding its own calls as steps; a nested subagent is a step of its work', async () => {
   const view = fold(
     turnStart(TURN, 1),
     tool(TURN, 'sub', { title: 'Explore the repo', toolName: 'Task', at: 2 }),
@@ -619,9 +619,12 @@ test('a subagent is one unit holding its own calls; a nested subagent counts the
   assert.match(text(container, '.ai-group-title'), /Read 1 file/, 'the coordinator’s own call stays in its group');
   await click(container.querySelector('.ai-subagent-head'));
   const body = container.querySelector('.ai-subagent-body');
-  assert.equal(body.querySelectorAll('.ai-tool').length, 3, 'every call of the unit, nested ones included');
-  assert.equal(text(body, '.ai-tool-count'), '1 call', 'the nested subagent counts the call under it');
-  assert.equal(body.querySelectorAll('.ai-tool-nested').length, 1, 'only the nested subagent’s call is indented');
+  assert.deepEqual(
+    [...body.querySelectorAll('.ai-step-label')].map((label) => label.textContent),
+    ['Read a', 'Started a helper', 'Read b'],
+    'every call of the unit, nested ones included, as steps in order',
+  );
+  assert.equal(body.querySelectorAll('.ai-tool').length, 0, 'no raw call cards');
 });
 
 test('thinking reads "Thought for 12s", opens to the thought, and shows no duration without stamps', async () => {

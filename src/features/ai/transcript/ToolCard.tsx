@@ -24,7 +24,9 @@ import { formatDuration } from '../chatStatus';
 import { UNNAMED_TOOL_TITLE, type ToolItem } from '../chatReducer';
 import { DiffView } from './DiffView';
 import { relativePath, relativeTitle } from './paths';
+import { PayloadDetails } from './PayloadDetails';
 import { useNow } from './ticker';
+import { isRawPayload, toolTitleText } from './toolWords';
 import { clampOutput, OUTPUT_PREVIEW_CHARS, toolDurationMs } from './transcriptModel';
 import { useOpenState } from './transcriptUi';
 
@@ -71,7 +73,7 @@ export const ToolCard = memo(function ToolCard({ item, chatId, projectPath, live
             item.title === UNNAMED_TOOL_TITLE ? (
               translate('ai.tool.untitled')
             ) : (
-              relativeTitle(item.title, projectPath)
+              relativeTitle(toolTitleText(item.title, item.toolName, translate), projectPath)
             )
           ) : (
             <CodeInline text={closedCommand(command)} language="shell" />
@@ -96,7 +98,7 @@ export const ToolCard = memo(function ToolCard({ item, chatId, projectPath, live
           {item.diffs.map((diff, index) => (
             <DiffView key={`${diff.path}-${index}`} diff={diff} projectPath={projectPath} />
           ))}
-          {hasOutput && <ToolOutput item={item} />}
+          {hasOutput && (isRawPayload(item) ? <PayloadDetails text={item.output} /> : <ToolOutput item={item} />)}
         </div>
       )}
     </div>
