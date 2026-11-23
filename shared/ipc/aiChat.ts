@@ -387,6 +387,11 @@ export interface AiFailure {
     | 'read-only'
     /** The agent does not offer this (steering, fork, compaction); the control should not have been shown. */
     | 'unsupported'
+    /**
+     * The agent took the message but its answer could not be read (or it began a turn Stacki cannot follow).
+     * The message is in the transcript and must never be sent again: the renderer neither queues nor retries it.
+     */
+    | 'delivered'
     | 'section-missing'
     /** The request is well formed but cannot be applied: a repeated section name, too many sections. */
     | 'invalid';
@@ -518,6 +523,7 @@ const FAILURE_CODES: readonly AiFailure['code'][] = [
   'chat-missing',
   'read-only',
   'unsupported',
+  'delivered',
   'section-missing',
   'invalid',
 ];

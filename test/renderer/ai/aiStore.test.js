@@ -540,6 +540,45 @@ test('"Send now" steers a queued message into the running turn; removing drops i
   assert.equal(await store.sendQueuedNow(FIRST, 'missing'), false);
 });
 
+test('a steer the agent took but answered unreadably is not queued, so no stale chip and no second send', async () => {
+  const fake = await openRunning(list([summary(FIRST)]), { aiSteer: failure('delivered', 'Claude answered in a way Stacki does not understand.') });
+  type('these should be brand-secondary-400 and 500');
+  assert.equal(await store.steerPrompt(FIRST), true, 'delivered counts as sent');
+  assert.equal(store.aiState().queue.get(FIRST), undefined, 'nothing waits in the queue');
+  assert.equal(store.draftText(store.aiState().drafts.get(FIRST)), '', 'the box is empty');
+  assert.match(store.aiState().error, /does not understand/, 'the problem is still a toast');
+  store.receiveEvents({ projectPath: PROJECT, chat: FIRST, events: [turnEnd('end_turn')] });
+  assert.equal(fake.named('aiPrompt').length, 0, 'the turn end does not send it again');
+  // Negative space: an agent that refused (nothing delivered) still queues, and is kept.
+  await openRunning(list([summary(FIRST)]), { aiSteer: failure('agent-failed', 'Refused.') });
+  type('refused words');
+  assert.equal(await store.steerPrompt(FIRST), true);
+  assert.equal(store.aiState().queue.get(FIRST).length, 1, 'a message that was not delivered is never lost');
+});
+
+test('"Send now" of a delivered-but-unreadable steer leaves the queue; a refusal puts the entry back and pauses', async () => {
+  const fake = await openRunning(list([summary(FIRST)]));
+  type('one');
+  await store.queuePrompt(FIRST);
+  type('two');
+  await store.queuePrompt(FIRST);
+  const [first, second] = store.aiState().queue.get(FIRST);
+  install(list([summary(FIRST)]), { aiSteer: failure('delivered', 'Unreadable.') });
+  assert.equal(await store.sendQueuedNow(FIRST, first.id), true);
+  assert.deepEqual(
+    store
+      .aiState()
+      .queue.get(FIRST)
+      .map((entry) => entry.id),
+    [second.id],
+  );
+  install(list([summary(FIRST)]), { aiSteer: failure('agent-failed', 'Refused.') });
+  assert.equal(await store.sendQueuedNow(FIRST, second.id), false);
+  assert.equal(store.aiState().queue.get(FIRST).length, 1, 'kept for another try');
+  assert.equal(store.aiState().queuePaused.has(FIRST), true);
+  assert.equal(fake.named('aiPrompt').length, 0);
+});
+
 test('a queue is dropped with its chat', async () => {
   await openRunning(list([summary(FIRST)]));
   type('later');

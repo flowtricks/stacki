@@ -666,6 +666,11 @@ export async function steerPrompt(chat: ChatId): Promise<boolean> {
   if (reply.ok) {
     return true;
   }
+  if (reply.error.code === 'delivered') {
+    // The agent has the message: it is not queued (that would send it twice) and the box stays empty.
+    reportSendFailure(reply.error);
+    return true;
+  }
   const queued = reply.error.code === 'unsupported' || reply.error.code === 'agent-failed' || reply.error.code === 'busy';
   if (queued && enqueue(chat, draft)) {
     if (state.views.get(chat)?.running === undefined) {
@@ -718,6 +723,10 @@ export async function sendQueuedNow(chat: ChatId, id: string): Promise<boolean> 
   }
   const reply = state.views.get(chat)?.running === undefined ? await submitPrompt(chat, content) : await submitSteer(chat, content);
   if (!reply.ok) {
+    if (reply.error.code === 'delivered') {
+      reportSendFailure(reply.error); // The agent has it: the entry stays out of the queue.
+      return true;
+    }
     putBack(chat, entry);
     reportSendFailure(reply.error);
     return false;

@@ -144,7 +144,13 @@ test('tool calls keep the agent’s tool name and only four fields of its input'
   });
   assert.ok(bash.kind === 'tool-call');
   assert.equal(bash.call.toolName, 'Bash');
-  assert.deepEqual(bash.call.rawInput, { command: 'sleep 20; echo done', description: 'Wait', runInBackground: true, subagentType: undefined });
+  assert.deepEqual(bash.call.rawInput, {
+    command: 'sleep 20; echo done',
+    description: 'Wait',
+    runInBackground: true,
+    subagentType: undefined,
+    model: undefined,
+  });
   const odd = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't2', rawInput: { command: ['ls'], run_in_background: 'yes', other: 1 } });
   assert.ok(odd.kind === 'tool-call');
   assert.equal(odd.call.rawInput, undefined, 'a command that is not text and a flag that is not boolean are dropped');
@@ -207,6 +213,17 @@ test('subagents: a Task call names its role, and everything the subagent says na
   const typeLong = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't', rawInput: { subagent_type: 'r'.repeat(AI_LIMITS.idCharsMax + 5) } });
   assert.ok(typeLong.kind === 'tool-call');
   assert.equal(typeLong.call.rawInput?.subagentType?.length, AI_LIMITS.idCharsMax);
+  // The model an Agent call asks for (`model: 'sonnet'`); absent, the subagent runs on the session's model.
+  const modelled = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't', rawInput: { description: 'Audit', subagent_type: 'Explore', model: 'sonnet' } });
+  assert.ok(modelled.kind === 'tool-call');
+  assert.equal(modelled.call.rawInput?.model, 'sonnet');
+  assert.equal(task.call.rawInput?.model, undefined, 'no model named: inherited');
+  const modelOdd = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't', rawInput: { model: 4 } });
+  assert.ok(modelOdd.kind === 'tool-call');
+  assert.equal(modelOdd.call.rawInput, undefined, 'a model that is not text is dropped');
+  const modelLong = updateOf({ sessionUpdate: 'tool_call', toolCallId: 't', rawInput: { model: 'm'.repeat(AI_LIMITS.idCharsMax + 5) } });
+  assert.ok(modelLong.kind === 'tool-call');
+  assert.equal(modelLong.call.rawInput?.model?.length, AI_LIMITS.idCharsMax, 'a model past the bound is cut to it');
 });
 
 test('usage is a count within the sanity ceiling', () => {
@@ -233,7 +250,10 @@ test('steering results: idle without a turn asks for a prompt; any other outcome
     assert.ok(result.ok);
     assert.equal(result.value.outcome, outcome);
   }
-  for (const bad of [{ outcome: 'queued' }, { outcome: 7 }, {}, 'steered', undefined]) {
+  const injected = parseSteerResult({ outcome: 'injected' });
+  assert.ok(injected.ok, 'the Claude adapter answers "injected" for a steer into a running turn');
+  assert.equal(injected.value.outcome, 'steered');
+  for (const bad of [{ outcome: 'Injected' }, { outcome: 'queued' }, { outcome: 7 }, {}, 'steered', undefined]) {
     assert.equal(parseSteerResult(bad).ok, false, JSON.stringify(bad));
   }
 });

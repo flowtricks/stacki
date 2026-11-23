@@ -209,6 +209,7 @@ function toolEvent(call: AcpToolCall, turn: TurnId, at: number | undefined): Cha
     ...(call.rawInput?.command === undefined ? {} : { command: call.rawInput.command }),
     ...(call.rawInput?.runInBackground === undefined ? {} : { background: call.rawInput.runInBackground }),
     ...(call.rawInput?.subagentType === undefined || call.rawInput.subagentType === '' ? {} : { agentType: call.rawInput.subagentType }),
+    ...(call.rawInput?.model === undefined || call.rawInput.model === '' ? {} : { agentModel: call.rawInput.model }),
   };
   assert(event.kind === 'tool', 'toolEvent: a tool event');
   return event;

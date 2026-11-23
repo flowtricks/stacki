@@ -167,6 +167,33 @@ test('steering injects into the running turn, a second send stays busy, and an i
   await until('the second turn', () => ofKind(setup.events(), 'turn-end').length === 2);
 });
 
+test('a steer the agent took but answered unreadably is delivered once: shown in the transcript, failure says delivered', async (context) => {
+  const setup = fakeHost();
+  context.after(() => setup.host.stopAll());
+  const chat = setup.chat();
+  assert.ok((await setup.host.prompt(setup.root, chat, 'please hold on', [])).ok);
+  await until('the held turn', () => ofKind(setup.events(), 'text').length > 0);
+  const garbled = await setup.host.steer(setup.root, chat, 'garbled words', [], undefined);
+  assert.ok(!garbled.ok);
+  assert.equal(garbled.error.code, 'delivered', 'the renderer must not queue it: the agent has it');
+  await until('the delivered message in the transcript', () => ofKind(setup.events(), 'user').length === 2);
+  assert.deepEqual(
+    ofKind(setup.events(), 'user').map((event) => [event.text, event.mode]),
+    [
+      ['please hold on', undefined],
+      ['garbled words', 'steer'],
+    ],
+    'exactly one user row for the delivered message',
+  );
+  const refused = await setup.host.steer(setup.root, chat, 'refuse this one', [], undefined);
+  assert.ok(!refused.ok);
+  assert.equal(refused.error.code, 'agent-failed', 'a refusal is nothing delivered, so it may be queued');
+  setup.host.cancel(setup.root, chat);
+  await until('the cancelled end', () => ofKind(setup.events(), 'turn-end').length === 1);
+  // Events arrive in order, so a stray row for the refused message would precede the turn end.
+  assert.equal(ofKind(setup.events(), 'user').length, 2, 'a refused message has no user row');
+});
+
 test('steering an agent that does not offer it is unsupported, and nothing is sent', async (context) => {
   const setup = fakeHost({ FAKE_PLAIN: '1' });
   context.after(() => setup.host.stopAll());

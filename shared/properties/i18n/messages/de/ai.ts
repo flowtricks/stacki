@@ -675,19 +675,27 @@ export const messages = {
     one: '{count} Agent beendet',
     other: '{count} Agenten beendet',
   },
+  'ai.subagents.followUp': 'Folgenachricht',
   'ai.subagents.label': 'Agenten',
+  'ai.subagents.model.inherited': '{model} (geerbt)',
+  'ai.subagents.model.session': 'Sitzungsmodell',
   'ai.subagents.more': {
     one: '{count} früherer Agent nicht angezeigt',
     other: '{count} frühere Agenten nicht angezeigt',
   },
+  'ai.subagents.openTranscript': 'Verlauf öffnen',
+  'ai.subagents.result': 'Ergebnis',
   'ai.subagents.running': {
     one: '{count} Agent arbeitet',
     other: '{count} Agenten arbeiten',
   },
   'ai.subagents.status.done': 'Fertig',
   'ai.subagents.status.failed': 'Fehlgeschlagen',
+  'ai.subagents.status.queued': 'In Warteschlange',
   'ai.subagents.status.running': 'Läuft',
+  'ai.subagents.status.stopped': 'Gestoppt',
   'ai.subagents.status.waiting': 'Wartet auf dich',
+  'ai.subagents.untitled': 'Subagent', // same
   'ai.tasks.done': 'Fertig',
   'ai.tasks.failed': 'Fehlgeschlagen',
   'ai.tasks.finished': {

@@ -3,8 +3,9 @@
 // failed reply). Under it, while a turn runs, the loader with what the agent is doing and a live
 // timer; above the composer's edge, the tray of background work. A subagent's own words are not drawn
 // here: they belong to its transcript (SubagentPane.tsx), which is this same view given the
-// subagent's items, so both are drawn by one renderer. Subagents are listed by the strip above, so
-// the tray keeps the commands and other calls left running.
+// subagent's items, so both are drawn by one renderer. Each subagent is one unit (SubagentCard.tsx) that
+// holds its own calls, so the coordinator's groups hold only its own work. Subagents are listed by the
+// strip above, so the tray keeps the commands and other calls left running.
 //
 // Scrolling: the view follows the newest line while the person is at the bottom, stops following the
 // moment they scroll up (wheel, touch, keys or the scrollbar), and offers "Jump to latest" until they
@@ -28,6 +29,7 @@ import { useFormat, useTranslate, useTranslateDescribed } from '../../../lib/i18
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { formatDuration } from '../chatStatus';
 import type { SignInReading } from '../signInTranscript';
+import { deriveSubagentWork, type SubagentWork } from '../subagents';
 import { ActivityGroup } from './ActivityGroup';
 import { BackgroundTasks } from './BackgroundTasks';
 import { ChangesCard } from './ChangesCard';
@@ -41,6 +43,7 @@ import { answerableMessageId, lastUserMessageId } from './messageModel';
 import { PermissionCard, PermissionPin } from './PermissionCard';
 import { relativePath } from './paths';
 import { sentPartsView } from './SentParts';
+import { SubagentCard } from './SubagentCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCard } from './ToolCard';
 import { TurnStatus } from './TurnStatus';
@@ -68,6 +71,8 @@ export function Transcript({
   onReview,
   onOpenFile,
   empty,
+  reveal,
+  onOpenSubagent,
 }: {
   readonly view: ChatView;
   /** What of the transcript is a sign-in problem (the sign-in card draws it, not the transcript). */
@@ -81,6 +86,10 @@ export function Transcript({
   readonly onOpenFile?: ((path: string) => void) | undefined;
   /** What an empty transcript says; the chat's invitation by default. */
   readonly empty?: string | undefined;
+  /** The subagent unit the strip asked for, with a count that grows with each ask, so asking twice scrolls twice. */
+  readonly reveal?: { readonly call: string; readonly count: number } | undefined;
+  /** Opens one subagent's full transcript; without it a unit offers none. */
+  readonly onOpenSubagent?: ((call: string) => void) | undefined;
 }) {
   const translate = useTranslate();
   const scroll = useRef<HTMLDivElement>(null);
@@ -105,18 +114,39 @@ export function Transcript({
     [canOpenFile, projectPath],
   );
 
+  // The subagents and the calls each made: those calls are drawn inside their unit, not in the coordinator's groups.
+  const previousWork = useRef<SubagentWork | undefined>(undefined);
+  const work = useMemo(() => {
+    const derived = deriveSubagentWork(view, previousWork.current);
+    previousWork.current = derived;
+    return derived;
+  }, [view]);
   const previousRows = useRef<readonly TranscriptRow[]>([]);
   const rows = useMemo(() => {
     const positioned: PositionedItem[] = [];
     view.items.forEach((item, index) => {
-      if (!reading.hidden.has(index) && !isSubagentText(item)) {
+      if (!reading.hidden.has(index) && !isSubagentText(item) && !(item.kind === 'tool' && work.unitOf.has(item.call))) {
         positioned.push({ item, index });
       }
     });
     const built = buildRows(positioned, previousRows.current);
     previousRows.current = built;
     return built;
-  }, [view.items, reading]);
+  }, [view.items, reading, work]);
+  // A unit the strip asks for is drawn even when it sits above the window of newest rows. Only a new ask
+  // moves the window (the rows are read through a ref), so rows growing afterwards do not hold it open.
+  const rowsNow = useRef(rows);
+  rowsNow.current = rows;
+  useEffect(() => {
+    if (reveal === undefined) {
+      return;
+    }
+    const current = rowsNow.current;
+    const at = current.findIndex((row) => row.kind === 'subagent' && row.item.call === reveal.call);
+    if (at !== -1) {
+      setShown((count) => Math.max(count, current.length - at));
+    }
+  }, [reveal]);
   const windowed = windowRows(rows, find.open && find.query !== '' ? Math.max(shown, FIND_LIMITS.rowsShownMax) : shown);
   const openFind = useCallback((): void => setFind((previous) => ({ open: true, query: previous.open ? previous.query : '', focus: previous.focus + 1 })), []);
   const closeFind = useCallback((): void => setFind((previous) => ({ open: false, query: '', focus: previous.focus })), []);
@@ -254,6 +284,18 @@ export function Transcript({
         {windowed.shown.map((row) =>
           row.kind === 'group' ? (
             <ActivityGroup key={`g${row.key}`} run={row} chatId={chatId} projectPath={projectPath} working={view.running === row.turn} />
+          ) : row.kind === 'subagent' ? (
+            <UnitRow
+              key={`a${row.key}`}
+              item={row.item}
+              work={work}
+              chatId={chatId}
+              projectPath={projectPath}
+              options={view.options}
+              live={view.running === row.item.turn}
+              reveal={reveal?.call === row.item.call ? reveal.count : undefined}
+              onOpenTranscript={onOpenSubagent}
+            />
           ) : (
             <Item
               key={`i${row.key}`}
@@ -298,6 +340,35 @@ export function Transcript({
         </button>
       )}
     </div>
+  );
+}
+
+/** A subagent's unit; a unit call the work does not know (it cannot happen: both read the same items) is drawn as a plain call. */
+function UnitRow({
+  item,
+  work,
+  chatId,
+  projectPath,
+  options,
+  live,
+  reveal,
+  onOpenTranscript,
+}: {
+  readonly item: ToolItem;
+  readonly work: SubagentWork;
+  readonly chatId: ChatId;
+  readonly projectPath: string;
+  readonly options: ChatView['options'];
+  readonly live: boolean;
+  readonly reveal: number | undefined;
+  readonly onOpenTranscript: ((call: string) => void) | undefined;
+}) {
+  const unit = work.units.get(item.call);
+  if (unit === undefined) {
+    return <ToolCard item={item} chatId={chatId} projectPath={projectPath} live={live} childCount={0} />;
+  }
+  return (
+    <SubagentCard unit={unit} chatId={chatId} projectPath={projectPath} options={options} live={live} reveal={reveal} onOpenTranscript={onOpenTranscript} />
   );
 }
 

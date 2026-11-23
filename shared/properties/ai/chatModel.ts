@@ -192,6 +192,8 @@ export type ChatEvent =
       readonly background?: boolean | undefined;
       /** The role of the subagent an Agent or Task call starts (Claude's `subagent_type`: `Explore`), when it said. */
       readonly agentType?: string | undefined;
+      /** The model an Agent or Task call asked for (Claude's `model`: `sonnet`), when it named one; absent means the session's model. */
+      readonly agentModel?: string | undefined;
     }
   | {
       readonly kind: 'compaction';
@@ -560,6 +562,7 @@ function parseToolEvent(value: Record<string, unknown>): ChatEvent {
     command: value['command'] === undefined ? undefined : text(value['command'], AI_LIMITS.labelCharsMax, 'tool.command'),
     background: value['background'] === undefined ? undefined : flag(value['background'], 'tool.background'),
     agentType: value['agentType'] === undefined ? undefined : identifier(value['agentType']),
+    agentModel: value['agentModel'] === undefined ? undefined : identifier(value['agentModel']),
   };
 }
 

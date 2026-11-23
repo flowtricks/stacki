@@ -640,17 +640,25 @@ export const messages = {
   'ai.subagents.finished': {
     other: '{count} agen selesai',
   },
+  'ai.subagents.followUp': 'Pesan lanjutan',
   'ai.subagents.label': 'Agen',
+  'ai.subagents.model.inherited': '{model} (diwarisi)',
+  'ai.subagents.model.session': 'Model sesi',
   'ai.subagents.more': {
     other: '{count} agen sebelumnya tidak ditampilkan',
   },
+  'ai.subagents.openTranscript': 'Buka transkrip',
+  'ai.subagents.result': 'Hasil',
   'ai.subagents.running': {
     other: '{count} agen berjalan',
   },
   'ai.subagents.status.done': 'Selesai',
   'ai.subagents.status.failed': 'Gagal',
+  'ai.subagents.status.queued': 'Dalam antrean',
   'ai.subagents.status.running': 'Berjalan',
+  'ai.subagents.status.stopped': 'Dihentikan',
   'ai.subagents.status.waiting': 'Menunggu Anda',
+  'ai.subagents.untitled': 'Subagen',
   'ai.tasks.done': 'Selesai',
   'ai.tasks.failed': 'Gagal',
   'ai.tasks.finished': {

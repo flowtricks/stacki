@@ -11,6 +11,7 @@ import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { activityHeadline, buildTurnStatus, formatDuration, formatTokens, type ChatWords, type TurnPhase } from '../chatStatus';
 import type { BackgroundTask, ChatView, CompactionItem, ToolItem, TranscriptItem } from '../chatReducer';
+import { isSubagentCall, isUnitCall } from '../subagents';
 
 /** An item of the kinds an activity group folds: the agent's thoughts and its tool calls. */
 export type TextItem = Extract<TranscriptItem, { readonly kind: 'text' }>;
@@ -39,7 +40,14 @@ export interface SingleRow {
   readonly index: number;
 }
 
-export type TranscriptRow = ActivityRun | SingleRow;
+/** A subagent (or a follow-up message to one) as one unit: its own calls are drawn inside it, not in the groups around it. */
+export interface SubagentRow {
+  readonly kind: 'subagent';
+  readonly key: number;
+  readonly item: ToolItem;
+}
+
+export type TranscriptRow = ActivityRun | SingleRow | SubagentRow;
 
 /** The items the transcript draws, each with its position in the chat. */
 export interface PositionedItem {
@@ -49,8 +57,9 @@ export interface PositionedItem {
 
 /**
  * Folds items into rows: every maximal run of consecutive activity items of one turn becomes a group,
- * anything else (a message, a permission request, a compaction, a notice) stays its own row and ends
- * the run. `previous` is the rows of the last call: a group whose items are all the same objects is
+ * a subagent's call becomes a unit of its own, and anything else (a message, a permission request, a
+ * compaction, a notice) stays its own row; the last two end the run. The calls a subagent made are not
+ * given here (the caller leaves them out), so the coordinator's groups hold only its own work. `previous` is the rows of the last call: a group whose items are all the same objects is
  * returned as the same object, so React can skip it while text streams in below.
  */
 export function buildRows(items: readonly PositionedItem[], previous: readonly TranscriptRow[]): readonly TranscriptRow[] {
@@ -72,7 +81,10 @@ export function buildRows(items: readonly PositionedItem[], previous: readonly T
   };
   for (const positioned of items) {
     const { item } = positioned;
-    if (isActivityItem(item)) {
+    if (item.kind === 'tool' && isUnitCall(item)) {
+      flush();
+      rows.push({ kind: 'subagent', key: item.id, item });
+    } else if (isActivityItem(item)) {
       const first = run[0];
       if (first !== undefined && first.turn !== item.turn) {
         flush();
@@ -300,11 +312,6 @@ export interface FinishedTask {
   readonly status: 'completed' | 'failed';
   readonly durationMs: number | undefined;
   readonly lastOutputLine: string | undefined;
-}
-
-/** Claude nests its subagent calls under `Task` (or `Agent`); Codex titles them "Start subagent …" (the reducer's rule). */
-function isSubagentCall(item: ToolItem): boolean {
-  return item.toolName === 'Task' || item.toolName === 'Agent' || item.title.startsWith('Start subagent');
 }
 
 function lastLineOf(output: string): string | undefined {

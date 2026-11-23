@@ -135,6 +135,12 @@ test('a subagent’s words name its call and a Task call names its role; both ar
   for (const agentType of ['', ['Explore'], 'r'.repeat(AI_LIMITS.idCharsMax + 1)]) {
     assert.throws(() => parseChatEvent({ kind: 'tool', turn, call: 'k', agentType }), Error, String(agentType));
   }
+  const modelled = parseChatEvent({ kind: 'tool', turn, call: 'toolu_task', toolName: 'Agent', agentModel: 'sonnet' });
+  assert.ok(modelled.kind === 'tool');
+  assert.equal(modelled.agentModel, 'sonnet');
+  for (const agentModel of ['', 7, 'm'.repeat(AI_LIMITS.idCharsMax + 1)]) {
+    assert.throws(() => parseChatEvent({ kind: 'tool', turn, call: 'k', agentModel }), Error, String(agentModel));
+  }
 });
 
 test('compaction events: status and id are required, the turn is optional', () => {

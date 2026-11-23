@@ -798,7 +798,10 @@ export const messages = {
     many: 'انتهى {count} وكيلًا',
     other: 'انتهى {count} وكيل',
   },
+  'ai.subagents.followUp': 'رسالة متابعة',
   'ai.subagents.label': 'الوكلاء',
+  'ai.subagents.model.inherited': '{model} (موروث)',
+  'ai.subagents.model.session': 'نموذج الجلسة',
   'ai.subagents.more': {
     zero: 'لا وكلاء سابقون مخفيون',
     one: 'وكيل سابق واحد غير ظاهر',
@@ -807,6 +810,8 @@ export const messages = {
     many: '{count} وكيلًا سابقًا غير ظاهر',
     other: '{count} وكيل سابق غير ظاهر',
   },
+  'ai.subagents.openTranscript': 'فتح السجل',
+  'ai.subagents.result': 'النتيجة',
   'ai.subagents.running': {
     zero: 'لا يعمل أي وكيل',
     one: 'يعمل وكيل واحد',
@@ -817,8 +822,11 @@ export const messages = {
   },
   'ai.subagents.status.done': 'تم',
   'ai.subagents.status.failed': 'فشل',
+  'ai.subagents.status.queued': 'في قائمة الانتظار',
   'ai.subagents.status.running': 'قيد التشغيل',
+  'ai.subagents.status.stopped': 'متوقف',
   'ai.subagents.status.waiting': 'في انتظارك',
+  'ai.subagents.untitled': 'وكيل فرعي',
   'ai.tasks.done': 'تم',
   'ai.tasks.failed': 'فشل',
   'ai.tasks.finished': {

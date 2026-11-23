@@ -271,7 +271,7 @@ test('the new replies parse and their bad shapes are refused', () => {
   assert.throws(() => parseDiffReply({ newText: 4 }));
   assert.equal(parseMentionReply([{ kind: 'file', path: 'a.md', name: 'a.md' }]).length, 1);
   assert.throws(() => parseMentionReply([{ kind: 'file', path: '../a.md', name: 'a.md' }]));
-  for (const code of ['unsupported', 'section-missing', 'invalid']) {
+  for (const code of ['unsupported', 'delivered', 'section-missing', 'invalid']) {
     assert.deepEqual(parseAiResult({ ok: false, error: { code, message: 'm' } }, parseCompactStarted), { ok: false, error: { code, message: 'm' } });
   }
   assert.throws(() => parseAiResult({ ok: false, error: { code: 'nope', message: 'm' } }, parseCompactStarted));

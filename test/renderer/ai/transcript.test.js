@@ -603,16 +603,25 @@ test('an unknown kind of call degrades to a generic card; a call with nothing to
   assert.ok(container.querySelector('.ai-status-failed[aria-label="Failed"]'), 'status is announced, not only coloured');
 });
 
-test('a subagent card counts the calls nested under it', async () => {
+test('a subagent is one unit holding its own calls; a nested subagent counts the calls under it', async () => {
   const view = fold(
     turnStart(TURN, 1),
     tool(TURN, 'sub', { title: 'Explore the repo', toolName: 'Task', at: 2 }),
-    tool(TURN, 'k1', { title: 'Read a', toolKind: 'read', parent: 'sub', status: 'completed', at: 3 }),
-    tool(TURN, 'k2', { title: 'Read b', toolKind: 'read', parent: 'sub', status: 'completed', at: 4 }),
+    tool(TURN, 'k1', { title: 'Read a', toolKind: 'read', paths: ['/p/a'], parent: 'sub', status: 'completed', at: 3 }),
+    tool(TURN, 'deep', { title: 'Look deeper', toolName: 'Agent', parent: 'sub', at: 4 }),
+    tool(TURN, 'k2', { title: 'Read b', toolKind: 'read', paths: ['/p/b'], parent: 'deep', status: 'completed', at: 5 }),
+    tool(TURN, 'own', { title: 'Read mine', toolKind: 'read', status: 'completed', at: 6 }),
   );
   const { container } = await mount(view);
-  assert.equal(text(container, '.ai-tool-count'), '2 calls');
-  assert.equal(container.querySelectorAll('.ai-tool-nested').length, 2);
+  assert.equal(container.querySelectorAll('.ai-subagent').length, 1, 'one unit; the nested subagent is its work, not a unit');
+  assert.match(text(container, '.ai-subagent-progress'), /Read 2 files, used 1 tool/);
+  assert.equal(container.querySelector('.ai-subagent-body') ?? undefined, undefined, 'closed by default');
+  assert.match(text(container, '.ai-group-title'), /Read 1 file/, 'the coordinator’s own call stays in its group');
+  await click(container.querySelector('.ai-subagent-head'));
+  const body = container.querySelector('.ai-subagent-body');
+  assert.equal(body.querySelectorAll('.ai-tool').length, 3, 'every call of the unit, nested ones included');
+  assert.equal(text(body, '.ai-tool-count'), '1 call', 'the nested subagent counts the call under it');
+  assert.equal(body.querySelectorAll('.ai-tool-nested').length, 1, 'only the nested subagent’s call is indented');
 });
 
 test('thinking reads "Thought for 12s", opens to the thought, and shows no duration without stamps', async () => {
@@ -777,7 +786,7 @@ test('the background tray lists running work with its elapsed time and last outp
   const head = container.querySelector('.ai-tasks-head');
   assert.equal(head.textContent, '2 tasks running', 'the subagent is listed by the subagent strip, not the tray');
   assert.equal(container.querySelector('.ai-task') ?? undefined, undefined, 'a closed tray lists nothing');
-  assert.equal(intervals.size, 0, 'and ticks nothing');
+  assert.equal(intervals.size, 1, 'and adds no ticker: the one there is the running subagent unit’s');
   await click(head);
   const rows = [...container.querySelectorAll('.ai-task')];
   assert.equal(rows.length, 2);
@@ -785,7 +794,7 @@ test('the background tray lists running work with its elapsed time and last outp
   assert.equal(text(rows[0], '.ai-task-time'), '18s', 'elapsed since the call began');
   assert.equal(text(rows[0], '.ai-task-peek'), 'ready on :4321');
   assert.equal(text(rows[1], '.ai-task-time'), '15s');
-  assert.equal(intervals.size, 1, 'one shared interval for every row');
+  assert.equal(intervals.size, 1, 'one shared interval for every row and the unit');
   const controls = [...container.querySelectorAll('.ai-tasks button')].map((control) => control.textContent);
   assert.deepEqual(controls, ['2 tasks running', 'Stop agent'], '"Stop agent" is the only control');
   await click(container.querySelector('.ai-tasks-stop'));

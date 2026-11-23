@@ -1,7 +1,7 @@
 // Goal: the subagents of a run are derived truthfully from the transcript, and one subagent's work reads
 // as a chat of its own. A subagent is a top-level Agent/Task call (Codex: "Start subagent …"); its status
 // moves running → waiting (a request of its own waits) → done or failed, and a run stopped by the person
-// or an error fails the subagents it left open; what it is doing is its newest call or message; the strip
+// stops (an error fails) the subagents it left open; what it is doing is its newest call or message; the strip
 // is hidden without subagents, live while one works, a folded summary once all are done, and opens again;
 // the lists are bounded (SUBAGENTS_SHOWN_MAX, SUBAGENT_ITEMS_MAX) and say what they left out. The reducer
 // keeps each speaker's streamed words in order however they interleave, and never joins two speakers.
@@ -135,9 +135,12 @@ test('a subagent runs, waits for the person, then finishes or fails; its time co
 });
 
 test('a run that was stopped or failed takes the subagents it left open with it; a run that ended well leaves them running', () => {
-  for (const stop of ['cancelled', 'error']) {
+  for (const [stop, kind] of [
+    ['cancelled', 'stopped'],
+    ['error', 'failed'],
+  ]) {
     const view = fold(turnStart(TURN, 1), user(TURN, 'go', 1), task(TURN, 'a', { at: 2 }), turnEnd(TURN, 5, stop));
-    assert.deepEqual(model.deriveSubagents(view).agents[0].status, { kind: 'failed', durationMs: undefined }, stop);
+    assert.deepEqual(model.deriveSubagents(view).agents[0].status, { kind, durationMs: undefined }, stop);
   }
   const background = fold(turnStart(TURN, 1), user(TURN, 'go', 1), task(TURN, 'a', { at: 2 }), turnEnd(TURN, 5));
   assert.equal(model.deriveSubagents(background).agents[0].status.kind, 'running', 'a subagent can outlive a turn that ended well');

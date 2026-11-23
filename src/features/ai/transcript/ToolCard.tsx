@@ -41,9 +41,11 @@ export interface ToolCardProps {
   readonly live: boolean;
   /** Calls nested under this one (a subagent's own calls); zero for an ordinary call. */
   readonly childCount: number;
+  /** Drawn one step in, under the call it runs under; by default whenever it names a parent. */
+  readonly nested?: boolean | undefined;
 }
 
-export const ToolCard = memo(function ToolCard({ item, chatId, projectPath, live, childCount }: ToolCardProps) {
+export const ToolCard = memo(function ToolCard({ item, chatId, projectPath, live, childCount, nested }: ToolCardProps) {
   const translate = useTranslate();
   const hasOutput = item.output !== '';
   const hasDiffs = item.diffs.length > 0;
@@ -54,7 +56,7 @@ export const ToolCard = memo(function ToolCard({ item, chatId, projectPath, live
   const Icon = toolIcon(item.toolKind);
   const expanded = open && hasBody;
   return (
-    <div className={`ai-tool ai-tool-${item.status}${item.parent === undefined ? '' : ' ai-tool-nested'}`}>
+    <div className={`ai-tool ai-tool-${item.status}${(nested ?? item.parent !== undefined) ? ' ai-tool-nested' : ''}`}>
       <button
         className="ai-tool-head"
         aria-expanded={hasBody ? expanded : undefined}

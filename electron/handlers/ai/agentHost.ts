@@ -685,9 +685,15 @@ export class AgentHost {
     if (!answer.ok) {
       return err(failureOf(answer.error, runtime.agent, process.stderr));
     }
+    // The request was answered without an error, so the adapter has the message. Whatever else is wrong with the
+    // answer, the message is delivered: it is shown once, and the failure says `delivered` so it is never queued
+    // and sent a second time.
     const outcome = parseSteerResult(answer.value);
     if (!outcome.ok) {
-      return err({ code: 'agent-failed', ...described('ai.error.misunderstood', { agent: AGENTS[runtime.agent].label }) });
+      // The reason goes to the log (the shape only, never the message text) so a new adapter reply is diagnosable.
+      console.warn(`[ai] ${runtime.agent}: unreadable steering answer: ${outcome.error.message}; answer=${JSON.stringify(answer.value)?.slice(0, 200)}`);
+      this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' })]);
+      return err({ code: 'delivered', ...described('ai.error.misunderstood', { agent: AGENTS[runtime.agent].label }) });
     }
     switch (outcome.value.outcome) {
       case 'steered': {
@@ -704,8 +710,10 @@ export class AgentHost {
         return started.ok ? ok({ turn: started.value.turn, outcome: 'startedNewTurn' }) : started;
       }
       case 'startedNewTurn':
-        // An adapter that ignores the opt-in began a turn on its own; Stacki cannot follow it, so say so.
-        return err({ code: 'agent-failed', ...described('ai.error.separateTurn', { agent: AGENTS[runtime.agent].label }) });
+        // An adapter that ignores the opt-in began a turn on its own; Stacki cannot follow it, so say so. The message is
+        // still delivered, so it is shown and never queued for a second send.
+        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' })]);
+        return err({ code: 'delivered', ...described('ai.error.separateTurn', { agent: AGENTS[runtime.agent].label }) });
       default: {
         const exhaustive: never = outcome.value.outcome;
         return exhaustive;

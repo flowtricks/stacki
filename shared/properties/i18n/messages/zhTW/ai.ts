@@ -634,17 +634,25 @@ export const messages = {
   'ai.subagents.finished': {
     other: '{count} 個代理程式已完成',
   },
+  'ai.subagents.followUp': '後續訊息',
   'ai.subagents.label': '代理程式',
+  'ai.subagents.model.inherited': '{model}（繼承）',
+  'ai.subagents.model.session': '工作階段模型',
   'ai.subagents.more': {
     other: '另有 {count} 個較早的代理程式未顯示',
   },
+  'ai.subagents.openTranscript': '開啟對話紀錄',
+  'ai.subagents.result': '結果',
   'ai.subagents.running': {
     other: '{count} 個代理程式正在工作',
   },
   'ai.subagents.status.done': '完成',
   'ai.subagents.status.failed': '失敗',
+  'ai.subagents.status.queued': '排隊中',
   'ai.subagents.status.running': '執行中',
+  'ai.subagents.status.stopped': '已停止',
   'ai.subagents.status.waiting': '等待你操作',
+  'ai.subagents.untitled': '子代理',
   'ai.tasks.done': '完成',
   'ai.tasks.failed': '失敗',
   'ai.tasks.finished': {
