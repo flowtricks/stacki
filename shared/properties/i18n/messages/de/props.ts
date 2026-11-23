@@ -481,9 +481,12 @@ export const messages = {
   'props.loop.value': 'Wert',
   'props.loop.when': 'Wenn',
   'props.map.code': 'Code', // same
-  'props.map.customLoop': 'Eigener Schleifencode – bearbeite ihn unten.',
   'props.map.tag': 'Tag', // same
   'props.map.tooLong': 'Dieser Code ist zu lang.',
+  'props.map.why.nestedPattern':
+    'Diese Schleife entpackt ihr Element mit einem verschachtelten Muster oder Standardwerten, denen die Steuerungen nicht folgen können. Bearbeite sie als Code.',
+  'props.map.why.shape': 'Diese Schleife ist nicht als list.map((item) => ( geschrieben, daher sind die Listensteuerungen aus. Bearbeite sie als Code.',
+  'props.map.why.statements': 'Diese Schleife hat Anweisungen vor ihrem Markup, daher sind die Listensteuerungen aus. Bearbeite sie als Code.',
   'props.newProp.form.attributeName': 'Attributname',
   'props.newProp.form.attributeNameHint': 'Name',
   'props.newProp.form.attributeValue': 'Attributwert',

@@ -9,11 +9,14 @@ import LoopSettings, { type LoopListOption, type LoopSettingsProps } from './Loo
 import type { RichContext } from './RichContent';
 import type { FieldPosition, SourceContext } from './propBindings';
 import { assert } from '../../../shared/core/assert';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
+import { splitDestructuredHead } from '../../editor/loopBindings';
 import { LIMITS } from '../../../shared/core/limits';
 import { HTML_TAGS } from '../../editor/elementSchemas';
 import { dataTree, listsOnly } from '../../editor/dataSuggest';
 import ExprInput from '../../ui/ExprInput';
 import { SourceEditButton } from './propBindings';
+import PropTip from './PropTip';
 import { elementIcon, astroAssetIcon, LayoutIcon, ElementComponentIcon, CodeIcon, TagIcon } from '../../ui/Icons';
 
 export interface Rename {
@@ -49,21 +52,32 @@ const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.p
 // `items.filter(i => i.on).map((item, index) => (` into friendly fields.
 // The data part is any expression, so filtered/sorted collections still fit;
 // the single parameter may be bare — `items.map(item => (` — the way a
-// one-argument arrow is often written. Only destructured params or non-arrow
-// callbacks fall back to code.
-export function parseMapHead(head: string) {
+// one-argument arrow is often written, or a flat destructuring —
+// `work.map(({ data, id }) => (` — which AI-built pages write for a content
+// collection; it has no one item name (`item` is undefined) and the pattern is
+// kept as written. A nested pattern or a non-arrow callback falls back to code.
+export function parseMapHead(head: string): { readonly data: string; readonly item: string | undefined; readonly index: string } | undefined {
   assert(head.length <= LIMITS.nodeValueCharsMax, 'MapEditor: head limit exceeded');
   const match = String(head)
     .trim()
     .match(/^([\s\S]+?)\.map\(\s*(?:\(\s*([\w$]+)\s*(?:,\s*([\w$]+)\s*)?\)|([\w$]+))\s*=>\s*\($/);
-  if (!match?.[1]) {
-    return undefined;
+  if (match?.[1]) {
+    const item = match[2] || match[4];
+    return item ? { data: match[1].trim(), item, index: match[3] || '' } : undefined;
   }
-  const item = match[2] || match[4];
-  if (!item) {
-    return undefined;
+  const destructured = splitDestructuredHead(head);
+  return destructured === undefined ? undefined : { data: destructured.data, item: undefined, index: destructured.index };
+}
+
+/** Why a loop head is edited as code only, as the message that says it. */
+export function customLoopReason(node: Pick<MapNode, 'head' | 'bodyParts'>): MessageKey {
+  if (node.bodyParts !== undefined) {
+    return 'props.map.why.statements';
   }
-  return { data: match[1].trim(), item, index: match[3] || '' };
+  if (/\.map\(\s*\(?\s*\{[\s\S]*\}[\s\S]*=>/.test(node.head)) {
+    return 'props.map.why.nestedPattern';
+  }
+  return 'props.map.why.shape';
 }
 
 // The renames a new head makes: the item or index renamed with the list kept,
@@ -127,6 +141,8 @@ export function MapEditor(props: MapEditorProps) {
             <CodeIcon size={12} className="prop-label-icon" />
             {translate('props.map.code')}
           </span>
+          {/* Why the controls are not offered: a tip on the label, never a paragraph in the panel. */}
+          {!splittable && <PropTip text={translate(customLoopReason(node))} />}
         </label>
         <ExprInput
           value={draft}
@@ -147,16 +163,7 @@ export function MapEditor(props: MapEditorProps) {
     </>
   );
   // The Code field goes inside the settings, so their Details come after it.
-  return splittable ? (
-    <MapListSettings props={props}>{code}</MapListSettings>
-  ) : (
-    <>
-      <div className="props-field" style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}>
-        {translate('props.map.customLoop')}
-      </div>
-      {code}
-    </>
-  );
+  return splittable ? <MapListSettings props={props}>{code}</MapListSettings> : <>{code}</>;
 }
 
 // Tag switcher for plain elements: free text with a suggestion list of

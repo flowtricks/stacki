@@ -474,9 +474,12 @@ export const messages = {
   'props.loop.value': 'Waarde',
   'props.loop.when': 'Wanneer',
   'props.map.code': 'Code', // same
-  'props.map.customLoop': 'Eigen loopcode — bewerk die hieronder.',
   'props.map.tag': 'Tag', // same
   'props.map.tooLong': 'Deze code is te lang.',
+  'props.map.why.nestedPattern':
+    'Deze lus pakt zijn item uit met een geneste patroon of standaardwaarden die de instellingen niet kunnen volgen. Bewerk hem als code.',
+  'props.map.why.shape': 'Deze lus is niet geschreven als list.map((item) => (, dus de lijstinstellingen staan uit. Bewerk hem als code.',
+  'props.map.why.statements': 'Deze lus heeft instructies vóór de markup, dus de lijstinstellingen staan uit. Bewerk hem als code.',
   'props.newProp.form.attributeName': 'Attribuutnaam',
   'props.newProp.form.attributeNameHint': 'naam',
   'props.newProp.form.attributeValue': 'Attribuutwaarde',

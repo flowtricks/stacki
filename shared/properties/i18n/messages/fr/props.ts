@@ -476,9 +476,12 @@ export const messages = {
   'props.loop.value': 'Valeur',
   'props.loop.when': 'Quand',
   'props.map.code': 'Code', // same
-  'props.map.customLoop': 'Code de boucle personnalisé : modifiez-le ci-dessous.',
   'props.map.tag': 'Balise',
   'props.map.tooLong': 'Ce code est trop long.',
+  'props.map.why.nestedPattern':
+    'Cette boucle déstructure son élément avec un motif imbriqué ou des valeurs par défaut que les réglages ne peuvent pas suivre. Modifiez-la en code.',
+  'props.map.why.shape': 'Cette boucle n’est pas écrite sous la forme list.map((item) => ( ; les réglages de liste sont donc désactivés. Modifiez-la en code.',
+  'props.map.why.statements': 'Cette boucle contient des instructions avant son balisage ; les réglages de liste sont donc désactivés. Modifiez-la en code.',
   'props.newProp.form.attributeName': 'Nom de l’attribut',
   'props.newProp.form.attributeNameHint': 'nom',
   'props.newProp.form.attributeValue': 'Valeur de l’attribut',

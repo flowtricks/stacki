@@ -471,9 +471,12 @@ export const messages = {
   'props.loop.value': 'Nilai',
   'props.loop.when': 'Ketika',
   'props.map.code': 'Kode',
-  'props.map.customLoop': 'Kode loop kustom — edit di bawah.',
   'props.map.tag': 'Tag', // same
   'props.map.tooLong': 'Kode ini terlalu panjang.',
+  'props.map.why.nestedPattern':
+    'Perulangan ini membongkar itemnya dengan pola bersarang atau nilai bawaan yang tidak bisa diikuti kontrol. Edit sebagai kode.',
+  'props.map.why.shape': 'Perulangan ini tidak ditulis sebagai list.map((item) => (, jadi kontrol daftar dimatikan. Edit sebagai kode.',
+  'props.map.why.statements': 'Perulangan ini punya pernyataan sebelum markup-nya, jadi kontrol daftar dimatikan. Edit sebagai kode.',
   'props.newProp.form.attributeName': 'Nama atribut',
   'props.newProp.form.attributeNameHint': 'name', // same
   'props.newProp.form.attributeValue': 'Nilai atribut',

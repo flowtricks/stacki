@@ -470,9 +470,11 @@ export const messages = {
   'props.loop.value': '值',
   'props.loop.when': '当',
   'props.map.code': '代码',
-  'props.map.customLoop': '自定义循环代码——请在下方编辑。',
   'props.map.tag': '标签',
   'props.map.tooLong': '此代码太长。',
+  'props.map.why.nestedPattern': '此循环用嵌套或带默认值的模式解构其项，控件无法跟随。请作为代码编辑。',
+  'props.map.why.shape': '此循环不是 list.map((item) => ( 的写法，因此列表控件不可用。请作为代码编辑。',
+  'props.map.why.statements': '此循环在标记之前有语句，因此列表控件不可用。请作为代码编辑。',
   'props.newProp.form.attributeName': '属性名',
   'props.newProp.form.attributeNameHint': 'name', // same
   'props.newProp.form.attributeValue': '属性值',

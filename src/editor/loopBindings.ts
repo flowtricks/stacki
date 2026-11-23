@@ -34,6 +34,33 @@ export function splitMapHead(head: unknown): LoopHead | undefined {
   return { data: data.trim(), item, index: match[3] || '' };
 }
 
+// A destructured item: `work.map(({ data, id }, index) => (`. The pattern is one flat
+// object pattern of plain names (`data`, `data: entry`, `...rest`); a nested pattern or
+// a default is code the editor does not model, so it fails safe to a custom head.
+const DESTRUCTURED_HEAD_RE = /^([\s\S]+?)\.map\(\s*\(\s*(\{[\w$\s,:.]*\})\s*(?:,\s*([A-Za-z_$][\w$]*)\s*)?\)\s*=>\s*\($/;
+
+export interface DestructuredLoopHead {
+  readonly data: string;
+  /** The object pattern as written, braces included. */
+  readonly pattern: string;
+  readonly index: string;
+}
+
+export function splitDestructuredHead(head: unknown): DestructuredLoopHead | undefined {
+  const text = String(head).trim();
+  const match = text.match(DESTRUCTURED_HEAD_RE);
+  const data = match?.[1];
+  const pattern = match?.[2];
+  if (!match || data === undefined || pattern === undefined) {
+    return undefined;
+  }
+  // `{}` declares nothing, so there would be nothing for the body to read.
+  if (pattern.replace(/[{}\s]/g, '') === '') {
+    return undefined;
+  }
+  return { data: data.trim(), pattern, index: match[3] || '' };
+}
+
 // Whole identifier only: `service` but never the `service` in `x.service`
 // (a property of something else) or in `services`.
 const escapeIdentifier = (name: string): string => String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

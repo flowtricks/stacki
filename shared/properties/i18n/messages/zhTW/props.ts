@@ -470,9 +470,11 @@ export const messages = {
   'props.loop.value': '值',
   'props.loop.when': '當',
   'props.map.code': '程式碼',
-  'props.map.customLoop': '自訂迴圈程式碼，請在下方編輯。',
   'props.map.tag': '標籤',
   'props.map.tooLong': '此程式碼太長。',
+  'props.map.why.nestedPattern': '此迴圈以巢狀或帶預設值的模式解構其項目，控制項無法跟隨。請作為程式碼編輯。',
+  'props.map.why.shape': '此迴圈不是 list.map((item) => ( 的寫法，因此清單控制項無法使用。請作為程式碼編輯。',
+  'props.map.why.statements': '此迴圈在標記之前有陳述式，因此清單控制項無法使用。請作為程式碼編輯。',
   'props.newProp.form.attributeName': '屬性名稱',
   'props.newProp.form.attributeNameHint': 'name', // same
   'props.newProp.form.attributeValue': '屬性值',

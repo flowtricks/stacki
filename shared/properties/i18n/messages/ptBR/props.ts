@@ -474,9 +474,12 @@ export const messages = {
   'props.loop.value': 'Valor',
   'props.loop.when': 'Quando',
   'props.map.code': 'Código',
-  'props.map.customLoop': 'Código de laço personalizado: edite abaixo.',
   'props.map.tag': 'Tag', // same
   'props.map.tooLong': 'Este código é muito longo.',
+  'props.map.why.nestedPattern':
+    'Este loop desestrutura o item com um padrão aninhado ou com valores padrão que os controles não conseguem seguir. Edite-o como código.',
+  'props.map.why.shape': 'Este loop não está escrito como list.map((item) => (, então os controles da lista ficam desativados. Edite-o como código.',
+  'props.map.why.statements': 'Este loop tem instruções antes da marcação, então os controles da lista ficam desativados. Edite-o como código.',
   'props.newProp.form.attributeName': 'Nome do atributo',
   'props.newProp.form.attributeNameHint': 'nome',
   'props.newProp.form.attributeValue': 'Valor do atributo',

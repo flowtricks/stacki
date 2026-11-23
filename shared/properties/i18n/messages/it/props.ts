@@ -479,9 +479,12 @@ export const messages = {
   'props.loop.value': 'Valore',
   'props.loop.when': 'Quando',
   'props.map.code': 'Codice',
-  'props.map.customLoop': 'Codice del ciclo personalizzato — modificalo qui sotto.',
   'props.map.tag': 'Tag', // same
   'props.map.tooLong': 'Questo codice è troppo lungo.',
+  'props.map.why.nestedPattern':
+    'Questo ciclo scompone il suo elemento con un pattern annidato o con valori predefiniti che i controlli non possono seguire. Modificalo come codice.',
+  'props.map.why.shape': 'Questo ciclo non è scritto come list.map((item) => (, quindi i controlli della lista sono disattivati. Modificalo come codice.',
+  'props.map.why.statements': 'Questo ciclo ha istruzioni prima del markup, quindi i controlli della lista sono disattivati. Modificalo come codice.',
   'props.newProp.form.attributeName': 'Nome dell’attributo',
   'props.newProp.form.attributeNameHint': 'nome',
   'props.newProp.form.attributeValue': 'Valore dell’attributo',
