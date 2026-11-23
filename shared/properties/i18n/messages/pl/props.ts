@@ -499,9 +499,12 @@ export const messages = {
   'props.loop.value': 'Wartość',
   'props.loop.when': 'Gdy',
   'props.map.code': 'Kod',
-  'props.map.customLoop': 'Własny kod pętli — edytuj go poniżej.',
   'props.map.tag': 'Tag', // same
   'props.map.tooLong': 'Ten kod jest zbyt długi.',
+  'props.map.why.nestedPattern':
+    'Ta pętla rozpakowuje element zagnieżdżonym wzorcem lub z wartościami domyślnymi, za którymi ustawienia nie nadążą. Edytuj ją jako kod.',
+  'props.map.why.shape': 'Ta pętla nie jest zapisana jako list.map((item) => (, więc ustawienia listy są wyłączone. Edytuj ją jako kod.',
+  'props.map.why.statements': 'Ta pętla ma instrukcje przed znacznikami, więc ustawienia listy są wyłączone. Edytuj ją jako kod.',
   'props.newProp.form.attributeName': 'Nazwa atrybutu',
   'props.newProp.form.attributeNameHint': 'name', // same
   'props.newProp.form.attributeValue': 'Wartość atrybutu',

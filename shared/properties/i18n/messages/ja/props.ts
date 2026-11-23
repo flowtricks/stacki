@@ -473,9 +473,11 @@ export const messages = {
   'props.loop.value': '値',
   'props.loop.when': '条件',
   'props.map.code': 'コード',
-  'props.map.customLoop': 'カスタムのループコードです。下で編集してください。',
   'props.map.tag': 'タグ',
   'props.map.tooLong': 'このコードは長すぎます。',
+  'props.map.why.nestedPattern': 'このループは入れ子またはデフォルト値つきのパターンで項目を分解しており、設定では扱えません。コードとして編集してください。',
+  'props.map.why.shape': 'このループは list.map((item) => ( の形で書かれていないため、リストの設定は使えません。コードとして編集してください。',
+  'props.map.why.statements': 'このループはマークアップの前に文があるため、リストの設定は使えません。コードとして編集してください。',
   'props.newProp.form.attributeName': '属性名',
   'props.newProp.form.attributeNameHint': 'name', // same
   'props.newProp.form.attributeValue': '属性値',

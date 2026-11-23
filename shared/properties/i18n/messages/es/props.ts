@@ -473,9 +473,12 @@ export const messages = {
   'props.loop.value': 'Valor',
   'props.loop.when': 'Cuando',
   'props.map.code': 'Código',
-  'props.map.customLoop': 'Código de bucle personalizado: edítalo abajo.',
   'props.map.tag': 'Etiqueta',
   'props.map.tooLong': 'Este código es demasiado largo.',
+  'props.map.why.nestedPattern':
+    'Este bucle desestructura su elemento con un patrón anidado o con valores por defecto que los controles no pueden seguir. Edítalo como código.',
+  'props.map.why.shape': 'Este bucle no está escrito como list.map((item) => (, así que los controles de lista están desactivados. Edítalo como código.',
+  'props.map.why.statements': 'Este bucle tiene instrucciones antes de su marcado, así que los controles de lista están desactivados. Edítalo como código.',
   'props.newProp.form.attributeName': 'Nombre del atributo',
   'props.newProp.form.attributeNameHint': 'nombre',
   'props.newProp.form.attributeValue': 'Valor del atributo',

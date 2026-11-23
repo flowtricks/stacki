@@ -34,7 +34,7 @@ import type { ItemSamples } from './loopRemove';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { reboundOptions, type BindingChange } from './optionsBinding';
 import { fieldListCode, type FieldList } from './loopFieldList';
-import { splitMapHead, type LoopHead } from './loopBindings';
+import { splitDestructuredHead, splitMapHead, type LoopHead } from './loopBindings';
 import { autoQueryName, QUERY_MARK } from './dataScope';
 import type { EditorModel, EditorNode } from './pageView';
 
@@ -107,8 +107,16 @@ const CLEANUP_PASSES_MAX = 16;
 
 export function planLoop(requested: LoopPlanInput): LoopPlanResult {
   const input = withProjectImport(requested);
-  const head = splitMapHead(input.loop.head);
+  const split = splitMapHead(input.loop.head);
+  // A destructured item (`work.map(({ data }) => (`) has no one name to rebind bindings by or to
+  // write back, so its head is only ever edited where its list is written, and its children stay.
+  const destructured = split === undefined ? splitDestructuredHead(input.loop.head) : undefined;
+  const head: LoopHead | undefined = split ?? (destructured === undefined ? undefined : { data: destructured.data, item: '', index: destructured.index });
   if (head === undefined) {
+    return { ok: false, ...issue('editor.loopPlan.customCode') };
+  }
+  if (destructured !== undefined && input.target.kind === 'query' && input.target.query.source.kind === 'list') {
+    // A List prop's settings are written into the head under the item's own name.
     return { ok: false, ...issue('editor.loopPlan.customCode') };
   }
   const before = parseFrontmatter(input.model.extraFrontmatter);
@@ -134,7 +142,10 @@ export function planLoop(requested: LoopPlanInput): LoopPlanResult {
   if (!written.ok) {
     return written;
   }
-  const loopHead = `${written.data}.map((${head.item}${head.index ? `, ${head.index}` : ''}) => (`;
+  const loopHead =
+    destructured === undefined
+      ? `${written.data}.map((${head.item}${head.index ? `, ${head.index}` : ''}) => (`
+      : headWithData(input.loop.head, head.data, written.data);
   const markupAfter = `${markup}\n${loopHead}`;
   const removable = new Set(readingChain(reading).filter((name) => name !== written.name));
   // The holder was replaced in place: what it read is now possibly unread.
@@ -146,10 +157,11 @@ export function planLoop(requested: LoopPlanInput): LoopPlanResult {
   }
   const cleaned = cleanedUp({ frontmatter: written.frontmatter, imports: written.imports, removed: replaced }, removable, markupAfter);
   const restoring = input.restore !== undefined && readingKeyOf(reading, head.data) !== targetKey(input.target);
-  const rebound = reboundChildren(input, { reading, item: head.item, restoring });
+  const rebound =
+    destructured === undefined ? reboundChildren(input, { reading, item: head.item, restoring }) : { nodes: input.loop.children ?? [], unbound: 0, lost: [] };
   const loop = { ...input.loop, head: loopHead, children: rebound.nodes };
   assert(loop.id === input.loop.id, 'A planned loop keeps its id');
-  assert(splitMapHead(loop.head) !== undefined, 'A planned head is one the loop editor reads back');
+  assert(headDataOf(loop.head) !== undefined, 'A planned head is one the loop editor reads back');
   return {
     ok: true,
     plan: {
@@ -216,6 +228,18 @@ function itemNamedQuery(query: LoopQuery, item: string): LoopQuery {
 const DEFAULT_ITEM_NAME = 'item';
 const ITEM_NAME = /^[A-Za-z_$][\w$]*$/;
 
+// The head with its list swapped and everything else (the item's pattern, the spacing) as written.
+function headWithData(loopHead: string, before: string, after: string): string {
+  const at = loopHead.indexOf(before);
+  assert(at >= 0, 'A loop’s head holds its data expression');
+  return `${loopHead.slice(0, at)}${after}${loopHead.slice(at + before.length)}`;
+}
+
+// The list a head loops over, whether its item is named or destructured.
+function headDataOf(loopHead: string): string | undefined {
+  return (splitMapHead(loopHead) ?? splitDestructuredHead(loopHead))?.data;
+}
+
 // A section as code: only its bytes change, in the head or the declaration its
 // steps are written in. The rest of the head, the other sections, the imports
 // and the children stay as they are, so there is nothing to clean up after it.
@@ -248,7 +272,7 @@ function sectionEdit(
   const loopHead = `${input.loop.head.slice(0, at)}${data}${input.loop.head.slice(at + head.data.length)}`;
   // Checked once more as the whole it lands in: nothing that would not read back is written.
   if (
-    splitMapHead(loopHead)?.data !== data.trim() ||
+    headDataOf(loopHead) !== data.trim() ||
     parseExpression(data) === undefined ||
     parseFrontmatter(extraFrontmatter).declarations.size !== frontmatter.declarations.size
   ) {

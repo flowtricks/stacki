@@ -22,7 +22,8 @@ const { repoPath } = require('../../helpers/sources.js');
 // Reading a head.
 assert.deepEqual(parseMapHead('posts.map((post, index) => ('), { data: 'posts', item: 'post', index: 'index' });
 assert.deepEqual(parseMapHead('posts.filter(p => p.live).map(post => ('), { data: 'posts.filter(p => p.live)', item: 'post', index: '' });
-assert.equal(parseMapHead('posts.map(({title}) => ('), undefined, 'a destructured item is code');
+assert.deepEqual(parseMapHead('posts.map(({title}) => ('), { data: 'posts', item: undefined, index: '' }, 'a flat destructured item splits, with no item name');
+assert.equal(parseMapHead('posts.map(({title: {text}}) => ('), undefined, 'a nested pattern is code');
 assert.equal(parseMapHead(''), undefined);
 // No size limit: a head longer than the old cap is read like any other, its list expression whole.
 const longList = 'x'.repeat(1_000_001);

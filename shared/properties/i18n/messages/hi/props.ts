@@ -474,9 +474,12 @@ export const messages = {
   'props.loop.value': 'मान',
   'props.loop.when': 'कब',
   'props.map.code': 'कोड',
-  'props.map.customLoop': 'कस्टम लूप कोड — इसे नीचे संपादित करें।',
   'props.map.tag': 'टैग',
   'props.map.tooLong': 'यह कोड बहुत लंबा है।',
+  'props.map.why.nestedPattern':
+    'यह लूप अपने आइटम को नेस्टेड या डिफ़ॉल्ट मान वाले पैटर्न में खोलता है, जिसे नियंत्रण नहीं समझ सकते। इसे कोड के रूप में संपादित करें।',
+  'props.map.why.shape': 'यह लूप list.map((item) => ( के रूप में नहीं लिखा है, इसलिए सूची के नियंत्रण बंद हैं। इसे कोड के रूप में संपादित करें।',
+  'props.map.why.statements': 'इस लूप के मार्कअप से पहले स्टेटमेंट हैं, इसलिए सूची के नियंत्रण बंद हैं। इसे कोड के रूप में संपादित करें।',
   'props.newProp.form.attributeName': 'एट्रिब्यूट का नाम',
   'props.newProp.form.attributeNameHint': 'नाम',
   'props.newProp.form.attributeValue': 'एट्रिब्यूट का मान',

@@ -501,9 +501,12 @@ export const messages = {
   'props.loop.value': 'Значение',
   'props.loop.when': 'Когда',
   'props.map.code': 'Код',
-  'props.map.customLoop': 'Собственный код цикла — измените его ниже.',
   'props.map.tag': 'Тег',
   'props.map.tooLong': 'Этот код слишком длинный.',
+  'props.map.why.nestedPattern':
+    'Этот цикл разбирает элемент вложенным шаблоном или со значениями по умолчанию, которые настройки не поддерживают. Измените его как код.',
+  'props.map.why.shape': 'Этот цикл написан не как list.map((item) => (, поэтому настройки списка отключены. Измените его как код.',
+  'props.map.why.statements': 'В этом цикле перед разметкой есть инструкции, поэтому настройки списка отключены. Измените его как код.',
   'props.newProp.form.attributeName': 'Имя атрибута',
   'props.newProp.form.attributeNameHint': 'name', // same
   'props.newProp.form.attributeValue': 'Значение атрибута',

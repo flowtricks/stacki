@@ -480,9 +480,11 @@ export const messages = {
   'props.loop.value': 'ערך',
   'props.loop.when': 'כאשר',
   'props.map.code': 'קוד',
-  'props.map.customLoop': 'קוד לולאה מותאם אישית — אפשר לערוך אותו למטה.',
   'props.map.tag': 'תג',
   'props.map.tooLong': 'הקוד הזה ארוך מדי.',
+  'props.map.why.nestedPattern': 'הלולאה הזו מפרקת את הפריט שלה בתבנית מקוננת או עם ערכי ברירת מחדל שהבקרים לא יכולים לעקוב אחריהם. ערכו אותה כקוד.',
+  'props.map.why.shape': 'הלולאה הזו לא כתובה בצורה list.map((item) => (, ולכן בקרי הרשימה כבויים. ערכו אותה כקוד.',
+  'props.map.why.statements': 'ללולאה הזו יש הוראות לפני הסימון שלה, ולכן בקרי הרשימה כבויים. ערכו אותה כקוד.',
   'props.newProp.form.attributeName': 'שם המאפיין',
   'props.newProp.form.attributeNameHint': 'name', // same
   'props.newProp.form.attributeValue': 'ערך המאפיין',
