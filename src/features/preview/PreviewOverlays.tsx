@@ -107,12 +107,13 @@ export function deepOutlineInfo(path: string): OverlayInfo | undefined {
 }
 
 export function PreviewOverlays(props: PreviewOverlaysProps) {
+  const highlight = useSyncExternalStore(subscribeCanvasHighlight, canvasHighlight, canvasHighlight);
   return (
     <>
       {!props.focusWhole && <FocusOverlays path={props.focusPath} rects={props.rects} scale={props.scale} />}
       <SpacingOverlays {...props} />
       <NodeOutlines {...props} />
-      <TextMarkOutlines marks={props.textMarks ?? NO_TEXT_MARKS} instances={selectionBoxes(props)} scale={props.scale} />
+      <TextMarkOutlines marks={props.textMarks ?? NO_TEXT_MARKS} instances={outlineBoxes(props, highlight)} scale={props.scale} />
     </>
   );
 }
@@ -419,22 +420,24 @@ function TextMarkOutlines({ marks, instances, scale }: { readonly marks: TextMar
   ));
 }
 
-// The boxes the selection's outlines are drawn on, so text marks can keep
-// their tags off the selection's tag.
-function selectionBoxes(props: PreviewOverlaysProps): readonly Box[] {
-  if (!props.selPath) {
-    return [];
+// The boxes every node outline of this render is drawn on (hover, selection, highlight), so a text mark never draws its own tag
+// over one of theirs: two tags at one corner print over each other ("text" and "heading" garbled into one chip). The node
+// outline's tag wins, so a hovered text reads exactly as the same text clicked.
+function outlineBoxes(props: PreviewOverlaysProps, highlight: CanvasHighlight | undefined): readonly Box[] {
+  const boxes: Box[] = [];
+  for (const outline of outlineTargets(props, highlight)) {
+    if (outline.pseudo !== undefined) {
+      continue;
+    }
+    const info = props.overlayInfo?.(outline.path);
+    const all = props.rects[outlineBoxPath(outline.path, info?.nodeKind)] ?? props.rects[outline.path];
+    if (all === undefined) {
+      continue;
+    }
+    const loop = info?.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
+    boxes.push(...(loop !== undefined ? [loop] : copiesToDraw(all, outline.occ)));
   }
-  const info = props.overlayInfo?.(props.selPath);
-  const all = props.rects[outlineBoxPath(props.selPath, info?.nodeKind)] ?? props.rects[props.selPath];
-  if (!all) {
-    return [];
-  }
-  const loop = info?.nodeKind === 'map' ? loopBox(props.rects, props.selPath, info.childCount) : undefined;
-  if (loop !== undefined) {
-    return [loop];
-  }
-  return copiesToDraw(all, props.selOcc);
+  return boxes;
 }
 
 // Tags sit on their box's top-left corner, so two boxes whose corners lie

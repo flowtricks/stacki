@@ -75,7 +75,7 @@ export function installTextMarks(source: MarkSource): () => void {
         : undefined;
     const at = held ? undefined : pointer;
     // The selected instance's marked words first; otherwise any prop text under the pointer, selected or not.
-    const hover = at ? (shown.find((match) => holds(wordsBox(match), at)) ?? hoverBeforeSelect(source, at)) : undefined;
+    const hover = at ? (shown.find((match) => holds(wordsBox(match), at) && reachable(match, at)) ?? hoverBeforeSelect(source, at)) : undefined;
     const chosen =
       shown.find(({ target }) => target.key === picked) ??
       (awaiting === undefined ? undefined : matchesWhere(source.catalog(), (target) => target.key === awaiting?.key)[0]);
@@ -91,7 +91,11 @@ export function installTextMarks(source: MarkSource): () => void {
       ...shown.filter((match) => match !== hover && match !== chosen).map((match) => dashedMark(wordsBox(match))),
       ...bound.map(dashedMark),
     );
-    const message = { type: 'avb:text-marks', hover: refused ?? report(hover), picked: report(chosen) };
+    // Hovering words draws no outline of their own: a component's own direct text (prop text, slot text its root or its wrapper prints)
+    // is the component's, so the pointer on it is the instance's hover, and only a separate child tag the page wrote (a `strong`)
+    // is outlined, as the node it is. The words stay hit-testable here for the click, which picks them. A refused prop text is the
+    // one hover reported, because it says why a double click opens nothing.
+    const message = { type: 'avb:text-marks', hover: refused, picked: report(chosen) };
     const text = JSON.stringify(message);
     if (text !== reported) {
       reported = text;
@@ -120,7 +124,7 @@ export function installTextMarks(source: MarkSource): () => void {
     'click',
     (event) => {
       const at = { x: event.clientX, y: event.clientY };
-      const hit = markedNow(source).find((match) => holds(wordsBox(match), at)) ?? hoverBeforeSelect(source, at);
+      const hit = markedNow(source).find((match) => holds(wordsBox(match), at) && reachable(match, at)) ?? hoverBeforeSelect(source, at);
       picked = hit?.target.key;
       const scope = hit?.target.scope;
       awaiting = hit !== undefined && scope !== undefined && !source.focus().has(scope) ? { key: hit.target.key, scope } : undefined;
@@ -156,6 +160,24 @@ function markedNow(source: MarkSource): TextMatchAt[] {
   return [...typing, ...others].filter((match) => !isInstanceRoot(match.element, match.target.scope) || drawnAsRun(match));
 }
 
+// Whether the pointer's real target (the browser's own hit test, which knows z-index, stacking, pointer-events, clipping and
+// transforms) delivers to these words: the topmost element at the point is the words' element or inside it, or it lies inside the
+// words' own instance (a stretched link laid over a card's words). Words a sibling covers, or that take no pointer, are not hovered.
+function reachable(match: TextMatchAt, at: { readonly x: number; readonly y: number }): boolean {
+  // An engine with no hit test (a test DOM) cannot say what covers what, so nothing is covered.
+  if (typeof document.elementsFromPoint !== 'function' && typeof document.elementFromPoint !== 'function') {
+    return true;
+  }
+  const top = elementsAt(at.x, at.y)[0];
+  if (top === undefined) {
+    return false;
+  }
+  if (match.element.contains(top)) {
+    return true;
+  }
+  return match.target.scope !== undefined && withinScope(top, match.target);
+}
+
 // Prop or slot text under the pointer (a prop's words, or the words the page writes inside the instance), whether or not its instance is selected: the words a double click would edit once the component is
 // the selection. Only targets whose instance and element are on the pointer's own ancestor chain are matched, so a catalog of
 // thousands costs a set lookup each and a match for the few that are near the pointer.
@@ -182,7 +204,7 @@ function hoverBeforeSelect(source: MarkSource, at: { readonly x: number; readonl
       if (pathsOf(match.element).includes(target.scope) && !drawnAsRun(match)) {
         continue;
       }
-      if (!holds(wordsBox(match), at)) {
+      if (!holds(wordsBox(match), at) || !reachable(match, at)) {
         continue;
       }
       // Nested words: the innermost box under the pointer is the one named.
@@ -421,13 +443,24 @@ function framesWords(match: TextMatchAt): boolean {
 // writes into a slot, wherever the component puts them (they are the page's, whatever element draws them), and words a root
 // frames (`framesWords`). The element around them stays the component's, drawn by the instance's own outline.
 function drawnAsRun(match: TextMatchAt): boolean {
-  return match.nodes.length > 0 && (match.target.from === 'slot' || framesWords(match));
+  return match.nodes.length > 0 && (pageWrote(match) || framesWords(match));
 }
 
-// Who owns what the outline is drawn around (shared/properties/outlineOwnership.ts): the words a page wrote into a slot are the
+// Whether the words are text nodes the page wrote into a slot, which the canvas can tell because the preview records the run of
+// nodes each page text renders (`runsOf`). Words a component prints from a string (a Button's `set:html={content}`, a prop) have no
+// recorded run: they are the component's own output, even when the page's slot is where the string came from.
+function pageWrote(match: TextMatchAt): boolean {
+  const first = match.nodes[0];
+  if (match.target.from !== 'slot' || first === undefined) {
+    return false;
+  }
+  return (runsOf(match.target.path) ?? []).some((run) => run.includes(first));
+}
+
+// Who owns what the outline is drawn around (shared/properties/outlineOwnership.ts): the text nodes a page wrote into a slot are the
 // page's; any other words are owned as the element that draws them is, by its paths.
 function ownerOfWords(match: TextMatchAt): Ownership {
-  return match.target.from === 'slot' ? 'slot' : ownershipOf(pathsOf(match.element));
+  return pageWrote(match) ? 'slot' : ownershipOf(pathsOf(match.element));
 }
 
 const FRAME_SIDES = ['top', 'right', 'bottom', 'left'] as const;

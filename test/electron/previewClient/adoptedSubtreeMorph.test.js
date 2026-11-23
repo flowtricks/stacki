@@ -108,5 +108,57 @@ test('every reload leaves a reason in the preview log', () => {
   assert.equal((client.match(/reloadFor\('/g) ?? []).length, 2, 'both reload sites say why');
   const config = fs.readFileSync(repoPath('electron/preview/markerConfig.ts'), 'utf8');
   assert.match(config, /server\.middlewares\.use\('\/__avb\/reload'/);
-  assert.match(config, /canvas reloaded instead of patching/);
+  assert.match(client, /reloaded instead of patching \(/);
+  assert.match(config, /\[stacki\] canvas /);
+});
+
+// The footer Button of the swash-labs site, as the server renders it for each variant, with the footer's script
+// having written the year into its own span and bound a click handler to the link.
+const footer = (button) => `<footer data-avb-p="Footer|0"><p>(c) <span id="year">2025</span></p>\n${button}\n</footer>`;
+const LINK =
+  '<a class="button_wrap link" href="#" data-top data-avb-p="Button|0"><span class="button_text text-style-trim" data-avb-p="Button|0.0">Back to top &#8593;</span></a>';
+const PILL = (arrow) =>
+  '<a class="button_wrap pill" href="#" data-top data-avb-p="Button|0"><span class="button_roll" data-avb-p="Button|0.0"><span>Back to top &#8593;</span>' +
+  `<span aria-hidden="true">Back to top &#8593;</span></span>${arrow ? '<i class="button_arrow" aria-hidden="true" style="--_arrow: url(/arrow.svg)"></i>' : ''}</a>`;
+
+test('the footer Button switches variant and toggles its arrow in place, keeping what the footer script did', () => {
+  const live = liveBody(footer(LINK));
+  live.querySelector('#year').textContent = '2026';
+  const anchor = live.querySelector('[data-top]');
+  let clicks = 0;
+  anchor.addEventListener('click', () => (clicks += 1));
+  morph.patchChildren(live, body(footer(LINK)), body(footer(PILL(false))));
+  morph.patchChildren(live, body(footer(PILL(false))), body(footer(PILL(true))));
+  assert.equal(live.querySelector('[data-top]'), anchor, 'the link is the same element, so its handler is still bound');
+  assert.equal(live.querySelector('#year').textContent, '2026', 'the script own text is kept');
+  assert.ok(live.querySelector('.button_arrow'), 'the arrow arrived');
+  morph.patchChildren(live, body(footer(PILL(true))), body(footer(PILL(false))));
+  assert.equal(live.querySelector('.button_arrow') ?? undefined, undefined, 'and went');
+  anchor.click();
+  assert.equal(clicks, 1);
+});
+
+test('the dev server error overlay goes with a patch that brought the page up to date', () => {
+  const live = liveBody('<main>page</main><vite-error-overlay></vite-error-overlay>');
+  assert.equal(morph.dismissErrorOverlay(live), true);
+  assert.equal(live.querySelector('vite-error-overlay') ?? undefined, undefined);
+  assert.ok(live.querySelector('main'));
+  assert.equal(morph.dismissErrorOverlay(live), false, 'nothing to remove the second time');
+  const nested = liveBody('<main><vite-error-overlay></vite-error-overlay></main>');
+  assert.equal(morph.dismissErrorOverlay(nested), false, 'only the overlay the dev client puts on the body');
+});
+
+test('a failed rendering keeps the page instead of reloading it', () => {
+  const client = fs.readFileSync(repoPath('electron/previewClient/morphClient.ts'), 'utf8');
+  assert.match(client, /class HeldRendering/);
+  assert.match(client, /error instanceof HeldRendering && error\.status >= 500/);
+});
+
+test('the dev log names the file behind a reload and the script behind a scripts reload', () => {
+  const config = fs.readFileSync(repoPath('electron/preview/markerConfig.ts'), 'utf8');
+  assert.match(config, /file changed outside the app/);
+  assert.match(config, /the dev server asked for a full reload/);
+  const head = (scripts) => new JSDOM(`<!doctype html><html><head>${scripts}</head><body></body></html>`).window.document;
+  const text = morph.describeScriptChange(head('<script type="module" src="/a.js"></script>'), head('<script type="module">1</script>'));
+  assert.match(text, /a\.js/);
 });

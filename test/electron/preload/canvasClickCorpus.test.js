@@ -80,10 +80,84 @@ const CORPUS = [
         '<section id="hero" style="position:relative;height:200px">' + marked('0.0', '<h1 id="title" style="height:80px">Behind a catcher</h1>') + '</section>',
       ),
       {
-        head: '<script>addEventListener("DOMContentLoaded",()=>{const d=document.createElement("div");d.style.cssText="position:fixed;inset:0;z-index:9";document.body.appendChild(d)})</script>',
+        head: '<script>addEventListener("DOMContentLoaded",()=>{const d=document.createElement("div");d.style.cssText="position:fixed;inset:0;z-index:9;pointer-events:none";document.body.appendChild(d)})</script>',
       },
     ),
     clicks: [{ at: '#title', expect: '0.0' }],
+  },
+  {
+    // The browser's own hit test is the authority (docs/canvas-click.md): a sibling painted above the heading covers it, so the
+    // pointer there is the sibling's, and the heading is never hovered or picked through it.
+    name: 'covered-by-higher-z-sibling',
+    html: page(
+      marked(
+        '0',
+        '<section style="position:relative;height:200px">' +
+          marked('0.0', '<h1 id="title" data-avb-p="0.0" style="position:relative;z-index:1;margin:0;height:80px">Covered heading</h1>') +
+          // A component whose own root is not a stacking context and whose card (markup no file wrote: a script's, an untagged
+          // layer) is positioned above the heading: the painted order is card, heading, root.
+          marked(
+            '0.1',
+            '<div data-avb-p="0.1"><div id="cover" style="position:relative;z-index:5;margin-top:-80px;height:80px;background:#369">Cards</div></div>',
+          ) +
+          '</section>',
+      ),
+    ),
+    clicks: [
+      { at: '#title', expect: '0.1' },
+      { at: '#cover', expect: '0.1' },
+    ],
+  },
+  {
+    // Negative space of the hit test: what the browser would not deliver to is never answered, and what it would is, whatever it paints.
+    name: 'pointer-events-auto-child-in-none-parent',
+    html: page(
+      marked(
+        '0',
+        '<section data-avb-p="0" style="position:relative;height:200px">' +
+          marked('0.0', '<h1 id="title" data-avb-p="0.0" style="margin:0;height:80px">Title</h1>') +
+          '<div style="position:absolute;inset:0;pointer-events:none">' +
+          marked('0.1', '<button id="go" data-avb-p="0.1" style="position:absolute;left:0;top:0;width:100px;height:40px;pointer-events:auto">Go</button>') +
+          '</div></section>',
+      ),
+    ),
+    clicks: [{ at: '#go', expect: '0.1' }],
+  },
+  {
+    name: 'opacity-zero-overlay-is-still-hit-visibility-hidden-is-not',
+    html: page(
+      marked(
+        '0',
+        '<section data-avb-p="0" style="position:relative;height:300px">' +
+          marked('0.0', '<h1 id="under" data-avb-p="0.0" style="margin:0;height:80px">Under glass</h1>') +
+          marked('0.1', '<div id="ghost" data-avb-p="0.1" style="position:absolute;left:0;top:0;width:300px;height:80px;opacity:0"></div>') +
+          marked('0.2', '<h2 id="below" data-avb-p="0.2" style="margin:0;margin-top:120px;height:80px">Below</h2>') +
+          marked('0.3', '<div id="hidden" data-avb-p="0.3" style="position:absolute;left:0;top:120px;width:300px;height:80px;visibility:hidden"></div>') +
+          '</section>',
+      ),
+    ),
+    clicks: [
+      { at: '#under', expect: '0.1' },
+      { at: '#below', expect: '0.2' },
+    ],
+  },
+  {
+    // A Heading-like line of plain words with tagged children (`Our wild words<br><strong>work</strong>`): a click on the bare words
+    // still picks the text node, but a hover on them is their owner's, since only tagged children get an outline of their own.
+    name: 'plain-text-among-tagged-children',
+    html: page(
+      marked(
+        '0',
+        '<p id="line" data-avb-p="0" style="margin:0;display:inline-block;font:40px/1.2 sans-serif;white-space:nowrap">' +
+          'Our wild wild wild wild words ' +
+          '<strong id="strong" data-avb-p="0.1">work</strong>' +
+          '</p>',
+      ),
+    ),
+    clicks: [
+      { at: '#line', expect: '0.0', hover: '0' },
+      { at: '#strong', expect: '0.1' },
+    ],
   },
   {
     name: 'fixed-header-scrolled',

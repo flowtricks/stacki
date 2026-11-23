@@ -100,10 +100,15 @@ installTextMarks({
   visible: () => true,
   post: (message) => posted.push(message),
 });
+// Hovering words draws no outline of their own (a component's own words are the instance's hover), so what the frame says about
+// words is read from the pick a click makes; the hover is asserted to stay empty.
 const hoverAt = (x, y) => {
+  window.dispatchEvent(new window.MouseEvent('click', { clientX: 5000, clientY: 5000 }));
   window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: 5000, clientY: 5000 }));
   window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: x, clientY: y }));
-  return posted.at(-1)?.hover;
+  assert.equal(posted.at(-1)?.hover, undefined, 'no hover outline of its own over words');
+  window.dispatchEvent(new window.MouseEvent('click', { clientX: x, clientY: y }));
+  return posted.at(-1)?.picked;
 };
 
 test('slot words reach the instance through its slot, so they are offered', () => {
@@ -131,10 +136,9 @@ test('the pointer on the padding is the component, not its words', () => {
   assert.equal(hoverAt(310, 75), undefined);
 });
 
-test('a root with neither padding nor a border draws its slot words as a run of their own, owned by the page', () => {
+test('a root with neither padding nor a border is its words: no outline of their own (no run the page wrote)', () => {
   focus = new Set();
-  const hover = hoverAt(60, 200);
-  assert.deepEqual({ x: hover?.x, w: hover?.w, scope: hover?.scope, owner: hover?.owner }, { x: 20, w: 200, scope: '0.2', owner: 'slot' });
+  assert.equal(hoverAt(60, 200), undefined);
 });
 
 test('with the Button selected its words are still hovered and marked at rest at their own size', () => {

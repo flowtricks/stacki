@@ -2,7 +2,8 @@
 // (docs/canvas-closed-component-text.md). The rule: content is page-owned (blue, `element`) only when the page wrote it, as a
 // node of the open file or as children passed into a slot of the enclosing instance; everything else inside a component instance
 // (its root, its own markup, a wrapper it draws around the slot, text from a prop) is the component's (green, `component`).
-// Method, three layers. (1) The pure rule `outlineKind` / `ownershipOf` is pinned with literal subjects and path lists, including
+// Words the page wrote as text nodes into a slot (a recorded run) are slot-owned runs; that case needs the preview's markers and is
+// pinned in the real window (test/electron/preload/slotTextHoverCanvas.test.js, Heading). Method, three layers. (1) The pure rule `outlineKind` / `ownershipOf` is pinned with literal subjects and path lists, including
 // the assertion that fires when something inside a component with no slot ancestor would be plain. (2) A JSDOM page tagged as
 // the preview renders it (a Button whose own `<span class="label">` wraps the slot words, a Heading whose root holds them, a
 // page-authored `<em>` inside a slot, a Button nested in a Card's slot, a Button in a loop) is hovered, picked and typed in
@@ -133,10 +134,15 @@ installTextMarks({
   visible: () => true,
   post: (message) => posted.push(message),
 });
+// Hovering words draws no outline of their own (a component's own words are the instance's hover), so what the frame says about
+// words is read from the pick a click makes; the hover is asserted to stay empty.
 const hoverAt = (x, y) => {
+  window.dispatchEvent(new window.MouseEvent('click', { clientX: 5000, clientY: 5000 }));
   window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: 5000, clientY: 5000 }));
   window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: x, clientY: y }));
-  return posted.at(-1)?.hover;
+  assert.equal(posted.at(-1)?.hover, undefined, 'no hover outline of its own over words');
+  window.dispatchEvent(new window.MouseEvent('click', { clientX: x, clientY: y }));
+  return posted.at(-1)?.picked;
 };
 const pickAt = (x, y) => {
   hoverAt(x, y);
@@ -144,27 +150,24 @@ const pickAt = (x, y) => {
   return posted.at(-1)?.picked;
 };
 
-test("slot words are the page's: their run is slot-owned whatever element the component draws around them, hovered and picked", () => {
+test("slot words a Button prints from a string into its own span (set:html, no run the page wrote) are the component's", () => {
   const hover = hoverAt(100, 48);
-  assert.equal(hover?.owner, 'slot');
-  // The run is the words' own box; the wrapper span and the Button around it are drawn by the instance's own (green) outline.
+  assert.equal(hover?.owner, 'component');
   assert.equal(hover?.w, 244);
-  assert.equal(pickAt(100, 48)?.owner, 'slot');
+  assert.equal(pickAt(100, 48)?.owner, 'component');
 });
 
-test('a Heading that is only its slot words draws the words as a slot-owned run, beside its own root', () => {
-  const hover = hoverAt(60, 120);
-  assert.equal(hover?.owner, 'slot');
-  assert.equal(hover?.scope, '0.1');
+test('a Heading that is only its words, with no run the page wrote, draws no text outline: its own (green) hover is the hover', () => {
+  assert.equal(hoverAt(60, 120), undefined);
 });
 
 test('an element only the page tagged, inside an instance, is slot content', () => {
   assert.equal(hoverAt(60, 228)?.owner, 'slot');
 });
 
-test("a Button nested in a Card's slot and a Button in a loop: their own slot words are blue runs, their roots are the components'", () => {
-  assert.equal(hoverAt(60, 332)?.owner, 'slot');
-  assert.equal(hoverAt(60, 448)?.owner, 'slot');
+test("a Button nested in a Card's slot and a Button in a loop print their words themselves: the component's", () => {
+  assert.equal(hoverAt(60, 332)?.owner, 'component');
+  assert.equal(hoverAt(60, 448)?.owner, 'component');
 });
 
 test("text a component renders from a prop, in its own element, is the component's", () => {

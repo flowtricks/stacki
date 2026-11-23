@@ -168,14 +168,16 @@ const COMPONENTS = [
   const card = (instance, heading, text) =>
     `<!--avb-s:${instance}--><div class="card_content" data-avb-p="${instance} ${cardPath(instance)}">` +
     `<h3 data-avb-p="${headingPath} src/components/typography/Heading.astro|0">${heading}</h3>` +
-    `<p data-avb-p="${paragraphPath} src/components/typography/Paragraph.astro|0">${text}</p></div><!--avb-e:${instance}-->`;
+    `<p data-avb-p="${paragraphPath} src/components/typography/Paragraph.astro|0">${text}</p>` +
+    // A link stretched over the card, as a Card with a button draws it (`::after` over the whole card): the topmost element at every
+    // point of the card, and inside the card's own instance, so the words beneath it are still the ones the pointer is on.
+    '<a href="#" data-avb-p="9" style="position:absolute;left:0;top:0;width:100%;height:100%;display:block"></a></div><!--avb-e:' +
+    `${instance}-->`;
   const checksum = crypto.createHash('sha256').update(PAGE_SOURCE).digest('hex');
   const markup =
-    `<!doctype html><meta charset=utf-8><style>body{margin:0;font:20px/1.4 serif}.card_content{width:420px;margin-bottom:20px}h3,p{margin:0}</style><body>${stampComment({ file: PAGE, checksum })}` +
+    `<!doctype html><meta charset=utf-8><style>body{margin:0;font:20px/1.4 serif}.card_content{position:relative;width:420px;margin-bottom:20px}h3,p{margin:0}</style><body>${stampComment({ file: PAGE, checksum })}` +
     card(0, 'Lorem ipsum dolor sit amet', 'First body words that sit in a paragraph.') +
     card(1, 'Second heading', 'Second body words.') +
-    // A link stretched over the cards, as a Card with a button draws it (`::after` over the whole card): the topmost element at every point.
-    '<a href="#" data-avb-p="9" style="position:absolute;left:0;top:0;width:420px;height:150px;display:block"></a>' +
     '</body>';
   const catalog = {
     type: 'avb:text-catalog',
@@ -229,19 +231,26 @@ const COMPONENTS = [
        await post(JSON.parse(fs.readFileSync(${JSON.stringify(catalogFile)}, 'utf8')));
        const centre = (selector, index) => run('(() => { const r = ' + frame + '.document.querySelectorAll(' + JSON.stringify(selector) + ')[' + index + '].getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }; })()');
        const posts = () => run('JSON.stringify(window.posts.filter((m) => /^avb:text/.test(m.type)))').then(JSON.parse);
-       // With nothing selected, pointing at a Card's words outlines and names them at once; pointing at nothing does not.
+       // With nothing selected, a click on a Card's words picks and names them at once (the pointer alone draws no outline of its own over a
+       // component's own words); pointing at nothing leaves no hover.
        const point = (at) => win.webContents.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y });
-       const marksWithHover = (list) => list.filter((m) => m.type === 'avb:text-marks' && m.hover);
+       const marksWithPick = (list) => list.filter((m) => m.type === 'avb:text-marks' && m.picked);
        out.hover = await waitFor({
-         what: 'the heading was hovered with nothing selected',
+         what: 'the heading was picked with nothing selected',
          read: async () => {
-           point(await centre('h3', 1));
-           return marksWithHover(await posts());
+           const at = await centre('h3', 1);
+           point(at);
+           win.webContents.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+           win.webContents.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+           return marksWithPick(await posts());
          },
          until: (list) => list.length > 0,
        });
        await run('window.posts.length = 0');
        point({ x: 790, y: 690 });
+       // A click off the words drops the pick: the one change the frame reports there, the pointer alone having drawn nothing.
+       win.webContents.sendInputEvent({ type: 'mouseDown', x: 790, y: 690, button: 'left', clickCount: 1 });
+       win.webContents.sendInputEvent({ type: 'mouseUp', x: 790, y: 690, button: 'left', clickCount: 1 });
        out.hoverGone = await waitFor({ what: 'the hover ended off the words', read: posts, until: (list) => list.some((m) => m.type === 'avb:text-marks' && !m.hover) });
        await run('window.posts.length = 0');
        // Selecting both Cards marks the words each can edit; four marks (two words a Card) mean the frame matched every target.
@@ -372,9 +381,9 @@ const COMPONENTS = [
     check('the browser probe ran', false, `${run.stdout}\n${run.stderr}`.slice(0, 1500));
   } else {
     const result = JSON.parse(line.slice('RESULT '.length));
-    const hovered = result.hover.at(-1)?.hover;
+    const hovered = result.hover.at(-1)?.picked;
     check(
-      'the Card heading is hovered before anything is selected, named for the component that draws it',
+      'the Card heading is picked before anything is selected, named for the component that draws it',
       hovered?.label === 'Heading' && hovered.w > 0 && hovered.h > 0,
       JSON.stringify(result.hover),
     );

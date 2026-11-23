@@ -12,7 +12,9 @@
 // 3 once and the bar follows; Enter commits and Escape reverts; invalid and out-of-order entries write nothing and say why; adding a
 // wider or narrower breakpoint inserts it by size with a default name and writes; invalid adds are refused; removing writes and the
 // bar loses it, asks first only when synced queries are remembered, and records an undo step; the list may be emptied; a corrupt file
-// shows the defaults and is never written over; versions 1 and 2 read at the same widths without a write.
+// shows the defaults and is never written over; versions 1 and 2 read at the same widths without a write. Why a value was refused is
+// a toast said once when it is committed (the bundle is injected with the toast capture); the card only takes the error look
+// (data-invalid and aria-invalid), so no paragraph is ever added under a field.
 const assert = require('node:assert/strict');
 const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
@@ -22,6 +24,7 @@ const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { waitFor } = require('../../helpers/waitFor.js');
+const { toastMessages } = require('../../helpers/toastCapture');
 
 const directory = repoPath('node_modules/.stacki-test/project-breakpoints');
 fs.mkdirSync(directory, { recursive: true });
@@ -43,6 +46,7 @@ export { serializeBreakpoints, BREAKPOINT_DEFAULTS, BREAKPOINT_DEFAULT_LIST, BRE
     loader: 'ts',
   },
   outfile: output,
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -335,7 +339,13 @@ test('a spaced entry for the same value normalizes and writes nothing', async ()
   root.unmount();
 });
 
-test('invalid and out-of-order entries write nothing and the card says why under its field', async () => {
+const clearToasts = () => {
+  globalThis.stackiCapturedToasts = [];
+};
+const noParagraph = () =>
+  assert.equal(document.querySelectorAll('[role="alert"], .breakpoints-problem, .app-settings-notice').length, 0, 'no paragraph is added');
+
+test('invalid and out-of-order entries write nothing; the card wears the error look and says why once, as a toast', async () => {
   const { root, storage } = await mount('fixture-invalid', undefined);
   const cases = [
     ['Tablet', 'abc', /Type a width like 64rem/],
@@ -349,11 +359,12 @@ test('invalid and out-of-order entries write nothing and the card says why under
     ['Laptop', '40rem', /Laptop must be larger than Tablet \(48rem\)/],
   ];
   for (const [label, text, message] of cases) {
+    clearToasts();
     await type(fieldFor(label), text);
     assert.equal(storage.state.writes.length, 0, `${label} ${JSON.stringify(text)} writes nothing`);
-    const alert = card(label).querySelector('[role="alert"]');
-    assert.ok(alert, `${label} ${JSON.stringify(text)} has an inline message`);
-    assert.match(alert.textContent, message);
+    assert.match(toastMessages(), message, `${label} ${JSON.stringify(text)} says why in a toast`);
+    noParagraph();
+    assert.equal(fieldFor(label).getAttribute('aria-invalid'), 'true');
     assert.equal(card(label).hasAttribute('data-invalid'), true);
     assert.equal(fieldFor(label).value, text, 'what was typed stays to be fixed');
     await key(fieldFor(label), 'Escape');
@@ -480,19 +491,27 @@ test('the add card shows the icon the new breakpoint will get, live', async () =
 test('adds that do not fit write nothing and say why: syntax, the same as Desktop, the same value, the name, the count', async () => {
   const { root, storage } = await mount('fixture-add-bad', undefined);
   await click(addButton());
+  // Typing only turns the value red; Enter (or Add) says why, once, as a toast.
   const attempt = async (value) => {
     await act(async () => setValue(addValue(), value));
-    return addCard().querySelector('[role="alert"]')?.textContent;
+    assert.equal(addValue().getAttribute('aria-invalid'), 'true', `${value} wears the error look`);
+    clearToasts();
+    await key(addValue(), 'Enter');
+    await settle();
+    noParagraph();
+    return toastMessages();
   };
   assert.match(await attempt('abc'), /Type a width like 64rem/);
   assert.match(await attempt('90rem'), /It must differ from Desktop \(90rem\)/);
   assert.match(await attempt('1440px'), /It must differ from Desktop \(90rem\)/);
   assert.match(await attempt('64rem'), /Laptop already uses 64rem/);
-  assert.equal(addCard().querySelector('.breakpoints-add-confirm').disabled, true);
+  assert.equal(addCard().hasAttribute('data-invalid'), true, 'the card wears the error look');
   await act(async () => setValue(addCard().querySelector('.breakpoints-name-input'), 'laptop'));
   await act(async () => setValue(addValue(), '100rem'));
-  assert.match(addCard().querySelector('[role="alert"]').textContent, /A name is 1 to 24 characters, and each one is different/);
+  clearToasts();
   await key(addValue(), 'Enter');
+  assert.match(toastMessages(), /A name is 1 to 24 characters, and each one is different/);
+  noParagraph();
   await settle();
   assert.equal(storage.state.writes.length, 0, 'none of it was written');
   await key(addValue(), 'Escape');
@@ -541,31 +560,41 @@ test('Desktop has a number: its frame width, never a media query; moving it is l
   assert.deepEqual(bar().slice(0, 2), ['Desktop — 1', 'Laptop (1023px) — 2'], 'the bar does not change: Desktop is still full width');
   // Below the largest narrower breakpoint is refused, naming it.
   const writes = storage.state.writes.length;
+  clearToasts();
   await type(desktopField(), '60rem');
   assert.equal(storage.state.writes.length, writes, 'nothing is written');
-  assert.match(card('Desktop').querySelector('[role="alert"]').textContent, /Laptop \(64rem\) would end up on the other side of Desktop/);
+  assert.match(toastMessages(), /Laptop \(64rem\) would end up on the other side of Desktop/);
+  noParagraph();
+  assert.equal(desktopField().getAttribute('aria-invalid'), 'true', 'Desktop wears the error look');
   await key(desktopField(), 'Escape');
+  clearToasts();
   await type(desktopField(), 'abc');
-  assert.match(card('Desktop').querySelector('[role="alert"]').textContent, /Type a width like 64rem/);
+  assert.match(toastMessages(), /Type a width like 64rem/);
   root.unmount();
   const wide = await mount('fixture-desktop-wide', versionFour([up('bp-1', 100, 'rem', { name: 'Large' }), down('laptop', 64)]));
+  clearToasts();
   await type(desktopField(), '100rem');
-  assert.match(card('Desktop').querySelector('[role="alert"]').textContent, /Large \(100rem\) would end up on the other side of Desktop/);
+  assert.match(toastMessages(), /Large \(100rem\) would end up on the other side of Desktop/);
+  clearToasts();
   await type(desktopField(), '70rem');
+  assert.equal(toastMessages(), '', 'a value between the two says nothing');
   assert.equal(wide.storage.state.writes.length, 1, 'between the two is allowed');
   wide.root.unmount();
 });
 
 test('a breakpoint cannot be typed across Desktop: the card says so', async () => {
   const { root, storage } = await mount('fixture-cross', undefined);
+  clearToasts();
   await type(fieldFor('Laptop'), '95rem');
-  assert.match(card('Laptop').querySelector('[role="alert"]').textContent, /Laptop must be smaller than Desktop \(90rem\)/);
+  assert.match(toastMessages(), /Laptop must be smaller than Desktop \(90rem\)/);
+  noParagraph();
   assert.equal(storage.state.writes.length, 0);
   await key(fieldFor('Laptop'), 'Escape');
   root.unmount();
   const wider = await mount('fixture-cross-up', versionFour([up('bp-1', 100, 'rem', { name: 'Large' })]));
+  clearToasts();
   await type(fieldFor('Large'), '80rem');
-  assert.match(card('Large').querySelector('[role="alert"]').textContent, /Large must be larger than Desktop \(90rem\)/);
+  assert.match(toastMessages(), /Large must be larger than Desktop \(90rem\)/);
   assert.equal(wider.storage.state.writes.length, 0);
   wider.root.unmount();
 });
@@ -652,9 +681,12 @@ test('renaming a breakpoint saves the name; a taken or empty name is refused', a
   assert.ok(fieldFor('Mobile'), 'the card and the bar take the new name');
   assert.equal(bar()[3], 'Mobile (479px) — 4');
   const writes = storage.state.writes.length;
+  clearToasts();
   await type(nameFor('Tablet'), 'laptop', 'Enter');
   assert.equal(storage.state.writes.length, writes, 'a name another breakpoint has is refused');
-  assert.match(card('Tablet').querySelector('[role="alert"]').textContent, /A name is 1 to 24 characters/);
+  assert.match(toastMessages(), /A name is 1 to 24 characters/, 'the refusal is a toast');
+  noParagraph();
+  assert.equal(nameFor('Tablet').getAttribute('aria-invalid'), 'true', 'the name takes the error look');
   await type(nameFor('Tablet'), '   ', 'Enter');
   assert.equal(storage.state.writes.length, writes);
   root.unmount();
@@ -663,7 +695,8 @@ test('renaming a breakpoint saves the name; a taken or empty name is refused', a
 test('a corrupt file shows the defaults, explains itself, disables every field and is never written over', async () => {
   const { root, storage } = await mount('fixture-corrupt', '{ "version": 3, "breakpoints": [ { "id": 5 } ] }');
   assert.deepEqual(bar().slice(1, 4), ['Laptop (1023px) — 2', 'Tablet (767px) — 3', 'Phone (479px) — 4']);
-  assert.match(document.querySelector('[role="alert"]').textContent, /left as it is/);
+  assert.match(toastMessages(), /left as it is/, 'the unreadable file is a toast');
+  noParagraph();
   assert.equal(fieldFor('Tablet').disabled, true);
   assert.equal(addButton().disabled, true);
   assert.equal(card('Tablet').querySelector('.breakpoints-remove').disabled, true);

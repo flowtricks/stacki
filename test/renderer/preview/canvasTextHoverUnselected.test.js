@@ -1,5 +1,5 @@
-// Goal: the words a component prints from a prop show their hover outline and name under the
-// pointer with nothing selected, not only after the component is selected. A prop bound to code
+// Goal: the words a component prints from a prop draw no hover outline of their own (the pointer on them is the instance's hover:
+// docs/canvas-closed-component-text.md), and a click picks them with nothing selected, not only after the component is selected. A prop bound to code
 // the editor cannot follow shows a refused look instead. Words a component writes itself (no prop
 // or slot of the instance reaches them) get nothing: they are the component's own hover.
 // Method: a JSDOM page tagged like a rendered Card and Button with per-element boxes, a stubbed
@@ -95,17 +95,22 @@ installTextMarks({
 });
 const move = (x, y) => window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: x, clientY: y }));
 
-test('prop text under the pointer is hovered with nothing selected', () => {
-  move(40, 40);
-  const hover = posted.at(-1).hover;
-  assert.ok(hover, 'the heading is hovered before its Card is selected');
-  assert.deepEqual(
-    [hover.kind, hover.x, hover.y, hover.w, hover.h],
-    ['component', 20, 20, 300, 40],
-    'the outline is the words box, named for the component that draws it',
-  );
-  assert.equal(hover.label, 'Heading');
-  assert.equal(posted.at(-1).picked, undefined, 'hover picks nothing: a click still selects the component');
+// A component's own words draw no outline of their own on hover (the pointer on them is the instance's hover), but a click still
+// picks them: the pick carries the box and the name.
+const clickAt = (x, y) => {
+  move(500, 250);
+  window.dispatchEvent(new window.MouseEvent('click', { clientX: 500, clientY: 250 }));
+  move(x, y);
+  assert.equal(posted.at(-1).hover, undefined, "no hover outline over a component's own words");
+  window.dispatchEvent(new window.MouseEvent('click', { clientX: x, clientY: y }));
+  return posted.at(-1).picked;
+};
+
+test('prop text under the pointer draws no hover of its own, and a click picks it with nothing selected', () => {
+  const picked = clickAt(40, 40);
+  assert.ok(picked, 'the heading is picked before its Card is selected');
+  assert.deepEqual([picked.kind, picked.x, picked.y, picked.w, picked.h], ['component', 20, 20, 300, 40], 'the pick is the words box, named for the component');
+  assert.equal(picked.label, 'Heading');
 });
 
 test('off the words nothing is hovered', () => {
@@ -123,10 +128,11 @@ test('a prop bound to code the editor cannot follow shows the refused look', () 
 
 test('words the page writes inside an unselected instance hover too (a Button label as its child text)', () => {
   move(40, 160);
-  const hover = posted.at(-1).hover;
-  assert.ok(hover, 'slot text hovers before selection');
-  assert.equal(hover.y, 140);
-  assert.equal(hover.scope, '0.1', 'and names the instance it belongs to');
+  assert.equal(posted.at(-1).hover, undefined, 'slot text draws no hover of its own');
+  const picked = clickAt(40, 160);
+  assert.ok(picked, 'a click picks slot text before selection');
+  assert.equal(picked.y, 140);
+  assert.equal(picked.scope, '0.1', 'and names the instance it belongs to');
 });
 
 test('words a component draws that no prop or slot reaches get no outline, no label and no double click', () => {
@@ -147,11 +153,9 @@ test('the words are still hovered with their own component selected, or any othe
     // A click, then the pointer travels on: the click's gesture must not read as a drag still in flight.
     window.dispatchEvent(new window.MouseEvent('pointerdown', { clientX: 400, clientY: 250, buttons: 1 }));
     window.dispatchEvent(new window.MouseEvent('pointerup', { clientX: 400, clientY: 250, buttons: 0 }));
-    move(500, 250);
-    move(40, 40);
-    const hover = posted.at(-1).hover;
-    assert.ok(hover, `hovered with ${[...selected]} selected`);
-    assert.equal(hover.label, 'Heading');
+    const picked = clickAt(40, 40);
+    assert.ok(picked, `picked with ${[...selected]} selected`);
+    assert.equal(picked.label, 'Heading');
   }
   focus = new Set();
 });
@@ -161,7 +165,7 @@ test('nothing is hovered while a button is held down: a drag or a resize is in f
   window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: 40, clientY: 40, buttons: 1 }));
   assert.equal(posted.at(-1).hover, undefined);
   move(40, 40);
-  assert.ok(posted.at(-1).hover, 'hovered again once the button is up');
+  assert.equal(posted.at(-1).hover, undefined, 'and still no hover of its own once the button is up');
 });
 
 test('one click on hovered prop text picks it at once, whatever is selected, and keeps it when the selection arrives', () => {
@@ -189,7 +193,8 @@ test('words under a link stretched over the whole component are still the ones h
   link.setAttribute('data-avb-p', 'Button.astro|0 0.1.9');
   link.setAttribute('data-box', '0,0,600,300');
   const innermost = document.elementFromPoint;
-  document.body.append(link);
+  // The link lies inside the instance whose words it covers, as a stretched link does.
+  (document.querySelector('[data-avb-p~="0.1"]') ?? document.body).append(link);
   // The hit test as it was before the link was added: the words are in the stack beneath it.
   const beneath = (x, y) =>
     [...document.body.querySelectorAll('[data-box]')]
@@ -201,7 +206,8 @@ test('words under a link stretched over the whole component are still the ones h
   try {
     move(500, 250);
     move(40, 40);
-    assert.equal(posted.at(-1).hover?.label, 'Heading', 'hover finds the heading beneath the link');
+    window.dispatchEvent(new window.MouseEvent('click', { clientX: 40, clientY: 40 }));
+    assert.equal(posted.at(-1).picked?.label, 'Heading', 'the words beneath the link are picked');
     const hit = findTextHit(CATALOG, { target: link, clientX: 40, clientY: 40 });
     assert.ok(hit, 'a double click on the stretched link resolves a text');
     assert.equal(hit.target.key, CATALOG.targets[0].key, 'and it is the words under the pointer, not the link text or the nearest one');

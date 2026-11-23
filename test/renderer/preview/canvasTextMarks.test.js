@@ -116,19 +116,22 @@ test('only the selected instance marks its text, dashed at rest', () => {
   select('0.3.0');
   assert.equal(layer().children.length, 0, 'a selected child marks nothing');
   select('0.5');
-  assert.equal(layer().children.length, 1, "a component's own root holding slot words marks the words, a run of their own");
+  assert.equal(layer().children.length, 0, "a component's own root is the selection, unmarked");
 });
 
 test('hovering and clicking report the text the way the app names elements', () => {
   select('0.3', '0.4');
   move(50, 60);
   const hovered = posted.at(-1);
+  assert.equal(hovered.hover, undefined, "a component's own words draw no hover of their own");
+  assert.equal(hovered.picked, undefined);
+  assert.equal(layer().children.length, 1, 'the dash stays at rest under the pointer');
+  click(50, 60);
   assert.deepEqual(
-    [hovered.hover.label, hovered.hover.kind, hovered.hover.y, hovered.picked],
-    ['Heading', 'component', 40, undefined],
+    [posted.at(-1).picked.label, posted.at(-1).picked.kind, posted.at(-1).picked.y],
+    ['Heading', 'component', 40],
     'a component root is named for its component',
   );
-  assert.equal(layer().children.length, 1, 'the hovered text leaves its dash to the app');
   click(40, 220);
   const picked = posted.at(-1).picked;
   assert.deepEqual([picked.label, picked.kind], ['.button_main_text', 'text'], 'a plain element');
@@ -148,7 +151,7 @@ test('the text being typed in stays picked while the editor is open', () => {
   move(50, 60);
   const typing = posted.at(-1);
   assert.equal(typing.picked.label, 'Heading', 'its parent keeps the picked look');
-  assert.deepEqual(typing.hover, typing.picked, 'the pointer over the editor is on the picked text, which the app neither tints nor outlines');
+  assert.equal(typing.hover, undefined, 'the pointer over the editor draws no hover');
   assert.equal(layer().children.length, 0, 'no dash under the editor');
   editing = undefined;
   editingElement.firstChild.data = 'Here for you.';

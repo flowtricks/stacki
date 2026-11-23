@@ -40,7 +40,10 @@ let lastHover: { readonly path: string | undefined; readonly occurrence: number;
 let lastPointer: { readonly x: number; readonly y: number } | undefined;
 
 // Tells the app what the pointer is over, when that changed.
-function reportHover(scoped: ReturnType<typeof nodeAt>, element: Element | undefined): void {
+function reportHover(picked: ReturnType<typeof nodeAt>, element: Element | undefined): void {
+  // What a hover draws is what a click would pick, except bare text: untagged words among tagged siblings are no hover target
+  // of their own, so the hover is their owner's (the Heading around `Our wild<br><strong>work</strong>`), as over any other part of it.
+  const scoped = picked.textOwner === undefined ? picked : { ...picked, path: picked.textOwner };
   // In deep outline mode a hover inside a closed component names the element there (frameOutlineMode.ts); a click never does.
   const deep = deepHoverAt(element, scoped.path);
   const { path: nodePath, occurrence, pseudo } = deep === undefined ? scoped : { ...deep, pseudo: undefined };
@@ -77,7 +80,7 @@ const nodeAt = (
   target: Node | undefined,
   x?: number,
   y?: number,
-): { path: string | undefined; occurrence: number; outside: boolean; pseudo: PseudoLayer | undefined } => {
+): { path: string | undefined; occurrence: number; outside: boolean; pseudo: PseudoLayer | undefined; textOwner?: string } => {
   const tagged = taggedFor(target, x, y);
   // Whether anything at all was under the pointer, focus aside. No path
   // means the canvas could not place the click; `outside` means it could,
@@ -108,7 +111,8 @@ const nodeAt = (
   if (best && x !== undefined && y !== undefined) {
     const text = inlineTextPathAt(best, x, y);
     if (text) {
-      return { path: text, occurrence: occurrenceOf(best, target), outside: false, pseudo: undefined };
+      // A bare text node among tagged siblings has no tag of its own: a click still picks it, but a hover is its owner's (hoverTarget).
+      return { path: text, occurrence: occurrenceOf(best, target), outside: false, pseudo: undefined, textOwner: best };
     }
   }
   // The space between a loop's items is the element holding them as far as the
@@ -223,48 +227,12 @@ const targetAt = (event: MouseEvent): Node | undefined => {
   return event.target instanceof window.Node ? event.target : undefined;
 };
 
-// What the pointer is over at a point, past what no source owns: an embed
-// under it (embedAt), or, when the topmost element is markup no file wrote — a
-// script's overlay, a lightbox's click catcher, a widget's layer — the first
-// element beneath it that a file did write. Without this, an invisible overlay
-// a script laid over the page made every click select the layout.
-const pointTarget = (hit: Element, x: number, y: number): Element => {
-  const embed = embedAt(hit, x, y);
-  if (embed !== hit) {
-    return embed;
-  }
-  if (hit.hasAttribute(PATH_ATTR)) {
-    return hit;
-  }
-  return markedBeneath(hit, x, y) ?? hit;
-};
-
-// The first element under the point, below `hit`, that carries a path of its
-// own and is not one of hit's ancestors (those already answer for it). Bounded:
-// the stack under a point is short on any real page.
-const STACK_CHECKED_MAX = 32;
-const markedBeneath = (hit: Element, x: number, y: number): Element | undefined => {
-  if (typeof document.elementsFromPoint !== 'function') {
-    return undefined; // An engine without it (jsdom) keeps the plain hit.
-  }
-  const stack = document.elementsFromPoint(x, y);
-  const count = Math.min(stack.length, STACK_CHECKED_MAX);
-  for (let index = 0; index < count; index++) {
-    const element = stack[index];
-    if (element === undefined) {
-      break;
-    }
-    if (element === hit) {
-      continue;
-    }
-    if (!element.hasAttribute(PATH_ATTR)) {
-      continue;
-    }
-    // An ancestor already answers for the hit through the ordinary walk.
-    return element.contains(hit) ? undefined : element;
-  }
-  return undefined;
-};
+// What the pointer is over at a point: the topmost element the browser itself hits (`elementFromPoint` already accounts for
+// stacking contexts, z-index, pointer-events, visibility, clipping and transforms), or the embed under it (embedAt). Nothing is
+// looked for beneath it: a covered element is not what a real pointer reaches, so it is never outlined, picked or edited. An
+// element no file wrote (a script's overlay, a widget's layer) answers through its nearest tagged ancestor, as the browser's own
+// event would bubble to it; nothing mapped above it answers nothing.
+const pointTarget = (hit: Element, x: number, y: number): Element => embedAt(hit, x, y);
 
 // Embedded documents take no pointer in select mode (frameInteraction.ts), so
 // the hit test lands on the element around them. The embed itself is what the

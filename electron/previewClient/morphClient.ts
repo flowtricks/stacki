@@ -24,9 +24,9 @@
 
 import { stripTemplateMarkers, asDocument, inertNoscripts } from './morphNodes';
 import { parsePreviewRoute } from '../../shared/properties/previewRoute';
-import { previewHost, stripAnchors, stripPreviewInstrumentation, syncAnchors, syncStamps } from './morphAnchors';
+import { dismissErrorOverlay, previewHost, stripAnchors, stripPreviewInstrumentation, syncAnchors, syncStamps } from './morphAnchors';
 import { patchAttrs, patchChildren } from './morphPatch';
-import { addedScripts, noteScripts, runScripts, noteStyles, loadStyles, refreshDevStyles } from './morphAssets';
+import { addedScripts, describeScriptChange, noteScripts, runScripts, noteStyles, loadStyles, refreshDevStyles } from './morphAssets';
 import { createVariantPreview } from './morphVariant';
 
 declare global {
@@ -54,6 +54,15 @@ if (host === 'browser') {
 // headers, and a const declared below that pull would not exist yet.
 const variantPreview = createVariantPreview({ paint: paintRendering, restore: () => void update(), supersede: () => activePull?.abort() });
 
+// The dev server answered with an error (a file mid-edit does not compile): not a rendering to patch in, and not a
+// reason to reload. The page on show stays as it is, with its intro played and its scroll kept; the app's own
+// check names the error, and the next good rendering patches as always.
+class HeldRendering extends Error {
+  constructor(readonly status: number) {
+    super('dev server answered ' + status);
+  }
+}
+
 function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<FetchedDocument> {
   const rendering =
     initialHTML === undefined
@@ -63,7 +72,7 @@ function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<Fetc
           // but retain Astro's intentional 404 status for an HTML page rendering.
           const html404 = response.status === 404 && response.headers.get('content-type')?.includes('text/html');
           if (!response.ok && !html404) {
-            throw new Error('dev server answered ' + response.status);
+            throw new HeldRendering(response.status);
           }
           return response.text();
         })
@@ -129,18 +138,20 @@ type ReloadReason = 'scripts-changed' | 'patch-failed';
 // reason to be diagnosed. A keepalive fetch to the page's own dev server, because it must outlive the page that sends it
 // (Studio ships this file and its no-tracking scan forbids the beacon API; the request never leaves the dev server).
 const RELOAD_DETAIL_CHARS_MAX = 240;
+function logToDevServer(line: string): void {
+  try {
+    fetch('/__avb/reload?r=' + encodeURIComponent(line.slice(0, RELOAD_DETAIL_CHARS_MAX)), { cache: 'no-store', keepalive: true }).catch(() => undefined);
+  } catch {
+    /* the log line is a courtesy */
+  }
+}
 function reloadFor(reason: ReloadReason, detail: string): void {
   try {
     window.parent.postMessage({ type: 'avb:preview-reload', reason }, '*');
   } catch {
     /* no parent to tell */
   }
-  try {
-    const line = reason + ': ' + detail.slice(0, RELOAD_DETAIL_CHARS_MAX);
-    fetch('/__avb/reload?r=' + encodeURIComponent(line), { cache: 'no-store', keepalive: true }).catch(() => undefined);
-  } catch {
-    /* the log line is a courtesy; the reload is not */
-  }
+  logToDevServer('reloaded instead of patching (' + reason + ': ' + detail + ')');
   location.reload();
 }
 
@@ -244,7 +255,9 @@ async function update(): Promise<void> {
       again = true;
     }
   } catch (error: unknown) {
-    if (pull?.signal.aborted) {
+    if (error instanceof HeldRendering && error.status >= 500 && previousDocument !== undefined) {
+      logToDevServer('kept the page (the rendering failed: ' + error.message + ')');
+    } else if (pull?.signal.aborted) {
       // Our own cancellation is supersession, not a failed preview. The next
       // pass consumes the newest push or fetches the newly selected route.
       again = true;
@@ -276,7 +289,7 @@ function applyRendering(next: FetchedDocument): void {
   }
   const added = addedScripts(previousDocument, next.clean);
   if (added === undefined) {
-    reloadFor('scripts-changed', 'a script that already ran changed, went away, or an inline one arrived');
+    reloadFor('scripts-changed', describeScriptChange(previousDocument, next.clean));
     return;
   }
   const liveRoot = document.documentElement;
@@ -307,6 +320,7 @@ function applyRendering(next: FetchedDocument): void {
   }
   syncAnchors(liveBody, serverBody);
   syncStamps(document, next.withAnchors);
+  dismissErrorOverlay(liveBody);
   document.dispatchEvent(new CustomEvent('avb:after-patch', { detail: next.withAnchors }));
   document.dispatchEvent(new CustomEvent('avb:morphed', { detail: next.withAnchors }));
 }

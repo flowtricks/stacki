@@ -125,6 +125,24 @@ export function addedScripts(previousDocument: Document, nextDocument: Document)
   return i === ordered.length ? added : undefined;
 }
 
+// One short line for the log: which script made the page unpatchable.
+export function describeScriptChange(previousDocument: Document, nextDocument: Document): string {
+  const label = (script: ScriptInfo): string => (script.src === '' ? 'inline script "' + script.signature.slice(0, 60) + '"' : script.src.slice(0, 120));
+  const before = scriptsOf(previousDocument);
+  const after = scriptsOf(nextDocument);
+  const afterSignatures = new Set(after.map((script) => script.signature));
+  const beforeSignatures = new Set(before.map((script) => script.signature));
+  const gone = before.find((script) => !afterSignatures.has(script.signature));
+  if (gone !== undefined) {
+    return 'script changed or gone: ' + label(gone);
+  }
+  const arrived = after.find((script) => !beforeSignatures.has(script.signature) && script.src === '');
+  if (arrived !== undefined) {
+    return 'an inline script arrived: ' + label(arrived);
+  }
+  return 'scripts reordered or repeated';
+}
+
 function isExternalModule(script: ScriptInfo): boolean {
   return script.src !== '' && script.type === 'module';
 }
