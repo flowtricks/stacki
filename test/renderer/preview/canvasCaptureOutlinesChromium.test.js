@@ -66,6 +66,17 @@ function count(image, [red, green, blue]) {
   }
   return matches;
 }
+// Pixels of the toolbar: clearly magenta, red and blue high and green low. A display's colour conversion moves a channel by a
+// few units (a Retina Mac captures #ff00ff as 255, 3, 255), past count()'s step, but never far enough to read as the white
+// stage or an outline colour.
+function countMagenta(image) {
+  const bitmap = image.toBitmap();
+  let matches = 0;
+  for (let at = 0; at + 3 < bitmap.length; at += 4) {
+    if (bitmap[at] >= 200 && bitmap[at + 1] <= 60 && bitmap[at + 2] >= 200) { matches += 1; }
+  }
+  return matches;
+}
 app.whenReady().then(async () => {
   const server = http.createServer((request, response) => {
     const name = request.url.split('?')[0] === '/' ? 'host.html' : request.url.split('?')[0].slice(1);
@@ -93,7 +104,7 @@ app.whenReady().then(async () => {
       const stage = await win.webContents.capturePage(STAGE);
       const whole = await win.webContents.capturePage();
       const size = stage.getSize();
-      const result = { size, colours, magentaInStage: count(stage, [255, 0, 255]), magentaInWindow: count(whole, [255, 0, 255]) };
+      const result = { size, colours, magentaInStage: countMagenta(stage), magentaInWindow: countMagenta(whole) };
       if (colours.outline) { result.outlinePixels = count(stage, colours.outline); }
       if (colours.tag) { result.tagPixels = count(stage, colours.tag); }
       output.scenarios[scenario] = result;
