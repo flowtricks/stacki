@@ -124,6 +124,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'Ce texte est calculé dans {file} : modifiez-le là-bas.',
   'preview.text.source.blocked.concatenation': 'Ce texte est assemblé à partir de morceaux dans {file} : modifiez-le là-bas.',
   'preview.text.source.blocked.duplicate': 'Plusieurs endroits affichent les mêmes mots, impossible de distinguer le bon : modifiez-le dans {file}.',
+  'preview.text.source.blocked.loop': 'Ce texte est {path}, rempli à partir de chaque élément d’une boucle : modifiez-le dans la source de la collection.',
   'preview.text.source.blocked.missing': 'La valeur {path} n’est pas écrite dans {file}.',
   'preview.text.source.blocked.multiline': 'Ce texte est une valeur YAML écrite sur plusieurs lignes dans {file} : modifiez-le là-bas.',
   'preview.text.source.blocked.mutable': 'Ce texte provient d’une variable qui peut changer (let ou var) dans {file} : modifiez-le là-bas.',

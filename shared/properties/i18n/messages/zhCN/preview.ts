@@ -121,6 +121,7 @@ export const messages = {
   'preview.text.source.blocked.computed': '此文本在 {file} 中计算得出：请在该处编辑。',
   'preview.text.source.blocked.concatenation': '此文本在 {file} 中由多个片段拼接而成：请在该处编辑。',
   'preview.text.source.blocked.duplicate': '此处有多个位置输出相同的文字，无法分辨是哪一个：请在 {file} 中编辑。',
+  'preview.text.source.blocked.loop': '此文本为 {path}，由循环中的每一项填充：请在集合的数据源中编辑。',
   'preview.text.source.blocked.missing': '值 {path} 未写在 {file} 中。',
   'preview.text.source.blocked.multiline': '此文本是 {file} 中跨多行书写的 YAML 值：请在该处编辑。',
   'preview.text.source.blocked.mutable': '此文本来自 {file} 中一个可变的变量（let 或 var）：请在该处编辑。',

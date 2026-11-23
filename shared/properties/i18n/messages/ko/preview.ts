@@ -122,6 +122,7 @@ export const messages = {
   'preview.text.source.blocked.computed': '이 텍스트는 {file}에서 계산됩니다: 해당 파일에서 편집하세요.',
   'preview.text.source.blocked.concatenation': '이 텍스트는 {file}에서 여러 조각을 이어 붙인 것입니다: 해당 파일에서 편집하세요.',
   'preview.text.source.blocked.duplicate': '여러 위치에서 같은 문구를 출력하고 있어 올바른 위치를 구분할 수 없습니다: {file}에서 편집하세요.',
+  'preview.text.source.blocked.loop': '이 텍스트는 {path}이며 반복문의 각 항목에서 채워집니다. 컬렉션의 소스에서 편집하세요.',
   'preview.text.source.blocked.missing': '값 {path}이(가) {file}에 작성되어 있지 않습니다.',
   'preview.text.source.blocked.multiline': '이 텍스트는 {file}에 여러 줄로 작성된 YAML 값입니다: 해당 파일에서 편집하세요.',
   'preview.text.source.blocked.mutable': '이 텍스트는 {file}에서 변경될 수 있는 변수(let 또는 var)에서 옵니다: 해당 파일에서 편집하세요.',

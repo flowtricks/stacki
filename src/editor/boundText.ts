@@ -55,6 +55,7 @@ export const BOUND_TEXT_BLOCKS = [
   'computed',
   'concatenation',
   'duplicate',
+  'loop',
   'ambiguous',
   'missing',
   'multiline',

@@ -123,6 +123,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'Teks ini dihitung di {file}: sunting di sana.',
   'preview.text.source.blocked.concatenation': 'Teks ini disusun dari beberapa bagian di {file}: sunting di sana.',
   'preview.text.source.blocked.duplicate': 'Beberapa tempat mencetak kata yang sama di sini, sehingga yang tepat tidak dapat dibedakan: sunting di {file}.',
+  'preview.text.source.blocked.loop': 'Teks ini adalah {path}, diisi dari setiap item dalam perulangan: ubah di sumber koleksi.',
   'preview.text.source.blocked.missing': 'Nilai {path} tidak ditulis di {file}.',
   'preview.text.source.blocked.multiline': 'Teks ini adalah nilai YAML yang ditulis dalam beberapa baris di {file}: sunting di sana.',
   'preview.text.source.blocked.mutable': 'Teks ini berasal dari variabel yang dapat berubah (let atau var) di {file}: sunting di sana.',

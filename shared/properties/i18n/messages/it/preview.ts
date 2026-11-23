@@ -125,6 +125,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'Questo testo è calcolato in {file}: modificalo lì.',
   'preview.text.source.blocked.concatenation': 'Questo testo è composto da più parti in {file}: modificalo lì.',
   'preview.text.source.blocked.duplicate': 'Più punti stampano qui le stesse parole, quindi non si può distinguere quello giusto: modificalo in {file}.',
+  'preview.text.source.blocked.loop': 'Questo testo è {path} e viene riempito da ogni elemento di un ciclo: modificalo nella sorgente della raccolta.',
   'preview.text.source.blocked.missing': 'Il valore {path} non è scritto in {file}.',
   'preview.text.source.blocked.multiline': 'Questo testo è un valore YAML scritto su più righe in {file}: modificalo lì.',
   'preview.text.source.blocked.mutable': 'Questo testo proviene da una variabile che può cambiare (let o var) in {file}: modificalo lì.',

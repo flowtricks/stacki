@@ -123,6 +123,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'Ten tekst jest obliczany w {file}: edytuj go tam.',
   'preview.text.source.blocked.concatenation': 'Ten tekst jest złożony z kawałków w {file}: edytuj go tam.',
   'preview.text.source.blocked.duplicate': 'Kilka miejsc wypisuje tu te same słowa, więc nie da się wskazać właściwego: edytuj go w {file}.',
+  'preview.text.source.blocked.loop': 'Ten tekst to {path}, wypełniany z każdego elementu pętli: edytuj go w źródle kolekcji.',
   'preview.text.source.blocked.missing': 'Wartość {path} nie jest zapisana w {file}.',
   'preview.text.source.blocked.multiline': 'Ten tekst jest wartością YAML zapisaną w wielu wierszach w {file}: edytuj go tam.',
   'preview.text.source.blocked.mutable': 'Ten tekst pochodzi ze zmiennej, która może się zmieniać (let lub var) w {file}: edytuj go tam.',

@@ -122,6 +122,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'यह टेक्स्ट {file} में गणना से बनता है: इसे वहीं संपादित करें।',
   'preview.text.source.blocked.concatenation': 'यह टेक्स्ट {file} में कई टुकड़ों को जोड़कर बनता है: इसे वहीं संपादित करें।',
   'preview.text.source.blocked.duplicate': 'यहाँ कई जगहें यही शब्द छापती हैं, इसलिए सही वाली पहचानी नहीं जा सकती: इसे {file} में संपादित करें।',
+  'preview.text.source.blocked.loop': 'यह टेक्स्ट {path} है और लूप के हर आइटम से भरा जाता है: इसे कलेक्शन के स्रोत में बदलें।',
   'preview.text.source.blocked.missing': 'मान {path} {file} में लिखा नहीं है।',
   'preview.text.source.blocked.multiline': 'यह टेक्स्ट {file} में कई पंक्तियों में लिखा YAML मान है: इसे वहीं संपादित करें।',
   'preview.text.source.blocked.mutable': 'यह टेक्स्ट {file} में ऐसे वेरिएबल (let या var) से आता है जो बदल सकता है: इसे वहीं संपादित करें।',

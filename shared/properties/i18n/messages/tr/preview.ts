@@ -125,6 +125,7 @@ export const messages = {
   'preview.text.source.blocked.concatenation': 'Bu metin {file} içinde parçalardan birleştiriliyor: orada düzenleyin.',
   'preview.text.source.blocked.duplicate':
     'Burada birden fazla yer aynı sözcükleri yazdırıyor, bu yüzden doğru olan ayırt edilemiyor: {file} içinde düzenleyin.',
+  'preview.text.source.blocked.loop': 'Bu metin {path} değeridir ve bir döngünün her öğesinden doldurulur: koleksiyonun kaynağında düzenleyin.',
   'preview.text.source.blocked.missing': '{path} değeri {file} içinde yazılı değil.',
   'preview.text.source.blocked.multiline': 'Bu metin {file} içinde birkaç satıra yazılmış bir YAML değeri: orada düzenleyin.',
   'preview.text.source.blocked.mutable': 'Bu metin {file} içinde değişebilen bir değişkenden (let veya var) geliyor: orada düzenleyin.',

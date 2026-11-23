@@ -122,6 +122,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'Этот текст вычисляется в {file}. Измените его там.',
   'preview.text.source.blocked.concatenation': 'Этот текст собирается из частей в {file}. Измените его там.',
   'preview.text.source.blocked.duplicate': 'Те же слова выводятся в нескольких местах, поэтому нужное не определить. Измените текст в {file}.',
+  'preview.text.source.blocked.loop': 'Этот текст — {path}, он подставляется из каждого элемента цикла: измените его в источнике коллекции.',
   'preview.text.source.blocked.missing': 'Значение {path} не записано в {file}.',
   'preview.text.source.blocked.multiline': 'Этот текст — значение YAML, записанное в {file} в несколько строк. Измените его там.',
   'preview.text.source.blocked.mutable': 'Этот текст берётся из изменяемой переменной (let или var) в {file}. Измените его там.',
