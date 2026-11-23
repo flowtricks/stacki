@@ -123,6 +123,12 @@ async function runInElectron({ window, project, options }) {
   await driver.waitForApp();
   await driver.setPageFocus('focused');
   await installRecorder(driver.contents);
+  // The Desktop canvas draws the page at the pane's own width, which at the harness window is a Laptop layout. The scenario reads the
+  // wide Card layout (a bare picture area beside the words over a cover picture), so it types a 1440px canvas width into the toolbar.
+  await driver.evaluate(`document.querySelector('.preview-width-field input').focus()`);
+  await driver.typeText('1440');
+  await driver.key('Enter');
+  await driver.settle();
   const CARD_IMAGE_DECODED = `(() => { const image = document.querySelector('#card-one .card_visual img'); return !!image && image.complete && image.naturalWidth > 0; })()`;
   await pollUntil({
     what: 'the Card image decoded on the canvas',

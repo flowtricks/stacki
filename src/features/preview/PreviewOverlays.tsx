@@ -186,7 +186,9 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     : targets;
   return outlines.flatMap((outline) => {
     if (outline.pseudo !== undefined) {
-      return <PseudoOutline key={`${outline.slot}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} />;
+      // Inside a component (an instance, or markup rendered by a component file) the pseudo-element reads as the component's: green.
+      const inComponent = props.overlayInfo?.(outline.path)?.kind === 'component' || outsideScope(outline.path, props.pathScope ?? '');
+      return <PseudoOutline key={`${outline.slot}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} inComponent={inComponent} />;
     }
     // A deep hover or a highlight names a node inside a closed component, which the open file's tree cannot label.
     const info =
@@ -201,15 +203,18 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     const boxes = loop !== undefined ? [loop] : copiesToDraw(all, outline.occ);
     // Hovering a slot says nothing inside it can be picked: a muted fill, not the accent. Picking the slot itself stays as it was.
     const muted = info.hostContent && outline.type === 'hover';
+    // Words the frame reports for this path name it as their component instance (`scope`), whatever the Navigator calls the node
+    // (a dynamic tag, a fragment): it is drawn as the component it is, never in the plain blue.
+    const kind = info.kind === 'element' && ownsMarkedWords(props.textMarks, outline.path) ? 'component' : info.kind;
     return boxes.map((box, index) => {
       const collapse = collapseKind(box);
       return (
         <div
           key={`${outline.slot}-${index}`}
-          className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${muted ? ` host-content${props.selPath === outline.path ? ' is-selected' : ''}` : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${ownerClasses(
+          className={`node-outline ${outline.type} ${kind}${info.bound ? ' bound' : ''}${muted ? ` host-content${props.selPath === outline.path ? ' is-selected' : ''}` : ''}${collapse === 'none' ? '' : ` collapsed is-${collapse}`}${ownerClasses(
             props.textMarks,
             {
-              ownable: info.kind === 'component' && !info.isLayout,
+              ownable: kind === 'component' && !info.isLayout,
               path: outline.path,
               slot: outline.slot === 'highlight' ? 'highlight' : outline.type === 'sel' ? 'sel' : 'hover',
               pointedAt: props.hoverPath === outline.path,
@@ -232,6 +237,11 @@ function NodeOutlines(props: PreviewOverlaysProps) {
       );
     });
   });
+}
+
+// Whether hovered or picked words name `path` as the component instance that owns them.
+function ownsMarkedWords(marks: TextMarks | undefined, path: string): boolean {
+  return marks?.hover?.scope === path || marks?.picked?.scope === path;
 }
 
 function ComponentEditButton({
@@ -312,7 +322,17 @@ function outlineTargets(props: PreviewOverlaysProps, highlight: CanvasHighlight 
 
 // A ::before or ::after outline: its own measured box (framePseudo.ts), named
 // as its navigator row is, with no component button (it is CSS, not markup).
-function PseudoOutline({ outline, rects, scale }: { readonly outline: OutlineTarget; readonly rects: RectMap; readonly scale: number }) {
+function PseudoOutline({
+  outline,
+  rects,
+  scale,
+  inComponent,
+}: {
+  readonly outline: OutlineTarget;
+  readonly rects: RectMap;
+  readonly scale: number;
+  readonly inComponent: boolean;
+}) {
   assert(outline.pseudo !== undefined, 'PseudoOutline: the outline is a pseudo-element');
   const all = rects[pseudoPath(outline.path, outline.pseudo)];
   if (!all) {
@@ -320,7 +340,11 @@ function PseudoOutline({ outline, rects, scale }: { readonly outline: OutlineTar
   }
   const boxes = copiesToDraw(all, outline.occ);
   return boxes.map((box, index) => (
-    <div key={`${outline.type}-pseudo-${index}`} className={`node-outline ${outline.type} element`} style={boxStyle(box, scale)}>
+    <div
+      key={`${outline.type}-pseudo-${index}`}
+      className={`node-outline ${outline.type} pseudo ${inComponent ? 'component' : 'element'}`}
+      style={boxStyle(box, scale)}
+    >
       <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
         <PseudoElementIcon size={11} />
         ::{outline.pseudo}
@@ -372,7 +396,7 @@ function TextMarkOutlines({ marks, instances, scale }: { readonly marks: TextMar
     ...(marks.picked ? [['sel', marks.picked] as const] : []),
   ];
   return drawn.map(([type, box]) => (
-    <div key={type} className={`node-outline ${type} component text-mark`} style={boxStyle(box, scale)}>
+    <div key={type} className={`node-outline ${type} ${box.from === 'slot' ? 'element' : 'component'} text-mark`} style={boxStyle(box, scale)}>
       {!instances.some((instance) => tagsCollide(instance, box, scale)) && (
         <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
           {box.kind === 'component' ? <ElementComponentIcon size={11} /> : <TextIcon size={11} />}

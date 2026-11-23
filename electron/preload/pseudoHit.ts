@@ -77,3 +77,32 @@ export function boxHolds(box: Box, x: number, y: number): boolean {
   }
   return y <= box.bottom;
 }
+
+/**
+ * Whether a pseudo-element is offered on the canvas at all: never with `pointer-events: none`, and inside a component only with text.
+ * Detail: Inside a component's markup a ::before or ::after is the
+ * component's own decoration (an icon, an underline, a stretched overlay): outlining it only names CSS the page cannot
+ * change from here and covers the instance, so it is offered only when it renders text. On a plain element it always is.
+ */
+export function pseudoOffered(options: { readonly inComponent: boolean; readonly content: string; readonly pointerEvents: string }): boolean {
+  const { inComponent, content, pointerEvents } = options;
+  assert(typeof content === 'string', 'pseudoOffered: content is a string');
+  // The computed value already carries inheritance from the host. A pseudo-element the pointer passes through is nothing to pick,
+  // text or not: the click belongs to what is beneath it.
+  if (pointerEvents === 'none') {
+    return false;
+  }
+  return inComponent ? pseudoRendersText(content) : true;
+}
+
+/** Whether a computed `content` renders text: a quoted string with a visible character, or attr(), counter() or counters(). */
+export function pseudoRendersText(content: string): boolean {
+  // A url() names an image, whose quoted address is not text.
+  const bare = content.replace(/url\((?:[^)"']|"[^"]*"|'[^']*')*\)/g, '');
+  const strings = bare.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g) ?? [];
+  const text = strings.map((part) => part.slice(1, -1).replace(/\\(.)/g, '$1')).join('');
+  if (text.trim() !== '') {
+    return true;
+  }
+  return /\b(?:attr|counters?)\(/.test(bare);
+}
