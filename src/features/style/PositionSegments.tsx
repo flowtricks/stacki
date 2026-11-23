@@ -9,7 +9,7 @@ import VariableConnect from './VariableConnect';
 import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import type { ResolvedProp } from './model/resolved';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
 import { keepImportant, parseImportant } from './model/styleDisplay';

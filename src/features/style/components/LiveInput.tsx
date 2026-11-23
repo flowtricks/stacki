@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import VariableConnect from '../VariableConnect';
 import { handleArrowStep } from '../model/numberStep';
-import { commitInPlace } from '../model/commitInPlace';
+import { commitInPlace } from '../model/commitStyleInPlace';
 import useScrub from './useScrub';
 
 // The panel's value field.

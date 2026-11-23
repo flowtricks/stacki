@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { checkTrackExpression, type TrackExpressionProblem } from './model/gridTemplate';
 import VariableConnect from './VariableConnect';
 

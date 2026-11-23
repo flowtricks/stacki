@@ -17,7 +17,7 @@ import VariableConnect from './VariableConnect';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import type { Contributor, ResolvedProp } from './model/resolved';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 

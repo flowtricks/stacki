@@ -6,6 +6,7 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import ListField from './ListField';
 import SegSwitch from './SegSwitch';
+import { commitInPlace } from '../../ui/commitInPlace';
 
 // A prop whose value is an object, edited as the fields it holds.
 //
@@ -102,7 +103,7 @@ function ObjectRowControl({ field, onChange }: RowProps) {
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.currentTarget.blur();
+          commitInPlace(event.currentTarget);
         }
       }}
     />

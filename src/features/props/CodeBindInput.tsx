@@ -7,6 +7,7 @@ import ExprInput, { type ExprInputAPI } from '../../ui/ExprInput';
 import type { AttributeLanguage } from '../../ui/attributeLanguage';
 import type { BindInputHandle } from './BindInput';
 import { propSyntax } from './propSyntax';
+import { commitEditableInPlace } from '../../ui/commitInPlace';
 
 // A prop's value as a field you can type in, with the data in it shown as chips
 // (BindInput.tsx), for a value that is code in its own right: `sizes`, `srcset`,
@@ -91,7 +92,10 @@ const CodeBindInput = forwardRef<BindInputHandle, CodeBindInputProps>(function C
       // One line: Enter commits rather than splitting the value in two.
       onKeyDown={(event) => {
         if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-          hostRef.current?.querySelector<HTMLElement>('.cm-content')?.blur();
+          const content = hostRef.current?.querySelector<HTMLElement>('.cm-content');
+          if (content) {
+            commitEditableInPlace(content);
+          }
         }
       }}
     >

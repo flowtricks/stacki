@@ -13,6 +13,7 @@ import { isArrayLiteral, LOOP_LITERAL_LIMITS } from '../../editor/loopLiteral';
 import { SectionHeader } from './LoopRows';
 import { moved } from './LoopItems';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { commitInPlace } from '../../ui/commitInPlace';
 
 /**
  * A custom list's items: rows of text while every item is a string, and, behind the `{}` beside the label, the
@@ -189,7 +190,7 @@ function LiteralInput(props: { readonly value: string; readonly onCommit: (value
       onBlur={commit}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.currentTarget.blur();
+          commitInPlace(event.currentTarget);
         } else if (event.key === 'Escape') {
           setDraft(props.value);
         }

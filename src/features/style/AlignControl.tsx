@@ -6,7 +6,7 @@ import VariableConnect from './VariableConnect';
 import { GroupLabel } from './TypographySection';
 import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { assert } from '../../../shared/core/assert';
 import ImportantMark from './components/ImportantMark';
 import { displayOf } from './model/styleDisplay';

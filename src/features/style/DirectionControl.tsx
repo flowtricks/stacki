@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, PlusIcon, tooltipArrowStyle } from './components/MenuParts';
 import VariableConnect from './VariableConnect';
 import KeywordConnect, { useOpenVariablePicker } from './KeywordConnect';

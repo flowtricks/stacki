@@ -37,6 +37,7 @@ import {
   spreadOfName,
   typedAttributeName,
 } from './attributeText';
+import { commitInPlace } from '../../ui/commitInPlace';
 export { parseAttrPaste, parseObjectLiteral, serializeObjectLiteral } from './attributeText';
 
 interface AttributeNode {
@@ -764,7 +765,17 @@ function AttributeName({ state }: { readonly state: AttributeState }) {
           }}
           onChange={(event) => setDraftName(typedAttributeName(event.target.value))}
           onBlur={commitName}
-          onKeyDown={(event) => event.key === 'Enter' && (commitName(), event.currentTarget.blur())}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              commitName();
+              // A new attribute's Name is done with Enter and leaves; an existing one keeps the focus.
+              if (isNew) {
+                event.currentTarget.blur();
+              } else {
+                commitInPlace(event.currentTarget);
+              }
+            }
+          }}
         />
         {spreading && (
           <BindHandle

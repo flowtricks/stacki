@@ -17,7 +17,7 @@ import { handleArrowStep } from './model/numberStep';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
 import type { Contributor, ResolvedProp } from './model/resolved';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { openAfterRemoval, useExternalDraft } from './model/fieldHooks';
 import { displayOf, displayText, keepImportant, parseImportant } from './model/styleDisplay';
 import ImportantMark from './components/ImportantMark';

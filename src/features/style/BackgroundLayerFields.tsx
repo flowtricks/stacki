@@ -15,7 +15,7 @@ import { assetValueFor } from '../../ui/assetPath';
 import { sourceCandidates } from '../../ui/AssetThumb';
 import { getHost } from './model/host';
 import ColorSwatch from './components/ColorSwatch';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { useExternalDraft } from './model/fieldHooks';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';

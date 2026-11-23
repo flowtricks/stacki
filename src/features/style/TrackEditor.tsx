@@ -13,6 +13,7 @@ import { parseTrackSize, trackKind, type TrackSize } from './model/gridTemplate'
 import { WarnIcon } from './GridSettingsKit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // Webflow's grid track glyphs: a GEAR for minmax/custom, an "A" for auto/content, and
 // a double-arrow for everything else (fr / lengths). The arrow points along the axis
@@ -139,12 +140,12 @@ export function TrackInput({
   );
 }
 
-// Enter blurs (which commits); ↑/↓ step the number under the caret (unit preserved) in
+// Enter commits and keeps the focus; ↑/↓ step the number under the caret (unit preserved) in
 // place. Returns the stepped text to apply immediately, or undefined.
 export function stepTrackInput(event: React.KeyboardEvent<HTMLInputElement>): string | undefined {
   const input = event.currentTarget;
   if (event.key === 'Enter') {
-    input.blur();
+    commitInPlace(input);
     return undefined;
   }
   const stepped = handleArrowStep(event);

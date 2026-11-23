@@ -11,7 +11,7 @@ import { KeywordSegments } from './KeywordConnect';
 import { PropTip, useHoverTip } from './components/CssPropertyTip';
 import { useHighlight } from './model/computedStyle';
 import { handleArrowStep } from './model/numberStep';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { parseOrigin, serializeOrigin, type Origin } from './model/transformSettings';
 import type { ResolvedProp } from './model/resolved';
 import { displayOf } from './model/styleDisplay';

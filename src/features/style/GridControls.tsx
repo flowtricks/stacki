@@ -12,7 +12,7 @@ import { HoverTooltip } from '../../ui/SegmentedControl';
 import GridSettings from './GridSettings';
 import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { NEW_COLUMN, NEW_ROW, repeatTracks } from './gridTracks';
 import { classifyTrackCount } from './model/gridTemplate';
 import GridTrackExpression from './GridTrackExpression';

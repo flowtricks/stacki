@@ -4,6 +4,7 @@ import Popup from '../../../ui/Popup';
 import { colorMode, formatColor, formatHex, hsvaToRgba, parseColor, rgbaToHsl, rgbaToHsva, type ColorMode, type HSVA, type RGBA } from '../model/colorSpace';
 import { dragNote, endDragNotes } from '../../../ui/sound';
 import type { CSSProperties, RefObject } from 'react';
+import { commitInPlace } from '../model/commitStyleInPlace';
 
 type EyeDropperConstructor = new () => { open: () => Promise<{ sRGBHex: string }> };
 
@@ -107,7 +108,7 @@ function Field({ label, value, onChange, wide }: { label: string; value: string;
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
-            event.currentTarget.blur();
+            commitInPlace(event.currentTarget);
             return;
           }
           if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {

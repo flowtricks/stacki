@@ -6,7 +6,7 @@ import type { SelectOption } from './components/Select';
 import { VariableSelect } from './KeywordConnect';
 import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { useDebouncedLive } from './model/fieldHooks';
 import { displayOf, parseImportant } from './model/styleDisplay';
 import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, withImportant, useFollowingDraft, stepSizeKey } from './SizeKit';

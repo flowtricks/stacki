@@ -9,7 +9,7 @@ import SegmentedControl from '../../ui/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
 import VariableConnect from './VariableConnect';
 import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { parseFlow, buildFlow, isPresetFlow } from './gridTracks';
 import { gridFlowOptions, GRID_CONTENT, GRID_SYNONYMS, gridKeyword, contentLabels, cap, contentOptions, ChevUp, ChevDown, DenseIcon } from './GridIcons';
 

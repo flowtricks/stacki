@@ -4,6 +4,7 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { deleteChipAtCaret } from './chipKeys';
 import { insertAtRange } from './fieldFocus';
+import { commitEditableInPlace } from '../../ui/commitInPlace';
 
 // A prop's value as a field you can type in, with the data in it shown as
 // chips: `Posted ` · [post.data.pubDate] · ` in London`. The chip is atomic —
@@ -118,7 +119,9 @@ const BindInput = forwardRef<BindInputHandle, BindInputProps>(function BindInput
         // One line: Enter commits rather than splitting the value in two.
         if (event.key === 'Enter') {
           event.preventDefault();
-          hostRef.current?.blur();
+          if (hostRef.current) {
+            commitEditableInPlace(hostRef.current);
+          }
           return;
         }
         // Backspace against a chip takes that chip, and only that chip.

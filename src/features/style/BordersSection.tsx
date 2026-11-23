@@ -7,7 +7,7 @@ import VariableConnect from './VariableConnect';
 import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import { useHighlight } from './model/computedStyle';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { displayOf, displayText, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { type Read, type Props, stripImportant, PropLabel, LiveInput } from './BordersKit';

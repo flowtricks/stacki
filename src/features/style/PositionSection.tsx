@@ -10,7 +10,7 @@ import VariableConnect from './VariableConnect';
 import { SpacingFill, useSpacingBox } from './SpacingBox';
 import { handleArrowStep } from './model/numberStep';
 import type { ResolvedProp } from './model/resolved';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { displayText, keepImportant, parseImportant, withImportant } from './model/styleDisplay';
 import { CloseIcon, RelativeIcon, AbsoluteIcon, FixedIcon, StickyIcon } from './PositionIcons';
 import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Props, SegmentedIconControl, floatSegments, clearSegments } from './PositionSegments';

@@ -9,6 +9,7 @@ import { useLiveColor } from './model/liveColor';
 import { sliderLength, useLengthUnit } from './model/lengthUnit';
 import { projectDefaultUnit } from '../../../shared/properties/lengthUnit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // Shared building blocks for the shadow editors (text-shadow + box-shadow): a labelled
 // length row (drag slider + number field) and the full-width popup modal. Both editors
@@ -179,11 +180,11 @@ function useDebouncedLive(onLive: (value: string) => void) {
   return { cancel, liveNow, live };
 }
 
-// Enter commits by blurring; an arrow key steps the number under the caret and
+// Enter commits and keeps the focus; an arrow key steps the number under the caret and
 // writes it straight into the input. Returns the stepped text, if any.
 function stepShadowKey(event: KeyboardEvent<HTMLInputElement>): string | undefined {
   if (event.key === 'Enter') {
-    event.currentTarget.blur();
+    commitInPlace(event.currentTarget);
     return undefined;
   }
   const stepped = handleArrowStep(event);

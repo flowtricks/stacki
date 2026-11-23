@@ -240,8 +240,15 @@ export function spacingEditorHandlers({
 }) {
   return {
     keyDownCapture: (event: ReactKeyboardEvent) => {
-      if (commit.recordKey(event) === 'abandon') {
+      const recorded = commit.recordKey(event);
+      if (recorded === 'abandon') {
         abandon();
+      } else if (recorded === 'commit' && event.target instanceof HTMLElement && event.target.isContentEditable) {
+        // The token editor would hand its focus straight back after Enter, like every panel field. This
+        // editor is done with Enter: leaving (the blur) is what closes it, so it leaves before the field answers.
+        event.preventDefault();
+        event.stopPropagation();
+        event.target.blur();
       }
     },
     keyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {

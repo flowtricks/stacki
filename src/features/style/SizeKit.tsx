@@ -12,7 +12,7 @@ import { useFieldDraft } from './model/fieldDraft';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
 import type { Contributor, ResolvedProp } from './model/resolved';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { followWhileRendering, useDebouncedLive } from './model/fieldHooks';
 import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';

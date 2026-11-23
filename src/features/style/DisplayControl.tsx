@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts';
 import { parseImportant, withImportant } from './model/styleDisplay';
 import VariableConnect from './VariableConnect';

@@ -11,6 +11,7 @@ import type { ResolvedProp } from './model/resolved';
 import { splitTopLevelSpaces } from './model/background';
 import { useGapHover, type GapAxis } from './model/gapHover';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // The Gap control for the Layout section: a lock toggle plus one field (linked →
 // both gaps equal) or two fields (unlinked → separate row/column).
@@ -214,11 +215,11 @@ function useExternalDraft(value: string) {
   return { draft, setDraft, focused };
 }
 
-// Enter blurs (which commits); ↑/↓ step the number in place. Returns the stepped text,
+// Enter commits and keeps the focus; ↑/↓ step the number in place. Returns the stepped text,
 // or undefined when the key did not step.
 function stepOnKey(event: React.KeyboardEvent<HTMLInputElement>, prop: string) {
   if (event.key === 'Enter') {
-    event.currentTarget.blur();
+    commitInPlace(event.currentTarget);
     return undefined;
   }
   // A gap has no negative side to step onto.

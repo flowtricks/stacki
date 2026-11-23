@@ -9,6 +9,7 @@ import { droplet as centralDroplet, font as centralFont, number as centralNumber
 import type { MutableRefObject, RefObject } from 'react';
 import { caretOffset, highlightCss, setCaretOffset, stepNumberAt, stepSize } from './model/cssCode';
 import { isHTMLElementInDocument } from './model/dom';
+import { commitTokenFieldInPlace } from './model/commitStyleInPlace';
 import { assert } from '../../../shared/core/assert';
 import { caretPlacementAt, placeCaret } from './tokenFieldCaret';
 import { EMPTY_FIELD_HISTORY, type FieldHistory, type FieldSnapshot, recordEdit, redoStep, undoStep } from './tokenFieldHistory';
@@ -849,7 +850,8 @@ export function tokenFieldKeyDown(
 ): void {
   if (event.key === 'Enter') {
     event.preventDefault();
-    event.currentTarget.blur();
+    // Commits and stays: the field still has the focus for the arrow keys afterwards.
+    commitTokenFieldInPlace(event.currentTarget);
     return;
   }
   const element = event.currentTarget;

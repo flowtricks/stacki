@@ -36,7 +36,7 @@ const check = (what, condition, detail) => {
     stdin: {
       contents: `
         export { default as SizeSection } from './src/features/style/SizeSection'
-        export { commitInPlace } from './src/features/style/model/commitInPlace'
+        export { commitInPlace } from './src/features/style/model/commitStyleInPlace'
       `,
       resolveDir: ROOT,
       loader: 'tsx',

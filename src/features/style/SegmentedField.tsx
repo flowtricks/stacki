@@ -9,6 +9,7 @@ import { useCustomFocus } from './model/fieldHooks';
 import { parseImportant, withImportant } from './model/styleDisplay';
 import VariableConnect from './VariableConnect';
 import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // A segmented button-list with a trailing dropdown arrow whose menu offers a
 // "Custom" escape hatch (writes `unset` and reveals a focused text field), and —
@@ -76,7 +77,7 @@ function CustomField({
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
-            event.currentTarget.blur();
+            commitInPlace(event.currentTarget);
           }
         }}
         disabled={busy}

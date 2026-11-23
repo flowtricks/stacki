@@ -5,7 +5,7 @@ import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts';
 import { useCustomFocus, useDebouncedLive } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';

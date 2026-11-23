@@ -120,6 +120,23 @@ export function useEditorRefs() {
   };
 }
 
+// The text field holding the focus, if one does: an input, a textarea or a contentEditable. Read by tag name and
+// property, not `instanceof`: the DOM constructors are globals a non-browser test window does not define, and the
+// busy timer must not throw there.
+function focusedTextField(): Element | undefined {
+  const active = document.activeElement;
+  if (active === null) {
+    return undefined;
+  }
+  if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') {
+    return active;
+  }
+  if ('isContentEditable' in active && active.isContentEditable === true) {
+    return active;
+  }
+  return undefined;
+}
+
 // The busy flag (shown, deferred) and the last save failure.
 export function useBusyState(editorRefs: ReturnType<typeof useEditorRefs>) {
   const { busyRef, busyTimerRef } = editorRefs;
@@ -136,7 +153,23 @@ export function useBusyState(editorRefs: ReturnType<typeof useEditorRefs>) {
         if (busyTimerRef.current === undefined) {
           busyTimerRef.current = window.setTimeout(() => {
             busyTimerRef.current = undefined;
-            setBusy(true);
+            // Disabling the field someone is typing in throws the focus out of it (the caret and the
+            // arrow keys go with it) — what Enter then looked like on a slow write. The lock waits
+            // for that field to be left; the poll gate (busyRef) already holds either way.
+            const typing = focusedTextField();
+            if (typing === undefined) {
+              setBusy(true);
+              return;
+            }
+            typing.addEventListener(
+              'focusout',
+              () => {
+                if (busyRef.current) {
+                  setBusy(true);
+                }
+              },
+              { once: true },
+            );
           }, 300);
         }
       } else {

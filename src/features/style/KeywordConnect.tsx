@@ -27,7 +27,7 @@ import { VariablePicker } from './VariablePicker';
 import { useSharedVars } from './sharedVars';
 import { useFieldPreview } from './connectFieldHelpers';
 import VariableConnect, { ConnectDot } from './VariableConnect';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 /** The list row that opens the variable picker; never a value of the property. */
 export const VARIABLE_OPTION = '__variable__';

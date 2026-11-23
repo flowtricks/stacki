@@ -7,6 +7,7 @@ import { parseAreas, serializeAreas, areaLabel, nextAreaName, type GridArea, typ
 import { type SetProp, type ClearProp, type LabelProps, resolvedValue, PlusIcon, TrashIcon } from './GridSettingsKit';
 import { TrackPopover } from './TrackEditor';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // A crosshair marker for area rows (Webflow's area glyph).
 export const AreaIcon = () => (
@@ -53,7 +54,7 @@ export function AreaNameInput({ value, busy, onCommit }: { value: string; busy: 
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.currentTarget.blur();
+          commitInPlace(event.currentTarget);
         }
       }}
     />
@@ -96,7 +97,7 @@ export function AreaNumberInput({ value, ariaLabel, busy, onCommit }: { value: n
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.currentTarget.blur();
+          commitInPlace(event.currentTarget);
           return;
         }
         if (event.key === 'ArrowUp') {

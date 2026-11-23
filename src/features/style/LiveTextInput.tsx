@@ -7,7 +7,7 @@ import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
 import { followWhileRendering } from './model/fieldHooks';
 import VariableConnect from './VariableConnect';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { parseImportant } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
 import { useTranslate } from '../../lib/i18n/useTranslate';

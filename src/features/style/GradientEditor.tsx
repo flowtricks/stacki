@@ -14,7 +14,7 @@ import {
   type GradientStop,
   type GradientStopPatch,
 } from './model/gradient';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import VariableConnect from './VariableConnect';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import { RadialSizeControl, RepeatIcon, type WriteOptions, AngleControl } from './GradientControls';
