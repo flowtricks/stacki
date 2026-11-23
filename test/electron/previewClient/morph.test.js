@@ -256,6 +256,37 @@ const LIVE_TABS = (labels, active) =>
   const withInline = head(style('Card') + script('Nav') + '<script>console.log(2)</script>');
   check('an inline arrival reloads too', addedScripts(before, withInline) === undefined);
 
+  // A prop edit on a Section reloaded the canvas and replayed the page's intro animation: Astro emits a
+  // component's module where it renders, and slot content rendered to a string finishes in a different
+  // order from one edit to the next. A module runs once per URL, so its order and its tag count say
+  // nothing about what the live page runs. Negative space: a changed, a gone or an inline script still
+  // reloads, and so does a reordered classic script (it would run again).
+  {
+    const pair = (names) => names.map(script).join('');
+    const rendered = head(pair(['Button', 'Nav', 'Card', 'Card', 'Marquee']));
+    const reordered = head(pair(['Button', 'Nav', 'Marquee', 'Card', 'Card']));
+    const deduplicated = head(pair(['Button', 'Nav', 'Marquee', 'Card']));
+    check('a reordered set of modules patches', addedScripts(rendered, reordered)?.length === 0, JSON.stringify(addedScripts(rendered, reordered)));
+    check('a duplicate tag appearing or going patches', addedScripts(rendered, deduplicated)?.length === 0);
+    check('the other way round too', addedScripts(deduplicated, rendered)?.length === 0);
+    const withNew = head(pair(['Marquee', 'Footer', 'Card', 'Footer', 'Nav', 'Button']));
+    const addedOnce = addedScripts(rendered, withNew);
+    check('a new module in a reordered list is added once', addedOnce?.length === 1 && /Footer/.test(addedOnce[0].src), JSON.stringify(addedOnce));
+    check('a module that went away in a reordered list still reloads', addedScripts(rendered, head(pair(['Marquee', 'Card', 'Button']))) === undefined);
+    const classic = (name) => `<script src="/vendor/${name}.js"></script>`;
+    check('a reordered classic script reloads', addedScripts(head(classic('a') + classic('b')), head(classic('b') + classic('a'))) === undefined);
+    check('a duplicated classic script reloads', addedScripts(head(classic('a')), head(classic('a') + classic('a'))) === undefined);
+    const inline = (text) => `<script>${text}</script>`;
+    check(
+      'an unchanged inline script alongside reordered modules patches',
+      addedScripts(head(inline('x') + pair(['Nav', 'Card'])), head(pair(['Card', 'Nav']) + inline('x')))?.length === 0,
+    );
+    check(
+      'a changed inline script among reordered modules reloads',
+      addedScripts(head(inline('x') + pair(['Nav', 'Card'])), head(pair(['Card', 'Nav']) + inline('y'))) === undefined,
+    );
+  }
+
   // Not reloading is only half of it: the new component's CSS has to arrive.
   // The patch cannot bring it — a <script> cloned from a fetched document is
   // inert, so it is loaded by hand, with an element that runs.
