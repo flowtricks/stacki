@@ -68,8 +68,7 @@
   font-weight: 500;
 }
 .agents-row-description,
-.agents-row-path,
-.agents-note {
+.agents-row-path {
   margin: 0;
   overflow: hidden;
   color: var(--text-dim);
@@ -81,8 +80,7 @@
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   white-space: nowrap;
 }
-.agents-row-warning,
-.agents-problem {
+.agents-row-warning {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -167,9 +165,19 @@
   flex-direction: column;
   gap: 4px;
 }
+.agents-field-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .agents-field label {
   color: var(--text-dim);
   font-size: 12px;
+}
+/* A refused field takes the error look: a soft red fill, never an outline; the reason is a toast on submit. */
+.agents-field[data-invalid] input,
+.agents-field[data-invalid] textarea {
+  background: rgba(255, 69, 58, 0.18);
 }
 .agents-field textarea {
   min-height: 120px;

@@ -146,12 +146,6 @@
 .breakpoint-sync-after {
   color: var(--green);
 }
-.breakpoint-sync-note {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.5;
-}
 .breakpoint-sync .modal-footer {
   padding: 12px 20px 16px;
 }

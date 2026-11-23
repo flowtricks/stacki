@@ -3,9 +3,12 @@
 // project never changed shows its defaults and writes nothing; the first add,
 // remove or reset creates the file. Pages are shown but fixed: they follow
 // `srcDir` in astro.config, where Astro routes from. The CMS section
-// (CmsSourceSettings.tsx) hides collections and chooses data files.
+// (CmsSourceSettings.tsx) hides collections and chooses data files. A failure
+// (an unreadable file, a refused folder, a failed save) is a toast, never a
+// paragraph in the tab, and an explanation is the (i) beside its title.
 import { useEffect, useState, type ReactNode } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { Described } from '../../../shared/properties/i18n/messageRef';
@@ -112,10 +115,11 @@ export function FolderSettings(props: FolderSettingsProps) {
     );
   }
   if (load.kind === 'failed') {
+    // The tab stays an empty frame (the failure is the toast) so nothing below it moves into its place.
     return (
-      <p className="app-folders-notice" role="alert">
-        {load.message}
-      </p>
+      <section className="app-folders" aria-label={translate('settings.folders.aria')}>
+        <ErrorToast message={load.message} />
+      </section>
     );
   }
   if (load.kind === 'unsupported') {
@@ -171,16 +175,8 @@ export function FolderSettings(props: FolderSettingsProps) {
   return (
     <section className="app-folders" aria-label={translate('settings.folders.aria')}>
       <SettingsSaveRow saving={indicator.state} />
-      {file.read.kind === 'invalid' && (
-        <p className="app-folders-notice" role="alert">
-          {translate('settings.folders.unreadable', { message: file.read.message })}
-        </p>
-      )}
-      {notice !== undefined && (
-        <p className="app-folders-notice" role="alert">
-          {translateDescribed(notice)}
-        </p>
-      )}
+      <ErrorToast message={file.read.kind === 'invalid' ? translate('settings.folders.unreadable', { message: file.read.message }) : undefined} />
+      <ErrorToast message={notice === undefined ? undefined : translateDescribed(notice)} />
       <SettingsSection title={translate('settings.folders.panels')}>
         {PROJECT_FOLDER_KINDS.map((kind) => (
           <FolderRow
@@ -215,10 +211,8 @@ function UnsupportedFolders(props: { readonly note: string; readonly pagesRow: R
   const translate = useTranslate();
   return (
     <section className="app-folders" aria-label={translate('settings.folders.aria')}>
-      <p className="app-folders-notice" role="status">
-        {props.note}
-      </p>
-      <SettingsSection title={translate('settings.folders.panels')}>
+      {/* Why the rows are fixed is the (i) beside the heading, not a paragraph above it. */}
+      <SettingsSection title={translate('settings.folders.panels')} info={props.note}>
         {PROJECT_FOLDER_KINDS.map((kind) => (
           <FixedRow key={kind} icon={<KindIcon kind={kind} />} label={translate(KIND_KEYS[kind])} folders={foldersFor(kind, undefined)}>
             {translate('settings.folders.defaults')}

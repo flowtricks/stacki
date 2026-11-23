@@ -2,7 +2,8 @@
 // non-secret fields as `npm create stacki`, and an installed Studio can change it later.
 // Method: mount the real Studio setup UI against a fake preload bridge. The dialog is driven like
 // a person would: radios, typing, copy buttons. What reaches `installStudio` and `setStudioAuth`
-// is inspected, because the contract is that a secret has no way into the payload.
+// is inspected, because the contract is that a secret has no way into the payload. Validation words, the change warning and the
+// saved note are toasts, never paragraphs in the dialog (owner rule), so those cases read the captured toasts.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -10,6 +11,7 @@ const fs = require('node:fs');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture.js');
 const output = repoPath('node_modules/.stacki-test/studio-sign-in.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
@@ -20,6 +22,7 @@ buildSync({
   format: 'cjs',
   jsx: 'automatic',
   loader: { '.css': 'empty' },
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   logLevel: 'silent',
 });
@@ -56,6 +59,7 @@ function type(input, value) {
 }
 
 async function fixture(status = missing) {
+  globalThis.stackiCapturedToasts = [];
   const installs = [];
   const changes = [];
   const copied = [];
@@ -109,7 +113,8 @@ test('each choice shows its own fields and validates them before installing', as
     assert.equal(document.querySelectorAll('.studio-auth-field').length, 4);
     await click(button('Add Studio'));
     assert.equal(state.installs.length, 0, 'an invalid form installs nothing');
-    assert.match(document.querySelector('.studio-auth-fields').textContent, /Required\./);
+    assert.match(toastMessages(), /Required\./);
+    assert.equal(document.querySelector('.studio-auth-field small') ?? undefined, undefined, 'no line is added under a field');
     assert.match(document.querySelector('.studio-auth-notes').textContent, /wrangler secret put GOOGLE_CLIENT_SECRET/);
     assert.ok(document.querySelector('.studio-auth-notes .code-token'), 'shell commands are highlighted');
     assert.match(document.querySelector('.studio-auth-notes').textContent, /\/studio\/auth\/google\/callback/);
@@ -140,7 +145,7 @@ test('SSO validates the issuer; Passkeys ask only for a handle; Access needs a c
     await type(textField('First administrator email'), 'me@corp.com');
     await click(button('Add Studio'));
     assert.equal(state.installs.length, 0);
-    assert.match(document.querySelector('.studio-auth-fields').textContent, /Not valid\./);
+    assert.match(toastMessages(), /Not valid\./);
     await click(radios()[4]);
     assert.equal(document.querySelectorAll('.studio-auth-field').length, 1);
     assert.match(document.querySelector('.studio-auth-notes').textContent, /\/studio\/auth\/passkey\/bootstrap/);
@@ -152,7 +157,7 @@ test('SSO validates the issuer; Passkeys ask only for a handle; Access needs a c
     await type(textField('First administrator email'), 'boss@corp.com');
     await click(button('Add Studio'));
     assert.equal(state.installs.length, 0);
-    assert.match(document.querySelector('.studio-auth-fields').textContent, /Not a cloudflareaccess\.com domain/);
+    assert.match(toastMessages(), /Not a cloudflareaccess\.com domain/);
     await click(document.querySelector('.studio-auth-confirm input'));
     await click(button('Add Studio'));
     assert.deepEqual(state.installs[0].auth, {
@@ -189,14 +194,16 @@ test('an installed Studio shows its sign-in type and Change edits only that, wit
     const signInName = () => document.querySelector('.studio-auth-current-name').textContent;
     assert.equal(signInName(), 'Passkeys');
     await click(button('Change'));
-    assert.match(document.querySelector('dialog').textContent, /new credentials or invites/);
+    assert.match(toastMessages(), /new credentials or invites/);
+    assert.doesNotMatch(document.querySelector('dialog').textContent, /new credentials or invites/, 'the warning is not a paragraph in the dialog');
     assert.equal(radios().find((radio) => radio.checked) && labelOf(radios().find((radio) => radio.checked)), 'Passkeys');
     await click(radios()[0]);
     await click(button('Save sign-in type'));
     assert.deepEqual(state.changes, [{ projectPath: '/project', auth: { kind: 'github' } }]);
     assert.equal(state.installs.length, 0);
     assert.equal(signInName(), 'GitHub');
-    assert.match(document.body.textContent, /Deploy Studio to apply it/);
+    assert.match(toastMessages(), /Deploy Studio to apply it/);
+    assert.equal(document.querySelector('.studio-auth-current-note') ?? undefined, undefined, 'the saved note is a toast, not a line beside the name');
   } finally {
     await state.close();
   }

@@ -49,6 +49,7 @@ import {
   folder as centralFolder,
   folderAdd as centralFolderAdd,
   folderOpen as centralFolderOpen,
+  microphone as centralMicrophone,
   guide as centralGuide,
   help as centralHelp,
   history as centralHistory,
@@ -341,6 +342,8 @@ export const PointerEventsNoneIcon = (props: IconProps) => (
 );
 
 export const CheckIcon = centralIcon(centralCheck);
+/** The microphone of the composer's dictation button, also the Dictation tab's mark in Settings. */
+export const MicrophoneIcon = centralIcon(centralMicrophone);
 
 // The "goes here" elbow: one side of a condition, in the navigator.
 export const CornerIcon = centralIcon(centralCorner);

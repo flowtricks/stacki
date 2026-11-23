@@ -68,7 +68,10 @@ import { createServer, type ViteDevServer } from 'vite';
 // (projectAgentChannels, over the agent definitions' parsers in projectAgents, which reads Codex's TOML through mcpToml and
 // mcpCodex), and the English catalog gained the Add elements namespace (elements): five more, 174 measured. None can leave:
 // the payload parsers are the boundary docs/contracts.md requires, and the catalog is one module per namespace.
-const MODULES_MAX = 180;
+// 1.4.17 stands at 182: the new boundary parsers (the phone-preview network contract, the Astro copy request) and the
+// outline ownership rule are shared contract modules the renderer links; each is one module a parser or a rule needs, with
+// a little headroom.
+const MODULES_MAX = 190;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

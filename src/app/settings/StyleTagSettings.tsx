@@ -33,10 +33,12 @@ import { readStyleFiles } from '../../features/style/stylePanelBridge';
 import { publishNewStyleLocations } from '../../features/style/model/newStyleTagSettings';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
+import { reportErrorToast } from '../../ui/errorNotices';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { CodeIcon, FileIcon } from '../../ui/Icons';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { Skeleton } from '../../ui/Skeleton';
-import { SettingsNotice, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
+import { SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useCodeChips } from '../../features/style/codeChips/CodeChips';
 import { can } from '../../../shared/properties/projectRoles';
@@ -107,7 +109,6 @@ export function StyleTagSettings(props: { readonly projectPath: string; readonly
   const [locations, setLocations] = useState<NewStyleLocations>();
   // The project's stylesheets, project-relative; undefined until listed (the dropdown shows skeleton rows meanwhile).
   const [stylesheets, setStylesheets] = useState<readonly string[]>();
-  const [problem, setProblem] = useState<string>();
   // The latest locations, so a debounced editor save composes with a dropdown change made since.
   const latest = useRef<NewStyleLocations | undefined>(undefined);
   // Writes run one after another, each carrying the whole latest value, so the file ends at what was chosen last.
@@ -116,7 +117,7 @@ export function StyleTagSettings(props: { readonly projectPath: string; readonly
     let live = true;
     const failed = (failure: unknown): void => {
       if (live) {
-        setProblem(translate('settings.styleTags.error.save', { message: failure instanceof Error ? failure.message : String(failure) }));
+        reportSaveFailure(failure, translate);
       }
     };
     readNewStyleLocations(projectPath).then((saved) => {
@@ -146,8 +147,8 @@ export function StyleTagSettings(props: { readonly projectPath: string; readonly
     const written = queue.current.then(() => writeNewStyleLocations(projectPath, next));
     queue.current = written.catch(() => undefined);
     track(written).then(
-      () => setProblem(undefined),
-      (failure: unknown) => setProblem(translate('settings.styleTags.error.save', { message: failure instanceof Error ? failure.message : String(failure) })),
+      () => undefined,
+      (failure: unknown) => reportSaveFailure(failure, translate),
     );
   };
 
@@ -160,7 +161,6 @@ export function StyleTagSettings(props: { readonly projectPath: string; readonly
   }
   return (
     <>
-      {problem !== undefined && <SettingsNotice message={problem} />}
       <ScopeSection
         key={`page:${projectPath}`}
         scope="page"
@@ -179,6 +179,11 @@ export function StyleTagSettings(props: { readonly projectPath: string; readonly
       />
     </>
   );
+}
+
+// A failed write is said once, as a toast; the dropdown and the editor already show the value that was chosen.
+function reportSaveFailure(failure: unknown, translate: ReturnType<typeof useTranslate>): void {
+  reportErrorToast(translate('settings.styleTags.error.save', { message: failure instanceof Error ? failure.message : String(failure) }));
 }
 
 /** The dropdown's options: "Create a style tag", then the project's stylesheets by path; a chosen file that is gone stays listed, dimmed, so the trigger names it. */
@@ -231,11 +236,8 @@ function ScopeSection(props: {
             onChange={(choice) => onChange((previous) => (choice === CREATE_TAG_CHOICE ? withTag(previous) : withFile(previous, choice)))}
           />
         </SettingsRow>
-        {health.kind === 'missing' && (
-          <span className="style-tags-chip" role="status">
-            {translate('settings.newStyles.missing', { path: health.path })}
-          </span>
-        )}
+        {/* A chosen file that is gone is a warning toast; the dropdown already lists it dimmed, so the row does not grow. */}
+        <NoticeToast kind="warning" message={health.kind === 'missing' ? translate('settings.newStyles.missing', { path: health.path }) : undefined} />
         {/* A missing file leaves the tag in charge (the panel writes it), so its editor stays beneath the chip. */}
         {(location.kind === 'tag' || health.kind === 'missing') && (
           <TagEditor tag={location.tag} editable={editable} onChange={(tag) => onChange((previous) => withTagSettings(previous, tag))} />
@@ -263,19 +265,19 @@ function TagEditor(props: { readonly tag: NewStyleTagSettings; readonly editable
     clearTimeout(timer.current);
     const settings = styleTagSettingsOf(next);
     setInvalid(settings === undefined);
-    if (settings !== undefined) {
-      timer.current = setTimeout(() => onChange(settings), SAVE_DELAY_MS);
-    }
+    // Once typing rests: a valid block is saved; an invalid one says why once, as a toast (the editor wears the error look meanwhile).
+    timer.current = setTimeout(() => {
+      if (settings === undefined) {
+        reportErrorToast(translate('settings.styleTags.invalid'));
+      } else {
+        onChange(settings);
+      }
+    }, SAVE_DELAY_MS);
   };
   return (
     <>
       <div className="style-tags-editor" data-readonly={editable ? undefined : ''} data-invalid={invalid ? '' : undefined}>
         <CodeEditor language="html" indentation="spaces" chrome="minimal" value={text} extensions={lock} onChange={editable ? edit : undefined} />
-        {invalid && (
-          <span className="style-tags-invalid" role="alert">
-            {translate('settings.styleTags.invalid')}
-          </span>
-        )}
         {codeChips.overlay}
       </div>
     </>

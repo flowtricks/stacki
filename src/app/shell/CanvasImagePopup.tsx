@@ -9,6 +9,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { assert } from '../../../shared/core/assert';
+import InfoHint from '../../ui/InfoHint';
 import Popup from '../../ui/Popup';
 import { placeMenu } from '../../ui/menuModel';
 import { CloseIcon } from '../../ui/Icons';
@@ -154,6 +155,7 @@ export function CanvasImagePopup(props: { readonly shown: CanvasImageShown; read
   );
   const surface = useRef<HTMLDivElement>(null);
   const drag = useHeaderDrag(surface, place);
+  const altTip = shown.outcome.kind === 'edit' ? altNote(shown.outcome.target.alt, translate) : undefined;
   return (
     <Popup
       ref={surface}
@@ -172,6 +174,8 @@ export function CanvasImagePopup(props: { readonly shown: CanvasImageShown; read
     >
       <header className={`canvas-image-head${drag.dragging ? ' is-dragging' : ''}`} {...drag.handlers}>
         <strong>{title}</strong>
+        {/* Why the alt text has no field of its own is a tip beside the title, not a paragraph under the fields. */}
+        {altTip !== undefined && <InfoHint text={altTip} />}
         <button type="button" className="ghost" aria-label={translate('preview.image.close')} onClick={props.onClose}>
           <CloseIcon size={14} />
         </button>
@@ -181,15 +185,15 @@ export function CanvasImagePopup(props: { readonly shown: CanvasImageShown; read
         <AssetPickPresentationContext.Provider value="overlay">
           {shown.outcome.kind === 'edit' ? props.fields : undefined}
         </AssetPickPresentationContext.Provider>
-        <ImageNotes outcome={shown.outcome} translate={translate} />
+        {shown.outcome.kind === 'refused' && <RefusalBody refusal={shown.outcome.refusal} translate={translate} />}
       </div>
     </Popup>
   );
 }
 
-function ImageNotes({ outcome, translate }: { readonly outcome: CanvasImageOutcome; readonly translate: Translator }) {
-  const note = outcome.kind === 'refused' ? refusalNote(outcome.refusal, translate) : altNote(outcome.target.alt, translate);
-  return note === undefined ? undefined : <p className="canvas-image-note">{note}</p>;
+// A refused image has no fields, so what the popup says is its whole body: the reason, not an appended note.
+function RefusalBody({ refusal, translate }: { readonly refusal: ShownImageRefusal; readonly translate: Translator }) {
+  return <p className="canvas-image-note">{refusalNote(refusal, translate)}</p>;
 }
 
 /**
@@ -211,7 +215,7 @@ export function refusalNote(refusal: ShownImageRefusal, translate: Translator): 
   }
 }
 
-// The note under the fields when the alt text has no field of its own to show.
+// The tip beside the title when the alt text has no field of its own to show.
 function altNote(alt: AltTarget, translate: Translator): string | undefined {
   switch (alt.kind) {
     case 'prop':

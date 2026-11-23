@@ -103,13 +103,6 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.breakpoints-problem {
-  grid-column: 2 / -1;
-  margin: 0;
-  color: var(--red);
-  font-size: 12px;
-  line-height: 1.4;
-}
 
 /* A card's name is an input that reads as a title until it is hovered or focused. */
 .breakpoints-name-input {
@@ -221,11 +214,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  justify-content: space-between;
-}
-.breakpoints-note {
-  color: var(--text-faint);
-  font-size: 11px;
 }
 
 /* Where a breakpoint is used: one quiet line under the subtitle, and a list of files across the card that opens from its chevron. */
@@ -272,12 +260,6 @@
   .breakpoints-usage-chevron {
     transition: none;
   }
-}
-.breakpoints-usage-problem {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 11px;
-  overflow-wrap: anywhere;
 }
 .breakpoints-usage-list {
   grid-column: 1 / -1;

@@ -1,5 +1,5 @@
 // The Settings panel's Agents view (left rail, beside Secrets, MCP and Instructions): every Claude and Codex agent definition the project holds, with its provider's mark,
-// name and description, or what is wrong with it (shown inline; the file stays listed and opens). Choosing
+// name and description, or what is wrong with it (shown in place of the description, at the same height; the file stays listed and opens). Choosing
 // one opens it in the Instructions editor over the canvas, as any instruction file opens: the same save,
 // unsaved-edits, conflict and outside-change handling, and frontmatter kept line by line, so keys this
 // panel does not know are never rewritten. A Codex definition is TOML and opens as source.
@@ -7,7 +7,8 @@
 // "New agent" writes one set of fields to `.stacki/agents/<name>.json` and a definition for each CLI from
 // them (shared/properties/projectAgents.ts). A generated file that someone edited, or that is gone, is
 // shown as such with Re-sync, which asks before overwriting an edit. Deleting moves the files to the Trash
-// after the custom confirm dialog.
+// after the custom confirm dialog. A failed write, a cut-short listing and a refused form are toasts; the form's explanations
+// are (i) tips, and a refused field takes the error look: no paragraph is ever added to the panel.
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { AGENT_IDS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { can } from '../../../shared/properties/projectRoles';
@@ -18,6 +19,10 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { ClaudeLogo, CodexLogo } from '../../ui/agentLogos';
 import { confirmDialog } from '../../ui/ConfirmDialog';
+import { reportErrorToast } from '../../ui/errorNotices';
+import { ErrorToast } from '../../ui/ErrorToast';
+import InfoHint from '../../ui/InfoHint';
+import { NoticeToast } from '../../ui/NoticeToast';
 import Dropdown from '../../ui/Dropdown';
 import { AgentIcon, PlusIcon, SyncIcon, TrashIcon, WarningTriangleIcon } from '../../ui/Icons';
 import { Skeleton } from '../../ui/Skeleton';
@@ -51,7 +56,6 @@ export function AgentsSettings({ projectPath }: { readonly projectPath: string }
   const editable = can(role, 'instructions:edit');
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [form, setForm] = useState<Form>();
-  const [problem, setProblem] = useState<string>();
   const load = useCallback(() => {
     void listProjectAgents(projectPath).then(
       (listing) => setState({ kind: 'ready', listing }),
@@ -75,9 +79,13 @@ export function AgentsSettings({ projectPath }: { readonly projectPath: string }
     );
   }
   if (state.kind === 'error') {
+    // The failure is the toast; the card stays an empty frame at the loading card's place.
     return (
-      <div className="props-empty" role="alert">
-        {state.message}
+      <div className="agents-settings">
+        <SettingsSection title={translate('settings.agents.list.title')}>
+          <div className="agents-card" />
+        </SettingsSection>
+        <ErrorToast message={state.message} />
       </div>
     );
   }
@@ -106,7 +114,9 @@ export function AgentsSettings({ projectPath }: { readonly projectPath: string }
       return;
     }
     const result = await deleteProjectAgent(projectPath, pairedName === undefined ? { kind: 'file', path: agent.path } : { kind: 'paired', name: pairedName });
-    setProblem(result.ok ? undefined : result.error.message);
+    if (!result.ok) {
+      reportErrorToast(result.error.message);
+    }
     written();
   };
   const resync = async (pair: PairedAgent): Promise<void> => {
@@ -126,7 +136,9 @@ export function AgentsSettings({ projectPath }: { readonly projectPath: string }
       }
     }
     const result = await saveProjectAgent(projectPath, { fields: pair.fields.value, mode: 'update', overwrite });
-    setProblem(result.ok ? undefined : result.error.message);
+    if (!result.ok) {
+      reportErrorToast(result.error.message);
+    }
     written();
   };
   const save = async (current: Form, fields: AgentFields): Promise<void> => {
@@ -148,9 +160,8 @@ export function AgentsSettings({ projectPath }: { readonly projectPath: string }
     const result = await saveProjectAgent(projectPath, { fields, mode: current.mode, overwrite });
     if (result.ok) {
       setForm(undefined);
-      setProblem(undefined);
     } else {
-      setProblem(result.error.message);
+      reportErrorToast(result.error.message);
     }
     written();
   };
@@ -184,13 +195,8 @@ export function AgentsSettings({ projectPath }: { readonly projectPath: string }
               ))}
             </ul>
           )}
-          {listing.truncated && <p className="agents-note">{translate('settings.agents.truncated')}</p>}
+          <NoticeToast kind="warning" message={listing.truncated ? translate('settings.agents.truncated') : undefined} />
           {editable && form === undefined && listing.agents.length > 0 && <div className="agents-actions">{newButton}</div>}
-          {problem !== undefined && (
-            <p className="agents-problem" role="alert">
-              {problem}
-            </p>
-          )}
         </div>
       </SettingsSection>
       {form !== undefined && (
@@ -351,37 +357,42 @@ function AgentForm(props: {
   const [busy, setBusy] = useState(false);
   const ids = useId();
   const problems = draftProblems(draft, props.taken);
-  const problemOf = (field: string): string | undefined => {
-    const found = problems.find((each) => each.field === field);
-    return found === undefined || !touched ? undefined : translate(fieldProblemKey(found));
-  };
+  // A refused field takes the error look once the form was touched; why it was refused is the toast on submit.
+  const invalidOf = (field: string): boolean => touched && problems.some((each) => each.field === field);
   const change = (key: keyof AgentDraft, value: string): void => {
     setDraft((current) => ({ ...current, [key]: value }));
     setTouched(true);
   };
   const updating = props.form.mode === 'update';
   return (
-    <SettingsSection title={updating ? translate('settings.agents.form.editTitle', { name: draft.name }) : translate('settings.agents.form.title')}>
+    <SettingsSection
+      title={updating ? translate('settings.agents.form.editTitle', { name: draft.name }) : translate('settings.agents.form.title')}
+      info={translate('settings.agents.form.intro')}
+    >
       <form
         className="agents-card agents-form"
         onSubmit={(event) => {
           event.preventDefault();
           setTouched(true);
-          if (problems.length === 0 && !busy) {
+          const first = problems[0];
+          if (first !== undefined) {
+            // Every refused field wears the error look; the first reason is said once.
+            reportErrorToast(translate(fieldProblemKey(first)));
+          } else if (!busy) {
             setBusy(true);
             void props.onSave(props.form, fieldsOfDraft(draft)).finally(() => setBusy(false));
           }
         }}
       >
-        <p className="agents-note">{translate('settings.agents.form.intro')}</p>
         <FormField
           id={`${ids}-name`}
           label={translate('settings.agents.form.name')}
-          problem={problemOf('name')}
+          invalid={invalidOf('name')}
           hint={translate('settings.agents.form.nameHint')}
         >
           <input
             id={`${ids}-name`}
+            aria-invalid={invalidOf('name') ? true : undefined}
             type="text"
             value={draft.name}
             disabled={updating}
@@ -393,22 +404,35 @@ function AgentForm(props: {
         <FormField
           id={`${ids}-description`}
           label={translate('settings.agents.form.description')}
-          problem={problemOf('description')}
+          invalid={invalidOf('description')}
           hint={translate('settings.agents.form.descriptionHint')}
         >
-          <input id={`${ids}-description`} type="text" value={draft.description} onChange={(event) => change('description', event.target.value)} />
+          <input
+            id={`${ids}-description`}
+            aria-invalid={invalidOf('description') ? true : undefined}
+            type="text"
+            value={draft.description}
+            onChange={(event) => change('description', event.target.value)}
+          />
         </FormField>
-        <FormField id={`${ids}-instructions`} label={translate('settings.agents.form.instructions')} problem={problemOf('instructions')}>
-          <textarea id={`${ids}-instructions`} rows={8} value={draft.instructions} onChange={(event) => change('instructions', event.target.value)} />
+        <FormField id={`${ids}-instructions`} label={translate('settings.agents.form.instructions')} invalid={invalidOf('instructions')}>
+          <textarea
+            id={`${ids}-instructions`}
+            aria-invalid={invalidOf('instructions') ? true : undefined}
+            rows={8}
+            value={draft.instructions}
+            onChange={(event) => change('instructions', event.target.value)}
+          />
         </FormField>
         <FormField
           id={`${ids}-tools`}
           label={translate('settings.agents.form.tools')}
-          problem={problemOf('tools')}
+          invalid={invalidOf('tools')}
           hint={translate('settings.agents.form.toolsHint')}
         >
           <input
             id={`${ids}-tools`}
+            aria-invalid={invalidOf('tools') ? true : undefined}
             type="text"
             value={draft.tools}
             spellCheck={false}
@@ -416,7 +440,7 @@ function AgentForm(props: {
             onChange={(event) => change('tools', event.target.value)}
           />
         </FormField>
-        <FormField id={`${ids}-claudeModel`} label={translate('settings.agents.form.claudeModel')} problem={problemOf('claudeModel')}>
+        <FormField id={`${ids}-claudeModel`} label={translate('settings.agents.form.claudeModel')} invalid={invalidOf('claudeModel')}>
           <Dropdown
             ariaLabel={translate('settings.agents.form.claudeModel')}
             value={draft.claudeModel}
@@ -427,11 +451,12 @@ function AgentForm(props: {
         <FormField
           id={`${ids}-codexModel`}
           label={translate('settings.agents.form.codexModel')}
-          problem={problemOf('codexModel')}
+          invalid={invalidOf('codexModel')}
           hint={translate('settings.agents.form.codexModelHint')}
         >
           <input
             id={`${ids}-codexModel`}
+            aria-invalid={invalidOf('codexModel') ? true : undefined}
             type="text"
             value={draft.codexModel}
             spellCheck={false}
@@ -443,7 +468,7 @@ function AgentForm(props: {
           <button type="button" onClick={props.onCancel}>
             {translate('settings.agents.form.cancel')}
           </button>
-          <button type="submit" className="primary" disabled={busy || (touched && problems.length > 0)}>
+          <button type="submit" className="primary" disabled={busy}>
             {updating ? translate('settings.agents.form.save') : translate('settings.agents.form.create')}
           </button>
         </div>
@@ -455,21 +480,19 @@ function AgentForm(props: {
 function FormField(props: {
   readonly id: string;
   readonly label: string;
+  /** The longer explanation, in an (i) tip beside the label. */
   readonly hint?: string;
-  readonly problem: string | undefined;
+  /** The field was refused: its control takes the error look (a fill, not a border). */
+  readonly invalid: boolean;
   readonly children: ReactNode;
 }) {
   return (
-    <div className="agents-field">
-      <label htmlFor={props.id}>{props.label}</label>
+    <div className="agents-field" data-invalid={props.invalid ? '' : undefined}>
+      <span className="agents-field-label">
+        <label htmlFor={props.id}>{props.label}</label>
+        {props.hint !== undefined && <InfoHint text={props.hint} />}
+      </span>
       {props.children}
-      {props.problem !== undefined ? (
-        <span className="agents-problem" role="alert">
-          {props.problem}
-        </span>
-      ) : (
-        props.hint !== undefined && <span className="agents-note">{props.hint}</span>
-      )}
     </div>
   );
 }

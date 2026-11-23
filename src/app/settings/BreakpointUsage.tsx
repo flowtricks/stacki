@@ -16,6 +16,7 @@ import {
   type PlaceChoice,
 } from '../../../shared/properties/breakpointSyncSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { ChevronRightIcon } from '../../ui/Icons';
 import { Skeleton } from '../../ui/Skeleton';
 import { SyncFileRow } from './SyncFileRows';
@@ -90,9 +91,6 @@ export function BreakpointUsageLine(props: LineProps) {
       ) : (
         text
       )}
-      {props.state.problem !== undefined && (
-        <span className="breakpoints-usage-problem">{translate('settings.breakpoints.usage.problem', { message: props.state.problem })}</span>
-      )}
     </span>
   );
 }
@@ -101,7 +99,6 @@ export function BreakpointUsageLine(props: LineProps) {
 export function BreakpointUsageList(props: ListProps) {
   const translate = useTranslate();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  const [problem, setProblem] = useState<string>();
   const files = filesOf(props.state, props.id);
   const checked = checkedOf(files);
   const choose = async (next: CheckedPlaces): Promise<void> => {
@@ -112,7 +109,10 @@ export function BreakpointUsageList(props: ListProps) {
       }),
     );
     if (choices.length > 0) {
-      setProblem(await props.onToggle(props.id, choices));
+      const failure = await props.onToggle(props.id, choices);
+      if (failure !== undefined) {
+        reportErrorToast(failure);
+      }
     }
   };
   const all = new Set(files.flatMap((file) => file.occurrences.map((place) => placeKey(file.rel, place.locator))));
@@ -140,7 +140,6 @@ export function BreakpointUsageList(props: ListProps) {
           />
         ))}
       </div>
-      {problem !== undefined && <p className="breakpoints-usage-problem">{problem}</p>}
     </div>
   );
 }

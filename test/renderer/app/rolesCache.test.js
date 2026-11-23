@@ -15,6 +15,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture');
 
 const output = repoPath('node_modules/.stacki-test/roles-cache.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -30,6 +31,7 @@ esbuild.buildSync({
     loader: 'ts',
   },
   outfile: output,
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -251,10 +253,11 @@ test('with nothing read yet, the first frame is the real layout with shapes, nev
   await replyFile(roles.serializeProjectRoles(OWNED));
   assert.equal(document.querySelectorAll('[data-skeleton="role"]').length, 0, 'the read swaps the shapes for cards');
   assert.ok(document.querySelector('section[aria-label="Admin role"]'), 'the cards show before the login answers');
-  assert.equal(document.querySelectorAll('.app-roles-notice').length, 0, 'an unknown login never flashes "Signed out"');
+  assert.doesNotMatch(toastMessages(), /Signed out/, 'an unknown login never flashes "Signed out"');
   identityReplies.shift().resolve({ login: undefined });
   await tick();
-  assert.match(document.querySelector('.app-roles-notice').textContent, /Signed out/, 'a known signed-out login says so');
+  assert.match(toastMessages(), /Signed out/, 'a known signed-out login says so, as a toast');
+  assert.equal(document.querySelectorAll('.app-roles-notice, [role="alert"]').length, 0, 'and adds no paragraph to the screen');
   await unmount();
 });
 

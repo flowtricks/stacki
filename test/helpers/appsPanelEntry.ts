@@ -6,4 +6,5 @@
 export { default } from '../../src/features/apps/AppsPanel';
 export { ConfirmHost } from '../../src/ui/ConfirmDialog';
 export { registerAgentTaskHandler } from '../../src/lib/agentTasks';
+export { subscribeErrorToasts } from '../../src/ui/errorNotices';
 export { configureAppCommands } from '../../src/features/apps/appCommands';

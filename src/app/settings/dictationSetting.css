@@ -1,71 +1,172 @@
-/* Settings → AI → Dictation (DictationSetting.tsx). Fills, never borders. */
-.dictation-setting-status {
-  margin-inline-end: 8px;
-  font-size: 12px;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-.dictation-setting-problem {
-  margin: 0;
-}
-.dictation-setting-facts {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 12px;
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--bg-input);
-  font-size: 12px;
-}
-.dictation-setting-facts dt {
-  color: var(--text-faint);
-}
-.dictation-setting-facts dd {
-  margin: 0;
+/* Settings → Dictation (DictationSetting.tsx, DictationQuality.tsx, DictationWords.tsx). Fills, never borders:
+   every block is a soft background, set apart by space. The page is one column that never scrolls sideways; the
+   cards and rows shrink and wrap before they would overflow, down to the narrowest Settings width. */
+.dictation-page {
   min-inline-size: 0;
-  overflow-wrap: anywhere;
+  /* The page's own width, not the window's, decides when the cards and the status card stack (the @container rules below). */
+  container-type: inline-size;
 }
-.dictation-setting-path {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
-}
-.dictation-words-chips {
-  margin-block: 4px 8px;
-}
-.dictation-words-suggestions {
-  display: flex;
-  flex-wrap: wrap;
+
+/* The status card: a mark, its words, its one action; a download adds its bar underneath across the card. */
+.dictation-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  gap: 12px 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-hover);
+}
+.dictation-status-mark {
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.dictation-status[data-state='ready'] .dictation-status-mark {
+  background: rgba(48, 193, 88, 0.16);
+  color: var(--green);
+}
+.dictation-status[data-state='downloading'] .dictation-status-mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.dictation-status-text {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  margin-block-end: 8px;
+  min-inline-size: 0;
 }
-.dictation-words-suggestions-label {
-  font-size: 11px;
-  color: var(--text-faint);
-  margin-inline-end: 4px;
-}
-.dictation-words-suggestion {
+.dictation-status-title {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding-block: 2px;
-  padding-inline: 8px;
-  border-radius: 999px;
-  background: var(--bg-input);
-  font-size: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-.dictation-snippets {
+.dictation-status-detail {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.dictation-status-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-inline-size: 0;
+}
+.dictation-status-bar {
+  grid-column: 1 / -1;
+  block-size: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.dictation-status-bar-fill {
+  block-size: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dictation-status-bar-fill {
+    transition: none;
+  }
+}
+
+/* Quality: three equal cards in a row, one under another when the page is too narrow for three. */
+.dictation-quality {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+@container (max-width: 480px) {
+  .dictation-quality {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.dictation-quality-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  min-inline-size: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  color: var(--text);
+  text-align: start;
 }
-.dictation-snippets-empty {
-  margin: 0;
-  font-size: 12px;
+.dictation-quality-card:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+.dictation-quality-card[data-selected='true'] {
+  background: var(--accent-soft);
+}
+.dictation-quality-card:disabled {
+  opacity: 0.55;
+}
+.dictation-quality-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.dictation-quality-detail {
+  flex: 1;
   color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.4;
 }
-.dictation-snippets-list {
+.dictation-quality-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  inline-size: 100%;
+  margin-block-start: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dictation-quality-size {
+  color: var(--text-dim);
+}
+.dictation-quality-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+}
+.dictation-quality-state[data-downloaded='true'] svg {
+  color: var(--green);
+}
+
+/* Language and microphone share a stack of rows. */
+.dictation-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dictation-mic-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.dictation-mic-state[data-status='granted'] svg {
+  color: var(--green);
+}
+
+/* Vocabulary and snippets: one row each, its text at the start, edit and delete at the end. */
+.dictation-rows {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -73,29 +174,147 @@
   padding: 0;
   list-style: none;
 }
-.dictation-snippet {
+.dictation-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
-  padding-block: 4px;
-  padding-inline: 8px;
-  border-radius: 6px;
+  gap: 4px;
+  padding-block: 6px;
+  padding-inline: 12px 6px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  font-size: 13px;
+}
+.dictation-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.dictation-row-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dictation-row-detail {
+  color: var(--text-faint);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dictation-words-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.dictation-words-suggestions-label {
+  margin-inline-end: 4px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.dictation-words-suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 3px;
+  padding-inline: 10px;
+  border-radius: 999px;
   background: var(--bg-input);
   font-size: 12px;
 }
-.dictation-snippet-trigger {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+/* Model details: a folded row; opened, a grid of what the model is and where it lives. */
+.dictation-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.dictation-snippet-expansion {
+.dictation-details-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: start;
+}
+.dictation-details-toggle svg {
+  transition: transform 150ms ease;
+}
+.dictation-details[data-open='false'] .dictation-details-toggle svg {
+  transform: rotate(-90deg);
+}
+[dir='rtl'] .dictation-details[data-open='false'] .dictation-details-toggle svg {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dictation-details-toggle svg {
+    transition: none;
+  }
+}
+.dictation-details-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  font-size: 12px;
+}
+.dictation-details-list dt {
   color: var(--text-faint);
+}
+.dictation-details-list dd {
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+/* The path is one line cut in its middle; a reveal button sits after it, and wraps under it when narrow. */
+.dictation-details-storage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.dictation-details-path {
+  flex: 1 1 12ch;
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: ltr;
+  text-align: start;
 }
+
+/* Narrow Settings: the status card's action drops under its words. */
+@container (max-width: 420px) {
+  .dictation-status {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .dictation-status-action {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .dictation-details-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .dictation-details-list dd {
+    margin-block-end: 8px;
+  }
+}
+
+/* The add-word and snippet dialogs. */
 .dictation-words-dialog {
   inline-size: min(420px, calc(100vw - 32px));
 }
@@ -112,6 +331,11 @@
 }
 .dictation-words-field textarea {
   resize: vertical;
+}
+/* A refused field takes the error look (a fill, never an outline); why is a toast. */
+.dictation-words-field input[aria-invalid='true'],
+.dictation-words-field textarea[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
 }
 .dictation-words-toggle {
   display: flex;

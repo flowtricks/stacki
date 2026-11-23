@@ -6,8 +6,8 @@
 // id, and so its grants, stay); only custom roles can be deleted, after a confirmation. Client cannot: the parser
 // puts it back in every file it reads, and Studio falls back to it (a broken roles file, a signed-in person
 // without a file), so deleting it would only reset it to its default access. Every control is disabled when the
-// viewer cannot edit roles. Changes save at once (RolesSettings.tsx); a refused or failed one shows its notice
-// under the heading.
+// viewer cannot edit roles. Changes save at once (RolesSettings.tsx); a refused or failed one is a toast
+// (RolesSettings.tsx).
 import { useMemo, useState, type ReactNode } from 'react';
 import {
   ADMIN_ROLE_ID,
@@ -26,7 +26,7 @@ import { permissionCounts, type RoleSection } from './roleDetailModel';
 import type { ComponentRule, ComponentState, ComponentTarget } from '../../../shared/properties/componentAccess';
 
 export interface RoleCardActions {
-  /** Whether the name was accepted; a refused one says why in the card's notice. */
+  /** Whether the name was accepted; a refused one says why in a toast. */
   readonly rename: (name: string) => boolean;
   readonly remove: () => void;
   readonly addMember: (login: string) => boolean;
@@ -63,8 +63,6 @@ export function RoleCard(props: {
   readonly open: (section: RoleSection) => void;
   /** The open project's component files, for the Components row's count; without them it counts none. */
   readonly componentFiles?: readonly string[];
-  /** Why the card's last change was refused or not saved, beside it. */
-  readonly notice?: ReactNode;
   /** The card opens with its name field focused: the role was just made by Duplicate. */
   readonly naming?: 'rename' | undefined;
 }) {
@@ -114,7 +112,6 @@ export function RoleCard(props: {
         <span className="app-role-count">{role.members.length > 0 && translate('settings.roles.members.count', { count: role.members.length })}</span>
         <RoleHeadingActions role={role} editable={editable} actions={actions} startNaming={() => setNaming('editing')} />
       </div>
-      {props.notice}
       {/* Flat rows, transparent at rest: one level of filled surface (the card) and a hover wash, no boxes inside it. */}
       <ul className="app-role-rows">
         {rows.map((row) => (
@@ -192,7 +189,7 @@ function RoleHeadingActions(props: Omit<SectionProps, 'projectPath'> & { readonl
 /**
  * A role's name, renamed in place: click it (or choose Rename in the "…" menu) to edit, Enter or leaving
  * the field saves, Escape cancels. A refused name (empty, too long, taken) puts the field back to the
- * saved name and the card's notice says why.
+ * saved name and a toast says why.
  */
 function RoleName(props: {
   readonly role: ProjectRole;

@@ -66,7 +66,6 @@ export function RoleComponents(props: {
   };
   return (
     <div className="app-role-components-body">
-      <p className="app-role-components-info">{translate('settings.roles.components.info')}</p>
       {editable && props.copySources.length > 0 && (
         <div className="app-role-components-tools">
           <Dropdown

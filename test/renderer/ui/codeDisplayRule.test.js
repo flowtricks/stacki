@@ -38,10 +38,8 @@ const PRE_ALLOWED = {
 const CODE_LABELS_ALLOWED = {
   'src/app/settings/InstructionsSettings.tsx': 'A path pattern in a sentence or a list row.',
   'src/features/assets/AssetsPanel.tsx': 'A folder name in a sentence.',
-  'src/features/cms/CmsSettings.tsx': 'A field key in a sentence.',
   'src/features/cmsConnections/EmDashDetails.tsx': 'A field slug in a list row.',
   'src/features/cmsConnections/EmDashInstall.tsx': 'A file path in a list row.',
-  'src/features/palette/PaletteDialogs.tsx': 'A component name and its path in a sentence.',
   'src/features/palette/PalettePanel.tsx': 'A folder name in a sentence.',
   'src/features/palette/RenameComponentDialog.tsx': 'The new file path, and each file a rename edits, in a list row.',
   'src/features/props/ConditionalValue.tsx': 'Highlighted already: a style value is coloured with declarationTokens through CodeTokens, between value chips.',

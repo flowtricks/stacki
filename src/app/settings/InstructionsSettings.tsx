@@ -8,6 +8,8 @@ import { parseHiddenPattern, withHidden, withoutHidden, type InstructionSettings
 import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { CloseIcon, HideIcon } from '../../ui/Icons';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { Skeleton } from '../../ui/Skeleton';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { SettingsEmptyState } from './SettingsEmptyState';
@@ -38,7 +40,6 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
   const editable = can(role, 'settings:instructions') || can(role, 'instructions:edit');
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [draft, setDraft] = useState('');
-  const [problem, setProblem] = useState<string>();
   const load = useCallback(() => {
     void readInstructionSettings(projectPath).then(
       (stored) => setState({ kind: 'ready', stored }),
@@ -63,9 +64,10 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
     );
   }
   if (state.kind === 'error') {
+    // The failure is the toast; the tab stays an empty frame.
     return (
-      <div className="props-empty" role="alert">
-        {state.message}
+      <div className="instructions-settings">
+        <ErrorToast message={state.message} />
       </div>
     );
   }
@@ -90,9 +92,8 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
     try {
       const stored = await writeInstructionSettings(projectPath, next, state.stored.source);
       setState({ kind: 'ready', stored });
-      setProblem(undefined);
     } catch (failure: unknown) {
-      setProblem(failure instanceof Error ? failure.message : String(failure));
+      reportErrorToast(failure instanceof Error ? failure.message : String(failure));
       load();
     }
   };
@@ -102,11 +103,10 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
       setDraft('');
       void save(next.value);
     } else {
-      setProblem(next.error);
+      reportErrorToast(next.error);
     }
   };
   const draftState = check(draft);
-  const message = draftState.kind === 'invalid' ? draftState.message : problem;
   const suggestions = SUGGESTIONS.filter((suggestion) => !hidden.includes(suggestion));
   return (
     <div className="instructions-settings">
@@ -148,33 +148,30 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
           {editable && (
             <form
               className="instructions-hidden-add"
+              data-invalid={draftState.kind === 'invalid' ? '' : undefined}
               onSubmit={(event) => {
                 event.preventDefault();
                 if (draftState.kind === 'valid') {
                   hide(draftState.pattern);
+                } else if (draftState.kind === 'invalid') {
+                  // Said once, on commit; while it is typed the field only wears the error look.
+                  reportErrorToast(draftState.message);
                 }
               }}
             >
               <input
                 type="text"
                 aria-label={translate('settings.instructions.hidden.input')}
+                aria-invalid={draftState.kind === 'invalid' ? true : undefined}
                 placeholder={translate('settings.instructions.hidden.placeholder')}
                 spellCheck={false}
                 value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  setProblem(undefined);
-                }}
+                onChange={(event) => setDraft(event.target.value)}
               />
-              <button type="submit" disabled={draftState.kind !== 'valid'}>
+              <button type="submit" disabled={draftState.kind === 'empty'}>
                 {translate('settings.instructions.hidden.hide')}
               </button>
             </form>
-          )}
-          {message !== undefined && (
-            <div className="instructions-hidden-problem" role="alert">
-              {message}
-            </div>
           )}
         </div>
       </SettingsSection>

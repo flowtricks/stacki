@@ -1,7 +1,7 @@
 // The card that adds a breakpoint, in the same grid as the others: the icon the new breakpoint WILL get at the left (it follows the
 // direction and the value as they are typed), then a column with its name (an input that reads as text until hovered or focused), the
 // direction as a segmented control and a muted line saying the query and canvas it will have, plus how many places already match when
-// the value does; the value field in the same column and width as every card's; the problem, if any, under both; and the actions at the
+// the value does; the value field in the same column and width as every card's; and the actions at the
 // bottom right, Cancel then Add. Enter adds and Escape cancels; Tab goes name, direction, value, Cancel, Add. The value is focused and
 // selected when the card opens.
 import { useEffect, useRef, useState } from 'react';
@@ -35,6 +35,7 @@ interface Props {
   readonly suggestedName: string;
   /** The breakpoint this would be, once the value parses; undefined before. */
   readonly candidate: Breakpoint | undefined;
+  /** Why the draft cannot be added: the card takes the error look; the owner says it once, as a toast, when Add is pressed. */
   readonly problem: string | undefined;
   readonly canAdd: boolean;
   readonly onAdd: () => void;
@@ -112,11 +113,6 @@ export function BreakpointAddCard(props: Props) {
       </div>
       {/* Where the other cards have their remove button, so the value lines up with theirs. */}
       <span className="breakpoints-spacer" aria-hidden="true" />
-      {props.problem !== undefined && (
-        <p className="breakpoints-problem" role="alert">
-          {props.problem}
-        </p>
-      )}
       <div className="breakpoints-add-actions">
         <button type="button" className="breakpoints-add-cancel" onClick={props.onCancel}>
           {translate('ui.cancel')}

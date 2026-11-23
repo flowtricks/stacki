@@ -21,26 +21,6 @@
 .style-tags-editor[data-invalid] {
   background: color-mix(in srgb, var(--red) 14%, var(--bg-hover));
 }
-.style-tags-invalid {
-  position: absolute;
-  top: 8px;
-  inset-inline-end: 12px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  color: #fff;
-  background: var(--red);
-}
-
-/* A chosen file that is gone: a filled chip (amber, never a border) that says the tag is used meanwhile. */
-.style-tags-chip {
-  align-self: flex-start;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--text);
-  background: color-mix(in srgb, var(--amber) 22%, var(--bg-hover));
-}
 
 /* The location row: the label keeps its words on one line and the dropdown takes the rest, so a long
    stylesheet path is cut with an ellipsis inside the dropdown instead of squeezing the label. */

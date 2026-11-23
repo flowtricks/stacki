@@ -7,7 +7,9 @@
 // collections and chooses data files the same way.
 // Method: bundle the real FolderSettings component with esbuild, mount it in
 // jsdom over a fake bridge that keeps `.stacki/folders.json` in memory and
-// answers the folder dialog from a queue, then click through the tab.
+// answers the folder dialog from a queue, then click through the tab. Failures and refusals are toasts (the bundle is injected with
+// the toast capture), never a paragraph in the tab: the panel renders no role="alert" or notice element, and the reason a host
+// cannot store folders is the (i) beside the heading.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -15,12 +17,14 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture');
 
 const output = repoPath('node_modules/.stacki-test/folder-settings.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 const bundled = esbuild.build({
   entryPoints: [repoPath('src/app/settings/FolderSettings.tsx')],
   outfile: output,
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -107,9 +111,15 @@ async function reset(label) {
   const item = [...document.querySelectorAll('.prop-menu-item')].find((entry) => entry.textContent.trim() === 'Reset');
   await click(item);
 }
-const alert = () => [...document.querySelectorAll('[role="alert"]')].map((item) => item.textContent.trim()).join(' ');
+// What was said as a toast since the last click; nothing is ever drawn in the tab itself.
+const alert = () => toastMessages().replace(/\n/g, ' ');
+const clearToasts = () => {
+  globalThis.stackiCapturedToasts = [];
+};
+const noInlineNotice = () => assert.equal(document.querySelectorAll('[role="alert"], .app-folders-notice').length, 0, 'the tab appends no notice paragraph');
 const click = async (element) => {
   assert.ok(element, 'the control exists');
+  clearToasts();
   await act(async () => element.click());
   await settle();
 };
@@ -160,7 +170,8 @@ test('defaults show, and add, remove, reset and refusals all go through the file
   assert.match(alert(), /lib\/images is outside public\/ and src\//);
   picks.push({ kind: 'canceled' });
   await click(button('Assets', 'Add folder'));
-  assert.equal(alert(), '', 'a cancel clears the message and changes nothing');
+  assert.equal(alert(), '', 'a cancel says nothing and changes nothing');
+  noInlineNotice();
   assert.equal(writes.length, 1, 'no refused choice was written');
 
   await click(row('Components').querySelector('[aria-label="Remove src/components from Components"]'));
@@ -213,6 +224,7 @@ test('an unreadable file is reported, the defaults show, and a stale save is ref
   stored = '{"version":1,"folders":{"assets":["../outside"]}}';
   await mount();
   assert.match(alert(), /could not be read .*cannot step out/);
+  noInlineNotice();
   assert.deepEqual(chips('Assets'), ['public', 'src']);
   // Another session changes the file after this tab read it.
   stored = JSON.stringify({ version: 1, folders: {} });
@@ -231,10 +243,11 @@ test('a host from before folder settings shows the defaults read-only, and other
       throw new Error("Error invoking remote method 'project:metadata': Error: Unknown project metadata file");
     };
     await mount();
-    assert.match(document.querySelector('[role="status"]').textContent, /Restart Stacki to edit folders/);
+    assert.match(document.querySelector('.info-hint-text').textContent, /Restart Stacki to edit folders/, 'the reason is the (i) tip, not a paragraph');
+    assert.equal(document.querySelector('.app-folders > p') ?? undefined, undefined, 'and no paragraph sits above the rows');
     assert.deepEqual(chips('Components'), ['src/components']);
     assert.deepEqual(chips('Assets'), ['public', 'src']);
-    assert.equal(document.querySelectorAll('.app-folders button').length, 0, 'nothing can be changed');
+    assert.equal(document.querySelectorAll('.app-folders button:not(.settings-info)').length, 0, 'nothing can be changed (the (i) only explains)');
     await act(async () => root.unmount());
 
     // Studio passes its own note for a server that predates folder settings.
@@ -243,14 +256,16 @@ test('a host from before folder settings shows the defaults read-only, and other
       root.render(React.createElement(component.FolderSettings, { projectPath: '/project', unsupportedNote: 'Update Studio to edit folders.' })),
     );
     await settle();
-    assert.match(document.querySelector('[role="status"]').textContent, /Update Studio to edit folders/);
+    assert.match(document.querySelector('.info-hint-text').textContent, /Update Studio to edit folders/);
     await act(async () => root.unmount());
 
     window.avb.projectMetadata = async () => {
       throw new Error('Permission denied');
     };
+    clearToasts();
     await mount();
-    assert.match(alert(), /Permission denied/, 'any other failure is a failure');
+    assert.match(alert(), /Permission denied/, 'any other failure is a failure, said as a toast');
+    assert.equal(document.querySelectorAll('.app-folders p, [role="alert"]').length, 0, 'and the tab stays an empty frame');
     await act(async () => root.unmount());
   } finally {
     window.avb.projectMetadata = projectMetadata;

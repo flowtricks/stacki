@@ -1,11 +1,12 @@
 // The dialog that follows a changed breakpoint when media queries elsewhere in the project still hold its old value
 // (Settings > Breakpoints). Files are rows with a box each (half-checked when only some places are); a row opens to its places,
 // each with its line and `before → after`. Exact matches start checked; inclusive 1px forms and places remembered as "Not synced"
-// start unchecked and say so. Nothing is written until the primary button is pressed; "Just save the number" leaves the project's
+// start unchecked and say so. A scan that was cut short or could not be remembered is a warning toast. Nothing is written until the primary button is pressed; "Just save the number" leaves the project's
 // files as they are. While the scan is slow the same dialog shows skeleton rows, so it never appears empty.
 import { useEffect, useState } from 'react';
 import type { BreakpointSyncScan } from '../../../shared/properties/breakpointSyncPlan';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { NoticeToast } from '../../ui/NoticeToast';
 import Popup from '../../ui/Popup';
 import { Skeleton } from '../../ui/Skeleton';
 import {
@@ -49,6 +50,13 @@ export function BreakpointSyncDialog(props: Props) {
     <Popup className="modal breakpoint-sync" role="dialog" labelledBy="breakpoint-sync-title" onClose={props.onSkip}>
       {({ close }) => (
         <>
+          {/* What the scan could not read is a warning toast, not a paragraph under the list: the list does not move when it arrives. */}
+          <NoticeToast kind="warning" message={scan?.truncated === true ? translate('settings.breakpoints.sync.truncated') : undefined} />
+          <NoticeToast kind="warning" message={scan !== undefined && scan.skipped > 0 ? translate('settings.breakpoints.sync.skippedLarge') : undefined} />
+          <NoticeToast
+            kind="warning"
+            message={scan?.recordProblem === undefined ? undefined : translate('settings.breakpoints.sync.recordProblem', { message: scan.recordProblem })}
+          />
           <div className="modal-header" id="breakpoint-sync-title">
             {scan === undefined ? translate('settings.breakpoints.sync.scanning') : translate('settings.breakpoints.sync.title', { count: total })}
           </div>
@@ -78,11 +86,6 @@ export function BreakpointSyncDialog(props: Props) {
                     />
                   ))}
             </div>
-            {scan?.truncated === true && <p className="breakpoint-sync-note">{translate('settings.breakpoints.sync.truncated')}</p>}
-            {scan !== undefined && scan.skipped > 0 && <p className="breakpoint-sync-note">{translate('settings.breakpoints.sync.skippedLarge')}</p>}
-            {scan?.recordProblem !== undefined && (
-              <p className="breakpoint-sync-note">{translate('settings.breakpoints.sync.recordProblem', { message: scan.recordProblem })}</p>
-            )}
           </div>
           <div className="modal-footer">
             <button type="button" onClick={close} disabled={props.busy}>

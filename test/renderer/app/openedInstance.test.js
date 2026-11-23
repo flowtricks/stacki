@@ -51,6 +51,7 @@ test('the opened copy reaches the overlay as the selection copy, and a stale one
   const runtime = fs.readFileSync(repoPath('src/features/preview/previewRuntime.ts'), 'utf8');
   const overlays = fs.readFileSync(repoPath('src/features/preview/PreviewOverlays.tsx'), 'utf8');
   assert.match(runtime, /selOcc: selectedOccurrence \?\? props\.openedOcc/);
-  assert.match(overlays, /copiesToDraw\(all, props\.selOcc\)/);
+  // The selection is drawn on the copy it names, and a copy that no longer exists falls back to the first.
+  assert.match(overlays, /boxes\[props\.selOcc \?\? 0\] \?\? boxes\[0\]/);
   assert.match(overlays, /copiesToDraw\(all, outline\.occ\)/);
 });

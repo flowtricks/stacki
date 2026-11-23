@@ -177,6 +177,19 @@
   gap: 4px;
   margin-bottom: 4px;
 }
+/* A section's action (its Add button) shares the heading's line and ends it. */
+.app-settings-section-header:has(.app-settings-section-action) {
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.app-settings-section-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  max-inline-size: 100%;
+}
 .app-settings-section-title {
   display: flex;
   align-items: center;
@@ -268,6 +281,11 @@
   background: var(--bg-hover);
   text-align: center;
 }
+/* A list's own empty state inside a page that has other sections: a short band, not a page. */
+.app-settings-empty[data-compact='true'] {
+  gap: 8px;
+  padding: 20px 16px;
+}
 .app-settings-empty-icon {
   display: grid;
   place-items: center;
@@ -320,33 +338,6 @@
   }
 }
 
-/* A notice beside the control it is about: why a change was refused, or that a
-   save failed, with Retry. A soft red fill, never an outline. */
-.app-settings-notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-block: 8px;
-  padding-inline: 12px 8px;
-  border-radius: 6px;
-  background: rgba(255, 155, 146, 0.08);
-  color: #ff9b92;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.app-settings-notice button {
-  flex: none;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-.app-settings-notice button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
 /* Narrow windows: the sidebar becomes a row of tabs above the page, scrolling
    sideways rather than cutting a label off; rows stack their control under
    the text once there is no room beside it. */
@@ -393,15 +384,6 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-}
-.app-folders-notice {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: #ff9b9214;
-  color: #ff9b92;
-  font-size: 12px;
-  line-height: 1.5;
 }
 .app-folder-row {
   display: flex;

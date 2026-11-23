@@ -9,6 +9,7 @@
 // CMS panel.
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
+import { ErrorToast } from '../../ui/ErrorToast';
 import { BracesIcon, ChevronRightIcon, CloseIcon, CmsIcon, FileIcon, PlusIcon } from '../../ui/Icons';
 import { cleanError } from '../../lib/cleanError';
 import { assert } from '../../../shared/core/assert';
@@ -103,11 +104,7 @@ export function CmsSources(props: {
     );
   }
   if (sources.kind === 'failed') {
-    return (
-      <p className="app-folders-notice" role="alert">
-        {sources.message}
-      </p>
-    );
+    return <ErrorToast message={sources.message} />;
   }
   const chosen = cmsFilesFor(props.config);
   // Astro files are always sources and never listed here (isAstroSource).

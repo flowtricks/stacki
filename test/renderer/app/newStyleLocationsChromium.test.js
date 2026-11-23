@@ -1,7 +1,7 @@
 // Goal: the New style locations tab (Settings, src/app/settings/StyleTagSettings.tsx) never scrolls sideways at the
 // widths the Settings dialog's content area takes. Each scope shows a row with the location dropdown, a code block
-// and a caption; the page scope here holds a chosen stylesheet whose path is long and no longer exists (the warning
-// chip), so the long label, the chip and the editor are all on screen at once. None of them may be wider than the
+// and a caption; the page scope here holds a chosen stylesheet whose path is long and no longer exists (its warning is a
+// toast, so the tab adds no chip), so the long label and the editor are both on screen at once. None of them may be wider than the
 // scrolling area, and the area keeps `scrollbar-gutter: stable`.
 //
 //   node test/renderer/settings/newStyleLocationsChromium.test.js
@@ -63,7 +63,7 @@ const MEASURE = \`new Promise((resolve) => {
     frames += 1;
     const body = document.querySelector('.app-settings-scroll');
     const shape = body === null ? '' : body.scrollWidth + 'x' + body.scrollHeight + ':' + body.clientWidth;
-    if (body !== null && shape === last && document.fonts.status === 'loaded' && document.querySelector('.cm-editor') !== null && document.querySelector('.style-tags-chip') !== null) {
+    if (body !== null && shape === last && document.fonts.status === 'loaded' && document.querySelector('.cm-editor') !== null) {
       const limit = body.getBoundingClientRect().right;
       const wide = [...body.querySelectorAll('*')]
         .filter((element) => element.getBoundingClientRect().right > limit + 0.5)

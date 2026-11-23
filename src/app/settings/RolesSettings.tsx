@@ -24,6 +24,7 @@ import {
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { NoticeToast } from '../../ui/NoticeToast';
 import { cleanError } from '../../lib/cleanError';
 import { PlusIcon } from '../../ui/Icons';
 import { setViewAs, viewingAs } from '../../lib/currentRole';
@@ -60,7 +61,7 @@ import { DescribedError } from '../../../shared/properties/describedError';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import type { Described, Translator } from '../../../shared/properties/i18n/messageRef';
 import { assert } from '../../../shared/core/assert';
-import { SettingsSaveRow, SettingsNotice, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
+import { SettingsSaveRow, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import './roles.css';
 
 export function RolesSettings(props: { readonly projectPath: string; readonly componentFiles?: readonly string[] }) {
@@ -176,7 +177,7 @@ function initialRoles(stored: StoredRoles, login: string | undefined): ProjectRo
   return { ...DEFAULT_PROJECT_ROLES, roles: [{ ...admin, members: [login] }, ...DEFAULT_PROJECT_ROLES.roles.slice(1)] };
 }
 
-/** Where a notice shows: beside a role's card, the access rows, or the new-role field. */
+/** What a notice is about: a role's card, the access rows, or the new-role field (a failed save retries that scope). */
 export type RolesNoticeScope = { readonly kind: 'role'; readonly id: string } | { readonly kind: 'access' } | { readonly kind: 'new-role' };
 type RolesNotice =
   | { readonly kind: 'none' }
@@ -221,7 +222,10 @@ function RolesEditor(props: {
   // follow the active role either: while an admin views as Client the controls stay editable.
   const editable = DESKTOP_EDITS_ROLES;
   const [shown, setShown] = useState<ProjectRoles>(() => initialRoles(stored, login));
-  const [notice, setNotice] = useState<RolesNotice>({ kind: 'none' });
+  const [shownNotice, setShownNotice] = useState<{ readonly notice: RolesNotice; readonly serial: number }>({ notice: { kind: 'none' }, serial: 0 });
+  const notice = shownNotice.notice;
+  // Each notice is its own toast, even when a second refusal reads the same as the first.
+  const setNotice = (next: RolesNotice): void => setShownNotice((current) => ({ notice: next, serial: current.serial + 1 }));
   const [newName, setNewName] = useState('');
   // The role Duplicate just made, whose card opens with its name field focused.
   const [naming, setNaming] = useState<string | undefined>(undefined);
@@ -318,25 +322,32 @@ function RolesEditor(props: {
       }
     }
   };
-  const noticeFor = (scope: RolesNoticeScope) => {
-    if (notice.kind === 'none' || !sameScope(notice.scope, scope)) {
+  // One toast owner for every view: a notice made in the cards must not be reported again when the detail view opens.
+  const noticeToast = (() => {
+    if (notice.kind === 'none') {
       return undefined;
     }
     if (notice.kind === 'refused') {
-      return <SettingsNotice message={translateDescribed(notice.problem)} />;
+      return <ErrorToast key={shownNotice.serial} message={translateDescribed(notice.problem)} />;
     }
     const retry = notice.roles;
     return (
-      <SettingsNotice
+      <ErrorToast
+        key={shownNotice.serial}
         message={translate('settings.roles.notSaved', { message: notice.detail })}
-        onRetry={() => {
-          setShown(retry);
-          setNotice({ kind: 'none' });
-          void persist(scope, retry);
-        }}
+        recovery={[
+          {
+            label: translate('settings.retry'),
+            run: () => {
+              setShown(retry);
+              setNotice({ kind: 'none' });
+              void persist(notice.scope, retry);
+            },
+          },
+        ]}
       />
     );
-  };
+  })();
   const detailRole = view.kind === 'detail' ? shown.roles.find((item) => item.id === view.roleId) : undefined;
   const open = (roleId: string, section: RoleSection) => setView({ kind: 'detail', roleId, section });
   if (view.kind === 'detail' && detailRole !== undefined) {
@@ -344,6 +355,7 @@ function RolesEditor(props: {
     return (
       <section className="app-roles" aria-label={translate('settings.roles.screen.label')}>
         <SettingsSaveRow saving={indicator.state} />
+        {noticeToast}
         <RoleDetail
           role={detailRole}
           section={view.section}
@@ -355,7 +367,6 @@ function RolesEditor(props: {
           query={queries[queryKey] ?? ''}
           setQuery={(query) => setQueries({ ...queries, [queryKey]: query })}
           back={() => setView({ kind: 'cards' })}
-          notice={noticeFor({ kind: 'role', id: detailRole.id })}
           actions={cardActions(
             detailRole.id,
             translate,
@@ -370,7 +381,8 @@ function RolesEditor(props: {
   return (
     <section className="app-roles" aria-label={translate('settings.roles.screen.label')}>
       <SettingsSaveRow saving={indicator.state} />
-      {props.identity === 'known' && login === undefined && <p className="app-roles-notice">{translate('settings.roles.signedOut')}</p>}
+      {noticeToast}
+      <NoticeToast kind="info" message={props.identity === 'known' && login === undefined ? translate('settings.roles.signedOut') : undefined} />
       {stored.kind === 'invalid' && <ErrorToast message={translate('settings.roles.fileUnreadable', { message: stored.message })} />}
       <SettingsSection title={translate('settings.roles.section.access')}>
         {/* The two pickers share one grid row (roles.css); the outer box is the container the grid's width query reads. */}
@@ -380,7 +392,6 @@ function RolesEditor(props: {
             <DefaultRole roles={shown} editable={editable} change={(id) => apply({ kind: 'access' }, (roles) => setDefaultRole(roles, id))} />
           </div>
         </div>
-        {noticeFor({ kind: 'access' })}
       </SettingsSection>
       <SettingsSection title={translate('settings.roles.section.roles')} info={translate('settings.roles.members.info')}>
         {shown.roles.map((item) => (
@@ -390,7 +401,6 @@ function RolesEditor(props: {
             editable={editable}
             open={(section) => open(item.id, section)}
             {...(props.componentFiles === undefined ? {} : { componentFiles: props.componentFiles })}
-            notice={noticeFor({ kind: 'role', id: item.id })}
             naming={item.id === naming ? 'rename' : undefined}
             actions={cardActions(
               item.id,
@@ -422,7 +432,6 @@ function RolesEditor(props: {
             </button>
           </form>
         )}
-        {noticeFor({ kind: 'new-role' })}
       </SettingsSection>
     </section>
   );
@@ -446,13 +455,6 @@ export function deleteRoleSummary(
     parts.push(translate('roles.delete.viewing'));
   }
   return parts.join(' ');
-}
-
-function sameScope(left: RolesNoticeScope, right: RolesNoticeScope): boolean {
-  if (left.kind === 'role') {
-    return right.kind === 'role' && right.id === left.id;
-  }
-  return left.kind === right.kind;
 }
 
 function cardActions(

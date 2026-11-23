@@ -21,6 +21,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const output = repoPath('node_modules/.stacki-test/roles-settings.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -79,9 +80,14 @@ const { act } = React;
 const { createRoot } = require('react-dom/client');
 const roles = require(output);
 const toasts = [];
+// The toasts still on screen (a recovery toast leaves when its notice resolves), with their Retry actions.
+const live = new Map();
 roles.subscribeErrorToasts(
-  (notice) => toasts.push(notice.message),
-  () => undefined,
+  (notice) => {
+    toasts.push(notice.message);
+    live.set(notice.id, notice);
+  },
+  (id) => live.delete(id),
 );
 
 let root;
@@ -150,7 +156,10 @@ async function chooseMenu(name, label) {
 }
 
 const saved = () => roles.parseProjectRolesSource(stored);
-const notice = (scope) => scope.querySelector('.app-settings-notice')?.textContent ?? '';
+// A refusal or a failed save is a toast; the roles screen itself never draws a notice paragraph.
+const notice = () => [...live.values()].map((item) => item.message).join(' ');
+const noInlineNotice = () =>
+  assert.equal(document.querySelectorAll('.app-settings-notice, [role="alert"]').length, 0, 'no notice paragraph is added to the screen');
 const permission = (name, label) => card(name).querySelector(`[role="switch"][aria-label="${label}"]`);
 async function rename(name, value, key = 'Enter') {
   await click(card(name).querySelector(`button[aria-label="Rename ${name}"]`));
@@ -249,10 +258,11 @@ test('roles are renamed in place, Client included, and a bad name is refused bes
   const before = writes.length;
   await rename('Customer', 'writer');
   assert.equal(writes.length, before, 'a taken name, in any case, is not saved');
-  assert.match(notice(card('Customer')), /There is already a role named Writer/);
+  assert.match(toasts.at(-1), /There is already a role named Writer/);
+  noInlineNotice();
   assert.ok(card('Customer').querySelector('button[aria-label="Rename Customer"]'), 'the name is back to the saved one');
   await rename('Customer', '   ');
-  assert.match(notice(card('Customer')), /A role needs a name/);
+  assert.match(toasts.at(-1), /A role needs a name/);
   await rename('Customer', 'Ignored', 'Escape');
   assert.equal(writes.length, before, 'Escape cancels without saving');
   assert.ok(card('Customer'));
@@ -277,7 +287,8 @@ test('a change that would leave no admin is refused before any write', async () 
   assert.equal(writes.length, 1, 'removing another admin saves');
   await click(card('Admin').querySelector('button[aria-label="Remove owner"]'));
   assert.equal(writes.length, 1, 'the last admin cannot be removed');
-  assert.match(notice(card('Admin')), /At least one person must be an admin/);
+  assert.match(toasts.at(-1), /At least one person must be an admin/);
+  noInlineNotice();
   assert.match(card('Admin').textContent, /owner/);
   await unmount();
 });
@@ -298,12 +309,20 @@ test('a failed save puts the control back and offers Retry', async () => {
   await click(permission('Client', 'CMS'));
   assert.equal(writes.length, 0);
   assert.equal(permission('Client', 'CMS').getAttribute('aria-checked'), 'false', 'the switch returns to the saved value');
-  assert.match(notice(card('Client')), /Not saved: Disk full/);
-  await click(button(card('Client'), 'Retry'));
+  assert.match(notice(), /Not saved: Disk full/);
+  noInlineNotice();
+  assert.equal(button(card('Client'), 'Retry'), undefined, 'Retry is on the toast, not in the card');
+  const failed = [...live.values()].find((item) => /Not saved/.test(item.message));
+  assert.deepEqual(
+    failed.recovery.map((action) => action.label),
+    ['Retry'],
+  );
+  await act(async () => failed.recovery[0].run());
+  await act(async () => waitFor({ what: 'the retried save', read: () => writes.length, until: (count) => count === 1 }));
   assert.equal(writes.length, 1, 'Retry saves the change');
   assert.deepEqual(saved().roles[1].access, ['panel:cms']);
   assert.equal(permission('Client', 'CMS').getAttribute('aria-checked'), 'true');
-  assert.equal(notice(card('Client')), '', 'and the notice goes');
+  assert.doesNotMatch(notice(), /Not saved/, 'and the toast goes');
   await unmount();
 });
 

@@ -34,6 +34,10 @@
 .canvas-image-head button {
   cursor: default;
 }
+/* The (i) with the alt text's explanation sits right after the title; the close button keeps the far end. */
+.canvas-image-head .settings-info {
+  margin-inline-end: auto;
+}
 /* Over the canvas frame while the header is dragged, so the page under the pointer sees none of it. */
 .canvas-image-shield {
   position: fixed;

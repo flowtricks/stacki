@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture.js');
 const output = repoPath('node_modules/.stacki-test/studio-status-card.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 buildSync({
@@ -53,6 +54,7 @@ function deferred() {
 }
 
 async function fixture({ status, check }) {
+  globalThis.stackiCapturedToasts = [];
   const statusReply = deferred();
   const checkReply = deferred();
   const upgradeReplies = [];
@@ -168,7 +170,8 @@ test('running shows one progress line and no primary; failure offers Retry as th
     assert.equal(button('Manage Stacki Studio').disabled, true, 'Manage waits for the upgrade');
     await state.finishUpgrade({ kind: 'error', message: 'Download failed' });
     assert.deepEqual(primaries(), ['Retry']);
-    assert.equal(document.querySelector('.studio-status-card [role="alert"]').textContent, 'Download failed');
+    assert.match(toastMessages(), /Download failed/);
+    assert.equal(document.querySelector('.studio-status-card [role="alert"]') ?? undefined, undefined, 'the failure is a toast, not a line in the card');
     await act(async () => button('Retry').click());
     await state.finishUpgrade({
       kind: 'upgraded',

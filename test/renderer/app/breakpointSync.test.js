@@ -11,7 +11,8 @@
 // checked and inclusive 1px and "Not synced" places start unchecked and say so; the file box half-checks; All and None; places
 // open with their line and before and after; skip sends nothing; update sends exactly the checked places and the unchecked ones;
 // the undo step restores the files and the number; no dialog when nothing matches; a slow scan shows skeleton rows; an
-// unavailable bridge (Studio) opens nothing.
+// unavailable bridge (Studio) opens nothing. What a sync or a scan reports (done, failed, cut short) is a toast through the app's
+// toast handoff (the bundle is injected with the toast capture), never a paragraph in the panel or the dialog.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -19,6 +20,7 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture');
 
 const directory = repoPath('node_modules/.stacki-test/breakpoint-sync');
 fs.mkdirSync(directory, { recursive: true });
@@ -33,6 +35,7 @@ export * from './shared/properties/breakpointSyncSelection';`,
     loader: 'ts',
   },
   outfile: output,
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -330,7 +333,8 @@ test('Update sends exactly the checked places and the unchecked ones to remember
     ],
   );
   assert.equal(request.unchecked.length, 2);
-  assert.match(document.body.textContent, /Updated 2 places\./);
+  assert.match(toastMessages(), /Updated 2 places\./, 'the result is a toast');
+  assert.equal(document.querySelectorAll('[role="alert"], .app-settings-notice, .breakpoint-sync-note').length, 0, 'and no paragraph is added to the panel');
   assert.equal(undo.length, 1);
   assert.equal(undo[0].label, 'Sync breakpoint queries');
   await undo[0].undo();
@@ -548,6 +552,48 @@ test('the files link opens the file when the app can, and a scan that fails says
     scanBreakpointUsage: async () => ({ ok: false, error: 'disk is busy' }),
   };
   const failing = await mount('usage-fails');
-  assert.match(usageLine('Laptop').textContent, /Could not look for where this is used\. disk is busy/);
+  await settle();
+  assert.match(toastMessages(), /Could not look for where this is used\. disk is busy/, 'the failure is one toast');
+  assert.doesNotMatch(document.body.textContent, /disk is busy/, 'and is not drawn in the card');
+  assert.equal(document.querySelector('.breakpoints-usage-problem') ?? undefined, undefined);
   failing.root.unmount();
+});
+
+// A refused value takes the error look on its card and says why once, as a toast, when the field is committed: no paragraph is added to
+// the card, so nothing below it moves. A value that is accepted says nothing (negative space).
+test('a refused breakpoint value is an error look and one toast, never a paragraph; a valid one says nothing', async () => {
+  fakeBridge(scanFixture());
+  const view = await mount('refused-values');
+  const card = () => document.querySelector('.breakpoints-card[data-breakpoint="laptop"]');
+  globalThis.stackiCapturedToasts = [];
+  await commit('Laptop', 'abc');
+  assert.equal(toastMessages().split('\n').filter(Boolean).length, 1, 'one toast, said when the value is committed');
+  assert.ok(toastMessages().length > 0);
+  assert.equal(card().hasAttribute('data-invalid'), true, 'the card takes the error look (a fill)');
+  assert.equal(field('Laptop').getAttribute('aria-invalid'), 'true');
+  assert.equal(document.querySelectorAll('[role="alert"], .breakpoints-problem, .breakpoints-note, .app-settings-notice').length, 0, 'no paragraph is added');
+  // Escape puts the saved value back and the look goes.
+  await act(async () => {
+    field('Laptop').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  });
+  assert.equal(card().hasAttribute('data-invalid'), false, 'the saved value shows no error look');
+  globalThis.stackiCapturedToasts = [];
+  await commit('Laptop', '65rem');
+  assert.equal(toastMessages(), '', 'a valid value says nothing');
+  view.root.unmount();
+});
+
+test('what a sync scan could not read is a warning toast in the dialog, not a note under the list', async () => {
+  const scan = { ...scanFixture(), truncated: true, skipped: 2, recordProblem: 'the record is corrupt' };
+  fakeBridge(scan);
+  globalThis.stackiCapturedToasts = [];
+  const view = await mount('sync-warnings');
+  await commit('Laptop', '70rem');
+  assert.ok(dialog(), 'the dialog opens');
+  const said = toastMessages();
+  assert.match(said, /some files were not read/);
+  assert.match(said, /Large files were not read/);
+  assert.match(said, /the record is corrupt/);
+  assert.equal(document.querySelectorAll('.breakpoint-sync-note').length, 0, 'the dialog appends no note');
+  view.root.unmount();
 });

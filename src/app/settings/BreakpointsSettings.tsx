@@ -47,6 +47,9 @@ import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { readMetadata } from '../../ipc/projectMetadataBridge';
 import { confirmDialog } from '../../ui/ConfirmDialog';
+import { ErrorToast } from '../../ui/ErrorToast';
+import InfoHint from '../../ui/InfoHint';
+import { reportActionToast, reportErrorToast } from '../../ui/errorNotices';
 import { DesktopIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import { Skeleton } from '../../ui/Skeleton';
 import { messageRef } from '../../../shared/properties/i18n/messageRef';
@@ -60,7 +63,7 @@ import { BreakpointUsageLine, BreakpointUsageList, hasUsage } from './Breakpoint
 import { BreakpointAddCard, type AddDraft } from './BreakpointAddCard';
 import { useBreakpointUsage } from './useBreakpointUsage';
 import { applyRequest, type CheckedPlaces } from '../../../shared/properties/breakpointSyncSelection';
-import { SettingsNotice, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
+import { SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import './breakpointsSettings.css';
 
 const ICON_SIZE_PX = 16;
@@ -112,7 +115,6 @@ export function BreakpointsSettings({
   const [adding, setAdding] = useState<AddDraft>();
   const [run, setRun] = useState<SyncRun>();
   const [syncBusy, setSyncBusy] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string>();
   const scanSerial = useRef(0);
   const [saveProblem, setSaveProblem] = useState<{ readonly id: string; readonly message: string }>();
   // The saved list is the truth: an edit in another window or a pull puts it back in the fields.
@@ -123,6 +125,12 @@ export function BreakpointsSettings({
   }, [config, list, translate]);
 
   const label = (breakpoint: Breakpoint): string => breakpointLabel(breakpoint, translate);
+  // A refused or failed change takes the card's error look (the state below) and says why once, as a toast; no row is added to the card.
+  const failSave = (id: string, error: string): void => {
+    const message = translate('settings.breakpoints.error.save', { message: error });
+    setSaveProblem({ id, message });
+    reportErrorToast(message);
+  };
   const record = (before: BreakpointConfig, after: BreakpointConfig, name: string): void => {
     onRecordUndo?.({
       label: name,
@@ -136,14 +144,20 @@ export function BreakpointsSettings({
     const draft = drafts[id] ?? '';
     const entry = parseBreakpointEntry(draft);
     if (!entry.ok) {
+      // The card shows the error look; the reason is said once, here, when the value is committed.
+      reportErrorToast(entryProblem(entry.error.code, translate));
       return;
     }
     if (id === DESKTOP_ID) {
       return commitDesktop(entry.value, draft);
     }
     const current = list.find((breakpoint) => breakpoint.id === id);
-    if (current === undefined || valueProblem(config, id, draft, translate) !== undefined) {
-      // The card already says why; nothing is written and what was typed stays to be fixed.
+    const refused = valueProblem(config, id, draft, translate);
+    if (current === undefined || refused !== undefined) {
+      // Nothing is written and what was typed stays to be fixed.
+      if (refused !== undefined) {
+        reportErrorToast(refused);
+      }
       return;
     }
     const checked = checkedConfig(withBreakpointSetting(config, id, entry.value));
@@ -160,13 +174,15 @@ export function BreakpointsSettings({
       setSaveProblem(undefined);
       void startSync(id, config, checked.value);
     } else {
-      setSaveProblem({ id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
+      failSave(id, saved.error.message);
     }
   };
 
   // Desktop's number is only the width of its frame in the side-by-side view: no query holds it, so there is nothing to sync.
   const commitDesktop = async (setting: Breakpoint['setting'], draft: string): Promise<void> => {
-    if (desktopProblem(config, draft, { translate, label }) !== undefined) {
+    const refused = desktopProblem(config, draft, { translate, label });
+    if (refused !== undefined) {
+      reportErrorToast(refused);
       return;
     }
     const checked = checkedConfig(withDesktop(config, setting));
@@ -182,7 +198,7 @@ export function BreakpointsSettings({
       setSaveProblem(undefined);
       record(config, checked.value, translate('settings.breakpoints.desktop'));
     } else {
-      setSaveProblem({ id: DESKTOP_ID, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
+      failSave(DESKTOP_ID, saved.error.message);
     }
   };
 
@@ -193,13 +209,15 @@ export function BreakpointsSettings({
       setNames(namesOf(list, translate));
       return;
     }
-    if (nameProblem(list, id, typed, { translate, label }) !== undefined) {
+    const refused = nameProblem(list, id, typed, { translate, label });
+    if (refused !== undefined) {
+      reportErrorToast(refused);
       return;
     }
     const next = withBreakpointName(config, id, typed);
     const saved = await indicator.track(save(next));
     if (!saved.ok) {
-      setSaveProblem({ id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
+      failSave(id, saved.error.message);
     }
   };
 
@@ -220,10 +238,9 @@ export function BreakpointsSettings({
     const next = withBreakpointRemoved(config, breakpoint.id);
     const saved = await indicator.track(save(next));
     if (saved.ok) {
-      setSyncMessage(undefined);
       record(config, next, name);
     } else {
-      setSaveProblem({ id: breakpoint.id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
+      failSave(breakpoint.id, saved.error.message);
     }
   };
 
@@ -231,7 +248,11 @@ export function BreakpointsSettings({
   const addView = adding === undefined ? undefined : previewForAdd(config, adding, translate, label);
   const addProblem = adding === undefined || addView === undefined ? undefined : problemForAdd(config, adding, addView.name, translate, label);
   const commitAdd = async (): Promise<void> => {
-    if (adding === undefined || addView === undefined || addProblem !== undefined || adding.value.trim() === '') {
+    if (adding === undefined || addView === undefined || adding.value.trim() === '') {
+      return;
+    }
+    if (addProblem !== undefined) {
+      reportErrorToast(addProblem);
       return;
     }
     const entry = parseBreakpointEntry(adding.value);
@@ -248,7 +269,7 @@ export function BreakpointsSettings({
       setAdding(undefined);
       record(config, checked.value, created.name);
     } else {
-      setSaveProblem({ id: created.id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
+      failSave(created.id, saved.error.message);
     }
   };
 
@@ -262,7 +283,6 @@ export function BreakpointsSettings({
     }
     scanSerial.current += 1;
     const serial = scanSerial.current;
-    setSyncMessage(undefined);
     const slow = window.setTimeout(() => {
       if (scanSerial.current === serial) {
         setRun({ id, before, after, scan: undefined });
@@ -288,7 +308,7 @@ export function BreakpointsSettings({
     setSyncBusy(false);
     setRun(undefined);
     if (!result.ok) {
-      setSyncMessage(translate('settings.breakpoints.sync.failed', { message: result.error ?? '' }));
+      reportErrorToast(translate('settings.breakpoints.sync.failed', { message: result.error ?? '' }));
       return;
     }
     const notes: string[] = [];
@@ -298,7 +318,9 @@ export function BreakpointsSettings({
     if (result.skipped.length > 0) {
       notes.push(translate('settings.breakpoints.sync.skippedFiles', { count: result.skipped.length }));
     }
-    setSyncMessage(notes.length > 0 ? notes.join(' ') : undefined);
+    if (notes.length > 0) {
+      reportActionToast(notes.join(' '), 'success', []);
+    }
     usage.refresh();
     const journalId = result.journalId;
     if (journalId !== undefined && onRecordUndo !== undefined) {
@@ -426,11 +448,6 @@ export function BreakpointsSettings({
         {usageOpen.has(breakpoint.id) && hasUsage(usage.state, breakpoint.id) && (
           <BreakpointUsageList id={breakpoint.id} state={usage.state} editable={editable && !blocked} onToggle={usage.toggle} onOpenFile={onOpenFile} />
         )}
-        {(problem !== undefined || nameIssue !== undefined) && (
-          <p className="breakpoints-problem" role="alert">
-            {problem ?? nameIssue}
-          </p>
-        )}
       </div>
     );
   };
@@ -480,19 +497,20 @@ export function BreakpointsSettings({
         </div>
         {/* Where the other cards have their remove button (Desktop cannot be removed), so its value lines up with theirs. */}
         <span className="breakpoints-spacer" aria-hidden="true" />
-        {problem !== undefined && (
-          <p className="breakpoints-problem" role="alert">
-            {problem}
-          </p>
-        )}
       </div>
     );
   };
   return (
     <section className="breakpoints-settings" aria-label={translate('settings.tab.breakpoints')}>
       <SettingsSaveRow saving={indicator.state} />
-      {syncMessage !== undefined && <SettingsNotice message={syncMessage} />}
-      {blocked && <SettingsNotice message={translate('settings.breakpoints.error.file', { message: state.message })} />}
+      <ErrorToast message={state.kind === 'blocked' ? translate('settings.breakpoints.error.file', { message: state.message }) : undefined} />
+      <ErrorToast
+        message={
+          usage.state.kind === 'ready' && usage.state.problem !== undefined
+            ? translate('settings.breakpoints.usage.problem', { message: usage.state.problem })
+            : undefined
+        }
+      />
       <SettingsSection
         title={translate('settings.tab.breakpoints')}
         info={`${translate('settings.breakpoints.intro')} ${translate('settings.breakpoints.explain')}`}
@@ -525,9 +543,9 @@ export function BreakpointsSettings({
             <PlusIcon size={12} />
             {translate('settings.breakpoints.add')}
           </button>
-          <span className="breakpoints-note">
-            {full ? translate('settings.breakpoints.full', { count: BREAKPOINT_LIMITS.countMax }) : translate('settings.breakpoints.removeNote')}
-          </span>
+          <InfoHint
+            text={full ? translate('settings.breakpoints.full', { count: BREAKPOINT_LIMITS.countMax }) : translate('settings.breakpoints.removeNote')}
+          />
         </div>
       </SettingsSection>
       {run !== undefined && (

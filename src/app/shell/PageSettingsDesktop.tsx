@@ -23,6 +23,8 @@ import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate
 import { pageDisplayLabel } from '../../lib/pageName';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { CodeBlock } from '../../ui/CodeBlock';
+import { ErrorToast } from '../../ui/ErrorToast';
+import TipAnchor from '../../ui/TipAnchor';
 import { BracesIcon, PlusIcon } from '../../ui/Icons';
 import { SkeletonRows } from '../../ui/Skeleton';
 import type { ShellView } from '../App';
@@ -231,7 +233,7 @@ function TemplateSettings({ app, page, projectPath }: { readonly app: ShellView;
     case 'reading':
       return <SkeletonRows count={3} />;
     case 'failed':
-      return <div className="page-settings-problem">{state.message}</div>;
+      return <ErrorToast message={state.message} />;
     case 'read':
       return <TemplateReadingView app={app} page={page} reading={state.reading} projectPath={projectPath} reread={() => setVersion((value) => value + 1)} />;
     default: {
@@ -256,8 +258,9 @@ function TemplateReadingView(props: {
   if (reading.kind === 'custom') {
     return (
       <div className="page-settings-field">
-        <div className="page-settings-badge">{translate('pages.settings.template.custom')}</div>
-        <div className="page-settings-note">{translate('pages.settings.template.customBody')}</div>
+        <TipAnchor text={translate('pages.settings.template.customBody')}>
+          <div className="page-settings-badge">{translate('pages.settings.template.custom')}</div>
+        </TipAnchor>
         <CodeBlock className="page-settings-template-code" text={reading.code} language="typescript" />
         <button type="button" className="page-settings-add-prop" onClick={() => props.app.openCodeWindow()}>
           {translate('pages.settings.template.editCode')}
@@ -332,12 +335,16 @@ function ContentTemplateForm(props: {
     });
     props.reread();
   };
+  const applyButton = (
+    <button type="button" className="primary" disabled={!changed || slug === undefined || isNew || busy} onClick={() => void apply()}>
+      {translate('pages.settings.template.apply')}
+    </button>
+  );
   return (
     <div className="page-settings-field page-template-dialog">
       <ContentFields projectPath={projectPath} form={form} set={setForm} collections={collections} onSample={() => undefined} />
-      {isNew && <div className="page-settings-note">{translate('pages.settings.template.newCollection')}</div>}
       {showCode && <CodeBlock className="page-settings-template-code" text={reading.code} language="typescript" />}
-      {problem !== undefined && <div className="page-settings-problem">{problem}</div>}
+      <ErrorToast message={problem} />
       <div className="page-settings-row">
         <button
           type="button"
@@ -349,9 +356,7 @@ function ContentTemplateForm(props: {
         >
           <BracesIcon size={13} />
         </button>
-        <button type="button" className="primary" disabled={!changed || slug === undefined || isNew || busy} onClick={() => void apply()}>
-          {translate('pages.settings.template.apply')}
-        </button>
+        {isNew ? <TipAnchor text={translate('pages.settings.template.newCollection')}>{applyButton}</TipAnchor> : applyButton}
       </div>
     </div>
   );

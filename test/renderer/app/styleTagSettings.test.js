@@ -20,6 +20,7 @@ const { mock } = test;
 const assert = require('node:assert/strict');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { waitFor } = require('../../helpers/waitFor.js');
+const { toastMessages } = require('../../helpers/toastCapture');
 
 // The editor's save debounce (SAVE_DELAY_MS in StyleTagSettings.tsx): the tick that fires it.
 const SAVE_DELAY_MS = 600;
@@ -60,6 +61,7 @@ async function load() {
       loader: 'tsx',
     },
     outfile: bundlePath,
+    inject: [repoPath('test/helpers/toastCaptureEntry.js')],
     bundle: true,
     format: 'cjs',
     platform: 'node',
@@ -105,6 +107,8 @@ async function load() {
 
 async function mount({ source, editable = true, failWrite = false, stylesheets = ['src/styles/global.css', 'src/styles/components.css'] }) {
   const { dom, React, createRoot, StyleTagSettings } = await load();
+  // Failures and warnings are toasts; each mount reads only its own.
+  globalThis.stackiCapturedToasts = [];
   const file = { source };
   const writes = [];
   let listed = false;
@@ -224,8 +228,13 @@ test('attributes are edited on the opening tag; ones that do not parse turn the 
   const end = shown(view.container).indexOf('>');
   await editAndSave(() => type(view.container, end, end, ' lang=scss'));
   const editor = sectionOf(view.container, 'page').querySelector('.style-tags-editor');
-  assert.ok(editor.hasAttribute('data-invalid'), 'the block is marked');
-  assert.equal(sectionOf(view.container, 'page').querySelector('.style-tags-invalid').textContent, 'Invalid');
+  assert.ok(editor.hasAttribute('data-invalid'), 'the block wears the error look');
+  assert.equal(
+    sectionOf(view.container, 'page').querySelector('.style-tags-invalid, [role="alert"]') ?? undefined,
+    undefined,
+    'no label is added over the block',
+  );
+  assert.equal(toastMessages(), 'Invalid', 'the reason is one toast, once typing rests');
   assert.deepEqual(view.writes, [], 'nothing invalid is saved');
   // Fixed: the quotes go in, the mark goes, and it saves.
   const fixed = shown(view.container).indexOf('scss');
@@ -301,7 +310,7 @@ test('the dropdown lists the style tag first, then the project stylesheets by pa
   assert.deepEqual(lastWrite(view).newStyleLocations.component, { use: 'tag', tag: PAGE_TAG });
 });
 
-test('a chosen stylesheet that is not in the project shows a warning chip, keeps the tag editor, and is never rewritten by reading', async (context) => {
+test('a chosen stylesheet that is not in the project warns once as a toast, keeps the tag editor, and is never rewritten by reading', async (context) => {
   const source = JSON.stringify({
     version: 1,
     keep: [],
@@ -309,18 +318,18 @@ test('a chosen stylesheet that is not in the project shows a warning chip, keeps
   });
   const view = await mount({ source });
   context.after(view.unmount);
-  const chip = sectionOf(view.container, 'page').querySelector('.style-tags-chip');
-  assert.ok(chip, 'the warning chip is shown');
-  assert.match(chip.textContent, /src\/styles\/gone\.css was not found/);
-  assert.ok(!sectionOf(view.container, 'component').querySelector('.style-tags-chip'), 'only the scope with the missing file warns');
+  assert.match(toastMessages(), /src\/styles\/gone\.css was not found/, 'the warning is a toast');
+  assert.equal(globalThis.stackiCapturedToasts.length, 1, 'only the scope with the missing file warns');
+  assert.equal(view.container.querySelector('.style-tags-chip') ?? undefined, undefined, 'and no chip is added to the page');
   assert.ok(sectionOf(view.container, 'page').querySelector('.cm-editor'), 'the tag that is used meanwhile stays editable');
   assert.deepEqual(view.writes, []);
-  // Picking an existing file clears the chip.
+  // Picking an existing file says nothing more: a valid choice shows nothing.
+  globalThis.stackiCapturedToasts = [];
   await pick(view, 'page', 'src/styles/global.css');
-  assert.ok(!sectionOf(view.container, 'page').querySelector('.style-tags-chip'));
+  assert.equal(toastMessages(), '', 'negative space: a stylesheet that exists raises no toast');
 });
 
-test('a role that may not edit sees everything read-only, and a failed write is shown', async (context) => {
+test('a role that may not edit sees everything read-only, and a failed write is a toast', async (context) => {
   const readOnly = await mount({ source: JSON.stringify({ version: 1, keep: [] }), editable: false });
   context.after(readOnly.unmount);
   assert.ok(readOnly.container.querySelector('.style-tags-editor').hasAttribute('data-readonly'));
@@ -330,12 +339,13 @@ test('a role that may not edit sees everything read-only, and a failed write is 
   context.after(failing.unmount);
   const at = shown(failing.container).indexOf('</style>');
   await editAndSave(() => type(failing.container, at, at, '@layer a {}\n'));
-  const alert = await waitFor({
-    what: 'the failed write shown',
-    read: () => failing.container.querySelector('[role="alert"]'),
-    until: (node) => node !== null,
+  const said = await waitFor({
+    what: 'the failed write said as a toast',
+    read: () => toastMessages(),
+    until: (text) => text.length > 0,
   });
-  assert.match(alert.textContent, /disk full/);
+  assert.match(said, /disk full/);
+  assert.equal(failing.container.querySelector('[role="alert"], .app-settings-notice') ?? undefined, undefined, 'and no notice is added to the tab');
 });
 
 test('every row and the closed trigger carry an icon; a short list has no search', async (context) => {

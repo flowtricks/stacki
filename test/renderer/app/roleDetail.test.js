@@ -13,6 +13,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { toastMessages } = require('../../helpers/toastCapture');
 
 const output = repoPath('node_modules/.stacki-test/role-detail.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -31,6 +32,7 @@ esbuild.buildSync({
     loader: 'ts',
   },
   outfile: output,
+  inject: [repoPath('test/helpers/toastCaptureEntry.js')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -359,10 +361,14 @@ test('a google project adds a member by email as google:<email>, and refuses a b
     const field = detail().querySelector('input[aria-label="Add an email address to Client"]');
     assert.ok(field, 'the email field replaces the GitHub one');
     await type(field, 'not an email');
+    globalThis.stackiCapturedToasts = [];
     await act(async () => field.form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
-    assert.match(detail().textContent, /Enter an email address/);
+    assert.match(toastMessages(), /Enter an email address/, 'the refusal is one toast');
+    assert.doesNotMatch(detail().textContent, /Enter an email address/, 'and no paragraph is added under the field');
+    assert.equal(field.getAttribute('aria-invalid'), 'true', 'the field takes the error look');
     assert.equal(writes.length, 0);
     await type(field, 'Ana@Example.com');
+    assert.equal(field.getAttribute('aria-invalid') ?? undefined, undefined, 'editing clears the error look');
     await act(async () => field.form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
     await settle();
     assert.deepEqual(roleOf('client').members, ['google:ana@example.com']);

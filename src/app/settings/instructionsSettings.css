@@ -91,6 +91,10 @@
   border-radius: 8px;
   background: var(--instructions-field);
 }
+.instructions-hidden-add[data-invalid] {
+  /* A refused pattern takes the error look (a fill, never an outline); the reason is a toast on Hide. */
+  background: rgba(255, 69, 58, 0.18);
+}
 .instructions-hidden-add input {
   flex: 1;
   min-width: 0;
@@ -131,10 +135,4 @@
   background: var(--instructions-button-off);
   color: var(--text-dim);
   opacity: 1;
-}
-.instructions-hidden-problem {
-  padding: 0 4px;
-  color: var(--red);
-  font-size: 11px;
-  line-height: 16px;
 }

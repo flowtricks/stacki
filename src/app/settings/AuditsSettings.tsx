@@ -22,6 +22,8 @@ import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 import { Switch } from '../../ui/Switch';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { reportErrorToast } from '../../ui/errorNotices';
 import InfoHint from '../../ui/InfoHint';
 import { AUDIT_ICONS } from '../../features/audits/AuditIcons';
 import { readAuditIgnores, saveAuditIgnores, type StoredIgnores } from '../../features/audits/auditsBridge';
@@ -56,7 +58,6 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
   const role = useCurrentRole();
   const editable = can(role, 'settings:audits') || can(role, 'panel:audits');
   const [state, setState] = useState<State>({ kind: 'loading' });
-  const [problem, setProblem] = useState<string>();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set(['accessibility']));
   const load = useCallback(() => {
     void readAuditIgnores(projectPath).then((read) => setState(read.ok ? { kind: 'ready', stored: read.value } : { kind: 'error', message: read.error }));
@@ -66,9 +67,10 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
     return <SkeletonRows count={AUDIT_SETTINGS_SKELETON_ROWS} row={() => <Skeleton height="28px" radius="8px" />} />;
   }
   if (state.kind === 'error') {
+    // The failure is the toast; the tab stays an empty frame.
     return (
-      <div className="props-empty" role="alert">
-        {state.message}
+      <div className="audits-settings">
+        <ErrorToast message={state.message} />
       </div>
     );
   }
@@ -77,10 +79,9 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
     const saved = await saveAuditIgnores(projectPath, state.stored, next);
     if (saved.ok) {
       setState({ kind: 'ready', stored: saved.value });
-      setProblem(undefined);
       updateAuditState((current) => ({ ...current, ignores: saved.value, request: current.request + 1 }));
     } else {
-      setProblem(saved.error);
+      reportErrorToast(saved.error);
       load();
     }
   };
@@ -96,11 +97,6 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
   const tokens = (next: AuditTokenSettings): AuditFile => ({ ...file, tokens: next });
   return (
     <div className="audits-settings">
-      {problem !== undefined && (
-        <p className="audits-note" role="alert">
-          {problem}
-        </p>
-      )}
       {AUDIT_CATEGORIES.map((category) => {
         const ids = AUDIT_CHECK_IDS.filter((id) => AUDIT_CHECKS[id].category === category);
         const on = ids.filter((id) => setting(id).enabled).length;

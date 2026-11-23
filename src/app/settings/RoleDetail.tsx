@@ -6,7 +6,7 @@
 //
 // Every change goes through the same card actions as before (RoleCard.tsx), so role gating, validation, undo and the
 // last-admin refusal behave exactly as they did inline.
-import { useId, useMemo, type KeyboardEvent, type ReactNode } from 'react';
+import { useId, useMemo, type KeyboardEvent } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { APPS_ACCESS_GROUP, sameLogin, type ProjectRole } from '../../../shared/properties/projectRoles';
 import CommitAvatar from '../../features/history/CommitAvatar';
@@ -15,6 +15,7 @@ import { Switch } from '../../ui/Switch';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { FeatureIcon } from '../featureIcons';
 import { buildComponentTree, type ComponentTree } from './componentTree';
+import InfoHint from '../../ui/InfoHint';
 import { memberAvatarURL } from './memberAvatars';
 import { MemberInvite } from './MemberInvite';
 import { RoleAppPermissions } from './RoleAppPermissions';
@@ -41,8 +42,6 @@ export function RoleDetail(props: {
   readonly currentLogin?: string | undefined;
   readonly componentFiles?: readonly string[];
   readonly copySources?: readonly { readonly id: string; readonly name: string }[];
-  /** Why the last change was refused or not saved. */
-  readonly notice?: ReactNode;
 }) {
   const { role, section, editable, actions, query } = props;
   const translate = useTranslate();
@@ -70,6 +69,8 @@ export function RoleDetail(props: {
           <ChevronLeftIcon size={14} />
         </button>
         <h3>{title}</h3>
+        {/* What the Components list means is a tip beside the title, not a paragraph above the list. */}
+        {section === 'components' && <InfoHint text={translate('settings.roles.components.info')} />}
         <span className="app-role-detail-role">{role.name}</span>
         <span className="app-role-detail-count">{sectionCount(role, section, tree, translate)}</span>
         {section === 'components' && editable && (
@@ -83,7 +84,6 @@ export function RoleDetail(props: {
           </span>
         )}
       </header>
-      {props.notice}
       <DetailSearch section={section} query={query} setQuery={props.setQuery} />
       {section === 'members' && (
         <MembersView role={role} editable={editable} actions={actions} projectPath={props.projectPath} currentLogin={props.currentLogin} query={query} />

@@ -1,14 +1,15 @@
 // The pieces every Settings tab is laid out with, so the tabs share one rhythm
 // (settings.css): a tab opens with its save indicator; a section is a heading
 // above its rows; a row is a label on the left and the control in a fixed
-// column on the right; a notice sits beside the control it is about; an empty
-// state says what is missing and what to do about it. A card never holds a
-// paragraph: its title may carry an (i) (InfoHint) whose tip explains it, and
-// a row may add one short dim line only when the title leaves something out.
+// column on the right; an empty state says what is missing and what to do
+// about it. A card never holds a paragraph: its title may carry an (i)
+// (InfoHint) whose tip explains it, and a row may add one short dim line only
+// when the title leaves something out.
 //
 // Every tab saves each change as it is made, so none has a Save button: the
-// indicator says "Saving…", then "Saved" for a moment, and a failure shows as
-// a notice with Retry beside the control that made it.
+// indicator says "Saving…", then "Saved" for a moment, and a failure is a toast
+// (ErrorToast, with Retry when a retry makes sense), never a row in the tab:
+// a row that appears moves everything below it.
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { CheckIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
@@ -76,26 +77,8 @@ function SaveIndicator(props: { readonly state: SaveIndicatorState }) {
   );
 }
 
-/**
- * A message beside the control it is about: a change that was refused (the
- * control is back at its saved value), or a save that failed, with Retry.
- */
-export function SettingsNotice(props: { readonly message: string; readonly onRetry?: () => void }) {
-  const translate = useTranslate();
-  return (
-    <div className="app-settings-notice" role="alert">
-      <span>{props.message}</span>
-      {props.onRetry !== undefined && (
-        <button type="button" onClick={props.onRetry}>
-          {translate('settings.retry')}
-        </button>
-      )}
-    </div>
-  );
-}
-
-/** A section: its heading, with an (i) when `info` explains what the section holds, then its rows. */
-export function SettingsSection(props: { readonly title: string; readonly info?: string; readonly children: ReactNode }) {
+/** A section: its heading, with an (i) when `info` explains what the section holds, an `action` (its Add button) at the end of the heading, then its rows. */
+export function SettingsSection(props: { readonly title: string; readonly info?: string; readonly action?: ReactNode; readonly children: ReactNode }) {
   const id = useId();
   return (
     <section className="app-settings-section" aria-labelledby={id}>
@@ -105,6 +88,7 @@ export function SettingsSection(props: { readonly title: string; readonly info?:
           <h4 id={id}>{props.title}</h4>
           {props.info !== undefined && <InfoHint text={props.info} />}
         </div>
+        {props.action !== undefined && <div className="app-settings-section-action">{props.action}</div>}
       </header>
       {props.children}
     </section>
@@ -140,9 +124,9 @@ export function SettingsRow(props: {
 }
 
 /** A tab with nothing to show yet: an icon, then a sentence that says what to do. */
-export function SettingsEmpty(props: { readonly icon: ReactNode; readonly children: ReactNode }) {
+export function SettingsEmpty(props: { readonly icon: ReactNode; readonly children: ReactNode; readonly compact?: boolean }) {
   return (
-    <div className="app-settings-empty">
+    <div className="app-settings-empty" data-compact={props.compact === true ? 'true' : undefined}>
       <span className="app-settings-empty-icon" aria-hidden="true">
         {props.icon}
       </span>
