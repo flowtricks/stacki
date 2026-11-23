@@ -24,6 +24,7 @@ const { canvasTextPlans } = loadRenderer('src/features/preview/canvasTextSource.
 
 const FILE = 'src/pages/index.astro';
 const CHECKSUM = 'a'.repeat(64);
+// The window and frame stay inside a small CI display (1024 by 768): a click below the visible area of a clipped window never arrives.
 const FRAME_OFFSET_PX = 20;
 
 // Heading's own element, tagged as the dev plugin tags it: its template path and the instance's path.
@@ -112,7 +113,7 @@ window.announce = announceMapped;
 
 // The host's side of a selection, as far as the frame can tell: it tracks the clicked node and focuses its text.
 const HOST = (index) => `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">
-<iframe id="frame" src="page${index}.html#avb-design" style="position:absolute;left:${FRAME_OFFSET_PX}px;top:${FRAME_OFFSET_PX}px;width:1000px;height:700px;border:0"></iframe>
+<iframe id="frame" src="page${index}.html#avb-design" style="position:absolute;left:${FRAME_OFFSET_PX}px;top:${FRAME_OFFSET_PX}px;width:840px;height:560px;border:0"></iframe>
 <script>
 window.posted = [];
 const frame = document.getElementById('frame');
@@ -141,7 +142,7 @@ app.on('window-all-closed', () => {});
 const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
 const POLL_COUNT_MAX = 200;
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ show: false, x: 0, y: 0, width: 1100, height: 760, webPreferences: { contextIsolation: false, backgroundThrottling: false } });
+  const win = new BrowserWindow({ show: false, x: 0, y: 0, width: 900, height: 620, webPreferences: { contextIsolation: false, backgroundThrottling: false } });
   const host = (code) => win.webContents.executeJavaScript(code);
   const inFrame = (code) => host('document.getElementById("frame").contentWindow.eval(' + JSON.stringify(code) + ')');
   const pollRead = async (what, read, pollCountMax) => (await pollUntil({ what, read, until: Boolean, pollCountMax })).kind === 'reached';
@@ -193,7 +194,7 @@ app.whenReady().then(async () => {
         '} return undefined; })()');
       // Input is hit-tested against the committed layout: wait until the point lands on the heading, not just until it has scrolled.
       await pollFrame('document.elementFromPoint(' + point.x + ', ' + point.y + ') === document.querySelectorAll("h2")[' + (variant.occurrence || 0) + '] || document.elementFromPoint(' + point.x + ', ' + point.y + ') !== null && document.querySelectorAll("h2")[' + (variant.occurrence || 0) + '].contains(document.elementFromPoint(' + point.x + ', ' + point.y + '))', POLL_COUNT_MAX);
-      const result = { name: variant.name, point };
+      const result = { name: variant.name, point, clickAt: { x: point.x + OFFSET, y: point.y + OFFSET }, scrollTop: await inFrame('document.documentElement.scrollTop'), windowSize: await host('[innerWidth, innerHeight]') };
       await click(point.x + OFFSET, point.y + OFFSET, 2);
       const openedAtMs = await frameClockMs();
       const sample = async () => {
@@ -256,7 +257,9 @@ function check(variant, result) {
     return failures;
   }
   if (result.opened.editor !== variant.expectedEditor) {
-    failures.push(`${label}: editor is ${result.opened.editor}, expected ${variant.expectedEditor} (posts: ${posts(result.opened)})`);
+    failures.push(
+      `${label}: editor is ${result.opened.editor}, expected ${variant.expectedEditor} (posts: ${posts(result.opened)}; click at ${JSON.stringify(result.clickAt)}, scrolled to ${result.scrollTop}, window ${JSON.stringify(result.windowSize)})`,
+    );
   }
   if (!result.opened.focused) {
     failures.push(`${label}: the editor is not focused right after the double click (posts: ${posts(result.opened)})`);
