@@ -3,7 +3,9 @@
 // over the dragged row itself, where it says nothing); a
 // place it refuses but a valid neighbour exists for (a doctype over a component) shows the
 // indicator at that neighbour and the drop lands there; a valid place behaves as it always did;
-// and a drop on a refused place reaches no handler, so nothing is written.
+// and a drop on a refused place reaches no handler, so nothing is written. The words about a drag are never
+// appended to the tree or the panel: they float as a fixed tooltip on the body, and a drop that was redirected
+// to the nearest valid place says so in a toast.
 // Method: mount the real StructurePanel in jsdom over a generated tree, start a drag on a row
 // (dragstart records the drag the way a person's does), fire dragover and drop on the gaps and
 // rows, and read the indicator, the cancelled-or-not state of the event, the drop effect, the
@@ -106,12 +108,13 @@ async function mount() {
     [...container.querySelectorAll('.nav-gap')]
       .filter((candidate) => candidate.children.length > 0)
       .map((candidate) => `${candidate.dataset.dropParent}:${candidate.dataset.dropIndex}`);
-  const note = () => container.querySelector('.navigator-drop-note')?.textContent;
+  const note = () => dom.window.document.querySelector('.navigator-drop-note')?.textContent;
+  const noteInLayout = () => container.querySelector('.navigator-drop-note') ?? undefined;
   const start = async (id) => {
     transfer.getData = (type) => (type === 'avb/node' ? id : '');
     await fire(row(id), 'dragstart');
   };
-  return { fire, gap, row, lit, note, start, moved, dropped, transfer, cleanup: () => root.unmount() };
+  return { fire, gap, row, lit, note, noteInLayout, dom, start, moved, dropped, transfer, cleanup: () => root.unmount() };
 }
 
 test('a doctype over a place that cannot hold it lights the top of the page instead, and drops there', async () => {
@@ -121,7 +124,17 @@ test('a doctype over a place that cannot hold it lights the top of the page inst
   assert.equal(over.defaultPrevented, true, 'the drop is accepted, at the neighbour');
   assert.deepEqual(view.lit(), [':0'], 'only the top of the page is lit');
   assert.match(view.note() ?? '', /doctype/i);
+  assert.equal(view.noteInLayout(), undefined, 'the note is not in the panel or the tree');
+  const tooltip = view.dom.window.document.querySelector('.navigator-drop-note');
+  assert.equal(tooltip.parentElement, view.dom.window.document.body, 'it floats on the body');
+  assert.equal(globalThis.stackiCapturedToasts.length, 0, 'no toast while the drag is still going');
   await view.fire(view.gap('main', 1), 'drop');
+  assert.equal(view.note(), undefined, 'the tooltip goes with the drop');
+  const toast = globalThis.stackiCapturedToasts[0];
+  assert.ok(toast, 'a redirected drop reports a toast');
+  assert.equal(toast.kind, 'info');
+  assert.match(toast.message, /doctype/i);
+  assert.match(toast.message, /nearest valid place/);
   assert.deepEqual(view.moved, [{ id: 'doctype', parentId: undefined, index: 0 }], 'the drop lands at the top');
   view.cleanup();
 });
@@ -134,6 +147,7 @@ test('a list item over a page with no list shows no indicator, the not-allowed e
   assert.equal(view.transfer.dropEffect, 'none');
   assert.deepEqual(view.lit(), [], 'no indicator anywhere');
   assert.match(view.note() ?? '', /li/);
+  assert.equal(view.noteInLayout(), undefined, 'the note is not in the panel or the tree');
   await view.fire(view.gap('main', 1), 'drop');
   assert.deepEqual(view.moved, [], 'a refused place reaches no handler');
   view.cleanup();

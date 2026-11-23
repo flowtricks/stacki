@@ -1,5 +1,6 @@
 import { canConvertAssets } from '../../ipc/editorEnvironment';
 import { useEffect, useRef, useState } from 'react';
+import { reportActionToast } from '../../ui/errorNotices';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { IMAGE_BATCH_MAX, type ImageFormat } from '../../../shared/ipc/assetConversion';
 import { confirmDialog } from '../../ui/ConfirmDialog';
@@ -121,17 +122,18 @@ export function selectableAsset(_file: AssetFile): boolean {
 }
 
 export function AssetBatchTools({ batch, files }: { readonly batch: AssetBatch; readonly files: readonly AssetFile[] }) {
+  // The outcome of a batch is a toast, not a paragraph appended under the toolbar.
+  useEffect(() => {
+    if (batch.notice) {
+      reportActionToast(batch.notice, 'info', []);
+    }
+  }, [batch.notice]);
   return (
     <>
       <AssetSelectionToolbar batch={batch} files={files} />
       {batch.progress && (
         <div className="asset-batch-progress" role="status">
           <span className="mini-spinner" /> {batch.progress}
-        </div>
-      )}
-      {batch.notice && (
-        <div className="asset-batch-notice" role="status">
-          {batch.notice}
         </div>
       )}
       {batch.compression && (

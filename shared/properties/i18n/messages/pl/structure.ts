@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': 'Element nie może znajdować się wewnątrz samego siebie.',
   'structure.placement.slotInPage': 'Slot działa tylko w komponencie lub układzie, a nie na stronie.',
   'structure.placement.snapped': '{reason} Upuszczenie tutaj umieści go w najbliższym poprawnym miejscu.',
+  'structure.placement.snappedToast': '{reason} Trafił w najbliższe poprawne miejsce.',
   'structure.placement.textInList': 'Tekst bezpośrednio wewnątrz „{parent}” nie jest poprawnym HTML.',
   'structure.placement.textPosition': 'Tekst nie może znajdować się bezpośrednio wewnątrz „{parent}”.',
   'structure.placement.undoLast': 'Cofnij ostatnią zmianę',

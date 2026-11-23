@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': 'Een element kan niet binnen zichzelf.',
   'structure.placement.slotInPage': 'Een slot werkt alleen in een component of layout, niet in een pagina.',
   'structure.placement.snapped': '{reason} Hier neerzetten plaatst het op de dichtstbijzijnde geldige plek.',
+  'structure.placement.snappedToast': '{reason} Het is op de dichtstbijzijnde geldige plek gezet.',
   'structure.placement.textInList': 'Tekst direct binnen “{parent}” is geen geldige HTML.',
   'structure.placement.textPosition': 'Tekst kan niet direct binnen “{parent}”.',
   'structure.placement.undoLast': 'Laatste wijziging ongedaan maken',

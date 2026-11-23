@@ -43,6 +43,9 @@ import type { PlacementMessage } from '../../../shared/page/placement';
 import { type LiveValue } from '../../ui/liveValue';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { reportActionToast } from '../../ui/errorNotices';
+import { createPortal } from 'react-dom';
 import { PanelHeader } from '../../ui/PanelHeader';
 import { TOOLTIP_DELAY_MS } from '../../ui/delayedTooltip';
 
@@ -181,7 +184,8 @@ function EditableStructurePanel(props: EditableProps) {
   const canvasDrag = useSyncExternalStore(subscribeCanvasDrag, navigatorDragView);
   useCanvasDragReveal(state.bodyRef, canvasDrag?.revealId);
   usePublishNavigatorDrop(props.pageState.model.nodes, canvasDrag === undefined ? state.dropTarget : undefined);
-  const treeContext = treeContextOf(props, state, canvasDrag);
+  const translate = useTranslate();
+  const treeContext = treeContextOf(props, state, canvasDrag, translate);
   return (
     // A drag that starts in the tree ends the search first: the drop is a position in the page's own lists, which the filtered copy does not share.
     <div className="panel-section grow navigator" onDragStartCapture={() => state.setQuery('')}>
@@ -443,7 +447,7 @@ function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string, 
   bodyElement.scrollTop += rowBounds.top - bodyBounds.top - (bodyBounds.height - rowBounds.height) / 2;
 }
 
-function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: NavigatorDragView | undefined): StructureTreeContext {
+function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: NavigatorDragView | undefined, translate: Translator): StructureTreeContext {
   // A canvas drag opens the rows its mark sits in for as long as it lasts, without touching what the person
   // opened or closed: when the drag ends the set is empty and every row is as it was.
   const isCollapsed = (node: NavigatorNode): boolean => (canvasDrag?.expand.has(node.id) === true ? false : collapsedState(node, state.toggled));
@@ -465,7 +469,7 @@ function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: Navig
     movingId: canvasDrag === undefined || canvasDrag.subject.kind === 'new' ? undefined : canvasDrag.subject.id,
     isCollapsed,
     isDndPayload,
-    performDrop: (event, target) => dropOnTree(event, target, props, state),
+    performDrop: (event, target) => dropOnTree(event, target, props, state, translate),
     placementFor: (location) => dropPlacement(props.pageState.model.nodes, getDrag(), location, placementEnvironment(props)),
     noteDrop: (placement) => state.setDropNote((previous) => noteOf(placement, previous)),
     nodeById: (id) => findNavigatorNode(props.pageState.model.nodes, id) ?? undefined,
@@ -507,7 +511,7 @@ function isDndPayload(event: React.DragEvent<HTMLElement>): boolean {
   return types.includes('avb/component') || types.includes('avb/node') || types.includes(INSERT_DRAG_TYPE);
 }
 
-function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, props: EditableProps, state: TreeState): void {
+function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, props: EditableProps, state: TreeState, translate: Translator): void {
   event.preventDefault();
   event.stopPropagation();
   state.setDropTarget(undefined);
@@ -527,6 +531,10 @@ function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, p
     return;
   }
   const landing = placement.kind === 'snap' ? placement.to : target;
+  if (placement.kind === 'snap') {
+    // The drag's tooltip is gone with the drop, so what it said (why, and where it went instead) is a toast.
+    reportActionToast(translate('structure.placement.snappedToast', { reason: translate(placement.reason.messageKey, placement.reason.params) }), 'info', []);
+  }
   switch (drop.kind) {
     case 'component':
       props.onDropComponent(drop.path ?? drop.name, landing);
@@ -591,16 +599,58 @@ function noteOf(placement: DropPlacement, previous: DropNote | undefined): DropN
   return previous?.tone === next?.tone && previous?.reason.reason === next?.reason.reason ? previous : next;
 }
 
+// The drag's words float at the pointer (position: fixed, in a portal on the body), so they never take room in the tree
+// or the panel. The pointer is tracked straight into the element's style: a drag moves it on every event, and the
+// tree must not re-render for that. Without a pointer yet (a drag that began on the canvas) it sits at the corner.
 function DropNoteChip({ note }: { readonly note: DropNote | undefined }) {
   const translate = useTranslate();
   if (note === undefined) {
     return undefined;
   }
   const reason = translate(note.reason.messageKey, note.reason.params);
-  return (
-    <div className="navigator-drop-note" role="status" data-tone={note.tone}>
-      {note.tone === 'snapped' ? translate('structure.placement.snapped', { reason }) : reason}
-    </div>
+  return <FloatingDropNote tone={note.tone} text={note.tone === 'snapped' ? translate('structure.placement.snapped', { reason }) : reason} />;
+}
+
+const POINTER_OFFSET_PX = 16;
+const lastPointer: { x: number | undefined; y: number | undefined } = { x: undefined, y: undefined };
+
+function placeNote(element: HTMLElement | undefined): void {
+  if (element === undefined || lastPointer.x === undefined || lastPointer.y === undefined) {
+    return;
+  }
+  element.style.left = `${lastPointer.x + POINTER_OFFSET_PX}px`;
+  element.style.top = `${lastPointer.y + POINTER_OFFSET_PX}px`;
+  element.style.bottom = 'auto';
+}
+
+function FloatingDropNote({ tone, text }: { readonly tone: string; readonly text: string }) {
+  const element = useRef<HTMLDivElement | undefined>(undefined);
+  useLayoutEffect(() => {
+    placeNote(element.current);
+    const follow = (event: Event): void => {
+      if ('clientX' in event && 'clientY' in event && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+        if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+          lastPointer.x = event.clientX;
+          lastPointer.y = event.clientY;
+          placeNote(element.current);
+        }
+      }
+    };
+    document.addEventListener('dragover', follow, true);
+    return () => document.removeEventListener('dragover', follow, true);
+  }, []);
+  return createPortal(
+    <div
+      ref={(node) => {
+        element.current = node ?? undefined;
+      }}
+      className="navigator-drop-note"
+      role="status"
+      data-tone={tone}
+    >
+      {text}
+    </div>,
+    document.body,
   );
 }
 
@@ -751,11 +801,7 @@ function CanvasDropNote({ view }: { readonly view: NavigatorDragView }) {
   if (text === undefined) {
     return undefined;
   }
-  return (
-    <div className="navigator-drop-note" role="status" data-tone={view.verdict.kind === 'refused' ? 'refused' : 'warning'}>
-      {text}
-    </div>
-  );
+  return <FloatingDropNote tone={view.verdict.kind === 'refused' ? 'refused' : 'warning'} text={text} />;
 }
 
 // A drag over the Navigator tells the canvas where its mark is, so the canvas draws the same line
@@ -811,7 +857,7 @@ function EmptyDropTarget({ props, state }: { readonly props: EditableProps; read
         active,
         accepts: isDndPayload,
         enter: () => state.setDropTarget({ kind: 'gap', ...location }),
-        drop: (event) => dropOnTree(event, location, props, state),
+        drop: (event) => dropOnTree(event, location, props, state, translate),
       }}
     >
       {translate('structure.dragHere')}

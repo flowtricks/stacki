@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': 'Un élément ne peut pas aller dans lui-même.',
   'structure.placement.slotInPage': 'Un slot ne fonctionne que dans un composant ou un layout, pas dans une page.',
   'structure.placement.snapped': '{reason} Déposé ici, il ira à l’endroit valide le plus proche.',
+  'structure.placement.snappedToast': '{reason} Il est allé à l’endroit valide le plus proche.',
   'structure.placement.textInList': 'Du texte directement dans “{parent}” n’est pas du HTML valide.',
   'structure.placement.textPosition': 'Du texte ne peut pas aller directement dans “{parent}”.',
   'structure.placement.undoLast': 'Annuler la dernière modification',

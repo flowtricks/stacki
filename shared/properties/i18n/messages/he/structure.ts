@@ -54,6 +54,7 @@ export const messages = {
   'structure.placement.selfDrop': 'אי אפשר למקם אלמנט בתוך עצמו.',
   'structure.placement.slotInPage': 'slot עובד רק ברכיב או ב־layout, לא בדף.',
   'structure.placement.snapped': '{reason} שחרור כאן ימקם אותו במקום התקין הקרוב ביותר.',
+  'structure.placement.snappedToast': '{reason} הוא הועבר למקום התקין הקרוב ביותר.',
   'structure.placement.textInList': 'טקסט ישירות בתוך “{parent}” אינו HTML תקין.',
   'structure.placement.textPosition': 'אי אפשר למקם טקסט ישירות בתוך “{parent}”.',
   'structure.placement.undoLast': 'ביטול השינוי האחרון',

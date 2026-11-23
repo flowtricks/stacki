@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': 'Bir öğe kendi içine konamaz.',
   'structure.placement.slotInPage': 'Slot yalnızca bir bileşende veya düzende çalışır, sayfada çalışmaz.',
   'structure.placement.snapped': '{reason} Buraya bırakmak onu en yakın geçerli yere koyar.',
+  'structure.placement.snappedToast': '{reason} En yakın geçerli yere konuldu.',
   'structure.placement.textInList': '“{parent}” içinde doğrudan metin olması geçerli HTML değildir.',
   'structure.placement.textPosition': 'Metin doğrudan “{parent}” içine konamaz.',
   'structure.placement.undoLast': 'Son değişikliği geri al',

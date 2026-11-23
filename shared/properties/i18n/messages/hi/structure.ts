@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': 'कोई एलिमेंट अपने ही अंदर नहीं रखा जा सकता।',
   'structure.placement.slotInPage': 'स्लॉट सिर्फ़ कंपोनेंट या लेआउट में काम करता है, पेज में नहीं।',
   'structure.placement.snapped': '{reason} यहाँ छोड़ने पर यह सबसे नज़दीकी मान्य जगह पर रखा जाएगा।',
+  'structure.placement.snappedToast': '{reason} इसे सबसे नज़दीकी मान्य जगह पर रखा गया।',
   'structure.placement.textInList': '“{parent}” के सीधे अंदर टेक्स्ट मान्य HTML नहीं है।',
   'structure.placement.textPosition': 'टेक्स्ट को “{parent}” के सीधे अंदर नहीं रखा जा सकता।',
   'structure.placement.undoLast': 'पिछला बदलाव पूर्ववत करें',

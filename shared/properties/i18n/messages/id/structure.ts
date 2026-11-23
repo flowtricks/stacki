@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': 'Elemen tidak dapat diletakkan di dalam dirinya sendiri.',
   'structure.placement.slotInPage': 'Slot hanya berfungsi di komponen atau layout, bukan di halaman.',
   'structure.placement.snapped': '{reason} Jika dilepas di sini, elemen akan ditempatkan di posisi valid terdekat.',
+  'structure.placement.snappedToast': '{reason} Elemen ditempatkan di posisi valid terdekat.',
   'structure.placement.textInList': 'Teks langsung di dalam “{parent}” bukan HTML yang valid.',
   'structure.placement.textPosition': 'Teks tidak boleh langsung berada di dalam “{parent}”.',
   'structure.placement.undoLast': 'Urungkan perubahan terakhir',

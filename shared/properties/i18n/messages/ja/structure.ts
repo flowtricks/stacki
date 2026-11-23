@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': '要素をそれ自身の中に置くことはできません。',
   'structure.placement.slotInPage': 'slot はコンポーネントやレイアウトでのみ機能し、ページでは機能しません。',
   'structure.placement.snapped': '{reason} ここにドロップすると、最も近い有効な位置に配置されます。',
+  'structure.placement.snappedToast': '{reason} 最も近い有効な位置に配置されました。',
   'structure.placement.textInList': '「{parent}」の直下にテキストを置くのは有効な HTML ではありません。',
   'structure.placement.textPosition': 'テキストは「{parent}」の直下に置けません。',
   'structure.placement.undoLast': '最後の変更を取り消す',

@@ -61,6 +61,7 @@ export const messages = {
   'structure.placement.selfDrop': 'لا يمكن وضع عنصر داخل نفسه.',
   'structure.placement.slotInPage': 'يعمل slot في المكوّنات والتخطيطات فقط، وليس في الصفحات.',
   'structure.placement.snapped': '{reason} سيوضع العنصر عند الإفلات هنا في أقرب مكان صالح.',
+  'structure.placement.snappedToast': '{reason} وُضع العنصر في أقرب مكان صالح.',
   'structure.placement.textInList': 'النص مباشرة داخل “{parent}” ليس HTML صالحًا.',
   'structure.placement.textPosition': 'لا يمكن وضع النص مباشرة داخل “{parent}”.',
   'structure.placement.undoLast': 'التراجع عن آخر تغيير',

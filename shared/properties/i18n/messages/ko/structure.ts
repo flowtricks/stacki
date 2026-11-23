@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': '요소를 자기 자신 안에 넣을 수 없습니다.',
   'structure.placement.slotInPage': 'slot은 페이지가 아닌 컴포넌트나 레이아웃에서만 작동합니다.',
   'structure.placement.snapped': '{reason} 여기에 놓으면 가장 가까운 유효한 위치에 배치됩니다.',
+  'structure.placement.snappedToast': '{reason} 가장 가까운 유효한 위치에 배치되었습니다.',
   'structure.placement.textInList': '“{parent}” 바로 안의 텍스트는 유효한 HTML이 아닙니다.',
   'structure.placement.textPosition': '텍스트는 “{parent}” 바로 안에 넣을 수 없습니다.',
   'structure.placement.undoLast': '마지막 변경 실행 취소',

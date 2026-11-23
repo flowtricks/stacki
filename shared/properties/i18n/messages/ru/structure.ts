@@ -55,6 +55,7 @@ export const messages = {
   'structure.placement.selfDrop': 'Элемент нельзя поместить внутрь самого себя.',
   'structure.placement.slotInPage': 'slot работает только в компоненте или макете, но не на странице.',
   'structure.placement.snapped': '{reason} При перетаскивании сюда элемент будет помещён в ближайшее допустимое место.',
+  'structure.placement.snappedToast': '{reason} Элемент помещён в ближайшее допустимое место.',
   'structure.placement.textInList': 'Текст непосредственно внутри «{parent}» — недопустимый HTML.',
   'structure.placement.textPosition': 'Текст нельзя поместить непосредственно внутрь «{parent}».',
   'structure.placement.undoLast': 'Отменить последнее изменение',

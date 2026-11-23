@@ -54,6 +54,7 @@ export const messages = {
   'structure.placement.selfDrop': '元素不能放在自己內部。',
   'structure.placement.slotInPage': 'slot 只能在元件或版面配置中使用，不能用在頁面中。',
   'structure.placement.snapped': '{reason} 放在這裡會將它移到最近的有效位置。',
+  'structure.placement.snappedToast': '{reason} 已移到最近的有效位置。',
   'structure.placement.textInList': '直接位於「{parent}」內的文字不是有效的 HTML。',
   'structure.placement.textPosition': '文字不能直接放在「{parent}」內。',
   'structure.placement.undoLast': '復原上一次變更',

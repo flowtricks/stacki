@@ -4495,11 +4495,14 @@ body > .embed-editor_provenance {
   color: var(--text);
 }
 
-/* Why the drag over the Navigator cannot land where it is (the placement rule), pinned to the panel's bottom edge. */
+/* Why the drag over the Navigator cannot land where it is (the placement rule): a tooltip at the pointer, fixed and
+   in a portal on the body, so it never takes room in the tree. JS sets left and top to follow the pointer. */
 .navigator-drop-note {
-  position: sticky;
+  position: fixed;
+  inset-inline-start: 8px;
   bottom: 8px;
-  margin: 8px;
+  z-index: 1000;
+  max-width: 280px;
   padding: 6px 10px;
   border-radius: var(--radius);
   background: var(--bg-panel-2);
@@ -10499,11 +10502,6 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   pointer-events: none;
 }
 .asset-batch-progress,
-.asset-batch-notice {
-  padding: 8px 12px;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
 .asset-compression-dialog {
   width: min(480px, calc(100vw - 32px));
 }
