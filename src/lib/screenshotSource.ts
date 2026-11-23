@@ -22,8 +22,12 @@ export interface CanvasTarget {
 export interface ScreenshotSource {
   /** The part of the window the canvas shows and its breakpoint width, or undefined with no visible canvas; tells a canvas region from a panel one. */
   readonly canvas: () => CanvasTarget | undefined;
-  /** Hides the editor's own marks over the canvas (outlines, labels) until the returned call restores them. */
-  readonly hideMarks: () => () => void;
+  /**
+   * Readies the canvas for a capture until the returned call restores it: the last hovered node stays outlined (the pointer
+   * has left the canvas for the screenshot button), and the editor's transient tooltips step aside. Selected outlines, tag
+   * labels and text marks are the canvas's own and are never hidden: the capture shows what the person sees.
+   */
+  readonly prepare: () => () => void;
 }
 
 let source: ScreenshotSource | undefined;

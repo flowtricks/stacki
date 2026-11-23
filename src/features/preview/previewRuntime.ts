@@ -25,6 +25,7 @@ import { canvasClicksCaptured, noteCanvasOpen, observeCanvasClick, takeCanvasCli
 import { receiveCanvasPoint } from '../../ui/canvasPointQuery';
 import { reportFrameOverlay } from './canvasRecoveryBus';
 import { canvasHighlight, noteDeepHover, resendCanvasOutlineMode, subscribeCanvasHighlight } from '../../ui/canvasOutlineMode';
+import { canvasHoverPinned, forgetCanvasHover, rememberCanvasHover, rememberedCanvasHover, subscribeCanvasHoverPin } from '../../ui/canvasHoverPin';
 
 /** Whether a click or double-click on the canvas may select what it names
  * (src/features/preview/previewGate.ts). Hover needs only the token to be the latest. */
@@ -170,6 +171,7 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
     [],
   );
   useOccurrenceSelection(props, refs, setSelectedOccurrence);
+  usePinnedHover(setters);
   useClearPendingSelection(props.selPath, setPendingSelection);
   useExpirePendingSelection(pendingSelection, setPendingSelection);
   useClickLadder(iframeRef, refs, setters, url);
@@ -451,7 +453,14 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       // A frame that has vouched for no rendering at all (still digesting, or
       // it said why it cannot) still shows what the pointer is over: an outline
       // drawn from the frame's own boxes selects nothing.
+      if (canvasHoverPinned()) {
+        // A capture holds the hover it pinned (src/ui/canvasHoverPin.ts); the pointer is elsewhere and the frame's report is not what the picture shows.
+        break;
+      }
       if (hoverShown(message.token, refs.render.current)) {
+        if (message.path !== undefined) {
+          rememberCanvasHover({ path: message.path, pseudo: message.pseudo, occurrence: message.occurrence, deep: message.deep }, Date.now());
+        }
         noteDeepHover(message.path, message.deep);
         drawSentBoxes(message.path, message.boxes, setters);
         setters.setCanvasHover(message.path);
@@ -820,11 +829,35 @@ function useSelectionScroll(props: PreviewRuntimeProps, iframeRef: React.RefObje
   }, [iframeRef, props.focusPath, props.navigatorSelectionTick, props.pathScope, props.selPath, refs]);
 }
 
+// While a capture pins the hover, the canvas draws the node the pointer was last on, as the frame reported it. The pin's release
+// clears it, so the outline then follows the pointer again; the frame is told the hovered path through the usual tracking.
+function usePinnedHover(setters: RuntimeSetters): void {
+  const pinned = useSyncExternalStore(subscribeCanvasHoverPin, canvasHoverPinned);
+  useEffect(() => {
+    if (pinned) {
+      const hover = rememberedCanvasHover(Date.now());
+      if (hover !== undefined) {
+        noteDeepHover(hover.path, hover.deep);
+        setters.setCanvasHover(hover.path);
+        setters.setCanvasHoverPseudo(hover.pseudo);
+        setters.setHoverOcc(hover.occurrence);
+      }
+      return () => {
+        setters.setCanvasHover(undefined);
+        setters.setCanvasHoverPseudo(undefined);
+        setters.setHoverOcc(0);
+      };
+    }
+    return undefined;
+  }, [pinned, setters]);
+}
+
 function useResetOnReload(props: PreviewRuntimeProps, url: string | undefined, refs: RuntimeRefs, setters: RuntimeSetters): void {
   const canvasMode = props.device === 'canvas';
   useEffect(() => {
     const { selectedClasses: selectedClassesRef, clickPending: clickPendingRef, lastClick: lastClickRef } = refs;
     setters.setRects({});
+    forgetCanvasHover();
     setters.setCanvasHover(undefined);
     setters.setCanvasHoverPseudo(undefined);
     setters.setSpacing({});

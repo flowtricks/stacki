@@ -146,7 +146,7 @@ function fakeSource() {
   const calls = { hidden: 0, restored: 0 };
   const uninstall = shot.setScreenshotSource({
     canvas: () => ({ rect: { x: 300, y: 0, width: 800, height: 700 }, breakpointPx: 1280 }),
-    hideMarks: () => {
+    prepare: () => {
       calls.hidden += 1;
       return () => {
         calls.restored += 1;
@@ -156,13 +156,13 @@ function fakeSource() {
   return { calls, uninstall };
 }
 
-test('a region capture asks main for its rect, hides the marks for that frame only, and keeps the bytes in memory', async () => {
+test('a region capture asks main for its rect, prepares the canvas for that frame only, and keeps the bytes in memory', async () => {
   const { calls, uninstall } = fakeSource();
   const asked = [];
   window.avb = {
     aiScreenshot: async (payload) => {
       asked.push(payload);
-      assert.equal(calls.hidden, 1, 'the marks are hidden while main photographs');
+      assert.equal(calls.hidden, 1, 'the canvas is prepared while main photographs');
       assert.equal(calls.restored, 0);
       return { ok: true, value: { mimeType: 'image/png', data: 'iVBORw0KGgo=', width: 400, height: 200 } };
     },

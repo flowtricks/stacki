@@ -1,5 +1,5 @@
-// Taking one screenshot for the composer: let the person drag the part of the window to photograph, hide the editor's own marks over the canvas
-// for the frame of the capture, ask main to photograph it (`ai:screenshot`) and turn the reply into a
+// Taking one screenshot for the composer: let the person drag the part of the window to photograph, pin the canvas's last hovered outline and step tooltips aside
+// for the frame of the capture (selected outlines, tags and text marks stay), ask main to photograph it (`ai:screenshot`) and turn the reply into a
 // draft attachment with its one-line note. The bytes stay in memory: in the reply, in the draft, in the
 // prompt, never in a file or in browser storage.
 import { assert } from '../../../../shared/core/assert';
@@ -32,10 +32,10 @@ export async function takeScreenshot(request: ScreenshotRequest, translate: Tran
   if (shown === undefined) {
     return { kind: 'failed', message: translate('ai.screenshot.failed') };
   }
-  const restore = source?.hideMarks() ?? (() => undefined);
+  const restore = source?.prepare() ?? (() => undefined);
   let reply: Awaited<ReturnType<typeof aiScreenshot>>;
   try {
-    // The marks are hidden by a class; two frames let the compositor paint without them before main photographs.
+    // The hover is pinned and tooltips hidden; two frames let the compositor paint that before main photographs.
     await nextPaint();
     reply = await aiScreenshot({ projectPath: request.projectPath, rect: shown });
   } finally {
