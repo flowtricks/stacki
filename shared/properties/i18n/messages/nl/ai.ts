@@ -673,19 +673,27 @@ export const messages = {
     one: '{count} agent klaar',
     other: '{count} agents klaar',
   },
+  'ai.subagents.followUp': 'Vervolgbericht',
   'ai.subagents.label': 'Agents', // same
+  'ai.subagents.model.inherited': '{model} (overgenomen)',
+  'ai.subagents.model.session': 'Sessiemodel',
   'ai.subagents.more': {
     one: '{count} eerdere agent niet getoond',
     other: '{count} eerdere agents niet getoond',
   },
+  'ai.subagents.openTranscript': 'Transcript openen',
+  'ai.subagents.result': 'Resultaat',
   'ai.subagents.running': {
     one: '{count} agent aan het werk',
     other: '{count} agents aan het werk',
   },
   'ai.subagents.status.done': 'Klaar',
   'ai.subagents.status.failed': 'Mislukt',
+  'ai.subagents.status.queued': 'In de wachtrij',
   'ai.subagents.status.running': 'Bezig',
+  'ai.subagents.status.stopped': 'Gestopt',
   'ai.subagents.status.waiting': 'Wacht op jou',
+  'ai.subagents.untitled': 'Subagent', // same
   'ai.tasks.done': 'Klaar',
   'ai.tasks.failed': 'Mislukt',
   'ai.tasks.finished': {

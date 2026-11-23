@@ -130,6 +130,13 @@ test('a subagent’s words carry its call, a Task call its role, and two speaker
   const [plain] = checked(eventsForUpdate(updateOf({ sessionUpdate: 'tool_call', toolCallId: 'k3', rawInput: { subagent_type: '' } }), turn));
   assert.ok(plain?.kind === 'tool');
   assert.equal('agentType' in plain, false, 'an empty role is no role');
+  assert.equal('agentModel' in started, false, 'a call that names no model inherits the session’s');
+  const [modelled] = checked(eventsForUpdate(updateOf({ sessionUpdate: 'tool_call', toolCallId: 'k4', rawInput: { model: 'haiku' } }), turn));
+  assert.ok(modelled?.kind === 'tool');
+  assert.equal(modelled.agentModel, 'haiku');
+  const [blank] = checked(eventsForUpdate(updateOf({ sessionUpdate: 'tool_call', toolCallId: 'k5', rawInput: { model: '', command: 'ls' } }), turn));
+  assert.ok(blank?.kind === 'tool');
+  assert.equal('agentModel' in blank, false, 'an empty model is no model');
 });
 
 test('compaction with the capability becomes one event per update', () => {

@@ -635,17 +635,25 @@ export const messages = {
   'ai.subagents.finished': {
     other: '{count} 个代理已完成',
   },
+  'ai.subagents.followUp': '后续消息',
   'ai.subagents.label': '代理',
+  'ai.subagents.model.inherited': '{model}（继承）',
+  'ai.subagents.model.session': '会话模型',
   'ai.subagents.more': {
     other: '另有 {count} 个较早的代理未显示',
   },
+  'ai.subagents.openTranscript': '打开对话记录',
+  'ai.subagents.result': '结果',
   'ai.subagents.running': {
     other: '{count} 个代理正在工作',
   },
   'ai.subagents.status.done': '完成',
   'ai.subagents.status.failed': '失败',
+  'ai.subagents.status.queued': '排队中',
   'ai.subagents.status.running': '运行中',
+  'ai.subagents.status.stopped': '已停止',
   'ai.subagents.status.waiting': '等待你操作',
+  'ai.subagents.untitled': '子代理',
   'ai.tasks.done': '完成',
   'ai.tasks.failed': '失败',
   'ai.tasks.finished': {

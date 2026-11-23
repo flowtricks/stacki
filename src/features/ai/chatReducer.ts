@@ -56,6 +56,13 @@ export interface ToolItem {
   readonly background: boolean;
   /** The role of the subagent an Agent or Task call starts (Claude's `Explore`), when the agent said. */
   readonly agentType: string | undefined;
+  /** The model an Agent or Task call asked for (Claude's `sonnet`); undefined when it runs on the session's model. */
+  readonly agentModel: string | undefined;
+  /**
+   * Where in `output` the update that finished the call began: what follows is the call's result (a subagent's
+   * report), apart from what it showed while it ran (a subagent's prompt). Undefined while the call is open.
+   */
+  readonly resultFrom: number | undefined;
 }
 
 export interface PermissionItem {
@@ -389,9 +396,12 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
       command: event.command,
       background: event.background ?? false,
       agentType: event.agentType,
+      agentModel: event.agentModel,
+      resultFrom: isFinished(status) ? 0 : undefined,
     }));
   }
   const status = event.status ?? existing.status;
+  const output = event.output === undefined ? existing.output : (existing.output + event.output).slice(-AI_LIMITS.toolOutputCharsMax);
   const merged: ToolItem = {
     ...existing,
     title: event.title ?? existing.title,
@@ -399,7 +409,7 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
     status,
     paths: event.paths ?? existing.paths,
     diffs: event.diffs ?? existing.diffs,
-    output: event.output === undefined ? existing.output : (existing.output + event.output).slice(-AI_LIMITS.toolOutputCharsMax),
+    output,
     exitCode: event.exitCode ?? existing.exitCode,
     parent: event.parent ?? existing.parent,
     at: existing.at ?? event.at,
@@ -409,10 +419,30 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
     command: event.command ?? existing.command,
     background: event.background ?? existing.background,
     agentType: event.agentType ?? existing.agentType,
+    agentModel: event.agentModel ?? existing.agentModel,
+    resultFrom: resultStart(existing, output, { finishing: isFinished(status), added: event.output?.length ?? 0 }),
   };
+  assert(merged.resultFrom === undefined || merged.resultFrom <= merged.output.length, 'applyTool: the result starts inside the output');
   const items = [...view.items];
   items[index] = merged;
   return { ...view, items };
+}
+
+/**
+ * Where the result begins once the call is finished: the first finishing update's own output is the tail of
+ * the joined output, and an output cut to its bound from the front moves that start back by what was cut.
+ */
+function resultStart(existing: ToolItem, output: string, update: { readonly finishing: boolean; readonly added: number }): number | undefined {
+  const dropped = Math.max(0, existing.output.length + update.added - output.length);
+  if (existing.resultFrom !== undefined) {
+    return Math.max(0, existing.resultFrom - dropped);
+  }
+  if (!update.finishing) {
+    return undefined;
+  }
+  const start = Math.max(0, output.length - update.added);
+  assert(start <= output.length, 'resultStart: inside the output');
+  return start;
 }
 
 function applyUsage(view: ChatView, usage: ChatContext): ChatView {

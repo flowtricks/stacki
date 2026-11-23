@@ -5,6 +5,7 @@
 // no gap is larger than a turn's; secondary text is the design system's secondary token, the least important the tertiary
 // one, and prose the primary; the "Jump to latest" pill is an opaque surface; and the time and Copy row of a message
 // has a slot of its own (1.25rem), invisible until hover or focus, so revealing it overlaps no block and moves nothing.
+// The command rows of an opened group sit flush left: their chevron under the head's chevron, their duration right-aligned.
 // Method: bundle the real activity group, messages and stylesheets into one page, load it in Electron's Chromium at 340
 // and 600 px, and read the layout and computed colours back.
 const test = require('node:test');
@@ -177,13 +178,38 @@ app.whenReady().then(async () => {
       const others = [...document.querySelectorAll('.ai-transcript-flow > *')].filter((element) => element !== reply).map(box);
       const body = box(reply.querySelector('.ai-msg-body'));
       const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      // Open the first group last, after every layout reading above: its command rows must sit flush left under the head.
+      const headLeftClosed = Math.round(box(chevron).left * 10) / 10;
+      const timeRightClosed = time ? Math.round(box(time).right * 10) / 10 : undefined;
+      const headHeightClosed = Math.round(box(head).height);
+      head.click();
+      await new Promise((resolve) => {
+        const present = () => document.querySelector('.ai-group-body .ai-tool-head') !== null;
+        if (present()) {
+          resolve();
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          if (present()) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      });
+      const rowHead = document.querySelector('.ai-group-body .ai-tool-head');
+      const rowTime = rowHead.querySelector('.ai-tool-time');
+      const rowChevronLeft = Math.round(box(rowHead.querySelector('svg')).left * 10) / 10;
+      const rowTimeRight = rowTime ? Math.round(box(rowTime).right * 10) / 10 : undefined;
       return {
+        rowChevronLeft,
+        rowTimeRight,
         width: ${'${width}'},
-        headLeft: Math.round(box(chevron).left * 10) / 10,
+        headLeft: headLeftClosed,
         proseLeft: Math.round(prose.left * 10) / 10,
-        timeRight: time ? Math.round(box(time).right * 10) / 10 : undefined,
+        timeRight: timeRightClosed,
         proseRight: Math.round(proseColumn.right * 10) / 10,
-        headHeight: Math.round(box(head).height),
+        headHeight: headHeightClosed,
         headSvgCount: head.querySelectorAll('svg').length,
         flowGaps: gaps(flow),
         flowKinds: flow.map((element) => element.className.split(' ')[0]),
@@ -232,6 +258,8 @@ app.whenReady().then(async () => {
     const near = (actual, expected, message) =>
       assert.ok(Math.abs(actual - expected) <= 1, `${message} at ${result.width}px: ${actual} vs ${expected}: ${detail}`);
     near(result.headLeft, result.proseLeft, 'the tool row starts where the prose starts');
+    near(result.rowChevronLeft, result.headLeft, 'a command row’s chevron sits under the head’s chevron, no indent');
+    near(result.rowTimeRight, result.proseRight, 'a command row’s duration ends where the prose ends');
     near(result.timeRight, result.proseRight, 'the duration ends where the prose ends');
     assert.equal(result.headSvgCount, 1, `only the chevron: no check mark at ${result.width}px`);
     assert.ok(result.headHeight <= 24, `the row is compact (${result.headHeight}px) at ${result.width}px`);

@@ -88,7 +88,7 @@ export interface AcpToolCall {
   readonly parent: string | undefined;
   /** The agent's own name for the tool (Claude's `_meta.claudeCode.toolName`: `Bash`, `compact`). */
   readonly toolName: string | undefined;
-  /** The four fields of `rawInput` the panel uses; the rest of the input is dropped. */
+  /** The five fields of `rawInput` the panel uses; the rest of the input is dropped. */
   readonly rawInput: AcpRawInput | undefined;
   /** What a Codex subagent call reports in `rawInput.activityKind` (`started`, ...). */
   readonly activityKind: string | undefined;
@@ -101,6 +101,8 @@ export interface AcpRawInput {
   readonly runInBackground: boolean | undefined;
   /** Claude's `subagent_type` on an Agent or Task call: the role of the subagent it starts (`Explore`, `general-purpose`). */
   readonly subagentType: string | undefined;
+  /** Claude's `model` on an Agent or Task call (`sonnet`, `opus`, `haiku`, `fable`): absent when the subagent inherits the session's. */
+  readonly model: string | undefined;
 }
 
 export interface AcpPlanEntry {
@@ -339,7 +341,10 @@ export function parseSessionResult(input: unknown, sessionId: string | undefined
 export function parseSteerResult(input: unknown): Result<{ readonly outcome: SteerOutcome }, AcpWireError> {
   return guarded(() => {
     const value = required(input, 'steering');
-    const outcome = oneOf(value['outcome'], STEER_OUTCOMES, 'steering.outcome');
+    // The Claude adapter (0.105.0, acp-agent.js `steer`) answers `injected` when it pushed the message into the running
+    // turn; that is this panel's `steered`. Reading only `steered` made every successful steer look unreadable.
+    const raw = value['outcome'] === 'injected' ? 'steered' : value['outcome'];
+    const outcome = oneOf(raw, STEER_OUTCOMES, 'steering.outcome');
     assert(STEER_OUTCOMES.includes(outcome), 'steering: a known outcome');
     return { outcome };
   });
@@ -511,7 +516,7 @@ function parseToolCall(value: Record<string, unknown>): AcpToolCall {
   return call;
 }
 
-// Only four fields of a tool's input matter to the panel; the input itself can be a whole file.
+// Only five fields of a tool's input matter to the panel; the input itself can be a whole file.
 function parseRawInput(raw: Record<string, unknown> | undefined): AcpRawInput | undefined {
   if (raw === undefined) {
     return undefined;
@@ -520,10 +525,11 @@ function parseRawInput(raw: Record<string, unknown> | undefined): AcpRawInput | 
   const description = optionalText(raw['description'], AI_LIMITS.labelCharsMax);
   const runInBackground = typeof raw['run_in_background'] === 'boolean' ? raw['run_in_background'] : undefined;
   const subagentType = typeof raw['subagent_type'] === 'string' ? optionalText(raw['subagent_type'], AI_LIMITS.idCharsMax) : undefined;
-  if (command === undefined && description === undefined && runInBackground === undefined && subagentType === undefined) {
+  const model = typeof raw['model'] === 'string' ? optionalText(raw['model'], AI_LIMITS.idCharsMax) : undefined;
+  if (command === undefined && description === undefined && runInBackground === undefined && subagentType === undefined && model === undefined) {
     return undefined;
   }
-  return { command, description, runInBackground, subagentType };
+  return { command, description, runInBackground, subagentType, model };
 }
 
 function parseToolContent(input: unknown): AcpToolContent {

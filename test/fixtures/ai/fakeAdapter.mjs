@@ -134,10 +134,13 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
     const text = params.prompt.map((block) => block.text ?? '').join('');
     if (text.includes('refuse')) {
       send({ id, error: { code: -32602, message: 'Steering refused' } });
+    } else if (text.includes('garbled')) {
+      // Accepted, but answered in a shape Stacki cannot read; the turn stays held.
+      send({ id, result: { outcome: 'bogus' } });
     } else if (held === undefined) {
       send({ id, result: { outcome: 'promptRequired', reason: 'noRunningTurn' } });
     } else {
-      send({ id, result: { outcome: 'steered' } });
+      send({ id, result: { outcome: 'injected' } }); // What the real Claude adapter answers (acp-agent.js `steer`).
       update(held.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Steered: ${text}` } });
       finishHeld('end_turn');
     }

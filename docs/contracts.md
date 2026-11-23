@@ -1045,11 +1045,11 @@ Opening a project without saved guide preferences uses defaults in memory. It do
 
 `.stacki/breakpoints.json` contains `{ version: 4, desktop: { value, unit }, breakpoints: [...] }`
 (`shared/properties/projectBreakpoints.ts`): Desktop's frame width and an ordered list of `{ id, name?, value, unit }`,
-`unit` `rem` or `px`. Desktop is 90rem (1440px) unless set. It is **never a media query**: its uses are the width of the
-Desktop frame in the side-by-side (all breakpoints) view, the narrowest width the single canvas's Desktop button draws the page
-at, and the line that decides on which side of Desktop a breakpoint is. The Desktop button fills a pane at least that wide (below
-the narrowest `up` canvas) and otherwise draws that width scaled to fit (`desktopCanvasWidth` in `shared/properties/breakpointIcon.ts`),
-so no breakpoint query applies under it: Base in a desktop-first component, the widest `width >= X` in a mobile-first one. A breakpoint has no stored direction: it is DERIVED from its
+`unit` `rem` or `px`. Desktop is 90rem (1440px) unless set. It is **never a media query**: its only uses are the width of the
+Desktop frame in the side-by-side (all breakpoints) view and the line that decides on which side of Desktop a breakpoint is. The
+single canvas's Desktop button is the full available width, never scaled: a pane narrower than a breakpoint's canvas draws the page
+at the pane's width (scale 1), so its media queries switch to that layout, and the preview bar and the style panel's follow read
+the device that width belongs to (`activeDeviceFor`), a Laptop-wide pane as Laptop, never as Desktop. A breakpoint has no stored direction: it is DERIVED from its
 number against Desktop's (`directionOf`). Wider than Desktop it is `up`, the query `width >= X` (mobile first), and its canvas is
 exactly X (100rem is 1600px); narrower it is `down`, `width < X`, canvas X less 1px (64rem is 1023px); equal to Desktop is refused.
 The defaults, with no file, are the Lumos 64rem, 48rem and 30rem breakpoints (ids `laptop`, `tablet`, `phone`, names read in the
@@ -2135,12 +2135,19 @@ project-relative with no `..`, absolute, backslash or empty segments). New bound
 **Subagents.** Claude stamps `_meta.claudeCode.parentToolUseId` (the Agent or Task call's id) on
 everything a subagent reports, its message and thought chunks as well as its tool calls. `acpWire.ts`
 reads it as `parent` on `message` updates and tool calls (a non-string is dropped, an over-long one cut
-to `idCharsMax`), and `rawInput.subagent_type` as `subagentType`. The chat model carries them as the
-optional `parent` of a `text` event and `agentType` of a `tool` event (absent in older chats, which
-still read); `coalesceEvents` and the reducer never join two speakers' text. The panel derives the
-run's subagents from these alone (`src/features/ai/subagents.ts`, bounds `SUBAGENTS_SHOWN_MAX` and
-`SUBAGENT_ITEMS_MAX` beside it): the strip above the transcript, and one subagent's transcript, which
-is the chat's `Transcript` given that subagent's re-rooted items. A subagent's words are drawn only
+to `idCharsMax`), `rawInput.subagent_type` as `subagentType`, and `rawInput.model` (the model an Agent
+call asks for: `sonnet`, `opus`, `haiku`, `fable`) as `model`. The chat model carries them as the
+optional `parent` of a `text` event and `agentType` and `agentModel` of a `tool` event (absent in older
+chats, which still read; an absent `agentModel` means the subagent runs on the session's model);
+`coalesceEvents` and the reducer never join two speakers' text. The reducer also records where the
+update that finished a call began in its output (`resultFrom`), so a subagent's report reads apart from
+the prompt its call showed while it ran. The panel derives the subagents from these alone
+(`src/features/ai/subagents.ts`, bounds `SUBAGENTS_SHOWN_MAX`, `SUBAGENT_ITEMS_MAX` and
+`RESULT_SUMMARY_CHARS_MAX` beside it): each Agent or Task call, and each SendMessage follow-up, is one
+unit in the transcript holding every call that names it as parent (directly or through nested calls, at
+most 8 deep); a call naming a parent the transcript does not hold belongs to no unit and stays in the
+coordinator's groups. Above the transcript, a strip lists the run's units; one subagent's transcript is
+the chat's `Transcript` given that subagent's re-rooted items. A subagent's words are drawn only
 there. Codex reports a subagent as one call titled "Start subagent …" and forwards none of its work,
 so a Codex subagent has a row but an empty transcript. No adapter Stacki drives can stop one subagent
 (per-subagent sessions are offered only to JetBrains AIR clients), so there is no per-subagent stop.

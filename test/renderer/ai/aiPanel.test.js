@@ -778,10 +778,12 @@ test('whole panel: a running turn shows its tool group, the loader with a timer,
   );
 });
 
-test('whole panel: subagents show in a strip, open into their own transcript drawn by the chat’s renderer, and fold to a summary', async (context) => {
+test('whole panel: subagents show in a strip and as units holding their own calls, open into their own transcript, and fold to a summary', async (context) => {
   ai.resetAiStore();
   window.localStorage.clear();
   const { listeners } = fakeMain({ trusted: true });
+  // The strip scrolls a unit into view; the test DOM has no layout, so that scroll is a no-op here.
+  window.HTMLElement.prototype.scrollIntoView ??= function () {};
   const { container, root } = await mount();
   context.after(() => act(() => root.unmount()));
   const now = Date.now();
@@ -801,15 +803,31 @@ test('whole panel: subagents show in a strip, open into their own transcript dra
   assert.match(strip.querySelector('.ai-agents-head').textContent, /1 agent working/);
   const row = strip.querySelector('.ai-agent');
   assert.equal(row.querySelector('.ai-agent-name').textContent, 'Tidy Hero.astro');
-  assert.equal(row.querySelector('.ai-agent-role').textContent, 'general-purpose');
+  assert.equal(row.querySelector('.ai-agent-model').textContent, 'Session model', 'no model asked for and none reported: the session’s');
+  assert.match(row.getAttribute('title'), /general-purpose/, 'its role is in the row’s tooltip');
   assert.equal(row.querySelector('.ai-agent-dot').getAttribute('aria-label'), 'Running');
   assert.match(row.querySelector('.ai-agent-time').textContent, /^\d[\d.]*s$/, 'its elapsed time');
   assert.equal(row.querySelector('.ai-agent-doing').textContent, 'Editing Hero.astro');
   const chat = container.querySelector('.ai-transcript');
   assert.match(chat.textContent, /Starting a helper/);
   assert.doesNotMatch(chat.textContent, /stray margin/, 'the subagent’s words are not the chat’s');
+  const unit = chat.querySelector('.ai-subagent[data-subagent="toolu_a"]');
+  assert.ok(unit, 'the subagent is one unit in the transcript');
+  assert.match(unit.querySelector('.ai-subagent-title').textContent, /Tidy Hero\.astro/);
+  assert.match(
+    unit.querySelector('.ai-subagent-progress').textContent,
+    /Editing Hero\.astro · Edited 1 file, read 1 file/,
+    'what it does now and what it has done',
+  );
+  assert.equal(unit.querySelector('.ai-subagent-head').getAttribute('aria-expanded'), 'false', 'closed by default');
+  assert.equal(chat.querySelector('.ai-group') ?? undefined, undefined, 'its calls are not in the coordinator’s groups');
 
   await click(row);
+  assert.equal(unit.querySelector('.ai-subagent-head').getAttribute('aria-expanded'), 'true', 'a strip row opens its unit');
+  assert.equal(unit.querySelectorAll('.ai-subagent-body .ai-tool').length, 2, 'with its own calls inside');
+  assert.equal(unit.querySelector('.ai-subagent-body .ai-tool-nested') ?? undefined, undefined, 'its direct calls sit flush, not indented');
+
+  await click(button(container, 'Open transcript'));
   assert.equal(container.querySelector('.ai-agents') ?? undefined, undefined, 'the strip gives way to the subagent’s transcript');
   const head = container.querySelector('.ai-agent-pane-head');
   assert.match(head.textContent, /Tidy Hero\.astro/);

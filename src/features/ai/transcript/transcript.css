@@ -75,7 +75,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
+  padding: 3px 6px;
   border-radius: 6px;
   background: transparent;
   color: var(--text-dim);
@@ -87,7 +87,8 @@
 }
 .ai-thought-body {
   margin-block: 2px 0;
-  margin-inline: 18px 0;
+  /* Under the thought's label: the head's padding, the chevron and its gap. */
+  margin-inline: 24px 0;
   padding: 6px 8px;
   max-height: 260px;
   overflow: auto;
@@ -193,8 +194,9 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* Under the label: the chevron's width and its gap. */
-  padding-inline-start: 18px;
+  /* Flush left: the rows reach 6px past the prose on both sides exactly as the head does, so a row's chevron sits
+     under the head's chevron and its duration ends where the head's does. No indent under the label. */
+  margin-inline: -6px;
   min-width: 0;
 }
 
@@ -599,6 +601,7 @@
 .ai-agents-head {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   width: 100%;
   min-width: 0;
@@ -632,9 +635,18 @@ button.ai-agents-head:hover {
   font-size: 11px;
   color: var(--text-faint);
 }
+/* Every row has the same columns, so the dots, models and times line up down the list whatever their text: the dot,
+   the task (the rest of the width, cut with an ellipsis), the model (one fixed width), and the time (one fixed width,
+   right-aligned tabular figures, so "11s" and "5.9s" end on one line). */
+.ai-transcript,
+.ai-agents,
+.ai-agent-pane-head {
+  --ai-agent-model-width: 6.5rem;
+  --ai-agent-time-width: 3.25rem;
+}
 .ai-agent {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: 7px minmax(0, 1fr) var(--ai-agent-model-width) var(--ai-agent-time-width);
   align-items: center;
   gap: 1px 6px;
   width: 100%;
@@ -667,6 +679,9 @@ button.ai-agents-head:hover {
 .ai-agent-dot-failed {
   background: var(--red);
 }
+.ai-agent-dot-stopped {
+  background: var(--text-dim);
+}
 @media (prefers-reduced-motion: no-preference) {
   .ai-agent-dot-running {
     animation: ai-agent-pulse 1.6s ease-in-out infinite;
@@ -683,10 +698,22 @@ button.ai-agents-head:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ai-agent-role {
+.ai-agent-role,
+.ai-agent-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 10.5px;
   color: var(--text-faint);
   white-space: nowrap;
+}
+.ai-agent-model-inherited {
+  font-style: italic;
+}
+.ai-agent-time-cell {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
 }
 .ai-agent-time {
   font-size: 10.5px;
@@ -715,6 +742,98 @@ button.ai-agents-head:hover {
 }
 .ai-agent-pane-head .ai-agent-name {
   flex: 1;
+}
+/* A subagent in the transcript (SubagentCard.tsx): one unit with its calls inside. Its head is a two-line grid in the
+   strip's columns (chevron and dot, task, model, time; then the progress line and the result under the task); its
+   chevron sits where the prose starts, as a group's does, and its calls sit flush under it. */
+.ai-subagent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-inline: -6px;
+  border-radius: 6px;
+  background: transparent;
+}
+.ai-subagent:has(> .ai-subagent-body) {
+  background: var(--bg-hover);
+}
+.ai-subagent-head {
+  display: grid;
+  grid-template-columns: 12px 7px minmax(0, 1fr) var(--ai-agent-model-width) var(--ai-agent-time-width);
+  align-items: center;
+  gap: 1px 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: start;
+}
+.ai-subagent-head:hover {
+  background: var(--bg-hover);
+}
+.ai-subagent-chevron {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+.ai-subagent-title {
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-subagent-progress,
+.ai-subagent-summary {
+  grid-column: 3 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-subagent-summary {
+  color: var(--text-dim);
+}
+.ai-subagent-failed .ai-subagent-progress {
+  color: var(--red);
+}
+.ai-subagent-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  padding-block-end: 4px;
+}
+.ai-subagent-body > .ui-skeleton-rows {
+  padding: 4px 6px;
+}
+.ai-subagent-result {
+  margin: 4px 6px 0;
+  padding: 6px 8px;
+  max-height: 260px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.ai-subagent-open {
+  align-self: flex-start;
+  margin: 4px 6px 0;
+  background: var(--bg-active);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-subagent-open:hover {
+  background: var(--bg-pressed);
+  color: var(--text);
 }
 .ai-agent-back {
   flex: none;

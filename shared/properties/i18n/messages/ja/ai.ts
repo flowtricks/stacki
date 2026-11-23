@@ -640,17 +640,25 @@ export const messages = {
   'ai.subagents.finished': {
     other: '{count} 件のエージェントが完了',
   },
+  'ai.subagents.followUp': 'フォローアップメッセージ',
   'ai.subagents.label': 'エージェント',
+  'ai.subagents.model.inherited': '{model}（継承）',
+  'ai.subagents.model.session': 'セッションのモデル',
   'ai.subagents.more': {
     other: '以前の {count} 件のエージェントは非表示',
   },
+  'ai.subagents.openTranscript': 'トランスクリプトを開く',
+  'ai.subagents.result': '結果',
   'ai.subagents.running': {
     other: '{count} 件のエージェントが作業中',
   },
   'ai.subagents.status.done': '完了',
   'ai.subagents.status.failed': '失敗',
+  'ai.subagents.status.queued': '待機中',
   'ai.subagents.status.running': '実行中',
+  'ai.subagents.status.stopped': '停止済み',
   'ai.subagents.status.waiting': 'あなたの対応待ち',
+  'ai.subagents.untitled': 'サブエージェント',
   'ai.tasks.done': '完了',
   'ai.tasks.failed': '失敗',
   'ai.tasks.finished': {

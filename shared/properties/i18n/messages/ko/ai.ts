@@ -639,17 +639,25 @@ export const messages = {
   'ai.subagents.finished': {
     other: '에이전트 {count}개 완료',
   },
+  'ai.subagents.followUp': '후속 메시지',
   'ai.subagents.label': '에이전트',
+  'ai.subagents.model.inherited': '{model} (상속됨)',
+  'ai.subagents.model.session': '세션 모델',
   'ai.subagents.more': {
     other: '이전 에이전트 {count}개 숨김',
   },
+  'ai.subagents.openTranscript': '대화 기록 열기',
+  'ai.subagents.result': '결과',
   'ai.subagents.running': {
     other: '에이전트 {count}개 작업 중',
   },
   'ai.subagents.status.done': '완료',
   'ai.subagents.status.failed': '실패',
+  'ai.subagents.status.queued': '대기 중',
   'ai.subagents.status.running': '실행 중',
+  'ai.subagents.status.stopped': '중지됨',
   'ai.subagents.status.waiting': '사용자 응답 대기 중',
+  'ai.subagents.untitled': '하위 에이전트',
   'ai.tasks.done': '완료',
   'ai.tasks.failed': '실패',
   'ai.tasks.finished': {
