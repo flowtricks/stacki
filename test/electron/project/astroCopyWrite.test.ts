@@ -124,7 +124,10 @@ test('the copy is the planned project, the original is untouched byte for byte, 
   assert.equal(read(target, 'public/_partial.html'), '<p>{partial}</p>', 'a kept page is copied as it was');
   assert.equal(read(target, 'public/css/site.css'), 'body { color: red }');
   assert.match(read(target, 'public/Old.htm'), /url=Old\.html/);
-  assert.equal(fs.statSync(path.join(target, 'public/js/app.js')).mode & 0o777, 0o755);
+  // Windows has no execute bit: a file's mode there is always 0o666 or 0o444, so a mode is only kept where the platform has modes.
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(path.join(target, 'public/js/app.js')).mode & 0o777, 0o755);
+  }
   assert.deepEqual(made.value.plan.keptAsFiles, ['_partial.html', 'about.html']);
   assert.equal(made.value.plan.skippedCount, 3, '.env, node_modules and the old package.json');
   assert.deepEqual(
