@@ -47,6 +47,20 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.15
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.15.
+- **Features**
+  - ai: redesign the subagent overview, flush-left command rows
+  - props: loop settings for destructured .map(({ data }) => heads
+  - preview: show prop-bound text inside loop cards on the canvas
+- **Fixes**
+  - preview: let the Desktop canvas fill its pane
+  - navigator: no chip on expression text rows; Image icon stays green
+  - preview: outline pseudo-state targets on components and text marks
+  - preview: keep focus in a canvas text editor after it opens
+  - preview: prop edits morph the page instead of reloading it
+
 ## 1.4.14
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.14.
