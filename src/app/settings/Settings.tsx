@@ -232,7 +232,7 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
   const icon = <SettingsTabIcon tab={props.tab} size={20} />;
   switch (props.tab) {
     case 'editor':
-      return <Preferences />;
+      return <Preferences projectPath={props.projectPath} />;
     case 'folders':
       return props.projectPath ? (
         <FolderSettings
@@ -357,7 +357,7 @@ function usePreferences() {
 }
 
 // Editor settings save each switch as it flips: each is safe to apply alone.
-function Preferences() {
+function Preferences({ projectPath }: { readonly projectPath: string | undefined }) {
   const translate = useTranslate();
   const { value, busy, error, change, saving } = usePreferences();
   return (
@@ -407,7 +407,7 @@ function Preferences() {
         <SettingsRow label={translate('ai.autoCompact.label')} info={translate('ai.autoCompact.info')}>
           <AutoCompactPicker ariaLabel={translate('ai.autoCompact.label')} />
         </SettingsRow>
-        <DictationSetting />
+        <DictationSetting projectPath={projectPath} />
       </SettingsSection>
       <SettingsSection title={translate('settings.editor.section.privacy')}>
         <PreferenceToggle

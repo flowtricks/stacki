@@ -13,7 +13,7 @@ import {
   type VocabularyEntry,
 } from '../../../shared/properties/voice/dictationVocabulary';
 import { normalizeWords } from '../../../shared/properties/voice/dictationVocabulary';
-import { mentionCandidates } from '../../features/ai/aiStore';
+import { aiMentions } from '../../features/ai/aiBridge';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { CloseIcon, PencilIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
@@ -25,12 +25,21 @@ import { SettingsEmpty, SettingsRow } from './SettingsLayout';
 /** Project names offered as vocabulary at once. */
 const SUGGESTIONS_MAX = 12;
 
-export function DictationWordsRows({ words, onChange }: { readonly words: DictationWords; readonly onChange: (words: DictationWords) => void }) {
+export function DictationWordsRows({
+  words,
+  projectPath,
+  onChange,
+}: {
+  readonly words: DictationWords;
+  /** The project open in this window, whose component names are suggested; none on the welcome screen. */
+  readonly projectPath: string | undefined;
+  readonly onChange: (words: DictationWords) => void;
+}) {
   const translate = useTranslate();
   const [wordOpen, setWordOpen] = useState(false);
   const [snippetEdit, setSnippetEdit] = useState<{ readonly kind: 'new' } | { readonly kind: 'edit'; readonly snippet: Snippet } | undefined>(undefined);
   const [search, setSearch] = useState('');
-  const suggestions = useProjectNames(words.vocabulary);
+  const suggestions = useProjectNames(projectPath, words.vocabulary);
   const addWord = (entry: VocabularyEntry): void => onChange({ ...words, vocabulary: [...words.vocabulary, entry] });
   const shown = words.snippets.filter((snippet) => {
     const query = normalizeWords(search);
@@ -164,11 +173,17 @@ export function DictationWordsRows({ words, onChange }: { readonly words: Dictat
 }
 
 // The open project's component names (PascalCase file names), as vocabulary suggestions; none without a project.
-function useProjectNames(vocabulary: readonly VocabularyEntry[]): readonly string[] {
+// The files are asked of the main process for the project Settings names, not through the AI panel's store: that
+// store learns a project only when the panel opens, and asking it before then asserted and took Settings down.
+function useProjectNames(projectPath: string | undefined, vocabulary: readonly VocabularyEntry[]): readonly string[] {
   const [names, setNames] = useState<readonly string[]>([]);
   useEffect(() => {
+    setNames([]); // Another project, or none: the last one's names are not this one's.
+    if (projectPath === undefined) {
+      return undefined;
+    }
     let live = true;
-    mentionCandidates('', ['file'])
+    aiMentions({ projectPath, query: '', kinds: ['file'] })
       .then((reply) => {
         if (!live || !reply.ok) {
           return;
@@ -182,11 +197,11 @@ function useProjectNames(vocabulary: readonly VocabularyEntry[]): readonly strin
         });
         setNames([...new Set(found)]);
       })
-      .catch(() => undefined);
+      .catch(() => undefined); // Suggestions are a convenience: a failed read leaves none, and the words stay editable.
     return () => {
       live = false;
     };
-  }, []);
+  }, [projectPath]);
   return useMemo(() => {
     const known = new Set(vocabulary.map((entry) => entry.word.toLowerCase()));
     return names.filter((name) => !known.has(name.toLowerCase())).slice(0, SUGGESTIONS_MAX);
