@@ -92,9 +92,11 @@ test('the reported case never wears the Tablet icon at the Desktop device', () =
   assert.equal(shown, 'desktop', 'Desktop');
 });
 
-test('Desktop keeps its name at any width, as the toolbar does', () => {
-  assert.equal(activeDeviceFor('desktop', 900, DEFAULTS), 'desktop', 'a narrow pane still shows Desktop pressed');
-  assert.equal(canvasTriggerIcon('@media (width >= 48rem)', { device: 'desktop', widthPx: 900 }, DEFAULTS), 'desktop', 'and so does the trigger');
+test('Desktop reads as the device its pane width belongs to, as the toolbar does', () => {
+  assert.equal(activeDeviceFor('desktop', 900, DEFAULTS), 'laptop', 'a pane narrower than the Laptop canvas shows Laptop pressed, not Desktop');
+  assert.equal(canvasTriggerIcon('@media (width >= 48rem)', { device: 'desktop', widthPx: 900 }, DEFAULTS), 'laptop', 'and so does the trigger');
+  assert.equal(activeDeviceFor('desktop', 1200, DEFAULTS), 'desktop', 'a pane wide enough for no breakpoint is Desktop');
+  assert.equal(activeDeviceFor('desktop', 0, DEFAULTS), 'desktop', 'an unmeasured pane keeps Desktop pressed');
   assert.equal(activeDeviceFor('custom', 900, DEFAULTS), 'laptop', 'a dragged width is the device it belongs to');
 });
 

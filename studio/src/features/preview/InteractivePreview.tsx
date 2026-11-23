@@ -289,8 +289,8 @@ export function PreviewWorkspace({
 // as the canvas (Desktop's AppShell PreviewModeView). The canvas below keeps the device keys.
 function PreviewModeView({ preview, size }: { readonly preview: InteractivePreviewState; readonly size: PreviewWorkspaceSize }) {
   const translate = useTranslate();
-  const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(size.projectName);
-  const sizing = usePreviewSizing(size.device, size.dimensions, breakpoints, { deviceShortcuts: false, desktopFramePx }, size.onDevice);
+  const { resolved: breakpoints } = useProjectBreakpoints(size.projectName);
+  const sizing = usePreviewSizing(size.device, size.dimensions, breakpoints, { deviceShortcuts: false }, size.onDevice);
   return (
     <PreviewModeStage sizing={sizing}>
       {preview.target ? (

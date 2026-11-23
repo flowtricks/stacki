@@ -118,7 +118,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const ownDimensions = usePreviewDimensions();
   const dimensions = props.dimensions ?? ownDimensions;
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectPath);
-  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx }, props.onDevice);
+  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true }, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
   const measured = props.device !== 'canvas' && (sizing.width !== undefined || sizing.wrapWidth > 0);
@@ -251,10 +251,10 @@ function DesignPreview({
         />
       </SizedFrame>
       <div
-        className={`preview-overlay-layer ${width && sizing.fit === 'framed' ? '' : 'full'}`}
+        className={`preview-overlay-layer ${width ? '' : 'full'}`}
         style={
           width
-            ? { width: sizing.viewport.width * scale, height: sizing.viewport.height * scale, borderRadius: sizing.fit === 'framed' ? 10 * scale : 0 }
+            ? { width: sizing.viewport.width * scale, height: sizing.viewport.height * scale, borderRadius: 10 * scale }
             : { width: '100%', height: '100%', borderRadius: 0 }
         }
       >

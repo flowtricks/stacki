@@ -81,7 +81,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Çok büyük',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Masaüstü',
-  'settings.breakpoints.desktopNote': 'Tuvalde ve yan yana görünümde sığacak şekilde ölçeklenen masaüstü genişliği. Medya sorgusu olarak asla kullanılmaz.',
+  'settings.breakpoints.desktopNote': 'Yan yana görünümdeki çerçeve genişliği. Medya sorgusu olarak asla kullanılmaz.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) Masaüstü’nün öbür tarafına geçerdi.',
   'settings.breakpoints.error.file': 'Kesme noktaları dosyası kullanılamadı, bu yüzden varsayılanlar gösteriliyor ve dosyaya dokunulmuyor. {message}',
   'settings.breakpoints.error.name': 'Ad 1 ile {maximum} karakter arasında olmalı ve her biri farklı olmalı.',

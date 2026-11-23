@@ -80,7 +80,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'अतिरिक्त बड़ा',
   'settings.breakpoints.defaultName.up2': 'अल्ट्रा',
   'settings.breakpoints.desktop': 'डेस्कटॉप',
-  'settings.breakpoints.desktopNote': 'कैनवास और साथ-साथ दृश्य में डेस्कटॉप की चौड़ाई, फ़िट होने के लिए स्केल की गई। मीडिया क्वेरी में कभी उपयोग नहीं होती।',
+  'settings.breakpoints.desktopNote': 'साथ-साथ दृश्य में फ़्रेम की चौड़ाई। मीडिया क्वेरी में कभी उपयोग नहीं होती।',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) डेस्कटॉप के दूसरी ओर चला जाएगा।',
   'settings.breakpoints.error.file': 'ब्रेकपॉइंट फ़ाइल उपयोग नहीं की जा सकी, इसलिए डिफ़ॉल्ट दिखाए गए हैं और फ़ाइल जैसी है वैसी छोड़ी गई है। {message}',
   'settings.breakpoints.error.name': 'नाम 1 से {maximum} वर्णों का होता है, और हर नाम अलग होना चाहिए।',

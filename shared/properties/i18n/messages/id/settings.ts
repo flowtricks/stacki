@@ -81,7 +81,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Ekstra besar',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
-  'settings.breakpoints.desktopNote': 'Lebar desktop di kanvas dan berdampingan, diskalakan agar muat. Tidak pernah dipakai sebagai media query.',
+  'settings.breakpoints.desktopNote': 'Lebar bingkai di tampilan berdampingan. Tidak pernah dipakai sebagai media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) akan berada di sisi lain Desktop.',
   'settings.breakpoints.error.file': 'File breakpoint tidak dapat dipakai, jadi nilai bawaan ditampilkan dan file dibiarkan apa adanya. {message}',
   'settings.breakpoints.error.name': 'Nama terdiri dari 1 hingga {maximum} karakter, dan setiap nama berbeda.',

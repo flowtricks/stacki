@@ -78,7 +78,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': '特大',
   'settings.breakpoints.defaultName.up2': '超大',
   'settings.breakpoints.desktop': '桌面',
-  'settings.breakpoints.desktopNote': '画布和并排视图中的桌面宽度，会缩放以适应。从不用作媒体查询。',
+  'settings.breakpoints.desktopNote': '并排视图中的框架宽度。从不用作媒体查询。',
   'settings.breakpoints.error.desktopFlips': '{name}（{limit}）会落到桌面的另一侧。',
   'settings.breakpoints.error.file': '无法使用断点文件，因此显示默认值，文件保持不变。{message}',
   'settings.breakpoints.error.name': '名称为 1 到 {maximum} 个字符，且各不相同。',

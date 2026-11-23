@@ -21,8 +21,8 @@ export function SizedFrame({ sizing, children }: { readonly sizing: PreviewSizin
   assert(scale > 0, 'The canvas scale is positive');
   assert(scale <= 1, 'The canvas never scales a page up');
   const moving = sizing.resizing || sizing.panelSettling;
-  // A fluid frame and the Desktop device cover the canvas edge to edge (no gutter, radius or shadow): the handles sit inside it.
-  const flush = sizing.width === undefined || sizing.fit === 'flush';
+  // A fluid frame (Desktop, the all-breakpoints canvas) covers the canvas edge to edge (no gutter, radius or shadow): the handles sit inside it.
+  const flush = sizing.width === undefined;
   return (
     <div
       ref={sizing.frameRef}

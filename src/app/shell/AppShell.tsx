@@ -171,8 +171,8 @@ export function AppShell({ app }: { readonly app: ShellView }) {
 // preview keeps the size picked in it. The canvas below keeps listening for the device keys.
 function PreviewModeView({ app, source }: { readonly app: ShellView; readonly source: string }) {
   const translate = useTranslate();
-  const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(app.project.path);
-  const sizing = usePreviewSizing(app.device, app.previewDimensions, breakpoints, { deviceShortcuts: false, desktopFramePx }, app.setDevice);
+  const { resolved: breakpoints } = useProjectBreakpoints(app.project.path);
+  const sizing = usePreviewSizing(app.device, app.previewDimensions, breakpoints, { deviceShortcuts: false }, app.setDevice);
   return (
     <PreviewModeStage sizing={sizing}>
       <iframe ref={app.previewIframeRef} src={source} title={translate('shell.preview.interactiveTitle')} />
