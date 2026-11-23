@@ -116,9 +116,16 @@ test('instrumentation remains only in the Stacki design frame', () => {
 test('scripts retain ordering, multiplicity, and loading attributes', () => {
   const first = '<script type="module" src="/first.js"></script>';
   const second = '<script type="module" src="/second.js"></script>';
-  assert.equal(morph.addedScripts(tree(first + second), tree(second + first)), undefined);
-  assert.equal(morph.addedScripts(tree(first + first), tree(first)), undefined);
-  assert.equal(morph.addedScripts(tree(first), tree(first + first)), undefined);
+  // An external module runs once per URL, so its order and its count do not matter: nothing is added, nothing reloads.
+  assert.deepEqual(morph.addedScripts(tree(first + second), tree(second + first)), []);
+  assert.deepEqual(morph.addedScripts(tree(first + first), tree(first)), []);
+  assert.deepEqual(morph.addedScripts(tree(first), tree(first + first)), []);
+  assert.equal(morph.addedScripts(tree(first + second), tree(second)), undefined, 'a module that is gone cannot be un-run');
+  // Every other script keeps its order and count: a reorder or a second execution cannot be patched.
+  const classicFirst = '<script src="/classic-first.js"></script>';
+  const classicSecond = '<script src="/classic-second.js"></script>';
+  assert.equal(morph.addedScripts(tree(classicFirst + classicSecond), tree(classicSecond + classicFirst)), undefined);
+  assert.equal(morph.addedScripts(tree(classicFirst), tree(classicFirst + classicFirst)), undefined);
   assert.equal(morph.addedScripts(tree(first), tree(first.replace('type="module"', 'type="module" integrity="new"'))), undefined);
   assert.deepEqual(morph.addedScripts(tree(first), tree('<script src="/first.js" type="module"></script>')), []);
 
