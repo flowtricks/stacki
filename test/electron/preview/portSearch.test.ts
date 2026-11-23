@@ -38,8 +38,28 @@ test('reserved ranges remain bounded and unexpected socket failures propagate', 
     return this;
   });
   await assert.rejects(findFreePort(49821), /No available preview port within the search limit/);
-  assert.equal(listen.mock.callCount(), MAIN_LIMITS.portAttemptsMax);
+  // The bounded search, then one request to the system for a port of its own choosing.
+  assert.equal(listen.mock.callCount(), MAIN_LIMITS.portAttemptsMax + 1);
   code = 'EMFILE';
   await assert.rejects(findFreePort(49821), { code: 'EMFILE' });
-  assert.equal(listen.mock.callCount(), MAIN_LIMITS.portAttemptsMax + 1);
+  assert.equal(listen.mock.callCount(), MAIN_LIMITS.portAttemptsMax + 2);
+});
+
+test('a fully reserved range falls back to a port the system chooses', async (context) => {
+  const original = net.Server.prototype.listen;
+  const requested: unknown[] = [];
+  context.mock.method(net.Server.prototype, 'listen', function (this: net.Server, ...args: unknown[]) {
+    requested.push(args[0]);
+    if (args[0] === 0) {
+      const result: unknown = Reflect.apply(original, this, args);
+      assert.ok(result === this, 'listen returns its server');
+      return this;
+    }
+    queueMicrotask(() => this.emit('error', Object.assign(new Error('Reserved'), { code: 'EACCES' })));
+    return this;
+  });
+  const port = await findFreePort(49821);
+  assert.ok(port > 0 && port < 65536);
+  assert.equal(requested.at(-1), 0);
+  assert.equal(requested.length, MAIN_LIMITS.portAttemptsMax + 1);
 });

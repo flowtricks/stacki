@@ -301,7 +301,33 @@ export async function findFreePort(start: number): Promise<number> {
       return port;
     }
   }
+  // Windows (Hyper-V, WSL, Docker) can reserve a block of hundreds of ports at once, so a search that
+  // starts inside one never leaves it. Ports the system hands out itself are never in a reserved block.
+  const assigned = await findSystemAssignedPort();
+  if (assigned !== undefined) {
+    return assigned;
+  }
   throw new Error('No available preview port within the search limit');
+}
+
+// One port chosen by the operating system, or undefined when it refuses; other socket failures propagate.
+function findSystemAssignedPort(): Promise<number | undefined> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+        resolve(undefined);
+      } else {
+        reject(error);
+      }
+    });
+    server.once('listening', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : undefined;
+      server.close(() => resolve(port));
+    });
+    server.listen(0, '127.0.0.1');
+  });
 }
 
 export function findFreePortProbe(port: number): Promise<boolean> {
