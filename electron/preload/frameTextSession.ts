@@ -11,12 +11,18 @@ interface ActiveText {
   readonly editor: NonNullable<ReturnType<typeof openNativeText>>;
 }
 
+// How long after an editor opens the page's own movement (a scroll or resize the open itself caused: layout settling,
+// the app resizing the frame to the page height) is not taken as the person leaving. A person scrolling or resizing
+// takes longer than this to begin. Unverified against the reported case: a defensive bound, pinned by canvasSlotTextFocusChromium.test.js.
+export const OPEN_SETTLE_MS = 400;
+
 export function createCanvasTextSession(post: (message: unknown) => void) {
   let catalog: CanvasTextCatalog | undefined;
   let active: ActiveText | undefined;
   // What is being typed in, and where: its words may no longer match the catalog's.
   let typing: { readonly key: string; readonly element: Element } | undefined;
   let focus: ReadonlySet<string> = new Set();
+  let openedAtMs = -Infinity;
   const finish = (action: 'apply' | 'cancel') => active?.editor.finish(action);
   return {
     catalog: () => catalog,
@@ -25,6 +31,13 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
     editingElement: () => (active ? typing?.element : undefined),
     contains: (event: MouseEvent) => active?.editor.contains(event) ?? false,
     dismiss: () => finish('apply'),
+    // A scroll or resize ends the edit, unless it is the open's own settling.
+    dismissOnMovement: () => {
+      assert(OPEN_SETTLE_MS > 0, 'The settle window is positive');
+      if (performance.now() - openedAtMs >= OPEN_SETTLE_MS) {
+        finish('apply');
+      }
+    },
     reconcile: () => {
       if (active && stale(active)) {
         finish('cancel');
@@ -75,6 +88,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
         },
       });
       if (editor) {
+        openedAtMs = performance.now();
         active = { catalog: current, editor };
         typing = { key: target.key, element: match.element };
         stopSelection = reportTextSelection({ catalog: current, opened, root: textEditorRoot(match), editor }, post);

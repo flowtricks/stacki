@@ -100,8 +100,8 @@ export function installCanvasText(
   );
   window.addEventListener('click', click, true);
   window.addEventListener('dblclick', click, true);
-  window.addEventListener('scroll', session.dismiss, true);
-  window.addEventListener('resize', session.dismiss);
+  window.addEventListener('scroll', session.dismissOnMovement, true);
+  window.addEventListener('resize', session.dismissOnMovement);
   document.addEventListener('avb:morphed', session.reconcile);
 }
 
