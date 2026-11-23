@@ -78,14 +78,16 @@ const EDGE = 8;
 // gaps), and no wider: filling the panel made a dialog the size of the sheet it
 // was opened over.
 const IDEAL_WIDTH = 480;
-function framedStyle(frame: { left: number; width: number }): { left: number; width: number } {
+function framedStyle(frame: { left: number; width: number }): { left: number; width: number; maxWidth: number } {
   const room = (typeof window === 'undefined' ? 0 : window.innerWidth) || frame.width || IDEAL_WIDTH;
   const panel = frame.width || room;
   const width = Math.max(320, Math.min(IDEAL_WIDTH, panel - EDGE * 2, room - EDGE * 2));
   // Centred in the panel it belongs to, then kept inside the window.
   const centred = (frame.left || 0) + (panel - width) / 2;
   const left = Math.max(EDGE, Math.min(centred, room - width - EDGE));
-  return { left, width };
+  // `maxWidth` too: a sheet's stylesheet caps it at the Style panel's width, which a collapsed panel
+  // reports as 0px, and a framed sheet drew as a 2px hairline. The frame is the box that owns its width.
+  return { left, width, maxWidth: width };
 }
 
 const bezEq = (left: Bezier, right: Bezier) => left.every((coordinate, i) => Math.abs(coordinate - (right[i] ?? 0)) < 0.005);

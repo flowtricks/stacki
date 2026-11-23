@@ -524,9 +524,21 @@ function usePanelBounds(hostRef: React.RefObject<HTMLDivElement>): void {
     if (!element) {
       return;
     }
+    const withdraw = (): void => {
+      for (const name of PANEL_BOUNDS_PROPERTIES) {
+        document.documentElement.style.removeProperty(name);
+      }
+    };
     const publish = (): void => {
       const bounds = element.getBoundingClientRect();
       const style = document.documentElement.style;
+      // A panel that is not drawn (collapsed, hidden) has no box. Publishing its 0px width capped every
+      // sheet at 0px (`max-width: var(--style-panel-width)`), so a sheet opened from a code chip drew
+      // as a hairline. Unpublished, the sheets fall back to the window's own size.
+      if (bounds.width <= 0 || bounds.height <= 0) {
+        withdraw();
+        return;
+      }
       style.setProperty('--style-panel-left', `${bounds.left}px`);
       style.setProperty('--style-panel-top', `${bounds.top}px`);
       style.setProperty('--style-panel-width', `${bounds.width}px`);
@@ -539,9 +551,13 @@ function usePanelBounds(hostRef: React.RefObject<HTMLDivElement>): void {
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', publish);
+      // A panel that is gone leaves no box behind for the sheets to be sized by.
+      withdraw();
     };
   }, [hostRef]);
 }
+
+const PANEL_BOUNDS_PROPERTIES = ['--style-panel-left', '--style-panel-top', '--style-panel-width', '--style-panel-height'] as const;
 
 function playButtonNote(event: React.MouseEvent<HTMLDivElement>): void {
   const target = event.target;
