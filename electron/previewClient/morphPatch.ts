@@ -3,7 +3,7 @@
 // subsequence, live nodes found past whatever the client added, and only
 // what the two renderings disagree about written.
 
-import { isAnchor, asElement, asText, asComment } from './morphNodes';
+import { isAnchor, MORPH_LIMITS, asElement, asText, asComment } from './morphNodes';
 
 // Never looked inside. A dev stylesheet belongs to Vite, which swaps it in by
 // data-vite-dev-id; an external script re-runs if it is re-inserted, which is
@@ -538,10 +538,18 @@ export function patchChildren(liveParent: Element, previousParent: Element, next
   }
 
   let live = liveParent.firstChild;
-  const locate = (serverNode: Node): Node => {
+  // A text or comment the server rendered may be gone from the live page: a script that splits a
+  // label into lines or words, or trims the whitespace between its pieces, leaves none of the
+  // server's text nodes. Nothing is left to patch there, which is what "client code that rewrote
+  // this text keeps it" already says (patchNode), so that is a skip. Reloading for it replayed the
+  // page's intro on a prop edit (a Button's arrow inside a script-adopted hero). An element that is
+  // not among the live siblings may have been moved by a script (an adopted hero hands its server
+  // nodes to its own layout): its editor marker finds it wherever it went (relocated). Only an
+  // element found by neither is a reason to give up: patching its neighbour would be a bug.
+  const locate = (serverNode: Node): Node | undefined => {
     const target = findLive(live ?? undefined, serverNode);
-    if (!target) {
-      throw Ambiguous(describe(serverNode));
+    if (!target && asElement(serverNode) && relocated(serverNode) === undefined && !hasMarker(serverNode)) {
+      throw Ambiguous(describe(serverNode) + ' (in ' + describe(liveParent) + ')');
     }
     return target;
   };
@@ -556,6 +564,10 @@ export function patchChildren(liveParent: Element, previousParent: Element, next
         throw Ambiguous('index gap in diff');
       }
       const target = locate(previousNode);
+      if (target === undefined) {
+        patchAway(previousNode, nextNode, 0);
+        continue;
+      }
       patchNode(target, previousNode, nextNode);
       live = target.nextSibling;
     } else if (kind === -1) {
@@ -564,6 +576,16 @@ export function patchChildren(liveParent: Element, previousParent: Element, next
         throw Ambiguous('index gap in diff');
       }
       const target = locate(previousNode);
+      if (target === undefined) {
+        if (asElement(previousNode)) {
+          const moved = relocated(previousNode);
+          if (moved === undefined) {
+            throw Ambiguous(describe(previousNode) + ' (in ' + describe(liveParent) + ')');
+          }
+          moved.remove();
+        }
+        continue;
+      }
       if (live === target) {
         live = target.nextSibling;
       }
@@ -579,9 +601,66 @@ export function patchChildren(liveParent: Element, previousParent: Element, next
   }
 }
 
+// The live element a server element stands for when a script moved it out of its parent: the one
+// element of the page carrying the same editor path (data-avb-p names the file and the node, and the
+// live copy keeps what the server rendered). None or more than one is no answer.
+const MARKER_CHARS_MAX = 2048;
+const elementOf = (node: Node): Element | undefined => (asElement(node) ? node : undefined);
+function markerOf(node: Node): string | undefined {
+  const marker = elementOf(node)?.getAttribute('data-avb-p');
+  return marker !== null && marker !== undefined && marker.length > 0 && marker.length <= MARKER_CHARS_MAX ? marker : undefined;
+}
+function hasMarker(node: Node): boolean {
+  return markerOf(node) !== undefined;
+}
+function relocated(serverNode: Node): Element | undefined {
+  const marker = markerOf(serverNode);
+  if (marker === undefined) {
+    return undefined;
+  }
+  const found = document.querySelectorAll('[data-avb-p="' + marker.replace(/["\\]/g, '\\$&') + '"]');
+  const only = found.length === 1 ? found[0] : undefined;
+  return only !== undefined && only.tagName === elementOf(serverNode)?.tagName ? only : undefined;
+}
+
+// A server element that is not where the server put it. Found by its marker, it is patched where it
+// is. Absent altogether (a script dismantled its parent), what changed lies in its descendants, so
+// they are looked for the same way; a change to the absent element's own attributes or to its list
+// of children has nowhere to land, and that is the reload.
+function patchAway(previous: Node, next: Node, depth: number): void {
+  if (depth > MORPH_LIMITS.domDepthMax) {
+    throw Ambiguous('a subtree nested deeper than the patch walks');
+  }
+  const previousElement = elementOf(previous);
+  const nextElement = elementOf(next);
+  if (previousElement === undefined || nextElement === undefined) {
+    return; // Text or a comment that is gone has nothing to patch.
+  }
+  const moved = relocated(previousElement);
+  if (moved !== undefined) {
+    patchNode(moved, previousElement, nextElement);
+    return;
+  }
+  if (previousElement.isEqualNode(nextElement)) {
+    return;
+  }
+  const before = Array.from(previousElement.childNodes);
+  const after = Array.from(nextElement.childNodes);
+  for (const [kind, i, j] of diffChildren(before.map(keyFor), after.map(keyFor))) {
+    const previousChild = i >= 0 ? before[i] : undefined;
+    const nextChild = j >= 0 ? after[j] : undefined;
+    if (kind === 0 && previousChild !== undefined && nextChild !== undefined) {
+      patchAway(previousChild, nextChild, depth + 1);
+    } else if ((previousChild !== undefined && asElement(previousChild)) || (nextChild !== undefined && asElement(nextChild))) {
+      throw Ambiguous(describe(previousElement) + ' children (' + describe(previousElement) + ' is not on the live page)');
+    }
+  }
+}
+
 const describe = (node: Node): string => {
   if (asElement(node)) {
-    return '<' + node.tagName.toLowerCase() + '>';
+    const className = node.getAttribute('class');
+    return '<' + node.tagName.toLowerCase() + (className ? '.' + className.trim().split(/\s+/).slice(0, 3).join('.') : '') + '>';
   }
   if (asComment(node)) {
     return 'marker ' + node.data;

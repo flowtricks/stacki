@@ -123,11 +123,23 @@ type ReloadReason = 'scripts-changed' | 'patch-failed';
 
 // A reload is honest: the app hears why before the page goes, so the canvas
 // shows that it lost its running state on purpose, not by accident.
-function reloadFor(reason: ReloadReason): void {
+//
+// A reload also leaves one line in the dev server's log (stdout, so the preview's own log shows it):
+// every reload replays the page's intro and drops its state, and a report of "it reloads" needs the
+// reason to be diagnosed. A keepalive fetch to the page's own dev server, because it must outlive the page that sends it
+// (Studio ships this file and its no-tracking scan forbids the beacon API; the request never leaves the dev server).
+const RELOAD_DETAIL_CHARS_MAX = 240;
+function reloadFor(reason: ReloadReason, detail: string): void {
   try {
     window.parent.postMessage({ type: 'avb:preview-reload', reason }, '*');
   } catch {
     /* no parent to tell */
+  }
+  try {
+    const line = reason + ': ' + detail.slice(0, RELOAD_DETAIL_CHARS_MAX);
+    fetch('/__avb/reload?r=' + encodeURIComponent(line), { cache: 'no-store', keepalive: true }).catch(() => undefined);
+  } catch {
+    /* the log line is a courtesy; the reload is not */
   }
   location.reload();
 }
@@ -243,7 +255,7 @@ async function update(): Promise<void> {
       // throw it caused skipped the reload line below, which is the whole point
       // of the catch. Log and reload.
       console.error('[stacki] could not patch the page, reloading:', error);
-      reloadFor('patch-failed');
+      reloadFor('patch-failed', error instanceof Error ? error.message : String(error));
       return;
     }
   } finally {
@@ -264,7 +276,7 @@ function applyRendering(next: FetchedDocument): void {
   }
   const added = addedScripts(previousDocument, next.clean);
   if (added === undefined) {
-    reloadFor('scripts-changed');
+    reloadFor('scripts-changed', 'a script that already ran changed, went away, or an inline one arrived');
     return;
   }
   const liveRoot = document.documentElement;

@@ -662,6 +662,18 @@ const avbMorph = {
       }
       return ownEmit(event, file, ...rest);
     };
+    // The canvas says why it reloaded instead of patching (morphClient.ts reloadFor): one bounded line
+    // on the server's stdout, which the preview's log keeps. Nothing is written to the project.
+    server.middlewares.use('/__avb/reload', (req, res) => {
+      const reason = new URL(req.url || '/', 'http://localhost').searchParams.get('r') || '';
+      let line = '';
+      for (const ch of reason.slice(0, 300)) {
+        line += ch.charCodeAt(0) < 32 ? ' ' : ch;
+      }
+      console.log('[stacki] canvas reloaded instead of patching (' + line + ')');
+      res.statusCode = 204;
+      res.end();
+    });
     server.middlewares.use('/__avb/touch', (req, res) => {
       const asked = new URL(req.url || '/', 'http://localhost').searchParams.get('f') || '';
       // Both sides by their real paths: a project under a symlinked folder (macOS /var, a linked workspace)
