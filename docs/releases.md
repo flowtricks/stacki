@@ -47,6 +47,25 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.16
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.16.
+- **Features**
+  - ai: screenshots capture canvas outlines and the hover pin
+  - ai: recording keeps its scrim; scrubber triangle; 16 frames
+  - ai: show thumbnails of the screenshots a message sent
+  - style: hover a variable in the picker to preview it on the canvas
+- **Fixes**
+  - settings: Settings no longer crashes before the AI panel opens
+  - preview: one owner per outline on closed components and text
+  - preview: place the caret on a heading's empty-corner double click
+  - preview: morph moved and removed nodes; log why a page reloads
+  - navigator: show the drop refusal as a toast and tooltip
+  - code: the style and code editor window stays open
+  - style: Enter keeps the focus in Style and Props inputs
+  - style: the easing popup is as wide as its field
+  - style: the CSS variable chooser reads the property correctly
+
 ## 1.4.15
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.15.
