@@ -1,13 +1,14 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type MutableRefObject, type ReactNode } from 'react';
 import type { Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { assert } from '../../../../shared/core/assert';
-import { codeSlotAt, type CodeTypedVariable } from '../model/codeVariableScope';
+import { codeSlotAt, declarationValueWith, type CodeTypedVariable } from '../model/codeVariableScope';
 import { rootSwatchScope, SwatchScopeContext } from '../model/computedColor';
 import { declaredPropertyAt } from '../model/panelVariableList';
 import { usePanelListing } from '../usePanelListing';
 import type { ProjectVariable } from '../model/webflow';
 import { VariablePicker, type PickerNavigation } from '../VariablePicker';
+import { useChipPreview } from './chipPreview';
 import {
   chipTypedCompletion,
   chipTypingExtension,
@@ -90,20 +91,71 @@ export function useChipTyping(text: CssChipText | undefined, catalog: { readonly
   const overlay =
     following === undefined || anchor === undefined ? undefined : (
       <SwatchScopeContext.Provider value={swatchScope}>
-        <VariablePicker
+        <TypedPicker
           anchor={anchor}
           vars={listing === undefined ? vars : [...listing.variables]}
           loading={loading}
-          {...(listing === undefined ? {} : { panel: { blocks: listing.blocks } })}
-          {...(following.typed.prop === undefined ? {} : { prop: following.typed.prop })}
-          {...slotOf(following)}
-          typing={{ query: following.typed.typed.query, navigationRef }}
+          panel={listing === undefined ? undefined : { blocks: listing.blocks }}
+          following={following}
+          navigationRef={navigationRef}
           onPick={pick}
           onClose={dismiss}
         />
       </SwatchScopeContext.Provider>
     );
   return { extension, overlay };
+}
+
+// The chooser under the caret. Hovering or arrowing a row shows that variable in the declaration on the
+// canvas (chipPreview.ts) while the typed text stays the editor's own; the pick is the only write. Its own
+// component so the preview lives exactly as long as the chooser: closing it takes the preview back.
+function TypedPicker({
+  anchor,
+  vars,
+  loading,
+  panel,
+  following,
+  navigationRef,
+  onPick,
+  onClose,
+}: {
+  readonly anchor: HTMLElement;
+  readonly vars: ProjectVariable[];
+  readonly loading: boolean;
+  readonly panel: ComponentProps<typeof VariablePicker>['panel'] | undefined;
+  readonly following: Following;
+  readonly navigationRef: MutableRefObject<PickerNavigation | undefined>;
+  readonly onPick: (binding: string) => void;
+  readonly onClose: () => void;
+}) {
+  const { typed } = following.typed;
+  // The declaration as it would read once `binding` replaced the fragment typed so far, from the editor's live text.
+  const valueWith = (binding: string): string | undefined => {
+    const text = following.view.state.doc.toString();
+    const edit = chipTypedCompletion(text, following.typed, binding);
+    return declarationValueWith(text, following.typed, edit.insert)?.trim();
+  };
+  const preview = useChipPreview({ property: following.typed.prop, valueWith }, { exits: 'window' });
+  return (
+    <VariablePicker
+      anchor={anchor}
+      vars={vars}
+      loading={loading}
+      {...(panel === undefined ? {} : { panel })}
+      {...(following.typed.prop === undefined ? {} : { prop: following.typed.prop })}
+      {...slotOf(following)}
+      typing={{ query: typed.query, navigationRef }}
+      previewWhileTyping="canvas"
+      onPreview={preview.onPreview}
+      previewEpoch={preview.previewEpoch}
+      onPreviewEnd={preview.onPreviewEnd}
+      onPick={(binding) => {
+        preview.handOver(binding);
+        onPick(binding);
+      }}
+      onClose={onClose}
+    />
+  );
 }
 
 // While the chooser follows typing, ↑ and ↓ move through it, Enter and Tab take the marked variable,

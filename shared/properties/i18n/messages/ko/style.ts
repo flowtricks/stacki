@@ -727,6 +727,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value}({file}의 {selector}에 선언됨)',
   'style.variablePicker.declaredOn': '{name}: {value}({selector}에 선언됨)',
   'style.variablePicker.localScope': '이 요소',
+  'style.variablePicker.previewFailed': '해당 변수를 캔버스에서 미리 볼 수 없습니다.',
   'style.variablePicker.noVariables': '변수를 찾을 수 없습니다.',
   'style.variablePicker.notValidForProperty': '이 속성에 유효한 값이 아닙니다',
   'style.variablePicker.otherGroup': '기타',

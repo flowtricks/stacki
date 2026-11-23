@@ -735,6 +735,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} (declarado en {file} sobre {selector})',
   'style.variablePicker.declaredOn': '{name}: {value} (declarado sobre {selector})',
   'style.variablePicker.localScope': 'Este elemento',
+  'style.variablePicker.previewFailed': 'No se pudo previsualizar esa variable en el lienzo.',
   'style.variablePicker.noVariables': 'No se encontraron variables.',
   'style.variablePicker.notValidForProperty': 'No es un valor válido para esta propiedad',
   'style.variablePicker.otherGroup': 'Otras',

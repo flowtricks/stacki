@@ -96,7 +96,7 @@ export type PreviewProp = (prop: string | readonly string[], value: string | und
 
 // Outside a style card (the audits, the variables sheet) there is nothing on the canvas to preview on:
 // the control shows the preview and nothing else does.
-const previewNowhere: PreviewProp = () => undefined;
+export const previewNowhere: PreviewProp = () => undefined;
 
 /** The style card's canvas-only preview, for the controls inside it (StyleCard provides it). */
 export const PreviewPropContext = createContext<PreviewProp>(previewNowhere);

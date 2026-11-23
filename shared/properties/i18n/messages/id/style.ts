@@ -728,6 +728,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} (dideklarasikan di {file} pada {selector})',
   'style.variablePicker.declaredOn': '{name}: {value} (dideklarasikan pada {selector})',
   'style.variablePicker.localScope': 'Elemen ini',
+  'style.variablePicker.previewFailed': 'Tidak dapat menampilkan pratinjau variabel itu di kanvas.',
   'style.variablePicker.noVariables': 'Tidak ada variabel.',
   'style.variablePicker.notValidForProperty': 'Bukan nilai yang valid untuk properti ini',
   'style.variablePicker.otherGroup': 'Lainnya',

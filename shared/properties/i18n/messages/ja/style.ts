@@ -727,6 +727,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}：{value}（{file} の {selector} で宣言）',
   'style.variablePicker.declaredOn': '{name}：{value}（{selector} で宣言）',
   'style.variablePicker.localScope': 'この要素',
+  'style.variablePicker.previewFailed': 'その変数をキャンバスでプレビューできませんでした。',
   'style.variablePicker.noVariables': '変数が見つかりません。',
   'style.variablePicker.notValidForProperty': 'このプロパティでは有効な値ではありません',
   'style.variablePicker.otherGroup': 'その他',

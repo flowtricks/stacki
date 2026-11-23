@@ -721,6 +721,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}：{value}（在 {file} 的 {selector} 上声明）',
   'style.variablePicker.declaredOn': '{name}：{value}（在 {selector} 上声明）',
   'style.variablePicker.localScope': '此元素',
+  'style.variablePicker.previewFailed': '无法在画布上预览该变量。',
   'style.variablePicker.noVariables': '未找到变量。',
   'style.variablePicker.notValidForProperty': '不是此属性的有效值',
   'style.variablePicker.otherGroup': '其他',

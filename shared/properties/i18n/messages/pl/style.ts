@@ -742,6 +742,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} (zadeklarowano w {file} na {selector})',
   'style.variablePicker.declaredOn': '{name}: {value} (zadeklarowano na {selector})',
   'style.variablePicker.localScope': 'Ten element',
+  'style.variablePicker.previewFailed': 'Nie udało się wyświetlić podglądu tej zmiennej na kanwie.',
   'style.variablePicker.noVariables': 'Nie znaleziono zmiennych.',
   'style.variablePicker.notValidForProperty': 'To nie jest poprawna wartość dla tej właściwości',
   'style.variablePicker.otherGroup': 'Inne',

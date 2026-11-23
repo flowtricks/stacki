@@ -737,6 +737,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} ({file} में {selector} पर घोषित)',
   'style.variablePicker.declaredOn': '{name}: {value} ({selector} पर घोषित)',
   'style.variablePicker.localScope': 'यह एलिमेंट',
+  'style.variablePicker.previewFailed': 'कैनवास पर उस वेरिएबल का प्रीव्यू नहीं दिखाया जा सका।',
   'style.variablePicker.noVariables': 'कोई वेरिएबल नहीं मिला।',
   'style.variablePicker.notValidForProperty': 'इस प्रॉपर्टी के लिए मान्य मान नहीं',
   'style.variablePicker.otherGroup': 'अन्य',

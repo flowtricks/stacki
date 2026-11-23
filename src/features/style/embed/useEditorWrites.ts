@@ -9,11 +9,8 @@ import { saveEmbedSource } from '../model/toolPreferences';
 import { hslaToRgba } from '../model/colorWrite';
 import { writtenValue } from '../model/lengthUnit';
 import { contextKeyOf, ruleOnLayer } from '../model/resolved';
-import { parseImportant } from '../model/styleDisplay';
-import { HOVER_STYLE_LIMITS, HOVER_STYLE_MESSAGE, parseHoverStyleMessage, type HoverDeclaration } from '../../../../shared/properties/liveRules';
 import { hoverStyle } from '../model/liveRuleEdits';
-import { assert } from '../../../../shared/core/assert';
-import { getHost } from '../model/host';
+import { canvasPreviewProp, type CanvasPreviewContext } from './canvasPreview';
 import type { PreviewProp } from '../connectFieldHelpers';
 import { pseudoPickPending, usePanelLayer } from './editorModel';
 import type { ParsedRule } from '../model/styleTypes';
@@ -255,63 +252,10 @@ export function useLiveSetProp(
 // can never race a write. Fields and dropdowns reach it through PreviewPropContext with liveSetProp's own
 // shape, so a hover-scrub that used to call liveSetProp calls this instead; `undefined` takes it back. A
 // state or pseudo-element context has no element to show it on: there the control alone shows it.
-function useCanvasPreview({ stateKey, activeSelector }: { readonly stateKey: string; readonly activeSelector: string | undefined }): PreviewProp {
+function useCanvasPreview(context: CanvasPreviewContext): PreviewProp {
   // Leaving the panel with a preview still up (a project switch) puts the element's own style back.
   useEffect(() => () => hoverStyle.clear(hoverStyle.showing()), []);
-  return (propOrProps, typed, important) => {
-    const props: readonly string[] = typeof propOrProps === 'string' ? [propOrProps] : propOrProps;
-    assert(props.length > 0, 'Canvas preview: a preview names a property');
-    const shown = typed === undefined ? undefined : hoverDeclarationsOf(props, typed, { important, stateKey, activeSelector });
-    if (shown === undefined) {
-      hoverStyle.clear(props);
-      return;
-    }
-    hoverStyle.show(shown.path, shown.declarations);
-    assert(hoverStyle.showing().length === shown.declarations.length, 'Canvas preview: the shown properties are remembered');
-  };
-}
-
-// What the frame shows for `typed` on the selected element, or undefined when there is nowhere to show
-// it: no selection, a value a property does not take, a state or pseudo-element context.
-function hoverDeclarationsOf(
-  props: readonly string[],
-  typed: string,
-  { important, stateKey, activeSelector }: { readonly important: boolean; readonly stateKey: string; readonly activeSelector: string | undefined },
-): { readonly path: string; readonly declarations: readonly HoverDeclaration[] } | undefined {
-  if (stateKey.length > 0) {
-    return undefined;
-  }
-  if (activeSelector !== undefined) {
-    if (activeSelector.includes('::')) {
-      return undefined;
-    }
-  }
-  const host = getHost();
-  const nodeId = host.selectedId;
-  if (nodeId === undefined) {
-    return undefined;
-  }
-  const path = host.pathOf?.(nodeId);
-  if (path === undefined) {
-    return undefined;
-  }
-  // A field's text may carry its own flag (`12px !important`); a dropdown passes it apart.
-  const parsed = parseImportant(typed.trim());
-  const declarations: HoverDeclaration[] = [];
-  for (const prop of props.slice(0, HOVER_STYLE_LIMITS.declarationsMax)) {
-    const value = writtenValue(prop, parsed.value);
-    if (value.length === 0) {
-      return undefined;
-    }
-    // A half-made value is not sent: the frame would drop the declaration and show nothing.
-    if (!isSupportedCssValue(prop, value)) {
-      return undefined;
-    }
-    declarations.push({ property: prop, value, important: important || parsed.important });
-  }
-  // Parsed as the frame will parse it, so the panel never sends what the frame refuses.
-  const message = parseHoverStyleMessage({ type: HOVER_STYLE_MESSAGE, op: 'show', path, declarations });
-  return message?.op === 'show' ? { path: message.path, declarations: message.declarations } : undefined;
+  return canvasPreviewProp(context);
 }
 
 // The source dropdown: every embed, grouped by component.

@@ -733,6 +733,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} ({file} dosyasında, {selector} üzerinde bildirildi)',
   'style.variablePicker.declaredOn': '{name}: {value} ({selector} üzerinde bildirildi)',
   'style.variablePicker.localScope': 'Bu öğe',
+  'style.variablePicker.previewFailed': 'Bu değişkenin tuvalde önizlemesi gösterilemedi.',
   'style.variablePicker.noVariables': 'Değişken bulunamadı.',
   'style.variablePicker.notValidForProperty': 'Bu özellik için geçerli bir değer değil',
   'style.variablePicker.otherGroup': 'Diğer',

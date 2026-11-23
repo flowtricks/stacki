@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, Suspense, useContext, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import type { Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { assert } from '../../../../shared/core/assert';
@@ -24,7 +24,9 @@ import LayerPopover from '../LayerPopover';
 import { ShadowEditor, TextShadowsRow } from '../TextStrokeShadow';
 import { FiltersRow, TransformsRow } from '../TransformsRow';
 import { TransitionsRow } from '../TransitionsRow';
-import { VariablePicker } from '../VariablePicker';
+import { useHoverPreview as usePickerHoverPreview, VariablePicker } from '../VariablePicker';
+import { previewNowhere, PreviewPropContext } from '../connectFieldHelpers';
+import { hoverStyle } from '../model/liveRuleEdits';
 import { useSharedVars } from '../sharedVars';
 import { rootSwatchScope, subscribeRootColors, SwatchScopeContext } from '../model/computedColor';
 import { declaredPropertyAt } from '../model/panelVariableList';
@@ -40,6 +42,7 @@ import '../../../ui/menu.css';
 import { KeywordChipControl, keywordControlOf } from './KeywordChipControl';
 import { isKeywordOf, keywordChoices, type KeywordPropertyName } from './keywordOptions';
 import { useChipTyping } from './ChipTypingChooser';
+import { CANVAS_WRITER, useChipPreview, valueAround } from './chipPreview';
 import { codeChipsExtension, refreshCodeChips, setOpenChip, writeChipValue, type CodeChipHandlers, type CodeChipRequest } from './codeChipsExtension';
 import type { CssChipText, CssValueChip, LayeredProperty } from './cssValueChips';
 import '../embedEditor.css';
@@ -241,13 +244,31 @@ export function useCodeChips(text: CssChipText | undefined, options: { readonly 
     <>
       {open === undefined ? undefined : (
         <ChipPopoverBoundary key={`${open.chip.kind}|${open.chip.from}`} onFailure={close}>
-          <ChipEditor open={open} vars={vars} onClose={close} />
+          <ChipPreviewScope>
+            <ChipEditor open={open} vars={vars} onClose={close} />
+          </ChipPreviewScope>
         </ChipPopoverBoundary>
       )}
       {typing.overlay}
     </>
   );
   return { extension, overlay };
+}
+
+// A code window has no Style card around it, so the panel's controls inside a chip's popup (a dropdown's
+// hover-scrub, a picker's hover) had nowhere to show a hover: this gives them the canvas-only preview,
+// aimed at the selected element (chipPreview.ts). Inside a card, the card's own preview is kept. One
+// still up when the popup goes away is taken back.
+function ChipPreviewScope({ children }: { readonly children: ReactNode }) {
+  const outer = useContext(PreviewPropContext);
+  const provides = outer === previewNowhere;
+  useEffect(() => {
+    if (!provides) {
+      return undefined;
+    }
+    return () => hoverStyle.clear(hoverStyle.showing());
+  }, [provides]);
+  return provides ? <PreviewPropContext.Provider value={CANVAS_WRITER}>{children}</PreviewPropContext.Provider> : children;
 }
 
 // The press that opens a chip, or, on the open chip itself, the press that puts it away.
@@ -377,6 +398,12 @@ function VariableChipEditor({
   const customValue = chip.property === undefined;
   const [self] = useState(() => (customValue ? declaredPropertyAt(open.view.state.doc.toString(), chip.declaration.from) : undefined));
   const listing = usePanelListing({ active: customValue }, self, vars);
+  // Hovering or arrowing a row shows that variable in the declaration on the canvas; the editor's text is
+  // untouched until a pick.
+  const preview = useChipPreview(
+    { property: chip.property, valueWith: (binding) => valueAround(chip, binding, (from, to) => open.view.state.sliceDoc(from, to)) },
+    { exits: 'window' },
+  );
   return (
     <SwatchScopeContext.Provider value={rootSwatchScope(vars)}>
       <VariablePicker
@@ -387,7 +414,11 @@ function VariableChipEditor({
         {...(chip.property === undefined ? {} : { prop: chip.property })}
         selectedBinding={chip.value}
         {...slotProp(open.view, chip)}
+        onPreview={preview.onPreview}
+        previewEpoch={preview.previewEpoch}
+        onPreviewEnd={preview.onPreviewEnd}
         onPick={(binding) => {
+          preview.handOver(binding);
           writeChipValue(open.view, binding);
           onClose();
         }}
@@ -640,7 +671,11 @@ function KeywordChipEditor({ open, property, onClose }: ChipEditorProps & { read
   const translate = useTranslate();
   const [value, setValue] = useState(open.chip.value);
   const current = value.trim().toLowerCase();
+  // Hovering or focusing a row of a listed keyword shows it on the canvas; the text is untouched until a pick.
+  const preview = useChipPreview({ property, valueWith: (keyword) => keyword }, { exits: 'leave' });
+  const hover = usePickerHoverPreview({ onPreview: preview.onPreview, previewEpoch: preview.previewEpoch, onPreviewEnd: preview.onPreviewEnd });
   const pick = (next: string): void => {
+    preview.handOver(next);
     writeChipValue(open.view, next);
     onClose();
   };
@@ -667,11 +702,21 @@ function KeywordChipEditor({ open, property, onClose }: ChipEditorProps & { read
     <ChipPopover open={open} widthPx={CHIP_POPOVER_WIDTH_PX} label={property} onClose={onClose}>
       <div className="code-chip-keywords">
         {list.length > 0 ? (
-          <div className="code-chip-keyword-list" role="listbox" aria-label={property}>
+          <div className="code-chip-keyword-list" role="listbox" aria-label={property} onPointerLeave={() => hover.end({ when: 'now' })}>
             {list.map((option) => {
               const selected = option.value.toLowerCase() === current;
               return (
-                <button key={option.value} type="button" role="option" aria-selected={selected} className="menu-row" onClick={() => pick(option.value)}>
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className="menu-row"
+                  onPointerEnter={() => hover.enter(option.value)}
+                  onFocus={() => hover.enter(option.value)}
+                  onBlur={() => hover.end({ when: 'now' })}
+                  onClick={() => pick(option.value)}
+                >
                   {option.icon === undefined ? undefined : <span className="menu-icon">{option.icon}</span>}
                   <span className="menu-label">{option.text}</span>
                   {selected ? (

@@ -740,6 +740,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} (объявлена в {file} на {selector})',
   'style.variablePicker.declaredOn': '{name}: {value} (объявлена на {selector})',
   'style.variablePicker.localScope': 'Этот элемент',
+  'style.variablePicker.previewFailed': 'Не удалось показать предпросмотр этой переменной на холсте.',
   'style.variablePicker.noVariables': 'Переменные не найдены.',
   'style.variablePicker.notValidForProperty': 'Недопустимое значение для этого свойства',
   'style.variablePicker.otherGroup': 'Другое',

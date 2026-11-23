@@ -737,6 +737,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name} : {value} (déclaré dans {file} sur {selector})',
   'style.variablePicker.declaredOn': '{name} : {value} (déclaré sur {selector})',
   'style.variablePicker.localScope': 'Cet élément',
+  'style.variablePicker.previewFailed': "Impossible d'afficher l'aperçu de cette variable sur le canevas.",
   'style.variablePicker.noVariables': 'Aucune variable trouvée.',
   'style.variablePicker.notValidForProperty': 'Valeur non valide pour cette propriété',
   'style.variablePicker.otherGroup': 'Autres',

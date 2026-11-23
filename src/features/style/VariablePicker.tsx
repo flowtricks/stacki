@@ -78,6 +78,7 @@ export function VariablePicker({
   onPreview,
   previewEpoch = ZERO_EPOCH,
   onPreviewEnd,
+  previewWhileTyping,
   onPick,
   onClose,
   within,
@@ -122,6 +123,12 @@ export function VariablePicker({
   previewEpoch?: () => number;
   /** Hovering ended without a pick (the pointer left the list, the window lost focus): put the value back. */
   onPreviewEnd?: (timing: PreviewEndTiming) => void;
+  /**
+   * Set where the previews are the canvas's alone and never touch what is being typed (a code window's
+   * chooser, whose text is the editor's own): hovering a row and the arrows preview even while `typing`.
+   * The Style panel's fields show a preview in the field itself, which typing would fight, so they leave it out.
+   */
+  previewWhileTyping?: 'canvas';
   onPick: (binding: string) => void;
   onClose: () => void;
 }) {
@@ -232,12 +239,14 @@ export function VariablePicker({
     () => drawingOrder(filtered, listed, offered, { grouped, query, panelBlocks }),
     [filtered, listed, offered, grouped, query, panelBlocks],
   );
-  const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, previewEpoch, onPick);
+  // While typing, the previews are the canvas's alone, or none (see `previewWhileTyping`).
+  const previews = previewsOf({ typing: typing !== undefined, previewWhileTyping }, onPreview);
+  const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, previews, previewEpoch, onPick);
   // With its own search box the arrows move the purple mark itself, from the
   // applied variable to the one being previewed. Following typing, the mark
   // stays on the applied variable and the keyboard row is tinted instead.
   const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
-  const hover = useHoverPreview({ onPreview: typing === undefined ? onPreview : undefined, previewEpoch, onPreviewEnd });
+  const hover = useHoverPreview({ onPreview: previews, previewEpoch, onPreviewEnd });
   const pressGuard = usePressStartedInside(ref);
   const endHover = (): void => hover.end({ when: 'now' });
   useEffect(() => {
@@ -412,7 +421,19 @@ export type PreviewEndTiming = { readonly when: 'now' | 'batched' };
 // winning, and a pending one is cancelled when the pointer leaves or the picker closes,
 // so a stale frame can never re-show a preview after the restore. Hover events are
 // pointer events dispatched by the page; nothing here depends on real pointer hardware.
-function useHoverPreview({
+// Whether previews are offered: always in the picker's own search box, and while typing only where
+// they are the canvas's alone.
+function previewsOf(
+  { typing, previewWhileTyping }: { readonly typing: boolean; readonly previewWhileTyping: 'canvas' | undefined },
+  onPreview: ((binding: string, epoch: number) => void) | undefined,
+): ((binding: string, epoch: number) => void) | undefined {
+  if (typing) {
+    return previewWhileTyping === 'canvas' ? onPreview : undefined;
+  }
+  return onPreview;
+}
+
+export function useHoverPreview({
   onPreview,
   previewEpoch,
   onPreviewEnd,
@@ -1300,7 +1321,7 @@ function usePickerNavigation(
       assert(next < list.length, 'usePickerNavigation: the next row is on the list');
       const binding = list[next]?.dataset['binding'];
       setMarked(binding);
-      if (typing === undefined && binding !== undefined) {
+      if (binding !== undefined) {
         onPreview?.(binding, previewEpoch());
       }
     },

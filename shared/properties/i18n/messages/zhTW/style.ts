@@ -720,6 +720,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}：{value}（宣告於 {file} 的 {selector}）',
   'style.variablePicker.declaredOn': '{name}：{value}（宣告於 {selector}）',
   'style.variablePicker.localScope': '此元素',
+  'style.variablePicker.previewFailed': '無法在畫布上預覽該變數。',
   'style.variablePicker.noVariables': '找不到變數。',
   'style.variablePicker.notValidForProperty': '不是此屬性的有效值',
   'style.variablePicker.otherGroup': '其他',

@@ -733,6 +733,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} (מוגדר ב־{file} ב־{selector})',
   'style.variablePicker.declaredOn': '{name}: {value} (מוגדר ב־{selector})',
   'style.variablePicker.localScope': 'האלמנט הזה',
+  'style.variablePicker.previewFailed': 'לא ניתן להציג תצוגה מקדימה של המשתנה הזה בקנבס.',
   'style.variablePicker.noVariables': 'לא נמצאו משתנים.',
   'style.variablePicker.notValidForProperty': 'אינו ערך תקין עבור המאפיין הזה',
   'style.variablePicker.otherGroup': 'אחר',

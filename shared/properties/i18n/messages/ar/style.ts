@@ -745,6 +745,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} (معرَّف في {file} على {selector})',
   'style.variablePicker.declaredOn': '{name}: {value} (معرَّف على {selector})',
   'style.variablePicker.localScope': 'هذا العنصر',
+  'style.variablePicker.previewFailed': 'تعذّرت معاينة هذا المتغيّر على اللوحة.',
   'style.variablePicker.noVariables': 'لم يُعثر على متغيرات.',
   'style.variablePicker.notValidForProperty': 'ليست قيمة صالحة لهذه الخاصية',
   'style.variablePicker.otherGroup': 'أخرى',

@@ -45,6 +45,7 @@ const check = (what, condition, detail) => {
   const stub = `
     export const onCanvasReady = () => () => {};
     export const hasCanvas = () => !globalThis.__noCanvas;
+    export const tellCanvas = () => false;
     export const queryCanvas = (p, a, b, props) => new Promise((resolve) => {
       globalThis.__answer = () => {
         const computedProps = {};

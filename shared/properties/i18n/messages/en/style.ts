@@ -729,6 +729,7 @@ export const messages = {
   'style.variablePicker.declaredIn': '{name}: {value} (declared in {file} on {selector})',
   'style.variablePicker.declaredOn': '{name}: {value} (declared on {selector})',
   'style.variablePicker.localScope': 'This element',
+  'style.variablePicker.previewFailed': "Couldn't preview that variable on the canvas.",
   'style.variablePicker.noVariables': 'No variables found.',
   'style.variablePicker.notValidForProperty': 'Not a valid value for this property',
   'style.variablePicker.otherGroup': 'Other',
