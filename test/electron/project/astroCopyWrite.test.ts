@@ -138,8 +138,9 @@ test('the copy is the planned project, the original is untouched byte for byte, 
 });
 
 test('a copy that fails part way leaves no target and no temporary folder, and the original stays', async (context) => {
-  if (process.getuid?.() === 0) {
-    context.skip('root reads every file');
+  if (process.getuid?.() === 0 || process.platform === 'win32') {
+    // Root reads every file, and Windows ignores a chmod to 000: neither can make a file unreadable this way.
+    context.skip('a file cannot be made unreadable by its mode here');
     return;
   }
   const site = fixture();
@@ -183,7 +184,8 @@ test('the boundary check refuses a bad name, an existing target, a place inside 
   assert.deepEqual(ask(path.join(site.source, 'css'), 'copy'), { ok: false, error: 'inside-original' });
   assert.deepEqual(ask(path.join(site.parent, 'gone'), 'copy'), { ok: false, error: 'location-missing' });
   assert.deepEqual(ask(path.join(site.source, 'index.html'), 'copy'), { ok: false, error: 'location-missing' });
-  if (process.getuid?.() !== 0) {
+  // A read-only folder by mode: not on Windows, where a folder's mode does not stop a write, nor as root.
+  if (process.getuid?.() !== 0 && process.platform !== 'win32') {
     const locked = path.join(site.parent, 'locked');
     fs.mkdirSync(locked, { mode: 0o555 });
     assert.deepEqual(ask(locked, 'copy'), { ok: false, error: 'location-unwritable' });

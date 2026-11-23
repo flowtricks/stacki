@@ -7,7 +7,7 @@
 // Method: the Desktop button (src/features/preview/phone) is bundled with the confirmation host
 // (test/helpers/phonePreviewEntry.tsx) and mounted in jsdom. window.avb is a fake main that records every
 // dev:setNetwork and answers from a script, and can hold a reply to show the restarting state; the clipboard
-// is a recorder that can refuse. Waits poll the DOM a bounded number of turns, never a fixed pause. Sizes
+// is a recorder that can refuse. Waits poll the DOM at a fixed interval for a bounded count, never a fixed pause. Sizes
 // and overlap need real layout: phoneUrlBarChromium.test.js holds those.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -20,6 +20,7 @@ const { act } = React;
 const { createRoot } = require('react-dom/client');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { installPopupDOM } = require('../../helpers/popupDom.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const directory = repoPath('node_modules/.stacki-test/phone-preview');
 fs.mkdirSync(directory, { recursive: true });
@@ -88,14 +89,17 @@ function setup() {
 }
 
 // Up to 200 turns of the event loop for `predicate` to hold: the fakes answer within a few.
+// Waits on the state, polling at the helper's interval for a bounded count, flushing React before each read: a slow runner gets the
+// time it needs where a fixed number of event-loop turns ran out on Ubuntu.
 async function until(predicate, what) {
-  for (let turn = 0; turn < 200; turn++) {
-    if (predicate()) {
-      return;
-    }
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  }
-  assert.fail(`timed out waiting for ${what}`);
+  await waitFor({
+    what,
+    read: async () => {
+      await act(async () => undefined);
+      return predicate();
+    },
+    until: Boolean,
+  });
 }
 
 const click = (window, element) => act(async () => element.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
