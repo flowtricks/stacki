@@ -122,6 +122,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'This text is computed in {file}: edit it there.',
   'preview.text.source.blocked.concatenation': 'This text is joined from pieces in {file}: edit it there.',
   'preview.text.source.blocked.duplicate': 'Several places print the same words here, so the right one cannot be told apart: edit it in {file}.',
+  'preview.text.source.blocked.loop': "This text is {path}, filled in from each item of a loop: edit it in the collection's source.",
   'preview.text.source.blocked.missing': 'The value {path} is not written in {file}.',
   'preview.text.source.blocked.multiline': 'This text is a YAML value written over several lines in {file}: edit it there.',
   'preview.text.source.blocked.mutable': 'This text comes from a variable that can change (let or var) in {file}: edit it there.',

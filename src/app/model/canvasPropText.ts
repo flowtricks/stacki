@@ -58,7 +58,7 @@ const EDITS_MAX = 1_000;
 export async function canvasPropEdits(document: CanvasTextDocument, context: PropTextContext): Promise<CanvasTextEdit[]> {
   const sites = propSiteReader(context);
   const edits: CanvasTextEdit[] = [];
-  for (const instance of pageInstances(context.nodes).slice(0, INSTANCES_MAX)) {
+  for (const { instance, repeated } of pageInstances(context.nodes).slice(0, INSTANCES_MAX)) {
     if (edits.length >= EDITS_MAX) {
       break;
     }
@@ -74,6 +74,13 @@ export async function canvasPropEdits(document: CanvasTextDocument, context: Pro
       continue;
     }
     for (const site of await sites(component)) {
+      if (repeated) {
+        const looped = loopedBinding(instance, site);
+        if (looped !== undefined) {
+          edits.push(boundPropEdit({ instance, site, followed: looped, scope, label: context.label }));
+        }
+        continue;
+      }
       const followed = await followedBinding(instance, site, context);
       if (followed !== undefined) {
         edits.push(boundPropEdit({ instance, site, followed, scope, label: context.label }));
@@ -89,6 +96,23 @@ export async function canvasPropEdits(document: CanvasTextDocument, context: Pro
   }
   assert(edits.length <= EDITS_MAX + SITES_MAX * 8, 'Prop text stays within its bounds');
   return edits;
+}
+
+// A prop an instance inside a loop sets to an expression (`heading={post.data.title}`): each copy prints its own item's words, so
+// there is no one string to write and the binding is never followed (a name like `post` is the loop's variable, not a module
+// binding that happens to share it). The text is still the instance's: it is marked and hovered like any prop text, and its
+// double click names the expression to edit. A literal in a loop stays no target (its one attribute would stand for every copy).
+function loopedBinding(instance: InstanceNode, site: PropTextSite): BoundPropText | undefined {
+  const attr = 'props' in instance ? instance.props?.[site.prop] : undefined;
+  if (attr?.type !== 'expr') {
+    return undefined;
+  }
+  assert(attr.value.trim() !== '', 'An expression prop names its expression');
+  return {
+    value: '',
+    bound: { kind: 'blocked', expression: attr.value, file: '', reason: 'loop' },
+    apply: () => Promise.reject(new Error('Text from a loop is edited in its collection')),
+  };
 }
 
 // A prop the page sets to a binding: the string it leads to (typing writes there), or why it leads to none (the double click names the file to edit).
@@ -284,21 +308,24 @@ function textRuns(children: readonly InlineNode[]) {
   return runs;
 }
 
-// The page's component instances that render at most once: not inside a loop
-// or an expression, where one attribute would stand for many copies. A branch
-// (`{show && <X />}`) renders its instance once or not at all.
-function pageInstances(nodes: readonly PropNode[]): InstanceNode[] {
-  const found: InstanceNode[] = [];
-  const queue: PropNode[] = [...nodes];
+// The page's component instances that can be marked. `repeated` ones sit inside a loop (`posts.map(...)`), where one attribute
+// stands for many copies: they offer no edit of their own, only the marks of the props bound to data. Instances inside any other
+// expression (`{show && <X />}`) are the page's code and stay out, as before.
+function pageInstances(nodes: readonly PropNode[]): { readonly instance: InstanceNode; readonly repeated: boolean }[] {
+  type Place = 'once' | 'loop' | 'code';
+  const found: { readonly instance: InstanceNode; readonly repeated: boolean }[] = [];
+  const queue: { readonly node: PropNode; readonly place: Place }[] = nodes.map((node) => ({ node, place: 'once' }));
   for (let index = 0; index < queue.length && index < 10_000; index++) {
-    const node = queue[index];
-    if (!node || REPEATS.includes(node.kind)) {
+    const entry = queue[index];
+    if (!entry) {
       continue;
     }
-    if (isInstance(node)) {
-      found.push(node);
+    if (isInstance(entry.node) && entry.place !== 'code') {
+      found.push({ instance: entry.node, repeated: entry.place === 'loop' });
     }
-    queue.push(...childrenOf(node));
+    // A loop wins over the code around it: its copies print whatever sits inside.
+    const place: Place = entry.node.kind === 'map' || entry.place === 'loop' ? 'loop' : REPEATS.includes(entry.node.kind) ? 'code' : entry.place;
+    queue.push(...childrenOf(entry.node).map((node) => ({ node, place })));
   }
   return found;
 }

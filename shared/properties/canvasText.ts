@@ -59,6 +59,8 @@ export interface CanvasTextCatalog {
 export interface CanvasTextBlocked {
   readonly key: string;
   readonly path: string;
+  /** For prop text of a component instance: the page instance it belongs to, so the frame marks it while that instance is selected. */
+  readonly scope?: string;
 }
 
 /** The words of one text, in a save that changes several at once. */
@@ -126,7 +128,7 @@ export function parseCanvasTextCatalog(input: unknown): CanvasTextCatalog {
 function parseBlocked(input: unknown): readonly CanvasTextBlocked[] {
   const blocked = list((entry) => {
     const data = record(entry);
-    return { key: pathText(data['key']), path: pathText(data['path']) };
+    return { key: pathText(data['key']), path: pathText(data['path']), ...(data['scope'] === undefined ? {} : { scope: pathText(data['scope']) }) };
   })(input);
   if (blocked.length > CANVAS_BLOCKED_LIMIT) {
     throw new Error('Too many blocked canvas texts');

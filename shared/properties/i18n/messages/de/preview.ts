@@ -125,6 +125,7 @@ export const messages = {
   'preview.text.source.blocked.concatenation': 'Dieser Text wird in {file} aus mehreren Teilen zusammengesetzt: Bearbeite ihn dort.',
   'preview.text.source.blocked.duplicate':
     'Mehrere Stellen zeigen dieselben Wörter, daher lässt sich die richtige nicht unterscheiden: Bearbeite ihn in {file}.',
+  'preview.text.source.blocked.loop': 'Dieser Text ist {path} und wird aus jedem Eintrag einer Schleife befüllt: Bearbeite ihn in der Quelle der Sammlung.',
   'preview.text.source.blocked.missing': 'Der Wert {path} steht nicht in {file}.',
   'preview.text.source.blocked.multiline': 'Dieser Text ist ein YAML-Wert über mehrere Zeilen in {file}: Bearbeite ihn dort.',
   'preview.text.source.blocked.mutable': 'Dieser Text stammt aus einer veränderbaren Variable (let oder var) in {file}: Bearbeite ihn dort.',

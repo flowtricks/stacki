@@ -123,6 +123,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'Este texto se calcula en {file}: edítalo allí.',
   'preview.text.source.blocked.concatenation': 'Este texto se une a partir de varias piezas en {file}: edítalo allí.',
   'preview.text.source.blocked.duplicate': 'Varios lugares muestran las mismas palabras, así que no se puede distinguir el correcto: edítalo en {file}.',
+  'preview.text.source.blocked.loop': 'Este texto es {path} y se rellena con cada elemento de un bucle: edítalo en el origen de la colección.',
   'preview.text.source.blocked.missing': 'El valor {path} no está escrito en {file}.',
   'preview.text.source.blocked.multiline': 'Este texto es un valor YAML escrito en varias líneas en {file}: edítalo allí.',
   'preview.text.source.blocked.mutable': 'Este texto viene de una variable que puede cambiar (let o var) en {file}: edítalo allí.',

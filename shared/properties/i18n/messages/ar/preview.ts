@@ -121,6 +121,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'يُحسب هذا النص في {file}: عدّله هناك.',
   'preview.text.source.blocked.concatenation': 'يُجمع هذا النص من أجزاء في {file}: عدّله هناك.',
   'preview.text.source.blocked.duplicate': 'تطبع عدة مواضع الكلمات نفسها هنا، فلا يمكن تمييز الموضع الصحيح: عدّله في {file}.',
+  'preview.text.source.blocked.loop': 'هذا النص هو {path} ويُملأ من كل عنصر في حلقة تكرارية: عدّله في مصدر المجموعة.',
   'preview.text.source.blocked.missing': 'القيمة {path} غير مكتوبة في {file}.',
   'preview.text.source.blocked.multiline': 'هذا النص قيمة YAML مكتوبة على عدة أسطر في {file}: عدّله هناك.',
   'preview.text.source.blocked.mutable': 'يأتي هذا النص من متغيّر قابل للتغيير (let أو var) في {file}: عدّله هناك.',

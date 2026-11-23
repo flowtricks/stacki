@@ -331,7 +331,15 @@ async function publishCanvasTextSession(
       catalog: {
         ...catalog,
         targets: editable.map((plan) => plan.target),
-        ...(blocked.length === 0 ? {} : { blocked: blocked.map((plan) => ({ key: plan.target.key, path: plan.target.path })) }),
+        ...(blocked.length === 0
+          ? {}
+          : {
+              blocked: blocked.map((plan) => ({
+                key: plan.target.key,
+                path: plan.target.path,
+                ...(plan.target.scope === undefined ? {} : { scope: plan.target.scope }),
+              })),
+            }),
       },
     });
   }
@@ -539,6 +547,7 @@ const BLOCKED_KEYS: Readonly<Record<BoundTextBlockReason, MessageKey>> = {
   computed: 'preview.text.source.blocked.computed',
   concatenation: 'preview.text.source.blocked.concatenation',
   duplicate: 'preview.text.source.blocked.duplicate',
+  loop: 'preview.text.source.blocked.loop',
   missing: 'preview.text.source.blocked.missing',
   multiline: 'preview.text.source.blocked.multiline',
   mutable: 'preview.text.source.blocked.mutable',

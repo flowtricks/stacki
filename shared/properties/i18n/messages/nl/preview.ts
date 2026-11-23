@@ -124,6 +124,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'Deze tekst wordt berekend in {file}: bewerk hem daar.',
   'preview.text.source.blocked.concatenation': 'Deze tekst wordt in {file} uit stukken samengevoegd: bewerk hem daar.',
   'preview.text.source.blocked.duplicate': 'Meerdere plekken tonen hier dezelfde woorden, dus de juiste is niet te onderscheiden: bewerk hem in {file}.',
+  'preview.text.source.blocked.loop': 'Deze tekst is {path} en wordt gevuld vanuit elk item van een lus: bewerk hem in de bron van de collectie.',
   'preview.text.source.blocked.missing': 'De waarde {path} staat niet in {file}.',
   'preview.text.source.blocked.multiline': 'Deze tekst is een YAML-waarde die in {file} over meerdere regels is geschreven: bewerk hem daar.',
   'preview.text.source.blocked.mutable': 'Deze tekst komt uit een variabele die kan veranderen (let of var) in {file}: bewerk hem daar.',

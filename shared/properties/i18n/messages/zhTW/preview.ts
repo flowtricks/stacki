@@ -121,6 +121,7 @@ export const messages = {
   'preview.text.source.blocked.computed': '此文字是在 {file} 中計算得出的：請在該處編輯。',
   'preview.text.source.blocked.concatenation': '此文字是由 {file} 中的多個片段組合而成：請在該處編輯。',
   'preview.text.source.blocked.duplicate': '這裡有多處輸出相同的文字，無法分辨是哪一處：請在 {file} 中編輯。',
+  'preview.text.source.blocked.loop': '此文字為 {path}，由迴圈中的每個項目填入：請在集合的資料來源中編輯。',
   'preview.text.source.blocked.missing': '{file} 中沒有寫入值 {path}。',
   'preview.text.source.blocked.multiline': '此文字是 {file} 中跨多行撰寫的 YAML 值：請在該處編輯。',
   'preview.text.source.blocked.mutable': '此文字來自 {file} 中可變更的變數（let 或 var）：請在該處編輯。',

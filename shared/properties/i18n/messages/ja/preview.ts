@@ -122,6 +122,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'このテキストは {file} で計算されています。そちらで編集してください。',
   'preview.text.source.blocked.concatenation': 'このテキストは {file} で複数の断片から結合されています。そちらで編集してください。',
   'preview.text.source.blocked.duplicate': '複数の場所が同じ文言を出力しているため、どれか特定できません。{file} で編集してください。',
+  'preview.text.source.blocked.loop': 'このテキストは {path} で、ループの各項目から入力されます。コレクションのソースで編集してください。',
   'preview.text.source.blocked.missing': '値 {path} は {file} に記述されていません。',
   'preview.text.source.blocked.multiline': 'このテキストは {file} で複数行にわたって書かれた YAML 値です。そちらで編集してください。',
   'preview.text.source.blocked.mutable': 'このテキストは {file} の変更可能な変数（let または var）から来ています。そちらで編集してください。',

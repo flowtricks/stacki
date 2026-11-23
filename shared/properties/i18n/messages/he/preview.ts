@@ -121,6 +121,7 @@ export const messages = {
   'preview.text.source.blocked.computed': 'הטקסט הזה מחושב ב-{file}: יש לערוך אותו שם.',
   'preview.text.source.blocked.concatenation': 'הטקסט הזה מורכב מחלקים ב-{file}: יש לערוך אותו שם.',
   'preview.text.source.blocked.duplicate': 'כמה מקומות מדפיסים כאן את אותן מילים, ולכן אי אפשר להבחין בין המקומות: יש לערוך ב-{file}.',
+  'preview.text.source.blocked.loop': 'הטקסט הזה הוא {path} ומתמלא מכל פריט בלולאה: ערכו אותו במקור האוסף.',
   'preview.text.source.blocked.missing': 'הערך {path} לא כתוב ב-{file}.',
   'preview.text.source.blocked.multiline': 'הטקסט הזה הוא ערך YAML שנכתב בכמה שורות ב-{file}: יש לערוך אותו שם.',
   'preview.text.source.blocked.mutable': 'הטקסט הזה מגיע ממשתנה שיכול להשתנות (let או var) ב-{file}: יש לערוך אותו שם.',
