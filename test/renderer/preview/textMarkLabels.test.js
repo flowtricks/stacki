@@ -34,6 +34,13 @@ dom.window.Element.prototype.getBoundingClientRect = function boxOf() {
   return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
 };
 
+// jsdom's Range has no layout. The marks measure the words themselves with a Range, so a Range reports the box of the
+// element holding the words it starts in: the same boxes the elements above report, which is what a bare word fills.
+dom.window.Range.prototype.getBoundingClientRect = function boxOfWords() {
+  const holder = this.startContainer.nodeType === 1 ? this.startContainer : this.startContainer.parentElement;
+  return holder.getBoundingClientRect();
+};
+
 const targets = ['Title', 'Build your brand', 'Two files', 'Build class only', 'Start building'].map((value, index) => ({
   kind: 'component',
   label: 'Edit text',

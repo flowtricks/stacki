@@ -42,6 +42,11 @@ const boxOf = (element) => {
 window.Element.prototype.getBoundingClientRect = function box() {
   return boxOf(this);
 };
+// A range around words is the box they are drawn in: their element's `data-words`, else its own box (words fill it).
+window.Range.prototype.getBoundingClientRect = function wordsBox() {
+  const holder = this.startContainer.nodeType === 1 ? this.startContainer : this.startContainer.parentElement;
+  return boxOf({ getAttribute: (name) => (name === 'data-box' ? (holder.getAttribute('data-words') ?? holder.getAttribute('data-box')) : undefined) });
+};
 // The innermost element whose box holds the point, as the browser's hit test answers.
 document.elementFromPoint = (x, y) => {
   const inside = [...document.querySelectorAll('[data-box]')].filter((element) => {

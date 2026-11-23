@@ -16,6 +16,7 @@
 
 import type { CanvasTextBlocked, CanvasTextCatalog, CanvasTextTarget } from '../../shared/properties/canvasText';
 import { assert } from '../../shared/core/assert';
+import { ownershipOf, type Ownership } from '../../shared/properties/outlineOwnership';
 import { isEditableThroughProps, textReach } from '../../shared/properties/closedComponentReach';
 import { elementsWithPath, pathsOf, runsOf } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
@@ -152,7 +153,7 @@ function markedNow(source: MarkSource): TextMatchAt[] {
   // outline or tag is drawn over the selection's. A root that frames its words
   // (a Button's `<a>` with padding around its slot) is not its words: they get
   // their own outline, hugging them.
-  return [...typing, ...others].filter((match) => !isInstanceRoot(match.element, match.target.scope) || framesWords(match));
+  return [...typing, ...others].filter((match) => !isInstanceRoot(match.element, match.target.scope) || drawnAsRun(match));
 }
 
 // Prop or slot text under the pointer (a prop's words, or the words the page writes inside the instance), whether or not its instance is selected: the words a double click would edit once the component is
@@ -178,7 +179,7 @@ function hoverBeforeSelect(source: MarkSource, at: { readonly x: number; readonl
     for (const match of matchesWhere(catalog, (candidate) => candidate === target)) {
       // Words held by an element that carries the instance's own path are the component itself (its hover is the hover),
       // unless that element is the instance's root and frames them: a Button's `<a><slot /></a>` with padding around the words.
-      if (pathsOf(match.element).includes(target.scope) && !framesWords(match)) {
+      if (pathsOf(match.element).includes(target.scope) && !drawnAsRun(match)) {
         continue;
       }
       if (!holds(wordsBox(match), at)) {
@@ -325,7 +326,7 @@ function report(match: TextMatchAt | undefined) {
     h: box.height,
     ...labelOf(match.element),
     ...(match.target.scope === undefined ? {} : { scope: match.target.scope }),
-    ...(match.target.from === undefined ? {} : { from: match.target.from }),
+    owner: ownerOfWords(match),
   };
 }
 
@@ -416,6 +417,19 @@ function framesWords(match: TextMatchAt): boolean {
   return FRAME_SIDES.some((side) => cssLength(style.getPropertyValue(`padding-${side}`)) > 0 || cssLength(style.getPropertyValue(`border-${side}-width`)) > 0);
 }
 
+// Whether the words are outlined as a run of their own (the range of their text) rather than as their element: the words a page
+// writes into a slot, wherever the component puts them (they are the page's, whatever element draws them), and words a root
+// frames (`framesWords`). The element around them stays the component's, drawn by the instance's own outline.
+function drawnAsRun(match: TextMatchAt): boolean {
+  return match.nodes.length > 0 && (match.target.from === 'slot' || framesWords(match));
+}
+
+// Who owns what the outline is drawn around (shared/properties/outlineOwnership.ts): the words a page wrote into a slot are the
+// page's; any other words are owned as the element that draws them is, by its paths.
+function ownerOfWords(match: TextMatchAt): Ownership {
+  return match.target.from === 'slot' ? 'slot' : ownershipOf(pathsOf(match.element));
+}
+
 const FRAME_SIDES = ['top', 'right', 'bottom', 'left'] as const;
 
 // A computed length in pixels; anything unreadable (a test DOM computes no styles) is no length at all.
@@ -424,12 +438,12 @@ function cssLength(value: string): number {
   return Number.isFinite(pixels) ? pixels : 0;
 }
 
-// The box the words are drawn in. Words framed by their instance's root are measured as the words themselves (their range's
-// box), never the root's, so the outline hugs the text and not the whole component; any other words are their element's box.
+// The box the words are drawn in. Words drawn as a run (drawnAsRun) are measured as the words themselves (their range's box),
+// never their element's, so the outline hugs the text and not the whole component; any other words are their element's box.
 function wordsBox(match: TextMatchAt): DOMRect {
   const first = match.nodes[0];
   const last = match.nodes.at(-1);
-  if (first === undefined || last === undefined || !framesWords(match)) {
+  if (first === undefined || last === undefined || !drawnAsRun(match)) {
     return match.element.getBoundingClientRect();
   }
   const range = document.createRange();

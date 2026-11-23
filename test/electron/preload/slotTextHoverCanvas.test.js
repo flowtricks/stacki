@@ -9,8 +9,9 @@
 // built preload runs in a hidden Electron window over markup shaped as the preview renders it (each component's root tagged
 // with its own path and the path of the instance that drew it, the slot wrapped in its markers). Real mouse moves hover
 // the words, the padding, the Heading and the badge; the `avb:text-marks` the frame posts are compared with the words' own
-// range box measured in the page. Both sides of the rule are checked: slot words are outlined, words no slot or prop
-// reaches (the badge) and a root that is only its words (the Heading) are not.
+// range box measured in the page, and each carries the owner `slot` (the page wrote the words, so their run is blue while the
+// component around them stays green). Both sides of the rule are checked: slot words are outlined as a run, including a
+// Heading that is only its words; words no slot or prop reaches (the badge) are not.
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -262,6 +263,9 @@ const PAGE_SOURCE = [
     const hugs = (hover, box) => hover !== undefined && near(hover.x, box.x) && near(hover.y, box.y) && near(hover.w, box.w) && near(hover.h, box.h);
     const hoveredFor = (hover, measured, words) => {
       check(`hovering "${words}" outlines them, owned by their own Button`, hover?.scope === found[words].parent, JSON.stringify(hover));
+      // Ownership (shared/properties/outlineOwnership.ts): the words are the page's (it wrote them into the slot), so their run is
+      // blue; the Button around them stays the component's, drawn by the instance's own outline. Includes the nested Button.
+      check(`the outline of "${words}" is the run of page-owned words`, hover?.owner === 'slot', JSON.stringify(hover));
       check(
         `the outline of "${words}" hugs the words, not the button`,
         hugs(hover, measured.words) && hover.w < measured.element.w,
@@ -271,11 +275,9 @@ const PAGE_SOURCE = [
     hoveredFor(out.firstHover, out.first, 'Start your free flight');
     check('the pointer on the button padding is the component, not its words', out.paddingHover === undefined, JSON.stringify(out.paddingHover));
     hoveredFor(out.secondHover, out.second, 'Second button');
-    check(
-      'a Heading that is only its words gets no outline of its own (its hover is the hover)',
-      out.headingHover === undefined,
-      JSON.stringify(out.headingHover),
-    );
+    // A Heading that is only its words still draws the words the page wrote as a run of their own (blue), beside the Heading's own
+    // (green) hover.
+    hoveredFor(out.headingHover, out.heading, 'Plain heading');
     check('words the Card writes itself are not outlined', out.badgeHover === undefined, JSON.stringify(out.badgeHover));
     hoveredFor(out.nestedHover, out.nested, 'Nested words');
     hoveredFor(out.maybeHover, out.maybe, 'Maybe words');

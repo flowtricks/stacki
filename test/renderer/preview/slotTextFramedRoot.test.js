@@ -131,9 +131,10 @@ test('the pointer on the padding is the component, not its words', () => {
   assert.equal(hoverAt(310, 75), undefined);
 });
 
-test('a root with neither padding nor a border is its words: no outline of their own', () => {
+test('a root with neither padding nor a border draws its slot words as a run of their own, owned by the page', () => {
   focus = new Set();
-  assert.equal(hoverAt(60, 200), undefined);
+  const hover = hoverAt(60, 200);
+  assert.deepEqual({ x: hover?.x, w: hover?.w, scope: hover?.scope, owner: hover?.owner }, { x: 20, w: 200, scope: '0.2', owner: 'slot' });
 });
 
 test('with the Button selected its words are still hovered and marked at rest at their own size', () => {

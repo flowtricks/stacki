@@ -1,5 +1,33 @@
 # Text inside closed components on the canvas
 
+## Who owns an outline decides its colour
+
+One rule (`shared/properties/outlineOwnership.ts`): content is **page-owned (blue, `element`)** only when the page wrote it: a
+node of the open file's own tree, or an element rendered from children the page passed into a slot of the enclosing instance.
+**Everything else inside a component instance is the component's own (green, `component`)**: its root, its own markup, a wrapper
+it draws around the slot (a Button's `<span class="label">`), text it renders from a prop, any element carrying a component
+file's path (`File.astro|0.1`). A closed component has no way to produce a blue outline for what it renders itself.
+
+- Every producer (node hover and selection, hovered and picked words, pseudo-elements, editing) asks `outlineKind`; none picks a
+  colour class. `OutlineSubject` has no colour field, and `outlineKind` asserts that nothing inside a component with no slot
+  ancestor leaves green.
+- Two things can be outlined, each with its own owner. **The words** a page wrote into a slot are the page's: they are drawn as a
+  run of their own (the range of their text, `drawnAsRun` in `electron/preload/frameTextMarks.ts`), reported with `owner: 'slot'`,
+  and outlined **blue**, wherever the component puts them (its root, a Button's label span, a nested instance). **The element**
+  around them (a Heading's root, a Button and its label span) is the component's and stays **green**, drawn by the instance's own
+  outline. Words a component renders itself (a prop, hardcoded text) are outlined on their element, owned by its paths
+  (`ownershipOf`: a `|` path is a component file's own, so `owner: 'component'`, green). A mark with no owner is the component's.
+- A Heading that is only its slot words is therefore outlined twice, as any slot text is: the Heading green, the words blue.
+  A page's own `<span>` inside a Button's slot is a node of the page's tree, blue like any plain element, with the Button green.
+- Deep outline mode (`avb:outline-mode` `deep`) names a node as the editor would draw it with the component open, so it keeps the
+  open view's colours; that is a view of the component's file, not of the closed component's markup.
+- A `::before` or `::after` inside a component is outlined green and only when it renders text and takes pointer events
+  (`pseudoOffered`); on a plain element it is blue as always.
+
+Tests: `test/renderer/preview/outlineOwnership.test.js` (rule, frame owners for a Button label span, a Heading, a page-authored
+element in a slot, a Button nested in a Card's slot and in a loop; hover, pick and edit outlines), `pseudoOutlineComponent.test.js`,
+and the real-window `test/electron/preload/slotTextHoverCanvas.test.js`.
+
 One state machine, `src/features/preview/textOwnerState.ts`, draws every closed component (the **owner**: the outermost
 component instance of the page that renders the words) around the words it renders (the **text**: a prop's words, children
 the page writes inside the instance, or a fragment of HTML). The frame reports the hovered and the picked words with the
@@ -41,12 +69,13 @@ names another element (a stretched link over the card), it is found from where t
 
 Clicks: one click on hovered words selects the owner and picks the words in the same step (the frame keeps the pick until the
 app's selection arrives); a double click enters editing as before. Components that are only their words (a `Heading` or
-`Paragraph` written in the page) are their own owner: the component's hover is the hover.
+`Paragraph` written in the page) keep the component's own (green) hover, and their slot words are outlined as a blue run beside it
+(see "Who owns an outline decides its colour").
 
 A component whose root **frames** the words is not only its words: a Button's `<a class="button"><slot /></a>` with padding
 or a border on any side around `<Button>Start your free flight</Button>`. Its slot words are hovered, marked and picked like
 any other words, and their outline is the words' own box (the range of their text), never the button's; the pointer on the
-padding is the component's own hover. A root with neither padding nor a border is its words, as above (`framesWords` in
+padding is the component's own hover. Slot words are always drawn as that run, framed or not (`drawnAsRun` in
 `electron/preload/frameTextMarks.ts`; `test/renderer/preview/slotTextFramedRoot.test.js` and the real-window
 `test/electron/preload/slotTextHoverCanvas.test.js`).
 

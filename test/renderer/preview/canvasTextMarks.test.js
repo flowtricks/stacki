@@ -35,6 +35,12 @@ function setUp() {
     const [left, top, width, height] = box;
     return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
   };
+  // A range around words is the box they are drawn in: their element's `data-words`, else its own box (words fill it).
+  window.Range.prototype.getBoundingClientRect = function wordsBox() {
+    const holder = this.startContainer.nodeType === 1 ? this.startContainer : this.startContainer.parentElement;
+    const [left, top, width, height] = (holder.getAttribute('data-words') ?? holder.getAttribute('data-box') ?? '0,0,0,0').split(',').map(Number);
+    return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
+  };
   // The browser's hit test: the innermost element whose box holds the point.
   document.elementFromPoint = (x, y) => {
     const inside = [...document.querySelectorAll('[data-box]')].filter((element) => {
@@ -110,7 +116,7 @@ test('only the selected instance marks its text, dashed at rest', () => {
   select('0.3.0');
   assert.equal(layer().children.length, 0, 'a selected child marks nothing');
   select('0.5');
-  assert.equal(layer().children.length, 0, "a component's own root is the selection, unmarked");
+  assert.equal(layer().children.length, 1, "a component's own root holding slot words marks the words, a run of their own");
 });
 
 test('hovering and clicking report the text the way the app names elements', () => {

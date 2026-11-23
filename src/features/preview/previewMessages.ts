@@ -1,4 +1,5 @@
 import { parseDeepHoverNode, type DeepHoverNode } from '../../../shared/properties/deepOutline';
+import type { Ownership } from '../../../shared/properties/outlineOwnership';
 import { isReservedShortcut, type AppReservedShortcut } from '../../../shared/properties/appShortcuts';
 import { parseContextPoint, type ContextPoint } from './contextPosition';
 import { canvasClickBox, coordinateOf, type CanvasClickBox } from '../../ui/canvasClickSlot';
@@ -110,8 +111,8 @@ export interface TextMarkBox extends Box {
   readonly kind: 'component' | 'text' | 'refused';
   /** The page path of the component instance the words belong to, when they are its slot or prop text. */
   readonly scope?: string;
-  /** Where the words come from: `slot` is the page's own content inside the instance (drawn as plain content), `prop` is rendered by the component. */
-  readonly from?: 'slot' | 'prop';
+  /** Who wrote the element the words are outlined on (shared/properties/outlineOwnership.ts): the page, through a slot, or the component. */
+  readonly owner: Ownership;
 }
 
 /** Why the canvas patcher reloaded (electron/previewClient/morphClient.ts): past one of its
@@ -486,16 +487,16 @@ function parseTextMarkBox(input: unknown): TextMarkBox {
   if (kind !== 'component' && kind !== 'text' && kind !== 'refused') {
     throw new Error('Text mark: expected component, text or refused');
   }
-  const from = value['from'];
-  if (from !== undefined && from !== 'slot' && from !== 'prop') {
-    throw new Error('Text mark: expected slot or prop');
+  const owner = value['owner'];
+  if (owner !== 'slot' && owner !== 'component') {
+    throw new Error('Text mark: expected an owner, slot or component');
   }
   return {
     ...parseBox(value),
     label: pathText(value['label']),
     kind,
     ...(value['scope'] === undefined ? {} : { scope: pathText(value['scope']) }),
-    ...(from === undefined ? {} : { from }),
+    owner,
   };
 }
 

@@ -140,7 +140,8 @@ test('pointer-events auto, or any other value that reaches the pointer, keeps th
   }
 });
 
-// Slot content belongs to the page: the outline of picked words follows who wrote them, not the instance around them.
+// The colour of words' outlines by owner is pinned in outlineOwnership.test.js; here only that a nested component's root and a
+// slot child keep their colours through the same producer.
 function textMarkClasses(picked) {
   const markup = renderToStaticMarkup(
     React.createElement(PreviewOverlays, {
@@ -160,25 +161,10 @@ function textMarkClasses(picked) {
   return [...markup.matchAll(/class="(node-outline [^"]*text-mark[^"]*)"/g)].map((match) => match[1]);
 }
 
-const MARK = { x: 10, y: 10, w: 80, h: 20, label: 'Heading', scope: '0.1' };
+const MARK = { x: 10, y: 10, w: 80, h: 20, label: 'Heading', scope: '0.1', kind: 'text' };
 
-test('words the page passes into an instance (slot) are outlined blue, as a plain element', () => {
-  const [classes] = textMarkClasses({ ...MARK, kind: 'text', from: 'slot' });
-  assert.match(classes, /\belement\b/);
-  assert.doesNotMatch(classes, /\bcomponent\b/);
-});
-
-test("slot words that fill the instance root are still the page's, so blue", () => {
-  const [classes] = textMarkClasses({ ...MARK, kind: 'component', from: 'slot' });
-  assert.match(classes, /\belement\b/);
-});
-
-test("a component's own text (a prop it renders) and its own root stay green", () => {
-  assert.match(textMarkClasses({ ...MARK, kind: 'text', from: 'prop' })[0], /\bcomponent\b/);
-  assert.match(textMarkClasses({ ...MARK, kind: 'component' })[0], /\bcomponent\b/);
-});
-
-test('a nested instance inside a slot is green on its own root, and its own slot words are blue', () => {
-  assert.match(textMarkClasses({ ...MARK, kind: 'component', scope: '0.1.2' })[0], /\bcomponent\b/);
-  assert.match(textMarkClasses({ ...MARK, kind: 'text', from: 'slot', scope: '0.1.2' })[0], /\belement\b/);
+test("a slot child is blue and the component's own element is green, nested or not", () => {
+  assert.match(textMarkClasses({ ...MARK, owner: 'slot' })[0], /\belement\b/);
+  assert.match(textMarkClasses({ ...MARK, owner: 'component' })[0], /\bcomponent\b/);
+  assert.match(textMarkClasses({ ...MARK, owner: 'component', scope: '0.1.2' })[0], /\bcomponent\b/);
 });

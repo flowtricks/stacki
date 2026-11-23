@@ -7,7 +7,8 @@ import { assert } from '../../../shared/core/assert';
 import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
-import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
+import { outlineKind, type OutlineKind } from '../../../shared/properties/outlineOwnership';
+import { NO_TEXT_MARKS, type TextMarkBox, type TextMarks } from './previewMessages';
 import { ownerClasses } from './textOwnerState';
 import { copiesToDraw, hoverIsSelection, loopChildPaths, collapseKind, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
 import { clipBand, spacingBands, withLiveSpacing, type CollapsePartner } from './spacingBands';
@@ -187,8 +188,12 @@ function NodeOutlines(props: PreviewOverlaysProps) {
   return outlines.flatMap((outline) => {
     if (outline.pseudo !== undefined) {
       // Inside a component (an instance, or markup rendered by a component file) the pseudo-element reads as the component's: green.
-      const inComponent = props.overlayInfo?.(outline.path)?.kind === 'component' || outsideScope(outline.path, props.pathScope ?? '');
-      return <PseudoOutline key={`${outline.slot}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} inComponent={inComponent} />;
+      const kind = outlineKind({
+        insideComponent: outsideScope(outline.path, props.pathScope ?? ''),
+        insideSlot: false,
+        nodeKind: props.overlayInfo?.(outline.path)?.kind === 'component' ? 'component' : 'element',
+      });
+      return <PseudoOutline key={`${outline.slot}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} kind={kind} />;
     }
     // A deep hover or a highlight names a node inside a closed component, which the open file's tree cannot label.
     const info =
@@ -204,8 +209,13 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     // Hovering a slot says nothing inside it can be picked: a muted fill, not the accent. Picking the slot itself stays as it was.
     const muted = info.hostContent && outline.type === 'hover';
     // Words the frame reports for this path name it as their component instance (`scope`), whatever the Navigator calls the node
-    // (a dynamic tag, a fragment): it is drawn as the component it is, never in the plain blue.
-    const kind = info.kind === 'element' && ownsMarkedWords(props.textMarks, outline.path) ? 'component' : info.kind;
+    // (a dynamic tag, a fragment): it is a component. A deep hover names a node as the editor would outline it with the component
+    // open, so it is the open view's, not a closed component's own markup.
+    const kind = outlineKind({
+      insideComponent: false,
+      insideSlot: false,
+      nodeKind: info.kind === 'element' && ownsMarkedWords(props.textMarks, outline.path) ? 'component' : info.kind,
+    });
     return boxes.map((box, index) => {
       const collapse = collapseKind(box);
       return (
@@ -237,6 +247,12 @@ function NodeOutlines(props: PreviewOverlaysProps) {
       );
     });
   });
+}
+
+// The kind of outline around words: the element holding them is the component's own unless the page wrote it (a slot child), and
+// words the page passes in are inside the instance's slot by construction.
+function markKind(box: TextMarkBox): OutlineKind {
+  return outlineKind({ insideComponent: true, insideSlot: box.owner === 'slot', nodeKind: 'element' });
 }
 
 // Whether hovered or picked words name `path` as the component instance that owns them.
@@ -326,12 +342,12 @@ function PseudoOutline({
   outline,
   rects,
   scale,
-  inComponent,
+  kind,
 }: {
   readonly outline: OutlineTarget;
   readonly rects: RectMap;
   readonly scale: number;
-  readonly inComponent: boolean;
+  readonly kind: OutlineKind;
 }) {
   assert(outline.pseudo !== undefined, 'PseudoOutline: the outline is a pseudo-element');
   const all = rects[pseudoPath(outline.path, outline.pseudo)];
@@ -340,11 +356,7 @@ function PseudoOutline({
   }
   const boxes = copiesToDraw(all, outline.occ);
   return boxes.map((box, index) => (
-    <div
-      key={`${outline.type}-pseudo-${index}`}
-      className={`node-outline ${outline.type} pseudo ${inComponent ? 'component' : 'element'}`}
-      style={boxStyle(box, scale)}
-    >
+    <div key={`${outline.type}-pseudo-${index}`} className={`node-outline ${outline.type} pseudo ${kind}`} style={boxStyle(box, scale)}>
       <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
         <PseudoElementIcon size={11} />
         ::{outline.pseudo}
@@ -396,7 +408,7 @@ function TextMarkOutlines({ marks, instances, scale }: { readonly marks: TextMar
     ...(marks.picked ? [['sel', marks.picked] as const] : []),
   ];
   return drawn.map(([type, box]) => (
-    <div key={type} className={`node-outline ${type} ${box.from === 'slot' ? 'element' : 'component'} text-mark`} style={boxStyle(box, scale)}>
+    <div key={type} className={`node-outline ${type} ${markKind(box)} text-mark`} style={boxStyle(box, scale)}>
       {!instances.some((instance) => tagsCollide(instance, box, scale)) && (
         <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
           {box.kind === 'component' ? <ElementComponentIcon size={11} /> : <TextIcon size={11} />}
