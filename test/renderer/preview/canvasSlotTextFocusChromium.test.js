@@ -134,22 +134,21 @@ const DIRECTORY = ${JSON.stringify(directory)};
 const OFFSET = ${FRAME_OFFSET_PX};
 const VARIANTS = ${JSON.stringify(variants)};
 app.on('window-all-closed', () => {});
-// Waits are on state, never on a guessed duration: a poll of a page expression, one rendered frame apart, for at most
-// POLL_COUNT_MAX polls (about three seconds). The result says whether the state was reached; a state that never arrives
-// is reported by the samples below, not by a throw here, because several variants assert that something did NOT happen.
+// Waits are on state, never on a guessed duration: pollUntil (test/helpers/waitFor.js) reads a page expression at its
+// fixed interval for a stated number of polls. It does not depend on rendered frames, which a hidden window on a CI runner
+// may never produce. A state that never arrives is reported by the samples below, not by a throw from the wait, because
+// several variants assert that something did NOT happen.
+const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
 const POLL_COUNT_MAX = 200;
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, x: 0, y: 0, width: 1100, height: 760, webPreferences: { contextIsolation: false, backgroundThrottling: false } });
   const host = (code) => win.webContents.executeJavaScript(code);
   const inFrame = (code) => host('document.getElementById("frame").contentWindow.eval(' + JSON.stringify(code) + ')');
-  const frameTick = () => host('new Promise((resolve) => requestAnimationFrame(() => resolve(true)))');
-  const pollFrame = async (code, pollCountMax) => {
-    for (let poll = 0; poll < pollCountMax; poll += 1) {
-      if (await inFrame(code)) { return true; }
-      await frameTick();
-    }
-    return false;
-  };
+  const pollRead = async (what, read, pollCountMax) => (await pollUntil({ what, read, until: Boolean, pollCountMax })).kind === 'reached';
+  const pollFrame = (code, pollCountMax) => pollRead(code, () => inFrame(code), pollCountMax);
+  const pollHost = (code, pollCountMax) => pollRead(code, () => host(code), pollCountMax);
+  // One task of the page, for a message the page handles in a task of its own.
+  const nextTask = () => host('new Promise((resolve) => setTimeout(resolve, 0))');
   // The product settles an open by the frame's own clock (OPEN_SETTLE_MS); the test reads that same clock instead of sleeping.
   const untilFrameClock = async (startMs, spanMs) => pollFrame('performance.now() - ' + startMs + ' >= ' + spanMs, POLL_COUNT_MAX);
   const frameClockMs = () => inFrame('performance.now()');
@@ -167,21 +166,17 @@ app.whenReady().then(async () => {
   try {
     for (const [index, variant] of VARIANTS.entries()) {
       await win.loadFile(path.join(DIRECTORY, 'host' + index + '.html'));
-      for (let spin = 0; spin < 100 && (await host('document.getElementById("frame").contentDocument.readyState')) !== 'complete'; spin += 1) { await frameTick(); }
-      for (let spin = 0; spin < 100 && !(await host('document.hasFocus()')); spin += 1) {
-        win.focus();
-        win.webContents.focus();
-        await frameTick();
-      }
+      await pollHost('document.getElementById("frame").contentDocument.readyState === "complete"', POLL_COUNT_MAX);
+      await pollRead('the page has focus', async () => { win.focus(); win.webContents.focus(); return host('document.hasFocus()'); }, POLL_COUNT_MAX);
       if (!(await host('document.hasFocus()'))) { throw new Error('the page never took focus'); }
       await inFrame('window.focusLog = []; for (const type of ["blur", "focus"]) { addEventListener(type, (event) => window.focusLog.push(type + ":" + (event.target === window ? "window" : event.target.nodeName))); } window.announce(); true');
       await host('window.focusLog = []; for (const type of ["blur", "focus"]) { addEventListener(type, (event) => window.focusLog.push(type + ":" + (event.target === window ? "window" : event.target.nodeName))); } true');
       // The announce is the frame's own message to the host; wait until the host has it.
-      await host('new Promise((resolve) => { const check = () => (window.posted.length > 0 ? resolve(true) : requestAnimationFrame(check)); check(); })');
+      await pollHost('window.posted.length > 0', POLL_COUNT_MAX);
       await host('document.getElementById("frame").contentWindow.postMessage(' + JSON.stringify(variant.catalog) + ', "*"); true');
-      // The frame handles the catalog message in a task of its own; two rendered frames have run it.
-      await frameTick();
-      await frameTick();
+      // The frame handles the catalog message in a task of its own; two page tasks have run it.
+      await nextTask();
+      await nextTask();
       if (variant.scrolled) {
         await inFrame('window.scrollTo(0, document.documentElement.scrollHeight); true');
         await pollFrame('document.documentElement.scrollTop > 0', POLL_COUNT_MAX);
@@ -196,6 +191,8 @@ app.whenReady().then(async () => {
         '    return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };' +
         '  }' +
         '} return undefined; })()');
+      // Input is hit-tested against the committed layout: wait until the point lands on the heading, not just until it has scrolled.
+      await pollFrame('document.elementFromPoint(' + point.x + ', ' + point.y + ') === document.querySelectorAll("h2")[' + (variant.occurrence || 0) + '] || document.elementFromPoint(' + point.x + ', ' + point.y + ') !== null && document.querySelectorAll("h2")[' + (variant.occurrence || 0) + '].contains(document.elementFromPoint(' + point.x + ', ' + point.y + '))', POLL_COUNT_MAX);
       const result = { name: variant.name, point };
       await click(point.x + OFFSET, point.y + OFFSET, 2);
       const openedAtMs = await frameClockMs();
@@ -234,7 +231,7 @@ app.whenReady().then(async () => {
       win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
       await pollFrame(editorClosed, POLL_COUNT_MAX);
       // The close is reported to the host by a message; wait until the host has it.
-      await host('new Promise((resolve) => { let polls = 0; const check = () => (window.posted.some((message) => message.type === "avb:text-inactive") || polls >= ' + POLL_COUNT_MAX + ' ? resolve(true) : (polls += 1, requestAnimationFrame(check))); check(); })');
+      await pollHost('window.posted.some((message) => message.type === "avb:text-inactive")', POLL_COUNT_MAX);
       result.closed = await sample();
       output.variants.push(result);
     }
