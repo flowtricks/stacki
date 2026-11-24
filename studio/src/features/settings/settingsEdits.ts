@@ -57,7 +57,8 @@ export function innerContentEdit(source: string, id: string, content: string): E
   if (/\/\s*>$/.test(written)) {
     return { ...range, text: written.replace(/\/\s*>$/, '>') + content + `</${node.name}>` };
   }
-  const end = source.lastIndexOf('</', range.end);
+  // Searched from the node's last character: `range.end` itself may open the parent's closing tag.
+  const end = source.lastIndexOf('</', range.end - 1);
   if (end < range.start) {
     throw new Error('This node cannot contain content');
   }
@@ -73,7 +74,7 @@ export function nodeTextEdit(source: string, id: string, value: string): Edit {
     return headEdit(source, node, value);
   }
   if (node.kind === 'raw') {
-    const end = source.lastIndexOf('</', range.end);
+    const end = source.lastIndexOf('</', range.end - 1);
     // A quoted attribute may contain ">"; the parser already found the
     // exact inner content, so measure back from the closing tag instead.
     const start = end - node.inner.length;
