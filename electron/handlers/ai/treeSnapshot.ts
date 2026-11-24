@@ -20,7 +20,7 @@ import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import { git } from '../../lib/nodeTools';
 
 export interface TreeChange {
-  /** Project-relative, forward slashes, as git names it. */
+  /** Project-relative, forward slashes. */
   readonly path: string;
   readonly status: 'added' | 'deleted' | 'modified';
 }
@@ -70,7 +70,11 @@ async function changedPaths(root: string, before: string, after: string): Promis
   if (before === after) {
     return [];
   }
-  const output = (await git(root, ['diff-tree', '-r', '-z', '--no-renames', '--name-status', before, after], { timeout: AI_LIMITS.snapshotMsMax })).stdout;
+  // `--relative`: a project may be a folder inside a larger repository, whose tree paths start at the repository's root. It names
+  // files from the project folder, as the ledger reads them, and leaves out what changed elsewhere.
+  const output = (
+    await git(root, ['diff-tree', '-r', '-z', '--no-renames', '--relative', '--name-status', before, after], { timeout: AI_LIMITS.snapshotMsMax })
+  ).stdout;
   const fields = output.split('\0').filter((field) => field.length > 0);
   const changes: TreeChange[] = [];
   for (let index = 0; index + 1 < fields.length && changes.length < AI_LIMITS.ledgerFilesMax; index += 2) {
@@ -88,7 +92,8 @@ async function blobAt(root: string, tree: string, relative: string): Promise<str
   assert(TREE_HASH.test(tree), 'blobAt: a tree hash');
   assert(!relative.startsWith('/'), 'blobAt: a project-relative path');
   try {
-    const text = (await git(root, ['cat-file', 'blob', `${tree}:${relative}`], { timeout: AI_LIMITS.snapshotMsMax, maxBuffer: AI_LIMITS.fileCharsMax * 4 }))
+    // `./` reads the path from the project folder; without it git reads it from the repository's root.
+    const text = (await git(root, ['cat-file', 'blob', `${tree}:./${relative}`], { timeout: AI_LIMITS.snapshotMsMax, maxBuffer: AI_LIMITS.fileCharsMax * 4 }))
       .stdout;
     return text.includes('\0') || text.length > AI_LIMITS.fileCharsMax ? undefined : text;
   } catch {
