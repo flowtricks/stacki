@@ -28,6 +28,9 @@ export default function TipAnchor({ text, className, children }: TipAnchorProps)
       ref={wrapper}
       className={className === undefined ? 'tip-anchor' : `tip-anchor ${className}`}
       aria-describedby={text === undefined ? undefined : descriptionId}
+      // An empty title blanks any `title` an ancestor carries, so the browser's native box never covers this tip. A control
+      // inside keeps its own title only if it sets one, which nativeTitleCollision.test.ts rejects.
+      title={text === undefined ? undefined : ''}
       onMouseEnter={(event) => tip.show(event.currentTarget)}
       onMouseLeave={tip.hide}
       onFocus={(event) => tip.showNow(event.currentTarget)}

@@ -19,6 +19,8 @@ export default function Tooltip({ text, className }: { readonly text: string; re
       <span
         className={className}
         aria-describedby={state.kind === 'open' ? id : undefined}
+        // An empty title blanks any `title` an ancestor carries, so the browser's native box never covers this tip.
+        title=""
         onMouseEnter={(event) => {
           const bounds = event.currentTarget.getBoundingClientRect();
           setState({

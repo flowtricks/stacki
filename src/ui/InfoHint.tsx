@@ -32,6 +32,9 @@ export default function InfoHint({ text }: { readonly text: string }) {
         className="settings-info"
         aria-label={translate('settings.info.label')}
         aria-describedby={descriptionId}
+        // An empty title blanks any `title` an ancestor carries: the browser titles every descendant of a titled element, and its
+        // native box would draw over this tip at the same moment. The name and description stay on the aria attributes.
+        title=""
         onMouseEnter={(event) => tip.show(event.currentTarget)}
         onMouseLeave={tip.hide}
         onFocus={(event) => tip.showNow(event.currentTarget)}

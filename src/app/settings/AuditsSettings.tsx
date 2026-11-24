@@ -234,8 +234,10 @@ function CheckRow(props: {
         <Icon size={14} />
       </span>
       <span className="app-role-app-permission-text">
-        <span className="app-role-toggle-label" title={auditText.checkTitle(props.id)}>
-          {auditText.checkTitle(props.id)}
+        <span className="app-role-toggle-label">
+          {/* The full name for a cut-off label sits on the name alone: a `title` on the whole label would also title the (i) mark
+              inside it, and the browser's box would cover the app's own tip (test/renderer/ui/nativeTitleCollision.test.ts). */}
+          <span title={auditText.checkTitle(props.id)}>{auditText.checkTitle(props.id)}</span>
           {/* Why the check matters is audit-definition text (shared/page/auditFindings.ts), shown as the (i) tip. */}
           <InfoHint text={auditText.checkWhy(props.id)} />
           {priority !== undefined && <span className="audits-settings-priority">{translate(PRIORITY_KEYS[priority])}</span>}

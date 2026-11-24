@@ -7,7 +7,8 @@ export function InfoLabel({ label, description }: { readonly label: string; read
   const id = useId();
   const [open, setOpen] = useState(false);
   return (
-    <span className="info-label" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    // An empty title blanks any `title` an ancestor carries, so the browser's native box never covers this tip.
+    <span className="info-label" title="" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <span>{label}</span>
       <button
         type="button"

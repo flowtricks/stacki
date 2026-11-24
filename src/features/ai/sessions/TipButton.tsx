@@ -48,6 +48,8 @@ export function TipButton(props: TipButtonProps) {
         aria-haspopup={props.menu === undefined ? undefined : 'menu'}
         aria-expanded={props.menu?.open}
         aria-keyshortcuts={props.shortcut === undefined ? undefined : ariaKeyShortcuts(props.shortcut)}
+        // An empty title blanks any `title` an ancestor carries, so the browser's native box never covers this tip.
+        title=""
         onMouseEnter={(event) => placement.show(event.currentTarget)}
         onMouseLeave={placement.hide}
         onFocus={(event) => placement.show(event.currentTarget)}
