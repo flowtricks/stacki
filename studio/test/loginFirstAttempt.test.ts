@@ -141,7 +141,13 @@ test("one visitor's wait never blocks another visitor", async (t) => {
 test('a GitHub limit is never retried, and the page names the step and the signal', async (t) => {
   for (const [label, token, profile, reference, seconds] of [
     ['bare 429 at the token step', () => new Response(null, { status: 429 }), undefined, 'token-429-status', 60],
-    ['secondary limit at the token step', () => new Response(null, { status: 403, headers: { 'Retry-After': '295' } }), undefined, 'token-403-retry-after', 295],
+    [
+      'secondary limit at the token step',
+      () => new Response(null, { status: 403, headers: { 'Retry-After': '295' } }),
+      undefined,
+      'token-403-retry-after',
+      295,
+    ],
     [
       'exhausted quota at the profile step',
       undefined,

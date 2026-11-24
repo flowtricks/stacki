@@ -1,6 +1,7 @@
 // i18n-ignore-file: the CLI and its MCP tools speak to agents and scripts in English; none of this is interface text.
 // `.stacki/audits.json`: how the project audits itself: ignored findings and pages, which checks run and how loud, the design-token rules and the placeholder phrases.
 import {
+  AUDIT_ALLOWABLE_UNITS,
   AUDIT_IGNORE_LIMITS,
   AUDIT_SETTING_PRIORITIES,
   DEFAULT_PLACEHOLDERS,
@@ -107,9 +108,21 @@ export const AUDITS_FILE: FileSchema = {
         colors: field(bool(), 'Flag raw hex, rgb() and hsl() colours.', { default: DEFAULT_TOKEN_SETTINGS.colors }),
         px: field(bool(), 'Flag any px value outside a variable definition.', { default: DEFAULT_TOKEN_SETTINGS.px }),
         remOutsideVariables: field(bool(), 'Flag any rem value outside a variable definition.', { default: DEFAULT_TOKEN_SETTINGS.remOutsideVariables }),
+        sizes: field(
+          bool(),
+          'Flag raw widths and heights (width, height, inline-size, block-size and their min and max). A component’s own size is not a token, so it is off by default.',
+          {
+            default: DEFAULT_TOKEN_SETTINGS.sizes,
+          },
+        ),
         allowed: field(arrayOf(listItem, AUDIT_IGNORE_LIMITS.listItemsMax), 'Raw values that are fine as written, compared lower-cased: 0, auto, 1px, 100%.', {
           default: DEFAULT_TOKEN_SETTINGS.allowed.join(', '),
         }),
+        allowedUnits: field(
+          arrayOf(oneOf(...AUDIT_ALLOWABLE_UNITS), AUDIT_ALLOWABLE_UNITS.length),
+          'Units whose raw values are fine as written on every property (padding-inline-end: 3em), each listed once. px and rem are not here: they have their own switches. Absent means none: every unit is flagged.',
+          { default: 'none' },
+        ),
       }),
       'The design-token linter rules. Written only when they differ from the defaults.',
       { default: 'the app defaults' },
@@ -148,6 +161,7 @@ export const AUDITS_FILE: FileSchema = {
     'shared/properties/customAudits.ts',
   ],
   parserKeyExceptions: {
+    em: 'A unit-group name (AUDIT_UNIT_GROUPS.em, the Settings switch for the em unit), not a key read from the file.',
     page: 'A type lookup (IgnoredGroup["page"]) in the ignore list, not a key read from the file.',
     code: 'A type lookup (CustomAuditProblem["code"]) of a refused pattern, not a key read from the file.',
     rel: 'Wire key of a scanned stylesheet handed to the token linter, not a setting of the file.',

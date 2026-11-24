@@ -23,6 +23,35 @@ test('a document the app writes passes the registry and the parser', () => {
   assert.equal(checkValue(schema, AUDITS_FILE.empty, 'audits'), undefined);
 });
 
+test('the size rule and the allowed units are settable, and the app parser keeps them', () => {
+  const tokens = {
+    properties: ['padding*'],
+    colors: true,
+    px: true,
+    remOutsideVariables: false,
+    sizes: true,
+    allowed: ['0'],
+    allowedUnits: ['em', 'vw', 'ch'],
+  };
+  const document = { ...good, tokens };
+  assert.equal(checkValue(schema, document, 'audits'), undefined);
+  const written: unknown = JSON.parse(serializeDocument(AUDITS_FILE, document));
+  assert.ok(typeof written === 'object' && written !== null, 'the writer writes an object');
+  const writtenTokens: unknown = Reflect.get(written, 'tokens');
+  assert.ok(typeof writtenTokens === 'object' && writtenTokens !== null, 'with a tokens object');
+  assert.equal(Reflect.get(writtenTokens, 'sizes'), true, 'the size rule survives the canonical writer');
+  assert.deepEqual(Reflect.get(writtenTokens, 'allowedUnits'), ['em', 'vw', 'ch'], 'and so do the allowed units, in the app’s order');
+  assert.equal(refusalOfSource(AUDITS_FILE, serializeDocument(AUDITS_FILE, document)), undefined);
+});
+
+test('a unit that is not allowable, px and rem among them, is refused', () => {
+  for (const unit of ['px', 'rem', 'furlong', '']) {
+    const document = { ...good, tokens: { ...good.tokens, allowedUnits: [unit] } };
+    assert.notEqual(checkValue(schema, document, 'audits'), undefined, `${JSON.stringify(unit)} is not an allowable unit`);
+  }
+  assert.notEqual(checkValue(schema, { ...good, tokens: { ...good.tokens, sizes: 'yes' } }, 'audits'), undefined, 'sizes is a boolean');
+});
+
 test('the canonical writer leaves out settings at their defaults', () => {
   const text = serializeDocument(AUDITS_FILE, { version: 2, ignored: [], checks: {} });
   assert.deepEqual(JSON.parse(text), { version: 2, ignored: [] });
