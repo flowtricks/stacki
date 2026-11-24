@@ -501,6 +501,7 @@ function patchNode(live: Node, previous: Node, next: Node): void {
     // guard keeps the types truthful rather than encoding a lie about it.
     return;
   }
+  refuseStaleMeasurement(live, previous, next);
   patchAttrs(live, previous, next);
   // A change to the element's own attributes (a class, a style, a prop's value) is not
   // a change to what it holds. Its children are left to the page when the server's are
@@ -511,6 +512,83 @@ function patchNode(live: Node, previous: Node, next: Node): void {
     return;
   }
   patchChildren(live, previous, next);
+}
+
+// A page script that sized an element from what it held, once, as it mounted: the
+// patch keeps the size (it is the client's inline style, which the patch never
+// touches) while the variant it measured is replaced, and the canvas shows the new
+// variant at the old variant's size. Reported on swash-labs: its hero script adopts
+// the CTA Button and writes `--pill-w` and `font-size` from the label it finds; a
+// Button written as `main` has no pill label, so it measured 105px, and switching
+// to `pill` put a 183px label in that 105px pill ("LET'S", clipped). A refresh
+// measures the pill and is right. Nothing in the page can be asked to measure
+// again, so the patch cannot reach what a fresh load shows: the reload is the
+// honest answer, and morphClient logs why.
+//
+// Only when all of it holds: the server changed the element's class (a variant,
+// not a text edit) AND what it holds, AND the live element carries an inline
+// sizing declaration the server did not write. A transform or opacity an
+// animation set does not depend on the content, so it is no reason. Neither is a
+// custom property: Button's own pointer handler writes `--_mx` on every hover,
+// and reading that as a measurement reloaded every hovered pill. The hero's
+// measurement also writes `font-size`, which is what this catches.
+const MEASURED_PROPERTIES: ReadonlySet<string> = new Set([
+  'block-size',
+  'font-size',
+  'height',
+  'inline-size',
+  'max-block-size',
+  'max-height',
+  'max-inline-size',
+  'max-width',
+  'min-block-size',
+  'min-height',
+  'min-inline-size',
+  'min-width',
+  'width',
+]);
+// Declarations read from one style attribute; past it, the rest is not read (an
+// inline style that long was not written by a measuring script).
+const STYLE_DECLARATIONS_MAX = 256;
+
+function refuseStaleMeasurement(live: Element, previous: Element, next: Element): void {
+  if ((previous.getAttribute('class') || '') === (next.getAttribute('class') || '')) {
+    return; // Not a variant: the element is still the thing that was measured.
+  }
+  if (sameChildren(previous, next)) {
+    return; // Only its own attributes changed; the measured content did not.
+  }
+  const measured = pageMeasured(live, previous);
+  if (measured === undefined) {
+    return;
+  }
+  throw new Error('the page sized ' + describe(live) + ' (' + measured + ') from markup this edit replaces');
+}
+
+/** The first sizing declaration the live element carries that the server's rendering did not write, if any. */
+export function pageMeasured(live: Element, previous: Element): string | undefined {
+  const served = inlineSizing(previous);
+  for (const [name, value] of inlineSizing(live)) {
+    if (served.get(name) !== value) {
+      return name;
+    }
+  }
+  return undefined;
+}
+
+function inlineSizing(element: Element): Map<string, string> {
+  const sizing = new Map<string, string>();
+  const declarations = (element.getAttribute('style') || '').split(';').slice(0, STYLE_DECLARATIONS_MAX);
+  for (const declaration of declarations) {
+    const colon = declaration.indexOf(':');
+    if (colon > 0) {
+      const name = declaration.slice(0, colon).trim().toLowerCase();
+      if (MEASURED_PROPERTIES.has(name)) {
+        sizing.set(name, declaration.slice(colon + 1).trim());
+      }
+    }
+  }
+  return sizing;
 }
 
 function sameChildren(previous: Element, next: Element): boolean {
