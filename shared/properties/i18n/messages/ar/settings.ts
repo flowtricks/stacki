@@ -369,7 +369,7 @@ export const messages = {
   'settings.roles.components.count': '{visible} من {total} ظاهرة',
   'settings.roles.components.expand': 'فتح {name} أو إغلاقه',
   'settings.roles.components.folderCount': '{visible} من {total}',
-  'settings.roles.components.hiddenBy': 'مخفي بواسطة المجلد {folder}',
+  'settings.roles.components.hiddenBy': 'مخفي بواسطة المجلد',
   'settings.roles.components.hiddenOwn': 'مخفي',
   'settings.roles.components.hide': 'إخفاء {name}',
   'settings.roles.components.info':

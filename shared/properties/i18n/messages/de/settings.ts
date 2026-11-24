@@ -309,7 +309,7 @@ export const messages = {
   'settings.roles.components.count': '{visible} von {total} sichtbar',
   'settings.roles.components.expand': '{name} öffnen oder schließen',
   'settings.roles.components.folderCount': '{visible} von {total}',
-  'settings.roles.components.hiddenBy': 'ausgeblendet durch Ordner {folder}',
+  'settings.roles.components.hiddenBy': 'ausgeblendet durch Ordner',
   'settings.roles.components.hiddenOwn': 'ausgeblendet',
   'settings.roles.components.hide': '{name} ausblenden',
   'settings.roles.components.info':

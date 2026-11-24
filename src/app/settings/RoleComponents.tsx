@@ -189,7 +189,9 @@ function rowNote(decision: ComponentDecision, kind: 'folder' | 'component', tran
     case 'default':
       return undefined;
     case 'folder':
-      return translate(decision.effect === 'hide' ? 'settings.roles.components.hiddenBy' : 'settings.roles.components.shownBy', { folder: decision.folder });
+      return decision.effect === 'hide'
+        ? translate('settings.roles.components.hiddenBy')
+        : translate('settings.roles.components.shownBy', { folder: decision.folder });
     case 'component':
       return kind === 'component'
         ? translate(decision.effect === 'hide' ? 'settings.roles.components.hiddenOwn' : 'settings.roles.components.shownOwn')

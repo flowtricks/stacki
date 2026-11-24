@@ -303,7 +303,7 @@ export const messages = {
   'settings.roles.components.count': '{total} में से {visible} दिख रहे हैं',
   'settings.roles.components.expand': '{name} खोलें या बंद करें',
   'settings.roles.components.folderCount': '{total} में से {visible}',
-  'settings.roles.components.hiddenBy': 'फ़ोल्डर {folder} द्वारा छिपा',
+  'settings.roles.components.hiddenBy': 'फ़ोल्डर द्वारा छिपा',
   'settings.roles.components.hiddenOwn': 'छिपा',
   'settings.roles.components.hide': '{name} छिपाएँ',
   'settings.roles.components.info':

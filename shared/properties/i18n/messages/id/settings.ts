@@ -301,7 +301,7 @@ export const messages = {
   'settings.roles.components.count': '{visible} dari {total} terlihat',
   'settings.roles.components.expand': 'Buka atau tutup {name}',
   'settings.roles.components.folderCount': '{visible} dari {total}',
-  'settings.roles.components.hiddenBy': 'disembunyikan oleh folder {folder}',
+  'settings.roles.components.hiddenBy': 'disembunyikan oleh folder',
   'settings.roles.components.hiddenOwn': 'disembunyikan',
   'settings.roles.components.hide': 'Sembunyikan {name}',
   'settings.roles.components.info':

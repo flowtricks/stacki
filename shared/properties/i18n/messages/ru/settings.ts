@@ -343,7 +343,7 @@ export const messages = {
   'settings.roles.components.count': 'Видно {visible} из {total}',
   'settings.roles.components.expand': 'Открыть или закрыть {name}',
   'settings.roles.components.folderCount': '{visible} из {total}',
-  'settings.roles.components.hiddenBy': 'скрыт папкой {folder}',
+  'settings.roles.components.hiddenBy': 'скрыт папкой',
   'settings.roles.components.hiddenOwn': 'скрыт',
   'settings.roles.components.hide': 'Скрыть {name}',
   'settings.roles.components.info':

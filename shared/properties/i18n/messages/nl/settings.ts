@@ -306,7 +306,7 @@ export const messages = {
   'settings.roles.components.count': '{visible} van {total} zichtbaar',
   'settings.roles.components.expand': '{name} openen of sluiten',
   'settings.roles.components.folderCount': '{visible} van {total}',
-  'settings.roles.components.hiddenBy': 'verborgen door map {folder}',
+  'settings.roles.components.hiddenBy': 'verborgen door map',
   'settings.roles.components.hiddenOwn': 'verborgen',
   'settings.roles.components.hide': '{name} verbergen',
   'settings.roles.components.info':

@@ -291,7 +291,7 @@ export const messages = {
   'settings.roles.components.count': '{visible} / {total} 個可見',
   'settings.roles.components.expand': '展開或收合 {name}',
   'settings.roles.components.folderCount': '{visible} / {total}',
-  'settings.roles.components.hiddenBy': '由資料夾 {folder} 隱藏',
+  'settings.roles.components.hiddenBy': '由資料夾隱藏',
   'settings.roles.components.hiddenOwn': '已隱藏',
   'settings.roles.components.hide': '隱藏 {name}',
   'settings.roles.components.info': '此角色無法從元件庫或元件面板新增隱藏的元件。已在頁面上的元件仍可編輯。新元件對所有角色皆可見。',

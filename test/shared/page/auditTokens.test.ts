@@ -46,7 +46,7 @@ test('raw colours and sizes are flagged; variables, definitions, keywords and ze
 });
 
 test('unit rules flag px or rem outside variables; offsets point at the token', () => {
-  const px = { ...rules, px: true };
+  const px = rules;
   assert.deepEqual(kinds('.a { border: 1px solid; top: 4px; --x: 2px; }', px), ['token-unit:1px', 'token-unit:4px']);
   assert.deepEqual(kinds('.a { transform: translateY(1rem); }', { ...rules, remOutsideVariables: true }), ['token-unit:1rem']);
   const text = '.a { padding: 12px; }';

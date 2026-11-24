@@ -109,18 +109,24 @@ test('an agent task is bounded where it is built', () => {
   assert.throws(() => agentTask({ ...task, context: { ...task.context, files: ['/abs/file.astro'] } }), /project-relative/);
 });
 
+test('px flag: a file that never set it reads on; an explicit false stays off', () => {
+  assert.equal(DEFAULT_TOKEN_SETTINGS.px, true, 'new projects flag px outside variables');
+  assert.equal(parseAuditIgnores({ version: 2, ignored: [], tokens: { colors: false } }).tokens.px, true, 'unset reads as the default');
+  assert.equal(parseAuditIgnores({ version: 2, ignored: [], tokens: { px: false } }).tokens.px, false, 'an explicit false is honoured');
+});
+
 test('version 2 settings: defaults fill what the file leaves out, and only choices are written', () => {
   const read = parseAuditIgnores({ version: 1, ignored: [] });
   assert.equal(read.version, 2, 'version 1 reads as version 2');
   assert.deepEqual(read.tokens, DEFAULT_TOKEN_SETTINGS);
   assert.deepEqual(read.placeholders, DEFAULT_PLACEHOLDERS);
-  const chosen = withCheckSetting({ ...read, tokens: { ...read.tokens, px: true, allowed: ['1px'] } }, 'token-value', { enabled: false, priority: undefined });
+  const chosen = withCheckSetting({ ...read, tokens: { ...read.tokens, px: false, allowed: ['1px'] } }, 'token-value', { enabled: false, priority: undefined });
   const text = serializeAuditIgnores(chosen);
   assert.deepEqual(JSON.parse(text), {
     version: 2,
     ignored: [],
     checks: { 'token-value': { enabled: false } },
-    tokens: { ...DEFAULT_TOKEN_SETTINGS, px: true, allowed: ['1px'] },
+    tokens: { ...DEFAULT_TOKEN_SETTINGS, px: false, allowed: ['1px'] },
   });
   assert.deepEqual(parseAuditIgnoresSource(text), chosen);
   assert.deepEqual(withCheckSetting(chosen, 'token-value', { enabled: true, priority: undefined }).checks, {}, 'back to its defaults: nothing written');

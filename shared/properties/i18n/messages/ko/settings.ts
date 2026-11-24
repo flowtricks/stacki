@@ -300,7 +300,7 @@ export const messages = {
   'settings.roles.components.count': '{total}개 중 {visible}개 표시',
   'settings.roles.components.expand': '{name} 열기 또는 닫기',
   'settings.roles.components.folderCount': '{total}개 중 {visible}개',
-  'settings.roles.components.hiddenBy': '{folder} 폴더에 의해 숨겨짐',
+  'settings.roles.components.hiddenBy': '폴더에 의해 숨겨짐',
   'settings.roles.components.hiddenOwn': '숨겨짐',
   'settings.roles.components.hide': '{name} 숨기기',
   'settings.roles.components.info':

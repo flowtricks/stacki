@@ -8,7 +8,7 @@
 //     "ignored": [{ "id": "img-alt|src/pages/index.astro|0.3|src=\"/a.png\"", "reason": "Decorative hero" }],
 //     "ignoredPages": [{ "file": "src/pages/legal.astro", "reason": "Copy comes from the lawyers" }],
 //     "checks": { "token-value": { "enabled": false }, "token-color": { "priority": "high" } },
-//     "tokens": { "properties": ["border-radius", "gap"], "colors": true, "px": false, "remOutsideVariables": true, "allowed": ["1px", "100%"] },
+//     "tokens": { "properties": ["border-radius", "gap"], "colors": true, "px": true, "remOutsideVariables": true, "allowed": ["1px", "100%"] },
 //     "placeholders": ["lorem ipsum", "button text"]
 //   }
 //
@@ -92,7 +92,7 @@ export type AuditIgnores = AuditFile;
 export const DEFAULT_TOKEN_SETTINGS: AuditTokenSettings = {
   properties: ['border-radius', 'gap', 'row-gap', 'column-gap', 'font-size', 'line-height', 'letter-spacing', 'padding*', 'margin*', 'width', 'max-width'],
   colors: true,
-  px: false,
+  px: true,
   remOutsideVariables: false,
   allowed: ['0', 'auto', 'inherit', 'initial', 'unset', 'currentcolor', 'transparent', 'none', 'normal', '100%'],
 };

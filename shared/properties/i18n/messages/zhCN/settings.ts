@@ -291,7 +291,7 @@ export const messages = {
   'settings.roles.components.count': '{visible} / {total} 可见',
   'settings.roles.components.expand': '展开或收起 {name}',
   'settings.roles.components.folderCount': '{visible} / {total}',
-  'settings.roles.components.hiddenBy': '被文件夹 {folder} 隐藏',
+  'settings.roles.components.hiddenBy': '被文件夹隐藏',
   'settings.roles.components.hiddenOwn': '已隐藏',
   'settings.roles.components.hide': '隐藏 {name}',
   'settings.roles.components.info': '此角色无法从组件库或组件面板添加隐藏的组件。页面上已有的组件仍可编辑。新组件对所有角色可见。',

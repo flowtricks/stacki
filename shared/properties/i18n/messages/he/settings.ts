@@ -297,7 +297,7 @@ export const messages = {
   'settings.roles.components.count': '{visible} מתוך {total} גלויים',
   'settings.roles.components.expand': 'פתיחה או סגירה של {name}',
   'settings.roles.components.folderCount': '{visible} מתוך {total}',
-  'settings.roles.components.hiddenBy': 'מוסתר על ידי התיקייה {folder}',
+  'settings.roles.components.hiddenBy': 'מוסתר על ידי התיקייה',
   'settings.roles.components.hiddenOwn': 'מוסתר',
   'settings.roles.components.hide': 'הסתרת {name}',
   'settings.roles.components.info':

@@ -303,7 +303,7 @@ export const messages = {
   'settings.roles.components.count': '{total} içinden {visible} görünür',
   'settings.roles.components.expand': '{name} öğesini aç veya kapat',
   'settings.roles.components.folderCount': '{total} içinden {visible}',
-  'settings.roles.components.hiddenBy': '{folder} klasörü tarafından gizlendi',
+  'settings.roles.components.hiddenBy': 'klasör tarafından gizlendi',
   'settings.roles.components.hiddenOwn': 'gizli',
   'settings.roles.components.hide': '{name} öğesini gizle',
   'settings.roles.components.info':

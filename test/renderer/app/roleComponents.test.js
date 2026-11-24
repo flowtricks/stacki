@@ -143,7 +143,7 @@ test('a row says which folder decides it, and its own switch re-shows one compon
   await click(check('Client', 'Hide interactive'));
   await type(card('Client').querySelector('input[aria-label="Search components"]'), 'tabs');
   assert.deepEqual(rows('Client'), ['src', 'components', 'interactive', 'Tabs.astro'], 'the search keeps matches and the folders above them');
-  assert.match(section('Client').textContent, /hidden by folder src\/components\/interactive/);
+  assert.match(section('Client').textContent, /hidden by folder/);
   await click(check('Client', 'Show Tabs.astro'));
   assert.deepEqual(rulesOf('client'), [
     { kind: 'folder', path: 'src/components/interactive', effect: 'hide' },

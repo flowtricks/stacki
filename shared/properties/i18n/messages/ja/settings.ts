@@ -305,7 +305,7 @@ export const messages = {
   'settings.roles.components.count': '{total}個中{visible}個を表示',
   'settings.roles.components.expand': '{name}を開く/閉じる',
   'settings.roles.components.folderCount': '{visible}/{total}',
-  'settings.roles.components.hiddenBy': 'フォルダ{folder}により非表示',
+  'settings.roles.components.hiddenBy': 'フォルダにより非表示',
   'settings.roles.components.hiddenOwn': '非表示',
   'settings.roles.components.hide': '{name}を非表示',
   'settings.roles.components.info':
