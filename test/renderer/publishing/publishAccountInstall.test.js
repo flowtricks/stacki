@@ -1,8 +1,9 @@
-// Goal: Cloudflare sign-in stays on one screen from installation to browser sign-in or failure:
-// the button waits disabled while Wrangler installs, then opens the browser, and a failure turns
-// it into Try again. After an install the screen says the site's dependencies changed.
-// Method: render the account dialog with controlled IPC replies and advance the real poll with
-// mocked timers.
+// Goal: Cloudflare sign-in stays on one screen from setup to browser sign-in or failure, with one line of text. The
+// primary button carries the progress: a spinner and "Setting things up…" while the tool installs, then "Waiting for
+// you in the browser…" once the sign-in page is open (opened by itself, once). A failure is a toast and the button
+// turns into Try again. Nothing about tools or dependencies is ever shown, and no status paragraphs are added.
+// Method: render the account dialog with controlled IPC replies, record openExternal and error toasts, and advance the
+// real poll with mocked timers.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -15,11 +16,17 @@ const { act } = React;
 
 const browserURL = 'https://dash.cloudflare.com/oauth2/auth?state=test';
 
+// One bundle for the dialog and the toast channel, so the test listens to the same toast list the dialog reports to.
 function loadDialog() {
   const output = repoPath('node_modules/.stacki-test/publish-account-install.cjs');
   fs.mkdirSync(path.dirname(output), { recursive: true });
   buildSync({
-    entryPoints: [repoPath('src/features/publishing/PublishAccount.tsx')],
+    stdin: {
+      contents:
+        "export { AddPublishAccount } from './src/features/publishing/PublishAccount';\n" + "export { subscribeErrorToasts } from './src/ui/errorNotices';\n",
+      resolveDir: ROOT,
+      loader: 'ts',
+    },
     absWorkingDir: ROOT,
     outfile: output,
     bundle: true,
@@ -29,11 +36,12 @@ function loadDialog() {
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     logLevel: 'silent',
   });
-  return require(output).AddPublishAccount;
+  return require(output);
 }
 
 async function render(context, reply) {
-  const AddPublishAccount = loadDialog();
+  const code = loadDialog();
+  const AddPublishAccount = code.AddPublishAccount;
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   require('../../helpers/popupDom').installPopupDOM(dom.window);
   global.window = dom.window;
@@ -41,12 +49,23 @@ async function render(context, reply) {
   global.navigator = dom.window.navigator;
   global.IS_REACT_ACT_ENVIRONMENT = true;
   const calls = [];
+  const opened = [];
   window.avb = {
     publishingAccount: async ({ request }) => {
       calls.push(request);
       return reply(request);
     },
+    openExternal: async (url) => {
+      opened.push(url);
+      return { ok: true };
+    },
   };
+  const toasts = [];
+  const unsubscribe = code.subscribeErrorToasts(
+    (notice) => toasts.push(notice),
+    () => {},
+  );
+  context.after(unsubscribe);
   const root = require('react-dom/client').createRoot(document.getElementById('root'));
   context.after(() => dom.window.close());
   context.mock.timers.enable({ apis: ['setTimeout'] });
@@ -55,58 +74,80 @@ async function render(context, reply) {
       React.createElement(AddPublishAccount, {
         projectPath: '/project',
         provider: 'cloudflare',
+        purpose: 'sign-in',
         close() {},
         connected() {},
       }),
     ),
   );
-  return { calls, root };
+  return { calls, opened, toasts, root };
+}
+
+function primary() {
+  return document.querySelector('.modal-body button.primary');
 }
 
 function button(label) {
   return [...document.querySelectorAll('button')].find((item) => item.textContent === label);
 }
 
-test('installation and browser sign-in share one screen', async (context) => {
-  const { calls, root } = await render(context, (request) => (request.action === 'start' ? { kind: 'installing' } : { kind: 'browser', url: browserURL }));
+test('setup and browser sign-in share one screen; the button carries the progress', async (context) => {
+  const { calls, opened, root } = await render(context, (request) =>
+    request.action === 'start' ? { kind: 'installing' } : { kind: 'browser', url: browserURL },
+  );
   assert.match(document.body.textContent, /Sign in to Cloudflare/);
-  assert.match(document.body.textContent, /Installing Wrangler in this site/);
-  assert.match(document.body.textContent, /lets the installation finish/);
-  assert.equal(button('Continue in browser').disabled, true);
-  assert.doesNotMatch(document.body.textContent, /Wrangler was added/);
+  assert.equal(document.querySelectorAll('.modal-body p').length, 1, 'one line of text, nothing else');
+  assert.match(document.body.textContent, /Approve access in your browser/);
+  assert.equal(primary().textContent, 'Setting things up…');
+  assert.equal(primary().getAttribute('aria-busy'), 'true');
+  assert.ok(primary().querySelector('.mini-spinner'), 'the spinner sits in the button');
+  assert.equal(primary().disabled, false, 'the blue button is never dimmed by the disabled attribute');
+  assert.doesNotMatch(document.body.textContent, /Wrangler|dependenc|command-line/);
   await act(async () => context.mock.timers.tick(1000));
-  assert.equal(button('Continue in browser').disabled, false);
-  assert.match(document.body.textContent, /Wrangler was added to this site/);
-  assert.match(document.body.textContent, /Waiting for sign-in/);
+  assert.equal(primary().textContent, 'Waiting for you in the browser…');
+  assert.deepEqual(opened, [browserURL], 'the sign-in page opens by itself');
+  await act(async () => context.mock.timers.tick(1000));
+  assert.deepEqual(opened, [browserURL], 'and only once');
+  assert.doesNotMatch(document.body.textContent, /Wrangler|dependenc/);
   assert.deepEqual(
     calls.map((call) => call.action),
-    ['start', 'status'],
+    ['start', 'status', 'status'],
   );
   await act(async () => root.unmount());
   assert.equal(calls.at(-1).action, 'cancel');
   assert.equal(new Set(calls.map((call) => call.id)).size, 1);
 });
 
-test('a site that already has Wrangler says nothing about dependencies', async (context) => {
+test('the login switching tip lives in a (?) tip, not in the dialog text', async (context) => {
   await render(context, () => ({ kind: 'browser', url: browserURL }));
-  assert.equal(button('Continue in browser').disabled, false);
-  assert.doesNotMatch(document.body.textContent, /Wrangler was added/);
+  const tip = document.querySelector('.modal-body .settings-info');
+  assert.ok(tip);
+  assert.match(document.getElementById(tip.getAttribute('aria-describedby')).textContent, /switch accounts in your browser/);
+  assert.equal(document.querySelectorAll('.modal-body p').length, 1);
 });
 
-test('a failure stays on the same screen and offers Try again', async (context) => {
-  const { calls } = await render(context, (request) =>
-    calls.length === 1
-      ? { kind: 'browser', url: browserURL }
-      : request.action === 'status'
-        ? { kind: 'failed', message: 'Cloudflare sign-in expired. Please try again.' }
-        : { kind: 'browser', url: browserURL },
-  );
+test('a failure is a toast and the button offers Try again', async (context) => {
+  // The first status poll fails; the start before it and the retry's start after it both reach the browser step.
+  let polls = 0;
+  const { calls, toasts } = await render(context, (request) => {
+    if (request.action === 'status') {
+      polls += 1;
+      if (polls === 1) {
+        return { kind: 'failed', message: 'Could not finish setting up Cloudflare. Please try again.' };
+      }
+    }
+    return { kind: 'browser', url: browserURL };
+  });
   await act(async () => context.mock.timers.tick(1000));
   assert.match(document.body.textContent, /Sign in to Cloudflare/);
-  assert.match(document.body.textContent, /Sign-in did not finish/);
-  assert.equal(button('Continue in browser'), undefined);
+  assert.doesNotMatch(document.body.textContent, /Could not finish/, 'the cause is a toast, not a line in the dialog');
+  assert.deepEqual(
+    toasts.map((toast) => toast.message),
+    ['Could not finish setting up Cloudflare. Please try again.'],
+  );
+  assert.equal(toasts[0].recovery[0].label, 'Try again');
   await act(async () => button('Try again').click());
-  assert.equal(button('Continue in browser').disabled, false);
+  assert.equal(primary().textContent, 'Waiting for you in the browser…');
   const starts = calls.filter((call) => call.action === 'start');
   assert.equal(starts.length, 2);
   assert.notEqual(starts[0].id, starts[1].id);

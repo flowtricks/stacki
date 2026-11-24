@@ -212,6 +212,7 @@
     "electron/project/publishRepositories.ts",
     "electron/project/publishReviewRequest.ts",
     "electron/project/publishSite.ts",
+    "electron/project/publishToolInstall.ts",
     "electron/project/publishWorkerConfig.ts",
     "electron/project/publishWorkerSetup.ts",
     "electron/project/studioCatalog.ts",

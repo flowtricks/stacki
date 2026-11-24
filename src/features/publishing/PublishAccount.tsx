@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { described, type MessageKey } from '../../../shared/properties/i18n/messageRef';
+import InfoHint from '../../ui/InfoHint';
 import { publishingAccount, openAccountSignIn } from '../../ipc/publishAccountBridge';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
@@ -29,17 +30,12 @@ export function AddPublishAccount(props: Props) {
   const label = PROVIDER_LABELS[props.provider];
   const [attempt, setAttempt] = useState(0);
   const state = useAccountSignIn(props.projectPath, props.provider, attempt);
-  // The attempt that installed the CLI, so its later steps can say what changed.
-  const [installedAttempt, setInstalledAttempt] = useState<number | undefined>(undefined);
   const { connected } = props;
   useEffect(() => {
     if (state.kind === 'complete') {
       connected();
     }
-    if (state.kind === 'installing') {
-      setInstalledAttempt(attempt);
-    }
-  }, [state.kind, connected, attempt]);
+  }, [state.kind, connected]);
   const retry = () => setAttempt(attempt + 1);
   // A first connection signs in; adding another GitHub or Cloudflare account keeps its old title.
   const heading =
@@ -51,7 +47,7 @@ export function AddPublishAccount(props: Props) {
           <div className="modal-header">{heading}</div>
           <div className="modal-body publish-fields" aria-live="polite">
             {props.provider !== 'github' ? (
-              <BrowserSignIn provider={props.provider} state={state} installed={installedAttempt === attempt} retry={retry} />
+              <BrowserSignIn provider={props.provider} state={state} retry={retry} />
             ) : state.kind === 'waiting' ? (
               <AccountDeviceCode code={state.code} />
             ) : state.kind === 'failed' ? (
@@ -155,91 +151,74 @@ function useAccountSignIn(projectPath: string, provider: AccountProvider, attemp
   return state;
 }
 
-// What each browser sign-in says: the tool it installs, and where the install goes.
-const BROWSER_SIGN_IN = {
-  cloudflare: {
-    label: 'Cloudflare', // i18n-ignore: product name.
-    installed: 'publish.account.cloudflare.installed',
-    installing: 'publish.account.cloudflare.installing',
-  },
-  vercel: {
-    label: 'Vercel', // i18n-ignore: product name.
-    installed: 'publish.account.vercel.installed',
-    installing: 'publish.account.vercel.installing',
-  },
-} as const satisfies Record<'cloudflare' | 'vercel', { readonly label: string; readonly installed: MessageKey; readonly installing: MessageKey }>;
+// The step the sign-in button names while it works, changing in place: setting up (installing the tool or starting
+// sign-in), then waiting for the person in the browser. A finished or failed sign-in names its own next step instead.
+const BROWSER_STEP_LABELS = {
+  installing: 'publish.account.step.setup',
+  starting: 'publish.account.step.setup',
+  browser: 'publish.account.step.waiting',
+  waiting: 'publish.account.step.waiting',
+  complete: 'publish.account.connected',
+  cancelled: 'publish.account.step.setup',
+} as const satisfies Record<Exclude<AccountState['kind'], 'failed'>, MessageKey>;
 
-// One screen for the whole browser sign-in: installing, starting, waiting and failing only
-// change the button and the status line, so nothing flashes past between steps.
-function BrowserSignIn(props: {
-  readonly provider: 'cloudflare' | 'vercel';
-  readonly state: AccountState;
-  readonly installed: boolean;
-  readonly retry: () => void;
-}) {
+// One screen for the whole browser sign-in: one line, a (?) tip for switching logins, and one primary button that
+// carries the progress (spinner and step label) from setup to sign-in. The browser opens by itself once the sign-in
+// page is ready; problems are toasts, each with its own retry, never lines added to the dialog.
+function BrowserSignIn(props: { readonly provider: 'cloudflare' | 'vercel'; readonly state: AccountState; readonly retry: () => void }) {
   const translate = useTranslate();
-  const [error, setError] = useState('');
+  const translateDescribed = useTranslateDescribed();
+  const [openError, setOpenError] = useState('');
+  const opened = useRef<string | undefined>(undefined);
   const { state } = props;
-  const copy = BROWSER_SIGN_IN[props.provider];
+  const label = PROVIDER_LABELS[props.provider];
+  const openBrowser = (url: string) => {
+    setOpenError('');
+    void openAccountSignIn(url).catch(() => {
+      setOpenError(translate('publish.account.openFailed', { provider: label }));
+    });
+  };
+  const browserURL = state.kind === 'browser' ? state.url : undefined;
+  useEffect(() => {
+    // Each sign-in page opens once; polling hands back the same address every second.
+    if (browserURL !== undefined && opened.current !== browserURL) {
+      opened.current = browserURL;
+      openBrowser(browserURL);
+    }
+  });
+  const tryAgain = translate('publish.common.tryAgain');
   return (
     <>
-      <p>{translate('publish.account.browser.intro', { provider: copy.label })}</p>
-      <p className="hint-text">{translate('publish.account.browser.switchHint', { provider: copy.label })}</p>
-      {props.installed && state.kind !== 'installing' && <p className="hint-text">{translate(copy.installed)}</p>}
+      <div className="publish-account-line">
+        <p>{translate('publish.account.browser.approve')}</p>
+        <InfoHint text={translate('publish.account.browser.switchHint', { provider: label })} />
+      </div>
       {state.kind === 'failed' ? (
-        <button type="button" className="primary" onClick={props.retry}>
-          {translate('publish.common.tryAgain')}
-        </button>
+        <>
+          <button type="button" className="primary" onClick={props.retry}>
+            {tryAgain}
+          </button>
+          <ErrorToast message={translateDescribed(state)} recovery={[{ label: tryAgain, run: props.retry }]} />
+        </>
       ) : (
-        <button
-          type="button"
-          className="primary"
-          disabled={state.kind !== 'browser'}
-          onClick={() => {
-            if (state.kind === 'browser') {
-              setError('');
-              void openAccountSignIn(state.url).catch(() => {
-                setError(translate('publish.account.openFailed', { provider: copy.label }));
-              });
-            }
-          }}
-        >
-          {translate('publish.account.continueBrowser')}
-        </button>
+        <SignInStepButton state={state} />
       )}
-      <BrowserSignInStatus provider={props.provider} state={state} />
-      {error && <ErrorToast message={error} />}
+      {openError && browserURL !== undefined && (
+        <ErrorToast message={openError} recovery={[{ label: translate('publish.account.openBrowser'), run: () => openBrowser(browserURL) }]} />
+      )}
     </>
   );
 }
 
-function BrowserSignInStatus({ provider, state }: { readonly provider: 'cloudflare' | 'vercel'; readonly state: AccountState }) {
+// The blue button keeps its fill while it works (aria-disabled, not the disabled attribute that dims it), so it reads
+// as busy rather than unavailable; a click while it works does nothing.
+function SignInStepButton({ state }: { readonly state: Exclude<AccountState, { readonly kind: 'failed' }> }) {
   const translate = useTranslate();
-  const translateDescribed = useTranslateDescribed();
-  const copy = BROWSER_SIGN_IN[provider];
-  switch (state.kind) {
-    case 'installing':
-      return <p className="hint-text">{translate(copy.installing)}</p>;
-    case 'starting':
-      return <p className="hint-text">{translate('publish.account.starting', { provider: copy.label })}</p>;
-    case 'waiting':
-    case 'browser':
-      return <p className="hint-text">{translate('publish.account.waiting')}</p>;
-    case 'complete':
-      return <p className="hint-text">{translate('publish.account.connected')}</p>;
-    case 'cancelled':
-      return <p className="hint-text">{translate('publish.account.cancelled')}</p>;
-    case 'failed':
-      // The cause goes to the app's error toast; the screen only says sign-in stopped.
-      return (
-        <>
-          <p className="hint-text">{translate('publish.account.unfinished')}</p>
-          <ErrorToast message={translateDescribed(state)} />
-        </>
-      );
-    default: {
-      const exhaustive: never = state;
-      return exhaustive;
-    }
-  }
+  const busy = accountSignInPending(state);
+  return (
+    <button type="button" className="primary publish-setup-button" aria-busy={busy} aria-disabled={true} aria-live="polite">
+      {busy && <span className="mini-spinner" aria-hidden="true" />}
+      {translate(BROWSER_STEP_LABELS[state.kind])}
+    </button>
+  );
 }

@@ -6,6 +6,7 @@ import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib
 import { described, type Described, type MessageKey } from '../../../shared/properties/i18n/messageRef';
 import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
+import InfoHint from '../../ui/InfoHint';
 import { HostingChoice, hostingKey } from './PublishHosting';
 import { cachedPublishingDiscovery, invalidatePublishingAccounts } from './publishDiscoveryCache';
 import { connectionFailureMessage, type ConnectionProblem, type PublishAccount, type PublishDiscovery } from '../../../shared/properties/publishDiscovery';
@@ -76,7 +77,7 @@ export function PublishConnections(props: Props) {
           refresh={refresh}
         />
       )}
-      {displayed?.kind === 'failed' && <ConnectionHelp provider={provider} />}
+      {displayed?.kind === 'failed' && !installsOnConnect(provider, displayed) && <ConnectionHelp provider={provider} />}
     </div>
   );
 }
@@ -127,6 +128,17 @@ export function connectionRecovery(provider: Props['provider'], problem: Pick<Co
   }
 }
 
+/**
+ * Whether the recovery button fixes the problem by itself: a missing Cloudflare or Vercel tool is installed by the
+ * sign-in that button starts, so the missing tool is not news to report, only a step the button takes.
+ */
+export function installsOnConnect(provider: Props['provider'], problem: Pick<ConnectionProblem, 'reason'>): boolean {
+  if (problem.reason !== 'missing-cli') {
+    return false;
+  }
+  return provider !== 'github';
+}
+
 // Remounted for each check (keyed by attempt), so a refresh that fails again reports again: the
 // toast leaves while the check runs and returns with the reason it found.
 function ConnectionRecovery(props: {
@@ -144,13 +156,18 @@ function ConnectionRecovery(props: {
   const recoveryLabel = translateDescribed(recovery);
   const problemText = translate(FAILURE_KEYS[props.problem.reason], { provider: PROVIDER_LABELS[props.provider] });
   const run = recovery.kind === 'sign-in' ? () => setSigningIn(true) : props.refresh;
+  // The problem is a toast (a failed check) or the button's (i) tip (a notice beside working accounts), never a line in
+  // the dialog. A tool the button installs itself is neither: the button alone is the next step.
+  const silent = installsOnConnect(props.provider, props.problem);
   return (
     <div className="publish-connection-recovery">
-      <p className="hint-text">{problemText}</p>
-      <button type="button" className={recovery.kind === 'sign-in' ? 'primary' : ''} disabled={props.busy} onClick={run}>
-        {props.busy ? translate('publish.connection.checking') : recoveryLabel}
-      </button>
-      {props.toast && !props.busy && <ErrorToast message={problemText} recovery={[{ label: recoveryLabel, run }]} />}
+      <div className="publish-connection-action">
+        <button type="button" className={recovery.kind === 'sign-in' ? 'primary' : ''} disabled={props.busy} onClick={run}>
+          {props.busy ? translate('publish.connection.checking') : recoveryLabel}
+        </button>
+        {!props.toast && !silent && <InfoHint text={problemText} />}
+      </div>
+      {props.toast && !silent && !props.busy && <ErrorToast message={problemText} recovery={[{ label: recoveryLabel, run }]} />}
       {signingIn && (
         <AddPublishAccount
           projectPath={props.projectPath}

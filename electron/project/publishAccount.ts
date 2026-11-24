@@ -10,17 +10,36 @@ import {
   type AccountRequest,
   type AccountState,
 } from '../../shared/ipc/publishAccount';
-import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
+import type { PackageManager } from '../../shared/properties/packageManager';
 import { homedir } from 'node:os';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import { err, ok, type Result } from '../../shared/core/result';
 import { ensureToolPath, toolPathHome } from '../lib/nodeTools';
-import { detectPackageManager, PNPM_TOLERATE_IGNORED_BUILDS } from './packageManager';
-import { addPublishToolDirectory, projectHasWrangler, publishToolInstalled, resolvePublishExecutable, vercelInstallPrefix } from './publishExecutable';
+import { PNPM_TOLERATE_IGNORED_BUILDS } from './packageManager';
+import {
+  addPublishToolDirectory,
+  publishToolInstalled,
+  resolvePublishExecutable,
+  vercelInstallPrefix,
+  wranglerAvailableWithoutPATH,
+} from './publishExecutable';
 import { publishEnvironment, stopPublishProcess } from './publishCommands';
+import { appToolsDirectory, discardWranglerInstall, finishWranglerInstall, prepareWranglerInstall, type ToolInstallFailure } from './publishToolInstall';
 
-// What a launched process does: install the provider's CLI, or sign in. Wrangler installs into
-// the site with its own manager; the Vercel CLI installs once for this user, without sudo.
-export type LaunchStep = { readonly kind: 'installing'; readonly packageManager: PackageManager } | { readonly kind: 'starting' };
+/**
+ * One installation of a provider's tool, run by npm before sign-in. Wrangler installs, pinned and verified, into a
+ * folder Stacki owns (publishToolInstall.ts); the Vercel CLI installs once for this user, without sudo. `finish`
+ * runs after npm exits cleanly and decides whether the result is used; `discard` cleans up after any other ending.
+ */
+export interface ToolInstall {
+  readonly arguments: readonly string[];
+  readonly cwd: string;
+  readonly finish: () => Result<void, ToolInstallFailure>;
+  readonly discard: () => void;
+}
+
+// What a launched process does: install the provider's tool, or sign in.
+export type LaunchStep = { readonly kind: 'installing'; readonly install: ToolInstall } | { readonly kind: 'starting' };
 
 interface Session {
   readonly id: string;
@@ -31,6 +50,9 @@ interface Session {
   state: AccountState;
   output: string;
   outputChars: number;
+  // Whether the installer printed a network failure. Installer output is never kept (it can hold registry
+  // credentials); only this one fact is, so an offline failure can say so.
+  offline: boolean;
   timer: ReturnType<typeof setTimeout> | undefined;
 }
 const OUTPUT_CHARS_MAX = 8192;
@@ -44,7 +66,7 @@ export class PublishingAccount {
   constructor(
     private readonly launch: Launch = launchAccountSignIn,
     private readonly hasTool: (root: string, provider: AccountProvider) => boolean = accountToolInstalled,
-    private readonly packageManager: (root: string) => PackageManager = detectPackageManager,
+    private readonly prepareInstall: (root: string, provider: AccountProvider) => Result<ToolInstall, Described> = prepareAccountTool,
   ) {}
 
   request(root: string, input: AccountRequest): AccountState {
@@ -64,10 +86,14 @@ export class PublishingAccount {
     if (busy !== undefined) {
       return busy;
     }
-    const step: LaunchStep = this.hasTool(root, provider)
-      ? { kind: 'starting' }
-      : { kind: 'installing', packageManager: provider === 'vercel' ? 'npm' : this.packageManager(root) };
-    return this.start(root, request.id, provider, step);
+    if (this.hasTool(root, provider)) {
+      return this.start(root, request.id, provider, { kind: 'starting' });
+    }
+    const install = this.prepareInstall(root, provider);
+    if (!install.ok) {
+      return { kind: 'failed', ...install.error };
+    }
+    return this.start(root, request.id, provider, { kind: 'installing', install: install.value });
   }
 
   // A pending sign-in owns the CLI credentials, and a cancelled installation still
@@ -86,7 +112,7 @@ export class PublishingAccount {
     if (session.step.kind === 'installing' && running(session.process)) {
       return {
         kind: 'failed',
-        ...described('publish.account.error.stillInstalling', { tool: toolLabel(session.provider) }),
+        ...described('publish.account.setup.stillRunning', { provider: providerLabel(session.provider) }),
       };
     }
     return undefined;
@@ -98,6 +124,9 @@ export class PublishingAccount {
       child = this.launch(root, provider, step);
     } catch {
       // On Windows a missing tool is found while resolving it, before any process starts.
+      if (step.kind === 'installing') {
+        step.install.discard();
+      }
       return { kind: 'failed', ...launchFailure(provider, step) };
     }
     const stop = () => {
@@ -114,6 +143,7 @@ export class PublishingAccount {
       state: { kind: step.kind },
       output: '',
       outputChars: 0,
+      offline: false,
       timer: undefined,
     };
     this.session = session;
@@ -130,7 +160,7 @@ export class PublishingAccount {
       this.finish(session, {
         kind: 'failed',
         ...(session.step.kind === 'installing'
-          ? described('publish.account.error.installTimedOut', { tool: toolLabel(session.provider) })
+          ? described('publish.account.setup.timedOut', { provider: providerLabel(session.provider) })
           : described('publish.account.error.providerSignInExpired', { provider: providerLabel(session.provider) })),
       });
       return;
@@ -165,32 +195,11 @@ export class PublishingAccount {
     if (this.session !== session) {
       return;
     }
-    if (!accountSignInPending(session.state)) {
-      // A cancelled installation that finished in the background needs no timeout now.
-      clearTimeout(session.timer);
+    if (session.step.kind === 'installing') {
+      this.installed(session, session.step.install, code);
       return;
     }
-    if (session.step.kind === 'installing') {
-      if (code === 0) {
-        clearTimeout(session.timer);
-        if (session.provider === 'vercel') {
-          // The global install wrote a directory this process may not have had on PATH yet.
-          addPublishToolDirectory(toolPathHome ?? homedir());
-        }
-        // Session identity prevents late installer events from completing the subsequent login.
-        const login = this.start(session.root, session.id, session.provider, { kind: 'starting' });
-        if (this.session === session) {
-          // Login could not launch, so no new session replaced this one.
-          this.finish(session, login);
-        }
-      } else {
-        this.finish(session, {
-          kind: 'failed',
-          ...described(session.provider === 'vercel' ? 'publish.account.error.installFailedDisk' : 'publish.account.error.installFailedAccess', {
-            tool: toolLabel(session.provider),
-          }),
-        });
-      }
+    if (!accountSignInPending(session.state)) {
       return;
     }
     this.finish(
@@ -202,6 +211,33 @@ export class PublishingAccount {
             ...described('publish.account.error.signInIncomplete', { provider: providerLabel(session.provider) }),
           },
     );
+  }
+
+  // An installer exited. A clean exit is verified and kept even after a cancel, so the next attempt starts at once;
+  // any other exit discards what it wrote. Only a still-pending session goes on to sign in or reports a failure.
+  private installed(session: Session, install: ToolInstall, code: number | undefined): void {
+    assert(session.step.kind === 'installing', 'Only an installation session finishes an install');
+    clearTimeout(session.timer);
+    let outcome: Result<void, ToolInstallFailure | 'failed' | 'offline'>;
+    if (code === 0) {
+      outcome = install.finish();
+    } else {
+      install.discard();
+      outcome = err(session.offline ? 'offline' : 'failed');
+    }
+    if (!accountSignInPending(session.state)) {
+      return;
+    }
+    if (outcome.ok) {
+      // Session identity prevents late installer events from completing the subsequent login.
+      const login = this.start(session.root, session.id, session.provider, { kind: 'starting' });
+      if (this.session === session) {
+        // Login could not launch, so no new session replaced this one.
+        this.finish(session, login);
+      }
+      return;
+    }
+    this.finish(session, { kind: 'failed', ...installFailure(session.provider, outcome.error) });
   }
 
   private read(expectedSession: Session, chunk: unknown): void {
@@ -220,7 +256,7 @@ export class PublishingAccount {
       this.finish(session, {
         kind: 'failed',
         ...(installing
-          ? described('publish.account.error.installOutputLarge', { tool: toolLabel(session.provider) })
+          ? described('publish.account.setup.failed', { provider: providerLabel(session.provider) })
           : described('publish.account.error.signInOutputLarge', { provider: providerLabel(session.provider) })),
       });
       return;
@@ -228,6 +264,9 @@ export class PublishingAccount {
     session.outputChars += chunk.length;
     // Installation logs can contain registry credentials; count them without retaining them.
     if (installing) {
+      if (INSTALL_OFFLINE_PATTERN.test(chunk)) {
+        session.offline = true;
+      }
       return;
     }
     session.output += chunk;
@@ -282,10 +321,31 @@ function running(child: ChildProcessWithoutNullStreams): boolean {
   return child.exitCode === null && child.signalCode === null;
 }
 
+// The words npm prints for a registry it could not reach; anything else that fails is reported as a plain failure.
+const INSTALL_OFFLINE_PATTERN = /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|network request|getaddrinfo/;
+
+function installFailure(provider: AccountProvider, failure: ToolInstallFailure | 'failed' | 'offline'): Described {
+  const params = { provider: providerLabel(provider) };
+  switch (failure) {
+    case 'disk':
+      return described('publish.account.setup.disk', params);
+    case 'verify':
+      return described('publish.account.setup.verifyFailed', params);
+    case 'offline':
+      return described('publish.account.setup.offline', params);
+    case 'failed':
+      return described('publish.account.setup.failed', params);
+    default: {
+      const exhaustive: never = failure;
+      return exhaustive;
+    }
+  }
+}
+
 function launchFailure(provider: AccountProvider, step: LaunchStep): Described {
   if (step.kind === 'installing') {
-    const label = packageManagerLabel(step.packageManager);
-    return described('publish.account.error.launchInstall', { manager: label, tool: toolLabel(provider) });
+    // The installer, `npm`, comes with Node.js, which every site needs too; it is the one thing Stacki cannot install itself.
+    return described('publish.account.setup.needsNode', { provider: providerLabel(provider) });
   }
   switch (provider) {
     case 'github':
@@ -319,18 +379,18 @@ function providerLabel(provider: AccountProvider): string {
   }
 }
 
-// The command-line tool each provider's sign-in runs, named the way its docs name it.
-function toolLabel(provider: AccountProvider): string {
+// GitHub's gh is never installed by Stacki; sign-in reports a missing gh as a launch failure.
+function accountToolInstalled(root: string, provider: AccountProvider): boolean {
   switch (provider) {
     case 'github':
-      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
-      return 'GitHub CLI';
+      return true;
     case 'cloudflare':
-      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
-      return 'Wrangler';
+      // The site's own Wrangler, Stacki's pinned copy, or one shipped beside Desktop or Studio. A Wrangler found only on
+      // PATH does not count: its version is unknown, so Stacki installs the pinned one it has tested instead.
+      return wranglerAvailableWithoutPATH(root);
     case 'vercel':
-      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
-      return 'Vercel CLI';
+      ensureToolPath();
+      return publishToolInstalled(root, 'vercel');
     default: {
       const exhaustive: never = provider;
       return exhaustive;
@@ -338,16 +398,34 @@ function toolLabel(provider: AccountProvider): string {
   }
 }
 
-// GitHub's gh is never installed by Stacki; sign-in reports a missing gh as a launch failure.
-function accountToolInstalled(root: string, provider: AccountProvider): boolean {
+// Plans the install a provider's sign-in needs. GitHub's gh is a native program Stacki never installs.
+function prepareAccountTool(root: string, provider: AccountProvider): Result<ToolInstall, Described> {
   switch (provider) {
     case 'github':
-      return true;
-    case 'cloudflare':
-      return projectHasWrangler(root);
+      return err(described('publish.account.error.startGitHub'));
+    case 'cloudflare': {
+      const plan = prepareWranglerInstall(appToolsDirectory());
+      if (!plan.ok) {
+        return err(installFailure(provider, plan.error));
+      }
+      return ok({
+        arguments: plan.value.arguments,
+        cwd: plan.value.staging,
+        finish: () => finishWranglerInstall(plan.value),
+        discard: () => discardWranglerInstall(plan.value),
+      });
+    }
     case 'vercel':
-      ensureToolPath();
-      return publishToolInstalled(root, 'vercel');
+      return ok({
+        arguments: vercelInstallArguments(toolPathHome ?? homedir(), process.platform),
+        cwd: root,
+        finish: () => {
+          // The global install wrote a directory this process may not have had on PATH yet.
+          addPublishToolDirectory(toolPathHome ?? homedir());
+          return ok(undefined);
+        },
+        discard: () => {},
+      });
     default: {
       const exhaustive: never = provider;
       return exhaustive;
@@ -381,7 +459,8 @@ export function vercelInstallArguments(home: string, platform: NodeJS.Platform):
   return platform === 'win32' ? ['install', '--global', 'vercel'] : ['install', '--global', '--prefix', vercelInstallPrefix(home), 'vercel'];
 }
 
-// Adds the latest Wrangler as a development dependency with the site's manager.
+// Adds the latest Wrangler as a development dependency with the site's manager. Sign-in no longer uses this (it installs
+// Stacki's own pinned copy); Worker setup still adds Wrangler to a site that deploys with it.
 export function wranglerInstallArguments(manager: PackageManager): readonly string[] {
   switch (manager) {
     case 'npm':
@@ -424,15 +503,11 @@ function launchCloudflareSignIn(root: string, step: LaunchStep): ChildProcessWit
   const command = resolvePublishExecutable(
     root,
     step.kind === 'installing'
-      ? {
-          executable: step.packageManager,
-          arguments: wranglerInstallArguments(step.packageManager),
-          environment: {},
-        }
+      ? { executable: 'npm', arguments: step.install.arguments, environment: {} }
       : { executable: 'wrangler', arguments: ['login', '--browser=false'], environment: {} },
   );
   return spawn(command.executable, [...command.arguments], {
-    cwd: root,
+    cwd: step.kind === 'installing' ? step.install.cwd : root,
     env: { ...publishEnvironment(), NO_COLOR: '1', WRANGLER_SEND_METRICS: 'false' },
     detached: process.platform !== 'win32',
     stdio: 'pipe',
@@ -446,7 +521,7 @@ function launchVercelSignIn(root: string, step: LaunchStep): ChildProcessWithout
   const command = resolvePublishExecutable(
     root,
     step.kind === 'installing'
-      ? { executable: 'npm', arguments: vercelInstallArguments(toolPathHome ?? homedir(), process.platform), environment: {} }
+      ? { executable: 'npm', arguments: step.install.arguments, environment: {} }
       : { executable: 'vercel', arguments: ['login'], environment: {} },
   );
   // VERCEL_TOKEN would make the CLI use that token instead of signing this computer in.

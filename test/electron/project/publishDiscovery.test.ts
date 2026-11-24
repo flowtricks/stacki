@@ -245,7 +245,7 @@ test('Cloudflare combines Pages and Workers across accounts', async (context) =>
 test('Vercel failures report why: no CLI, signed out, expired or offline', async (context) => {
   const root = await fixture(context);
   const cases = [
-    ['missing-cli', /not installed/],
+    ['missing-cli', /not set up on this computer/],
     ['signed-out', /not signed in to Vercel/],
     ['expired', /expired or was revoked/],
     ['network', /Could not reach Vercel/],

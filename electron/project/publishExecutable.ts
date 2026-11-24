@@ -8,6 +8,7 @@ import type { PublishCommand } from '../../shared/properties/publishCommands';
 import type { PackageManager } from '../../shared/properties/packageManager';
 import { described } from '../../shared/properties/i18n/messageRef';
 import { DescribedError } from '../../shared/properties/describedError';
+import { appToolsDirectory, checkAppWrangler, wranglerToolRoot } from './publishToolInstall';
 
 export function projectHasWrangler(root: string): boolean {
   const resolver = createRequire(path.join(root, 'package.json'));
@@ -36,6 +37,17 @@ export function publishToolInstalled(root: string, executable: 'wrangler' | 'ver
     return true;
   }
   return pathTool(executable, pathEnvironmentValue(process.env)) !== undefined;
+}
+
+/**
+ * Whether Wrangler can run for this site without looking on PATH: the site's own copy, Stacki's pinned copy, or one
+ * shipped beside Desktop or Studio. Sign-in uses this so an unknown global version never stands in for the pinned one.
+ */
+export function wranglerAvailableWithoutPATH(root: string): boolean {
+  if (projectHasWrangler(root)) {
+    return true;
+  }
+  return installedPublishTool(root, 'wrangler') !== undefined;
 }
 
 /** Where a global install without sudo puts the Vercel CLI: npm's prefix under ~/.local. */
@@ -139,7 +151,10 @@ function installedPublishTool(root: string, executable: string): string | undefi
   }
   // Desktop and Studio can share an installed CLI without downloading code during discovery.
   const resolver = createRequire(path.join(process.cwd(), 'package.json'));
-  const directories = [root, process.cwd(), path.join(process.cwd(), 'studio'), path.dirname(process.argv[1] ?? process.cwd())];
+  // The site's own copy wins, then the pinned copy Stacki installed for itself (publishToolInstall.ts), then a copy
+  // shipped beside Desktop or Studio. Only a whole, pinned app copy counts; a damaged one is reinstalled instead.
+  const tools = executable === 'wrangler' && checkAppWrangler(appToolsDirectory()).kind === 'ready' ? [wranglerToolRoot(appToolsDirectory())] : [];
+  const directories = [root, ...tools, process.cwd(), path.join(process.cwd(), 'studio'), path.dirname(process.argv[1] ?? process.cwd())];
   for (const directory of directories) {
     let manifest: string;
     try {

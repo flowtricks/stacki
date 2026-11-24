@@ -4,13 +4,8 @@ import type { MessageKey } from '../en/publish';
 
 export const messages = {
   'publish.account.addTitle': '{provider}-Konto hinzufügen',
-  'publish.account.browser.intro': 'Melde dich bei {provider} an und genehmige den Zugriff, um deine Konten zu verbinden.',
-  'publish.account.browser.switchHint':
-    'Um ein anderes Login zu verwenden, wechsle in {provider} das Konto, bevor du den Zugriff genehmigst. Das aktualisiert das {provider}-Login der lokalen Veröffentlichung.',
-  'publish.account.cancelled': 'Anmeldung abgebrochen.',
-  'publish.account.cloudflare.installed': 'Wrangler wurde zu den Entwicklungsabhängigkeiten dieser Website hinzugefügt.',
-  'publish.account.cloudflare.installing':
-    'Wrangler wird in dieser Website installiert … Abbrechen überspringt die Anmeldung, die Installation wird aber beendet.',
+  'publish.account.browser.approve': 'Genehmige den Zugriff in deinem Browser.',
+  'publish.account.browser.switchHint': 'Um ein anderes {provider}-Login zu verwenden, wechsle im Browser das Konto, bevor du den Zugriff genehmigst.',
   'publish.account.connected': 'Konto verbunden.',
   'publish.account.continueBrowser': 'Im Browser fortfahren',
   'publish.account.deviceCode.hint': 'Wähle auf GitHub das Konto, das du hinzufügen möchtest. Dort kannst du dich auch mit einem anderen Konto anmelden.',
@@ -18,29 +13,31 @@ export const messages = {
   'publish.account.deviceCode.label': 'Einmalcode',
   'publish.account.deviceCode.openFailed': 'Der Browser konnte nicht geöffnet werden. Öffne github.com/login/device und gib den Code ein.',
   'publish.account.error.inProgress': 'Schließe die laufende Kontoanmeldung ab oder brich sie ab.',
-  'publish.account.error.installFailedAccess':
-    '{tool} konnte nicht installiert werden. Prüfe deine Verbindung und den Zugriff auf das Projekt und versuche es dann erneut.',
-  'publish.account.error.installFailedDisk':
-    '{tool} konnte nicht installiert werden. Prüfe deine Verbindung und den Speicherplatz und versuche es dann erneut.',
-  'publish.account.error.installOutputLarge': 'Die Installation von {tool} hat zu viel Ausgabe erzeugt.',
-  'publish.account.error.installTimedOut': 'Die Installation von {tool} hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.',
-  'publish.account.error.launchInstall':
-    '{manager} konnte nicht ausgeführt werden, um {tool} zu installieren. Installiere {manager} und versuche es dann erneut.',
   'publish.account.error.providerSignInExpired': 'Die Anmeldung bei {provider} ist abgelaufen. Bitte versuche es erneut.',
   'publish.account.error.sessionEnded': 'Diese Anmeldesitzung wurde beendet. Bitte versuche es erneut.',
-  'publish.account.error.signInIncomplete': 'Die Anmeldung bei {provider} wurde nicht abgeschlossen. Prüfe die CLI-Authentifizierung und versuche es erneut.',
+  'publish.account.error.signInIncomplete': 'Die Anmeldung bei {provider} wurde nicht abgeschlossen. Bitte versuche es erneut.',
   'publish.account.error.signInOutputLarge': 'Die Anmeldung bei {provider} hat zu viel Ausgabe erzeugt.',
-  'publish.account.error.startCloudflare': 'Die Cloudflare-Anmeldung konnte nicht gestartet werden. Installiere Wrangler und versuche es erneut.',
+  'publish.account.error.startCloudflare': 'Die Cloudflare-Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.',
   'publish.account.error.startGitHub': 'Die GitHub-Anmeldung konnte nicht gestartet werden. Installiere gh und versuche es erneut.',
-  'publish.account.error.startVercel': 'Die Vercel-Anmeldung konnte nicht gestartet werden. Installiere die Vercel-CLI und versuche es erneut.',
-  'publish.account.error.stillInstalling': '{tool} wird noch im Hintergrund installiert. Versuche es gleich noch einmal.',
+  'publish.account.error.startVercel': 'Die Vercel-Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.',
   'publish.account.expired': 'Die Kontoanmeldung ist abgelaufen. Versuche es erneut.',
+  'publish.account.openBrowser': 'Browser öffnen',
   'publish.account.openFailed': 'Die Anmeldung bei {provider} konnte nicht geöffnet werden. Versuche es erneut.',
+  'publish.account.setup.disk':
+    'Die Einrichtung von {provider} konnte nicht auf diesem Computer gespeichert werden. Prüfe den freien Speicherplatz und versuche es dann erneut.',
+  'publish.account.setup.failed': 'Die Einrichtung von {provider} konnte nicht abgeschlossen werden. Bitte versuche es erneut.',
+  'publish.account.setup.needsNode':
+    'Für die Einrichtung von {provider} wird Node.js auf diesem Computer benötigt. Installiere es von nodejs.org und versuche es dann erneut.',
+  'publish.account.setup.offline':
+    'Für die Einrichtung von {provider} konnte keine Internetverbindung hergestellt werden. Prüfe deine Verbindung und versuche es dann erneut.',
+  'publish.account.setup.stillRunning': '{provider} wird noch eingerichtet. Versuche es gleich noch einmal.',
+  'publish.account.setup.timedOut': 'Die Einrichtung von {provider} hat zu lange gedauert. Prüfe deine Verbindung und versuche es dann erneut.',
+  'publish.account.setup.verifyFailed':
+    'Der Download von {provider} entsprach nicht den Erwartungen von Stacki und wurde deshalb nicht verwendet. Bitte versuche es erneut.',
   'publish.account.signInTitle': 'Bei {provider} anmelden',
   'publish.account.starting': 'Anmeldung bei {provider} wird gestartet …',
-  'publish.account.unfinished': 'Die Anmeldung wurde nicht abgeschlossen.',
-  'publish.account.vercel.installed': 'Die Vercel-CLI wurde für dein Benutzerkonto installiert.',
-  'publish.account.vercel.installing': 'Die Vercel-CLI wird installiert … Abbrechen überspringt die Anmeldung, die Installation wird aber beendet.',
+  'publish.account.step.setup': 'Wird eingerichtet …',
+  'publish.account.step.waiting': 'Warte auf dich im Browser …',
   'publish.account.waiting': 'Warte auf die Anmeldung …',
   'publish.branchWarning.body': 'Du bist auf {branch}, nicht auf {default}. Beim Veröffentlichen wird dieser Branch gesendet.',
   'publish.branchWarning.bodyDetached':
@@ -71,7 +68,7 @@ export const messages = {
   'publish.common.tryAgain': 'Erneut versuchen',
   'publish.connection.checking': 'Verbindung wird geprüft …',
   'publish.connection.failure.expired': 'Die Anmeldung bei {provider} ist abgelaufen oder wurde widerrufen. Melde dich erneut an.',
-  'publish.connection.failure.missingCli': 'Das {provider}-Kommandozeilenwerkzeug ist auf diesem Computer nicht installiert.',
+  'publish.connection.failure.missingCli': '{provider} ist auf diesem Computer noch nicht eingerichtet.',
   'publish.connection.failure.network': '{provider} ist nicht erreichbar. Prüfe deine Internetverbindung und aktualisiere dann.',
   'publish.connection.failure.signedOut': 'Du bist bei {provider} nicht angemeldet.',
   'publish.connection.failure.unknown':

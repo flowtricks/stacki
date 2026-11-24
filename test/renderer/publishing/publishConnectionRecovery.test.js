@@ -1,5 +1,5 @@
-// Goal: choosing Vercel never strands the person on a dead-end toast. No CLI offers Install
-// Vercel, no login offers Sign in to Vercel (opening the sign-in dialog), an expired login offers
+// Goal: choosing Vercel never strands the person on a dead-end toast, and no problem is ever a paragraph in the
+// field. No CLI offers Install Vercel with no message at all (the button installs it), no login offers Sign in to Vercel (opening the sign-in dialog), an expired login offers
 // Sign in again, and Refresh really re-checks: the toast leaves while it runs and comes back with
 // the reason the new check found.
 // Method: mount the real connections field with deferred discovery IPC and a recorded toast
@@ -92,18 +92,13 @@ function button(label) {
   return [...document.querySelectorAll('button')].find((item) => item.textContent === label);
 }
 
-test('no Vercel CLI offers Install Vercel, which opens the sign-in dialog', async (context) => {
+test('no Vercel CLI offers Install Vercel and says nothing else: the button installs it', async (context) => {
   const { discovery, accounts, open } = await mount(context);
   assert.equal(discovery[0].request.provider, 'vercel');
-  await act(async () =>
-    discovery[0].resolve({ kind: 'failed', reason: 'missing-cli', message: 'The Vercel command-line tool is not installed on this computer.' }),
-  );
-  assert.match(document.body.textContent, /not installed on this computer/);
-  assert.doesNotMatch(document.body.textContent, /Connection unavailable/);
-  assert.deepEqual(
-    open().map((toast) => toast.recovery.map((action) => action.label)),
-    [['Install Vercel']],
-  );
+  await act(async () => discovery[0].resolve({ kind: 'failed', reason: 'missing-cli', message: 'Vercel is not set up on this computer yet.' }));
+  assert.doesNotMatch(document.body.textContent, /not set up on this computer|command-line|Connection help/);
+  assert.equal(document.querySelectorAll('.publish-connection-recovery p').length, 0, 'no paragraph is appended');
+  assert.deepEqual(open(), [], 'a tool the button installs is not an error');
   await act(async () => button('Install Vercel').click());
   assert.match(document.body.textContent, /Sign in to Vercel/);
   assert.equal(accounts[0].provider, 'vercel');

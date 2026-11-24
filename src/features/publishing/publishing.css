@@ -295,7 +295,12 @@
   gap: 16px;
   padding-top: 16px;
 }
-/* The message and its one next step (install, sign in, refresh) sit together under the field. */
+/* The one next step (connect, sign in, refresh) under the field; its message is a toast or the (i) tip beside it. */
+.publish-connection-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .publish-settings .publish-connection-recovery {
   display: grid;
   justify-items: start;
@@ -311,6 +316,8 @@
   flex-shrink: 0;
   padding: 12px 20px;
   background: inherit;
+  /* Stacki separates with fills, never divider lines: the footer sits on the dialog's own background. */
+  border-top: 0;
 }
 .modal.publish-status {
   width: min(420px, calc(100vw - 32px));
@@ -545,6 +552,15 @@
 .modal.publish-add-account {
   /* Creation is a separate task; its dialog only needs space for the two fields. */
   height: auto;
+}
+/* The sign-in's one line and its (?) tip, which holds how to use another login. */
+.publish-account-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.publish-add-account .publish-setup-button {
+  justify-content: center;
 }
 .publish-account-code {
   text-align: center;
