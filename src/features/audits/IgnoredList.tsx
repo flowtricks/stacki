@@ -1,12 +1,12 @@
 // The Audits panel's "Ignored" view: everything the project ignores, grouped by
-// file, so it can be read and taken back. A file ignored whole shows its reason and
-// how many findings it hides; findings ignored one by one list under their file with
-// their own reason; an entry the audit no longer reports (a deleted page, markup that
+// file, so it can be read and taken back. A file ignored whole shows its reason, when
+// it has one, and how many findings it hides; findings ignored one by one list under
+// their file, a reason someone left as a quiet second line; an entry the audit no longer reports (a deleted page, markup that
 // moved) is still listed so it can be removed. Unignore edits only that entry in
 // `.stacki/audits.json`; "Unignore all" asks first.
 import { useState } from 'react';
 import type { AuditFinding } from '../../../shared/page/auditFindings';
-import { ignoredEntryCount, ignoredGroups } from '../../../shared/properties/auditIgnoreList';
+import { ignoredEntryCount, ignoredGroups, type IgnoredFindingRow } from '../../../shared/properties/auditIgnoreList';
 import type { AuditIgnores } from '../../../shared/properties/auditIgnores';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { FileKindIcon, type Actions } from './AuditsPanel';
@@ -53,7 +53,9 @@ export function IgnoredList(props: { readonly findings: readonly AuditFinding[];
           </div>
           {group.page !== undefined && (
             <div className="list-item audits-row audits-ignored-row">
-              <span className="label audits-title">{translate('audits.ignored.page', { reason: group.page.reason })}</span>
+              <span className="label audits-title">
+                {group.page.reason === undefined ? translate('audits.ignored.pageWhole') : translate('audits.ignored.page', { reason: group.page.reason })}
+              </span>
               <span className="audits-muted-text">
                 {group.page.count === 0 ? translate('audits.ignored.stale') : translate('audits.ignored.pageCount', { count: group.page.count })}
               </span>
@@ -62,21 +64,32 @@ export function IgnoredList(props: { readonly findings: readonly AuditFinding[];
               </button>
             </div>
           )}
-          {group.findings.map((row) => (
-            <div key={row.id} className="list-item audits-row audits-ignored-row">
-              <span className="label audits-title" title={row.label}>
-                {row.label}
-              </span>
-              <span className="audits-muted-text" title={row.reason}>
-                {row.live ? row.reason : `${row.reason} · ${translate('audits.ignored.stale')}`}
-              </span>
-              <button className="audits-link" disabled={props.actions.busy} onClick={() => void props.actions.unignoreIds([row.id])}>
-                {translate('audits.ignored.unignore')}
-              </button>
-            </div>
-          ))}
+          {group.findings.map((row) => {
+            const note = rowNote(row, translate('audits.ignored.stale'));
+            return (
+              <div key={row.id} className="list-item audits-row audits-ignored-row">
+                <span className="label audits-title" title={row.label}>
+                  {row.label}
+                </span>
+                {note !== undefined && (
+                  <span className="audits-muted-text" title={note}>
+                    {note}
+                  </span>
+                )}
+                <button className="audits-link" disabled={props.actions.busy} onClick={() => void props.actions.unignoreIds([row.id])}>
+                  {translate('audits.ignored.unignore')}
+                </button>
+              </div>
+            );
+          })}
         </section>
       ))}
     </div>
   );
+}
+
+/** A row's quiet line: the reason someone left, and whether the audit still reports it; nothing for a plain, live ignore. */
+function rowNote(row: Pick<IgnoredFindingRow, 'reason' | 'live'>, stale: string): string | undefined {
+  const parts = [...(row.reason === undefined ? [] : [row.reason]), ...(row.live ? [] : [stale])];
+  return parts.length === 0 ? undefined : parts.join(' · ');
 }

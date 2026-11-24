@@ -1,7 +1,8 @@
 // Goal: `.stacki/audits.json` parses only into a bounded, unique list of
-// ignored finding ids, each with a reason; every other shape is refused with a
-// message naming the field; what is written reads back; adding and removing
-// keep the list unique. The agent task value is bounded where it is built.
+// ignored finding ids, each with an optional reason (files from when a reason
+// was required read unchanged); every other shape is refused with a message
+// naming the field; what is written reads back, a plain ignore without a
+// `reason` key; adding and removing keep the list unique. The agent task value is bounded where it is built.
 // Method: parse the known-good file, then each known-bad shape and each bound
 // just past its limit, pinning the error; round-trip through the serializer;
 // exercise withIgnore / withoutIgnore; build agent tasks across their bounds.
@@ -94,7 +95,7 @@ test('what is written reads back, and edits keep ids unique', () => {
   assert.equal(replaced.ignored.length, 2);
   assert.equal(replaced.ignored[1]?.reason, 'New reason');
   assert.deepEqual(withoutIgnore(replaced, 'b'), good);
-  assert.throws(() => withIgnore(good, { id: 'c', reason: ' ' }), /reason/);
+  assert.equal(withIgnore(good, { id: 'c', reason: ' ' }).ignored[1]?.reason, undefined, 'a blank reason is no reason');
 });
 
 test('an agent task is bounded where it is built', () => {
@@ -186,7 +187,7 @@ test('ignoring and unignoring a page touch only that entry', () => {
   assert.deepEqual(without.ignoredPages, [{ file: 'b.astro', reason: 'two' }]);
   assert.deepEqual(without.ignored, good.ignored, 'finding-level ignores stay');
   assert.deepEqual(withoutIgnoredPage(without, 'missing.astro'), without);
-  assert.throws(() => withIgnoredPage(good, { file: 'a.astro', reason: ' ' }), /Assertion failed/);
+  assert.equal(withIgnoredPage(good, { file: 'a.astro', reason: ' ' }).ignoredPages[0]?.reason, undefined, 'a blank reason is no reason');
   assert.deepEqual(withoutAnyIgnores({ ...withPage, checks: { x: { enabled: false, priority: undefined } } }).checks, {
     x: { enabled: false, priority: undefined },
   });
@@ -202,8 +203,8 @@ test('a page silences every finding in it; a finding keeps its own reason', () =
   const findings = [alt, link, other];
   const file = { ...withPage, ignored: [{ id: link.id, reason: 'mine' }] };
   const reasons = ignoreReasons(findings, file);
-  assert.equal(reasons.get(alt.id), 'Lawyers own the copy');
-  assert.equal(reasons.get(link.id), 'mine');
+  assert.equal(reasons.get(alt.id)?.reason, 'Lawyers own the copy');
+  assert.equal(reasons.get(link.id)?.reason, 'mine');
   assert.equal(reasons.has(other.id), false, 'another page is untouched');
   assert.equal(ignoredEntryCount(file), 2);
 });
@@ -232,4 +233,63 @@ test('the ignored list groups by file and keeps stale entries removable', () => 
   );
   assert.equal(groups[1]?.findings[0]?.label, 'old', 'a stale entry is named from its id');
   assert.deepEqual(ignoredGroups([], EMPTY_AUDIT_IGNORES), []);
+});
+
+// Ignoring needs no reason. A plain ignore is written without the key, reads back as
+// undefined, and is still an ignore; files written while a reason was required keep
+// theirs; a reason that is present must still say something and stay in bounds.
+test('an ignore without a reason is written without the field and reads back as ignored', () => {
+  const plain = withIgnore(EMPTY_AUDIT_IGNORES, { id: 'img-alt|src/pages/index.astro|0.1|a', reason: undefined });
+  assert.deepEqual(plain.ignored, [{ id: 'img-alt|src/pages/index.astro|0.1|a', reason: undefined }]);
+  const text = serializeAuditIgnores(withIgnoredPage(plain, { file: 'src/pages/legal.astro', reason: undefined }));
+  assert.deepEqual(JSON.parse(text), {
+    version: 2,
+    ignored: [{ id: 'img-alt|src/pages/index.astro|0.1|a' }],
+    ignoredPages: [{ file: 'src/pages/legal.astro' }],
+  });
+  assert.equal(text.includes('reason'), false, 'no reason, no key');
+  const read = parseAuditIgnoresSource(text);
+  assert.equal(read.ignored[0]?.reason, undefined);
+  assert.equal(read.ignoredPages[0]?.reason, undefined);
+  const findings = [found('img-alt|src/pages/index.astro|0.1|a', 'src/pages/index.astro'), found('x|src/pages/legal.astro|0|b', 'src/pages/legal.astro')];
+  const reasons = ignoreReasons(findings, read);
+  assert.deepEqual(
+    [...reasons.entries()],
+    [
+      ['img-alt|src/pages/index.astro|0.1|a', { reason: undefined }],
+      ['x|src/pages/legal.astro|0|b', { reason: undefined }],
+    ],
+    'both are ignored, neither has a note',
+  );
+  assert.deepEqual(
+    ignoredGroups(findings, read).map((group) => group.page?.reason ?? group.findings[0]?.reason),
+    [undefined, undefined],
+  );
+});
+
+test('files with reasons still parse and keep them; a present reason must say something', () => {
+  const old = '{ "version": 2, "ignored": [{ "id": "a", "reason": "Decorative" }, { "id": "b" }], "ignoredPages": [{ "file": "x.astro", "reason": "Legal" }] }';
+  const read = parseAuditIgnoresSource(old);
+  assert.deepEqual(read.ignored, [
+    { id: 'a', reason: 'Decorative' },
+    { id: 'b', reason: undefined },
+  ]);
+  assert.deepEqual(read.ignoredPages, [{ file: 'x.astro', reason: 'Legal' }]);
+  const written: unknown = JSON.parse(serializeAuditIgnores(read));
+  assert.deepEqual(
+    written,
+    { version: 2, ignored: [{ id: 'a', reason: 'Decorative' }, { id: 'b' }], ignoredPages: [{ file: 'x.astro', reason: 'Legal' }] },
+    'written back as read',
+  );
+  assert.equal(parseAuditIgnores({ version: 1, ignored: [{ id: 'v1', reason: 'old' }] }).ignored[0]?.reason, 'old', 'version 1 reasons are kept');
+  assert.throws(() => parseAuditIgnores({ version: 2, ignored: [{ id: 'a', reason: 3 }] }), /ignored\[0\]\.reason: expected a non-empty string when present/);
+  assert.throws(() => parseAuditIgnores({ version: 2, ignored: [{ id: 'a', reason: '' }] }), /ignored\[0\]\.reason/);
+  assert.throws(
+    () => parseAuditIgnores({ version: 2, ignored: [{ id: 'a' }], ignoredPages: [{ file: 'x.astro', reason: false }] }),
+    /ignoredPages\[0\]\.reason/,
+  );
+  // A reason given while ignoring is kept, and ignoring again with none clears it.
+  const noted = withIgnore(read, { id: 'b', reason: 'Kept on purpose' });
+  assert.equal(noted.ignored.find((entry) => entry.id === 'b')?.reason, 'Kept on purpose');
+  assert.equal(withIgnore(noted, { id: 'b', reason: undefined }).ignored.find((entry) => entry.id === 'b')?.reason, undefined);
 });

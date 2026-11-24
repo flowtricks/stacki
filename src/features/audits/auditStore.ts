@@ -139,12 +139,12 @@ export function openFindings(
 /** The ignored findings the report still holds, each with its reason. */
 export function ignoredFindings(
   current: Pick<AuditState, 'report' | 'ignores'> & { readonly performance?: Pick<PerformanceState, 'findings'> },
-): readonly { readonly finding: AuditFinding; readonly reason: string }[] {
+): readonly { readonly finding: AuditFinding; readonly reason: string | undefined }[] {
   const findings = allFindings(current);
   const reasons = ignoreReasons(findings, current.ignores.value);
   return findings.flatMap((finding) => {
-    const reason = reasons.get(finding.id);
-    return reason === undefined ? [] : [{ finding, reason }];
+    const ignored = reasons.get(finding.id);
+    return ignored === undefined ? [] : [{ finding, reason: ignored.reason }];
   });
 }
 

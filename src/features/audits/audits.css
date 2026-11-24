@@ -352,15 +352,6 @@
   align-items: center;
   gap: 4px;
 }
-.audits-reason {
-  flex: 1 1 120px;
-  min-width: 0;
-  padding: 3px 6px;
-  border-radius: 5px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 11.5px;
-}
 
 @keyframes audits-spin {
   to {

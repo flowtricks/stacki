@@ -1,11 +1,11 @@
 // `.stacki/audits.json`: how a project audits itself. It is tracked, so the
-// whole team shares one list of ignored findings (each with the reason someone
-// gave) and one configuration of the checks: which run and how loud, the
+// whole team shares one list of ignored findings (each with the note someone
+// left, when they left one) and one configuration of the checks: which run and how loud, the
 // design-token rules, and the placeholder phrases.
 //
 //   {
 //     "version": 2,
-//     "ignored": [{ "id": "img-alt|src/pages/index.astro|0.3|src=\"/a.png\"", "reason": "Decorative hero" }],
+//     "ignored": [{ "id": "img-alt|src/pages/index.astro|0.3|src=\"/a.png\"", "reason": "Decorative hero" }, { "id": "…" }],
 //     "ignoredPages": [{ "file": "src/pages/legal.astro", "reason": "Copy comes from the lawyers" }],
 //     "checks": { "token-value": { "enabled": false }, "token-color": { "priority": "high" } },
 //     "tokens": { "properties": ["border-radius", "gap"], "colors": true, "px": true, "remOutsideVariables": true, "allowed": ["1px", "100%"] },
@@ -19,6 +19,10 @@
 // optional and written only when there is one: a file without it reads as before,
 // and a page entry silences every finding of every check in that file, while the
 // per-finding `ignored` entries stay untouched whether the page is ignored or not.
+//
+// A reason is optional: ignoring is one click, and a note is extra. An entry
+// without one is written without the field, and files written when a reason was
+// required read as before, their reasons kept.
 //
 // An id is the finding's own (shared/page/auditFindings.ts findingId), so an
 // ignore follows the finding while the file holds still and lapses when the
@@ -41,13 +45,15 @@ export const AUDIT_IGNORE_LIMITS = {
 
 export interface AuditIgnore {
   readonly id: string;
-  readonly reason: string;
+  /** Why it is ignored, when someone said; undefined for a plain ignore. */
+  readonly reason: string | undefined;
 }
 
 /** A whole page or file ignored: every finding in `file` (project-relative), whatever the check. */
 export interface AuditIgnoredPage {
   readonly file: string;
-  readonly reason: string;
+  /** Why the page is ignored, when someone said; undefined for a plain ignore. */
+  readonly reason: string | undefined;
 }
 
 export const AUDIT_SETTING_PRIORITIES = ['high', 'medium', 'low'] as const;
@@ -195,20 +201,13 @@ function parseIgnoredPages(input: unknown): readonly AuditIgnoredPage[] {
       }
     }
     const file = value['file'];
-    const reason = value['reason'];
     if (typeof file !== 'string' || file.length === 0 || file.startsWith('/')) {
       throw new Error(`${where}.file: expected a project-relative path`);
     }
     if (file.length > AUDIT_IGNORE_LIMITS.idCharsMax) {
       throw new Error(`${where}.file: longer than ${AUDIT_IGNORE_LIMITS.idCharsMax} characters`);
     }
-    if (typeof reason !== 'string' || reason.trim().length === 0) {
-      throw new Error(`${where}.reason: expected a non-empty string`);
-    }
-    if (reason.length > AUDIT_IGNORE_LIMITS.reasonCharsMax) {
-      throw new Error(`${where}.reason: longer than ${AUDIT_IGNORE_LIMITS.reasonCharsMax} characters`);
-    }
-    return { file, reason };
+    return { file, reason: parseReason(value['reason'], where) };
   });
   if (new Set(pages.map((page) => page.file)).size !== pages.length) {
     throw new Error('Audit ignores.ignoredPages: a file is listed twice');
@@ -229,20 +228,27 @@ function parseAuditIgnore(input: unknown, index: number): AuditIgnore {
     }
   }
   const id = value['id'];
-  const reason = value['reason'];
   if (typeof id !== 'string' || id.length === 0) {
     throw new Error(`${where}.id: expected a non-empty string`);
   }
   if (id.length > AUDIT_IGNORE_LIMITS.idCharsMax) {
     throw new Error(`${where}.id: longer than ${AUDIT_IGNORE_LIMITS.idCharsMax} characters`);
   }
-  if (typeof reason !== 'string' || reason.trim().length === 0) {
-    throw new Error(`${where}.reason: expected a non-empty string`);
+  return { id, reason: parseReason(value['reason'], where) };
+}
+
+// An entry's reason: absent is a plain ignore; present, it is a note someone wrote, so it must say something.
+function parseReason(input: unknown, where: string): string | undefined {
+  if (input === undefined) {
+    return undefined;
   }
-  if (reason.length > AUDIT_IGNORE_LIMITS.reasonCharsMax) {
+  if (typeof input !== 'string' || input.trim().length === 0) {
+    throw new Error(`${where}.reason: expected a non-empty string when present`);
+  }
+  if (input.length > AUDIT_IGNORE_LIMITS.reasonCharsMax) {
     throw new Error(`${where}.reason: longer than ${AUDIT_IGNORE_LIMITS.reasonCharsMax} characters`);
   }
-  return { id, reason };
+  return input;
 }
 
 function parseChecks(input: unknown): Readonly<Record<string, AuditCheckSetting>> {
@@ -346,8 +352,8 @@ export function serializeAuditIgnores(value: AuditFile): string {
   const same = (left: unknown, right: unknown): boolean => JSON.stringify(left) === JSON.stringify(right);
   const body = {
     version: 2,
-    ignored: value.ignored.map((entry) => ({ id: entry.id, reason: entry.reason })),
-    ...(value.ignoredPages.length === 0 ? {} : { ignoredPages: value.ignoredPages.map((page) => ({ file: page.file, reason: page.reason })) }),
+    ignored: value.ignored.map((entry) => ({ id: entry.id, ...reasonField(entry.reason) })),
+    ...(value.ignoredPages.length === 0 ? {} : { ignoredPages: value.ignoredPages.map((page) => ({ file: page.file, ...reasonField(page.reason) })) }),
     ...(Object.keys(value.checks).length === 0 ? {} : { checks: serializedChecks(value.checks) }),
     ...(same(value.tokens, DEFAULT_TOKEN_SETTINGS) ? {} : { tokens: value.tokens }),
     ...(same(value.placeholders, DEFAULT_PLACEHOLDERS) ? {} : { placeholders: value.placeholders }),
@@ -355,6 +361,11 @@ export function serializeAuditIgnores(value: AuditFile): string {
   const text = `${JSON.stringify(body, undefined, 2)}\n`;
   assert(parseAuditIgnoresSource(text).ignored.length === value.ignored.length, 'serializeAuditIgnores: what is written reads back');
   return text;
+}
+
+/** The `reason` key, only when there is one: a plain ignore writes no field. */
+function reasonField(reason: string | undefined): { readonly reason?: string } {
+  return reason === undefined ? {} : { reason };
 }
 
 function serializedChecks(checks: Readonly<Record<string, AuditCheckSetting>>): Record<string, { enabled?: boolean; priority?: AuditSettingPriority }> {
@@ -365,26 +376,34 @@ function serializedChecks(checks: Readonly<Record<string, AuditCheckSetting>>): 
   return out;
 }
 
-/** The file with `entry` added, or its reason replaced when the id is already there. */
+/** The file with `entry` added, or its reason replaced when the id is already there. A blank reason is no reason. */
 export function withIgnore(value: AuditFile, entry: AuditIgnore): AuditFile {
   assert(entry.id.length > 0, 'withIgnore: an entry has an id');
-  assert(entry.reason.trim().length > 0, 'withIgnore: an entry has a reason');
   const kept = value.ignored.filter((existing) => existing.id !== entry.id);
   if (kept.length >= AUDIT_IGNORE_LIMITS.entriesMax) {
     throw new Error(`At most ${AUDIT_IGNORE_LIMITS.entriesMax} findings can be ignored`);
   }
-  return { ...value, ignored: [...kept, { id: entry.id, reason: entry.reason.trim().slice(0, AUDIT_IGNORE_LIMITS.reasonCharsMax) }] };
+  const next = { ...value, ignored: [...kept, { id: entry.id, reason: cleanReason(entry.reason) }] };
+  assert(next.ignored.length <= value.ignored.length + 1, 'withIgnore: adds at most one entry');
+  return next;
 }
 
-/** The file with `file` ignored whole, or its reason replaced when it already is. */
+/** The file with `file` ignored whole, or its reason replaced when it already is. A blank reason is no reason. */
 export function withIgnoredPage(value: AuditFile, entry: AuditIgnoredPage): AuditFile {
   assert(entry.file.length > 0, 'withIgnoredPage: an entry has a file');
-  assert(entry.reason.trim().length > 0, 'withIgnoredPage: an entry has a reason');
   const kept = value.ignoredPages.filter((existing) => existing.file !== entry.file);
   if (kept.length >= AUDIT_IGNORE_LIMITS.pagesMax) {
     throw new Error(`At most ${AUDIT_IGNORE_LIMITS.pagesMax} pages can be ignored`);
   }
-  return { ...value, ignoredPages: [...kept, { file: entry.file, reason: entry.reason.trim().slice(0, AUDIT_IGNORE_LIMITS.reasonCharsMax) }] };
+  const next = { ...value, ignoredPages: [...kept, { file: entry.file, reason: cleanReason(entry.reason) }] };
+  assert(next.ignoredPages.length <= value.ignoredPages.length + 1, 'withIgnoredPage: adds at most one entry');
+  return next;
+}
+
+/** A reason as the file keeps it: trimmed and bounded, or undefined when there is nothing to keep. */
+function cleanReason(reason: string | undefined): string | undefined {
+  const trimmed = reason?.trim() ?? '';
+  return trimmed.length === 0 ? undefined : trimmed.slice(0, AUDIT_IGNORE_LIMITS.reasonCharsMax);
 }
 
 /** The file without the whole-page ignore for `file`; finding-level ignores in it stay. */

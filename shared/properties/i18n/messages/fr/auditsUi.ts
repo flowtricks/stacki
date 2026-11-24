@@ -73,11 +73,10 @@ export const messages = {
   'auditsUi.group.unit': 'Unité',
   'auditsUi.handOff.partial': '{message} Les {count} premiers sont partis ; envoyez le reste ensuite.',
   'auditsUi.ignoreButton': 'Ignorer',
-  'auditsUi.ignoreMenu': 'Ignorer…',
-  'auditsUi.ignoreReason': 'Raison de l’exclusion', // review
-  'auditsUi.ignoreWhy': 'Pourquoi l’ignorer ?',
   'auditsUi.ignoreWriteFailed': 'Impossible de mettre à jour .stacki/audits.json : {error}',
+  'auditsUi.ignoredManyToast': 'Constats ignorés',
   'auditsUi.ignoredNote': 'Ignoré : {reason}',
+  'auditsUi.ignoredToast': 'Constat ignoré',
   'auditsUi.linkTo': 'Lien vers',
   'auditsUi.linkToLabel': 'Lien vers {route}',
   'auditsUi.menu.closeFind': 'Fermer rechercher et remplacer',

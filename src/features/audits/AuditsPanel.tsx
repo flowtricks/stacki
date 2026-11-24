@@ -7,8 +7,9 @@
 // occurrence goes to the element (opens its file, selects it as the Navigator
 // does, scrolls to it and flashes it); Fix, AI and ⋯ appear on hover. Line
 // numbers and raw attribute text stay in the row's tooltip. When safe fixes
-// exist, a slim row at the top applies them. Fixes preview their code first;
-// Ignore asks for a reason and writes the tracked `.stacki/audits.json`.
+// exist, a slim row at the top applies them. Fixes preview their code first.
+// Ignore is one click: it writes the tracked `.stacki/audits.json` with no reason
+// asked, and a toast offers Undo, which puts the file's entries back as they were.
 import { assert } from '../../../shared/core/assert';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { PageNode } from '../../../shared/page/pageNode';
@@ -18,8 +19,18 @@ import { type AuditFinding, type AuditPriority, type AuditRuleGroup } from '../.
 import { auditPrompt, promptBatches, AUDIT_PROMPT_FINDINGS_MAX } from '../../../shared/page/auditPrompt';
 import { linkFix } from '../../../shared/page/auditRepairs';
 import { agentTask } from '../../../shared/properties/agentTask';
-import { ignoreReasons, ignoredEntryCount } from '../../../shared/properties/auditIgnoreList';
-import { withIgnore, withIgnoredPage, withoutAnyIgnores, withoutIgnore, withoutIgnoredPage, type AuditIgnores } from '../../../shared/properties/auditIgnores';
+import { ignoreReasons, ignoredEntryCount, type IgnoredFinding } from '../../../shared/properties/auditIgnoreList';
+import {
+  withIgnore,
+  withIgnoredPage,
+  withoutAnyIgnores,
+  withoutIgnore,
+  withoutIgnoredPage,
+  type AuditIgnore,
+  type AuditIgnoredPage,
+  type AuditIgnores,
+} from '../../../shared/properties/auditIgnores';
+import { dismissErrorToast, reportActionToast } from '../../ui/errorNotices';
 import { agentTaskMessage, requestAgentTask } from '../../lib/agentTasks';
 import { CodeBlock } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
@@ -153,15 +164,19 @@ export default function AuditsPanel(props: AuditsPanelProps) {
       const rest = targets.length - batch.length;
       props.showToast(rest > 0 ? translate('auditsUi.handOff.partial', { message, count: AUDIT_PROMPT_FINDINGS_MAX }) : message, kind);
     },
-    ignore: (finding, reason) => writeIgnores(props, translate, (value) => withIgnore(value, { id: finding.id, reason })),
-    ignoreAll: (findings, reason) =>
-      writeIgnores(props, translate, (value) => findings.reduce((file, finding) => withIgnore(file, { id: finding.id, reason }), value)),
-    ignorePage: (file, reason) => writeIgnores(props, translate, (value) => withIgnoredPage(value, { file, reason })),
-    unignorePage: (file) => writeIgnores(props, translate, (value) => withoutIgnoredPage(value, file)),
-    unignoreIds: (ids) => writeIgnores(props, translate, (value) => ids.reduce(withoutIgnore, value)),
-    unignoreAll: () => writeIgnores(props, translate, withoutAnyIgnores),
-    restore: (finding) => writeIgnores(props, translate, (value) => withoutIgnore(value, finding.id)),
-    reasonOf: (finding) => reasons.get(finding.id),
+    ignore: (finding) => ignoreFindings(props, translate, [finding], undefined),
+    ignoreAll: (findings, reason) => ignoreFindings(props, translate, findings, reason),
+    ignorePage: async (file) => {
+      const before = auditState().ignores.value.ignoredPages.find((entry) => entry.file === file);
+      if (await writeIgnores(props, translate, (value) => withIgnoredPage(value, { file, reason: undefined }))) {
+        undoToast(translate('audits.ignorePage.toast'), translate, () => writeIgnores(props, translate, (value) => pageRestored(value, file, before)));
+      }
+    },
+    unignorePage: async (file) => void (await writeIgnores(props, translate, (value) => withoutIgnoredPage(value, file))),
+    unignoreIds: async (ids) => void (await writeIgnores(props, translate, (value) => ids.reduce(withoutIgnore, value))),
+    unignoreAll: async () => void (await writeIgnores(props, translate, withoutAnyIgnores)),
+    restore: async (finding) => void (await writeIgnores(props, translate, (value) => withoutIgnore(value, finding.id))),
+    ignoredOf: (finding) => reasons.get(finding.id),
   };
   const open = view.shown.filter((finding) => !ignoredIds.has(finding.id));
   const fixes = view.fixable.length;
@@ -311,17 +326,59 @@ export interface Actions {
   readonly busy: boolean;
   readonly fix: (targets: readonly AuditFinding[], label: string) => Promise<void>;
   readonly handOff: (targets: readonly AuditFinding[]) => Promise<void>;
-  readonly ignore: (finding: AuditFinding, reason: string) => Promise<void>;
-  /** Several findings ignored with one reason, in one write. */
-  readonly ignoreAll: (findings: readonly AuditFinding[], reason: string) => Promise<void>;
-  /** Every finding in `file`, of every check, ignored with one entry. */
-  readonly ignorePage: (file: string, reason: string) => Promise<void>;
+  /** One click: no reason asked; a toast offers Undo. */
+  readonly ignore: (finding: AuditFinding) => Promise<void>;
+  /** Several findings ignored in one write, with the reason the caller states (or none); a toast offers Undo. */
+  readonly ignoreAll: (findings: readonly AuditFinding[], reason: string | undefined) => Promise<void>;
+  /** Every finding in `file`, of every check, ignored with one entry; a toast offers Undo. */
+  readonly ignorePage: (file: string) => Promise<void>;
   /** Removes the whole-page entry; findings ignored one by one stay ignored. */
   readonly unignorePage: (file: string) => Promise<void>;
   readonly unignoreIds: (ids: readonly string[]) => Promise<void>;
   readonly unignoreAll: () => Promise<void>;
   readonly restore: (finding: AuditFinding) => Promise<void>;
-  readonly reasonOf: (finding: AuditFinding) => string | undefined;
+  /** Whether the finding is ignored, and the note behind it when someone left one. */
+  readonly ignoredOf: (finding: AuditFinding) => IgnoredFinding | undefined;
+}
+
+/** How long the Undo toast stays up before it goes by itself. */
+const UNDO_TOAST_MS = 8_000;
+
+// Ignores `findings` in one write and, once it is saved, offers to put back exactly what the
+// file held for them before: no entry, or the entry (and reason) one of them already had.
+async function ignoreFindings(props: AuditsPanelProps, translate: Translator, findings: readonly AuditFinding[], reason: string | undefined): Promise<void> {
+  assert(findings.length > 0, 'ignoreFindings: something to ignore');
+  const ids = new Set(findings.map((finding) => finding.id));
+  const before = auditState().ignores.value.ignored.filter((entry) => ids.has(entry.id));
+  assert(before.length <= ids.size, 'ignoreFindings: at most one entry per id');
+  const saved = await writeIgnores(props, translate, (value) => findings.reduce((file, finding) => withIgnore(file, { id: finding.id, reason }), value));
+  if (saved) {
+    const message = findings.length === 1 ? translate('auditsUi.ignoredToast') : translate('auditsUi.ignoredManyToast');
+    undoToast(message, translate, () => writeIgnores(props, translate, (value) => findingsRestored(value, ids, before)));
+  }
+}
+
+/** The file with the entries for `ids` back to `before`: removed, then the ones that were there re-added. */
+export function findingsRestored(value: AuditIgnores, ids: ReadonlySet<string>, before: readonly AuditIgnore[]): AuditIgnores {
+  const cleared = [...ids].reduce(withoutIgnore, value);
+  const restored = before.reduce(withIgnore, cleared);
+  assert(restored.ignored.length <= value.ignored.length, 'findingsRestored: undo never adds entries');
+  return restored;
+}
+
+/** The file with the page entry for `file` back to `before`: none, or the entry it had. */
+export function pageRestored(value: AuditIgnores, file: string, before: AuditIgnoredPage | undefined): AuditIgnores {
+  const cleared = withoutIgnoredPage(value, file);
+  return before === undefined ? cleared : withIgnoredPage(cleared, before);
+}
+
+// A success toast with Undo. A toast with an action stays until it is used or dismissed, so this
+// one is dismissed after a while: an Undo offered long after the click would surprise.
+function undoToast(message: string, translate: Translator, undo: () => Promise<boolean>): void {
+  const id = reportActionToast(message, 'success', [{ label: translate('menu.edit.undo'), run: async () => void (await undo()) }]);
+  if (id !== undefined) {
+    setTimeout(() => dismissErrorToast(id), UNDO_TOAST_MS);
+  }
 }
 
 // Speed with nothing to fix: said positively once a measurement has finished, and nothing while one runs.
@@ -368,21 +425,23 @@ function EmptyLine({ filtered }: { readonly filtered: boolean }) {
   );
 }
 
-async function writeIgnores(props: AuditsPanelProps, translate: Translator, change: (value: AuditIgnores) => AuditIgnores): Promise<void> {
+/** Writes the changed ignores; true once they are saved, false after a failure the person was told about. */
+async function writeIgnores(props: AuditsPanelProps, translate: Translator, change: (value: AuditIgnores) => AuditIgnores): Promise<boolean> {
   const base = auditState().ignores;
   let next: AuditIgnores;
   try {
     next = change(base.value);
   } catch (error: unknown) {
     props.showToast(error instanceof Error ? error.message : String(error), 'error');
-    return;
+    return false;
   }
   const saved = await saveAuditIgnores(props.project.path, base, next);
   if (saved.ok) {
     updateAuditState((current) => ({ ...current, ignores: saved.value }));
-  } else {
-    props.showToast(translate('auditsUi.ignoreWriteFailed', { error: saved.error }), 'error');
+    return true;
   }
+  props.showToast(translate('auditsUi.ignoreWriteFailed', { error: saved.error }), 'error');
+  return false;
 }
 
 function activateOnKey(activate: () => void): (event: KeyboardEvent) => void {
@@ -512,8 +571,6 @@ function FileGroup(props: {
 }) {
   const translate = useTranslate();
   const [open, setOpen] = useState(props.findings.length <= GROUP_OPEN_MAX);
-  const [ignoring, setIgnoring] = useState(false);
-  const [reason, setReason] = useState('');
   const toggle = (): void => setOpen((value) => !value);
   const [first] = props.findings;
   return (
@@ -530,38 +587,12 @@ function FileGroup(props: {
         <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
           <MoreMenu
             className="audits-icon-button"
-            title={translate('audits.ignorePage.menu')}
+            title={translate('auditsUi.more')}
             width={200}
-            items={[{ label: translate('audits.ignorePage.menu'), onSelect: () => setIgnoring(true) }]}
+            items={[{ label: translate('audits.ignorePage.submit'), onSelect: () => void props.actions.ignorePage(props.file) }]}
           />
         </span>
       </div>
-      {ignoring && (
-        <div className="audits-inset audits-actions">
-          <input
-            className="audits-reason"
-            placeholder={translate('audits.ignorePage.placeholder')}
-            aria-label={translate('audits.ignorePage.aria')}
-            value={reason}
-            maxLength={500}
-            autoFocus
-            onChange={(event) => setReason(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && reason.trim().length > 0) {
-                void props.actions.ignorePage(props.file, reason);
-              } else if (event.key === 'Escape') {
-                setIgnoring(false);
-              }
-            }}
-          />
-          <button className="audits-link" disabled={reason.trim().length === 0} onClick={() => void props.actions.ignorePage(props.file, reason)}>
-            {translate('audits.ignorePage.submit')}
-          </button>
-          <button className="audits-link muted" onClick={() => setIgnoring(false)}>
-            {translate('audits.ignored.cancel')}
-          </button>
-        </div>
-      )}
       {open && (
         <div className="audits-file-body">
           {sameElementRuns(props.findings).map(([only, ...others]) =>
@@ -741,14 +772,14 @@ function nestedLabel(finding: AuditFinding, fallback: string, auditText: AuditTe
   return finding.detail.length > 0 ? auditText.detail(finding) : fallback;
 }
 
-/** The muted second line: the text in the finding's detail (`"Button Text"`, `href="/x"`), or why it is ignored. */
+/** The muted second line: the text in the finding's detail (`"Button Text"`, `href="/x"`), or that it is ignored and why, when a note says. */
 export function occurrenceNote(
   finding: Pick<AuditFinding, 'detail' | 'excerpt'>,
-  reason: string | undefined,
+  ignored: IgnoredFinding | undefined,
   translate: Translator = ENGLISH_TRANSLATE,
 ): string | undefined {
-  if (reason !== undefined) {
-    return translate('auditsUi.ignoredNote', { reason });
+  if (ignored !== undefined) {
+    return ignored.reason === undefined ? translate('audits.ignored.chip') : translate('auditsUi.ignoredNote', { reason: ignored.reason });
   }
   if (finding.excerpt !== undefined) {
     return finding.excerpt;
@@ -767,10 +798,9 @@ function Occurrence(props: {
 }) {
   const translate = useTranslate();
   const { finding, actions, panel } = props;
-  const [mode, setMode] = useState<'idle' | 'preview' | 'ignore' | 'relink'>('idle');
-  const [reason, setReason] = useState('');
+  const [mode, setMode] = useState<'idle' | 'preview' | 'relink'>('idle');
   const element = finding.element;
-  const ignoredBecause = actions.reasonOf(finding);
+  const ignoredBecause = actions.ignoredOf(finding);
   const fix = ignoredBecause === undefined ? finding.fix : undefined;
   const go = (): void => panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop);
   const href = /href="([^"]*)"/.exec(finding.detail)?.[1];
@@ -827,7 +857,7 @@ function Occurrence(props: {
               brokenRoute !== undefined && { label: translate('auditsUi.createPage', { route: brokenRoute }), onSelect: () => panel.onCreatePage(brokenRoute) },
               brokenRoute !== undefined && element !== undefined && { label: translate('auditsUi.changeLink'), onSelect: () => setMode('relink') },
               ignoredBecause === undefined
-                ? { label: translate('auditsUi.ignoreMenu'), onSelect: () => setMode('ignore') }
+                ? { label: translate('auditsUi.ignoreButton'), onSelect: () => void actions.ignore(finding) }
                 : { label: translate('auditsUi.stopIgnoring'), onSelect: () => void actions.restore(finding) },
             ]}
           />
@@ -877,32 +907,6 @@ function Occurrence(props: {
               );
             }}
           />
-        </div>
-      )}
-      {mode === 'ignore' && (
-        <div className="audits-inset audits-actions">
-          <input
-            className="audits-reason"
-            placeholder={translate('auditsUi.ignoreWhy')}
-            aria-label={translate('auditsUi.ignoreReason')}
-            value={reason}
-            maxLength={500}
-            autoFocus
-            onChange={(event) => setReason(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && reason.trim().length > 0) {
-                void actions.ignore(finding, reason);
-              } else if (event.key === 'Escape') {
-                setMode('idle');
-              }
-            }}
-          />
-          <button className="audits-link" disabled={reason.trim().length === 0} onClick={() => void actions.ignore(finding, reason)}>
-            {translate('auditsUi.ignoreButton')}
-          </button>
-          <button className="audits-link muted" onClick={() => setMode('idle')}>
-            {translate('ui.cancel')}
-          </button>
         </div>
       )}
     </div>

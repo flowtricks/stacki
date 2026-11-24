@@ -8,7 +8,7 @@
 // over fixed facts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { auditRenderedPage, parseMarker, renderedText, type RenderedElement, type RenderedNode } from '#dist/shared/page/auditRendered.js';
+import { auditRenderedPage, givingInstance, parseMarker, renderedText, type RenderedElement, type RenderedNode } from '#dist/shared/page/auditRendered.js';
 import { blend, contrastRatio, contrastVerdict, largeText, parseCssColor } from '#dist/shared/page/auditContrast.js';
 import { DEFAULT_PLACEHOLDERS } from '#dist/shared/properties/auditIgnores.js';
 import { SITE_FILE_ENDPOINTS, auditSite, configMakes, exportedString, noindexRoutesIn } from '#dist/shared/page/auditSite.js';
@@ -216,4 +216,54 @@ test('placeholder copy is found as rendered, and a marked text is located at the
     ).length,
     0,
   );
+});
+
+// Copy a node only passes on (a `<slot>`, a Fragment that `set:html`s a rendered slot) is not
+// that node's: `copyAt` says which locations pass copy on, and the finding moves to the instance
+// the element's `data-avb-p` names after its own path, or, with none named, to the page with no
+// element. Never to the wrapper. Locations that write their copy, and runs without `copyAt`,
+// keep the old placing.
+test('placeholder copy a node only passes on goes to the instance that gave it, never to the wrapper', () => {
+  const fragment = { file: 'src/components/Section.astro', path: [0, 0, 0, 0, 0] };
+  const given = (place: { readonly file: string; readonly path: readonly number[] }) =>
+    place.file === fragment.file && place.path.join('.') === fragment.path.join('.') ? ('given' as const) : ('own' as const);
+  const located = (body: readonly Child[], copyAt: typeof given | undefined) =>
+    auditRenderedPage(page(body), { noindexRoutes: [], placeholders: DEFAULT_PLACEHOLDERS, ...(copyAt === undefined ? {} : { copyAt }) }).findings.filter(
+      (finding) => finding.check === 'placeholder-text',
+    );
+  const lorem = 'Lorem ipsum dolor sit amet';
+  // The element took the Fragment's marker, and names its caller: the finding goes to that instance.
+  const withCaller = element('p', { 'data-avb-p': 'src/components/Paragraph.astro|0 0.1.0.0' }, [lorem], { source: fragment, style: undefined });
+  const [onInstance] = located([withCaller], given);
+  assert.equal(onInstance?.file, 'src/pages/index.astro');
+  assert.deepEqual(onInstance?.element?.path, [0, 1, 0, 0]);
+  // A text whose own marker is the Fragment's: the same.
+  const markedText = { kind: 'text', value: lorem, source: fragment } as const;
+  const [fromText] = located([element('p', { 'data-avb-p': 'src/components/Paragraph.astro|0 0.1.1' }, [markedText])], given);
+  assert.deepEqual([fromText?.file, fromText?.element?.path], ['src/pages/index.astro', [0, 1, 1]]);
+  // No caller named: the page, with no element, rather than the wrapper.
+  const [unplaced] = located([element('p', {}, [lorem], { source: fragment, style: undefined })], given);
+  assert.equal(unplaced?.file, 'src/pages/index.astro');
+  assert.equal(unplaced?.element, undefined);
+  assert.equal(unplaced?.fileKind, 'page');
+  // A node that writes its copy keeps it, and so does every location when nothing says otherwise.
+  const own = { file: 'src/components/Note.astro', path: [0, 0] };
+  const [kept] = located([element('p', { 'data-avb-p': 'src/components/Note.astro|0.0' }, ['Sample text'], { source: own, style: undefined })], given);
+  assert.deepEqual([kept?.file, kept?.element?.path], [own.file, own.path]);
+  const [old] = located([withCaller], undefined);
+  assert.deepEqual([old?.file, old?.element?.path], [fragment.file, fragment.path], 'without copyAt the old placing stands');
+});
+
+test('the giving instance is the second path an element carries', () => {
+  assert.deepEqual(givingInstance({ attrs: { 'data-avb-p': 'src/components/Card.astro|0 0.3' } }, 'src/pages/index.astro'), {
+    file: 'src/pages/index.astro',
+    path: [0, 3],
+  });
+  assert.deepEqual(givingInstance({ attrs: { 'data-avb-p': 'src/components/Card.astro|0 src/layouts/Base.astro|1.2 0.3' } }, 'src/pages/index.astro'), {
+    file: 'src/layouts/Base.astro',
+    path: [1, 2],
+  });
+  assert.equal(givingInstance({ attrs: { 'data-avb-p': '0.3' } }, 'src/pages/index.astro'), undefined, 'its own path only');
+  assert.equal(givingInstance({ attrs: {} }, 'src/pages/index.astro'), undefined);
+  assert.equal(givingInstance({ attrs: { 'data-avb-p': '0.3 not-a-path' } }, 'src/pages/index.astro'), undefined, 'a malformed caller names nothing');
 });

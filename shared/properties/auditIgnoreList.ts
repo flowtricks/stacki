@@ -1,5 +1,5 @@
-// What the project ignores, as the Audits panel reads it: the reason each finding
-// is silenced (its own entry, else its page's), and the "Ignored" list that groups
+// What the project ignores, as the Audits panel reads it: each silenced finding and
+// the note behind it, when there is one (its own entry's, else its page's), and the "Ignored" list that groups
 // every entry by file with the page entry first. Pure, so the flows are tested
 // without drawing the panel. An entry whose finding or page is gone is still listed
 // (`live: false`): a stale ignore must stay removable.
@@ -13,15 +13,21 @@ export interface IgnorableFinding {
   readonly detail: string;
 }
 
-/** Why each ignored finding is ignored: its own reason wins over its page's. */
-export function ignoreReasons(findings: readonly IgnorableFinding[], file: Pick<AuditFile, 'ignored' | 'ignoredPages'>): ReadonlyMap<string, string> {
-  const own = new Map(file.ignored.map((entry) => [entry.id, entry.reason]));
-  const pages = new Map(file.ignoredPages.map((entry) => [entry.file, entry.reason]));
-  const reasons = new Map<string, string>();
+/** A finding the project ignores, and the note someone left, when they left one. */
+export interface IgnoredFinding {
+  readonly reason: string | undefined;
+}
+
+/** Every ignored finding by id, with its reason: its own entry's wins over its page's. A finding not in the map is not ignored. */
+export function ignoreReasons(findings: readonly IgnorableFinding[], file: Pick<AuditFile, 'ignored' | 'ignoredPages'>): ReadonlyMap<string, IgnoredFinding> {
+  const own = new Map(file.ignored.map((entry) => [entry.id, entry]));
+  const pages = new Map(file.ignoredPages.map((entry) => [entry.file, entry]));
+  const reasons = new Map<string, IgnoredFinding>();
   for (const finding of findings) {
-    const reason = own.get(finding.id) ?? pages.get(finding.file);
-    if (reason !== undefined) {
-      reasons.set(finding.id, reason);
+    const entry = own.get(finding.id);
+    const page = pages.get(finding.file);
+    if (entry !== undefined || page !== undefined) {
+      reasons.set(finding.id, { reason: entry?.reason ?? page?.reason });
     }
   }
   assert(reasons.size <= findings.length, 'ignoreReasons: a subset of the findings');
@@ -30,7 +36,7 @@ export function ignoreReasons(findings: readonly IgnorableFinding[], file: Pick<
 
 export interface IgnoredFindingRow {
   readonly id: string;
-  readonly reason: string;
+  readonly reason: string | undefined;
   /** What the entry was about, from the live finding or, when it is gone, from its id. */
   readonly label: string;
   /** False when the audit no longer reports the finding. */
@@ -40,7 +46,7 @@ export interface IgnoredFindingRow {
 export interface IgnoredGroup {
   readonly file: string;
   /** The whole-page entry, when the file is ignored whole. */
-  readonly page: { readonly reason: string; readonly count: number } | undefined;
+  readonly page: { readonly reason: string | undefined; readonly count: number } | undefined;
   readonly findings: readonly IgnoredFindingRow[];
 }
 

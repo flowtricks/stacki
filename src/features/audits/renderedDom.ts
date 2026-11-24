@@ -44,7 +44,8 @@ export function renderedTree(document: Document, pageFile: string, styleOf?: (el
           children.push({ kind: 'text', value });
         }
       } else if (child.nodeType === 1 && child instanceof Element) {
-        children.push(convert(child, marker ?? inherited(source), depth + 1));
+        const location = elementPlace(child, marker, pageFile);
+        children.push(convert(child, location ?? inherited(source), depth + 1));
         marker = undefined;
       }
     }
@@ -62,6 +63,22 @@ export function renderedTree(document: Document, pageFile: string, styleOf?: (el
     };
   };
   return convert(root, undefined, 0);
+}
+
+// An element's own location: the first path of its `data-avb-p`, which the marked build writes on
+// every element and component root, else the comment marker right before it. The attribute comes
+// first because a comment before an element is not always the element's: a component that renders
+// its slot to a string and scrubs the comments out (`slotContent`, then `<Fragment set:html>`)
+// leaves its own Fragment's marker right before the slotted markup, and that marker read as the
+// element's put a page's paragraph, and its text, on the component's Fragment.
+function elementPlace(element: Element, marker: RenderedSource | undefined, pageFile: string): RenderedSource | undefined {
+  const first = (element.getAttribute('data-avb-p') ?? '').trim().split(/\s+/)[0] ?? '';
+  const own = first.length === 0 ? undefined : parseMarker(`avb-s:${first}`, pageFile);
+  if (own === undefined) {
+    return marker;
+  }
+  // The element's own comment marker names the same node: keep that object.
+  return marker !== undefined && marker.file === own.file && marker.path.join('.') === own.path.join('.') ? marker : own;
 }
 
 /** The location an unmarked element takes from its parent: the parent's own, marked as an ancestor's. */

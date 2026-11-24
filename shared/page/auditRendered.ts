@@ -108,6 +108,10 @@ interface Visit {
 /** Every rendered finding on one page. */
 export interface RenderedOptions {
   readonly noindexRoutes: readonly string[];
+  /** What the node at a location does with the copy it renders, read from the parsed files: writes
+   * it (`own`), or puts out content an instance gave it (`given`: a `<slot>`, a `<Fragment set:html>`
+   * of slot content). Without it, or where it answers undefined, every location counts as `own`. */
+  readonly copyAt?: (place: { readonly file: string; readonly path: readonly number[] }) => CopyHolding | undefined;
   /** The placeholder phrases the project checks copy against (shared/properties/auditIgnores.ts). */
   readonly placeholders: readonly string[];
 }
@@ -126,7 +130,7 @@ export function auditRenderedPage(page: RenderedPage, options: RenderedOptions):
   checkNames(elements, add);
   checkIds(elements, add);
   checkContrast(elements, add);
-  checkPlaceholders(page, elements, options.placeholders, (finding) => {
+  checkPlaceholders(page, elements, { phrases: options.placeholders, copyAt: options.copyAt }, (finding) => {
     if (findings.length < AUDIT_LIMITS.findingsPerFileMax) {
       findings.push(finding);
     }
@@ -415,15 +419,29 @@ function socialImageOf(elements: readonly Visit[]): { readonly url: string; read
   return undefined;
 }
 
+/** What a node does with the copy it renders: writes it, or puts out content an instance gave it. */
+export type CopyHolding = 'own' | 'given';
+
 // Placeholder copy as the page renders it: what a constant, a prop default or a loop put there
 // as well as what is written inline. A text with its own marker is located at the node that
 // holds it in its file (the element, or the instance whose slot it fills); one without is
 // located at its element, which the runner traces back to the prop or constant behind it.
-function checkPlaceholders(page: RenderedPage, elements: readonly Visit[], phrases: readonly string[], push: (finding: AuditFinding) => void): void {
+// A location whose node only passes on content it was given (a `<slot>`, a Fragment that
+// `set:html`s a rendered slot) does not hold the copy: the finding moves to the instance that
+// gave it, or, when no instance is named, stays on the page with no element. It never points at
+// a wrapper whose source does not contain the text.
+function checkPlaceholders(
+  page: RenderedPage,
+  elements: readonly Visit[],
+  options: { readonly phrases: readonly string[]; readonly copyAt: RenderedOptions['copyAt'] },
+  push: (finding: AuditFinding) => void,
+): void {
+  const phrases = options.phrases;
   assert(phrases.length <= AUDIT_LIMITS.findingsPerFileMax * 4, 'checkPlaceholders: the phrases are bounded');
   if (phrases.length === 0) {
     return;
   }
+  const copyAt = options.copyAt ?? ((): CopyHolding => 'own');
   for (const { element } of elements) {
     if (PLACEHOLDER_SKIPPED_TAGS.has(element.tag)) {
       continue;
@@ -432,9 +450,8 @@ function checkPlaceholders(page: RenderedPage, elements: readonly Visit[], phras
       if (placeholderPhrase(text.value, phrases) === undefined) {
         continue;
       }
-      const holder = text.source === undefined ? undefined : textHolder(text.source);
       const finding = renderedFinding(page, element, 'placeholder-text', placeholderDetail(text.value), {});
-      push(holder === undefined ? finding : relocatedTo(finding, page, holder));
+      push(placeholderLocated(finding, page, { element, text: text.source }, copyAt));
     }
     const source = element.tag === 'img' ? (element.attrs['src'] ?? '') : '';
     if (source.length > 0 && placeholderImage(source)) {
@@ -474,6 +491,55 @@ function ownTexts(element: RenderedElement): readonly { readonly value: string; 
   }
   assert(runs.length <= element.children.length, 'ownTexts: at most one run per child');
   return runs.map((run) => ({ value: run.value.replace(/\s+/g, ' ').trim(), source: run.source })).filter((run) => run.value.length > 0);
+}
+
+// Where a placeholder finding belongs. Its text's own marker names the text (or the expression
+// that wrote it) unless that node only passed on given content; without one, the element's own
+// location holds it unless that node only passes content on. Given content belongs to the
+// instance that gave it: the caller the element's `data-avb-p` names after its own path.
+function placeholderLocated(
+  finding: AuditFinding,
+  page: RenderedPage,
+  at: { readonly element: RenderedElement; readonly text: RenderedSource | undefined },
+  copyAt: NonNullable<RenderedOptions['copyAt']>,
+): AuditFinding {
+  const marked = at.text;
+  if (marked !== undefined && copyAt(marked) !== 'given') {
+    const holder = textHolder(marked);
+    return holder === undefined ? finding : relocatedTo(finding, page, holder);
+  }
+  const own = at.element.source;
+  if (marked === undefined && (own === undefined || copyAt(own) !== 'given')) {
+    return finding;
+  }
+  const instance = givingInstance(at.element, page.file);
+  if (instance !== undefined) {
+    return relocatedTo(finding, page, instance);
+  }
+  const unplaced = auditFinding({
+    check: finding.check,
+    file: page.file,
+    fileKind: 'page',
+    element: undefined,
+    detail: finding.detail,
+    ...(finding.detailRef === undefined ? {} : { detailRef: finding.detailRef }),
+    source: 'rendered',
+    fix: undefined,
+  });
+  assert(unplaced.element === undefined, 'placeholderLocated: given copy with no instance is located at no element');
+  return unplaced;
+}
+
+/** The instance that placed an element's file: the second path of its `data-avb-p` (own path first, the caller's after). */
+export function givingInstance(element: Pick<RenderedElement, 'attrs'>, pageFile: string): RenderedSource | undefined {
+  const paths = (element.attrs['data-avb-p'] ?? '').trim().split(/\s+/);
+  const caller = paths[1];
+  if (caller === undefined || caller.length === 0) {
+    return undefined;
+  }
+  const place = parseMarker(`avb-s:${caller}`, pageFile);
+  assert(place === undefined || place.path.length > 0, 'givingInstance: a caller names a node');
+  return place;
 }
 
 /** The node holding a marked text: the text's parent in its file, the element or the instance whose slot it fills. */

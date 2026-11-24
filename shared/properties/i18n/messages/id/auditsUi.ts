@@ -73,11 +73,10 @@ export const messages = {
   'auditsUi.group.unit': 'Unit', // same
   'auditsUi.handOff.partial': '{message} {count} pertama terkirim; kirim sisanya setelahnya.',
   'auditsUi.ignoreButton': 'Abaikan',
-  'auditsUi.ignoreMenu': 'Abaikan…',
-  'auditsUi.ignoreReason': 'Alasan mengabaikan',
-  'auditsUi.ignoreWhy': 'Mengapa diabaikan?',
   'auditsUi.ignoreWriteFailed': 'Tidak dapat memperbarui .stacki/audits.json: {error}',
+  'auditsUi.ignoredManyToast': 'Temuan diabaikan',
   'auditsUi.ignoredNote': 'Diabaikan: {reason}',
+  'auditsUi.ignoredToast': 'Temuan diabaikan',
   'auditsUi.linkTo': 'Tautkan ke',
   'auditsUi.linkToLabel': 'Tautkan ke {route}',
   'auditsUi.menu.closeFind': 'Tutup cari & ganti',

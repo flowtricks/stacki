@@ -568,7 +568,8 @@ test('occurrence names, notes, and what a page-level finding goes to', () => {
   assert.equal(audits.occurrenceNote({ detail: '"Button Text" (written by the component here)' }, undefined), 'Button Text');
   assert.equal(audits.occurrenceNote({ detail: '<a href="/missing"> goes nowhere' }, undefined), '/missing');
   assert.equal(audits.occurrenceNote({ detail: '<img> with no alt' }, undefined), undefined);
-  assert.equal(audits.occurrenceNote({ detail: '"x"' }, 'Third party'), 'Ignored: Third party');
+  assert.equal(audits.occurrenceNote({ detail: '"x"' }, { reason: 'Third party' }), 'Ignored: Third party');
+  assert.equal(audits.occurrenceNote({ detail: '"x"' }, { reason: undefined }), 'Ignored', 'a plain ignore says so, with no reason');
   assert.equal(audits.GROUP_OPEN_MAX, 5);
   const promote = {
     file: 'src/pages/a.astro',
@@ -949,6 +950,69 @@ test('the value field is read-only without the style kit, and a refused value ke
   await act(async () => root.unmount());
 });
 
+// Ignore is one click: no popover, no reason. The write has no `reason` key; a toast says so and
+// offers Undo, which writes the file back as it was. Ignore page works the same way.
+test('the panel: Ignore is one click with no reason, and Undo in the toast puts the file back', async () => {
+  const writes = [];
+  window.avb.projectMetadata = async () => ({ ok: true, value: {} });
+  window.avb.writeProjectMetadata = async (input) => {
+    writes.push(input.write.source);
+    return { ok: true, value: { source: input.write.source } };
+  };
+  const toasts = installToastLog(audits.subscribeErrorToasts);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const report = {
+    scope: 'site',
+    findings: [finding({ id: 'a', check: 'img-alt' })],
+    files: 1,
+    unreadable: 0,
+    skipped: 0,
+    rendered: { tag: 'done', pages: 1 },
+    checkedAt: Date.now(),
+    trees: new Map(),
+  };
+  await act(async () => audits.updateAuditState((state) => ({ ...state, report, ignores: { source: undefined, value: audits.EMPTY_AUDIT_IGNORES } })));
+  await act(async () => root.render(React.createElement(audits.AuditsPanel, panelProps)));
+  await act(async () => container.querySelector('.audits-rule > .audits-row').click());
+  const menuItem = async (scope, label) => {
+    await act(async () => container.querySelector(`${scope} .more-menu-button`).click());
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find((row) => row.textContent === label);
+    assert.ok(item, `the menu offers ${label}`);
+    await act(async () => item.click());
+    await settle();
+    await settle();
+  };
+  await menuItem('.audits-occurrence', 'Ignore');
+  assert.equal(container.querySelector('input') ?? undefined, undefined, 'no reason field opens');
+  assert.equal(writes.length, 1, 'one click, one write');
+  assert.deepEqual(JSON.parse(writes[0]).ignored, [{ id: 'a' }], 'written without a reason');
+  assert.deepEqual(toasts.messages(), ['Finding ignored']);
+  assert.deepEqual(
+    audits.auditState().ignores.value.ignored.map((entry) => entry.id),
+    ['a'],
+  );
+  const undo = [...document.querySelectorAll('.toast-log-item button')].find((button) => button.textContent === 'Undo');
+  assert.ok(undo, 'the toast offers Undo');
+  await act(async () => undo.click());
+  await settle();
+  assert.equal(writes.length, 2);
+  assert.deepEqual(JSON.parse(writes[1]).ignored, [], 'Undo takes the entry out again');
+  assert.equal(audits.auditState().ignores.value.ignored.length, 0);
+  // The page's own menu ignores every finding in it, also with one click and no reason.
+  await menuItem('.audits-group-row', 'Ignore page');
+  assert.deepEqual(JSON.parse(writes[2]).ignoredPages, [{ file: 'src/pages/index.astro' }]);
+  assert.ok(toasts.messages().includes('Page ignored'));
+  const undoPage = [...document.querySelectorAll('.toast-log-item button')].filter((button) => button.textContent === 'Undo').at(-1);
+  await act(async () => undoPage.click());
+  await settle();
+  assert.equal(JSON.parse(writes[3]).ignoredPages, undefined, 'Undo removes the page entry');
+  toasts.uninstall();
+  await act(async () => root.unmount());
+  audits.resetAuditState('/site');
+});
+
 test('the panel: ignoring a page hides its findings and drops the counts; the Ignored view lists it and Unignore restores', async () => {
   const writes = [];
   window.avb.projectMetadata = async () => ({ ok: true, value: {} });
@@ -999,4 +1063,143 @@ test('the panel: ignoring a page hides its findings and drops the counts; the Ig
   assert.equal(container.querySelector('.audits-pill').textContent, '3', 'the findings are back');
   await act(async () => root.unmount());
   audits.resetAuditState('/site');
+});
+
+// The placeholder rule's attribution through a component that renders its slot to a string,
+// scrubs the comments and puts it back with `<Fragment set:html>` (Section > section > if content >
+// .container > Fragment, as Lumos writes it). The scrub takes the slotted markup's comment markers,
+// so the Fragment's own marker sits right before the first slotted element; read as that element's,
+// it put the page's copy on Section's Fragment. Now every finding is where its text is written: copy
+// the page writes inline on the page's own node; copy a page expression feeds into Paragraph's
+// `set:html` on that Paragraph instance (inside Section's slot and outside it); a component's own
+// literal copy in the component. Negative space: no finding lands on Section's section, container
+// or Fragment, and real copy (the hero heading) is never flagged.
+const SLOT_FILES = {
+  '/site/src/pages/index.astro': [
+    '---',
+    "import Section from '../components/Section.astro';",
+    "import Paragraph from '../components/Paragraph.astro';",
+    "import Note from '../components/Note.astro';",
+    "const greeting = 'Lorem ipsum dolor sit amet';",
+    '---',
+    '<html lang="en"><head><title>Home</title></head><body><Section><Paragraph>{greeting}</Paragraph><h1>We build things that help people work smarter</h1>' +
+      '<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p></Section><Paragraph>{greeting}</Paragraph><Note /></body></html>',
+    '',
+  ].join('\n'),
+  '/site/src/components/Section.astro': [
+    '---',
+    'const { ...rest } = Astro.props;',
+    "const content = (await Astro.slots.render('default')).replace(/<!--[\\s\\S]*?-->/g, '').trim();",
+    '---',
+    '<section class="section" {...rest}>',
+    '  {content && (',
+    '    <div class="container">',
+    '      <Fragment set:html={content} />',
+    '    </div>',
+    '  )}',
+    '</section>',
+    '',
+  ].join('\n'),
+  '/site/src/components/Paragraph.astro': [
+    '---',
+    "const content = (await Astro.slots.render('default')).replace(/<!--[\\s\\S]*?-->/g, '').trim();",
+    'const { ...rest } = Astro.props;',
+    '---',
+    '<p class="text" {...rest}><Fragment set:html={content} /></p>',
+    '',
+  ].join('\n'),
+  '/site/src/components/Note.astro': '---\n---\n<aside class="note"><p>Sample text</p></aside>\n',
+};
+const SECTION = 'src/components/Section.astro';
+const PARAGRAPH = 'src/components/Paragraph.astro';
+const NOTE = 'src/components/Note.astro';
+const marked = (id, html) => `<!--avb-s:${id}-->${html}<!--avb-e:${id}-->`;
+// Paragraph's own markup; inside Section's slot its comments are scrubbed, as the real component's are.
+const paragraph = (caller, { scrubbed }) => {
+  const text = scrubbed ? 'Lorem ipsum dolor sit amet' : marked(`${PARAGRAPH}|0.0`, 'Lorem ipsum dolor sit amet');
+  const element = `<p class="text" data-avb-p="${PARAGRAPH}|0 ${caller}">${text}</p>`;
+  return scrubbed ? element : marked(`${PARAGRAPH}|0`, element);
+};
+const SLOT_HTML =
+  '<html lang="en"><head><title>Home</title></head><body data-avb-p="0.1">' +
+  marked(
+    '0.1.0',
+    marked(
+      `${SECTION}|0`,
+      `<section class="section" data-avb-p="${SECTION}|0 0.1.0">` +
+        marked(
+          `${SECTION}|0.0`,
+          marked(
+            `${SECTION}|0.0.0`,
+            marked(
+              `${SECTION}|0.0.0.0`,
+              `<div class="container" data-avb-p="${SECTION}|0.0.0.0">` +
+                marked(
+                  `${SECTION}|0.0.0.0.0`,
+                  paragraph('0.1.0.0', { scrubbed: true }) +
+                    '<h1 data-avb-p="0.1.0.1">We build things that help people work smarter</h1>' +
+                    '<p data-avb-p="0.1.0.2">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>',
+                ) +
+                '</div>',
+            ),
+          ),
+        ) +
+        '</section>',
+    ),
+  ) +
+  marked('0.1.1', paragraph('0.1.1', { scrubbed: false })) +
+  marked('0.1.2', marked(`${NOTE}|0`, `<aside class="note" data-avb-p="${NOTE}|0 0.1.2"><p data-avb-p="${NOTE}|0.0">Sample text</p></aside>`)) +
+  '</body></html>';
+
+test('placeholder copy is attributed to the node that writes it, never to a wrapper that passes a slot on', async () => {
+  const slotScan = {
+    ...scan,
+    pages: [{ path: '/site/src/pages/index.astro', name: 'index.astro', route: '/', title: 'Home' }],
+    components: [SECTION, PARAGRAPH, NOTE].map((file) => ({ path: `/site/${file}`, file, name: file.split('/').pop().replace('.astro', ''), folder: '' })),
+  };
+  const report = await audits.runAudit(
+    { settings: audits.EMPTY_AUDIT_IGNORES, scope: 'site', projectPath: PROJECT, scan: slotScan, open: undefined },
+    io({
+      readFile: async (file) => readOf(SLOT_FILES[file]),
+      renderPage: async (route) => (route === '/' ? { ok: true, status: 200, html: SLOT_HTML } : { ok: true, status: 404, html: '' }),
+    }),
+  );
+  const placeholders = report.findings.filter((finding) => finding.check === 'placeholder-text');
+  const where = placeholders.map((finding) => [finding.file, finding.element?.path.join('.'), finding.element?.tag, finding.detail]).sort();
+  assert.deepEqual(where, [
+    [NOTE, '0.0', 'p', '"Sample text"'],
+    ['src/pages/index.astro', '0.1.0.0', 'Paragraph', '"Lorem ipsum dolor sit amet"'],
+    ['src/pages/index.astro', '0.1.0.2', 'p', '"Lorem ipsum dolor sit amet, consectetur adipiscing elit."'],
+    ['src/pages/index.astro', '0.1.1', 'Paragraph', '"Lorem ipsum dolor sit amet"'],
+  ]);
+  assert.equal(
+    placeholders.some((finding) => finding.file === SECTION || finding.file === PARAGRAPH),
+    false,
+    'nothing on the wrappers that only pass the slot on',
+  );
+  assert.equal(
+    placeholders.some((finding) => /We build things/.test(finding.detail)),
+    false,
+    'real copy is not placeholder text',
+  );
+  // The rendered tree itself: the slotted paragraph's location is its own path, not the Fragment's marker before it.
+  const { parsedTree } = require(rendered);
+  const tree = parsedTree(SLOT_HTML, 'src/pages/index.astro');
+  // Preorder over the tree, bounded by its size: the first element with the tag (and the text, when given).
+  const find = (root, tag, text) => {
+    const pending = [root];
+    for (let visited = 0; pending.length > 0 && visited < 10_000; visited++) {
+      const element = pending.shift();
+      if (element.tag === tag && (text === undefined || element.children.some((child) => child.kind === 'text' && child.value.includes(text)))) {
+        return element;
+      }
+      pending.unshift(...element.children.filter((child) => child.kind === 'element'));
+    }
+    return undefined;
+  };
+  const slotted = find(tree, 'p', 'consectetur');
+  assert.deepEqual(slotted.source.file, 'src/pages/index.astro');
+  assert.deepEqual(slotted.source.path, [0, 1, 0, 2]);
+  const first = find(tree, 'p', undefined);
+  assert.deepEqual([first.source.file, first.source.path], [PARAGRAPH, [0]], 'the first slotted element is not the Fragment either');
 });

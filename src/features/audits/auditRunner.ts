@@ -11,7 +11,8 @@
 import { assert } from '../../../shared/core/assert';
 import type { Result } from '../../../shared/core/result';
 import { AUDIT_LIMITS, uniqueFindings, type AuditFinding } from '../../../shared/page/auditFindings';
-import { auditRenderedPage, type RenderedElement } from '../../../shared/page/auditRendered';
+import { auditRenderedPage, type RenderedElement, type RenderedOptions } from '../../../shared/page/auditRendered';
+import { copyHolding } from './copyHolding';
 import {
   SITE_FILE_ENDPOINTS,
   SITE_FILE_URLS,
@@ -167,7 +168,9 @@ export async function runAudit(input: AuditRunInput, io: AuditIO): Promise<Audit
     findings.push(...audit.findings);
     summaries.push(audit.summary);
   }
-  const rendered = await renderedPass(input, plan.routes, facts, io, (finding, pageFile) => relocated(finding, { pageFile, inputs, input, io }));
+  const rendered = await renderedPass(input, plan.routes, { facts, copyAt: copyHolding(inputs) }, io, (finding, pageFile) =>
+    relocated(finding, { pageFile, inputs, input, io }),
+  );
   const headings = headingComponents(input.scan);
   findings.push(...renderedPlaceholdersNew(rendered.findings, findings).map((finding) => retagged(repaired(finding, inputs, headings), inputs)));
   if (plan.site || input.scope === 'pages') {
@@ -350,7 +353,7 @@ async function configFacts(input: AuditRunInput, io: AuditIO): Promise<{ readonl
 async function renderedPass(
   input: AuditRunInput,
   routes: readonly { readonly route: string; readonly file: string }[],
-  facts: AuditFacts,
+  { facts, copyAt }: { readonly facts: AuditFacts; readonly copyAt: RenderedOptions['copyAt'] },
   io: AuditIO,
   relocate: (finding: AuditFinding, pageFile: string) => Promise<AuditFinding>,
 ): Promise<{ readonly findings: readonly AuditFinding[]; readonly pages: readonly SitePage[]; readonly status: RenderedStatus }> {
@@ -377,7 +380,7 @@ async function renderedPass(
     // (title, description, canonical), outline, names and ids. The laid-out frame only adds
     // colours for contrast; a frame that loaded late or not at all can never report a head missing.
     input.onProgress?.({ stage: 'pages', done: pages.length + 1, total: routes.length });
-    const audit = await renderedAudit(input, { file, route, html: html.html }, facts, io);
+    const audit = await renderedAudit(input, { file, route, html: html.html }, { facts, copyAt }, io);
     if (audit === undefined) {
       continue;
     }
@@ -468,7 +471,7 @@ function repaired(finding: AuditFinding, inputs: ReadonlyMap<string, AuditFileIn
 async function renderedAudit(
   input: AuditRunInput,
   page: { readonly file: string; readonly route: string; readonly html: string },
-  facts: AuditFacts,
+  { facts, copyAt }: { readonly facts: AuditFacts; readonly copyAt: RenderedOptions['copyAt'] },
   io: AuditIO,
 ): Promise<ReturnType<typeof auditRenderedPage> | undefined> {
   const placeholders = `${facts.placeholders.join('\n')}\n|${facts.noindexRoutes.join('\n')}`;
@@ -481,7 +484,10 @@ async function renderedAudit(
   if (root.tag !== 'html') {
     return undefined;
   }
-  const audit = auditRenderedPage({ file: page.file, route: page.route, root }, { noindexRoutes: facts.noindexRoutes, placeholders: facts.placeholders });
+  const audit = auditRenderedPage(
+    { file: page.file, route: page.route, root },
+    { noindexRoutes: facts.noindexRoutes, placeholders: facts.placeholders, ...(copyAt === undefined ? {} : { copyAt }) },
+  );
   if (input.cache !== undefined) {
     remember(input.cache.rendered, key, { html: page.html, placeholders, audit });
   }
