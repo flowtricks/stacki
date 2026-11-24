@@ -134,11 +134,16 @@ test('an empty path is a programmer error', () => {
   assert.throws(() => queue.add(''), /Assertion failed: FolderOpenQueue.add: a path/);
 });
 
+// Paths are read the host's way: a Windows runner puts a drive in front of a rooted path, so each expectation is resolved here too.
 test('launch arguments: the program is skipped, switches are left out, paths are read from the working folder', () => {
-  assert.deepEqual(launchFolderArguments(['/Applications/Stacki', '/Users/me/site'], { skip: 1, workingDirectory: '/tmp' }), ['/Users/me/site']);
-  assert.deepEqual(launchFolderArguments(['electron', '.', 'site', '--inspect'], { skip: 2, workingDirectory: '/Users/me' }), ['/Users/me/site']);
+  assert.deepEqual(launchFolderArguments(['/Applications/Stacki', '/Users/me/site'], { skip: 1, workingDirectory: '/tmp' }), [path.resolve('/Users/me/site')]);
+  assert.deepEqual(launchFolderArguments(['electron', '.', 'site', '--inspect'], { skip: 2, workingDirectory: '/Users/me' }), [
+    path.resolve('/Users/me', 'site'),
+  ]);
   assert.deepEqual(launchFolderArguments(['Stacki', '-psn_0_12345', '--enable-sandbox', ''], { skip: 1, workingDirectory: '/tmp' }), []);
-  assert.deepEqual(launchFolderArguments(['stacki', pathToFileURL('/home/me/my site').href], { skip: 1, workingDirectory: '/tmp' }), ['/home/me/my site']);
+  assert.deepEqual(launchFolderArguments(['stacki', pathToFileURL(path.resolve('/home/me/my site')).href], { skip: 1, workingDirectory: '/tmp' }), [
+    path.resolve('/home/me/my site'),
+  ]);
   assert.deepEqual(launchFolderArguments(['stacki', 'https://example.com/site'], { skip: 1, workingDirectory: '/tmp' }), []);
   assert.deepEqual(launchFolderArguments(['electron', '.'], { skip: 2, workingDirectory: '/tmp' }), []);
 });
