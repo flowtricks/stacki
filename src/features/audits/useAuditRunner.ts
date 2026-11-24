@@ -93,6 +93,10 @@ async function run(input: AuditRunnerInput): Promise<void> {
     cache.reads.clear();
   }
   updateAuditState((current) => ({ ...current, running: true, progress: undefined }));
+  await refreshSettings(input.projectPath);
+  if (mine !== newestRun) {
+    return; // A newer run started while the settings were read; it audits instead.
+  }
   try {
     const report = await runAudit(
       {
@@ -117,6 +121,21 @@ async function run(input: AuditRunnerInput): Promise<void> {
     if (mine === newestRun) {
       updateAuditState((current) => ({ ...current, running: false, progress: undefined, problem: error instanceof Error ? error.message : String(error) }));
     }
+  }
+}
+
+// `.stacki/audits.json` can change outside the panel (`stacki audits add`, a pull, an editor) and
+// no watcher announces it, so every run reads it again: the run uses what the file says now, and
+// the panel's next write is checked against these bytes instead of failing on stale ones. A file
+// that does not read keeps the last good settings, and so does a read overtaken by the panel's own
+// write, whose answer is the newer one.
+async function refreshSettings(projectPath: string): Promise<void> {
+  const before = auditState().ignores;
+  const read = await readAuditIgnores(projectPath);
+  if (read.ok) {
+    updateAuditState((current) =>
+      current.projectPath !== projectPath || current.ignores !== before || read.value.source === before.source ? current : { ...current, ignores: read.value },
+    );
   }
 }
 
