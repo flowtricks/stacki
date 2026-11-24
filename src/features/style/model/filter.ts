@@ -6,7 +6,7 @@
 
 import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
 import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
-import { splitTopLevelSpaces } from './background';
+import { isShadowLength, splitTopLevelSpaces } from './background';
 
 export type FilterType = 'blur' | 'brightness' | 'contrast' | 'grayscale' | 'hue-rotate' | 'invert' | 'saturate' | 'sepia' | 'drop-shadow';
 
@@ -67,7 +67,6 @@ const innerOf = (call: string): string => {
   const closeIndex = call.lastIndexOf(')');
   return openIndex < 0 || closeIndex <= openIndex ? '' : call.slice(openIndex + 1, closeIndex).trim();
 };
-const isLength = (token: string): boolean => /^-?[\d.]+(px|em|rem|%|vw|vh|vmin|vmax)?$/i.test(token.trim());
 
 // Normalize a value filter's argument to the meta unit: %-filters store a percentage
 // (a unitless `1.5` → `150%`), deg-filters store degrees, blur stores px. A value we
@@ -112,7 +111,7 @@ export function parseFilters(value: string): Filter[] {
       const lens: string[] = [];
       let color = '';
       for (const argument of splitTopLevelSpaces(innerOf(call))) {
-        if (isLength(argument)) {
+        if (isShadowLength(argument)) {
           lens.push(argument);
         } else {
           color = argument;

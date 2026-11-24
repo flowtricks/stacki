@@ -141,6 +141,15 @@ export function splitTopLevelSpaces(value: string): string[] {
   return parts;
 }
 
+/** Whether a token of a shadow is one of its lengths, whatever the unit: a number or
+ *  dimension (`0`, `.5px`, `1pt`, `2cqmin`) or a math function. A list of known units
+ *  read `1pt` or `calc()` as the colour, and writing the list back put the real lengths
+ *  after four defaults: a declaration the browser drops. */
+export function isShadowLength(token: string): boolean {
+  const text = token.trim();
+  return /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?([a-z]+|%)?$/i.test(text) || /^[+-]?(calc|min|max|clamp)\(.*\)$/is.test(text);
+}
+
 const REPEAT_KW = new Set(['repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round']);
 const ATTACH_KW = new Set(['scroll', 'fixed', 'local']);
 const BOX_KW = new Set(['border-box', 'padding-box', 'content-box']);

@@ -5,14 +5,9 @@
 
 import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
 import type { Translator } from '../../../../shared/properties/i18n/messageRef';
-import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
+import { isShadowLength, splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
 export type Shadow = { x: string; y: string; blur: string; color: string };
-
-/** A token that reads as a length (a number with an optional CSS unit). */
-function isLength(token: string): boolean {
-  return /^-?[\d.]+(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cqw|cqh|cqi|cqb)?$/i.test(token.trim());
-}
 
 /** Parse a `text-shadow` value into an ordered shadow list (`none`/'' → empty). */
 export function parseShadows(value: string): Shadow[] {
@@ -26,7 +21,7 @@ export function parseShadows(value: string): Shadow[] {
       const lengths: string[] = [];
       let color = '';
       for (const token of splitTopLevelSpaces(part)) {
-        if (isLength(token)) {
+        if (isShadowLength(token)) {
           lengths.push(token);
         } else {
           color = color ? `${color} ${token}` : token;
