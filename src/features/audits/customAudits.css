@@ -1,0 +1,136 @@
+/* The custom audit dialog (CustomAuditDialog.tsx): fills, never borders, as the rest of the Audits panel draws itself. */
+.modal.custom-audit-dialog {
+  width: 480px;
+}
+.custom-audit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+.custom-audit-header h4 {
+  margin: 0;
+  font-size: 13px;
+}
+.custom-audit-body,
+.custom-audit-list {
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.custom-audit-body input {
+  width: 100%;
+}
+.custom-audit-code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+.custom-audit-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 5px;
+}
+.custom-audit-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.custom-audit-grow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.custom-audit-icon-field {
+  position: relative;
+  width: 150px;
+  flex: none;
+}
+.custom-audit-look {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-1, rgba(255, 255, 255, 0.04));
+}
+.custom-audit-look .hint-text {
+  margin: -6px 0 0;
+}
+.custom-audit-live {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 64px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-1, rgba(255, 255, 255, 0.04));
+}
+.custom-audit-live-count {
+  font-size: 12px;
+  font-weight: 600;
+}
+.custom-audit-sample {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  font-size: 11px;
+}
+.custom-audit-sample-where {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.custom-audit-sample code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-audit-delete {
+  margin-inline-end: auto;
+}
+.custom-audit-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.custom-audit-item:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.05));
+}
+.custom-audit-item-icon {
+  display: inline-flex;
+  color: var(--text-dim);
+}
+.custom-audit-item-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: start;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.custom-audit-item-category {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.custom-audit-empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.custom-audit-add {
+  min-width: 200px;
+}
