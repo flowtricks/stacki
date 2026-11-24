@@ -47,14 +47,18 @@ export function setDeclOnRule(rule: Rule, prop: string, declared: DeclarationVal
     setPaddingDeclaration(rule, prop, declared);
     return;
   }
-  const found: Declaration[] = [];
-  rule.walkDecls(prop, (declaration) => {
-    found.push(declaration);
-  });
-  const last = found.at(-1);
+  // The rule's own declarations only. A walk of the whole subtree found a nested rule's
+  // declaration of the same property (`.card { .title { color: blue } }`) and rewrote
+  // that, leaving the rule itself unset.
+  const last = directDecls(rule)
+    .filter((declaration) => declaration.prop === prop)
+    .at(-1);
   if (last) {
     last.value = declared.value;
     last.important = declared.important;
+  } else if (rule.nodes?.some((child) => child.type === 'rule' || child.type === 'atrule')) {
+    // Above the nested rules, with the rule's other declarations.
+    appendDecl(rule, prop, declared);
   } else {
     rule.append({ prop, value: declared.value, important: declared.important });
     fillTrailingBlankLine(rule);

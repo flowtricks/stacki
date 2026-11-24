@@ -51,18 +51,14 @@ export function useSplitForEdit(nativeState: ReturnType<typeof useNativeState>) 
       if (index === undefined) {
         return identity;
       }
-      const origNodes: Declaration[] = [];
-      rule.node.walkDecls((declaration) => {
-        origNodes.push(declaration);
-      });
+      // The rule's own declarations, as `rule.declarations` lists them. A walk of the whole
+      // subtree counted nested rules' too, so an index could land on a nested declaration.
+      const origNodes = directDecls(rule.node);
       const clone = splitRuleSelectorAt(rule.node, index);
       if (!clone) {
         return identity;
       }
-      const cloneNodes: Declaration[] = [];
-      clone.walkDecls((declaration) => {
-        cloneNodes.push(declaration);
-      });
+      const cloneNodes = directDecls(clone);
       const editRule: ParsedRule = {
         ...rule,
         node: clone,
