@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmdirSync } from 'node:fs';
 import { readPublishConfig } from '../project/publishConfig';
 import { publishingGitEnvironment } from '../project/publishGitHub';
 import { homedir } from 'node:os';
@@ -14,6 +14,23 @@ import type { MainHost } from './mainHost';
 import { translateMain } from '../lib/mainLocale';
 import { described } from '../../shared/properties/i18n/messageRef';
 import { referencingIpc } from '../lib/referencingIpc';
+
+/**
+ * Makes `projectPath` and runs `clone` in it. A clone that wrote nothing (offline, signed out, no access) leaves no folder behind, so
+ * trying again can reuse the name; anything it did write stays for the person to inspect, and nothing is deleted recursively.
+ */
+export async function cloneIntoNewFolder(projectPath: string, clone: () => Promise<unknown>): Promise<void> {
+  // Exclusive creation protects existing projects, including empty directories.
+  mkdirSync(projectPath);
+  try {
+    await clone();
+  } catch (error: unknown) {
+    if (readdirSync(projectPath).length === 0) {
+      rmdirSync(projectPath);
+    }
+    throw error;
+  }
+}
 
 export function registerGitRepositoryHandlers({ ipcMain: plainIpcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
   const ipcMain = referencingIpc(plainIpcMain);
@@ -37,11 +54,11 @@ export function registerGitRepositoryHandlers({ ipcMain: plainIpcMain, showOpenD
     const name = repository.split('/')[1];
     assert(name !== undefined, 'Repository must have a name');
     const projectPath = join(parent, name);
-    // Exclusive creation protects existing projects, including empty directories.
-    mkdirSync(projectPath);
-    await run('gh', ['repo', 'clone', `https://github.com/${repository}`, '.'], projectPath, {
-      timeout: 180000,
-    });
+    await cloneIntoNewFolder(projectPath, () =>
+      run('gh', ['repo', 'clone', `https://github.com/${repository}`, '.'], projectPath, {
+        timeout: 180000,
+      }),
+    );
     if (!isAstroProject(projectPath)) {
       const cloneNotAstro = described('git.error.cloneNotAstro', { path: projectPath });
       return { canceled: false as const, error: cloneNotAstro.message, errorRef: cloneNotAstro.messageRef };
