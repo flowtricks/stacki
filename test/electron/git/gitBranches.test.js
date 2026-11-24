@@ -627,6 +627,38 @@ const caught = async (callback) => {
     check('with the work in progress on it', fs.readFileSync(path.join(directory, 'a.txt'), 'utf8') === 'started something\n');
   }
 
+  // --- Names git quotes, in a project inside a larger repository ------------
+  //
+  // The line form of `diff --name-only` writes an accented name quoted and
+  // escaped, and reports it from the repository root. Either way the file was
+  // not found, so the clash came back empty and no answer to it could finish.
+  {
+    const directory = await repo('monorepo');
+    cleanup.push(directory);
+    const site = path.join(directory, 'site');
+    const name = 'site/caf\u00e9 [slug].astro';
+    const write = (text) => fs.writeFileSync(path.join(directory, name), `${text}\n`);
+    fs.mkdirSync(site);
+    write('base');
+    await sh(directory, 'add', '-A');
+    await sh(directory, 'commit', '-qm', 'page');
+    await sh(directory, 'checkout', '-qb', 'feature');
+    write('theirs');
+    await sh(directory, 'commit', '-qam', 'feature page');
+    await sh(directory, 'checkout', '-q', 'main');
+    write('ours');
+    await sh(directory, 'commit', '-qam', 'main page');
+
+    const clash = await mergeBranch(git, { projectPath: site, branch: 'feature' });
+    check('the clash names the file as it is on disk', clash.files.length === 1 && clash.files[0].path === name, JSON.stringify(clash.files));
+    check('with both versions read', clash.files[0]?.ours === 'ours\n' && clash.files[0]?.theirs === 'theirs\n', JSON.stringify(clash.files));
+    check('and the disagreement parsed', clash.files[0]?.parts?.some((part) => part.kind === 'clash') === true, JSON.stringify(clash.files));
+    const { error, value: done } = await caught(() => resolveMerge(git, { projectPath: site, branch: 'feature', choices: { [name]: ['theirs'] } }));
+    check('a per-part answer finishes from the subfolder', done?.ok === true, String(error));
+    check('with the chosen side on disk', fs.readFileSync(path.join(directory, name), 'utf8').trim() === 'theirs');
+    check('and a clean tree', (await sh(directory, 'status', '--porcelain')) === '');
+  }
+
   for (const directory of cleanup) {
     fs.rmSync(directory, { recursive: true, force: true });
   }

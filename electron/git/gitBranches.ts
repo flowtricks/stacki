@@ -75,6 +75,26 @@ export type MergeOutcome =
       readonly files: readonly string[];
     };
 
+/**
+ * The files git could not reconcile, as paths from the repository's root. `-z` because the line form quotes and escapes a name with
+ * accents or quotes (`"caf\\303\\251.astro"`), which names no file on disk and cannot be passed back to git.
+ */
+async function conflictedFiles(git: Git, projectPath: string): Promise<string[]> {
+  return (await git(projectPath, ['diff', '--name-only', '-z', '--diff-filter=U'])).stdout.split('\0').filter(Boolean);
+}
+
+/**
+ * Where a root-relative conflict path is on disk. The project may sit inside a larger repository (a monorepo), so joining it to the
+ * project folder would look for `site/site/page.astro`. `--show-cdup` keeps the project path's own spelling, links included.
+ */
+async function conflictedFilePath(git: Git, projectPath: string, file: string): Promise<string> {
+  const up = (await git(projectPath, ['rev-parse', '--show-cdup'])).stdout.trim();
+  return path.resolve(projectPath, up, file);
+}
+
+/** The pathspec for a root-relative path, from any folder of the repository, with `[slug]` read as a name rather than a pattern. */
+const rootPathspec = (file: string): string => `:(top,literal)${file}`;
+
 /** One side of a conflicted file, or undefined when that side deleted it. */
 async function stage(git: Git, projectPath: string, stageNumber: number, file: string): Promise<string | undefined> {
   try {
@@ -123,10 +143,7 @@ async function resolveMerge(
     }
     return { ok: true, into, changed: true, resolved: 0 };
   }
-  const left = (await git(projectPath, ['diff', '--name-only', '--diff-filter=U'])).stdout
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const left = await conflictedFiles(git, projectPath);
   try {
     if (edited.length > 0 && (left.length !== Object.keys(resolutions).length || left.some((file) => resolutions[file] === undefined))) {
       throw new ReferencedError('git.error.mergeFilesChanged');
@@ -134,7 +151,7 @@ async function resolveMerge(
     for (const file of left) {
       const choice = resolutions[file] ?? 'ours';
       await resolveMergeFile(git, projectPath, file, choice);
-      await git(projectPath, ['add', '--', file]);
+      await git(projectPath, ['add', '--', rootPathspec(file)]);
     }
     // Everything git reconciled by itself is already staged; this commits the
     // whole merge, the chosen files included.
@@ -189,21 +206,22 @@ async function resolveMergeFile(git: Git, projectPath: string, file: string, cho
   // markers with the chosen side of each. This is what makes it possible
   // to take part of a file from each branch.
   const perHunk = toArray(choice);
+  const target = await conflictedFilePath(git, projectPath, file);
   if (typeof choice === 'object' && 'kind' in choice) {
-    const parts = parseConflict(fs.readFileSync(path.join(projectPath, file), 'utf8'));
+    const parts = parseConflict(fs.readFileSync(target, 'utf8'));
     if (mergeConflictSnapshot(parts) !== choice.expected) {
       throw new ReferencedError('git.error.mergeFileChanged');
     }
-    writeProjectText(path.join(projectPath, file), choice.text);
+    writeProjectText(target, choice.text);
   } else if (perHunk) {
-    const parts = parseConflict(fs.readFileSync(path.join(projectPath, file), 'utf8'));
-    writeProjectText(path.join(projectPath, file), renderResolved(parts, perHunk));
+    const parts = parseConflict(fs.readFileSync(target, 'utf8'));
+    writeProjectText(target, renderResolved(parts, perHunk));
   } else {
     // One answer for the whole file. Defaults to keeping what is on this
     // branch: a missing choice must never silently prefer the incoming
     // version over the user's own work.
     const side = choice === 'theirs' ? '--theirs' : '--ours';
-    await git(projectPath, ['checkout', side, '--', file]);
+    await git(projectPath, ['checkout', side, '--', rootPathspec(file)]);
   }
 }
 
@@ -252,10 +270,7 @@ async function mergeBranch(git: Git, { projectPath, branch }: { readonly project
     // clears it.
     let files: string[] = [];
     try {
-      files = (await git(projectPath, ['diff', '--name-only', '--diff-filter=U'])).stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
+      files = await conflictedFiles(git, projectPath);
     } catch {
       /* no index to ask about — the merge never started */
     }
@@ -275,7 +290,7 @@ async function mergeBranch(git: Git, { projectPath, branch }: { readonly project
         // other can say so.
         let parts: readonly ConflictPart[] | undefined = undefined;
         try {
-          parts = parseConflict(fs.readFileSync(path.join(projectPath, file), 'utf8'));
+          parts = parseConflict(fs.readFileSync(await conflictedFilePath(git, projectPath, file), 'utf8'));
         } catch {
           // A binary file, or one side deleted it: there is no marked-up text
           // to read, and the choice is the whole file or nothing.
