@@ -186,6 +186,11 @@ function isOpaque(declaration: Declaration): boolean {
 // A var() or env() standing for a whole part of a value.
 const isSubstitution = (part: string): boolean => /^(var|env)\(/i.test(part);
 
+// A CSS-wide keyword is only valid as a declaration's whole value: beside other parts
+// (`padding: inherit inherit inherit 5px`) the browser drops the declaration. Sides that
+// all agree on one still write `padding: inherit`; unequal ones go as axes or longhands.
+const isWideKeyword = (part: string): boolean => /^(inherit|initial|unset|revert|revert-layer)$/i.test(part);
+
 // What each side resolves to within one node: a later declaration wins, unless
 // an earlier one is `!important` and it is not. Undefined when a declaration
 // cannot be read side by side, which leaves the node as written.
@@ -260,6 +265,9 @@ function shorthandOf(values: ReadonlyMap<string, SideValue>): Compact | undefine
   }
   // SIDES is top, right, bottom, left: the shorthand's own order.
   const parts = [top.value, right.value, bottom.value, left.value];
+  if (parts.some(isWideKeyword)) {
+    return parts.every((part) => part === top.value) ? { prop: 'padding', value: top.value, important } : undefined;
+  }
   if (right.value === left.value) {
     parts.pop();
     if (top.value === bottom.value) {

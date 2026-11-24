@@ -348,3 +348,22 @@ test('the padding writer refuses a property that is not padding', () => {
   assert.equal(add(`${before}.section {\n  top: 0;\n}`, 'color'), `${before}.section {\n  top: 0;\n  color: 1rem;\n}`);
   assert.equal(add(`${before}.section {\n\n\n}`, 'color'), `${before}.section {\n  color: 1rem;\n\n}`);
 }
+
+// A CSS-wide keyword stands alone: grouped beside other sides it would make a
+// declaration the browser drops, taking all four paddings with it.
+{
+  const postcss = require('postcss');
+  const { addDeclaration } = require('../../helpers/rendererModule')('src/features/style/model/css.ts');
+  const add = (css, prop, value) => {
+    const root = postcss.parse(css);
+    addDeclaration({ node: root.first }, prop, { value, important: false });
+    return root.toString();
+  };
+  assert.equal(
+    add('.a {\n  padding: inherit;\n}', 'padding-left', '5px'),
+    '.a {\n  padding-block: inherit;\n  padding-right: inherit;\n  padding-left: 5px;\n}',
+  );
+  assert.equal(add('.a {\n  padding: 1rem;\n}', 'padding-top', 'unset'), '.a {\n  padding-top: unset;\n  padding-bottom: 1rem;\n  padding-inline: 1rem;\n}');
+  // Four sides that agree on the keyword are still one declaration.
+  assert.equal(add('.a {\n  padding-block: unset;\n}', 'padding-inline', 'unset'), '.a {\n  padding: unset;\n}');
+}
