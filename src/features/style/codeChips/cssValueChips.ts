@@ -78,10 +78,13 @@ export const STYLE_BLOCKS_MAX = 256;
 /** How far ahead a line is read to see whether it starts a declaration of its own. */
 const DECLARATION_START_CHARS_MAX = 128;
 
-// A property name: a standard one, a vendor-prefixed one, or a custom property.
-const PROPERTY_NAME = /^-{0,2}[a-z][a-z0-9_-]*$/i;
+// A property name: a custom property, or a standard or vendor-prefixed one. A custom property's name
+// may start with any name character after its `--`: Lumos' private variables are `--_gap-size`, and
+// requiring a letter there dropped every one of their declarations, so `--_gap-size: var(--a)` had no
+// chip for its reference while `gap: var(--_gap-size)` beside it had one.
+const PROPERTY_NAME = /^(?:--[\w -￿-]+|-?[a-z][a-z0-9_-]*)$/i;
 // A line that starts a declaration: the text after an unfinished one (`background-image:` and no `;`).
-const DECLARATION_START = /^\s*-{0,2}[a-z][a-z0-9_-]*\s*:(?!:)/i;
+const DECLARATION_START = /^\s*(?:--[\w -￿-]+|-?[a-z][a-z0-9_-]*)\s*:(?!:)/i;
 const VENDOR_PREFIX = /^-(?:webkit|moz|ms|o)-/;
 // Values that only say "take it from the cascade": no editor has anything to show for them.
 const WIDE_KEYWORDS = new Set(['none', 'inherit', 'initial', 'unset', 'revert', 'revert-layer']);
