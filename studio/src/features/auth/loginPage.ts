@@ -14,15 +14,6 @@ export function loginPage(problem?: SignInProblem, status = 200, reference = '',
   const { locale, translate } = translatorForLanguages(languages);
   const messageKeys = provider === undefined ? signInMessageKeys : signInNeutralMessageKeys;
   const message = escapeHtml(translate(problem ? messageKeys[problem] : 'studio.login.prompt'));
-  const countdown = loginCountdown(
-    seconds,
-    {
-      one: translate('studio.login.waitOne'),
-      many: translate('studio.login.waitMany', { seconds: '{seconds}' }),
-      ready: translate('studio.login.ready'),
-    },
-    escapeHtml,
-  );
   const detail = reference
     ? `<p>${escapeHtml(translate('studio.login.reference', { reference: reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) }))}</p>`
     : '';
@@ -32,6 +23,11 @@ export function loginPage(problem?: SignInProblem, status = 200, reference = '',
       : provider === PASSKEY_BUTTON_PROVIDER
         ? translate('studio.login.buttonPasskey')
         : translate('studio.login.buttonProvider', { provider });
+  const countdown = loginCountdown(
+    seconds,
+    { waiting: translate('studio.login.tryAgainIn', { time: '{time}' }), button: buttonLabel, ready: translate('studio.login.ready') },
+    escapeHtml,
+  );
   const providerMark =
     provider === undefined
       ? `
@@ -52,10 +48,13 @@ body{background:#111;color:#eee;font:14px system-ui;display:grid;place-items:cen
 main{text-align:center;max-width:32rem;padding:24px}
 .studio-logo{display:block;margin:0 auto 24px}
 a{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#eee;
-  color:#111;border-radius:8px;padding:12px 20px;text-decoration:none;margin:20px 0}
+  color:#111;border-radius:8px;padding:12px 20px;text-decoration:none;margin:20px 0;
+  font-variant-numeric:tabular-nums}
 a svg{flex-shrink:0}
+a[aria-disabled="true"]{opacity:.5;pointer-events:none;cursor:default}
 p{color:#999;line-height:1.6}
 </style>
+<noscript><style>a[aria-disabled="true"]{opacity:1;pointer-events:auto}</style></noscript>
 </head>
 <body><main>
 <svg class="studio-logo" width="48" height="48" viewBox="0 0 458 458"
@@ -63,9 +62,9 @@ p{color:#999;line-height:1.6}
   <path d="${stackiMarkPath}" fill="currentColor" />
 </svg>
 <h1>${escapeHtml(translate(problem ? 'studio.login.failedHeading' : 'studio.login.welcomeHeading'))}</h1>
-<p id="login-message">${message}${countdown.markup}</p>
-<a href="/studio/auth/login">${providerMark}
-  <span>${escapeHtml(buttonLabel)}</span>
+<p id="login-message">${message}</p>
+<a id="login-button" href="/studio/auth/login"${countdown.attributes}>${providerMark}
+  <span id="login-button-label">${countdown.label}</span>
 </a>${detail}
 </main>${countdown.script}</body></html>`,
     {

@@ -8,6 +8,7 @@ export class GitHubRateLimitError extends Error {
   constructor(
     readonly status: number,
     readonly retryAt: number,
+    readonly signal: GitHubLimitSignal = 'status',
   ) {
     super(`GitHub is limiting requests (${status}).`);
     this.name = 'GitHubRateLimitError';
@@ -27,6 +28,20 @@ export function isRateLimited(status: number, headers: Headers): boolean {
     return headers.get('x-ratelimit-remaining') === '0';
   }
   return false;
+}
+
+/**
+ * Which kind of limit GitHub signalled, for the sign-in reference and the log; never shown as prose.
+ * `retry-after` is a secondary limit (GitHub's abuse protection, which also counts the shared Cloudflare egress address
+ * a Worker calls from); `quota` is an exhausted primary quota with a reset time; `status` is a bare 429 with no header.
+ */
+export type GitHubLimitSignal = 'retry-after' | 'quota' | 'status';
+
+export function limitSignal(headers: Headers): GitHubLimitSignal {
+  if (headers.has('Retry-After')) {
+    return 'retry-after';
+  }
+  return headers.get('x-ratelimit-remaining') === '0' ? 'quota' : 'status';
 }
 
 // Honor GitHub's wait headers; without one, its guidance is to wait at least a minute. The result is clamped to rateLimitWaitMsMax.
@@ -49,6 +64,6 @@ export function retryAt(headers: Headers, now = Date.now()): number {
 // Throws GitHubRateLimitError when the response is a limit; otherwise returns so the caller handles other failures.
 export function throwIfRateLimited(response: Response): void {
   if (isRateLimited(response.status, response.headers)) {
-    throw new GitHubRateLimitError(response.status, retryAt(response.headers));
+    throw new GitHubRateLimitError(response.status, retryAt(response.headers), limitSignal(response.headers));
   }
 }

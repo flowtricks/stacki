@@ -67,7 +67,9 @@ test('rate limiting honors GitHub wait time and blocks repeated exchanges until 
   assert.ok(response);
   assert.equal(response.status, 429);
   assert.equal(response.headers.get('Retry-After'), '120');
-  assert.match(await response.text(), /Wait at least 120 seconds/);
+  assert.match(await response.text(), /Try again in 2:00/);
+  // The evidence for the owner: which step GitHub limited, and with which signal.
+  assert.equal(response.headers.get('X-Studio-Reference'), 'token-429-retry-after');
   const cookie = response.headers.get('Set-Cookie')?.split(';')[0];
   assert.ok(cookie);
   const token = cookie.slice(cookie.indexOf('=') + 1);

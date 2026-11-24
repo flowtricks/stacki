@@ -27,6 +27,9 @@ export const PASSKEY_SETUP_PATH = '/studio/auth/passkey/bootstrap';
 const STATE_COOKIE = '__Host-studio-state';
 const STATE_COOKIE_SECONDS = 600;
 const PROVIDER_PATH_CHARS_MAX = 200;
+/** Which step a refused sign-in stopped at, for the owner's network panel (see rateLimitedPage). */
+export const REFERENCE_HEADER = 'X-Studio-Reference';
+const REFERENCE_CHARS_MAX = 80;
 
 /** The page-facing name of a provider that is not GitHub (custom, or built-in Google, SSO, passkey); undefined keeps the GitHub page. */
 export function installedProviderName(runtime: AuthRuntime): string | undefined {
@@ -223,7 +226,7 @@ async function refusalPage(runtime: AuthRuntime, refusal: SignInRefusal, languag
     logRefusal(runtime, refusal);
   }
   if (refusal.problem === 'rate-limit') {
-    return rateLimitedPage(runtime, refusal.retryAtMs ?? Date.now(), languages ?? null);
+    return rateLimitedPage(runtime, refusal.retryAtMs ?? Date.now(), languages ?? null, refusal.reference);
   }
   if (refusal.problem === 'access') {
     return loginPage('access', 403, '', 0, languages ?? undefined, name);
@@ -232,10 +235,15 @@ async function refusalPage(runtime: AuthRuntime, refusal: SignInRefusal, languag
   return loginPage(refusal.problem, status, refusal.reference ?? '', 0, languages ?? undefined, name);
 }
 
-async function rateLimitedPage(runtime: AuthRuntime, until: number, languages: string | null): Promise<Response> {
+// `reference` says which step was limited and how (`token-429-retry-after`): a response header, not page prose, so the
+// page keeps its one message while the owner can still read the evidence in the browser's network panel.
+async function rateLimitedPage(runtime: AuthRuntime, until: number, languages: string | null, reference?: string): Promise<Response> {
   const seconds = Math.max(1, Math.ceil((until - Date.now()) / 1000));
   const response = loginPage('rate-limit', 429, '', seconds, languages ?? undefined, installedProviderName(runtime));
   response.headers.set('Retry-After', String(seconds));
+  if (reference !== undefined) {
+    response.headers.set(REFERENCE_HEADER, reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, REFERENCE_CHARS_MAX));
+  }
   response.headers.append('Set-Cookie', await waitCookie(until, runtime.secret));
   return response;
 }

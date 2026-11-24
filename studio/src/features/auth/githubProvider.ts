@@ -6,7 +6,7 @@ import { err, ok, type Result } from '../../../vendor/stacki/shared/core/result'
 import { record, string } from '../../shared/validation';
 import { parseProfile, type GitHubProfile } from './profile';
 import { SignInFailure, signInStep } from './signInFailure';
-import { isRateLimited, retryAt } from './githubRateLimit';
+import { isRateLimited, limitSignal, retryAt } from './githubRateLimit';
 import { canEdit as repositoryCanEdit, type AccessConfig } from './repositoryAccess';
 import type { AuthProvider, Principal, ProviderPerson, SignInFlow, SignInRefusal } from './authProvider';
 
@@ -89,7 +89,7 @@ async function fetchProfile(token: string) {
   });
   if (!profileResponse.ok) {
     if (isRateLimited(profileResponse.status, profileResponse.headers)) {
-      throw new SignInFailure('rate-limit', 'profile', profileResponse.status, 'http', retryAt(profileResponse.headers));
+      throw new SignInFailure('rate-limit', 'profile', profileResponse.status, limitSignal(profileResponse.headers), retryAt(profileResponse.headers));
     }
     throw new SignInFailure('unavailable', 'profile', profileResponse.status, 'http');
   }
@@ -116,7 +116,7 @@ async function exchangeCode(code: string, config: AuthConfig, flow: SignInFlow) 
   if (!tokenResponse.ok) {
     if (isRateLimited(tokenResponse.status, tokenResponse.headers)) {
       reportTokenLimit(tokenResponse);
-      throw new SignInFailure('rate-limit', 'token', tokenResponse.status, 'http', retryAt(tokenResponse.headers));
+      throw new SignInFailure('rate-limit', 'token', tokenResponse.status, limitSignal(tokenResponse.headers), retryAt(tokenResponse.headers));
     }
     throw new SignInFailure('unavailable', 'token', tokenResponse.status, 'http');
   }

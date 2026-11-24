@@ -18,7 +18,7 @@ export class SignInFailure extends Error {
 }
 
 function rethrowRateLimit(stage: SignInStage, error: GitHubRateLimitError): never {
-  throw new SignInFailure('rate-limit', stage, error.status, 'http', error.retryAt);
+  throw new SignInFailure('rate-limit', stage, error.status, error.signal, error.retryAt);
 }
 
 export async function signInStep<T>(stage: SignInStage, action: () => Promise<T>): Promise<T> {

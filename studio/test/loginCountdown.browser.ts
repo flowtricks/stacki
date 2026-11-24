@@ -25,21 +25,25 @@ try {
     });
   });
   await page.goto('https://studio.test/studio/auth/login', { waitUntil: 'load' });
-  const countdown = page.locator('#login-countdown');
-  assert.match((await countdown.textContent()) ?? '', /266 seconds/);
+  const button = page.locator('#login-button');
+  const label = page.locator('#login-button-label');
+  assert.equal(await label.textContent(), 'Try again in 4:26');
+  assert.equal(await button.getAttribute('aria-disabled'), 'true');
   await page.clock.runFor(1000);
-  assert.match((await countdown.textContent()) ?? '', /265 seconds/);
+  assert.equal(await label.textContent(), 'Try again in 4:25');
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/login-countdown.png' });
   await page.clock.fastForward(264_000);
-  assert.match((await countdown.textContent()) ?? '', /1 second,/);
+  assert.equal(await label.textContent(), 'Try again in 0:01');
   await page.clock.fastForward(2000);
   assert.equal(await page.getByRole('status').textContent(), 'You can try signing in again below.');
+  assert.equal(await label.textContent(), 'Sign in with GitHub');
+  assert.equal(await button.getAttribute('aria-disabled'), null);
   await page.clock.fastForward(60_000);
   assert.equal(await page.getByRole('status').textContent(), 'You can try signing in again below.');
   assert.equal(await page.getByRole('link').getAttribute('href'), '/studio/auth/login');
   assert.equal(requests, 1);
-  console.log('Login countdown, background catch-up, expiry, and script policy passed.');
+  console.log('Login button countdown, background catch-up, re-enable, and script policy passed.');
 } finally {
   await browser.close();
 }
