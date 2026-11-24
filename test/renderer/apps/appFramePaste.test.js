@@ -58,7 +58,13 @@ esbuild.buildSync({
 });
 const apps = require(outfile);
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+// The SDK's report of the focused field travels as a message, which jsdom delivers in a later task of its own: two turns of the
+// timer queue run it and the answer it causes.
+const settle = async () => {
+  for (let turn = 0; turn < 2; turn += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+};
 
 function summary(id, { shortcutClaims = [] } = {}) {
   return {
