@@ -112,6 +112,22 @@ async function main() {
   });
   assert.deepEqual(names(parked), ['gitMerge', 'gitPark', 'gitMerge', 'gitUnpark']);
   assert.equal(parked.at(-1).conflict.deleteAfter, true);
+  // A second merge that throws (a hook refusing the merge commit) must not leave the work parked, unseen.
+  const hookRefused = [];
+  await assert.rejects(
+    scenario('mergeBranchAction', [{ checked: true }, true], {
+      gitMerge: [dirty, { then: (_resolve, reject) => reject(new Error('commit-msg hook refused the merge')) }],
+      gitPark: [{ ok: true, parked: true, branch: 'main' }],
+      gitUnpark: {
+        shift: () => {
+          hookRefused.push('gitUnpark');
+          return { restored: true };
+        },
+      },
+    }),
+    /hook refused/,
+  );
+  assert.deepEqual(hookRefused, ['gitUnpark']);
   const refusal = { ok: false, unmerged: true, message: 'Unmerged commits' };
   const cancelled = await scenario('deleteBranchAction', [true, false], {
     gitDeleteBranch: [refusal],

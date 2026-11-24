@@ -212,7 +212,14 @@ async function mergeDirtyWork(
     showToast(parked?.error || translate('git.action.dirty.parkFailed'), 'error');
     return;
   }
-  const again = await gitMerge({ projectPath, branch });
+  let again: Awaited<ReturnType<typeof gitMerge>>;
+  try {
+    again = await gitMerge({ projectPath, branch });
+  } catch (error: unknown) {
+    // A merge that throws (a hook refusing the merge commit) still gives the work back before it is reported.
+    await gitUnpark({ projectPath });
+    throw error;
+  }
   // Whatever happens next, the work comes back out — including when the
   // merge then clashes, since the clash is resolved against the files
   // rather than the working tree.
