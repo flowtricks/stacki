@@ -46,11 +46,14 @@ async function playNPM(
 }
 
 test('the tools folder is the app data folder on each operating system', () => {
-  assert.equal(publishToolsDirectory('/Users/designer', 'darwin', {}), path.join('/Users/designer', 'Library', 'Application Support', 'Stacki', 'tools'));
-  assert.equal(publishToolsDirectory('/home/designer', 'linux', {}), path.join('/home/designer', '.config', 'Stacki', 'tools'));
-  assert.equal(publishToolsDirectory('/home/designer', 'linux', { XDG_CONFIG_HOME: '/data/config' }), path.join('/data/config', 'Stacki', 'tools'));
+  assert.equal(publishToolsDirectory('/Users/designer', 'darwin', {}), path.posix.join('/Users/designer', 'Library', 'Application Support', 'Stacki', 'tools'));
+  assert.equal(publishToolsDirectory('/home/designer', 'linux', {}), path.posix.join('/home/designer', '.config', 'Stacki', 'tools'));
+  assert.equal(publishToolsDirectory('/home/designer', 'linux', { XDG_CONFIG_HOME: '/data/config' }), path.posix.join('/data/config', 'Stacki', 'tools'));
   // A relative XDG folder would land the tools wherever Stacki started, so it is ignored.
-  assert.equal(publishToolsDirectory('/home/designer', 'linux', { XDG_CONFIG_HOME: 'config' }), path.join('/home/designer', '.config', 'Stacki', 'tools'));
+  assert.equal(
+    publishToolsDirectory('/home/designer', 'linux', { XDG_CONFIG_HOME: 'config' }),
+    path.posix.join('/home/designer', '.config', 'Stacki', 'tools'),
+  );
   assert.equal(
     publishToolsDirectory('/Users/designer', 'win32', { APPDATA: 'C:\\Users\\designer\\AppData\\Roaming' }),
     path.win32.join('C:\\Users\\designer\\AppData\\Roaming', 'Stacki', 'tools'),

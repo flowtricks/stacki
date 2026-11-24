@@ -46,7 +46,8 @@ test('a file, a missing path and a path through a file are refused', () => {
 test('a link to a folder opens its target; a dangling link and a loop of links are refused', () => {
   const link = path.join(root, 'site-link');
   fs.symlinkSync(folder, link);
-  assert.deepEqual(inspectFolderPath(link), { ok: true, value: folder });
+  // The answer is the target's real path: where a temporary folder is named by its short form (a Windows runner's 8.3 name), that differs from the path the test made.
+  assert.deepEqual(inspectFolderPath(link), { ok: true, value: fs.realpathSync.native(folder) });
   const fileLink = path.join(root, 'notes-link');
   fs.symlinkSync(file, fileLink);
   assert.deepEqual(inspectFolderPath(fileLink), { ok: false, error: 'notFolder' });
