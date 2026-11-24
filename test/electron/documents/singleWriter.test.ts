@@ -127,6 +127,19 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/handlers/componentRenameApply.ts': {
     renameSync: { count: 3, reason: 'a component file or folder move (a case-only rename goes through a temporary name); text changes use the host writer' },
   },
+  'electron/project/publishToolInstall.ts': {
+    writeFileSync: {
+      count: 1,
+      reason: 'the package.json of a staging folder Stacki just made for the pinned Wrangler install, created exclusive (wx); never project text',
+    },
+    renameSync: { count: 1, reason: 'the verified staging folder moved to the tools folder in one step; the old copy is removed first' },
+  },
+  'electron/project/publishWorkerSetup.ts': {
+    writeFile: {
+      count: 1,
+      reason: 'the Worker config Add Worker writes for a site that has none, created exclusive (wx) so an authored config is never overwritten',
+    },
+  },
   'electron/project/astroCopyWrite.ts': {
     writeFile: {
       count: 2,

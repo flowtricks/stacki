@@ -494,6 +494,11 @@
       "file": "src/features/ai/composer/VoiceLine.tsx",
       "pattern": "className={`ai-voice-text${interim === '' ? ' is-hint' : ''}`}",
       "reason": "The live dictation line inside the composer: the interim text replaces the hint in place and is the content itself."
+    },
+    {
+      "file": "src/features/welcome/FolderDropHost.tsx",
+      "pattern": "className=\"folder-drop-hint\"",
+      "reason": "The line of the full-window overlay shown only while a folder is dragged over Stacki: it is the overlay itself, replaces nothing on the page, and is gone on drop or leave."
     }
   ]
 }

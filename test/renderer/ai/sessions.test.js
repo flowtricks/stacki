@@ -1113,7 +1113,12 @@ test('on the list the header says Chats with a filter and a new chat button', as
   const newChat = view.container.querySelector('button[aria-label="New chat"]');
   assert.equal(newChat.classList.contains('ai-new-chat'), false, 'New chat is a plain header icon button, not a blue one');
   assert.equal(view.container.querySelector('button[aria-label="All chats"]') ?? undefined, undefined, 'nothing to go back to');
-  assert.equal(view.container.querySelector('.ai-header button[title]') ?? undefined, undefined, 'the buttons use the app’s tooltip, never the native one');
+  // An empty title is how a control blanks a title an ancestor carries (TipButton): only a title with text would show the native box.
+  assert.equal(
+    view.container.querySelector('.ai-header button[title]:not([title=""])') ?? undefined,
+    undefined,
+    'the buttons use the app’s tooltip, never the native one',
+  );
   await view.unmount();
 });
 
