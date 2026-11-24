@@ -25,6 +25,7 @@ import CanvasView from '../../../vendor/stacki/src/features/preview/CanvasView';
 import { useProjectBreakpoints } from '../../../vendor/stacki/src/ipc/useProjectBreakpoints';
 import { usePreviewSizing } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
 import type { usePreviewDimensions } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
+import { FLUID_FRAME_WIDTH } from '../../../vendor/stacki/src/features/preview/previewViewport';
 import '../../../vendor/stacki/src/features/preview/previewViewport.css';
 import { SizedFrame } from '../../../vendor/stacki/src/features/preview/SizedFrame';
 import { CollectionEditor } from '../collections/CollectionEditor';
@@ -253,7 +254,7 @@ function CanvasOverlays({
         height: sizing.viewport.height * sizing.viewport.scale,
         borderRadius: 10 * sizing.viewport.scale,
       }
-    : { width: '100%', height: '100%', borderRadius: 0 };
+    : { width: FLUID_FRAME_WIDTH, height: '100%', borderRadius: 0 };
   // The overlays are drawn in the page's own coordinates over the user's site, which never mirrors, so they stay left to right.
   return (
     <div dir="ltr" className={`preview-overlay-layer ${sizing.width ? '' : 'full'}`} style={style}>

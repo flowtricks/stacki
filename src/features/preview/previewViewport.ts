@@ -20,6 +20,9 @@ export function parsePreviewWidth(input: string): number | undefined {
 const FRAMED_GUTTER_PX = { side: 24, vertical: 32 } as const;
 export const FLUID_GUTTER_PX = { side: 18 } as const;
 
+/** A fluid frame's CSS width, and its overlay layer's: both centred, so the outlines and guides sit exactly on the page. */
+export const FLUID_FRAME_WIDTH = `calc(100% - ${FLUID_GUTTER_PX.side}px)`;
+
 /** The width a fluid frame draws the page at in a pane this wide: the pane less its gutters, 0 for an unmeasured pane. */
 export function fluidFrameWidthPx(paneWidthPx: number): number {
   assert(Number.isFinite(paneWidthPx), 'fluidFrameWidthPx: the pane width is finite');
