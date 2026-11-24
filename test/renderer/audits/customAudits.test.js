@@ -191,6 +191,13 @@ test('the form round-trips: a simple rule opens simple, an expression the simple
   assert.equal(audits.propertyPatternOf('color, border*'), '^(color|border[a-z-]*)$');
   assert.equal(audits.propertyNamesOf('^(color|border[a-z-]*)$'), 'color, border*');
   assert.equal(audits.propertyNamesOf('^(color|.*)$'), undefined);
+  // A custom property's name holds digits and underscores, which a prefix has to reach; another prefix's names stay out.
+  const custom = audits.propertyPatternOf('--space*, border*');
+  assert.match('--space-2', new RegExp(custom, 'i'));
+  assert.match('--space_wide', new RegExp(custom, 'i'));
+  assert.doesNotMatch('--color-2', new RegExp(custom, 'i'));
+  assert.equal(audits.propertyNamesOf(custom), '--space*, border*');
+  assert.equal(audits.propertyNamesOf('^--space[a-z-]*$'), '--space*', 'a rule saved before still opens in the simple mode');
 });
 
 // One turn of the event loop, inside act: the promises a bridge call resolves and the render they cause.

@@ -92,10 +92,17 @@ export function literalOf(pattern: string): string | undefined {
   return out;
 }
 
+// What `*` stands for after a prefix. A CSS property's name holds letters and hyphens only; a custom property's also holds
+// digits and underscores, so `--space*` has to reach `--space-2`.
+const PREFIX_REST = '[a-z-]*';
+const CUSTOM_PREFIX_REST = '[\\w-]*';
+
 /** The property pattern for a list of names: `text-align, border*` → `^(text-align|border[a-z-]*)$`. */
 export function propertyPatternOf(names: string): string {
   const list = propertyNames(names);
-  const parts = list.map((name) => (name.endsWith('*') ? `${escapedPattern(name.slice(0, -1))}[a-z-]*` : escapedPattern(name)));
+  const parts = list.map((name) =>
+    name.endsWith('*') ? `${escapedPattern(name.slice(0, -1))}${name.startsWith('--') ? CUSTOM_PREFIX_REST : PREFIX_REST}` : escapedPattern(name),
+  );
   return parts.length === 1 ? `^${parts[0] ?? ''}$` : `^(${parts.join('|')})$`;
 }
 
@@ -107,8 +114,9 @@ export function propertyNamesOf(pattern: string): string | undefined {
   }
   const names: string[] = [];
   for (const part of inner.split('|').slice(0, PROPERTIES_MAX + 1)) {
-    const prefix = part.endsWith('[a-z-]*');
-    const literal = literalOf(prefix ? part.slice(0, -'[a-z-]*'.length) : part);
+    const rest = [PREFIX_REST, CUSTOM_PREFIX_REST].find((suffix) => part.endsWith(suffix));
+    const prefix = rest !== undefined;
+    const literal = literalOf(rest === undefined ? part : part.slice(0, -rest.length));
     if (literal === undefined || literal.length === 0 || !/^-{0,2}[a-z][a-z0-9-]*$/i.test(literal)) {
       return undefined;
     }
