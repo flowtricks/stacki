@@ -135,11 +135,54 @@ files other people rely on and a newly installed command should never be runnabl
 | `stacki agents create <name> --description <text> [--instructions <text>\|--instructions-file <path>] [--tools <list>] [--claude-model <id>] [--codex-model <id>]` | write | `cli:config` | `cli.agents.create` | `stacki_agents_create` |
 | `stacki agents sync [<name>\|--all] [--force]` | write | `cli:config` | `cli.agents.sync` | `stacki_agents_sync` |
 | `stacki agents delete <name>` | write, deletes | `cli:config` | `cli.agents.delete` | `stacki_agents_delete` |
+| `stacki audits list`, `audits presets` | read | `cli:read` | `cli.audits.list`, `.presets` | `stacki_audits_list`, `_presets` |
+| `stacki audits add [--preset <id>] --name <text> --icon <icon> --category <name> [--severity] [--scope] [--property <regex>] [--value-must-match <regex>] [--value-must-not-match <regex>] [--regex <regex>] [--exclude <regex>] [--message <text>]` | write | `cli:config` | `cli.audits.add` | `stacki_audits_add` |
+| `stacki audits update <id> [the add flags] [--enabled true\|false]` | write | `cli:config` | `cli.audits.update` | `stacki_audits_update` |
+| `stacki audits remove <id>` | write, deletes | `cli:config` | `cli.audits.remove` | `stacki_audits_remove` |
+| `stacki audits test [<id>] [the add flags] [--samples n]` | read | `cli:read` | `cli.audits.test` | `stacki_audits_test` |
 | `stacki undo <id>` | write | `cli:config` | `cli.undo` | `stacki_undo` |
 
 Config on `roles` needs `cli:roles`, on the apps files `cli:apps`, on `cli.json` `cli:roles`, whatever the command's own feature: no route around the
 high-privilege features. A file also needs the app feature its UI asks (`stacki schema` shows `requires`), so a role with `cli:config` still cannot change
 a file its role cannot change in the app.
+
+### Audits: the project's own checks
+
+`stacki audits` adds, changes and tests the custom audits the Audits panel shows beside its built-in checks
+(`.stacki/audits.json` `customAudits`, `shared/properties/customAudits.ts`; the panel's ⋯ > "Add custom audit…" edits the
+same list). An agent should use these commands, not `config`, because they check every pattern for safety first.
+
+- **What an audit is.** A name, an icon (one the panel already draws: `droplet`, `text`, `ruler`, `variable`, `layers`, `tag`,
+  `braces`, `image`, `link`, `globe`, `hash`, `heading`, `contrast`, `form`, `accessibility`, `placeholder`, `star`, `chart`,
+  `gauge`, `block`, `file`, `hide`, `clock`, `target`), a category (a built-in one: `accessibility`, `seo`, `content`,
+  `tokens`, `performance`, or a new name such as `Brand`, which becomes a category of its own in the panel), a severity
+  (`high`, `medium` default, `low`), and what to look for. Every regular expression is case-insensitive.
+- **Scopes.** `declaration` (default) judges each CSS declaration in stylesheets and `<style>` blocks: `--property` is a
+  regular expression on the property name, `--value-must-match` and `--value-must-not-match` on the value, so "match this and
+  not that" needs no lookahead. `css` (stylesheet and `<style>` text), `markup` (.astro templates, frontmatter, styles and
+  scripts left out) and `rendered` (the dev server's HTML, Audits panel only) take one `--regex`. `--exclude` drops a match
+  whose declaration (`property: value`) or, for the text scopes, whose line also matches.
+- **Examples.**
+  - A hard-coded `text-align`: `stacki audits add --name "Hard-coded text-align" --icon text --category tokens --property '^text-align$' --value-must-not-match 'var\('`
+  - A core swatch used where a theme variable belongs: `stacki audits add --name "Core swatch instead of theme variable" --icon droplet --category tokens --property '^(color|background(-color)?|border(-color)?|outline(-color)?|fill|stroke|box-shadow|text-shadow|filter)$' --value-must-match 'var\(\s*--swatch-'`
+    (or `--preset core-swatch-instead-of-theme`, which lists every colour property and shorthand).
+  - A TODO left in a page: `stacki audits add --name "TODO left in markup" --icon placeholder --category content --scope markup --regex '\bTODO\b'`
+- **Presets.** `stacki audits presets` lists ready audits (`hard-coded-text-align`, `core-swatch-instead-of-theme`,
+  `important`, `hard-coded-z-index`, `inline-style`, `todo-comment`); `add --preset <id>` starts from one and the other flags
+  change it.
+- **Testing first.** `stacki audits test <id>` (or `test` with the add flags, nothing saved) runs the panel's bounded matcher
+  over the project's .astro files and stylesheets and answers `result.count`, `result.files`, `result.stopped` and the first
+  `result.matches` (`file`, `line`, `text`; `--samples`, default 10, at most 50). Run it before `add --apply` to see what an
+  audit would flag.
+- **Safety.** Patterns are refused (`invalid-value`, naming the flag; nothing written) when they are not valid regular
+  expressions, hold a backreference, repeat inside a repeated group (`(a+)+`), hold more than 3 open-ended repeats, are over
+  300 characters, or (for a pattern that finds) match empty text. The matcher reads at most 1,000 characters per value or
+  line, 200 matches per file, 2,000 per run and 1.5 s per audit; a scan that reaches a bound says so (`stopped`, and a note).
+  At most 50 audits per project.
+- **Writes.** `add`, `update` (only the flags given change; `--enabled false` turns one off) and `remove` (needs `--yes`) are
+  ordinary settings edits of `.stacki/audits.json`: a dry run until `--apply`, written atomically through the app's own
+  serializer (ignores and other settings kept), undone by `stacki undo <id>`. `list` shows each audit with `safe` (whether its
+  patterns pass the guard today, for a file edited by hand).
 
 ### Breakpoints: moving a boundary and its media queries
 
@@ -241,7 +284,7 @@ same bytes for the same source; `test/electron/project/cli/cliAgents.test.ts` co
 | `.stacki/publish.json` | version, defaultTarget, githubAccount, hosting, buildScript, beforePublish, afterPublish, githubWorkflow, publishedSite | config | `publish` |
 | `.stacki/styles.json` | version, keep, lockedStylesheets, newStyleTag (`version` 2, `attributes`, `content`; version 1 `isGlobal` is read), newStyleLocations (`page` and `component`, each `use` tag or file, `file`, `tag`) | config | `panel:selectors` |
 | `.stacki/variables.json` | version, hiddenFromSuggestions | config | `panel:style` |
-| `.stacki/audits.json` | version, ignored, ignoredPages, checks, tokens, placeholders | config | `panel:audits` |
+| `.stacki/audits.json` | version, ignored, ignoredPages, checks, tokens, placeholders, customAudits | audits add/update/remove, config | `panel:audits` |
 | `.stacki/instructions.json` | version, hidden | config | `instructions:edit` |
 | `.stacki/apps/apps.json` | version, apps (the install lock) | apps add/remove | `settings:roles` |
 | `.stacki/apps/settings.json` | version, apps (non-secret values) | apps settings set | `panel:apps` |

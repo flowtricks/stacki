@@ -69,6 +69,60 @@ const AGENT_NAME = arg('name', 'string', 'The agent name: lowercase letters, dig
   positional: true,
 });
 
+// The fields of a custom audit (shared/properties/customAudits.ts), shared by `audits add`, `audits update` and an inline `audits test`.
+const AUDIT_ID = arg('id', 'string', 'The custom audit id (lowercase letters, digits and hyphens), as "stacki audits list" prints it.', {
+  required: true,
+  positional: true,
+});
+const AUDIT_FIELDS: readonly ArgSpec[] = [
+  arg('preset', 'string', 'Start from a built-in preset ("stacki audits presets" lists them); the other flags change it.', { placeholder: 'id' }),
+  arg('name', 'string', 'The name the Audits panel shows, at most 60 characters.'),
+  arg('icon', 'enum', 'An icon the panel already draws.', {
+    values: [
+      'droplet',
+      'text',
+      'ruler',
+      'variable',
+      'layers',
+      'tag',
+      'braces',
+      'image',
+      'link',
+      'globe',
+      'hash',
+      'heading',
+      'contrast',
+      'form',
+      'accessibility',
+      'placeholder',
+      'star',
+      'chart',
+      'gauge',
+      'block',
+      'file',
+      'hide',
+      'clock',
+      'target',
+    ],
+  }),
+  arg('category', 'string', 'A built-in category (accessibility, seo, content, tokens, performance) or a new category name such as Brand.'),
+  arg('severity', 'enum', 'How loud its findings are; default medium.', { values: ['high', 'medium', 'low'] }),
+  arg('scope', 'enum', 'What it reads: CSS declarations (default), stylesheet text, .astro markup, or rendered pages (Audits panel only).', {
+    values: ['declaration', 'css', 'markup', 'rendered'],
+  }),
+  arg('property', 'string', 'declaration scope: a regular expression on the property name, such as ^text-align$.', { placeholder: 'regex' }),
+  arg('valueMustMatch', 'string', 'declaration scope: the value must match this regular expression, such as var\(\s*--swatch-.', { placeholder: 'regex' }),
+  arg('valueMustNotMatch', 'string', 'declaration scope: the value must not match this regular expression, such as var\(.', { placeholder: 'regex' }),
+  arg('regex', 'string', 'css, markup and rendered scopes: the regular expression to find.', { placeholder: 'regex' }),
+  arg(
+    'exclude',
+    'string',
+    'Drop a match whose declaration (property: value) or, for css, markup and rendered, whose line also matches this regular expression.',
+    { placeholder: 'regex' },
+  ),
+  arg('message', 'string', 'One line shown under the name: why it matters or what to use instead.'),
+];
+
 function command(
   words: readonly string[],
   summary: string,
@@ -389,6 +443,38 @@ export const COMMANDS: readonly CommandSpec[] = [
     'Delete a paired agent: its source and both generated files. The CLI cannot reach the Trash, so the texts are kept in the undo journal.',
     'cli:config',
     { write: true, destructive: true, args: [AGENT_NAME] },
+  ),
+  command(
+    ['audits', 'list'],
+    "List the project's custom audits (.stacki/audits.json customAudits): id, name, icon, category, severity, scope, patterns, on or off.",
+    'cli:read',
+  ),
+  command(['audits', 'presets'], 'List the built-in custom audit presets, each a whole audit to add with "stacki audits add --preset <id>".', 'cli:read'),
+  command(
+    ['audits', 'add'],
+    'Add a custom audit to the Audits panel. Every regular expression is checked for safety (no nested repeats, no backreferences, bounded length) before anything is written. Example: --name "Hard-coded text-align" --icon text --category tokens --property "^text-align$" --value-must-not-match "var\\(".',
+    'cli:config',
+    {
+      write: true,
+      args: [arg('id', 'string', 'The new id; default derived from the name.'), ...AUDIT_FIELDS, arg('enabled', 'boolean', 'Whether it runs; default true.')],
+    },
+  ),
+  command(['audits', 'update'], 'Change a custom audit: only the flags given change. Patterns are checked as for add.', 'cli:config', {
+    write: true,
+    args: [AUDIT_ID, ...AUDIT_FIELDS.filter((field) => field.name !== 'preset'), arg('enabled', 'boolean', 'Turn it on or off.')],
+  }),
+  command(['audits', 'remove'], 'Remove a custom audit from .stacki/audits.json.', 'cli:config', { write: true, destructive: true, args: [AUDIT_ID] }),
+  command(
+    ['audits', 'test'],
+    "Run a custom audit over the project's .astro files and stylesheets with the Audits panel's bounded matcher and print the match count and the first matches; nothing is written. Name a saved audit by id, or describe one inline with the add flags.",
+    'cli:read',
+    {
+      args: [
+        arg('id', 'string', 'A saved custom audit; omit to test the inline flags.', { positional: true }),
+        ...AUDIT_FIELDS,
+        arg('samples', 'integer', 'How many matches to print, 0 to 50; default 10.'),
+      ],
+    },
   ),
   command(['undo'], 'Put back what an applied command changed, if those files are still as it left them.', 'cli:config', {
     write: true,

@@ -25,22 +25,23 @@ const customAuditFields = (match: Readonly<Record<string, FieldSchema>>): Readon
   id: field(
     text(CUSTOM_AUDIT_LIMITS.idCharsMax, { charsMin: 1, pattern: '^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$' }),
     'Lowercase letters, digits and hyphens; unique in the list. Findings and ignores key on it.',
-    { required: true },
+    { required: true, commands: ['audits add'] },
   ),
   name: field(text(CUSTOM_AUDIT_LIMITS.nameCharsMax, { charsMin: 1 }), 'The name the Audits panel shows.', {
     required: true,
+    commands: ['audits add', 'audits update'],
   }),
-  icon: field(oneOf(...CUSTOM_AUDIT_ICONS), 'An icon the Audits panel already draws.', { required: true }),
+  icon: field(oneOf(...CUSTOM_AUDIT_ICONS), 'An icon the Audits panel already draws.', { required: true, commands: ['audits add', 'audits update'] }),
   category: field(
     text(CUSTOM_AUDIT_LIMITS.categoryCharsMax, { charsMin: 1 }),
     'A built-in category (accessibility, seo, content, tokens, performance) or the name of a category of the project’s own.',
-    { required: true },
+    { required: true, commands: ['audits add', 'audits update'] },
   ),
-  severity: field(oneOf(...CUSTOM_AUDIT_SEVERITIES), 'How loud its findings are.', { default: 'medium' }),
-  match: field(objectOf(match), 'What it looks for.', { required: true }),
+  severity: field(oneOf(...CUSTOM_AUDIT_SEVERITIES), 'How loud its findings are.', { default: 'medium', commands: ['audits add', 'audits update'] }),
+  match: field(objectOf(match), 'What it looks for.', { required: true, commands: ['audits add', 'audits update'] }),
   exclude: pattern('A match is dropped when its declaration (property: value) or, for a text scope, its line also matches this.'),
   message: field(text(CUSTOM_AUDIT_LIMITS.messageCharsMax, { charsMin: 1 }), 'One line under the name: why it matters or what to use instead.'),
-  enabled: field(bool(), 'Whether it runs.', { default: true }),
+  enabled: field(bool(), 'Whether it runs.', { default: true, commands: ['audits update'] }),
 });
 const textMatch = { pattern: pattern('What to find.', { required: true }) };
 
@@ -133,13 +134,13 @@ export const AUDITS_FILE: FileSchema = {
         CUSTOM_AUDIT_LIMITS.auditsMax,
       ),
       'The project’s own audits, shown in the Audits panel beside the built-in checks. scope says what each reads: declaration (CSS declarations: property and value rules), css (stylesheet text), markup (.astro templates) or rendered (served HTML). Prefer "stacki audits add|update|remove|test", which check every pattern for safety. Written only when there is one.',
-      { default: 'none' },
+      { default: 'none', commands: ['audits add', 'audits update', 'audits remove'] },
     ),
   },
   empty: { version: 2, ignored: [] },
   // The app's writer leaves out settings at their defaults and an empty ignoredPages; the CLI writes the same bytes.
   serialize: (document) => serializeAuditIgnores(parseAuditIgnores(document)),
-  commands: [],
+  commands: ['audits add', 'audits update', 'audits remove'],
   parserSources: [
     'shared/properties/auditIgnores.ts',
     'shared/properties/auditIgnoreList.ts',

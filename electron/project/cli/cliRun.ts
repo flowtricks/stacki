@@ -12,6 +12,7 @@ import { applyStaged, DEFAULT_WRITER, planUndo, type FileWriter } from './cliApp
 import { describeEffect, type EffectApplier, type EffectRecord } from './cliEffects';
 import { APP_ADMIN_HANDLERS } from './cliAppAdmin';
 import { AGENT_HANDLERS } from './cliAgents';
+import { AUDIT_HANDLERS } from './cliAudits';
 import { CORE_HANDLERS, schemaOfArgument, type Handler, type Outcome } from './cliCommands';
 import { findProject } from './cliFiles';
 import { appsAdd, appsRemove } from './cliAppsInstall';
@@ -52,6 +53,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   'apps remove': appsRemove,
   ...APP_ADMIN_HANDLERS,
   ...AGENT_HANDLERS,
+  ...AUDIT_HANDLERS,
   'apps settings set': (context) => {
     const schema = fileSchemaById('appSettings');
     const [app, setting, value] = [context.args['app'], context.args['setting'], context.args['value']];
