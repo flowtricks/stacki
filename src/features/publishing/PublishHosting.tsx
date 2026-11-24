@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 import type { PublishAccount, PublishProject } from '../../../shared/properties/publishDiscovery';
 import Dropdown from '../../ui/Dropdown';
+import { useIsInvalidPublishField } from './publishInvalidField';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { RefreshIcon } from '../../ui/Icons';
@@ -60,6 +61,7 @@ export function HostingChoice(props: Props) {
 
 function CloudflareAccount(props: Props & { readonly add: () => void }) {
   const translate = useTranslate();
+  const invalid = useIsInvalidPublishField('cloudflareAccount');
   const selected = hostingAccount(props.value);
   const selectedName = useCloudflareAccountName(props, selected);
   const accounts =
@@ -78,6 +80,7 @@ function CloudflareAccount(props: Props & { readonly add: () => void }) {
         </button>
       </div>
       <Dropdown
+        invalid={invalid}
         ariaLabel={translate('publish.hosting.cloudflareAccount')}
         value={selected}
         options={accounts.map((account) => ({ value: account.id, label: account.name }))}
@@ -123,6 +126,7 @@ function useCloudflareAccountName(props: Props, selected: string): string {
 
 function HostingProject(props: Props & { readonly add: () => void }) {
   const translate = useTranslate();
+  const invalid = useIsInvalidPublishField('hostingProject');
   const selected = hostingKey(props.value);
   const account = hostingAccount(props.value);
   const options = props.projects
@@ -162,6 +166,7 @@ function HostingProject(props: Props & { readonly add: () => void }) {
         )}
       </div>
       <Dropdown
+        invalid={invalid}
         ariaLabel={translate('publish.hosting.project')}
         value={selected}
         options={options}

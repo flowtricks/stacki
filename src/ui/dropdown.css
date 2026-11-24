@@ -23,6 +23,10 @@
   outline: none;
   border-color: var(--accent);
 }
+/* A refused, empty field takes the error fill (never an outline); why is a toast. */
+.dd-trigger[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
+}
 .dd-label {
   flex: 1;
   overflow: hidden;

@@ -10,12 +10,15 @@ import Dropdown from '../../ui/Dropdown';
 import { PublishProviderIcon } from './PublishProviderIcon';
 import { UploadCloudIcon } from '../../ui/Icons';
 import { PublishConnections } from './PublishConnections';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, parsePublishSource, type PublishConfig, type Hosting } from '../../../shared/properties/publishConfig';
+import { findMissingPublishField, type MissingPublishField } from '../../../shared/properties/publishMissing';
+import { PublishInvalidFieldContext } from './publishInvalidField';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { cleanError } from '../../lib/cleanError';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
-import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 
 interface Props {
   readonly projectPath: string;
@@ -136,6 +139,8 @@ function PublishSettingsForm({
   const { config, changeConfig: setConfig, changeHosting, discoveringHosting } = usePublishSettingsConfig(projectPath, stored);
   const [repository, setRepository] = useState<Extract<RepositoryRequest, { action: 'connect' }>>();
   const [repositoryBusy, setRepositoryBusy] = useState(false);
+  const scroll = useRef<HTMLDivElement>(null);
+  const [refused, setRefused] = useState<{ readonly field: MissingPublishField; readonly attempt: number }>();
   const { error, saving, save } = usePublishSettingsSave({
     projectPath,
     config,
@@ -143,10 +148,22 @@ function PublishSettingsForm({
     repository,
     close,
     translate,
+    refuse: (field) => setRefused({ field, attempt: (refused?.attempt ?? 0) + 1 }),
   });
+  // The mark clears itself: it shows only while the refused field is still the first one missing.
+  const missing = findMissingPublishField(config);
+  const invalidField = refused !== undefined && !missing.ok && missing.error.field === refused.field ? refused.field : undefined;
+  useEffect(() => {
+    // Each refused Save brings the empty field into view, even when it was already marked.
+    if (refused !== undefined) {
+      const target = scroll.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+      target?.scrollIntoView({ block: 'center' });
+      target?.focus();
+    }
+  }, [refused]);
   return (
-    <>
-      <div className="publish-settings-scroll">
+    <PublishInvalidFieldContext.Provider value={invalidField}>
+      <div className="publish-settings-scroll" ref={scroll}>
         <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
           <PublishTargetField config={config} setConfig={setConfig} />
           <section className="publish-settings-section" aria-label="GitHub" /* i18n-ignore: product name. */>
@@ -175,7 +192,7 @@ function PublishSettingsForm({
         </fieldset>
       </div>
       <SettingsFooter busy={saving || repositoryBusy} discoveringHosting={discoveringHosting} saving={saving} close={close} save={save} />
-    </>
+    </PublishInvalidFieldContext.Provider>
   );
 }
 
@@ -229,8 +246,10 @@ function usePublishSettingsSave({
   repository,
   close,
   translate,
+  refuse,
 }: {
   readonly translate: Translator;
+  readonly refuse: (field: MissingPublishField) => void;
   readonly projectPath: string;
   readonly config: PublishConfig;
   readonly base: string | undefined;
@@ -242,9 +261,16 @@ function usePublishSettingsSave({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   async function save() {
+    const missing = findMissingPublishField(config);
+    if (!missing.ok) {
+      // Said as a toast (never a paragraph) that names the field; the form marks it and takes the person to it.
+      reportErrorToast(translate(MISSING_FIELD_MESSAGES[missing.error.field]));
+      refuse(missing.error.field);
+      return;
+    }
     setSaving(true);
     try {
-      const validated = validateSettings(config, translate);
+      const validated = validateSettings(config);
       const written = await writeMetadata(projectPath, {
         kind: 'publish',
         source: JSON.stringify(validated, undefined, 2) + '\n',
@@ -481,10 +507,14 @@ function emptyHosting(provider: Hosting['provider']): Hosting {
   }
 }
 
-function validateSettings(config: PublishConfig, translate: Translator): PublishConfig {
-  if (config.hosting.provider === 'cloudflare-workers' && !config.hosting.accountId) {
-    throw new Error(translate('publish.settings.chooseWorker'));
-  }
+const MISSING_FIELD_MESSAGES = {
+  cloudflareAccount: 'publish.settings.missing.cloudflareAccount',
+  hostingProject: 'publish.settings.missing.hostingProject',
+  vercelOrganization: 'publish.settings.missing.vercelOrganization',
+  buildScript: 'publish.settings.missing.buildScript',
+} as const satisfies Record<MissingPublishField, MessageKey>;
+
+function validateSettings(config: PublishConfig): PublishConfig {
   const saved = config.publishedSite;
   return parsePublishConfig(saved === undefined ? config : { ...config, publishedSite: { ...saved, url: saved.url.trim().replace(/\/$/, '') } });
 }

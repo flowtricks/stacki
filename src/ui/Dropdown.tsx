@@ -72,6 +72,8 @@ export interface DropdownProps<T = string> {
   readonly options: readonly DropdownOption<T>[];
   readonly onChange: (value: T) => void;
   readonly className?: string;
+  /** The field is refused and empty: the trigger takes the error fill and `aria-invalid` (why is told by a toast, not here). */
+  readonly invalid?: boolean;
   readonly menuClassName?: string;
   /** The menu's least width; it is never narrower than its trigger either way. */
   readonly menuWidthMin?: number;
@@ -189,6 +191,7 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
         disabled={props.disabled}
         aria-label={props.ariaLabel}
         aria-expanded={state.open}
+        aria-invalid={props.invalid === true ? true : undefined}
         ref={state.triggerRef}
         className={`dd-trigger ${props.className || ''}`}
         // The chosen row's tooltip is the trigger's too: what it names is the same.

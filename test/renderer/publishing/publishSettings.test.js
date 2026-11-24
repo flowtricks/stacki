@@ -1,4 +1,5 @@
-// Goal: discovery preserves choices and publish toggles always select at least one destination.
+// Goal: discovery preserves choices, publish toggles always select at least one destination, and Save with an empty required
+// field names that field in a toast and marks its dropdown instead of showing a vague parser message.
 // Method: mount real settings with deferred IPC, exercise controls, and inspect saved metadata.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -15,7 +16,12 @@ function fixture(context, source) {
   const output = repoPath('node_modules/.stacki-test/publish-settings.cjs');
   fs.mkdirSync(path.dirname(output), { recursive: true });
   buildSync({
-    entryPoints: [repoPath('src/features/publishing/PublishSettings.tsx')],
+    stdin: {
+      contents:
+        "export { PublishSettings } from './src/features/publishing/PublishSettings';\n" + "export { subscribeErrorToasts } from './src/ui/errorNotices';\n",
+      resolveDir: ROOT,
+      loader: 'ts',
+    },
     absWorkingDir: ROOT,
     outfile: output,
     bundle: true,
@@ -26,7 +32,12 @@ function fixture(context, source) {
     logLevel: 'silent',
   });
   delete require.cache[output];
-  const { PublishSettings } = require(output);
+  const { PublishSettings, subscribeErrorToasts } = require(output);
+  const toasts = [];
+  const unsubscribe = subscribeErrorToasts(
+    (notice) => toasts.push(notice.message),
+    () => {},
+  );
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   require('../../helpers/popupDom').installPopupDOM(dom.window);
   dom.window.HTMLElement.prototype.scrollIntoView = function () {};
@@ -61,10 +72,11 @@ function fixture(context, source) {
   const root = createRoot(document.getElementById('root'));
   context.after(async () => {
     await act(async () => root.unmount());
+    unsubscribe();
     dom.window.close();
   });
   const show = () => act(async () => root.render(React.createElement(PublishSettings, { projectPath: '/project', close() {} })));
-  return { discovery, writes, show, root };
+  return { discovery, writes, show, root, toasts };
 }
 
 const linked = {
@@ -435,4 +447,50 @@ test('an explicit published URL is saved for the selected hosting destination', 
     source: 'manual',
     url: 'https://example.com',
   });
+});
+
+// A stored file can never hold an empty identifier (the parser rejects it), so the empty state is reached the way a person
+// reaches it: by choosing a provider whose account and project are not yet chosen.
+async function chooseProvider(label) {
+  await act(async () => document.querySelector('[aria-label="Hosting provider"]').click());
+  const option = [...document.querySelectorAll('.dd-option')].find((entry) => entry.textContent.includes(label));
+  assert.ok(option);
+  await act(async () => option.click());
+}
+
+test('Save with no hosting project names the field, marks it and writes nothing', async (context) => {
+  const { discovery, show, writes, toasts } = fixture(context, JSON.stringify(DEFAULT_PUBLISH_CONFIG));
+  await show();
+  await chooseProvider('Vercel');
+  await act(async () => document.querySelector('.modal-footer .primary').click());
+  assert.deepEqual(toasts, ['Choose a hosting project']);
+  assert.deepEqual(writes, []);
+  const project = document.querySelector('[aria-label="Hosting project"]');
+  assert.equal(project.getAttribute('aria-invalid'), 'true');
+  assert.equal(document.activeElement, project);
+  assert.equal(document.querySelector('.publish-settings [role="alert"]') === null, true, 'no inline paragraph');
+  // Choosing a project clears the mark and Save then writes.
+  const website = { name: 'website', hosting: { provider: 'vercel', organizationId: 'team', projectId: 'website' } };
+  await act(async () =>
+    discovery.filter((call) => call.request.provider === 'vercel').forEach((call) => call.resolve({ kind: 'ready', accounts: [], projects: [website] })),
+  );
+  await act(async () => document.querySelector('[aria-label="Hosting project"]').click());
+  const option = [...document.querySelectorAll('.dd-option')].find((entry) => entry.textContent.includes('website'));
+  assert.ok(option);
+  await act(async () => option.click());
+  assert.equal(document.querySelector('[aria-label="Hosting project"]').hasAttribute('aria-invalid'), false);
+  await act(async () => document.querySelector('.modal-footer .primary').click());
+  assert.equal(writes[0].hosting.projectId, 'website');
+  assert.equal(toasts.length, 1);
+});
+
+test('Save with no Cloudflare account names the account first', async (context) => {
+  const { show, writes, toasts } = fixture(context, JSON.stringify(DEFAULT_PUBLISH_CONFIG));
+  await show();
+  await chooseProvider('Cloudflare');
+  await act(async () => document.querySelector('.modal-footer .primary').click());
+  assert.deepEqual(toasts, ['Choose a Cloudflare account']);
+  assert.deepEqual(writes, []);
+  assert.equal(document.querySelector('[aria-label="Cloudflare account"]').getAttribute('aria-invalid'), 'true');
+  assert.equal(document.querySelector('[aria-label="Hosting project"]').hasAttribute('aria-invalid'), false);
 });
