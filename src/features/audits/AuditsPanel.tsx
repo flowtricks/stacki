@@ -11,7 +11,7 @@
 // Ignore is one click: it writes the tracked `.stacki/audits.json` with no reason
 // asked, and a toast offers Undo, which puts the file's entries back as they were.
 import { assert } from '../../../shared/core/assert';
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { PageNode } from '../../../shared/page/pageNode';
 import { nodeAt } from '../../../shared/page/auditTrace';
 import { describeNode } from '../../ui/navigatorLabel';
@@ -26,9 +26,12 @@ import {
   withoutAnyIgnores,
   withoutIgnore,
   withoutIgnoredPage,
+  withUnitGroup,
   type AuditIgnore,
   type AuditIgnoredPage,
   type AuditIgnores,
+  type AuditTokenSettings,
+  type AuditUnitGroup,
 } from '../../../shared/properties/auditIgnores';
 import { dismissErrorToast, reportActionToast } from '../../ui/errorNotices';
 import { agentTaskMessage, requestAgentTask } from '../../lib/agentTasks';
@@ -56,6 +59,16 @@ import { PerformanceBar } from './PerformanceBar';
 import { AUDIT_FILTERS, auditView, type AuditFilter } from './auditView';
 import type { RawValueKit } from './RawValueField';
 import { StyleReview } from './StyleReview';
+import {
+  codeTarget,
+  declarationNote,
+  declarationUnderElement,
+  findingRowKey,
+  flaggedUnitGroups,
+  holdsSizeFindings,
+  unitGroupText,
+  type AuditCodeTarget,
+} from './tokenActions';
 import './audits.css';
 import { PanelHeader } from '../../ui/PanelHeader';
 
@@ -65,8 +78,11 @@ export interface AuditsPanelProps {
   readonly project: { readonly path: string; readonly name: string };
   /** What a fix writes through, read when a fix is applied so it sees the page as it is then. */
   readonly fixDeps: () => FixDeps;
-  /** Opens the file; with a path, selects that element, scrolls to it and flashes it; with a prop, shows its field in Settings. */
-  readonly onReveal: (file: string, path: readonly number[] | undefined, prop: string | undefined) => void;
+  /**
+   * Opens the file; with a path, selects that element, scrolls to it and flashes it; with a prop, shows its field in Settings;
+   * with code, also opens the code window at that declaration's line.
+   */
+  readonly onReveal: (file: string, path: readonly number[] | undefined, prop: string | undefined, code?: AuditCodeTarget) => void;
   /** Outlines the element on the canvas while the pointer is on its occurrence; undefined clears it. */
   readonly onHover: (file: string, path: readonly number[] | undefined) => void;
   /** Starts a new page at `route`, for a link that points nowhere yet. */
@@ -105,6 +121,12 @@ interface ShownRule extends AuditRuleGroup {
   readonly priority: AuditPriority;
 }
 
+/**
+ * The row the person last went to (findingRowKey), kept by the panel so it stays marked while the list redraws or the
+ * filter changes. Keyed by place, not text: two declarations can read the same.
+ */
+const ActiveRowContext = createContext<{ readonly key: string | undefined; readonly pick: (key: string) => void }>({ key: undefined, pick: () => undefined });
+
 export default function AuditsPanel(props: AuditsPanelProps) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
@@ -116,6 +138,7 @@ export default function AuditsPanel(props: AuditsPanelProps) {
   const [searching, setSearching] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [activeRow, setActiveRow] = useState<string | undefined>(undefined);
   const reasons = ignoreReasons(allFindings(state), state.ignores.value);
   const ignoredIds: ReadonlySet<string> = new Set(reasons.keys());
   const [ignoredView, setIgnoredView] = useState(false);
@@ -177,6 +200,7 @@ export default function AuditsPanel(props: AuditsPanelProps) {
     unignoreAll: async () => void (await writeIgnores(props, translate, withoutAnyIgnores)),
     restore: async (finding) => void (await writeIgnores(props, translate, (value) => withoutIgnore(value, finding.id))),
     ignoredOf: (finding) => reasons.get(finding.id),
+    changeTokens: (message, change) => changeTokenSettings(props, translate, message, change),
   };
   const open = view.shown.filter((finding) => !ignoredIds.has(finding.id));
   const fixes = view.fixable.length;
@@ -278,46 +302,48 @@ export default function AuditsPanel(props: AuditsPanelProps) {
       {reviewing !== undefined && (
         <StyleReview findings={reviewing.filter((item) => !ignoredIds.has(item.id))} actions={actions} panel={props} onClose={() => setReviewing(undefined)} />
       )}
-      <div className="audits-list">
-        {ignoredView && <IgnoredList findings={allFindings(state)} ignores={state.ignores.value} actions={actions} />}
-        {!ignoredView && findOpen && (
-          <FindReplace
-            project={props.project}
-            fixDeps={props.fixDeps}
-            onReveal={props.onReveal}
-            showToast={props.showToast}
-            sources={props.sources}
-            onClose={() => setFindOpen(false)}
-          />
-        )}
-        {!ignoredView && filter === 'performance' && <PerformanceBar measure={props.measure} />}
-        {!ignoredView && fixes > 0 && (
-          <div className="audits-ready">
-            <span className="audits-ready-lead">
-              <span className="audits-ready-text" title={translate('auditsUi.fixesReady', { count: fixes })}>
-                {translate('auditsUi.fixesReady', { count: fixes })}
+      <ActiveRowContext.Provider value={{ key: activeRow, pick: setActiveRow }}>
+        <div className="audits-list">
+          {ignoredView && <IgnoredList findings={allFindings(state)} ignores={state.ignores.value} actions={actions} />}
+          {!ignoredView && findOpen && (
+            <FindReplace
+              project={props.project}
+              fixDeps={props.fixDeps}
+              onReveal={props.onReveal}
+              showToast={props.showToast}
+              sources={props.sources}
+              onClose={() => setFindOpen(false)}
+            />
+          )}
+          {!ignoredView && filter === 'performance' && <PerformanceBar measure={props.measure} />}
+          {!ignoredView && fixes > 0 && (
+            <div className="audits-ready">
+              <span className="audits-ready-lead">
+                <span className="audits-ready-text" title={translate('auditsUi.fixesReady', { count: fixes })}>
+                  {translate('auditsUi.fixesReady', { count: fixes })}
+                </span>
+                <FixesInfo plan={view.fixPlan} onGo={(finding) => props.onReveal(finding.file, finding.element?.path ?? fixTarget(finding), finding.prop)} />
               </span>
-              <FixesInfo plan={view.fixPlan} onGo={(finding) => props.onReveal(finding.file, finding.element?.path ?? fixTarget(finding), finding.prop)} />
-            </span>
-            <button className="audits-apply" disabled={busy} onClick={() => void actions.fix(view.fixable, translate('auditsUi.fixAllLabel'))}>
-              {translate('ui.apply')}
-            </button>
-          </div>
-        )}
-        {(ignoredView ? [] : rules).map((rule) => (
-          <RuleRow
-            onReview={(findings) => setReviewing(findings)}
-            key={rule.check}
-            rule={rule}
-            open={expanded.has(rule.check)}
-            onToggle={() => toggle(rule.check)}
-            actions={actions}
-            panel={props}
-          />
-        ))}
-        {!ignoredView && rules.length === 0 && filter !== 'performance' && <EmptyState filtered={view.counts.all > 0} />}
-        {!ignoredView && rules.length === 0 && filter === 'performance' && <SpeedClear />}
-      </div>
+              <button className="audits-apply" disabled={busy} onClick={() => void actions.fix(view.fixable, translate('auditsUi.fixAllLabel'))}>
+                {translate('ui.apply')}
+              </button>
+            </div>
+          )}
+          {(ignoredView ? [] : rules).map((rule) => (
+            <RuleRow
+              onReview={(findings) => setReviewing(findings)}
+              key={rule.check}
+              rule={rule}
+              open={expanded.has(rule.check)}
+              onToggle={() => toggle(rule.check)}
+              actions={actions}
+              panel={props}
+            />
+          ))}
+          {!ignoredView && rules.length === 0 && filter !== 'performance' && <EmptyState filtered={view.counts.all > 0} />}
+          {!ignoredView && rules.length === 0 && filter === 'performance' && <SpeedClear />}
+        </div>
+      </ActiveRowContext.Provider>
     </div>
   );
 }
@@ -339,6 +365,30 @@ export interface Actions {
   readonly restore: (finding: AuditFinding) => Promise<void>;
   /** Whether the finding is ignored, and the note behind it when someone left one. */
   readonly ignoredOf: (finding: AuditFinding) => IgnoredFinding | undefined;
+  /** Changes the design-token rules in one write, audits again, and offers Undo in a toast that says `message`. */
+  readonly changeTokens: (message: string, change: (tokens: AuditTokenSettings) => AuditTokenSettings) => Promise<void>;
+}
+
+// A quick token-rule change from a rule's ⋯ ("Allow em values"): saved, audited again, and undone by writing back the rules
+// exactly as they were, so Undo never touches a rule the change did not.
+async function changeTokenSettings(
+  props: AuditsPanelProps,
+  translate: Translator,
+  message: string,
+  change: (tokens: AuditTokenSettings) => AuditTokenSettings,
+): Promise<void> {
+  const before = auditState().ignores.value.tokens;
+  const rerun = (): void => updateAuditState((current) => ({ ...current, request: current.request + 1 }));
+  if (await writeIgnores(props, translate, (value) => ({ ...value, tokens: change(value.tokens) }))) {
+    rerun();
+    undoToast(message, translate, async () => {
+      const restored = await writeIgnores(props, translate, (value) => ({ ...value, tokens: before }));
+      if (restored) {
+        rerun();
+      }
+      return restored;
+    });
+  }
 }
 
 /** How long the Undo toast stays up before it goes by itself. */
@@ -501,6 +551,7 @@ function RuleRow(props: {
           </button>
         )}
         <span className="audits-count">{rule.findings.length}</span>
+        <TokenRuleMenu findings={rule.findings} actions={props.actions} />
       </div>
       {props.open && (
         <div className="audits-rule-body">
@@ -510,6 +561,37 @@ function RuleRow(props: {
         </div>
       )}
     </div>
+  );
+}
+
+// A raw-value rule's ⋯: allow a unit it flags, or stop flagging widths and heights, each one click with Undo. Nothing to offer, no menu.
+function TokenRuleMenu(props: { readonly findings: readonly AuditFinding[]; readonly actions: Actions }) {
+  const translate = useTranslate();
+  const tokens = useAuditState().ignores.value.tokens;
+  const groups = flaggedUnitGroups(props.findings, tokens);
+  const sizes = tokens.sizes && holdsSizeFindings(props.findings);
+  if (groups.length === 0 && !sizes) {
+    return undefined;
+  }
+  const allow = (group: AuditUnitGroup): void => {
+    const units = unitGroupText(group, 'short');
+    void props.actions.changeTokens(translate('auditsUi.allowUnitToast', { units }), (current) => withUnitGroup(current, group, 'allowed'));
+  };
+  return (
+    <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+      <MoreMenu
+        className="audits-icon-button"
+        title={translate('auditsUi.more')}
+        width={220}
+        items={[
+          ...groups.map((group) => ({ label: translate('auditsUi.allowUnit', { units: unitGroupText(group, 'short') }), onSelect: () => allow(group) })),
+          sizes && {
+            label: translate('auditsUi.untrackSizes'),
+            onSelect: () => void props.actions.changeTokens(translate('auditsUi.untrackSizesToast'), (current) => ({ ...current, sizes: false })),
+          },
+        ]}
+      />
+    </span>
   );
 }
 
@@ -596,7 +678,7 @@ function FileGroup(props: {
       {open && (
         <div className="audits-file-body">
           {sameElementRuns(props.findings).map(([only, ...others]) =>
-            only === undefined ? undefined : others.length === 0 ? (
+            only === undefined ? undefined : others.length === 0 && !declarationUnderElement(only) ? (
               <Occurrence key={only.id} finding={only} nodes={props.nodes} actions={props.actions} panel={props.panel} />
             ) : (
               <ElementGroup key={only.id} findings={[only, ...others]} nodes={props.nodes} actions={props.actions} panel={props.panel} />
@@ -638,9 +720,16 @@ function ElementGroup(props: {
 }) {
   const [open, setOpen] = useState(props.findings.length <= GROUP_OPEN_MAX);
   const auditText = useAuditText();
-  const toggle = (): void => setOpen((value) => !value);
   const [first] = props.findings;
   assert(first !== undefined, 'An element group has findings');
+  const code = codeTarget(first);
+  // A `<style>` block's row also goes to its code, at its first declaration, each time it is clicked.
+  const toggle = (): void => {
+    if (code !== undefined) {
+      props.panel.onReveal(first.file, first.element?.path, undefined, code);
+    }
+    setOpen((value) => !value);
+  };
   const view = occurrenceView(first, props.nodes, auditText);
   const element = first.element;
   return (
@@ -667,7 +756,7 @@ function ElementGroup(props: {
       {open && (
         <div className="audits-file-body">
           {props.findings.map((finding) => (
-            <Occurrence key={finding.id} finding={finding} nodes={props.nodes} actions={props.actions} panel={props.panel} nested={true} />
+            <Occurrence key={findingRowKey(finding)} finding={finding} nodes={props.nodes} actions={props.actions} panel={props.panel} nested={true} />
           ))}
         </div>
       )}
@@ -818,7 +907,13 @@ function Occurrence(props: {
   const element = finding.element;
   const ignoredBecause = actions.ignoredOf(finding);
   const fix = ignoredBecause === undefined ? finding.fix : undefined;
-  const go = (): void => panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop);
+  const active = useContext(ActiveRowContext);
+  const rowKey = findingRowKey(finding);
+  const selected = active.key === rowKey;
+  const go = (): void => {
+    active.pick(rowKey);
+    panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop, codeTarget(finding));
+  };
   const href = /href="([^"]*)"/.exec(finding.detail)?.[1];
   const brokenRoute = missingRoute(finding, panel.routes);
   // Only a literal is rewritten: an href a component computes is fixed where its value is written.
@@ -826,17 +921,20 @@ function Occurrence(props: {
     finding.check === 'link-broken' && element !== undefined && props.nodes !== undefined ? relinkTarget(props.nodes, element.path, finding.prop) : undefined;
   const auditText = useAuditText();
   const whole = occurrenceView(finding, props.nodes, auditText);
-  const view = props.nested === true ? { icon: <span className="audits-occurrence-icon" />, label: nestedLabel(finding, whole.label, auditText) } : whole;
+  // A raw value reads as its declaration wherever it is listed: under its block's row, or alone for a stylesheet's (no element).
+  const declaration = finding.css !== undefined && (props.nested === true || element === undefined);
+  const view = declaration ? { icon: <span className="audits-occurrence-icon" />, label: nestedLabel(finding, whole.label, auditText) } : whole;
   const note =
-    props.nested === true && finding.css !== undefined && ignoredBecause === undefined
-      ? finding.css.selector
+    declaration && finding.css !== undefined && ignoredBecause === undefined
+      ? declarationNote(finding.css, translate)
       : occurrenceNote(finding, ignoredBecause, translate);
   return (
     <div className="audits-occurrence">
       <div
-        className={`list-item audits-row audits-occurrence-row ${ignoredBecause === undefined ? '' : 'ignored'}`}
+        className={`list-item audits-row audits-occurrence-row ${ignoredBecause === undefined ? '' : 'ignored'} ${selected ? 'selected' : ''}`}
         role="button"
         tabIndex={0}
+        aria-current={selected ? 'true' : undefined}
         onClick={go}
         onKeyDown={activateOnKey(go)}
         onMouseEnter={element === undefined ? undefined : () => panel.onHover(finding.file, element.path)}

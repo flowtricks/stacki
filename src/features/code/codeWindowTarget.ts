@@ -14,6 +14,8 @@ export interface CodeWindowState {
    *  spaces, anything else a document. */
   readonly indentation?: CodeEditorIndentation;
   readonly revealLine?: number;
+  /** Bumped by each go-to, so asking for the line the window already shows scrolls and selects it again. */
+  readonly revealSerial?: number;
 }
 
 /** The page frontmatter: selectable like a node, but it is not one. */

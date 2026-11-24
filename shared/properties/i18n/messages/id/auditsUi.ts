@@ -125,6 +125,10 @@ export const messages = {
   'auditsUi.review.applyCount': 'Terapkan {count}',
   'auditsUi.review.applyExact': { other: 'Terapkan {count} perbaikan tepat' },
   'auditsUi.review.button': 'Tinjau',
+  'auditsUi.allowUnit': 'Izinkan nilai {units}',
+  'auditsUi.allowUnitToast': 'Nilai {units} kini boleh',
+  'auditsUi.untrackSizes': 'Jangan tandai lebar dan tinggi',
+  'auditsUi.untrackSizesToast': 'Lebar dan tinggi tidak lagi ditandai',
   'auditsUi.review.changes': 'Perubahan',
   'auditsUi.review.declaration': 'Deklarasi',
   'auditsUi.review.file': 'File', // same

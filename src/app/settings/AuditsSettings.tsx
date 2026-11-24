@@ -8,7 +8,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { AUDIT_CATEGORIES, AUDIT_CHECKS, AUDIT_CHECK_IDS, type AuditCategory, type AuditCheckId } from '../../../shared/page/auditFindings';
 import {
+  AUDIT_UNIT_GROUP_IDS,
+  unitGroupAllowed,
   withCheckSetting,
+  withUnitGroup,
   type AuditCheckSetting,
   type AuditFile,
   type AuditSettingPriority,
@@ -29,6 +32,7 @@ import { AUDIT_ICONS } from '../../features/audits/AuditIcons';
 import { readAuditIgnores, saveAuditIgnores, type StoredIgnores } from '../../features/audits/auditsBridge';
 import { updateAuditState } from '../../features/audits/auditStore';
 import { useAuditText } from '../../features/audits/useAuditText';
+import { unitGroupText } from '../../features/audits/tokenActions';
 import '../../features/audits/audits.css';
 import './roles.css';
 
@@ -158,6 +162,27 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
                     disabled={!editable}
                     onToggle={() => void save(tokens({ ...file.tokens, remOutsideVariables: !file.tokens.remOutsideVariables }))}
                   />
+                  <PlainSwitch
+                    label={translate('settings.audits.rules.sizesLabel')}
+                    description={translate('settings.audits.rules.sizesInfo')}
+                    checked={file.tokens.sizes}
+                    disabled={!editable}
+                    onToggle={() => void save(tokens({ ...file.tokens, sizes: !file.tokens.sizes }))}
+                  />
+                  {/* On means flagged, as Flag px reads: a unit switched off is fine as written on every property. */}
+                  {AUDIT_UNIT_GROUP_IDS.map((group) => {
+                    const flagged = !unitGroupAllowed(file.tokens, group);
+                    return (
+                      <PlainSwitch
+                        key={group}
+                        label={translate('settings.audits.rules.unitLabel', { units: unitGroupText(group, 'short') })}
+                        description={translate('settings.audits.rules.unitInfo', { units: unitGroupText(group, 'full') })}
+                        checked={flagged}
+                        disabled={!editable}
+                        onToggle={() => void save(tokens(withUnitGroup(file.tokens, group, flagged ? 'allowed' : 'flagged')))}
+                      />
+                    );
+                  })}
                 </div>
                 <h5>{translate('settings.audits.properties.title')}</h5>
                 <ChipList

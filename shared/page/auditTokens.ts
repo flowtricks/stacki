@@ -3,8 +3,9 @@
 // selector, so a fix can only ever swap a value: the selector, its scoping and
 // every other byte stay as written (Stacki never rewrites a person's CSS
 // scoping). Values inside `var(…)` (fallbacks included), variable definitions
-// (`--x: 1rem`), keywords, the project's allowed raw values, and calc() whose
-// parts are all variables are left alone.
+// (`--x: 1rem`), keywords, the project's allowed raw values and units, and calc()
+// whose parts are all variables are left alone. An allowed unit is judged token
+// by token: `calc(1em + 2px)` still flags the 2px.
 import { assert } from '../core/assert';
 
 /** The rules the linter applies; `.stacki/audits.json` supplies them (shared/properties/auditIgnores.ts TokenRules has this shape). */
@@ -14,7 +15,19 @@ export interface TokenRules {
   readonly px: boolean;
   readonly remOutsideVariables: boolean;
   readonly allowed: readonly string[];
+  /** Whether raw widths and heights (SIZE_PROPERTIES) are flagged; off, they are fine as written whatever `properties` and the unit switches say. */
+  readonly sizes: boolean;
+  /** Units whose raw values are fine as written on every property: `em`, `%`. Compared lower-cased. */
+  readonly allowedUnits: readonly string[];
 }
+
+/**
+ * The width and height properties, physical and logical, with their min and max. A component's size is usually its own
+ * (`.slider_marker { width: 0.75rem }`), not a design token, so these are flagged only when the project turns `sizes` on.
+ */
+export const SIZE_PROPERTIES: ReadonlySet<string> = new Set(
+  ['width', 'height', 'inline-size', 'block-size'].flatMap((name) => [name, `min-${name}`, `max-${name}`]),
+);
 
 /** Whether `property` is one the rules cover: an exact name, or a `prefix*` pattern. */
 export function coveredProperty(rules: Pick<TokenRules, 'properties'>, property: string): boolean {
@@ -98,12 +111,23 @@ function declarationIssues(
       push('token-color', match[0], match.index ?? 0);
     }
   }
-  const covered = coveredProperty(settings, property);
+  const size = SIZE_PROPERTIES.has(property.toLowerCase());
+  if (size && !settings.sizes) {
+    return issues.sort((left, right) => left.offset - right.offset); // Widths and heights are fine as written unless the project tracks them.
+  }
+  // A tracked size needs a variable whatever its unit, as a covered property does.
+  const covered = size || coveredProperty(settings, property);
   for (const match of outside.matchAll(NUMBER_RE)) {
     const token = match[0];
     const at = match.index ?? 0;
     if (Number.parseFloat(token) === 0 || settings.allowed.includes(token.toLowerCase()) || insideCalculationFactor(outside, at, token)) {
       continue;
+    }
+    if (alwaysFine(token)) {
+      continue; // 1 and 1px are hairlines and unit factors (`border-width: 1px`, `flex: 1`, `opacity: 1`), never a token.
+    }
+    if (allowedUnit(settings, token)) {
+      continue; // The project writes this unit as is: `padding-inline-end: 3em` is fine.
     }
     if (covered) {
       push('token-value', token, at);
@@ -114,6 +138,23 @@ function declarationIssues(
     }
   }
   return issues.sort((left, right) => left.offset - right.offset);
+}
+
+// The raw numbers no project wants a variable for, whatever its settings: zero in any unit is skipped above, and here one,
+// unitless or in px. Compared by value, so `1.0` and `01` are one too; `1.5px`, `10px` and `-1px` are not.
+function alwaysFine(token: string): boolean {
+  const unit = token.replace(/^-?(?:\d+\.?\d*|\.\d+)/, '').toLowerCase();
+  if (Number.parseFloat(token) === 1) {
+    return unit === '' || unit === 'px';
+  }
+  return false;
+}
+
+// Whether the token's unit is one the project allows as written. A unitless number has no unit to allow.
+function allowedUnit(settings: Pick<TokenRules, 'allowedUnits'>, token: string): boolean {
+  const unit = token.replace(/^-?(?:\d+\.?\d*|\.\d+)/, '').toLowerCase();
+  assert(unit.length < token.length, 'allowedUnit: a token starts with its number');
+  return unit.length > 0 && settings.allowedUnits.includes(unit);
 }
 
 // A unitless factor inside calc() (`calc(var(--x) * 2)`) scales a variable; it is not a raw size.

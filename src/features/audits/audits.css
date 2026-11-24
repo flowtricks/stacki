@@ -291,6 +291,11 @@
 .audits-occurrence-row.ignored .audits-title {
   color: var(--text-dim);
 }
+/* The row last gone to: an accent fill that stays while the list redraws, as a selected row does in other lists; hover does not replace it. */
+.list-item.audits-occurrence-row.selected,
+.list-item.audits-occurrence-row.selected:hover {
+  background: var(--accent-soft);
+}
 
 /* At rest the actions take no width; on hover or focus they sit at the row's right. */
 .audits-hover-actions {

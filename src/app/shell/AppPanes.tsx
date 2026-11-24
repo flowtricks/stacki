@@ -806,6 +806,7 @@ export function CodeWindowHost({ app }: { readonly app: ShellView }) {
       value={codeWinValue}
       editorKey={isFileWin ? `file:${codeWin.rel}` : targetId}
       revealLine={codeWin.revealLine}
+      revealSerial={codeWin.revealSerial}
       extensions={codeChips.extension}
       overlay={codeChips.overlay}
       onChange={(value) => {

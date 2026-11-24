@@ -2,7 +2,8 @@
 // ask for variables, and only there: never a variable definition, a var() (its
 // fallback included), a keyword, an allowed value, a zero, or a unitless factor
 // in calc(); the unit rules flag px or rem outside variables; offsets point at
-// the raw token so a fix swaps exactly that value. Style blocks, placeholders,
+// the raw token so a fix swaps exactly that value. 0 and 1 (and 1px) are never
+// flagged; widths and heights only when `sizes` is on; allowed units never. Style blocks, placeholders,
 // launch facts and measured performance are pinned beside it.
 // Method: lint small stylesheets under the default rules and variations, then
 // check the static pass's style-block, inline-style and placeholder findings,
@@ -33,7 +34,7 @@ test('raw colours and sizes are flagged; variables, definitions, keywords and ze
     'definitions and var() fallbacks',
   );
   assert.deepEqual(
-    kinds('.a { width: calc(var(--x) * 2); max-width: calc(var(--x) + 10px); }'),
+    kinds('.a { width: calc(var(--x) * 2); max-width: calc(var(--x) + 10px); }', { ...rules, sizes: true }),
     ['token-value:10px'],
     'a unitless factor scales a variable; a raw length does not',
   );
@@ -47,7 +48,7 @@ test('raw colours and sizes are flagged; variables, definitions, keywords and ze
 
 test('unit rules flag px or rem outside variables; offsets point at the token', () => {
   const px = rules;
-  assert.deepEqual(kinds('.a { border: 1px solid; top: 4px; --x: 2px; }', px), ['token-unit:1px', 'token-unit:4px']);
+  assert.deepEqual(kinds('.a { border: 1px solid; top: 4px; --x: 2px; }', px), ['token-unit:4px'], '1px is a hairline, never a token');
   assert.deepEqual(kinds('.a { transform: translateY(1rem); }', { ...rules, remOutsideVariables: true }), ['token-unit:1rem']);
   const text = '.a { padding: 12px; }';
   const [issue] = lintCss(text, rules);

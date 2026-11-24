@@ -30,6 +30,14 @@ export interface PendingReveal {
   readonly path: string;
   readonly trail: readonly number[];
   readonly phase: 'opening' | 'rendering';
+  /** A declaration in a `<style>` block to show in the code window once the element is selected. */
+  readonly code?: StyleBlockCode;
+}
+
+/** A `<style>` block, by its path in the file, and an offset into its text. */
+export interface StyleBlockCode {
+  readonly path: readonly number[];
+  readonly offset: number;
 }
 
 /** The next state of a waiting go-to, and whether to select now. */

@@ -116,6 +116,13 @@ test('px flag: a file that never set it reads on; an explicit false stays off', 
   assert.equal(parseAuditIgnores({ version: 2, ignored: [], tokens: { px: false } }).tokens.px, false, 'an explicit false is honoured');
 });
 
+function withoutUnitFields(tokens: typeof DEFAULT_TOKEN_SETTINGS) {
+  const { sizes, allowedUnits, ...rest } = tokens;
+  assert.equal(sizes, false);
+  assert.deepEqual(allowedUnits, []);
+  return rest;
+}
+
 test('version 2 settings: defaults fill what the file leaves out, and only choices are written', () => {
   const read = parseAuditIgnores({ version: 1, ignored: [] });
   assert.equal(read.version, 2, 'version 1 reads as version 2');
@@ -127,7 +134,8 @@ test('version 2 settings: defaults fill what the file leaves out, and only choic
     version: 2,
     ignored: [],
     checks: { 'token-value': { enabled: false } },
-    tokens: { ...DEFAULT_TOKEN_SETTINGS, px: false, allowed: ['1px'] },
+    // `sizes` off and no allowed units are their defaults, so the file leaves them out.
+    tokens: { ...withoutUnitFields(DEFAULT_TOKEN_SETTINGS), px: false, allowed: ['1px'] },
   });
   assert.deepEqual(parseAuditIgnoresSource(text), chosen);
   assert.deepEqual(withCheckSetting(chosen, 'token-value', { enabled: true, priority: undefined }).checks, {}, 'back to its defaults: nothing written');

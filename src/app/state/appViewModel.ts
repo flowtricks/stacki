@@ -14,7 +14,7 @@ import { cleanError } from '../../lib/cleanError';
 import { findImportOf } from '../../editor/dataSuggest';
 import type { DataContext } from '../../editor/dataScope';
 import type { TagOption } from '../../features/props/propNodeEditors';
-import { codeWindowFor, fileWindowIndentation, FRONTMATTER_SUBJECT, type CodeSubject } from '../../features/code/codeWindowTarget';
+import { codeWindowFor, fileWindowIndentation, FRONTMATTER_SUBJECT, type CodeSubject, type CodeWindowState } from '../../features/code/codeWindowTarget';
 import { toEditorPageState } from '../../editor/pageState';
 import { readDynamicPaths, readProjectAsset } from '../../ipc/appBridge';
 import { linkEntriesFromAnswer, type LinkEntryLoader } from '../../features/props/linkEntries';
@@ -233,6 +233,11 @@ export function useTagOptions(coreState: ReturnType<typeof useCoreState>, pageOp
 }
 
 // The floating code window.
+// A node's code window, when it has one: undefined for a node that is gone or is markup.
+function codeWindowForNode(node: CodeSubject | undefined): CodeWindowState | undefined {
+  return node === undefined ? undefined : codeWindowFor(node);
+}
+
 export function useCodeWindow(
   coreState: ReturnType<typeof useCoreState>,
   shortcuts: ReturnType<typeof useShortcuts>,
@@ -279,6 +284,16 @@ export function useCodeWindow(
   };
   // Read by the keydown effect, which is set up long before this exists.
   openCodeWindowRef.current = openCodeWindow;
+  // An audit's go-to for a declaration in a <style> block: the block's window, at `line` of the block's own text (the line
+  // the window counts, not the .astro file's). The serial makes a second go-to to the line already shown select it again.
+  const openCodeWindowAt = (id: string, line: number): boolean => {
+    const codeWindow = codeWindowForNode(tree.node(id));
+    if (codeWindow === undefined) {
+      return false;
+    }
+    setCodeWin((current) => ({ ...codeWindow, revealLine: line, revealSerial: (current?.revealSerial ?? 0) + 1 }));
+    return true;
+  };
 
   // Opens a public/ text file in the floating editor.
   const openAssetFile = useCallback(
@@ -303,7 +318,7 @@ export function useCodeWindow(
     },
     [showToast, projectRef, setCodeWin, setFileText],
   );
-  return { codeWinValue, isFileWin, openAssetFile, openCodeWindow, openCodeWindowById };
+  return { codeWinValue, isFileWin, openAssetFile, openCodeWindow, openCodeWindowAt, openCodeWindowById };
 }
 
 // Opening the file an imported symbol comes from.
@@ -361,8 +376,9 @@ export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOp
   );
   // Opens one project file, named project-relative, in the code panel: Settings → Folders
   // opens astro.config and the content config this way.
+  // With a line (an audit finding in a stylesheet), the window opens scrolled to it with it selected.
   const openProjectFile = useCallback(
-    async (rel: string) => {
+    async (rel: string, at?: { readonly line: number }) => {
       const projectPath = projectRef.current?.path;
       if (!projectPath) {
         return;
@@ -376,6 +392,7 @@ export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOp
           title: rel,
           language: /\.css$/i.test(rel) ? 'css' : 'javascript',
           ...fileWindowIndentation(rel),
+          ...(at === undefined ? {} : { revealLine: at.line, revealSerial: Date.now() }),
         });
       } catch (error: unknown) {
         showToast(cleanError(error), 'error');

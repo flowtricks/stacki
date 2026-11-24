@@ -126,6 +126,8 @@ export interface CodeEditorProps {
   readonly stickyHeaders?: boolean | undefined;
   readonly onChange?: ((text: string, position: number) => void) | undefined;
   readonly revealLine?: number | undefined;
+  /** A new value reveals `revealLine` again, even when the line is unchanged: a second go-to to the same declaration. */
+  readonly revealSerial?: number | undefined;
   readonly activeRange?: CodeEditorRange | undefined;
   readonly componentRanges?: readonly CodeEditorComponentRange[] | undefined;
   readonly onPositionChange?: ((position: number) => void) | undefined;
@@ -174,7 +176,7 @@ export default function CodeEditor(props: CodeEditorProps) {
   return useCodeAccess() ? <EditableCodeEditor {...props} /> : <ManagedValue />;
 }
 function EditableCodeEditor(props: CodeEditorProps) {
-  const { value, language, indentation, revealLine } = props;
+  const { value, language, indentation, revealLine, revealSerial } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | undefined>(undefined);
   // These values change without replacing the editor, preserving history and selection.
@@ -230,12 +232,15 @@ function EditableCodeEditor(props: CodeEditorProps) {
     assert(Number.isSafeInteger(revealLine), 'CodeEditor: reveal line is a safe integer');
     const shownLine = revealLine - (codeViewRef.current?.headLineCount ?? 0);
     const line = view.state.doc.line(Math.max(1, Math.min(shownLine, view.state.doc.lines)));
+    // The line's text is selected, its indent left out: the selection is the highlight, and the cursor sits on the declaration.
+    const indent = /^\s*/.exec(line.text)?.[0].length ?? 0;
+    assert(indent <= line.length, 'CodeEditor: the indent is inside its line');
     view.dispatch({
-      selection: { anchor: line.from },
+      selection: { anchor: line.from + indent, head: line.to },
       effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
     });
     view.focus();
-  }, [revealLine, language]);
+  }, [revealLine, revealSerial, language]);
   return <div ref={hostRef} className="cm-host" />;
 }
 

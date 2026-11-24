@@ -8,7 +8,7 @@
 //     "ignored": [{ "id": "img-alt|src/pages/index.astro|0.3|src=\"/a.png\"", "reason": "Decorative hero" }, { "id": "…" }],
 //     "ignoredPages": [{ "file": "src/pages/legal.astro", "reason": "Copy comes from the lawyers" }],
 //     "checks": { "token-value": { "enabled": false }, "token-color": { "priority": "high" } },
-//     "tokens": { "properties": ["border-radius", "gap"], "colors": true, "px": true, "remOutsideVariables": true, "allowed": ["1px", "100%"] },
+//     "tokens": { "properties": ["border-radius", "gap"], "colors": true, "px": true, "remOutsideVariables": true, "sizes": true, "allowed": ["1px", "100%"], "allowedUnits": ["em"] },
 //     "placeholders": ["lorem ipsum", "button text"]
 //   }
 //
@@ -75,8 +75,66 @@ export interface AuditTokenSettings {
   readonly px: boolean;
   /** Any rem value outside a variable definition is flagged. */
   readonly remOutsideVariables: boolean;
+  /**
+   * Raw widths and heights (width, height, inline-size, block-size and their min and max; shared/page/auditTokens.ts
+   * SIZE_PROPERTIES) are flagged. Off by default and when absent from the file: a component's own size is not a token.
+   */
+  readonly sizes: boolean;
   /** Raw values that are fine as written, compared lower-cased: `0`, `auto`, `1px`, `100%`. */
   readonly allowed: readonly string[];
+  /**
+   * Units whose raw values are fine as written on every property (`padding-inline-end: 3em`), from AUDIT_ALLOWABLE_UNITS.
+   * Absent in the file reads as none, which is how audits behaved before the list existed: every unit is flagged.
+   */
+  readonly allowedUnits: readonly AuditAllowableUnit[];
+}
+
+/**
+ * The units a project may allow as written. px and rem are not here: they are the units the design tokens are written in,
+ * and each already has its own switch (`px`, `remOutsideVariables`), so allowing them here would contradict those.
+ */
+export const AUDIT_ALLOWABLE_UNITS = ['em', '%', 'vw', 'vh', 'vmin', 'vmax', 'svh', 'dvh', 'lvh', 'ch', 'ex', 'cqw', 'cqh', 'pt'] as const;
+export type AuditAllowableUnit = (typeof AUDIT_ALLOWABLE_UNITS)[number];
+
+/** The units Settings and the panel switch together: one switch for em, one for %, one for every viewport unit, one for ch and ex. */
+export const AUDIT_UNIT_GROUPS = {
+  em: ['em'],
+  percent: ['%'],
+  viewport: ['vw', 'vh', 'vmin', 'vmax', 'svh', 'dvh', 'lvh'],
+  character: ['ch', 'ex'],
+} as const satisfies Record<string, readonly AuditAllowableUnit[]>;
+export type AuditUnitGroup = keyof typeof AUDIT_UNIT_GROUPS;
+export const AUDIT_UNIT_GROUP_IDS = ['em', 'percent', 'viewport', 'character'] as const satisfies readonly AuditUnitGroup[];
+
+/** The unit of a raw number token (`3em` → `em`, `-50%` → `%`), lower-cased; empty for a unitless number. */
+export function tokenUnit(token: string): string {
+  const unit = token.replace(/^-?(?:\d+\.?\d*|\.\d+)/, '').toLowerCase();
+  assert(unit.length < token.length || token.length === 0, 'tokenUnit: a token starts with its number');
+  return unit;
+}
+
+/** The unit group a raw token's unit belongs to, when it is one Settings can allow. */
+export function unitGroupOf(token: string): AuditUnitGroup | undefined {
+  const unit = tokenUnit(token);
+  return AUDIT_UNIT_GROUP_IDS.find((group) => AUDIT_UNIT_GROUPS[group].some((member) => member === unit));
+}
+
+/** Whether every unit in `group` is allowed as written. */
+export function unitGroupAllowed(settings: Pick<AuditTokenSettings, 'allowedUnits'>, group: AuditUnitGroup): boolean {
+  const members: readonly AuditAllowableUnit[] = AUDIT_UNIT_GROUPS[group];
+  assert(members.length > 0, 'unitGroupAllowed: a group has units');
+  return members.every((unit) => settings.allowedUnits.includes(unit));
+}
+
+/** The token rules with `group`'s units allowed as written (`allowed`) or flagged again; other units are kept as they were. */
+export function withUnitGroup(settings: AuditTokenSettings, group: AuditUnitGroup, allowed: 'allowed' | 'flagged'): AuditTokenSettings {
+  const members: readonly AuditAllowableUnit[] = AUDIT_UNIT_GROUPS[group];
+  const others = settings.allowedUnits.filter((unit) => !members.includes(unit));
+  const next = allowed === 'allowed' ? [...others, ...members] : others;
+  // Kept in the list's own order, so the file does not change when the same switches are set in another order.
+  const allowedUnits = AUDIT_ALLOWABLE_UNITS.filter((unit) => next.includes(unit));
+  assert(allowedUnits.length <= AUDIT_ALLOWABLE_UNITS.length, 'withUnitGroup: bounded by the known units');
+  return { ...settings, allowedUnits };
 }
 
 export interface AuditFile {
@@ -100,7 +158,9 @@ export const DEFAULT_TOKEN_SETTINGS: AuditTokenSettings = {
   colors: true,
   px: true,
   remOutsideVariables: false,
+  sizes: false,
   allowed: ['0', 'auto', 'inherit', 'initial', 'unset', 'currentcolor', 'transparent', 'none', 'normal', '100%'],
+  allowedUnits: [],
 };
 
 export const DEFAULT_PLACEHOLDERS: readonly string[] = [
@@ -136,7 +196,7 @@ export const EMPTY_AUDIT_IGNORES: AuditFile = {
 };
 
 const TOP_FIELDS = ['version', 'ignored', 'ignoredPages', 'checks', 'tokens', 'placeholders'] as const;
-const TOKEN_FIELDS = ['properties', 'colors', 'px', 'remOutsideVariables', 'allowed'] as const;
+const TOKEN_FIELDS = ['properties', 'colors', 'px', 'remOutsideVariables', 'sizes', 'allowed', 'allowedUnits'] as const;
 
 /** The file's value, or a throw naming the first field that is wrong. */
 export function parseAuditIgnores(input: unknown): AuditFile {
@@ -299,7 +359,7 @@ function parseTokens(input: unknown): AuditTokenSettings {
       throw new Error(`Audit settings.tokens: unknown field "${key}"`);
     }
   }
-  const flag = (key: 'colors' | 'px' | 'remOutsideVariables'): boolean => {
+  const flag = (key: 'colors' | 'px' | 'remOutsideVariables' | 'sizes'): boolean => {
     const raw = value[key] ?? DEFAULT_TOKEN_SETTINGS[key];
     if (typeof raw !== 'boolean') {
       throw new Error(`Audit settings.tokens.${key}: expected a boolean`);
@@ -311,11 +371,23 @@ function parseTokens(input: unknown): AuditTokenSettings {
     colors: flag('colors'),
     px: flag('px'),
     remOutsideVariables: flag('remOutsideVariables'),
+    sizes: flag('sizes'),
     allowed:
       value['allowed'] === undefined
         ? DEFAULT_TOKEN_SETTINGS.allowed
         : parseList(value['allowed'], 'Audit settings.tokens.allowed').map((item) => item.toLowerCase()),
+    allowedUnits: value['allowedUnits'] === undefined ? DEFAULT_TOKEN_SETTINGS.allowedUnits : parseAllowedUnits(value['allowedUnits']),
   };
+}
+
+// The allowed units: an array of strings like any list, read leniently past that. A unit Stacki does not know (a typo, or
+// px and rem, which have their own switches) is dropped rather than failing the whole file, so one hand-edited slip
+// never turns the audit off; case and repeats do not matter, and the result is in AUDIT_ALLOWABLE_UNITS order.
+function parseAllowedUnits(input: unknown): readonly AuditAllowableUnit[] {
+  const items = parseList(input, 'Audit settings.tokens.allowedUnits').map((item) => item.toLowerCase());
+  const units = AUDIT_ALLOWABLE_UNITS.filter((unit) => items.includes(unit));
+  assert(units.length <= items.length, 'parseAllowedUnits: never more units than were written');
+  return units;
 }
 
 function parseList(input: unknown, where: string): readonly string[] {
@@ -355,7 +427,7 @@ export function serializeAuditIgnores(value: AuditFile): string {
     ignored: value.ignored.map((entry) => ({ id: entry.id, ...reasonField(entry.reason) })),
     ...(value.ignoredPages.length === 0 ? {} : { ignoredPages: value.ignoredPages.map((page) => ({ file: page.file, ...reasonField(page.reason) })) }),
     ...(Object.keys(value.checks).length === 0 ? {} : { checks: serializedChecks(value.checks) }),
-    ...(same(value.tokens, DEFAULT_TOKEN_SETTINGS) ? {} : { tokens: value.tokens }),
+    ...(same(value.tokens, DEFAULT_TOKEN_SETTINGS) ? {} : { tokens: serializedTokens(value.tokens) }),
     ...(same(value.placeholders, DEFAULT_PLACEHOLDERS) ? {} : { placeholders: value.placeholders }),
   };
   const text = `${JSON.stringify(body, undefined, 2)}\n`;
@@ -366,6 +438,15 @@ export function serializeAuditIgnores(value: AuditFile): string {
 /** The `reason` key, only when there is one: a plain ignore writes no field. */
 function reasonField(reason: string | undefined): { readonly reason?: string } {
   return reason === undefined ? {} : { reason };
+}
+
+// The token rules as written: `sizes` off and an empty `allowedUnits` are left out (both read back as their defaults), so a
+// project that uses neither writes a file an older Stacki, whose parser does not know the fields, still reads.
+function serializedTokens(
+  tokens: AuditTokenSettings,
+): Omit<AuditTokenSettings, 'allowedUnits' | 'sizes'> & { readonly sizes?: true; readonly allowedUnits?: readonly AuditAllowableUnit[] } {
+  const { allowedUnits, sizes, ...rest } = tokens;
+  return { ...rest, ...(sizes ? { sizes: true } : {}), ...(allowedUnits.length === 0 ? {} : { allowedUnits }) };
 }
 
 function serializedChecks(checks: Readonly<Record<string, AuditCheckSetting>>): Record<string, { enabled?: boolean; priority?: AuditSettingPriority }> {

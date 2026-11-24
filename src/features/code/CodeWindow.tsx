@@ -52,7 +52,7 @@ function useEscapeToClose(surface: React.RefObject<HTMLDivElement>, onClose: () 
 // A single pointer session owns movement and cleanup, including closing mid-drag.
 export default function CodeWindow(props: CodeWindowProps) {
   const translate = useTranslate();
-  const { title, language, indentation, value, onChange, onClose, editorKey, revealLine, extensions, overlay } = props;
+  const { title, language, indentation, value, onChange, onClose, editorKey, revealLine, revealSerial, extensions, overlay } = props;
   const windowState = useWindowRectangle({ width: 340, height: 220 });
   const { rectangle } = windowState;
   const surface = useRef<HTMLDivElement>(null);
@@ -92,6 +92,7 @@ export default function CodeWindow(props: CodeWindowProps) {
           value={value}
           onChange={onChange}
           revealLine={revealLine}
+          revealSerial={revealSerial}
           extensions={extensions}
         />
         {overlay}

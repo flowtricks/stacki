@@ -21,7 +21,8 @@ import { terminalAgentHandler } from '../../features/terminal/terminalAgent';
 import { AuditsPanel } from '../appPanels';
 import { relativeTo } from '../../features/audits/auditScope';
 import { openAppSettings } from '../settings/LazySettings';
-import { nextReveal, revealNode, type PendingReveal } from './auditReveal';
+import { nextReveal, revealNode, type PendingReveal, type StyleBlockCode } from './auditReveal';
+import { lineAtOffset, type AuditCodeTarget } from '../../features/audits/tokenActions';
 import { AUDIT_VALUE_KIT } from './auditValueKit';
 import { selectFromPanel } from './panelSelection';
 import type { ShellView } from '../App';
@@ -67,6 +68,9 @@ export function AuditsHost({ app }: { readonly app: ShellView }) {
       if (node !== undefined) {
         revealNode(appRef.current, node.id);
       }
+      if (wanted.code !== undefined) {
+        openStyleCode(appRef.current, state.model.nodes, wanted.code);
+      }
     }
   }, [shownPath, state, rendered]);
   return undefined;
@@ -77,7 +81,7 @@ export function AuditsTab({ app }: { readonly app: ShellView }) {
     <AuditsPanel
       project={app.project}
       fixDeps={() => fixDeps(app)}
-      onReveal={(file: string, trail: readonly number[] | undefined, prop: string | undefined) => reveal(app, file, trail, prop)}
+      onReveal={(file: string, trail: readonly number[] | undefined, prop: string | undefined, code?: AuditCodeTarget) => reveal(app, file, trail, prop, code)}
       onHover={(file: string, trail: readonly number[] | undefined) => hover(app, file, trail)}
       onCreatePage={(route: string) => app.onCreatePage(route.replace(/^\/+|\/+$/g, '') || 'index', undefined)}
       routes={app.scan.pages.map((page) => page.route).filter((route) => !route.includes('['))}
@@ -97,6 +101,15 @@ function shownNode(app: ShellView, file: string, trail: readonly number[]): Edit
     return undefined;
   }
   return nodeAtPath<EditorNode>(state.model.nodes, trail);
+}
+
+// The `<style>` block's code window, at the declaration's line. The offset is into the block's text, the same text the window
+// shows, so the line is counted there; a block that is gone or no longer raw (edited since the audit) opens nothing.
+function openStyleCode(app: ShellView, nodes: readonly EditorNode[], code: StyleBlockCode): void {
+  const node = nodeAtPath<EditorNode>(nodes, code.path);
+  if (node?.kind === 'raw') {
+    app.openCodeWindowAt(node.id, lineAtOffset(node.inner, code.offset));
+  }
 }
 
 function hover(app: ShellView, file: string, trail: readonly number[] | undefined): void {
@@ -146,18 +159,21 @@ function fixDeps(app: ShellView): FixDeps {
 }
 
 // The open file's element is selected now; another file opens first, as the Pages
-// panel and the canvas open it, and its element is selected when it has loaded.
-function reveal(app: ShellView, file: string, trail: readonly number[] | undefined, prop: string | undefined): void {
+// panel and the canvas open it, and its element is selected when it has loaded. A
+// declaration also opens the code window at its line: a `<style>` block's own window
+// (selected and re-targeted, never a second window), or a stylesheet's file.
+function reveal(app: ShellView, file: string, trail: readonly number[] | undefined, prop: string | undefined, code: AuditCodeTarget | undefined): void {
   const path = absolutePath(app.project.path, file);
   if (prop !== undefined) {
     // The value is a prop on this instance: its field is in Settings.
     app.setRightTab('settings');
   }
   if (!file.endsWith('.astro') && !file.endsWith('.md') && !file.endsWith('.mdx')) {
-    // A constants module or a config: its text, in the code window.
-    void app.openProjectFile(file);
+    // A constants module, a config or a stylesheet: its text, in the code window, at the finding's line when it has one.
+    void app.openProjectFile(file, code?.tag === 'file' ? { line: code.line } : undefined);
     return;
   }
+  const styleCode: StyleBlockCode | undefined = code?.tag === 'style-block' ? { path: code.path, offset: code.offset } : undefined;
   const state = app.pageStateRef.current.pageState;
   if (app.currentPage?.path === path) {
     const node = state?.editable === true && trail !== undefined ? nodeAtPath<EditorNode>(state.model.nodes, trail) : undefined;
@@ -167,10 +183,13 @@ function reveal(app: ShellView, file: string, trail: readonly number[] | undefin
       // A page-level finding: the page itself, with nothing selected in it.
       selectFromPanel(app, undefined);
     }
+    if (styleCode !== undefined && state?.editable === true) {
+      openStyleCode(app, state.model.nodes, styleCode);
+    }
     return;
   }
   // A page-level finding (no element) only opens its file.
-  pendingReveal = trail === undefined ? undefined : { path, trail, phase: 'opening' };
+  pendingReveal = trail === undefined ? undefined : { path, trail, phase: 'opening', ...(styleCode === undefined ? {} : { code: styleCode }) };
   const page = app.scan.pages.find((candidate) => candidate.path === path);
   if (page !== undefined) {
     app.onSelectPage(page);

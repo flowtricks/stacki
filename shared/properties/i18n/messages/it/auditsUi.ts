@@ -125,6 +125,10 @@ export const messages = {
   'auditsUi.review.applyCount': 'Applica {count}',
   'auditsUi.review.applyExact': { one: 'Applica {count} correzione esatta', other: 'Applica {count} correzioni esatte' },
   'auditsUi.review.button': 'Rivedi',
+  'auditsUi.allowUnit': 'Consenti valori in {units}',
+  'auditsUi.allowUnitToast': 'I valori in {units} ora vanno bene',
+  'auditsUi.untrackSizes': 'Non segnalare larghezze e altezze',
+  'auditsUi.untrackSizesToast': 'Larghezze e altezze non vengono più segnalate',
   'auditsUi.review.changes': 'Modifiche',
   'auditsUi.review.declaration': 'Dichiarazione',
   'auditsUi.review.file': 'File', // same
