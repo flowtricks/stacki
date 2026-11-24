@@ -797,8 +797,16 @@ function withoutChat(chats: ReadonlySet<ChatId>, chat: ChatId): ReadonlySet<Chat
   return next;
 }
 
-export async function stopChat(chat: ChatId): Promise<void> {
-  await aiCancel({ projectPath: requireProject(), chat });
+/**
+ * Asks the agent to stop the chat's turn and everything it started. Resolves whether the stop reached the agent; when it
+ * did not, the failure is shown (the panel's toast), so a Stop that only spins is never the whole story.
+ */
+export async function stopChat(chat: ChatId): Promise<boolean> {
+  const reply = await aiCancel({ projectPath: requireProject(), chat });
+  if (!reply.ok) {
+    fail(reply.error);
+  }
+  return reply.ok;
 }
 
 // Requests whose answer is on its way to the main process. The card's buttons, its number keys (a held

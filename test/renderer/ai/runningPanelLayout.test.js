@@ -3,7 +3,8 @@
 // models one left edge, and the times end on one right edge in tabular figures; a long title is cut with an ellipsis
 // before the model column, never pushing it; an opened agent's steps sit flush under it (their chevron under the
 // row's, their time ending where the row's time ends). The panel stays inside the window and inside the chat column,
-// and nothing in it, or on the page, scrolls sideways.
+// and nothing in it, or on the page, scrolls sideways. Its fill is opaque (the transcript never shows through), it
+// opens above its chip and never over the composer, and every point of it is the panel, not the transcript beneath.
 // Method: views are folded by the real wire parser, the host's event builder and the reducer from
 // test/fixtures/ai/runningWork.jsonl (a long-running agent, a background command, a failed agent) plus an agent with
 // a very long title, their stamps moved to just now; the real chip, panel and stylesheets are bundled into one page,
@@ -62,6 +63,18 @@ function viewForPage() {
   return moved;
 }
 
+/** The alpha of a computed colour: `rgb()` is opaque; `rgba()` and `color(… / a)` carry their own. */
+function alphaOf(color) {
+  const slash = /\/\s*([\d.]+)\s*\)$/u.exec(color);
+  if (slash !== null) {
+    return Number(slash[1]);
+  }
+  const parts = /^rgba?\(([^)]*)\)$/u.exec(color);
+  assert.ok(parts !== null, `a colour the test can read: ${color}`);
+  const channels = parts[1].split(',').map((part) => part.trim());
+  return channels.length === 4 ? Number(channels[3]) : 1;
+}
+
 test('the Running panel keeps its columns, cuts long titles and stays inside the window at 340 and 600 px', async (context) => {
   let electronPath;
   try {
@@ -91,7 +104,7 @@ createRoot(document.getElementById('root')!).render(
   <LocaleProvider onPreference={() => undefined}>
     <div className="ai-body" style={{ width, height: 860, boxSizing: 'border-box' }}>
       <div className="ai-transcript" style={{ flex: 1 }}>
-        <div className="ai-transcript-flow">transcript</div>
+        <div className="ai-transcript-flow">{Array.from({ length: 80 }, (_, index) => <p key={index}>01-bulletin-board.astro New +5842 −0 Applied</p>)}</div>
       </div>
       <RunningChip view={view} chatId="chat" projectPath="/site" />
       <div className="ai-composer-stand-in" style={{ height: 120, background: 'var(--bg-input)' }} />
@@ -144,6 +157,12 @@ app.whenReady().then(async () => {
       await present('.ai-running-chip');
       document.querySelector('.ai-running-chip').click();
       await present('.ai-running-panel[data-popup-phase="open"]');
+      // The opening motion fades the panel in; its layout and fill are read once it is at rest (the probe's timeout
+      // bounds a panel that never gets there).
+      await new Promise((resolve) => {
+        const settled = () => (getComputedStyle(document.querySelector('.ai-running-panel')).opacity === '1' ? resolve() : requestAnimationFrame(settled));
+        settled();
+      });
       document.querySelector('.ai-running-head').click();
       await present('.ai-running-steps .ai-step');
       const box = (element) => element.getBoundingClientRect();
@@ -179,6 +198,13 @@ app.whenReady().then(async () => {
       });
       const rectangle = box(panel);
       const column = box(document.querySelector('.ai-body'));
+      const anchor = box(document.querySelector('.ai-running-chip'));
+      const composer = box(document.querySelector('.ai-composer-stand-in'));
+      // What a press at points across the panel lands on: the panel itself, never the transcript beneath it.
+      const hits = [[0.1, 0.1], [0.5, 0.5], [0.9, 0.9], [0.5, 0.95]].map(([x, y]) => {
+        const element = document.elementFromPoint(rectangle.left + rectangle.width * x, rectangle.top + rectangle.height * y);
+        return element !== null && panel.contains(element);
+      });
       return {
         width: ${'${width}'},
         rows,
@@ -188,6 +214,11 @@ app.whenReady().then(async () => {
         panelScrollWidth: panel.scrollWidth,
         panelClientWidth: panel.clientWidth,
         gutter: getComputedStyle(panel).scrollbarGutter,
+        background: getComputedStyle(panel).backgroundColor,
+        opacity: getComputedStyle(panel).opacity,
+        anchor: { top: round(anchor.top), bottom: round(anchor.bottom) },
+        composerTop: round(composer.top),
+        hits,
         windowWidth: window.innerWidth,
         windowHeight: window.innerHeight,
         pageWidth: document.documentElement.scrollWidth,
@@ -256,6 +287,16 @@ app.whenReady().then(async () => {
     );
     assert.ok(result.panelScrollWidth <= result.panelClientWidth, `nothing in the panel scrolls sideways at ${result.width}px: ${detail}`);
     assert.equal(result.gutter, 'stable', 'the panel reserves its scrollbar gutter');
+    // The transcript must not show through: a solid fill, fully opaque at rest (the owner saw file rows through it).
+    assert.equal(alphaOf(result.background), 1, `the panel's fill is opaque, not a translucent token: ${result.background}`);
+    assert.equal(result.opacity, '1', 'the panel at rest is fully opaque');
+    assert.ok(result.panel.bottom <= result.anchor.top + 0.5, `the panel opens above its chip, not over it: ${detail}`);
+    assert.ok(result.panel.bottom <= result.composerTop + 0.5, `the panel never covers the composer: ${detail}`);
+    // A window the runner clamped shorter than asked puts the panel partly off screen, where no point can be hit: the
+    // stacking check is advisory there (the fill check above holds everywhere).
+    if (result.windowHeight >= WINDOW_HEIGHT_PX) {
+      assert.deepEqual(result.hits, [true, true, true, true], `the panel is drawn above the transcript at every point: ${detail}`);
+    }
     assert.ok(result.pageWidth <= result.width + 40, `nothing on the page scrolls sideways at ${result.width}px`);
   }
 });

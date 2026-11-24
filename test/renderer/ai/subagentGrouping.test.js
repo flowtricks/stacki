@@ -110,7 +110,8 @@ test('a run the person stopped stops the subagents it left open; one that failed
   const errored = model.deriveSubagentWork(chat('stopped', { stop: 'error', at: 5000 })).units.get('toolu_s');
   assert.equal(errored.agent.status.kind, 'failed');
   const ended = model.deriveSubagentWork(chat('stopped', { stop: 'end_turn', at: 5000 })).units.get('toolu_s');
-  assert.equal(ended.agent.status.kind, 'running', 'a subagent can outlive a turn that ended well');
+  // It may outlive a turn that ended well, but while the chat waits nothing reports it and nothing can stop it.
+  assert.deepEqual(ended.agent.status, { kind: 'done', durationMs: 1000 }, 'not at work while the chat waits; timed to its last report');
 });
 
 test('a subagent that asked for no model inherits the session’s, and one that reported nothing is queued', () => {

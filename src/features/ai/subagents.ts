@@ -482,7 +482,7 @@ function statusOf(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus 
   switch (call.status) {
     case 'completed':
       // A subagent started in the background returns its call at once and works on under it.
-      if (call.background && (facts.openChild.has(call.call) || view.running !== undefined)) {
+      if (call.background && (facts.openChild.has(call.call) || view.running !== undefined) && stillReporting(call, view, facts)) {
         return liveStatus(call, view, facts);
       }
       return { kind: 'done', durationMs: durationOf(call, facts) };
@@ -497,6 +497,9 @@ function statusOf(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus 
       if (stop !== undefined && stop !== 'end_turn') {
         return { kind: 'failed', durationMs: durationOf(call, facts) };
       }
+      if (!stillReporting(call, view, facts)) {
+        return { kind: 'done', durationMs: durationOf(call, facts) };
+      }
       return liveStatus(call, view, facts);
     }
     default: {
@@ -504,6 +507,34 @@ function statusOf(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus 
       return exhaustive;
     }
   }
+}
+
+/**
+ * Whether a subagent left open can still be at work as far as the transcript shows. Its own running turn, or a turn
+ * the view never saw end: yes. Otherwise its turn ended well and it outlived it, which is real for an agent sent to the
+ * background, but the adapters deliver its reports only while a turn runs, and `session/cancel` stops only a running
+ * turn. So while the chat waits for the person it is not shown at work: a step whose close never came (an app restart,
+ * a lost update) would otherwise tick for a day ("22h 55m" for an agent that worked 16 minutes) with nothing to stop.
+ * While a later turn runs it is at work only once it has reported in that turn; with no stamps there is no evidence
+ * either way and it keeps its open state.
+ */
+function stillReporting(call: ToolItem, view: ChatView, facts: Facts): boolean {
+  if (view.running === call.turn) {
+    return true;
+  }
+  if (!facts.stops.has(call.turn)) {
+    return true;
+  }
+  if (view.running === undefined) {
+    return false;
+  }
+  const since = view.turnStartedAt;
+  const stamps = [call.at, call.endedAt, facts.lastStamp.get(call.call)].filter((stamp): stamp is number => stamp !== undefined);
+  if (since === undefined || stamps.length === 0) {
+    return true;
+  }
+  assert(view.running !== call.turn, 'stillReporting: an earlier turn’s subagent');
+  return Math.max(...stamps) >= since;
 }
 
 function liveStatus(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus {

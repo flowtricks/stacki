@@ -68,6 +68,21 @@ export function formatDuration(milliseconds: number, formatNumber: Formatters['f
   return `${unit(Math.floor(minutes / 60), 'hour', 0)} ${unit(minutes % 60, 'minute', 0)}`;
 }
 
+/**
+ * The time a live clock shows for work that started at `startedAt` (a host stamp, epoch milliseconds), read at `now`:
+ * undefined when the start is unknown or not a time, and zero when the start is ahead of `now` (the host's clock and
+ * the window's disagree by a moment), so a skewed stamp never reads as a negative or a huge time.
+ */
+export function elapsedSince(startedAt: number | undefined, now: number): number | undefined {
+  assert(Number.isFinite(now), 'elapsedSince: now is a finite time');
+  if (startedAt === undefined || !Number.isFinite(startedAt)) {
+    return undefined;
+  }
+  const elapsed = Math.max(0, now - startedAt);
+  assert(elapsed >= 0, 'elapsedSince: never negative');
+  return elapsed;
+}
+
 /** Tokens as people write them, in the language's own short form: `850`, `42K`, `1.2M`. */
 export function formatTokens(tokens: number, formatNumber: ChatWords['formatNumber']): string {
   assert(Number.isFinite(tokens), 'formatTokens: a finite number');

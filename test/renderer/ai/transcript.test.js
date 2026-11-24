@@ -789,7 +789,8 @@ test('the background tray lists running work with its elapsed time and last outp
   const head = container.querySelector('.ai-tasks-head');
   assert.equal(head.textContent, '2 tasks running', 'the subagent is listed by the subagent strip, not the tray');
   assert.equal(container.querySelector('.ai-task') ?? undefined, undefined, 'a closed tray lists nothing');
-  assert.equal(intervals.size, 1, 'and adds no ticker: the one there is the running subagent unit’s');
+  // The subagent its ended turn left open is not ticking while the chat waits (subagents.ts, stillReporting).
+  assert.equal(intervals.size, 0, 'and adds no ticker');
   await click(head);
   const rows = [...container.querySelectorAll('.ai-task')];
   assert.equal(rows.length, 2);
@@ -797,7 +798,7 @@ test('the background tray lists running work with its elapsed time and last outp
   assert.equal(text(rows[0], '.ai-task-time'), '18s', 'elapsed since the call began');
   assert.equal(text(rows[0], '.ai-task-peek'), 'ready on :4321');
   assert.equal(text(rows[1], '.ai-task-time'), '15s');
-  assert.equal(intervals.size, 1, 'one shared interval for every row and the unit');
+  assert.equal(intervals.size, 1, 'one shared interval for every row');
   const controls = [...container.querySelectorAll('.ai-tasks button')].map((control) => control.textContent);
   assert.deepEqual(controls, ['2 tasks running', 'Stop agent'], '"Stop agent" is the only control');
   await click(container.querySelector('.ai-tasks-stop'));

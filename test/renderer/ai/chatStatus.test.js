@@ -75,6 +75,21 @@ test('durations read as people say them', () => {
   assert.throws(() => formatDuration(Number.NaN), /finite/);
 });
 
+test('a live clock counts from its own start: none without one, never negative, never the session’s time', () => {
+  const since = status.elapsedSince;
+  const minute = 60_000;
+  assert.equal(since(1_000, 1_000 + 16 * minute + 47_000), 16 * minute + 47_000);
+  assert.equal(formatDuration(since(1_000, 1_000 + 16 * minute + 47_000)), '16m 47s');
+  assert.equal(since(undefined, 5_000), undefined, 'no start: no time, not the time since the epoch');
+  assert.equal(since(Number.NaN, 5_000), undefined, 'a start that is not a time: no time');
+  assert.equal(since(Number.POSITIVE_INFINITY, 5_000), undefined);
+  assert.equal(since(9_000, 5_000), 0, 'a start ahead of the clock (skew between host and window) reads zero');
+  assert.equal(since(5_000, 5_000), 0);
+  // Restart and resume: the clock reads the start stamp it is given each time, so a later reading only grows.
+  assert.ok(since(1_000, 90_000) > since(1_000, 60_000));
+  assert.throws(() => since(1_000, Number.NaN), /finite/, 'a clock that is not a time is a bug');
+});
+
 test('a running turn says what it is doing from its newest event, with a live timer', () => {
   const running = (events) => reduceChat(EMPTY_CHAT, [start, ...events]);
   const label = (view, now = 5000) => buildTurnStatus(view, now).label;

@@ -466,7 +466,9 @@ export const messages = {
   'ai.running.section.finished': 'Abgeschlossen',
   'ai.running.section.running': 'Läuft',
   'ai.running.showMore': 'Mehr anzeigen',
+  'ai.running.stopAll': 'Alle stoppen',
   'ai.running.stopTitle': 'Beendet den gesamten Durchgang. Ein einzelner Agent oder Befehl lässt sich nicht separat stoppen.',
+  'ai.running.stopping': 'Wird gestoppt …',
   'ai.screenshot.button': 'Screenshot', // same
   'ai.screenshot.close': 'Vorschau schließen',
   'ai.screenshot.enlarge': '{name} vergrößern',

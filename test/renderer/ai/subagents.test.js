@@ -1,7 +1,8 @@
 // Goal: the subagents of a run are derived truthfully from the transcript, and one subagent's work reads
 // as a chat of its own. A subagent is a top-level Agent/Task call (Codex: "Start subagent …"); its status
 // moves running → waiting (a request of its own waits) → done or failed, and a run stopped by the person
-// stops (an error fails) the subagents it left open; what it is doing is its newest call or message; the strip
+// stops (an error fails) the subagents it left open; one left open by a turn that ended well is at work only while a
+// turn runs and it reports in it, so a step whose close never came cannot tick for a day; what it is doing is its newest call or message; the strip
 // is hidden without subagents, live while one works, a folded summary once all are done, and opens again;
 // the lists are bounded (SUBAGENTS_SHOWN_MAX, SUBAGENT_ITEMS_MAX) and say what they left out. The reducer
 // keeps each speaker's streamed words in order however they interleave, and never joins two speakers.
@@ -143,7 +144,50 @@ test('a run that was stopped or failed takes the subagents it left open with it;
     assert.deepEqual(model.deriveSubagents(view).agents[0].status, { kind, durationMs: undefined }, stop);
   }
   const background = fold(turnStart(TURN, 1), user(TURN, 'go', 1), task(TURN, 'a', { at: 2 }), turnEnd(TURN, 5));
-  assert.equal(model.deriveSubagents(background).agents[0].status.kind, 'running', 'a subagent can outlive a turn that ended well');
+  assert.equal(
+    model.deriveSubagents(reduceChat(background, [turnStart(turnId(2), 6), tool(turnId(2), 'k', { parent: 'a', at: 7 })])).agents[0].status.kind,
+    'running',
+    'a subagent can outlive a turn that ended well, and is at work once it reports in a later turn',
+  );
+});
+
+test('a subagent left open by an ended turn is not at work while the chat waits, nor through a later turn it is silent in', () => {
+  const HOUR_MS = 3_600_000;
+  const second = turnId(2);
+  // The owner's case: a background agent works 16m 47s, its last step never closes, the turn ends well, and a day passes.
+  const started = 1_000_000;
+  const worked = 16 * 60_000 + 47_000;
+  const stale = fold(
+    turnStart(TURN, started),
+    user(TURN, 'go', started),
+    task(TURN, 'a', { at: started, background: true }),
+    tool(TURN, 'a', { status: 'completed', at: started + 500 }),
+    tool(TURN, 'k1', { parent: 'a', at: started + 1000, status: 'completed' }),
+    tool(TURN, 'k2', { parent: 'a', at: started + worked }),
+    turnEnd(TURN, started + worked + 1000),
+  );
+  assert.deepEqual(
+    model.deriveSubagents(stale).agents.map((agent) => agent.status.kind),
+    ['done'],
+    'idle: the strip lists it as done, not working',
+  );
+  const idle = model.deriveSubagentWork(stale).units.get('a').agent.status;
+  assert.deepEqual(idle, { kind: 'done', durationMs: worked }, 'idle: done, with the time it worked, not the time since it began');
+  // A later turn a day on, in which it says nothing: still not at work.
+  const later = reduceChat(stale, [turnStart(second, started + 23 * HOUR_MS), user(second, 'next', started + 23 * HOUR_MS)]);
+  assert.equal(model.deriveSubagentWork(later).units.get('a').agent.status.kind, 'done', 'silent through a later turn: not at work');
+  // It reports in that turn (its buffered work arrives): at work again, its start its own.
+  const reported = reduceChat(later, [tool(TURN, 'k3', { parent: 'a', at: started + 23 * HOUR_MS + 10 })]);
+  assert.deepEqual(model.deriveSubagentWork(reported).units.get('a').agent.status, { kind: 'running', startedAt: started });
+  // An open subagent call (not sent to the background) whose turn ended well: done while the chat waits.
+  const open = fold(turnStart(TURN, 1), user(TURN, 'go', 1), task(TURN, 'b', { at: 2 }), tool(TURN, 'kb', { parent: 'b', at: 3 }), turnEnd(TURN, 5));
+  assert.deepEqual(model.deriveSubagentWork(open).units.get('b').agent.status, { kind: 'done', durationMs: 1 });
+  // Its own running turn: at work, whatever the stamps.
+  const live = fold(turnStart(TURN, 1), user(TURN, 'go', 1), task(TURN, 'c', { at: 2 }));
+  assert.equal(model.deriveSubagentWork(live).units.get('c').agent.status.kind, 'running');
+  // A turn the view never saw end (no turn-end): no evidence it stopped, so it keeps its open state.
+  const unseen = fold(user(TURN, 'go', 1), task(TURN, 'd', { at: 2 }));
+  assert.equal(model.deriveSubagentWork(unseen).units.get('d').agent.status.kind, 'running');
 });
 
 test('what a subagent is doing: a file it reads or edits, a command, a tool’s title, a thought or its words', () => {

@@ -7,9 +7,10 @@
 // opens to the command itself, the one technical line it has.
 //
 // The panel lives in the chat column, not a portal: the transcript scrolls under it and it stays open. Escape or a
-// press outside closes it (Popup), and the chip toggles it. Its only control that acts is "Stop agent", which stops
-// the whole turn; no row has a Stop of its own because the adapters cannot stop one subagent for Stacki
-// (runningWork.ts says why), and a button that only pretended would be worse than none.
+// press outside closes it (Popup), and the chip toggles it. Its only control that acts is "Stop all", at the top, which
+// stops the whole turn; no row has a Stop of its own because the adapters cannot stop one subagent for Stacki
+// (runningWork.ts says why), and a button that only pretended would be worse than none. Once pressed it reads
+// "Stopping…" and waits, disabled, until what it stopped has ended; a stop that never reached the agent is a toast.
 import { memo, useId, useMemo, useRef, useState } from 'react';
 import type { ChatId, ChatOption } from '../../../../shared/properties/ai/chatModel';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
@@ -44,6 +45,9 @@ export const RunningChip = memo(function RunningChip({ view, chatId, projectPath
   const running = useMemo(() => deriveRunningWork(view, work), [view, work]);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
+  // What a press of Stop asked to end: the running turn, or the commands left running after it. Stopping lasts while
+  // that is still what runs, so it ends by itself when the turn ends, with no timer and no effect to reset it.
+  const [stopped, setStopped] = useState<string | undefined>(undefined);
   const chip = chipState(running);
   if (chip.kind === 'hidden') {
     return undefined;
@@ -54,6 +58,20 @@ export const RunningChip = memo(function RunningChip({ view, chatId, projectPath
   };
   // The turn can be stopped while it runs, or while a command it left keeps going (the host's cancel reaches both).
   const stoppable = view.running !== undefined || running.commandsRunning > 0;
+  const stopTarget = view.running ?? (running.commandsRunning > 0 ? 'commands' : undefined);
+  const stop: StopControl | undefined = stoppable
+    ? {
+        stopping: stopped !== undefined && stopped === stopTarget,
+        run: () => {
+          setStopped(stopTarget);
+          void stopChat(chatId).then((sent) => {
+            if (!sent) {
+              setStopped(undefined);
+            }
+          });
+        },
+      }
+    : undefined;
   return (
     <div className="ai-running">
       <button
@@ -85,30 +103,30 @@ export const RunningChip = memo(function RunningChip({ view, chatId, projectPath
         onClose={close}
         className="ai-running-panel"
       >
-        <PanelBody
-          running={running}
-          chatId={chatId}
-          projectPath={projectPath}
-          options={view.options}
-          onStop={stoppable ? () => void stopChat(chatId) : undefined}
-        />
+        <PanelBody running={running} chatId={chatId} projectPath={projectPath} options={view.options} stop={stop} />
       </Popup>
     </div>
   );
 });
+
+/** The panel's one Stop: what it does, and whether it was pressed and waits for the turn to end. */
+interface StopControl {
+  readonly stopping: boolean;
+  readonly run: () => void;
+}
 
 function PanelBody({
   running,
   chatId,
   projectPath,
   options,
-  onStop,
+  stop,
 }: {
   readonly running: RunningWork;
   readonly chatId: ChatId;
   readonly projectPath: string;
   readonly options: readonly ChatOption[];
-  readonly onStop: (() => void) | undefined;
+  readonly stop: StopControl | undefined;
 }) {
   const translate = useTranslate();
   const { formatNumber } = useFormat();
@@ -121,11 +139,7 @@ function PanelBody({
           <div className="ai-running-section-head">
             <span className="ai-running-section-title">{translate('ai.running.section.running')}</span>
             <span className="ai-running-count">{formatNumber(runningCount)}</span>
-            {onStop !== undefined && (
-              <button type="button" className="ai-running-stop" title={translate('ai.running.stopTitle')} onClick={onStop}>
-                {translate('ai.tasks.stop')}
-              </button>
-            )}
+            {stop !== undefined && <StopButton stop={stop} />}
           </div>
           <ul className="ai-running-list">
             {running.runningOmitted > 0 && <li className="ai-running-more">{translate('ai.steps.more', { count: running.runningOmitted })}</li>}
@@ -138,9 +152,27 @@ function PanelBody({
         </section>
       )}
       {running.finished.length > 0 && (
-        <FinishedSection running={running} startOpen={runningCount === 0} rowProps={rowProps} onStop={runningCount === 0 ? onStop : undefined} />
+        <FinishedSection running={running} startOpen={runningCount === 0} rowProps={rowProps} stop={runningCount === 0 ? stop : undefined} />
       )}
     </div>
+  );
+}
+
+/** "Stop all", or while the stop it sent takes effect, "Stopping…" with its dots, disabled so it is sent once. */
+function StopButton({ stop }: { readonly stop: StopControl }) {
+  const translate = useTranslate();
+  return (
+    <button
+      type="button"
+      className="ai-running-stop"
+      title={translate('ai.running.stopTitle')}
+      disabled={stop.stopping}
+      aria-busy={stop.stopping}
+      onClick={stop.stopping ? undefined : stop.run}
+    >
+      {stop.stopping && <LoaderDots dotPx={3} />}
+      {translate(stop.stopping ? 'ai.running.stopping' : 'ai.running.stopAll')}
+    </button>
   );
 }
 
@@ -149,12 +181,12 @@ function FinishedSection({
   running,
   startOpen,
   rowProps,
-  onStop,
+  stop,
 }: {
   readonly running: RunningWork;
   readonly startOpen: boolean;
   readonly rowProps: { readonly chatId: ChatId; readonly projectPath: string; readonly options: readonly ChatOption[] };
-  readonly onStop: (() => void) | undefined;
+  readonly stop: StopControl | undefined;
 }) {
   const translate = useTranslate();
   const { formatNumber } = useFormat();
@@ -172,11 +204,7 @@ function FinishedSection({
           <span className="ai-running-section-title">{translate('ai.running.section.finished')}</span>
           <span className="ai-running-count">{formatNumber(total)}</span>
         </button>
-        {onStop !== undefined && (
-          <button type="button" className="ai-running-stop" title={translate('ai.running.stopTitle')} onClick={onStop}>
-            {translate('ai.tasks.stop')}
-          </button>
-        )}
+        {stop !== undefined && <StopButton stop={stop} />}
       </div>
       {open && (
         <ul className="ai-running-list" id={bodyId}>

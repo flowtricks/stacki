@@ -6,8 +6,8 @@
 // and its "Show commands" stays closed (even after the chat's "Expand all") until clicked, which reveals the exact
 // command highlighted, the paths and the error. The negative space: no raw JSON, no tool-call or agent id, no run of
 // hex, no secret env value and no command line is in the default DOM; no row has a Stop of its own (the adapter
-// cannot stop one subagent for Stacki); the panel's one "Stop agent" shows only while the turn can be stopped, and
-// sends `ai:cancel`.
+// cannot stop one subagent for Stacki); the panel's one "Stop all", at its top, shows only while the turn can be
+// stopped, sends `ai:cancel` once, reads "Stopping…" (disabled) until the turn ends, and a stop that failed is a toast.
 // Method: the real components are bundled with esbuild and mounted in jsdom; views are folded by the real wire
 // parser, the host's event builder and the reducer from test/fixtures/ai/runningWork.jsonl; clicks are real DOM
 // events and the DOM text is read back.
@@ -29,7 +29,7 @@ esbuild.buildSync({
       "export { deriveSubagentWork } from './src/features/ai/subagents';",
       "export { expandAllItems, resetTranscriptUi } from './src/features/ai/transcript/transcriptUi';",
       "export { EMPTY_CHAT, reduceChat } from './src/features/ai/chatReducer';",
-      "export { loadAiProject, resetAiStore } from './src/features/ai/aiStore';",
+      "export { aiState, loadAiProject, resetAiStore } from './src/features/ai/aiStore';",
       "export { parseAcpLine, parseSessionNotification } from './shared/properties/ai/acpWire';",
       "export { eventsForUpdate } from './electron/handlers/ai/chatEvents';",
       "export { parseChatEvent } from './shared/properties/ai/chatModel';",
@@ -186,7 +186,7 @@ test('the chip toggles the panel; Escape and a press outside close it; the secti
   const sections = [...panel.querySelectorAll('.ai-running-section-head')].map((head) => head.textContent);
   assert.deepEqual(
     sections,
-    ['Running2Stop agent', 'Finished2'],
+    ['Running2Stop all', 'Finished2'],
     'Running with its two rows and Stop; Finished (the failed agent, the finished tests) folded with its count',
   );
   assert.equal(
@@ -307,16 +307,46 @@ test('no row has a Stop of its own; the one Stop shows only while the turn can b
   for (const row of panel.querySelectorAll('.ai-running-row')) {
     assert.equal(byText(row, 'button', 'Stop'), undefined, 'a row has no Stop: the adapter cannot stop one subagent');
   }
-  const stop = panel.querySelector('.ai-running-stop');
-  assert.equal(stop.textContent, 'Stop agent');
+  const stops = panel.querySelectorAll('.ai-running-stop');
+  assert.equal(stops.length, 1, 'one Stop for the whole panel');
+  const stop = stops[0];
+  assert.ok(panel.querySelector('.ai-running-section-head').contains(stop), 'it sits at the top of the panel');
+  assert.equal(stop.textContent, 'Stop all');
+  assert.equal(stop.disabled, false);
   assert.ok(stop.getAttribute('title').includes('whole turn'), 'it says what it stops');
   await click(stop);
   assert.equal(window.cancelled.length, 1, 'ai:cancel was sent');
   assert.equal(window.cancelled[0].chat, CHAT);
+  const stopping = panel.querySelector('.ai-running-stop');
+  assert.equal(stopping.textContent, 'Stopping…', 'it waits for the turn to end');
+  assert.equal(stopping.disabled, true, 'a second press sends nothing');
+  assert.equal(stopping.getAttribute('aria-busy'), 'true');
+  await click(stopping);
+  assert.equal(window.cancelled.length, 1, 'stopping sends one cancel');
+  // The turn ends: what was stopped is gone, so the panel no longer says Stopping.
+  await act(async () => live.root.render(chip(viewOf(['long', 'background'], 'cancelled'))));
+  for (const button of live.container.querySelectorAll('.ai-running-stop')) {
+    assert.notEqual(button.textContent, 'Stopping…', 'stopping ends with the turn');
+  }
 
   const ended = await mount(chip(viewOf(['failed'], 'end_turn')));
   await click(ended.container.querySelector('.ai-running-chip'));
   assert.equal(ended.container.querySelector('.ai-running-stop') ?? undefined, undefined, 'nothing to stop once the turn ended');
+});
+
+test('a stop that never reached the agent is a toast, and Stop all can be pressed again', async () => {
+  window.avb.aiCancel = async (payload) => {
+    window.cancelled.push(payload);
+    throw new Error('The agent did not answer.');
+  };
+  const live = await mount(chip(viewOf(['long'])));
+  await click(live.container.querySelector('.ai-running-chip'));
+  await click(live.container.querySelector('.ai-running-stop'));
+  assert.equal(window.cancelled.length, 1);
+  assert.match(ui.aiState().error ?? '', /The agent did not answer/u, 'the failure goes to the panel’s toast');
+  const stop = live.container.querySelector('.ai-running-stop');
+  assert.equal(stop.textContent, 'Stop all', 'not stuck at Stopping');
+  assert.equal(stop.disabled, false);
 });
 
 test('the inline unit draws the same steps, its commands behind the same disclosure', async () => {

@@ -463,7 +463,9 @@ export const messages = {
   'ai.running.section.finished': 'Terminato',
   'ai.running.section.running': 'In corso',
   'ai.running.showMore': 'Mostra altro',
+  'ai.running.stopAll': 'Ferma tutto',
   'ai.running.stopTitle': 'Ferma l’intero turno. Un singolo agente o comando non può essere fermato da solo.',
+  'ai.running.stopping': 'Interruzione…',
   'ai.screenshot.button': 'Screenshot', // same
   'ai.screenshot.close': 'Chiudi anteprima',
   'ai.screenshot.enlarge': 'Ingrandisci {name}',

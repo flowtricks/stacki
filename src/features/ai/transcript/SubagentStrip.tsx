@@ -12,7 +12,7 @@ import { LoaderDots } from '../../../ui/LoaderDots';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
-import { formatDuration } from '../chatStatus';
+import { elapsedSince, formatDuration } from '../chatStatus';
 import { commandName } from '../runningWork';
 import {
   chosenModelName,
@@ -256,8 +256,8 @@ export function SubagentTime({ status }: { readonly status: SubagentStatus }) {
 }
 
 function Elapsed({ startedAt }: { readonly startedAt: number }) {
-  const now = useNow();
-  return <Duration milliseconds={Math.max(0, now - startedAt)} />;
+  const elapsed = elapsedSince(startedAt, useNow());
+  return elapsed === undefined ? undefined : <Duration milliseconds={elapsed} />;
 }
 
 function Duration({ milliseconds }: { readonly milliseconds: number }) {

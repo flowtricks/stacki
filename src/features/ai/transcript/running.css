@@ -47,7 +47,9 @@
   scrollbar-gutter: stable;
   padding: 6px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-input), var(--text) 10%);
+  /* The solid surface menus and popovers use. Why not a mix of --bg-input: that token is translucent (white at 6%), so
+     any mix of it stays translucent and the transcript scrolling under the panel showed through its rows. */
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
   color: var(--text);
   box-shadow:
     0 12px 32px rgba(0, 0, 0, 0.5),
@@ -78,6 +80,8 @@
   flex: 1;
   display: flex;
   align-items: center;
+  /* The app centres bare buttons; the fold reads from the start like the section heads beside it. */
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
   margin: -2px -6px;
@@ -102,6 +106,9 @@
 }
 .ai-running-stop {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-inline-start: auto;
   padding: 2px 8px;
   border-radius: 5px;
@@ -109,8 +116,13 @@
   color: var(--text);
   font-size: 11px;
 }
-.ai-running-stop:hover {
+.ai-running-stop:hover:not(:disabled) {
   background: var(--bg-pressed);
+}
+/* Stopping: the same fill, its words dimmed, so it reads as waiting rather than gone. */
+.ai-running-stop:disabled {
+  color: var(--text-dim);
+  cursor: default;
 }
 .ai-running-list {
   display: flex;

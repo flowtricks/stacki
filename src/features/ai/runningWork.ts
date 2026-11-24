@@ -11,7 +11,7 @@
 // claude-agent-acp can stop one subagent only for a client that declares `clientCapabilities.subagents` (every
 // subagent then streams as its own child session) and one background command only for JetBrains AIR clients
 // (`_session/async_task/stop`); Stacki declares neither, so no row offers a Stop of its own: the panel's one Stop
-// is "Stop agent", which stops the turn, and it says so.
+// is "Stop all", which stops the turn, and it says so.
 import { assert } from '../../../shared/core/assert';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import type { TurnId } from '../../../shared/properties/ai/chatModel';

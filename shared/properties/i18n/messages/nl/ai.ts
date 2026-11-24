@@ -464,7 +464,9 @@ export const messages = {
   'ai.running.section.finished': 'Klaar',
   'ai.running.section.running': 'Bezig',
   'ai.running.showMore': 'Meer tonen',
+  'ai.running.stopAll': 'Alles stoppen',
   'ai.running.stopTitle': 'Stopt de hele beurt. Eén agent of opdracht kan niet apart worden gestopt.',
+  'ai.running.stopping': 'Stoppen…',
   'ai.screenshot.button': 'Screenshot', // same
   'ai.screenshot.close': 'Voorbeeld sluiten',
   'ai.screenshot.enlarge': '{name} vergroten',
