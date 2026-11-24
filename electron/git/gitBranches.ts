@@ -1,3 +1,4 @@
+import { isUtf8 } from 'buffer';
 import fs from 'fs';
 import path from 'path';
 
@@ -92,6 +93,29 @@ async function conflictedFilePath(git: Git, projectPath: string, file: string): 
   return path.resolve(projectPath, up, file);
 }
 
+/**
+ * A clash's marked-up text, or undefined when there is none to read: a side deleted the file, or it is not UTF-8 text. Decoding such
+ * bytes as text does not fail, it swaps them for replacement characters, and writing that back would commit a corrupted image or font.
+ * With no parts the choice is the whole file.
+ */
+async function conflictedParts(
+  git: Git,
+  projectPath: string,
+  file: string,
+  sides: Pick<MergeClash, 'ours' | 'theirs'>,
+): Promise<readonly ConflictPart[] | undefined> {
+  if (sides.ours === undefined || sides.theirs === undefined) {
+    return undefined;
+  }
+  try {
+    const bytes = fs.readFileSync(await conflictedFilePath(git, projectPath, file));
+    // A NUL byte is valid UTF-8 but is how git itself tells a binary file, which it leaves unmarked.
+    return isUtf8(bytes) && !bytes.includes(0) ? parseConflict(bytes.toString('utf8')) : undefined;
+  } catch {
+    return undefined; // Nothing on disk to read.
+  }
+}
+
 /** The pathspec for a root-relative path, from any folder of the repository, with `[slug]` read as a name rather than a pattern. */
 const rootPathspec = (file: string): string => `:(top,literal)${file}`;
 
@@ -151,7 +175,6 @@ async function resolveMerge(
     for (const file of left) {
       const choice = resolutions[file] ?? 'ours';
       await resolveMergeFile(git, projectPath, file, choice);
-      await git(projectPath, ['add', '--', rootPathspec(file)]);
     }
     // Everything git reconciled by itself is already staged; this commits the
     // whole merge, the chosen files included.
@@ -220,9 +243,24 @@ async function resolveMergeFile(git: Git, projectPath: string, file: string, cho
     // One answer for the whole file. Defaults to keeping what is on this
     // branch: a missing choice must never silently prefer the incoming
     // version over the user's own work.
-    const side = choice === 'theirs' ? '--theirs' : '--ours';
-    await git(projectPath, ['checkout', side, '--', rootPathspec(file)]);
+    await resolveMergeWholeFile(git, projectPath, file, choice === 'theirs' ? 'theirs' : 'ours');
+    return;
   }
+  await git(projectPath, ['add', '--', rootPathspec(file)]);
+}
+
+async function resolveMergeWholeFile(git: Git, projectPath: string, file: string, side: 'ours' | 'theirs'): Promise<void> {
+  const spec = rootPathspec(file);
+  // The index lists one entry per version that exists (2 is ours, 3 theirs). A side without one deleted the file, so keeping that
+  // side removes it: `checkout --ours` then has no version to write and fails, and there is nothing left to add.
+  const unmerged = (await git(projectPath, ['ls-files', '--unmerged', '-z', '--', spec])).stdout;
+  const wanted = side === 'ours' ? '2' : '3';
+  if (!unmerged.split('\0').some((entry) => entry.split('\t')[0]?.endsWith(` ${wanted}`))) {
+    await git(projectPath, ['rm', '--force', '--quiet', '--', spec]);
+    return;
+  }
+  await git(projectPath, ['checkout', `--${side}`, '--', spec]);
+  await git(projectPath, ['add', '--', spec]);
 }
 
 /**
@@ -288,20 +326,8 @@ async function mergeBranch(git: Git, { projectPath, branch }: { readonly project
         // and each disagreement comes back separately, so a page whose heading
         // should come from one branch and whose footer should come from the
         // other can say so.
-        let parts: readonly ConflictPart[] | undefined = undefined;
-        try {
-          parts = parseConflict(fs.readFileSync(await conflictedFilePath(git, projectPath, file), 'utf8'));
-        } catch {
-          // A binary file, or one side deleted it: there is no marked-up text
-          // to read, and the choice is the whole file or nothing.
-          parts = undefined;
-        }
-        clashes.push({
-          path: file,
-          ours: await stage(git, projectPath, 2, file),
-          theirs: await stage(git, projectPath, 3, file),
-          parts,
-        });
+        const sides = { ours: await stage(git, projectPath, 2, file), theirs: await stage(git, projectPath, 3, file) };
+        clashes.push({ path: file, ...sides, parts: await conflictedParts(git, projectPath, file, sides) });
       }
       // Unwound before returning. Conflict markers sitting in the files would
       // be read as markup by the editor a moment later, and the page would

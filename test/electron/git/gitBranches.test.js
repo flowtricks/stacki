@@ -659,6 +659,51 @@ const caught = async (callback) => {
     check('and a clean tree', (await sh(directory, 'status', '--porcelain')) === '');
   }
 
+  // --- Files with no text to merge ------------------------------------------
+  //
+  // Bytes that are not UTF-8 decode without an error, into replacement
+  // characters; offered as text, finishing the merge would commit that
+  // corruption. A file one side deleted has no marked-up text either, and
+  // keeping the side that deleted it has to remove it.
+  {
+    const directory = await repo('binary');
+    cleanup.push(directory);
+    const bytes = (tail) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, tail]);
+    const at = (name) => path.join(directory, name);
+    const save = async (message, files) => {
+      for (const [name, content] of Object.entries(files)) {
+        if (content === undefined) {
+          fs.rmSync(at(name));
+        } else {
+          fs.writeFileSync(at(name), content);
+        }
+      }
+      await sh(directory, 'add', '-A');
+      await sh(directory, 'commit', '-qm', message);
+    };
+    await save('files', { 'i.png': bytes(1), 'gone-here.txt': 'base\n', 'gone-there.txt': 'base\n' });
+    await sh(directory, 'checkout', '-qb', 'feature');
+    await save('feature files', { 'i.png': bytes(2), 'gone-here.txt': 'theirs\n', 'gone-there.txt': undefined });
+    await sh(directory, 'checkout', '-q', 'main');
+    await save('main files', { 'i.png': bytes(3), 'gone-here.txt': undefined, 'gone-there.txt': 'ours\n' });
+
+    const clash = await mergeBranch(git, { projectPath: directory, branch: 'feature' });
+    check('three clashes', clash.files?.length === 3, JSON.stringify(clash.files));
+    check(
+      'none of them offered as text',
+      clash.files.every((file) => file.parts === undefined),
+      JSON.stringify(clash.files),
+    );
+    // Each answer for a text file keeps a deletion, once from either side.
+    const choices = { 'i.png': 'theirs', 'gone-here.txt': 'ours', 'gone-there.txt': 'theirs' };
+    const { error, value: done } = await caught(() => resolveMerge(git, { projectPath: directory, branch: 'feature', choices }));
+    check('keeping a deletion finishes the merge', done?.ok === true, String(error));
+    check('the image is the chosen bytes exactly', fs.readFileSync(at('i.png')).equals(bytes(2)));
+    check('the file deleted here stays deleted', !fs.existsSync(at('gone-here.txt')));
+    check('the file deleted there is deleted', !fs.existsSync(at('gone-there.txt')));
+    check('and the tree is clean', (await sh(directory, 'status', '--porcelain')) === '');
+  }
+
   for (const directory of cleanup) {
     fs.rmSync(directory, { recursive: true, force: true });
   }
