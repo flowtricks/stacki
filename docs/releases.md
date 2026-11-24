@@ -47,6 +47,37 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.18
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.18.
+- **Features**
+  - audits: flag px on by default; shorten the hidden-by-folder note
+  - welcome: open a project by dropping its folder on Stacki
+  - rail: right-clicking a rail icon opens nothing
+  - audits: custom audits model, regex guard and bounded matcher
+  - audits: add, edit and test custom audits from the Audits panel
+  - cli: stacki audits list, presets, add, update, remove and test
+- **Fixes**
+  - preview: canvas frames keep the breakpoint's whole width
+  - preview: Desktop's outlines and guides sit on the page again
+  - publish: Save names the empty required field in a toast, marks it
+  - cms: read content configs with rolldown on Astro 7 projects
+  - preview: reload when a page script sized the variant being switched
+  - studio: sign-in wait is a button countdown, limits name their step
+  - ui: the (i) tip no longer shows the native title over it
+  - ai: Running panel is opaque, stale agents stop ticking, Stop all
+  - publish: Add Worker sets the site up so Publish works at once
+  - publish: Connect Cloudflare installs what it needs in one click
+  - audits: placeholder findings sit on their copy; Ignore is one click
+  - audits: Broken link sees links from components, props and slots
+  - code-chips: chip references in --_private custom property values
+  - audits: list every raw value, open it at its line, unit settings
+  - preview: one canvas scrollbar, no setting; every frame gets it
+  - navigation: audit jumps replace the open component, not stack it
+  - cli: the audits registry covers tokens.sizes and allowedUnits
+- **Maintenance**
+  - dictation: red remove action, accessible quality cards
+
 ## 1.4.17
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.17.
