@@ -135,13 +135,23 @@ export function assetProp(source: string, id: string, file: string, name: string
   source = setAttributes(source, id, {
     [name]: { type: 'expr', value: node.kind === 'element' ? binding + '.src' : binding },
   });
-  if (!existing) {
-    const eol = parsed.model.eol;
-    const offset = source.startsWith('---\r\n') ? 5 : 4;
-    const line = `import ${binding} from ${JSON.stringify(specifier)};${eol}`;
-    source = parsed.model.hadFrontmatter ? source.slice(0, offset) + line + source.slice(offset) : `---${eol}${line}---${eol}${source}`;
+  return existing ? source : withImport(source, `import ${binding} from ${JSON.stringify(specifier)};`, parsed.model);
+}
+
+// The opening fence is not always the file's first four characters: a byte order mark,
+// blank lines or trailing spaces may surround it, and an offset that assumes otherwise
+// joins the import to the fence, which breaks the page.
+function withImport(source: string, statement: string, model: { readonly eol: string; readonly hadFrontmatter: boolean }): string {
+  const line = `${statement}${model.eol}`;
+  if (!model.hadFrontmatter) {
+    const start = source.startsWith('\uFEFF') ? 1 : 0;
+    return `${source.slice(0, start)}---${model.eol}${line}---${model.eol}${source.slice(start)}`;
   }
-  return source;
+  const fence = /^\s*---[^\S\r\n]*\r?\n/.exec(source);
+  if (!fence) {
+    throw new Error('Fix the page syntax before choosing an asset.');
+  }
+  return fence[0] + line + source.slice(fence[0].length);
 }
 
 function headEdit(source: string, node: Extract<ParserNode, { kind: 'map' | 'cond' }>, value: string): Edit {
