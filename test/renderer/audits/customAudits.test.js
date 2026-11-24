@@ -14,6 +14,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const output = repoPath('node_modules/.stacki-test/custom-audits.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -192,7 +193,8 @@ test('the form round-trips: a simple rule opens simple, an expression the simple
   assert.equal(audits.propertyNamesOf('^(color|.*)$'), undefined);
 });
 
-const settle = (ms = 10) => act(async () => new Promise((resolve) => setTimeout(resolve, ms)));
+// One turn of the event loop, inside act: the promises a bridge call resolves and the render they cause.
+const settle = () => act(async () => new Promise((resolve) => setImmediate(resolve)));
 const typeInto = async (input, value) => {
   const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
   await act(async () => {
@@ -255,7 +257,15 @@ test('the editor: added from the ⋯ menu, a live count with samples, an unsafe 
   await typeInto(labelled('Properties'), 'text-align');
   await typeInto(labelled('Value does not contain'), 'var(');
   assert.ok(document.querySelector('.custom-audit-live .ui-skeleton'), 'skeleton rows while the count computes, never a word');
-  await settle(400);
+  // The count is computed after the last keystroke has rested: wait on what it shows.
+  await waitFor({
+    what: 'the live count',
+    read: async () => {
+      await act(async () => undefined);
+      return document.querySelector('.custom-audit-live')?.textContent ?? '';
+    },
+    until: (text) => /2 matches in this project/.test(text),
+  });
   const live = document.querySelector('.custom-audit-live');
   assert.match(live.textContent, /2 matches in this project/);
   assert.equal(live.querySelectorAll('.custom-audit-sample').length, 2);

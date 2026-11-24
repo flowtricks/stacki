@@ -16,7 +16,10 @@ const { JSDOM } = require('jsdom');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { repoPath, stubPanels, stubSources } = require('../../helpers/sources.js');
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+const { waitForSteady } = require('../../helpers/waitFor.js');
+
+// One turn of the event loop: the promises a bridge call resolves, and the render they cause, run before the next line.
+const tick = () => new Promise((resolve) => setImmediate(resolve));
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 const pageState = (label) => {
   const source = `<div data-label="${label}"></div>\n`;
@@ -107,13 +110,21 @@ test('three audit jumps into components, then one back, returns to the page', as
   const { act } = React;
   const root = createRoot(document.getElementById('root'));
   const App = require(path.join(directory, 'app.js')).default;
-  const settle = () =>
-    act(async () => {
-      await tick();
-      await tick();
-    });
   const openPath = () => reads.at(-1);
   const backButton = () => document.querySelector('.comp-back') ?? undefined;
+  // The app is settled when what the test reads (how many files were read, which one is open, the back arrow) stopped changing, not
+  // after a guessed time.
+  const settle = () =>
+    waitForSteady({
+      what: 'the open file, the reads and the back arrow stopped changing',
+      read: async () => {
+        await act(async () => {
+          await tick();
+        });
+        return JSON.stringify([reads.length, openPath(), backButton()?.textContent ?? 'none']);
+      },
+      until: () => true,
+    });
   await act(async () => {
     root.render(React.createElement(App));
     await tick();
