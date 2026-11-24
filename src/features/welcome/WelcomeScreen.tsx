@@ -10,9 +10,8 @@ import WelcomeShaderBackground from './WelcomeShaderBackground';
 import { railScrollbarFor, watchRailEdges } from './recentRail';
 import { currentDesktopPlatform } from '../../lib/shortcutLabel';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
-import AstroCopyDialog, { type AstroCopySource } from './AstroCopyDialog';
-import type { AstroCopyCreated } from '../../../shared/ipc/astroCopy';
-import type { Translator } from '../../lib/i18n/localeContext';
+import AstroCopyDialog, { announceAstroCopy, type AstroCopySource } from './AstroCopyDialog';
+import { FolderDropHost, useFolderChoiceRoute } from './FolderDropHost';
 
 interface WelcomeScreenProps {
   readonly onOpen: (projectPath: string) => void;
@@ -28,6 +27,8 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
   const [copySource, setCopySource] = useState<AstroCopySource | undefined>(undefined);
   const recent = useRecentProjects(showToast);
   const actions = useWelcomeActions(onOpen, setError, setNewProjectParent, setStarterDirectory, setCopySource);
+  // A folder dropped on the window or on the app's icon: what "Open from folder" does with the same folder.
+  const routeFolder = useFolderChoiceRoute({ open: onOpen, offerCopy: setCopySource, showToast });
 
   return (
     <div className="welcome">
@@ -41,6 +42,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
         cloneRepository={() => setCloning(true)}
       />
       <RecentRail projects={recent.projects} refreshing={recent.refreshing} open={onOpen} remove={(projectPath) => void recent.remove(projectPath)} />
+      <FolderDropHost onChoice={routeFolder} showToast={showToast} />
       {cloning && (
         <CloneRepositoryModal
           onClose={() => setCloning(false)}
@@ -142,17 +144,6 @@ function useWelcomeActions(
     }
   };
   return { openExisting, createNew, startFromLumos };
-}
-
-// What a finished copy says before it opens: that it was made, and anything the person should know about it.
-function announceAstroCopy(created: AstroCopyCreated, translate: Translator, showToast: WelcomeScreenProps['showToast']): void {
-  showToast(translate('welcome.copy.created'), 'success');
-  if (created.keptAsFilesCount > 0) {
-    showToast(translate('welcome.copy.keptAsFiles', { count: created.keptAsFilesCount, files: created.keptAsFiles.join(', ') }), 'info');
-  }
-  if (created.install.kind === 'failed') {
-    showToast(translate('welcome.copy.installFailed', { detail: created.install.detail }), 'error');
-  }
 }
 
 function useRecentProjects(showToast: WelcomeScreenProps['showToast']) {

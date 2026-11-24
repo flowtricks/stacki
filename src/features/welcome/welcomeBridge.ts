@@ -6,6 +6,7 @@ import type { Result } from '../../../shared/core/result';
 import type { CreatePackageManager } from '../../../shared/properties/packageManager';
 import { cleanError } from '../../lib/cleanError';
 import { parseAstroCopyCheck, parseAstroCopyReply, parseSiteFolderChoice, type AstroCopyRequest } from '../../../shared/ipc/astroCopy';
+import { parseFolderOpenChoice, parseFolderOpenChoices, type FolderOpenChoice } from '../../../shared/ipc/folderOpen';
 
 export type RecentProject = IpcResults['recents:list'][number];
 export type ProjectDialog = IpcResults['project:openDialog'];
@@ -81,6 +82,23 @@ export function removeRecentProject(projectPath: string) {
 export function chooseSiteFolder() {
   const payload = parseIpcPayload('project:openSiteDialog', undefined);
   return welcomeRequest(parseSiteFolderChoice, () => window.avb.openSiteDialog(payload));
+}
+
+/** A folder dropped on the window: what main finds at `folderPath`, which came from the drag and is checked there. */
+export function inspectFolder(folderPath: string) {
+  const payload = parseIpcPayload('project:inspectFolder', folderPath);
+  return welcomeRequest(parseFolderOpenChoice, () => window.avb.inspectFolder(payload));
+}
+
+/** The folders the app's icon or the command line handed over before the window listened; main sends later ones itself. */
+export function takeOpenedFolders() {
+  const payload = parseIpcPayload('project:takeOpenedFolders', undefined);
+  return welcomeRequest(parseFolderOpenChoices, () => window.avb.takeOpenedFolders(payload));
+}
+
+/** A folder the app's icon or a second launch handed over while the window listens. */
+export function subscribeOpenedFolders(receive: (choice: FolderOpenChoice) => void): () => void {
+  return window.avb.onFolderOpened((input) => receive(parseFolderOpenChoice(input)));
 }
 
 /** Whether an Astro copy may go at `request`: the dialog's live check of its name and location. */

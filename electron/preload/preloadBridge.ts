@@ -161,6 +161,8 @@ function projectBridge() {
     openSiteDialog: invoke('project:openSiteDialog'),
     checkAstroCopy: invoke('project:checkAstroCopy'),
     createAstroCopy: invoke('project:createAstroCopy'),
+    inspectFolder: invoke('project:inspectFolder'),
+    takeOpenedFolders: invoke('project:takeOpenedFolders'),
     createStarter: invoke('project:createStarter'),
     scanProject: invoke('project:scan'),
     listProjectClasses: invoke('project:classes'),
@@ -545,6 +547,12 @@ function eventBridge() {
       const listener = (_event: unknown, chunk: unknown) => callback(chunk);
       ipcRenderer.on('create:log', listener);
       return () => ipcRenderer.removeListener('create:log', listener);
+    },
+    // A folder the app's icon, the command line or a second launch handed over (electron/project/folderOpen.ts).
+    onFolderOpened: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('project:folderOpened', listener);
+      return () => ipcRenderer.removeListener('project:folderOpened', listener);
     },
     // Live output of the command that adds EmDash to the open project, shown in its dialog.
     onEmDashInstallLog: (callback: (chunk: unknown) => void) => {

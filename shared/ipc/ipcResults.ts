@@ -13,6 +13,7 @@ import type { AccountState } from './publishAccount';
 import type { PreviewHealth } from './previewHealth';
 import type { DevNetworkReply, DevNetworkState } from './devNetwork';
 import type { AstroCopyCheck, AstroCopyReply, SiteFolderChoice } from './astroCopy';
+import type { FolderOpenChoice } from './folderOpen';
 import type { CmsCheckResult, CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
 import type { ConstantEditReply, ConstantListingReply } from '../properties/cmsConstants';
 import type {
@@ -852,6 +853,8 @@ export interface IpcResults extends AiResults, AgentResults {
         readonly error?: never;
       };
   readonly 'project:openSiteDialog': SiteFolderChoice;
+  readonly 'project:inspectFolder': FolderOpenChoice;
+  readonly 'project:takeOpenedFolders': readonly FolderOpenChoice[];
   readonly 'project:checkAstroCopy': AstroCopyCheck;
   readonly 'project:createAstroCopy': AstroCopyReply;
   readonly 'project:parentDialog':

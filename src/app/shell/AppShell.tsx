@@ -7,6 +7,7 @@ import { desktopElementActions } from './desktopElementActions';
 import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanvasBar';
 import { DesktopPublishButton } from './DesktopPublishButton';
 import { ToastStack } from '../../features/notifications/ToastStack';
+import { ProjectFolderDrop } from './ProjectFolderDrop';
 // The app's frame: the welcome view, the shell and its overlays, the title
 // bar with its URL group and actions, and the left panel with each of its
 // tabs (App.tsx).
@@ -235,6 +236,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       />
       {app.busy && <BusyOverlay message={app.busy} />}
       <DesktopAppsHost app={app} />
+      <ProjectFolderDrop app={app} />
       <ToastStack notices={app.notices} dismiss={app.dismissToast} />
       <ConfirmHost />
       <UpdatePopupHost />

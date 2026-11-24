@@ -6310,6 +6310,37 @@ body > .embed-editor_provenance {
   /* Present (and blocking) from the first frame, seen only after 300ms: work that ends sooner never flickers a cover. */
   animation: busy-appear 120ms ease-out 300ms both;
 }
+/* A folder dragged over the window (FolderDropHost.tsx): one fill over everything, no outline. It never
+   takes the pointer, so the drop targets under it still answer; the frames stop taking it while it shows,
+   so the drag stays in the app's own document over the canvas too. */
+.folder-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 153, 255, 0.16);
+  backdrop-filter: blur(2px);
+  color: var(--text);
+}
+.folder-drop-overlay > svg {
+  color: var(--accent);
+}
+.folder-drop-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.folder-drop-hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.folder-drag-active iframe {
+  pointer-events: none;
+}
 @keyframes busy-appear {
   from {
     opacity: 0;

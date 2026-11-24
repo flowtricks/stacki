@@ -31,6 +31,8 @@ interface InvokeChannels {
   readonly openSiteDialog: 'project:openSiteDialog';
   readonly checkAstroCopy: 'project:checkAstroCopy';
   readonly createAstroCopy: 'project:createAstroCopy';
+  readonly inspectFolder: 'project:inspectFolder';
+  readonly takeOpenedFolders: 'project:takeOpenedFolders';
   readonly createStarter: 'project:createStarter';
   readonly scanProject: 'project:scan';
   readonly listProjectClasses: 'project:classes';
@@ -377,6 +379,8 @@ export type PreloadBridge = InvokeSurface & {
   readonly onAppPersonChanged: (callback: () => void) => () => void;
   readonly onAppAuthChanged: (callback: (data: unknown) => void) => () => void;
   readonly onCreateLog: (callback: (data: unknown) => void) => () => void;
+  /** A folder the app's icon or a second launch handed over while the window listens (shared/ipc/folderOpen.ts FolderOpenChoice). */
+  readonly onFolderOpened: (callback: (data: unknown) => void) => () => void;
   readonly onEmDashInstallLog: (callback: (data: unknown) => void) => () => void;
   readonly onFsChanged: (callback: (data: unknown) => void) => () => void;
   /** A Markdown file the Instructions panel lists changed outside the app, or the hidden paths did: `{ files }`, project-relative. */

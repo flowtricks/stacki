@@ -768,6 +768,9 @@ export const IPC_PAYLOADS = {
   'project:openSiteDialog': nothing,
   'project:checkAstroCopy': parseAstroCopyRequest,
   'project:createAstroCopy': parseAstroCopyRequest,
+  // A folder dropped on the window, and the folders the app's icon or the command line handed over (shared/ipc/folderOpen.ts).
+  'project:inspectFolder': pathText,
+  'project:takeOpenedFolders': nothing,
   'project:parentDialog': nothing,
   'project:pending': nothing,
   'project:resolveImport': object({ ...source }),

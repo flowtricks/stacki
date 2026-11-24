@@ -113,6 +113,7 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
       gitWorktrees: async () => [],
       gitStatus: async () => [],
       listRecents: async () => [],
+      takeOpenedFolders: async () => [],
       onCssChanged: () => () => {},
     },
     {

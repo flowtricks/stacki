@@ -154,6 +154,9 @@ const railRules = (css) => {
   let releaseThumb;
   dom.window.avb = {
     platform: 'linux',
+    // The window drop's inbox (src/features/welcome/FolderDropHost.tsx): nothing handed over.
+    takeOpenedFolders: async () => [],
+    onFolderOpened: () => () => {},
     listRecents: async () => [
       { path: '/p/a', name: 'a', thumb: PIXEL, stale: false, canRefresh: true, openedAt: 3 },
       { path: '/p/b', name: 'b', thumb: PIXEL, stale: true, canRefresh: true, openedAt: 2 },

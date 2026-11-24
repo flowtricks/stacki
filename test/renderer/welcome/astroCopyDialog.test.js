@@ -104,6 +104,9 @@ export { subscribeErrorToasts } from ${JSON.stringify(repoPath('src/ui/errorNoti
   };
   dom.window.avb = {
     onCreateLog: () => () => {},
+    // The window drop's inbox (src/features/welcome/FolderDropHost.tsx): nothing handed over.
+    takeOpenedFolders: async () => [],
+    onFolderOpened: () => () => {},
     checkAstroCopy: async (request) => {
       checks.push(request);
       return locationVerdict ?? verdicts.get(request.name) ?? { ok: true, value: { targetPath: `${request.parentPath}/${request.name}` } };

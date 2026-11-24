@@ -16,9 +16,9 @@ import { detectPackageManager, installArguments } from '../project/packageManage
 import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
 import { translateMain } from '../lib/mainLocale';
-import { classifySiteFolder } from '../project/plainSiteScan';
+import { folderOpenChoice, siteFolderChoice } from '../project/folderOpen';
 import { checkAstroCopyTarget, createAstroCopy } from '../project/astroCopyWrite';
-import { ASTRO_COPY_LIMITS, defaultAstroCopyName, type AstroCopyInstall, type AstroCopyReply, type SiteFolderChoice } from '../../shared/ipc/astroCopy';
+import { ASTRO_COPY_LIMITS, type AstroCopyInstall, type AstroCopyReply, type SiteFolderChoice } from '../../shared/ipc/astroCopy';
 import { err, ok } from '../../shared/core/result';
 
 export function registerProjectHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
@@ -140,21 +140,11 @@ function registerAstroCopyHandlers({ ipcMain, send, showOpenDialog }: Pick<MainH
     if (result.canceled || directory === undefined) {
       return { kind: 'canceled' };
     }
-    const folder = path.resolve(directory);
-    const kind = classifySiteFolder(folder);
-    switch (kind) {
-      case 'astro':
-        return { kind, projectPath: folder };
-      case 'plainWebsite':
-        return { kind, sourcePath: folder, parentPath: path.dirname(folder), name: defaultAstroCopyName(path.basename(folder)), homePath: os.homedir() };
-      case 'notWebsite':
-        return { kind, folderPath: folder };
-      default: {
-        const exhaustive: never = kind;
-        return exhaustive;
-      }
-    }
+    return siteFolderChoice(path.resolve(directory));
   });
+  // A folder dropped on the window: the renderer names it from the drag, and main decides what is there
+  // (electron/project/folderOpen.ts) before it is opened, copied or refused like the dialog's choice.
+  ipcMain.handle('project:inspectFolder', (_event, candidate) => folderOpenChoice(candidate));
   ipcMain.handle('project:checkAstroCopy', (_event, request) => checkAstroCopyTarget(normalizedRequest(request)));
   // The copy, then the steps every new site gets: Stacki's defaults, the install and a first commit.
   // A manager that is missing fails before any folder exists; a failed install keeps the finished copy

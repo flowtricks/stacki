@@ -291,6 +291,7 @@
     "shared/ipc/assetConversion.ts",
     "shared/ipc/commitAvatars.ts",
     "shared/ipc/devNetwork.ts",
+    "shared/ipc/folderOpen.ts",
     "shared/ipc/gitCommitDiff.ts",
     "shared/ipc/githubRepository.ts",
     "shared/ipc/githubUserSearch.ts",

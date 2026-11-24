@@ -34,6 +34,21 @@ interface AstroCopyDialogProps {
   readonly onDone: (created: AstroCopyCreated) => void;
 }
 
+// What a finished copy says before it opens: that it was made, and anything the person should know about it.
+export function announceAstroCopy(
+  created: AstroCopyCreated,
+  translate: Translator,
+  showToast: (message: string, kind: 'success' | 'error' | 'info') => void,
+): void {
+  showToast(translate('welcome.copy.created'), 'success');
+  if (created.keptAsFilesCount > 0) {
+    showToast(translate('welcome.copy.keptAsFiles', { count: created.keptAsFilesCount, files: created.keptAsFiles.join(', ') }), 'info');
+  }
+  if (created.install.kind === 'failed') {
+    showToast(translate('welcome.copy.installFailed', { detail: created.install.detail }), 'error');
+  }
+}
+
 // The main process's verdict on one name and location; a verdict for other values is stale.
 interface Verdict {
   readonly key: string;

@@ -205,7 +205,17 @@
       "notarize": true,
       "minimumSystemVersion": "13.0.0",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Stacki uses the microphone only when you press the microphone button to dictate a message to the AI panel."
+        "NSMicrophoneUsageDescription": "Stacki uses the microphone only when you press the microphone button to dictate a message to the AI panel.",
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Folder",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.folder"
+            ]
+          }
+        ]
       }
     },
     "win": {

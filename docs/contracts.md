@@ -1064,6 +1064,30 @@ unquoted braced values, `is:inline` scripts and slots, `is:global` styles, a lea
 written into a `mkdtemp` sibling and renamed into place after the target is checked missing again; any
 failure removes that temporary folder and nothing else. A failed install keeps the finished copy.
 
+## Folders from outside the app (`shared/ipc/folderOpen.ts`)
+
+A folder dropped on the window, dropped on the app's icon (macOS `open-file`, which a Dock drop sends only in a
+packaged build whose Info.plist declares `public.folder`: `build.mac.extendInfo.CFBundleDocumentTypes`), named on
+the command line, or named by a second launch (`second-instance`; packaged builds take the single-instance lock)
+gets the answer "Open from folder" gives: `FolderOpenChoice` is `SiteFolderChoice` without `canceled`, or
+`rejected` with `missing`, `notFolder` or `unreadable`. Main decides (`electron/project/folderOpen.ts`): the path
+is absolute, within `BOUNDARY_LIMITS.pathLengthMax` and NUL-free, `lstat`, `realpath` and `stat` succeed (a link
+opens its target, a dangling link is `missing`, a loop is `unreadable`), and it is a directory; then
+`classifySiteFolder` classifies it.
+
+`project:inspectFolder` (a path) answers for a window drop; the renderer names the path from the drag through the
+preload's `getFilePath` and never opens it unanswered. Folders from the icon and the command line wait in main's
+queue (at most `FOLDER_OPEN_LIMITS.queueMax`, a waiting duplicate dropped) until the page calls
+`project:takeOpenedFolders` (no payload; the waiting answers, oldest first); after that take main pushes each one
+on `project:folderOpened`, and holds again from the moment the main frame starts a new document, crashes or
+closes. The renderer listens before it takes, once per page (`FolderDropHost.tsx`).
+
+The window shows its drop fill only while a drag holds `Files` and nothing but untyped file items (a folder from
+Finder or Explorer) and no drop target under the pointer has called `preventDefault`; in-app drags and typed files
+stay with their own targets. The first dropped folder opens; the rest are counted in one toast. With a project
+open, an Astro project opens through `leaveProject` (edits flushed, the window reloads into it), and a plain
+website gets the Astro copy dialog in the project window.
+
 ## Shared project editor metadata
 
 `.stacki/components.json` (version 1) stores insertion recipes keyed by project-relative
@@ -2681,13 +2705,16 @@ Tests inject the recognizer, the audio meter and the clock through `VoiceEnviron
 ## Audits
 
 `.stacki/audits.json` (`shared/properties/auditIgnores.ts`) is the tracked audit configuration:
-`{ "version": 2, "ignored": [{ "id", "reason" }], "ignoredPages"?, "checks"?, "tokens"?, "placeholders"? }`. One file
+`{ "version": 2, "ignored": [{ "id", "reason"? }], "ignoredPages"?, "checks"?, "tokens"?, "placeholders"? }`. One file
 holds both ignores and settings, rather than a second `.stacki/lint.json`: both are "how this
 project audits itself", edited from the same panel and Settings tab, and one file is one write
 witnessed against one set of bytes. Version 1 (ignores only) still reads and is written back as
 version 2; settings at their defaults are left out of the file.
 
-- `ignoredPages`: `[{ "file", "reason" }]`, at most 500, `file` project-relative and unique. A page entry
+- `reason` is optional on every entry: Ignore is one click, so a plain ignore is written without the
+  key and reads back as no reason. Files written while a reason was required read unchanged and keep
+  their reasons. An entry without `reason` is refused by earlier builds, which required it.
+- `ignoredPages`: `[{ "file", "reason"? }]`, at most 500, `file` project-relative and unique. A page entry
   silences every finding of every check in that file; finding-level `ignored` entries are separate and
   stay when a page is unignored. Written only when non-empty, so older files read unchanged; a file
   that has the key is refused by older builds (unknown field), as every addition to this file is.
@@ -2696,8 +2723,8 @@ version 2; settings at their defaults are left out of the file.
   (booleans), `allowed` (raw values, compared lower-cased).
 - `placeholders`: phrases; one word must be the whole text, several may be part of it.
 - Lists hold at most 200 items of at most 120 characters; ignores at most 2,000 entries, ids at
-  most 1,024 and reasons at most 500 characters. Unknown fields, blank reasons, a repeated id and
-  settings under version 1 are refused.
+  most 1,024 and reasons at most 500 characters. Unknown fields, a reason that is present but blank
+  or not a string, a repeated id and settings under version 1 are refused.
 
 It travels as the `audits` metadata kind through `project:metadata` / `project:writeMetadata`
 (writes need `panel:audits` or `settings:audits`). An id is `findingId`

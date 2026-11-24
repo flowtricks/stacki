@@ -111,6 +111,7 @@ import { registerAuditHandlers } from './handlers/auditHandlers';
 import { registerAiHandlers, registerAiSendChannels } from './handlers/ai/aiHandlers';
 import { attachmentThumbnail } from './handlers/ai/attachmentThumbnail';
 import { createGitHubIdentity, registerRoleHandlers } from './handlers/roleAccess';
+import { createFolderOpenQueue, folderOpenChoice, launchFolderArguments } from './project/folderOpen';
 
 // The facade keeps native Electron registration behind a parsed payload boundary.
 // Desktop does not enforce project roles (.stacki/roles.json): it previews them, and only Studio enforces
@@ -118,6 +119,14 @@ import { createGitHubIdentity, registerRoleHandlers } from './handlers/roleAcces
 const githubIdentity = createGitHubIdentity();
 const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
 setToolPathHome(app.getPath('home'));
+
+// One Stacki per person, packaged: a second launch (a folder dropped on the program or a shortcut on
+// Windows and Linux, `stacki <folder>` in a terminal) hands its arguments to this one (`second-instance`
+// below) and quits. Development runs skip the lock, so a dev window and an installed Stacki can run side by
+// side; the arguments of the dev launch itself are still read.
+if (app.isPackaged && !app.requestSingleInstanceLock()) {
+  app.exit(0);
+}
 
 let mainWindow: Window | undefined = undefined;
 // The project's dev server and its home-page pictures: state of this process,
@@ -442,6 +451,13 @@ function createWindow() {
   keepAppFramesHome(mainWindow.webContents, openExternalLink);
 
   watchWindowHealth(mainWindow);
+  // A new page (a reload, leaving one project for another) is not listening yet: folders wait for its take.
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      folderQueue.hold();
+    }
+  });
+  mainWindow.webContents.on('render-process-gone', () => folderQueue.hold());
   // A renderer that does not load leaves an empty window; the log says why, and the health watch above shows the recovery screen.
   loadApp(mainWindow).catch((error: unknown) => {
     console.error('[window] the renderer did not load:', error);
@@ -462,6 +478,7 @@ function createWindow() {
   mainWindow.on('close', () => bootStore?.flush());
   mainWindow.on('closed', () => {
     openProjectRoot = undefined;
+    folderQueue.hold();
     stopWatchingProject();
     devServers.stop();
     stopAllServices();
@@ -884,6 +901,62 @@ function send(channel: string, payload?: unknown) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Folders from outside the app: the icon, the command line, a second launch (electron/project/folderOpen.ts)
+// ---------------------------------------------------------------------------
+
+const folderQueue = createFolderOpenQueue((folder) => {
+  send('project:folderOpened', folderOpenChoice(folder));
+  bringWindowForward();
+});
+
+function receiveFolder(folder: string): void {
+  const arrival = folderQueue.add(folder);
+  if (arrival === 'full') {
+    console.warn('[folder-open] too many folders are waiting for the window; this one was not opened:', folder);
+  }
+  if (arrival === 'delivered') {
+    return;
+  }
+  // Held for the page to take as it mounts. macOS keeps the app running with no window: make one for it.
+  if (app.isReady()) {
+    if (mainWindow === undefined || mainWindow.isDestroyed()) {
+      createWindow();
+    } else {
+      bringWindowForward();
+    }
+  }
+}
+
+function bringWindowForward(): void {
+  const window = mainWindow;
+  if (window === undefined || window.isDestroyed()) {
+    return;
+  }
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.focus();
+}
+
+// A drop on the Dock icon, before the app is ready when the drop launched it. Default prevented, so macOS
+// knows the app took the folder.
+app.on('open-file', (event, filePath) => {
+  event.preventDefault();
+  receiveFolder(filePath);
+});
+app.on('second-instance', (_event, argv, workingDirectory) => {
+  bringWindowForward();
+  for (const folder of launchFolderArguments(argv, { skip: 1, workingDirectory })) {
+    receiveFolder(folder);
+  }
+});
+// This launch's own arguments: Electron and the app's folder lead them in development, the program alone packaged.
+for (const folder of launchFolderArguments(process.argv, { skip: process.defaultApp ? 2 : 1, workingDirectory: process.cwd() })) {
+  receiveFolder(folder);
+}
+ipcMain.handle('project:takeOpenedFolders', () => folderQueue.take().map((folder) => folderOpenChoice(folder)));
+
 function showMessageBox(parent: Window | undefined, options: MessageBoxOptions) {
   return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options);
 }
@@ -1133,6 +1206,8 @@ ipcMain.handle('recents:add', async (_event, projectPath) => {
     openedAt: Date.now(),
   });
   writeRecents(list.slice(0, 12));
+  // The Dock menu's and the taskbar's recent list; picking one comes back as `open-file` on macOS.
+  app.addRecentDocument(projectPath);
   return { ok: true as const };
 });
 

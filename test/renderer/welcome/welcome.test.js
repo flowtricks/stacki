@@ -103,6 +103,9 @@ const PIXEL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAA
   const toasts = [];
 
   dom.window.avb = {
+    // The window drop's inbox (src/features/welcome/FolderDropHost.tsx): nothing handed over.
+    takeOpenedFolders: async () => [],
+    onFolderOpened: () => () => {},
     listRecents: async () => recents.map((recent) => ({ ...recent })),
     removeRecent: async () => ({ ok: true }),
     refreshThumb: async (projectPath) => {
