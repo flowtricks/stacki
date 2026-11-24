@@ -552,15 +552,16 @@
 .app-overlay-heat {
   display: grid;
 }
-/* An app's frame overlay fills its item. Without a size, the iframe falls back
-   to the browser default of 300 × 150. */
+/* An app's frame overlay fills its item, which carries the anchor's size. An
+   iframe is a replaced element: without a width and height it keeps the browser
+   default of 300 × 150, even absolutely positioned with every inset. Block, so
+   no inline baseline gap shows under it. The frame's transparent background and
+   color scheme are set inline on every app frame (APP_FRAME_SURFACE). */
 .app-overlay-frame {
-  position: absolute;
-  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   border: 0;
-  background: transparent;
 }
 
 /* The Load App From GitHub popup: a fixed title, a body that takes the height

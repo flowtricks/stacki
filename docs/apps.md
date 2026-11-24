@@ -944,7 +944,8 @@ type AppOverlayItem =
   like any app page. Without `interactive`, clicks pass through it to the canvas.
 - **Hand a `frame` its data with `overlay.post`**, never through storage or the URL: see [Messages to
   overlay frames](#messages-to-overlay-frames). `stacki.storage` is for values that outlive the
-  app; a frame that polls it, or is re-set to reload, lags and flickers.
+  app; a frame that polls it lags, and one given a new `path` or `id` to show new data reloads
+  and flickers.
 - `interactive` boxes, labels and pins send `overlay.click`; `draggable` ones send `overlay.drag`
   (see [Dragging](#dragging)). Only boxes, labels and pins take `draggable`.
 - Only clicks and drags are an item's. Wheel and trackpad scrolling and pinch zoom always reach the
@@ -981,9 +982,13 @@ stacki.on('overlay.click', ({ itemId }) => console.log('clicked', itemId));
 ### Messages to overlay frames
 
 `overlay.post` is how an app hands data to an overlay `frame` item, and how the frame answers. A
-`frame` item is a whole document: setting the overlay again with a changed item reloads it, and the
-frame cannot read the app's memory or its window. So set the item once, then post it the data it
-should show, as often as it changes. `overlay.post({ itemId, data })` from the app reaches
+`frame` item is a whole document, and it cannot read the app's memory or its window. Setting the
+overlay again keeps a frame item's document, with its state and its `overlay.message` listener, as
+long as the item keeps its `id` and its `path`: a new anchor or `interactive` only moves, resizes or
+retargets it, with no reload and no flicker. A new `path` loads that page in the same frame; a new
+`id`, or leaving the item out, closes the frame, and an item that comes back gets a fresh one.
+Stacki also reloads a frame when the app's files change on disk. So set the item once, then post it
+the data it should show, as often as it changes. `overlay.post({ itemId, data })` from the app reaches
 the frame that draws `itemId`; inside that frame, `overlay.post({ data })` (no `itemId`) reaches the
 app's own frames, its window and custom frames. Each side hears the other with `overlay.message`:
 
