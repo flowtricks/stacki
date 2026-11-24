@@ -6,7 +6,7 @@
 // PAGE_LOAD_LINE_MS_MAX it finishes on its own, so a page that errors or never answers still clears it.
 
 import { useEffect, useState } from 'react';
-import { usePageLoading } from './pageLoadState';
+import { usePageLoad } from './pageLoadState';
 
 /** The longest the line waits for a page before it completes anyway. */
 export const PAGE_LOAD_LINE_MS_MAX = 20000;
@@ -16,15 +16,20 @@ export const PAGE_LOAD_LINE_FINISH_MS = 450;
 type Phase = 'idle' | 'loading' | 'finishing';
 
 export function PageLoadLine() {
-  const loading = usePageLoading();
+  const load = usePageLoad();
   const [phase, setPhase] = useState<Phase>('idle');
-  // Derived during render so the line is up in the same frame the frame starts loading.
-  if (loading && phase !== 'loading') {
-    setPhase('loading');
+  const [seen, setSeen] = useState(0);
+  // Derived during render so the line is up in the same frame the frame starts loading. It rises only for a
+  // wait it has not seen: after giving up, the same still-waiting frame must not raise it again.
+  if (load !== seen) {
+    setSeen(load);
+    if (load !== 0) {
+      setPhase('loading');
+    }
   }
   useEffect(() => {
     if (phase === 'loading') {
-      if (loading) {
+      if (load !== 0) {
         const giveUp = window.setTimeout(() => setPhase('finishing'), PAGE_LOAD_LINE_MS_MAX);
         return () => window.clearTimeout(giveUp);
       }
@@ -36,7 +41,7 @@ export function PageLoadLine() {
       return () => window.clearTimeout(done);
     }
     return undefined;
-  }, [phase, loading]);
+  }, [phase, load]);
   if (phase === 'idle') {
     return undefined;
   }

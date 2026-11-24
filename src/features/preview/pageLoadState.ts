@@ -14,14 +14,17 @@ export const PAGE_LOAD_FRAMES_MAX = 16;
 
 const loadingIds = new Set<string>();
 const listeners = new Set<() => void>();
-let loading = false;
+// Numbers each wait as it starts. Why a number and not a yes or no: the line gives up on a page that never
+// answers while its frame still waits, so only a new number tells it that another page switch has begun.
+let startSerial = 0;
+let load = 0;
 
 function publish(): void {
-  const next = loadingIds.size > 0;
-  if (next === loading) {
+  const next = loadingIds.size > 0 ? startSerial : 0;
+  if (next === load) {
     return;
   }
-  loading = next;
+  load = next;
   for (const listener of listeners) {
     listener();
   }
@@ -32,6 +35,7 @@ export function pageLoadStart(frameId: string): void {
   assert(frameId.length > 0, 'pageLoadStart: a frame id is never empty');
   if (loadingIds.size < PAGE_LOAD_FRAMES_MAX) {
     loadingIds.add(frameId);
+    startSerial += 1;
   }
   assert(loadingIds.size <= PAGE_LOAD_FRAMES_MAX, 'pageLoadStart: the tracked frames are bounded');
   publish();
@@ -49,11 +53,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Whether any frame is still waiting for its page. */
-export function usePageLoading(): boolean {
+/** 0 while every frame has its page; else the number of the newest wait, which changes on each new one. */
+export function usePageLoad(): number {
   return useSyncExternalStore(
     subscribe,
-    () => loading,
-    () => false,
+    () => load,
+    () => 0,
   );
 }

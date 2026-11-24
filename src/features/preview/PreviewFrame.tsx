@@ -27,7 +27,8 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
   const attach = useFrameReady(target, frameRef, setShown);
   const loading = shown?.key !== target.key;
   const retained = loading ? shown : undefined;
-  // The address bar draws the loading line from this; ending on unmount keeps it from sticking.
+  // The address bar draws the loading line from this; ending on unmount keeps it from sticking. Each page
+  // switched to is a new report, so the line returns even after it gave up on one that never answered.
   const frameId = useId();
   useEffect(() => {
     if (!loading) {
@@ -35,7 +36,7 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
     }
     pageLoadStart(frameId);
     return () => pageLoadEnd(frameId);
-  }, [loading, frameId]);
+  }, [loading, frameId, target.key]);
   const frames = retained ? [retained, target] : [target];
   return (
     <>
