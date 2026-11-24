@@ -100,6 +100,10 @@ test('asset operations validate payloads, parse replies, and preserve failures',
   });
   assert.equal((await bridge.makeAssetDirectory('/project', 'public', 'images')).ok, true);
   assert.equal(calls.length, 6);
+  global.window.avb.moveAsset = async () => ({ ok: true, rel: 'public/images/a-1.png' });
+  assert.deepEqual(await bridge.moveAsset('/project', 'public/a.png', 'public/images'), { ok: true, value: 'public/images/a-1.png' });
+  global.window.avb.moveAsset = async () => ({ ok: true, rel: 7 });
+  await assert.rejects(async () => bridge.moveAsset('/project', 'public/a.png', 'public/images'), 'a path that is not text is refused');
 
   global.window.avb.listAssets = async () => {
     throw new Error('disk offline');

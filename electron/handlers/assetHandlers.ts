@@ -79,7 +79,8 @@ function registerAssetsMoveHandlers({
     fs.mkdirSync(toDirectory, { recursive: true });
     fs.renameSync(from, target);
     send('assets:changed', {});
-    return { ok: true as const };
+    // Where it landed: a taken name is moved in as `name-1`, and Undo must move that file, never the one already there.
+    return { ok: true as const, rel: toPosix(path.relative(path.resolve(projectPath), target)) };
   });
 
   ipcMain.handle('assets:rename', async (_event, { projectPath, rel, newName }) => {

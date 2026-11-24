@@ -261,37 +261,52 @@ function useAssetActions(props: AssetsPanelProps, state: AssetPanelState): Asset
 function useAssetMove(props: AssetsPanelProps) {
   const { project, showToast, onRecordUndo } = props;
   const translate = useTranslate();
+  // Where the moved file or folder is afterwards, or undefined when it did not move (already told).
   const execute = useCallback(
-    async (fromRel: string, toDirectoryRel: string): Promise<boolean> => {
+    async (fromRel: string, toDirectoryRel: string): Promise<string | undefined> => {
       const result = await moveAsset(project.path, fromRel, toDirectoryRel);
       if (!result.ok) {
         showToast(result.error, 'error');
-        return false;
+        return undefined;
       }
-      if (!result.value) {
+      if (result.value === false) {
         showToast(translate('assets.toast.alreadyGone'), 'error');
-        return false;
+        return undefined;
       }
-      return true;
+      const name = basename(fromRel);
+      return typeof result.value === 'string' ? result.value : toDirectoryRel ? `${toDirectoryRel}/${name}` : name;
     },
     [project.path, showToast, translate],
   );
+  const rename = useCallback(
+    async (rel: string, newName: string): Promise<boolean> => reportResult(await renameAsset(project.path, rel, newName), showToast),
+    [project.path, showToast],
+  );
   return useCallback(
     async (fromRel: string, toDirectoryRel: string): Promise<void> => {
-      if (!(await execute(fromRel, toDirectoryRel))) {
+      const landed = await execute(fromRel, toDirectoryRel);
+      if (landed === undefined) {
         return;
       }
       const fromDirectory = parentOf(fromRel);
       const name = basename(fromRel);
-      const landedRel = toDirectoryRel ? `${toDirectoryRel}/${name}` : name;
+      let movedRel = landed;
       onRecordUndo?.({
         label: translate('assets.undo.move', { name }),
         labelRef: messageRef('assets.undo.move', { name }),
-        undo: async () => void (await execute(landedRel, fromDirectory)),
-        redo: async () => void (await execute(fromRel, toDirectoryRel)),
+        // Back to its folder, then to its own name, which a move onto a taken name changed and references still use.
+        undo: async () => {
+          const back = await execute(movedRel, fromDirectory);
+          if (back !== undefined && basename(back) !== name) {
+            await rename(back, name);
+          }
+        },
+        redo: async () => {
+          movedRel = (await execute(fromRel, toDirectoryRel)) ?? movedRel;
+        },
       });
     },
-    [execute, onRecordUndo, translate],
+    [execute, onRecordUndo, rename, translate],
   );
 }
 

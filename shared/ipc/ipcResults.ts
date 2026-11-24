@@ -216,6 +216,8 @@ export interface IpcResults extends AiResults, AgentResults {
       }
     | {
         readonly ok: true;
+        /** Where the file or folder landed; its name differs from the source's when that name was taken. */
+        readonly rel: string;
       };
   readonly 'assets:pickUpload': {
     readonly added: number;

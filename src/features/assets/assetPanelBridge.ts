@@ -65,7 +65,7 @@ export function moveAsset(projectPath: string, fromRel: string, toDirectoryRel: 
     fromRel: parseAssetRelativePath(fromRel),
     toDirRel: parseAssetDestination(toDirectoryRel),
   });
-  return request(parseOutcome, () => window.avb.moveAsset(payload));
+  return request(parseMoved, () => window.avb.moveAsset(payload));
 }
 
 export function renameAsset(projectPath: string, rel: string, newName: string) {
@@ -196,6 +196,16 @@ function parseAdded(input: unknown): number {
 
 function parseOutcome(input: unknown): boolean {
   return boolean(record(input)['ok']);
+}
+
+// False when the source was already gone. A path when main says where it landed; a host that never renames a moved file
+// (Studio refuses a taken name) answers true.
+function parseMoved(input: unknown): string | boolean {
+  const value = record(input);
+  if (!boolean(value['ok'])) {
+    return false;
+  }
+  return value['rel'] === undefined ? true : parseAssetRelativePath(text(value['rel']));
 }
 
 function parseSuccess(input: unknown): void {
