@@ -43,8 +43,9 @@ buildSync({
 const hold = require(output);
 
 test('the viewport follows the space it has, growing and shrinking', () => {
-  assert.deepEqual(hold.previewViewport(undefined, { width: 500, height: 600 }, undefined), { width: 500, height: 600, scale: 1 });
-  assert.deepEqual(hold.previewViewport(undefined, { width: 1400, height: 600 }, undefined), { width: 1400, height: 600, scale: 1 });
+  // A fluid frame keeps 9px each side for the canvas's scrollbar (previewViewport.ts): 18px less than its container.
+  assert.deepEqual(hold.previewViewport(undefined, { width: 500, height: 600 }, undefined), { width: 482, height: 600, scale: 1 });
+  assert.deepEqual(hold.previewViewport(undefined, { width: 1400, height: 600 }, undefined), { width: 1382, height: 600, scale: 1 });
   const fixed = hold.previewViewport(768, { width: 400, height: 600 }, undefined);
   assert.equal(fixed.width, 768);
   assert.equal(fixed.scale, (400 - 24) / 768);
@@ -98,7 +99,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
   const root = createRoot(document.getElementById('root'));
   try {
     await act(() => root.render(React.createElement(Canvas)));
-    assert.equal(last().width, 2000);
+    assert.equal(last().width, 2000 - 18, 'the container less the scrollbar’s two gutters');
     assert.equal(last().settling, false);
     await act(() => hold.setPanelDragPhase('dragging'));
     assert.equal(last().settling, true, 'The frame skips its width transition during the drag');
@@ -109,7 +110,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
     }
     assert.equal(renders.length, dragStart, 'A fluid frame follows by CSS: no preview render mid-drag');
     await act(() => hold.setPanelDragPhase('idle'));
-    assert.equal(last().width, 2100, 'Release measures once, with the final width');
+    assert.equal(last().width, 2100 - 18, 'Release measures once, with the final width');
     // Counted among the release frames (settling): the transition's own end is a timer that a loaded
     // runner can fire inside this act, and it is one more render whatever the number of steps.
     const releaseRenders = renders.slice(dragStart).filter((render) => render.settling);
@@ -120,7 +121,7 @@ test('the canvas follows a panel drag live and renders the fluid frame once, on 
     );
     assert.equal(last().settling, false, 'The transition returns the frame after release');
     await resize(1700);
-    assert.equal(last().width, 1700, 'Without a drag the canvas follows its container');
+    assert.equal(last().width, 1700 - 18, 'Without a drag the canvas follows its container');
     // A fixed-width frame rescales at each step, both ways, because its scale is React state.
     device = 'tablet';
     await act(() => root.render(React.createElement(Canvas)));

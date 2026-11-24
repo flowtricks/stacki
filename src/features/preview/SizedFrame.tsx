@@ -13,15 +13,25 @@
 import type { ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { PreviewSizing } from './usePreviewSizing';
+import { CanvasScrollbar } from './CanvasScrollbar';
+import { FLUID_FRAME_WIDTH } from './previewViewport';
 import './previewViewport.css';
 
-/** The frame, sized and scaled to the canvas, its page clipped to the rounded corners, and the handles. */
-export function SizedFrame({ sizing, children }: { readonly sizing: PreviewSizing; readonly children: ReactNode }) {
+export interface SizedFrameProps {
+  readonly sizing: PreviewSizing;
+  /** Frames this wide and wider keep Chromium's scrollbar (Settings, `canvasScrollbar`); undefined: the canvas draws its own everywhere. */
+  readonly chromiumFromPx: number | undefined;
+  readonly children: ReactNode;
+}
+
+/** The frame, sized and scaled to the canvas, its page clipped to the rounded corners, the page's scrollbar and the handles. */
+export function SizedFrame({ sizing, chromiumFromPx, children }: SizedFrameProps) {
   const scale = sizing.viewport.scale;
   assert(scale > 0, 'The canvas scale is positive');
   assert(scale <= 1, 'The canvas never scales a page up');
   const moving = sizing.resizing || sizing.panelSettling;
-  // A fluid frame (Desktop, the all-breakpoints canvas) covers the canvas edge to edge (no gutter, radius or shadow): the handles sit inside it.
+  // A fluid frame (Desktop, the all-breakpoints canvas) fills the canvas but for a narrow gutter each side, where the
+  // scrollbar sits (previewViewport.ts), with no radius or shadow: the handles sit inside it.
   const flush = sizing.width === undefined;
   return (
     <div
@@ -31,21 +41,24 @@ export function SizedFrame({ sizing, children }: { readonly sizing: PreviewSizin
       // without a render (usePreviewSizing puts off its measure until release).
       style={
         sizing.width === undefined
-          ? { width: '100%', height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
+          ? { width: FLUID_FRAME_WIDTH, height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
           : { width: sizing.viewport.width, height: sizing.viewport.height, bottom: 'auto', transform: `translateX(-50%) scale(${scale})` }
       }
     >
       <div className="frame-clip">{children}</div>
+      <CanvasScrollbar frameRef={sizing.frameRef} scale={scale} chromiumFromPx={chromiumFromPx} />
       <ResizeHandles sizing={sizing} />
     </div>
   );
 }
 
 /** The preview mode's stage: the area below the title bar, the frame centred in it as on the canvas. */
-export function PreviewModeStage({ sizing, children }: { readonly sizing: PreviewSizing; readonly children: ReactNode }) {
+export function PreviewModeStage({ sizing, chromiumFromPx, children }: SizedFrameProps) {
   return (
     <div className="preview-mode preview-mode-stage" dir="ltr" ref={sizing.wrapRef}>
-      <SizedFrame sizing={sizing}>{children}</SizedFrame>
+      <SizedFrame sizing={sizing} chromiumFromPx={chromiumFromPx}>
+        {children}
+      </SizedFrame>
     </div>
   );
 }

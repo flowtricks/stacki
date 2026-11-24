@@ -256,6 +256,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Сохраняет скрытый снимок до и после каждого хода ИИ, чтобы показывать изменения. Не добавляет коммиты в историю. Если выключить, большие проекты работают быстрее.',
   'settings.editor.ai.trackChanges.label': 'Снимок до и после каждого изменения ИИ',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} и шире',
+  'settings.editor.canvas.scrollbar.info':
+    'Выключено: тонкая полоса прокрутки рядом со страницей, и страница получает всю ширину контрольной точки, как на телефоне. С контрольной точки: собственная полоса прокрутки Chromium на ней и шире, которая занимает ширину, как на компьютере с мышью.',
+  'settings.editor.canvas.scrollbar.label': 'Полоса прокрутки Chromium',
+  'settings.editor.canvas.scrollbar.off': 'Выключено',
   'settings.editor.code.chips.info':
     'Переменные, easing, тени, градиенты и clip-path в CSS-коде показываются как чипы, открывающие свои редакторы. Выключено: обычный CSS.',
   'settings.editor.code.chips.label': 'Показывать CSS-чипы в коде',
@@ -268,6 +273,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Анонимный счётчик использования',
   'settings.editor.saveFailed': 'Применено для этого сеанса, но не сохранено. Проверьте место на диске и повторите попытку.',
   'settings.editor.section.ai': 'ИИ',
+  'settings.editor.section.canvas': 'Холст',
   'settings.editor.section.code': 'Код',
   'settings.editor.section.general': 'Общие',
   'settings.editor.section.privacy': 'Конфиденциальность',

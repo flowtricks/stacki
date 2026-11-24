@@ -1,5 +1,5 @@
-// Goal: in the browser Desktop ships, the Desktop device in a narrow pane draws the page at the pane's own width,
-// never scaled or shrunk: an 882px pane lays the page out at 882px, so its `(width < 64rem)` rules (Laptop's)
+// Goal: in the browser Desktop ships, the Desktop device in a narrow pane draws the page at the pane's own width less
+// the scrollbar's two 9px gutters, never scaled or shrunk: an 882px pane lays the page out at 864px, so its `(width < 64rem)` rules (Laptop's)
 // apply, as in a browser window that size, and the toolbar says Laptop rather than Desktop. Switching devices
 // never draws a frame of the page at a width other than the old or the new device's (no flicker through the pane
 // width).
@@ -21,8 +21,10 @@ const { buildSync } = require('esbuild');
 const { repoPath } = require('../../helpers/sources.js');
 
 const PANE = { width: 882, height: 700 };
+// The fluid frame leaves a 9px gutter on each side for the canvas's scrollbar (previewViewport.ts `FLUID_GUTTER_PX`).
+const FLUID_PAGE_WIDTH_PX = PANE.width - 18;
 const SWITCHES = ['laptop', 'desktop', 'tablet', 'desktop', 'phone', 'desktop'];
-const DEVICE_WIDTH_PX = { laptop: 1023, tablet: 767, phone: 479, desktop: PANE.width };
+const DEVICE_WIDTH_PX = { laptop: 1023, tablet: 767, phone: 479, desktop: FLUID_PAGE_WIDTH_PX };
 
 // The import paths are JSON-quoted: a Windows path's `\` inside a plain quoted string is an
 // escape, so a quoted literal only works on POSIX.
@@ -135,9 +137,9 @@ function check(output) {
   if (before === undefined || after === undefined) {
     return ['both modes were read'];
   }
-  // The fluid all-breakpoints frame and Desktop both fill the 882px pane, and so agree.
-  if (before.innerWidth !== PANE.width) {
-    failures.push(`before: the filling page is the pane's width (${before.innerWidth})`);
+  // The fluid all-breakpoints frame and Desktop both fill the 882px pane less its gutters, and so agree.
+  if (before.innerWidth !== FLUID_PAGE_WIDTH_PX) {
+    failures.push(`before: the filling page is the pane's width less its gutters (${before.innerWidth})`);
   }
   if (before.laptop !== true) {
     failures.push('before: the filling page matches (width < 64rem)');
@@ -151,8 +153,8 @@ function check(output) {
   if (after.laptop !== true) {
     failures.push("after: window.matchMedia('(width < 64rem)').matches is true inside the frame, as in an 882px window");
   }
-  if (after.innerWidth !== PANE.width) {
-    failures.push(`after: the page is laid out at the pane's width (${after.innerWidth})`);
+  if (after.innerWidth !== FLUID_PAGE_WIDTH_PX) {
+    failures.push(`after: the page is laid out at the pane's width less its gutters (${after.innerWidth})`);
   }
   if (after.background !== 'rgb(255, 0, 0)') {
     failures.push(`after: the Laptop rule paints the page (${after.background})`);

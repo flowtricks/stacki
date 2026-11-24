@@ -211,6 +211,11 @@ export const messages = {
   'settings.editor.ai.reviewChanges.label': '询问是否保留 AI 更改',
   'settings.editor.ai.trackChanges.info': '在每轮 AI 操作前后保存隐藏快照以显示更改。不会在历史记录中添加提交。关闭后在大型项目中速度更快。',
   'settings.editor.ai.trackChanges.label': '每次 AI 更改前后创建快照',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} 及更宽',
+  'settings.editor.canvas.scrollbar.info':
+    '关闭：在页面旁显示一条细滚动条，页面像在手机上一样占满断点的全部宽度。从某个断点起：在该宽度及更宽时使用 Chromium 自带的滚动条，会像在使用鼠标的电脑上一样占用宽度。',
+  'settings.editor.canvas.scrollbar.label': 'Chromium 滚动条',
+  'settings.editor.canvas.scrollbar.off': '关闭',
   'settings.editor.code.chips.info': '代码中的 CSS 变量、缓动、阴影、渐变和 clip-path 会显示为可点击的标签，点击可打开对应的编辑器。关闭后显示纯 CSS。',
   'settings.editor.code.chips.label': '在代码中显示 CSS 标签',
   'settings.editor.loading': '正在加载偏好设置…',
@@ -221,6 +226,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': '匿名使用计数',
   'settings.editor.saveFailed': '已在本次会话中生效，但无法保存。请检查磁盘空间后重试。',
   'settings.editor.section.ai': 'AI', // same
+  'settings.editor.section.canvas': '画布',
   'settings.editor.section.code': '代码',
   'settings.editor.section.general': '通用',
   'settings.editor.section.privacy': '隐私',

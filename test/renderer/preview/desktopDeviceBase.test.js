@@ -1,5 +1,5 @@
-// Goal: the Desktop device draws the page at the canvas pane's own width, never scaled or shrunk. In a narrow
-// window the page renders at the pane width, so its media queries switch to the laptop, tablet or phone layout
+// Goal: the Desktop device draws the page at the canvas pane's own width less the scrollbar's two 9px gutters, never
+// scaled or shrunk. In a narrow window the page renders at that width, so its media queries switch to the laptop, tablet or phone layout
 // (as in a browser window that size). The toolbar and the style panel tell the truth about it: a pane narrower
 // than the Laptop canvas reads as Laptop (or Tablet, Phone), so no `< 64rem` row ever wears the Desktop icon,
 // and following lands on the query in effect at the pane's width.
@@ -17,7 +17,7 @@ const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
 const { previewFrameWidth } = loadRenderer('src/features/preview/usePreviewSizing.ts');
-const { previewViewport } = loadRenderer('src/features/preview/previewViewport.ts');
+const { FLUID_GUTTER_PX, fluidFrameWidthPx, previewViewport } = loadRenderer('src/features/preview/previewViewport.ts');
 const { activeDeviceFor, deviceForWidth } = loadRenderer('shared/properties/breakpointIcon.ts');
 const { canvasTriggerIcon } = loadRenderer('src/features/style/embed/contextRows.ts');
 const { followedContextKey } = loadRenderer('src/features/style/model/followWidth.ts');
@@ -70,8 +70,8 @@ function canvasAt(device, panePx, contexts) {
   const viewport = previewViewport(width, { width: panePx, height: PANE_HEIGHT_PX }, undefined);
   const key = followedContextKey(contexts, viewport.width, ROOT_FONT_SIZE_PX);
   const icon = canvasTriggerIcon(key, { device, widthPx: viewport.width }, BREAKPOINT_DEFAULTS);
-  // The canvas hook passes the frame's own width, or the pane's for a fluid frame (usePreviewSizing).
-  return { width, viewport, key, icon, active: activeDeviceFor(device, width ?? panePx, BREAKPOINT_DEFAULTS) };
+  // The canvas hook passes the frame's own width, or the pane's less its gutters for a fluid frame (usePreviewSizing).
+  return { width, viewport, key, icon, active: activeDeviceFor(device, width ?? fluidFrameWidthPx(panePx), BREAKPOINT_DEFAULTS) };
 }
 
 for (const [fixture, contexts] of Object.entries(FIXTURES)) {
@@ -80,7 +80,7 @@ for (const [fixture, contexts] of Object.entries(FIXTURES)) {
       const canvas = canvasAt('desktop', panePx, contexts);
       const expected = DESKTOP_EXPECTED[panePx];
       assert.equal(canvas.width, undefined, 'Desktop is a fluid frame: it has no width of its own');
-      assert.equal(canvas.viewport.width, panePx, 'the page is as wide as the pane');
+      assert.equal(canvas.viewport.width, panePx - FLUID_GUTTER_PX.side, 'the page is as wide as the pane less the scrollbar’s gutters');
       assert.equal(canvas.viewport.scale, 1, 'never scaled or shrunk');
       assert.equal(canvas.viewport.height, PANE_HEIGHT_PX, 'the page is as tall as the pane');
       assert.equal(canvas.active, expected.device, 'the toolbar presses the device the pane width belongs to');
@@ -108,8 +108,8 @@ test('the Desktop icon is never worn at a width inside a narrower breakpoint, at
     for (const contexts of Object.values(FIXTURES)) {
       const canvas = canvasAt('desktop', panePx, contexts);
       assert.equal(canvas.viewport.scale, 1, `${panePx}px: Desktop never scales`);
-      assert.equal(canvas.viewport.width, panePx, `${panePx}px: Desktop is drawn at the pane width`);
-      if (panePx < 1024) {
+      assert.equal(canvas.viewport.width, panePx - FLUID_GUTTER_PX.side, `${panePx}px: Desktop is drawn at the pane width less its gutters`);
+      if (canvas.viewport.width < 1024) {
         assert.notEqual(canvas.active, 'desktop', `${panePx}px is inside a narrower breakpoint, so the bar cannot say Desktop`);
         assert.notEqual(canvas.icon, 'desktop', `${panePx}px: no row wears the Desktop icon`);
       } else {
@@ -182,11 +182,16 @@ test('other devices keep their own widths and a custom width stays custom', () =
   assert.equal(previewFrameWidth('laptop', 900, BREAKPOINT_DEFAULTS), 1023, 'a stale custom width is never read on a device');
 });
 
-// A fluid frame covers the pane at scale 1 and reserves no gutter; a fixed width keeps the framed 24px and 32px gutters.
-test('previewViewport: a fluid frame covers the pane, a fixed one leaves its gutter', () => {
+// A fluid frame fills the pane's height at scale 1 and keeps 9px each side for the scrollbar; a fixed width keeps the
+// framed 24px and 32px gutters. An unmeasured or tiny pane never gives a negative width.
+test('previewViewport: a fluid frame fills the pane less the scrollbar’s gutters, a fixed one leaves its gutter', () => {
   const pane = { width: 800, height: 600 };
   const fluid = previewViewport(undefined, pane, undefined);
-  assert.deepEqual(fluid, { width: 800, height: 600, scale: 1 });
+  assert.deepEqual(fluid, { width: 782, height: 600, scale: 1 });
+  assert.equal(fluidFrameWidthPx(800), 782);
+  assert.equal(fluidFrameWidthPx(10), 0);
+  assert.equal(fluidFrameWidthPx(0), 0);
+  assert.equal(previewViewport(undefined, { width: 10, height: 600 }, undefined).width, 1, 'a frame keeps at least a pixel');
   const fixed = previewViewport(1440, pane, undefined);
   assert.equal(fixed.scale, (800 - 24) / 1440);
   assert.equal(Math.round(fixed.height * fixed.scale), 600 - 32);

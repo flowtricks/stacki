@@ -221,6 +221,11 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'बदलाव दिखाने के लिए हर AI टर्न से पहले और बाद एक छिपा स्नैपशॉट सहेजता है। आपके इतिहास में कमिट नहीं जोड़ता। बंद रखने पर बड़े प्रोजेक्ट में तेज़ चलता है।',
   'settings.editor.ai.trackChanges.label': 'हर AI बदलाव से पहले और बाद स्नैपशॉट लें',
+  'settings.editor.canvas.scrollbar.from': '{breakpoint} और उससे चौड़ा',
+  'settings.editor.canvas.scrollbar.info':
+    'बंद: पेज के बगल में एक पतला स्क्रॉलबार, जिससे पेज को ब्रेकपॉइंट की पूरी चौड़ाई मिलती है, जैसे फ़ोन पर। किसी ब्रेकपॉइंट से: वहाँ और उससे चौड़े में Chromium का अपना स्क्रॉलबार, जो माउस वाले कंप्यूटर की तरह चौड़ाई लेता है।',
+  'settings.editor.canvas.scrollbar.label': 'Chromium स्क्रॉलबार',
+  'settings.editor.canvas.scrollbar.off': 'बंद',
   'settings.editor.code.chips.info':
     'CSS कोड में वेरिएबल, ईज़िंग, शैडो, ग्रेडिएंट और क्लिप-पाथ चिप के रूप में दिखते हैं जो उनके एडिटर खोलते हैं। बंद होने पर: सादा CSS।',
   'settings.editor.code.chips.label': 'कोड में CSS चिप दिखाएँ',
@@ -233,6 +238,7 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'गुमनाम उपयोग-गणना',
   'settings.editor.saveFailed': 'इस सत्र के लिए लागू हुआ, पर सहेजा नहीं जा सका। डिस्क स्पेस जाँचें और फिर कोशिश करें।',
   'settings.editor.section.ai': 'AI', // same
+  'settings.editor.section.canvas': 'कैनवास',
   'settings.editor.section.code': 'कोड',
   'settings.editor.section.general': 'सामान्य',
   'settings.editor.section.privacy': 'गोपनीयता',

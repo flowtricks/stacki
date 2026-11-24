@@ -19,6 +19,7 @@ import { listenForDesign, markFrameMode } from './frameDesign';
 import { listenForQueries, startWhenReady } from './frameQueries';
 import { rememberScrollAcrossRecovery } from './frameScrollMemory';
 import { reportErrorOverlay } from './frameErrorOverlay';
+import { installPageScrollReport } from './frameScrollbar';
 
 // A Stacki app's frame (stacki-app:) is the app's own sandboxed document: it
 // gets neither half. It talks to Stacki only through postMessage and the RPC.
@@ -50,6 +51,9 @@ if (location.protocol === 'stacki-app:') {
   listenForDesign();
   listenForQueries();
   startWhenReady();
+  // The canvas draws the page's scrollbar beside the frame from these reports (frameScrollbar.ts). Last, so the
+  // canvas's own listeners are in place whatever happens here.
+  installPageScrollReport(post);
 } else {
   exposeBridge();
 }

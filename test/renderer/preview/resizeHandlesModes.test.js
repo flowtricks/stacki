@@ -46,7 +46,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 test('AppShell draws the preview mode through the shared stage and the window size state', () => {
   const shell = fs.readFileSync(repoPath('src/app/shell/AppShell.tsx'), 'utf8');
-  assert.match(shell, /<PreviewModeStage sizing=\{sizing\}>/);
+  assert.match(shell, /<PreviewModeStage sizing=\{sizing\} chromiumFromPx=\{chromiumFromPx\}>/);
   assert.match(shell, /usePreviewSizing\(app\.device, app\.previewDimensions, breakpoints, \{ deviceShortcuts: false \}, app\.setDevice\)/);
   const panes = fs.readFileSync(repoPath('src/app/shell/AppPanes.tsx'), 'utf8');
   assert.match(panes, /dimensions=\{app\.previewDimensions\}/);

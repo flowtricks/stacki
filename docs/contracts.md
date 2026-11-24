@@ -615,6 +615,18 @@ the value cache's selection and history invalidation and never becomes editable 
   not a `replay`: a freshly reloaded page posts its click late, and the click ladder's replay is
   the same press answered again, so either used to close what the person had opened since (soak
   SP-04). A press without `pressedAtMs` (Studio's preview client) is taken at its word.
+- The page's scrollbar (`shared/properties/canvasScrollbar.ts`, frame half `electron/preload/frameScrollbar.ts`,
+  canvas half `src/features/preview/CanvasScrollbar.tsx`). A canvas frame scrolls inside itself, and Chromium's
+  classic scrollbar there took about 15px from the page (a 320px phone frame laid out in 305px while its media
+  queries read 320). Every sized frame (`SizedFrame`: the canvas, interact mode and preview mode, Desktop and Studio)
+  is told on each page load `avb:canvas-scrollbar` `{ chromiumFromPx? }` (a whole canvas width within the breakpoint
+  bounds; absent: none); the frame hides its root scrollbar (`scrollbar-width: none`) everywhere or below that width
+  with a media query, so a resize across it switches without a message. The frame reports `avb:page-scroll`
+  `{ topPx, heightPx, viewHeightPx, chromium }` (finite, never negative, at most `pagePxMax`) at most once per
+  animation frame and only when it changed: on scroll, resize, load, `avb:morphed` and a change of the page's height;
+  `chromium` stays true until the app's word arrives, so the canvas never draws a second bar. The canvas draws its own
+  thin bar from it, outside a framed device and over the page's right edge on a full frame, and a press or drag on it
+  sends `avb:page-scroll-to` `{ topPx }`, which the frame scrolls to at once. Only the root scrollbar is touched.
 - `preview:check` `{ projectPath, render }` → `PreviewVerdict`: main re-derives
   the token from the manifest, then reads every stamped file from disk
   (`electron/preview/previewCheck.ts`; a path outside the project is `missing`, a file
@@ -1022,6 +1034,16 @@ clip-paths, shadows and gradients with a small preview that opens the Style pane
 value (`src/features/style/codeChips/`). It changes only what is drawn: the text, a copy and every save
 are the CSS as written. Turned off, each open editor shows plain CSS at once. Studio and the demo have
 no app settings file and keep the default.
+
+`canvasScrollbar` (Settings > Editor > Canvas, "Chromium scrollbar"; default `off`, kept per person in
+`settings.json`) is the one preference that is not on or off: `off`, or a breakpoint id, meaning that
+breakpoint and every wider frame. `settings:set` carries it as `{ setting: 'canvasScrollbar', value }`
+(`parsePreferenceChange`, `shared/ipc/preferences.ts`), every other preference as `{ setting, enabled }`;
+the value is the stored text, so the renderer's parsed payload parses again unchanged in main. Off, the
+canvas draws its own thin scrollbar beside every frame and the page gets the breakpoint's whole width,
+as on a phone; from a breakpoint, frames at its canvas width and wider keep Chromium's own scrollbar, as
+a desktop browser with a mouse does. A breakpoint the open project does not have reads as Off. Studio and
+the demo keep Off.
 
 ## Interface language in the main process
 

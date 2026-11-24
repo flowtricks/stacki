@@ -47,6 +47,19 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.17
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.17.
+- **Features**
+  - phone preview over the LAN, Dictation tab, Astro copy
+  - ai: designer-friendly tool cards and a Running agents panel
+- **Fixes**
+  - preview: hover and pick by stacking order; one label; morph holds
+  - ui: Settings and dialogs tell problems as toasts, not paragraphs
+  - props: Props panel tells problems as toasts, not paragraphs
+  - style: Style and Insert tell problems as toasts and tooltips
+  - ui: Pages, CMS, Git, Apps and the rest tell problems as toasts
+
 ## 1.4.16
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.16.
