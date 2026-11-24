@@ -48,7 +48,6 @@ const saved = (enabled) => ({
   aiTrackChanges: enabled,
   aiReviewChanges: false,
   codeChips: true,
-  canvasScrollbar: 'off',
   saved: true,
 });
 

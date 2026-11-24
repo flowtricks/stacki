@@ -219,11 +219,6 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     '변경 사항을 표시하기 위해 AI 작업 전후에 숨겨진 스냅샷을 저장합니다. 기록에 커밋을 추가하지 않습니다. 큰 프로젝트에서는 끄는 것이 더 빠릅니다.',
   'settings.editor.ai.trackChanges.label': 'AI 변경 전후 스냅샷',
-  'settings.editor.canvas.scrollbar.from': '{breakpoint} 이상 너비',
-  'settings.editor.canvas.scrollbar.info':
-    '끄기: 페이지 옆에 얇은 스크롤바를 표시해 페이지가 휴대폰처럼 브레이크포인트 너비를 모두 씁니다. 브레이크포인트를 고르면 그 너비 이상에서는 Chromium 자체 스크롤바가 표시되며, 마우스를 쓰는 컴퓨터처럼 너비를 차지합니다.',
-  'settings.editor.canvas.scrollbar.label': 'Chromium 스크롤바',
-  'settings.editor.canvas.scrollbar.off': '끄기',
   'settings.editor.code.chips.info': 'CSS 코드의 변수, 이징, 그림자, 그라디언트, clip-path가 편집기를 여는 칩으로 표시됩니다. 끄면 일반 CSS로 표시됩니다.',
   'settings.editor.code.chips.label': '코드에 CSS 칩 표시',
   'settings.editor.loading': '환경설정 불러오는 중…',
@@ -235,7 +230,6 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': '익명 사용 횟수',
   'settings.editor.saveFailed': '이번 세션에는 적용되었지만 저장할 수 없습니다. 디스크 공간을 확인하고 다시 시도하세요.',
   'settings.editor.section.ai': 'AI', // same
-  'settings.editor.section.canvas': '캔버스',
   'settings.editor.section.code': '코드',
   'settings.editor.section.general': '일반',
   'settings.editor.section.privacy': '개인정보',

@@ -2,7 +2,8 @@
 // interact mode and in the preview mode (the play button in the title bar), and a drag in the
 // preview mode resizes the page as one on the canvas does: the frame takes the new size, the
 // device turns custom, the toolbar's width field shows the new width, and leaving and
-// re-entering the preview keeps that size.
+// re-entering the preview keeps that size. The side handles of a scaled frame stay the same distance out on screen, so
+// they never cover the canvas's scrollbar beside the frame.
 // Methodology: mount the real PreviewPane beside the real PreviewModeStage, wired the way
 // Desktop's AppShell PreviewModeView wires it (one window state holding the device and the
 // custom size, read by both), in jsdom with a fixed layout: every element measures 1600 by
@@ -46,7 +47,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 test('AppShell draws the preview mode through the shared stage and the window size state', () => {
   const shell = fs.readFileSync(repoPath('src/app/shell/AppShell.tsx'), 'utf8');
-  assert.match(shell, /<PreviewModeStage sizing=\{sizing\} chromiumFromPx=\{chromiumFromPx\}>/);
+  assert.match(shell, /<PreviewModeStage sizing=\{sizing\}>/);
   assert.match(shell, /usePreviewSizing\(app\.device, app\.previewDimensions, breakpoints, \{ deviceShortcuts: false \}, app\.setDevice\)/);
   const panes = fs.readFileSync(repoPath('src/app/shell/AppPanes.tsx'), 'utf8');
   assert.match(panes, /dimensions=\{app\.previewDimensions\}/);
@@ -110,6 +111,11 @@ test('the handles are the same in design, interact and preview modes, and a prev
     assert.equal(stageFrame().querySelector('.frame-clip > iframe').title, 'Site');
     assert.equal(stageFrame().querySelector('.frame-clip .rz-handle') === null, true);
     assert.equal(stageFrame().classList.contains('full'), true, 'Fit fills the stage, as the preview always did');
+    assert.equal(
+      stageFrame().querySelector('.rz-e').getAttribute('style') ?? undefined,
+      undefined,
+      'a fluid frame keeps its handles inside, by the stylesheet',
+    );
     // A right-edge drag widens both sides of the centred frame: 1600 + 2 × 100.
     await act(async () => pointer(stageFrame().querySelector('.rz-e'), 'pointerdown', { x: 1000, y: 400 }));
     await act(async () => {
@@ -138,6 +144,12 @@ test('the handles are the same in design, interact and preview modes, and a prev
     const heightAfter = Number.parseFloat(stageFrame().style.height);
     assert.equal(heightAfter, Math.round(heightBefore - 100 / scale));
     assert.equal(Number.parseFloat(canvasFrame().style.height), heightAfter, 'The canvas below takes the same height');
+    // The 1800px frame is scaled to fit: its side handles stay 12 screen pixels out (12 / scale frame pixels), past the
+    // canvas's scrollbar, which sits 2 to 7 screen pixels out (CanvasScrollbar.tsx). Fill mode keeps them inside the page.
+    assert.equal(Number.parseFloat(stageFrame().querySelector('.rz-e').style.right), -12 / scale);
+    assert.equal(Number.parseFloat(stageFrame().querySelector('.rz-w').style.left), -12 / scale);
+    assert.ok(-12 / scale < -12, 'further out in frame pixels than at scale 1, so the same on screen');
+    assert.equal(stageFrame().querySelector('.rz-s').getAttribute('style') ?? undefined, undefined, 'the bottom handle is nowhere near the bar');
     // Leaving the preview keeps the size on the canvas, and coming back opens on it.
     shown.preview = false;
     await render();

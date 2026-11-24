@@ -102,7 +102,10 @@ test('the mirrored preference is a shipped language or "system", and nothing els
   }
   for (const preference of ['', 'EN', 'en-US', 'klingon', 3, {}]) {
     assert.throws(() => parseLocaleSet({ preference }), /Locale preference/);
-    assert.throws(() => parseSettings({ sound: false, localePreference: preference }), /Locale preference/);
+    // On disk a damaged language reads as "system" alone: the rest of the settings file is kept (mainValidation.ts).
+    const kept = parseSettings({ sound: false, localePreference: preference, codeChips: false });
+    assert.equal(kept.localePreference, 'system', JSON.stringify(preference));
+    assert.equal(kept.codeChips, false);
   }
   assert.throws(() => parseLocaleSet({}));
   assert.equal(parseSettings({ sound: false }).localePreference, 'system', 'an older settings file follows the system');

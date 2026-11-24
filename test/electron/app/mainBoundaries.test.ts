@@ -206,6 +206,9 @@ test('the Markdown wire model keeps source metadata and rejects corrupted fields
   }
 });
 
+// A null as it reaches a boundary: out of a parsed file, never written in our own code.
+const NULL_FROM_JSON: unknown = JSON.parse('null');
+
 test('disk parsers validate known shapes and fail on corrupt data', () => {
   assert.deepEqual(parseSettings({ sound: true }), {
     sound: true,
@@ -216,7 +219,6 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
     aiTrackChanges: true,
     aiReviewChanges: false,
     codeChips: true,
-    canvasScrollbar: 'off',
     localePreference: 'system',
   });
   assert.equal(parseSettings({ sound: true, appsPersonHidden: true }).appsPersonHidden, true);
@@ -226,32 +228,37 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
   assert.equal(parseSettings({ sound: true }).aiTrackChanges, true);
   assert.equal(parseSettings({ sound: true, aiTrackChanges: false }).aiTrackChanges, false);
   assert.equal(parseSettings({ sound: true, aiTrackChanges: true }).aiTrackChanges, true);
+  // A damaged value falls back to its own default, and every other setting in the file is kept.
   for (const bad of ['yes', 'false', 0, 1, {}]) {
-    assert.throws(() => parseSettings({ sound: true, aiTrackChanges: bad }), /boolean/);
+    const kept = parseSettings({ sound: false, aiTrackChanges: bad, aiReviewChanges: true });
+    assert.equal(kept.aiTrackChanges, true, JSON.stringify(bad));
+    assert.equal(kept.aiReviewChanges, true);
+    assert.equal(kept.sound, false);
   }
   // Changes apply without asking unless the person turned review on; a file written before the setting existed stays off.
   assert.equal(parseSettings({ sound: true }).aiReviewChanges, false);
   assert.equal(parseSettings({ sound: true, aiReviewChanges: true }).aiReviewChanges, true);
   assert.equal(parseSettings({ sound: true, aiReviewChanges: false }).aiReviewChanges, false);
   for (const bad of ['yes', 'true', 0, 1, {}]) {
-    assert.throws(() => parseSettings({ sound: true, aiReviewChanges: bad }), /boolean/);
+    assert.equal(parseSettings({ sound: true, aiReviewChanges: bad, codeChips: false }).aiReviewChanges, false, JSON.stringify(bad));
+    assert.equal(parseSettings({ sound: true, aiReviewChanges: bad, codeChips: false }).codeChips, false);
   }
   // CSS chips are on unless the person turned them off; a file written before the setting existed keeps them on.
   assert.equal(parseSettings({ sound: true }).codeChips, true);
   assert.equal(parseSettings({ sound: true, codeChips: false }).codeChips, false);
   assert.equal(parseSettings({ sound: true, codeChips: true }).codeChips, true);
   for (const bad of ['yes', 'false', 0, 1, {}]) {
-    assert.throws(() => parseSettings({ sound: true, codeChips: bad }), /boolean/);
+    assert.equal(parseSettings({ sound: true, codeChips: bad, aiTrackChanges: false }).codeChips, true, JSON.stringify(bad));
+    assert.equal(parseSettings({ sound: true, codeChips: bad, aiTrackChanges: false }).aiTrackChanges, false);
   }
-  // The canvas draws its own scrollbar unless the person picked a breakpoint for Chromium's; a file written before the
-  // setting existed keeps the canvas's bar. Only `off` and breakpoint ids are read back.
-  assert.equal(parseSettings({ sound: true }).canvasScrollbar, 'off');
-  assert.equal(parseSettings({ sound: true, canvasScrollbar: 'off' }).canvasScrollbar, 'off');
-  assert.equal(parseSettings({ sound: true, canvasScrollbar: 'laptop' }).canvasScrollbar, 'laptop');
-  assert.equal(parseSettings({ sound: true, canvasScrollbar: 'bp-3' }).canvasScrollbar, 'bp-3');
-  for (const bad of ['', 'Laptop', '3bp', 'a'.repeat(25), 'laptop;', true, 0, {}]) {
-    assert.throws(() => parseSettings({ sound: true, canvasScrollbar: bad }), /canvasScrollbar/);
+  assert.equal(parseSettings({ sound: true, localePreference: 'xx-nope' }).localePreference, 'system');
+  // A setting this version no longer has (the removed breakpoint scrollbar choice) is ignored, never a reset.
+  for (const stored of ['off', 'laptop', 'desktop', '', 12, NULL_FROM_JSON, { kind: 'from' }]) {
+    const kept = parseSettings({ sound: false, codeChips: false, canvasScrollbar: stored });
+    assert.equal(kept.codeChips, false, JSON.stringify(stored));
+    assert.equal(Reflect.has(kept, 'canvasScrollbar'), false, 'not carried into the settings written back');
   }
+  // Privacy and trust stay strict: a damaged value there still refuses the file (main then turns usage counts off).
   assert.throws(() => parseSettings({ sound: true, appsPersonHidden: 'yes' }), /boolean/);
   assert.throws(() => parseSettings({ sound: 'yes' }), /boolean/);
   assert.deepEqual(
@@ -271,7 +278,6 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
       aiTrackChanges: true,
       aiReviewChanges: false,
       codeChips: true,
-      canvasScrollbar: 'off',
       localePreference: 'system',
     },
   );
@@ -560,15 +566,4 @@ test('popup preferences persist independently and reject invalid changes', async
   await assert.rejects(harness.invoke('settings:set', { setting: 'sound', enabled: 'yes' }));
   await assert.rejects(harness.invoke('settings:set', { setting: 'unknown', enabled: true }));
   assert.equal(toRecord(harness.call('readSettings'))?.['sound'], true);
-  // The canvas scrollbar carries a breakpoint id, not a switch: saved, read back, and refused when it is anything else.
-  assert.equal(toRecord(await harness.invoke('settings:get'))?.['canvasScrollbar'], 'off');
-  const picked = toRecord(await harness.invoke('settings:set', { setting: 'canvasScrollbar', value: 'laptop' }));
-  assert.equal(picked?.['canvasScrollbar'], 'laptop');
-  assert.equal(picked?.['saved'], true);
-  assert.equal(toRecord(harness.call('readSettings'))?.['canvasScrollbar'], 'laptop');
-  await assert.rejects(harness.invoke('settings:set', { setting: 'canvasScrollbar', value: 'Laptop' }));
-  await assert.rejects(harness.invoke('settings:set', { setting: 'canvasScrollbar', enabled: true }));
-  assert.equal(toRecord(harness.call('readSettings'))?.['canvasScrollbar'], 'laptop');
-  await harness.invoke('settings:set', { setting: 'canvasScrollbar', value: 'off' });
-  assert.equal(toRecord(harness.call('readSettings'))?.['canvasScrollbar'], 'off');
 });

@@ -2,18 +2,19 @@
 //
 //   node test/electron/preload/canvasScrollbarChromium.test.js
 //
-// Goal: a canvas frame narrower than the width Settings names for Chromium's scrollbar lays its page out at the
-// frame's full width, as a phone or a tablet does (a 320px frame is 320px of page, not 305px beside a classic
-// scrollbar), while a frame at or past that width keeps exactly the scrollbar Chromium draws in a frame nobody touched.
-// Off hides the root bar at every width. Each frame reports which bar is drawn, and the canvas's own bar scrolls it.
+// Goal: a canvas frame the app has told lays its page out at the frame's full width at every breakpoint, as a phone or
+// a tablet does (a 320px frame is 320px of page, not 305px beside a classic scrollbar; a 1440px frame is 1440px), and
+// an older app's width threshold in the message no longer brings Chromium's bar back. A frame nobody told keeps the
+// bar Chromium draws. Each frame reports which bar is drawn, and the canvas's own bar scrolls it.
 //
 // Method: a real Electron window (jsdom has no layout and draws no scrollbars) serves a host page over localhost with
-// three canvas iframes at `#avb-design`, the built preload running in each as in the app: a 320px phone frame and a
-// 1440px desktop frame told where Chromium's bar starts (1023px, Laptop and wider), and a 1440px control frame that is
-// told nothing. The pages are taller than their frames, so each scrolls. A computer that draws overlay scrollbars
-// (macOS with a trackpad) gives the control frame no bar at all; the checks compare against the control frame rather
-// than a number, so they hold on either kind of computer and still catch a frame that loses width to a bar. Every wait
-// is a bounded poll for what the frames report (test/helpers/waitFor.js), never a fixed pause.
+// three canvas iframes at `#avb-design`, the built preload running in each as in the app: a 320px phone frame told to
+// hide its bar, a 1440px desktop frame told the same with an older app's `chromiumFromPx: 1023` (now ignored), and a
+// 1440px control frame that is told nothing. The pages are taller than their frames, so each scrolls. A computer that
+// draws overlay scrollbars (macOS with a trackpad) gives the control frame no bar at all; the checks compare a frame's
+// layout width against its own viewport, so they hold on either kind of computer and still catch a frame that loses
+// width to a bar. Every wait is a bounded poll for what the frames report (test/helpers/waitFor.js), never a fixed
+// pause.
 
 const fs = require('fs');
 const http = require('http');
@@ -104,14 +105,16 @@ const tell = (id, message) => `document.getElementById(${JSON.stringify(id)}).co
        await win.loadURL('http://127.0.0.1:${port}/host.html');
        // Each frame reports once its preload runs: Chromium's bar until the app's word arrives.
        const before = await waitFor({ what: 'every frame reports', read, until: (frames) => frames.phone.report && frames.desktop.report && frames.control.report });
-       await run(${JSON.stringify(tell('phone', { type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 }))});
+       await run(${JSON.stringify(tell('phone', { type: 'avb:canvas-scrollbar' }))});
        await run(${JSON.stringify(tell('desktop', { type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 }))});
-       const told = await waitFor({ what: 'the phone frame reports the canvas bar', read, until: (frames) => frames.phone.report.chromium === false });
+       const told = await waitFor({
+         what: 'both told frames report the canvas bar',
+         read,
+         until: (frames) => frames.phone.report.chromium === false && frames.desktop.report.chromium === false,
+       });
        await run(${JSON.stringify(tell('phone', { type: 'avb:page-scroll-to', topPx: 500 }))});
        const scrolled = await waitFor({ what: 'the phone frame scrolls', read, until: (frames) => frames.phone.report.topPx === 500 });
-       await run(${JSON.stringify(tell('desktop', { type: 'avb:canvas-scrollbar' }))});
-       const off = await waitFor({ what: 'the desktop frame reports Off', read, until: (frames) => frames.desktop.report.chromium === false });
-       console.log(JSON.stringify({ before, told, scrolled, off }));
+       console.log(JSON.stringify({ before, told, scrolled }));
        app.quit();
      });`,
   );
@@ -138,30 +141,30 @@ const tell = (id, message) => `document.getElementById(${JSON.stringify(id)}).co
   if (!line) {
     check('the browser probe ran', false, (run.stderr || run.stdout || '').slice(0, 3000));
   } else {
-    const { before, told, scrolled, off } = JSON.parse(line);
+    const { before, told, scrolled } = JSON.parse(line);
     const detail = (frame) => JSON.stringify(frame);
     check('before the app’s word, every frame says Chromium draws its bar', before.phone.report.chromium && before.control.report.chromium, detail(before));
     check('a 320px phone frame lays its page out at 320px', told.phone.innerWidth === 320 && told.phone.clientWidth === 320, detail(told.phone));
     check('and says the canvas draws its bar', told.phone.report.chromium === false, detail(told.phone));
     check(
-      'a 1440px frame past Laptop keeps exactly the bar Chromium draws in an untouched frame',
-      told.desktop.clientWidth === told.control.clientWidth,
-      `${detail(told.desktop)} vs ${detail(told.control)}`,
+      'a 1440px frame lays its page out at 1440px too, an older app’s width threshold ignored',
+      told.desktop.clientWidth === told.desktop.innerWidth,
+      detail(told.desktop),
     );
-    check('and says Chromium draws it', told.desktop.report.chromium === true, detail(told.desktop));
+    check('and says the canvas draws its bar', told.desktop.report.chromium === false, detail(told.desktop));
+    check('an untold frame still says Chromium draws its bar', told.control.report.chromium === true, detail(told.control));
     check(
       'the canvas bar’s scroll moves the page and is reported',
       scrolled.phone.scrollY === 500 && scrolled.phone.report.topPx === 500,
       detail(scrolled.phone),
     );
-    check('Off gives a 1440px frame its whole width', off.desktop.clientWidth === off.desktop.innerWidth, detail(off.desktop));
   }
 
   if (failures.length) {
     console.error(`canvas-scrollbar-chromium: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
-  console.log(`canvas-scrollbar-chromium: ${checked} passed  [a frame below the Chromium width gets its whole width; one past it keeps Chromium's bar]`);
+  console.log(`canvas-scrollbar-chromium: ${checked} passed  [every told frame gets its whole width; an untold one keeps Chromium's bar]`);
   process.exit(0);
 })().catch((error) => {
   console.error(error);

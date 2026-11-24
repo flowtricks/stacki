@@ -69,8 +69,6 @@ import { activeMainLocale, loadMainLocale, setMainLocale, translateMain } from '
 import { openMicrophoneSettings, microphoneStatus, requestMicrophone, type MicrophoneSystem } from './app/microphoneAccess';
 import { LOCALE_PREFERENCE_DEFAULT } from '../shared/core/i18n/locales';
 import { resolveLocale } from '../shared/core/i18n/parseLocale';
-import { CANVAS_SCROLLBAR_DEFAULT, canvasScrollbarPreferenceText } from '../shared/properties/canvasScrollbarChoice';
-import { CANVAS_SCROLLBAR_SETTING } from '../shared/ipc/preferences';
 import { registerTerminalHandlers, cleanupTerminals } from './terminal/terminal';
 import { watchProject } from './project/projectWatcher';
 import { watchInstructions } from './project/instructionsWatcher';
@@ -987,8 +985,6 @@ const SETTINGS_DEFAULTS: AppSettings = {
   aiReviewChanges: false,
   // On: CSS in code editors shows variables, easings, shadows, gradients and clip-paths as chips that open their editors.
   codeChips: true,
-  // Off: the canvas draws its own scrollbar beside every frame, so the page always has the breakpoint's whole width.
-  canvasScrollbar: canvasScrollbarPreferenceText(CANVAS_SCROLLBAR_DEFAULT),
   localePreference: LOCALE_PREFERENCE_DEFAULT,
 };
 let settings: AppSettings = { ...SETTINGS_DEFAULTS };
@@ -1033,15 +1029,9 @@ const publicSettings = () => ({
   aiTrackChanges: settings.aiTrackChanges,
   aiReviewChanges: settings.aiReviewChanges,
   codeChips: settings.codeChips,
-  canvasScrollbar: settings.canvasScrollbar,
 });
 ipcMain.handle('settings:get', publicSettings);
-ipcMain.handle('settings:set', (_event, change) => {
-  if (change.setting === CANVAS_SCROLLBAR_SETTING) {
-    settings = { ...settings, canvasScrollbar: change.value };
-    return { ...publicSettings(), saved: writeSettings() };
-  }
-  const { setting, enabled } = change;
+ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
   let saved: boolean;
   if (setting === 'sound') {
     settings = { ...settings, sound: enabled };

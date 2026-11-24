@@ -1,13 +1,12 @@
-// Verify preference replies before the desktop settings popup consumes them, and the changes it sends.
-// Valid values round-trip; missing and malformed fields are rejected; the canvas scrollbar's breakpoint id is read
-// into its typed form, and a change's parsed output parses again unchanged (the renderer sends what it parsed).
+// Verify preference replies before the desktop settings popup consumes them.
+// Valid values round-trip; missing and malformed boolean fields are rejected.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parsePreferenceChange, parsePreferenceName, parsePreferences, parsePreferenceResult } from '#dist/shared/ipc/preferences.js';
+import { parsePreferenceName, parsePreferences, parsePreferenceResult } from '#dist/shared/ipc/preferences.js';
 
 test('desktop preference replies require boolean values and save status', () => {
   // Main always sends every preference, appsPersonHidden included (electron/main.ts), so none is optional here.
-  const switches = {
+  const preferences = {
     sound: true,
     usageCountsEnabled: false,
     appsPersonHidden: true,
@@ -16,17 +15,11 @@ test('desktop preference replies require boolean values and save status', () => 
     aiReviewChanges: false,
     codeChips: true,
   };
-  const preferences = { ...switches, canvasScrollbar: 'laptop' };
-  const parsed = { ...switches, canvasScrollbar: { kind: 'from', breakpointId: 'laptop' } };
-  assert.deepEqual(parsePreferences(preferences), parsed);
-  assert.deepEqual(parsePreferences({ ...preferences, canvasScrollbar: 'off' }).canvasScrollbar, { kind: 'off' });
+  assert.deepEqual(parsePreferences(preferences), preferences);
   assert.deepEqual(parsePreferenceResult({ ...preferences, saved: true }), {
-    ...parsed,
+    ...preferences,
     saved: true,
   });
-  for (const canvasScrollbar of [undefined, '', 'Laptop', true, 3]) {
-    assert.throws(() => parsePreferences({ ...preferences, canvasScrollbar }));
-  }
   for (const value of [
     undefined,
     {},
@@ -55,30 +48,5 @@ test('a preference change names a known preference', () => {
   }
   for (const name of [undefined, '', 'Sound', 'appsPerson', 17]) {
     assert.throws(() => parsePreferenceName(name), /Unknown preference/);
-  }
-});
-
-test('a preference change is a switch flipped or the canvas scrollbar breakpoint, and parses again unchanged', () => {
-  const flip = parsePreferenceChange({ setting: 'codeChips', enabled: false });
-  assert.deepEqual(flip, { setting: 'codeChips', enabled: false });
-  assert.deepEqual(parsePreferenceChange(flip), flip);
-  for (const value of ['off', 'laptop', 'bp-12']) {
-    const pick = parsePreferenceChange({ setting: 'canvasScrollbar', value });
-    assert.deepEqual(pick, { setting: 'canvasScrollbar', value });
-    assert.deepEqual(parsePreferenceChange(pick), pick);
-  }
-  for (const input of [
-    undefined,
-    'canvasScrollbar',
-    { setting: 'canvasScrollbar' },
-    { setting: 'canvasScrollbar', value: '' },
-    { setting: 'canvasScrollbar', value: 'Laptop' },
-    { setting: 'canvasScrollbar', value: 'x'.repeat(25) },
-    { setting: 'canvasScrollbar', enabled: true },
-    { setting: 'codeChips', value: 'laptop' },
-    { setting: 'codeChips', enabled: 'no' },
-    { setting: 'unknown', enabled: true },
-  ]) {
-    assert.throws(() => parsePreferenceChange(input), Error, JSON.stringify(input));
   }
 });

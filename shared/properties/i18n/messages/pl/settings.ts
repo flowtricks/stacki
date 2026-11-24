@@ -254,11 +254,6 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Zapisuje ukrytą migawkę przed i po każdej turze AI, aby pokazać zmiany. Nie dodaje commitów do historii. Wyłączone jest szybsze w dużych projektach.',
   'settings.editor.ai.trackChanges.label': 'Migawka przed i po każdej zmianie AI',
-  'settings.editor.canvas.scrollbar.from': '{breakpoint} i szersze',
-  'settings.editor.canvas.scrollbar.info':
-    'Wyłączony: cienki pasek przewijania obok strony, dzięki czemu strona ma pełną szerokość punktu przerwania, jak na telefonie. Od punktu przerwania: własny pasek przewijania Chromium tam i przy większych szerokościach, który zajmuje miejsce jak na komputerze z myszą.',
-  'settings.editor.canvas.scrollbar.label': 'Pasek przewijania Chromium',
-  'settings.editor.canvas.scrollbar.off': 'Wyłączony',
   'settings.editor.code.chips.info':
     'Zmienne, easingi, cienie, gradienty i clip-path w kodzie CSS pokazują się jako chipy, które otwierają swoje edytory. Wyłączone: zwykły CSS.',
   'settings.editor.code.chips.label': 'Pokazuj chipy CSS w kodzie',
@@ -271,7 +266,6 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Anonimowe liczniki użycia',
   'settings.editor.saveFailed': 'Zastosowano na tę sesję, ale nie udało się zapisać. Sprawdź miejsce na dysku i spróbuj ponownie.',
   'settings.editor.section.ai': 'AI', // same
-  'settings.editor.section.canvas': 'Kanwa',
   'settings.editor.section.code': 'Kod',
   'settings.editor.section.general': 'Ogólne',
   'settings.editor.section.privacy': 'Prywatność',

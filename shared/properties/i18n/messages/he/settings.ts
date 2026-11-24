@@ -217,11 +217,6 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'שומר snapshot מוסתר לפני ואחרי כל תור של AI כדי להציג שינויים. לא מוסיף commits להיסטוריה. כבוי מהיר יותר בפרויקטים גדולים.',
   'settings.editor.ai.trackChanges.label': 'Snapshot לפני ואחרי כל שינוי של AI',
-  'settings.editor.canvas.scrollbar.from': '{breakpoint} ורחב יותר',
-  'settings.editor.canvas.scrollbar.info':
-    'כבוי: פס גלילה דק לצד הדף, כך שהדף שומר על כל רוחב נקודת השבירה, כמו בטלפון. מנקודת שבירה: פס הגלילה של Chromium עצמו בה וברחבות יותר, שתופס רוחב כמו במחשב עם עכבר.',
-  'settings.editor.canvas.scrollbar.label': 'פס הגלילה של Chromium',
-  'settings.editor.canvas.scrollbar.off': 'כבוי',
   'settings.editor.code.chips.info': 'משתנים, easings, צללים, גרדיאנטים ו-clip-path בקוד CSS מופיעים כצ׳יפים שפותחים את העורכים שלהם. כבוי: CSS רגיל.',
   'settings.editor.code.chips.label': 'הצגת צ׳יפים של CSS בקוד',
   'settings.editor.loading': 'טוען העדפות…',
@@ -232,7 +227,6 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'ספירות שימוש אנונימיות',
   'settings.editor.saveFailed': 'הוחל להפעלה הנוכחית, אך לא ניתן היה לשמור. יש לבדוק את שטח הדיסק ולנסות שוב.',
   'settings.editor.section.ai': 'AI', // same
-  'settings.editor.section.canvas': 'קנבס',
   'settings.editor.section.code': 'קוד',
   'settings.editor.section.general': 'כללי',
   'settings.editor.section.privacy': 'פרטיות',

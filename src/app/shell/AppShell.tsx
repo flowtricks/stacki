@@ -62,8 +62,6 @@ import { prewarmInstalledApps } from '../../features/apps/installedAppsCache';
 import { prewarmPageOrder } from '../../features/pages/pageOrderPersistence';
 import { useCallback, useEffect } from 'react';
 import { PreviewModeStage } from '../../features/preview/SizedFrame';
-import { useCanvasScrollbarPreference } from '../../features/preview/canvasScrollbarPreference';
-import { chromiumScrollbarFromPx } from '../../../shared/properties/canvasScrollbar';
 import { usePreviewSizing } from '../../features/preview/usePreviewSizing';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { prefetchPanels, prefetchTimeline } from './panelPrefetch';
@@ -178,9 +176,8 @@ function PreviewModeView({ app, source }: { readonly app: ShellView; readonly so
   const translate = useTranslate();
   const { resolved: breakpoints } = useProjectBreakpoints(app.project.path);
   const sizing = usePreviewSizing(app.device, app.previewDimensions, breakpoints, { deviceShortcuts: false }, app.setDevice);
-  const chromiumFromPx = chromiumScrollbarFromPx(useCanvasScrollbarPreference(), breakpoints);
   return (
-    <PreviewModeStage sizing={sizing} chromiumFromPx={chromiumFromPx}>
+    <PreviewModeStage sizing={sizing}>
       <iframe ref={app.previewIframeRef} src={source} title={translate('shell.preview.interactiveTitle')} />
     </PreviewModeStage>
   );

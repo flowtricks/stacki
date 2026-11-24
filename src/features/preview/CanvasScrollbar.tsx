@@ -1,13 +1,14 @@
-// The canvas's own scrollbar for the page in a sized frame (shared/properties/canvasScrollbar.ts).
+// The canvas's own scrollbar for the page in a frame (shared/properties/canvasScrollbar.ts): a sized frame, and each
+// frame of the all-breakpoints canvas.
 //
-// The frame draws no root scrollbar, so the page keeps the frame's whole width, as on a phone; this bar shows where
-// the person is in the page instead, and moves it. It sits in the gutter just outside the frame, solid, never over
-// the page: a framed device has its gutter, and a frame that fills the canvas (Desktop) keeps one for it
-// (previewViewport.ts). Above the width set in Settings the frame keeps Chromium's own scrollbar and this one is not
-// drawn.
+// The frame draws no scrollbar of its own, so the page keeps the frame's whole width, as on a phone; this bar shows
+// where the person is in the page instead, and moves it. It sits in the gutter just outside the frame's inline end,
+// solid, never over the page: a framed device has its gutter, and a frame that fills the canvas (Desktop) keeps one
+// for it (previewViewport.ts). An all-breakpoints frame grows to its page's height, so its bar shows only for a page
+// taller than that frame may grow.
 //
-// The frame is told where Chromium's bar starts on every page load; it reports its scroll at most once per animation
-// frame; a drag or a click on the track tells it where to scroll.
+// The frame is told to hide its own bar on every page load; it reports its scroll at most once per animation frame;
+// a drag or a click on the track tells it where to scroll.
 
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -31,18 +32,16 @@ const BAR_SCREEN_PX = {
 } as const satisfies Record<string, number>;
 
 export interface CanvasScrollbarProps {
-  /** The sized frame that holds the page's iframe. */
+  /** The element that holds the page's iframe, the bar's positioned parent. */
   readonly frameRef: RefObject<HTMLDivElement>;
-  /** The frame's scale on screen (1 or less). */
+  /** The frame's scale on screen: 1 or less on a sized frame, the zoom on the all-breakpoints canvas. */
   readonly scale: number;
-  /** Frames this wide and wider keep Chromium's scrollbar; undefined: none does. */
-  readonly chromiumFromPx: number | undefined;
 }
 
 export function CanvasScrollbar(props: CanvasScrollbarProps) {
   assert(props.scale > 0, 'CanvasScrollbar: the frame has a scale');
-  assert(props.scale <= 1, 'CanvasScrollbar: the canvas never scales a page up');
-  const scroll = usePageScroll(props.frameRef, props.chromiumFromPx);
+  assert(Number.isFinite(props.scale), 'CanvasScrollbar: the frame scale is finite');
+  const scroll = usePageScroll(props.frameRef);
   const startDrag = usePointerDrag();
   if (scroll === undefined) {
     return undefined;
@@ -58,7 +57,7 @@ export function CanvasScrollbar(props: CanvasScrollbarProps) {
     return undefined; // The page does not scroll.
   }
   const widthPx = BAR_SCREEN_PX.width / props.scale;
-  const sidePx = -(BAR_SCREEN_PX.gap / props.scale) - widthPx;
+  const endPx = -(BAR_SCREEN_PX.gap / props.scale) - widthPx;
   const scrollTo = (offsetPx: number): void => {
     const topPx = scrollTopForThumb(scroll, trackPx, lengthPxMin, offsetPx);
     frameOf(props.frameRef)?.contentWindow?.postMessage(pageScrollToMessage(topPx), frameOrigin(props.frameRef));
@@ -78,22 +77,22 @@ export function CanvasScrollbar(props: CanvasScrollbarProps) {
       scrollTo(pointerPx - grabPx);
     }
     const frame = props.frameRef.current;
-    frame?.classList.add('scrolling'); // The iframe would take the pointer as the drag crosses it.
+    frame?.classList.add('canvas-scrolling'); // The iframe would take the pointer as the drag crosses it.
     startDrag(event, {
       onMove: (move) => scrollTo((move.clientY - track.top) / props.scale - grabPx),
-      onEnd: () => frame?.classList.remove('scrolling'),
+      onEnd: () => frame?.classList.remove('canvas-scrolling'),
     });
   };
   return (
-    <div className="canvas-scrollbar" style={{ width: widthPx, right: sidePx }} onPointerDown={press} aria-hidden="true">
+    <div className="canvas-scrollbar" style={{ width: widthPx, insetInlineEnd: endPx }} onPointerDown={press} aria-hidden="true">
       <div className="canvas-scrollbar-thumb" style={{ top: thumb.offsetPx, height: thumb.lengthPx, borderRadius: widthPx }} />
     </div>
   );
 }
 
-// The page's scroll as the frame last reported it. Each page load is told where Chromium's bar starts, and so is the
-// current page whenever that changes; a load listens in the capture phase, since `load` does not bubble.
-function usePageScroll(frameRef: RefObject<HTMLDivElement>, chromiumFromPx: number | undefined): PageScroll | undefined {
+// The page's scroll as the frame last reported it. Each page load is told to hide its own bar, and so is the page
+// already there when the bar mounts; a load listens in the capture phase, since `load` does not bubble.
+function usePageScroll(frameRef: RefObject<HTMLDivElement>): PageScroll | undefined {
   const [scroll, setScroll] = useState<PageScroll | undefined>(undefined);
   useEffect(() => {
     const holder = frameRef.current;
@@ -101,7 +100,7 @@ function usePageScroll(frameRef: RefObject<HTMLDivElement>, chromiumFromPx: numb
       return undefined;
     }
     const tell = (): void => {
-      frameOf(frameRef)?.contentWindow?.postMessage(canvasScrollbarMessage(chromiumFromPx), frameOrigin(frameRef));
+      frameOf(frameRef)?.contentWindow?.postMessage(canvasScrollbarMessage(), frameOrigin(frameRef));
     };
     const loaded = (event: Event): void => {
       if (event.target === frameOf(frameRef)) {
@@ -126,7 +125,7 @@ function usePageScroll(frameRef: RefObject<HTMLDivElement>, chromiumFromPx: numb
       holder.removeEventListener('load', loaded, true);
       window.removeEventListener('message', heard);
     };
-  }, [frameRef, chromiumFromPx]);
+  }, [frameRef]);
   return scroll;
 }
 

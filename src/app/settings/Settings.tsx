@@ -29,10 +29,6 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { AutoCompactPicker } from '../../features/ai/autoCompactPreference';
 import { publishReviewMode, reviewModeOf } from '../../features/ai/reviewChanges';
 import { codeChipsModeOf, publishCodeChipsMode } from '../../features/style/codeChips/codeChipsPreference';
-import { publishCanvasScrollbarPreference } from '../../features/preview/canvasScrollbarPreference';
-import { CANVAS_SCROLLBAR_SETTING } from '../../../shared/ipc/preferences';
-import { canvasScrollbarPreferenceText } from '../../../shared/properties/canvasScrollbarChoice';
-import { CanvasScrollbarSetting } from './CanvasScrollbarSetting';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { LanguageSetting } from './LanguageSetting';
 import { DictationSetting } from './DictationSetting';
@@ -251,7 +247,7 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
   const icon = <SettingsTabIcon tab={props.tab} size={20} />;
   switch (props.tab) {
     case 'editor':
-      return <Preferences projectPath={props.projectPath} />;
+      return <Preferences />;
     case 'dictation':
       return <DictationSetting projectPath={props.projectPath} />;
     case 'folders':
@@ -365,8 +361,6 @@ function usePreferences() {
       publishReviewMode(reviewModeOf({ enabled: result.aiReviewChanges }));
       // Every open code editor shows or drops its chips at once.
       publishCodeChipsMode(codeChipsModeOf({ enabled: result.codeChips }));
-      // The open canvas moves its scrollbar at once.
-      publishCanvasScrollbarPreference(result.canvasScrollbar);
       if (!result.saved) {
         setError(translate('settings.editor.saveFailed'));
       }
@@ -380,8 +374,7 @@ function usePreferences() {
 }
 
 // Editor settings save each switch as it flips: each is safe to apply alone.
-/** `projectPath`: the project open in this window, whose breakpoints the Canvas scrollbar choice lists; none on the welcome screen. */
-function Preferences({ projectPath }: { readonly projectPath: string | undefined }) {
+function Preferences() {
   const translate = useTranslate();
   const { value, busy, error, change, saving } = usePreferences();
   return (
@@ -404,14 +397,6 @@ function Preferences({ projectPath }: { readonly projectPath: string | undefined
           checked={value?.codeChips ?? true}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'codeChips', enabled: !value?.codeChips })}
-        />
-      </SettingsSection>
-      <SettingsSection title={translate('settings.editor.section.canvas')}>
-        <CanvasScrollbarSetting
-          projectPath={projectPath}
-          preference={value?.canvasScrollbar}
-          disabled={!value || busy}
-          onChange={(next) => void change({ setting: CANVAS_SCROLLBAR_SETTING, value: canvasScrollbarPreferenceText(next) })}
         />
       </SettingsSection>
       <SettingsSection title={translate('settings.editor.section.ai')}>

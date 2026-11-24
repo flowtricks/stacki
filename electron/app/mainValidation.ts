@@ -4,7 +4,6 @@ import { boolean, count, data, dictionary, list, nullable, object, optional, pat
 import type { Data } from '../../shared/core/boundary';
 import type { LocalePreference } from '../../shared/core/i18n/locales';
 import { parseAutoCompactPercent } from '../../shared/properties/ai/autoCompact';
-import { CANVAS_SCROLLBAR_DEFAULT, canvasScrollbarPreferenceText, parseCanvasScrollbarPreference } from '../../shared/properties/canvasScrollbarChoice';
 import { parseLocalePreferenceValue } from '../../shared/ipc/localeChannel';
 import type { ContentCollection } from '../content/contentEntries';
 import type { DynamicEntry } from '../lib/mainTypes';
@@ -28,8 +27,6 @@ export interface AppSettings {
   readonly aiAutoCompactPercent?: number;
   /** Draw CSS values in code editors as chips (variables, easings, shadows, gradients, clip-paths); on unless turned off. */
   readonly codeChips: boolean;
-  /** Where Chromium's own scrollbar starts on the canvas: `off` (the canvas's bar everywhere) or a breakpoint id (canvasScrollbar.ts). */
-  readonly canvasScrollbar: string;
   /** The interface language the renderer last chose (docs/i18n-playbook.md, "Main process"); "system" follows the operating system. */
   readonly localePreference: LocalePreference;
 }
@@ -42,12 +39,14 @@ export function parseSettings(input: unknown): AppSettings {
     usageLastAttemptDay: optional(text),
     appsPersonHidden: optional(boolean),
     aiAskBeforeTrust: optional(boolean),
-    aiTrackChanges: optional(boolean),
-    aiReviewChanges: optional(boolean),
-    aiAutoCompactPercent: optional(parseAutoCompactPercent),
-    codeChips: optional(boolean),
-    canvasScrollbar: optional(parseCanvasScrollbarPreference),
-    localePreference: optional(parseLocalePreferenceValue),
+    // A damaged value of a convenience preference falls back to its default alone, rather than resetting every setting.
+    // The privacy and trust fields above stay strict: a damaged file must never quietly turn their protection off.
+    // A key this version does not know (an old `canvasScrollbar`) is never read at all.
+    aiTrackChanges: defaultWhenInvalid(boolean),
+    aiReviewChanges: defaultWhenInvalid(boolean),
+    aiAutoCompactPercent: optional(parseAutoCompactPercent), // Strict: the in-app setter relies on it (main.ts withAutoCompactPercent).
+    codeChips: defaultWhenInvalid(boolean),
+    localePreference: defaultWhenInvalid(parseLocalePreferenceValue),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
     throw new Error('Settings: invalid usage notice version');
@@ -64,12 +63,25 @@ export function parseSettings(input: unknown): AppSettings {
     aiTrackChanges: value.aiTrackChanges ?? true,
     aiReviewChanges: value.aiReviewChanges ?? false,
     codeChips: value.codeChips ?? true,
-    canvasScrollbar: canvasScrollbarPreferenceText(value.canvasScrollbar ?? CANVAS_SCROLLBAR_DEFAULT),
     localePreference: value.localePreference ?? 'system',
     ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
     ...(value.aiAutoCompactPercent === undefined ? {} : { aiAutoCompactPercent: value.aiAutoCompactPercent }),
   };
 }
+// An absent value, or one its parser refuses, reads as absent, so the caller's default applies to that field only.
+function defaultWhenInvalid<T>(parse: (input: unknown) => T): (input: unknown) => T | undefined {
+  return (input) => {
+    if (input === undefined) {
+      return undefined;
+    }
+    try {
+      return parse(input);
+    } catch {
+      return undefined; // A refused value is expected data on disk, not a programmer error.
+    }
+  };
+}
+
 export const parseRecents = list(object({ path: pathText, name: text, openedAt: count }));
 
 export interface Collection extends ContentCollection {

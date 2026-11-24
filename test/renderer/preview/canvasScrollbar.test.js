@@ -1,6 +1,7 @@
-// Goal: the canvas's own scrollbar (src/features/preview/CanvasScrollbar.tsx) tells each page where Chromium's bar
-// starts, draws a thumb only for a page that scrolls and only where Chromium draws none, sits in the gutter just outside
-// the frame (never over the page) at a constant on-screen size, and scrolls the page when the track is
+// Goal: the canvas's own scrollbar (src/features/preview/CanvasScrollbar.tsx) tells each page to hide its own bar (one
+// behaviour, no setting), draws a thumb only for a page that scrolls and only once the page has hidden its own, sits
+// in the gutter just outside the frame's inline end (never over the page) at a constant on-screen size, whether the
+// frame is scaled down to fit or zoomed past 1 on the all-breakpoints canvas, and scrolls the page when the track is
 // pressed or the thumb dragged.
 // Method: the real component, bundled with esbuild, is mounted in jsdom next to a real iframe inside the frame holder,
 // as SizedFrame mounts it. What it posts to the iframe is captured; the frame's reports are MessageEvents whose source
@@ -136,23 +137,30 @@ async function mount(props) {
 }
 
 const px = (value) => Number.parseFloat(value);
+// The bar's offset from the frame's inline end (logical, so it follows the canvas's direction).
+const end = (element) => element.style.getPropertyValue('inset-inline-end');
 
-test('each page is told where Chromium’s bar starts: on mount, on every load, and when the setting changes', async (context) => {
-  const view = await mount({ scale: 1, chromiumFromPx: 1023 });
+test('a scale that is not a positive finite number is a programmer error, with its message pinned', async () => {
+  await assert.rejects(() => mount({ scale: 0 }), /Assertion failed: CanvasScrollbar: the frame has a scale/);
+  await assert.rejects(() => mount({ scale: Number.POSITIVE_INFINITY }), /Assertion failed: CanvasScrollbar: the frame scale is finite/);
+});
+
+test('each page is told to hide its own bar, on mount and on every load, with nothing to choose', async (context) => {
+  const view = await mount({ scale: 1 });
   context.after(view.close);
   // Mounted before the spy: the first word went to the real postMessage. A load says it again.
   await view.load();
-  assert.deepEqual(view.posted.at(-1), { message: { type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 }, origin: 'http://localhost:4321' });
-  await view.rerender({ chromiumFromPx: undefined });
-  assert.deepEqual(view.posted.at(-1).message, { type: 'avb:canvas-scrollbar' });
+  assert.deepEqual(view.posted.at(-1), { message: { type: 'avb:canvas-scrollbar' }, origin: 'http://localhost:4321' });
+  await view.load();
+  assert.equal(view.posted.length, 2, 'once per load');
 });
 
-test('no bar until the page reports, none where Chromium draws its own, none for a page that does not scroll', async (context) => {
-  const view = await mount({ scale: 1, chromiumFromPx: undefined });
+test('no bar until the page reports, none while the page still draws its own, none for a page that does not scroll', async (context) => {
+  const view = await mount({ scale: 1 });
   context.after(view.close);
   assert.equal(view.bar(), undefined);
   await view.report({ ...REPORT, chromium: true });
-  assert.equal(view.bar(), undefined, 'Chromium draws its own bar');
+  assert.equal(view.bar(), undefined, 'the page has not hidden its own bar yet');
   await view.report({ ...REPORT, heightPx: 800 });
   assert.equal(view.bar(), undefined, 'nothing to scroll');
   // Another window's report, or a malformed one, changes nothing.
@@ -167,37 +175,41 @@ test('no bar until the page reports, none where Chromium draws its own, none for
 });
 
 test('the bar sits in the gutter just outside the frame, never over the page, at the same size on screen at any zoom', async (context) => {
-  const view = await mount({ scale: 1, chromiumFromPx: undefined });
+  const view = await mount({ scale: 1 });
   context.after(view.close);
   await view.report(REPORT);
   // 800 of 4000 visible on the 800px track, 1600 of 3200 scrolled: a 160px thumb 320px down.
   assert.equal(px(view.thumb().style.height), 160);
   assert.equal(px(view.thumb().style.top), 320);
   assert.equal(px(view.bar().style.width), 5);
-  assert.equal(px(view.bar().style.right), -7, 'in the gutter, 2px from the frame: within a fluid frame’s 9px gutter');
+  assert.equal(px(end(view.bar())), -7, 'in the gutter, 2px from the frame: within a fluid frame’s 9px gutter');
   // At half zoom the frame is drawn at half size: the bar's frame pixels double so the screen sees the same bar.
   await view.rerender({ scale: 0.5 });
   assert.equal(px(view.bar().style.width), 10);
-  assert.equal(px(view.bar().style.right), -14);
+  assert.equal(px(end(view.bar())), -14);
   await view.report({ ...REPORT, topPx: 0, heightPx: 1_000_000 });
   assert.equal(px(view.thumb().style.height), 48, 'a long page keeps a 24px thumb on screen');
+  // The all-breakpoints canvas zooms past 1: the bar shrinks in frame pixels and keeps its screen size.
+  await view.rerender({ scale: 2 });
+  assert.equal(px(view.bar().style.width), 2.5);
+  assert.equal(px(end(view.bar())), -3.5);
 });
 
 test('a press on the track jumps the thumb under the pointer, and a drag scrolls the page with it', async (context) => {
-  const view = await mount({ scale: 1, chromiumFromPx: undefined });
+  const view = await mount({ scale: 1 });
   context.after(view.close);
   await view.report({ ...REPORT, topPx: 0 });
   view.posted.length = 0;
   // The thumb is 0–160; a press at 600 centres it there: offset 520 of 640 to travel, 2600 of 3200 scrolled.
   await view.pointer(view.bar(), 'pointerdown', 600);
   assert.deepEqual(view.posted.at(-1), { message: { type: 'avb:page-scroll-to', topPx: 2600 }, origin: 'http://localhost:4321' });
-  assert.ok(view.frame().classList.contains('scrolling'), 'the iframe lets the drag pass while it lasts');
+  assert.ok(view.frame().classList.contains('canvas-scrolling'), 'the iframe lets the drag pass while it lasts');
   await view.pointer(view.dom.window, 'pointermove', 700);
   assert.equal(view.posted.at(-1).message.topPx, 3100);
   await view.pointer(view.dom.window, 'pointermove', 5000);
   assert.equal(view.posted.at(-1).message.topPx, 3200, 'past the end: the end of the page');
   await view.pointer(view.dom.window, 'pointerup', 5000);
-  assert.ok(!view.frame().classList.contains('scrolling'));
+  assert.ok(!view.frame().classList.contains('canvas-scrolling'));
   // A press on the thumb keeps the point it was caught at: no jump, the page follows the move.
   await view.report({ ...REPORT, topPx: 0 });
   view.posted.length = 0;

@@ -1,20 +1,16 @@
-// Goal: the canvas scrollbar contract (shared/properties/canvasScrollbar.ts) accepts exactly what the app, the frame
-// and the settings file mean, and nothing that could escape it: a preference is `off` or a breakpoint id, a width is a
-// whole canvas width inside the breakpoint bounds, a scroll report is finite and bounded, and the thumb stays on its
-// track whatever the page's size.
+// Goal: the canvas scrollbar contract (shared/properties/canvasScrollbar.ts) accepts exactly what the app and the frame
+// mean, and nothing that could escape it: the app's word to hide the page's bar carries nothing to choose (one
+// behaviour, no setting), a scroll report is finite and bounded, and the thumb stays on its track whatever the page's
+// size.
 // Method: each parser takes known-good input and every known-bad shape, including values just past each bound; the
-// builders' output parses back; the stylesheet and query text are pinned; the thumb math is checked at the edges and
-// read backwards; violated preconditions throw with their message pinned.
+// builders' output parses back; the stylesheet text is pinned; the thumb math is checked at the edges and read
+// backwards; violated preconditions throw with their message pinned.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CANVAS_SCROLLBAR_DEFAULT, canvasScrollbarPreferenceText, parseCanvasScrollbarPreference } from '#dist/shared/properties/canvasScrollbarChoice.js';
 import {
+  CANVAS_SCROLLBAR_CSS,
   CANVAS_SCROLLBAR_LIMITS,
-  canvasScrollbarCss,
   canvasScrollbarMessage,
-  chromiumScrollbarBreakpoints,
-  chromiumScrollbarFromPx,
-  chromiumScrollbarQuery,
   pageScrollMessage,
   pageScrollToMessage,
   parseCanvasScrollbarMessage,
@@ -23,100 +19,28 @@ import {
   scrollThumb,
   scrollTopForThumb,
 } from '#dist/shared/properties/canvasScrollbar.js';
-import { BREAKPOINT_DEFAULT_LIST, resolveBreakpoints } from '#dist/shared/properties/projectBreakpoints.js';
+import * as canvasScrollbar from '#dist/shared/properties/canvasScrollbar.js';
 
 const SCROLL = { topPx: 0, heightPx: 4000, viewHeightPx: 800, chromium: false };
 // A null as it reaches a boundary: out of a parsed message, never written in our own code.
 const NULL_FROM_JSON: unknown = JSON.parse('null');
 
-test('the preference is off or a breakpoint id, and its stored text reads back', () => {
-  assert.deepEqual(parseCanvasScrollbarPreference('off'), { kind: 'off' });
-  assert.deepEqual(parseCanvasScrollbarPreference('laptop'), { kind: 'from', breakpointId: 'laptop' });
-  assert.deepEqual(parseCanvasScrollbarPreference('bp-12'), { kind: 'from', breakpointId: 'bp-12' });
-  assert.deepEqual(CANVAS_SCROLLBAR_DEFAULT, { kind: 'off' });
-  for (const stored of ['off', 'laptop', 'bp-12', 'a'.repeat(24)]) {
-    assert.equal(canvasScrollbarPreferenceText(parseCanvasScrollbarPreference(stored)), stored);
-  }
-  for (const bad of [undefined, NULL_FROM_JSON, true, 3, {}, '', 'Laptop', '3bp', '-x', 'bp_1', 'laptop;', 'laptop ', 'a'.repeat(25)]) {
-    assert.throws(() => parseCanvasScrollbarPreference(bad), /canvasScrollbar/, JSON.stringify(bad));
-  }
-});
-
-test('a computer breakpoint and every wider frame keep Chromium from that breakpoint’s canvas width', () => {
-  const breakpoints = resolveBreakpoints(BREAKPOINT_DEFAULT_LIST);
-  assert.equal(chromiumScrollbarFromPx({ kind: 'off' }, breakpoints), undefined);
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'laptop' }, breakpoints), 1023); // width < 64rem
-  // A tablet or a phone floats its bar over the page: never offered, and a saved one acts as Off.
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'tablet' }, breakpoints), undefined);
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'phone' }, breakpoints), undefined);
-  // A breakpoint this project does not have: the canvas's bar everywhere, as Off.
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'bp-9' }, breakpoints), undefined);
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'laptop' }, []), undefined);
-});
-
-test('Desktop and every wider frame keep Chromium from one pixel past the widest narrower breakpoint, whatever the list', () => {
-  const desktop = parseCanvasScrollbarPreference('desktop');
-  assert.deepEqual(desktop, { kind: 'from', breakpointId: 'desktop' });
-  assert.equal(canvasScrollbarPreferenceText(desktop), 'desktop');
-  // The default list: Laptop is `width < 64rem` (up to 1023), so Desktop starts at 1024, past Laptop's own 1023.
-  assert.equal(chromiumScrollbarFromPx(desktop, resolveBreakpoints(BREAKPOINT_DEFAULT_LIST)), 1024);
-  // A wider (`up`) breakpoint never moves where Desktop starts; the narrower ones do, whatever their number and names.
-  const large = { id: 'bp-1', name: 'Large', direction: 'up' as const, setting: { value: 160, unit: 'rem' as const } };
-  const small = { id: 'bp-2', name: 'Small laptop', direction: 'down' as const, setting: { value: 1200, unit: 'px' as const } };
-  assert.equal(chromiumScrollbarFromPx(desktop, resolveBreakpoints([large, ...BREAKPOINT_DEFAULT_LIST])), 1024);
-  assert.equal(chromiumScrollbarFromPx(desktop, resolveBreakpoints([large, small, ...BREAKPOINT_DEFAULT_LIST])), 1200);
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'bp-1' }, resolveBreakpoints([large, ...BREAKPOINT_DEFAULT_LIST])), 2560);
-  // The choices, widest first, whatever the list: every wider breakpoint and the computer-sized narrower ones, by
-  // position and width, never by name; a narrower one in a tablet's or a phone's range is left out.
-  const tabletSized = { id: 'bp-3', name: 'Big tablet', direction: 'down' as const, setting: { value: 860, unit: 'px' as const } };
-  // In list order, strictly decreasing: 2560, 1200, 1024 (Laptop), 860, 768 (Tablet), 480 (Phone).
-  const [laptop, tablet, phone] = BREAKPOINT_DEFAULT_LIST;
-  assert.ok(laptop !== undefined && tablet !== undefined && phone !== undefined);
-  const list = resolveBreakpoints([large, small, laptop, tabletSized, tablet, phone]);
-  assert.deepEqual(
-    chromiumScrollbarBreakpoints(list).map((breakpoint) => breakpoint.id),
-    ['bp-1', 'bp-2', 'laptop'],
-  );
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'bp-2' }, list), 1199);
-  assert.equal(chromiumScrollbarFromPx({ kind: 'from', breakpointId: 'bp-3' }, list), undefined);
-  assert.deepEqual(chromiumScrollbarBreakpoints([]), []);
-  // No narrower breakpoint: every frame below the wider ones is Desktop, so every frame keeps Chromium's bar.
-  assert.equal(chromiumScrollbarFromPx(desktop, resolveBreakpoints([large])), 280);
-  assert.equal(chromiumScrollbarFromPx(desktop, []), 280);
-});
-
-test('the app’s word to the frame carries a bounded canvas width or none', () => {
-  assert.deepEqual(canvasScrollbarMessage(undefined), { type: 'avb:canvas-scrollbar' });
-  assert.deepEqual(canvasScrollbarMessage(1023), { type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 });
-  for (const good of [280, 1023, 7681]) {
-    assert.deepEqual(parseCanvasScrollbarMessage({ type: 'avb:canvas-scrollbar', chromiumFromPx: good }), {
-      type: 'avb:canvas-scrollbar',
-      chromiumFromPx: good,
-    });
-  }
-  for (const bad of [
-    undefined,
-    'avb:canvas-scrollbar',
-    { type: 'avb:other', chromiumFromPx: 1023 },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: '1023' },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: 1023.5 },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: 279 },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: 7682 },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: Number.NaN },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: NULL_FROM_JSON },
-  ]) {
+test('the app’s word to the frame is one message with nothing to choose', () => {
+  assert.deepEqual(canvasScrollbarMessage(), { type: 'avb:canvas-scrollbar' });
+  assert.deepEqual(parseCanvasScrollbarMessage({ type: 'avb:canvas-scrollbar' }), { type: 'avb:canvas-scrollbar' });
+  // An older app sent where Chromium's bar started: the width is ignored, and the bar is hidden all the same.
+  assert.deepEqual(parseCanvasScrollbarMessage({ type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 }), { type: 'avb:canvas-scrollbar' });
+  for (const bad of [undefined, NULL_FROM_JSON, 'avb:canvas-scrollbar', 3, {}, { type: 'avb:other' }, { type: 'avb:page-scroll' }]) {
     assert.equal(parseCanvasScrollbarMessage(bad), undefined, JSON.stringify(bad));
   }
-  assert.throws(() => canvasScrollbarMessage(12), /Assertion failed: canvasScrollbarMessage: the message parses/);
 });
 
-test('the frame’s stylesheet hides the root bar everywhere or below the width, and the query names the rest', () => {
-  assert.equal(canvasScrollbarCss(undefined), 'html { scrollbar-width: none !important; }');
-  assert.equal(canvasScrollbarCss(1023), '@media (width < 1023px) { html { scrollbar-width: none !important; } }');
-  assert.equal(chromiumScrollbarQuery(undefined), undefined);
-  assert.equal(chromiumScrollbarQuery(1023), '(width >= 1023px)');
-  assert.throws(() => canvasScrollbarCss(12), /Assertion failed: canvasScrollbarCss: a canvas width within the breakpoint bounds/);
-  assert.throws(() => chromiumScrollbarQuery(1023.5), /Assertion failed: chromiumScrollbarQuery: a canvas width within the breakpoint bounds/);
+test('the frame’s stylesheet hides the bar of whichever root scrolls, and no width choice is left in the contract', () => {
+  assert.equal(CANVAS_SCROLLBAR_CSS, 'html, body { scrollbar-width: none !important; }');
+  // The breakpoint-based setting is gone for good: no export may bring a width threshold back.
+  for (const removed of ['chromiumScrollbarFromPx', 'chromiumScrollbarBreakpoints', 'chromiumScrollbarQuery', 'canvasScrollbarCss']) {
+    assert.equal(Reflect.has(canvasScrollbar, removed), false, removed);
+  }
 });
 
 test('the frame’s scroll report is finite, never negative and bounded', () => {

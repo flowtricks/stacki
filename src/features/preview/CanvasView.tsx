@@ -1,6 +1,8 @@
 import React from 'react';
+import { assert } from '../../../shared/core/assert';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
+import { CanvasScrollbar } from './CanvasScrollbar';
 import { parsePreviewMessage } from './previewMessages';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { panelDragPhase, subscribePanelDragPhase } from '../../ui/panelDragPhase';
@@ -380,7 +382,7 @@ function CanvasFrames({
   return (
     <div className="canvas-world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
       {frames.map((frame) => (
-        <div key={frame.key} className="canvas-frame" style={{ left: frame.x, top: 0, width: frame.width, height: frame.height }}>
+        <CanvasFrame key={frame.key} frame={frame} scale={view.scale}>
           <div className="canvas-frame-label" style={{ fontSize: 13 / view.scale, paddingBottom: 8 / view.scale }}>
             {translate('preview.canvas.frameLabel', { device: frame.label, width: frame.width })}
           </div>
@@ -401,8 +403,22 @@ function CanvasFrames({
             }}
           />
           <div className="canvas-frame-cover" />
-        </div>
+        </CanvasFrame>
       ))}
+    </div>
+  );
+}
+
+// One breakpoint's frame on the canvas, with the canvas's own scrollbar beside it (CanvasScrollbar.tsx), as every sized
+// frame has: the frame is told to hide its own bar, so the page gets the breakpoint's whole width here too. The frame
+// grows to its page's height, so the bar shows only for a page taller than PAGE_HEIGHT_PX_MAX.
+function CanvasFrame({ frame, scale, children }: { readonly frame: Frames[number]; readonly scale: number; readonly children: React.ReactNode }) {
+  const frameRef = React.useRef<HTMLDivElement>(null);
+  assert(frame.width > 0, 'CanvasFrame: a frame has a width');
+  return (
+    <div ref={frameRef} className="canvas-frame" style={{ left: frame.x, top: 0, width: frame.width, height: frame.height }}>
+      {children}
+      <CanvasScrollbar frameRef={frameRef} scale={scale} />
     </div>
   );
 }

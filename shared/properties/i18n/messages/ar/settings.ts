@@ -281,11 +281,6 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'يحفظ لقطة مخفية قبل كل دور لـ AI وبعده لإظهار التغييرات. لا يضيف commits إلى سجلك. الإيقاف أسرع في المشاريع الكبيرة.',
   'settings.editor.ai.trackChanges.label': 'لقطة قبل كل تغيير من AI وبعده',
-  'settings.editor.canvas.scrollbar.from': '{breakpoint} وأعرض',
-  'settings.editor.canvas.scrollbar.info':
-    'عند الإيقاف: شريط تمرير رفيع بجانب الصفحة، فتحتفظ بكامل عرض نقطة التوقف كما على الهاتف. من نقطة توقف: شريط تمرير Chromium نفسه عندها وما هو أعرض، ويأخذ من العرض كما على حاسوب بفأرة.',
-  'settings.editor.canvas.scrollbar.label': 'شريط تمرير Chromium',
-  'settings.editor.canvas.scrollbar.off': 'إيقاف',
   'settings.editor.code.chips.info': 'تظهر المتغيرات ومنحنيات التسارع والظلال والتدرجات وclip-path في كود CSS كشارات تفتح محرراتها. عند الإيقاف: CSS عادي.',
   'settings.editor.code.chips.label': 'عرض شارات CSS في الكود',
   'settings.editor.loading': 'جارٍ تحميل التفضيلات…',
@@ -297,7 +292,6 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'عدّ الاستخدام المجهول',
   'settings.editor.saveFailed': 'تم التطبيق لهذه الجلسة، لكن تعذّر الحفظ. تحقق من مساحة القرص وحاول مرة أخرى.',
   'settings.editor.section.ai': 'AI', // same
-  'settings.editor.section.canvas': 'اللوحة',
   'settings.editor.section.code': 'الكود',
   'settings.editor.section.general': 'عام',
   'settings.editor.section.privacy': 'الخصوصية',

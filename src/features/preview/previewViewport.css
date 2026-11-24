@@ -61,8 +61,9 @@
   transition: none;
 }
 /* The canvas's own scrollbar for the page (CanvasScrollbar.tsx): a solid thumb in the gutter beside the frame, never over
-   the page. Its width and offset come in screen pixels divided by the frame's scale.
-   Under the resize handles (z-index 5), which sit further out and only at mid-height. */
+   the page, at the frame's inline end. Its width and offset come in screen pixels divided by the frame's scale.
+   The side resize handles sit 12 screen pixels out at every zoom (SizedFrame.tsx), past the bar's 7, so neither covers
+   the other; the bar stays under them (z-index 5) all the same. */
 .canvas-scrollbar {
   position: absolute;
   top: 0;
@@ -77,11 +78,11 @@
   transition: background 0.12s;
 }
 .canvas-scrollbar:hover .canvas-scrollbar-thumb,
-.frame-sized.scrolling .canvas-scrollbar-thumb {
+.canvas-scrolling .canvas-scrollbar-thumb {
   background: var(--text-dim);
 }
 /* A thumb drag crosses the page: the iframe would take the pointer from the canvas. */
-.frame-sized.scrolling iframe {
+.canvas-scrolling iframe {
   pointer-events: none;
 }
 /* The canvas chrome's stacking order, bottom to top. One scale, so a new layer

@@ -8,8 +8,6 @@ import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
 import { useCanvasWidthRequest, usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest, type PreviewDimensions } from './usePreviewSizing';
 import { SizedFrame } from './SizedFrame';
-import { useCanvasScrollbarPreference } from './canvasScrollbarPreference';
-import { chromiumScrollbarFromPx } from '../../../shared/properties/canvasScrollbar';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
 import type { OverlayInfo, RectMap, SpacingHover } from './PreviewOverlays';
@@ -122,7 +120,6 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const dimensions = props.dimensions ?? ownDimensions;
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectPath);
   const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true }, props.onDevice);
-  const chromiumFromPx = chromiumScrollbarFromPx(useCanvasScrollbarPreference(), breakpoints);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
   const measured = props.device !== 'canvas' && (sizing.width !== undefined || sizing.wrapWidth > 0);
@@ -169,7 +166,6 @@ export default function PreviewPane(props: PreviewPaneProps) {
             },
           }}
           sizing={sizing}
-          chromiumFromPx={chromiumFromPx}
           breakpoints={breakpoints}
           desktopFramePx={desktopFramePx}
           shownGuide={columnGuide.shown}
@@ -188,13 +184,10 @@ function PreviewContent({
   url,
   runtime,
   sizing,
-  chromiumFromPx,
   shownGuide,
   breakpoints,
   desktopFramePx,
 }: {
-  /** Frames this wide and wider keep Chromium's scrollbar (Settings); undefined: the canvas draws its own everywhere. */
-  readonly chromiumFromPx: number | undefined;
   readonly breakpoints: readonly ResolvedBreakpoint[];
   /** The width of the Desktop frame in the side-by-side view. */
   readonly desktopFramePx: number;
@@ -219,7 +212,7 @@ function PreviewContent({
     );
   }
   if (url) {
-    return <DesignPreview props={props} url={url} runtime={runtime} sizing={sizing} chromiumFromPx={chromiumFromPx} shownGuide={shownGuide} />;
+    return <DesignPreview props={props} url={url} runtime={runtime} sizing={sizing} shownGuide={shownGuide} />;
   }
   return <PreviewPlaceholder props={props} />;
 }
@@ -229,14 +222,12 @@ function DesignPreview({
   url,
   runtime,
   sizing,
-  chromiumFromPx,
   shownGuide,
 }: {
   readonly props: PreviewPaneProps;
   readonly url: string;
   readonly runtime: Runtime;
   readonly sizing: Sizing;
-  readonly chromiumFromPx: number | undefined;
   readonly shownGuide: ShownGuide | undefined;
 }) {
   const translate = useTranslate();
@@ -247,7 +238,7 @@ function DesignPreview({
   const dragging = useSyncExternalStore(subscribeCanvasDrag, canvasDragActive);
   return (
     <>
-      <SizedFrame sizing={sizing} chromiumFromPx={chromiumFromPx}>
+      <SizedFrame sizing={sizing}>
         <PreviewFrame
           refreshKey={props.refreshKey ?? ''}
           frameRef={runtime.iframeRef}

@@ -392,7 +392,6 @@
     "shared/properties/breakpointSyncRecord.ts",
     "shared/properties/canvasInteraction.ts",
     "shared/properties/canvasScrollbar.ts",
-    "shared/properties/canvasScrollbarChoice.ts",
     "shared/properties/canvasText.ts",
     "shared/properties/canvasTextOverlay.ts",
     "shared/properties/cascadeOrigin.ts",

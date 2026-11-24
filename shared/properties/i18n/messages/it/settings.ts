@@ -223,11 +223,6 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Salva uno snapshot nascosto prima e dopo ogni turno AI per mostrare le modifiche. Non aggiunge commit alla tua cronologia. Disattivato è più veloce sui progetti grandi.',
   'settings.editor.ai.trackChanges.label': 'Snapshot prima e dopo ogni modifica AI',
-  'settings.editor.canvas.scrollbar.from': '{breakpoint} e più largo',
-  'settings.editor.canvas.scrollbar.info':
-    'Disattivata: una barra di scorrimento sottile accanto alla pagina, che mantiene tutta la larghezza del breakpoint, come su un telefono. Da un breakpoint: la barra di scorrimento di Chromium lì e oltre, che occupa larghezza come su un computer con il mouse.',
-  'settings.editor.canvas.scrollbar.label': 'Barra di scorrimento di Chromium',
-  'settings.editor.canvas.scrollbar.off': 'Disattivata',
   'settings.editor.code.chips.info':
     'Variabili, easing, ombre, gradienti e clip-path nel codice CSS compaiono come chip che aprono i rispettivi editor. Disattivato: CSS semplice.',
   'settings.editor.code.chips.label': 'Mostra i chip CSS nel codice',
@@ -240,7 +235,6 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Conteggio anonimo d’uso',
   'settings.editor.saveFailed': 'Applicato per questa sessione, ma non è stato possibile salvare. Controlla lo spazio su disco e riprova.',
   'settings.editor.section.ai': 'AI', // same
-  'settings.editor.section.canvas': 'Canvas', // same
   'settings.editor.section.code': 'Codice',
   'settings.editor.section.general': 'Generali',
   'settings.editor.section.privacy': 'Privacy', // same

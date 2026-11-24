@@ -21,7 +21,6 @@ function fakePreferences({ stored, failSet = false }) {
     aiTrackChanges: true,
     aiReviewChanges,
     codeChips: true,
-    canvasScrollbar: 'off',
   });
   window.avb = {
     settings: async () => everything(stored),

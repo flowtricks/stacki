@@ -224,11 +224,6 @@ export const messages = {
   'settings.editor.ai.trackChanges.info':
     'Slaat vóór en na elke AI-beurt een verborgen snapshot op om wijzigingen te tonen. Voegt geen commits toe aan je geschiedenis. Uit is sneller bij grote projecten.',
   'settings.editor.ai.trackChanges.label': 'Snapshot vóór en na elke AI-wijziging',
-  'settings.editor.canvas.scrollbar.from': '{breakpoint} en breder',
-  'settings.editor.canvas.scrollbar.info':
-    'Uit: een smalle scrollbalk naast de pagina, zodat de pagina de volle breedte van het breakpoint houdt, zoals op een telefoon. Vanaf een breakpoint: de eigen scrollbalk van Chromium daar en breder, die breedte inneemt zoals op een computer met een muis.',
-  'settings.editor.canvas.scrollbar.label': 'Chromium-scrollbalk',
-  'settings.editor.canvas.scrollbar.off': 'Uit',
   'settings.editor.code.chips.info':
     'Variabelen, easings, schaduwen, verlopen en clip-paths in CSS-code verschijnen als chips die hun editors openen. Uit: gewone CSS.',
   'settings.editor.code.chips.label': 'CSS-chips in code tonen',
@@ -241,7 +236,6 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': 'Anonieme gebruikstellingen',
   'settings.editor.saveFailed': 'Toegepast voor deze sessie, maar opslaan is mislukt. Controleer de schijfruimte en probeer het opnieuw.',
   'settings.editor.section.ai': 'AI', // same
-  'settings.editor.section.canvas': 'Canvas', // same
   'settings.editor.section.code': 'Code', // same
   'settings.editor.section.general': 'Algemeen',
   'settings.editor.section.privacy': 'Privacy', // same

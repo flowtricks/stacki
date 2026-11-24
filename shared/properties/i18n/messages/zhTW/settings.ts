@@ -211,11 +211,6 @@ export const messages = {
   'settings.editor.ai.reviewChanges.label': '詢問我是否保留 AI 變更',
   'settings.editor.ai.trackChanges.info': '在每次 AI 回合前後儲存隱藏的快照以顯示變更。不會在你的歷史記錄中新增提交。在大型專案中關閉會較快。',
   'settings.editor.ai.trackChanges.label': '每次 AI 變更前後建立快照',
-  'settings.editor.canvas.scrollbar.from': '{breakpoint} 及更寬',
-  'settings.editor.canvas.scrollbar.info':
-    '關閉：在頁面旁顯示一條細捲軸，頁面會像在手機上一樣使用斷點的完整寬度。從某個斷點起：在該寬度及更寬時使用 Chromium 本身的捲軸，會像在使用滑鼠的電腦上一樣占用寬度。',
-  'settings.editor.canvas.scrollbar.label': 'Chromium 捲軸',
-  'settings.editor.canvas.scrollbar.off': '關閉',
   'settings.editor.code.chips.info': '程式碼中 CSS 的變數、緩動、陰影、漸層與 clip-path 會顯示為可開啟編輯器的標籤。關閉：純 CSS。',
   'settings.editor.code.chips.label': '在程式碼中顯示 CSS 標籤',
   'settings.editor.loading': '正在載入偏好設定…',
@@ -226,7 +221,6 @@ export const messages = {
   'settings.editor.privacy.usageCounts.label': '匿名使用次數統計',
   'settings.editor.saveFailed': '已在本次工作階段套用，但無法儲存。請檢查磁碟空間後再試一次。',
   'settings.editor.section.ai': 'AI', // same
-  'settings.editor.section.canvas': '畫布',
   'settings.editor.section.code': '程式碼',
   'settings.editor.section.general': '一般',
   'settings.editor.section.privacy': '隱私權',

@@ -219,8 +219,7 @@ function DesignFrame({
   const frameAddress = useFrameAddress(props.preview.frame, props.preview.url);
   return (
     <>
-      {/* Studio has no app settings file: the canvas draws its own scrollbar at every width (canvasScrollbar.ts). */}
-      <SizedFrame sizing={sizing} chromiumFromPx={undefined}>
+      <SizedFrame sizing={sizing}>
         <iframe
           ref={props.preview.frame}
           title={translate('preview.pane.title')}

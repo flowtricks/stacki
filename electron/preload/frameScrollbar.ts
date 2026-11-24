@@ -1,15 +1,19 @@
 // The frame's half of the canvas scrollbar (shared/properties/canvasScrollbar.ts), shared by Desktop's preload
-// (frameQueries.ts) and Studio's preview client: hides the page's root scrollbar where the app says, reports the
+// (frameQueries.ts) and Studio's preview client: hides the page's own scrollbar once the app says so, reports the
 // page's vertical scroll so the canvas can draw its own bar, and scrolls when that bar is dragged.
 //
 // Until the app's word arrives, the page keeps Chromium's scrollbar and every report says so (`chromium: true`),
-// so the canvas never draws a second bar beside a frame that still shows its own.
+// so the canvas never draws a second bar beside a frame that still shows its own. A frame with no app (the phone
+// preview, a page opened on its own) is never told and keeps its scrollbar.
+//
+// The scrolling root is <html> (the document's scrolling element) on nearly every page. A page that holds <html> still
+// and scrolls <body> instead (`html { overflow: hidden } body { overflow: auto; height: 100% }`) is read and scrolled
+// through <body>, so its thumb is not missing.
 
 import { assert } from '../../shared/core/assert';
 import {
+  CANVAS_SCROLLBAR_CSS,
   CANVAS_SCROLLBAR_LIMITS,
-  canvasScrollbarCss,
-  chromiumScrollbarQuery,
   pageScrollMessage,
   parseCanvasScrollbarMessage,
   parsePageScrollToMessage,
@@ -17,11 +21,10 @@ import {
 } from '../../shared/properties/canvasScrollbar';
 
 const STYLE_ID = 'avb-canvas-scrollbar';
+/** The `overflow-y` values under which a <body> taller than its box scrolls itself. */
+const SCROLLING_OVERFLOWS: readonly string[] = ['auto', 'scroll', 'overlay'];
 
-/** Where Chromium keeps its bar: not yet told (`unknown`, its bar everywhere), nowhere, or from a width up. */
-type ChromiumRange = { readonly kind: 'unknown' } | { readonly kind: 'query'; readonly query: MediaQueryList | undefined };
-
-let range: ChromiumRange = { kind: 'unknown' };
+let told = false;
 let post: ((message: unknown) => void) | undefined = undefined;
 let reportScheduled = false;
 let lastReport: PageScroll | undefined = undefined;
@@ -35,7 +38,8 @@ export function installPageScrollReport(send: (message: unknown) => void): void 
     return;
   }
   post = send;
-  window.addEventListener('scroll', scheduleReport, { passive: true });
+  // Capture on the document: a scrolling <body> fires `scroll` at itself, and element scroll events do not bubble.
+  document.addEventListener('scroll', scheduleReport, { capture: true, passive: true });
   window.addEventListener('resize', scheduleReport);
   window.addEventListener('load', scheduleReport);
   document.addEventListener('avb:morphed', scheduleReport);
@@ -67,16 +71,15 @@ function observeRootWhenReady(): void {
   window.addEventListener('DOMContentLoaded', observe);
 }
 
-/** Applies an app message if it is one (where Chromium's bar starts, or a scroll); false when it was something else. */
+/** Applies an app message if it is one (hide the page's bar, or a scroll); false when it was something else. */
 export function receiveCanvasScrollbar(input: unknown): boolean {
-  const scrollbar = parseCanvasScrollbarMessage(input);
-  if (scrollbar !== undefined) {
-    applyRange(scrollbar.chromiumFromPx);
+  if (parseCanvasScrollbarMessage(input) !== undefined) {
+    hidePageScrollbar();
     return true;
   }
   const scrollTo = parsePageScrollToMessage(input);
   if (scrollTo !== undefined) {
-    window.scrollTo({ top: scrollTo.topPx, behavior: 'instant' });
+    scrollPageTo(scrollTo.topPx);
     scheduleReport();
     return true;
   }
@@ -85,51 +88,81 @@ export function receiveCanvasScrollbar(input: unknown): boolean {
 
 /** The scroll the frame reports now, or undefined before the page has a root to scroll. */
 export function pageScrollNow(): PageScroll | undefined {
-  const root = document.scrollingElement ?? document.documentElement;
-  if (root === null) {
+  const root = scrollRoot();
+  if (root === undefined) {
     return undefined; // A frame still being created: its first report comes once the page exists.
   }
+  // The viewport's height for the document's root; the element's own box for a scrolling <body>.
+  const viewHeightPx = bodyIsRoot(root) ? root.clientHeight : window.innerHeight;
   const scroll = {
     topPx: clampPagePx(root.scrollTop),
     heightPx: clampPagePx(root.scrollHeight),
-    viewHeightPx: clampPagePx(window.innerHeight),
-    chromium: chromiumDrawsBar(),
+    viewHeightPx: clampPagePx(viewHeightPx),
+    chromium: !told,
   };
   assert(scroll.topPx >= 0, 'pageScrollNow: never above the page');
   assert(scroll.viewHeightPx >= 0, 'pageScrollNow: a view has a height');
   return scroll;
 }
 
-function applyRange(chromiumFromPx: number | undefined): void {
+// The element that scrolls the page: the document's scrolling element, unless it cannot scroll and <body> does.
+function scrollRoot(): Element | undefined {
+  const root = document.scrollingElement ?? document.documentElement;
+  if (root === null) {
+    return undefined;
+  }
+  const body = document.body;
+  if (body === null) {
+    return root;
+  }
+  if (body === root) {
+    return root; // Quirks mode: <body> already is the scrolling element.
+  }
+  if (root.scrollHeight > root.clientHeight) {
+    return root; // The document itself scrolls.
+  }
+  return bodyScrolls(body) ? body : root;
+}
+
+// The page moves to `topPx`: the window for the document's root, as before; <body> itself when that is what scrolls.
+function scrollPageTo(topPx: number): void {
+  const root = scrollRoot();
+  if (root === undefined) {
+    return;
+  }
+  if (bodyIsRoot(root)) {
+    root.scrollTo({ top: topPx, behavior: 'instant' });
+  } else {
+    window.scrollTo({ top: topPx, behavior: 'instant' });
+  }
+}
+
+// A scrolling <body> in a standards-mode page: the one case read and scrolled through an element, not the window.
+function bodyIsRoot(root: Element): boolean {
+  if (root === document.body) {
+    return root !== document.scrollingElement;
+  }
+  return false;
+}
+
+function bodyScrolls(body: HTMLElement): boolean {
+  if (body.scrollHeight > body.clientHeight) {
+    return SCROLLING_OVERFLOWS.includes(window.getComputedStyle(body).overflowY);
+  }
+  return false;
+}
+
+function hidePageScrollbar(): void {
   const style = styleElement();
   if (style === undefined) {
     return;
   }
-  const css = canvasScrollbarCss(chromiumFromPx);
-  if (style.textContent !== css) {
-    style.textContent = css;
+  if (style.textContent !== CANVAS_SCROLLBAR_CSS) {
+    style.textContent = CANVAS_SCROLLBAR_CSS;
   }
-  if (range.kind === 'query') {
-    range.query?.removeEventListener('change', scheduleReport);
-  }
-  const query = chromiumScrollbarQuery(chromiumFromPx);
-  const list = query === undefined ? undefined : window.matchMedia(query);
-  list?.addEventListener('change', scheduleReport);
-  range = { kind: 'query', query: list };
+  told = true;
+  assert(style.textContent === CANVAS_SCROLLBAR_CSS, 'hidePageScrollbar: the frame draws no bar of its own');
   scheduleReport();
-}
-
-function chromiumDrawsBar(): boolean {
-  switch (range.kind) {
-    case 'unknown':
-      return true;
-    case 'query':
-      return range.query?.matches ?? false;
-    default: {
-      const exhaustive: never = range;
-      return exhaustive;
-    }
-  }
 }
 
 // The one <style> this module writes, last in <head> when made. A canvas patch keeps it: the patch only touches

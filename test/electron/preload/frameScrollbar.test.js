@@ -1,10 +1,11 @@
-// Goal: the frame half of the canvas scrollbar (electron/preload/frameScrollbar.ts) hides the page's root scrollbar
-// exactly where the app says, tells the truth about which bar is drawn (Chromium's until the app's word arrives), reports
-// the page's scroll at most once per animation frame and only when it changed, and scrolls when the canvas's bar asks.
+// Goal: the frame half of the canvas scrollbar (electron/preload/frameScrollbar.ts) hides the page's own scrollbar once
+// the app says so, at every width (one behaviour, no setting), tells the truth about which bar is drawn (Chromium's
+// until the app's word arrives), reports the page's scroll at most once per animation frame and only when it changed,
+// follows a page that scrolls <body> instead of <html>, and scrolls when the canvas's bar asks.
 // Method: the real module, bundled with esbuild, runs in a fresh jsdom window per test (its state is per page, as in a
-// frame). jsdom has no layout, so the test owns the root's scroll position and height and a `matchMedia` that answers
-// from a width the test sets; animation frames are queued and flushed by hand. Every report is read through the shared
-// contract's parser, as the canvas reads it.
+// frame). jsdom has no layout, so the test owns the root's and the body's scroll position and heights; animation
+// frames are queued and flushed by hand. Every report is read through the shared contract's parser, as the canvas
+// reads it.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -28,31 +29,16 @@ function moduleSource() {
   return bundle;
 }
 
-// A frame `widthPx` wide holding a page `heightPx` tall, the module loaded and reporting into `sent`.
-function frame({ widthPx, heightPx }) {
+// A frame holding a page `heightPx` tall that scrolls <html>, the module loaded and reporting into `sent`.
+function frame({ heightPx }) {
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>');
   const window = dom.window;
   const root = window.document.documentElement;
-  const page = { widthPx, heightPx, topPx: 0 };
+  const page = { heightPx, topPx: 0 };
   Object.defineProperty(root, 'scrollTop', { configurable: true, get: () => page.topPx });
   Object.defineProperty(root, 'scrollHeight', { configurable: true, get: () => page.heightPx });
+  Object.defineProperty(root, 'clientHeight', { configurable: true, get: () => 800 });
   Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => 800 });
-  const queries = [];
-  window.matchMedia = (query) => {
-    const atLeast = Number(/^\(width >= (\d+)px\)$/.exec(query)?.[1]);
-    assert.ok(Number.isSafeInteger(atLeast), `a width query: ${query}`);
-    const listeners = new Set();
-    const list = {
-      get matches() {
-        return page.widthPx >= atLeast;
-      },
-      addEventListener: (_type, listener) => listeners.add(listener),
-      removeEventListener: (_type, listener) => listeners.delete(listener),
-      listeners,
-    };
-    queries.push(list);
-    return list;
-  };
   const scrolls = [];
   window.scrollTo = (options) => {
     scrolls.push(options);
@@ -78,7 +64,6 @@ function frame({ widthPx, heightPx }) {
     module,
     window,
     page,
-    queries,
     scrolls,
     sent,
     install: () => module.installPageScrollReport((message) => sent.push(message)),
@@ -100,14 +85,14 @@ function frame({ widthPx, heightPx }) {
       }),
     scroll: (topPx) => {
       page.topPx = topPx;
-      window.dispatchEvent(new window.Event('scroll'));
+      window.document.dispatchEvent(new window.Event('scroll', { bubbles: true })); // A viewport scroll fires at the document.
     },
     close: () => window.close(),
   };
 }
 
-test('until the app says where Chromium’s bar starts, the page keeps it and every report says so', (context) => {
-  const view = frame({ widthPx: 320, heightPx: 4000 });
+test('until the app’s word arrives, the page keeps it and every report says so', (context) => {
+  const view = frame({ heightPx: 4000 });
   context.after(view.close);
   view.install();
   view.flush();
@@ -115,42 +100,57 @@ test('until the app says where Chromium’s bar starts, the page keeps it and ev
   assert.deepEqual(view.reports(), [{ type: 'avb:page-scroll', topPx: 0, heightPx: 4000, viewHeightPx: 800, chromium: true }]);
 });
 
-test('Off hides the root bar at every width, and the canvas draws its own', (context) => {
-  const view = frame({ widthPx: 1440, heightPx: 4000 });
+test('the app’s word hides the page’s own bar at every width, and the canvas draws its own', (context) => {
+  const view = frame({ heightPx: 4000 });
   context.after(view.close);
   view.install();
   assert.equal(view.module.receiveCanvasScrollbar({ type: 'avb:canvas-scrollbar' }), true);
   view.flush();
-  assert.equal(view.sheet(), 'html { scrollbar-width: none !important; }');
+  assert.equal(view.sheet(), 'html, body { scrollbar-width: none !important; }');
   assert.equal(view.reports().at(-1).chromium, false);
-  assert.equal(view.queries.length, 0, 'no width to watch');
+  // An older app's width is ignored: the bar stays hidden, with no width to watch and no classic bar from any width up.
+  assert.equal(view.module.receiveCanvasScrollbar({ type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 }), true);
+  view.flush();
+  assert.equal(view.sheet(), 'html, body { scrollbar-width: none !important; }');
+  assert.equal(view.reports().at(-1).chromium, false);
+  assert.equal(view.window.document.querySelectorAll('#avb-canvas-scrollbar').length, 1, 'one stylesheet, however often told');
 });
 
-test('from a breakpoint, a frame below it hides the root bar and one at or past it keeps Chromium’s, as it is dragged', (context) => {
-  const view = frame({ widthPx: 320, heightPx: 4000 });
+test('a page that holds <html> still and scrolls <body> is read and scrolled through <body>', (context) => {
+  const view = frame({ heightPx: 800 }); // <html> is exactly the view: it does not scroll.
   context.after(view.close);
+  const body = view.window.document.body;
+  body.style.overflowY = 'auto';
+  const inner = { topPx: 0 };
+  Object.defineProperty(body, 'scrollTop', { configurable: true, get: () => inner.topPx });
+  Object.defineProperty(body, 'scrollHeight', { configurable: true, get: () => 5000 });
+  Object.defineProperty(body, 'clientHeight', { configurable: true, get: () => 760 });
+  const bodyScrolls = [];
+  body.scrollTo = (options) => {
+    bodyScrolls.push(options.top);
+    inner.topPx = options.top;
+  };
   view.install();
-  view.module.receiveCanvasScrollbar({ type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 });
-  view.flush();
-  assert.equal(view.sheet(), '@media (width < 1023px) { html { scrollbar-width: none !important; } }');
-  assert.equal(view.reports().at(-1).chromium, false, 'a phone frame: the canvas draws the bar');
-  // The frame is dragged to the Laptop width: the media query changes and the frame says so without a message.
-  view.page.widthPx = 1023;
-  for (const listener of view.queries[0].listeners) {
-    listener();
-  }
-  view.flush();
-  assert.equal(view.reports().at(-1).chromium, true, 'Laptop and wider: Chromium draws its own');
-  // Turned off again: the old width is no longer watched.
   view.module.receiveCanvasScrollbar({ type: 'avb:canvas-scrollbar' });
   view.flush();
-  assert.equal(view.queries[0].listeners.size, 0, 'the previous query is let go');
-  assert.equal(view.sheet(), 'html { scrollbar-width: none !important; }');
-  assert.equal(view.reports().at(-1).chromium, false);
+  assert.deepEqual(view.reports().at(-1), { type: 'avb:page-scroll', topPx: 0, heightPx: 5000, viewHeightPx: 760, chromium: false });
+  // <body>'s own scroll event does not bubble: the module hears it in the capture phase.
+  inner.topPx = 900;
+  body.dispatchEvent(new view.window.Event('scroll', { bubbles: false }));
+  view.flush();
+  assert.equal(view.reports().at(-1).topPx, 900);
+  view.module.receiveCanvasScrollbar({ type: 'avb:page-scroll-to', topPx: 2000 });
+  assert.deepEqual(bodyScrolls, [2000]);
+  assert.deepEqual(view.scrolls, [], 'the window is left alone');
+  // A <body> that is taller but does not scroll (overflow visible) is not taken for the root.
+  body.style.overflowY = 'visible';
+  view.window.dispatchEvent(new view.window.Event('resize'));
+  view.flush();
+  assert.equal(view.reports().at(-1).heightPx, 800, 'back to <html>, which does not scroll');
 });
 
 test('a burst of scrolls is one report per animation frame, and an unchanged page sends none', (context) => {
-  const view = frame({ widthPx: 320, heightPx: 4000 });
+  const view = frame({ heightPx: 4000 });
   context.after(view.close);
   view.install();
   view.install(); // A second install is ignored: one listener, one report per change.
@@ -175,7 +175,7 @@ test('a burst of scrolls is one report per animation frame, and an unchanged pag
 });
 
 test('the canvas’s bar scrolls the page, and the new position is reported', (context) => {
-  const view = frame({ widthPx: 320, heightPx: 4000 });
+  const view = frame({ heightPx: 4000 });
   context.after(view.close);
   view.install();
   view.module.receiveCanvasScrollbar({ type: 'avb:canvas-scrollbar' });
@@ -189,14 +189,13 @@ test('the canvas’s bar scrolls the page, and the new position is reported', (c
   assert.equal(view.reports().at(-1).topPx, 1600);
 });
 
-test('anything else is not this module’s, and a malformed width hides nothing', (context) => {
-  const view = frame({ widthPx: 320, heightPx: 4000 });
+test('anything else is not this module’s, and hides nothing', (context) => {
+  const view = frame({ heightPx: 4000 });
   context.after(view.close);
   for (const input of [
     undefined,
     { type: 'avb:query' },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: 12 },
-    { type: 'avb:canvas-scrollbar', chromiumFromPx: '1023' },
+    { type: 'avb:canvas-scrollbars' },
     { type: 'avb:page-scroll-to', topPx: -1 },
     { type: 'avb:page-scroll-to' },
   ]) {
@@ -207,7 +206,7 @@ test('anything else is not this module’s, and a malformed width hides nothing'
 });
 
 test('a page taller than the bound is reported at the bound, never as an invalid report', (context) => {
-  const view = frame({ widthPx: 320, heightPx: 50_000_000 });
+  const view = frame({ heightPx: 50_000_000 });
   context.after(view.close);
   view.install();
   view.flush();
