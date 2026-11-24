@@ -9,6 +9,7 @@
 // The trace is static and only locates: whether a value is present or missing is
 // decided from the rendered head, never from here.
 import { assert } from '../core/assert';
+import { LIMITS } from '../core/limits';
 import { attrState, nodeChildren, nodeProps } from './auditMarkup';
 import type { AuditFileInput } from './auditStatic';
 import type { PageNode, PairedNode } from './pageNodeTypes';
@@ -63,6 +64,71 @@ export function traceAuthored(input: TraceInput): Authored | undefined {
   const hops = instanceChain(input, leafFile.file);
   assert(hops === undefined || hops.length <= HOPS_MAX, 'traceAuthored: the chain is bounded');
   return hops === undefined ? { kind: 'file', file: leafFile.file } : climb(hops, leafFile, prop);
+}
+
+export interface ChainTraceInput {
+  readonly files: ReadonlyMap<string, AuditFileInput>;
+  /** The project-relative file a component tag in `from` renders, or undefined. */
+  readonly resolve: (from: AuditFileInput, tag: string) => string | undefined;
+  /** The marked nodes the rendered element sits inside, outermost first (RenderedSource.within). */
+  readonly within: readonly { readonly file: string; readonly path: readonly number[] }[];
+  /** The element that holds the value, and the attribute it is in. */
+  readonly leaf: { readonly file: string; readonly path: readonly number[]; readonly attr: string };
+}
+
+/**
+ * Where one rendered copy of a value is written, up the instances that rendered that copy.
+ * `traceAuthored` takes the first instance of each component on the page, which is right for
+ * a head written once; a link a Button writes from its `href` prop differs per Button, so this
+ * climbs the very instances the rendered markers name: the second Button's own `href`.
+ */
+export function traceThrough(input: ChainTraceInput): Authored | undefined {
+  assert(input.leaf.path.length > 0, 'traceThrough: the value has an element');
+  assert(input.within.length <= LIMITS.treeDepthMax * 4, 'traceThrough: the markers around one element are bounded');
+  const leafFile = input.files.get(input.leaf.file);
+  const element = leafFile === undefined ? undefined : nodeAt(leafFile.nodes, input.leaf.path);
+  if (leafFile === undefined || element === undefined || (element.kind !== 'element' && element.kind !== 'raw')) {
+    return undefined;
+  }
+  const here: Authored = { kind: 'node', file: leafFile.file, path: input.leaf.path, tag: element.name, prop: undefined };
+  const value = valueOf(element, input.leaf.attr);
+  if (value === undefined || value.kind === 'literal') {
+    return here;
+  }
+  const prop = propBehind(leafFile, value.code);
+  if (prop === undefined) {
+    return importedIdentifier(leafFile, value.code) ?? here;
+  }
+  const hops = markedChain(input, leafFile);
+  assert(hops.length <= HOPS_MAX, 'traceThrough: the chain is bounded');
+  return hops.length === 0 ? (defaultOf(leafFile, prop) ?? here) : climb(hops, leafFile, prop);
+}
+
+// The instances that rendered the leaf's file, innermost first found, returned outermost first. A
+// marker that is not an instance of the file below (an element around a slot, slot content
+// passed from further up) is passed over, so each hop renders the file of the hop after it.
+function markedChain(input: ChainTraceInput, leafFile: AuditFileInput): readonly Hop[] {
+  const hops: Hop[] = [];
+  let callee = leafFile;
+  for (let index = input.within.length - 1; index >= 0 && hops.length < HOPS_MAX; index--) {
+    const place = input.within[index];
+    assert(place !== undefined, 'markedChain: the marker exists');
+    const caller = input.files.get(place.file);
+    const node = caller === undefined ? undefined : nodeAt(caller.nodes, place.path);
+    if (caller === undefined || node === undefined || node.kind !== 'component') {
+      continue;
+    }
+    if (input.resolve(caller, node.name) !== callee.file) {
+      continue;
+    }
+    hops.unshift({ caller, path: place.path, tag: node.name, callee });
+    callee = caller;
+  }
+  assert(
+    hops.every((hop, at) => at === 0 || hops[at - 1]?.callee.file === hop.caller.file),
+    'markedChain: each hop renders the next',
+  );
+  return hops;
 }
 
 // Up the instances, outermost last: each passes the prop on, sets it, or leaves the callee's default.

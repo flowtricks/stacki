@@ -78,6 +78,7 @@ export const AUDIT_TEXT = {
   'audits.fix.setValue': 'Set {property} to {value}',
   'audits.fix.useVariable': 'Use {variable}',
   'audits.measure.characters': { one: '{count} character', other: '{count} characters' },
+  'audits.measure.instances': { one: '{count} instance', other: '{count} instances' },
 } as const satisfies Record<string, MessageValue>;
 
 export type AuditTextKey = keyof typeof AUDIT_TEXT;

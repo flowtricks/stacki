@@ -23,6 +23,9 @@ export function renderedTree(document: Document, pageFile: string, styleOf?: (el
   const root = document.documentElement;
   assert(root !== null, 'renderedTree: a document has a root');
   let budget = AUDIT_LIMITS.elementsPerFileMax * 4;
+  // The markers open at this point of the document, outermost first: each avb-s opens one, its
+  // avb-e closes it. They are what an element renders inside (RenderedSource.within).
+  const open: { readonly id: string; readonly place: RenderedSource }[] = [];
   // Recursion follows the DOM; below the depth bound an element is read without its children, and the budget bounds the total.
   const convert = (element: Element, source: RenderedSource | undefined, depth: number): RenderedElement => {
     budget -= 1;
@@ -33,7 +36,14 @@ export function renderedTree(document: Document, pageFile: string, styleOf?: (el
     let marker: RenderedSource | undefined;
     for (const child of nodes) {
       if (child.nodeType === 8) {
-        marker = parseMarker(child.textContent ?? '', pageFile) ?? marker;
+        const data = child.textContent ?? '';
+        const parsed = parseMarker(data, pageFile);
+        if (parsed !== undefined) {
+          marker = parsed;
+          openMarker(open, data, parsed);
+        } else {
+          closeMarker(open, data);
+        }
       } else if (child.nodeType === 3) {
         const value = child.textContent ?? '';
         if (value.trim().length > 0) {
@@ -45,7 +55,7 @@ export function renderedTree(document: Document, pageFile: string, styleOf?: (el
         }
       } else if (child.nodeType === 1 && child instanceof Element) {
         const location = elementPlace(child, marker, pageFile);
-        children.push(convert(child, location ?? inherited(source), depth + 1));
+        children.push(convert(child, location === undefined ? inherited(source) : placed(location, open), depth + 1));
         marker = undefined;
       }
     }
@@ -65,6 +75,36 @@ export function renderedTree(document: Document, pageFile: string, styleOf?: (el
   return convert(root, undefined, 0);
 }
 
+/** Open markers one page nests at most; past it the outermost are dropped, which only loses attribution. */
+const MARKERS_OPEN_MAX = LIMITS.ipcDepthMax * 2;
+
+function openMarker(open: { readonly id: string; readonly place: RenderedSource }[], data: string, place: RenderedSource): void {
+  open.push({ id: data.slice('avb-s:'.length), place });
+  if (open.length > MARKERS_OPEN_MAX) {
+    open.shift();
+  }
+  assert(open.length <= MARKERS_OPEN_MAX, 'openMarker: the open markers are bounded');
+}
+
+// An `avb-e:<id>` closes its `avb-s:<id>` and every marker left open inside it.
+function closeMarker(open: { readonly id: string; readonly place: RenderedSource }[], data: string): void {
+  if (!data.startsWith('avb-e:')) {
+    return;
+  }
+  const id = data.slice('avb-e:'.length);
+  const at = open.map((entry) => entry.id).lastIndexOf(id);
+  if (at >= 0) {
+    open.splice(at);
+  }
+  assert(open.length <= MARKERS_OPEN_MAX, 'closeMarker: the open markers are bounded');
+}
+
+/** A marked element's location with the marked nodes around it, its own marker left out. */
+function placed(marker: RenderedSource, open: readonly { readonly place: RenderedSource }[]): RenderedSource {
+  const within = open.filter((entry) => entry.place !== marker).map((entry) => ({ file: entry.place.file, path: entry.place.path }));
+  return within.length === 0 ? marker : { ...marker, within };
+}
+
 // An element's own location: the first path of its `data-avb-p`, which the marked build writes on
 // every element and component root, else the comment marker right before it. The attribute comes
 // first because a comment before an element is not always the element's: a component that renders
@@ -77,7 +117,7 @@ function elementPlace(element: Element, marker: RenderedSource | undefined, page
   if (own === undefined) {
     return marker;
   }
-  // The element's own comment marker names the same node: keep that object.
+  // The element's own comment marker names the same node: keep that object, so `placed` leaves it out of `within`.
   return marker !== undefined && marker.file === own.file && marker.path.join('.') === own.path.join('.') ? marker : own;
 }
 

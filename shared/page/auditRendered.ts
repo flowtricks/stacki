@@ -18,6 +18,7 @@ import {
 } from './auditFindings';
 import type { MessageRef } from '../core/i18n/messageReference';
 import { contrastVerdict } from './auditContrast';
+import { linkTarget, type LinkFacts } from './auditLinks';
 import { DESCRIPTION_CHARS_MAX, DESCRIPTION_CHARS_MIN, VAGUE_LINK_TEXT, placeholderDetail, placeholderImage, placeholderPhrase } from './auditStatic';
 
 /** Where a rendered element was written: the file and the structural path its marker names. */
@@ -27,6 +28,16 @@ export interface RenderedSource {
   /** The element has no marker of its own (a component wrote it, through set:html or a transform):
    * the location is its nearest marked ancestor's, the node that rendered it. */
   readonly ancestor?: true;
+  /** The nodes the element renders inside, outermost first, its own marker left out: the page's
+   * instance, the component markup around it, a nested instance. Absent when there are none. A
+   * value traced up from a component reads which instance rendered this copy from here. */
+  readonly within?: readonly RenderedPlace[];
+}
+
+/** A marked node: the file and the structural path its marker names. */
+export interface RenderedPlace {
+  readonly file: string;
+  readonly path: readonly number[];
 }
 
 /** The computed style the contrast check reads; absent where the renderer could not compute one. */
@@ -70,6 +81,23 @@ export interface RenderedAudit {
   readonly socialImage: { readonly url: string; readonly element: RenderedElement } | undefined;
   /** Whether an analytics snippet is in the page. */
   readonly analytics: boolean;
+  /** Links the project's paths say go nowhere, for the runner to confirm, trace and report. */
+  readonly links: readonly RenderedLink[];
+  /** The ids the page renders, for links from other pages to its fragments. */
+  readonly ids: readonly string[];
+}
+
+/** A link the rendered page holds that the project does not serve, before the runner decides. */
+export interface RenderedLink {
+  /** The finding as the element's own marker locates it; the runner moves it to where the value is written. */
+  readonly finding: AuditFinding;
+  /** The nodes the link renders inside (RenderedSource.within). */
+  readonly within: readonly RenderedPlace[];
+  readonly target:
+    /** No page, route or public file serves the path: a 404 unless the dev server says otherwise. */
+    | { readonly tag: 'missing'; readonly url: string }
+    /** The page exists; the fragment must be an id on it. */
+    | { readonly tag: 'fragment'; readonly route: string; readonly id: string };
 }
 
 /** Script sources and inline calls of the analytics services a launch checks for. */
@@ -114,6 +142,8 @@ export interface RenderedOptions {
   readonly copyAt?: (place: { readonly file: string; readonly path: readonly number[] }) => CopyHolding | undefined;
   /** The placeholder phrases the project checks copy against (shared/properties/auditIgnores.ts). */
   readonly placeholders: readonly string[];
+  /** What the project serves, for the link check; without it links are not judged. */
+  readonly links?: LinkFacts;
 }
 
 export function auditRenderedPage(page: RenderedPage, options: RenderedOptions): RenderedAudit {
@@ -135,9 +165,12 @@ export function auditRenderedPage(page: RenderedPage, options: RenderedOptions):
       findings.push(finding);
     }
   });
+  const ids = renderedIds(elements);
+  const links = options.links === undefined ? [] : checkLinks(page, elements, ids, options.links);
   const title = elements.find((visit) => visit.element.tag === 'title');
   const description = elements.find((visit) => visit.element.tag === 'meta' && (visit.element.attrs['name'] ?? '').toLowerCase() === 'description');
   assert(findings.length <= AUDIT_LIMITS.findingsPerFileMax, 'auditRenderedPage: findings are bounded');
+  assert(links.length <= AUDIT_LIMITS.findingsPerFileMax, 'auditRenderedPage: link findings are bounded');
   return {
     findings,
     title: title === undefined ? undefined : renderedText(title.element).trim() || undefined,
@@ -148,7 +181,71 @@ export function auditRenderedPage(page: RenderedPage, options: RenderedOptions):
     analytics: elements.some(
       (visit) => visit.element.tag === 'script' && ANALYTICS_PATTERN.test(`${visit.element.attrs['src'] ?? ''} ${renderedText(visit.element)}`),
     ),
+    links,
+    ids: [...ids],
   };
+}
+
+// Every id the page renders, and every `<a name>`, which a fragment also scrolls to.
+function renderedIds(elements: readonly Visit[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const { element } of elements) {
+    const id = element.attrs['id'];
+    if (id !== undefined && id.length > 0) {
+      ids.add(id);
+    }
+    const name = element.tag === 'a' ? element.attrs['name'] : undefined;
+    if (name !== undefined && name.length > 0) {
+      ids.add(name);
+    }
+  }
+  assert(ids.size <= elements.length * 2, 'renderedIds: at most two per element');
+  return ids;
+}
+
+// Every link the page renders, whoever wrote it: the page, a component's own markup, a prop a
+// component turned into an href, a slot. A fragment on this page is judged here; a path the
+// project does not serve and a fragment on another page are handed to the runner, which can ask
+// the dev server and read the other page's ids.
+function checkLinks(page: RenderedPage, elements: readonly Visit[], ids: ReadonlySet<string>, facts: LinkFacts): readonly RenderedLink[] {
+  const links: RenderedLink[] = [];
+  for (const { element } of elements) {
+    const href = element.tag === 'a' ? element.attrs['href'] : undefined;
+    if (href === undefined || links.length >= AUDIT_LIMITS.findingsPerFileMax) {
+      continue;
+    }
+    const target = linkTarget(href, facts, page.route);
+    const finding = (): AuditFinding => renderedFinding(page, element, 'link-broken', `href="${href}"`, {}, { byComponent: false });
+    const within = element.source?.within ?? [];
+    switch (target.tag) {
+      case 'ignored':
+        break;
+      case 'here':
+        if (!ids.has(target.id)) {
+          links.push({ finding: finding(), within, target: { tag: 'fragment', route: page.route, id: target.id } });
+        }
+        break;
+      case 'found':
+        if (target.id !== undefined && !(sameRoute(target.route, page.route) && ids.has(target.id))) {
+          links.push({ finding: finding(), within, target: { tag: 'fragment', route: target.route, id: target.id } });
+        }
+        break;
+      case 'missing':
+        links.push({ finding: finding(), within, target: { tag: 'missing', url: target.url } });
+        break;
+      default: {
+        const exhaustive: never = target;
+        return exhaustive;
+      }
+    }
+  }
+  return links;
+}
+
+/** Whether two site paths name the same page, a trailing slash aside. */
+export function sameRoute(left: string, right: string): boolean {
+  const trim = (value: string): string => (value.length > 1 ? value.replace(/\/+$/, '') : value);
+  return trim(left) === trim(right);
 }
 
 function renderedFinding(
@@ -157,6 +254,7 @@ function renderedFinding(
   check: AuditFinding['check'],
   detail: string | DetailText,
   extra: Pick<AuditFinding, 'excerpt' | 'measure' | 'measureRef'>,
+  options?: { readonly byComponent: boolean },
 ): AuditFinding {
   const source = element?.source;
   const file = source?.file ?? page.file;
@@ -166,7 +264,7 @@ function renderedFinding(
     file,
     fileKind,
     element: source === undefined || element === undefined ? undefined : { path: source.path, tag: element.tag, line: undefined },
-    ...writtenDetail(detail, { byComponent: source?.ancestor === true }),
+    ...writtenDetail(detail, options ?? { byComponent: source?.ancestor === true }),
     source: 'rendered',
     fix: undefined,
     ...(extra.excerpt === undefined ? {} : { excerpt: extra.excerpt }),

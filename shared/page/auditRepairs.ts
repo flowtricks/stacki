@@ -170,15 +170,54 @@ export function headingPromotionFix(page: AuditFileInput, headingProps: Readonly
 }
 
 /** The fix that points a link at `route`. */
-export function linkFix(input: { readonly file: string; readonly path: readonly number[]; readonly href: string }, route: string): AuditFix {
+export function linkFix(
+  input: { readonly file: string; readonly path: readonly number[]; readonly href: string; readonly at?: RelinkTarget },
+  route: string,
+): AuditFix {
   assert(route.startsWith('/'), 'linkFix: a route is site-relative');
   assert(input.path.length > 0, 'linkFix: names the link');
-  const patch = { href: { type: 'string', value: route } satisfies Attr };
+  const at = input.at ?? { tag: 'a', attr: 'href' };
+  assert(at.attr.length > 0, 'linkFix: names the attribute or prop that holds the link');
+  const patch = { [at.attr]: { type: 'string', value: route } satisfies Attr };
   return {
     ...labelText('audits.fix.linkTo', { route }),
-    before: `<a href="${input.href}">`,
-    after: `<a href="${route}">`,
+    before: `<${at.tag} ${at.attr}="${input.href}">`,
+    after: `<${at.tag} ${at.attr}="${route}">`,
     file: input.file,
-    edits: [{ tag: 'attributes', path: input.path, expect: 'a', patch }],
+    edits: [{ tag: 'attributes', path: input.path, expect: at.tag, patch }],
   };
+}
+
+/** The tag a link fix patches and the attribute or prop it writes. */
+export interface RelinkTarget {
+  readonly tag: string;
+  readonly attr: string;
+}
+
+/**
+ * Where "Change link" may write: an `<a>` whose href is a literal, or an instance whose link prop
+ * is a literal (`<Button href="/abuot">`). An href written as an expression (`href={href}` inside a
+ * component, a template string) is not replaced: that would cut the binding every other instance
+ * relies on, so the person edits the value where it comes from. Undefined when there is no such place.
+ */
+export function relinkTarget(nodes: readonly PageNode[], path: readonly number[], prop: string | undefined): RelinkTarget | undefined {
+  assert(path.length > 0, 'relinkTarget: names a node');
+  let node: PageNode | undefined;
+  let list = nodes;
+  for (const index of path) {
+    node = list[index];
+    if (node === undefined) {
+      return undefined;
+    }
+    list = nodeChildren(node);
+  }
+  if (node === undefined || (node.kind !== 'element' && node.kind !== 'component')) {
+    return undefined;
+  }
+  const attr = node.kind === 'component' ? prop : node.name.toLowerCase() === 'a' ? 'href' : undefined;
+  if (attr === undefined) {
+    return undefined;
+  }
+  const written = Object.entries(nodeProps(node) ?? {}).find(([key]) => key.toLowerCase() === attr.toLowerCase());
+  return written !== undefined && written[1].type === 'string' ? { tag: node.name, attr: written[0] } : undefined;
 }

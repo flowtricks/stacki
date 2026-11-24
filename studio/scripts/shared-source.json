@@ -319,6 +319,7 @@
     "shared/ipc/updateState.ts",
     "shared/page/auditContrast.ts",
     "shared/page/auditFindings.ts",
+    "shared/page/auditLinks.ts",
     "shared/page/auditMarkup.ts",
     "shared/page/auditPerformance.ts",
     "shared/page/auditPrompt.ts",

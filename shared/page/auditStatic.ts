@@ -46,6 +46,8 @@ import {
 import type { Attr, ImportDecl, PageNode } from './pageNodeTypes';
 import { textValue } from './htmlText';
 import { lintCss, tokenGroup, variablesFor, type TokenIssue, type TokenRules } from './auditTokens';
+import { linkTarget, type LinkFacts } from './auditLinks';
+export { routeExists } from './auditLinks';
 
 /** One file as the audit reads it. */
 export interface AuditFileInput {
@@ -80,6 +82,10 @@ export interface AuditFacts {
   readonly variables: ReadonlyMap<string, string>;
   /** Phrases that mark copy as placeholder. */
   readonly placeholders: readonly string[];
+  /** Astro's `trailingSlash`, when the config sets it: the other spelling of a path is a 404. */
+  readonly trailingSlash?: string | undefined;
+  /** Astro's `base`, when the config sets one: same-site links are served under it. */
+  readonly base?: string | undefined;
 }
 
 export interface SiteConstants {
@@ -870,47 +876,18 @@ function checkLink(run: FileRun, visit: Visit): void {
   checkOpener(run, visit, props, href.value);
 }
 
+// A literal href on a page or a component's own link. A relative one is judged only on a page, whose route it resolves against.
 function checkInternalLink(run: FileRun, visit: Visit, href: string): void {
-  if (!localPath(href) || run.facts.routes.length === 0) {
-    return;
+  const facts: LinkFacts = {
+    routes: run.facts.routes,
+    publicFiles: run.facts.publicFiles,
+    trailingSlash: run.facts.trailingSlash,
+    base: run.facts.base,
+  };
+  const target = linkTarget(href, facts, run.input.kind === 'page' ? run.input.route : undefined);
+  if (target.tag === 'missing') {
+    add(run, visit, { check: 'link-broken', detail: `href="${href}"` });
   }
-  const path = urlPath(href);
-  if (run.facts.publicFiles.has(path) || routeExists(path, run.facts.routes)) {
-    return;
-  }
-  add(run, visit, { check: 'link-broken', detail: `href="${href}"` });
-}
-
-/** Whether `path` is served by one of `routes`, dynamic segments matching any value. */
-export function routeExists(path: string, routes: readonly string[]): boolean {
-  assert(path.startsWith('/'), 'routeExists: asks about an absolute path');
-  const wanted = segments(path);
-  return routes.some((route) => routeMatches(segments(route), wanted));
-}
-
-function segments(path: string): readonly string[] {
-  return path
-    .replace(/\/index(\.html)?$/, '/')
-    .replace(/\.html$/, '')
-    .split('/')
-    .filter((segment) => segment.length > 0);
-}
-
-function routeMatches(route: readonly string[], wanted: readonly string[]): boolean {
-  for (let index = 0; index < route.length; index++) {
-    const segment = route[index] ?? '';
-    if (/^\[\.\.\.[^\]]+\]$/.test(segment)) {
-      return true; // A rest parameter takes every remaining segment, or none.
-    }
-    const value = wanted[index];
-    if (value === undefined) {
-      return false;
-    }
-    if (!/\[[^\]]+\]/.test(segment) && segment !== value) {
-      return false;
-    }
-  }
-  return route.length === wanted.length;
 }
 
 function checkOpener(run: FileRun, visit: Visit, props: Readonly<Record<string, Attr>> | undefined, href: string): void {

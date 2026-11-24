@@ -11,8 +11,9 @@
 import { assert } from '../../../shared/core/assert';
 import type { Result } from '../../../shared/core/result';
 import { AUDIT_LIMITS, uniqueFindings, type AuditFinding } from '../../../shared/page/auditFindings';
-import { auditRenderedPage, type RenderedElement, type RenderedOptions } from '../../../shared/page/auditRendered';
+import { auditRenderedPage, sameRoute, type RenderedElement, type RenderedLink, type RenderedOptions } from '../../../shared/page/auditRendered';
 import { copyHolding } from './copyHolding';
+import { instanceLinkFindings, LINK_HOPS_MAX, type LinkFacts } from '../../../shared/page/auditLinks';
 import {
   SITE_FILE_ENDPOINTS,
   SITE_FILE_URLS,
@@ -38,8 +39,8 @@ import {
   type SiteConstants,
 } from '../../../shared/page/auditStatic';
 import { HEADING_TAG_PROPS, headingPromotionFix, instanceIdFix } from '../../../shared/page/auditRepairs';
-import { nodeAt, traceAuthored } from '../../../shared/page/auditTrace';
-import { auditFinding, detailText } from '../../../shared/page/auditFindings';
+import { nodeAt, traceAuthored, traceThrough, type Authored } from '../../../shared/page/auditTrace';
+import { auditFinding, detailText, measureText } from '../../../shared/page/auditFindings';
 import type { ImportDecl, PageNode } from '../../../shared/page/pageNode';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
@@ -168,11 +169,18 @@ export async function runAudit(input: AuditRunInput, io: AuditIO): Promise<Audit
     findings.push(...audit.findings);
     summaries.push(audit.summary);
   }
+  // The components the read files render, read too, so a link set on an instance is followed into them.
+  const known = await withRenderedComponents(input, inputs, io);
+  const resolve = componentResolver(input);
+  findings.push(...instanceLinkFindings({ files: known, resolve, facts: linkFacts(facts) }));
   const rendered = await renderedPass(input, plan.routes, { facts, copyAt: copyHolding(inputs) }, io, (finding, pageFile) =>
     relocated(finding, { pageFile, inputs, input, io }),
   );
   const headings = headingComponents(input.scan);
   findings.push(...renderedPlaceholdersNew(rendered.findings, findings).map((finding) => retagged(repaired(finding, inputs, headings), inputs)));
+  const links = await renderedLinkFindings(rendered.links, { files: known, resolve, ids: rendered.ids, io });
+  findings.push(...links.map((link) => link.finding));
+  const served = await servedLinkIds(findings, links, input, io);
   if (plan.site || input.scope === 'pages') {
     const config = plan.site ? await configFacts(input, io) : undefined;
     const siteFindings = auditSite({
@@ -191,7 +199,8 @@ export async function runAudit(input: AuditRunInput, io: AuditIO): Promise<Audit
   if (plan.site || input.scope === 'pages') {
     findings.push(...(await socialImageFindings(rendered.pages, io)));
   }
-  const unique = configured(uniqueFindings(findings), input.settings).slice(0, AUDIT_LIMITS.findingsMax);
+  const kept = findings.filter((finding) => !served.has(finding.id));
+  const unique = withUses(configured(uniqueFindings(kept), input.settings), links, input).slice(0, AUDIT_LIMITS.findingsMax);
   assert(unique.length <= AUDIT_LIMITS.findingsMax, 'runAudit: the findings are bounded');
   const trees = new Map([...inputs].map(([file, fileInput]) => [file, fileInput.nodes] as const));
   assert(trees.size <= AUDIT_LIMITS.filesMax, 'runAudit: the trees are bounded');
@@ -277,6 +286,7 @@ async function gatherFacts(input: AuditRunInput, reads: readonly { readonly read
     }
   }
   const constants = await siteConstants(io);
+  const config = await configFacts(input, io);
   return {
     routes: input.scan.pages.map((page) => page.route),
     publicFiles,
@@ -286,7 +296,19 @@ async function gatherFacts(input: AuditRunInput, reads: readonly { readonly read
     tokens: input.settings.tokens,
     variables: await io.variables().catch(() => new Map<string, string>()),
     placeholders: input.settings.placeholders,
+    trailingSlash: input.scan.trailingSlash,
+    base: config === undefined ? undefined : configBase(config.text),
   };
+}
+
+/** Astro's `base` as the config writes it, a literal string; undefined when it sets none or computes one. */
+export function configBase(text: string): string | undefined {
+  const written = /\bbase\s*:\s*(['"`])(\/[^'"`$]*)\1/.exec(text)?.[2];
+  return written === undefined || written === '/' ? undefined : written;
+}
+
+function linkFacts(facts: AuditFacts): LinkFacts {
+  return { routes: facts.routes, publicFiles: facts.publicFiles, trailingSlash: facts.trailingSlash, base: facts.base };
 }
 
 // Every same-site `<img src>` the files write, so their sizes are read once, before the checks.
@@ -356,7 +378,13 @@ async function renderedPass(
   { facts, copyAt }: { readonly facts: AuditFacts; readonly copyAt: RenderedOptions['copyAt'] },
   io: AuditIO,
   relocate: (finding: AuditFinding, pageFile: string) => Promise<AuditFinding>,
-): Promise<{ readonly findings: readonly AuditFinding[]; readonly pages: readonly SitePage[]; readonly status: RenderedStatus }> {
+): Promise<{
+  readonly findings: readonly AuditFinding[];
+  readonly pages: readonly SitePage[];
+  readonly status: RenderedStatus;
+  readonly links: readonly PageLink[];
+  readonly ids: ReadonlyMap<string, ReadonlySet<string>>;
+}> {
   const pagesFromScan = input.scan.pages.map((page): SitePage => ({
     file: relativeTo(input.projectPath, page.path),
     route: page.route,
@@ -365,10 +393,12 @@ async function renderedPass(
   }));
   const render = io.renderPage;
   if (render === undefined) {
-    return { findings: [], pages: pagesFromScan, status: { tag: 'offline' } };
+    return { findings: [], pages: pagesFromScan, status: { tag: 'offline' }, links: [], ids: new Map() };
   }
   const findings: AuditFinding[] = [];
   const pages: SitePage[] = [];
+  const links: PageLink[] = [];
+  const ids = new Map<string, ReadonlySet<string>>();
   let failure: string | undefined;
   for (const { route, file } of routes) {
     const html = await render(route).catch((error: unknown): RenderedHtml => ({ ok: false, message: String(error) }));
@@ -387,6 +417,8 @@ async function renderedPass(
     for (const finding of audit.findings) {
       findings.push(await relocate(finding, file));
     }
+    links.push(...audit.links.map((link) => ({ ...link, pageFile: file })));
+    ids.set(route, new Set(audit.ids));
     if (input.scope === 'page') {
       findings.push(...(await contrastFindings(html.html, { file, route }, facts, io)));
     }
@@ -406,7 +438,8 @@ async function renderedPass(
   }
   const status: RenderedStatus =
     failure !== undefined && pages.length === 0 && routes.length > 0 ? { tag: 'failed', message: failure } : { tag: 'done', pages: pages.length };
-  return { findings, pages: pages.length > 0 ? pages : pagesFromScan, status };
+  assert(ids.size <= routes.length, 'renderedPass: one id set per rendered route');
+  return { findings, pages: pages.length > 0 ? pages : pagesFromScan, status, links, ids };
 }
 
 // The static pass already reports placeholder copy written inline, at the node that holds it; the
@@ -474,7 +507,15 @@ async function renderedAudit(
   { facts, copyAt }: { readonly facts: AuditFacts; readonly copyAt: RenderedOptions['copyAt'] },
   io: AuditIO,
 ): Promise<ReturnType<typeof auditRenderedPage> | undefined> {
-  const placeholders = `${facts.placeholders.join('\n')}\n|${facts.noindexRoutes.join('\n')}`;
+  // Everything the checks read besides the HTML: a cached audit is reused only while all of it is the same.
+  const placeholders = [
+    facts.placeholders.join('\n'),
+    facts.noindexRoutes.join('\n'),
+    facts.routes.join('\n'),
+    [...facts.publicFiles.keys()].join('\n'),
+    facts.trailingSlash ?? '',
+    facts.base ?? '',
+  ].join('\n|');
   const key = `${page.file}\n${page.route}`;
   const cached = input.cache?.rendered.get(key);
   if (cached !== undefined && cached.html === page.html && cached.placeholders === placeholders) {
@@ -486,7 +527,7 @@ async function renderedAudit(
   }
   const audit = auditRenderedPage(
     { file: page.file, route: page.route, root },
-    { noindexRoutes: facts.noindexRoutes, placeholders: facts.placeholders, ...(copyAt === undefined ? {} : { copyAt }) },
+    { noindexRoutes: facts.noindexRoutes, placeholders: facts.placeholders, links: linkFacts(facts), ...(copyAt === undefined ? {} : { copyAt }) },
   );
   if (input.cache !== undefined) {
     remember(input.cache.rendered, key, { html: page.html, placeholders, audit });
@@ -566,6 +607,16 @@ async function relocated(
     },
     leaf: { file: finding.file, path: element.path, attr: TRACED.get(finding.check) },
   });
+  return movedTo(finding, authored, context);
+}
+
+// A finding moved to where its value is written: a node (an instance with the prop to edit, or
+// an element), a component's frontmatter default, or the site constant the default reads.
+async function movedTo(
+  finding: AuditFinding,
+  authored: Authored | undefined,
+  context: { readonly pageFile: string; readonly io: AuditIO },
+): Promise<AuditFinding> {
   const base = {
     check: finding.check,
     detail: finding.detail,
@@ -626,6 +677,197 @@ async function constantFile(module: string, from: string, io: AuditIO): Promise<
     }
   }
   return undefined;
+}
+
+// --- Links --------------------------------------------------------------------------------------
+
+/** Paths one run asks the dev server about before it calls a link broken. */
+const LINK_CONFIRMS_MAX = 200;
+const SITE_ORIGIN = 'http://site.invalid';
+
+/** The project-relative file a component tag renders, through the importing file's own import. */
+function componentResolver(input: AuditRunInput): (from: AuditFileInput, tag: string) => string | undefined {
+  return (from, tag) => {
+    const decl = from.imports.find((entry) => entry.name === tag);
+    return decl === undefined ? undefined : importedTargets([decl], input.projectPath, input.scan)[0]?.file;
+  };
+}
+
+// The read files and every component they import, to LINK_HOPS_MAX levels: what a link set on an
+// instance, or rendered by a nested one, is followed through. Reads go through the run's cache.
+async function withRenderedComponents(
+  input: AuditRunInput,
+  inputs: ReadonlyMap<string, AuditFileInput>,
+  io: AuditIO,
+): Promise<ReadonlyMap<string, AuditFileInput>> {
+  const known = new Map(inputs);
+  let level = [...inputs.values()];
+  for (let depth = 0; depth < LINK_HOPS_MAX && level.length > 0 && known.size < AUDIT_LIMITS.filesMax; depth++) {
+    const next: AuditFileInput[] = [];
+    for (const target of level.flatMap((file) => importedTargets(file.imports, input.projectPath, input.scan))) {
+      if (known.has(target.file) || known.size >= AUDIT_LIMITS.filesMax) {
+        continue;
+      }
+      const cached = input.cache?.reads.get(target.path);
+      const read = cached ?? (await io.readFile(target.path).catch((): AuditRead => ({ editable: false })));
+      if (cached === undefined && input.cache !== undefined) {
+        remember(input.cache.reads, target.path, read);
+      }
+      if (!read.editable) {
+        continue;
+      }
+      const file: AuditFileInput = {
+        file: target.file,
+        kind: target.kind,
+        nodes: read.nodes,
+        imports: read.imports,
+        frontmatter: frontmatterOf(read.source),
+        source: read.source,
+        route: target.route,
+      };
+      known.set(target.file, file);
+      next.push(file);
+    }
+    level = next;
+  }
+  assert(known.size <= AUDIT_LIMITS.filesMax, 'withRenderedComponents: the files are bounded');
+  return known;
+}
+
+/** A rendered link the runner judges, with the page it was rendered on. */
+type PageLink = RenderedLink & { readonly pageFile: string };
+
+/** A broken rendered link, moved to where its href is written, and the path to ask the dev server for. */
+interface TracedLink {
+  readonly finding: AuditFinding;
+  /** Undefined for a fragment: the page exists, the id does not. */
+  readonly url: string | undefined;
+}
+
+// Each rendered link that goes nowhere, located where its href is written: the page's own `<a>`,
+// the instance whose prop the component writes into its link (that very instance, by the markers),
+// or the component's own markup. A fragment is judged against the ids its page rendered; a page
+// the run did not render cannot say, so its fragments are not judged.
+async function renderedLinkFindings(
+  links: readonly PageLink[],
+  context: {
+    readonly files: ReadonlyMap<string, AuditFileInput>;
+    readonly resolve: (from: AuditFileInput, tag: string) => string | undefined;
+    readonly ids: ReadonlyMap<string, ReadonlySet<string>>;
+    readonly io: AuditIO;
+  },
+): Promise<readonly TracedLink[]> {
+  const traced: TracedLink[] = [];
+  for (const link of links.slice(0, AUDIT_LIMITS.findingsMax)) {
+    const target = link.target;
+    if (target.tag === 'fragment' && !fragmentMissing(target, context.ids)) {
+      continue;
+    }
+    const element = link.finding.element;
+    const authored =
+      element === undefined
+        ? undefined
+        : traceThrough({
+            files: context.files,
+            resolve: context.resolve,
+            within: link.within,
+            leaf: { file: link.finding.file, path: element.path, attr: 'href' },
+          });
+    const finding = await movedTo(link.finding, authored, { pageFile: link.pageFile, io: context.io });
+    traced.push({ finding, url: target.tag === 'missing' ? target.url : undefined });
+  }
+  assert(traced.length <= links.length, 'renderedLinkFindings: at most one finding per link');
+  return traced;
+}
+
+function fragmentMissing(target: { readonly route: string; readonly id: string }, ids: ReadonlyMap<string, ReadonlySet<string>>): boolean {
+  for (const [route, rendered] of ids) {
+    if (sameRoute(route, target.route)) {
+      return !rendered.has(target.id);
+    }
+  }
+  return false;
+}
+
+// The broken-link findings whose path the dev server serves after all: an endpoint, a redirect, an
+// integration's route. The project's files said no; the server's answer wins. Their ids are dropped.
+async function servedLinkIds(
+  findings: readonly AuditFinding[],
+  traced: readonly TracedLink[],
+  input: AuditRunInput,
+  io: AuditIO,
+): Promise<ReadonlySet<string>> {
+  const render = io.renderPage;
+  if (render === undefined) {
+    return new Set();
+  }
+  const urls = new Map<string, string>();
+  // A fragment's page exists; only its id is missing, which no request can settle.
+  const fragments = new Set(traced.filter((link) => link.url === undefined).map((link) => link.finding.id));
+  for (const link of traced) {
+    if (link.url !== undefined) {
+      urls.set(link.finding.id, link.url);
+    }
+  }
+  for (const finding of findings) {
+    const asked = urls.has(finding.id) || fragments.has(finding.id);
+    const url = finding.check === 'link-broken' && !asked ? staticLinkURL(finding, input) : undefined;
+    if (url !== undefined) {
+      urls.set(finding.id, url);
+    }
+  }
+  const answers = new Map<string, boolean>();
+  const served = new Set<string>();
+  for (const [id, url] of urls) {
+    if (!answers.has(url) && answers.size < LINK_CONFIRMS_MAX) {
+      const answer = await render(url).catch((): RenderedHtml => ({ ok: false, message: '' }));
+      answers.set(url, answer.ok && answer.status < 400);
+    }
+    if (answers.get(url) === true) {
+      served.add(id);
+    }
+  }
+  assert(answers.size <= LINK_CONFIRMS_MAX, 'servedLinkIds: the questions are bounded');
+  return served;
+}
+
+// The path a static broken link asks for: as written when it starts at the root, against its page's route when relative.
+function staticLinkURL(finding: AuditFinding, input: AuditRunInput): string | undefined {
+  const href = /href="([^"]*)"/.exec(finding.detail)?.[1]?.trim();
+  if (href === undefined || href.length === 0) {
+    return undefined;
+  }
+  const route = finding.fileKind === 'page' ? input.scan.pages.find((page) => relativeTo(input.projectPath, page.path) === finding.file)?.route : undefined;
+  if (!href.startsWith('/') && (route === undefined || route.includes('['))) {
+    return undefined;
+  }
+  try {
+    const url = new URL(href, `${SITE_ORIGIN}${route ?? '/'}`);
+    return url.origin === SITE_ORIGIN ? url.pathname : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// A broken link in a component's own markup is one finding however often it renders: it says how
+// many times. The rendered copies count when the run rendered pages; otherwise the scan's instances.
+function withUses(findings: readonly AuditFinding[], traced: readonly TracedLink[], input: AuditRunInput): readonly AuditFinding[] {
+  const counts = new Map<string, number>();
+  for (const link of traced) {
+    counts.set(link.finding.id, (counts.get(link.finding.id) ?? 0) + 1);
+  }
+  return findings.map((finding) => {
+    if (finding.check !== 'link-broken' || finding.fileKind === 'page' || finding.prop !== undefined) {
+      return finding;
+    }
+    const uses = counts.get(finding.id) ?? scannedInstances(finding.file, input);
+    return uses > 1 ? { ...finding, ...measureText('audits.measure.instances', { count: uses }) } : finding;
+  });
+}
+
+function scannedInstances(file: string, input: AuditRunInput): number {
+  const entry = [...input.scan.layouts, ...input.scan.components].find((candidate) => relativeTo(input.projectPath, candidate.path) === file);
+  return entry?.instances ?? 0;
 }
 
 function normalized(path: string): string {

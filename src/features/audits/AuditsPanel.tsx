@@ -17,7 +17,7 @@ import { nodeAt } from '../../../shared/page/auditTrace';
 import { describeNode } from '../../ui/navigatorLabel';
 import { type AuditFinding, type AuditPriority, type AuditRuleGroup } from '../../../shared/page/auditFindings';
 import { auditPrompt, promptBatches, AUDIT_PROMPT_FINDINGS_MAX } from '../../../shared/page/auditPrompt';
-import { linkFix } from '../../../shared/page/auditRepairs';
+import { linkFix, relinkTarget } from '../../../shared/page/auditRepairs';
 import { agentTask } from '../../../shared/properties/agentTask';
 import { ignoreReasons, ignoredEntryCount, type IgnoredFinding } from '../../../shared/properties/auditIgnoreList';
 import {
@@ -761,7 +761,23 @@ export function occurrenceView(
   }
   const node = nodes === undefined ? undefined : nodeAt(nodes, element.path);
   const described = node === undefined ? { icon: elementIcon(element.tag, 14), label: element.tag } : describeNode(node, undefined);
-  return { icon: <span className="audits-occurrence-icon">{described.icon}</span>, label: described.label };
+  // An instance found by its prop names the prop too, `Button · href`: the field to edit in Settings.
+  const label = finding.prop !== undefined && node?.kind === 'component' ? `${described.label} · ${finding.prop}` : described.label;
+  return { icon: <span className="audits-occurrence-icon">{described.icon}</span>, label };
+}
+
+/**
+ * The route "Create page" offers for a broken link: its path, when it is a site path no page has.
+ * A fragment on a page that exists (`/about#team`), a relative link and an outside address offer none.
+ */
+export function missingRoute(finding: Pick<AuditFinding, 'check' | 'detail'>, routes: readonly string[]): string | undefined {
+  const href = finding.check === 'link-broken' ? /href="([^"]*)"/.exec(finding.detail)?.[1] : undefined;
+  const route = href?.split(/[?#]/)[0];
+  if (route === undefined || !route.startsWith('/') || route.startsWith('//')) {
+    return undefined;
+  }
+  const trim = (value: string): string => (value.length > 1 ? value.replace(/\/+$/, '') : value);
+  return routes.some((known) => trim(known) === trim(route)) ? undefined : route;
 }
 
 /** A finding under its element's row: a raw CSS value reads as `padding: 12px`; anything else keeps its detail. */
@@ -804,7 +820,10 @@ function Occurrence(props: {
   const fix = ignoredBecause === undefined ? finding.fix : undefined;
   const go = (): void => panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop);
   const href = /href="([^"]*)"/.exec(finding.detail)?.[1];
-  const brokenRoute = finding.check === 'link-broken' && href !== undefined ? href.split(/[?#]/)[0] : undefined;
+  const brokenRoute = missingRoute(finding, panel.routes);
+  // Only a literal is rewritten: an href a component computes is fixed where its value is written.
+  const relink =
+    finding.check === 'link-broken' && element !== undefined && props.nodes !== undefined ? relinkTarget(props.nodes, element.path, finding.prop) : undefined;
   const auditText = useAuditText();
   const whole = occurrenceView(finding, props.nodes, auditText);
   const view = props.nested === true ? { icon: <span className="audits-occurrence-icon" />, label: nestedLabel(finding, whole.label, auditText) } : whole;
@@ -855,7 +874,7 @@ function Occurrence(props: {
             width={180}
             items={[
               brokenRoute !== undefined && { label: translate('auditsUi.createPage', { route: brokenRoute }), onSelect: () => panel.onCreatePage(brokenRoute) },
-              brokenRoute !== undefined && element !== undefined && { label: translate('auditsUi.changeLink'), onSelect: () => setMode('relink') },
+              relink !== undefined && { label: translate('auditsUi.changeLink'), onSelect: () => setMode('relink') },
               ignoredBecause === undefined
                 ? { label: translate('auditsUi.ignoreButton'), onSelect: () => void actions.ignore(finding) }
                 : { label: translate('auditsUi.stopIgnoring'), onSelect: () => void actions.restore(finding) },
@@ -892,7 +911,7 @@ function Occurrence(props: {
           </div>
         </div>
       )}
-      {mode === 'relink' && element !== undefined && (
+      {mode === 'relink' && element !== undefined && relink !== undefined && (
         <div className="audits-inset">
           <Dropdown<string>
             ariaLabel={translate('auditsUi.linkTo')}
@@ -902,7 +921,7 @@ function Occurrence(props: {
             onChange={(route) => {
               setMode('idle');
               void actions.fix(
-                [{ ...finding, fix: linkFix({ file: finding.file, path: element.path, href: href ?? '' }, route) }],
+                [{ ...finding, fix: linkFix({ file: finding.file, path: element.path, href: href ?? '', at: relink }, route) }],
                 translate('auditsUi.linkToLabel', { route }),
               );
             }}
