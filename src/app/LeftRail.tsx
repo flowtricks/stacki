@@ -15,20 +15,7 @@ import { useRailOverflow, type RailOverflowItem } from './railOverflow';
 import { useTranslate } from '../lib/i18n/useTranslate';
 import { TOOLTIP_DELAY_MS, tooltipAnchor, type TooltipAnchor } from '../ui/delayedTooltip';
 import FittedTooltip from '../ui/FittedTooltip';
-import Menu, { type MenuEntry } from '../ui/Menu';
-import {
-  crossRailItem,
-  isDefaultRailOrder,
-  isRailFixedId,
-  moveIntoSettings,
-  railPlaceOf,
-  railPosition,
-  sameRailOrder,
-  shiftRailItem,
-  visibleRailOrder,
-  type RailGroup,
-  type RailOrder,
-} from './railOrder';
+import { crossRailItem, isRailFixedId, railPosition, sameRailOrder, shiftRailItem, visibleRailOrder, type RailGroup, type RailOrder } from './railOrder';
 import { useRailOrder } from './railOrderStore';
 import { DEFAULT_RAIL_ORDER } from './railDefaults';
 import { useRailDrag } from './railDrag';
@@ -71,10 +58,9 @@ const AiRailIcon = FEATURE_ICONS['panel:ai'];
 // what is drawn.
 // Each person arranges the buttons (railOrder.ts): drag one to reorder it or to move it between the top
 // list and the bottom list at the foot, or use Alt+arrows on a focused button. The order is kept per
-// person for every project (railOrderStore.ts); right-clicking the rail offers to move a button or reset.
+// person for every project (railOrderStore.ts).
 // A button can also go into the Settings panel, as one of its root rows: dropped on the middle of the Settings
-// button, or between the rows once resting there has opened the panel (railDrag.ts), or by the menu's Move into
-// Settings. A Settings view dragged out of that panel (SettingsRailRows.tsx) becomes a button here that opens
+// button, or between the rows once resting there has opened the panel (railDrag.ts). A Settings view dragged out of that panel (SettingsRailRows.tsx) becomes a button here that opens
 // Settings at the view. Settings and the AI button never go inside Settings.
 export default function LeftRail({
   active,
@@ -95,7 +81,6 @@ export default function LeftRail({
   readonly aiButton?: { readonly active: boolean; readonly onSelect: () => void } | undefined;
 }) {
   const [tip, setTip] = useState<{ readonly label: string; readonly anchor: TooltipAnchor } | undefined>(undefined);
-  const [menu, setMenu] = useState<{ readonly anchor: HTMLElement; readonly id: string | undefined } | undefined>(undefined);
   const [announcement, setAnnouncement] = useState('');
   const translate = useTranslate();
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -103,7 +88,7 @@ export default function LeftRail({
   const anchorRef = useRef<HTMLDivElement>(null);
   const reflowRef = useRef<ReadonlyMap<string, number> | undefined>(undefined);
   const focusAfterRef = useRef<string | undefined>(undefined);
-  const { order, change, reset } = useRailOrder(DEFAULT_RAIL_ORDER);
+  const { order, change } = useRailOrder(DEFAULT_RAIL_ORDER);
 
   const showSoon = (label: string) => (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -244,13 +229,6 @@ export default function LeftRail({
       }
     }
   };
-  const resetOrder = () => {
-    if (!isDefaultRailOrder(DEFAULT_RAIL_ORDER, order)) {
-      reflowRef.current = readRailRows(railRef.current ?? undefined);
-      reset();
-      setAnnouncement(translate('rail.resetDone'));
-    }
-  };
   useLayoutEffect(() => {
     const before = reflowRef.current;
     reflowRef.current = undefined;
@@ -343,45 +321,6 @@ export default function LeftRail({
       })),
   ];
 
-  const openMenu = (event: MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    hide();
-    const target = event.target instanceof Element ? (event.target.closest<HTMLElement>('[data-rail-id]') ?? undefined) : undefined;
-    const anchor = target ?? railRef.current ?? undefined;
-    // Right-clicking the bare rail in the default order has no row to offer, so no empty menu opens.
-    const railId = target?.dataset['railId'];
-    if (anchor !== undefined && menuEntries(railId).length > 0) {
-      setMenu({ anchor, id: railId });
-    }
-  };
-  const menuEntries = (id: string | undefined): readonly MenuEntry[] => {
-    const place = id === undefined ? undefined : railPlaceOf(order, id);
-    const rows: MenuEntry[] = [];
-    if (id !== undefined && place !== undefined) {
-      const target: RailGroup = place.group === 'top' ? 'bottom' : 'top';
-      rows.push({
-        kind: 'item',
-        id: 'move',
-        label: translate(target === 'bottom' ? 'rail.moveToBottom' : 'rail.moveToTop'),
-        onSelect: () => commitOrder(crossRailItem(order, id, target), id, 'focus'),
-      });
-      // The keyboard's way into Settings too: the menu opens from the context-menu key on a focused button.
-      if (!isRailFixedId(id)) {
-        rows.push({
-          kind: 'item',
-          id: 'settings',
-          label: translate('rail.moveIntoSettings'),
-          onSelect: () => commitOrder(moveIntoSettings(order, id), id, 'none'),
-        });
-      }
-    }
-    // Reset is offered only when there is something to reset: a greyed row for a no-op is noise.
-    if (!isDefaultRailOrder(DEFAULT_RAIL_ORDER, order)) {
-      rows.push({ kind: 'item', id: 'reset', label: translate('rail.reset'), onSelect: resetOrder });
-    }
-    return rows;
-  };
-
   const renderButton = (entry: RailEntry, group: RailGroup) => {
     const dragged = dragView?.id === entry.id;
     return (
@@ -424,7 +363,9 @@ export default function LeftRail({
       data-dragging={dragView === undefined ? undefined : 'true'}
       // A Settings row dragged out lights the rail as the place to drop it.
       data-drop-ready={dragView?.origin === 'settings' ? 'true' : undefined}
-      onContextMenu={openMenu}
+      // Right-clicking a button does nothing: no menu of ours, and no native one either. The order changes by dragging,
+      // Alt+arrows, or Settings > rail order.
+      onContextMenu={(event) => event.preventDefault()}
     >
       {shownTopEntries.map((entry) => renderButton(entry, 'top'))}
       {shownTopEntries.length > 0 && shownApps.length > 0 && <div className="rail-separator" role="separator" />}
@@ -478,16 +419,6 @@ export default function LeftRail({
         <FittedTooltip anchor={tip.anchor} preferred={document.documentElement.dir === 'rtl' ? 'left' : 'right'}>
           {tip.label}
         </FittedTooltip>
-      )}
-      {menu !== undefined && (
-        <Menu
-          open
-          anchor={menu.anchor}
-          entries={menuEntries(menu.id)}
-          label={translate('rail.orderMenu')}
-          placement="right-start"
-          onClose={() => setMenu(undefined)}
-        />
       )}
     </div>
   );

@@ -17,10 +17,7 @@ export const messages = {
   'rail.history': 'Git', // same
   'rail.more': 'Plus',
   'rail.moveDown': 'Déplacer vers le bas',
-  'rail.moveIntoSettings': 'Déplacer vers Réglages',
-  'rail.moveToBottom': 'Déplacer vers le groupe du bas',
   'rail.moveToRail': 'Déplacer vers la barre latérale',
-  'rail.moveToTop': 'Déplacer vers le groupe du haut',
   'rail.moveUp': 'Déplacer vers le haut',
   'rail.movedBottom': '{label} : groupe du bas, position {position} sur {count}',
   'rail.movedSettings': '{label} : Réglages, position {position} sur {count}',
@@ -29,8 +26,6 @@ export const messages = {
   'rail.orderMenu': 'Ordre de la barre',
   'rail.pages': 'Pages', // same
   'rail.properties': 'Propriétés',
-  'rail.reset': "Réinitialiser l'ordre de la barre",
-  'rail.resetDone': 'Ordre de la barre réinitialisé',
   'rail.selectors': 'Sélecteurs de style',
   'rail.settings': 'Réglages',
   'rail.settingsEmpty': 'Faites glisser ici les icônes de la barre latérale pour les garder dans Réglages',

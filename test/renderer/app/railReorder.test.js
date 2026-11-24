@@ -357,27 +357,16 @@ test('a role-hidden button keeps its place in the stored order, and the shortcut
   await unmount();
 });
 
-test('right-clicking offers Move to bottom group and Reset rail order', async () => {
+test('right-clicking a rail button opens nothing and is default-prevented', async () => {
   await mount();
-  await act(async () => button('code').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
-  const rows = [...document.querySelectorAll('[role="menuitem"]')];
-  assert.deepEqual(
-    rows.map((row) => row.textContent),
-    ['Move to bottom group', 'Move into Settings'],
-    'Reset rail order is not offered while the order is the default',
-  );
-  await act(async () => rows[0].click());
-  assert.ok(ids('bottom').includes('code'));
-  await act(async () => button('pages').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
-  assert.ok(
-    [...document.querySelectorAll('[role="menuitem"]')].some((row) => row.textContent === 'Reset rail order'),
-    'Reset rail order appears once the order is not the default',
-  );
-  const reset = [...document.querySelectorAll('[role="menuitem"]')].find((row) => row.textContent === 'Reset rail order');
-  await act(async () => reset.click());
+  for (const id of ['code', 'pages']) {
+    const event = new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    await act(async () => button(id).dispatchEvent(event));
+    assert.equal(event.defaultPrevented, true, `${id}: no native context menu either`);
+    assert.equal(document.querySelectorAll('[role="menu"], [role="menuitem"]').length, 0, `${id}: no popup opens`);
+  }
   assert.deepEqual(ids('top'), DEFAULT_TOP);
   assert.deepEqual(ids('bottom'), DEFAULT_BOTTOM);
-  assert.ok(stored() === null, 'reset forgets the stored order');
   await unmount();
 });
 
@@ -584,8 +573,6 @@ test('Settings and the AI button never go inside Settings', async () => {
   await up('ai', 120, 150);
   assert.ok(!rows().includes('ai'));
   assert.ok(button('ai'), 'the AI button is still on the rail');
-  await act(async () => button('ai').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
-  assert.ok(![...document.querySelectorAll('[role="menuitem"]')].some((item) => item.textContent === 'Move into Settings'));
   await unmount();
 });
 
@@ -606,7 +593,7 @@ test('a Settings row dragged out onto the rail becomes a button there that opens
   await unmount();
 });
 
-test('the keyboard moves Settings rows: Alt+arrows reorder, Alt+Left moves out, the rail menu moves back in', async () => {
+test('the keyboard moves Settings rows: Alt+arrows reorder, Alt+Left moves out', async () => {
   await mountWithSettings();
   row('secrets').focus();
   await press(row('secrets'), 'ArrowDown', { altKey: true });
@@ -619,11 +606,6 @@ test('the keyboard moves Settings rows: Alt+arrows reorder, Alt+Left moves out, 
   assert.deepEqual(rows(), ['secrets', 'instructions', 'agents']);
   assert.deepEqual(ids('bottom'), ['selectors', 'audits', 'mcp', 'projectSettings', 'ai'], 'out onto the rail, right above Settings');
   assert.equal(document.activeElement, button('mcp'), 'focus follows it onto the rail');
-  await act(async () => button('mcp').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
-  const into = [...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent === 'Move into Settings');
-  await act(async () => into.click());
-  assert.deepEqual(rows(), ['secrets', 'instructions', 'agents', 'mcp']);
-  assert.ok(document.querySelector('.rail [data-rail-id="mcp"]') === null, 'it left the rail');
   await act(async () => row('instructions').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
   assert.deepEqual(
     [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
