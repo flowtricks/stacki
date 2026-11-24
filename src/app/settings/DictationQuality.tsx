@@ -3,6 +3,7 @@
 // computer. Picking one that is downloaded switches to it at once; picking one that is not asks first (the
 // download is hundreds of megabytes), then switches and downloads. While a download runs the cards are
 // locked, because one model downloads at a time and the choice must not move under it.
+import type { KeyboardEvent } from 'react';
 import { downloadPercent } from '../../../shared/properties/voice/dictationEngine';
 import { installOf } from '../../../shared/properties/voice/dictationModel';
 import { modelTotalBytes, WHISPER_MODELS, type WhisperModelId } from '../../../shared/properties/voice/whisperModels';
@@ -50,8 +51,22 @@ export function DictationQuality({
       await store.download();
     }
   };
+  // Arrow keys move the choice like a native radio group: the selected card is the one tab stop, and an arrow picks its neighbour.
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+    if (step === 0 || downloading) {
+      return;
+    }
+    event.preventDefault();
+    const at = QUALITY_ORDER.indexOf(snapshot.model);
+    const next = QUALITY_ORDER[(at + step + QUALITY_ORDER.length) % QUALITY_ORDER.length];
+    if (next !== undefined) {
+      void choose(next);
+      event.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')[QUALITY_ORDER.indexOf(next)]?.focus();
+    }
+  };
   return (
-    <div className="dictation-quality" role="radiogroup" aria-label={translate('dictation.settings.model')}>
+    <div className="dictation-quality" role="radiogroup" aria-label={translate('dictation.settings.model')} onKeyDown={onKeyDown}>
       {QUALITY_ORDER.map((id) => {
         const selected = id === snapshot.model;
         const install = installOf(snapshot.status, id);
@@ -61,12 +76,18 @@ export function DictationQuality({
             type="button"
             role="radio"
             aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
             disabled={downloading && !selected}
             className="dictation-quality-card"
             data-selected={selected}
             onClick={() => void choose(id)}
           >
-            <span className="dictation-quality-name">{translate(TIER_LABELS[id].label)}</span>
+            <span className="dictation-quality-name">
+              {translate(TIER_LABELS[id].label)}
+              <span className="dictation-quality-radio" aria-hidden="true">
+                {selected && <CheckIcon size={12} />}
+              </span>
+            </span>
             <span className="dictation-quality-detail">{translate(TIER_LABELS[id].hint)}</span>
             <span className="dictation-quality-foot">
               <span className="dictation-quality-size">{formatBytes(modelTotalBytes(WHISPER_MODELS[id]))}</span>

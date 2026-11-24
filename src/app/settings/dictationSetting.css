@@ -60,6 +60,41 @@
   justify-content: flex-end;
   min-inline-size: 0;
 }
+/* Remove: a destructive secondary action, a soft red fill with red text, its states staying in the red family. On a
+   narrow card the action drops under the words (the container rule below), so it never squeezes them. */
+.dictation-remove {
+  min-block-size: 32px;
+  padding-inline: 12px;
+  border-radius: 8px;
+  background: rgba(255, 69, 58, 0.14);
+  color: var(--red);
+}
+.dictation-remove:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.22);
+}
+.dictation-remove:active:not(:disabled) {
+  background: rgba(255, 69, 58, 0.3);
+}
+.dictation-remove:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 1px;
+}
+.dictation-remove:disabled {
+  opacity: 0.6;
+}
+.dictation-remove-spinner {
+  animation: dictation-remove-turn 900ms linear infinite;
+}
+@keyframes dictation-remove-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dictation-remove-spinner {
+    animation: none;
+  }
+}
 .dictation-status-bar {
   grid-column: 1 / -1;
   block-size: 6px;
@@ -104,18 +139,54 @@
   color: var(--text);
   text-align: start;
 }
-.dictation-quality-card:hover:not(:disabled) {
-  background: var(--bg-active);
+.dictation-quality-card {
+  transition: background 0.1s;
 }
+.dictation-quality-card:hover:not(:disabled) {
+  background: var(--bg-pressed);
+}
+.dictation-quality-card:active:not(:disabled) {
+  background: var(--bg-pressed);
+  filter: brightness(0.94);
+}
+/* Selected stays in the accent family in every state: hover and press deepen the blue, never grey it. */
 .dictation-quality-card[data-selected='true'] {
   background: var(--accent-soft);
+}
+.dictation-quality-card[data-selected='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.dictation-quality-card[data-selected='true']:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  filter: none;
+}
+.dictation-quality-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .dictation-quality-card:disabled {
   opacity: 0.55;
 }
 .dictation-quality-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  inline-size: 100%;
+  min-block-size: 20px;
   font-size: 13px;
   font-weight: 600;
+}
+.dictation-quality-radio {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: 50%;
+  color: var(--accent);
+}
+.dictation-quality-card[data-selected='true'] .dictation-quality-radio {
+  background: var(--accent-soft);
 }
 .dictation-quality-detail {
   flex: 1;

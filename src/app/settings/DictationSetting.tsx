@@ -25,7 +25,7 @@ import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { reportErrorToast } from '../../ui/errorNotices';
-import { CheckIcon, ChevronDownIcon, FolderOpenIcon, MicrophoneIcon } from '../../ui/Icons';
+import { CheckIcon, ChevronDownIcon, FolderOpenIcon, MicrophoneIcon, TrashIcon } from '../../ui/Icons';
 import InfoHint from '../../ui/InfoHint';
 import { Skeleton } from '../../ui/Skeleton';
 import { dictationPageStatus, modelDisplayName, modelFolder, PATH_CHARS_SHOWN, shortenMiddle, type DictationPageStatus } from './dictationDisplay';
@@ -83,6 +83,7 @@ function StatusCard({ store, status, model }: { readonly store: DictationStore; 
   const translate = useTranslate();
   const { formatBytes } = useFormat();
   const downloadSize = formatBytes(modelTotalBytes(WHISPER_MODELS[model]));
+  const [removing, setRemoving] = useState(false);
   const remove = async (): Promise<void> => {
     const size = status.kind === 'ready' ? formatBytes(status.sizeBytes) : '';
     const answer = await confirmDialog({
@@ -92,7 +93,14 @@ function StatusCard({ store, status, model }: { readonly store: DictationStore; 
       danger: true,
     });
     if (answer === true) {
-      await store.remove();
+      setRemoving(true);
+      try {
+        await store.remove();
+      } catch (error: unknown) {
+        reportErrorToast(cleanError(error));
+      } finally {
+        setRemoving(false);
+      }
     }
   };
   let title: string | undefined;
@@ -155,7 +163,14 @@ function StatusCard({ store, status, model }: { readonly store: DictationStore; 
           </button>
         )}
         {status.kind === 'ready' && (
-          <button type="button" className="danger" onClick={() => void remove()}>
+          <button type="button" className="dictation-remove" disabled={removing} aria-busy={removing} onClick={() => void remove()}>
+            {removing ? (
+              <svg className="dictation-remove-spinner" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeDasharray="22 16" />
+              </svg>
+            ) : (
+              <TrashIcon size={14} />
+            )}
             {translate('dictation.settings.remove')}
           </button>
         )}
