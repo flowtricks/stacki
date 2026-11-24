@@ -146,7 +146,7 @@ function appFrame(app) {
   return {
     frame,
     child,
-    focus: async (id) => {
+    focusIn: async (id) => {
       frame.focus();
       child.document.getElementById(id).focus();
       await settle();
@@ -163,11 +163,11 @@ test('⌘V and ⌘C in a focused app’s text field are the field’s own, throu
   const calls = [];
   const menu = recordingMenu(calls);
   const app = appFrame(summary('fields'));
-  await app.focus('field');
+  await app.focusIn('field');
   assert.equal(document.activeElement, app.frame, 'the editor sees only the app’s frame focused');
   apps.menuPaste(menu);
   apps.menuCopy(menu);
-  await app.focus('notes');
+  await app.focusIn('notes');
   apps.menuPaste(menu);
   assert.deepEqual(calls, ['native paste', 'native copy', 'native paste'], 'an input and a textarea each get the paste, and no element is pasted');
   app.stop();
@@ -178,12 +178,12 @@ test('with no app field focused, ⌘V and ⌘C stay the canvas element’s', asy
   const calls = [];
   const menu = recordingMenu(calls);
   const app = appFrame(summary('button'));
-  await app.focus('button');
+  await app.focusIn('button');
   apps.menuPaste(menu);
   apps.menuCopy(menu);
   assert.deepEqual(calls, ['element paste', 'element copy'], 'a button in the app is not a text field');
   calls.length = 0;
-  await app.focus('field');
+  await app.focusIn('field');
   app.frame.blur();
   dom.window.document.body.focus();
   apps.menuPaste(menu);
@@ -203,7 +203,7 @@ test('an app that claims ⌘V hears it as shortcut.press, and neither the field 
   const app = appFrame(summary('claims', { shortcutClaims: ['Mod+V'] }));
   const pressed = [];
   app.child.stacki.on('shortcut.press', (data) => pressed.push(data.shortcut));
-  await app.focus('field');
+  await app.focusIn('field');
   apps.menuPaste(menu);
   apps.menuCopy(menu);
   await settle();
