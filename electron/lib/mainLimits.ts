@@ -26,6 +26,10 @@ export const MAIN_LIMITS = {
    * reply longer than that could never reach the renderer, so the runner is
    * stopped instead of buffering toward it. */
   runnerLineCharsMax: LIMITS.ipcFieldCharsMax,
+  /** Source files one content config bundle may draw on: the config, its loaders and their
+   * imports. Each is statted on every read to tell whether the bundle is stale, so a graph far
+   * past any real config is a runaway import, refused rather than statted. */
+  runnerInputsMax: 10_000,
   /** The runner's stderr tail kept for an error message. */
   runnerStderrCharsMax: 4000,
   /** Output one command (git, the package manager, astro) may print before it
