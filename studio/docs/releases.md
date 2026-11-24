@@ -20,7 +20,9 @@ Every installed Desktop and Studio refuses a release file over 32,000,000 bytes,
 that bound is fixed in their code, so raising it never reaches them. The release
 therefore carries `vendor/stacki`'s TypeScript without prose comments (each file must
 compile to the same JavaScript; `scripts/releaseComments.ts`), and
-`test/releaseSize.test.ts` fails the gate once the file passes 31,000,000 bytes.
+`test/releaseSize.test.ts` fails the gate once the file passes 31,000,000 bytes or
+2,950 files (installed clients refuse more than 3,000). `scripts/shared-source.json`
+lists only the shared files Studio imports; drop entries nothing in Studio reaches.
 
 ## Accepting an update
 

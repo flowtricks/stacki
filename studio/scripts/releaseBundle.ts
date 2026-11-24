@@ -16,6 +16,12 @@ import { record } from '../src/shared/validation';
 export const RELEASE_SERIALIZED_BYTES_TARGET = 31_000_000;
 assertBundle(RELEASE_SERIALIZED_BYTES_TARGET < RELEASE_BYTES_MAX, 'The release target sits under the limit installed clients enforce');
 
+// The same holds for the file count: installed clients refuse more than RELEASE_FILES_MAX
+// (3,000) files. 1.4.18 carried 2,919. Fifty files under the bound is a few features of
+// growth, so the gate fails while trimming scripts/shared-source.json is still enough.
+export const RELEASE_FILES_TARGET = 2_950;
+assertBundle(RELEASE_FILES_TARGET < RELEASE_FILES_MAX, 'The file target sits under the count installed clients enforce');
+
 /** The Studio release for the tree at `root`, as installers parse it. */
 export async function buildRelease(root: string): Promise<StudioRelease> {
   const excluded: ReadonlySet<string> = new Set(RELEASE_EXCLUDED_FILES);

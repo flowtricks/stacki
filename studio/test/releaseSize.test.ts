@@ -3,12 +3,13 @@
 // 32,000,000 (RELEASE_BYTES_MAX), and the content-only count in parseRelease (31.3 MB) passed
 // because JSON escaping adds about 3%, so `astro-studio update` and Desktop setup both failed.
 // Method: build the release in memory from the assembled tree, exactly as `release:bundle` does,
-// and hold its serialized bytes a megabyte under that fixed limit; then check that stripping
+// and hold its serialized bytes a megabyte, and its file count fifty files, under the fixed
+// limits installed clients enforce (32,000,000 bytes, 3,000 files); then check that stripping
 // vendored comments keeps directives, keeps the code identical, and refuses what it must not touch.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { buildRelease, RELEASE_SERIALIZED_BYTES_TARGET, serializeRelease } from '../scripts/releaseBundle';
+import { buildRelease, RELEASE_FILES_TARGET, RELEASE_SERIALIZED_BYTES_TARGET, serializeRelease } from '../scripts/releaseBundle';
 import { stripReleaseComments } from '../scripts/releaseComments';
 import { parseRelease, RELEASE_BYTES_MAX, RELEASE_FILES_MAX } from '../src/features/updates/release';
 
@@ -23,7 +24,12 @@ test('the release file stays a megabyte under what installed clients accept', as
     bytes <= RELEASE_SERIALIZED_BYTES_TARGET,
     `Studio release is ${bytes} bytes, over the ${RELEASE_SERIALIZED_BYTES_TARGET} target (installed clients refuse ${RELEASE_BYTES_MAX})`,
   );
-  assert.ok(release.files.length <= RELEASE_FILES_MAX, `Studio release has ${release.files.length} files; installed clients refuse ${RELEASE_FILES_MAX}`);
+  assert.equal(RELEASE_FILES_MAX, 3000, 'Installed clients hold this bound; raising it here does not reach them');
+  assert.ok(
+    release.files.length <= RELEASE_FILES_TARGET,
+    `Studio release has ${release.files.length} files, over the ${RELEASE_FILES_TARGET} target (installed clients refuse ${RELEASE_FILES_MAX}); ` +
+      'drop vendored files Studio does not import from scripts/shared-source.json',
+  );
   // The parser an installed client runs reads the written file back unchanged.
   const parsed = parseRelease(JSON.parse(text));
   assert.equal(parsed.files.length, release.files.length);
