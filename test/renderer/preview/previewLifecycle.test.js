@@ -697,6 +697,8 @@ test('custom widths preserve layout size, scale ' + 'to fit, and reset with devi
     assert.equal(sized.style.width, 'calc(100% - 18px)');
     assert.equal(sized.style.height, '100%');
     assert.doesNotMatch(sized.style.transform, /scale/);
+    // The outlines and the column guides are drawn in their own layer, centred like the frame: same width, or they slide off the page.
+    assert.equal(document.querySelector('.preview-overlay-layer').style.width, sized.style.width, 'the overlay layer covers exactly the fluid frame');
     containerWidth = 2000;
     await act(() => observers.forEach((callback) => callback()));
     // A wider pane: the fluid frame fills the canvas by CSS too, so it follows a side-panel drag without a render.
