@@ -809,8 +809,10 @@ Keys pressed while an app has focus are the app's first. In order:
    arrives, so Desktop's Edit menu, which takes ⌘Z, ⇧⌘Z and ⌘E before a focused frame sees them,
    hands a claimed key to the app as `shortcut.press` instead of running Stacki's command. Handle
    claimed keys in `stacki.on('shortcut.press', …)`: the SDK raises it for a key press too.
-3. **Text fields.** In an `input`, `textarea`, `select` or `contenteditable` element, undo and redo
-   are the field's own, as everywhere else in Stacki.
+3. **Text fields.** In an `input`, `textarea`, `select` or `contenteditable` element (the kit's
+   `<stacki-input>` and `<stacki-textarea>` render one), undo, redo, cut, copy, paste and select all
+   are the field's own, as everywhere else in Stacki: ⌘V and Edit → Paste paste into it, and with no
+   app field focused they copy and paste the selected element on the canvas as before.
 4. **Forwarded editor shortcuts.** Only these reach Stacki, and each runs once:
 
 | Key (⌘ on macOS, Ctrl elsewhere) | Shortcut | Stacki runs |
@@ -1842,6 +1844,9 @@ permission, so an app that acts on behalf of a permission must check it before i
 - Messages are validated and bounded, and at most 32 requests may wait at once.
 - The frame cannot write to the clipboard itself: copy with `stacki.clipboard.write({ text })`, which
   Stacki performs for the app (up to 262,144 characters). Use it for every Copy button.
+- The frame cannot read the clipboard, and there is no API for it. The person's own paste (⌘V, Ctrl+V
+  or Edit → Paste) into a focused text field works as in any page: the field gets the text the person
+  chose to paste, in an `input` event and a `paste` event, and nothing else.
 
 ## Installing an app
 

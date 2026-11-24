@@ -26,6 +26,7 @@ import { toggleFollowMode } from '../../features/style/embed/contextFollow';
 import { getHost } from '../../features/style/model/host';
 import { structuralSelection } from './selectionStructure';
 import { type PasteNeeds } from './pageGestures';
+import { type AppShortcutRoute, appShortcutRoute } from '../../features/apps/appsRuntime';
 export { layoutWrapperGesture, markdownLayoutGesture, withImportsGesture } from './pageModelGestures';
 
 // The app's own keys, read through refs at keypress time: see the keydown effect in App.
@@ -539,8 +540,29 @@ export interface MenuEdits {
   readonly reportFailure: (error: unknown) => void;
 }
 
+// Where the menu's Copy or Paste goes while an app's frame has focus. Why: the app
+// is another document, so here the focused element is only its frame, and the
+// editable check below says no even with the caret in the app's text field. The
+// menu then pasted the copied element, or nothing, and ⌘V never reached the field.
+// The app's SDK reports whether one of its fields has focus (appsRuntime.ts), the
+// same report the menu's Undo reads; `native` hands the key to the focused frame,
+// which pastes only what the person chose to paste, so no app reads the clipboard.
+function appFrameEditRoute(shortcut: 'Mod+C' | 'Mod+V'): AppShortcutRoute {
+  const route = appShortcutRoute(shortcut, document.activeElement ?? undefined);
+  assert(route === 'stacki' || route === 'native' || route === 'app', 'appFrameEditRoute: a route is one of the three');
+  return route;
+}
+
 // The menu's Copy: the field's own, selected text, or else the selected node.
 export function menuCopy(menu: MenuEdits): void {
+  const route = appFrameEditRoute('Mod+C');
+  if (route === 'app') {
+    return; // The app claims ⌘C and has heard it as `shortcut.press`.
+  }
+  if (route === 'native') {
+    runNativeEdit('copy');
+    return;
+  }
   if (inEditable() || String(window.getSelection() || '')) {
     runNativeEdit('copy');
     return;
@@ -559,6 +581,14 @@ export function menuCopy(menu: MenuEdits): void {
 // fires a `paste` event even with no field focused: ⌘V is this menu item, not
 // the stock Paste role, so without it the event never fires at all.
 export function menuPaste(menu: MenuEdits): void {
+  const route = appFrameEditRoute('Mod+V');
+  if (route === 'app') {
+    return; // The app claims ⌘V and has heard it as `shortcut.press`.
+  }
+  if (route === 'native') {
+    runNativeEdit('paste');
+    return;
+  }
   if (inEditable()) {
     runNativeEdit('paste');
     return;
