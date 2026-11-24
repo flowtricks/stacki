@@ -476,6 +476,33 @@ export function stackWith(entry: OpenFile): (stack: readonly OpenFile[]) => read
   return (stack) => (stack.some((open) => open.path === entry.path) ? stack : [...stack, entry]);
 }
 
+/**
+ * How a component is opened. `drill`: from one of its instances (a double-click on the canvas, the navigator, the code
+ * editor), so back steps out one level to the file that holds that instance. `jump`: from a list that names the file
+ * (an audit finding, the Components panel, a usage list), which is a sibling move with no instance to step out of.
+ */
+export type ComponentNavigation = 'drill' | 'jump';
+
+// The drill-down stack after a jump to `entry`. Why: every finding the Audits panel opened used to push another level,
+// so after seven findings the back arrow took seven presses to reach the page. A jump keeps the page-level origin (the
+// stack's root, recorded once) and replaces whatever components were open above it, so one back returns to that page.
+// A file already in the stack is stepped back to rather than opened twice: re-clicking the open component changes
+// nothing, and jumping to a component that is open lower down keeps the entry the user drilled into.
+export function stackAfterJump(entry: OpenFile): (stack: readonly OpenFile[]) => readonly OpenFile[] {
+  assert(entry.kind === 'component', 'A jump opens a component');
+  return (stack) => {
+    const index = stack.findIndex((open) => open.path === entry.path);
+    if (index >= 0) {
+      return stack.slice(0, index + 1);
+    }
+    const origin = stack[0];
+    // A stack rooted in a component has no page to return to: the jump replaces it outright.
+    const next = origin?.kind === 'page' ? [origin, entry] : [entry];
+    assert(next.at(-1) === entry, 'A jump leaves the jumped-to component on top');
+    return next;
+  };
+}
+
 // A pasted node without the bindings of loops it no longer sits in: pasted outside
 // the loop it was copied from, they would throw.
 export function pastedInScope(

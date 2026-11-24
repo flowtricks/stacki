@@ -200,6 +200,6 @@ function reveal(app: ShellView, file: string, trail: readonly number[] | undefin
     .pop()
     ?.replace(/\.astro$/, '');
   if (name !== undefined) {
-    void app.openComponent(name, undefined, 0, toFilePath(path)).catch(app.reportFailure);
+    void app.openComponent(name, undefined, 0, toFilePath(path), 'jump').catch(app.reportFailure);
   }
 }

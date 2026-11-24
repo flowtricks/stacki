@@ -762,7 +762,7 @@ export function openUsage(app: ShellView, entry: { readonly path: string; readon
     .pop()
     ?.replace(/\.astro$/, '');
   if (name) {
-    void app.openComponent(name, undefined, 0, entry.path).catch(app.reportFailure);
+    void app.openComponent(name, undefined, 0, entry.path, 'jump').catch(app.reportFailure);
   }
 }
 

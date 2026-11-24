@@ -196,7 +196,7 @@ function LayoutProps({ app, page, close }: { readonly app: ShellView; readonly p
             onClick={() => {
               close();
               void app
-                .openComponent(file.name, undefined, 0, file.path)
+                .openComponent(file.name, undefined, 0, file.path, 'jump')
                 .then(() => app.setLeftTab('properties'))
                 .catch(app.reportFailure);
             }}

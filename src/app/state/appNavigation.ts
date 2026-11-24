@@ -29,7 +29,7 @@ import {
 import { componentEntry } from '../model/pageGestures';
 import { offerStyleMoveRecovery } from './styleMoveRecovery';
 import { windowHeld } from '../../ui/busyLock';
-import { savedForNavigation, componentAtPath, componentNamed, stackWith } from '../model/appKeys';
+import { savedForNavigation, componentAtPath, componentNamed, stackAfterJump, stackWith, type ComponentNavigation } from '../model/appKeys';
 import {
   useCoreState,
   useAssetPick,
@@ -345,9 +345,10 @@ export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lif
 
   // Drill into a component: its own file becomes the edited document, and the
   // stack remembers what to come back to (pages and components alike, so
-  // nesting works to any depth).
+  // nesting works to any depth). A jump (an audit finding, a panel that lists
+  // files) replaces the components above the page instead (stackAfterJump).
   const openComponent = useCallback(
-    async (name: string, hostPath: string | undefined, hostOcc = 0, filePath: string | undefined = undefined) => {
+    async (name: string, hostPath: string | undefined, hostOcc = 0, filePath: string | undefined = undefined, navigation: ComponentNavigation = 'drill') => {
       // A tag is only a local binding — `import Layout from
       // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
       // page's own import first, and fall back to matching by filename.
@@ -391,6 +392,13 @@ export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lif
       }
       const nodes = state?.editable ? state.model.nodes : [];
       const instance = { path: hostPath, occurrence: hostOcc };
+      if (navigation === 'jump') {
+        assert(hostPath === undefined, 'A jump opens a component by its file, not from an instance');
+        // The focus is worked out against the page alone: the components the jump replaces are not around it.
+        const entry = componentEntry(editStackRef.current.slice(0, 1), nodes, comp, instance);
+        await openFile(entry, { nextStack: stackAfterJump(entry), selectionPath: undefined });
+        return;
+      }
       const entry = componentEntry(editStackRef.current, nodes, comp, instance);
       await openFile(entry, { nextStack: stackWith(entry), selectionPath: undefined });
     },

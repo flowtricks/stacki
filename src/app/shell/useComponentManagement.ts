@@ -34,7 +34,7 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
   const editSettings = useCallback(
     (component: ScanComponent): void => {
       // The properties tab exists only while a component is the open document, so it is chosen once the file has opened.
-      void openComponent(component.name, undefined, 0, component.path)
+      void openComponent(component.name, undefined, 0, component.path, 'jump')
         .then(() => setLeftTab('properties'))
         .catch(reportFailure);
     },
@@ -207,7 +207,7 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
       const stillThere = scan.components.find((component) => component.path === open.path);
       const target = moved !== undefined && open.path.endsWith(request.from) ? moved : stillThere;
       if (target !== undefined) {
-        await openComponent(target.name, undefined, 0, target.path);
+        await openComponent(target.name, undefined, 0, target.path, 'jump');
         return true;
       }
       return undefined;

@@ -143,7 +143,7 @@ export function desktopAppHost(
         return { applied: false, reason: 'This project has no component at that path' };
       }
       // The Components panel's own open: the component's canvas on its own, with no page instance's props.
-      void app().openComponent(component.name, undefined, 0, component.path).catch(app().reportFailure);
+      void app().openComponent(component.name, undefined, 0, component.path, 'jump').catch(app().reportFailure);
       return APPLIED;
     }),
     snapshot: able((box, widthMax) => {
