@@ -8,7 +8,14 @@ import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTra
 import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
-export type Transition = { property: string; duration: string; timing: string; delay: string };
+export type Transition = {
+  property: string;
+  duration: string;
+  timing: string;
+  delay: string;
+  /** `allow-discrete` or `normal` where written. No control edits it; it is only kept. */
+  behavior?: string;
+};
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
 export type TransitionPatch = Pick<Transition, 'property'> | Pick<Transition, 'duration'> | Pick<Transition, 'timing'>;
@@ -180,14 +187,19 @@ export function parseTransitions(value: string): Transition[] {
       }
       let timing = '';
       let delay = '';
+      // A transition-behavior keyword is not an easing: read as one, it replaced the
+      // easing before it, and writing the list back dropped that easing.
+      let behavior: string | undefined;
       for (const token of rest) {
-        if (isTime(token)) {
+        if (/^(allow-discrete|normal)$/i.test(token)) {
+          behavior = token;
+        } else if (isTime(token)) {
           delay = token;
         } else {
           timing = token;
         }
       }
-      return { property, duration, delay, timing };
+      return { property, duration, delay, timing, ...(behavior === undefined ? {} : { behavior }) };
     });
 }
 
@@ -197,7 +209,7 @@ export function serializeTransitions(list: Transition[]): string {
     return '';
   }
   return list
-    .map((token) => [token.property || 'all', token.duration || '0s', token.timing, token.delay].filter((part) => part && part.trim()).join(' '))
+    .map((token) => [token.property || 'all', token.duration || '0s', token.timing, token.delay, token.behavior].filter((part) => part?.trim()).join(' '))
     .join(', ');
 }
 
