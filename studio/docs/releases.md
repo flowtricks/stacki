@@ -16,6 +16,12 @@ The root Stacki version identifies both release artifacts. The release workflow
 publishes `stacki-studio-VERSION.json` beside the desktop installers only after both
 packages pass their gates. Publishing an artifact never updates customer projects.
 
+Every installed Desktop and Studio refuses a release file over 32,000,000 bytes, and
+that bound is fixed in their code, so raising it never reaches them. The release
+therefore carries `vendor/stacki`'s TypeScript without prose comments (each file must
+compile to the same JavaScript; `scripts/releaseComments.ts`), and
+`test/releaseSize.test.ts` fails the gate once the file passes 31,000,000 bytes.
+
 ## Accepting an update
 
 The hosted account menu shows the installed Studio version. Updates are managed
