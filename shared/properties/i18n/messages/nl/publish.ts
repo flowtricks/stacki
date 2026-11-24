@@ -286,12 +286,25 @@ export const messages = {
   'publish.worker.error.configOutside': 'De Wrangler-configuratie moet binnen de publicatiesnapshot blijven.',
   'publish.worker.error.configTooLarge': 'De Wrangler-configuratie is groter dan 64 KiB.',
   'publish.worker.error.configUnreadable': 'De Wrangler-configuratie kan niet worden gelezen.',
-  'publish.worker.error.configure': 'Configureer dit project voor Cloudflare Workers voordat je publiceert.',
   'publish.worker.exists': 'Deze Worker bestaat al. Kies hem bij Hostingproject.',
   'publish.worker.name': 'Workernaam',
   'publish.worker.nameRule': 'Gebruik kleine letters, cijfers en koppeltekens. Begin met een letter of cijfer.',
-  'publish.worker.saveHint':
-    'Sla de publicatie-instellingen op om deze bestemming te kiezen. Bij je volgende publicatie wordt de Worker gemaakt met de Cloudflare-configuratie van dit project.',
+  'publish.worker.setup.action': 'Cloudflare instellen',
+  'publish.worker.setup.busy': 'Wacht tot het publiceren klaar is en stel dan Cloudflare in.',
+  'publish.worker.setup.done': 'Cloudflare is ingesteld. Publiceer opnieuw om live te gaan.',
+  'publish.worker.setup.existingConfig':
+    'Deze site heeft al eigen Cloudflare-instellingen, maar die zeggen niet wat er gepubliceerd moet worden. Vraag een ontwikkelaar om de buildmap eraan toe te voegen.',
+  'publish.worker.setup.installFailed':
+    'Stacki kon de publicatietool van Cloudflare niet aan deze site toevoegen. Controleer je internetverbinding en probeer het opnieuw.',
+  'publish.worker.setup.needed': 'Deze site is nog niet ingesteld voor Cloudflare Workers.',
+  'publish.worker.setup.notSite': 'Deze map is geen websiteproject, dus Stacki kan hem niet instellen voor Cloudflare.',
+  'publish.worker.setup.onDemand':
+    'Deze site maakt pagina’s op aanvraag en heeft daarvoor de Astro-uitbreiding van Cloudflare nodig. Vraag een ontwikkelaar om die toe te voegen en probeer het daarna opnieuw.',
+  'publish.worker.setup.otherHost': 'Deze site is gemaakt voor een andere host en kan daarom niet op Cloudflare Workers worden gepubliceerd.',
+  'publish.worker.setup.outputFolder': 'Stacki kan niet zien naar welke map deze site wordt gebouwd en kan Cloudflare daarom niet instellen.',
+  'publish.worker.setup.running': 'Cloudflare instellen…',
+  'publish.worker.setup.writeFailed': 'Stacki kon de Cloudflare-instellingen niet opslaan in de map van deze site.',
+  'publish.worker.setupHint': 'Stacki stelt deze site in voor Cloudflare en kiest de Worker. Je eerste publicatie maakt hem aan.',
   'publish.worker.title': 'Cloudflare Worker toevoegen',
   'publish.workflow.direct': 'Publiceren naar de huidige branch',
   'publish.workflow.label': 'GitHub-workflow',

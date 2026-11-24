@@ -407,6 +407,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     projectPath: '/site',
     request: { action: 'start', id: '00000000-0000-4000-8000-000000000000' },
   },
+  'publish:workerSetup': { projectPath: '/site', worker: { accountId: 'account', project: 'my-site' } },
   'publish:repository': {
     projectPath: '/site',
     request: { action: 'list', account: 'owner' },

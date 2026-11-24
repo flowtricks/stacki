@@ -39,6 +39,7 @@ import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
+import type { WorkerSetupResult } from '../properties/publishWorkerSetup';
 import type { ComponentOpError } from '../properties/componentOps';
 import type { ComponentRenameSummary } from '../properties/componentRename';
 import type { PageSettingsApplied, PageSettingsSummary } from '../properties/pageSettings';
@@ -582,6 +583,7 @@ export interface IpcResults extends AiResults, AgentResults {
   readonly 'publish:repository': RepositoryResult;
   readonly 'publish:discover': PublishDiscovery;
   readonly 'publish:account': AccountState;
+  readonly 'publish:workerSetup': WorkerSetupResult;
   readonly 'cmsConnections:list': CmsConnectionList;
   readonly 'cmsConnections:save': CmsSaveResult;
   readonly 'cmsConnections:remove': CmsConnectionList;

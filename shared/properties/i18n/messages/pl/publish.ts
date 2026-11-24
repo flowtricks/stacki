@@ -290,12 +290,25 @@ export const messages = {
   'publish.worker.error.configOutside': 'Konfiguracja Wranglera musi pozostać wewnątrz migawki publikacji.',
   'publish.worker.error.configTooLarge': 'Konfiguracja Wranglera przekracza 64 KiB.',
   'publish.worker.error.configUnreadable': 'Nie można odczytać konfiguracji Wranglera.',
-  'publish.worker.error.configure': 'Przed publikowaniem skonfiguruj ten projekt dla Cloudflare Workers.',
   'publish.worker.exists': 'Ten Worker już istnieje. Wybierz go z Projektu hostingu.',
   'publish.worker.name': 'Nazwa Workera',
   'publish.worker.nameRule': 'Użyj małych liter, cyfr i myślników. Zacznij od litery lub cyfry.',
-  'publish.worker.saveHint':
-    'Zapisz ustawienia publikowania, aby wybrać ten cel. Następne publikowanie utworzy Worker z użyciem konfiguracji Cloudflare tego projektu.',
+  'publish.worker.setup.action': 'Skonfiguruj Cloudflare',
+  'publish.worker.setup.busy': 'Poczekaj na zakończenie publikowania, a potem skonfiguruj Cloudflare.',
+  'publish.worker.setup.done': 'Cloudflare jest skonfigurowany. Opublikuj ponownie, aby strona była dostępna.',
+  'publish.worker.setup.existingConfig':
+    'Ta strona ma już własne ustawienia Cloudflare, ale nie wskazują one, co opublikować. Poproś programistę o dodanie do nich folderu kompilacji.',
+  'publish.worker.setup.installFailed':
+    'Stacki nie udało się dodać narzędzia publikowania Cloudflare do tej strony. Sprawdź połączenie z internetem i spróbuj ponownie.',
+  'publish.worker.setup.needed': 'Ta strona nie jest jeszcze skonfigurowana dla Cloudflare Workers.',
+  'publish.worker.setup.notSite': 'Ten folder nie jest projektem strony internetowej, więc Stacki nie może skonfigurować go dla Cloudflare.',
+  'publish.worker.setup.onDemand':
+    'Ta strona tworzy podstrony na żądanie, co wymaga dodatku Astro od Cloudflare. Poproś programistę o jego dodanie, a potem spróbuj ponownie.',
+  'publish.worker.setup.otherHost': 'Ta strona jest przygotowana do działania u innego dostawcy, więc nie można jej opublikować w Cloudflare Workers.',
+  'publish.worker.setup.outputFolder': 'Stacki nie może ustalić, do którego folderu kompiluje się ta strona, więc nie może skonfigurować Cloudflare.',
+  'publish.worker.setup.running': 'Konfigurowanie Cloudflare…',
+  'publish.worker.setup.writeFailed': 'Stacki nie udało się zapisać ustawień Cloudflare w folderze tej strony.',
+  'publish.worker.setupHint': 'Stacki konfiguruje tę stronę dla Cloudflare i wybiera Worker. Pierwsza publikacja go utworzy.',
   'publish.worker.title': 'Dodaj Cloudflare Worker',
   'publish.workflow.direct': 'Publikuj na bieżącej gałęzi',
   'publish.workflow.label': 'Przepływ pracy GitHub',

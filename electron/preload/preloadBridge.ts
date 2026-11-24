@@ -132,6 +132,7 @@ function projectBridge() {
     publishingRepositories: invoke('publish:repository'),
     discoverPublishing: invoke('publish:discover'),
     publishingAccount: invoke('publish:account'),
+    setUpPublishWorker: invoke('publish:workerSetup'),
     listInstructions: invoke('instructions:list'),
     readInstruction: invoke('instructions:read'),
     writeInstruction: invoke('instructions:write'),

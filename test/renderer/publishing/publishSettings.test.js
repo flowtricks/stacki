@@ -300,8 +300,13 @@ test('Switching Cloudflare accounts clears and filters projects', async (context
   assert.deepEqual(writes[0].hosting, cloudflareInventory.projects[1].hosting);
 });
 
-test('Add Worker validates and stages its destination until Save', async (context) => {
+test('Add Worker validates, sets the site up and saves its destination at once', async (context) => {
   const { discovery, writes, show } = fixture(context, cloudflareSettings());
+  const setups = [];
+  window.avb.setUpPublishWorker = async ({ projectPath, worker }) => {
+    setups.push({ projectPath, worker });
+    return { kind: 'ready', hosting: { provider: 'cloudflare-workers', ...worker } };
+  };
   await show();
   await loadCloudflare(discovery);
   const add = [...document.querySelectorAll('button')].find((entry) => entry.textContent === 'Add Worker');
@@ -322,14 +327,37 @@ test('Add Worker validates and stages its destination until Save', async (contex
     assert.equal(submit.disabled, disabled, name);
   }
   await act(async () => submit.click());
-  assert.equal(writes.length, 0);
+  const hosting = { provider: 'cloudflare-workers', accountId: 'account', project: 'new-site' };
+  assert.deepEqual(setups, [{ projectPath: '/project', worker: { accountId: 'account', project: 'new-site' } }]);
+  // Saved without waiting for Save, so a Publish right after uses the Worker.
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].hosting, hosting);
+  assert.equal(document.querySelector('.publish-new-worker') ?? undefined, undefined);
   assert.match(document.querySelector('[aria-label="Hosting project"]').textContent, /new-site/);
   await act(async () => document.querySelector('.modal-footer .primary').click());
-  assert.deepEqual(writes[0].hosting, {
-    provider: 'cloudflare-workers',
-    accountId: 'account',
-    project: 'new-site',
+  assert.deepEqual(writes[1].hosting, hosting);
+});
+
+test('Add Worker that cannot set the site up says why in a toast and saves nothing', async (context) => {
+  const { discovery, writes, show, toasts } = fixture(context, cloudflareSettings());
+  window.avb.setUpPublishWorker = async () => ({
+    kind: 'failed',
+    message: 'This site is built to run on another host, so it can’t publish to Cloudflare Workers.',
+    messageRef: { key: 'publish.worker.setup.otherHost' },
   });
+  await show();
+  await loadCloudflare(discovery);
+  const add = [...document.querySelectorAll('button')].find((entry) => entry.textContent === 'Add Worker');
+  await act(async () => add.click());
+  const { Simulate } = require('react-dom/test-utils');
+  await act(async () => {
+    Simulate.change(document.querySelector('.publish-new-worker input'), { target: { value: 'new-site' } });
+  });
+  await act(async () => document.querySelector('.publish-new-worker .primary').click());
+  assert.equal(writes.length, 0);
+  assert.deepEqual(toasts, ['This site is built to run on another host, so it can’t publish to Cloudflare Workers.']);
+  assert.ok(document.querySelector('.publish-new-worker'), 'the dialog stays open to try another name');
+  assert.equal(document.querySelector('.publish-new-worker .primary').getAttribute('aria-busy'), 'false');
 });
 
 test('Cloudflare sign-in opens authorization and refreshes accounts', async (context) => {

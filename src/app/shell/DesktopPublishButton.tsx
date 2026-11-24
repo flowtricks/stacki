@@ -6,7 +6,7 @@ import { PublishStatus } from '../../features/publishing/PublishStatus';
 import { useEffect, useRef, useState } from 'react';
 import { parsePublishCommitMessage, type PublishTarget } from '../../../shared/properties/publishConfig';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
-import { described } from '../../../shared/properties/i18n/messageRef';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { PublishControl } from '../../features/publishing/PublishControl';
 import { startPublish, readPublishState } from '../../features/publishing/publishBridge';
 import { cleanError } from '../../lib/cleanError';
@@ -19,6 +19,10 @@ import { createPortal } from 'react-dom';
 import { usePublishAvailability } from './usePublishAvailability';
 import type { SaveState } from '../../editor/saveState';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
+import { setUpWorker } from '../../features/publishing/setUpWorker';
+import { reportActionToast, reportErrorToast } from '../../ui/errorNotices';
+import { useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 // The step shown before the main process reports one: its reference lets the status panel word it in the language on screen.
 const PREPARING = described('publish.status.preparing');
@@ -49,6 +53,28 @@ function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, rep
   usePublishPolling(projectPath, state, setState, refresh);
   // Every way of starting a publish passes through the gate, so a branch nobody chose is asked about before anything is sent.
   const gate = usePublishBranchGate({ projectPath, repository, flushSave, refresh, withBranchChange, onBranchSwitched });
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  // The dialog's "Set up Cloudflare": the same setup Add Worker runs, for the saved Worker. Success closes the dialog
+  // and offers to publish again from the toast; a refusal is a toast that says what and why.
+  async function setUpSavedWorker(): Promise<void> {
+    try {
+      const problem = await setUpSavedPublishWorker(projectPath, translate);
+      if (problem === undefined) {
+        action.setVisible(false);
+        setState({ kind: 'idle' });
+        setSettingsRevision((revision) => revision + 1);
+        const target = action.lastTarget.current;
+        reportActionToast(translate('publish.worker.setup.done'), 'success', [
+          { label: translate('publish.label'), run: () => gate.guard(() => void action.publish(target)) },
+        ]);
+      } else {
+        reportErrorToast(translateDescribed(problem));
+      }
+    } catch (failure: unknown) {
+      reportErrorToast(cleanError(failure));
+    }
+  }
   return (
     <div className="stacki-publish-control stacki-publish-cluster">
       <BranchIndicator projectPath={projectPath} info={repository} onOpen={onOpenBranches} />
@@ -62,7 +88,7 @@ function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, rep
       />
       {gate.dialog}
       {(action.visible || state.kind === 'running') && (
-        <PublishStatus state={action.starting ? PREPARING_STATE : state} close={() => action.setVisible(false)} />
+        <PublishStatus state={action.starting ? PREPARING_STATE : state} close={() => action.setVisible(false)} setUpWorker={setUpSavedWorker} />
       )}
       {action.setup?.kind === 'commit' && (
         <PublishCommitMessage
@@ -91,12 +117,14 @@ function useDesktopPublishAction(
   const [visible, setVisible] = useState(false);
   const [setup, setSetup] = useState<PublishSetup>();
   const running = useRef(false);
+  const lastTarget = useRef<PublishTarget>('all');
   const active = usePublishLifetime();
   async function publish(target: PublishTarget, message?: string) {
     if (running.current || state.kind === 'running') {
       return;
     }
     running.current = true;
+    lastTarget.current = target;
     setStarting(true);
     setVisible(false);
     setSetup(undefined);
@@ -128,7 +156,18 @@ function useDesktopPublishAction(
       }
     }
   }
-  return { starting, visible, setVisible, setup, setSetup, publish };
+  return { starting, visible, setVisible, setup, setSetup, publish, lastTarget };
+}
+
+/** Sets up the saved Worker; undefined when it is ready, else the sentence that says why it is not. */
+async function setUpSavedPublishWorker(projectPath: string, translate: Translator): Promise<Described | undefined> {
+  const config = parsePublishSource((await readMetadata(projectPath, 'publish')).source);
+  if (config.hosting.provider !== 'cloudflare-workers') {
+    // The settings changed since the publish failed; a Worker is no longer the destination.
+    return { message: translate('publish.worker.setup.needed') };
+  }
+  const result = await setUpWorker(projectPath, { accountId: config.hosting.accountId, project: config.hosting.project });
+  return result.ok ? undefined : result.error;
 }
 
 async function publishSetup(projectPath: string, target: PublishTarget, message: string | undefined): Promise<PublishSetup | undefined> {

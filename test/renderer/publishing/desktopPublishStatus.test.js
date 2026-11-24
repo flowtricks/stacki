@@ -196,6 +196,101 @@ test('A failed deployment retains the confirmed GitHub result', async (context) 
   assert.equal(document.querySelector('.modal-footer button').textContent, 'Close');
 });
 
+const SETUP_NEEDED = {
+  kind: 'failed',
+  message: 'This site isn’t set up for Cloudflare Workers yet.',
+  messageRef: { key: 'publish.worker.setup.needed' },
+  github: false,
+  hosting: false,
+};
+
+test('A site not set up for Workers says so in one line and offers the fix as the primary button', async (context) => {
+  const show = await fixture(context);
+  let release;
+  const runs = [];
+  const setUpWorker = () => {
+    runs.push('run');
+    return new Promise((resolve) => {
+      release = resolve;
+    });
+  };
+  await show({ state: SETUP_NEEDED, setUpWorker });
+  assert.match(document.body.textContent, /Publish needs attention/);
+  const lines = [...document.querySelectorAll('.publish-status-body p')].map((line) => line.textContent);
+  assert.deepEqual(lines, ['This site isn’t set up for Cloudflare Workers yet.']);
+  assert.equal(toastMessages(), '', 'the missing setup is the dialog’s line, not also a toast');
+  const buttons = [...document.querySelectorAll('.modal-footer button')];
+  assert.deepEqual(
+    buttons.map((button) => button.textContent),
+    ['Close', 'Set up Cloudflare'],
+  );
+  const fix = buttons[1];
+  assert.ok(fix.classList.contains('primary'));
+  await act(async () => fix.click());
+  assert.equal(fix.getAttribute('aria-busy'), 'true');
+  assert.ok(fix.querySelector('.mini-spinner'), 'setup shows a spinner in the button, not a line of text');
+  assert.equal(fix.disabled, false, 'the button keeps its blue fill while it works');
+  await act(async () => fix.click());
+  assert.deepEqual(runs, ['run'], 'a second click while setup runs does nothing');
+  assert.equal(buttons[0].disabled, true);
+  await act(async () => release());
+  assert.equal(fix.getAttribute('aria-busy'), 'false');
+});
+
+test('Without a host that can set the site up, the line stays and Close is the only action', async (context) => {
+  const show = await fixture(context);
+  await show(SETUP_NEEDED);
+  assert.match(document.body.textContent, /isn’t set up for Cloudflare Workers yet/);
+  assert.deepEqual(
+    [...document.querySelectorAll('.modal-footer button')].map((button) => button.textContent),
+    ['Close'],
+  );
+});
+
+test('Desktop’s fix runs the same Worker setup for the saved Worker, then offers to publish again', async (context) => {
+  const view = await desktopFixture(context, false);
+  const setups = [];
+  const writes = [];
+  const saved =
+    JSON.stringify(
+      {
+        version: 1,
+        defaultTarget: 'hosting',
+        githubAccount: '',
+        hosting: { provider: 'cloudflare-workers', accountId: 'account', project: 'my-site' },
+        buildScript: 'build',
+        beforePublish: [],
+        afterPublish: [],
+      },
+      undefined,
+      2,
+    ) + '\n';
+  window.avb.projectMetadata = async () => ({ ok: true, value: { source: saved } });
+  window.avb.writeProjectMetadata = async ({ write }) => {
+    writes.push(write);
+    return { ok: true, value: { source: write.source } };
+  };
+  window.avb.publishStart = async (input) => {
+    view.starts.push(input);
+    return SETUP_NEEDED;
+  };
+  window.avb.setUpPublishWorker = async (input) => {
+    setups.push(input);
+    return { kind: 'ready', hosting: { provider: 'cloudflare-workers', ...input.worker } };
+  };
+  await view.show();
+  await act(async () => document.querySelector('[aria-label="More publish options"]').click());
+  const hosting = document.querySelector('.stacki-publish-hosting > button');
+  await act(async () => hosting.click());
+  const fix = [...document.querySelectorAll('.modal-footer button')].find((button) => button.textContent === 'Set up Cloudflare');
+  assert.ok(fix, 'the failed publish offers the fix');
+  await act(async () => fix.click());
+  assert.deepEqual(setups, [{ projectPath: '/project', worker: { accountId: 'account', project: 'my-site' } }]);
+  assert.equal(writes.length, 0, 'the saved Worker is already the destination');
+  assert.equal(document.querySelector('.publish-status') ?? undefined, undefined, 'success closes the dialog');
+  assert.match(toastMessages(), /Cloudflare is set up/);
+});
+
 // Studio's job stages, in the order a deployed run reports them, through Studio's own mapping.
 const STUDIO_RUN = [
   { kind: 'building', id: 'run' },

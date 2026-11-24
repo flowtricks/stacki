@@ -285,12 +285,25 @@ export const messages = {
   'publish.worker.error.configOutside': 'A configuração do Wrangler deve ficar dentro do snapshot de publicação.',
   'publish.worker.error.configTooLarge': 'A configuração do Wrangler excede 64 KiB.',
   'publish.worker.error.configUnreadable': 'Não é possível ler a configuração do Wrangler.',
-  'publish.worker.error.configure': 'Configure este projeto para o Cloudflare Workers antes de publicar.',
   'publish.worker.exists': 'Este Worker já existe. Escolha-o em Projeto de hospedagem.',
   'publish.worker.name': 'Nome do Worker',
   'publish.worker.nameRule': 'Use letras minúsculas, números e hifens. Comece com uma letra ou um número.',
-  'publish.worker.saveHint':
-    'Salve as configurações de publicação para selecionar este destino. A próxima publicação cria o Worker com a configuração da Cloudflare deste projeto.',
+  'publish.worker.setup.action': 'Configurar Cloudflare',
+  'publish.worker.setup.busy': 'Espere a publicação terminar e depois configure a Cloudflare.',
+  'publish.worker.setup.done': 'A Cloudflare está configurada. Publique de novo para colocar no ar.',
+  'publish.worker.setup.existingConfig':
+    'Este site já tem configurações próprias da Cloudflare, mas elas não dizem o que publicar. Peça a alguém do desenvolvimento para adicionar a pasta de build.',
+  'publish.worker.setup.installFailed':
+    'O Stacki não conseguiu adicionar a ferramenta de publicação da Cloudflare a este site. Verifique sua conexão com a internet e tente de novo.',
+  'publish.worker.setup.needed': 'Este site ainda não está configurado para o Cloudflare Workers.',
+  'publish.worker.setup.notSite': 'Esta pasta não é um projeto de site, então o Stacki não consegue configurá-la para a Cloudflare.',
+  'publish.worker.setup.onDemand':
+    'Este site gera páginas sob demanda, o que exige o complemento Astro da Cloudflare. Peça a alguém do desenvolvimento para adicioná-lo e tente de novo.',
+  'publish.worker.setup.otherHost': 'Este site foi feito para rodar em outro provedor, então não pode ser publicado no Cloudflare Workers.',
+  'publish.worker.setup.outputFolder': 'O Stacki não consegue saber em qual pasta este site é gerado, então não pode configurar a Cloudflare.',
+  'publish.worker.setup.running': 'Configurando a Cloudflare…',
+  'publish.worker.setup.writeFailed': 'O Stacki não conseguiu salvar as configurações da Cloudflare na pasta deste site.',
+  'publish.worker.setupHint': 'O Stacki configura este site para a Cloudflare e seleciona o Worker. Sua primeira publicação o cria.',
   'publish.worker.title': 'Adicionar Worker da Cloudflare',
   'publish.workflow.direct': 'Publicar no branch atual',
   'publish.workflow.label': 'Fluxo de trabalho do GitHub',

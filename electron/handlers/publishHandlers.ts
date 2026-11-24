@@ -10,6 +10,8 @@ import { readPublishAvailability } from '../project/publishAvailability';
 import { readProjectMetadata } from '../project/projectMetadata';
 import { publishedProjectSiteURL } from '../project/publishSite';
 import { translateMain } from '../lib/mainLocale';
+import { setUpWorkerHosting } from '../project/publishWorkerSetup';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
   const publisher = new DesktopPublisher();
@@ -32,6 +34,15 @@ export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
       return { ok: false, error: translateMain('error.publish.repositoriesBusy') };
     }
     return publishingRepositories(project, input.request);
+  });
+  host.ipcMain.handle('publish:workerSetup', async (_event, input) => {
+    const project = root(input.projectPath);
+    await ensureToolPath();
+    // Setup may change the site's dependencies; it must not race a publish that is building them.
+    if (publisher.state(project).kind === 'running') {
+      return { kind: 'failed', ...described('publish.worker.setup.busy') };
+    }
+    return setUpWorkerHosting(project, input.worker);
   });
   host.ipcMain.handle('publish:start', (_event, input) => publisher.start(root(input.projectPath), input.target, input.commitMessage));
   host.ipcMain.handle('publish:state', (_event, projectPath) => publisher.state(root(projectPath)));

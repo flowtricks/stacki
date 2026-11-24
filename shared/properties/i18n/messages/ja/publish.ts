@@ -287,12 +287,25 @@ export const messages = {
   'publish.worker.error.configOutside': 'Wranglerの設定は公開スナップショット内に置く必要があります。',
   'publish.worker.error.configTooLarge': 'Wranglerの設定が64 KiBを超えています。',
   'publish.worker.error.configUnreadable': 'Wranglerの設定を読み取れません。',
-  'publish.worker.error.configure': '公開する前に、このプロジェクトをCloudflare Workers用に設定してください。',
   'publish.worker.exists': 'このWorkerはすでに存在します。ホスティングプロジェクトから選択してください。',
   'publish.worker.name': 'Worker名',
   'publish.worker.nameRule': '英小文字、数字、ハイフンを使用し、英字または数字で始めてください。',
-  'publish.worker.saveHint':
-    'この公開先を選択するには公開設定を保存してください。次回の公開時に、このプロジェクトのCloudflare設定を使ってWorkerが作成されます。',
+  'publish.worker.setup.action': 'Cloudflareを設定',
+  'publish.worker.setup.busy': '公開が終わるのを待ってから、Cloudflareを設定してください。',
+  'publish.worker.setup.done': 'Cloudflareの設定が完了しました。もう一度公開すると公開されます。',
+  'publish.worker.setup.existingConfig':
+    'このサイトには独自のCloudflare設定がありますが、何を公開するかが指定されていません。開発者にビルドフォルダーを追加してもらってください。',
+  'publish.worker.setup.installFailed':
+    'StackiはこのサイトにCloudflareの公開ツールを追加できませんでした。インターネット接続を確認して、もう一度お試しください。',
+  'publish.worker.setup.needed': 'このサイトはまだCloudflare Workers用に設定されていません。',
+  'publish.worker.setup.notSite': 'このフォルダーはWebサイトのプロジェクトではないため、StackiはCloudflare用に設定できません。',
+  'publish.worker.setup.onDemand':
+    'このサイトはページをリクエスト時に生成するため、CloudflareのAstroアドオンが必要です。開発者に追加してもらってから、もう一度お試しください。',
+  'publish.worker.setup.otherHost': 'このサイトは別のホストで動くように作られているため、Cloudflare Workersに公開できません。',
+  'publish.worker.setup.outputFolder': 'このサイトがどのフォルダーにビルドされるか判断できないため、StackiはCloudflareを設定できません。',
+  'publish.worker.setup.running': 'Cloudflareを設定しています…',
+  'publish.worker.setup.writeFailed': 'StackiはこのサイトのフォルダーにCloudflare設定を保存できませんでした。',
+  'publish.worker.setupHint': 'StackiがこのサイトをCloudflare用に設定し、Workerを選択します。最初の公開でWorkerが作成されます。',
   'publish.worker.title': 'Cloudflare Workerを追加',
   'publish.workflow.direct': '現在のブランチに公開',
   'publish.workflow.label': 'GitHubワークフロー',

@@ -7,7 +7,7 @@ import { readPublishConfig } from './publishConfig';
 import { ensureToolPath } from '../lib/nodeTools';
 import { parsePublishCommitMessage, type PublishConfig, type PublishTarget } from '../../shared/properties/publishConfig';
 import { parseDesktopPublishProgress, type DesktopPublishState } from '../../shared/properties/publishState';
-import { deployHosting, runPublishScripts } from './publishCommands';
+import { checkHostingReady, deployHosting, runPublishScripts } from './publishCommands';
 import { createPublishSnapshot, createPublishSource, type PublishSource, type PublishSnapshot } from './publishSnapshot';
 import { publishingGitEnvironment, publishingGitRemote, recordPublishedGitHub } from './publishGitHub';
 import { deploymentConfiguration, recordDeployment } from './publishReceipt';
@@ -68,6 +68,14 @@ export class DesktopPublisher {
       return;
     }
     const job = prepared.value;
+    if (job.plan.kind === 'hosting') {
+      // Before any build or push: a site that cannot deploy says so now, and the dialog can offer to set it up.
+      const ready = await checkHostingReady(job.root, job.config);
+      if (!ready.ok) {
+        this.fail(ready.error, { github: false, hosting: false });
+        return;
+      }
+    }
     const captured = job.plan.kind === 'github' ? await createPublishSource(job.root, 'github') : await createPublishSnapshot(job.root);
     if (!captured.ok) {
       this.fail(captured.error, { github: false, hosting: false });

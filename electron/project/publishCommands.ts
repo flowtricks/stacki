@@ -2,10 +2,10 @@ import { spawn } from 'node:child_process';
 import { PUBLISH_LIMITS } from '../../shared/properties/publishConfig';
 import type { PublishConfig } from '../../shared/properties/publishConfig';
 import { hostingCommand, scriptCommand } from '../../shared/properties/publishCommands';
-import type { PublishCommand } from '../../shared/properties/publishCommands';
-import { resolvePublishExecutable } from './publishExecutable';
-import { withWorkerAccount } from './publishWorkerConfig';
+import { resolvePublishExecutable, type ExecutableCommand } from './publishExecutable';
+import { checkWorkerReady, withWorkerAccount } from './publishWorkerConfig';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import { ok, type Result } from '../../shared/core/result';
 import { DescribedError } from '../../shared/properties/describedError';
 
 export async function runPublishScripts(root: string, scripts: readonly string[], environment: Readonly<Record<string, string>> = {}): Promise<void> {
@@ -15,6 +15,18 @@ export async function runPublishScripts(root: string, scripts: readonly string[]
   for (const script of scripts) {
     await runPublishCommand(root, { ...scriptCommand(script), environment });
   }
+}
+
+/**
+ * Whether the saved hosting can deploy from this site right now, asked before Publish builds or pushes anything. A Worker
+ * uses checkWorkerReady, the same check Add Worker ends with, so setup and Publish cannot disagree about a site.
+ */
+export async function checkHostingReady(root: string, config: PublishConfig): Promise<Result<void, Described>> {
+  if (config.hosting.provider === 'cloudflare-workers') {
+    const ready = await checkWorkerReady(root);
+    return ready.ok ? ok(undefined) : ready;
+  }
+  return ok(undefined);
 }
 
 export async function deployHosting(root: string, config: PublishConfig): Promise<void> {
@@ -34,8 +46,11 @@ export async function deployHosting(root: string, config: PublishConfig): Promis
   }
 }
 
-/** Run installed tools only: publishing must never implicitly download executable packages. */
-export async function runPublishCommand(root: string, command: PublishCommand): Promise<void> {
+/**
+ * Run installed tools only: publishing must never implicitly download executable packages. A package manager may run
+ * here too, when Worker setup adds the deploy tool to the site as a development dependency.
+ */
+export async function runPublishCommand(root: string, command: ExecutableCommand): Promise<void> {
   const resolved = resolvePublishExecutable(root, command);
   const environment = {
     ...publishEnvironment(),

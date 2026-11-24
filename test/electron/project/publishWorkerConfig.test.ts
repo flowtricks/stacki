@@ -68,7 +68,7 @@ test('Worker config rejects missing, oversized, invalid, and escaping files', as
   const deploy = async () => {
     assert.fail('Invalid config must never deploy');
   };
-  await assert.rejects(withWorkerAccount(root, 'selected', deploy), /Configure this project/);
+  await assert.rejects(withWorkerAccount(root, 'selected', deploy), /set up for Cloudflare Workers/);
   await writeFile(path.join(root, 'wrangler.json'), 'x'.repeat(65_537));
   await assert.rejects(withWorkerAccount(root, 'selected', deploy), /64 KiB/);
   await writeFile(path.join(root, 'wrangler.json'), '{invalid');

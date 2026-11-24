@@ -204,6 +204,7 @@ interface InvokeChannels {
   readonly publishingRepositories: 'publish:repository';
   readonly discoverPublishing: 'publish:discover';
   readonly publishingAccount: 'publish:account';
+  readonly setUpPublishWorker: 'publish:workerSetup';
   readonly cmsConnections: 'cmsConnections:list';
   readonly saveCmsConnection: 'cmsConnections:save';
   readonly removeCmsConnection: 'cmsConnections:remove';

@@ -1667,6 +1667,17 @@ Cloudflare Workers have their own `cloudflare-workers` hosting variant. Discover
 may have an empty account ID when its local name is known but its account is unresolved; the saved
 publish-config parser rejects that incomplete value. This prevents assigning an unrelated account.
 
+`publish:workerSetup` accepts `{ projectPath, worker: { accountId, project } }`, parsed by
+`shared/properties/publishWorkerSetup.ts` (Cloudflare's Worker name rule, bounded account), and returns
+`ready` with the Worker hosting or `failed` with a described sentence. Main writes `wrangler.jsonc`
+only when the site has no Wrangler config (static assets from the build folder, or the Cloudflare
+Astro adapter's server and assets), never rewrites an authored one, and adds Wrangler as a development
+dependency with the site's package manager when it is missing. It reports `ready` only after
+`checkWorkerReady`, the check Publish runs before it builds or pushes, so Add Worker and Publish cannot
+disagree. The renderer then saves the Worker as hosting through the witnessed metadata transport.
+Studio exposes the same contract at `/studio/api/publish/worker`. A publish refused by that check fails
+with `publish.worker.setup.needed`, which the Publish dialog answers with a one-click setup.
+
 ## Error notifications
 
 Desktop and Studio report application errors through the shared toast stack. `src/ui/ErrorToast`

@@ -277,7 +277,12 @@ test('every publish entry point goes through the gate and nothing else starts on
   const source = fs.readFileSync(repoPath('src/app/shell/DesktopPublishButton.tsx'), 'utf8');
   assert.match(source, /publish=\{\(target\) => gate\.guard\(/);
   assert.equal(source.match(/startPublish\(/g).length, 1, 'one place starts a publish');
-  assert.equal((source.match(/action\.publish\(/g) ?? []).length, 2, 'the gated menu path and the commit-message follow-up of an already gated start');
+  assert.equal(
+    (source.match(/action\.publish\(/g) ?? []).length,
+    3,
+    'the gated menu path, the gated retry a Worker setup offers, and the commit-message follow-up of an already gated start',
+  );
+  assert.match(source, /run: \(\) => gate\.guard\(\(\) => void action\.publish\(target\)\)/, 'the retry after setup is gated too');
   const control = fs.readFileSync(repoPath('src/features/publishing/PublishControl.tsx'), 'utf8');
   assert.equal((control.match(/\bpublish\(target\)/g) ?? []).length, 1, 'PublishControl hands every target to the one publish callback');
 });

@@ -155,6 +155,7 @@ test('A failed push never marks its commit as published', async (context) => {
 test('Hosting records the dirty snapshot and preserves staging', async (context) => {
   const root = await fixture(context);
   context.mock.method(commands, 'runPublishScripts', async () => undefined);
+  context.mock.method(commands, 'checkHostingReady', async () => ({ ok: true, value: undefined }));
   context.mock.method(commands, 'deployHosting', async () => undefined);
   await writeFile(path.join(root, 'page.txt'), 'Staged');
   await git(root, ['add', 'page.txt']);
@@ -188,6 +189,7 @@ test('Hosting records the dirty snapshot and preserves staging', async (context)
 test('New edits and failed deployments stay pending', async (context) => {
   const root = await fixture(context);
   context.mock.method(commands, 'runPublishScripts', async () => undefined);
+  context.mock.method(commands, 'checkHostingReady', async () => ({ ok: true, value: undefined }));
   const deployment = context.mock.method(commands, 'deployHosting', async () => {
     await writeFile(path.join(root, 'page.txt'), 'Newer than deployment');
   });

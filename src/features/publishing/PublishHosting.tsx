@@ -45,6 +45,7 @@ export function HostingChoice(props: Props) {
       )}
       {dialog === 'worker' && (
         <AddWorker
+          projectPath={props.projectPath}
           account={account}
           accountName={props.accounts.find((entry) => entry.id === account)?.name ?? account}
           projects={projects}

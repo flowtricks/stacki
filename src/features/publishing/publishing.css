@@ -609,3 +609,13 @@
 .publish-dropdown .dd-option:has(.dd-description) .dd-check {
   margin-inline-start: 0;
 }
+/* Worker setup's primary button: the spinner sits inside it while setup runs, white on the blue fill it keeps. */
+.publish-setup-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.publish-setup-button .mini-spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: white;
+}

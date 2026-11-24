@@ -4,6 +4,9 @@ import Popup from '../../ui/Popup';
 import { CheckIcon, CloseIcon, UploadCloudIcon } from '../../ui/Icons';
 import { PublishProviderIcon } from './PublishProviderIcon';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
+import { publishNeedsWorkerSetup } from '../../../shared/properties/publishWorkerSetup';
+import { WorkerSetupButton } from './PublishWorker';
+import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
@@ -20,17 +23,26 @@ interface Props {
   readonly note?: string;
   /** The footer line while publishing, already translated; it says whether the host must stay open. Desktop's default asks to keep Stacki open. */
   readonly runningNote?: string;
+  /**
+   * Sets the site up for Cloudflare Workers when that is what stopped the publish; it reports its own outcome as toasts.
+   * A host that cannot set a site up leaves it out, and the dialog then only says what is missing.
+   */
+  readonly setUpWorker?: (() => Promise<void>) | undefined;
 }
 
-export function PublishStatus({ state, close, note, runningNote }: Props) {
+export function PublishStatus({ state, close, note, runningNote, setUpWorker }: Props) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
+  const [settingUp, setSettingUp] = useState(false);
   const footerNote = runningNote ?? translate('publish.status.keepOpen');
   assert(footerNote.length > 0, 'A running publish always explains what to keep open');
   const busy = publishStatusBusy(state);
   const title = publishStatusTitle(state, translate);
+  // The one failure with a fix: the body says what is missing in a line, and the fix is the primary button.
+  const needsSetup = publishNeedsWorkerSetup(state);
+  const fix = needsSetup ? setUpWorker : undefined;
   return (
-    <Popup className="modal publish-status" label={title} onClose={close} dismissible={!busy}>
+    <Popup className="modal publish-status" label={title} onClose={close} dismissible={!busy && !settingUp}>
       {({ close: dismiss }) => (
         <>
           <div className="modal-body publish-status-body" data-state={state.kind}>
@@ -42,7 +54,11 @@ export function PublishStatus({ state, close, note, runningNote }: Props) {
               <PublishRunning state={state} />
             ) : (
               <>
-                <ErrorToast message={state.kind === 'failed' ? translateDescribed(state) : undefined} />
+                {needsSetup ? (
+                  <p>{translate('publish.worker.setup.needed')}</p>
+                ) : (
+                  <ErrorToast message={state.kind === 'failed' ? translateDescribed(state) : undefined} />
+                )}
                 {state.kind === 'review-open' && (
                   <p>
                     <a href={state.url} target="_blank" rel="noreferrer">
@@ -59,6 +75,22 @@ export function PublishStatus({ state, close, note, runningNote }: Props) {
           <div className="modal-footer">
             {busy ? (
               <span>{footerNote}</span>
+            ) : fix !== undefined ? (
+              <>
+                <button type="button" onClick={dismiss} disabled={settingUp}>
+                  {translate('ui.close')}
+                </button>
+                <WorkerSetupButton
+                  label={translate('publish.worker.setup.action')}
+                  busyLabel={translate('publish.worker.setup.running')}
+                  busy={settingUp}
+                  disabled={false}
+                  run={() => {
+                    setSettingUp(true);
+                    void fix().finally(() => setSettingUp(false));
+                  }}
+                />
+              </>
             ) : (
               <button className="primary" onClick={dismiss}>
                 {state.kind === 'done' ? translate('publish.common.done') : translate('ui.close')}

@@ -33,6 +33,10 @@ test('failed build leaves Git untouched and duplicate starts share the job', asy
     }),
   );
   await writeFile(path.join(root, 'fail.cjs'), 'process.exit(7);');
+  // A site ready for Workers, so the failure under test is the build's and not the readiness check before it.
+  await writeFile(path.join(root, 'wrangler.json'), JSON.stringify({ name: 'site', assets: { directory: './dist' } }));
+  await mkdir(path.join(root, 'node_modules/.bin'), { recursive: true });
+  await writeFile(path.join(root, 'node_modules/.bin/wrangler'), '');
   await git(root, ['init', '--initial-branch=main']);
   await git(root, ['config', 'user.name', 'Publishing Test']);
   await git(root, ['config', 'user.email', 'publishing@example.test']);

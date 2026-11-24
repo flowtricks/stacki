@@ -15,6 +15,7 @@ import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, parsePublishSource, type PublishConfig, type Hosting } from '../../../shared/properties/publishConfig';
 import { findMissingPublishField, type MissingPublishField } from '../../../shared/properties/publishMissing';
 import { PublishInvalidFieldContext } from './publishInvalidField';
+import { PublishSettingsRebaseContext } from './setUpWorker';
 import { reportErrorToast } from '../../ui/errorNotices';
 import { cleanError } from '../../lib/cleanError';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -141,7 +142,7 @@ function PublishSettingsForm({
   const [repositoryBusy, setRepositoryBusy] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
   const [refused, setRefused] = useState<{ readonly field: MissingPublishField; readonly attempt: number }>();
-  const { error, saving, save } = usePublishSettingsSave({
+  const { error, saving, save, rebase } = usePublishSettingsSave({
     projectPath,
     config,
     base: stored.base,
@@ -163,35 +164,37 @@ function PublishSettingsForm({
   }, [refused]);
   return (
     <PublishInvalidFieldContext.Provider value={invalidField}>
-      <div className="publish-settings-scroll" ref={scroll}>
-        <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
-          <PublishTargetField config={config} setConfig={setConfig} />
-          <section className="publish-settings-section" aria-label="GitHub" /* i18n-ignore: product name. */>
-            <PublishWorkflow config={config} change={setConfig} />
-            <PublishConnections
-              projectPath={projectPath}
-              provider="github"
-              value={config.githubAccount}
-              change={(githubAccount) => setConfig({ ...config, githubAccount })}
-            />
-            <PublishRepositories
-              key={config.githubAccount}
-              projectPath={projectPath}
-              account={config.githubAccount}
-              selection={repository}
-              change={setRepository}
-              busy={setRepositoryBusy}
-            />
-          </section>
-          <section className="publish-settings-section" aria-label={translate('publish.settings.hosting')}>
-            <HostingFields projectPath={projectPath} hosting={config.hosting} discoveringHosting={discoveringHosting} change={changeHosting} />
-            <PublishedSiteField config={config} change={setConfig} />
-          </section>
-          <AdvancedFields config={config} setConfig={setConfig} />
-          {error && <ErrorToast message={error} />}
-        </fieldset>
-      </div>
-      <SettingsFooter busy={saving || repositoryBusy} discoveringHosting={discoveringHosting} saving={saving} close={close} save={save} />
+      <PublishSettingsRebaseContext.Provider value={rebase}>
+        <div className="publish-settings-scroll" ref={scroll}>
+          <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
+            <PublishTargetField config={config} setConfig={setConfig} />
+            <section className="publish-settings-section" aria-label="GitHub" /* i18n-ignore: product name. */>
+              <PublishWorkflow config={config} change={setConfig} />
+              <PublishConnections
+                projectPath={projectPath}
+                provider="github"
+                value={config.githubAccount}
+                change={(githubAccount) => setConfig({ ...config, githubAccount })}
+              />
+              <PublishRepositories
+                key={config.githubAccount}
+                projectPath={projectPath}
+                account={config.githubAccount}
+                selection={repository}
+                change={setRepository}
+                busy={setRepositoryBusy}
+              />
+            </section>
+            <section className="publish-settings-section" aria-label={translate('publish.settings.hosting')}>
+              <HostingFields projectPath={projectPath} hosting={config.hosting} discoveringHosting={discoveringHosting} change={changeHosting} />
+              <PublishedSiteField config={config} change={setConfig} />
+            </section>
+            <AdvancedFields config={config} setConfig={setConfig} />
+            {error && <ErrorToast message={error} />}
+          </fieldset>
+        </div>
+        <SettingsFooter busy={saving || repositoryBusy} discoveringHosting={discoveringHosting} saving={saving} close={close} save={save} />
+      </PublishSettingsRebaseContext.Provider>
     </PublishInvalidFieldContext.Provider>
   );
 }
@@ -291,7 +294,7 @@ function usePublishSettingsSave({
       setSaving(false);
     }
   }
-  return { error, saving, save };
+  return { error, saving, save, rebase: setBase };
 }
 
 function HostingFields({

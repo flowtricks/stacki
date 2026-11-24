@@ -7,6 +7,7 @@ import { githubUserSearchRoute } from '../features/roles/githubUserSearchServer'
 import { accountRoute } from '../features/publishing/accountRoutes';
 import { repositoryRoute } from '../features/publishing/repositoryRoutes';
 import { discoveryRoute } from '../features/publishing/discoveryRoutes';
+import { workerRoute } from '../features/publishing/workerRoutes';
 import { metadataRoute } from '../features/settings/projectMetadata';
 import { cmsRoutes } from '../features/cms/cmsServer';
 import { cmsRemoteRoutes } from '../features/cms/cmsRemoteServer';
@@ -54,6 +55,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       (await metadataRoute(root, rooms, request, response, pathname, readBody)) ||
       (await discoveryRoute(root, request, response, pathname, readBody)) ||
       (await accountRoute(root, request, response, pathname, readBody)) ||
+      (await workerRoute(root, request, response, pathname, readBody)) ||
       (await repositoryRoute(root, request, response, pathname, readBody)) ||
       (await componentUsageRoute(root, request, response, pathname)) ||
       (await cms(request, response, pathname, readBody)) ||
