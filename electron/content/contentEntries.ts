@@ -67,7 +67,9 @@ const toPosix = (filePath: string): string => filePath.split(path.sep).join('/')
 const isPlainObject = (value: unknown): boolean => !!value && typeof value === 'object' && !Array.isArray(value);
 
 // A glob pattern as a regular expression: `**` crosses folders, `*` does not,
-// and `{a,b}` is a choice. Enough for the patterns a content config writes.
+// `{a,b}` is a choice and `[abc]` one character of a set (`[^_]` or `[!_]`: one
+// outside it, as in Astro's `**/[^_]*.md`). Enough for the patterns a content
+// config writes.
 function globToRegExp(pattern: string): RegExp {
   let out = '';
   for (let i = 0; i < pattern.length; i++) {
@@ -79,6 +81,10 @@ function globToRegExp(pattern: string): RegExp {
       } else {
         out += '[^/]*';
       }
+    } else if (ch === '[' && pattern.indexOf(']', i + 2) !== -1) {
+      const close = pattern.indexOf(']', i + 2);
+      out += characterClass(pattern.slice(i + 1, close));
+      i = close;
     } else if (ch === '{') {
       const close = pattern.indexOf('}', i);
       out += `(?:${pattern
@@ -94,6 +100,23 @@ function globToRegExp(pattern: string): RegExp {
     }
   }
   return new RegExp(`^${out}$`);
+}
+
+// The inside of a glob's `[…]` as a regular expression's: ranges keep their
+// meaning, and a set never matches the folder separator.
+function characterClass(body: string): string {
+  const negated = body.startsWith('!') || body.startsWith('^');
+  const members = (negated ? body.slice(1) : body).replace(/[\\[\]^]/g, '\\$&');
+  return negated ? `[^/${members}]` : `(?!/)[${members}]`;
+}
+
+// Whether a path under the loader's base is one of its files: it matches one of
+// the patterns and none of those written `!…`, which exclude.
+function globMatcher(pattern: LoaderInfo['pattern']): (relative: string) => boolean {
+  const list: readonly string[] = typeof pattern === 'string' ? [pattern] : (pattern ?? []);
+  const wanted = list.filter((each) => !each.startsWith('!')).map(globToRegExp);
+  const excluded = list.filter((each) => each.startsWith('!')).map((each) => globToRegExp(each.slice(1)));
+  return (relative) => wanted.some((matcher) => matcher.test(relative)) && !excluded.some((matcher) => matcher.test(relative));
 }
 
 // Every file below a folder, written once for both drivers (lib/slicedWork.ts): a collection of
@@ -220,16 +243,10 @@ function reasonFields(problem: Described): ReasonFields {
   return { reason: problem.message, ...(problem.messageRef === undefined ? {} : { reasonRef: problem.messageRef }) };
 }
 
-const patternsOf = (pattern: LoaderInfo['pattern']): RegExp[] => {
-  const list = Array.isArray(pattern) ? pattern : pattern !== undefined ? [pattern] : [];
-  return list.map(globToRegExp);
-};
-
 function* globEntries(projectPath: string, collection: ContentCollection): SlicedWork<ListResult> {
   const loader = collection.loader ?? {};
   const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
-  const matchers = patternsOf(loader.pattern);
-  const files = (yield* walkFilesSliced(root)).filter((rel) => matchers.some((re) => re.test(rel)));
+  const files = (yield* walkFilesSliced(root)).filter(globMatcher(loader.pattern));
   files.sort();
 
   const titleFields = titleFieldsOf(collection.schema);
@@ -496,8 +513,7 @@ function* countEntriesWork(projectPath: string, collection: ContentCollection): 
   const loader = collection.loader ?? {};
   if (loader.kind === 'glob') {
     const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
-    const matchers = patternsOf(loader.pattern);
-    return (yield* walkFilesSliced(root)).filter((rel) => matchers.some((re) => re.test(rel))).length;
+    return (yield* walkFilesSliced(root)).filter(globMatcher(loader.pattern)).length;
   }
   if (loader.kind === 'file') {
     try {
@@ -549,9 +565,9 @@ function* coveredSliced(projectPath: string, collections: readonly ContentCollec
       // disappear from the file-based CMS.
       if (isDataDirectory(base)) {
         const root = cmsDirectoryPath(projectPath, base);
-        const matchers = patternsOf(loader.pattern);
+        const matches = globMatcher(loader.pattern);
         for (const relative of yield* walkFilesSliced(root)) {
-          if (matchers.some((matcher) => matcher.test(relative))) {
+          if (matches(relative)) {
             files.push(toPosix(path.relative(projectPath, path.join(root, relative))));
           }
         }
@@ -582,7 +598,7 @@ export {
   coveredPaths,
   coveredPathsSliced,
   locateRecords,
-  globToRegExp,
+  globMatcher,
   formatFor,
   formatName,
 };

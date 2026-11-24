@@ -43,7 +43,7 @@ import { addDataRecord, removeDataRecords } from './astroDataRecords';
 import { entryImage, projectImage, withInferredReferences, type RecordCollection } from './astroRecordReferences';
 
 export { projectImage };
-import { globToRegExp, listEntries, writeEntry, type ContentCollection, type Entry } from './contentEntries';
+import { globMatcher, listEntries, writeEntry, type ContentCollection, type Entry } from './contentEntries';
 import { applyRename, entryRenameLock, planRename } from './contentRefs';
 import { DescribedError } from '../../shared/properties/describedError';
 import { described, messageRef, type Described } from '../../shared/properties/i18n/messageRef';
@@ -574,7 +574,7 @@ async function createEntry(projectPath: string, collection: Collection): Promise
   const extension = EXTENSIONS.find((candidate) => patterns.some((pattern) => pattern.includes(candidate))) ?? 'md';
   const base = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
   const name = freeName(base, extension);
-  if (!patterns.some((pattern) => globToRegExp(pattern).test(name))) {
+  if (!globMatcher(patterns)(name)) {
     throw new Error(`Stacki can’t tell where new ${collection.name} entries go.`);
   }
   const titled = astroSchemaFields(collection.schema, new Map()).some((field) => field.name === 'title');
