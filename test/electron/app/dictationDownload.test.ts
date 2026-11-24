@@ -111,6 +111,11 @@ function sendWeights(request: IncomingMessage, response: ServerResponse, behavio
       const match = /^bytes=(\d+)-$/.exec(range ?? '');
       if (match !== null) {
         const start = Number(match[1]);
+        if (start >= weightBytes.length) {
+          response.writeHead(416, { 'Content-Range': `bytes */${weightBytes.length}` });
+          response.end();
+          return;
+        }
         response.writeHead(206, {
           'Content-Range': `bytes ${start}-${weightBytes.length - 1}/${weightBytes.length}`,
           'Content-Length': weightBytes.length - start,
@@ -227,6 +232,17 @@ test('a server that ignores the range sends the whole file, and the download sta
   await mkdir(path.join(directory, 'onnx'), { recursive: true });
   await writeFile(path.join(directory, 'onnx', 'weights.onnx' + PART_SUFFIX), weightBytes.subarray(0, 1000));
   assert.equal((await downloadModel(fakeModel, directory, signal(), deps(server.origin))).kind, 'installed');
+  assert.deepEqual(await readFile(path.join(directory, 'onnx', 'weights.onnx')), weightBytes);
+});
+
+test('a part that already holds the whole file is fetched again, not asked for past its end', async (context) => {
+  // A cancel or a stall after the last byte, before the body ended, leaves a full-size part. A Range from its end
+  // is answered 416, so resuming it would fail the same way on every later download.
+  const { directory, server, behaviour } = await setup(context, 'ok');
+  await mkdir(path.join(directory, 'onnx'), { recursive: true });
+  await writeFile(path.join(directory, 'onnx', 'weights.onnx' + PART_SUFFIX), weightBytes);
+  assert.equal((await downloadModel(fakeModel, directory, signal(), deps(server.origin))).kind, 'installed');
+  assert.deepEqual(behaviour.ranges, [], 'no range is asked for');
   assert.deepEqual(await readFile(path.join(directory, 'onnx', 'weights.onnx')), weightBytes);
 });
 

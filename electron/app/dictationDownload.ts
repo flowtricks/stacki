@@ -127,7 +127,9 @@ async function downloadFile(file: ModelFile, target: string, signal: AbortSignal
   await mkdir(path.dirname(target), { recursive: true });
   const part = target + PART_SUFFIX;
   let offset = (await sizeOf(part)) ?? 0;
-  if (offset > file.sizeBytes) {
+  // A part at the full size cannot be resumed either: a cancel or a stall after the last byte leaves one, and a
+  // range starting at the end is refused (416) every time.
+  if (offset >= file.sizeBytes) {
     await rm(part, { force: true });
     offset = 0;
   }
