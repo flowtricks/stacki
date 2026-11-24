@@ -205,6 +205,10 @@ function bounded(text: string): string {
   return flat.length > CUSTOM_MATCH_LIMITS.matchCharsMax ? `${flat.slice(0, CUSTOM_MATCH_LIMITS.matchCharsMax - 1)}…` : flat;
 }
 
+// The rest of a `<style>` or `<script>` opening tag that has content. A self-closing one (`<script set:html={data} />`) has none,
+// and must not open a block that runs on to a later closing tag over the template between. An arrow's `>` does not end the tag.
+const BLOCK_ATTRIBUTES = '(?:[^>=]|=>|=(?!>))*(?<!/)>';
+
 /**
  * An .astro file's template as markup patterns read it: the frontmatter and the inside of every `<style>` and `<script>` blanked,
  * offsets and line breaks kept, so a match's line is the file's own and a stylesheet's text is never "markup".
@@ -215,7 +219,7 @@ export function markupText(source: string): string {
   const fence = /^(\s*---\r?\n[\s\S]*?\r?\n---)/.exec(source);
   const withoutFrontmatter = fence === null ? source : `${blank(fence[1] ?? '')}${source.slice((fence[1] ?? '').length)}`;
   const out = withoutFrontmatter.replace(
-    /(<(style|script)\b[^>]*>)([\s\S]*?)(<\/\2\s*>)/gi,
+    new RegExp(`(<(style|script)\\b${BLOCK_ATTRIBUTES})([\\s\\S]*?)(<\\/\\2\\s*>)`, 'gi'),
     (_whole, open: string, _name: string, inner: string, close: string) => `${open}${blank(inner)}${close}`,
   );
   assert(out.length === source.length, 'markupText: offsets are kept');
@@ -251,7 +255,7 @@ export function customSegments(file: string, source: string, scope: CustomMatche
     return [];
   }
   const segments: CustomSegment[] = [];
-  for (const block of source.matchAll(/(<style\b[^>]*>)([\s\S]*?)<\/style\s*>/gi)) {
+  for (const block of source.matchAll(new RegExp(`(<style\\b${BLOCK_ATTRIBUTES})([\\s\\S]*?)<\\/style\\s*>`, 'gi'))) {
     segments.push({ text: block[2] ?? '', offset: block.index + (block[1] ?? '').length });
   }
   return segments;

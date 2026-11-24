@@ -114,6 +114,29 @@ test('markup leaves out the frontmatter, styles and scripts, keeping every offse
   assert.equal(text.indexOf('TODO'), source.indexOf('<h1>TODO') + 4);
 });
 
+test('a self-closing script or style opens no block, so the template after it is still markup and never CSS', () => {
+  const source = [
+    '<script type="application/ld+json" set:html={data} />',
+    '<style set:html={list.map((rule) => rule).join("")} />',
+    '<p>TODO hero</p>',
+    '<script>',
+    '  // TODO',
+    '</script>',
+    '<style>',
+    '  .a { color: red }',
+    '</style>',
+    '',
+  ].join('\n');
+  const text = markupText(source);
+  assert.equal((text.match(/TODO/g) ?? []).length, 1, 'the paragraph is read and the script is not');
+  assert.equal(text.indexOf('TODO'), source.indexOf('TODO hero'));
+  const segments = customSegments('src/pages/index.astro', source, 'css');
+  assert.deepEqual(
+    segments.map((segment) => segment.text),
+    ['\n  .a { color: red }\n'],
+  );
+});
+
 test('segments: a stylesheet whole, an .astro file’s style blocks or template, nothing for rendered or other files', () => {
   const astro = '---\n---\n<div style="x">a</div>\n<style is:global>\n.a { text-align: left }\n</style>\n';
   const [block] = customSegments('src/pages/index.astro', astro, 'declaration');
