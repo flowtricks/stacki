@@ -133,7 +133,9 @@ export function runEslint(root: string, files: readonly string[]): ChildResult {
   const eslint = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
   // No --cache: ESLint keys a cached result on the linted file and the config only, but the type-aware rules also read the types of every file it
   // imports. A changed dependency therefore left a stale "unsafe argument" verdict that no re-run could clear.
-  const argumentsList = [eslint, '--no-cache', '--max-warnings', '0', '--no-warn-ignored', ...files];
+  // The heap is the full gate's (the eslint check in scripts/gate/runTests.ts): type-aware lint of the whole tree, as check:local runs it,
+  // passes Node's default heap of about 4 GB and is aborted. The two stay equal; the gate compiles to CommonJS and cannot import this module.
+  const argumentsList = ['--max-old-space-size=6144', eslint, '--no-cache', '--max-warnings', '0', '--no-warn-ignored', ...files];
   return runChild(process.execPath, argumentsList, { cwd: root });
 }
 
