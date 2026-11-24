@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { batchedRead } from '../../shared/batchedRead';
 import { stat, readdir } from 'node:fs/promises';
-import { safePath, walk } from '../project/projectServer';
+import { safePath, supportedPath, walk } from '../project/projectServer';
 import { MEDIA_EXT } from './assetStateTypes';
 import { readAssetState } from './assetState';
 import type { WireAssetEntry } from '../../../vendor/stacki/shared/ipc/ipcResults';
@@ -14,7 +14,8 @@ export async function assetCatalog(root: string) {
   const folders = projectFoldersFor(root, 'assets');
   const listed = (rel: string) => folderHolding(folders, rel) !== undefined || isAboveFolder(folders, rel);
   const files = [...(await walk(root, 'public')), ...(await walk(root, 'src'))].filter(
-    (file) => MEDIA_EXT.test(file) && folderHolding(folders, file) !== undefined,
+    // One name Studio cannot open (`logo@2x.png`) must not empty the whole panel.
+    (file) => MEDIA_EXT.test(file) && folderHolding(folders, file) !== undefined && supportedPath(file),
   );
   const state = await readAssetState(root);
   const directories = new Set<string>(state.directories.filter(listed));

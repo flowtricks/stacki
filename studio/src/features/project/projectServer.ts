@@ -45,6 +45,15 @@ export async function safePath(root: string, relative: string): Promise<string> 
   }
   return absolute;
 }
+/** Whether Studio can open this file at all: every route refuses a path `filePath` refuses. */
+export function supportedPath(relative: string): boolean {
+  try {
+    filePath(relative);
+    return true;
+  } catch {
+    return false;
+  }
+}
 export async function preparePath(root: string, relative: string) {
   const absolute = await safePath(root, relative);
   await mkdir(path.dirname(absolute), { recursive: true });
@@ -100,7 +109,9 @@ export async function walk(root: string, directory: string): Promise<string[]> {
   return files.sort();
 }
 export async function scanProject(root: string, analysis = new ComponentAnalysis()) {
-  const files = [...(await walk(root, 'src')), ...(await walk(root, 'public'))];
+  // A name Studio cannot open (`logo@2x.png`, `Card (old).astro`) is left out of the
+  // lists: reading one throws, which would stop the whole project from opening.
+  const files = [...(await walk(root, 'src')), ...(await walk(root, 'public'))].filter(supportedPath);
   // Component and layout folders are the project's choice (.stacki/folders.json). Until it
   // makes one, Studio lists every .astro file outside src/pages, as it always has.
   const folders = configOf(readProjectFolders(root));
@@ -168,7 +179,12 @@ async function readComponentSource(root: string, file: string): Promise<string> 
 }
 
 async function scanStyleClasses(root: string, files: readonly string[]) {
-  const batches = await batchedRead(files, async (file) => sourceClasses(file, await readSource(root, file)));
+  const batches = await batchedRead(files, async (file) => {
+    // These names only feed class suggestions, so a stylesheet past the editing limit (a
+    // minified vendor file in public/) is skipped rather than failing the project scan.
+    const size = (await stat(await safePath(root, file))).size;
+    return size > MAX_SOURCE ? [] : sourceClasses(file, await readSource(root, file));
+  });
   return new Set(batches.flat());
 }
 

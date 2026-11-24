@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
-import { walk, safePath, readSource } from '../project/projectServer';
+import { walk, safePath, readSource, supportedPath } from '../project/projectServer';
 import type { createRooms } from '../collaboration/rooms';
 import { projectFoldersFor } from '../../../vendor/stacki/electron/lib/projectFolders';
 import { folderHolding } from '../../../vendor/stacki/shared/properties/projectFolders';
@@ -11,7 +11,7 @@ export async function styleFiles(root: string, astro: boolean) {
   const folders = projectFoldersFor(root, 'styles');
   const paths = [...(await walk(root, 'src')), ...(astro ? [] : await walk(root, 'public'))];
   for (const file of paths) {
-    if (!(astro ? /\.astro$/i.test(file) : /\.(css|scss|sass|less)$/i.test(file))) {
+    if (!(astro ? /\.astro$/i.test(file) : /\.(css|scss|sass|less)$/i.test(file)) || !supportedPath(file)) {
       continue;
     }
     // Stylesheets come from the project's style folders (.stacki/folders.json), as on Desktop.

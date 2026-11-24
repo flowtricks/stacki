@@ -3,7 +3,8 @@ import { gitDraftHeaders } from '../history/gitWorkspaceStorage';
 import { MEDIA_EXT } from '../assets/assetStateTypes';
 import { keepLocalUpload, localUploadPath } from './cleanupStore';
 import { writeFile, rename, stat, rm } from 'node:fs/promises';
-import { preparePath, safePath, walk } from '../project/projectServer';
+import path from 'node:path';
+import { preparePath, walk } from '../project/projectServer';
 import { filePath } from '../../shared/validation';
 
 export async function saveAsset(root: string, file: string, bytes: Uint8Array) {
@@ -12,7 +13,9 @@ export async function saveAsset(root: string, file: string, bytes: Uint8Array) {
     throw new ReferencedError('assets.error.tooBig', { size: 20 });
   }
   const inventory = [...(await walk(root, 'public')), ...(await walk(root, 'src')).filter((file) => MEDIA_EXT.test(file))];
-  const sizes = await Promise.all(inventory.filter((item) => item !== file).map(async (item) => (await stat(await safePath(root, item))).size));
+  // Every file still counts toward the allowance. `walk` lists only real files inside the
+  // project (it skips links), so a name `safePath` refuses is sized directly, not fatal.
+  const sizes = await Promise.all(inventory.filter((item) => item !== file).map(async (item) => (await stat(path.join(root, item))).size));
   if (inventory.length >= 200 || sizes.reduce((total, size) => total + size, bytes.length) > 100_000_000) {
     throw new ReferencedError('assets.error.allowance');
   }
