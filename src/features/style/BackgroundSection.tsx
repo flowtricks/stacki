@@ -30,9 +30,10 @@ import { useHoverPreview } from './connectFieldHelpers';
 const TRANSPARENT_KEYWORD = 'transparent'; // i18n-ignore: the CSS keyword shown as the empty color.
 
 export default function BackgroundSection(props: Props) {
-  const { read, busy, setProp, clearProp, onProvenance, onSelectSelector } = props;
+  const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
   const translate = useTranslate();
-  const stack = useLayerStack(props);
+  const layerWriters = keepingImportant(props);
+  const stack = useLayerStack({ ...props, ...layerWriters });
   const { layers, applyLayers, openLayer, setOpenLayer } = stack;
   // The layers come from the `background` shorthand when no `background-image`
   // is set (useLayerStack), so the label does too: `.divider::before { background:
@@ -80,9 +81,9 @@ export default function BackgroundSection(props: Props) {
             layers={layers}
             index={openLayer}
             busy={busy}
-            setProp={setProp}
+            setProp={layerWriters.setProp}
             clearProp={clearProp}
-            liveSetProp={props.liveSetProp}
+            liveSetProp={layerWriters.liveSetProp}
             applyLayers={applyLayers}
           />
         </LayerEditorModal>
@@ -102,6 +103,18 @@ export default function BackgroundSection(props: Props) {
       <ClippingRow {...props} />
     </div>
   );
+}
+
+// The writers the layer list and its editor use. A layer has no text to delete
+// `!important` from, so a write keeps the flag the longhand shows, or, while the
+// layers still come from the `background` shorthand, the shorthand's.
+function keepingImportant({ read, setProp, liveSetProp }: Props): Pick<Props, 'setProp' | 'liveSetProp'> {
+  const fromShorthand = layerSourceProp(read) === 'background';
+  const flagged = (prop: string): boolean => displayOf(read(prop)).important || (fromShorthand && displayOf(read('background')).important);
+  return {
+    setProp: (prop, value, important) => setProp(prop, value, important || flagged(prop)),
+    liveSetProp: (prop, value, important) => liveSetProp(prop, value, important || flagged(prop)),
+  };
 }
 
 // Clipping — background-clip. "None" writes border-box explicitly.
