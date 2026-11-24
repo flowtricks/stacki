@@ -60,7 +60,8 @@ export function CanvasScrollbar(props: CanvasScrollbarProps) {
   const endPx = -(BAR_SCREEN_PX.gap / props.scale) - widthPx;
   const scrollTo = (offsetPx: number): void => {
     const topPx = scrollTopForThumb(scroll, trackPx, lengthPxMin, offsetPx);
-    frameOf(props.frameRef)?.contentWindow?.postMessage(pageScrollToMessage(topPx), frameOrigin(props.frameRef));
+    const frame = frameOf(props.frameRef);
+    frame?.contentWindow?.postMessage(pageScrollToMessage(topPx), originOf(frame));
   };
   // A press on the thumb drags it; a press on the track puts the thumb's middle under the pointer, then drags.
   const press = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -99,13 +100,16 @@ function usePageScroll(frameRef: RefObject<HTMLDivElement>): PageScroll | undefi
     if (holder === null) {
       return undefined;
     }
-    const tell = (): void => {
-      frameOf(frameRef)?.contentWindow?.postMessage(canvasScrollbarMessage(), frameOrigin(frameRef));
+    const tell = (frame: HTMLIFrameElement | undefined): void => {
+      frame?.contentWindow?.postMessage(canvasScrollbarMessage(), originOf(frame));
     };
+    // Why not the holder's first iframe: while a page is replaced, PreviewFrame holds the previous one first
+    // (hidden from assistive tech), and the next one's load can arrive before the previous is dropped.
     const loaded = (event: Event): void => {
-      if (event.target === frameOf(frameRef)) {
+      const target = event.target;
+      if (target instanceof HTMLIFrameElement && target.getAttribute('aria-hidden') !== 'true') {
         setScroll(undefined); // A new page: nothing is known of its scroll until it reports.
-        tell();
+        tell(target);
       }
     };
     const heard = (event: MessageEvent<unknown>): void => {
@@ -120,7 +124,7 @@ function usePageScroll(frameRef: RefObject<HTMLDivElement>): PageScroll | undefi
     };
     holder.addEventListener('load', loaded, true);
     window.addEventListener('message', heard);
-    tell();
+    tell(frameOf(frameRef));
     return () => {
       holder.removeEventListener('load', loaded, true);
       window.removeEventListener('message', heard);
@@ -135,8 +139,8 @@ function frameOf(frameRef: RefObject<HTMLDivElement>): HTMLIFrameElement | undef
 }
 
 // The page's origin, so a message reaches that page only; '*' for a frame whose address has no origin of its own.
-function frameOrigin(frameRef: RefObject<HTMLDivElement>): string {
-  const source = frameOf(frameRef)?.src ?? '';
+function originOf(frame: HTMLIFrameElement | undefined): string {
+  const source = frame?.src ?? '';
   try {
     const origin = new URL(source, window.location.href).origin;
     return origin === 'null' ? '*' : origin;
