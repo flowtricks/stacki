@@ -14,7 +14,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseOptions } from '../scripts/createStacki/options';
-import { linePrompter } from '../scripts/createStacki/prompter';
+import { keyPrompter, linePrompter } from '../scripts/createStacki/prompter';
 import { chooseSignIn, configureSignIn } from '../scripts/createStacki/signIn';
 
 const studio = fileURLToPath(new URL('../', import.meta.url));
@@ -39,6 +39,26 @@ function scripted(answers: readonly string[]) {
   input.end(answers.join('\n') + '\n');
   return { prompter: linePrompter(input, output), transcript: () => transcript };
 }
+
+function terminal() {
+  const input = Object.assign(new PassThrough(), { setRawMode: () => undefined });
+  const output = new PassThrough();
+  output.resume();
+  return { input, prompter: keyPrompter(input, output) };
+}
+
+test('a typed question in a terminal rejects when cancelled, and answers otherwise', async () => {
+  for (const key of ['\x03', '\x04']) {
+    const { input, prompter } = terminal();
+    const asked = assert.rejects(prompter.ask('Client ID: '), /^Error: Cancelled\.$/);
+    input.write(key);
+    await asked;
+  }
+  const { input, prompter } = terminal();
+  const answer = prompter.ask('Client ID: ');
+  input.write(' abc \r');
+  assert.equal(await answer, 'abc');
+});
 
 test('--auth parses long form, takes values both ways and rejects unknown kinds', () => {
   assert.equal(parseOptions(['--auth', 'google']).auth, 'google');

@@ -82,10 +82,14 @@ export function keyPrompter(input: RawInput, output: Writable): Prompter {
 
 function askLine(input: Readable, output: Writable, question: string): Promise<string> {
   const reader = createInterface({ input, output, terminal: true });
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // Ctrl+C or Ctrl+D closes the reader without an answer. Unless that rejects, nothing keeps
+    // Node running and setup stops silently with a success exit code.
+    reader.once('close', () => reject(new Error('Cancelled.')));
     reader.question(question, (answer) => {
-      reader.close();
+      // Settle before closing, so the close above cannot turn an answer into a cancellation.
       resolve(answer.trim());
+      reader.close();
     });
   });
 }
